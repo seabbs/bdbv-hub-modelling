@@ -122,7 +122,7 @@ rule simulate_batch:
         uv=$(command -v uv)
         TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_LIB={params.lib} \
             RSCRIPT="$rscript" JAX_PLATFORMS=cpu \
-            XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1" \
+            XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
             PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
             nice -n 19 "$uv" run --frozen python -m nowcastfoundation.simulator \

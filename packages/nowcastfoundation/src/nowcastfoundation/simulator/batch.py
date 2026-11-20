@@ -28,6 +28,7 @@ import sys
 import time
 from collections.abc import Generator, Mapping, Sequence
 from dataclasses import dataclass, field
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -361,7 +362,18 @@ def _run_pass(
         }
         outcomes[j.id] = _Outcome(vals=values, latent=latent)
         seed = generator(batch.seed, *j.key, REPORT_KEY).integers(1, 2**31 - 1)
-        report_jobs.append(ReportJob(j.id, int(seed), j.design, values, onsets))
+        strata = _strata(j.design)
+        report_jobs.append(
+            ReportJob(
+                j.id,
+                int(seed),
+                j.design,
+                values,
+                onsets,
+                places=[s["place"] for s in strata],
+                ages=[s["age"] for s in strata],
+            )
+        )
     for r in reporting.report(report_jobs, grid_file, batch.draws):
         o = outcomes[r.id]
         if r.error is not None:
@@ -447,6 +459,10 @@ def simulate_batch(
     stack = {
         **reporting.software(),
         "python_version": platform.python_version(),
+        **{
+            f"{name}_version": metadata.version(name)
+            for name in ("jax", "numpyro", "pyrenew")
+        },
         "host": socket.gethostname(),
     }
     counts, latent, settings, failures = [], [], [], []

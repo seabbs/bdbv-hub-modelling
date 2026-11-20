@@ -38,6 +38,7 @@ class OnTheDay:
         self.calls.append([j.id for j in jobs])
         out = []
         for j in jobs:
+            assert len(j.places) == len(j.ages) == np.shape(j.onsets)[1]
             outbreak = j.id.split("/")[0]
             if j.id in self.fail or outbreak in self.fail:
                 out.append(

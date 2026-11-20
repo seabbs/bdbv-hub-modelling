@@ -59,8 +59,11 @@ class ReportJob:
         (`stratum_population`, `attack`).
     onsets : numpy.ndarray
         Expected (ascertained) onsets, days by strata: the days of the
-        reporting frame (`7 * (weeks + max_delay // 7 + 4)`), the strata
-        places first then ages within each place.
+        reporting frame (`7 * (weeks + max_delay // 7 + 4)`, the first
+        2026-01-03 plus the `offset`), the strata in epinowcast's `.group`
+        order, places first then ages within each place.
+    places, ages : list of str
+        Each onsets column's place (`P01`, ...) and age (`A1`, ...).
     """
 
     id: str
@@ -68,6 +71,8 @@ class ReportJob:
     design: dict[str, Any]
     vals: dict[str, Any]
     onsets: np.ndarray
+    places: list[str] = field(default_factory=list)
+    ages: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -93,7 +98,18 @@ class ReportResult:
 
 
 class ReportingStep(Protocol):
-    """Report simulations' expected onsets (`ReportJob`)."""
+    """Report simulations' expected onsets (`ReportJob`).
+
+    A step returns one `ReportResult` per job, in the jobs' order, with
+    the counts as `COUNT_COLUMNS` (draws 1 to `draws`; locations the
+    stratum's place, its age, or `<place>-<age>` when there are both) and
+    the job's values with these added, which the settings files and their
+    readers use: `stratum_location` (each stratum's location, in the
+    onsets' column order), `low_start_days` (days before the outbreak
+    first expects one onset a day), `lambda_hat`, `sum_p2` and
+    `sqrt_phi_obs` (the observation noise as the step applied it).
+    A job that fails gets `error` set rather than raising.
+    """
 
     def report(
         self, jobs: Sequence[ReportJob], grid_file: str | Path, draws: int
@@ -156,6 +172,8 @@ class RscriptReporting:
                         "design": j.design,
                         "values": j.vals,
                         "onsets": np.asarray(j.onsets, dtype=float),
+                        "places": list(j.places),
+                        "ages": list(j.ages),
                     }
                     for j in jobs
                 ],

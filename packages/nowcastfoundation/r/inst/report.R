@@ -49,10 +49,20 @@ results <- list()
 for (job in input$jobs) {
   design <- as_r(job$design)
   v <- as_r(job$values)
-  onsets <- do.call(rbind, lapply(job$onsets, function(r) as.numeric(unlist(r))))
+  onsets <- do.call(rbind, lapply(job$onsets, function(r) {
+    as.numeric(unlist(r))
+  }))
   set.seed(job$seed)
   res <- tryCatch(
-    report_outbreak(grid, design, v, onsets, ctx),
+    {
+      frame <- reporting_frame(design, v)
+      # The onsets' columns must be epinowcast's strata, in its order.
+      stopifnot(
+        identical(unlist(job$places), frame$strata$place),
+        identical(unlist(job$ages), frame$strata$age)
+      )
+      report_outbreak(grid, design, v, onsets, ctx, frame)
+    },
     error = function(e) e
   )
   if (inherits(res, "error")) {
