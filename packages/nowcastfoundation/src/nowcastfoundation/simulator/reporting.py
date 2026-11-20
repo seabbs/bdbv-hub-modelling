@@ -203,7 +203,7 @@ class RscriptReporting:
                 )
             try:
                 counts = pd.read_csv(
-                    job_dir / "counts.csv.gz",
+                    job_dir / "counts.csv",
                     dtype={"id": str, "location": str},
                 )
                 results = json.loads((job_dir / "results.json").read_text())

@@ -6,7 +6,7 @@
 # `job_dir/jobs.json` holds the grid file, the draws per simulation and
 # the jobs (id, R seed, design, values with the latent step's additions,
 # and each stratum's expected onsets, days by strata). Each job runs
-# through `report_outbreak`; the step writes `counts.csv.gz` (id, draw,
+# through `report_outbreak`; the step writes `counts.csv` (id, draw,
 # location, reference_date, report_date, count), `results.json` (each
 # job's values, or its error) and `stack.json` (R, BLAS, LAPACK and the
 # epinowcast fingerprint). ENW_LIB is the pinned epinowcast's library and
@@ -85,7 +85,7 @@ out <- if (length(counts)) {
     count = integer()
   )
 }
-fwrite(out, file.path(job_dir, "counts.csv.gz"))
+fwrite(out, file.path(job_dir, "counts.csv"))
 jsonlite::write_json(
   results, file.path(job_dir, "results.json"),
   auto_unbox = TRUE, digits = NA, null = "null", na = "null"
