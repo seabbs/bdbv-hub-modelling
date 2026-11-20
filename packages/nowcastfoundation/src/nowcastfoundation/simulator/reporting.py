@@ -201,11 +201,19 @@ class RscriptReporting:
                 raise RuntimeError(
                     "the reporting step failed:\n" + out.stderr[-4000:]
                 )
-            counts = pd.read_csv(
-                job_dir / "counts.csv.gz", dtype={"id": str, "location": str}
-            )
-            results = json.loads((job_dir / "results.json").read_text())
-            self._stack = json.loads((job_dir / "stack.json").read_text())
+            try:
+                counts = pd.read_csv(
+                    job_dir / "counts.csv.gz",
+                    dtype={"id": str, "location": str},
+                )
+                results = json.loads((job_dir / "results.json").read_text())
+                self._stack = json.loads((job_dir / "stack.json").read_text())
+            except (OSError, EOFError, ValueError) as e:
+                # A truncated output (a full disk, say) despite R's success.
+                raise RuntimeError(
+                    f"the reporting step's output is unreadable ({e}):\n"
+                    + out.stderr[-4000:]
+                ) from e
         by_id = {str(i): g for i, g in counts.groupby("id", sort=False)}
         empty = pd.DataFrame(columns=list(COUNT_COLUMNS))
         out_results = []
