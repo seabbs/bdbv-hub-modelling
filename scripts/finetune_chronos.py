@@ -257,24 +257,35 @@ first hashed, kept so moving it changes no checkpoint's hash (`CODE`)."""
 GRID_FILE_PATH = "config/finetune/grid.yaml"
 """The grid file's path from the repository root, hashed as `GRID_NAME`."""
 
-WRAPPER = "workflow/scripts/simulate.R"
-"""The simulate rule's wrapper around the engine."""
+SIMULATOR_PY = (
+    "packages/nowcastfoundation/src/nowcastfoundation/simulator",
+    "packages/nowcastrenewal/src/nowcastrenewal/latent",
+)
+"""The simulator's Python: its entry point and draws, and the latent step."""
 
 ROOT = Path(__file__).parents[1]
 """The repository root, which the hashed paths are relative to."""
 
 
 def simulator_files(grid_file: str) -> tuple[str, ...]:
-    """Return the simulator's files: the grid, the wrapper and the engine.
+    """Return the simulator's files: the grid, its Python and the R engine.
 
-    The engine is its description and every R file (`ENGINE/R/*.R`,
-    found by glob so a new file is hashed without listing it).
+    The Python is every file of `SIMULATOR_PY`, and the R engine its
+    description, reporting step (`inst/report.R`) and every R file
+    (`ENGINE/R/*.R`), found by glob so a new file is hashed without
+    listing it.
     """
+    python = sorted(
+        str(p.relative_to(ROOT))
+        for folder in SIMULATOR_PY
+        for p in (ROOT / folder).glob("*.py")
+    )
     engine = sorted(p.name for p in (ROOT / ENGINE / "R").glob("*.R"))
     return (
         grid_file,
-        WRAPPER,
+        *python,
         f"{ENGINE}/DESCRIPTION",
+        f"{ENGINE}/inst/report.R",
         *(f"{ENGINE}/R/{name}" for name in engine),
     )
 

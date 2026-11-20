@@ -165,14 +165,40 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
 
 
 def test_the_grid_hashes_the_names_it_was_first_hashed_with():
-    """The glob and the frozen grid name give the names checkpoints hashed."""
+    """The globs and the frozen grid name give the simulator's names."""
     import finetune_chronos as ft
 
     engine = "packages/nowcastfoundation/r"
+    python = {
+        f"{folder}/{name}.py"
+        for folder, names in (
+            (
+                "packages/nowcastfoundation/src/nowcastfoundation/simulator",
+                ("__init__", "__main__", "batch", "draws", "reporting"),
+            ),
+            (
+                "packages/nowcastrenewal/src/nowcastrenewal/latent",
+                (
+                    "__init__",
+                    "imports",
+                    "infections",
+                    "mixing",
+                    "pmfs",
+                    "reference",
+                    "rt",
+                    "simulate",
+                    "start",
+                    "strata",
+                ),
+            ),
+        )
+        for name in names
+    }
     first = {
         "config/finetune/grids/r7.yaml",
-        "workflow/scripts/simulate.R",
+        *python,
         f"{engine}/DESCRIPTION",
+        f"{engine}/inst/report.R",
         *(
             f"{engine}/R/{name}.R"
             for name in (
