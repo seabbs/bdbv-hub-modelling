@@ -29,10 +29,11 @@ def dry(tmp_path, *targets, config=None, extra=()):
     return {k: int(v) for k, v in jobs.items() if k != "total"}
 
 
-def dry_run(tmp_path, *targets, config=None, extra=()):
+def dry_run(tmp_path, *targets, config=None, extra=(), quiet=True):
     """Return the finished process of a dry run of `targets`.
 
-    Programs in <tmp_path>/bin (a stand-in `gh`) come first on PATH.
+    Programs in <tmp_path>/bin (a stand-in `gh`) come first on PATH. Not
+    `quiet`, the output holds each job's shell command.
     """
     local = tmp_path / "local.env"
     if not local.exists():
@@ -46,8 +47,7 @@ def dry_run(tmp_path, *targets, config=None, extra=()):
             "-s",
             "workflow/Snakefile",
             "-n",
-            "--quiet",
-            "rules",
+            *(["--quiet", "rules"] if quiet else []),
             "--cores",
             "1",
             "--workflow-profile",
@@ -179,6 +179,42 @@ def test_finetune_trains_one_segment_per_prefix(tmp_path):
     assert jobs["fetch_batch"] == 66
     # On one machine the batches are simulated here.
     assert jobs["simulate_batch"] == 66
+
+
+SMALL = {
+    **FT,
+    "finetune": {
+        **FT["finetune"],
+        "prefixes": [10, 20],
+        "outbreaks": 20,
+        "chunk": 10,
+        "batch_size": 64,
+        "checkpoint_above": 0,
+    },
+}
+
+
+def test_a_small_trial_is_a_config_override(tmp_path):
+    assert dry(tmp_path, "finetune", config=SMALL)["train_segment"] == 2
+    out = dry_run(tmp_path, "finetune", config=SMALL, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    trains = [
+        line for line in out.stdout.splitlines() if "finetune_stream.py" in line
+    ]
+    assert trains
+    for line in trains:
+        assert "--batch-size 64" in line
+        assert "--checkpoint-above 0" in line
+
+
+def test_a_machine_s_checkpoint_threshold_overrides_the_config(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nCHECKPOINT_ABOVE=5\n"
+    )
+    out = dry_run(tmp_path, "finetune", config=SMALL, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "--checkpoint-above 5" in out.stdout
+    assert "--checkpoint-above 0" not in out.stdout
 
 
 RELEASE = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
