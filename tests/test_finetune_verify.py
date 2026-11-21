@@ -165,3 +165,12 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
     assert ft.SIMULATOR[0] == name
     assert ft.CODE[name] == name
     assert grid not in ft.CODE
+
+
+def test_code_files_hash_the_same_from_any_directory(tmp_path, monkeypatch):
+    import finetune_chronos as ft
+
+    name = next(iter(ft.CODE))
+    here = ft.code_sha256(ft.CODE[name])
+    monkeypatch.chdir(tmp_path)
+    assert ft.code_sha256(ft.CODE[name]) == here

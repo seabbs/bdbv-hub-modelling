@@ -65,6 +65,8 @@ from nowcastfoundation.forecaster import FoundationModel, prefetch
 log = logging.getLogger(__name__)
 
 __all__ = [
+    "FORECAST_LEVELS",
+    "OUTER_LEVELS",
     "PAPER_COLUMNS",
     "QUANTILE_LEVELS",
     "SCORE_COLUMNS",
@@ -87,6 +89,13 @@ __all__ = [
 QUANTILE_LEVELS: Final = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
 """The quantile levels the hub collected."""
 
+OUTER_LEVELS: Final = (0.05, 0.95)
+"""The 90% interval's levels, which the hub did not collect."""
+
+FORECAST_LEVELS: Final = tuple(sorted((*QUANTILE_LEVELS, *OUTER_LEVELS)))
+"""The levels our models forecast: the hub's, scored with its WIS, and
+the 90% interval's, for its coverage."""
+
 SCORE_COLUMNS: Final = (
     "wis",
     "dispersion",
@@ -95,9 +104,11 @@ SCORE_COLUMNS: Final = (
     "ae_median",
     "coverage_50",
     "coverage_80",
+    "coverage_90",
     "coverage_95",
 )
-"""Scores of each forecast, from its quantiles at `QUANTILE_LEVELS`."""
+"""Scores of each forecast, from its quantiles at `QUANTILE_LEVELS`, and
+`coverage_90` from `OUTER_LEVELS` where a forecast has them."""
 
 PAPER_COLUMNS: Final = (
     "study",
@@ -377,18 +388,23 @@ def _tasks(
     n_samples: int,
     seed: int,
     root: Path | None,
+    horizons: Sequence[int] = HORIZONS,
 ) -> list[ForecastTask]:
     """Return a date's tasks, from the store `root` if it holds them.
 
     The store holds each date's tasks of every offset as a gzip-compressed
-    pickle (level 1: about 40 times smaller, and fast to read).
+    pickle (level 1: about 40 times smaller, and fast to read). Tasks of
+    other horizons than the hub's are kept in a folder named by them.
     """
     if root is None:
-        return nowcast_tasks(triangle, date, n_samples, seed)
-    path = Path(root) / f"{date}.pkl.gz"
+        return nowcast_tasks(triangle, date, n_samples, seed, horizons=horizons)
+    root = Path(root)
+    if tuple(horizons) != tuple(HORIZONS):
+        root = root / f"horizons{min(horizons)}_{max(horizons)}-{len(horizons)}"
+    path = root / f"{date}.pkl.gz"
     if path.exists():
         return list(pickle.loads(gzip.decompress(path.read_bytes())))
-    tasks = nowcast_tasks(triangle, date, n_samples, seed)
+    tasks = nowcast_tasks(triangle, date, n_samples, seed, horizons=horizons)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     raw = pickle.dumps(tasks, protocol=pickle.HIGHEST_PROTOCOL)
@@ -404,6 +420,7 @@ def germany_forecasts(
     n_samples: int,
     seed: int,
     tasks_dir: Path | None = None,
+    horizons: Sequence[int] = HORIZONS,
 ) -> pd.DataFrame:
     """Nowcast each date with each model, as quantiles at the hub's levels.
 
@@ -424,13 +441,17 @@ def germany_forecasts(
         one, else built and written to it. The tasks are the same for
         every checkpoint, so they are built once (`checkpoint.german_tasks_dir`
         keys the store on what they are built from).
+    horizons : sequence of int
+        Days from each nowcast date to the end of each 7-day sum, the
+        hub's 0 to -28 (`HORIZONS`) by default; days after it are
+        forecasts (`data.germany.nowcast_tasks`).
 
     Returns
     -------
     pandas.DataFrame
         One row per quantile: `model`, `origin` (the nowcast date),
         `location` (the place), `target_end_date`, `horizon` (days),
-        `quantile` and `value`, at `QUANTILE_LEVELS`
+        `quantile` and `value`, at `FORECAST_LEVELS`
         (`nowcasteval.marginals.forecast_quantiles`).
     """
     built = [get_model(m) for m in models]
@@ -440,23 +461,29 @@ def germany_forecasts(
     tasks: dict[str, list[ForecastTask]] = {}
     if any(isinstance(m, FoundationModel) for m in built):
         tasks = {
-            d: _tasks(triangle, d, n_samples, seed, tasks_dir) for d in dates
+            d: _tasks(triangle, d, n_samples, seed, tasks_dir, horizons)
+            for d in dates
         }
         every = [t for ts in tasks.values() for t in ts]
         built = [
-            prefetch(m, every) if isinstance(m, FoundationModel) else m
+            prefetch(m, every, FORECAST_LEVELS)
+            if isinstance(m, FoundationModel)
+            else m
             for m in built
         ]
+        # The loop pops each date's tasks, which frees them only once this
+        # list no longer holds them.
+        del every
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
     frames = []
     for date in dates:
         mine = tasks.pop(date, None)
         if mine is None:
-            mine = _tasks(triangle, date, n_samples, seed, tasks_dir)
+            mine = _tasks(triangle, date, n_samples, seed, tasks_dir, horizons)
         for task in mine:
             for model in built:
                 at = forecast_quantiles(
-                    model, task, QUANTILE_LEVELS, n_samples, seed
+                    model, task, FORECAST_LEVELS, n_samples, seed
                 )
                 if at.empty:
                     continue
@@ -537,12 +564,35 @@ def score_germany(forecasts: pd.DataFrame, truth_delay: int) -> pd.DataFrame:
     truth = rows[
         ["location", "target_end_date", "truth_vintage", "truth"]
     ].drop_duplicates()
+    keys = [*_KEYS, "target_end_date"]
+    level_of = rows["quantile"].round(6)
     scores = score_quantiles(
-        rows.drop(columns="truth"),
+        rows.loc[level_of.isin(QUANTILE_LEVELS)].drop(columns="truth"),
         truth,
-        (*_KEYS, "target_end_date"),
+        keys,
         QUANTILE_LEVELS,
     )
+    # The 90% interval, where the forecast has its levels (ours do; the
+    # hub's teams' do not).
+    outer = rows.loc[level_of.isin(OUTER_LEVELS)].pivot_table(
+        index=keys, columns="quantile", values="value", aggfunc="first"
+    )
+    outer = outer.rename(columns=lambda q: round(float(q), 6))
+    if set(OUTER_LEVELS) <= set(outer.columns):
+        lo, hi = (outer[q] for q in OUTER_LEVELS)
+        scores = scores.merge(
+            pd.DataFrame({"lo": lo, "hi": hi}).reset_index(),
+            on=keys,
+            how="left",
+        )
+        inside = (scores["lo"] <= scores["truth"]) & (
+            scores["truth"] <= scores["hi"]
+        )
+        scores["coverage_90"] = inside.astype(float).where(
+            scores["lo"].notna() & scores["hi"].notna()
+        )
+    else:
+        scores["coverage_90"] = np.nan
     scores["pool"] = scores["location"].map(level)
     return scores[[*cols, "pool"]]
 
@@ -731,8 +781,12 @@ def paper_forecasts(forecasts: pd.DataFrame) -> pd.DataFrame:
         a state), `stratum` (an age group of Germany, or `all`),
         `origin_date`, `target_date` (the last day of the 7-day sum),
         `horizon` (days), `quantile_level`, `sample_id` (empty), `value`
-        and `truth`.
+        and `truth`, at the hub's `QUANTILE_LEVELS` only, which the paper
+        scores.
     """
+    forecasts = forecasts.loc[
+        forecasts["quantile"].round(6).isin(QUANTILE_LEVELS)
+    ]
     ages = ~forecasts["location"].isin({GERMANY, *STATES})
     return pd.DataFrame(
         {

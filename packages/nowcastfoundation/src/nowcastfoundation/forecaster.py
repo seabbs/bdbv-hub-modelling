@@ -50,7 +50,6 @@ from nowcastfoundation.backends.chronos2 import (
     CHRONOS_REVISION,
     _predict,
     apply_threads,
-    inference_precision,
     torch_device,
 )
 from nowcastutils.base import (
@@ -73,6 +72,8 @@ __all__ = [
     "FINETUNED_PREFIX",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
+    "LAG_QUANTILE",
+    "LAG_WINDOW",
     "LAYOUTS",
     "MAX_LAG",
     "PERIODS",
@@ -91,7 +92,7 @@ __all__ = [
     "finetuned_spec",
     "group_key",
     "hub_triangle",
-    "inference_precision",
+    "lag_count",
     "layout_block",
     "native_sampler",
     "prefetch",
@@ -101,7 +102,6 @@ __all__ = [
     "register_realdata_models",
     "release_tag",
     "resolve_checkpoint",
-    "torch_device",
 ]
 
 SOURCES: Final = ("weekly", "daily")
@@ -112,8 +112,16 @@ LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
 
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
-"""Release lag $D$, in the source's steps, from which a count is taken as
-final."""
+"""A fixed release lag $D$ in the source's steps, 4 weeks or 28 days: the
+cap the SI compares the estimated lag count (`lag_count`) with, and the
+triangle's default width."""
+
+LAG_QUANTILE: Final = 0.99
+"""The share of a count reported by the lag `lag_count` takes as $D$."""
+
+LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
+"""The steps before the cut-off whose counts `lag_count` takes as complete
+(4 to 16 weeks, 28 to 112 days), and the most lags it gives."""
 
 PERIODS: Final = {"daily": "rolling7"}
 """The aggregate row each place has in a ragged block, by source
@@ -626,6 +634,49 @@ def hub_triangle(
     return HubTriangle(times, final, partial, last)
 
 
+def lag_count(
+    tri: HubTriangle, source: str, quantile: float = LAG_QUANTILE
+) -> int:
+    """Return the lag count $D$ from the data's reporting delay.
+
+    The delay's `quantile` point: the first lag at which the steps
+    `LAG_WINDOW` before the cut-off, taken as complete, had that share of
+    their counts reported, pooled over places and over the releases there
+    are (weekly releases of daily data see each step at every 7th lag).
+    It reads no release after the cut-off. At most the history allows,
+    with two steps of context before the longest lag; with no counts in
+    the window, or the share not reached within it, that many.
+
+    Parameters
+    ----------
+    tri : HubTriangle
+        The triangle, at least `LAG_WINDOW[source][1]` lags wide.
+    source : str
+        One of `SOURCES`.
+    quantile : float
+        The share of a count reported.
+
+    Returns
+    -------
+    int
+        $D$, at least 1.
+    """
+    lo, hi = LAG_WINDOW[source]
+    width = min(hi, int(tri.partial.shape[2]))
+    most = int(max(1, min(width, tri.last - 1)))
+    steps = np.arange(max(tri.last - hi, 0), tri.last - lo + 1)
+    if steps.size == 0:
+        return most
+    final = tri.final[:, steps]
+    for d in range(width):
+        part = tri.partial[:, steps, d]
+        seen = ~np.isnan(part)
+        total = final[seen].sum()
+        if total > 0 and part[seen].sum() / total >= quantile:
+            return max(1, min(d, most))
+    return most
+
+
 def quantile_draws(
     levels: np.ndarray, values: np.ndarray, u: np.ndarray
 ) -> np.ndarray:
@@ -758,13 +809,20 @@ Known = Mapping[str, np.ndarray]
 `group_key`, predicted ahead (`prefetch`)."""
 
 
-def group_key(group: Series, horizon: int) -> str:
+def group_key(
+    group: Series,
+    horizon: int,
+    levels: Sequence[float] | np.ndarray | None = None,
+) -> str:
     """Return a key of what Chronos-2 sees of a group, and the horizon.
 
     The rows' places are in it too: with the series bias, the same numbers
-    at other places forecast differently.
+    at other places forecast differently. Quantiles at `levels` other than
+    Chronos-2's own are keyed apart.
     """
     h = hashlib.sha256(str(horizon).encode())
+    if levels is not None:
+        h.update(f"levels={[float(x) for x in levels]!r}".encode())
     for name in ("places", "target_places"):
         h.update(f"{name}={list(group.get(name) or [])!r}".encode())
     for name in CHRONOS_KEYS:
@@ -786,19 +844,24 @@ def _native(
     groups: Sequence[Series],
     horizon: int,
     known: Known | None = None,
+    levels: Sequence[float] | np.ndarray | None = None,
 ) -> list[np.ndarray]:
-    """Return each group's native quantiles, `[V, horizon, Q]`.
+    """Return each group's quantiles, `[V, horizon, Q]`.
 
-    Groups in `known` are read from it; the rest are predicted together.
+    At Chronos-2's own levels by default, or at `levels`, which the
+    pipeline interpolates between its own (`predict_quantiles`). Groups in
+    `known` are read from it; the rest are predicted together.
     """
-    levels = np.asarray(pipeline.quantiles, dtype=float)
-    keys = [group_key(g, horizon) for g in groups]
+    keys = [group_key(g, horizon, levels) for g in groups]
+    at = np.asarray(
+        pipeline.quantiles if levels is None else levels, dtype=float
+    )
     out: list[np.ndarray | None] = [
         None if known is None else known.get(k) for k in keys
     ]
     todo = [i for i, q in enumerate(out) if q is None]
     if todo:
-        got = _predict(pipeline, [groups[i] for i in todo], horizon, levels)
+        got = _predict(pipeline, [groups[i] for i in todo], horizon, at)
         for i, q in zip(todo, got, strict=True):
             out[i] = q.float().cpu().numpy()
     return [np.asarray(q) for q in out]
@@ -934,8 +997,7 @@ def _weekly_from_totals(
     """Return weekly draws `[S, L, W]` read from the total rows.
 
     A week whose end is past the context takes its total row's draw
-    there, no lower than the sum of its days' counts reported; an earlier
-    week takes its total summed from the daily counts.
+    there; an earlier week takes its total summed from the daily counts.
     `drawn` is `[S, 2L, horizon]`, the count rows then the total rows.
     """
     n_places = period.totals.shape[0]
@@ -943,10 +1005,7 @@ def _weekly_from_totals(
     for week in weeks:
         t = tri.times.index(week)
         if t >= start:
-            # No lower than the days' counts reported, as the daily rows'
-            # draws are floored (`_daily_frame`).
-            reported = tri.final[:, max(t - 6, 0) : t + 1].sum(axis=1)
-            out.append(np.maximum(drawn[:, n_places:, t - start], reported))
+            out.append(drawn[:, n_places:, t - start])
         else:
             total = np.nan_to_num(period.totals[:, t])
             out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
@@ -966,8 +1025,8 @@ def _daily_frame(
 ) -> pd.DataFrame:
     """Return each day of the target weeks from the daily count rows.
 
-    A day past the context takes its count row's draw, no lower than the
-    count reported; an earlier day the count reported. `drawn` is
+    A day past the context takes its count row's draw; an earlier day the
+    count reported. `drawn` is
     `[S, V, horizon]`, the count rows first.
     """
     first = as_date(weeks[0]) - dt.timedelta(days=6)
@@ -977,11 +1036,7 @@ def _daily_frame(
     for day in days:
         t = tri.times.index(day)
         final = np.broadcast_to(tri.final[:, t], (n, n_loc))
-        cols.append(
-            np.maximum(drawn[:, :n_loc, t - start], final)
-            if t >= start
-            else final
-        )
+        cols.append(drawn[:, :n_loc, t - start] if t >= start else final)
     values = np.stack(cols, axis=2)  # [S, L, D]
     return pd.DataFrame(
         {
@@ -1034,6 +1089,9 @@ class FoundationModel:
     known : mapping or None
         Chronos-2's quantiles of tasks predicted ahead in few batched
         passes (`prefetch`); others are predicted when forecast.
+    lags : int or None
+        A fixed lag count $D$; None estimates it from each task's data
+        (`lag_count`).
     """
 
     name: str
@@ -1044,6 +1102,7 @@ class FoundationModel:
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
+    lags: int | None = None
     reads_zones: ClassVar[bool] = True
 
     @property
@@ -1092,29 +1151,8 @@ class FoundationModel:
         ValueError
             If the release holds another checkpoint or adapter.
         """
-        weekly = self.source == "weekly"
-        base = task.target_history if weekly else task.daily_history
-        zone = task.zone_history if weekly else task.zone_daily_history
-        if base is None or base.empty:
-            raise ModelUnavailableError(
-                f"{self.name} needs the {self.source} releases, and the task "
-                f"for {task.vintage} has none."
-            )
-        # Only the releases of the country and provinces, so a release
-        # gives every place's lag cells or none.
-        if zone is not None:
-            zone = zone.loc[zone["vintage"].isin(set(base["vintage"]))]
-        has_zones = zone is not None and task.zone_daily_history is not None
-        zones = tuple(
-            z
-            for z in task.zone_codes
-            if has_zones and province_of(z) in task.locations
-        )
-        rows = _rows(base, zone if zones else None)
-        assert rows is not None
-        places = (NATIONAL, *task.locations, *zones)
-        weeks = list(task.target_end_dates)
-        tri = hub_triangle(rows, self.source, places, weeks[-1])
+        rows, places, weeks = self._rows(task)
+        tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
         if self.layout == "complete":
             walk = _walk_start(task)
@@ -1146,7 +1184,9 @@ class FoundationModel:
             chronos_sampler, checkpoint=self.checkpoint, known=self.known
         )
         draws = sample([group], horizon, task.n_samples, seed)[0]
-        drawn = np.maximum(np.round(draws), 0.0)
+        # Counts are not negative; Chronos-2's output is otherwise kept as
+        # it is: not rounded and not floored at the counts reported.
+        drawn = np.maximum(draws, 0.0)
         if period is not None:
             values = _weekly_from_totals(drawn, period, tri, start, weeks)
         else:
@@ -1154,9 +1194,7 @@ class FoundationModel:
             steps = np.broadcast_to(
                 final, (task.n_samples, *final.shape)
             ).copy()
-            steps[:, :, start:] = np.maximum(
-                drawn[:, : len(places)], final[:, start:]
-            )
+            steps[:, :, start:] = drawn[:, : len(places)]
             # The hub's target is weekly: the daily source is summed to it.
             week_of = np.array(
                 [_step("weekly", t).isoformat() for t in tri.times]
@@ -1164,20 +1202,6 @@ class FoundationModel:
             values = np.stack(
                 [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
             )
-        latest = _rows(task.target, _at(task.zone_history, task.vintage))
-        assert latest is not None
-        reported = (
-            latest.pivot_table(
-                index="location",
-                columns="target_end_date",
-                values="total",
-                aggfunc="sum",
-            )
-            .reindex(index=list(places), columns=weeks)
-            .fillna(0.0)
-            .to_numpy()
-        )
-        values = np.maximum(values, reported)  # [S, L, W]
         n, n_loc = task.n_samples, len(places)
         weekly_out = pd.DataFrame(
             {
@@ -1193,6 +1217,52 @@ class FoundationModel:
             return weekly_out, pd.DataFrame(columns=list(DAILY_COLUMNS))
         return weekly_out, _daily_frame(drawn, tri, start, places, weeks)
 
+    def _rows(
+        self, task: ForecastTask
+    ) -> tuple[pd.DataFrame, tuple[str, ...], list[str]]:
+        """Return the task's releases of the source, its places and weeks.
+
+        Raises `ModelUnavailableError` with no releases of the source.
+        """
+        weekly = self.source == "weekly"
+        base = task.target_history if weekly else task.daily_history
+        zone = task.zone_history if weekly else task.zone_daily_history
+        if base is None or base.empty:
+            raise ModelUnavailableError(
+                f"{self.name} needs the {self.source} releases, and the task "
+                f"for {task.vintage} has none."
+            )
+        # Only the releases of the country and provinces, so a release
+        # gives every place's lag cells or none.
+        if zone is not None:
+            zone = zone.loc[zone["vintage"].isin(set(base["vintage"]))]
+        has_zones = zone is not None and task.zone_daily_history is not None
+        zones = tuple(
+            z
+            for z in task.zone_codes
+            if has_zones and province_of(z) in task.locations
+        )
+        rows = _rows(base, zone if zones else None)
+        assert rows is not None
+        places = (NATIONAL, *task.locations, *zones)
+        weeks = list(task.target_end_dates)
+        return rows, places, weeks
+
+    def _triangle(
+        self, rows: pd.DataFrame, places: Sequence[str], last_time: str
+    ) -> HubTriangle:
+        """Return the task's triangle, `lags` or `lag_count` lags wide."""
+        full = hub_triangle(
+            rows, self.source, places, last_time, LAG_WINDOW[self.source][1]
+        )
+        lags = self.lags or lag_count(full, self.source)
+        return replace(full, partial=full.partial[:, :, :lags])
+
+    def lag_count(self, task: ForecastTask) -> int:
+        """Return the lag count the model gives `task`'s block."""
+        rows, places, weeks = self._rows(task)
+        return int(self._triangle(rows, places, weeks[-1]).partial.shape[2])
+
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return trajectories of every hub target in the task.
 
@@ -1206,13 +1276,14 @@ class FoundationModel:
         """Return Chronos-2's own quantiles where each target is one step.
 
         Each week of the weekly source is one of Chronos-2's steps, so its
-        quantiles are Chronos-2's native quantiles read at `levels` by
-        linear interpolation between the native levels (`native_sampler`).
-        They pass through `forecast` as one trajectory per level; every
-        step after the draws (rounding, the floors at the reported counts)
-        is monotone, so trajectory `k` is the quantile at level `k`.
-        A week of the daily source is a sum of steps, which has no native
-        quantile.
+        quantiles are Chronos-2's own at `levels`, which its pipeline
+        interpolates between its training levels (`native_sampler`).
+        They pass through `forecast` as one trajectory per level; the only
+        step after the draws, the floor at zero, is monotone, so
+        trajectory `k` is the quantile at level `k`.
+        A week of the daily source read from each place's aggregate row is
+        one step of that row, so it has a native quantile too; summed from
+        daily steps it has none.
 
         Parameters
         ----------
@@ -1227,7 +1298,7 @@ class FoundationModel:
             Columns `location`, `target_end_date`, `quantile` and `value`,
             or None for the daily source.
         """
-        if self.source != "weekly":
+        if self.source != "weekly" and self.period is None:
             return None
         at = np.asarray(levels, dtype=float)
         run = replace(
@@ -1236,6 +1307,42 @@ class FoundationModel:
         out = run.forecast(replace(task, n_samples=len(at)))
         out["quantile"] = at[out["sample"].to_numpy() - 1]
         return out[["location", "target_end_date", "quantile", "value"]]
+
+    def daily_quantiles(
+        self, task: ForecastTask, levels: Sequence[float]
+    ) -> pd.DataFrame:
+        """Return each day's count as Chronos-2's own quantiles.
+
+        Each day is one step of its count row, so its quantiles are
+        Chronos-2's native quantiles read at `levels` (`native_sampler`),
+        from the same call as `quantiles`.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+        levels : sequence of float
+            Increasing quantile levels.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `location`, `date`, `quantile` and `value`.
+
+        Raises
+        ------
+        ValueError
+            For the weekly source, which has no daily counts.
+        """
+        if self.source != "daily":
+            raise ValueError(f"{self.name} has no daily counts")
+        at = np.asarray(levels, dtype=float)
+        run = replace(
+            self, sample=native_sampler(at, self.checkpoint, self.known)
+        )
+        _, out = run.forecast_both(replace(task, n_samples=len(at)))
+        out["quantile"] = at[out["sample"].to_numpy() - 1]
+        return out[["location", "date", "quantile", "value"]]
 
 
 def native_sampler(
@@ -1258,8 +1365,8 @@ def native_sampler(
     -------
     Sampler
         Gives `[K, V, horizon]` per group: path `k` is each series and
-        step's quantile at `levels[k]`, linear between Chronos-2's native
-        levels and flat beyond them. It draws no random numbers.
+        step's quantile at `levels[k]`, as Chronos-2's pipeline gives it
+        (interpolated between its own levels). It draws no random numbers.
     """
 
     def sample(
@@ -1269,14 +1376,10 @@ def native_sampler(
         seed: int,  # noqa: ARG001
     ) -> list[np.ndarray]:
         pipeline = _chronos(checkpoint)
-        native = np.asarray(pipeline.quantiles, dtype=float)
         out = []
-        for q in _native(pipeline, groups, horizon, known):
-            q = np.sort(q, axis=-1)  # [V, H, Q]
-            at = np.apply_along_axis(
-                lambda v: np.interp(levels, native, v), -1, q
-            )  # [V, H, K]
-            out.append(np.moveaxis(at, -1, 0))  # [K, V, H]
+        for q in _native(pipeline, groups, horizon, known, levels):
+            q = np.sort(q, axis=-1)  # [V, H, K], monotone in the level
+            out.append(np.moveaxis(q, -1, 0))  # [K, V, H]
         return out
 
     return sample
@@ -1287,7 +1390,9 @@ class _CollectedError(Exception):
 
 
 def prefetch(
-    model: FoundationModel, tasks: Sequence[ForecastTask]
+    model: FoundationModel,
+    tasks: Sequence[ForecastTask],
+    levels: Sequence[float] | None = None,
 ) -> FoundationModel:
     """Return the model with Chronos-2's quantiles of `tasks` predicted.
 
@@ -1304,6 +1409,10 @@ def prefetch(
         The model.
     tasks : sequence of ForecastTask
         The tasks it will forecast, with their `n_samples` and seeds.
+    levels : sequence of float, optional
+        Quantile levels its own quantiles will be read at
+        (`FoundationModel.quantiles`); Chronos-2's own, for draws, by
+        default.
 
     Returns
     -------
@@ -1333,9 +1442,9 @@ def prefetch(
     pipeline = _chronos(model.checkpoint)
     for horizon in sorted({h for _, h in seen}):
         groups = [g for g, h in seen if h == horizon]
-        quantiles = _native(pipeline, groups, horizon, known)
+        quantiles = _native(pipeline, groups, horizon, known, levels)
         for g, q in zip(groups, quantiles, strict=True):
-            known[group_key(g, horizon)] = q
+            known[group_key(g, horizon, levels)] = q
     return replace(model, known=known)
 
 

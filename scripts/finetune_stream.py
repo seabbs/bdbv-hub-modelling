@@ -753,6 +753,17 @@ def tensors(block: dict) -> dict:
     }
 
 
+def checkpoint_threshold(args: argparse.Namespace) -> int:
+    """Return the series above which a step is checkpointed.
+
+    `--checkpoint-above` if given (a machine setting, `CHECKPOINT_ABOVE`),
+    else what the memory budget allows without checkpointing.
+    """
+    if args.checkpoint_above is not None:
+        return int(args.checkpoint_above)
+    return ft.checkpoint_above(args.memory_gb)
+
+
 def checkpoint_large_batches(above: int) -> None:
     """Recompute encoder activations in backward for large batches.
 
@@ -779,6 +790,33 @@ def checkpoint_large_batches(above: int) -> None:
         return forward(self, hidden_states, **kwargs)
 
     Chronos2EncoderBlock.forward = checkpointed
+
+
+INPUT_PATCH = 16
+"""Steps in one of Chronos-2's input patches."""
+
+
+def trim_context(batch: dict) -> dict:
+    """Return a batch without its leading context patches that no row observes.
+
+    Blocks are left-padded to `ft.CONTEXT` with missing values, and early in
+    an outbreak most of the context is missing in every row. Chronos-2 masks
+    a patch with no observation out of time and group attention, its time
+    encoding counts back from the context's end, and its rotary positions
+    are relative, so cutting whole such patches from the left leaves the
+    loss and gradients as they were, while the step works on fewer tokens.
+    At least one patch is kept.
+    """
+    import torch
+
+    context = batch["context"]
+    seen = (~torch.isnan(context)).any(dim=0)
+    width = context.shape[1]
+    first = int(seen.to(torch.int8).argmax()) if bool(seen.any()) else width
+    keep = max(INPUT_PATCH, -(-(width - first) // INPUT_PATCH) * INPUT_PATCH)
+    if keep >= width:
+        return batch
+    return {**batch, "context": context[:, width - keep :]}
 
 
 class ByLength:
@@ -828,7 +866,7 @@ class ByLength:
         batch = self.data[length]._build_batch([self.local[i] for i in indices])
         if self.bias:
             batch["series_rows"] = block_rows([self.inputs[i] for i in indices])
-        return batch
+        return trim_context(batch)
 
     def indices(self):
         """Yield every block's index once, in batches of one length.
@@ -1085,17 +1123,21 @@ def publish(where: Path, key: str, run=subprocess.run) -> None:
     log(f"uploaded {[f.name for f in missing]} to {tag}")
 
 
-def accumulate(indices: list[int], backward, zero, skip) -> float:
+def accumulate(indices: list[int], backward, zero) -> float:
     """Return a batch's loss, accumulating its gradients by `backward`.
 
     The gradients are clear when it starts (`finite_step`). If memory runs
     out, they are cleared and the memory freed (`zero`) and the batch is
-    run again in halves, and so on. A single block that runs out is run
-    once more, in case the memory was held for a moment by another
-    process, and if it still does not fit it is left out (`skip`). Every
-    other block is used once, and the blocks used share the gradient as
-    a batch of them alone would. A batch with every block left out
-    returns nan.
+    run again in halves, and so on, so every block is used once and they
+    share the gradient as the whole batch would. A single block that runs
+    out is run once more, in case the memory was held for a moment by
+    another process.
+
+    Raises
+    ------
+    RuntimeError
+        If a single block still does not fit: leaving it out would bias
+        training, so the run stops (lower the checkpoint threshold).
     """
     parts = [indices]
     retried: set = set()
@@ -1119,8 +1161,10 @@ def accumulate(indices: list[int], backward, zero, skip) -> float:
             if len(part) == 1 and part[0] not in retried:
                 retried.add(part[0])
             elif len(part) == 1:
-                skip(part[0])
-                parts = [p for p in parts if p is not part]
+                raise RuntimeError(
+                    f"block {part[0]} is too large for memory even alone; "
+                    "lower checkpoint_above"
+                ) from error
             else:
                 half = len(part) // 2
                 at = parts.index(part)
@@ -1219,14 +1263,6 @@ def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
                 losses.setdefault(level, []).append(loss)
     model.train(training)
     return {k: float(np.mean(v)) for k, v in losses.items()}
-
-
-def skipped_lines(skipped: list[dict]) -> list[str]:
-    """Return the lines listing skipped blocks in a release's outbreaks."""
-    return [
-        f"# skipped {b['outbreak']} at step {b['step']}, {b['series']} series"
-        for b in skipped
-    ]
 
 
 def check_until(until: int | None, prefixes: list[int]) -> None:
@@ -1419,6 +1455,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-gain", type=float, default=0.01)
     parser.add_argument("--stop-from", type=int, default=8000)
     parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
+    # Series above which a step recomputes activations in backward (unset:
+    # from --memory-gb). Memory only: the steps and blocks are the same.
+    parser.add_argument("--checkpoint-above", type=int, default=None)
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
     # The series bias (nowcastfoundation.series_bias): learned
@@ -1562,10 +1601,9 @@ def main() -> None:
         time.sleep(POLL)
     held = held[: args.holdout]
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
-    # Checkpointing and the largest block follow from the memory budget,
-    # so held-out blocks are cut to the same size as training blocks.
-    checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
-    ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
+    # Checkpointing follows from the memory budget; the blocks and steps
+    # do not, so every machine trains on the same ones.
+    checkpoint_large_batches(checkpoint_threshold(args))
     pool = ProcessPoolExecutor(
         args.cut_workers,
         mp_context=multiprocessing.get_context("spawn"),
@@ -1609,11 +1647,11 @@ def main() -> None:
     base = {
         "chronos_revision": CHRONOS_REVISION,
         "code_sha256": {
-            **{n: ft._sha256(Path(p)) for n, p in ft.CODE.items()},
+            **{n: ft.code_sha256(p) for n, p in ft.CODE.items()},
             ft.TRAINER: ft._sha256(Path(__file__)),
             # The bias's code shapes a bias checkpoint, so it is hashed.
             **(
-                {n: ft._sha256(Path(p)) for n, p in BIAS_CODE.items()}
+                {n: ft.code_sha256(p) for n, p in BIAS_CODE.items()}
                 if args.series_bias
                 else {}
             ),
@@ -1706,7 +1744,6 @@ def main() -> None:
     chunk: list[str] = []
     seen = {"blocks": 0, "series": 0}
     losses: list[float] = []
-    skipped: list[dict] = []
 
     def request(kinds: list[str], **extra) -> dict:
         """Return what an offloaded evaluation of the model now scores."""
@@ -1751,7 +1788,6 @@ def main() -> None:
         step, done, position = state["step"], state["done"], state["position"]
         start_loss, history = state["start_loss"], state["history"]
         seen, losses = state["seen"], state["losses"]
-        skipped = state.get("skipped", [])
         trained = (
             state.get("trained")
             or ready_outbreaks(sim_dir, training_seeds())[:done]
@@ -1776,7 +1812,6 @@ def main() -> None:
                 "history": history,
                 "seen": seen,
                 "losses": losses,
-                "skipped": skipped,
             },
         )
 
@@ -1786,14 +1821,6 @@ def main() -> None:
         value = train_step(model, batch, accepted, device, share)
         del batch
         return value
-
-    def skip(i: int) -> None:
-        """Record a block too large for memory."""
-        series = int(data.inputs[i]["context"].shape[0])
-        skipped.append(
-            {"outbreak": pairs[i][0], "step": step + 1, "series": series}
-        )
-        log(f"skipped {pairs[i][0]}, {series} series, too large: {memory()}")
 
     def zero() -> None:
         optimiser.zero_grad()
@@ -1900,17 +1927,11 @@ def main() -> None:
             # Cheap without `free_memory`; the step starts from no gradients
             # whatever ran before it.
             optimiser.zero_grad()
-            value = accumulate(list(indices), backward, zero, skip)
+            value = accumulate(list(indices), backward, zero)
             if not finite_step(params, optimiser, value):
-                left_out = sum(s["step"] == step + 1 for s in skipped)
-                why = (
-                    "every block too large for memory"
-                    if left_out == len(indices)
-                    else f"loss {value}"
-                )
                 # The step still counts, so the schedule, the evaluation
                 # steps and consumed.txt keep their step numbers.
-                log(f"step {step + 1}: no update ({why})")
+                log(f"step {step + 1}: no update (loss {value})")
             # Batches differ in shape, so cached buffers pile up unless they
             # are freed every step.
             free_memory()
@@ -2010,10 +2031,8 @@ def main() -> None:
         if done in prefixes:
             where = out / f"n{done}"
             where.mkdir(parents=True, exist_ok=True)
-            # The release lists its outbreaks in the order trained, and
-            # any block skipped.
-            lines = [*trained, *skipped_lines(skipped)]
-            (where / "outbreaks.txt").write_text("\n".join(lines) + "\n")
+            # The release lists its outbreaks in the order trained.
+            (where / "outbreaks.txt").write_text("\n".join(trained) + "\n")
             (where / "consumed.txt").write_text(consumed.read_text())
             model.save_pretrained(where / "finetuned-ckpt")
             settings = {
@@ -2028,8 +2047,8 @@ def main() -> None:
                 "level_mix": seen.get("mix", {}),
                 "cadence_mix": seen.get("cadences", {}),
                 "tokens": seen.get("tokens", 0),
-                "skipped_blocks": skipped,
                 "memory_gb": args.memory_gb,
+                "checkpoint_above": checkpoint_threshold(args),
             }
             key = ft._settings_hash(settings)
             settings["hash"] = key

@@ -40,9 +40,9 @@ delay_parameters <- function(family, v, max_delay = NULL) {
   out
 }
 
-# The longest delay in days: the shortest of 3, 4, 6, 8 and 12 weeks at
-# or above the delay's 99th centile, at most 12 weeks.
-max_delay_for <- function(q99) {
-  options <- c(21L, 28L, 42L, 56L, 84L)
+# The longest delay in days: the first of `options` (the grid's
+# `max_delay_days`) at or above the delay's 99th centile, else the last.
+max_delay_for <- function(q99, options) {
+  options <- as.integer(options)
   options[min(which(c(options >= q99, TRUE))[1], length(options))]
 }

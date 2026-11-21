@@ -1,6 +1,6 @@
 # Paper
 
-The manuscript and supporting information for the paper planned in [#206](https://github.com/seabbs/bdbv-hub-modelling/issues/206), on fine-tuning Chronos-2 on simulated outbreaks for nowcasting.
+The manuscript and supporting information for the paper on fine-tuning Chronos-2 on simulated outbreaks for nowcasting.
 One Snakemake workflow runs its evaluation, from each study's data to the figures, tables and numbers the paper quotes, and then renders the paper.
 
 ## Reproducing the paper
@@ -22,14 +22,14 @@ flowchart LR
   sim[Simulate] --> ft[Fine-tune] --> fc[Forecast] --> sc[Score] --> fig[Figures and tables] --> paper[Paper]
 ```
 
-Simulation and fine-tuning run locally, not on CI, and publish each checkpoint as a `chronos-ft-<hash>` release (#192).
+Simulation and fine-tuning run locally, not on CI, and publish each checkpoint as a `chronos-ft-<hash>` release.
 A round's simulations are made on a CPU host (`task nowcast-foundation:simulate`) and trained on a GPU (`task nowcast-foundation:finetune`) by the Snakemake workflow in [`workflow/`](../workflow/README.md).
 Everything from forecasting on runs in this workflow, locally or on CI.
 
 <details>
 <summary>The studies</summary>
 
-- **Held-out synthetic outbreaks**: the simulations of each run's seeds ([`paperdata/synthetic.py`](paperdata/synthetic.py)) and the models' forecasts of them, which the synthetic runner of #192 writes.
+- **Held-out synthetic outbreaks**: the simulations of each run's seeds ([`paperdata/synthetic.py`](paperdata/synthetic.py)) and the models' forecasts of them, which the synthetic runner writes.
   Sample forecasts are scored by CRPS relative to `randomwalknowcast`, with D each outbreak's 98% delay.
 - **German nowcast hub**: the benchmark of Wolffram et al. (2023), run with `bdbvhubrenewal germany-backtest`, `germany-teams` and `germany-paper` ([`config/germany.toml`](../config/germany.toml), [German benchmark page](../docs/germany.md)).
   Quantiles are scored by WIS relative to `KIT-frozen_baseline` and to `randomwalknowcast`, with D 40 days.
@@ -100,10 +100,10 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - Any machine with Python 3.12 and uv.
   `--cores N` runs independent steps in parallel.
 - A development run on dummy data takes about a minute.
-- The German benchmark's development half takes about an hour on a laptop, and its held-out half as long again.
+- The German benchmark's development half takes about an hour, and its held-out half as long again.
   CI runs each half in parallel blocks of dates, the held-out half only for a dispatched `paper` run and never cached.
 - Cloning the Ebola hub takes about a minute.
-- Fine-tuning uses CUDA, MPS or the CPU, whichever is available (#192).
+- Fine-tuning uses CUDA, MPS or the CPU, whichever is available.
 
 </details>
 
