@@ -206,7 +206,8 @@ def test_a_machine_sets_the_checkpoint_threshold(tmp_path):
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
-    assert args.checkpoint_above is None
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    assert args.checkpoint_above == config["finetune"]["checkpoint_above"]
     args = fs.build_parser().parse_args(
         _trainer_args(tmp_path, machine="CHECKPOINT_ABOVE=0\n")
     )

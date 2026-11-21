@@ -80,6 +80,14 @@ finetune:
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
+  # Series a training step packs blocks up to; part of the recipe and
+  # the settings hash.
+  batch_size: 256
+  # Series above which a training step recomputes activations in
+  # backward. Memory and speed only: the steps and the hash stay. A
+  # machine with less GPU memory sets it lower (CHECKPOINT_ABOVE in
+  # config/local.env, or --config finetune.checkpoint_above=N).
+  checkpoint_above: 733
   sources: null
   univariate_share: 0.2
   # Days after the cut-off a training block's horizon, and so the loss,

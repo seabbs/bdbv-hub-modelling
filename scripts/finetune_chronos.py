@@ -1,10 +1,10 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Blocks, batches and memory budget for fine-tuning Chronos-2.
+"""Blocks and batches for fine-tuning Chronos-2.
 
 Cuts outbreaks from the simulator (packages/nowcastfoundation/r) into
 training blocks
-(`outbreak_blocks`), packs them into batches within a memory budget
-(`plan_batches`, `max_series`), without torch.
+(`outbreak_blocks`) and packs them into batches (`plan_batches`),
+without torch.
 `scripts/finetune_stream.py` trains on them and
 publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 `_ft` models load the newest one
@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -201,52 +202,13 @@ def check_package(root: Path) -> None:
         )
 
 
-MEMORY_GB = 36.0
-"""The GPU memory budget of a training step, in GB: the trainer's cap on
-GPU memory (0.85 of the GPU's working set) less room for the model and
-the held-out set. A machine with less GPU memory sets it lower
-(`--memory-gb`)."""
-
 MAX_SERIES = 2000
-"""Most series in a block. A block's series count is drawn log-uniformly
-up to it. With gradient checkpointing a block of 2,000 series fits
-`MEMORY_GB` with headroom; a machine with less GPU memory draws smaller
-blocks (`max_series`)."""
+"""Most series in a block of sampled places, whose series count is drawn
+log-uniformly up to it, and in a batch of several blocks."""
 
 CUTS = 32
 """Snapshots (cut-off slots) of each observation draw, spread over its
 course: 32 blocks from one draw."""
-
-MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
-"""GPU memory of one training step in GB per series and per series
-squared, without and with gradient checkpointing: fitted to 800 series
-taking about 43 GB without it, and 1,000, 1,500 and 2,000 series taking
-9.6, 17.3 and 25.9 GB with it (Chronos-2 with LoRA and AdamW on an Apple
-GPU). Group attention makes it grow with the square of the series."""
-
-
-def memory_gb(series: int, checkpointed: bool) -> float:
-    """Return a training step's GPU memory in GB for `series` series."""
-    per, squared = MEMORY_COST[checkpointed]
-    return per * series + squared * series**2
-
-
-def _most_within(budget_gb: float, checkpointed: bool) -> int:
-    """Return the most series whose step fits `budget_gb`."""
-    per, squared = MEMORY_COST[checkpointed]
-    root = (-per + (per**2 + 4 * squared * budget_gb) ** 0.5) / (2 * squared)
-    return int(root)
-
-
-def checkpoint_above(budget_gb: float) -> int:
-    """Return the series above which a step needs gradient checkpointing."""
-    return _most_within(budget_gb, checkpointed=False)
-
-
-def max_series(budget_gb: float) -> int:
-    """Return the most series of a block that fits with checkpointing."""
-    return _most_within(budget_gb, checkpointed=True)
-
 
 ENGINE = "packages/nowcastfoundation/r"
 """The simulator engine, whose R files and description are hashed."""
@@ -278,6 +240,17 @@ def simulator_files(grid_file: str) -> tuple[str, ...]:
         f"{ENGINE}/DESCRIPTION",
         *(f"{ENGINE}/R/{name}" for name in engine),
     )
+
+
+def workflow_finetune(key: str) -> Any:
+    """Return the workflow's fine-tuning setting `key`.
+
+    `finetune.<key>` in workflow/config.yaml: the trainer's default.
+    """
+    import yaml
+
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    return config["finetune"][key]
 
 
 def workflow_grid_file() -> str:
@@ -789,8 +762,8 @@ def plan_batches(
     Blocks are shuffled and packed in that order into batches of one size
     class until a batch holds `batch_size` series, so batches of small
     blocks pack tightly and a large block is a batch on its own. No batch
-    of several blocks holds more than `most` series, the most the memory
-    budget allows (`max_series`). The batches are then shuffled.
+    of several blocks holds more than `most` series (the trainer passes
+    `MAX_SERIES`). The batches are then shuffled.
     """
     filling: dict[int, list[int]] = {}
     held: dict[int, int] = {}

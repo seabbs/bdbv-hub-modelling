@@ -60,8 +60,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--free-run", type=int, default=0)
     p.add_argument("--device", default="auto")
     p.add_argument("--threads", type=int)
-    p.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
-    p.add_argument("--batch-size", type=int, default=256)
+    p.add_argument(
+        "--checkpoint-above",
+        type=int,
+        default=ft.workflow_finetune("checkpoint_above"),
+    )
+    p.add_argument(
+        "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
+    )
     p.add_argument("--blocks-per-simulation", type=int, default=32)
     p.add_argument("--draws-per-simulation", type=int, default=1)
     p.add_argument("--subset-seed", type=int, default=1)
@@ -90,7 +96,7 @@ def main() -> None:
     ft.UNIVARIATE_SHARE = args.univariate_share
     fs.DRAWS_PER_PASS = args.draws_per_simulation
     fs.SUBSET_SEED = args.subset_seed
-    fs.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
+    fs.checkpoint_large_batches(args.checkpoint_above)
     k = args.blocks_per_simulation
     device = torch_device(args.device)
 
@@ -223,9 +229,8 @@ def main() -> None:
     summary = {
         "device": device,
         "threads": torch.get_num_threads(),
-        "memory_gb": args.memory_gb,
         "max_series": ft.MAX_SERIES,
-        "checkpoint_above": ft.checkpoint_above(args.memory_gb),
+        "checkpoint_above": args.checkpoint_above,
         "series_bias": args.series_bias,
         "sims": len(ids),
         "blocks": len(blocks),
