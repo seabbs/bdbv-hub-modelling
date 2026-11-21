@@ -203,14 +203,15 @@ def check_package(root: Path) -> None:
 
 MEMORY_GB = 36.0
 """The GPU memory budget of a training step, in GB: the trainer's cap on
-MPS memory (0.85 of a 55.7 GB working set) less room for the model and
-the held-out set."""
+GPU memory (0.85 of the GPU's working set) less room for the model and
+the held-out set. A machine with less GPU memory sets it lower
+(`--memory-gb`)."""
 
 MAX_SERIES = 2000
 """Most series in a block. A block's series count is drawn log-uniformly
-up to it. With gradient checkpointing a block of 2,400 series fits the
-laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
-2,000 leaves headroom."""
+up to it. With gradient checkpointing a block of 2,000 series fits
+`MEMORY_GB` with headroom; a machine with less GPU memory draws smaller
+blocks (`max_series`)."""
 
 CUTS = 32
 """Snapshots (cut-off slots) of each observation draw, spread over its
@@ -221,7 +222,7 @@ MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
 squared, without and with gradient checkpointing: fitted to 800 series
 taking about 43 GB without it, and 1,000, 1,500 and 2,000 series taking
 9.6, 17.3 and 25.9 GB with it (Chronos-2 with LoRA and AdamW on an Apple
-M4 Max). Group attention makes it grow with the square of the series."""
+GPU). Group attention makes it grow with the square of the series."""
 
 
 def memory_gb(series: int, checkpointed: bool) -> float:
@@ -368,6 +369,11 @@ complete, unless an outbreak's settings give `max_delay` in days."""
 def _sha256(path: Path) -> str:
     """Return a file's SHA-256."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def code_sha256(path: str) -> str:
+    """Return the SHA-256 of a hashed code file, its path from `ROOT`."""
+    return _sha256(ROOT / path)
 
 
 QUIET_WINDOW_DAYS = 28
@@ -571,9 +577,9 @@ def whole_system(
     groups = sorted({p.split("-")[0] for p in provinces})
     ages = sorted(
         {
-            p.split("-")[1]
-            for p in provinces
-            if re.fullmatch(r"A\d+", p.split("-")[1])
+            parts[1]
+            for parts in (p.split("-") for p in provinces)
+            if len(parts) > 1 and re.fullmatch(r"A\d+", parts[1])
         }
     )
     return (NATIONAL, *groups, *ages, *sorted(provinces)), "all_levels"
@@ -609,9 +615,9 @@ def choose_places(
         groups.setdefault(p.split("-")[0], []).append(p)
     ages = sorted(
         {
-            p.split("-")[1]
-            for p in provinces
-            if re.fullmatch(r"A\d+", p.split("-")[1])
+            parts[1]
+            for parts in (p.split("-") for p in provinces)
+            if len(parts) > 1 and re.fullmatch(r"A\d+", parts[1])
         }
     )
     chosen: list[str] = []
@@ -716,14 +722,9 @@ def outbreak_blocks(
             # one more.
             rows = lag + 1 + (source in MIXED or source in ROLLING)
             if WHOLE_SYSTEM:
+                # The whole system, however many series: a block is never
+                # skipped for its size.
                 places, mix = whole_system(provinces, rng)
-                if len(places) * rows > MAX_SERIES:
-                    if empty is not None:
-                        empty.append(
-                            f"{source} cut {j}: {len(places)} places over "
-                            f"the series cap ({MAX_SERIES})"
-                        )
-                    continue
             elif len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 fits = MAX_SERIES // rows - 1
