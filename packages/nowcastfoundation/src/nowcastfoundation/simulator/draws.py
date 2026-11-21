@@ -343,16 +343,16 @@ def delay_q99(family: str, v: Mapping[str, Any]) -> float:
             raise ValueError(f"unknown delay family {other}")
 
 
-def max_delay_for(q99: float) -> int:
+def max_delay_for(q99: float, options: Sequence[int]) -> int:
     """Return the longest delay in days.
 
-    The shortest of 3, 4, 6, 8 and 12 weeks at or above the delay's 99th
-    centile, at most 12 weeks.
+    The first of `options` (the grid's `max_delay_days`) at or above the
+    delay's 99th centile, else the last.
     """
-    for days in (21, 28, 42, 56):
+    for days in options[:-1]:
         if days >= q99:
-            return days
-    return 84
+            return int(days)
+    return int(options[-1])
 
 
 def _sample(rng: np.random.Generator, x: Sequence[int], k: int) -> list[int]:
@@ -454,8 +454,9 @@ def draw_values(
     v["waves"] = 2 + int(rng.poisson(rates["extra_waves"]))
     v["wave_scale"] = vec(ds("wave_scale", v["waves"] + 1))
     v["flip_days"] = ds("flip_days")
-    # Weeks of the series, the longest delay (12 weeks) and the horizon.
-    v["walk_r"] = log_r_walk(grid, weeks + 18, rng)
+    # Weeks of the series, the longest delay possible and the horizon.
+    span = weeks + max(grid["max_delay_days"]) // 7 + 6
+    v["walk_r"] = log_r_walk(grid, span, rng)
     v["control_days"] = ds("control_days")
     v["r_drift"] = ds("r_drift") if not endemic and sh("drift") else 1.0
     v["population"] = vec(
@@ -521,7 +522,7 @@ def draw_values(
     v["periodic"] = ds("periodic")
     v["periodic_weeks"] = ds("periodic_weeks")
     v["walk_sd"] = ds("walk_sd")
-    steps = np.concatenate([[0.0], ds("walk_step", weeks + 17)])
+    steps = np.concatenate([[0.0], ds("walk_step", span - 1)])
     v["delay_walk"] = vec(v["walk_sd"] * np.cumsum(steps))
     v["smooth_amp"] = ds("smooth_amp")
     v["smooth_period"] = float(max(floors["period_days"], ds("smooth_period")))
@@ -532,7 +533,7 @@ def draw_values(
     parametric = design["delay_form"] != "non_parametric"
     family = design["delay_family"] if parametric else "none"
     v["delay_dow_sd"] = ds("delay_dow_sd")
-    v["max_delay"] = max_delay_for(delay_q99(family, v))
+    v["max_delay"] = max_delay_for(delay_q99(family, v), grid["max_delay_days"])
 
     # Layer 4: the reporting system.
     v["reference_dow_sd"] = ds("reference_dow_sd")

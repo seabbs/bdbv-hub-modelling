@@ -23,6 +23,10 @@ epinowcast_sha: e084b080
 # simulation of their own, so at most `max_independent` of them.
 max_strata: 60
 max_independent: 8
+# The longest delay a simulation reports, in days: the first of these at
+# or above its delay's 99th centile, else the last. The R(t) and delay
+# walks run over the series, the last of these and the horizon.
+max_delay_days: [21, 28, 42, 56, 84, 126]
 # Tries of a design's values before a new design, and designs before a
 # simulation fails.
 tries: 5
@@ -571,29 +575,32 @@ distributions:
   delay_mean:
     dist: lognormal
     median: 5.0
-    sdlog: 0.6
+    sdlog: 0.9
     layer: delays
-    why: mean delays of about 1.5 to 16 days
+    why: mean delays from about a day to several weeks (1.1 to 22 days)
   delay_median:
     dist: lognormal
-    median: 3.2
-    sdlog: 0.5
+    median: 2.5
+    sdlog: 0.8
     layer: delays
-    why: lognormal delays with medians of about 1 to 9 days
+    why: lognormal delays with medians of about half a day to 9 days
   delay_sdlog:
     dist: lognormal
-    median: 0.9
-    sdlog: 0.3
+    median: 1.2
+    sdlog: 0.35
     layer: delays
-    why: right-skewed delays, no longer-tailed than real ones
+    why: from tight to heavy tails (0.7 to 2.1); with a short median, a
+      fast head and a long tail, as Germany's 22-26% on day 0 and 99%
+      delay of 61-81 days
   delay_shape:
     dist: beta
-    a: 4.0
+    a: 1.5
     b: 2.0
-    lower: 0.0
-    upper: 2.0
+    lower: 0.2
+    upper: 2.5
     layer: delays
-    why: gamma delays need a shape below 2 in the simulate branch
+    why: gamma shapes from 0.2 (CV 2.2, a heavy head at 0 and a long tail)
+      to 2.5
   delay_place_sd:
     dist: lognormal
     median: 0.28

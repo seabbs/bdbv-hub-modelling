@@ -191,8 +191,9 @@ draw_values <- function(grid, design) {
   v$waves <- 2L + rpois(1, grid$rates$extra_waves)
   v$wave_scale <- ds("wave_scale", v$waves + 1L)
   v$flip_days <- ds("flip_days")
-  # Weeks of the series, the longest delay (12 weeks) and the horizon.
-  v$walk_r <- log_r_walk(grid, weeks + 18L)
+  # Weeks of the series, the longest delay possible and the horizon.
+  span <- weeks + max(grid$max_delay_days) %/% 7L + 6L
+  v$walk_r <- log_r_walk(grid, span)
   v$control_days <- ds("control_days")
   v$r_drift <- if (!endemic && draw_share(grid, "drift")) ds("r_drift") else 1
   v$population <- ds(if (endemic) "endemic_population" else "population", n_p)
@@ -255,7 +256,7 @@ draw_values <- function(grid, design) {
   v$periodic <- ds("periodic")
   v$periodic_weeks <- ds("periodic_weeks")
   v$walk_sd <- ds("walk_sd")
-  v$delay_walk <- v$walk_sd * cumsum(c(0, ds("walk_step", weeks + 17L)))
+  v$delay_walk <- v$walk_sd * cumsum(c(0, ds("walk_step", span - 1L)))
   v$smooth_amp <- ds("smooth_amp")
   v$smooth_period <- max(grid$floors$period_days, ds("smooth_period"))
   v$smooth_phase <- ds("phase")
@@ -264,7 +265,9 @@ draw_values <- function(grid, design) {
   v$slow_mult <- ds("slow_mult")
   family <- if (design$delay_form == "non_parametric") "none" else design$delay_family
   v$delay_dow_sd <- ds("delay_dow_sd")
-  v$max_delay <- max_delay_for(delay_parameters(family, v)$q99)
+  v$max_delay <- max_delay_for(
+    delay_parameters(family, v)$q99, grid$max_delay_days
+  )
 
   # Layer 4: the reporting system.
   v$reference_dow_sd <- ds("reference_dow_sd")
