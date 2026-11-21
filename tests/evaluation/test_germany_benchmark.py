@@ -504,6 +504,35 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     assert events == [e for d in dates for e in (("build", d), ("forecast", d))]
 
 
+def test_chronos_is_prefetched_at_the_levels_it_forecasts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bdbvhubrenewal.evaluation import germany as de
+
+    # Prefetched quantiles are keyed by their levels, so only those at the
+    # levels forecast are ever read.
+    class Chronos:
+        pass
+
+    seen: dict[str, tuple[float, ...]] = {}
+
+    def prefetch(model, _tasks, levels):
+        seen["prefetch"] = tuple(levels)
+        return model
+
+    def quantiles(_model, _task, levels, *_a, **_k):
+        seen["forecast"] = tuple(levels)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(de, "FoundationModel", Chronos)
+    monkeypatch.setattr(de, "get_model", lambda _name: Chronos())
+    monkeypatch.setattr(de, "prefetch", prefetch)
+    monkeypatch.setattr(de, "_tasks", lambda *_a: ["task"])
+    monkeypatch.setattr(de, "forecast_quantiles", quantiles)
+    de.germany_forecasts(["chronos2"], pd.DataFrame(), ["2021-10-04"], 10, 1)
+    assert seen["prefetch"] == seen["forecast"]
+
+
 def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
     forecasts: pd.DataFrame,
 ) -> None:

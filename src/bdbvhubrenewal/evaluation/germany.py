@@ -475,7 +475,7 @@ def germany_forecasts(
         }
         every = [t for ts in tasks.values() for t in ts]
         built = [
-            prefetch(m, every, QUANTILE_LEVELS)
+            prefetch(m, every, FORECAST_LEVELS)
             if isinstance(m, FoundationModel)
             else m
             for m in built

@@ -143,3 +143,29 @@ def test_the_task_store_key_covers_the_code_the_tasks_depend_on(
 
     monkeypatch.setattr(base, "ForecastTask", Wider)
     assert ck.german_tasks_dir(tmp_path, data, 1000, 1) != one
+
+
+def test_forecasts_read_every_quantile_from_the_prefetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The prefetch covers the levels the forecasts are read at, so no
+    # task calls Chronos-2 again.
+    from bdbvhubrenewal.evaluation import germany as de
+
+    triangle = read_triangle(FIXTURE)
+    pipe = _Pipeline()
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
+    done = []
+    fetch = de.prefetch
+
+    def prefetch_then_count(*args, **kwargs):
+        out = fetch(*args, **kwargs)
+        pipe.calls = 0
+        done.append(True)
+        return out
+
+    monkeypatch.setattr(de, "prefetch", prefetch_then_count)
+    forecasts = germany_forecasts(MODELS, triangle, DATES[:1], 30, 1)
+    assert done
+    assert set(forecasts["quantile"].round(6)) == set(de.FORECAST_LEVELS)
+    assert pipe.calls == 0

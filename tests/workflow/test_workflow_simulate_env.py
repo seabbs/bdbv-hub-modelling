@@ -21,7 +21,7 @@ def test_the_pin_and_identifier_are_read_from_the_grid(tmp_path):
     assert re.fullmatch(r"[0-9a-f]{7,40}", simulator.epinowcast_sha(GRID))
     assert re.fullmatch(r"[0-9a-f]{12}", simulator.grid_id(GRID))
     other = tmp_path / "x.yaml"
-    other.write_text("max_strata: 1\n")
+    other.write_text("max_triangle_cells: 1\n")
     assert simulator.grid_id(other) != simulator.grid_id(GRID)
     with pytest.raises(ValueError, match="epinowcast_sha"):
         simulator.epinowcast_sha(other)
