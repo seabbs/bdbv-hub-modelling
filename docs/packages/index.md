@@ -3,10 +3,8 @@
 The code behind the three projects, as seven packages.
 { .page-subtitle }
 
-Each package has its own docs site: getting started, how to, its API reference and how it is used in the workflow.
-The packages move out of `bdbvhubrenewal` one at a time.
-nowcastutils, nowcasteval and nowcastbaselines have their own sites now.
-The others are still modules of `bdbvhubrenewal`, and their API is in the [API reference](../reference/index.md).
+nowcastutils, nowcasteval and nowcastbaselines each have a docs site: getting started, how to, the API reference and how the package is used in the workflow.
+The API of the others is in the [API reference](../reference/index.md).
 
 | | Package | What it holds | Code and API |
 |---|---|---|---|

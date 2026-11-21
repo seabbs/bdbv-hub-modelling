@@ -26,7 +26,6 @@ metadata-files:
 ---
 
 <!--
-Plan from #206.
 Each top-level bullet is one paragraph, with 2–3 supporting points.
 -->
 
