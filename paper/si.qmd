@@ -19,7 +19,6 @@ metadata-files:
 ---
 
 <!--
-Plan from #206.
 One SI section per paper section.
 -->
 
