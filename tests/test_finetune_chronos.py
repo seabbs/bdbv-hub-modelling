@@ -451,7 +451,6 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
         initializer=init_worker,
         initargs=(
             finetune_chronos.MAX_SERIES,
-            finetune_chronos.MAX_LAGS,
             finetune_chronos.SOURCES,
         ),
     ) as pool:
@@ -563,32 +562,22 @@ def test_one_source_cuts_only_that_source(tmp_path, monkeypatch):
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("weekly",))
     blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
     assert blocks
-    assert all(_d(b) <= 7 for b in blocks)
+    assert all(b["source"] == "weekly" and _d(b) >= 1 for b in blocks)
 
 
 def test_workers_take_the_trainer_block_settings():
     import finetune_chronos
     from finetune_stream import init_worker
 
-    saved = (
-        finetune_chronos.MAX_SERIES,
-        finetune_chronos.MAX_LAGS,
-        finetune_chronos.SOURCES,
-    )
+    saved = (finetune_chronos.MAX_SERIES, finetune_chronos.SOURCES)
     try:
-        lags = {"daily": (28,)}
-        init_worker(100, lags, ("daily",), loss_days=7)
+        init_worker(100, ("daily",), loss_days=7)
         assert finetune_chronos.PARENTS is not None
         assert finetune_chronos.LOSS_HORIZON_DAYS == 7
         assert finetune_chronos.MAX_SERIES == 100
-        assert lags == finetune_chronos.MAX_LAGS
         assert finetune_chronos.SOURCES == ("daily",)
     finally:
-        (
-            finetune_chronos.MAX_SERIES,
-            finetune_chronos.MAX_LAGS,
-            finetune_chronos.SOURCES,
-        ) = saved
+        finetune_chronos.MAX_SERIES, finetune_chronos.SOURCES = saved
         finetune_chronos.PARENTS = None
         finetune_chronos.LOSS_HORIZON_DAYS = None
 
@@ -629,9 +618,8 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
     assert blocks
     for b in blocks:
         assert b["source"] == "3day"
-        # D is drawn from 5-16 steps of 3 days, capped at the history
-        # before an early cut-off.
-        assert 1 <= _d(b) <= 16
+        # D follows the lag rule in 3-day steps, at most the history.
+        assert _d(b) >= 1
     assert max(_d(b) for b in blocks) >= 5
 
 
@@ -1422,12 +1410,12 @@ def test_parents_come_from_the_grid_file(monkeypatch):
 
 
 def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
-    # A lag longer than the history before a cut-off is capped to it, so
-    # an early cut-off is kept, not skipped.
+    # Early cut-offs have no complete steps to read a delay from, so the
+    # shared rule takes as many lags as the history allows: they are kept,
+    # not skipped.
     from finetune_chronos import NATIONAL, outbreak_blocks
 
     monkeypatch.setattr(ft, "SOURCES", ("daily",))
-    monkeypatch.setattr(ft, "MAX_LAGS", {**ft.MAX_LAGS, "daily": (49,)})
     monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 1.0)
     counts = _counts_of(["P1", "P2"], days=63)
     blocks = outbreak_blocks(
@@ -1438,5 +1426,5 @@ def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
         assert b["places"] == (NATIONAL,)
         lag = b["n_covariates"] // len(b["places"])
         # Every lag series and two steps of context fit in the history.
-        assert 1 <= lag < 49
+        assert 1 <= lag < 63
         assert b["nowcast"] == lag

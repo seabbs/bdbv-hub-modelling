@@ -122,8 +122,9 @@ LAG_QUANTILE: Final = 0.99
 """The share of a count reported by the lag `lag_count` takes as $D$."""
 
 LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
-"""The steps before the cut-off whose counts `lag_count` takes as complete
-(4 to 16 weeks, 28 to 112 days), and the most lags it gives."""
+"""`lag_count`'s complete steps: this many (4 weeks, 28 days), ending this
+many before the cut-off (16 weeks, 112 days), which is also the most lags
+it reads."""
 
 COUPLING_WEEKS: Final = 8
 """How many earlier releases the gaussian coupling is fitted from: the
@@ -644,15 +645,24 @@ def hub_triangle(
 def lag_count(
     tri: HubTriangle, source: str, quantile: float = LAG_QUANTILE
 ) -> int:
-    """Return the lag count $D$ from the data's reporting delay.
+    """Return the block's lag count $D$ from the data's reporting delay.
 
-    The delay's `quantile` point: the first lag at which the steps
-    `LAG_WINDOW` before the cut-off, taken as complete, had that share of
-    their counts reported, pooled over places and over the releases there
-    are (weekly releases of daily data see each step at every 7th lag).
-    It reads no release after the cut-off. At most the history allows,
-    with two steps of context before the longest lag; with no counts in
-    the window, or the share not reached within it, that many.
+    One count for the block: the largest over its places of each place's
+    delay, one more than the first lag at which that place's complete
+    steps had `quantile` of their counts reported, so lag $D - 1$, where
+    the share is reached, is in the block. A place's complete steps are
+    the `LAG_WINDOW[source][0]` steps ending `LAG_WINDOW[source][1]`
+    steps before the cut-off: every lag below that is reported by the
+    cut-off, so recent steps, which have not yet seen their long delays,
+    do not bias it short (right truncation). It reads no release after
+    the cut-off. A lag no release fell on carries the count of the lag
+    before (weekly releases of daily data). A low-count place can only
+    underestimate its delay, so it never raises the block's. At most the
+    history allows, two steps of context before the longest lag; a place
+    whose share is not reached within the window takes that many, and so
+    does a block with no complete steps or no count in them. Training
+    blocks (`nowcastfoundation.finetune.training_block`) and forecasts
+    (`FoundationModel`) use this one rule.
 
     Parameters
     ----------
@@ -661,27 +671,37 @@ def lag_count(
     source : str
         One of `SOURCES`.
     quantile : float
-        The share of a count reported.
+        The share of a count reported, in (0, 1].
 
     Returns
     -------
     int
         $D$, at least 1.
+
+    Raises
+    ------
+    ValueError
+        If `quantile` is not in (0, 1].
     """
-    lo, hi = LAG_WINDOW[source]
-    width = min(hi, int(tri.partial.shape[2]))
+    if not 0 < quantile <= 1:
+        raise ValueError(f"lag quantile {quantile} is not in (0, 1]")
+    window, back = LAG_WINDOW[source]
+    width = min(back, int(tri.partial.shape[2]))
     most = int(max(1, min(width, tri.last - 1)))
-    steps = np.arange(max(tri.last - hi, 0), tri.last - lo + 1)
-    if steps.size == 0:
+    first = tri.last - back - window + 1
+    if first < 0:
         return most
-    final = tri.final[:, steps]
-    for d in range(width):
-        part = tri.partial[:, steps, d]
-        seen = ~np.isnan(part)
-        total = final[seen].sum()
-        if total > 0 and part[seen].sum() / total >= quantile:
-            return max(1, min(d, most))
-    return most
+    steps = list(range(first, tri.last - back + 1))
+    lags = []
+    for p in range(tri.final.shape[0]):
+        final = tri.final[p, steps].sum()
+        if final <= 0:
+            continue
+        seen = pd.DataFrame(tri.partial[p, steps, :width]).ffill(axis=1)
+        share = seen.fillna(0.0).to_numpy().sum(axis=0) / final
+        reached = np.flatnonzero(share >= quantile - 1e-12)
+        lags.append(int(reached[0]) + 1 if reached.size else most)
+    return min(max(lags), most) if lags else most
 
 
 def quantile_draws(
@@ -1018,7 +1038,7 @@ def _weekly_from_totals(
             out.append(drawn[:, n_places:, t - start])
         else:
             total = np.nan_to_num(period.totals[:, t])
-            out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
+            out.append(np.broadcast_to(total, (drawn.shape[0], n_places)))
     return np.stack(out, axis=2)
 
 
@@ -1196,33 +1216,40 @@ class FoundationModel:
         period = self._period(tri)
         # Zero-shot and fine-tuned models build the same block, the
         # zero-case places' lag rows included; only the weights differ.
-        group = layout_block(tri, self.layout, places, start, period)
         if self.coupling not in COUPLINGS:
             raise ValueError(
                 f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
             )
-        sample = self.sample
-        if sample is None:
-            past = (
-                self._past_blocks(rows, places, tri, start, horizon)
-                if self.coupling == "gaussian"
-                else []
-            )
-            if self.collect is not None:
-                self.collect.extend(
-                    (g, horizon) for g in [group, *(b for b, _ in past)]
+        if horizon <= 0:
+            # Every step of the target weeks is complete at the latest
+            # release (the target ends at least the lag count before the
+            # cut-off): the counts reported, with no forecast.
+            start = len(tri.times)
+            drawn = np.zeros((task.n_samples, len(places), 0))
+        else:
+            group = layout_block(tri, self.layout, places, start, period)
+            sample = self.sample
+            if sample is None:
+                past = (
+                    self._past_blocks(rows, places, tri, start, horizon)
+                    if self.coupling == "gaussian"
+                    else []
                 )
-                raise _CollectedError
-            sample = partial(
-                chronos_sampler,
-                checkpoint=self.checkpoint,
-                known=self.known,
-                coupling=self._coupling_fit(past, horizon, seed),
-            )
-        draws = sample([group], horizon, task.n_samples, seed)[0]
-        # Counts are not negative; Chronos-2's output is otherwise kept as
-        # it is: not rounded and not floored at the counts reported.
-        drawn = np.maximum(draws, 0.0)
+                if self.collect is not None:
+                    self.collect.extend(
+                        (g, horizon) for g in [group, *(b for b, _ in past)]
+                    )
+                    raise _CollectedError
+                sample = partial(
+                    chronos_sampler,
+                    checkpoint=self.checkpoint,
+                    known=self.known,
+                    coupling=self._coupling_fit(past, horizon, seed),
+                )
+            draws = sample([group], horizon, task.n_samples, seed)[0]
+            # Counts are not negative; Chronos-2's output is otherwise kept
+            # as it is: not rounded and not floored at the counts reported.
+            drawn = np.maximum(draws, 0.0)
         if period is not None:
             values = _weekly_from_totals(drawn, period, tri, start, weeks)
         else:
@@ -1291,7 +1318,12 @@ class FoundationModel:
         full = hub_triangle(
             rows, self.source, places, last_time, LAG_WINDOW[self.source][1]
         )
-        lags = self.lags or lag_count(full, self.source)
+        # A fixed count is still no more than the history allows.
+        lags = (
+            min(self.lags, max(1, full.last - 1))
+            if self.lags
+            else lag_count(full, self.source)
+        )
         return replace(full, partial=full.partial[:, :, :lags])
 
     def lag_count(self, task: ForecastTask) -> int:
