@@ -592,3 +592,33 @@ def test_forecasts_pass_their_horizons_and_store_them_apart(
     assert seen == [wide, tuple(HORIZONS)]
     # Each set of horizons has its own stored tasks.
     assert len(list(tmp_path.rglob("*.pkl.gz"))) == 2
+
+
+def test_models_see_only_the_counts_the_truth_holds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from bdbvhubrenewal.evaluation import germany as de
+
+    # The truth is the data reported within `max_delay` days, so the
+    # models forecast that count: what is reported later is not theirs.
+    seen: list[pd.DataFrame] = []
+
+    def tasks(triangle, _date, _n, _seed, _root, _horizons):
+        seen.append(triangle)
+        return []
+
+    monkeypatch.setattr(de, "_tasks", tasks)
+    monkeypatch.setattr(de, "get_model", lambda name: name)
+    tri = pd.DataFrame(
+        {
+            "reference_date": ["2021-01-01"] * 2,
+            "location": ["DE"] * 2,
+            "age_group": ["00+"] * 2,
+            "confirm": [8, 10],
+            "report_date": ["2021-02-10", "2021-02-11"],
+        }
+    )
+    de.germany_forecasts(
+        ["randomwalknowcast"], tri, ["2021-03-01"], 10, 1, max_delay=40
+    )
+    assert seen[0]["confirm"].tolist() == [8]

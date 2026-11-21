@@ -59,6 +59,7 @@ __all__ = [
     "nowcast_tasks",
     "place_code",
     "read_triangle",
+    "within_delay",
 ]
 
 GERMANY: Final = "DE"
@@ -208,6 +209,30 @@ def hub_triangle(path: Path | str) -> pd.DataFrame:
         }
     )
     return out.reset_index(drop=True)
+
+
+def within_delay(triangle: pd.DataFrame, days: int) -> pd.DataFrame:
+    """Return the counts reported at most `days` days after their Meldedatum.
+
+    A count's latest row is then its count `days` days on: the 40-day
+    truth's count of a sum's last day (`config/germany.toml`, `[truth]`).
+
+    Parameters
+    ----------
+    triangle : pandas.DataFrame
+        As `read_triangle`.
+    days : int
+        The longest delay kept, in days.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The rows of `triangle` reported within `days` days.
+    """
+    delay = pd.to_datetime(triangle["report_date"]) - pd.to_datetime(
+        triangle["reference_date"]
+    )
+    return triangle.loc[delay <= pd.Timedelta(days=days)].reset_index(drop=True)
 
 
 def read_triangle(path: Path | str) -> pd.DataFrame:
