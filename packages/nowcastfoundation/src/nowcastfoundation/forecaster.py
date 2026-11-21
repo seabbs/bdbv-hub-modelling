@@ -125,6 +125,11 @@ LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
 """The steps before the cut-off whose counts `lag_count` takes as complete
 (4 to 16 weeks, 28 to 112 days), and the most lags it gives."""
 
+COUPLING_WEEKS: Final = 8
+"""How many earlier releases the gaussian coupling is fitted from: the
+latest at least 1, 2, ..., 8 weeks before the task's, so one a week (as
+the random walks' copula window, `copula.WINDOW_WEEKS`)."""
+
 PERIODS: Final = {"daily": "rolling7"}
 """The aggregate row each place has in a ragged block, by source
 (`FoundationModel.period`): the daily source's 7-day rolling sums, from
@@ -1314,9 +1319,10 @@ class FoundationModel:
     ) -> list[tuple[Series, np.ndarray]]:
         """Return the block at each earlier release, with what matured.
 
-        Each earlier release's block is built as the task's is, from its
-        own releases and no later one, with as many lags and its context
-        ending as many steps before its cut-off. With it come its
+        The earlier releases are `coupling_releases`'. Each one's block
+        is built as the task's is, from its own releases and no later one,
+        with as many lags and its context ending as many steps before its
+        cut-off. With it come its
         targets' values at the task's release over its horizon, NaN where
         a step is not yet final there (at lag `D` or more,
         `HubTriangle.n_context`): what the model's forecast at that
@@ -1332,8 +1338,8 @@ class FoundationModel:
         width = 7 if self.source == "weekly" else 1
         ahead = start + horizon - 1 - tri.last
         out = []
-        for v in sorted(set(rows["vintage"]))[:-1]:
-            sub = rows.loc[rows["vintage"] <= v]
+        for v in coupling_releases(rows["vintage"]):
+            sub = rows.loc[rows["vintage"].astype(str).str[:10] <= v]
             cut = _step(self.source, str(sub["cutoff"].max()))
             end = cut + dt.timedelta(days=width * max(ahead, 0))
             try:
@@ -1506,6 +1512,39 @@ def native_sampler(
         return out
 
     return sample
+
+
+def coupling_releases(
+    vintages: Sequence[str] | pd.Series, weeks: int = COUPLING_WEEKS
+) -> list[str]:
+    """Return the earlier releases a task's coupling is fitted from.
+
+    For each of 1 to `weeks` weeks, the latest release at least that long
+    before the latest of `vintages`: one a week, whether releases are
+    weekly or daily.
+
+    Parameters
+    ----------
+    vintages : sequence of str
+        The task's release dates, ISO formatted.
+    weeks : int
+        How many weeks back.
+
+    Returns
+    -------
+    list of str
+        The releases, oldest first, each once.
+    """
+    days = sorted({as_date(str(v)) for v in vintages})
+    if not days:
+        return []
+    picked = set()
+    for k in range(1, weeks + 1):
+        edge = days[-1] - dt.timedelta(weeks=k)
+        before = [d for d in days if d <= edge]
+        if before:
+            picked.add(before[-1])
+    return [d.isoformat() for d in sorted(picked)]
 
 
 class _CollectedError(Exception):

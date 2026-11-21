@@ -157,3 +157,24 @@ def test_an_unknown_coupling_is_an_error(task: ForecastTask):
     )
     with pytest.raises(ValueError, match="unknown"):
         model.forecast(task)
+
+
+def test_the_fit_takes_one_earlier_release_a_week_for_eight_weeks():
+    weekly = [f"2026-{m:02d}-{d:02d}" for m, d in [(8, 1), (8, 8)]]
+    weekly += [
+        str(pd.Timestamp("2026-08-15") + pd.Timedelta(weeks=k))[:10]
+        for k in range(10)
+    ]
+    got = foundation.coupling_releases(weekly)
+    assert got == weekly[-9:-1]
+    daily = [
+        str(pd.Timestamp("2026-08-01") + pd.Timedelta(days=k))[:10]
+        for k in range(80)
+    ]
+    got = foundation.coupling_releases(daily)
+    assert len(got) == foundation.COUPLING_WEEKS
+    last = pd.Timestamp(daily[-1])
+    assert [(last - pd.Timestamp(d)).days for d in got] == list(
+        range(56, 0, -7)
+    )
+    assert foundation.coupling_releases(daily[:1]) == []
