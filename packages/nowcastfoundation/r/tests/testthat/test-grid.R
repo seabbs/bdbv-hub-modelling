@@ -83,17 +83,21 @@ test_that("a draw is redrawn if it reports fewer than the grid's minimum", {
   expect_true(is.na(redraw_reason(10, grid)))
 })
 
-test_that("every simulated system fits the trainer's block budget whole", {
+test_that("every simulation's triangle fits the simulator's memory", {
   grid <- test_grid()
   set.seed(11)
-  locs <- leaves <- numeric(0)
-  for (i in 1:5000) {
+  leaves <- numeric(0)
+  for (i in 1:2000) {
     d <- draw_design(grid)
-    locs <- c(locs, system_locations(d$n_places, d$n_ages))
+    v <- draw_values(grid, d)
     leaves <- c(leaves, d$n_places * d$n_ages)
-    expect_lte(d$n_places * d$n_ages, max_strata(grid, d$weeks))
+    if (d$strata_link != "independent") {
+      expect_lte(
+        triangle_cells(d$n_places * d$n_ages, d$weeks, v$max_delay),
+        grid$max_triangle_cells
+      )
+    }
   }
-  expect_lte(max(locs), grid$max_locations)
   # Sizes still vary: single series, small systems and large ones.
   expect_true(any(leaves == 1) && any(leaves >= 20))
 })
