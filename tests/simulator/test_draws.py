@@ -22,7 +22,7 @@ from nowcastfoundation.simulator import draws
 ROOT = Path(__file__).parents[2]
 GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
 ENGINE = ROOT / "packages" / "nowcastfoundation" / "r" / "R"
-OPTIONS = (21, 28, 42, 56, 84)
+OPTIONS = tuple(draws.read_grid(GRID_FILE)["max_delay_days"])
 
 
 @pytest.fixture(scope="module")
@@ -154,8 +154,10 @@ def test_values_have_the_engine_s_shapes(grid):
         for key in ("population", "place_lags", "mixing_x", "mixing_y"):
             assert len(v[key]) == n_p, key
         assert sorted(v["mixing_order"]) == list(range(1, n_p + 1))
-        assert len(v["walk_r"]) == d["weeks"] + 18
-        assert len(v["delay_walk"]) == d["weeks"] + 18
+        # The series, the longest delay possible and the horizon.
+        span = d["weeks"] + max(OPTIONS) // 7 + 6
+        assert len(v["walk_r"]) == span
+        assert len(v["delay_walk"]) == span
         assert len(v["wave_scale"]) == v["waves"] + 1
         assert len(v["quiet_places"]) < n_p
         cases = set(range(1, n_p + 1)) - set(v["quiet_places"])
@@ -174,13 +176,39 @@ def test_values_have_the_engine_s_shapes(grid):
 
 
 def test_the_longest_delay_is_the_first_option_past_the_99th_centile():
-    assert draws.max_delay_for(5) == 21
-    assert draws.max_delay_for(21) == 21
-    assert draws.max_delay_for(21.5) == 28
-    assert draws.max_delay_for(57) == 84
-    assert draws.max_delay_for(500) == 84
+    options = (21, 28, 42, 56, 84, 126)
+    assert draws.max_delay_for(5, options) == 21
+    assert draws.max_delay_for(21, options) == 21
+    assert draws.max_delay_for(21.5, options) == 28
+    assert draws.max_delay_for(57, options) == 84
+    assert draws.max_delay_for(100, options) == 126
+    assert draws.max_delay_for(500, options) == 126
     # R's qgeom counts failures: qgeom(0.99, 0.5) is 6.
     assert draws.delay_q99("none", {"delay_mean": 1.0}) == 6
+
+
+def test_long_delay_tails_are_a_real_share(grid):
+    """A fifth of draws have a 99% delay of 60 days or more (Germany's is
+    61 to 81), some with a fast head as well, and the longest delay
+    reaches the grid's last option."""
+    rng = draws.generator(8)
+    q99, head, longest = [], [], []
+    for _ in range(3_000):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        parametric = d["delay_form"] != "non_parametric"
+        family = d["delay_family"] if parametric else "none"
+        q = draws.delay_q99(family, v)
+        q99.append(q)
+        if family == "lognormal":
+            p0 = stats.lognorm.cdf(1, v["delay_sdlog"], scale=v["delay_median"])
+            head.append(p0 >= 0.2 and q >= 60)
+        longest.append(v["max_delay"])
+    q99 = np.asarray(q99)
+    assert np.mean(q99 >= 60) > 0.15
+    assert np.mean(q99 >= 120) > 0.04
+    assert np.mean(head) > 0.08
+    assert max(OPTIONS) in longest
 
 
 R_DRAWS = """
