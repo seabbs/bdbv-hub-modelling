@@ -326,6 +326,10 @@ The dashboard was built with the help of a large language model.
 - The workflow simulates outbreaks from the grid config and writes every figure below, so a change to the grid regenerates the tables and figures.
 - The layer tables replace the grid tables after the layers, and the workflow's figures replace the example simulations and comparisons.
 - The published ranges for other diseases (@tbl-sim-diseases) are replaced by the sourced reference-values table, which the main text's coverage panel reads.
+- The simulator composes PyRenew's components [@placeholder] for infections, the infection to reference delay and observation noise, with small components on PyRenew's base classes where it has none.
+- The reporting step gives counts by reference and report date from epinowcast's observation model [@abbottepinowcast], or from a PyRenew reporting step that gives the same counts, behind one interface.
+- We test the simulator by calling epinowcast, EpiNow2 [@placeholder] and primarycensored [@abbottprimarycensored] directly and comparing the outputs, with delay distributions matched to primarycensored's discretisation.
+- If the PyRenew reporting step is used, the notes below on epinowcast's simulation mode are dropped.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
@@ -554,7 +558,7 @@ Choices tuned on development data, with their values and the data they were set 
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, PyRenew, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
 - A Snakemake workflow runs the evaluation from the raw data to every figure and table.
 :::
 
