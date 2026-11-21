@@ -26,7 +26,7 @@ from nowcastrenewal.reporting.delays import (
     interval_pmf,
 )
 
-from .r_live import run_r
+from .r_live import _skip, require_r, run_r
 
 # Parameters across the grid's ranges (about its 5%, 50% and 95% points):
 # lognormal median and sdlog, gamma mean and shape, exponential mean.
@@ -61,23 +61,38 @@ ROWS = _rows()
 
 @pytest.fixture(scope="module")
 def epinowcast_hazards() -> list[dict[str, Any]]:
-    """epinowcast's discretised logit hazards and log pmfs, one R run."""
+    """epinowcast's discretised logit hazards and log pmfs, one R run.
+
+    At the engine's pin (`packages/nowcastfoundation/r/DESCRIPTION`)
+    epinowcast discretises the parametric delay with primarycensored
+    (`primarycensored_pmf.stan`).
+    """
+    require_r(["epinowcast", "cmdstanr"])
+    has = run_r(
+        'file.exists(system.file("stan", "functions", '
+        '"primarycensored_pmf.stan", package = "epinowcast"))',
+        {},
+        packages=["epinowcast"],
+    )
+    if not has:
+        _skip("needs epinowcast at the engine's pin (primarycensored_pmf)")
     code = """
     # A new target directory: functions are exposed only from a fresh
     # build, not from epinowcast's cached model.
     target <- tempfile("enw-fns-")
     dir.create(target)
     suppressMessages(epinowcast::enw_stan_to_r(
-      "discretised_logit_hazard.stan", verbose = FALSE, target_dir = target
+      c("primarycensored.stan", "primarycensored_pmf.stan"),
+      verbose = FALSE, target_dir = target
     ))
     lapply(seq_len(nrow(input)), function(i) {
       r <- input[i, ]
       list(
-        logit_hazard = discretised_logit_hazard(
-          r$mu, r$sigma, r$dmax, r$dist, 2L, 0L
+        logit_hazard = discretised_pcens_logit_hazard(
+          r$mu, r$sigma, r$dmax, r$dist, 0L
         ),
-        log_pmf = discretised_logit_hazard(
-          r$mu, r$sigma, r$dmax, r$dist, 2L, 1L
+        log_pmf = discretised_pcens_logit_hazard(
+          r$mu, r$sigma, r$dmax, r$dist, 1L
         )
       )
     })
@@ -115,9 +130,8 @@ def test_double_censored_delays_match_epinowcast(
     i: int, epinowcast_hazards: list[dict[str, Any]]
 ) -> None:
     # Where at least 1e-6 of the reports are still to come. Past that,
-    # epinowcast's hazards take differences of log cdfs near 0 and lose
-    # far more there (0.1 on the logit scale where 1e-9 is left); ours
-    # take them from the survival function
+    # epinowcast's hazards divide by a survival built by subtracting each
+    # probability from 1 and lose digits; ours keep the tail
     # (`test_the_hazards_give_the_pmf_to_full_precision`). The pmfs agree
     # everywhere, as the tail holds almost no mass.
     r, want = ROWS[i], epinowcast_hazards[i]
@@ -233,15 +247,6 @@ def primarycensored_pmfs() -> list[list[float]]:
     return run_r(code, rows, packages=["primarycensored"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "epinowcast's uniform interval approximation, p_d proportional to "
-        "F(d + 1) - F(d - 1), is not primarycensored's exact double "
-        "censored pmf: up to 0.09 apart on one delay for short delays "
-        "(lognormal median 1.4, sdlog 0.55); Sam decides which to keep"
-    ),
-)
 def test_double_censored_delays_match_primarycensored(
     primarycensored_pmfs: list[list[float]],
 ) -> None:
