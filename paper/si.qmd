@@ -357,6 +357,7 @@ The dashboard was built with the help of a large language model.
 ::: {.callout-note title="Plan"}
 - We report cases by reference and report date through epinowcast's observation model.
 - The reporting delay has a drawn family and mean, and differs between places and age groups.
+- Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.
 - In a third of simulations, the mean delay varies by reference weekday, mostly within about 10%.
 - The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
 - Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
@@ -431,6 +432,10 @@ Outbreak length is drawn from a log-normal distribution with median 30 weeks, an
 A simulation that fails or reports fewer than 10 cases is redrawn with a new seed.
 No simulation is rejected for its size, growth or reporting delay.
 We test the simulator so that a stratum never has more cases than its population.
+
+::: {.callout-note title="Plan"}
+- We recheck the delay comparison below with the wider delay prior, against the German delay truncated at 40 days, as the German target needs.
+:::
 
 The grid has one known limitation.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
