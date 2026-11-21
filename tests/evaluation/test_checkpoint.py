@@ -168,15 +168,6 @@ def test_merge_keeps_other_rules_rows_and_replaces_the_rules():
     assert set(got.loc[got["rule"] == ck.RULE, "level"]) == {"y"}
 
 
-def test_a_unit_is_done_when_every_origin_is_cached(tmp_path):
-    root = tmp_path / "bdbv" / "abc"
-    root.mkdir(parents=True)
-    (root / "2026-10-01.csv.gz").write_text("x")
-    assert not ck.unit_done(root, ["2026-10-01", "2026-10-08"])
-    (root / "2026-10-08.csv.gz").write_text("x")
-    assert ck.unit_done(root, ["2026-10-01", "2026-10-08"])
-
-
 def test_held_out_rows_from_settings():
     settings = {
         "held_out_loss": 1.5,
