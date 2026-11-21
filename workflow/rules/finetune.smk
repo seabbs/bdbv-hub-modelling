@@ -112,12 +112,10 @@ rule train_segment:
         ),
         bias=f"--series-bias --bias-lr {FT['bias_lr']}" if FT["series_bias"] else "",
         device=machine.device(LOCAL),
-        # This machine's checkpoint threshold, if set (memory only).
-        checkpoint=(
-            f"--checkpoint-above {LOCAL['CHECKPOINT_ABOVE']}"
-            if LOCAL.get("CHECKPOINT_ABOVE")
-            else ""
-        ),
+        # The checkpoint threshold: this machine's, if set, else the
+        # config's (memory only).
+        checkpoint=LOCAL.get("CHECKPOINT_ABOVE") or FT["checkpoint_above"],
+        batch_size=FT["batch_size"],
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
         # The run's folders, as functions: they hold the outputs.
@@ -181,7 +179,9 @@ rule train_segment:
             --eval-every {params.eval_every} \
             --by-source-every {params.by_source_every} \
             --eval {params.eval_mode} \
-            --exclude {params.run}/excluded.csv {params.bias} {params.checkpoint} \
+            --exclude {params.run}/excluded.csv {params.bias} \
+            --checkpoint-above {params.checkpoint} \
+            --batch-size {params.batch_size} \
             --until {wildcards.n} >>{log} 2>&1
         # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/segment_saved.py {output.settings} \

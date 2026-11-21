@@ -19,12 +19,14 @@ dependencies = [
   "nowcastutils",
   "nowcasteval",
   "nowcastbaselines",
+  "nowcastrenewal[model]",
 ]
 
 [tool.uv.sources]
 nowcastutils = { workspace = true }
 nowcasteval = { workspace = true }
 nowcastbaselines = { workspace = true }
+nowcastrenewal = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.8,<0.14"]

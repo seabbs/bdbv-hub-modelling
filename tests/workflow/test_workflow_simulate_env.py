@@ -8,11 +8,13 @@ from flowlib import simulator
 from test_workflow_dryrun import dry_run
 
 ROOT = Path(__file__).parents[2]
-SCRIPT = (ROOT / "workflow" / "scripts" / "simulate.R").read_text()
+SCRIPT = (
+    ROOT / "packages" / "nowcastfoundation" / "r" / "inst" / "report.R"
+).read_text()
 GRID = "config/finetune/grid.yaml"
 
 
-def test_the_simulator_loads_epinowcast_only_from_its_library():
+def test_the_reporting_step_loads_epinowcast_only_from_its_library():
     # From another library it ran, and every draw came out empty.
     assert re.search(r"library\(epinowcast, lib\.loc = lib\)", SCRIPT)
 
@@ -39,7 +41,10 @@ def test_a_batch_runs_with_the_pinned_library_and_system_tools(tmp_path):
         'PATH="$(getconf PATH):$PATH"'
     )
     assert f"ENW_LIB={lib} " in " ".join(command.split())
-    assert f'"$rscript" workflow/scripts/simulate.R {GRID}' in command
+    assert 'RSCRIPT="$rscript"' in command
+    flat = " ".join(command.split())
+    assert flat.index("RSCRIPT=") < flat.index("nowcastfoundation.simulator")
+    assert f"-m nowcastfoundation.simulator {GRID}" in flat
 
 
 def test_heavy_jobs_wait_below_the_load_ceiling(tmp_path):

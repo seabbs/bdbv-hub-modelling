@@ -175,10 +175,13 @@ def test_prefetch_draws_as_one_task_at_a_time(
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
     model = get_model(name)
     alone = [model.forecast(t) for t in tasks]
+    one_by_one = len(pipe.calls)
     pipe.calls.clear()
     ready = foundation.prefetch(model, tasks)
     passes = len(pipe.calls)
-    assert passes <= len(tasks)
+    # The tasks' blocks, and the earlier releases' blocks the coupling is
+    # fitted from, are batched: no more passes than a task at a time.
+    assert passes <= one_by_one
     for t, want in zip(tasks, alone, strict=True):
         pd.testing.assert_frame_equal(ready.forecast(t), want)
     # Every task's quantiles came from the prefetch.

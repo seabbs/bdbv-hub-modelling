@@ -105,7 +105,9 @@ def build_parser() -> argparse.ArgumentParser:
     # Checked against KINDS by `evaluate`.
     p.add_argument("--kinds", nargs="+")
     p.add_argument("--real-validation", type=Path)
-    p.add_argument("--batch-size", type=int, default=256)
+    p.add_argument(
+        "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
+    )
     p.add_argument("--device", default="auto")
     return p
 

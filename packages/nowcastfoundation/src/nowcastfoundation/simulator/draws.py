@@ -475,7 +475,7 @@ def draw_values(
     v["variant_r"] = vec(ds("variant_r", n_variants))
     v["variant_days"] = vec(ds("shift_days", n_variants))
     # Places with no cases; the first has cases if every place would not.
-    quiet = [i + 1 for i in np.flatnonzero(rng.random(n_p) < v["quiet"])]
+    quiet = [int(i) + 1 for i in np.flatnonzero(rng.random(n_p) < v["quiet"])]
     if len(quiet) == n_p:
         quiet = [q for q in quiet if q != 1]
     v["quiet_places"] = quiet

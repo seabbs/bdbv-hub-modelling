@@ -753,17 +753,6 @@ def tensors(block: dict) -> dict:
     }
 
 
-def checkpoint_threshold(args: argparse.Namespace) -> int:
-    """Return the series above which a step is checkpointed.
-
-    `--checkpoint-above` if given (a machine setting, `CHECKPOINT_ABOVE`),
-    else what the memory budget allows without checkpointing.
-    """
-    if args.checkpoint_above is not None:
-        return int(args.checkpoint_above)
-    return ft.checkpoint_above(args.memory_gb)
-
-
 def checkpoint_large_batches(above: int) -> None:
     """Recompute encoder activations in backward for large batches.
 
@@ -1440,7 +1429,10 @@ def build_parser() -> argparse.ArgumentParser:
     # Real validation blocks (`load_blocks`), scored at each checkpoint;
     # not trained on. The workflow passes none: BDBV is held out.
     parser.add_argument("--real-validation", type=Path)
-    parser.add_argument("--batch-size", type=int, default=256)
+    # Series a training step packs blocks up to (`plan_batches`).
+    parser.add_argument(
+        "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
+    )
     parser.add_argument("--device", default=os.environ.get("DEVICE", "auto"))
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
@@ -1454,10 +1446,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--min-gain", type=float, default=0.01)
     parser.add_argument("--stop-from", type=int, default=8000)
-    parser.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
-    # Series above which a step recomputes activations in backward (unset:
-    # from --memory-gb). Memory only: the steps and blocks are the same.
-    parser.add_argument("--checkpoint-above", type=int, default=None)
+    # Series above which a step recomputes activations in backward.
+    # Memory only: the steps and blocks are the same.
+    parser.add_argument(
+        "--checkpoint-above",
+        type=int,
+        default=ft.workflow_finetune("checkpoint_above"),
+    )
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
     # The series bias (nowcastfoundation.series_bias): learned
@@ -1603,7 +1598,7 @@ def main() -> None:
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
     # Checkpointing follows from the memory budget; the blocks and steps
     # do not, so every machine trains on the same ones.
-    checkpoint_large_batches(checkpoint_threshold(args))
+    checkpoint_large_batches(args.checkpoint_above)
     pool = ProcessPoolExecutor(
         args.cut_workers,
         mp_context=multiprocessing.get_context("spawn"),
@@ -2047,8 +2042,7 @@ def main() -> None:
                 "level_mix": seen.get("mix", {}),
                 "cadence_mix": seen.get("cadences", {}),
                 "tokens": seen.get("tokens", 0),
-                "memory_gb": args.memory_gb,
-                "checkpoint_above": checkpoint_threshold(args),
+                "checkpoint_above": args.checkpoint_above,
             }
             key = ft._settings_hash(settings)
             settings["hash"] = key
