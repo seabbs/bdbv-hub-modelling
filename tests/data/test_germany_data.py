@@ -8,7 +8,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.germany import (
+from bdbvhub.models import get_model
+from nowcasteval.backtest import run_forecasts
+from nowcastgermany.data import (
     HORIZONS,
     OFFSETS,
     hub_forecasts,
@@ -19,8 +21,7 @@ from bdbvhubrenewal.data.germany import (
     place_code,
     read_triangle,
 )
-from bdbvhubrenewal.forecasters import NATIONAL, get_model
-from nowcasteval.backtest import run_forecasts
+from nowcastutils.base import NATIONAL
 
 FIXTURE = (
     Path(__file__).resolve().parents[1]
@@ -321,3 +322,21 @@ def test_tasks_take_the_horizons_asked_for(triangle: pd.DataFrame) -> None:
         for w in t.target_end_dates
     }
     assert max(ahead) == 28
+
+
+def test_within_delay_keeps_the_counts_reported_by_that_delay() -> None:
+    from nowcastgermany.data import within_delay
+
+    # One day's count, reported 5 by day 0, 8 by day 40 and 10 by day 41.
+    tri = pd.DataFrame(
+        {
+            "reference_date": ["2021-01-01"] * 3,
+            "location": ["DE"] * 3,
+            "age_group": ["00+"] * 3,
+            "confirm": [5, 8, 10],
+            "report_date": ["2021-01-01", "2021-02-10", "2021-02-11"],
+        }
+    )
+    cut = within_delay(tri, 40)
+    assert cut["confirm"].tolist() == [5, 8]
+    assert within_delay(tri, 41).equals(tri)

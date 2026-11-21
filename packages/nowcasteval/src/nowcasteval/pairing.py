@@ -262,8 +262,8 @@ def bdbv_sensitivity(
     pandas.DataFrame
         `variant_scores` rows of every model, variant, origin and level.
     """
-    from bdbvhubrenewal.data import load_daily, load_delays, load_target
-    from bdbvhubrenewal.evaluation.store import origin_tasks
+    from bdbvhub.data.tidy import load_daily, load_delays, load_target
+    from bdbvhub.store.store import origin_tasks
     from nowcasteval.backtest import load_config, real_vintages
     from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
 
@@ -326,23 +326,31 @@ def germany_sensitivity(
     """
     from pathlib import Path
 
-    from bdbvhubrenewal.data.germany import (
+    from nowcasteval.nowcast import rolling_truth
+    from nowcastgermany import evaluation as de
+    from nowcastgermany.data import (
         AGE_GROUPS,
         hub_forecasts,
         hub_target,
         hub_triangle,
         nowcast_tasks,
+        within_delay,
     )
-    from bdbvhubrenewal.evaluation import germany as de
-    from nowcasteval.nowcast import rolling_truth
 
     cfg = de.load_germany_config(config_path)
     triangle = hub_triangle(Path(data) / Path(cfg.triangle).name)
     run = de.nowcast_dates(cfg) if dates is None else list(dates)
     levels = dict.fromkeys(AGE_GROUPS, "ages")
     frames = []
+    # The models see the counts the truth holds (`within_delay`).
+    seen = within_delay(triangle, cfg.truth_delay)
     for date in run:
-        for task in nowcast_tasks(triangle, date, cfg.n_samples, cfg.seed):
+        for task in nowcast_tasks(
+            seen,
+            date,
+            cfg.n_samples,
+            cfg.seed,
+        ):
             for name in MODELS:
                 drawn = variant_forecasts(name, task)
                 if not drawn:

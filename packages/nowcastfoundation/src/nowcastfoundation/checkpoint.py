@@ -342,19 +342,23 @@ def _write(frame: pd.DataFrame, path: Path) -> None:
 
 
 def german_tasks_dir(
-    cache: Path, triangle: Path, n_samples: int, seed: int
+    cache: Path,
+    triangle: Path,
+    n_samples: int,
+    seed: int,
+    max_delay: int | None = None,
 ) -> Path:
     """Return the store of the German tasks every checkpoint scores.
 
     Keyed on what the tasks are built from: the triangle file's bytes,
     the task-building code (`data.germany` and the `data.dates` it uses),
-    the fields of the `ForecastTask` they are pickled as, and the draws
-    and seed.
+    the fields of the `ForecastTask` they are pickled as, the draws and
+    seed, and the longest delay the models see (`max_delay`).
     """
     import hashlib
     import inspect
 
-    from bdbvhubrenewal.data import germany as dg
+    from nowcastgermany import data as dg
     from nowcastutils import base, dates
 
     h = hashlib.sha256()
@@ -366,20 +370,24 @@ def german_tasks_dir(
     fields = [f.name for f in dataclasses.fields(base.ForecastTask)]
     h.update(repr(fields).encode())
     h.update(f"{n_samples}-{seed}".encode())
+    if max_delay is not None:
+        h.update(f"max_delay-{max_delay}".encode())
     return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
 
 def germany_unit(cache: Path, label: str) -> None:
     """Nowcast each German development date, own quantiles with truth."""
-    from bdbvhubrenewal.data.germany import hub_triangle
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
+    from nowcastgermany.data import hub_triangle
 
     _pin(label)
     config = de.load_germany_config("config/germany.toml")
     path = Path("data/raw/germany") / Path(config.triangle).name
     triangle = hub_triangle(path)
     # Built once for every checkpoint, then read back.
-    tasks_dir = german_tasks_dir(cache, path, config.n_samples, config.seed)
+    tasks_dir = german_tasks_dir(
+        cache, path, config.n_samples, config.seed, config.truth_delay
+    )
     root = cache / GERMANY_UNIT / label
     root.mkdir(parents=True, exist_ok=True)
     record_precision(root)
@@ -394,7 +402,13 @@ def germany_unit(cache: Path, label: str) -> None:
         chunk = todo[i : i + step]
         start = time.monotonic()
         fc = de.germany_forecasts(
-            models, triangle, chunk, config.n_samples, config.seed, tasks_dir
+            models,
+            triangle,
+            chunk,
+            config.n_samples,
+            config.seed,
+            tasks_dir,
+            max_delay=config.truth_delay,
         )
         fc = de.with_truth(fc, triangle, config.truth_delay)
         for date in chunk:
@@ -475,7 +489,7 @@ def _with_precision(
 
 def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
     """Return the German development half's rule rows."""
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     config = de.load_germany_config("config/germany.toml")
     parts = []

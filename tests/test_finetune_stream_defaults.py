@@ -50,17 +50,24 @@ def test_dropping_quiet_cut_offs_is_off_until_set():
     assert f"{fs.ft.QUIET_WINDOW_DAYS} days" in rule
 
 
+def test_the_batch_and_checkpoint_defaults_are_the_workflow_config_s():
+    # One source: the trainer reads the run's defaults from the config.
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    argv = ["sims", "out", "--held-out-seeds", "1", "2"]
+    args = fs.build_parser().parse_args(argv)
+    assert args.batch_size == config["finetune"]["batch_size"]
+    assert args.checkpoint_above == config["finetune"]["checkpoint_above"]
+
+
 def test_the_checkpoint_threshold_is_a_machine_setting_outside_the_hash():
     # Recomputing activations in backward changes memory, not the steps,
-    # so a small GPU may checkpoint more without a new hash.
+    # so a machine with less GPU memory may checkpoint more without a new
+    # hash.
     import finetune_verify
 
     argv = ["sims", "out", "--held-out-seeds", "1", "2"]
-    args = fs.build_parser().parse_args(argv)
-    assert args.checkpoint_above is None
-    assert fs.checkpoint_threshold(args) == fs.ft.checkpoint_above(
-        args.memory_gb
-    )
     args = fs.build_parser().parse_args([*argv, "--checkpoint-above", "0"])
-    assert fs.checkpoint_threshold(args) == 0
+    assert args.checkpoint_above == 0
     assert "checkpoint_above" in finetune_verify.NOT_HASHED
+    assert "batch_size" not in finetune_verify.NOT_HASHED
+    assert not hasattr(args, "memory_gb")

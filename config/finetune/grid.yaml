@@ -206,8 +206,8 @@ factors:
     slowdown: 1
   # Report days: every day in half (with a report-date weekday
   # effect in half of these, `report_dow`), Monday to Friday in a quarter,
-  # two or three fixed days a week in 15% and one day a week in 10% (days
-  # drawn).
+  # two or three fixed days a week in 15% (drawn from Monday to Friday) and
+  # one day a week in 10% (any day).
   report_days:
     daily: 10
     weekdays: 5
