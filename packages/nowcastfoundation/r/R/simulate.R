@@ -1,6 +1,8 @@
-simulate_outbreak <- function(grid, design, v, ctx) {
-  # Four weeks plus the longest delay past the last cut-off, so a block's
-  # horizon (four weeks) is complete.
+# The reporting triangle's frame of a simulation: epinowcast's
+# preprocessed data with no counts, its strata (`.group`, place, age) and
+# its dates. Four weeks plus the longest delay past the last cut-off, so a
+# block's horizon (four weeks) is complete.
+reporting_frame <- function(design, v) {
   max_delay <- v$max_delay
   n_time <- 7L * (v$weeks + max_delay %/% 7L + 4L)
   place_ids <- sprintf("P%02d", seq_len(design$n_places))
@@ -15,22 +17,56 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   pobs <- suppressMessages(suppressWarnings(epinowcast::enw_preprocess_data(
     triangle, by = c("place", "age"), max_delay = max_delay
   )))
-  rm(triangle)
   strata <- unique(pobs$metareference[[1]][, .(.group, place, age)])
   setorder(strata, .group)
-  multi_place <- design$n_places > 1
-  multi_age <- design$n_ages > 1
+  list(pobs = pobs, strata = strata, dates = dates)
+}
 
+simulate_outbreak <- function(grid, design, v, ctx) {
+  frame <- reporting_frame(design, v)
   # Latent infections: growth r(t) directly, or the Rt(t) giving it, with
   # mixing between places and imports, run here and injected into
   # epinowcast (`latent_expectation`).
   gt <- gt_pmf(v$gt_mean, design$gt_family, v$gt_cv)
+  n_r <- length(frame$dates) - length(gt)
+  latent_run <- latent_onsets(grid, n_r, gt, frame$strata, design, v)
+  out <- report_outbreak(
+    grid, design, latent_run$values, latent_run$onsets, ctx, frame
+  )
+  out$latent <- latent_run$latent[, `:=`(
+    date = frame$dates, location = "all"
+  )]
+  out
+}
+
+#' Report a simulation's expected onsets through epinowcast
+#'
+#' The reporting layers of a simulation: the reference-to-report delay and
+#' its changes, report days and weekday effects, shocks, the observation
+#' noise and revisions, given each stratum's expected (ascertained) onsets.
+#'
+#' @param grid A grid (`read_grid`).
+#' @param design A design (`draw_design`).
+#' @param v Its values (`draw_values`), with `stratum_population` and
+#'   `attack` from the latent step.
+#' @param onsets Expected onsets, days (the frame's dates) by strata (in
+#'   `.group` order: places, then ages within each place).
+#' @param ctx The batch's context: `model`, `draws`, `debug` and
+#'   `expected_scale`.
+#' @param frame The reporting frame (`reporting_frame`).
+#' @return A list: `values` (`v` with the reporting step's additions) and
+#'   `counts` (draw, location, reference_date, report_date, count).
+#' @export
+report_outbreak <- function(grid, design, v, onsets, ctx,
+                            frame = reporting_frame(design, v)) {
+  onsets <- as.matrix(onsets)
+  pobs <- frame$pobs
+  strata <- frame$strata
+  stopifnot(nrow(onsets) == length(frame$dates), ncol(onsets) == nrow(strata))
+  max_delay <- v$max_delay
+  multi_place <- design$n_places > 1
+  multi_age <- design$n_ages > 1
   reference_dow <- design$reference_dow == "yes"
-  n_r <- length(unique(pobs$metareference[[1]]$date)) - length(gt)
-  latent_run <- latent_onsets(grid, n_r, gt, strata, design, v)
-  onsets <- latent_run$onsets
-  v <- latent_run$values
-  latent_path <- latent_run$latent[, `:=`(date = dates, location = "all")]
   # Days before the outbreak first expects one onset a day.
   total <- rowSums(onsets)
   v$low_start_days <- if (any(total >= 1)) {
@@ -248,7 +284,7 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   cells <- data.table::copy(stan$cells)
   data.table::setorderv(cells, c(".group", "reference_date"))
   stan$cells <- NULL
-  rm(pobs, meta, reference, report, expectation, latent, onsets)
+  rm(pobs, frame, meta, reference, report, expectation, latent, onsets)
   stan$file <- write_stan_data(
     stan$data, tempfile("standata-", fileext = ".json"),
     ctx$model$variables()$data
@@ -283,7 +319,6 @@ simulate_outbreak <- function(grid, design, v, ctx) {
   }
   list(
     values = v,
-    latent = latent_path,
     counts = pp[mean != 0, .(
       outbreak = NA_character_, draw, timestep = "day", location,
       reference_date, report_date, count = as.integer(mean)

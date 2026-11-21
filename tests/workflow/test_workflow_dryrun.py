@@ -1071,6 +1071,6 @@ def _done_round(root, r, batches=40):
 def test_a_round_s_batch_runs_the_grid(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
-    shell = text[text.index("workflow/scripts/simulate.R") - 400 :]
+    shell = text[text.index("-m nowcastfoundation.simulator") - 400 :]
     assert "ENW_CELLS" not in shell
-    assert "simulate.R config/finetune/grid.yaml 20 " in shell
+    assert "nowcastfoundation.simulator config/finetune/grid.yaml 20 " in shell
