@@ -215,12 +215,6 @@ def held_out_rows(checkpoint: str, settings: Mapping[str, Any]) -> pd.DataFrame:
     return out.reindex(columns=COLUMNS)
 
 
-def unit_done(root: Path, wanted: Sequence[str]) -> bool:
-    """Whether a unit's folder holds a file for every date or origin."""
-    have = {p.name.removesuffix(".csv.gz") for p in root.glob("*.csv.gz")}
-    return set(wanted) <= have
-
-
 # Scores ----------------------------------------------------------------
 
 
@@ -309,7 +303,10 @@ PRECISION_FILE: Final = "precision.txt"
 
 def record_precision(root: Path) -> None:
     """Write the precision a unit forecasts in to its folder."""
-    from nowcastfoundation.forecaster import inference_precision, torch_device
+    from nowcastfoundation.backends.chronos2 import (
+        inference_precision,
+        torch_device,
+    )
 
     Path(root).mkdir(parents=True, exist_ok=True)
     precision = inference_precision(torch_device())

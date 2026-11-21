@@ -373,19 +373,6 @@ class Hub:
                 return r
         return None
 
-    def all_round_ids(self) -> list[str]:
-        """List every round id in the configuration.
-
-        Returns
-        -------
-        list of str
-            Round ids, sorted within each round.
-        """
-        out: list[str] = []
-        for r in self.rounds:
-            out += sorted(r.round_ids)
-        return out
-
     def submission_window(
         self, rnd: Round, round_id: str
     ) -> tuple[datetime, datetime]:

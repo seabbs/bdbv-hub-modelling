@@ -19,7 +19,6 @@ metadata-files:
 ---
 
 <!--
-Plan from #206.
 One SI section per paper section.
 -->
 
@@ -207,7 +206,7 @@ where $s_t$ is the number of simulations trained by step $t$, interpolated withi
 - We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
 - A step that runs out of GPU memory is run again in halves.
-- A single block that runs out is run once more and then skipped.
+- A single block that runs out of memory stops the run, so no block is dropped.
 - A step whose loss or gradients are not finite is skipped and counted.
 - We do not stop early.
 
@@ -246,11 +245,19 @@ The layouts of the training blocks and their shares.
 - Non-summing parents apply only where a block holds both the country and its places.
 - @tbl-block-combinations gives the realised share of each combination.
 
+::: {.callout-note title="Plan"}
+- No training block is skipped, as dropping large systems would bias training towards small ones.
+- Each training block is a view of the simulated system that fits the largest block that trains in memory, chosen by rule and never by dropping leaves.
+- A system that fits is trained whole.
+- A larger system is aggregated up, by collapsing a level of places or dropping the age split, so its totals stay exact.
+- A block can also be a subtree, one region with its places and ages and the region's total at the top.
+- A simulation can give several views.
+- The views and their shares are set in the grid configuration, and the regions are the simulation's own.
+:::
+
 Each training block is built as follows.
 
 - A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past the last complete step the outbreak's final counts.
-- A system with more than 2,000 series is skipped, and the simulator draws strata so that a system fits.
-- Four or more flat places are grouped into 2 to 6 regions, with region totals.
 - The blocks with more than one series have as targets every level of their system.
 - Blocks whose places do not nest have no intermediate level, so their targets are the national total and the leaves.
 
@@ -264,7 +271,7 @@ The realised shares of the combinations of layout and options in the training bl
 Each simulation draws its settings, the grid's factors among them, independently from their sampling distributions, seeded per simulation.
 Training takes the simulations in order, in chunks.
 Each simulation gives up to 14 training blocks, which are shuffled within a chunk and packed into steps.
-Each step is filled until it holds 256 series or more, so one large block can make a step of up to 2,000 series.
+Each step is filled until it holds 256 series or more, so one large block can make a step on its own.
 
 ::: {.callout-note title="Plan"}
 - A table lists the trainer's memory and speed settings at the values the paper run used, read from the workflow configuration.
@@ -326,6 +333,10 @@ The dashboard was built with the help of a large language model.
 - The workflow simulates outbreaks from the grid config and writes every figure below, so a change to the grid regenerates the tables and figures.
 - The layer tables replace the grid tables after the layers, and the workflow's figures replace the example simulations and comparisons.
 - The published ranges for other diseases (@tbl-sim-diseases) are replaced by the sourced reference-values table, which the main text's coverage panel reads.
+- The simulator composes PyRenew's components [@placeholder] for infections, the infection to reference delay and observation noise, with small components on PyRenew's base classes where it has none.
+- The reporting step gives counts by reference and report date from epinowcast's observation model [@abbottepinowcast], or from a PyRenew reporting step that gives the same counts, behind one interface.
+- We test the simulator by calling epinowcast, EpiNow2 [@placeholder] and primarycensored [@abbottprimarycensored] directly and comparing the outputs, with delay distributions matched to primarycensored's discretisation.
+- If the PyRenew reporting step is used, the notes below on epinowcast's simulation mode are dropped.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
@@ -357,6 +368,7 @@ The dashboard was built with the help of a large language model.
 ::: {.callout-note title="Plan"}
 - We report cases by reference and report date through epinowcast's observation model.
 - The reporting delay has a drawn family and mean, and differs between places and age groups.
+- Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.
 - In a third of simulations, the mean delay varies by reference weekday, mostly within about 10%.
 - The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
 - Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
@@ -383,6 +395,8 @@ The dashboard was built with the help of a large language model.
 
 ::: {.callout-note title="Plan"}
 - We draw how many places and age groups an outbreak has and how they nest, in regions and in places by ages.
+- Places nest in one to three levels below the country, crossed with age groups, and R(t), mixing and delays share structure within a region.
+- Systems range up to several hundred leaves, so systems the size of Germany's 16 states by 6 age groups are common.
 - Places interact through mixing, share, correlate, lag or keep independent their R(t) paths, and can be seeded part way through the outbreak.
 - Each layer's settings are shared across strata, partially pooled or independent.
 - Aggregates are either the exact sum of their strata or do not add up, with a share of cases reported only at the aggregate or an aggregate reported later than its strata.
@@ -431,6 +445,10 @@ Outbreak length is drawn from a log-normal distribution with median 30 weeks, an
 A simulation that fails or reports fewer than 10 cases is redrawn with a new seed.
 No simulation is rejected for its size, growth or reporting delay.
 We test the simulator so that a stratum never has more cases than its population.
+
+::: {.callout-note title="Plan"}
+- We recheck the delay comparison below with the wider delay prior, against the German delay truncated at 40 days, as the German target needs.
+:::
 
 The grid has one known limitation.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
@@ -549,7 +567,7 @@ Choices tuned on development data, with their values and the data they were set 
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, PyRenew, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
 - A Snakemake workflow runs the evaluation from the raw data to every figure and table.
 :::
 
