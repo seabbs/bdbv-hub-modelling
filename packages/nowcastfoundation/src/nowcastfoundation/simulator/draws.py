@@ -38,10 +38,10 @@ __all__ = [
     "generator",
     "log_r_walk",
     "max_delay_for",
-    "max_strata",
     "read_grid",
     "stratum_values",
     "system_locations",
+    "triangle_cells",
 ]
 
 Grid = Mapping[str, Any]
@@ -150,14 +150,13 @@ def draw_share(
     return bool(x[0]) if n is None else x
 
 
-def max_strata(grid: Grid, weeks: int) -> int:
-    """Return the most strata in a run of `weeks`.
+def triangle_cells(strata: int, weeks: int, max_delay: int) -> int:
+    """Return a simulation's reporting-triangle cells.
 
-    `max_strata` up to 28 weeks, then fewer, so the reporting triangle and
-    the batch's memory stay about as at 28 weeks.
+    Strata by longest delay by days, the days being the series, the
+    longest delay and a four-week horizon.
     """
-    cap = int(grid["max_strata"])
-    return min(cap, int(cap * 28 / weeks))
+    return strata * max_delay * 7 * (weeks + max_delay // 7 + 4)
 
 
 def draw_strata(
@@ -233,11 +232,9 @@ def draw_design(
     # memory and the trainer's block.
     for _ in range(1000):
         n_places, n_ages = draw_strata(grid, cell, rng)
-        fits = (
-            n_places * n_ages <= max_strata(grid, weeks)
-            and system_locations(n_places, n_ages, grid["regions"])
-            <= grid["max_locations"]
-        )
+        shortest = min(grid["max_delay_days"])
+        cells = triangle_cells(n_places * n_ages, weeks, shortest)
+        fits = cells <= grid["max_triangle_cells"]
         if fits:
             break
     else:
@@ -533,7 +530,17 @@ def draw_values(
     parametric = design["delay_form"] != "non_parametric"
     family = design["delay_family"] if parametric else "none"
     v["delay_dow_sd"] = ds("delay_dow_sd")
-    v["max_delay"] = max_delay_for(delay_q99(family, v), grid["max_delay_days"])
+    # The longest delay its 99th centile asks for, else the longest that
+    # keeps the triangle within the simulator's memory.
+    options = list(grid["max_delay_days"])
+    wanted = max_delay_for(delay_q99(family, v), options)
+    fit = [
+        d
+        for d in options
+        if d <= wanted
+        and triangle_cells(n_s, weeks, d) <= grid["max_triangle_cells"]
+    ]
+    v["max_delay"] = int(max(fit)) if fit else int(min(options))
 
     # Layer 4: the reporting system.
     v["reference_dow_sd"] = ds("reference_dow_sd")

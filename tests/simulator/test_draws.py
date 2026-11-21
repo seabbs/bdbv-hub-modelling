@@ -108,11 +108,9 @@ def test_designs_fit_the_budget_and_report_on_their_days(grid):
         assert d["weeks"] >= grid["floors"]["weeks"]
         n_p, n_a = d["n_places"], d["n_ages"]
         if d["strata_link"] != "independent":
-            assert n_p * n_a <= draws.max_strata(grid, d["weeks"])
-            assert (
-                draws.system_locations(n_p, n_a, grid["regions"])
-                <= grid["max_locations"]
-            )
+            shortest = min(grid["max_delay_days"])
+            cells = draws.triangle_cells(n_p * n_a, d["weeks"], shortest)
+            assert cells <= grid["max_triangle_cells"]
         else:
             m = grid["max_independent"]
             if d["strata"] == "places_ages":
@@ -168,6 +166,9 @@ def test_values_have_the_engine_s_shapes(grid):
         assert len(v["shock_at"]) == len(v["shock_mult"]) == n
         assert all(0 < a < 1 for a in v["ascertainment"])
         assert v["max_delay"] in OPTIONS
+        if d["strata_link"] != "independent":
+            cells = draws.triangle_cells(n_s, d["weeks"], v["max_delay"])
+            assert cells <= grid["max_triangle_cells"]
         assert 0 <= v["offset"] <= 6
         if d["window"] == "early":
             assert v["variant_at"] == []

@@ -1,13 +1,13 @@
-#' The most strata of places by ages in a run of `weeks`
+#' A simulation's reporting-triangle cells
 #'
-#' `max_strata` up to 28 weeks, then fewer, so the reporting triangle
-#' (strata by days by delays) and the batch's memory stay about as at 28
-#' weeks.
-#' @param grid A grid (`read_grid`).
+#' Strata by longest delay by days, the days being the series, the longest
+#' delay and a four-week horizon. The grid's `max_triangle_cells` bounds it.
+#' @param strata Strata (places by ages).
 #' @param weeks Weeks in the series.
+#' @param max_delay The longest delay in days.
 #' @export
-max_strata <- function(grid, weeks) {
-  min(grid$max_strata, as.integer(grid$max_strata * 28 / weeks))
+triangle_cells <- function(strata, weeks, max_delay) {
+  strata * max_delay * 7 * (weeks + max_delay %/% 7 + 4)
 }
 
 #' Draw a system's places and ages from the grid's counts
@@ -74,8 +74,8 @@ draw_design <- function(grid, weeks = NULL) {
   # memory and the trainer's block.
   for (try in 1:1000) {
     n <- draw_strata(grid, cell)
-    fits <- n[1] * n[2] <= max_strata(grid, weeks) &&
-      system_locations(n[1], n[2], grid$regions) <= grid$max_locations
+    fits <- triangle_cells(n[1] * n[2], weeks, min(grid$max_delay_days)) <=
+      grid$max_triangle_cells
     if (fits) break
   }
   if (!fits) stop("no strata draw fits the budget")
@@ -265,9 +265,13 @@ draw_values <- function(grid, design) {
   v$slow_mult <- ds("slow_mult")
   family <- if (design$delay_form == "non_parametric") "none" else design$delay_family
   v$delay_dow_sd <- ds("delay_dow_sd")
-  v$max_delay <- max_delay_for(
-    delay_parameters(family, v)$q99, grid$max_delay_days
-  )
+  # The longest delay its 99th centile asks for, else the longest that
+  # keeps the triangle within the simulator's memory.
+  options <- as.integer(grid$max_delay_days)
+  wanted <- max_delay_for(delay_parameters(family, v)$q99, options)
+  fit <- options[options <= wanted &
+    triangle_cells(n_s, weeks, options) <= grid$max_triangle_cells]
+  v$max_delay <- if (length(fit)) max(fit) else min(options)
 
   # Layer 4: the reporting system.
   v$reference_dow_sd <- ds("reference_dow_sd")

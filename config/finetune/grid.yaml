@@ -18,10 +18,15 @@
 # - `floors`: the only floors on drawn values, and the fewest reported
 #   cases a simulation may have before it is drawn again.
 epinowcast_sha: e084b080
-# The simulator's memory: at most `max_strata` strata (places by ages) up to
-# 28 weeks, fewer in longer series. Independent strata are each a
-# simulation of their own, so at most `max_independent` of them.
-max_strata: 60
+# The simulator's memory: a simulation's reporting triangle has at most
+# `max_triangle_cells` cells (strata x longest delay x days, the days being
+# 7 x (weeks + longest delay in weeks + 4)). The R engine takes about 8 KB
+# a cell (96 strata x 126 days x 364 days peaked at 35 GB), so this is
+# about 13 GB, under the simulate rule's 16 GB. A design's strata must fit
+# at the shortest delay; a delay whose longest delay does not fit takes
+# the longest that does. Independent strata are each a simulation of their
+# own, so at most `max_independent` of them.
+max_triangle_cells: 1600000
 max_independent: 8
 # The longest delay a simulation reports, in days: the first of these at
 # or above its delay's 99th centile, else the last. The R(t) and delay
@@ -31,13 +36,7 @@ max_delay_days: [21, 28, 42, 56, 84, 126]
 # simulation fails.
 tries: 5
 designs: 20
-# The trainer's block budget: a block is a whole simulated system (the
-# country, group totals and every leaf), so a system has at most this many
-# locations. A location takes its counts, up to 49 lags and a period total
-# (51 rows) in a block of at most 2,000 series (finetune_chronos
-# MAX_SERIES, MAX_LAGS): 2,000 / 51 = 39, with 6 kept for the regions the
-# trainer may group flat places into.
-max_locations: 39
+# Region totals the trainer may group four or more flat places into.
 regions: 6
 floors:
   seed: 1
@@ -71,7 +70,7 @@ counts:
   active_places: {base: 1, mean: 1}
   late_places: {base: 1, mean: 0.5}
   # Strata: places and ages, drawn again until the system fits the
-  # simulator's memory (max_strata) and the trainer's block (max_locations).
+  # simulator's memory (max_triangle_cells).
   places_even: {base: 2, mean: 6}
   places_concentrated: {base: 15, mean: 5}
   places_by_ages: {base: 4, mean: 2}
@@ -597,10 +596,10 @@ distributions:
     a: 1.5
     b: 2.0
     lower: 0.2
-    upper: 2.5
+    upper: 2.0
     layer: delays
     why: gamma shapes from 0.2 (CV 2.2, a heavy head at 0 and a long tail)
-      to 2.5
+      to 2, as epinowcast's simulate branch needs a shape below 2
   delay_place_sd:
     dist: lognormal
     median: 0.28
