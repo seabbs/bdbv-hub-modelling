@@ -95,7 +95,7 @@ def test_metadata_is_valid(tmp_path: Path) -> None:
     assert validate_metadata(path, HUB).valid
     back = yaml.safe_load(path.read_text())
     assert "language model" not in back["model_details"]["methods_long"]
-    # Sam's HPRU funding, in the schema's `team_funding` field.
+    # The team's HPRU funding, in the schema's `team_funding` field.
     assert "NIHR207404" in back["team_funding"]
 
 
