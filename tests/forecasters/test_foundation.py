@@ -236,7 +236,7 @@ def test_draws_are_not_negative_and_not_floored_at_the_reported(
     name: str, task: ForecastTask
 ) -> None:
     # Chronos-2's output is kept as it is, at zero or above: not rounded,
-    # and not raised to the counts reported (Sam, 2026-11-20).
+    # and not raised to the counts reported.
     for value in (-50.0, 0.0, 3.5):
         model = dataclasses.replace(get_model(name), sample=_constant(value))
         out = model.forecast(task)
