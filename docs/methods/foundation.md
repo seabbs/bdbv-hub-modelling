@@ -58,8 +58,12 @@ Chronos-2 standardises each series and takes its arcsinh, so counts go in as the
 ## Trajectories
 
 Chronos-2 gives 21 quantiles, from 1% to 99%, of each series at each step ahead.
-Each of the 100 trajectories draws its own uniform level for every series and step, and reads the quantile function there: linear between the quantiles and flat beyond them.
-Draws are independent across steps and series.
+Each of the 100 trajectories reads each series and step's quantile function at a uniform level: linear between the quantiles and flat beyond them.
+The levels are coupled by a Gaussian copula (`nowcastutils.trajectories.couple`), with correlation `rho` between consecutive steps of a series and `s` between series.
+`rho` and `s` are fitted for each task (`fit_coupling`) from the model's own forecasts of the same block at earlier releases: the latest release at least 1, 2, ..., 8 weeks before the task's, so one a week.
+Each of those forecasts is scored at the steps that are final by the task's release, as normal scores of its randomised PIT (`pit_scores`).
+With no earlier release the fit is independence.
+Independent and comonotone draws remain as named options (`coupling`) for the supplement.
 
 ## Counts
 
