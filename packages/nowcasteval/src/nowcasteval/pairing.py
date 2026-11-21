@@ -334,6 +334,7 @@ def germany_sensitivity(
         hub_target,
         hub_triangle,
         nowcast_tasks,
+        within_delay,
     )
 
     cfg = de.load_germany_config(config_path)
@@ -341,8 +342,15 @@ def germany_sensitivity(
     run = de.nowcast_dates(cfg) if dates is None else list(dates)
     levels = dict.fromkeys(AGE_GROUPS, "ages")
     frames = []
+    # The models see the counts the truth holds (`within_delay`).
+    seen = within_delay(triangle, cfg.truth_delay)
     for date in run:
-        for task in nowcast_tasks(triangle, date, cfg.n_samples, cfg.seed):
+        for task in nowcast_tasks(
+            seen,
+            date,
+            cfg.n_samples,
+            cfg.seed,
+        ):
             for name in MODELS:
                 drawn = variant_forecasts(name, task)
                 if not drawn:

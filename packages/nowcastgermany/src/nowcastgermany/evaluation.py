@@ -60,6 +60,7 @@ from nowcastgermany.data import (
     hub_target,
     level,
     nowcast_tasks,
+    within_delay,
 )
 from nowcastutils.base import ForecastTask
 
@@ -422,6 +423,7 @@ def germany_forecasts(
     seed: int,
     tasks_dir: Path | None = None,
     horizons: Sequence[int] = HORIZONS,
+    max_delay: int | None = None,
 ) -> pd.DataFrame:
     """Nowcast each date with each model, as quantiles at the hub's levels.
 
@@ -446,6 +448,11 @@ def germany_forecasts(
         Days from each nowcast date to the end of each 7-day sum, the
         hub's 0 to -28 (`HORIZONS`) by default; days after it are
         forecasts (`data.germany.nowcast_tasks`).
+    max_delay : int, optional
+        The truth's delay (`GermanyConfig.truth_delay`): the models see
+        only the counts reported within it (`data.germany.within_delay`),
+        so they forecast the count the truth holds, not the eventual one.
+        A `tasks_dir` must then be keyed on it.
 
     Returns
     -------
@@ -455,6 +462,8 @@ def germany_forecasts(
         `quantile` and `value`, at `FORECAST_LEVELS`
         (`nowcasteval.marginals.forecast_quantiles`).
     """
+    if max_delay is not None:
+        triangle = within_delay(triangle, max_delay)
     built = [get_model(m) for m in models]
     # Chronos-2 is predicted for every date's tasks in a few batched passes,
     # so it needs them all at once. Each task holds its own copy of the
