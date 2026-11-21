@@ -460,6 +460,9 @@ def germany_forecasts(
             else m
             for m in built
         ]
+        # The loop pops each date's tasks, which frees them only once this
+        # list no longer holds them.
+        del every
     keys = ["model", "origin", "location", "target_end_date", "horizon"]
     frames = []
     for date in dates:
