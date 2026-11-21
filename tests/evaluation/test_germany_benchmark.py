@@ -11,8 +11,10 @@ import pandas as pd
 import pytest
 from scipy.stats import norm
 
-from bdbvhubrenewal.data.germany import HORIZONS, hub_target, read_triangle
-from bdbvhubrenewal.evaluation.germany import (
+from bdbvhub.models import list_models
+from nowcasteval.nowcast import rolling_truth
+from nowcastgermany.data import HORIZONS, hub_target, read_triangle
+from nowcastgermany.evaluation import (
     PAPER_COLUMNS,
     QUANTILE_LEVELS,
     SCORE_COLUMNS,
@@ -27,8 +29,6 @@ from bdbvhubrenewal.evaluation.germany import (
     team_forecasts,
     with_truth,
 )
-from bdbvhubrenewal.forecasters import list_models
-from nowcasteval.nowcast import rolling_truth
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = (
@@ -109,7 +109,7 @@ def test_the_later_half_of_the_dates_is_held_out() -> None:
 def test_our_quantiles_are_the_samples_quantiles_at_the_hub_s_levels(
     forecasts: pd.DataFrame,
 ) -> None:
-    from bdbvhubrenewal.evaluation.germany import FORECAST_LEVELS
+    from nowcastgermany.evaluation import FORECAST_LEVELS
 
     per = forecasts.groupby(["model", "origin", "location", "horizon"])
     assert (per["quantile"].apply(tuple) == FORECAST_LEVELS).all()
@@ -481,7 +481,7 @@ def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
 def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     # Each German task holds its own copy of the release history, so a
     # model that is not predicted ahead builds and forecasts one date's
@@ -507,7 +507,7 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
 def test_chronos_is_prefetched_at_the_levels_it_forecasts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     # Prefetched quantiles are keyed by their levels, so only those at the
     # levels forecast are ever read.
@@ -536,7 +536,7 @@ def test_chronos_is_prefetched_at_the_levels_it_forecasts(
 def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
     forecasts: pd.DataFrame,
 ) -> None:
-    from bdbvhubrenewal.evaluation.germany import (
+    from nowcastgermany.evaluation import (
         FORECAST_LEVELS,
         QUANTILE_LEVELS,
         paper_forecasts,
@@ -552,7 +552,7 @@ def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
 def test_scores_add_90_coverage_and_keep_wis_on_the_hub_levels(
     forecasts: pd.DataFrame, scores: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.evaluation.germany import QUANTILE_LEVELS
+    from nowcastgermany.evaluation import QUANTILE_LEVELS
 
     hub = forecasts[forecasts["quantile"].round(6).isin(QUANTILE_LEVELS)]
     on_hub = score_germany(hub, truth_delay=10)
@@ -573,7 +573,7 @@ def test_scores_add_90_coverage_and_keep_wis_on_the_hub_levels(
 def test_forecasts_pass_their_horizons_and_store_them_apart(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     seen: list[tuple[int, ...]] = []
 
@@ -597,7 +597,7 @@ def test_forecasts_pass_their_horizons_and_store_them_apart(
 def test_models_see_only_the_counts_the_truth_holds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     # The truth is the data reported within `max_delay` days, so the
     # models forecast that count: what is reported later is not theirs.

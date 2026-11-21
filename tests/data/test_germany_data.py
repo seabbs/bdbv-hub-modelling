@@ -8,7 +8,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.germany import (
+from bdbvhub.models import get_model
+from nowcasteval.backtest import run_forecasts
+from nowcastgermany.data import (
     HORIZONS,
     OFFSETS,
     hub_forecasts,
@@ -19,8 +21,7 @@ from bdbvhubrenewal.data.germany import (
     place_code,
     read_triangle,
 )
-from bdbvhubrenewal.forecasters import NATIONAL, get_model
-from nowcasteval.backtest import run_forecasts
+from nowcastutils.base import NATIONAL
 
 FIXTURE = (
     Path(__file__).resolve().parents[1]
@@ -324,7 +325,7 @@ def test_tasks_take_the_horizons_asked_for(triangle: pd.DataFrame) -> None:
 
 
 def test_within_delay_keeps_the_counts_reported_by_that_delay() -> None:
-    from bdbvhubrenewal.data.germany import within_delay
+    from nowcastgermany.data import within_delay
 
     # One day's count, reported 5 by day 0, 8 by day 40 and 10 by day 41.
     tri = pd.DataFrame(
