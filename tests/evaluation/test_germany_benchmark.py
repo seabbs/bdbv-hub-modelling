@@ -597,7 +597,7 @@ def test_forecasts_pass_their_horizons_and_store_them_apart(
 def test_models_see_only_the_counts_the_truth_holds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     # The truth is the data reported within `max_delay` days, so the
     # models forecast that count: what is reported later is not theirs.

@@ -325,7 +325,7 @@ def test_tasks_take_the_horizons_asked_for(triangle: pd.DataFrame) -> None:
 
 
 def test_within_delay_keeps_the_counts_reported_by_that_delay() -> None:
-    from bdbvhubrenewal.data.germany import within_delay
+    from nowcastgermany.data import within_delay
 
     # One day's count, reported 5 by day 0, 8 by day 40 and 10 by day 41.
     tri = pd.DataFrame(

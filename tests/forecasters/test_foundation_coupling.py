@@ -9,11 +9,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import ZoneData, hub_zones
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.data.zones import ZoneData, hub_zones
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastutils import trajectories
+from nowcastutils.base import ForecastTask
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"
