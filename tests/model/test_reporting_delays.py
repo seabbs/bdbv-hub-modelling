@@ -129,11 +129,11 @@ def _survival_before(log_pmf: np.ndarray) -> np.ndarray:
 def test_double_censored_delays_match_epinowcast(
     i: int, epinowcast_hazards: list[dict[str, Any]]
 ) -> None:
-    # Where at least 1e-6 of the reports are still to come. Past that,
-    # epinowcast's hazards divide by a survival built by subtracting each
-    # probability from 1 and lose digits; ours keep the tail
-    # (`test_the_hazards_give_the_pmf_to_full_precision`). The pmfs agree
-    # everywhere, as the tail holds almost no mass.
+    # epinowcast's pmf carries absolute errors up to about 2.5e-13 in the
+    # tail (ours stays within 6e-14 of a 50-digit reference, a scratch
+    # check), so its logit hazard log p_d - log sum_{i > d} p_i can be off
+    # by about 1e-12 / p_d + 1e-12 / sum_{i > d} p_i. The hazards are
+    # compared to 1e-9 plus that.
     r, want = ROWS[i], epinowcast_hazards[i]
     lh, lp = _ours(r)
     want_lh = np.array(
@@ -142,16 +142,25 @@ def test_double_censored_delays_match_epinowcast(
     )
     assert np.isposinf(lh[-1])
     assert np.isposinf(want_lh[-1])
-    sound = _survival_before(lp)[:-1] > 1e-6
-    np.testing.assert_allclose(
-        lh[:-1][sound], want_lh[:-1][sound], rtol=1e-9, atol=1e-9
-    )
+    p = np.exp(lp)
+    after = np.cumsum(p[::-1])[::-1][1:]
+    tol = 1e-9 + 1e-12 / p[:-1] + 1e-12 / after
+    got, ref = lh[:-1], want_lh[:-1]
+    # epinowcast's hazards are NaN once its running survival, built by
+    # subtracting each probability, falls below 0: only where under 1e-12
+    # of the reports remain (5e-13 at most here).
+    nan = np.isnan(ref)
+    assert np.all(after[nan] < 1e-12)
+    assert np.all(np.abs(got - ref)[~nan] <= tol[~nan])
     want_lp = np.array(
         [-np.inf if x in (None, "-Inf") else x for x in want["log_pmf"]],
         dtype=float,
     )
+    # Its log pmf is NaN in places too, only where under 1e-12 is left.
+    lost = np.isnan(want_lp)
+    assert np.all(p[lost] < 1e-12)
     np.testing.assert_allclose(
-        np.exp(lp), np.exp(want_lp), rtol=1e-9, atol=1e-13
+        p[~lost], np.exp(want_lp[~lost]), rtol=1e-9, atol=1e-12
     )
 
 

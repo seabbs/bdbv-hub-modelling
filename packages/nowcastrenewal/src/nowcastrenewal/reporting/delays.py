@@ -5,11 +5,11 @@ A delay $T$ from reference to report has a continuous distribution $F$ of
 one of `FAMILIES`. Two discretisations are used:
 
 - `double_censored_log_pmf` and `double_censored_logit_hazard`: both the
-  reference and the report day are censored to whole days, with the
-  uniform interval approximation $p_d = \{F(d + 1) - F(d - 1)\} / Z$ on
-  $d = 0, \dots, D - 1$, where $Z = F(D) + F(D - 1)$ normalises over the
-  window. This is the delay of the reporting triangle; its logit hazard
-  is the baseline that the hazard effects shift.
+  reference and the report day are censored to whole days, as in
+  primarycensored (a uniform reference time over its day, daily report
+  censoring, truncation at $D$), which is how epinowcast discretises at
+  the simulator's pin. This is the delay of the reporting triangle; its
+  logit hazard is the baseline that the hazard effects shift.
 - `interval_pmf`: $p_d \propto F(d + 1) - F(d)$, a delay from the start of
   the reference day. The simulator uses it only to size the NB1
   dispersion (its $\sum_d p_d^2$).
@@ -115,33 +115,56 @@ def log_cdf(
     return jnp.log(cdf_and_survival(family, mu, sigma, x)[0])
 
 
-class _Cdf:
-    r"""$F$ at delays $-1, 0, 1, \dots, D$, with $F(-1) = F(0) = 0$.
-
-    Differences $F(b) - F(a)$ are taken from $F$ below the median and
-    from $S$ above it, so neither loses digits.
-    """
-
-    def __init__(
-        self, family: str, mu: ArrayLike, sigma: ArrayLike, dmax: int
-    ) -> None:
-        if dmax < 3:
-            raise ValueError("dmax must be at least 3")
-        mu = jnp.asarray(mu)[..., None]
-        sigma = jnp.asarray(sigma)[..., None]
-        f, s = cdf_and_survival(
-            family, mu, sigma, jnp.arange(1, dmax + 1, dtype=float)
+def _partial_means(
+    family: str, mu: Array, sigma: Array, x: Array
+) -> tuple[Array, Array]:
+    r"""Return $E[T; T \le x]$ and $E[T; T > x]$."""
+    if family == "lognormal":
+        mean = jnp.exp(mu + sigma**2 / 2)
+        z = (jnp.log(x) - mu - sigma**2) / sigma
+        return mean * ndtr(z), mean * ndtr(-z)
+    if family in ("gamma", "exponential"):
+        shape = jnp.exp(mu) if family == "gamma" else jnp.ones_like(mu)
+        rate = sigma if family == "gamma" else jnp.exp(-mu)
+        mean = shape / rate
+        return (
+            mean * gammainc(shape + 1, rate * x),
+            mean * gammaincc(shape + 1, rate * x),
         )
-        lead = (*f.shape[:-1], 2)
-        self.f = jnp.concatenate([jnp.zeros(lead, f.dtype), f], axis=-1)
-        self.s = jnp.concatenate([jnp.ones(lead, s.dtype), s], axis=-1)
-        self.dmax = dmax
+    raise ValueError(f"family must be one of {FAMILIES}")
 
-    def __call__(self, a: Array, b: Array) -> Array:
-        r"""Return $F(b) - F(a)$ for indices $a \le b$ (delays a - 1, b - 1)."""
-        fa, fb = self.f[..., a], self.f[..., b]
-        sa, sb = self.s[..., a], self.s[..., b]
-        return jnp.where(fb < 0.5, fb - fa, sa - sb)
+
+def _censored_mass(
+    family: str, mu: ArrayLike, sigma: ArrayLike, dmax: int
+) -> Array:
+    r"""Return $F_c(d + 1) - F_c(d)$ for $d = 0, \dots, D - 1$.
+
+    $F_c(q) = \int_{q - 1}^{q} F(t)\,dt$ is the delay's cdf with the
+    reference time uniform over its day. With $G(t) = \int_0^t F$ and
+    $U(t) = \int_t^\infty S$, the mass is $G(d + 1) - 2 G(d) + G(d - 1)$,
+    taken below the median, and $U(d - 1) - 2 U(d) + U(d + 1)$ above it,
+    so the tail keeps its digits.
+    """
+    if dmax < 3:
+        raise ValueError("dmax must be at least 3")
+    mu = jnp.asarray(mu)[..., None]
+    sigma = jnp.asarray(sigma)[..., None]
+    t = jnp.arange(1, dmax + 1, dtype=float)
+    f, s = cdf_and_survival(family, mu, sigma, t)
+    lower, upper = _partial_means(family, mu, sigma, t)
+    # G(t) and U(t) at t = 1, ..., D; G(0) = 0 and U(0) = E[T].
+    g = t * f - lower
+    u = upper - t * s
+    lead = (*g.shape[:-1], 1)
+    zero = jnp.zeros(lead, g.dtype)
+    g = jnp.concatenate([zero, zero, g], axis=-1)  # t = -1, 0, ..., D
+    u0 = (lower + upper)[..., :1]
+    u = jnp.concatenate([u0 + 1, u0, u], axis=-1)  # U(-1) = E[T] + 1
+    d = jnp.arange(dmax)
+    below = g[..., d + 2] - 2 * g[..., d + 1] + g[..., d]
+    above = u[..., d] - 2 * u[..., d + 1] + u[..., d + 2]
+    use_below = (d == 0) | (f[..., :dmax] < 0.5)
+    return jnp.where(use_below, below, above)
 
 
 def double_censored_log_pmf(
@@ -149,8 +172,10 @@ def double_censored_log_pmf(
 ) -> Array:
     r"""Return the double censored delay's log pmf on 0, ..., dmax - 1.
 
-    $\log p_d$ with $p_d = \{F(d + 1) - F(d - 1)\} / \{F(D) + F(D - 1)\}$
-    and $F(0) = F(-1) = 0$.
+    primarycensored's pmf with a uniform reference time over a day, daily
+    report censoring and truncation at $D$:
+    $p_d = \{F_c(d + 1) - F_c(d)\} / F_c(D)$, with
+    $F_c(q) = \int_{q - 1}^{q} F(t)\,dt$.
 
     Parameters
     ----------
@@ -166,11 +191,8 @@ def double_censored_log_pmf(
     Array
         Shape `(..., dmax)`.
     """
-    diff = _Cdf(family, mu, sigma, dmax)
-    d = jnp.arange(dmax)
-    # Index i holds F(i - 1).
-    z = diff.f[..., dmax + 1] + diff.f[..., dmax]
-    return jnp.log(diff(d, d + 2)) - jnp.log(z)[..., None]
+    mass = _censored_mass(family, mu, sigma, dmax)
+    return jnp.log(mass) - jnp.log(mass.sum(axis=-1, keepdims=True))
 
 
 def double_censored_logit_hazard(
@@ -178,13 +200,10 @@ def double_censored_logit_hazard(
 ) -> Array:
     r"""Return the double censored delay's logit hazard on 0, ..., dmax - 1.
 
-    $h_d = p_d / (1 - \sum_{i < d} p_i)$, so
-
-    $$\operatorname{logit} h_d = \log\{F(d + 1) - F(d - 1)\}
-    - \log[\{F(D) - F(d + 1)\} + \{F(D - 1) - F(d)\}],$$
-
-    and $h_{D - 1} = 1$ (a logit of $+\infty$), so every report falls in
-    the window.
+    $h_d = p_d / \sum_{i \ge d} p_i$, so
+    $\operatorname{logit} h_d = \log p_d - \log \sum_{i > d} p_i$, and
+    $h_{D - 1} = 1$ (a logit of $+\infty$), so every report falls in the
+    window.
 
     Parameters
     ----------
@@ -200,11 +219,12 @@ def double_censored_logit_hazard(
     Array
         Shape `(..., dmax)`.
     """
-    diff = _Cdf(family, mu, sigma, dmax)
-    d = jnp.arange(dmax)
-    top = jnp.full_like(d, dmax + 1)
-    rest = diff(d + 2, top) + diff(d + 1, top - 1)
-    logit = jnp.log(diff(d, d + 2)) - jnp.log(rest)
+    mass = _censored_mass(family, mu, sigma, dmax)
+    after = jnp.flip(jnp.cumsum(jnp.flip(mass, -1), axis=-1), -1)
+    rest = jnp.concatenate(
+        [after[..., 1:], jnp.zeros_like(after[..., :1])], axis=-1
+    )
+    logit = jnp.log(mass) - jnp.log(rest)
     return logit.at[..., -1].set(jnp.inf)
 
 
