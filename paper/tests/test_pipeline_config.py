@@ -205,3 +205,21 @@ def test_the_heldout_set_is_the_runs_test_round() -> None:
     assert (
         Path(cfg["synthetic"]["grid_file"]).name == Path(sim["grid_file"]).name
     )
+
+
+def test_development_synthetic_set_is_the_validation_round() -> None:
+    # The run's validation round: `batches` batches from seed
+    # `seed_base` + 100 r, never a test or training round.
+    cfg = _config()
+    flow = yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    )
+    sim = flow["simulate"]
+    r = flow["grid_rounds"]["validation_round"]
+    first = sim["seed_base"] + 100 * r
+    assert cfg["development"]["synthetic_seeds"] == list(
+        range(first, first + sim["batches"])
+    )
+    assert cfg["synthetic"]["simulations"]["development"].endswith(
+        f"rounds/r{r}/sims"
+    )
