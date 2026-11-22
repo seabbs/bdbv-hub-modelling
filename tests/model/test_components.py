@@ -27,7 +27,6 @@ from nowcastrenewal.model import (
     onset_expectations,
     pooled_walk,
 )
-from nowcastrenewal.model.observation import backsample
 
 from .numpy_reference import (
     expected_imputed_onsets,
@@ -35,6 +34,7 @@ from .numpy_reference import (
     expected_missing_by_report,
     renewal,
 )
+from .reference_kernels import backsample
 
 
 def _hazard(name, time_process, n_groups=1):
