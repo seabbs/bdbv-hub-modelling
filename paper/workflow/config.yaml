@@ -48,7 +48,7 @@ synthetic:
   # The simulations of each run's seeds, whose settings give the grid's
   # realised values.
   simulations:
-    development: output/finetune/development
+    development: $ROOT/rounds/r33/sims
     # The run's test round's folder under the rounds folder (ROOT in
     # config/local.env), held out whole (workflow config `grid_rounds`).
     paper: $ROOT/rounds/r38/sims
@@ -146,12 +146,6 @@ evidence:
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: results/germany-chronos-dev/scores.csv
-  lag_bdbv_before:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: evidence/bdbv-lagfix/fm-summary-before.csv
-  lag_bdbv_after:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: evidence/bdbv-lagfix/fm-summary-after.csv
   # The walks' scores with no pairing and the rolling rho_p, by study and
   # level, on development data (`summarise_pairing` rows). Pending:
   # the rows on evidence/fm-copula.
@@ -183,8 +177,14 @@ evidence:
 
 # Data the development runs use.
 development:
-  # Pilot outbreaks, for checking the setup.
-  synthetic_seeds: [9501, 9502, 9503, 9504]
+  # The run's validation round 33, 40 batches of 20 (seeds 33300 to
+  # 33339), for checking the setup.
+  synthetic_seeds: [
+    33300, 33301, 33302, 33303, 33304, 33305, 33306, 33307, 33308, 33309,
+    33310, 33311, 33312, 33313, 33314, 33315, 33316, 33317, 33318, 33319,
+    33320, 33321, 33322, 33323, 33324, 33325, 33326, 33327, 33328, 33329,
+    33330, 33331, 33332, 33333, 33334, 33335, 33336, 33337, 33338, 33339,
+  ]
 
 # Data kept out of every development run.
 # Only the `paper` target reads them.

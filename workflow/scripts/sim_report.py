@@ -493,11 +493,93 @@ def pick_gallery(d: pd.DataFrame) -> list[tuple[str, pd.Series]]:
     return out
 
 
-def gallery(d: pd.DataFrame, dirs: dict) -> str:
-    """Return the example outbreaks' section."""
+RANDOM_SEED = 20261122
+"""The random gallery's seed, so reruns show the same outbreaks."""
+
+
+def pick_random(d: pd.DataFrame, k: int = 24) -> list[tuple[str, pd.Series]]:
+    """`k` outbreaks drawn at random (seeded), not chosen by regime."""
+    d = d.sort_values(["round", "outbreak"]).reset_index(drop=True)
+    rng = np.random.default_rng(RANDOM_SEED)
+    rows = sorted(rng.choice(len(d), size=min(k, len(d)), replace=False))
+    return [(f"random {i + 1}", d.iloc[r]) for i, r in enumerate(rows)]
+
+
+def _n_items(x: object) -> int:
+    """Return how many values a settings cell holds (`;`-separated)."""
+    if isinstance(x, str):
+        return sum(p not in ("", "NA") for p in x.split(";"))
+    return 0 if pd.isna(x) else 1
+
+
+def _any_true(x: object) -> bool:
+    """Return whether any of a settings cell's values is true."""
+    return any(
+        p.strip().upper() in ("TRUE", "1", "1.0") for p in str(x).split(";")
+    )
+
+
+SHARES = [
+    ("R path", lambda d: d["path"]),
+    ("window", lambda d: d["window"]),
+    ("place R relation", lambda d: d["place_rt"]),
+    ("strata link", lambda d: d["strata_link"]),
+    ("spread", lambda d: d["spread"]),
+    (
+        "R shifts",
+        lambda d: (
+            d["shift_at"]
+            .map(_n_items)
+            .clip(upper=3)
+            .map({0: "0", 1: "1", 2: "2", 3: "3+"})
+        ),
+    ),
+    (
+        "a reactive shift",
+        lambda d: (
+            d["shift_reactive"].map(_any_true).map({True: "yes", False: "no"})
+        ),
+    ),
+    ("variants", lambda d: d["variants"].map({True: "yes", False: "no"})),
+    ("reporting shocks", lambda d: d["shocks"]),
+    (
+        "R at its 95% over days",
+        lambda d: pd.cut(
+            d["r_q95"],
+            [0, 1.5, 3, 6, np.inf],
+            labels=["below 1.5", "1.5 to 3", "3 to 6", "above 6"],
+        ).astype(str),
+    ),
+]
+"""The round-wide shares: what each outbreak's R path is made of."""
+
+
+def shares(d: pd.DataFrame) -> str:
+    """Return the shares of R path kinds, shifts, shocks and relations."""
+    rows = []
+    for name, of in SHARES:
+        try:
+            x = of(d)
+        except KeyError:
+            continue
+        counts = x.fillna("none").astype(str).value_counts()
+        for level, n in counts.items():
+            rows.append(
+                f"<tr><td>{html.escape(name)}</td><td>{html.escape(level)}</td>"
+                f"<td>{n}</td><td>{n / len(d):.0%}</td></tr>"
+            )
+            name = ""
+    return (
+        "<table><tr><th>setting</th><th>level</th><th>outbreaks</th>"
+        "<th>share</th></tr>" + "".join(rows) + "</table>"
+    )
+
+
+def gallery(picks: list[tuple[str, pd.Series]], dirs: dict) -> str:
+    """Return the figures of the outbreaks in `picks`."""
     parts = []
     cache: dict = {}
-    for label, o in pick_gallery(d):
+    for label, o in picks:
         seed = o["outbreak"].split("-")[0]
         sims = dirs[o["round"]]
         if (sims, seed) not in cache:
@@ -883,7 +965,15 @@ def render(
         "nested strata land; aggregates (exact, unallocated, late parents) "
         "are made by the trainer, not the simulator, so are not here.</p>",
         "<h2>1. Example outbreaks</h2>",
-        gallery(d, dirs),
+        "<h3>Shares over the round</h3>",
+        shares(d),
+        "<h3>At random</h3>",
+        f"<p>{min(24, len(d))} outbreaks drawn at random (seed "
+        f"{RANDOM_SEED}), as a typical round looks.</p>",
+        gallery(pick_random(d), dirs),
+        "<h3>By regime</h3>",
+        "<p>One outbreak per regime, the lowest id that matches.</p>",
+        gallery(pick_gallery(d), dirs),
         "<h2>2. Settings and outcomes by layer</h2>",
         germany_table(de, d),
         layers(d, de, ref),

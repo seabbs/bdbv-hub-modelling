@@ -24,7 +24,7 @@ Pass Snakemake options after `--`: `task nowcast-foundation:score -- -n` is a dr
 Low level, any output file, for example:
 
 ```sh
-uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
+uv run --group paper snakemake <ROOT>/rounds/r34/sims/counts-33400.csv.gz  # one batch
 uv run --group paper snakemake <ROOT>/runs/runa/train/n800/settings.json  # one checkpoint
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
@@ -172,7 +172,7 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 - Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
 - Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
-- Evidence read from git (`evidence_aggregation_scores`, `evidence_checkpoint_scores`, `evidence_lag_bdbv_after`, `evidence_lag_bdbv_before`, `evidence_lag_germany`), gathered by `evidence`.
+- Evidence read from git (`evidence_aggregation_scores`, `evidence_checkpoint_scores`, `evidence_lag_germany`), gathered by `evidence`.
 - Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `grid_tables`, `summary` and `publish_paper`.
 
 ## Scheduled runs

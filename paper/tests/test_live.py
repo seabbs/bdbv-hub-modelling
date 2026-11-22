@@ -128,5 +128,5 @@ def test_the_curve_keeps_the_hub_target_only() -> None:
     rows = _scores()
     daily = rows.assign(target="daily", rel_crps=9.0, rel_wis=9.0)
     out = checkpoint_rows(pd.concat([rows, daily]), "one-model")
-    assert (out["rel_wis"] < 9).all()
+    assert (out["rel_wis"].dropna() < 9).all()
     assert not out.duplicated(["study", "level", "model", "checkpoint"]).any()

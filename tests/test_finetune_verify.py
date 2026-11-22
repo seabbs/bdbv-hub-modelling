@@ -216,6 +216,10 @@ def test_the_simulator_hashes_its_grid_python_and_engine():
                     "triangle",
                 ),
             ),
+            (
+                "packages/nowcastrenewal/src/nowcastrenewal/simulation",
+                ("__init__", "outbreak"),
+            ),
         )
         for name in names
     }

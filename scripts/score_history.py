@@ -176,20 +176,6 @@ def _metrics(summaries: Iterable[Mapping[str, Any]]) -> tuple[list[str], ...]:
     return list(keys), [k for k, r in keys.items() if r]
 
 
-def summary_scores(summary: Mapping[str, Any]) -> pd.DataFrame:
-    """Summarise one score summary by baseline, pool and model.
-
-    Every model is a baseline, over all forecasts. Returns
-    `baseline`, `pool`, `model`, `n` (forecasts the baseline also made),
-    the mean of each metric and, for relative metrics, the baseline's mean
-    on the same forecasts `base_<metric>` and `rel_<metric>`.
-    """
-    keys, relative = _metrics([summary])
-    rows = forecasts(summary).assign(deploy=0)
-    pairs = _pairs(rows, relative, list(dict.fromkeys(rows["model"])))
-    return _summarise(pairs, ["baseline"], keys, relative)
-
-
 def history(
     deploys: Iterable[Deploy], baselines: Sequence[str] | None = None
 ) -> pd.DataFrame:
@@ -208,8 +194,9 @@ def history(
     pandas.DataFrame
         One row per deploy, target, baseline, `split` (`"week <target
         week>"`), `common` (only the week's common set, see `_common`),
-        pool and model: `deploy_time`, `source_sha`, `pages_sha`, the
-        `summary_scores` columns, `origins`, `releases` and `break`.
+        pool and model: `deploy_time`, `source_sha`, `pages_sha`, `n`, the
+        mean of each metric (with `base_<metric>` and `rel_<metric>` for
+        relative metrics), `origins`, `releases` and `break`.
         `break` is true where `n` changes, where a model first appears
         or, over all forecasts, where the origins or releases change.
     """

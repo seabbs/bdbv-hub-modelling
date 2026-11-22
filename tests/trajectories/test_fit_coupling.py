@@ -98,7 +98,7 @@ def test_methods_without_parameters_fit_to_their_name(method):
 
 def test_an_unknown_method_is_an_error():
     with pytest.raises(ValueError, match="unknown method"):
-        fit_coupling(_scores(0.8, 0.4), "schaake")
+        fit_coupling(_scores(0.8, 0.4), "nope")
 
 
 def test_one_series_has_no_series_pairs_so_s_is_zero():

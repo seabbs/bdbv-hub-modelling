@@ -37,6 +37,7 @@ from pyrenew.metaclass import RandomVariable
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
+from nowcastutils.dates import epiweek_end
 from nowcastutils.releases import release_cutoff
 
 from ..components.mixing import Mixing, distance_kernel, great_circle_km
@@ -47,7 +48,6 @@ from .hazard_delay import HazardDelay
 from .inputs import (
     NATIONAL,
     START_COUNT,
-    _saturday,
     _seed_days,
     bvd_inputs,
     imputation_pmf,
@@ -767,7 +767,7 @@ def zone_vintage_from_tables(
     counts_by_week = national.to_numpy()
     threshold = min(START_COUNT, counts_by_week.max())
     big = int(np.argmax(counts_by_week >= threshold))
-    first = _saturday(str(national.index[max(0, big - 1)]))
+    first = epiweek_end(pd.Timestamp(national.index[max(0, big - 1)]).date())
     start = first - dt.timedelta(days=6)
     cutoff = (release_cutoff(target, vintage) - start).days
     n_weeks = cutoff // 7 + 1
