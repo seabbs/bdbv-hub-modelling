@@ -46,7 +46,7 @@ def missing() -> list[str]:
 
     paper = ROOT / "paper"
     config = yaml.safe_load((paper / "workflow" / "config.yaml").read_text())
-    sims = paper / localconfig.expand(
+    sims = ROOT / localconfig.expand(
         config["synthetic"]["simulations"]["paper"]
     )
     seeds = run_settings(config, "paper").synthetic_seeds
@@ -71,12 +71,12 @@ def pin() -> str:
     got = subprocess.run(
         [
             sys.executable,
-            "scripts/follow_checkpoint.py",
+            "paper/scripts/follow_checkpoint.py",
             config["finetune_run"],
             "--write",
-            "workflow/config.yaml",
+            "paper/workflow/config.yaml",
         ],
-        cwd=paper,
+        cwd=ROOT,
         capture_output=True,
         text=True,
         check=True,
@@ -116,7 +116,7 @@ def main(argv: list[str]) -> int:
             "--rerun-triggers",
             "mtime",
         ]
-        where = ROOT / "paper"
+        where = ROOT
     else:
         name = argv[0] if argv else "development"
         if name not in RENDERS:

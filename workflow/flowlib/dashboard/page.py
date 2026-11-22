@@ -236,6 +236,7 @@ class Status:
     steps: Callable[[int], tuple[int, bool]] | None = None
     sims_rate: float | None = None
     span: float | None = None
+    mean_rate: float | None = None
 
     @property
     def target(self) -> int:
@@ -363,6 +364,7 @@ def live_status(
         None if params["lr_steps"] else steps,
         sims_rate,
         span,
+        training.mean_rate(points),
     )
 
 
@@ -412,9 +414,18 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "Step",
             "t_step",
             "n/a" if st.step is None else str(st.step),
-            f"n{trained:.0f} of {st.target} simulations trained"
-            if trained is not None
-            else "",
+            "; ".join(
+                x
+                for x in (
+                    f"of {st.at(st.target)} steps"
+                    if st.target and st.step is not None
+                    else "",
+                    f"n{trained:.0f} of {st.target} simulations trained"
+                    if trained is not None
+                    else "",
+                )
+                if x
+            ),
             "",
         ),
         (
@@ -424,6 +435,7 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "; ".join(
                 x
                 for x in (
+                    f"mean {st.mean_rate:.3f}" if st.mean_rate else "",
                     f"{st.sims_rate * 60:.2f} simulations/min"
                     if st.sims_rate
                     else "",
@@ -434,6 +446,17 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "",
         ),
         ("Next checkpoint", "t_next", next_v, next_s, ""),
+        (
+            "Segments",
+            "t_segments",
+            next_v,
+            " · ".join(
+                f"n{n} {st.eta(n)}"
+                for n in st.params["prefixes"]
+                if n not in st.saved and n not in st.pending
+            ),
+            "",
+        ),
         (
             f"ETA n{st.target}",
             "t_eta",

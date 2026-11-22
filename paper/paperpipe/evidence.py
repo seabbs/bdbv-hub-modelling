@@ -41,7 +41,6 @@ from paperpipe.outputs import to_markdown
 
 __all__ = [
     "EVIDENCE",
-    "HELD_OUT_EVIDENCE",
     "aggregation_figure",
     "aggregation_numbers",
     "branch_head",
@@ -239,10 +238,6 @@ model's own quantiles for Germany, and CRPS on 1,000 draws with common
 random numbers for BDBV."""
 
 
-HELD_OUT_EVIDENCE: Final = ("lag_bdbv_before", "lag_bdbv_after")
-"""Evidence inputs that are BDBV scores only, which the paper never reads."""
-
-
 def drop_bdbv(frame: pd.DataFrame) -> pd.DataFrame:
     """Drop BDBV (Ebola) score rows, as the Ebola study is held out.
 
@@ -260,35 +255,19 @@ def drop_bdbv(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.loc[keep].reset_index(drop=True)
 
 
-def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
-    """Return the case studies' rows of `CHECKPOINT_RULE`, one score column.
-
-    BDBV's relative CRPS fills `rel_wis` where that is empty.
-    """
-    out = scores
-    if "rule" in out:
-        out = out.loc[out["rule"] == CHECKPOINT_RULE]
-    out = out.loc[out["study"].isin(["germany", "ebola"])]
-    if "rel_crps" in out:
-        out = out.assign(rel_wis=out["rel_wis"].fillna(out["rel_crps"]))
-        if "rel_log_crps" in out and "rel_log_wis" in out:
-            out = out.assign(
-                rel_log_wis=out["rel_log_wis"].fillna(out["rel_log_crps"])
-            )
-    return out
-
-
 def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
     """Return zero-shot and the live run's checkpoint rows, by level.
 
     Rows of `CHECKPOINT_RULE` and the hub target on the case studies'
     development data (`live_checkpoint.tidy`), at every level, each for
-    its own panel. BDBV's relative CRPS fills `rel_wis`, so one column
-    holds each study's relative score.
+    its own panel. A row with no relative WIS keeps it empty.
     """
     out = tidy(scores)
     out = out.loc[out["study"].isin(["germany", "ebola"])]
-    out = out.assign(rel_wis=out["rel"], rel_log_wis=out["rel_log"])
+    out = out.assign(
+        rel_wis=out.get("rel_wis", np.nan),
+        rel_log_wis=out.get("rel_log_wis", np.nan),
+    )
     live = out["run"] == run if "run" in out else False
     keep = (out["checkpoint"] == "zero-shot") | live
     return out.loc[keep].reset_index(drop=True)
@@ -714,8 +693,6 @@ EVIDENCE: Final = {
     "checkpoint_scores": "the scores of each checkpoint of the final run",
     "scale_floor": "the scale-floor test",
     "lag_germany": "the German lag-horizon scores",
-    "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
-    "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
     "compare_slots": "the slots and no-slots runs' scores by checkpoint",
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
@@ -969,9 +946,6 @@ def write_evidence(
     si_dir.mkdir(parents=True, exist_ok=True)
     fig_dir.mkdir(parents=True, exist_ok=True)
     data = {name: _read(paths, name) for name in EVIDENCE}
-    # The Ebola study is held out: no BDBV scores from development.
-    for name in HELD_OUT_EVIDENCE:
-        data[name] = None
     for name, frame in data.items():
         if frame is not None and name != "sim_realism":
             kept = drop_bdbv(frame)
@@ -1091,11 +1065,7 @@ def write_evidence(
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)
             ),
-            "waiting": [
-                EVIDENCE[n]
-                for n, d in data.items()
-                if d is None and n not in HELD_OUT_EVIDENCE
-            ],
+            "waiting": [EVIDENCE[n] for n, d in data.items() if d is None],
         }
     }
     out_yml.write_text(yaml.safe_dump(numbers, sort_keys=False))

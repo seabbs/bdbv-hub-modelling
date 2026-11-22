@@ -27,9 +27,14 @@ from typing import Any, Final
 
 import pandas as pd
 
+from nowcastfoundation.forecaster import (
+    FINETUNED_PREFIX,
+    SLOTS_PREFIX,
+    SLOTS_RELEASE_PREFIX,
+)
+from nowcastfoundation.forecaster import release_tag as foundation_release_tag
+
 __all__ = [
-    "FT_PREFIX",
-    "SLOTS_PREFIX",
     "STORED_MODELS",
     "STORE_BRANCH",
     "choose_checkpoint",
@@ -49,12 +54,6 @@ same checkpoint."""
 
 STORE_BRANCH: Final = "germany-ft-forecasts"
 """The branch that holds the stored forecasts."""
-
-FT_PREFIX: Final = "chronos-ft"
-"""Tag prefix of the fine-tuned checkpoints (`foundation.FINETUNED_PREFIX`)."""
-
-SLOTS_PREFIX: Final = "chronos-slots"
-"""Tag prefix of the final run's checkpoints, labelled `slots-<hash>`."""
 
 FORECASTS: Final = "forecasts.csv.gz"
 MANIFEST: Final = "manifest.json"
@@ -80,14 +79,12 @@ def release_tag(label: str) -> str:
     ValueError
         If the label is neither.
     """
-    slots = label.startswith("slots-")
-    checkpoint = label.removeprefix("slots-")
-    if not _HASH.fullmatch(checkpoint):
+    if not _HASH.fullmatch(label.removeprefix(SLOTS_PREFIX)):
         raise ValueError(
             f"Not a checkpoint label: {label!r}. Give a settings hash or "
             "slots-<hash>."
         )
-    return f"{SLOTS_PREFIX if slots else FT_PREFIX}-{checkpoint}"
+    return foundation_release_tag(label)
 
 
 def _published(releases: Iterable[Mapping[str, Any]], prefix: str) -> list[str]:
@@ -110,12 +107,12 @@ def choose_checkpoint(
 ) -> tuple[str | None, str | None]:
     """Return the checkpoint whose stored forecasts the page shows.
 
-    The newest published `SLOTS_PREFIX` release with stored forecasts
+    The newest published `SLOTS_RELEASE_PREFIX` release with stored forecasts
     wins: the final run's checkpoint, once the scorer has stored it.
     Otherwise the checkpoint `spec` pins, as the `_ft` models load it
-    (`foundation.resolve_checkpoint`): the newest `FT_PREFIX` release for
+    (`foundation.resolve_checkpoint`): the newest `FINETUNED_PREFIX` release for
     `"latest"`, else that hash's release. If its forecasts are not stored
-    yet, the newest stored `FT_PREFIX` release is shown instead.
+    yet, the newest stored `FINETUNED_PREFIX` release is shown instead.
 
     Parameters
     ----------
@@ -138,14 +135,15 @@ def choose_checkpoint(
         pins, None if there is no such release.
     """
     releases = list(releases)
-    slots = [t for t in _published(releases, SLOTS_PREFIX) if t in stored]
+    published = _published(releases, SLOTS_RELEASE_PREFIX)
+    slots = [t for t in published if t in stored]
     if live is not None:
         slots = [t for t in slots if t in live]
-    ft = _published(releases, FT_PREFIX)
+    ft = _published(releases, FINETUNED_PREFIX)
     if spec == "latest":
         pinned = ft[-1] if ft else None
     else:
-        pinned = f"{FT_PREFIX}-{spec}"
+        pinned = f"{FINETUNED_PREFIX}-{spec}"
     if slots:
         return slots[-1], pinned
     if live is not None:

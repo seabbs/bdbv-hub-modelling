@@ -54,6 +54,7 @@ from nowcastutils.base import (
     get_model,
     register_model,
 )
+from nowcastutils.dates import epiweek_end
 from nowcastutils.files import write_csv
 from nowcastutils.forecast import Forecast
 from nowcastutils.hierarchy import is_zone
@@ -407,11 +408,6 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     return model
 
 
-def _saturday(day: str | dt.date) -> dt.date:
-    d = pd.Timestamp(day).date()
-    return d + dt.timedelta(days=(5 - d.weekday()) % 7)
-
-
 def horizon_weeks(task: ForecastTask) -> int:
     """Weeks the model must run past the week holding the vintage.
 
@@ -425,8 +421,8 @@ def horizon_weeks(task: ForecastTask) -> int:
     int
         At least one.
     """
-    last = max(_saturday(d) for d in task.target_end_dates)
-    return max(1, (last - _saturday(task.cutoff)).days // 7)
+    last = max(epiweek_end(d) for d in task.target_end_dates)
+    return max(1, (last - epiweek_end(task.cutoff)).days // 7)
 
 
 def _weeks(first: dt.date, n: int) -> list[str]:
@@ -628,7 +624,7 @@ def samples_table(
     n = task.n_samples
     out: list[pd.DataFrame] = []
     for date in task.target_end_dates:
-        i = (_saturday(date) - first).days // 7
+        i = (epiweek_end(date) - first).days // 7
         for j, loc in enumerate(data.names):
             if i < 0:  # before the model grid: the data
                 value = observed[loc].get(date, 0) if loc in observed else 0

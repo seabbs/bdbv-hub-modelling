@@ -9,7 +9,29 @@ import jax
 import jax.numpy as jnp
 from jax.typing import ArrayLike
 
-from nowcastrenewal.model.observation import backsample
+
+def backsample(missing: ArrayLike, pmf: ArrayLike) -> jax.Array:
+    r"""Spread missing-onset cases back from report day with a delay pmf.
+
+    $a(s) = \sum_d m(s + d) \hat f(d)$, the hub's back-sampling in
+    expectation (`bdbvhub.data.delays.expected_imputed_onsets`).
+    Mass that would fall before day 0 is lost.
+
+    Parameters
+    ----------
+    missing : Array
+        Missing-onset cases by report day, shape `(n,)`.
+    pmf : Array
+        Delay pmf on 0..D.
+
+    Returns
+    -------
+    Array
+        Expected cases by onset day, shape `(n,)`.
+    """
+    missing = jnp.asarray(missing)
+    n = missing.shape[0]
+    return jnp.convolve(missing[::-1], pmf, mode="full")[:n][::-1]
 
 
 def onset_expectations_reference(

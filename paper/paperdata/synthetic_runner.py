@@ -93,10 +93,6 @@ HORIZON_WEEKS: Final = 5
 cut-off's week and three more, with a week to spare. An origin is at
 least this plus the outbreak's longest delay before its last report."""
 
-MIN_DELAY_WEEKS: Final = 3
-"""The grid's shortest longest delay; r3 outbreaks have 3, 4, 6, 8 or 12
-weeks."""
-
 HORIZONS: Final = tuple(range(-4, 4))
 """Forecast weeks from the reference date."""
 
@@ -594,19 +590,18 @@ def delay_quantile(counts: pd.DataFrame, q: float) -> int:
 def longest_delay_weeks(counts: pd.DataFrame) -> int:
     """Return an outbreak's longest reporting delay in whole weeks.
 
-    The longest delay seen, rounded up to weeks, and at least
-    `MIN_DELAY_WEEKS`, so an outbreak whose cases all come early keeps
-    the grid's shortest.
+    The longest delay seen, rounded up to weeks, within the grid's delay
+    range.
     """
     delay = (
         pd.to_datetime(counts["report_date"])
         - pd.to_datetime(counts["reference_date"])
     ).dt.days.max()
-    return max(MIN_DELAY_WEEKS, -(-int(delay) // 7))
+    return -(-int(delay) // 7)
 
 
 def simulation_id(outbreak: str) -> str:
-    """Return the simulation of an r3 outbreak, `<seed>-<index>-<draw>`.
+    """Return the simulation of an outbreak, `<seed>-<index>-<draw>`.
 
     The settings have one row per simulation, `<seed>-<index>`.
     """
@@ -617,7 +612,7 @@ def simulation_id(outbreak: str) -> str:
 def first_draws(counts: pd.DataFrame, draw: int = 1) -> pd.DataFrame:
     """Return one draw of each simulation, so outbreaks are independent.
 
-    The draws of an r3 simulation share its parameters and differ only in
+    The draws of a simulation share its parameters and differ only in
     their observations.
 
     Parameters

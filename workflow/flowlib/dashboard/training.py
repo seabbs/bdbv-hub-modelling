@@ -218,6 +218,27 @@ def recent_rate(
     return (last_s - first_s) / span, span
 
 
+RESTART_GAP = 1800.0
+"""Seconds between two logged points taken as a stop, not training."""
+
+
+def mean_rate(
+    points: Sequence[tuple[float, float]], gap: float = RESTART_GAP
+) -> float | None:
+    """Return the steps a second over the whole run, or None.
+
+    Over each pair of consecutive points (time, step) at most `gap`
+    seconds apart, so the time a run was stopped is left out.
+    """
+    pts = sorted(set(points))
+    steps = seconds = 0.0
+    for (t0, s0), (t1, s1) in pairwise(pts):
+        if 0 < t1 - t0 <= gap and s1 > s0:
+            steps += s1 - s0
+            seconds += t1 - t0
+    return steps / seconds if seconds else None
+
+
 def status_point(folder: Path | str) -> tuple[float, float] | None:
     """Return the trainer's status time and step while it trains, or None.
 
@@ -416,7 +437,9 @@ def loss_run(
         "tr0": sum(v for _, v in train[:20]) / len(train[:20])
         if train
         else None,
-        "held": [[x(r["step"]), r["held"]] for r in rows],
+        "held": [
+            [x(r["step"]), r["held"]] for r in rows if r["held"] is not None
+        ],
         "ck": [
             [at(nm, s), s["held_out_loss"]]
             for nm, s, _ in checkpoints

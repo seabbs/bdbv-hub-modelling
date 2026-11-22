@@ -1,7 +1,7 @@
 # The workflow
 
-One Snakemake workflow simulates outbreaks, fine-tunes Chronos-2 on them, publishes the checkpoints and scores them.
-The paper's workflow (`paper/workflow/Snakefile`) runs beside it.
+One Snakemake workflow simulates outbreaks, fine-tunes Chronos-2 on them, publishes the checkpoints, scores them and builds the paper.
+The paper's rules (`paper/workflow/Snakefile`) are a module of it, with their settings in `paper/workflow/config.yaml`.
 This page walks through it in order, with the command for each piece, from a whole target down to one file.
 
 ## Running it
@@ -18,13 +18,13 @@ High level, one Taskfile task per target:
 | `task nowcast-foundation:publish` | `publish` | verify and release each checkpoint | GitHub releases |
 | `task nowcast-foundation:score` | `score` | score each released checkpoint, then its follow-ups | no |
 | `task nowcast-foundation:land` | `land` | commit the score tables to `evidence/` and push | git push |
-| `task paper` | (paper workflow) | the paper, as now | no |
+| `task paper` | `development` or `paper`, then `render` | the paper (section 6) | no |
 
 Pass Snakemake options after `--`: `task nowcast-foundation:score -- -n` is a dry run, and a file path builds just that output.
 Low level, any output file, for example:
 
 ```sh
-uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
+uv run --group paper snakemake <ROOT>/rounds/r34/sims/counts-33400.csv.gz  # one batch
 uv run --group paper snakemake <ROOT>/runs/runa/train/n800/settings.json  # one checkpoint
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
@@ -89,6 +89,9 @@ It draws each outbreak's design and values in Python and runs each outbreak as o
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each round (no thresholds: it records each simulation's summaries and an empty exclusion list), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.
 - `round_ready`: the seed list and `READY`, last.
+- `round_summaries`: one row per outbreak of a round (`r<N>/summaries/outbreaks.csv`, `workflow/scripts/grid_summaries.py`): design, drawn values, size, dynamics, R, delays and the phase at the training cut-offs.
+- `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
+- `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release_qc`, `release`: opt-in, each batch and the round's QC exclusions to its round's release.
 - `push_batch`, `push`: on a helping host, its seeds (`SIM_SEEDS`), each pushed to the rounds host's round (`REMOTE`, `REMOTE_ROOT`): its files, then its manifest row (`flowlib.hosts`).
@@ -128,6 +131,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `score_germany`, `score_release`: the units of `nowcastfoundation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
   Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource.
   BDBV is held out for the paper, so no BDBV unit runs.
+- `coupling_germany`: a checkpoint's German forecasts' coupling scores and summary (`nowcasteval.coupling`), from its German unit, in `<SCORE_CACHE>/coupling/`.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
@@ -159,6 +163,17 @@ cp config/dashboard.example.yaml config/dashboard.local.yaml   # then edit paths
 uv run --group paper python workflow/scripts/dashboard.py --port 8765
 # open the address it prints; with the venv active, plain `python` works too
 ```
+
+## 6. Paper (`paper/workflow/Snakefile`)
+
+A module of this workflow (`use rule * from paper_workflow`), run from the repository root; its paths are from the root and its outputs are in `paper/results/<mode>/`.
+`development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.
+
+- Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
+- Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
+- Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
+- Evidence read from git (`evidence_aggregation_scores`, `evidence_checkpoint_scores`, `evidence_lag_germany`), gathered by `evidence`.
+- Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `grid_tables`, `summary` and `publish_paper`.
 
 ## Scheduled runs
 

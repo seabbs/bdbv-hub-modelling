@@ -339,9 +339,9 @@ rule grid_figures:
     shell:
         """
         uv run python workflow/scripts/grid_summaries.py compare \
-            {output.table} {params.sources} > {log} 2>&1
+            {output.table} {params.sources} >{log} 2>&1
         uv run python workflow/scripts/grid_figures.py {params.out} \
-            {params.sources} >> {log} 2>&1
+            {params.sources} >>{log} 2>&1
         """
 
 
@@ -350,9 +350,9 @@ rule grid_figures:
 # against the German development half and the paper's reference values.
 # Target `sim_reports`. The German triangle is the hub's, at
 # config/germany.toml's commit; no BDBV data.
-GERMANY_SPLIT = tomllib.loads(Path("config/germany.toml").read_text())[
-    "nowcast"
-]["split_date"]
+GERMANY_SPLIT = tomllib.loads(Path("config/germany.toml").read_text())["nowcast"][
+    "split_date"
+]
 REFERENCE_VALUES = "paper/data/reference-values.csv"
 
 
@@ -367,8 +367,7 @@ rule germany_triangle:
     params:
         out=lambda wc, output: Path(output[0]).parent,
     shell:
-        "uv run python -m bdbvhub.cli germany-fetch --out {params.out} "
-        "> {log} 2>&1"
+        "uv run python -m bdbvhub.cli germany-fetch --out {params.out} " "> {log} 2>&1"
 
 
 rule germany_dev_stats:

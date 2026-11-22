@@ -313,3 +313,23 @@ def test_block_views_are_summarised_from_the_run_s_record(tmp_path):
         "block views: 2 systems over the block limit (1 held-out) cut into "
         "5 blocks; largest 3990 series, at most 900 after"
     )
+
+
+def test_an_offloaded_run_s_steps_are_read_without_a_held_out_loss(tmp_path):
+    path = tmp_path / "n100.log"
+    path.write_text(
+        "2026-11-22 12:22:31 [train] step 200: loss 0.0792, held-out "
+        "(monitor, by_source) left to the evaluator, 1078 s\n"
+    )
+    row = logs.Log(path).rows()[0]
+    assert row["step"] == 200
+    assert row["loss"] == 0.0792
+    assert row["held"] is None
+
+
+def test_the_mean_rate_leaves_out_the_gaps_of_restarts():
+    t0 = 1_000_000.0
+    # 100 steps in 100 s, a stop of two hours, then 100 steps in 50 s.
+    points = [(t0, 0), (t0 + 100, 100), (t0 + 7300, 100), (t0 + 7350, 200)]
+    assert training.mean_rate(points) == pytest.approx(200 / 150)
+    assert training.mean_rate([(t0, 5)]) is None

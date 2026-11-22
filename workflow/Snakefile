@@ -19,6 +19,8 @@ from flowlib import machine  # noqa: E402
 
 
 configfile: str(Path(workflow.basedir) / "config.yaml")
+# The paper's settings (paper/workflow/config.yaml), beside the workflow's.
+configfile: str(Path(workflow.basedir).parent / "paper" / "workflow" / "config.yaml")
 
 
 include: "rules/common.smk"
@@ -44,3 +46,15 @@ rule all:
 
 onerror:
     say(f"FAILED; the failing rule and its error are in the Snakemake log {log}")
+
+
+# The paper (paper/workflow/Snakefile): targets `development`, `paper` and
+# `render`.
+module paper_workflow:
+    snakefile:
+        "../paper/workflow/Snakefile"
+    config:
+        config
+
+
+use rule * from paper_workflow

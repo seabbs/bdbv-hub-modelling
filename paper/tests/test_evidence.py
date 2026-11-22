@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -7,7 +8,6 @@ import yaml
 
 from paperpipe.evidence import (
     EVIDENCE,
-    HELD_OUT_EVIDENCE,
     aggregation_numbers,
     write_evidence,
 )
@@ -66,9 +66,7 @@ def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
     doc = yaml.safe_load((tmp_path / "e.yml").read_text())
     zero = doc["evidence"]["realism"]["zero_share"]
     assert zero["BDBV"] == "(not yet available)"
-    assert len(out["evidence"]["waiting"]) == len(EVIDENCE) - len(
-        HELD_OUT_EVIDENCE
-    )
+    assert len(out["evidence"]["waiting"]) == len(EVIDENCE)
 
 
 def test_a_paper_run_fails_while_evidence_is_missing(tmp_path) -> None:
@@ -309,7 +307,8 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
     out = checkpoint_rows(rows, "one-model")
     assert set(out["study"]) == {"germany", "ebola"}
     assert sorted(out["checkpoint"]) == ["b", "b", "zero-shot"]
-    assert out.set_index("study").loc["ebola", "rel_wis"] == 0.8
+    # A row with no relative WIS stays empty, never filled from CRPS.
+    assert pd.isna(out.set_index("study").loc["ebola", "rel_wis"])
     # Old tables, with no run, grid or rule, give the zero-shot rows only.
     old = rows.drop(columns=["run", "grid", "rule", "rel_crps"]).iloc[:2]
     assert list(checkpoint_rows(old, "one-model")["checkpoint"]) == [
@@ -690,16 +689,16 @@ def test_drop_bdbv_keeps_no_bdbv_score_rows() -> None:
     assert len(drop_bdbv(floor)) == 1
 
 
-def test_evidence_quotes_no_bdbv_scores(tmp_path) -> None:
-    paths = dict.fromkeys(EVIDENCE)
-    out = write_evidence(
-        paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml"
-    )
-    waiting = out["evidence"]["waiting"]
-    assert not any(EVIDENCE[n] in waiting for n in HELD_OUT_EVIDENCE)
-
-
 def test_waiting_notes_name_no_sessions_or_retired_grids() -> None:
     # The notes are rendered into the SI, so they say what each input is.
     code = re.compile(r"\bfm-|germany-chronos2|\br[3-6]\b")
     assert not [v for v in EVIDENCE.values() if code.search(v)]
+
+
+def test_no_evidence_input_is_bdbv_scores() -> None:
+    # The Ebola study is held out, so no development BDBV rows are inputs.
+    config = yaml.safe_load(
+        (Path(__file__).parents[1] / "workflow" / "config.yaml").read_text()
+    )
+    assert not [n for n in EVIDENCE if "bdbv" in n]
+    assert not [n for n in config["evidence"] if "bdbv" in n]

@@ -16,7 +16,7 @@
  "coverage": "Share of truths inside the 50% and 90% intervals, as in the paper. The 90% interval needs the 5% and 95% quantiles: sample-based datasets give them, but the German hub's quantiles stop at 2.5% and 97.5%, so German rows use the 95% interval. The dashed lines mark the nominal levels.",
  "biasscore": "Mean of 1 minus 2 times the forecast CDF at the truth, from -1 (forecast too low) to +1 (too high). 0 is unbiased.",
  "t_step": "The trainer's current optimiser step, and how many simulations that is.",
- "t_rate": "Training speed from the trainer's timestamped steps: each logged step and its status file, which it writes every few steps. Over the last hour, or the last two points if they are further apart (evaluations log a step only every few hundred). Below: simulations trained a minute over the same time.",
+ "t_rate": "Training speed from the trainer's timestamped steps: each logged step and its status file, which it writes every few steps. Over the last hour, or the last two points if they are further apart (evaluations log a step only every few hundred). Below: the mean over the whole run (leaving out stops of over half an hour) and simulations trained a minute over the recent time.",
  "t_next": "Simulations trained so far of the next checkpoint's size, the step it is saved at, and when it is due at the recent simulations a minute. A checkpoint already written and still being scored at its size is named below with the time it was written.",
  "t_eta": "Time to the final checkpoint at the recent simulations a minute (else steps a second).",
  "t_lr": "Current learning rate of each optimiser group.",

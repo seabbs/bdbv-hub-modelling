@@ -130,7 +130,6 @@ tasks:
 
   dry:paper:
     desc: Dry-run the paper workflow's development target
-    dir: paper
     cmds:
       - uv run --group paper snakemake -s workflow/Snakefile development -n --cores 1 {{.CLI_ARGS}}
 
