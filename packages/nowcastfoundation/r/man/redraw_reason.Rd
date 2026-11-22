@@ -4,17 +4,15 @@
 \alias{redraw_reason}
 \title{Why a simulation is drawn again, if it is}
 \usage{
-redraw_reason(size, grid)
+redraw_reason(size)
 }
 \arguments{
 \item{size}{Reported cases, the draws' mean.}
-
-\item{grid}{A grid (\code{read_grid}).}
 }
 \value{
 The reason, or \code{NA} if the simulation is kept.
 }
 \description{
-A simulation reporting fewer than \code{grid$floors$min_cases} cases (its
-draws' mean) is drawn again; so are draws that error (\code{simulate_cell}).
+A simulation reporting no cases (its draws' mean) is drawn again; so
+are draws that error (\code{simulate_cell}).
 }

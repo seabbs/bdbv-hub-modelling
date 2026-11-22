@@ -327,7 +327,7 @@ report_outbreak <- function(grid, design, v, onsets, ctx,
 }
 
 # Simulate one design: up to five draws of its values, each kept if it
-# runs and reports at least `min_cases` (`redraw_reason`). Returns the
+# runs and reports any cases (`redraw_reason`). Returns the
 # outbreak (or NULL) and a failure row per failed try.
 simulate_cell <- function(grid, design, ctx, id = NA_character_) {
   if (design$strata_link == "independent" &&
@@ -341,7 +341,7 @@ simulate_cell <- function(grid, design, ctx, id = NA_character_) {
     reason <- if (inherits(res, "error")) {
       conditionMessage(res)
     } else {
-      redraw_reason(sum(res$counts$count) / ctx$draws, grid)
+      redraw_reason(sum(res$counts$count) / ctx$draws)
     }
     if (is.na(reason)) {
       return(list(out = res, failures = failures))
@@ -445,8 +445,8 @@ simulate_independent <- function(grid, design, ctx, id = NA_character_) {
 #' Each simulation draws its categorical settings (`draw_design`), its
 #' values by layer (`draw_values`), its latent path by renewal
 #' (`latent_onsets`), and its release triangle by epinowcast, observed
-#' with the grid's noise, then revised. A draw that errors, reports fewer
-#' than `min_cases` or fails the sim QC is drawn again, up to five times,
+#' with the grid's noise, then revised. A draw that errors or reports
+#' no cases is drawn again, up to five times,
 #' then from a new design, so the batch always holds `n` simulations.
 #'
 #' @param grid A grid (`read_grid`).
@@ -514,16 +514,15 @@ simulate_batch <- function(grid, seed, n, model, draws = 1L, weeks = NULL,
 
 #' Why a simulation is drawn again, if it is
 #'
-#' A simulation reporting fewer than `grid$floors$min_cases` cases (its
-#' draws' mean) is drawn again; so are draws that error (`simulate_cell`).
+#' A simulation reporting no cases (its draws' mean) is drawn again; so
+#' are draws that error (`simulate_cell`).
 #'
 #' @param size Reported cases, the draws' mean.
-#' @param grid A grid (`read_grid`).
 #' @return The reason, or `NA` if the simulation is kept.
 #' @export
-redraw_reason <- function(size, grid) {
-  if (size < grid$floors$min_cases) {
-    sprintf("fewer than %s cases", grid$floors$min_cases)
+redraw_reason <- function(size) {
+  if (size <= 0) {
+    "no cases"
   } else {
     NA_character_
   }
