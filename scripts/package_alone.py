@@ -22,6 +22,7 @@ KNOWN: dict[str, set[str]] = {
     "nowcasteval": {
         "nowcasteval.backtest",
         "nowcasteval.checks",
+        "nowcasteval.coupling",
         "nowcasteval.marginals",
         "nowcasteval.nowcast",
         "nowcasteval.nowcast_plots",
@@ -42,8 +43,10 @@ KNOWN: dict[str, set[str]] = {
     "bdbvhub": {
         "bdbvhub.cli",
         "bdbvhub.compare",
+        "bdbvhub.reporting.hubtables",
         "bdbvhub.reporting.report",
         "bdbvhub.reporting.store_note",
+        "bdbvhub.reporting.zone_nowcast",
         "bdbvhub.store.archive",
         "bdbvhub.store.digest",
         "bdbvhub.store.store",

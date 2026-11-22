@@ -12,7 +12,8 @@ from papertables import synthetic_grid
 
 PAPER = Path(__file__).parents[1]
 CONFIG = yaml.safe_load((PAPER / "workflow" / "config.yaml").read_text())
-GRID_FILE = PAPER / CONFIG["synthetic"]["grid_file"]
+# Paths in the paper config are from the repository root.
+GRID_FILE = PAPER.parent / CONFIG["synthetic"]["grid_file"]
 GRID = synthetic_grid.read_grid(GRID_FILE)
 
 

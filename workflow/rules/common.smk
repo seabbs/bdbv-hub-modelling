@@ -477,7 +477,7 @@ def main_scores(wc):
 
 def src_tree():
     return subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD:src"],
+        ["git", "rev-parse", "--short", "HEAD:packages"],
         capture_output=True,
         text=True,
         check=True,
