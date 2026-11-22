@@ -84,6 +84,48 @@ def grid_id():
     return simulator.grid_id(GRID_FILE)
 
 
+def round_records(wc):
+    """A round's batch manifest rows."""
+    return [
+        f"{ROUNDS_DIR}/r{wc.round}/records/record-{s}.csv" for s in seeds_of(wc.round)
+    ]
+
+
+def round_sims(wc):
+    """A round's batches' counts, settings and latent files."""
+    kinds = (("counts", "csv.gz"), ("settings", "csv"), ("latent", "csv.gz"))
+    return [
+        f"{ROUNDS_DIR}/r{wc.round}/sims/{kind}-{seed}.{ext}"
+        for seed in seeds_of(wc.round)
+        for kind, ext in kinds
+    ]
+
+
+def release_owner(wc):
+    """Which grid round `wc.round`'s release belongs to (flowlib.grids)."""
+    return grids.owner(
+        int(wc.round), config["grid_rounds"], config.get("retired_rounds")
+    )
+
+
+def release_check(wc):
+    """Raise unless the rounds asked for may be released (flowlib.grids)."""
+    retired = config.get("retired_rounds")
+    return grids.check_release(config["rounds"], config["grid_rounds"], retired) or []
+
+
+def round_sources(wc, input):
+    """`r<N>=<file>` for each round in `rounds` and its file."""
+    return " ".join(f"r{r}={path}" for r, path in zip(config["rounds"], input))
+
+
+def summary_sources(rounds, summaries):
+    """`r<N>=<round's sims>:<summary>` for each round and its summary."""
+    return " ".join(
+        f"r{r}={ROUNDS_DIR}/r{r}/sims:{path}" for r, path in zip(rounds, summaries)
+    )
+
+
 # From finetune.smk.
 
 # The fine-tuning runs (`runs` in workflow/config.yaml, flowlib.runs):
@@ -305,6 +347,16 @@ def finetune_inputs(wc):
         if there.check in ns:
             out.append(f"{there.dir}/reports/n{there.check}-check.txt")
     return out
+
+
+def published_checkpoints(wc):
+    """Every trained run's saved checkpoints' release records."""
+    return [
+        f"{train_dir(run)}/n{n}/published.json"
+        for run in trained_runs()
+        for n in RUNS[run].ft["prefixes"]
+        if saved(run, n)
+    ]
 
 
 # From score.smk.
