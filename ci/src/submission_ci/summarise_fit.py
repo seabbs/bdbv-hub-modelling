@@ -28,8 +28,10 @@ from typing import Any
 from .common import (
     STATUS_LABEL,
     append_summary,
+    finite,
     fmt,
     fmt_rhat,
+    json_safe,
     markdown_table,
     read_json,
     set_outputs,
@@ -39,14 +41,6 @@ from .common import (
 from .policy import load_policy
 
 MARKER = "<!-- bdbv-fit-convergence -->"
-
-
-def _finite(x: Any) -> float:
-    try:
-        v = float(x)
-    except (TypeError, ValueError):
-        return math.nan
-    return v if math.isfinite(v) else math.nan
 
 
 @dataclass
@@ -69,13 +63,9 @@ class FitCheck:
 def headline(diag: Mapping[str, Any]) -> dict[str, float]:
     """Worst R-hat, smallest ESS, divergences and draws."""
     params = diag.get("parameters", [])
-    rhats = [r for p in params if not math.isnan(r := _finite(p.get("rhat")))]
-    bulk = [
-        e for p in params if not math.isnan(e := _finite(p.get("ess_bulk")))
-    ]
-    tail = [
-        e for p in params if not math.isnan(e := _finite(p.get("ess_tail")))
-    ]
+    rhats = [r for p in params if not math.isnan(r := finite(p.get("rhat")))]
+    bulk = [e for p in params if not math.isnan(e := finite(p.get("ess_bulk")))]
+    tail = [e for p in params if not math.isnan(e := finite(p.get("ess_tail")))]
     chains = diag.get("chains", [])
     div = sum(int(c.get("divergences", 0)) for c in chains)
     draws = sum(int(c.get("draws", 0)) for c in chains) or int(
@@ -147,15 +137,15 @@ def worst_parameters(
     params = [
         p
         for p in diag.get("parameters", [])
-        if not math.isnan(_finite(p.get("rhat")))
+        if not math.isnan(finite(p.get("rhat")))
     ]
-    ranked = sorted(params, key=lambda p: _finite(p.get("ess_bulk")))
+    ranked = sorted(params, key=lambda p: finite(p.get("ess_bulk")))
     return [
         {
             "parameter": _label(p),
-            "rhat": _finite(p.get("rhat")),
-            "ess_bulk": _finite(p.get("ess_bulk")),
-            "ess_tail": _finite(p.get("ess_tail")),
+            "rhat": finite(p.get("rhat")),
+            "ess_bulk": finite(p.get("ess_bulk")),
+            "ess_tail": finite(p.get("ess_tail")),
         }
         for p in ranked[:n]
     ]
@@ -167,12 +157,12 @@ def families(
     """Diagnostics grouped by parameter name, worst bulk ESS first."""
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for p in diag.get("parameters", []):
-        if not math.isnan(_finite(p.get("rhat"))):
+        if not math.isnan(finite(p.get("rhat"))):
             groups.setdefault(str(p["name"]), []).append(p)
     rows: list[dict[str, Any]] = []
     for name, ps in groups.items():
-        rh = [_finite(p.get("rhat")) for p in ps]
-        eb = [e for p in ps if not math.isnan(e := _finite(p.get("ess_bulk")))]
+        rh = [finite(p.get("rhat")) for p in ps]
+        eb = [e for p in ps if not math.isnan(e := finite(p.get("ess_bulk")))]
         rows.append(
             {
                 "parameter": name,
@@ -292,10 +282,10 @@ def markdown(
                         [
                             str(ch.get("chain", "")),
                             str(ch.get("divergences", 0)),
-                            fmt(_finite(ch.get("step_size"))),
+                            fmt(finite(ch.get("step_size"))),
                             str(ch.get("tree_depth_hits", "n/a")),
-                            fmt(_finite(ch.get("mean_accept"))),
-                            fmt(_finite(ch.get("ebfmi"))),
+                            fmt(finite(ch.get("mean_accept"))),
+                            fmt(finite(ch.get("ebfmi"))),
                         ]
                         for ch in c.chains
                     ],
@@ -383,18 +373,8 @@ def summarise(
         k: (None if isinstance(v, float) and math.isnan(v) else v)
         for k, v in check.headline.items()
     }
-    write_json(out_dir / "fit-summary.json", _clean(data))
+    write_json(out_dir / "fit-summary.json", json_safe(data))
     return check
-
-
-def _clean(x: Any) -> Any:
-    if isinstance(x, float) and not math.isfinite(x):
-        return None
-    if isinstance(x, dict):
-        return {k: _clean(v) for k, v in x.items()}
-    if isinstance(x, list):
-        return [_clean(v) for v in x]
-    return x
 
 
 def main(argv: Sequence[str] | None = None) -> int:
