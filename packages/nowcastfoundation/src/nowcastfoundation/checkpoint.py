@@ -22,7 +22,7 @@ keyed by checkpoint hash and run, with the checkpoint's outbreaks and
 grid.
 
 Usage:
-  python -m nowcastfoundation.checkpoint germany CACHE LABEL
+  python -m nowcastfoundation.checkpoint germany CACHE LABEL [SEGMENT]
   python -m nowcastfoundation.checkpoint release CACHE HASH
   python -m nowcastfoundation.checkpoint table CACHE EVIDENCE \\
     CHECKPOINTS HASH...
@@ -319,8 +319,15 @@ def unit_precision(root: Path) -> str:
     return path.read_text().strip() if path.exists() else "fp32"
 
 
-def _pin(label: str) -> None:
-    """Pin the checkpoint, so no process resolves `latest` mid-run."""
+def _pin(label: str, segment: Path | None = None) -> None:
+    """Pin the checkpoint, so no process resolves `latest` mid-run.
+
+    A run's own `segment` folder, when given, is the checkpoint
+    (`forecaster.local_checkpoint`), else the release `label` names.
+    """
+    if segment is not None:
+        os.environ["BDBV_CHRONOS_FT"] = str(segment)
+        return
     os.environ["BDBV_CHRONOS_FT"] = (
         REFERENCE_PIN if label == REFERENCE else label
     )
@@ -375,12 +382,16 @@ def german_tasks_dir(
     return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
 
-def germany_unit(cache: Path, label: str) -> None:
-    """Nowcast each German development date, own quantiles with truth."""
+def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
+    """Nowcast each German development date, own quantiles with truth.
+
+    The fine-tuned models load the release `label` names, or a run's own
+    `segment` folder (`<run>/train/n<N>`) when given, cached as `label`.
+    """
     from nowcastgermany import evaluation as de
     from nowcastgermany.data import hub_triangle
 
-    _pin(label)
+    _pin(label, segment)
     config = de.load_germany_config("config/germany.toml")
     path = Path("data/raw/germany") / Path(config.triangle).name
     triangle = hub_triangle(path)
@@ -572,8 +583,9 @@ def main(argv: Sequence[str]) -> None:
     if len(argv) < 3:
         raise SystemExit(__doc__)
     study, cache = argv[0], Path(argv[1])
-    if study == "germany":
-        germany_unit(cache, argv[2])
+    if study == "germany" and len(argv) <= 4:
+        segment = Path(argv[3]) if len(argv) == 4 else None
+        germany_unit(cache, argv[2], segment)
     elif study == "release":
         release_unit(cache, argv[2])
     elif study == "table" and len(argv) >= 4:
