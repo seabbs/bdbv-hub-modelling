@@ -186,6 +186,8 @@ rule germany_development:
         f"{GERMANY['results']}/paper-forecasts.csv.gz",
     log:
         f"{R}/logs/germany_development.log",
+    benchmark:
+        f"{R}/benchmarks/germany_development/germany_development.tsv"
     conda:
         TOOLS_ENV
     params:
@@ -209,6 +211,8 @@ rule germany_heldout:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
     log:
         f"{R}/logs/germany_heldout.log",
+    benchmark:
+        f"{R}/benchmarks/germany_heldout/germany_heldout.tsv"
     conda:
         TOOLS_ENV
     params:
@@ -251,6 +255,8 @@ rule ebola_backtest_draws:
         EBOLA_DRAWS,
     log:
         f"{R}/logs/ebola_backtest_draws.log",
+    benchmark:
+        f"{R}/benchmarks/ebola_backtest_draws/ebola_backtest_draws.tsv"
     conda:
         TOOLS_ENV
     resources:
@@ -278,6 +284,8 @@ rule ebola_backtest:
         f"{EBOLA['data']}/target.csv",
     log:
         f"{R}/logs/ebola_backtest.log",
+    benchmark:
+        f"{R}/benchmarks/ebola_backtest/ebola_backtest.tsv"
     conda:
         TOOLS_ENV
     params:

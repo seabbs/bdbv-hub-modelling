@@ -1986,6 +1986,7 @@ def _germany_backtest(args: argparse.Namespace) -> int:
         else args.models
     )
     triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
+    timings: list[dict[str, Any]] = []
     forecasts = de.with_truth(
         de.germany_forecasts(
             models,
@@ -1994,6 +1995,7 @@ def _germany_backtest(args: argparse.Namespace) -> int:
             config.n_samples,
             config.seed,
             max_delay=config.truth_delay,
+            timings=timings,
         ),
         triangle,
         config.truth_delay,
@@ -2003,6 +2005,9 @@ def _germany_backtest(args: argparse.Namespace) -> int:
     out.mkdir(parents=True, exist_ok=True)
     write_csv(forecasts, out / "forecasts.csv.gz")
     write_csv(scores, out / "scores.csv.gz")
+    # Seconds by model and date (`germany_forecasts`), for the
+    # `benchmarks` workflow target.
+    pd.DataFrame(timings).to_csv(out / "timings.csv", index=False)
     print(f"German benchmark: {len(scores)} scored nowcasts in {out}.")
     return 0
 
