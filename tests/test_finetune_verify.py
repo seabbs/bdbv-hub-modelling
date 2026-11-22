@@ -195,7 +195,7 @@ def test_the_simulator_hashes_its_grid_python_and_engine():
             ),
             (
                 "packages/nowcastrenewal/src/nowcastrenewal/components",
-                ("__init__", "pmfs"),
+                ("__init__", "mixing", "pmfs"),
             ),
         )
         for name in names
