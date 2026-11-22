@@ -76,6 +76,46 @@ def test_simulate_runs_every_batch_of_a_round(tmp_path):
     assert jobs["round_ready"] == 1
 
 
+def _sim_commands(out):
+    return [
+        line
+        for line in out.stdout.splitlines()
+        if "nowcastfoundation.simulator" in line
+    ]
+
+
+def test_batches_run_by_count_under_the_shared_prefix_not_a_cap(tmp_path):
+    # SIM_SLOTS alone sets how many batches run at once: a batch claims
+    # no memory and has no cap of its own, only the machine's SIM_PREFIX
+    # (such as one systemd slice all batches share).
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
+        "JOB_PREFIX='percap {mem}'\nSIM_PREFIX='inslice'\n"
+    )
+    out = dry_run(tmp_path, "simulate", config={"rounds": [4]}, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    lines = _sim_commands(out)
+    assert len(lines) == 40
+    claims = re.findall(
+        r"rule simulate_batch:.*?resources: ([^\n]*)", out.stdout, re.S
+    )
+    assert len(claims) == 40
+    assert all("sim_slots=1" in c for c in claims)
+    assert not any(re.search(r"mem_mb=[1-9]", c) for c in claims)
+    shared = re.compile(r':\$PATH"\s+inslice\s+workflow/scripts/timed\.sh')
+    assert all(shared.search(x) for x in lines)
+    assert not any("percap" in x for x in lines)
+
+
+def test_with_no_sim_prefix_a_batch_runs_bare(tmp_path):
+    out = dry_run(tmp_path, "simulate", config={"rounds": [4]}, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    lines = _sim_commands(out)
+    assert lines
+    bare = re.compile(r':\$PATH"\s+workflow/scripts/timed\.sh')
+    assert all(bare.search(x) for x in lines)
+
+
 def test_simulate_never_releases(tmp_path):
     jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
     assert not any(k.startswith("release") for k in jobs)
