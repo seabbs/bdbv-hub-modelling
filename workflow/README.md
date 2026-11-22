@@ -132,6 +132,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `score_germany`, `score_release`: the units of `nowcastfoundation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
   Units run torch on the machine's device with `SCORE_THREADS` threads and the `gpu` resource.
   BDBV is held out for the paper, so no BDBV unit runs.
+- `coupling_germany`: a checkpoint's German forecasts' coupling scores and summary (`nowcasteval.coupling`), from its German unit, in `<SCORE_CACHE>/coupling/`.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
