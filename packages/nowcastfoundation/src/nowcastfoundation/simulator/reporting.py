@@ -131,6 +131,13 @@ def _json(x: Any) -> Any:
     raise TypeError(f"not JSON: {type(x).__name__}")
 
 
+def _failed(job: ReportJob, e: Exception) -> ReportResult:
+    """Return a job's result for a reporting call that failed."""
+    return ReportResult(
+        job.id, pd.DataFrame(columns=list(COUNT_COLUMNS)), error=str(e)
+    )
+
+
 @dataclass
 class RscriptReporting:
     """The R engine's epinowcast reporting step, run through Rscript.
@@ -158,9 +165,32 @@ class RscriptReporting:
     def report(
         self, jobs: Sequence[ReportJob], grid_file: str | Path, draws: int
     ) -> list[ReportResult]:
-        """Report the jobs in one Rscript call, in a temporary folder."""
+        """Report the jobs in one Rscript call, in a temporary folder.
+
+        `report_outbreak`'s errors are each job's own. If the call itself
+        dies (R killed or out of memory, say), each job is reported again
+        in its own call, and a job that fails alone gets the failure as
+        its error, so only it is redrawn.
+        """
         if not jobs:
             return []
+        try:
+            return self._call(jobs, grid_file, draws)
+        except RuntimeError as e:
+            if len(jobs) == 1:
+                return [_failed(jobs[0], e)]
+        out = []
+        for j in jobs:
+            try:
+                out += self._call([j], grid_file, draws)
+            except RuntimeError as e:
+                out.append(_failed(j, e))
+        return out
+
+    def _call(
+        self, jobs: Sequence[ReportJob], grid_file: str | Path, draws: int
+    ) -> list[ReportResult]:
+        """Report the jobs in one Rscript call; raise if it fails."""
         with tempfile.TemporaryDirectory(prefix="report-") as tmp:
             job_dir = Path(tmp)
             payload = {
@@ -200,7 +230,9 @@ class RscriptReporting:
             )
             if out.returncode != 0:
                 raise RuntimeError(
-                    "the reporting step failed:\n" + out.stderr[-4000:]
+                    f"the reporting step failed (exit {out.returncode}):\n"
+                    + out.stderr[-4000:]
+                    + out.stdout[-2000:]
                 )
             try:
                 counts = pd.read_csv(
@@ -277,7 +309,9 @@ class PyRenewReporting:
                     j.seed,
                     draws,
                 )
-            except (ValueError, FloatingPointError, KeyError) as e:
+            except Exception as e:
+                # Any error is this draw's: it is redrawn, and a bug that
+                # fails every draw still stops the batch (no design runs).
                 out.append(ReportResult(j.id, empty, error=str(e)))
                 continue
             out.append(ReportResult(j.id, counts, vals={**j.vals, **added}))
