@@ -255,17 +255,6 @@ def drop_bdbv(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.loc[keep].reset_index(drop=True)
 
 
-def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
-    """Return the case studies' rows of `CHECKPOINT_RULE`.
-
-    A row with no relative WIS keeps it empty.
-    """
-    out = scores
-    if "rule" in out:
-        out = out.loc[out["rule"] == CHECKPOINT_RULE]
-    return out.loc[out["study"].isin(["germany", "ebola"])]
-
-
 def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
     """Return zero-shot and the live run's checkpoint rows, by level.
 
