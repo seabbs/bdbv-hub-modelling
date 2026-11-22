@@ -1348,3 +1348,11 @@ def test_places_key_only_the_models_that_read_them(
     assert store.current_keys(moved, renewal, sampler, "c") != (
         store.current_keys(tasks, renewal, sampler, "c")
     )
+
+
+def test_the_backtest_takes_its_draws_from_the_config_unless_given() -> None:
+    from bdbvhub import cli
+
+    assert cli.build_parser().parse_args(["backtest"]).samples is None
+    got = cli.build_parser().parse_args(["backtest", "--samples", "7"])
+    assert got.samples == 7

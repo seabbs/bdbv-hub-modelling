@@ -30,6 +30,8 @@ synthetic:
   grid_file: config/finetune/grid.yaml
   grid: r7
   simulations_per_seed: 20
+  # Draws per forecast of each model on the held-out simulations.
+  samples: 1000
   # Example simulations for the SI figure (`paperfigs.sim_examples`): pilot
   # simulations of the grid on an evidence branch, each with its label.
   examples:

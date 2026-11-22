@@ -127,10 +127,11 @@ for _mode in MODES:
             seeds=FLOW.seeds(_mode),
             # The fine-tuned models wait for the final run's checkpoint.
             models=FLOW.synthetic_models_arg(),
+            samples=config["synthetic"]["samples"],
         shell:
             "exec >{log} 2>&1; "
             "{params.python} paper/scripts/run_synthetic.py {params.sims} "
-            "{output} --seeds {params.seeds} --samples 1000 --device cpu "
+            "{output} --seeds {params.seeds} --samples {params.samples} --device cpu "
             "--threads 1 {params.models}"
 
 
@@ -264,16 +265,13 @@ rule ebola_backtest_draws:
     params:
         bdbv=BDBV,
         models=" ".join(EBOLA["backtest_models"]),
-        n=EBOLA.get("n_samples", 100),
+        n=EBOLA["n_samples"],
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
     shell:
         "exec >{log} 2>&1; "
         "mkdir -p {params.folder} && "
-        "sed 's/^backtest = .*/backtest = {params.n}/' {params.config} "
-        "> {params.folder}/backtest.toml && "
-        "grep -q '^backtest = {params.n}$' {params.folder}/backtest.toml && "
-        "{params.bdbv} backtest --config {params.folder}/backtest.toml "
+        "{params.bdbv} backtest --config {params.config} --samples {params.n} "
         "--models {params.models} --no-recovery "
         "--results {params.folder}/results --output {params.folder}"
 
