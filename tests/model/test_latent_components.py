@@ -23,10 +23,10 @@ from nowcastrenewal.components.pmfs import (
     delay_pmf,
     generation_time_pmf,
 )
+from nowcastrenewal.components.reference import ReferenceEvents
 from nowcastrenewal.components.renewal import Shifts, Variants, run_renewal
 from nowcastrenewal.latent.imports import Imports
 from nowcastrenewal.latent.mixing import PlaceMixing
-from nowcastrenewal.latent.reference import ReferenceEvents
 
 from .latent_r import load
 
@@ -236,7 +236,7 @@ def test_the_fitted_models_do_not_import_the_simulator_components() -> None:
     # components stay out of it and adding them refits nothing.
     code = (
         "import sys, nowcastrenewal.forecaster, nowcastrenewal.zones;"
-        "mods = ('imports', 'mixing', 'reference');"
+        "mods = ('imports', 'mixing');"
         "print([m for m in mods"
         " if f'nowcastrenewal.latent.{m}' in sys.modules])"
     )

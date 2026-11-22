@@ -20,6 +20,7 @@ import pytest
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.randomvariable import DistributionalVariable
 
+from nowcastrenewal.components.hazards import log_hazard_probs
 from nowcastrenewal.components.pmfs import (
     FAMILIES,
     CensoredPMF,
@@ -30,7 +31,6 @@ from nowcastrenewal.components.pmfs import (
     delay_pmf,
     generation_time_pmf,
 )
-from nowcastrenewal.model.hazard_delay import hazard_to_pmf
 
 from .r_live import run_r
 
@@ -196,7 +196,7 @@ def test_log_pmf_and_logit_hazard_agree_with_the_pmf() -> None:
             p = np.asarray(censored_pmf(d, r["n"]))
             lp = np.asarray(censored_log_pmf(d, r["n"]))
             lh = np.asarray(censored_logit_hazard(d, r["n"]))
-            from_h = np.asarray(hazard_to_pmf(jnp.asarray(lh[:-1])))
+            from_h = np.exp(log_hazard_probs(jnp.asarray(lh[:-1]), close=True))
         np.testing.assert_allclose(np.exp(lp), p, rtol=1e-12)
         assert np.isposinf(lh[-1])
         np.testing.assert_allclose(from_h, p, rtol=1e-10, atol=1e-300)

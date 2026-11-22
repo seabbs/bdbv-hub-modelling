@@ -834,9 +834,9 @@ def delay_summary(
 ) -> pd.DataFrame:
     r"""Summarise a fit's onset-to-report delay over posterior draws.
 
-    The delay pmf of onset day $s$ is `hazard_to_pmf` of
-    $\beta(d) + \gamma(s)$, as in `HazardDelay`, from the recorded
-    `delay_beta` and `delay_shift` draws.
+    The delay pmf of onset day $s$ follows from the hazards
+    $\beta(d) + \gamma(s)$ (`components.hazards.log_hazard_probs`), as in
+    `HazardDelay`, from the recorded `delay_beta` and `delay_shift` draws.
 
     Parameters
     ----------
@@ -862,7 +862,7 @@ def delay_summary(
     """
     import jax.numpy as jnp
 
-    from nowcastrenewal.model.hazard_delay import hazard_to_pmf
+    from nowcastrenewal.components.hazards import log_hazard_probs
 
     days = pd.date_range(first_day, periods=last_day + 1, freq="D")
     # The last day of each onset week (to Saturday) up to the vintage.
@@ -871,7 +871,8 @@ def delay_summary(
         pd.Series(np.arange(len(days)), index=week_end).groupby(level=0).max()
     )
     logit = beta[:, None, :] + shift[:, last.to_numpy()][:, :, None]
-    cdf = np.cumsum(np.asarray(hazard_to_pmf(jnp.asarray(logit))), axis=-1)
+    pmf = jnp.exp(log_hazard_probs(jnp.asarray(logit), close=True))
+    cdf = np.cumsum(np.asarray(pmf), axis=-1)
     qs = list(_DELAY_QUANTILES)
 
     def rows(

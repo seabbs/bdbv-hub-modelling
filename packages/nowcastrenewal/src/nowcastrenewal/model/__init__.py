@@ -25,7 +25,7 @@ The package imports without JAX until this subpackage is imported.
 from .delays import (
     FixedTimeVarying,
 )
-from .hazard_delay import HazardDelay, hazard_to_pmf
+from .hazard_delay import HazardDelay
 from .model import (
     BVD,
     MAIN,
@@ -65,7 +65,6 @@ __all__ = [
     "fit",
     "forecast_trajectories",
     "generation_interval",
-    "hazard_to_pmf",
     "incubation_period",
     "model_args",
     "onset_expectations",

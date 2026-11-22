@@ -186,7 +186,6 @@ def test_the_simulator_hashes_its_grid_python_and_engine():
                     "imports",
                     "infections",
                     "mixing",
-                    "reference",
                     "rt",
                     "simulate",
                     "start",
@@ -194,7 +193,14 @@ def test_the_simulator_hashes_its_grid_python_and_engine():
             ),
             (
                 "packages/nowcastrenewal/src/nowcastrenewal/components",
-                ("__init__", "mixing", "pmfs", "renewal"),
+                (
+                    "__init__",
+                    "hazards",
+                    "mixing",
+                    "pmfs",
+                    "reference",
+                    "renewal",
+                ),
             ),
         )
         for name in names

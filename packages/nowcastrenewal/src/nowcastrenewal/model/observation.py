@@ -39,6 +39,7 @@ from pyrenew.observation.noise import CountNoise
 from pyrenew.observation.types import ObservationSample
 from pyrenew.time import daily_to_weekly
 
+from ..components.reference import delayed_events
 from .composition_noise import CompositionNoise, MultinomialNoise
 from .pooled import pooled_groups, pooled_walk
 from .publication_lag import ReleasePairLikelihood
@@ -770,8 +771,9 @@ class OnsetStreams(BaseObservationProcess):
     def _predicted_obs(self, infections: Array) -> Array:
         """Convolve infections with the infection-to-onset pmf.
 
-        Column by column, aligned so day $t$ of the output is day $t$ of
-        the input, with no infections before the axis. The seeding days
+        The shared `components.reference.delayed_events`: column by
+        column, aligned so day $t$ of the output is day $t$ of the input,
+        with no infections before the axis. The seeding days
         feed the weekly sums, so they are partial sums rather than NaN.
 
         Parameters
@@ -784,13 +786,7 @@ class OnsetStreams(BaseObservationProcess):
         Array
             Expected infections by onset day, the shape of `infections`.
         """
-        pmf = jnp.asarray(self.temporal_pmf_rv())
-        n = infections.shape[0]
-        return jax.vmap(
-            lambda col: jnp.convolve(col, pmf, mode="full")[:n],
-            in_axes=1,
-            out_axes=1,
-        )(infections)
+        return delayed_events(infections, jnp.asarray(self.temporal_pmf_rv()))
 
     def validate_data(
         self,

@@ -8,7 +8,6 @@ events on day $s$.
 
 from __future__ import annotations
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -19,38 +18,8 @@ from pyrenew.latent.temporal_processes import (
 )
 from pyrenew.metaclass import RandomVariable
 
+from ..components.hazards import log_hazard_probs
 from .pooled import pooled_groups, pooled_walk
-
-
-def hazard_to_pmf(logit_hazard: Array) -> Array:
-    r"""Convert discrete-time hazards to a pmf on the last axis.
-
-    $$f(d) = h(d) \prod_{j < d} \{1 - h(j)\}, \qquad h(D) = 1,$$
-
-    so each row sums to one. The cumulative sum of $\log(1 - h)$ is a
-    product with a triangular matrix, which is faster than `cumsum` on
-    CPU, forward and backward.
-
-    Parameters
-    ----------
-    logit_hazard
-        Logit hazards for delays 0..D-1, shape `(..., D)`.
-
-    Returns
-    -------
-    Array
-        Pmf on 0..D, shape `(..., D + 1)`.
-    """
-    k = logit_hazard.shape[-1]
-    log_h = jax.nn.log_sigmoid(logit_hazard)
-    log_1mh = jax.nn.log_sigmoid(-logit_hazard)
-    # Column d sums the first d terms, so the result is the log survival
-    # before each delay, with zero at d = 0.
-    upper = jnp.triu(jnp.ones((k, k + 1), logit_hazard.dtype), 1)
-    log_surv_before = log_1mh @ upper
-    zero = jnp.zeros((*log_h.shape[:-1], 1), log_h.dtype)
-    log_h = jnp.concatenate([log_h, zero], axis=-1)
-    return jnp.exp(log_h + log_surv_before)
 
 
 class HazardDelay(RandomVariable):
@@ -67,11 +36,11 @@ class HazardDelay(RandomVariable):
     learnt spread each (`pooled_walk`), so each group's delay is pooled
     towards the shared delay and $\gamma$ stays identified. All hazards
     of a group and day shift together (proportional odds). The pmf
-    follows from `hazard_to_pmf`. With one group, $\delta$ and $\eta$
-    are zero. The shape $\beta$, the shared shift $\gamma$, each
-    group's shift $\gamma + \delta_p + \eta_p$ and each group's mean
-    delay by day are recorded as `{name}_beta`, `{name}_shared_shift`,
-    `{name}_shift` and `{name}_mean`.
+    follows from `components.hazards.log_hazard_probs` (closed at $D$).
+    With one group, $\delta$ and $\eta$ are zero. The shape $\beta$, the
+    shared shift $\gamma$, each group's shift $\gamma + \delta_p + \eta_p$
+    and each group's mean delay by day are recorded as `{name}_beta`,
+    `{name}_shared_shift`, `{name}_shift` and `{name}_mean`.
     """
 
     def __init__(
@@ -223,7 +192,7 @@ class HazardDelay(RandomVariable):
         if distinct.size < n_groups:
             shift = shift[:, distinct]
         logit = beta[None, None, :] + shift.T[:, :, None]
-        pmf = hazard_to_pmf(logit)
+        pmf = jnp.exp(log_hazard_probs(logit, close=True))
         mean = pmf @ jnp.arange(self.dmax + 1)
         if distinct.size < n_groups:
             pmf, mean = pmf[rows], mean[rows]

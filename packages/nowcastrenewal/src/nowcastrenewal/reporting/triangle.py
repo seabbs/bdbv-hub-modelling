@@ -27,11 +27,12 @@ from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.metaclass import RandomVariable
 
+from ..components.hazards import log_hazard_probs
+
 __all__ = [
     "ReportingTriangle",
     "combine_logit_hazards",
     "log_expected_counts",
-    "log_report_probs",
     "report_day_groups",
 ]
 
@@ -65,31 +66,6 @@ def combine_logit_hazards(
     """
     window = parametric.shape[-1]
     return parametric + non_parametric + _by_report_date(report, window)
-
-
-def log_report_probs(logit_hazard: Array) -> Array:
-    r"""Return $\log p_d = \log h_d + \sum_{j<d} \log(1 - h_j)$.
-
-    Unlike `model.hazard_delay.hazard_to_pmf`, the last hazard is used as
-    given, so a finite one leaves some reports beyond the window.
-
-    Parameters
-    ----------
-    logit_hazard : Array
-        Logit hazards on the last axis.
-
-    Returns
-    -------
-    Array
-        Log probabilities, the same shape.
-    """
-    log_h = jax.nn.log_sigmoid(logit_hazard)
-    log_1mh = jax.nn.log_sigmoid(-logit_hazard)
-    # Survival to each delay: an exclusive running sum, so a last hazard
-    # of 1 (a logit of +inf) never meets its own log(1 - h) = -inf.
-    before = jnp.cumsum(log_1mh[..., :-1], axis=-1)
-    before = jnp.concatenate([jnp.zeros_like(log_h[..., :1]), before], -1)
-    return log_h + before
 
 
 def report_day_groups(reports: Array, window: int) -> Array:
@@ -138,7 +114,7 @@ def log_expected_counts(
     Array
         Shape $(G, T, D)$.
     """
-    log_p = log_report_probs(logit_hazard)
+    log_p = log_hazard_probs(logit_hazard)
     if reports is not None:
         window = logit_hazard.shape[-1]
         to = report_day_groups(reports, window)

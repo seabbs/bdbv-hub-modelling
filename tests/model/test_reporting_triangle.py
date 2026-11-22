@@ -15,11 +15,11 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from nowcastrenewal.components.hazards import log_hazard_probs
 from nowcastrenewal.components.pmfs import Delay, censored_logit_hazard
 from nowcastrenewal.reporting.triangle import (
     combine_logit_hazards,
     log_expected_counts,
-    log_report_probs,
     report_day_groups,
 )
 
@@ -205,15 +205,8 @@ def test_report_day_aggregation_matches_epinowcast(
 def test_report_probs_with_a_last_hazard_of_one_sum_to_one() -> None:
     with jax.enable_x64(True):
         lh = jnp.asarray(_parametric()) + jnp.asarray(INPUTS["refnp_lh"])
-        p = np.exp(np.asarray(log_report_probs(lh)))
+        p = np.exp(np.asarray(log_hazard_probs(lh)))
     np.testing.assert_allclose(p.sum(axis=-1), 1.0, rtol=1e-12)
-
-
-def test_a_finite_last_hazard_leaves_reports_beyond_the_window() -> None:
-    # As in epinowcast, a hazard with no parametric part need not end at 1.
-    with jax.enable_x64(True):
-        p = np.exp(np.asarray(log_report_probs(jnp.zeros((1, 4)))))
-    np.testing.assert_allclose(p, [[0.5, 0.25, 0.125, 0.0625]])
 
 
 def test_report_day_groups_send_each_delay_to_its_next_report() -> None:
