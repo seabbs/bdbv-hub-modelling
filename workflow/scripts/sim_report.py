@@ -379,17 +379,25 @@ def hist_panel(ax, values, title, de=None, bands=(), log=False, clip=None):
         ax.set_xscale("log")
     else:
         bins = 40
+    full = v
     if len(v):
-        ax.hist(v, bins=bins, color=SIM_COLOUR, alpha=0.75)
+        hidden = ""
         if not log:
+            # The middle 99%, so a few extremes do not squash the rest.
             lo, hi = np.quantile(v, [0.005, 0.995])
             pad = 0.05 * (hi - lo) if hi > lo else 1
             ax.set_xlim(lo - pad, hi + pad)
+            out = (v < lo) | (v > hi)
+            if out.any():
+                hidden = f" ({int(out.sum())} outside)"
+            v = v[~out]
+        ax.hist(v, bins=bins, color=SIM_COLOUR, alpha=0.75)
+        title += hidden
     ymax = ax.get_ylim()[1]
     xmax = ax.get_xlim()[1]
     note = ""
     if de is not None and np.isfinite(de):
-        pct = 100 * (v < de).mean() if len(v) else np.nan
+        pct = 100 * (full < de).mean() if len(full) else np.nan
         ax.axvline(de, color=DE_COLOUR, lw=1.6)
         note = f"  DE {de:.3g} (p{pct:.0f})"
     for i, (label, lo, hi) in enumerate(bands):
