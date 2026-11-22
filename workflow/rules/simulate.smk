@@ -331,6 +331,55 @@ rule simulate:
         expand(f"{ROUNDS_DIR}/r{{round}}/READY", round=config["rounds"]),
 
 
+rule round_summaries:
+    # One row per outbreak of a round (first draw, strata summed): design,
+    # drawn values, size, dynamics, R, delays and the phase at the
+    # training cut-offs (workflow/scripts/grid_summaries.py).
+    input:
+        rules.round_manifest.output,
+    output:
+        f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/summaries/run.log",
+    conda:
+        TOOLS_ENV
+    params:
+        sims=lambda wc, input: Path(input[0]).parent / "sims",
+    shell:
+        "uv run python workflow/scripts/grid_summaries.py outbreaks "
+        "{params.sims} {output} > {log} 2>&1"
+
+
+rule grid_figures:
+    # The run's rounds side by side: each summary's ECDF and the shares of
+    # patterns and phases, with their quantiles and shares as a table.
+    input:
+        expand(
+            f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
+            round=config["rounds"],
+        ),
+    output:
+        ecdf=f"{ROUNDS_DIR}/figures/grid/compare-ecdf.png",
+        shares=f"{ROUNDS_DIR}/figures/grid/compare-shares.png",
+        table=f"{ROUNDS_DIR}/figures/grid/compare.csv",
+    log:
+        f"{ROUNDS_DIR}/figures/grid/run.log",
+    conda:
+        TOOLS_ENV
+    params:
+        out=lambda wc, output: Path(output.ecdf).parent,
+        sources=lambda wc, input: " ".join(
+            f"r{r}={path}" for r, path in zip(config["rounds"], input)
+        ),
+    shell:
+        """
+        uv run python workflow/scripts/grid_summaries.py compare \
+            {output.table} {params.sources} > {log} 2>&1
+        uv run python workflow/scripts/grid_figures.py {params.out} \
+            {params.sources} >> {log} 2>&1
+        """
+
+
 rule release:
     input:
         # Never an earlier grid's round: its release holds that grid's
