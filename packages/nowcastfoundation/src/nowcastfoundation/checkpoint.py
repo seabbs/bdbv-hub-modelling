@@ -402,6 +402,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     for i in range(0, len(todo), step):
         chunk = todo[i : i + step]
         start = time.monotonic()
+        timings: list[dict[str, Any]] = []
         fc = de.germany_forecasts(
             models,
             triangle,
@@ -410,6 +411,12 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
             config.seed,
             tasks_dir,
             max_delay=config.truth_delay,
+            timings=timings,
+        )
+        # Seconds by model and date, for the `benchmarks` target.
+        times = root / "timings.csv"
+        pd.DataFrame(timings).assign(dates=len(chunk)).to_csv(
+            times, mode="a", header=not times.exists(), index=False
         )
         fc = de.with_truth(fc, triangle, config.truth_delay)
         for date in chunk:

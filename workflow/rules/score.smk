@@ -41,6 +41,8 @@ rule score_germany:
         f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",
     log:
         f"{CACHE}/log/{GERMANY_UNIT}-{{label}}.log",
+    benchmark:
+        f"{CACHE}/benchmarks/score_germany/{{label}}.tsv"
     priority: unit_priority(5)
     conda:
         TOOLS_ENV
@@ -121,6 +123,8 @@ rule coupling_germany:
         summary=f"{CACHE}/coupling/{{label}}-summary.csv",
     log:
         f"{CACHE}/log/coupling-{{label}}.log",
+    benchmark:
+        f"{CACHE}/benchmarks/coupling_germany/{{label}}.tsv"
     conda:
         TOOLS_ENV
     threads: 4
@@ -202,3 +206,20 @@ rule score:
         rules.score_table.output,
         run_scores,
         lambda wc: followups(wc),
+
+
+rule benchmarks:
+    # Opt-in: seconds and peak memory of every forecast and score job
+    # (`benchmark:` files), and seconds by model and date (`timings.csv`),
+    # in the score cache and the paper's results, as one CSV
+    # (flowlib.benchmarks). Rerun with --forcerun benchmarks.
+    output:
+        f"{CACHE}/benchmarks.csv",
+    log:
+        f"{CACHE}/log/benchmarks.log",
+    localrule: True
+    params:
+        roots=lambda wc: f"{CACHE} {config['results']} {RUNS_DIR}",
+    shell:
+        "uv run python workflow/scripts/benchmarks.py {output} {params.roots} "
+        "> {log} 2>&1"
