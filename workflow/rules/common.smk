@@ -4,7 +4,6 @@
 
 import functools
 import json
-import shlex
 import tomllib
 
 from flowlib import (
@@ -16,6 +15,7 @@ from flowlib import (
     manifest,
     notify,
     releases,
+    scoring,
     segments,
     simulator,
 )
@@ -84,6 +84,48 @@ def grid_id():
     return simulator.grid_id(GRID_FILE)
 
 
+def round_records(wc):
+    """A round's batch manifest rows."""
+    return [
+        f"{ROUNDS_DIR}/r{wc.round}/records/record-{s}.csv" for s in seeds_of(wc.round)
+    ]
+
+
+def round_sims(wc):
+    """A round's batches' counts, settings and latent files."""
+    kinds = (("counts", "csv.gz"), ("settings", "csv"), ("latent", "csv.gz"))
+    return [
+        f"{ROUNDS_DIR}/r{wc.round}/sims/{kind}-{seed}.{ext}"
+        for seed in seeds_of(wc.round)
+        for kind, ext in kinds
+    ]
+
+
+def release_owner(wc):
+    """Which grid round `wc.round`'s release belongs to (flowlib.grids)."""
+    return grids.owner(
+        int(wc.round), config["grid_rounds"], config.get("retired_rounds")
+    )
+
+
+def release_check(wc):
+    """Raise unless the rounds asked for may be released (flowlib.grids)."""
+    retired = config.get("retired_rounds")
+    return grids.check_release(config["rounds"], config["grid_rounds"], retired) or []
+
+
+def round_sources(wc, input):
+    """`r<N>=<file>` for each round in `rounds` and its file."""
+    return " ".join(f"r{r}={path}" for r, path in zip(config["rounds"], input))
+
+
+def summary_sources(rounds, summaries):
+    """`r<N>=<round's sims>:<summary>` for each round and its summary."""
+    return " ".join(
+        f"r{r}={ROUNDS_DIR}/r{r}/sims:{path}" for r, path in zip(rounds, summaries)
+    )
+
+
 # From finetune.smk.
 
 # The fine-tuning runs (`runs` in workflow/config.yaml, flowlib.runs):
@@ -114,6 +156,25 @@ def ft(key):
     return lambda wc: RUNS[wc.run].ft[key]
 
 
+def local_or_ft(key, setting):
+    """A param: this machine's `key` in local.env if set, else the run's
+    `finetune` setting."""
+    return lambda wc: LOCAL.get(key) or RUNS[wc.run].ft[setting]
+
+
+# Files publishing reads beside a segment's outputs, copied back with
+# them from a worker elsewhere (flowlib.compute).
+SEGMENT_COPY_BACK = (
+    "outbreaks.txt",
+    "consumed.txt",
+    "finetuned-ckpt/adapter_config.json",
+)
+
+
+def segment_copy_back(wc):
+    return [f"{train_dir(wc.run)}/n{wc.n}/{name}" for name in SEGMENT_COPY_BACK]
+
+
 def train_dir(run):
     return RUNS[run].train
 
@@ -121,10 +182,27 @@ def train_dir(run):
 # From evaluate.smk.
 
 EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded.py"
+# Below the trainer's (20): the GPU belongs to training for the whole run.
 EVALUATE_PRIORITY = 15
-# Above the trainer's (20): a checkpoint and step 0 are scored between
-# segments, a few minutes of GPU each, not after the whole run.
-EVALUATE_CHECKPOINT_PRIORITY = 25
+# Step 0, which every checkpoint's evaluation needs: before any of them.
+EVALUATE_BASE_PRIORITY = EVALUATE_PRIORITY + 0.1
+# CPU threads an evaluation job takes.
+EVALUATE_THREADS = 4
+
+
+def evaluate_priority(wc):
+    """An evaluation's priority: below the trainer, newer checkpoints first."""
+    return EVALUATE_PRIORITY + int(wc.n) / 1e5
+
+
+def evaluate_device():
+    """The device evaluation runs on: EVAL_DEVICE, else the machine's."""
+    return LOCAL.get("EVAL_DEVICE") or machine.device(LOCAL)
+
+
+def evaluate_gpu():
+    """The GPU an evaluation claims: none on the CPU, beside the trainer."""
+    return 0 if evaluate_device() == "cpu" else 1
 
 
 def evaluate_prev(wc):
@@ -136,6 +214,22 @@ def evaluate_prev(wc):
 def first_prefix(run):
     """The run's first checkpoint: the one with no previous."""
     return next(n for n, p in RUNS[run].prev.items() if p is None)
+
+
+def evaluate_prev_dir(input):
+    """The previous checkpoint's folder, if it has one."""
+    return Path(input.prev).parent if input.prev else None
+
+
+def evaluate_copy_in(wc):
+    """The run's step evaluations and held-out blocks, for a worker."""
+    return [f"{train_dir(wc.run)}/evals/", f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"]
+
+
+def earlier_settings(wc):
+    """The settings of the run's checkpoints before n."""
+    train, n = train_dir(wc.run), int(wc.n)
+    return [f"{train}/n{p}/settings.json" for p in run_of(wc).ft["prefixes"] if p < n]
 
 
 def evaluate_inputs_from(wc):
@@ -275,6 +369,16 @@ def finetune_inputs(wc):
     return out
 
 
+def published_checkpoints(wc):
+    """Every trained run's saved checkpoints' release records."""
+    return [
+        f"{train_dir(run)}/n{n}/published.json"
+        for run in trained_runs()
+        for n in RUNS[run].ft["prefixes"]
+        if saved(run, n)
+    ]
+
+
 # From score.smk.
 
 SC = config["score"]
@@ -285,10 +389,7 @@ def checkpoint_labels(wc=None):
     """The checkpoints to score, less `score.skip`."""
     if SC["labels"] is not None:
         return list(SC["labels"])
-    path = checkpoints.release_list.get().output[0]
-    found = releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
-    skip = set(SC.get("skip") or ())
-    return [lb for lb in found if lb not in skip]
+    return releases.chosen(checkpoints.release_list.get().output[0], SC)
 
 
 ROOM = (
@@ -303,17 +404,8 @@ UNIT_THREADS = int(LOCAL.get("SCORE_THREADS") or 2)
 
 
 def score_order():
-    """The checkpoint labels, oldest published first.
-
-    Read from the release list if it is there, none otherwise: a job's
-    priority cannot wait on the release_list checkpoint.
-    """
-    if SC["labels"] is not None:
-        return list(SC["labels"])
-    path = Path(f"{CACHE}/releases.json")
-    if not path.exists():
-        return []
-    return releases.by_time(json.loads(path.read_text()), SC["published_from"])
+    """The checkpoint labels, oldest published first (none before listed)."""
+    return releases.oldest_first(f"{CACHE}/releases.json", SC)
 
 
 def unit_priority(base):
@@ -334,7 +426,7 @@ def unit_env(wc, threads):
 GERMANY_UNIT = "germany-days"
 """The German units' cache folder, as `evaluation.checkpoint.GERMANY_UNIT`."""
 
-EVALUATE = "uv run --group chronos python -m nowcastfoundation.checkpoint"
+EVALUATE = scoring.EVALUATE
 
 
 def unit_rows(study):
@@ -343,13 +435,8 @@ def unit_rows(study):
 
 
 def unit_shell(study, segment=""):
-    """A unit of `study` caching under {params.cache} as {params.label};
-    `segment`, if given, is the run's own checkpoint folder it loads."""
-    return (
-        f"mkdir -p {{params.copy_back}} && {ROOM}{{params.prefix}} nice -n 19 "
-        f"env {{params.env}} {EVALUATE} {study} {{params.cache}} "
-        f"{{params.label}} {segment}> {{log}} 2>&1 && touch {{output}}"
-    )
+    """A unit's shell command (flowlib.scoring.unit_shell)."""
+    return scoring.unit_shell(study, ROOM, segment)
 
 
 def run_scores_dir(run):
@@ -373,17 +460,10 @@ def references():
 
 def report_names(wc):
     """The German report's LABEL=NAME arguments and reference folders."""
-    names = {"reference": "Zero-shot", "randomwalknowcast": "Random walk nowcast"}
-    names |= {
-        f"n{n}": f"{wc.run} n{n}"
-        for n in RUNS[wc.run].ft["prefixes"]
-        if saved(wc.run, n)
-    }
-    args = [shlex.quote(f"{k}={v}") for k, v in names.items()]
-    args += [
-        f"--from {label}={CACHE}/{GERMANY_UNIT}/{label}" for label in SC["reference"]
-    ]
-    return " ".join(args)
+    saved_ns = [n for n in RUNS[wc.run].ft["prefixes"] if saved(wc.run, n)]
+    return scoring.report_args(
+        wc.run, saved_ns, SC["reference"], f"{CACHE}/{GERMANY_UNIT}"
+    )
 
 
 def run_scores(wc=None):

@@ -72,7 +72,8 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
     second = checkpoint_at(train, 500, 400)
     mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
     assert calls["loads"] == 1
-    assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]
+    # Newest first.
+    assert [c[1] for c in calls["evals"]] == [["monitor"], ["start"]]
     got = json.loads((train / "evals" / "step-0000200.json").read_text())
     assert got["step"] == 200
     assert got["eval_loss"] == 0.3
@@ -191,3 +192,17 @@ def test_base_scores_only_step_0_and_once(tmp_path, fake):
     # The segment's step evaluation then skips step 0.
     mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
     assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]
+
+
+def test_steps_scores_the_newest_snapshot_first(tmp_path, fake):
+    mod, calls = fake
+    train = tmp_path / "train"
+    for step in (200, 400, 600):
+        snapshot(train, step, ["monitor"])
+    where = checkpoint_at(train, 250, 600)
+    (train / "evals" / "step-0000000.json").write_text("{}")
+    mod.main(["steps", str(where), "--device", "cpu", "--eval-every", "200"])
+    steps = [
+        int(c[0].parent.name.removeprefix("step-")) for c in calls["evals"]
+    ]
+    assert steps == [600, 400, 200]

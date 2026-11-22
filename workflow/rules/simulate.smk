@@ -12,7 +12,10 @@
 # simulation is kept: the QC only records summaries (qc/).
 #
 # Targets: `simulate` (the rounds in `rounds`), and the opt-in `release`,
-# which uploads each batch to the release sims-r<r>.
+# which uploads each batch to the release sims-r<r>. Opt-in too:
+# <ROOT>/rounds/bench/simulator-<cpu|cuda>-n<n>-s<seed>.json, the
+# simulator's benchmark on one seeded batch of the grid
+# (nowcastfoundation.simulator.bench).
 #
 # Two hosts can share the rounds (flowlib.hosts): each lists the seeds
 # it takes in its local config (SIM_SEEDS; empty: all). A helping
@@ -25,6 +28,7 @@ wildcard_constraints:
     round=r"\d+",
     seed=r"\d+",
     n=r"\d+",
+    device=r"cpu|cuda",
 
 
 rule simulate_batch:
@@ -57,6 +61,9 @@ rule simulate_batch:
         grid=GRID_FILE,
         engine=" ".join(simulator.ENGINE),
         prefix=LOCAL["SIM_PREFIX"],
+        jax_cache=LOCAL["JAX_CACHE"],
+        jax_cache_gb=LOCAL["JAX_CACHE_GB"],
+        jax_env=simulator.jax_cache_env(LOCAL["JAX_CACHE"]),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
         max_load=LOCAL["MAX_LOAD"],
@@ -65,7 +72,8 @@ rule simulate_batch:
         # as the manifest records the commit. A retry keeps the first
         # attempt's log. The simulator writes temporary files to a folder of
         # the batch's own, removed however the batch ends. JAX runs on one
-        # thread, as the job has one.
+        # thread, as the job has one, and shares its compiles with the
+        # host's other batches (flowlib.simulator.jax_cache_env).
         """
         if ! git diff --quiet HEAD -- {params.engine} {params.grid}; then
             echo "the simulator or its grid differs from HEAD" >{log}
@@ -77,13 +85,36 @@ rule simulate_batch:
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
+        workflow/scripts/trim_jax_cache.sh "{params.jax_cache}" {params.jax_cache_gb}
         uv=$(command -v uv)
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} JAX_PLATFORMS=cpu \
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} JAX_PLATFORMS=cpu {params.jax_env} \
             XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
             {params.prefix} workflow/scripts/timed.sh \
             nice -n 19 "$uv" run --frozen python -m nowcastfoundation.simulator \
             {params.grid} {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
+        """
+
+
+rule simulator_benchmark:
+    # Two passes of one batch, cold then warm, as a simulate_batch job
+    # runs (one thread, the round's draws) on the given JAX device.
+    output:
+        f"{ROUNDS_DIR}/bench/simulator-{{device}}-n{{n}}-s{{seed}}.json",
+    log:
+        f"{ROUNDS_DIR}/bench/logs/simulator-{{device}}-n{{n}}-s{{seed}}.log",
+    conda:
+        TOOLS_ENV
+    threads: 1
+    params:
+        draws=SIM["draws"],
+        grid=GRID_FILE,
+    shell:
+        """
+        ENW_DRAWS={params.draws} JAX_PLATFORMS={wildcards.device} \
+            XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
+            uv run --frozen python -m nowcastfoundation.simulator.bench \
+            {params.grid} {wildcards.n} {wildcards.seed} {output} >{log} 2>&1
         """
 
 
@@ -131,10 +162,7 @@ rule batch_record:
 
 rule round_manifest:
     input:
-        lambda wc: expand(
-            f"{ROUNDS_DIR}/r{wc.round}/records/record-{{seed}}.csv",
-            seed=seeds_of(wc.round),
-        ),
+        round_records,
     output:
         f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
     log:
@@ -198,9 +226,7 @@ rule release_batch:
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
-        owner=lambda wc: grids.owner(
-            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
-        ),
+        owner=release_owner,
         counts=rules.simulate_batch.output.counts,
         settings=rules.simulate_batch.output.settings,
     shell:
@@ -263,15 +289,7 @@ rule round_summaries:
     # round's batch files, not its manifest, so a summary of a round
     # another run is simulating writes nothing into that round's records.
     input:
-        lambda wc: [
-            f"{ROUNDS_DIR}/r{wc.round}/sims/{kind}-{seed}.{ext}"
-            for seed in seeds_of(wc.round)
-            for kind, ext in (
-                ("counts", "csv.gz"),
-                ("settings", "csv"),
-                ("latent", "csv.gz"),
-            )
-        ],
+        round_sims,
     output:
         f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
     log:
@@ -303,9 +321,7 @@ rule grid_figures:
         TOOLS_ENV
     params:
         out=lambda wc, output: Path(output.ecdf).parent,
-        sources=lambda wc, input: " ".join(
-            f"r{r}={path}" for r, path in zip(config["rounds"], input)
-        ),
+        sources=round_sources,
     shell:
         """
         uv run python workflow/scripts/grid_summaries.py compare \
@@ -371,9 +387,7 @@ rule sim_report:
     conda:
         TOOLS_ENV
     params:
-        source=lambda wc, input: (
-            f"r{wc.round}={ROUNDS_DIR}/r{wc.round}/sims:{input.summaries}"
-        ),
+        source=lambda wc, input: summary_sources([wc.round], [input.summaries]),
     shell:
         "uv run python workflow/scripts/sim_report.py render {output} "
         "'Simulated outbreaks, round {wildcards.round}' {input.refs} "
@@ -398,10 +412,7 @@ rule sim_report_run:
     params:
         title="Simulated outbreaks, rounds "
         + ", ".join(str(r) for r in config["rounds"]),
-        sources=lambda wc, input: " ".join(
-            f"r{r}={ROUNDS_DIR}/r{r}/sims:{path}"
-            for r, path in zip(config["rounds"], input.summaries)
-        ),
+        sources=lambda wc, input: summary_sources(config["rounds"], input.summaries),
     shell:
         "uv run python workflow/scripts/sim_report.py render {output} "
         "'{params.title}' {input.refs} {input.germany} {params.sources} "
@@ -421,10 +432,7 @@ rule release:
     input:
         # Never an earlier grid's round: its release holds that grid's
         # batches.
-        lambda wc: grids.check_release(
-            config["rounds"], config["grid_rounds"], config.get("retired_rounds")
-        )
-        or [],
+        release_check,
         [
             f"{ROUNDS_DIR}/r{r}/released/{s}.done"
             for r in config["rounds"]

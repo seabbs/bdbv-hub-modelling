@@ -115,10 +115,11 @@ def base_step(where: Path, device: str) -> None:
 
 
 def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
-    """Score step snapshots `todo` and write each one's result beside it."""
+    """Score step snapshots `todo`, newest first, writing each result."""
     if not todo:
         fs.log(f"{train}: no step snapshots to score")
         return
+    todo = sorted(todo, key=evaluations.step_of, reverse=True)
     base = fe.load_base("cpu")
     blocks: dict[Any, list[dict]] = {}
     for snap in todo:

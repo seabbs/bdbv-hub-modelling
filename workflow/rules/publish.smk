@@ -52,9 +52,4 @@ rule publish:
     # The checkpoints saved so far, so it never schedules training and can
     # run beside a training run.
     input:
-        lambda wc: [
-            f"{train_dir(run)}/n{n}/published.json"
-            for run in trained_runs()
-            for n in RUNS[run].ft["prefixes"]
-            if saved(run, n)
-        ],
+        published_checkpoints,

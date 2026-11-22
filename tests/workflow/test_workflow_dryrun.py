@@ -449,26 +449,62 @@ def test_a_checkpoint_s_evaluation_needs_only_step_0_and_earlier_settings(
     assert (first, check) in edges
 
 
-def _priorities(out):
-    got = re.findall(
-        r"^(?:local)?rule (\w+):.*?^\s+priority: ([\d.]+)$",
-        out.stdout,
-        re.M | re.S,
-    )
-    by: dict[str, set[float]] = {}
-    for rule, p in got:
-        by.setdefault(rule, set()).add(float(p))
-    return by
+def _field(block, key):
+    m = re.search(rf"^\s+{key}: (.*)$", block, re.M)
+    return m[1] if m else ""
 
 
-def test_checkpoint_evaluation_outranks_the_next_segment(tmp_path):
+def _jobs_of(out, rule):
+    """Each planned job of `rule`: its wildcards, priority and resources."""
+    blocks = re.split(r"^\[[^\]]+\]$", out.stdout, flags=re.M)
+    return [
+        {
+            "wildcards": _field(b, "wildcards"),
+            "priority": float(_field(b, "priority") or 0),
+            "resources": _field(b, "resources"),
+            "shell": b,
+        }
+        for b in blocks
+        if re.search(rf"^(?:local)?rule {rule}:$", b, re.M)
+    ]
+
+
+def test_evaluation_ranks_below_the_trainer_newest_first(tmp_path):
+    # The GPU belongs to training for the whole run: evaluation waits for
+    # it, and its backlog is scored newest first.
     out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
-    by = _priorities(out)
-    trainer = max(by["train_segment"])
-    assert min(by["evaluate_checkpoint"]) > trainer
-    assert min(by["evaluate_base"]) > trainer
-    assert max(by["evaluate_steps"]) < trainer
+    trainer = max(j["priority"] for j in _jobs_of(out, "train_segment"))
+    for rule in ("evaluate_base", "evaluate_steps", "evaluate_checkpoint"):
+        assert all(j["priority"] < trainer for j in _jobs_of(out, rule))
+    for rule in ("evaluate_steps", "evaluate_checkpoint"):
+        by_n = sorted(
+            (int(re.search(r"n=(\d+)", j["wildcards"])[1]), j["priority"])
+            for j in _jobs_of(out, rule)
+        )
+        assert [p for _, p in by_n] == sorted(p for _, p in by_n)
+        assert by_n[0][1] < by_n[-1][1]
+    (base,) = _jobs_of(out, "evaluate_base")
+    assert base["priority"] > max(
+        j["priority"] for j in _jobs_of(out, "evaluate_checkpoint")
+    )
+
+
+def test_evaluation_on_the_cpu_claims_no_gpu(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nEVAL_DEVICE=cpu\n"
+    )
+    out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    for rule in ("evaluate_base", "evaluate_steps", "evaluate_checkpoint"):
+        jobs = _jobs_of(out, rule)
+        assert jobs
+        for j in jobs:
+            assert "gpu=0" in j["resources"] or "gpu" not in j["resources"]
+            assert "--device cpu" in j["shell"]
+    assert all(
+        "gpu=1" in j["resources"] for j in _jobs_of(out, "train_segment")
+    )
 
 
 def test_finetune_never_publishes(tmp_path):

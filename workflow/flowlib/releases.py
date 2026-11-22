@@ -18,6 +18,8 @@ import json
 import re
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
+from pathlib import Path
+from typing import Any
 
 FT = "chronos-ft-"
 SLOTS = "chronos-slots-"
@@ -90,3 +92,34 @@ def release_seeds(repo: str, round_: int) -> set[int]:
     if got.returncode:
         return set()
     return released_seeds(a["name"] for a in json.loads(got.stdout)["assets"])
+
+
+def _listing(path: Path | str) -> list[dict[str, Any]] | None:
+    path = Path(path)
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def chosen(listing: Path | str, cfg: Mapping[str, Any]) -> list[str]:
+    """Return the checkpoints to score: `cfg["labels"]`, else the listed.
+
+    `cfg` is the workflow's `score` settings; listed releases published
+    from `published_from` count, less `skip`.
+    """
+    if cfg["labels"] is not None:
+        return list(cfg["labels"])
+    rows = _listing(listing) or []
+    skip = set(cfg.get("skip") or ())
+    found = labels(rows, cfg["published_from"])
+    return [lb for lb in found if lb not in skip]
+
+
+def oldest_first(listing: Path | str, cfg: Mapping[str, Any]) -> list[str]:
+    """Return `cfg["labels"]`, else the listed checkpoints oldest first.
+
+    None if the listing is not there yet: a job's priority cannot wait
+    for it.
+    """
+    if cfg["labels"] is not None:
+        return list(cfg["labels"])
+    rows = _listing(listing)
+    return [] if rows is None else by_time(rows, cfg["published_from"])

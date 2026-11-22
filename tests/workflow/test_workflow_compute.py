@@ -214,7 +214,8 @@ def test_the_gpu_rules_are_those_that_take_the_gpu():
         for line in smk.read_text().splitlines():
             if line.startswith(("rule ", "checkpoint ")):
                 rule = line.split()[1].rstrip(":")
-            elif line.strip() == "gpu=1,":
+            # gpu=1, or a machine's choice (evaluation: none on the CPU).
+            elif line.strip() in ("gpu=1,", "gpu=evaluate_gpu(),"):
                 found.add(rule)
     assert found == compute.GPU_RULES
 
