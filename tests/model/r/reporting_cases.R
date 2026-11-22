@@ -39,7 +39,7 @@ reporting_effect_sds <- function(rdesign, sds) {
   array(as.numeric(unlist(sds[effects])))
 }
 
-reference_case <- function(input) {
+reference_parts <- function(input) {
   design <- input$design
   v <- input$values
   set.seed(input$seed)
@@ -160,16 +160,21 @@ reference_case <- function(input) {
     )
     p$refnp_arima_sigma <- array(v$hazard_walk_sd)
   }
-  lambda <- matrix(5, input$n_days, input$n_places * input$n_ages)
-  expectation <- epinowcast::enw_expectation(
-    r = ~1, generation_time = 1, observation = ~1, data = pobs
+  list(
+    pobs = pobs, meta = meta, reference = reference, rd = rd, p = p,
+    parametric = parametric, hazard = hazard
   )
+}
+
+# Runs epinowcast's model at the pin with parameters `p` fixed, for the
+# modules given, and latent expected counts `lambda` (days by strata).
+reporting_run <- function(pobs, reference, report, expectation, p, lambda) {
   log_l <- log(lambda)
   p$expr_lelatent_int <- matrix(log_l[1, ], nrow = 1)
   capture <- function(data, init, ...) data.table(data = list(data), init = list(init))
   prepared <- epinowcast::epinowcast(
     data = pobs, reference = reference,
-    report = epinowcast::enw_report(data = pobs), expectation = expectation,
+    report = report, expectation = expectation,
     missing = epinowcast::enw_missing(formula = ~0, data = pobs),
     obs = epinowcast::enw_obs(family = "poisson", data = pobs),
     fit = epinowcast::enw_fit_opts(
@@ -203,6 +208,22 @@ reference_case <- function(input) {
     sig_figs = 18,
     show_messages = FALSE, show_exceptions = FALSE
   )))
+  list(fit = fit, data = data, model = model)
+}
+
+reference_case <- function(input) {
+  parts <- reference_parts(input)
+  for (name in names(parts)) assign(name, parts[[name]])
+  lambda <- matrix(5, input$n_days, input$n_places * input$n_ages)
+  expectation <- epinowcast::enw_expectation(
+    r = ~1, generation_time = 1, observation = ~1, data = pobs
+  )
+  run <- reporting_run(
+    pobs, reference, epinowcast::enw_report(data = pobs), expectation, p,
+    lambda
+  )
+  fit <- run$fit
+  data <- run$data
   draw <- function(name) {
     d <- fit$draws(name, format = "draws_matrix")
     if (ncol(d) == 0) NULL else as.numeric(d[1, ])
@@ -223,5 +244,118 @@ reference_case <- function(input) {
     # hazards, or log probabilities where `ref_as_p`.
     refp_lh = if (parametric) draw("refp_lh") else NULL,
     refnp_lh = if (hazard) draw("refnp_lh") else NULL
+  )
+}
+
+# An integer array as Rcpp takes a Stan array of arrays: nested lists of
+# its first index, down to integer vectors.
+reporting_nested <- function(a) {
+  d <- dim(a)
+  if (is.null(d) || length(d) == 1) return(as.integer(a))
+  lapply(asplit(a, 1), reporting_nested)
+}
+
+# The whole triangle's log expected reports through epinowcast at the pin:
+# the reference module (`reference_parts`), a report module (a report
+# weekday effect, or report days and outages), the reference weekday's
+# effect on the expected counts and the latent expected counts
+# `input$log_lambda` (strata by days), run with fixed parameters; then the
+# model's own `expected_obs_from_snaps` on its transformed parameters, as
+# its generated quantities call it.
+expectation_case <- function(input) {
+  parts <- reference_parts(input)
+  for (name in names(parts)) assign(name, parts[[name]])
+  design <- input$design
+  v <- input$values
+  structural <- NULL
+  report_terms <- NULL
+  if (design$report_days == "daily") {
+    if (design$report_dow == "yes") report_terms <- "(1 | day_of_week)"
+  } else {
+    on <- strsplit(design$report_weekdays, ";")[[1]]
+    structural <- epinowcast::enw_structural_reporting_metadata(pobs)
+    structural[, report := as.integer(weekdays(report_date) %in% on)]
+    structural <- structural[, .(.group, date, report_date, report)]
+  }
+  if (design$shocks == "outage") {
+    if (is.null(structural)) {
+      structural <- epinowcast::enw_structural_reporting_metadata(pobs)
+      structural[, report := 1L]
+    }
+    first <- min(meta$date)
+    for (k in seq_along(v$shock_places)) {
+      w <- reporting_window(first, v$shock_at[k], v$shock_weeks[k], v)
+      groups <- meta[place == sprintf("P%02d", v$shock_places[k]), unique(.group)]
+      structural[
+        .group %in% groups & report_date >= w[1] & report_date <= w[2],
+        report := 0L
+      ]
+    }
+  }
+  report <- epinowcast::enw_report(
+    non_parametric = reporting_formula(FALSE, report_terms),
+    structural = structural, data = pobs
+  )
+  if (length(report_terms)) {
+    p$rep_beta <- array(rnorm(report$data$rep_fncol))
+    p$rep_beta_sd <- array(v$dow_sd)
+  }
+  reference_dow <- design$reference_dow == "yes"
+  expectation <- epinowcast::enw_expectation(
+    r = ~1, generation_time = 1,
+    observation = if (reference_dow) ~ (1 | day_of_week) else ~1,
+    data = pobs
+  )
+  if (reference_dow) {
+    p$expl_beta <- array(rnorm(expectation$data$expl_fncol))
+    p$expl_beta_sd <- array(v$reference_dow_sd)
+  }
+  # `fromJSON` reads the strata-by-days list as a matrix.
+  lambda <- exp(t(as.matrix(input$log_lambda)))
+  run <- reporting_run(pobs, reference, report, expectation, p, lambda)
+  data <- run$data
+  draw <- function(name) {
+    d <- posterior::draws_of(posterior::as_draws_rvars(run$fit$draws(name))[[name]])
+    # One draw: drop the draws dimension.
+    dd <- dim(d)
+    if (length(d) == 0) NULL else if (length(dd) <= 2) as.numeric(d) else array(d, dd[-1])
+  }
+  target <- tempfile("enw-fns-")
+  dir.create(target)
+  suppressMessages(epinowcast::enw_stan_to_r(
+    c("hazard.stan", "combine_logit_hazards.stan", "expected_obs.stan",
+      "expected_obs_from.stan"),
+    verbose = FALSE, target_dir = target
+  ))
+  exp_lobs <- draw("exp_lobs")  # strata by days
+  refp_lh <- if (data$model_refp > 0) draw("refp_lh") else matrix(0, data$dmax, 1)
+  refnp_lh <- if (data$model_refnp > 0) draw("refnp_lh") else numeric(0)
+  srdlh <- draw("srdlh")
+  if (is.null(srdlh)) srdlh <- numeric(0)
+  ref_as_p <- as.integer(!(data$model_rep > 0 || data$model_refp == 0))
+  log_exp <- expected_obs_from_snaps(
+    1L, data$s, lapply(seq_len(nrow(exp_lobs)), function(g) exp_lobs[g, ]),
+    reporting_nested(data$rep_findex), as.numeric(srdlh),
+    matrix(refp_lh, nrow = data$dmax), as.integer(data$refp_findex),
+    as.integer(data$model_refp), as.integer(data$rep_fncol), ref_as_p,
+    as.integer(data$sdmax), as.integer(data$csdmax), as.integer(data$sg),
+    as.integer(data$st), as.integer(data$csdmax[data$s]), as.numeric(refnp_lh),
+    as.integer(data$model_refnp), as.integer(data$sdmax),
+    as.integer(data$csdmax), as.integer(data$rep_agg_p),
+    reporting_nested(data$rep_agg_n_selected),
+    reporting_nested(data$rep_agg_selected_idx)
+  )
+  list(
+    groups = meta[, .(.group, place, age)][!duplicated(.group)],
+    dates = as.character(sort(unique(meta$date))),
+    refp_cols = if (parametric) colnames(rd$refp_fdesign) else NULL,
+    refnp_cols = if (hazard) colnames(rd$refnp_fdesign) else NULL,
+    rep_cols = if (length(report_terms)) colnames(report$data$rep_fdesign) else NULL,
+    expl_cols = if (reference_dow) colnames(expectation$data$expl_fdesign) else NULL,
+    parameters = p,
+    ref_as_p = ref_as_p,
+    model_rep = data$model_rep,
+    sg = data$sg, st = data$st, sdmax = data$sdmax,
+    log_expected = as.numeric(log_exp)
   )
 }

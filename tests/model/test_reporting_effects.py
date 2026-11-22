@@ -169,6 +169,13 @@ def _frame(out: dict[str, Any]) -> ReferenceFrame:
     return ReferenceFrame(dates=dates, place=place, age=age)
 
 
+def _names(cols: Any) -> list[str]:
+    """Column names; one name comes back as a string (`auto_unbox`)."""
+    if cols is None:
+        return []
+    return [cols] if isinstance(cols, str) else list(cols)
+
+
 def _sites(
     out: dict[str, Any], frame: ReferenceFrame, prefix: str
 ) -> dict[str, np.ndarray]:
@@ -189,7 +196,7 @@ def _sites(
     modules = [("mean", "refp_cols", "refp_mean_beta")]
     modules.append(("hazard", "refnp_cols", "refnp_beta"))
     for kind, cols_key, beta_key in modules:
-        cols = out.get(cols_key) or []
+        cols = _names(out.get(cols_key))
         beta = np.atleast_1d(p.get(beta_key, []))
         for col, b in zip(cols, beta, strict=True):
             if col.startswith("place"):
