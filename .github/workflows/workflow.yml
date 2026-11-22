@@ -11,6 +11,7 @@ on:
     paths:
       - 'workflow/**'
       - 'tests/workflow/**'
+      - 'paper/workflow/**'
       - 'scripts/**'
       - 'Taskfile.yml'
       - 'pyproject.toml'
@@ -20,6 +21,7 @@ on:
     paths:
       - 'workflow/**'
       - 'tests/workflow/**'
+      - 'paper/workflow/**'
       - 'scripts/**'
       - 'Taskfile.yml'
       - 'pyproject.toml'

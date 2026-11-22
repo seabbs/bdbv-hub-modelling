@@ -1,8 +1,8 @@
 # Settings of the paper's evaluation workflow (`workflow/Snakefile`).
-# Paths are relative to `paper/`.
-results: results
+# Paths are relative to the repository root.
+results: paper/results
 # Where `publish` copies a run's outputs for main.qmd and si.qmd.
-build: build
+build: paper/build
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]
@@ -11,7 +11,7 @@ studies: [synthetic, germany, ebola]
 # `finetuned` is the checkpoint every `_ft` model of the workflow loads;
 # null leaves the fine-tuned forecasts pending. scripts/follow_checkpoint.py
 # sets it.
-finetune_run: ../output/checkpoints/slots
+finetune_run: output/checkpoints/slots
 finetuned: null
 final_checkpoints: []
 # The live fine-tuning run (the checkpoint scores' `run`) whose newest
@@ -27,7 +27,7 @@ n_samples: 100
 synthetic:
   # The grid config the grid tables and SI notes are read from (the
   # main workflow's `simulate.grid_file`), and the held-out set's design.
-  grid_file: ../config/finetune/grid.yaml
+  grid_file: config/finetune/grid.yaml
   grid: r7
   simulations_per_seed: 20
   draw: 1
@@ -55,17 +55,17 @@ synthetic:
   # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
   forecasts:
-    development: ../output/paper/synthetic-dev.csv.gz
-    paper: ../output/paper/synthetic.csv.gz
+    development: output/paper/synthetic-dev.csv.gz
+    paper: output/paper/synthetic.csv.gz
 
 # The German benchmark, run with the `bdbvhubrenewal` command line
 # (config/germany.toml). Its models are the config's `models`.
 # `real: false` runs the study on dummy data.
 germany:
   real: true
-  config: ../config/germany.toml
-  data: ../data/raw/germany
-  results: ../results/germany
+  config: config/germany.toml
+  data: data/raw/germany
+  results: results/germany
   # Further forecasts of the benchmark from evidence rows (`evidence`
   # below), such as models run outside config/germany.toml: `models`
   # keeps the models matching a regular expression, `suffix` renames
@@ -82,11 +82,11 @@ germany:
 # forecasts, our stored forecasts and the fit store. `hub: null` runs the
 # study on dummy data.
 ebola:
-  backtest: ../results/forecasts.csv.gz
+  backtest: results/forecasts.csv.gz
   # Main's data, whose releases give the observations and truth, and the
   # backtest config, which sets D, as the release backtest takes them.
-  data: ../data
-  config: ../config/backtest.toml
+  data: data
+  config: config/backtest.toml
   # Further models' release-backtest samples from evidence rows
   # (`evidence` below), in the backtest's layout, kept to `models`.
   extra: []
@@ -95,10 +95,10 @@ ebola:
   # the backtest's seed shared by every model (common random numbers).
   # Their rows replace the site backtest's, which keeps its own number.
   n_samples: 1000
-  hub: ../data/raw/bdbv-hub
+  hub: data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
-  candidates: [../data/candidate-forecasts.csv.gz]
-  store: ..
+  candidates: [data/candidate-forecasts.csv.gz]
+  store: .
   store_ref: origin/fit-store
 
 # What the nowcast panels show (`paperfigs.nowcasts`). The main panel

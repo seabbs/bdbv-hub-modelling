@@ -70,7 +70,6 @@ jobs:
           export LOCAL_CONFIG="$RUNNER_TEMP/local.env"
           status=0
           uv run snakemake -s workflow/Snakefile --lint || status=1
-          (cd paper && uv run snakemake -s workflow/Snakefile --lint) || status=1
           exit $status
 
   # The submission CI scripts in ci/, their own uv project.

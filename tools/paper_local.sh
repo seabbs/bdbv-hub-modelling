@@ -41,7 +41,7 @@ sys.path.append("workflow")
 from flowlib import localconfig
 from paperpipe.config import run_settings
 config = yaml.safe_load(Path("paper/workflow/config.yaml").read_text())
-sims = Path("paper") / localconfig.expand(config["synthetic"]["simulations"]["paper"])
+sims = Path(localconfig.expand(config["synthetic"]["simulations"]["paper"]))
 seeds = run_settings(config, "paper").synthetic_seeds
 # The simulation set writes READY beside sims/ once every batch is
 # simulated, recorded and reviewed.

@@ -14,11 +14,12 @@ from paperpipe.config import last_release, run_studies
 pytest.importorskip("snakemake")
 
 PAPER = Path(__file__).parents[1]
-SNAKEFILE = PAPER / "workflow" / "Snakefile"
+# The paper is a module of the project workflow, run from the root.
+SNAKEFILE = PAPER.parent / "workflow" / "Snakefile"
 CONFIG = yaml.safe_load((PAPER / "workflow" / "config.yaml").read_text())
 RULES = (
     "data",
-    "publish",
+    "publish_paper",
     "summary",
     "forecasts",
     "table",
@@ -46,7 +47,7 @@ def _offline(tmp: Path, **extra) -> Path:
 def _snakemake(*args: str) -> subprocess.CompletedProcess:
     cmd = [sys.executable, "-m", "snakemake", "-s", str(SNAKEFILE), *args]
     return subprocess.run(
-        cmd, cwd=PAPER, capture_output=True, text=True, check=False
+        cmd, cwd=PAPER.parent, capture_output=True, text=True, check=False
     )
 
 
@@ -203,7 +204,7 @@ def test_benchmark_commands_run_from_the_repository_root(
     tmp_path: Path,
 ) -> None:
     # The models read config/ relative to the working directory
-    # (config/finetune.toml), so a local run from paper/ must cd first.
+    # (config/finetune.toml); the workflow runs from the root.
     cfg = tmp_path / "real.yaml"
     cfg.write_text(yaml.safe_dump({"results": str(tmp_path / "results")}))
     base = str(PAPER / "workflow" / "config.yaml")
@@ -220,7 +221,7 @@ def test_benchmark_commands_run_from_the_repository_root(
     for line in commands:
         # After the redirect into the rule's log.
         line = re.sub(r"^exec >\S+ 2>&1; ", "", line)
-        assert line.startswith("cd .. && ")
+        assert not line.startswith("cd ")
         assert "--config config/germany.toml" in line
         assert "--data data/raw/germany" in line
 
