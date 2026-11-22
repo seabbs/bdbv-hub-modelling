@@ -155,9 +155,7 @@ def round_of(seed):
 def training_seeds(run):
     """The run's training seeds, in the order it trains on them."""
     f = RUNS[run].ft
-    if f["seed_file"]:
-        return [int(s) for s in Path(f["seed_file"]).read_text().split()]
-    return [s for r in f["rounds"] for s in seeds_of(r)]
+    return segments.training_seeds(f["seed_file"], f["rounds"], seeds_of)
 
 
 def held_seeds(run):
@@ -171,41 +169,30 @@ def held_range(run):
 
 
 def available_seeds(run):
-    """The training seeds whose batches can be had now, in order.
-
-    All of them from this machine's rounds, which the workflow simulates.
-    From the rounds host or releases, those before the first batch not
-    yet listed, and none until the validation round is all listed.
-    """
-    order = training_seeds(run)
-    if not RUNS[run].elsewhere:
-        return order
-    listed = listed_batches(run)
-    if not set(held_seeds(run)) <= listed:
-        return []
-    for i, seed in enumerate(order):
-        if seed not in listed:
-            return order[:i]
-    return order
+    """The training seeds whose batches can be had now, in order."""
+    listed = listed_batches(run) if RUNS[run].elsewhere else None
+    return segments.available_seeds(training_seeds(run), held_seeds(run), listed)
 
 
 def outbreaks_or_full(run, seed):
     """A batch's outbreaks if simulated, else a full batch."""
-    for settings in (
-        Path(f"{RUNS[run].dir}/sims/settings-{seed}.csv"),
-        Path(f"{ROUNDS_DIR}/r{round_of(seed)}/sims/settings-{seed}.csv"),
-    ):
-        if settings.exists():
-            return segments.batch_outbreaks(settings)
-    return SIM["batch"]
+    return segments.outbreaks_or_full(
+        [
+            f"{RUNS[run].dir}/sims/settings-{seed}.csv",
+            f"{ROUNDS_DIR}/r{round_of(seed)}/sims/settings-{seed}.csv",
+        ],
+        SIM["batch"],
+    )
 
 
 def segment_seeds(run, n):
     """The seeds segment n needs: n outbreaks, one spare, the held-out."""
-    order = available_seeds(run)
-    need = segments.seeds_for(n, order, lambda s: outbreaks_or_full(run, s))
-    spare = order[len(need) : len(need) + 1]
-    return need + spare + held_seeds(run)
+    return segments.segment_seeds(
+        n,
+        available_seeds(run),
+        held_seeds(run),
+        lambda s: outbreaks_or_full(run, s),
+    )
 
 
 def segment_inputs(wc):
@@ -244,29 +231,21 @@ def saved(run, n):
 def trainable(run):
     """The prefixes done or within reach of the seed list."""
     f = RUNS[run].ft
-    order = available_seeds(run)
-    # A spare batch past each prefix but the run's last, which takes
-    # every training simulation.
-    return [
-        n
-        for n in f["prefixes"]
-        if saved(run, n)
-        or segments.reachable(
-            n + SIM["batch"] * (n < f["outbreaks"]),
-            order,
-            lambda s: outbreaks_or_full(run, s),
-        )
-    ]
+    return segments.trainable(
+        f["prefixes"],
+        f["outbreaks"],
+        SIM["batch"],
+        available_seeds(run),
+        lambda n: saved(run, n),
+        lambda s: outbreaks_or_full(run, s),
+    )
 
 
 def to_train(run):
     """Prefixes `finetune` asks for of the run."""
-    prefixes = trainable(run)
-    if not config.get("next_segment_only"):
-        return prefixes
-    done = [n for n in prefixes if saved(run, n)]
-    rest = [n for n in prefixes if n not in done]
-    return done + rest[:1]
+    return segments.to_train(
+        trainable(run), lambda n: saved(run, n), config.get("next_segment_only")
+    )
 
 
 def finetune_inputs(wc):
