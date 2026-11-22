@@ -60,10 +60,6 @@ RULE_GROUPS = {
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
     "score_germany": "score",
-    "slots_check_shard": "score",
-    "agg_sanity": "score",
-    "agg_fit": "score",
-    "agg_rows": "score",
 }
 """Each placed rule's group; any other rule is in `any`."""
 

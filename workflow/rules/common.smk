@@ -428,46 +428,6 @@ def unit_stamps(wc=None):
     return [f for files in table_inputs(wc).values() for f in files]
 
 
-# From followups.smk.
-
-SLC = config["slots_check"]
-AGG = config["agg"]
-AGG_ROOT = f"{CACHE}/agg"
-HEAVY = (
-    f"{ROOM}{{params.prefix}} nice -n 19 env OMP_NUM_THREADS=1 "
-    "MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 CUDA_VISIBLE_DEVICES= "
-)
-
-
-def slots_labels():
-    return [lb for lb in checkpoint_labels() if lb.startswith("slots-")]
-
-
-def main_scores(wc):
-    return [
-        f"{CACHE}/{GERMANY_UNIT}/{wc.label}.done",
-    ]
-
-
-def src_tree():
-    return subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD:packages"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-
-
-def followups(wc=None):
-    labels = slots_labels()
-    out = []
-    if SLC["run"]:
-        out += expand(f"{CACHE}/slots-check/{{label}}/summary.csv", label=labels)
-    if AGG["run"]:
-        out += expand(f"{AGG_ROOT}/{{label}}/aggregation-scores.csv.gz", label=labels)
-    return out
-
-
 # The longer run directives' steps.
 
 

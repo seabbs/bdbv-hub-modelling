@@ -19,6 +19,10 @@
 # (nowcasteval.coupling), from that unit's cached quantiles, on the CPU.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
 
+wildcard_constraints:
+    label=r"slots-[0-9a-f]+|[0-9a-f]+|reference[a-z-]*",
+
+
 
 checkpoint release_list:
     # Lists the releases to score; `task nowcast-foundation:score` reruns it.
@@ -201,4 +205,3 @@ rule score:
         unit_stamps,
         rules.score_table.output,
         run_scores,
-        lambda wc: followups(wc),
