@@ -398,6 +398,18 @@ def loss_run(
         and isinstance(h.get("by_source"), dict)
     ] or [(r["step"], r["src"]) for r in rows if r.get("src")]
 
+    # The subset held-out loss by step: the offloaded evaluations' (the
+    # merged history), else the trainer's log lines.
+    held = [
+        (h["step"], h["eval_loss"], _parts(h, "eval_loss"))
+        for h in hist
+        if isinstance(h, dict) and h.get("eval_loss") is not None
+    ] or [
+        (r["step"], r["held"], r.get("parts") or {})
+        for r in rows
+        if r["held"] is not None
+    ]
+
     def x(step: float) -> float:
         return round(sims(step), 2)
 
@@ -439,16 +451,14 @@ def loss_run(
         "tr0": sum(v for _, v in train[:20]) / len(train[:20])
         if train
         else None,
-        "held": [
-            [x(r["step"]), r["held"]] for r in rows if r["held"] is not None
-        ],
+        "held": [[x(st), round(v, 5)] for st, v, _ in held],
         "ck": [
             [at(nm, s), s["held_out_loss"]]
             for nm, s, _ in checkpoints
             if s.get("held_out_loss")
         ],
         "held_parts": {
-            p: [[x(r["step"]), r["parts"][p]] for r in rows if r.get("parts")]
+            p: [[x(st), round(parts[p], 5)] for st, _, parts in held if parts]
             for p in PARTS
         },
         "ck_parts": {
