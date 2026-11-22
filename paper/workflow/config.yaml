@@ -146,12 +146,6 @@ evidence:
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: results/germany-chronos-dev/scores.csv
-  lag_bdbv_before:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: evidence/bdbv-lagfix/fm-summary-before.csv
-  lag_bdbv_after:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: evidence/bdbv-lagfix/fm-summary-after.csv
   # The walks' scores with no pairing and the rolling rho_p, by study and
   # level, on development data (`summarise_pairing` rows). Pending:
   # the rows on evidence/fm-copula.
