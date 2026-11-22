@@ -15,13 +15,12 @@ Hub weeks run Sunday to Saturday and are labelled by the Saturday.
 
 from __future__ import annotations
 
-import datetime as dt
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
-from nowcastutils.dates import as_date
+from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.hierarchy import depth
 from nowcastutils.hierarchy import parent as parent_of
 from nowcastutils.releases import release_cutoff
@@ -94,10 +93,6 @@ class SnapshotArrays:
         return int(self.week[self.cut[r]])
 
 
-def _saturday(day: dt.date) -> dt.date:
-    return day + dt.timedelta(days=(5 - day.weekday()) % 7)
-
-
 def snapshot_arrays(
     daily: pd.DataFrame, vintage: str, locations: tuple[str, ...]
 ) -> SnapshotArrays:
@@ -141,7 +136,7 @@ def snapshot_arrays(
     nodes_t = tuple(sorted(nodes, key=lambda c: (depth(c), len(c), c)))
     first = as_date(str(rows["onset_date"].min()))
     cutoffs = [release_cutoff(rows, r) for r in releases]
-    days = pd.date_range(first, _saturday(max(cutoffs)), freq="D")
+    days = pd.date_range(first, epiweek_end(max(cutoffs)), freq="D")
     index = {d: i for i, d in enumerate(days.date)}
     cut = np.array([index[c] for c in cutoffs], dtype=np.int64)
     observed = np.arange(len(days))[None, :] <= cut[:, None]
@@ -161,7 +156,7 @@ def snapshot_arrays(
         values,
     )
     counts = counts * observed[None]
-    ends = [_saturday(d) for d in days.date]
+    ends = [epiweek_end(d) for d in days.date]
     week_ends = tuple(sorted({e.isoformat() for e in ends}))
     where = {w: i for i, w in enumerate(week_ends)}
     week = np.array([where[e.isoformat()] for e in ends], dtype=np.int64)
