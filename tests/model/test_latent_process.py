@@ -1,6 +1,6 @@
 """The simulator's latent process against the R engine, run by run.
 
-Each `latent-*.json` fixture (from `scripts/latent_fixtures.R`) holds a
+Each case, run live by the R engine (`r/latent_cases.R`), holds a
 drawn design and values and every random draw R made for it, in order:
 standard normals and the path kinds of independent places. The run is
 replayed by substituting those draws at the model's sample sites, in the
@@ -9,10 +9,8 @@ order the model makes them, and must use all of them.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 import jax
@@ -37,12 +35,7 @@ from nowcastrenewal.latent.simulate import (
 )
 from nowcastrenewal.latent.start import InitializeStrata
 
-FIXTURES = Path(__file__).parent / "fixtures" / "latent"
-LATENT = sorted(FIXTURES.glob("latent-*.json"))
-
-
-def load(name: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / f"{name}.json").read_text())
+from .latent_r import load
 
 
 def matrix(x: Any) -> np.ndarray:
@@ -135,9 +128,21 @@ def test_the_start_is_a_seed_on_the_last_day_or_a_level(early: bool) -> None:
     np.testing.assert_array_equal(out, want)
 
 
-@pytest.mark.parametrize("path", LATENT, ids=lambda p: p.stem)
-def test_latent_runs_replay_the_r_engine(path: Path) -> None:
-    case = json.loads(path.read_text())
+def runs() -> list[dict[str, Any]]:
+    return list(load("runs"))
+
+
+def test_latent_runs_replay_the_r_engine() -> None:
+    cases = runs()
+    assert len(cases) >= 12
+    for case in cases:
+        try:
+            _replay_case(case)
+        except AssertionError as e:
+            raise AssertionError(f"R seed {case['seed']}: {e}") from e
+
+
+def _replay_case(case: dict[str, Any]) -> None:
     design, values = case["design"], case["values"]
     gt = gt_pmf(values["gt_mean"], design["gt_family"], values["gt_cv"])
     strata = pd.DataFrame(case["strata"])
@@ -172,11 +177,7 @@ def test_latent_runs_replay_the_r_engine(path: Path) -> None:
 
 
 def test_the_latent_cases_cover_every_design_level() -> None:
-    ran = [
-        c["design"]
-        for c in (json.loads(p.read_text()) for p in LATENT)
-        if "error" not in c
-    ]
+    ran = [c["design"] for c in runs() if "error" not in c]
     for factor, levels in {
         "mixing": {"none", "symmetric", "asymmetric", "distance"}
         | {"time_varying"},
@@ -189,7 +190,7 @@ def test_the_latent_cases_cover_every_design_level() -> None:
 
 
 def _simulations() -> list[dict[str, Any]]:
-    case = json.loads(LATENT[-1].read_text())
+    case = runs()[-1]
     sims = [
         {
             "id": f"s{i}",
@@ -261,7 +262,7 @@ def test_any_error_in_one_simulation_is_recorded_and_the_batch_goes_on() -> (
 
 
 def test_a_single_draw_of_a_vector_value_may_be_a_scalar() -> None:
-    case = json.loads(LATENT[0].read_text())
+    case = runs()[0]
     values = {
         k: (v[0] if isinstance(v, list) and len(v) == 1 else v)
         for k, v in case["values"].items()
@@ -302,3 +303,20 @@ def test_the_fitted_models_do_not_import_the_latent_process() -> None:
         check=True,
     )
     assert out.stdout.strip() == "[]"
+
+
+def test_ci_runs_the_live_latent_checks() -> None:
+    import yaml
+
+    from .r_live import ROOT
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    job = workflow["jobs"]["r-live"]
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    packages = " ".join(
+        s.get("with", {}).get("packages", "") for s in job["steps"]
+    )
+    for test in ("test_latent_components.py", "test_latent_process.py"):
+        assert f"tests/model/{test}" in runs, test
+    for pkg in ("pkgload", "yaml", "data.table"):
+        assert pkg in packages, pkg

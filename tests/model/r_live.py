@@ -31,7 +31,7 @@ out <- local({
 %s
 })
 jsonlite::write_json(out, args[2], digits = NA, auto_unbox = TRUE,
-  matrix = "rowmajor")
+  matrix = "rowmajor"%s)
 """
 
 
@@ -83,6 +83,7 @@ def run_r(
     inputs: Any,
     packages: Sequence[str] = (),
     timeout: float = 1800,
+    na_as_null: bool = False,
 ) -> Any:
     """Run R `code` on `inputs` and return its value, through JSON.
 
@@ -99,6 +100,8 @@ def run_r(
         R packages the code needs; the test skips without them.
     timeout : float
         Seconds before the run is stopped.
+    na_as_null : bool
+        Write R's `NA` and `NULL` as JSON `null` rather than strings.
 
     Returns
     -------
@@ -111,7 +114,8 @@ def run_r(
             Path(tmp) / f for f in ("in.json", "out.json", "run.R")
         )
         src.write_text(json.dumps(inputs))
-        script.write_text(_PRELUDE % code)
+        nulls = ', na = "null", null = "null"' if na_as_null else ""
+        script.write_text(_PRELUDE % (code, nulls))
         env = {**os.environ, "PATH": _r_path()}
         out = subprocess.run(
             ["Rscript", str(script), str(src), str(dst)],
