@@ -1,8 +1,8 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Training blocks for fine-tuning Chronos-2 on simulated outbreaks.
 
-The simulator (packages/nowcastfoundation/r) simulates the outbreaks'
-reporting triangles with epinowcast. See the Foundation models methods page for
+The simulator (nowcastfoundation.simulator) simulates the outbreaks'
+reporting triangles. See the Foundation models methods page for
 the training data.
 """
 
