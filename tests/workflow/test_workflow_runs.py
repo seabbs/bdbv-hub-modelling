@@ -64,3 +64,27 @@ def test_a_local_run_folder_is_refused_with_the_fix():
     cfg = runs.load_config()
     with pytest.raises(ValueError, match="runs/<name>"):
         runs.resolve(cfg, {"ROOT": "/data", "RUN": "/data/old"})
+
+
+def _run(**ft):
+    base = {"prefixes": [100, 200], "series_bias": False, "bias_lr": 0.001}
+    return runs.Run("r", base | ft, "/x/r")
+
+
+def test_an_option_is_left_out_when_unset():
+    assert runs.option("--a", None) == ""
+    assert runs.option("--a", 0) == "--a 0"
+
+
+def test_a_segment_resumes_from_the_previous_prefix_s_state():
+    assert runs.resume_options(_run(), 100) == ""
+    got = runs.resume_options(_run(), 200)
+    assert got == "--prev /x/r/train/n100/state --prev-n 100"
+
+
+def test_trainer_options_name_only_the_settings_given():
+    assert runs.trainer_options(_run()) == ""
+    got = runs.trainer_options(
+        _run(series_bias=True, loss_horizon_days=7, quiet_min_cases=None)
+    )
+    assert got == "--loss-horizon-days 7 --series-bias --bias-lr 0.001"

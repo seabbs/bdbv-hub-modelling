@@ -114,6 +114,25 @@ def ft(key):
     return lambda wc: RUNS[wc.run].ft[key]
 
 
+def local_or_ft(key, setting):
+    """A param: this machine's `key` in local.env if set, else the run's
+    `finetune` setting."""
+    return lambda wc: LOCAL.get(key) or RUNS[wc.run].ft[setting]
+
+
+# Files publishing reads beside a segment's outputs, copied back with
+# them from a worker elsewhere (flowlib.compute).
+SEGMENT_COPY_BACK = (
+    "outbreaks.txt",
+    "consumed.txt",
+    "finetuned-ckpt/adapter_config.json",
+)
+
+
+def segment_copy_back(wc):
+    return [f"{train_dir(wc.run)}/n{wc.n}/{name}" for name in SEGMENT_COPY_BACK]
+
+
 def train_dir(run):
     return RUNS[run].train
 
@@ -128,6 +147,28 @@ def evaluate_prev(wc):
     """The settings of the checkpoint before segment n, if any."""
     prev = run_of(wc).prev[int(wc.n)]
     return f"{train_dir(wc.run)}/n{prev}/settings.json" if prev else []
+
+
+def evaluate_before(wc):
+    """The previous segment's steps stamp, so step 0 is scored first."""
+    prev = run_of(wc).prev[int(wc.n)]
+    return f"{train_dir(wc.run)}/evals/n{prev}.done" if prev else []
+
+
+def evaluate_prev_dir(input):
+    """The previous checkpoint's folder, if it has one."""
+    return Path(input.prev).parent if input.prev else None
+
+
+def evaluate_copy_in(wc):
+    """The run's step evaluations and held-out blocks, for a worker."""
+    return [f"{train_dir(wc.run)}/evals/", f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"]
+
+
+def earlier_settings(wc):
+    """The settings of the run's checkpoints before n."""
+    train, n = train_dir(wc.run), int(wc.n)
+    return [f"{train}/n{p}/settings.json" for p in run_of(wc).ft["prefixes"] if p < n]
 
 
 def evaluate_inputs_from(wc):

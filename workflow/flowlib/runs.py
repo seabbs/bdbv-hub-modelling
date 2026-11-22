@@ -100,3 +100,35 @@ def trained(config: Mapping[str, Any], found: Mapping[str, Run]) -> list[str]:
     if unknown:
         raise ValueError(f"train_runs names runs not in `runs`: {unknown}")
     return list(names)
+
+
+def option(flag: str, value: object) -> str:
+    """Return `flag value` for a command line, or nothing if `value` is None."""
+    return "" if value is None else f"{flag} {value}"
+
+
+def resume_options(run: Run, n: int) -> str:
+    """Return the state segment n resumes from: the previous prefix's."""
+    prev = run.prev[n]
+    if prev is None:
+        return ""
+    return f"--prev {run.train}/n{prev}/state --prev-n {prev}"
+
+
+def trainer_options(run: Run) -> str:
+    """Return the run's optional trainer arguments, each only when set.
+
+    The series bias and its rate, the loss horizon and the quiet-block
+    floor.
+    """
+    f = run.ft
+    bias = f"--series-bias --bias-lr {f['bias_lr']}" if f["series_bias"] else ""
+    return " ".join(
+        a
+        for a in (
+            option("--loss-horizon-days", f.get("loss_horizon_days")),
+            option("--quiet-min-cases", f.get("quiet_min_cases")),
+            bias,
+        )
+        if a
+    )
