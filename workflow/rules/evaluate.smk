@@ -58,6 +58,8 @@ rule evaluate_base:
         f"{TRAIN}/evals/step-0000000.json",
     log:
         f"{TRAIN}/logs/evaluate-base.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/evaluate_base.tsv"
     priority: EVALUATE_CHECKPOINT_PRIORITY
     conda:
         TOOLS_ENV
