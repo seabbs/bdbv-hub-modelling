@@ -48,7 +48,7 @@ task serve                           # serve the site (run task nowcast-eval:res
 ```
 
 `--models` runs some models and keeps the others' rows in `results/`.
-The files in `results/` are not committed, apart from `development-log.csv`, `ladder.csv` and `model-choice.yml`.
+The files in `results/` are not committed, apart from `development-log.csv` and `model-choice.yml`.
 The Pages build makes the rest with the steps of `task nowcast-eval:results`, from the code, the data and the fit store.
 
 ## Fit store

@@ -1101,80 +1101,6 @@ def _nowcast_forecasts(
     return pd.concat(frames, ignore_index=True)
 
 
-_LADDER_SECTIONS = (
-    (
-        "Rungs",
-        "What each rung adds, and what was decided.",
-        ("step", "rung", "description", "decision"),
-    ),
-    (
-        "Sampler",
-        "Sampler diagnostics of the fit to the real vintage.",
-        (
-            "real_seconds",
-            "real_max_rhat",
-            "real_min_ess",
-            "real_min_ess_per_s",
-            "real_divergent",
-            "real_depth_hits",
-        ),
-    ),
-    (
-        "Recovery",
-        "Fits to a simulated outbreak with known parameters.",
-        (
-            "sim_max_rhat",
-            "sim_rt_mae",
-            "sim_turn_error",
-            "sim_ppc90",
-            "sim_crps_national",
-            "sim_crps_province",
-            "sim_cov90_national_ahead",
-            "sim_cov90_province_ahead",
-        ),
-    ),
-    (
-        "Scores",
-        "Forecasts from the real vintage, scored against a later release.",
-        (
-            "real_ppc90",
-            "real_crps_national",
-            "real_crps_province",
-            "real_cov90_national_now",
-            "real_cov90_national_ahead",
-            "real_cov90_province_now",
-            "real_cov90_province_ahead",
-            "prior_wild",
-        ),
-    ),
-)
-"""Sections of the Model building page, with the ladder columns each shows."""
-
-_LADDER_LABELS = {
-    "step": "Step",
-    "rung": "Rung",
-    "description": "Adds",
-    "decision": "Decision",
-    "seconds": "Seconds",
-    "max_rhat": "Max R-hat",
-    "min_ess": "Min ESS",
-    "min_ess_per_s": "Min ESS per second",
-    "divergent": "Divergent share",
-    "depth_hits": "Depth cap share",
-    "rt_mae": "Rt MAE",
-    "turn_error": "Days off the Rt = 1 crossing",
-    "ppc90": "PPC 90% coverage",
-    "crps_national": "National CRPS",
-    "crps_province": "Province CRPS",
-    "cov90_national_now": "National 90% coverage, nowcast",
-    "cov90_national_ahead": "National 90% coverage, ahead",
-    "cov90_province_now": "Province 90% coverage, nowcast",
-    "cov90_province_ahead": "Province 90% coverage, ahead",
-    "prior_wild": "Prior draws past 10x the peak",
-}
-"""Column headers of the Model building tables, without the sim_ or real_."""
-
-
 def _evidence_link(evidence: object) -> str:
     """Render a log row's evidence as a link."""
     if not isinstance(evidence, str) or not evidence:
@@ -1193,35 +1119,6 @@ def _development_log(path: Path) -> str:
     log["evidence"] = log["evidence"].map(_evidence_link)
     log.columns = [c.capitalize() for c in log.columns]
     return log.to_markdown(index=False) + "\n"
-
-
-def _ladder_label(column: str) -> str:
-    """Return the header of a ladder column."""
-    key = column.removeprefix("sim_").removeprefix("real_")
-    return _LADDER_LABELS.get(key, column)
-
-
-def _ladder_page(path: Path) -> str:
-    """Return the Model building tables from the ladder results."""
-    ladder = pd.read_csv(path)
-    if "step" in ladder:
-        ladder = ladder.sort_values("step")
-    parts = []
-    for title, lead, columns in _LADDER_SECTIONS:
-        cols = [c for c in columns if c in ladder]
-        if not cols:
-            continue
-        if "rung" not in cols:
-            cols = ["rung", *cols]
-        metrics = [c for c in cols if c not in ("step", "rung")]
-        shown = ladder.dropna(subset=metrics, how="all")[cols].round(3)
-        # tabulate blanks None but prints NaN, so cells go to objects first.
-        shown = shown.astype(object).where(shown.notna(), None)
-        table = shown.rename(columns=_ladder_label).to_markdown(
-            index=False, missingval=""
-        )
-        parts.append(f"## {title}\n\n{lead}\n\n{table}\n")
-    return "\n".join(parts)
 
 
 def _lopo_section(path: Path) -> str:
@@ -1926,7 +1823,6 @@ def _backtest_page(
         else "",
     )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
-    _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
     _write(
         gen / "development-log.md",
         _development_log(res / "development-log.csv"),
