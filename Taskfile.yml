@@ -69,6 +69,7 @@ tasks:
       - uv run ruff check packages tests workflow scripts
       - uv run ruff format --check packages tests workflow scripts
       - uv run mypy packages/*/src
+      - uv run lint-imports --no-logo
 
 
   format:

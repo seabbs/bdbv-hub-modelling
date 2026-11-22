@@ -47,6 +47,10 @@ jobs:
           uv run ruff check packages tests workflow scripts
           uv run ruff format --check packages tests workflow scripts
           uv run mypy packages/*/src
+      # The packages import one way (pyproject.toml's import-linter
+      # contract).
+      - name: Import contract
+        run: uv run lint-imports --no-logo
 
   # Snakemake style and lint of the workflow and the paper's workflow.
   workflow-lint:
