@@ -127,11 +127,14 @@ jobs:
             primarycensored@1.6.0
             any::cmdstanr
             any::jsonlite
+            any::pkgload
+            any::yaml
+            any::data.table
           dependencies: '"hard"'
       - name: Install CmdStan
         run: Rscript -e 'cmdstanr::install_cmdstan(cores = 2)'
       - name: Live R checks
-        run: uv run pytest -q tests/model/test_reporting_delays.py
+        run: uv run pytest -q tests/model/test_latent_components.py tests/model/test_latent_process.py tests/model/test_reporting_delays.py
 
   # The simulator engine's testthat suite (packages/nowcastfoundation/r).
   # Its hard dependencies only: the tests that run epinowcast skip without

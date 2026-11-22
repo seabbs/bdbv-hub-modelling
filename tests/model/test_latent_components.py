@@ -1,16 +1,13 @@
 """The simulator's renewal-step components against the R engine.
 
-The fixtures come from `scripts/latent_fixtures.R`, which runs the R
-functions in `packages/nowcastfoundation/r/R/infections.R` and
-`observation.R`.
+The cases come live from `r/latent_cases.R`, which runs the R functions
+in `packages/nowcastfoundation/r/R/infections.R` and `observation.R`.
 """
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 import jax
@@ -36,11 +33,7 @@ from nowcastrenewal.latent.strata import (
     strata_renewal,
 )
 
-FIXTURES = Path(__file__).parent / "fixtures" / "latent"
-
-
-def load(name: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / f"{name}.json").read_text())
+from .latent_r import load
 
 
 def matrix(x: Any) -> np.ndarray:
