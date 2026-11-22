@@ -57,6 +57,9 @@ DEFAULTS = (
     ("CORES", ""),
     ("MEM_MB", ""),
     ("SIM_SLOTS", ""),
+    # The checkout whose Snakemake runs this machine's workflow, for the
+    # dashboard's pipeline view (its .snakemake/log; empty: this one).
+    ("WORKFLOW_DIR", ""),
     ("DEVICE", "auto"),
     # Series above which a training step recomputes activations in
     # backward (empty: the trainer's memory budget sets it); lower on a

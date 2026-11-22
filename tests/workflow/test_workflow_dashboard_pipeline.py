@@ -108,6 +108,7 @@ def test_a_stopped_run_waiting_on_a_failed_batch_is_at_simulate(tmp_path):
     assert "157" not in by["fetch"].progress
     assert "39 of 40" in by["fetch"].progress
     assert "1 running" in by["evaluate"].timing
+    assert "evaluate_checkpoint n=400" in by["evaluate"].progress
 
 
 def test_a_training_run_is_at_train_with_its_step(tmp_path):
