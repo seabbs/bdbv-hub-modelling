@@ -322,3 +322,13 @@ disallow_subclassing_any = false
 # The series biases subclass torch's untyped `nn.Module` (torch is optional).
 module = ["nowcastfoundation.series_bias"]
 disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+# The fine-tuning trainer is not typed yet; mypy skips it.
+module = [
+  "nowcastfoundation.finetune.chronos",
+  "nowcastfoundation.finetune.evaluate",
+  "nowcastfoundation.finetune.stream",
+  "nowcastfoundation.finetune.verify",
+]
+ignore_errors = true

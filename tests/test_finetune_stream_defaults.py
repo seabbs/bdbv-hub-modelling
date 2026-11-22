@@ -1,14 +1,12 @@
 """The trainer's command-line rates are the workflow's and the SI's."""
 
-import sys
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
 
-import finetune_stream as fs  # noqa: E402
+from nowcastfoundation.finetune import stream as fs  # noqa: E402
 
 
 def test_the_cli_rates_match_the_workflow_config():
@@ -63,7 +61,7 @@ def test_the_checkpoint_threshold_is_a_machine_setting_outside_the_hash():
     # Recomputing activations in backward changes memory, not the steps,
     # so a machine with less GPU memory may checkpoint more without a new
     # hash.
-    import finetune_verify
+    from nowcastfoundation.finetune import verify as finetune_verify
 
     argv = ["sims", "out", "--held-out-seeds", "1", "2"]
     args = fs.build_parser().parse_args([*argv, "--checkpoint-above", "0"])

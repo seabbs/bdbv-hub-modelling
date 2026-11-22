@@ -116,8 +116,7 @@ def _trainer_args(tmp_path, finetune=None, machine=""):
 
 def test_the_trainer_gets_the_agreed_design(tmp_path):
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
     assert args.until == 100
@@ -149,8 +148,7 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
 
 def test_the_loss_horizon_comes_from_the_config(tmp_path):
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(
         _trainer_args(tmp_path, {"loss_horizon_days": None})
@@ -164,8 +162,7 @@ def test_the_loss_horizon_comes_from_the_config(tmp_path):
 
 def test_quiet_cut_offs_come_from_the_config(tmp_path):
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(
         _trainer_args(tmp_path, {"quiet_min_cases": 10})
@@ -174,8 +171,7 @@ def test_quiet_cut_offs_come_from_the_config(tmp_path):
 
 
 def test_the_grid_s_sources_are_the_block_design():
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_chronos as ft
+    from nowcastfoundation.finetune import chronos as ft
 
     sources = CONFIG["grid_rounds"]["sources"]
     assert sources == list(ft.BLOCK_DESIGN["source_shares"])
@@ -195,8 +191,7 @@ def test_development_scores_no_bdbv_blocks(tmp_path):
 
 def test_a_machine_sets_the_checkpoint_threshold(tmp_path):
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
     config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
