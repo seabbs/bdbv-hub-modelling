@@ -163,10 +163,9 @@ def code_paths(bias: bool) -> dict[str, str]:
     The trainer's own file is named `finetune_chronos.TRAINER`, and the
     `foundation.<function>` entries are read from `foundation`.
     """
-    root = Path(__file__).resolve().parents[1]
     paths = {
         **ft.CODE,
-        ft.TRAINER: Path(__file__).resolve().relative_to(root).as_posix(),
+        ft.TRAINER: Path(__file__).resolve().relative_to(ft.ROOT).as_posix(),
         "foundation": ft.FOUNDATION_PATH,
     }
     if bias:
@@ -1398,10 +1397,10 @@ def load_state(where: Path, model, optimiser) -> dict | None:
 
 
 def code_commit() -> str:
-    """Return the commit of the repository holding this script."""
+    """Return the commit of the repository holding the trainer."""
     return subprocess.run(
         ["git", "rev-parse", "HEAD"],
-        cwd=Path(__file__).parent,
+        cwd=ft.ROOT,
         capture_output=True,
         text=True,
         check=True,
@@ -1553,8 +1552,13 @@ def check_cadence(eval_every: int, by_source_every: int) -> None:
         )
 
 
-def main() -> None:
-    """Train on the chunks as they are simulated."""
+def main(root: Path | None = None) -> None:
+    """Train on the chunks as they are simulated.
+
+    `root` is the checkout the trainer is launched from
+    (`scripts/finetune_stream.py`'s), which must hold the imported
+    package (`check_package`); None for the package's own.
+    """
     global CHUNK, DRAWS_PER_PASS, SUBSET_SEED
     import torch
     from chronos import Chronos2Pipeline
@@ -1567,7 +1571,7 @@ def main() -> None:
     ft.use_grid(args.grid_file)
     ft.SOURCES = tuple(args.sources or ft.SOURCE_SHARES)
     ft.check_sources(ft.SOURCES)
-    ft.check_package(Path(__file__).parents[1])
+    ft.check_package(ft.ROOT if root is None else root)
     ft.UNIVARIATE_SHARE = args.univariate_share
     ft.LOSS_HORIZON_DAYS = args.loss_horizon_days
     ft.QUIET_MIN_CASES = args.quiet_min_cases

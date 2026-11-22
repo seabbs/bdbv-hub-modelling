@@ -250,8 +250,8 @@ def code_files(simulator: tuple[str, ...]) -> dict[str, str]:
     """Return `CODE` for a simulator's files, each named by its path."""
     files = (
         *simulator,
-        "scripts/finetune_chronos.py",
-        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/chronos.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
     )
     return {path: path for path in files}
 
@@ -265,7 +265,7 @@ CODE = code_files(SIMULATOR)
 file's name in `code_sha256`, then its path. The paths also go into the
 settings outside the hash (`code_paths`), for `finetune_verify`."""
 
-TRAINER = "scripts/finetune_stream.py"
+TRAINER = "packages/nowcastfoundation/src/nowcastfoundation/finetune/stream.py"
 """The trainer's name in `code_sha256` (its path is its own file)."""
 
 FOUNDATION_PATH = (

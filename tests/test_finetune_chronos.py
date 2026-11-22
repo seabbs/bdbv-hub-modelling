@@ -1009,7 +1009,7 @@ def test_a_crash_while_saving_state_keeps_the_last_state(tmp_path, monkeypatch):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["state"]
 
 
-def test_the_code_commit_is_the_scripts_repository(tmp_path, monkeypatch):
+def test_the_code_commit_is_the_trainers_repository(tmp_path, monkeypatch):
     from nowcastfoundation.finetune.stream import code_commit
 
     here = subprocess.run(

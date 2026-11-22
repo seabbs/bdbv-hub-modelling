@@ -8,7 +8,9 @@ The trainer is `nowcastfoundation.finetune.stream`.
         --publish
 """
 
+from pathlib import Path
+
 from nowcastfoundation.finetune.stream import main
 
 if __name__ == "__main__":
-    main()
+    main(Path(__file__).resolve().parents[1])

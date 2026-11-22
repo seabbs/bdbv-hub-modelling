@@ -116,13 +116,21 @@ def test_the_code_names_are_the_files_paths():
 
     assert set(ft.CODE) == {
         *ft.SIMULATOR,
-        "scripts/finetune_chronos.py",
-        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/chronos.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
     }
     assert all(name == path for name, path in ft.CODE.items())
     root = Path(__file__).parents[1]
-    for path in (*ft.CODE.values(), ft.FOUNDATION_PATH):
+    for path in (*ft.CODE.values(), ft.FOUNDATION_PATH, ft.TRAINER):
         assert (root / path).exists(), path
+
+
+def test_the_trainer_is_hashed_under_its_own_path():
+    from nowcastfoundation.finetune import chronos as ft
+    from nowcastfoundation.finetune import stream as fs
+
+    assert fs.code_paths(bias=False)[ft.TRAINER] == ft.TRAINER
+    assert Path(fs.__file__).resolve() == (ft.ROOT / ft.TRAINER).resolve()
 
 
 def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
@@ -212,8 +220,8 @@ def test_the_simulator_hashes_its_grid_and_python():
     }
     names = set(ft.code_files(ft.simulator_files("config/finetune/grid.yaml")))
     trainer = {
-        "scripts/finetune_chronos.py",
-        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/chronos.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
     }
     assert names - trainer == first
 
