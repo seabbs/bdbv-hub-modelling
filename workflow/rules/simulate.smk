@@ -390,6 +390,109 @@ rule grid_figures:
         """
 
 
+# The simulation report (workflow/scripts/sim_report.py): per round, and
+# over every round in `rounds`, the science of the simulated outbreaks
+# against the German development half and the paper's reference values.
+# Target `sim_reports`. The German triangle is the hub's, at
+# config/germany.toml's commit; no BDBV data.
+GERMANY_SPLIT = tomllib.loads(Path("config/germany.toml").read_text())[
+    "nowcast"
+]["split_date"]
+REFERENCE_VALUES = "paper/data/reference-values.csv"
+
+
+rule germany_triangle:
+    output:
+        f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv",
+    log:
+        f"{LOCAL['ROOT']}/germany/fetch.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        out=lambda wc, output: Path(output[0]).parent,
+    shell:
+        "uv run python -m bdbvhub.cli germany-fetch --out {params.out} "
+        "> {log} 2>&1"
+
+
+rule germany_dev_stats:
+    # The development half's series statistics: national, and medians
+    # over states and over age groups.
+    input:
+        rules.germany_triangle.output,
+    output:
+        f"{ROUNDS_DIR}/report/germany-dev.csv",
+    log:
+        f"{ROUNDS_DIR}/report/germany-dev.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        split=GERMANY_SPLIT,
+    shell:
+        "uv run python workflow/scripts/sim_report.py germany {input} "
+        "{params.split} {output} > {log} 2>&1"
+
+
+rule sim_report:
+    input:
+        summaries=rules.round_summaries.output,
+        germany=rules.germany_dev_stats.output,
+        refs=REFERENCE_VALUES,
+    output:
+        f"{ROUNDS_DIR}/r{{round}}/report/sim-report.html",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/report/run.log",
+    conda:
+        TOOLS_ENV
+    params:
+        source=lambda wc, input: (
+            f"r{wc.round}={ROUNDS_DIR}/r{wc.round}/sims:{input.summaries}"
+        ),
+    shell:
+        "uv run python workflow/scripts/sim_report.py render {output} "
+        "'Simulated outbreaks, round {wildcards.round}' {input.refs} "
+        "{input.germany} {params.source} > {log} 2>&1"
+
+
+rule sim_report_run:
+    # Every round in `rounds` together.
+    input:
+        summaries=expand(
+            f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
+            round=config["rounds"],
+        ),
+        germany=rules.germany_dev_stats.output,
+        refs=REFERENCE_VALUES,
+    output:
+        f"{ROUNDS_DIR}/report/sim-report.html",
+    log:
+        f"{ROUNDS_DIR}/report/run.log",
+    conda:
+        TOOLS_ENV
+    params:
+        title="Simulated outbreaks, rounds "
+        + ", ".join(str(r) for r in config["rounds"]),
+        sources=lambda wc, input: " ".join(
+            f"r{r}={ROUNDS_DIR}/r{r}/sims:{path}"
+            for r, path in zip(config["rounds"], input.summaries)
+        ),
+    shell:
+        "uv run python workflow/scripts/sim_report.py render {output} "
+        "'{params.title}' {input.refs} {input.germany} {params.sources} "
+        "> {log} 2>&1"
+
+
+rule sim_reports:
+    input:
+        expand(
+            f"{ROUNDS_DIR}/r{{round}}/report/sim-report.html",
+            round=config["rounds"],
+        ),
+        rules.sim_report_run.output,
+
+
 rule release:
     input:
         # Never an earlier grid's round: its release holds that grid's
