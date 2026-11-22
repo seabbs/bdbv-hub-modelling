@@ -111,7 +111,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 Group attention has learned biases for a series attending to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai's any-variate attention [@Woo2024], while every place's series sit in one group.
 The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation (same place: a place's count series and its lag series).
 Beside it, one place's daily rows carry a weekly total row, missing until the last day of each week.
-(C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained.
+(C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final simulated counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained.
 (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.](figures/fig1-pipeline.svg){#fig-pipeline}
 
 ### Synthetic data generation
@@ -159,6 +159,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ::: {.callout-note title="Plan"}
 - We compare with the hub's models, relative to the hub's baseline, and evaluate as the hub did.
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, against the data as reported 40 days later [@Wolffram2023].
+- Our models see only reports made within 40 days of each reference date, so they forecast the count the truth holds.
 - We score the hub's target, 7-day sums, ending on each day from the nowcast date to 28 days before it.
 - We score only the hub's targets, and the SI adds our models' forecasts up to 4 weeks after the nowcast date.
 - Our models forecast weeks ending on Saturdays, so each nowcast date gives seven sets of forecasts, one for each weekday offset $k$ from 0 to 6.
