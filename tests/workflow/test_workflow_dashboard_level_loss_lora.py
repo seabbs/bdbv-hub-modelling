@@ -1,11 +1,11 @@
-"""What fine-tuning learns: held-out loss by source and level, LoRA size."""
+"""Held-out loss by level and LoRA size."""
 
 import json
 import math
 import struct
 
 import pytest
-from flowlib.dashboard import learning, runs
+from flowlib.dashboard import level_loss_lora, runs
 
 HISTORY = [
     {
@@ -29,15 +29,15 @@ def test_loss_by_level_is_relative_to_the_start_at_each_checkpoint():
         ("n250", {"steps": 1500, "held_out_loss_by_level": {"leaf": 0.1}}),
         ("n500", {"steps": 3000, "held_out_loss_by_level": {"leaf": 0.05}}),
     ]
-    assert learning.by_level(HISTORY, cks) == {
+    assert level_loss_lora.by_level(HISTORY, cks) == {
         "leaf": [(0, 1.0), (250, 0.5), (500, 0.25)],
         "national": [(0, 1.0)],
     }
 
 
 def test_no_start_gives_no_curves():
-    assert learning.by_level([{"step": 10, "loss": 0.5}], []) == {}
-    assert learning.by_level([], []) == {}
+    assert level_loss_lora.by_level([{"step": 10, "loss": 0.5}], []) == {}
+    assert level_loss_lora.by_level([], []) == {}
 
 
 def _safetensors(path, tensors):
@@ -85,7 +85,7 @@ def test_lora_update_size_by_layer(tmp_path):
     )
     (ckpt / "adapter_config.json").write_text('{"r": 8, "lora_alpha": 16}')
     # Scaled by alpha / r = 2; a layer's modules add in quadrature.
-    got = learning.lora_size(ckpt)
+    got = level_loss_lora.lora_size(ckpt)
     assert got[0] == (0, pytest.approx(2 * math.sqrt(5)))
     assert got[1] == (1, 0.0)
 
@@ -104,7 +104,7 @@ def test_lora_size_of_a_run_by_checkpoint(tmp_path):
         )
         (d / "settings.json").write_text('{"steps": 10}')
     run = runs.Run("r5", "r5", folder=folder)
-    assert learning.run_lora(run) == {
+    assert level_loss_lora.run_lora(run) == {
         "n250": [(0, 1.0)],
         "n500": [(0, 1.0)],
     }
@@ -115,7 +115,7 @@ def test_section_has_three_panels(tmp_path):
     (folder / "train").mkdir(parents=True)
     (folder / "train" / "history.json").write_text(json.dumps(HISTORY))
     run = runs.Run("r5", "r5", folder=folder, live=True)
-    out = learning.section([run])
+    out = level_loss_lora.section([run])
     assert out.count("<div class=card>") == 3
     assert "by encoder layer" in out
 
@@ -145,7 +145,7 @@ def test_lora_update_size_by_kind(tmp_path):
             json.dumps({"steps": 10, "n_outbreaks": int(name[1:])})
         )
     run = runs.Run("r5", "r5", folder=folder)
-    assert learning.run_kinds(run) == {
+    assert level_loss_lora.run_kinds(run) == {
         "time attention": [(250, 1.0), (500, 2.0)],
         "group attention": [(250, 3.0), (500, 3.0)],
         "output layer": [(250, 4.0), (500, 4.0)],
@@ -157,19 +157,21 @@ def test_each_panel_has_its_explainer(tmp_path):
     (folder / "train").mkdir(parents=True)
     (folder / "train" / "history.json").write_text(json.dumps(HISTORY))
     run = runs.Run("r5", "r5", folder=folder, live=True)
-    out = learning.section([run], tip=lambda key: f"<i data-key={key}></i>")
-    for key in learning.EXPLAINERS:
+    out = level_loss_lora.section(
+        [run], tip=lambda key: f"<i data-key={key}></i>"
+    )
+    for key in level_loss_lora.EXPLAINERS:
         assert f"<i data-key={key}></i>" in out
 
 
 def test_every_explainer_has_a_note():
     from flowlib.dashboard import page
 
-    for key in learning.EXPLAINERS:
+    for key in level_loss_lora.EXPLAINERS:
         assert page.EXPLAIN.get(key)
 
 
-def test_every_run_is_in_the_learning_panels(tmp_path):
+def test_every_run_is_in_the_level_and_lora_panels(tmp_path):
     folders = {}
     for key, v in (("r5", 0.5), ("r6", 0.8)):
         folder = tmp_path / key
@@ -187,7 +189,7 @@ def test_every_run_is_in_the_learning_panels(tmp_path):
         )
         folders[key] = folder
     rs = runs.load_runs([], f"r5={folders['r5']};r6={folders['r6']},live", [])
-    out = learning.section(rs)
+    out = level_loss_lora.section(rs)
     assert "leaf (r5)" in out
     assert "leaf (r6)" in out
     assert "simulations trained" in out

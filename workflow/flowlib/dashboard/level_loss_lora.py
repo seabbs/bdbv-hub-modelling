@@ -1,4 +1,4 @@
-"""What fine-tuning learns, from what the trainer writes.
+"""Held-out loss by level and LoRA size, from what the trainer writes.
 
 Held-out loss by level at each checkpoint (`settings.json`), relative
 to its loss at the start (`history.json`); and the size of the LoRA
@@ -32,7 +32,7 @@ BLOCK = re.compile(r"encoder\.block\.(\d+)\.layer\.(\d+)\.")
 KINDS = {"0": "time attention", "1": "group attention"}
 """Encoder sublayers by index (`Chronos2EncoderBlock.layer`)."""
 
-EXPLAINERS = ("learnlevel", "learnlayer", "learnkind")
+EXPLAINERS = ("lossbylevel", "lorabylayer", "lorabykind")
 """The explainer keys (`page/explain.json`) of the three panels, in order."""
 
 
@@ -262,7 +262,7 @@ def _checkpoints(run: Run) -> list[tuple[str, Mapping[str, Any]]]:
 def section(
     run_list: Sequence[Run], tip: Callable[[str], str] = lambda _: ""
 ) -> str:
-    """Return the three panels of what fine-tuning learns, for every run.
+    """Return the panels of held-out loss by level and LoRA size.
 
     Each run's own history and checkpoints only, against simulations
     trained. `tip` gives the info marker of an explainer key
@@ -281,7 +281,7 @@ def section(
         levels,
         hlines=[1.0],
         xlabel="simulations trained",
-        info=tip("learnlevel"),
+        info=tip("lossbylevel"),
         note="All held-out blocks, each level scored with the others masked.",
         legend=legend,
     )
@@ -297,7 +297,7 @@ def section(
         "checkpoint",
         layers,
         xlabel="encoder layer",
-        info=tip("learnlayer"),
+        info=tip("lorabylayer"),
         note="Frobenius norm of the scaled B·A, a layer's attention "
         "modules in quadrature.",
     )
@@ -306,7 +306,7 @@ def section(
         "Size of the LoRA update by kind of module",
         kinds,
         xlabel="simulations trained",
-        info=tip("learnkind"),
+        info=tip("lorabykind"),
         note="Time attention, group attention and the output layer, "
         "each in quadrature over its modules.",
         legend=legend,
