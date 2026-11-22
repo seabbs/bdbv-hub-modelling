@@ -68,3 +68,15 @@ def test_the_choice_is_reproducible_and_checked():
         choose_window(observed, q, LEVELS, observed, candidates=(), n_eval=3)
     with pytest.raises(ValueError, match="n_eval"):
         choose_window(observed, q, LEVELS, observed, candidates=(2,), n_eval=12)
+
+
+def test_the_energy_score_estimates_the_scoring_package_s():
+    # The same score as nowcasteval's fair estimator (scoringrules), from
+    # draw pairs rather than all pairs: equal on average, noisier.
+    from nowcasteval.scoring import energy_sample
+
+    rng = np.random.default_rng(5)
+    observed = rng.standard_normal(6)
+    draws = rng.standard_normal((4000, 6)) + 0.3
+    fair = energy_sample(observed, draws)
+    assert energy_score(draws, observed) == pytest.approx(fair, rel=0.02)

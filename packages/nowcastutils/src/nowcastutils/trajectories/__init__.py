@@ -333,7 +333,9 @@ def energy_score(draws: np.ndarray, observed: np.ndarray) -> float:
 
     $\mathrm{ES} = E\|X - y\| - \tfrac12 E\|X - X'\|$ over the cells
     where `observed` is finite, the second term from each draw and the
-    next (Gneiting et al. 2008), so the cost is linear in the draws.
+    next (Gneiting et al. 2008), so the cost is linear in the draws. It
+    estimates the same score as `nowcasteval.scoring.energy_sample`'s fair
+    estimator, without its cost quadratic in the draws, and is noisier.
 
     Parameters
     ----------
