@@ -26,7 +26,16 @@ from typing import Any
 
 from nowcasteval import labels
 
-from . import bias, learning, logs, nowcasts, paperstyle, scores, svg, training
+from . import (
+    bias,
+    level_loss_lora,
+    logs,
+    nowcasts,
+    paperstyle,
+    scores,
+    svg,
+    training,
+)
 from .mirror import Source
 from .runs import Reference, Run, split_label
 
@@ -1035,9 +1044,9 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (
-            "learning",
-            "What fine-tuning learns",
-            learning.section(ctx.runs, tip),
+            "levels",
+            "Held-out loss by level and LoRA size",
+            level_loss_lora.section(ctx.runs, tip),
             True,
         ),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
@@ -1053,7 +1062,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
 NAV = {
     "status": "Status",
     "mailbox": "Activity",
-    "learning": "Learning",
+    "levels": "By level",
 }
 """Short names in the top bar, where they differ from the section titles."""
 
