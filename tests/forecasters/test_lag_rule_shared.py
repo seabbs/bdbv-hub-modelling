@@ -1,7 +1,5 @@
 """One lag rule for training and prediction (forecaster.lag_count)."""
 
-import importlib.util
-import sys
 from pathlib import Path
 
 import pandas as pd
@@ -54,15 +52,11 @@ def test_training_blocks_take_their_lags_from_the_shared_rule(monkeypatch):
 
 
 def test_the_trainer_draws_no_lag_count() -> None:
-    spec = importlib.util.spec_from_file_location(
-        "finetune_chronos", ROOT / "scripts" / "finetune_chronos.py"
-    )
-    sys.path.insert(0, str(ROOT / "scripts"))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
+    from nowcastfoundation.finetune import chronos as mod
+
     assert not hasattr(mod, "MAX_LAGS")
     assert not hasattr(mod, "LAG_CAP")
-    source = (ROOT / "scripts" / "finetune_chronos.py").read_text()
+    source = Path(mod.__file__).read_text()
     assert "rng.choice(MAX_LAGS" not in source
 
 

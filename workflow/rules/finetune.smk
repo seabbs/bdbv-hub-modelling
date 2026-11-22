@@ -71,8 +71,7 @@ rule seed_list:
         f"{RUN}/logs/seed-list.log",
     localrule: True
     run:
-        seeds = training_seeds(wildcards.run)
-        Path(output[0]).write_text("".join(f"{s}\n" for s in seeds))
+        manifest.write_seeds(training_seeds(wildcards.run), output[0])
 
 
 rule train_segment:

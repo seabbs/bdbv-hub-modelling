@@ -104,6 +104,7 @@ def _ran(run: object) -> set[str]:
     return {Path(f).relative_to(ROOT).as_posix() for f in seen}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("model", ["randomwalk", "randomwalknowcast"])
 def test_model_code_covers_what_its_forecasts_run(
     model: str,

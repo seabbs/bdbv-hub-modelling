@@ -9,6 +9,8 @@ that posted it.
 from __future__ import annotations
 
 import datetime as dt
+import shutil
+import subprocess
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -37,3 +39,34 @@ def check_branch(current: str, allowed: str) -> None:
         raise SystemExit(
             f"land runs on the evidence branch {allowed}, not {current}"
         )
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args], check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def land(
+    tables: tuple[Path | str, Path | str],
+    evidence: str,
+    checkpoints: str,
+    branch: str,
+) -> str:
+    """Commit the score tables on the evidence branch, push, return the head.
+
+    Raises unless the checkout is on `branch` and the commit reached
+    origin.
+    """
+    check_branch(_git("rev-parse", "--abbrev-ref", "HEAD"), branch)
+    shutil.copy(tables[0], evidence)
+    shutil.copy(tables[1], checkpoints)
+    _git("add", evidence, checkpoints)
+    if _git("diff", "--cached", "--name-only"):
+        _git("commit", "-q", "-m", "evidence: checkpoint scores")
+    _git("push", "-q", "origin", branch)
+    _git("fetch", "-q", "origin", branch)
+    head = _git("rev-parse", "HEAD")
+    if head != _git("rev-parse", f"origin/{branch}"):
+        raise SystemExit(f"{head} is not on origin/{branch}")
+    return head

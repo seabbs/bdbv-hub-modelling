@@ -210,16 +210,13 @@ def test_inference_gives_a_bias_model_its_rows_by_name(monkeypatch, tmp_path):
 
 def test_the_bias_survives_gradient_checkpointing(monkeypatch):
     # The trainer recomputes large batches' encoder blocks in backward
-    # (finetune_stream.checkpoint_large_batches); with the rows still
+    # (finetune.stream.checkpoint_large_batches); with the rows still
     # assigned, the recompute adds the same bias.
-    import sys
-    from pathlib import Path
 
     from chronos.chronos2.model import Chronos2EncoderBlock
     from chronos_toy import batch_of
 
-    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     def grads(checkpointed: bool):
         model = tiny_model()

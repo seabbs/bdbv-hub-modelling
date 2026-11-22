@@ -143,7 +143,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 `task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
 `task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
-The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Pipeline (simulate, fetch, cut, train, held-out evaluation and German scoring, with the current stage marked, each stage's progress and job timings from the newest Snakemake log in `WORKFLOW_DIR`, and the batches a stopped run waits on), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a notes file) and Tables. Every chart has an info marker (`page/explain.json`).
+The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a notes file) and Tables. Every chart has an info marker (`page/explain.json`).
 
 Settings:
 
@@ -201,18 +201,17 @@ Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add 
 
 ## Monitor
 
-`task nowcast-workflow:monitor` serves one page of what runs where: each machine's step, its running jobs (rule, wildcards, resources, start) and its recent ones.
-Each tick writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds while a step runs, and when it is skipped or ends (`workflow/flowlib/runstatus.py`, read from the run's own Snakemake log).
-With a rounds host (`REMOTE`) the file is copied to its `status/` folder, which the monitor reads, so one page shows every machine.
-A run that stops writing for two intervals, because it was killed or its machine went down, is shown as stale.
-The page is served on `MONITOR_HOST` and `MONITOR_PORT` and refreshes every `MONITOR_REFRESH` seconds, all from `config/local.env`.
-It is separate from the fine-tuning dashboard, of which several may run at once.
-Work run outside the workflow does not appear until it runs under the tick.
-
-We chose this over Panoptes.
-Snakemake 9 has no `--wms-monitor`; monitoring goes through logger plugins.
-The Panoptes logger plugin is not maintained by the Snakemake organisation, and Panoptes needs a server that every machine can reach.
-The status files need neither: the machines already reach the rounds host.
+`task nowcast-workflow:monitor` serves [Panoptes](https://github.com/panoptes-organization/panoptes), Snakemake's web monitor: every run's jobs, their state, what is running and what has failed, in one page.
+Every Snakemake run the tasks, ticks and paper scripts start reports to it through the logger plugin `snakemake-logger-plugin-panoptes` (`workflow/flowlib/monitor.py`), on by default.
+Runs report to `MONITOR_URL`; another machine's runs report to the serving machine's address, and an empty `MONITOR_URL` switches reporting off.
+The plugin drops events it cannot send, so a run goes on when no server is listening.
+The page is served on `MONITOR_HOST` and `MONITOR_PORT`, with its database in `<ROOT>/monitor/`, all from `config/local.env`.
+Panoptes has no DAG view, so the same server adds one at `/dag/` (`workflow/flowlib/monitor_server.py`, `workflow/flowlib/dag.py`).
+For each `MONITOR_DAG` target (`NAME=TARGET`) it draws the rule graph and the job DAG, each job pending, running, done or failed.
+A job Snakemake would not run is done; Panoptes gives the rest their state, so the colours follow the run on each visit.
+The graphs are built with `MONITOR_DAG_OPTIONS` every `MONITOR_DAG_EVERY` seconds, without a lock; `task nowcast-workflow:dag -- NAME=TARGET` builds one now.
+Each tick also writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds (`workflow/flowlib/runstatus.py`).
+The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), not jobs.
 
 ## CI
 

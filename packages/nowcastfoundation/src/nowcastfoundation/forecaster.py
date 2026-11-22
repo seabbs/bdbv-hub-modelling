@@ -205,7 +205,7 @@ class Checkpoint:
     Attributes
     ----------
     hash : str
-        Settings hash from `scripts/finetune_stream.py`. The release
+        Settings hash from `nowcastfoundation.finetune.stream`. The release
         is `tag`: `release_tag(hash)` for a simulation checkpoint, else
         `<prefix>-<hash>`.
     sha256 : tuple of (str, str)
@@ -1107,11 +1107,6 @@ def _daily_frame(
             "value": values.transpose(1, 0, 2).reshape(-1),
         }
     )[list(DAILY_COLUMNS)]
-
-
-def _at(rows: pd.DataFrame | None, vintage: str) -> pd.DataFrame | None:
-    """Return the rows of one release, or None."""
-    return None if rows is None else rows.loc[rows["vintage"] == vintage]
 
 
 def _rows(*tables: pd.DataFrame | None) -> pd.DataFrame | None:

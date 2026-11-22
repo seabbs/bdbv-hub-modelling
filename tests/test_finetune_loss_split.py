@@ -10,9 +10,9 @@ torch = pytest.importorskip("torch")
 pytest.importorskip("chronos")
 
 sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-import finetune_stream as fs  # noqa: E402
 from chronos_toy import LAG, N_PLACES, T, tiny_model, toy_block  # noqa: E402
+
+from nowcastfoundation.finetune import stream as fs  # noqa: E402
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ def test_the_nowcast_part_is_the_loss_on_the_steps_to_the_cut_off():
 
 
 def test_the_parts_written_after_the_hash_are_outside_it():
-    import finetune_verify
+    from nowcastfoundation.finetune import verify as finetune_verify
 
     for name in ("held_out_loss", "real_validation_loss"):
         parts = fs.loss_parts(name, {"nowcast": 0.1, "forecast": 0.2})

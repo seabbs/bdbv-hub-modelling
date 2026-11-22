@@ -63,6 +63,7 @@ def test_register_config_refuses_a_taken_name() -> None:
         register_config(randomwalk_config("main"))
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_fit_then_nowcast_from_the_fit(tmp_path: Path, plain: Path) -> None:
     fit = tmp_path / "fit"
@@ -125,6 +126,7 @@ def test_fit_fails_on_unknown_config_or_vintage(tmp_path: Path) -> None:
     assert main([*bad, "--out", out]) == 1
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_plot_submission_and_validate(tmp_path: Path) -> None:
     out = tmp_path / "sub"
@@ -293,6 +295,7 @@ def test_randomwalknowcast_has_its_own_hub_id(
     assert "language model" not in text
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_randomwalknowcast_config_runs_the_nowcast_model(
     tmp_path: Path, plain: Path

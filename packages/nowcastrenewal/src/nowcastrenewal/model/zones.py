@@ -253,62 +253,14 @@ class MeanAnchoredWalk(NonCentredRandomWalk):
     The walk's fitted part is shifted so its mean is the starting value.
     The data fix a walk's level, so with the start at the first knot the
     start and the steps trade off along a ridge that NUTS crosses only
-    with very long trajectories (renewal-speed's Laplace analysis of
-    `renewal` at 2026-11-01: condition number 1.9e7, about 4300
-    leapfrog steps). Anchoring at the mean removes that ridge.
+    with very long trajectories (in `renewal`, a posterior condition
+    number of 1.9e7 and about 4300 leapfrog steps). Anchoring at the mean
+    removes that ridge.
     """
 
-    def sample(
-        self,
-        n_timepoints: int,
-        initial_value: float | ArrayLike | None = None,
-        n_processes: int = 1,
-        name_prefix: str = "rw",
-        *,
-        first_day_dow: int | None = None,
-    ) -> Array:
-        """Sample trajectories, as `NonCentredRandomWalk.sample`."""
-        from .temporal import _damped_sum
-
-        n_past = (
-            n_timepoints
-            if self.n_fit is None
-            else min(self.n_fit, n_timepoints)
-        )
-        x0 = jnp.broadcast_to(
-            jnp.asarray(0.0 if initial_value is None else initial_value),
-            (n_processes,),
-        )
-        frozen = min(self.frozen, n_past - 1)
-        n_free = n_past - 1 - frozen
-        sd = self.innovation_sd_rv()
-        phi = (
-            1.0
-            if self.half_life_rv is None
-            else 0.5 ** (1.0 / self.half_life_rv())
-        )
-        z = numpyro.sample(
-            f"{name_prefix}_z",
-            dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
-        )
-        free = _damped_sum(phi, sd * z)
-        decay = phi ** jnp.arange(1, n_free + 1)[:, None]
-        past = jnp.vstack(
-            [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
-        )
-        past = past - past.mean(axis=0) + x0
-        n_future = n_timepoints - n_past
-        if n_future == 0:
-            return past
-        z_future = numpyro.sample(
-            f"{name_prefix}_z_future",
-            dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
-        )
-        if self.forecast_half_life is not None:
-            phi = 0.5 ** (1.0 / self.forecast_half_life)
-        decay = phi ** jnp.arange(1, n_future + 1)[:, None]
-        future = decay * past[-1] + _damped_sum(phi, sd * z_future)
-        return jnp.vstack([past, future])
+    def _anchor(self, past: Array, x0: Array) -> Array:
+        """Shift the fitted part so its mean is the start."""
+        return past - past.mean(axis=0) + x0
 
 
 def _zone_walk(

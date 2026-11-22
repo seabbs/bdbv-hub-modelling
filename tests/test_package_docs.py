@@ -45,6 +45,7 @@ def test_the_main_site_links_out_to_each_package_site(site: Path) -> None:
     assert f"](../{site.parent.name}/)" in index
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("site", SITES, ids=lambda s: s.parent.name)
 def test_package_site_examples_run(site: Path, tmp_path: Path) -> None:
     # Every page's blocks run in the nav's order and share their names, as

@@ -14,7 +14,7 @@ and `merged_history`, so a run evaluated either way reads the same.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -114,3 +114,23 @@ def start_loss(train: Path | str) -> float | None:
         if isinstance(s, dict) and s.get("held_out_loss_start") is not None:
             return float(s["held_out_loss_start"])
     return None
+
+
+def check_report(
+    where: Path | str, run: str, n: int, prefixes: Iterable[int]
+) -> tuple[str, str]:
+    """Return whether checkpoint n<n> beats zero-shot, as a report and a line.
+
+    On the held-out simulations only: BDBV is held out for the paper.
+    The line is an ALERT when it does not, naming the next checkpoint.
+    """
+    s = checkpoint_settings(where)
+    ok = s["held_out_loss"] < s["held_out_loss_start"]
+    text = (
+        f"{run} n{n} {'beats' if ok else 'does NOT beat'} zero-shot: "
+        f"held-out {s['held_out_loss']:.4f} vs "
+        f"{s['held_out_loss_start']:.4f}"
+    )
+    after = [p for p in sorted(prefixes) if p > n]
+    nxt = f", check before n{after[0]}" if after else ""
+    return text, text if ok else f"ALERT {text}; training goes on{nxt}"

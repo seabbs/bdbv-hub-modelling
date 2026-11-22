@@ -1,12 +1,8 @@
 """A segment of a continuous run stops at a prefix (`--until`)."""
 
-import sys
-from pathlib import Path
-
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-import finetune_stream as fs
+from nowcastfoundation.finetune import stream as fs
 
 
 def test_until_is_a_flag():

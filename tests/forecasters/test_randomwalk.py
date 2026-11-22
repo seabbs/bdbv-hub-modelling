@@ -163,6 +163,7 @@ def test_the_partial_week_adds_walk_draws_to_its_nowcast(
     assert mine.nunique() > 10
 
 
+@pytest.mark.slow
 def test_the_walk_goes_on_from_the_completed_cut_off_week(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
@@ -184,6 +185,7 @@ def test_the_walk_goes_on_from_the_completed_cut_off_week(
     assert np.corrcoef(week, after)[0, 1] > 0.9
 
 
+@pytest.mark.slow
 def test_the_missing_days_step_from_the_week_before(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
@@ -203,6 +205,7 @@ def test_the_missing_days_step_from_the_week_before(
     assert values[:, i, cw].mean() == pytest.approx(want, rel=0.03)
 
 
+@pytest.mark.slow
 def test_a_full_cut_off_week_is_the_walks_base(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:

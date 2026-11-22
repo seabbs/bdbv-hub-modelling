@@ -1,13 +1,10 @@
 """The learning rate falls linearly to zero over the run's simulations."""
 
 import itertools
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-import finetune_stream as fs
+from nowcastfoundation.finetune import stream as fs
 
 
 def schedule(chunks: list[tuple[int, int]], outbreaks: int, base: float):

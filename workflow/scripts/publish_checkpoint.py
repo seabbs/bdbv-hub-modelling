@@ -18,10 +18,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
 
-import finetune_stream as fs  # noqa: E402
-
+from nowcastfoundation.finetune import stream as fs  # noqa: E402
 from nowcastfoundation.forecaster import (  # noqa: E402
     checkpoint_spec,
     release_tag,

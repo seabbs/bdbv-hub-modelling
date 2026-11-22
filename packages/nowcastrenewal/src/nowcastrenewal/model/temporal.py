@@ -115,6 +115,13 @@ class NonCentredRandomWalk(TemporalProcess):
             + (", centred=True)" if self.centred else ")")
         )
 
+    def _anchor(self, past: Array, x0: Array) -> Array:
+        """Return the fitted part, `(n_past, n_processes)`, as drawn.
+
+        Subclasses shift it; the forecast continues from its last value.
+        """
+        return past
+
     def sample(
         self,
         n_timepoints: int,
@@ -188,6 +195,7 @@ class NonCentredRandomWalk(TemporalProcess):
         past = jnp.vstack(
             [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
         )
+        past = self._anchor(past, x0)
         n_future = n_timepoints - n_past
         if n_future == 0:
             return past

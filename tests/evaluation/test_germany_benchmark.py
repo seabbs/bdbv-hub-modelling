@@ -106,6 +106,7 @@ def test_the_later_half_of_the_dates_is_held_out() -> None:
     assert len(development) - len(held) in (0, 1)
 
 
+@pytest.mark.slow
 def test_our_quantiles_are_the_samples_quantiles_at_the_hub_s_levels(
     forecasts: pd.DataFrame,
 ) -> None:
@@ -451,6 +452,7 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     np.testing.assert_array_equal(scores["wis"], 0)
 
 
+@pytest.mark.slow
 def test_a_sample_model_s_german_quantiles_use_the_draws_given(
     triangle: pd.DataFrame,
 ) -> None:
