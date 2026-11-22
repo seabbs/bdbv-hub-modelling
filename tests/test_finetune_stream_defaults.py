@@ -71,3 +71,17 @@ def test_the_checkpoint_threshold_is_a_machine_setting_outside_the_hash():
     assert "checkpoint_above" in finetune_verify.NOT_HASHED
     assert "batch_size" not in finetune_verify.NOT_HASHED
     assert not hasattr(args, "memory_gb")
+
+
+def test_the_block_limit_is_the_workflow_config_s_and_hashed():
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    argv = ["sims", "out", "--held-out-seeds", "1", "2"]
+    args = fs.build_parser().parse_args(argv)
+    assert args.block_limit == config["finetune"]["block_limit"]
+    args = fs.build_parser().parse_args([*argv, "--block-limit", "900"])
+    assert args.block_limit == 900
+    # The limit shapes the blocks, so it is in the settings.
+    assert fs.view_settings(900) == {
+        "block_limit": 900,
+        "block_views": fs.ft.VIEW_RULE,
+    }

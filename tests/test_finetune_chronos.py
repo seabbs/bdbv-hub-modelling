@@ -1428,3 +1428,104 @@ def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
         # Every lag series and two steps of context fit in the history.
         assert 1 <= lag < 63
         assert b["nowcast"] == lag
+
+
+def test_views_of_a_system_over_capacity_cover_every_leaf():
+    from finetune_chronos import NATIONAL, system_views
+
+    nested = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
+    whole = (NATIONAL, "P1", "P2", "P3", "A1", "A2", *nested)
+    # Within capacity: the whole system.
+    assert system_views(whole, len(whole)) == [("whole", whole, [])]
+    # Over it: the top levels aggregated up, and each place with its ages
+    # and its own total.
+    assert system_views(whole, 5) == [
+        ("top", (NATIONAL, "P1", "P2", "P3"), ["strata"]),
+        ("subtree", ("P1", "P1-A1", "P1-A2"), []),
+        ("subtree", ("P2", "P2-A1", "P2-A2"), []),
+        ("subtree", ("P3", "P3-A1", "P3-A2"), []),
+    ]
+    # A subtree over capacity is its total with as many leaves as fit.
+    assert system_views(whole, 2)[1:] == [
+        ("subtree", (f"P{p}", f"P{p}-A{a}"), [])
+        for p in range(1, 4)
+        for a in range(1, 3)
+    ]
+    # The top collapses further until it fits.
+    assert system_views(whole, 2)[0] == (
+        "top",
+        (NATIONAL,),
+        ["strata", "places"],
+    )
+    # Room for one place: the country, and each leaf alone.
+    assert system_views(whole, 1) == [
+        ("top", (NATIONAL,), ["strata", "places"]),
+        *[("subtree", (p,), []) for p in nested],
+    ]
+    # Flat places: the country, and its places in groups with it.
+    flat = (NATIONAL, "P01", "P02", "P03")
+    assert system_views(flat, 3) == [
+        ("top", (NATIONAL,), ["places"]),
+        ("subtree", (NATIONAL, "P01", "P02"), []),
+        ("subtree", (NATIONAL, "P03"), []),
+    ]
+
+
+def test_a_system_over_capacity_is_cut_into_views_with_exact_totals(
+    monkeypatch,
+):
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    ft.use_grid()
+    try:
+        monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.0)
+        monkeypatch.setitem(
+            ft.PARENTS,
+            "shares",
+            {"exact": 1.0, "unallocated": 0.0, "late_parent": 0.0},
+        )
+        places = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
+        counts = _counts_of(places)
+        whole = (NATIONAL, "P1", "P2", "P3", "A1", "A2", *places)
+        monkeypatch.setattr(ft, "BLOCK_LIMIT", None)
+        full = outbreak_blocks(counts, places, np.random.default_rng(0), 3)
+        assert full
+        assert all(b["places"] == whole for b in full)
+        assert all(b["view"] == {"kind": "whole"} for b in full)
+        series = [b["context"].shape[0] for b in full]
+        # Room for the country and its places, not for the whole system.
+        limit = -(-max(series) * 5 // len(whole))
+        assert min(series) > limit
+        monkeypatch.setattr(ft, "BLOCK_LIMIT", limit)
+        cut = outbreak_blocks(counts, places, np.random.default_rng(0), 3)
+        assert len(cut) == 4 * len(full)
+        for k, before in enumerate(full):
+            views = cut[4 * k : 4 * k + 4]
+            assert [v["view"]["kind"] for v in views] == [
+                "top",
+                *["subtree"] * 3,
+            ]
+            # Every leaf is in a block.
+            assert {p for v in views for p in v["places"] if "-" in p} == set(
+                places
+            )
+            for after in views:
+                assert after["context"].shape[0] <= limit
+                assert after["cut"] == before["cut"]
+                assert after["view"]["series_before"] == series[k]
+                assert (
+                    after["view"]["series_after"] == after["context"].shape[0]
+                )
+                assert after["view"]["places_before"] == len(whole)
+                assert after["view"]["places_after"] == len(after["places"])
+                # Totals stay exact: each place's series is the whole
+                # system's.
+                for i, place in enumerate(after["places"]):
+                    row = after["target_places"].index(i)
+                    was = before["target_places"].index(whole.index(place))
+                    np.testing.assert_array_equal(
+                        after["context"][row], before["context"][was]
+                    )
+            assert views[0]["view"]["collapsed"] == ["strata"]
+    finally:
+        ft.PARENTS = None
