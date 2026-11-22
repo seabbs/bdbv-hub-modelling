@@ -461,22 +461,6 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
     return True
 
 
-EXCLUDE_FILE: Path | None = None
-"""Simulations the sim QC excluded (`--exclude`), one a line or a CSV
-with a `simulation` column. It is read again before each new batch, as a
-continuous run's rounds bring their exclusions with them."""
-
-
-def excluded() -> set[str]:
-    """Return the simulations in `EXCLUDE_FILE`, if any."""
-    if EXCLUDE_FILE is None or not EXCLUDE_FILE.exists():
-        return set()
-    lines = [x.strip() for x in EXCLUDE_FILE.read_text().splitlines()]
-    if lines and lines[0].startswith("simulation"):
-        lines = [x.split(",")[0] for x in lines[1:]]
-    return {x for x in lines if x}
-
-
 def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
     """Return a finished batch's outbreaks in order, or None if not done.
 
@@ -486,8 +470,6 @@ def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
         if not seed_done(sim_dir, seed):
             return None
         ids = read_ids(sim_dir / f"settings-{seed}.csv")
-        skip = excluded()
-        ids = [i for i in ids if i not in skip]
         _READY[sim_dir, seed] = sorted(ids, key=ft._order)
     return _READY[sim_dir, seed]
 
@@ -1493,8 +1475,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grid-file", type=Path, default=ft.GRID_FILE)
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--blocks-per-simulation", type=int, default=12)
-    # Sim QC exclusions (scripts/sim_qc.py), read before each new batch.
-    parser.add_argument("--exclude", type=Path)
     parser.add_argument(
         "--prefixes", type=int, nargs="+", default=list(ft.PREFIXES)
     )
@@ -1595,8 +1575,7 @@ def main() -> None:
     ft.LOSS_HORIZON_DAYS = args.loss_horizon_days
     ft.QUIET_MIN_CASES = args.quiet_min_cases
     ft.BLOCK_LIMIT = args.block_limit
-    global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
-    EXCLUDE_FILE = args.exclude
+    global DRAWS_PER_PASS, SUBSET_SEED
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
     # Read once at start: the worktree may move on while training.

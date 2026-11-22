@@ -50,14 +50,8 @@ def test_the_round_s_check_is_recorded(tmp_path):
         check=True,
     )
     qc = tmp_path / "r1" / "qc"
-    assert list(pd.read_csv(qc / "excluded.csv").columns) == [
-        "simulation",
-        "reason",
-        "evidence",
-    ]
-    assert pd.read_csv(qc / "excluded.csv").empty
+    assert not (qc / "excluded.csv").exists()
     decisions = json.loads((qc / "decisions.json").read_text())
-    assert decisions["excluded"] == []
     assert decisions["n_simulations"] == 4
     assert len(pd.read_csv(qc / "input.csv")) == 4
-    assert "of 4 simulations" in (qc / "summary.txt").read_text()
+    assert "summarised 4 simulations" in (qc / "summary.txt").read_text()
