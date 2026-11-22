@@ -264,7 +264,9 @@ def test_a_segment_waits_on_the_batches_it_needs_that_are_missing(tmp_path):
     assert logs.waiting_batches(tmp_path, 800) == [33431]
     assert logs.waiting_batches(tmp_path, 400) == []
     # Missing batches count as full ones.
-    _batches(tmp_path, seeds, seeds[:10])
-    assert logs.waiting_batches(tmp_path, 400) == list(range(33410, 33421))
+    few = tmp_path / "few"
+    few.mkdir()
+    _batches(few, seeds, seeds[:10])
+    assert logs.waiting_batches(few, 400) == list(range(33410, 33421))
     # A run with no seed list waits on nothing it can name.
     assert logs.waiting_batches(tmp_path / "none", 400) == []

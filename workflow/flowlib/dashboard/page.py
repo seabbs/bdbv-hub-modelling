@@ -374,6 +374,14 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     folder = live.folder
     trained = st.trained
     trainer, alive = logs.trainer_state(folder) if folder else ("n/a", None)
+    # A stopped run's next segment may wait on batches it lacks (failed or
+    # still being simulated): name them.
+    if folder and not alive and st.nxt and not st.pending:
+        missing = [str(s) for s in logs.waiting_batches(folder, st.nxt)]
+        if missing:
+            what = "batches" if len(missing) > 1 else "batch"
+            trainer = f"{trainer}; waiting for {what} {', '.join(missing)}"
+            alive = False
     # The running segment's last line of any kind, not only a step.
     last = logs.RunLog(folder).last_line() if folder else None
     last_t, last_text = last or (st.last_t, "")
