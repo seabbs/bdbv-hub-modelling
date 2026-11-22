@@ -39,6 +39,9 @@ DEFAULTS = (
     ("NOSLOTS_RUN", "$ROOT/checkpoints"),
     ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
+    # The prefix every simulation batch runs under, with no cap of its
+    # own (such as one systemd slice they all share; empty: none).
+    ("SIM_PREFIX", ""),
     # The rounds host, as ssh names it (empty: this machine), and its
     # rounds folder (empty: ROOT), where a helping host pushes its
     # batches; the seeds this host simulates (flowlib.hosts; empty: all);

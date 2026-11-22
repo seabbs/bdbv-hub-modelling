@@ -82,6 +82,7 @@ MACHINE_KEYS = frozenset(
         "INBOX",
         "NOTIFY",
         "JOB_PREFIX",
+        "SIM_PREFIX",
         "SNAKEMAKE_PROFILE",
         "HEADROOM_CORES",
         "HEADROOM_GB",

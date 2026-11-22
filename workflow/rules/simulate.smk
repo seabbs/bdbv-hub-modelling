@@ -78,11 +78,12 @@ rule simulate_batch:
     conda:
         TOOLS_ENV
     threads: 1
+    # Batches are run by count, not by memory: at most
+    # `--resources sim_slots=N` at once (SIM_SLOTS, 2 by default). A batch
+    # claims no memory and has no cap of its own; SIM_PREFIX (such as one
+    # systemd slice all batches share) guards the rest of the machine.
     resources:
-        mem_mb=lambda wc, attempt: (
-            SIM["mem_mb"] if attempt == 1 else SIM["retry_mem_mb"]
-        ),
-        # At most `--resources sim_slots=N` batches at once (2 by default).
+        mem_mb=0,
         sim_slots=1,
     params:
         sims=lambda wc, output: Path(output.counts).parent,
@@ -91,7 +92,7 @@ rule simulate_batch:
         lib=ENW_LIB,
         grid=GRID_FILE,
         engine=" ".join(simulator.ENGINE),
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        prefix=LOCAL["SIM_PREFIX"],
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
         max_load=LOCAL["MAX_LOAD"],
