@@ -28,7 +28,14 @@ from .expectation import ReportingExpectation
 from .observation import ObservedReports, nb1_scale
 from .revisions import Revisions
 
-__all__ = ["COUNT_COLUMNS", "START", "report_simulation", "reporting_model"]
+__all__ = [
+    "COUNT_COLUMNS",
+    "START",
+    "report_simulation",
+    "reporting_frame",
+    "reporting_model",
+    "tabulate",
+]
 
 COUNT_COLUMNS = ("draw", "location", "reference_date", "report_date", "count")
 """The counts' columns: one row per non-zero increment."""
@@ -37,12 +44,28 @@ START = dt.date(2026, 1, 3)
 """The reporting frame's first date before a simulation's offset."""
 
 
-def _frame(
+def reporting_frame(
     values: Mapping[str, Any],
     n_days: int,
     places: Sequence[str],
     ages: Sequence[str],
 ) -> ReferenceFrame:
+    """Return a simulation's reporting frame: its strata and dates.
+
+    Parameters
+    ----------
+    values : mapping
+        The values (`offset`).
+    n_days : int
+        Days of the frame.
+    places, ages : sequence of str
+        Each stratum's place (`P01`, ...) and age group (`A1`, ...).
+
+    Returns
+    -------
+    ReferenceFrame
+        From `START` plus the offset.
+    """
     first = np.datetime64(START) + int(values["offset"])
     return ReferenceFrame(
         dates=first + np.arange(n_days),
@@ -145,13 +168,48 @@ def report_simulation(
     """
     x = np.asarray(onsets, dtype=float)
     T = x.shape[0]
-    frame = _frame(values, T, places, ages)
+    frame = reporting_frame(values, T, places, ages)
     with (
         jax.enable_x64(True),
         handlers.trace() as tr,
         handlers.seed(rng_seed=int(seed)),
     ):
         reporting_model(frame, design, values, x, draws)
+    return tabulate(tr, design, values, x, places, ages, draws)
+
+
+def tabulate(
+    trace: Mapping[str, Any],
+    design: Mapping[str, Any],
+    values: Mapping[str, Any],
+    onsets: np.ndarray,
+    places: Sequence[str],
+    ages: Sequence[str],
+    draws: int,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Return a traced reporting model's counts and added values.
+
+    Parameters
+    ----------
+    trace : mapping
+        A trace of `reporting_model` (on its own or in a larger model).
+    design, values : mapping
+        The simulation's design and values.
+    onsets : numpy.ndarray
+        The expected onsets it reported, days by strata.
+    places, ages : sequence of str
+        Each stratum's place and age group.
+    draws : int
+        Observation draws.
+
+    Returns
+    -------
+    tuple
+        As `report_simulation`.
+    """
+    tr = trace
+    x = np.asarray(onsets, dtype=float)
+    T = x.shape[0]
     multi_place = int(design["n_places"]) > 1
     multi_age = int(design["n_ages"]) > 1
     location = [
