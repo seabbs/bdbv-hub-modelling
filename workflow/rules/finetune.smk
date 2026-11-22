@@ -41,13 +41,16 @@ rule fetch_batch:
         src_settings=lambda wc, input: input.get("settings", ""),
         there=lambda wc: hosts._at(REMOTE, f"{REMOTE_ROUNDS}/r{round_of(wc.seed)}/sims"),
     shell:
-        # Hard links where the rounds are on this machine, a copy from the
-        # rounds host, else the batch's assets of its round's release.
+        # A copy where the rounds are on this machine (not a hard link:
+        # Snakemake touches outputs one at a time, which through a link
+        # moves the inputs' times too and can leave the counts older than
+        # the settings input), a copy from the rounds host, else the
+        # batch's assets of its round's release.
         """
         exec >{log} 2>&1
         if [ "{params.source}" = local ]; then
-            ln -f {params.src} {output.counts} 2>/dev/null || cp {params.src} {output.counts}
-            ln -f {params.src_settings} {output.settings} 2>/dev/null || cp {params.src_settings} {output.settings}
+            cp {params.src} {output.counts}
+            cp {params.src_settings} {output.settings}
         elif [ "{params.source}" = remote ]; then
             rsync -a {params.there}/counts-{wildcards.seed}.csv.gz \
                 {params.there}/settings-{wildcards.seed}.csv {params.sims}/

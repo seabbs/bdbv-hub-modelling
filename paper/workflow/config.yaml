@@ -142,7 +142,7 @@ evidence:
     path: evidence/checkpoint-scores.csv
   # Pending: the scale-floor test on the final run's checkpoints.
   scale_floor: null
-  # The lag-horizon test of the ragged layout (germany-chronos2).
+  # The lag-horizon test of the ragged layout.
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: results/germany-chronos-dev/scores.csv
@@ -169,7 +169,7 @@ evidence:
   compare_realdata: null
   # Pending: daily and hub-target scores from the target column.
   compare_daily: null
-  # Pending: fm-finetune3's realised shares of each combination of block
+  # Pending: the realised shares of each combination of block
   # layout and options.
   block_combinations: null
   # Pending: the final run's held-out loss curve.
@@ -183,7 +183,7 @@ evidence:
 
 # Data the development runs use.
 development:
-  # The r3 pilot's outbreaks, for checking the setup.
+  # Pilot outbreaks, for checking the setup.
   synthetic_seeds: [9501, 9502, 9503, 9504]
 
 # Data kept out of every development run.

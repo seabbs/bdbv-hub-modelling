@@ -704,25 +704,23 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 
 EVIDENCE: Final = {
-    "si_copula": "fm-copula's walk scores, no pairing against rolling rho_p",
+    "si_copula": "the walks' scores, no pairing against rolling rho_p",
     "copula_rho": "the walk models' rho_p by origin (copula.json rows)",
-    "aggregation_scores": "fm-agg's per-target aggregation scores",
-    "finetune_heldout": "fm-finetune3's held-out loss curve",
-    "sim_summaries": "fm-finetune3's per-outbreak r3 pilot summaries",
-    "sim_realism": "fm-finetune3's data reference values",
-    "sim_diseases": "fm-finetune3's published disease values",
-    "checkpoint_scores": "germany-chronos2's scores of each r3 checkpoint",
-    "scale_floor": "fm-finetune3's scale-floor test",
-    "lag_germany": "germany-chronos2's German lag-horizon scores",
+    "aggregation_scores": "the per-target aggregation scores",
+    "finetune_heldout": "the final run's held-out loss curve",
+    "sim_summaries": "per-outbreak summaries of the final grid's simulations",
+    "sim_realism": "the data reference values",
+    "sim_diseases": "the published disease values",
+    "checkpoint_scores": "the scores of each checkpoint of the final run",
+    "scale_floor": "the scale-floor test",
+    "lag_germany": "the German lag-horizon scores",
     "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
     "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
     "compare_slots": "the slots and no-slots runs' scores by checkpoint",
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
     "compare_daily": "our models' daily and hub-target scores by checkpoint",
-    "block_combinations": (
-        "fm-finetune3's realised shares of block layouts and options"
-    ),
+    "block_combinations": ("the realised shares of block layouts and options"),
 }
 """Each evidence input and what it waits on until set.
 

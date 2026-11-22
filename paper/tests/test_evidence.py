@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -695,3 +697,9 @@ def test_evidence_quotes_no_bdbv_scores(tmp_path) -> None:
     )
     waiting = out["evidence"]["waiting"]
     assert not any(EVIDENCE[n] in waiting for n in HELD_OUT_EVIDENCE)
+
+
+def test_waiting_notes_name_no_sessions_or_retired_grids() -> None:
+    # The notes are rendered into the SI, so they say what each input is.
+    code = re.compile(r"\bfm-|germany-chronos2|\br[3-6]\b")
+    assert not [v for v in EVIDENCE.values() if code.search(v)]
