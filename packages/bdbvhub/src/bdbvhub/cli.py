@@ -1595,7 +1595,7 @@ def _nowcast(args: argparse.Namespace) -> int:
     # The fine-tuned checkpoint the model loaded, for the PR body.
     if checkpoint is not None:
         record = {
-            "tag": f"chronos-ft-{checkpoint.hash}",
+            "tag": checkpoint.tag,
             "sha256": dict(checkpoint.sha256),
         }
         (Path(args.out) / "checkpoint.json").write_text(
@@ -1842,9 +1842,7 @@ def _metadata(args: argparse.Namespace) -> int:
     if "{release}" in methods_long:
         # The release of the checkpoint the model loads now.
         checkpoint = get_model(args.model).checkpoint  # type: ignore[attr-defined]
-        methods_long = methods_long.format(
-            release=f"chronos-ft-{checkpoint.hash}"
-        )
+        methods_long = methods_long.format(release=checkpoint.tag)
     record = render_model_metadata(
         _abbr(args),
         model_name=text["model_name"],
