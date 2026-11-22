@@ -42,6 +42,11 @@ DEFAULTS = (
     # The prefix every simulation batch runs under, with no cap of its
     # own (such as one systemd slice they all share; empty: none).
     ("SIM_PREFIX", ""),
+    # The folder simulation batches share their JAX compiles in (empty:
+    # none) and the size in GB past which a batch empties it
+    # (flowlib.simulator.jax_cache_env).
+    ("JAX_CACHE", "$ROOT/jax-cache"),
+    ("JAX_CACHE_GB", "2"),
     # The rounds host, as ssh names it (empty: this machine), and its
     # rounds folder (empty: ROOT), where a helping host pushes its
     # batches; the seeds this host simulates (flowlib.hosts; empty: all);

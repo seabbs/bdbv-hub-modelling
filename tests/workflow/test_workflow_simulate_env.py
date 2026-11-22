@@ -1,6 +1,7 @@
 """The simulator runs as the committed Python, with JAX on one thread."""
 
 import re
+import subprocess
 
 from flowlib import simulator
 from test_workflow_dryrun import dry_run
@@ -42,14 +43,15 @@ def test_heavy_jobs_wait_below_the_load_ceiling(tmp_path):
     assert f"wait_for_room.sh 20 16 {sims} 12" in command
 
 
-def test_the_compile_cache_env_names_the_folder_and_its_cap():
-    env = simulator.jax_cache_env("/x/jax-cache", "2")
+def test_the_compile_cache_env_names_the_folder():
+    env = simulator.jax_cache_env("/x/jax-cache")
     assert "JAX_COMPILATION_CACHE_DIR=/x/jax-cache" in env
-    assert "JAX_COMPILATION_CACHE_MAX_SIZE=2000000000" in env
+    # JAX's own cap scans the folder on every write: left off.
+    assert "MAX_SIZE" not in env
     # Every compile is cached, however small or quick.
     assert "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0" in env
     assert "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=0" in env
-    assert simulator.jax_cache_env("", "2") == ""
+    assert simulator.jax_cache_env("") == ""
 
 
 def test_batches_share_a_compile_cache_under_root(tmp_path):
@@ -61,6 +63,7 @@ def test_batches_share_a_compile_cache_under_root(tmp_path):
     assert out.returncode == 0, out.stderr
     command = " ".join(out.stdout.split("rule simulate_batch", 1)[1].split())
     assert f"JAX_COMPILATION_CACHE_DIR={tmp_path}/jax-cache" in command
+    assert f'trim_jax_cache.sh "{tmp_path}/jax-cache" 2' in command
 
 
 def test_an_empty_cache_setting_turns_the_cache_off(tmp_path):
@@ -71,3 +74,33 @@ def test_an_empty_cache_setting_turns_the_cache_off(tmp_path):
     out = dry_run(tmp_path, str(batch), extra=["-p", "--quiet", "host"])
     assert out.returncode == 0, out.stderr
     assert "JAX_COMPILATION_CACHE_DIR" not in out.stdout
+
+
+def _cache(folder, kb):
+    folder.mkdir()
+    (folder / "a-cache").write_bytes(b"x" * kb * 1024)
+    (folder / "a-atime").write_bytes(b"t")
+    (folder / "keep.txt").write_text("not JAX's")
+
+
+def _trim(folder, gb):
+    return subprocess.run(
+        ["workflow/scripts/trim_jax_cache.sh", str(folder), gb], check=True
+    )
+
+
+def test_a_cache_over_its_size_is_emptied_of_jax_entries(tmp_path):
+    folder = tmp_path / "jax-cache"
+    _cache(folder, 2000)
+    _trim(folder, "0.001")
+    assert sorted(p.name for p in folder.iterdir()) == ["keep.txt"]
+
+
+def test_a_cache_under_its_size_is_kept(tmp_path):
+    folder = tmp_path / "jax-cache"
+    _cache(folder, 10)
+    _trim(folder, "1")
+    assert len(list(folder.iterdir())) == 3
+    # No folder yet, or none set: nothing to do.
+    _trim(tmp_path / "missing", "1")
+    _trim("", "1")
