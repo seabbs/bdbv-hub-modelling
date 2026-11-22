@@ -125,7 +125,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`).
 - `publish`: every checkpoint.
 
-## 4. Score (`rules/score.smk`, `rules/followups.smk`)
+## 4. Score (`rules/score.smk`)
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task nowcast-foundation:score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `score_germany`, `score_release`: the units of `nowcastfoundation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
@@ -137,13 +137,6 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `coupling_germany`: a checkpoint's German forecasts' coupling scores and summary (`nowcasteval.coupling`), from its German unit, in `<SCORE_CACHE>/coupling/`.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
-
-After each slots checkpoint's scores:
-
-- `fetch_adapter`: its adapter from the release, checked against `sha256sums.txt`.
-- `slots_check_shard`, `slots_check_summary`: the slots check (`scripts/slots_check.py`) against zero-shot and the no-slots checkpoint of its size.
-- `agg_data`, `agg_sanity`, `agg_fit`, `agg_rows`: the aggregation arms (`scripts/agg/`), with the data pinned to the zero-shot rows' hub commit and a sanity check that a zero-shot arm reproduces its rows, once per package version.
-- `followups`: all of these; `score` includes them.
 
 ## 5. Dashboard (`workflow/flowlib/dashboard/`)
 

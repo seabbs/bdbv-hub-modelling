@@ -52,9 +52,7 @@ def read_quantiles(
 ) -> np.ndarray:
     """Read quantile functions at uniform draws.
 
-    Linear between the levels and flat beyond them, the same reading as
-    `forecasters.foundation.quantile_draws`. That copy is part of the
-    foundation model's stored-fit keys, so it is not imported here.
+    Linear between the levels and flat beyond them.
 
     Parameters
     ----------
