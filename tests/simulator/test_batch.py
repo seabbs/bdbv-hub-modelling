@@ -144,9 +144,26 @@ class FailFirst(OnTheDay):
         return super().report(jobs, _grid_file, _n_draws)
 
 
+def _linked_seed(start: int) -> int:
+    """The first seed from `start` whose first design runs as one job."""
+    grid = draws.read_grid(GRID_FILE)
+    for seed in range(start, start + 100):
+        d = draws.draw_design(
+            grid, draws.generator(seed, 1, 1, sb.DESIGN), weeks=8
+        )
+        if d["strata_link"] != "independent":
+            return seed
+    raise AssertionError("no linked design")
+
+
 def test_a_failing_draw_is_drawn_again(tmp_path):
     files = simulate_batch(
-        GRID_FILE, 5151, 1, tmp_path, reporting=FailFirst(2), weeks=8
+        GRID_FILE,
+        _linked_seed(5151),
+        1,
+        tmp_path,
+        reporting=FailFirst(2),
+        weeks=8,
     )
     failures = pd.read_csv(files["failures"])
     assert len(failures) == 2
