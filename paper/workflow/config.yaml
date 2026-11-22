@@ -30,9 +30,6 @@ synthetic:
   grid_file: config/finetune/grid.yaml
   grid: r7
   simulations_per_seed: 20
-  draw: 1
-  # The synthetic runner's protocol, quoted in the SI note.
-  protocol: {min_releases: 6, horizon_weeks: 5, horizons: [-4, 3]}
   # Example simulations for the SI figure (`paperfigs.sim_examples`): pilot
   # simulations of the grid on an evidence branch, each with its label.
   examples:

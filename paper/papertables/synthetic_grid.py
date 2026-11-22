@@ -28,6 +28,14 @@ from typing import Any, Final
 import pandas as pd
 import yaml
 
+from paperdata.synthetic_runner import (
+    DRAW,
+    HORIZON_WEEKS,
+    HORIZONS,
+    MIN_RELEASES,
+    ORIGINS,
+)
+
 __all__ = [
     "LAYERS",
     "TABLES",
@@ -258,10 +266,6 @@ def heldout_note(config: dict) -> str:
     `config` is the workflow config's `synthetic` block with the run's
     `heldout_seeds` and `development_seeds`.
     """
-    protocol = config["protocol"]
-    min_releases = protocol["min_releases"]
-    horizon_weeks = protocol["horizon_weeks"]
-    horizons = protocol["horizons"]
     seeds = config["heldout_seeds"]
     n = config["simulations_per_seed"]
     dev = config["development_seeds"]
@@ -270,7 +274,7 @@ def heldout_note(config: dict) -> str:
         "",
         f"The held-out set is simulated on grid `{config['grid']}` with"
         f" {_seeds(seeds)}, {n} simulations each.",
-        f"We evaluate draw {config['draw']} of each simulation, so the"
+        f"We evaluate draw {DRAW} of each simulation, so the"
         " outbreaks are independent.",
         "The fine-tune never trains on these seeds.",
         f"The simulations are written to `{config['simulations']['paper']}`,"
@@ -286,10 +290,10 @@ def heldout_note(config: dict) -> str:
         "",
         "Each outbreak is released weekly, on one weekday from Wednesday to"
         " Saturday drawn from its id, and a release's cut-off is its origin.",
-        "Each outbreak has four origins, spread evenly from its"
-        f" {_ordinal(min_releases)} release to the last release at least its"
-        f" longest delay plus {horizon_weeks} weeks before its last report.",
-        f"Each forecast covers weeks {horizons[0]} to {horizons[-1]} from"
+        f"Each outbreak has {ORIGINS} origins, spread evenly from its"
+        f" {_ordinal(MIN_RELEASES)} release to the last release at least its"
+        f" longest delay plus {HORIZON_WEEKS} weeks before its last report.",
+        f"Each forecast covers weeks {HORIZONS[0]} to {HORIZONS[-1]} from"
         " the week of the cut-off, as weekly totals by onset week for the"
         " country and each stratum.",
         "Scores use rolling truth, the count reported D days after the end"

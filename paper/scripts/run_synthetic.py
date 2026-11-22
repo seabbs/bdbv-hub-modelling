@@ -26,7 +26,9 @@ import pandas as pd
 from paperdata.synthetic import outputs
 from paperdata.synthetic_runner import (
     COLUMNS,
+    DRAW,
     MODELS,
+    ORIGINS,
     evaluate,
     factor_table,
     first_draws,
@@ -58,10 +60,10 @@ def main() -> None:
     parser.add_argument("--seeds", type=int, nargs="+", required=True)
     parser.add_argument("--models", nargs="+", default=list(MODELS))
     parser.add_argument("--outbreaks", type=int, default=None)
-    parser.add_argument("--origins", type=int, default=4)
+    parser.add_argument("--origins", type=int, default=ORIGINS)
     parser.add_argument("--samples", type=int, default=200)
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--draw", type=int, default=1)
+    parser.add_argument("--draw", type=int, default=DRAW)
     parser.add_argument("--device", choices=("auto", "cpu"), default="auto")
     parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args()
