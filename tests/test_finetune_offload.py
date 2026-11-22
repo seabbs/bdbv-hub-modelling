@@ -228,3 +228,20 @@ def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
     )
     start = json.loads((train / "evals" / "step-0000000.json").read_text())
     assert sidecar["held_out_loss_start"] == start["held_out_loss"]
+
+
+@pytest.mark.usefixtures("short_context")
+@pytest.mark.parametrize("kind", ["start", "checkpoint"])
+def test_checkpoints_and_the_start_get_interval_coverage(tmp_path, kind):
+    model = trained()
+    where = tmp_path / "step-0000100"
+    fs.save_snapshot(model, where, {"step": 100})
+    base = tiny_model()
+    series_bias.attach(base)
+    got = fe.evaluate(where / "adapter", base, blocks(), [kind], 100)
+    cover = got["held_out_coverage"]
+    for prefix in ("", "nowcast_", "forecast_", "source_daily_", "level_leaf_"):
+        assert 0 <= cover[f"{prefix}cover50"] <= cover[f"{prefix}cover90"] <= 1
+    # Every scored step is a nowcast step or a forecast step.
+    assert cover["nowcast_n"] + cover["forecast_n"] == cover["n"] > 0
+    assert cover["source_daily_n"] + cover["source_weekly_n"] == cover["n"]
