@@ -74,20 +74,21 @@ stratum_imports <- function(n, share, strata, design, v) {
 }
 
 # A generation time on 1, ..., n days, n its 99.9% quantile, from its
-# family (gamma or lognormal), mean and CV.
+# family (gamma or lognormal), mean and CV: double interval censored
+# (primarycensored, a uniform primary day), left truncated at a day.
 gt_pmf <- function(mean, family, cv) {
   if (family == "gamma") {
     k <- 1 / cv^2
-    cdf <- function(d) pgamma(d, k, k / mean)
+    args <- list(pdist = pgamma, shape = k, rate = k / mean)
     q <- qgamma(0.999, k, k / mean)
   } else {
     sdlog <- sqrt(log(1 + cv^2))
     meanlog <- log(mean) - sdlog^2 / 2
-    cdf <- function(d) plnorm(d, meanlog, sdlog)
+    args <- list(pdist = plnorm, meanlog = meanlog, sdlog = sdlog)
     q <- qlnorm(0.999, meanlog, sdlog)
   }
-  pmf <- diff(cdf(0:max(2L, as.integer(ceiling(q)))))
-  pmf / sum(pmf)
+  n <- max(2L, as.integer(ceiling(q)))
+  do.call(primarycensored::dpcens, c(list(1:n, L = 1, D = n + 1), args))
 }
 
 # `n` weeks of an AR(1) walk on log R around 0 (R = 1).
@@ -124,7 +125,7 @@ stratum_values <- function(grid, structure, n, name, probability = FALSE) {
   )
 }
 
-# Log R of a path on `n` days: r6's shapes on log R, the weekly walk
+# Log R of a path on `n` days: the shapes on log R, the weekly walk
 # around R = 1 (endemic), or a start at the amplitude decaying onto that
 # walk (an early outbreak brought under control).
 path_log_r <- function(n, kind, v) {
@@ -257,13 +258,13 @@ renewal_infections <- function(start, gt, log_r, population, mixing = NULL,
   list(infections = out, r = r, reff = reff, susceptible = left)
 }
 
-# r7's expected onsets (ascertained infections) on the generation time's
-# span plus `n` days, for `simulate_outbreak`. Strata weights are r6's
-# (`stratum_sd`, quiet places none). Each place's population is split over
+# Expected onsets (ascertained infections) on the generation time's
+# span plus `n` days, for `simulate_outbreak`. Strata weights are
+# drawn (`stratum_sd`, quiet places none). Each place's population is split over
 # its ages by their weights. An early window starts each stratum with
 # cases from a seed on the last day before it (at least 1); an endemic or
 # established one runs at the drawn level over the span. Late places,
-# r6's import kinds (in units of the seed or level) and a trickle of
+# the import kinds (in units of the seed or level) and a trickle of
 # imports into every stratum with cases come in as imports. Returns the
 # onsets, the infections and the values with each stratum's population
 # and the attack rate added.
@@ -324,7 +325,11 @@ latent_onsets <- function(grid, n, gt, strata, design, v) {
   pmfs <- lapply(v$incubation_mean[strata$.group], incubation_pmf,
     cv = grid$constants$incubation_cv
   )
-  onsets <- sweep(convolve_rows(run$infections, pmfs), 2, asc, `*`)
+  # An established or endemic stratum ran at its level before the span
+  # too, so its onsets open at that level rather than ramping up from zero
+  # over the incubation period; an early outbreak had no infections before.
+  before <- if (early) NULL else start[1L, ]
+  onsets <- sweep(convolve_rows(run$infections, pmfs, before), 2, asc, `*`)
   list(
     onsets = onsets,
     infections = run$infections,

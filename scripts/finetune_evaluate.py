@@ -14,6 +14,7 @@ Kinds: `start` (step 0), `monitor` (the logged held-out loss),
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import sys
 import time
@@ -21,12 +22,14 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).parent))
 import finetune_chronos as ft
 import finetune_stream as fs
 
 from nowcastfoundation import series_bias
-from nowcastfoundation.forecaster import torch_device
+from nowcastfoundation.backends.chronos2 import torch_device
 
 KINDS = ("start", "monitor", "by_source", "checkpoint")
 
@@ -67,6 +70,8 @@ def evaluate(
         parts = fs.held_out_parts(model, val, batch_size)
         out["held_out_loss"] = parts["loss"]
         out |= fs.loss_parts("held_out_loss", parts)
+    if "start" in kinds or "checkpoint" in kinds:
+        out["held_out_coverage"] = held_out_coverage(model, val, batch_size)
     if "start" in kinds:
         out["by_level"] = fs.held_out_by_level(model, val, fs.LEVEL_BLOCKS)
         out["by_source"] = fs.held_out_by_source(
@@ -94,6 +99,106 @@ def evaluate(
     return out
 
 
+INTERVAL_LEVELS = (0.05, 0.25, 0.75, 0.95)
+"""The ends of the 90% and 50% central intervals `held_out_coverage`
+scores."""
+
+
+def _covered(
+    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+) -> list[dict[str, Any]]:
+    """Return each target step's 50% and 90% hits, step kind, source, level.
+
+    A step is a nowcast step up to its block's cut-off
+    (`finetune_stream.nowcast_steps`), as the loss's parts split them.
+    """
+    import torch
+    from chronos.chronos2.dataset import DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    blocks = list(blocks)
+    data = fs.ByLength(
+        blocks,
+        batch_size,
+        DatasetMode.VALIDATION,
+        series_bias.has_bias(model),
+    )
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    levels = np.asarray(model.chronos_config.quantiles, dtype=float)
+    # Each interval end is the model's quantile at that level, linear
+    # between its two nearest levels where it has none.
+    upper = np.clip(
+        np.searchsorted(levels, INTERVAL_LEVELS), 1, len(levels) - 1
+    )
+    weight = np.clip(
+        (np.asarray(INTERVAL_LEVELS) - levels[upper - 1])
+        / (levels[upper] - levels[upper - 1]),
+        0.0,
+        1.0,
+    )[None, :, None]
+    rows: list[dict[str, Any]] = []
+    with torch.no_grad():
+        for indices in data.indices():  # type: ignore[no-untyped-call]
+            batch = data._build_batch(indices)
+            out = fs.forward(model, batch, accepted)
+            raw = out.quantile_preds.float().cpu().numpy()
+            preds = (1 - weight) * raw[:, upper - 1] + weight * raw[:, upper]
+            target = batch["future_target"].float().cpu().numpy()
+            ranges = batch["target_idx_ranges"]
+            for i, (lo, hi) in zip(indices, ranges, strict=True):
+                block = blocks[i]
+                n_steps = int(block["prediction_length"])
+                d = fs.nowcast_steps(block)
+                names = block.get("levels", ())
+                for r in range(lo, hi):
+                    y = target[r, :n_steps]
+                    q = preds[r, :, :n_steps]
+                    ok = ~np.isnan(y)
+                    rows.append(
+                        {
+                            "source": block.get("source", ""),
+                            "level": names[r - lo]
+                            if r - lo < len(names)
+                            else "",
+                            "nowcast": np.arange(n_steps)[ok] < d,
+                            "in50": ((y >= q[1]) & (y <= q[2]))[ok],
+                            "in90": ((y >= q[0]) & (y <= q[3]))[ok],
+                        }
+                    )
+    return rows
+
+
+def held_out_coverage(
+    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+) -> dict[str, float]:
+    """Return the held-out 50% and 90% interval coverage of target steps.
+
+    Over every step, then the nowcast and forecast steps, then by source
+    and by level (`<prefix>cover50`, `<prefix>cover90`, `<prefix>n`).
+    """
+    rows = _covered(model, blocks, batch_size)
+    groups: dict[str, list[tuple[np.ndarray, np.ndarray]]] = {}
+    for row in rows:
+        for part in ("nowcast", "forecast"):
+            keep = row["nowcast"] if part == "nowcast" else ~row["nowcast"]
+            groups.setdefault(f"{part}_", []).append(
+                (row["in50"][keep], row["in90"][keep])
+            )
+        hits = (row["in50"], row["in90"])
+        groups.setdefault("", []).append(hits)
+        for key in ("source", "level"):
+            if row[key]:
+                groups.setdefault(f"{key}_{row[key]}_", []).append(hits)
+    out: dict[str, float] = {}
+    for prefix, parts in groups.items():
+        in50 = np.concatenate([a for a, _ in parts])
+        in90 = np.concatenate([b for _, b in parts])
+        out[f"{prefix}n"] = len(in50)
+        out[f"{prefix}cover50"] = float(in50.mean()) if len(in50) else np.nan
+        out[f"{prefix}cover90"] = float(in90.mean()) if len(in90) else np.nan
+    return out
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the command-line parser."""
     p = argparse.ArgumentParser(description=__doc__)
@@ -105,7 +210,9 @@ def build_parser() -> argparse.ArgumentParser:
     # Checked against KINDS by `evaluate`.
     p.add_argument("--kinds", nargs="+")
     p.add_argument("--real-validation", type=Path)
-    p.add_argument("--batch-size", type=int, default=256)
+    p.add_argument(
+        "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
+    )
     p.add_argument("--device", default="auto")
     return p
 

@@ -29,10 +29,12 @@ def dry(tmp_path, *targets, config=None, extra=()):
     return {k: int(v) for k, v in jobs.items() if k != "total"}
 
 
-def dry_run(tmp_path, *targets, config=None, extra=()):
+def dry_run(tmp_path, *targets, config=None, extra=(), quiet=True, dry=True):
     """Return the finished process of a dry run of `targets`.
 
-    Programs in <tmp_path>/bin (a stand-in `gh`) come first on PATH.
+    Programs in <tmp_path>/bin (a stand-in `gh`) come first on PATH. Not
+    `quiet`, the output holds each job's shell command. Not `dry`, the
+    jobs run.
     """
     local = tmp_path / "local.env"
     if not local.exists():
@@ -45,9 +47,8 @@ def dry_run(tmp_path, *targets, config=None, extra=()):
             *targets,
             "-s",
             "workflow/Snakefile",
-            "-n",
-            "--quiet",
-            "rules",
+            *(["-n"] if dry else []),
+            *(["--quiet", "rules"] if quiet else []),
             "--cores",
             "1",
             "--workflow-profile",
@@ -98,7 +99,7 @@ def test_batches_already_simulated_are_kept(tmp_path):
 
 def _enw_lib(tmp_path):
     """The pinned epinowcast's library under the machine's ROOT."""
-    grid = "config/finetune/grids/r7.yaml"
+    grid = "config/finetune/grid.yaml"
     return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha(grid)}"
 
 
@@ -181,6 +182,53 @@ def test_finetune_trains_one_segment_per_prefix(tmp_path):
     assert jobs["simulate_batch"] == 66
 
 
+SMALL = {
+    **FT,
+    "finetune": {
+        **FT["finetune"],
+        "prefixes": [10, 20],
+        "outbreaks": 20,
+        "chunk": 10,
+        "batch_size": 64,
+        "checkpoint_above": 0,
+        "block_limit": 700,
+    },
+}
+
+
+def test_a_small_trial_is_a_config_override(tmp_path):
+    assert dry(tmp_path, "finetune", config=SMALL)["train_segment"] == 2
+    out = dry_run(tmp_path, "finetune", config=SMALL, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    trains = [
+        line for line in out.stdout.splitlines() if "finetune_stream.py" in line
+    ]
+    assert trains
+    for line in trains:
+        assert "--batch-size 64" in line
+        assert "--checkpoint-above 0" in line
+        assert "--block-limit 700" in line
+
+
+def test_a_machine_s_block_limit_overrides_the_config(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nBLOCK_LIMIT=4000\n"
+    )
+    out = dry_run(tmp_path, "finetune", config=SMALL, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "--block-limit 4000" in out.stdout
+
+
+def test_a_machine_s_checkpoint_threshold_overrides_the_config(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nCHECKPOINT_ABOVE=5\n"
+    )
+    out = dry_run(tmp_path, "finetune", config=SMALL, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "--checkpoint-above 5" in out.stdout
+    assert "--checkpoint-above 0" not in out.stdout
+
+
 RELEASE = {**FT, "finetune": {**FT["finetune"], "sims_from": "release"}}
 
 
@@ -210,7 +258,7 @@ def _released(tmp_path, seeds):
 
 def _stale_list(tmp_path, seeds):
     """A batch list an earlier run wrote."""
-    where = tmp_path / "checkpoints" / "slots"
+    where = tmp_path / "runs" / "runa"
     where.mkdir(parents=True, exist_ok=True)
     (where / "available-batches.txt").write_text(
         "".join(f"{s}\n" for s in seeds)
@@ -245,7 +293,7 @@ def test_from_releases_each_run_lists_them_as_it_plans(tmp_path):
     _released(tmp_path, [*range(30100, 30140)])
     jobs = dry(tmp_path, "finetune", config=RELEASE)
     assert "available_batches" not in jobs
-    record = tmp_path / "checkpoints" / "slots" / "available-batches.txt"
+    record = tmp_path / "runs" / "runa" / "available-batches.txt"
     assert record.read_text().split() == [str(s) for s in range(30100, 30140)]
 
 
@@ -344,7 +392,7 @@ def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
     # evaluation waits for every earlier segment's.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    sidecar = "checkpoints/slots/train/n500/held-out.json"
+    sidecar = "runs/runa/train/n500/held-out.json"
     jobs = dry(tmp_path, str(tmp_path / sidecar), config=OFFLOAD)
     assert jobs["evaluate_steps"] == 2
     assert jobs["evaluate_checkpoint"] == 1
@@ -364,14 +412,16 @@ def test_a_checkpoint_s_evaluation_depends_on_step_0_and_earlier_settings(
 ):
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    sidecar = tmp_path / "checkpoints/slots/train/n500/held-out.json"
+    sidecar = tmp_path / "runs/runa/train/n500/held-out.json"
     jobs, edges = _dag(tmp_path, str(sidecar), OFFLOAD)
     steps = [j for j, label in jobs.items() if label == "evaluate_steps"]
     (check,) = [
         j for j, label in jobs.items() if label == "evaluate_checkpoint"
     ]
     (first,) = [
-        j for j, label in jobs.items() if label == "train_segment\\nn: 250"
+        j
+        for j, label in jobs.items()
+        if label.startswith("train_segment\\n") and "n: 250" in label
     ]
     # One segment's step evaluation feeds the next's, which feeds the
     # checkpoint's: step 0 is scored before the checkpoint.
@@ -388,7 +438,7 @@ def test_finetune_never_publishes(tmp_path):
 
 
 def test_finished_checkpoints_are_kept(tmp_path):
-    n250 = tmp_path / "checkpoints" / "slots" / "train" / "n250"
+    n250 = tmp_path / "runs" / "runa" / "train" / "n250"
     (n250 / "finetuned-ckpt").mkdir(parents=True)
     (n250 / "state").mkdir()
     (n250 / "settings.json").write_text("{}")
@@ -399,7 +449,7 @@ def test_finished_checkpoints_are_kept(tmp_path):
 
 
 def _checkpoint(tmp_path, n):
-    where = tmp_path / "checkpoints" / "slots" / "train" / f"n{n}"
+    where = tmp_path / "runs" / "runa" / "train" / f"n{n}"
     (where / "finetuned-ckpt").mkdir(parents=True)
     (where / "state").mkdir()
     (where / "settings.json").write_text("{}")
@@ -408,10 +458,10 @@ def _checkpoint(tmp_path, n):
 
 
 def test_the_live_run_switches_over_without_retraining(tmp_path):
-    # The laptop's slots run: n250 to n750 saved without state of their
+    # The slots run: n250 to n750 saved without state of their
     # own, the trainer's state part way to n1000, and a seed list that
     # reaches 1,500 outbreaks so far.
-    train = tmp_path / "checkpoints" / "slots" / "train"
+    train = tmp_path / "runs" / "runa" / "train"
     for n in (250, 500, 750):
         where = train / f"n{n}"
         (where / "finetuned-ckpt").mkdir(parents=True)
@@ -519,7 +569,7 @@ def test_verify_alone_never_releases(tmp_path):
     _checkpoint(tmp_path, 250)
     jobs = dry(
         tmp_path,
-        f"{tmp_path}/checkpoints/slots/train/n250/verified.txt",
+        f"{tmp_path}/runs/runa/train/n250/verified.txt",
         config=FT,
     )
     assert jobs == {"verify_checkpoint": 1}
@@ -527,7 +577,7 @@ def test_verify_alone_never_releases(tmp_path):
 
 def test_score_computes_nothing_on_bdbv_held_out_for_the_paper(tmp_path):
     # BDBV is held out entirely: no BDBV unit,
-    # zone unit or data refresh is a scoring job, and `zones` is gone.
+    # zone unit or data refresh is a scoring job.
     config = {"score": {"labels": ["slots-aaa", "bbb"]}}
     jobs = dry(tmp_path, "score", config=config)
     assert not {"score_bdbv", "score_zones", "bdbv_data"} & set(jobs)
@@ -591,8 +641,7 @@ def test_skipped_checkpoints_are_not_scored(tmp_path):
 
 def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     # With mtime triggers alone, a new label's units under tables already
-    # built were "missing, no update": every tick did nothing (r5 n4000,
-    # 2026-11-19).
+    # built would be "missing, no update", and no tick would score them.
     cache = tmp_path / "scores"
     for unit, labels in (
         ("germany-days", ["reference", "slots-aaa"]),
@@ -729,13 +778,13 @@ def test_a_failed_run_posts_a_mailbox_line(tmp_path):
     # with no losses.
     box = tmp_path / "box.md"
     _local(tmp_path, "NOTIFY=1", f"MAILBOX={box}")
-    n800 = tmp_path / "checkpoints" / "slots" / "train" / "n800"
+    n800 = tmp_path / "runs" / "runa" / "train" / "n800"
     n800.mkdir(parents=True)
     (n800 / "settings.json").write_text("{}")
     # Evaluated in the trainer, so the report needs only the checkpoint.
     overlay = tmp_path / "overlay.yaml"
     overlay.write_text("finetune:\n  eval: local\n")
-    target = tmp_path / "checkpoints" / "slots" / "reports" / "n800-check.txt"
+    target = tmp_path / "runs" / "runa" / "reports" / "n800-check.txt"
     out = subprocess.run(
         [
             str(SNAKEMAKE),
@@ -822,41 +871,26 @@ def test_the_rounds_host_s_manifests_and_exclusions_are_mirrored(tmp_path):
         "simulation\n30101-3\n"
     )
     dry(tmp_path, "finetune", config=REMOTE)
-    run = tmp_path / "checkpoints" / "slots"
+    run = tmp_path / "runs" / "runa"
     listed = (run / "available-batches.txt").read_text().split()
     assert listed == [str(s) for s in [*range(30100, 30140), 30200]]
     assert (run / "rounds" / "r1" / "qc" / "excluded.csv").exists()
     assert (run / "rounds" / "r2" / "manifest.csv").exists()
 
 
-NOBIAS = {**FT, "finetune": {**FT["finetune"], "series_bias": False}}
+NOBIAS = {
+    **FT,
+    "runs": {"nobias": {"series_bias": False}},
+    "train_runs": ["nobias"],
+}
 
 
-def test_a_no_bias_control_refuses_the_slots_run_s_folder(tmp_path):
-    local = tmp_path / "local.env"
-    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
-    overlay = tmp_path / "overlay.yaml"
-    overlay.write_text(yaml.safe_dump(NOBIAS))
-    out = subprocess.run(
-        [str(SNAKEMAKE), "finetune", "-s", "workflow/Snakefile", "-n",
-         "--cores", "1", "--workflow-profile", "workflow/profiles/ci",
-         "--configfile", str(overlay)],
-        cwd=ROOT,
-        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
-             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
-        capture_output=True,
-        text=True,
-    )  # fmt: skip
-    assert out.returncode != 0
-    assert "RUN" in out.stderr + out.stdout
-
-
-def test_a_no_bias_control_trains_in_its_own_folder(tmp_path):
-    (tmp_path / "local.env").write_text(
-        f"ROOT={tmp_path}\nHOST_NAME=test-host\nRUN={tmp_path}/nobias\n"
-    )
+def test_a_no_bias_control_is_a_run_in_its_own_folder(tmp_path):
     jobs = dry(tmp_path, "finetune", config=NOBIAS)
     assert jobs["train_segment"] == 2
+    out = dry_run(tmp_path, "finetune", config=NOBIAS, quiet=False)
+    assert f"{tmp_path}/runs/nobias/train/n250/settings.json" in out.stdout
+    assert "--series-bias" not in out.stdout
 
 
 def test_a_tick_trains_only_the_next_segment(tmp_path):
@@ -1012,29 +1046,24 @@ def test_one_unit_runs_before_the_release_list_exists(tmp_path):
     assert jobs["score_germany"] == 1
 
 
-# Each grid has its own rounds (flowlib.grids).
+# The grid's rounds, never an earlier version's (flowlib.grids).
 
 
-def test_r7_release_of_a_retired_round_is_refused(tmp_path):
-    with pytest.raises(AssertionError, match="round 9 is grid retired's"):
+def test_release_of_a_retired_round_is_refused(tmp_path):
+    with pytest.raises(AssertionError, match="round 9 is an earlier grid's"):
         dry(tmp_path, "release", config={"rounds": [9]})
 
 
-def test_r7_simulates_its_held_out_round_33(tmp_path):
+def test_the_grid_simulates_its_held_out_round_33(tmp_path):
     jobs = dry(tmp_path, "simulate", config={"rounds": [33]})
     assert jobs["simulate_batch"] == 40
 
 
-def test_the_sim_qc_checks_fixed_thresholds_from_the_config(tmp_path):
+def test_the_sim_qc_runs_with_no_thresholds(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     qc = next(b for b in blocks if re.match(r"(local)?rule sim_qc:", b))
     assert "scripts/sim_qc.py" in qc
-    grid = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())[
-        "simulate"
-    ]["grid_file"]
-    limits = yaml.safe_load((ROOT / grid).read_text())["qc"]
-    for key, value in limits.items():
-        assert f"--{key.replace('_', '-')} {value}" in qc
+    assert "--max-" not in qc
 
 
 def _done_round(root, r, batches=40):
@@ -1077,6 +1106,89 @@ def _done_round(root, r, batches=40):
 def test_a_round_s_batch_runs_the_grid(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
-    shell = text[text.index("workflow/scripts/simulate.R") - 400 :]
+    shell = text[text.index("-m nowcastfoundation.simulator") - 400 :]
     assert "ENW_CELLS" not in shell
-    assert "simulate.R config/finetune/grids/r7.yaml 20 " in shell
+    assert "nowcastfoundation.simulator config/finetune/grid.yaml 20 " in shell
+
+
+def test_grid_figures_summarise_each_round_then_compare_them(tmp_path):
+    """The grid summaries and figures are workflow targets, per round."""
+    blocks = score_jobs(tmp_path, {"rounds": [4, 5]}, target="grid_figures")
+    text = " ".join("".join(blocks).replace("\\\n", " ").split())
+    rounds = tmp_path / "rounds"
+    for r in (4, 5):
+        assert (
+            f"grid_summaries.py outbreaks {rounds}/r{r}/sims "
+            f"{rounds}/r{r}/summaries/outbreaks.csv"
+        ) in text
+    assert f"r4={rounds}/r4/summaries/outbreaks.csv" in text
+    assert "grid_figures.py" in text
+    # From the batch files: no manifest or records of the round.
+    assert "rule round_manifest" not in "".join(blocks)
+    assert "rule batch_record" not in "".join(blocks)
+
+
+def test_a_fetched_batch_is_a_copy_not_a_link_to_its_source(tmp_path):
+    # Snakemake touches a job's outputs one after another; through a hard
+    # link that moves its inputs' times too, and a clock tick between the
+    # two touches leaves the counts older than the settings input, which
+    # fails the job.
+    import os
+    import time
+
+    sims = tmp_path / "rounds" / "r33" / "sims"
+    sims.mkdir(parents=True)
+    counts = sims / "counts-33300.csv.gz"
+    counts.write_bytes(gzip.compress(b"x\n"))
+    settings = sims / "settings-33300.csv"
+    settings.write_text("x\n")
+    now = time.time_ns()
+    os.utime(counts, ns=(now, now))
+    os.utime(settings, ns=(now + 10**6, now + 10**6))
+    run = tmp_path / "runs" / "runa"
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nSIMS_FROM=local\n"
+    )
+    out = dry_run(
+        tmp_path,
+        str(run / "sims" / "counts-33300.csv.gz"),
+        config=FT,
+        extra=("--allowed-rules", "fetch_batch"),
+        dry=False,
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    for name, source in (
+        ("counts-33300.csv.gz", counts),
+        ("settings-33300.csv", settings),
+    ):
+        fetched = run / "sims" / name
+        assert fetched.read_bytes() == source.read_bytes()
+        assert fetched.stat().st_ino != source.stat().st_ino
+
+
+def test_sim_reports_render_each_round_and_the_rounds_together(tmp_path):
+    """The simulation report is a workflow target, per round and over all."""
+    blocks = score_jobs(tmp_path, {"rounds": [4, 5]}, target="sim_reports")
+    text = " ".join("".join(blocks).replace("\\\n", " ").split())
+    rounds = tmp_path / "rounds"
+    assert f"germany-fetch --out {tmp_path}/germany" in text
+    triangle = tmp_path / "germany" / "COVID-19_hospitalizations.csv"
+    assert (
+        f"sim_report.py germany {triangle}"
+        f" 2022-02-10 {rounds}/report/germany-dev.csv"
+    ) in text
+    for r in (4, 5):
+        assert (
+            f"sim_report.py render {rounds}/r{r}/report/sim-report.html"
+        ) in text
+        assert (
+            f"r{r}={rounds}/r{r}/sims:{rounds}/r{r}/summaries/outbreaks.csv"
+            in text
+        )
+    assert f"sim_report.py render {rounds}/report/sim-report.html" in text
+    assert "'Simulated outbreaks, rounds 4, 5'" in text
+    # From the batch files and the German triangle only: nothing of the
+    # rounds' records, and no BDBV data.
+    joined = "".join(blocks)
+    assert "rule batch_record" not in joined
+    assert "bdbvhub.cli data" not in joined

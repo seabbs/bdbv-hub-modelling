@@ -8,24 +8,22 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import (
-    ForecastTask,
-    ModelUnavailableError,
-    RandomWalk,
-    RandomWalkNowcast,
-    add_national,
-    check_samples,
-    get_model,
-    list_models,
-)
+from bdbvhub.models import get_model, list_models
 from nowcastbaselines.chain import (
     NoCompleteWeek,
     NoDelayPair,
     NoWalkSpread,
     Settings,
 )
+from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
-from nowcastutils.base import MissingSnapshots
+from nowcastutils.base import (
+    ForecastTask,
+    MissingSnapshots,
+    ModelUnavailableError,
+    add_national,
+    check_samples,
+)
 
 
 def _task(
@@ -356,7 +354,7 @@ def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
         "The copula pairs each week's province draws on its own (#310), so "
         "a sample's nowcast week and the week after are not one trajectory: "
         "the correlation is about 0 paired and 0.9 unpaired. Whether to keep "
-        "trajectories is Sam's decision."
+        "trajectories is an open decision."
     ),
 )
 def test_the_walk_forecasts_on_from_each_samples_nowcast(

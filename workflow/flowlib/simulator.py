@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).parents[2]
-ENGINE = ("packages/nowcastfoundation/r", "workflow/scripts/simulate.R")
-"""The simulator's code: the engine package and the rule's wrapper."""
+ENGINE = (
+    "packages/nowcastfoundation/src/nowcastfoundation/simulator",
+    "packages/nowcastrenewal/src/nowcastrenewal/latent",
+    "packages/nowcastrenewal/src/nowcastrenewal/components",
+    "packages/nowcastrenewal/src/nowcastrenewal/reporting",
+    "packages/nowcastfoundation/r",
+)
+"""The simulator's code: its entry point and draws, the latent step, the
+shared components it composes and the R engine's reporting step."""
 
 
 def read_grid(grid_file: Path | str) -> dict:
-    """Return the grid config (`config/finetune/grids/<grid>.yaml`)."""
+    """Return the grid config (`config/finetune/grid.yaml`)."""
     return yaml.safe_load((ROOT / grid_file).read_text())
 
 
@@ -27,6 +35,9 @@ def epinowcast_sha(grid_file: Path | str) -> str:
     return sha
 
 
-def grid_name(grid_file: Path | str) -> str:
-    """Return the grid's name (its `name`)."""
-    return str(read_grid(grid_file)["name"])
+def grid_id(grid_file: Path | str) -> str:
+    """Return the grid file's identifier, as each manifest row records it.
+
+    The first 12 hex digits of the file's SHA-256.
+    """
+    return hashlib.sha256((ROOT / grid_file).read_bytes()).hexdigest()[:12]

@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import ZoneData, hub_zones
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhub.data.zones import ZoneData, hub_zones
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation import series_bias
@@ -117,8 +117,8 @@ def test_predict_gives_each_pass_its_groups_bias_rows(
 def test_native_quantiles_carry_the_series_bias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The weekly model's own quantiles were predicted without the rows'
-    # places, so a checkpoint's series bias was left out.
+    # The weekly model's own quantiles carry the rows' places, so a
+    # checkpoint's series bias is applied.
     seen = _bias_rows(monkeypatch)
     pipe = _Pipeline(model=object())
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
@@ -175,10 +175,11 @@ def test_prefetch_draws_as_one_task_at_a_time(
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
     model = get_model(name)
     alone = [model.forecast(t) for t in tasks]
+    one_by_one = len(pipe.calls)
     pipe.calls.clear()
     ready = foundation.prefetch(model, tasks)
     passes = len(pipe.calls)
-    assert passes <= len(tasks)
+    assert passes <= one_by_one
     for t, want in zip(tasks, alone, strict=True):
         pd.testing.assert_frame_equal(ready.forecast(t), want)
     # Every task's quantiles came from the prefetch.
@@ -195,7 +196,9 @@ def test_prefetch_serves_native_quantiles(
     alone = [model.quantiles(t, levels) for t in tasks]
     pipe.calls.clear()
     ready = foundation.prefetch(
-        model, [dataclasses.replace(t, n_samples=len(levels)) for t in tasks]
+        model,
+        [dataclasses.replace(t, n_samples=len(levels)) for t in tasks],
+        levels,
     )
     passes = len(pipe.calls)
     for t, want in zip(tasks, alone, strict=True):

@@ -34,10 +34,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bdbvhubrenewal.data.bvd import MAX_RHAT
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.tidy import delays_for_vintage
-from bdbvhubrenewal.data.zones import ZoneData, hub_places
+from bdbvhub.data.delays import hub_delay_pmf
+from bdbvhub.data.tidy import delays_for_vintage
+from bdbvhub.data.zones import ZoneData, hub_places
 from nowcasteval.nowcast import TRUTH_LEVEL
 from nowcasteval.scoring import energy_scores, score_forecasts
 from nowcastfoundation.simulate import (
@@ -48,6 +47,7 @@ from nowcastfoundation.simulate import (
     release_dates,
     simulate_outbreak,
 )
+from nowcastrenewal.bvd import MAX_RHAT
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -141,7 +141,7 @@ class BacktestConfig:
     bvd_max_rhat : float
         The limit on the joint fit's worst R-hat of a BVDOutbreakSize
         release the BVD variant may use
-        (`bdbvhubrenewal.data.bvd.select_release`).
+        (`nowcastrenewal.bvd.select_release`).
     skip_origins : tuple of str
         Real releases that are not backtest origins. They stay in the
         histories of later origins.
@@ -222,7 +222,7 @@ def apply_sampler(config: BacktestConfig) -> None:
     config : BacktestConfig
         Gives `sampler`.
     """
-    from bdbvhubrenewal.forecasters.renewal import SAMPLER_ENV
+    from nowcastrenewal.forecaster import SAMPLER_ENV
 
     if config.sampler and not os.environ.get(SAMPLER_ENV):
         os.environ[SAMPLER_ENV] = json.dumps(config.sampler)
@@ -398,7 +398,7 @@ def make_tasks(
     Examples
     --------
     >>> import dataclasses
-    >>> from bdbvhubrenewal.data import (
+    >>> from bdbvhub.data.tidy import (
     ...     delays_for_vintage, load_daily, load_delays, load_target
     ... )
     >>> from nowcasteval import backtest as bt
@@ -616,7 +616,7 @@ def run_forecasts(
     Examples
     --------
     >>> from nowcasteval.backtest import run_forecasts
-    >>> from bdbvhubrenewal.forecasters import get_model
+    >>> from bdbvhub.models import get_model
     >>> models = [get_model("randomwalk"), get_model("randomwalknowcast")]
     >>> forecasts = run_forecasts(models, [task])  # tasks from `make_tasks`
     >>> forecasts.groupby("model")["sample"].nunique()
@@ -669,7 +669,7 @@ def merge_by_model(path: Path | str, new: pd.DataFrame) -> pd.DataFrame:
     """Merge a run's rows into a results file, keeping other models' rows.
 
     The fitted variants are slow, so their rows come from the fit store
-    (`bdbvhubrenewal.evaluation.store`). A run replaces the rows of the
+    (`bdbvhub.store.store`). A run replaces the rows of the
     models it ran and keeps the rest, so a run of no model keeps them all.
 
     Parameters
@@ -1355,7 +1355,7 @@ def scenario_forecasts(
         them (`evaluation.zones.zone_allocations`), each with `scenario`.
     """
     # Local import: the zone backtest builds on this module.
-    from bdbvhubrenewal.evaluation.zones import zone_allocations
+    from bdbvhub.zones import zone_allocations
 
     lags = None if daily is None else cutoff_lags(daily)
     all_forecasts, all_zones = [], []
@@ -1413,7 +1413,7 @@ def score_scenarios(
     tuple of pandas.DataFrame
         The scores, the energy scores and the truth, as `run_scenarios`.
     """
-    from bdbvhubrenewal.evaluation.zones import score_zone_allocations
+    from bdbvhub.zones import score_zone_allocations
 
     del daily
     k = config.complete_after_weeks

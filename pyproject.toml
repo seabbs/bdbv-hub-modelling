@@ -20,6 +20,9 @@ dependencies = [
   "nowcasteval",
   "nowcastbaselines",
   "nowcastfoundation",
+  "nowcastrenewal",
+  "nowcastgermany",
+  "bdbvhub",
 ]
 keywords = [
   "epidemiology",
@@ -41,7 +44,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# The PyRenew renewal model (`bdbvhubrenewal.model`), pinned by SHA.
+# The PyRenew renewal model (`nowcastrenewal.model`), pinned by SHA.
 # PyRenew brings JAX and NumPyro. The package imports without it.
 model = [
   "pyrenew @ git+https://github.com/CDCgov/PyRenew@2441cb327d6e563eab0495540cb7467a102c234f",
@@ -53,16 +56,10 @@ Documentation = "https://samabbott.co.uk/bdbv-hub-modelling/"
 Repository = "https://github.com/seabbs/bdbv-hub-modelling"
 Issues = "https://github.com/seabbs/bdbv-hub-modelling/issues"
 
-[project.scripts]
-bdbvhubrenewal = "bdbvhubrenewal.cli:main"
-
-[build-system]
-requires = ["uv_build>=0.8,<0.14"]
-build-backend = "uv_build"
-
 [dependency-groups]
 dev = [
   "BDBVHubRenewal[model]",
+  "import-linter>=2.1",
   "mypy>=1.11",
   "pandas-stubs>=2.1",
   "pytest>=8",
@@ -94,6 +91,10 @@ paper = [
 
 [tool.uv]
 default-groups = ["dev"]
+# The workspace root holds no code of its own: the packages are in
+# packages/, and `bdbvhub` installs the `bdbvhub` and `bdbvhubrenewal`
+# commands.
+package = false
 
 [[tool.uv.index]]
 name = "pytorch-cu126"
@@ -106,12 +107,12 @@ nowcastutils = { workspace = true }
 nowcasteval = { workspace = true }
 nowcastbaselines = { workspace = true }
 nowcastfoundation = { workspace = true }
+nowcastrenewal = { workspace = true }
+bdbvhub = { workspace = true }
+nowcastgermany = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
-
-[tool.uv.build-backend]
-module-name = "bdbvhubrenewal"
 
 [tool.ruff]
 line-length = 80
@@ -143,12 +144,12 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = [
-  "bdbvhubrenewal",
   "nowcastutils",
   "nowcasteval",
   "nowcastbaselines",
   "nowcastfoundation",
   "nowcastrenewal",
+  "nowcastgermany",
   "bdbvhub",
 ]
 
@@ -161,9 +162,12 @@ convention = "numpy"
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
 # The small config classes and helpers carry no docstrings.
-"src/bdbvhubrenewal/submission/validate.py" = ["D101", "D102", "D103"]
+"packages/bdbvhub/src/bdbvhub/submission/validate.py" = ["D101", "D102", "D103"]
 # Method signatures follow PyRenew's, and maths names keep their capitals.
-"src/bdbvhubrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
+"packages/nowcastrenewal/src/nowcastrenewal/model/**" = ["ARG002", "N803", "N806", "PTH123"]
+"packages/nowcastrenewal/src/nowcastrenewal/latent/**" = ["ARG002", "N803", "N806"]
+"packages/nowcastrenewal/src/nowcastrenewal/reporting/**" = ["ARG002", "N803", "N806"]
+"packages/nowcastrenewal/src/nowcastrenewal/components/**" = ["ARG002", "N803", "N806"]
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 # The port's abort tests check R's conditions, not message text.
@@ -184,18 +188,87 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["bdbvhubrenewal"]
+source = [
+  "nowcastutils",
+  "nowcasteval",
+  "nowcastbaselines",
+  "nowcastfoundation",
+  "nowcastrenewal",
+  "nowcastgermany",
+  "bdbvhub",
+]
 branch = true
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
 
+[tool.importlinter]
+root_packages = [
+  "nowcastutils",
+  "nowcasteval",
+  "nowcastbaselines",
+  "nowcastrenewal",
+  "nowcastfoundation",
+  "nowcastgermany",
+  "bdbvhub",
+]
+
+[[tool.importlinter.contracts]]
+name = "Packages import only the packages below them"
+type = "layers"
+layers = [
+  "bdbvhub",
+  "nowcastgermany",
+  "nowcastfoundation",
+  "nowcastrenewal",
+  "nowcastbaselines",
+  "nowcasteval",
+  "nowcastutils",
+]
+# Imports against the order as of 2026-11-22. Each moves to the package
+# that owns the code, or out of the import. A new upward import is a
+# layering bug to fix, not to list here.
+ignore_imports = [
+  "nowcasteval.backtest -> bdbvhub.data.delays",
+  "nowcasteval.backtest -> bdbvhub.data.tidy",
+  "nowcasteval.backtest -> bdbvhub.data.zones",
+  "nowcasteval.backtest -> bdbvhub.zones",
+  "nowcasteval.backtest -> nowcastfoundation.simulate",
+  "nowcasteval.backtest -> nowcastrenewal.bvd",
+  "nowcasteval.backtest -> nowcastrenewal.forecaster",
+  "nowcasteval.checks -> bdbvhub.reporting.site",
+  "nowcasteval.checks -> nowcastbaselines.chain",
+  "nowcasteval.nowcast -> nowcastrenewal.forecaster",
+  "nowcasteval.nowcast_plots -> bdbvhub.reporting.site",
+  "nowcasteval.pairing -> bdbvhub.data.tidy",
+  "nowcasteval.pairing -> bdbvhub.store.store",
+  "nowcasteval.pairing -> nowcastbaselines.randomwalk",
+  "nowcasteval.pairing -> nowcastgermany.data",
+  "nowcasteval.pairing -> nowcastgermany.evaluation",
+  "nowcasteval.plots -> bdbvhub.data.delays",
+  "nowcasteval.plots -> bdbvhub.data.tidy",
+  "nowcasteval.plots -> bdbvhub.reporting.site",
+  "nowcasteval.plots -> nowcastbaselines.chain",
+  "nowcasteval.scoresummary -> bdbvhub.reporting.site",
+  "nowcastfoundation.checkpoint -> nowcastgermany.data",
+  "nowcastfoundation.checkpoint -> nowcastgermany.evaluation",
+  "nowcastfoundation.live_checkpoint -> nowcastgermany.store",
+  "nowcastfoundation.simulate -> bdbvhub.data.delays",
+  "nowcastfoundation.simulate -> bdbvhub.data.tidy",
+  "nowcastgermany.evaluation -> bdbvhub.data.tidy",
+  "nowcastgermany.evaluation -> bdbvhub.models",
+  "nowcastgermany.reporting -> bdbvhub.reporting.explorer",
+  "nowcastgermany.reporting -> bdbvhub.reporting.site",
+  "nowcastrenewal.zones -> bdbvhub.data.tidy",
+  "nowcastrenewal.zones -> bdbvhub.data.zones",
+]
+
 [tool.mypy]
 python_version = "3.13"
 strict = true
 warn_unreachable = true
-files = ["src"]
+files = ["packages/*/src"]
 
 [[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.
@@ -236,7 +309,12 @@ disallow_untyped_calls = false
 
 [[tool.mypy.overrides]]
 # The model subclasses PyRenew's and NumPyro's classes, which are untyped.
-module = ["bdbvhubrenewal.model.*"]
+module = [
+  "nowcastrenewal.model.*",
+  "nowcastrenewal.latent.*",
+  "nowcastrenewal.reporting.*",
+  "nowcastrenewal.components.*",
+]
 disallow_subclassing_any = false
 
 [[tool.mypy.overrides]]

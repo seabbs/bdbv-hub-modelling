@@ -3,8 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.model import censored_pmf, generation_interval
+from bdbvhub.data.delays import hub_delay_pmf
+from nowcastrenewal.components.pmfs import Delay, censored_pmf
+from nowcastrenewal.model import generation_interval
 
 from .numpy_reference import (
     delay_matrix,
@@ -21,7 +22,9 @@ def test_known_plus_missing_equals_reports() -> None:
     confirmed = np.linspace(5, 50, n)
     pmfs = np.array(
         [
-            censored_pmf("gamma", 5 + s / 20, 4 / (5 + s / 20), 20)
+            censored_pmf(
+                Delay.from_mean_cv("gamma", 5 + s / 20, 4 / (5 + s / 20)), 21
+            )
             for s in range(n)
         ]
     )

@@ -1,34 +1,28 @@
-"""Check one round of simulations against fixed plausibility thresholds.
+"""Record one round of simulations' summaries.
 
-Summarises each simulation of `ROUND_DIR/sims` (`summaries`) and excludes
-those past a threshold (`check`), each with its reason and evidence: cases
-per stratum (the median total over draws, over the strata with cases),
-the largest week-on-week rise in weekly cases by reference date, and the
-mean reporting delay. The thresholds and why they are set as they are
-live in the grid file (`qc`, the one `simulate.grid_file` names); the
-workflow passes them.
+Summarises each simulation of `ROUND_DIR/sims` (`summaries`): cases,
+strata with cases, the largest stratum's cases over its population, the
+largest week-on-week rise in weekly cases by reference date and the
+reporting delay. The grid sets no thresholds, so no simulation is
+excluded. `excluded.csv` is written empty because the trainer and the
+releases read it.
 
 Records the input table, the exclusions (`excluded.csv`: simulation,
-reason, evidence), the thresholds (`decisions.json`) and a one-line
-summary in `ROUND_DIR/qc/`. Simulations are never deleted; the trainer
-skips the excluded ones. Run from the repo root:
+reason, evidence), `decisions.json` and a one-line summary in
+`ROUND_DIR/qc/`. Simulations are never deleted. Run from the repo root:
 
-    uv run python scripts/sim_qc.py ROUND_DIR --max-cases-per-stratum N
-        --max-weekly-jump N --max-mean-delay-days N
+    uv run python scripts/sim_qc.py ROUND_DIR
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
-
-LIMITS = ("max_cases_per_stratum", "max_weekly_jump", "max_mean_delay_days")
-"""The thresholds `check` takes, each a required option."""
 
 CELL = [
     "strata",
@@ -40,7 +34,7 @@ CELL = [
     "delay_family",
     "delay_form",
     "delay_change",
-    "reporting",
+    "report_days",
     "shocks",
     "mixing",
     "imports",
@@ -50,6 +44,33 @@ CELL = [
     "delay_places",
     "strata_link",
 ]
+
+
+def cases_over_population(counts: pd.DataFrame, settings: Any) -> float:
+    """Return the largest ratio of a stratum's cases to its population.
+
+    Cases are each stratum's median total over draws. NaN unless the
+    settings give each stratum's location and population
+    (`stratum_location`, `stratum_population`, ";"-separated).
+    """
+    try:
+        where = str(settings["stratum_location"]).split(";")
+        size = [
+            float(x) for x in str(settings["stratum_population"]).split(";")
+        ]
+    except (KeyError, TypeError, ValueError):
+        return float("nan")
+    if len(where) != len(size):
+        return float("nan")
+    population = pd.Series(size, index=where)
+    cases = (
+        counts.groupby(["location", "outbreak"])["count"]
+        .sum()
+        .groupby("location")
+        .median()
+    )
+    ratio = cases / population.reindex(cases.index)
+    return float(ratio.max()) if ratio.notna().any() else float("nan")
 
 
 def summaries(sim_dir: Path) -> pd.DataFrame:
@@ -86,6 +107,7 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
                     "cases_min": float(per_draw.min()),
                     "cases_max": float(per_draw.max()),
                     "strata_with_cases": c["location"].nunique(),
+                    "cases_over_population": cases_over_population(c, s),
                     "weeks": int(first.size),
                     "peak_weekly": float(first.max()),
                     "max_weekly_log_growth": float(growth.max())
@@ -103,80 +125,24 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def check(table: pd.DataFrame, limits: dict[str, float]) -> pd.DataFrame:
-    """Return the simulations past a threshold, with reason and evidence.
-
-    `table` is `summaries`' output; `limits` holds `max_cases_per_stratum`,
-    `max_weekly_jump` and `max_mean_delay_days`. A simulation past several
-    thresholds is listed once per threshold.
-    """
-    table = table.reset_index(drop=True)
-    per_stratum = table["cases_median"] / table["strata_with_cases"].clip(
-        lower=1
-    )
-    jump = math.log(limits["max_weekly_jump"])
-    rules = [
-        (
-            per_stratum > limits["max_cases_per_stratum"],
-            f"cases per stratum above {limits['max_cases_per_stratum']:,.0f}",
-            lambda i: (
-                f"cases_per_stratum={per_stratum[i]:.0f}, "
-                f"strata_with_cases={table['strata_with_cases'][i]}"
-            ),
-        ),
-        (
-            table["max_weekly_log_growth"] > jump,
-            f"weekly cases rise more than {limits['max_weekly_jump']:,.0f}-"
-            "fold in one week",
-            lambda i: (
-                "max_weekly_fold="
-                f"{math.exp(table['max_weekly_log_growth'][i]):.0f}"
-            ),
-        ),
-        (
-            table["delay_mean_days"] > limits["max_mean_delay_days"],
-            "mean reporting delay over "
-            f"{limits['max_mean_delay_days']:,.0f} days",
-            lambda i: f"delay_mean_days={table['delay_mean_days'][i]:.1f}",
-        ),
-    ]
-    out = []
-    for mask, reason, evidence in rules:
-        for i in mask[mask].index:
-            out.append(
-                {
-                    "simulation": table["simulation"][i],
-                    "reason": reason,
-                    "evidence": evidence(i),
-                }
-            )
-    return pd.DataFrame(out, columns=["simulation", "reason", "evidence"])
-
-
 def main() -> None:
     """Check the round and record everything in its qc/ directory."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("round_dir", type=Path)
-    for key in LIMITS:
-        parser.add_argument(
-            "--" + key.replace("_", "-"), type=float, required=True
-        )
     args = parser.parse_args()
-    limits = {k: getattr(args, k) for k in LIMITS}
     qc = args.round_dir / "qc"
     qc.mkdir(parents=True, exist_ok=True)
     table = summaries(args.round_dir / "sims")
     table.to_csv(qc / "input.csv", index=False)
-    excluded = check(table, limits)
+    excluded = pd.DataFrame(columns=["simulation", "reason", "evidence"])
     excluded.to_csv(qc / "excluded.csv", index=False)
-    n_out = excluded["simulation"].nunique()
+    n_out = 0
     (qc / "decisions.json").write_text(
         json.dumps(
             {
-                "check": "fixed thresholds (scripts/sim_qc.py)",
-                "limits": limits,
+                "check": "no thresholds (scripts/sim_qc.py)",
                 "n_simulations": len(table),
-                "excluded": excluded.to_dict("records"),
+                "excluded": [],
             },
             indent=1,
         )

@@ -116,28 +116,11 @@ def test_a_non_finite_loss_or_gradient_leaves_the_weights():
     assert not torch.equal(before[0], params[0])
 
 
-def test_memory_budget_sets_checkpointing_and_block_size():
-    from finetune_chronos import checkpoint_above, max_series, memory_gb
+def test_the_trainer_has_no_way_to_skip_a_block():
+    import finetune_stream
 
-    # Measured: 800 series without checkpointing about 43 GB; 1,000, 1,500
-    # and 2,000 with it about 9.6, 17.3 and 25.9 GB.
-    assert abs(memory_gb(800, checkpointed=False) - 43) < 2
-    for series, gb in ((1000, 9.6), (1500, 17.3), (2000, 25.9)):
-        assert abs(memory_gb(series, checkpointed=True) - gb) < 1
-    budget = 36
-    above = checkpoint_above(budget)
-    assert memory_gb(above, False) <= budget < memory_gb(above + 1, False)
-    most = max_series(budget)
-    assert memory_gb(most, True) <= budget < memory_gb(most + 1, True)
-
-
-def test_skipped_blocks_are_listed_for_the_release():
-    from finetune_stream import skipped_lines
-
-    skipped = [{"outbreak": "5043-0013", "step": 3700, "series": 897}]
-    assert skipped_lines(skipped) == [
-        "# skipped 5043-0013 at step 3700, 897 series"
-    ]
+    # Skipping blocks biases training: none is ever left out.
+    assert not hasattr(finetune_stream, "skipped_lines")
 
 
 def test_no_batch_holds_more_series_than_the_budget_allows():
@@ -214,13 +197,10 @@ def test_a_split_batch_starts_from_clear_gradients():
     from finetune_stream import accumulate
 
     grads: list[int] = []
-    skipped: list[int] = []
 
     def backward(part, _share):
         if len(part) > 2:
             grads.append(-1)  # a partial backward before running out
-            raise RuntimeError("MPS backend out of memory")
-        if 9 in part:
             raise RuntimeError("MPS backend out of memory")
         grads.extend(part)
         return 0.5
@@ -228,20 +208,29 @@ def test_a_split_batch_starts_from_clear_gradients():
     def zero():
         grads.clear()
 
-    value = accumulate([1, 2, 3, 4, 9], backward, zero, skipped.append)
-    # The partial backward is cleared; every block but the one too large
-    # for memory is used once.
-    assert sorted(grads) == [1, 2, 3, 4]
-    assert skipped == [9]
+    value = accumulate([1, 2, 3, 4, 9], backward, zero)
+    # The partial backward is cleared; every block is used once.
+    assert sorted(grads) == [1, 2, 3, 4, 9]
     assert value == 0.5
 
 
-def test_a_block_that_runs_out_once_is_retried_before_it_is_skipped():
+def test_a_block_too_large_for_memory_stops_the_run():
+    from finetune_stream import accumulate
+
+    def backward(part, _share):
+        if 9 in part:
+            raise RuntimeError("CUDA out of memory")
+        return 0.5
+
+    with pytest.raises(RuntimeError, match="too large for memory"):
+        accumulate([1, 9], backward, lambda: None)
+
+
+def test_a_block_that_runs_out_once_is_retried():
     from finetune_stream import accumulate
 
     calls: list[list[int]] = []
     zeroed: list[int] = []
-    skipped: list[int] = []
 
     def backward(part, _share):
         calls.append(list(part))
@@ -251,46 +240,11 @@ def test_a_block_that_runs_out_once_is_retried_before_it_is_skipped():
             raise RuntimeError("CUDA out of memory")
         return 0.5
 
-    value = accumulate([7], backward, lambda: zeroed.append(1), skipped.append)
+    value = accumulate([7], backward, lambda: zeroed.append(1))
     assert value == 0.5
-    assert skipped == []
     # Memory is freed (`zero`) before the retry.
     assert calls == [[7], [7]]
     assert zeroed == [1]
-
-
-def test_a_block_that_never_fits_is_skipped_after_one_retry():
-    from finetune_stream import accumulate
-
-    calls: list[list[int]] = []
-    skipped: list[int] = []
-
-    def backward(part, _share):
-        calls.append(list(part))
-        raise RuntimeError("CUDA out of memory")
-
-    value = accumulate([7], backward, lambda: None, skipped.append)
-    assert np.isnan(value)
-    assert skipped == [7]
-    assert calls == [[7], [7]]
-
-
-def test_blocks_left_after_a_skip_share_the_whole_gradient():
-    from finetune_stream import accumulate
-
-    shares: dict[int, float] = {}
-
-    def backward(part, share):
-        if 9 in part:
-            raise RuntimeError("CUDA out of memory")
-        for i in part:
-            shares[i] = share / len(part)
-        return 0.5
-
-    accumulate([1, 2, 3, 9], backward, shares.clear, print)
-    # The three blocks used weigh a third each, as a batch of three would.
-    assert sorted(shares) == [1, 2, 3]
-    assert sum(shares.values()) == pytest.approx(1.0)
 
 
 def _checkpoint(tmp_path):
@@ -497,7 +451,6 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
         initializer=init_worker,
         initargs=(
             finetune_chronos.MAX_SERIES,
-            finetune_chronos.MAX_LAGS,
             finetune_chronos.SOURCES,
         ),
     ) as pool:
@@ -609,32 +562,22 @@ def test_one_source_cuts_only_that_source(tmp_path, monkeypatch):
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("weekly",))
     blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
     assert blocks
-    assert all(_d(b) <= 7 for b in blocks)
+    assert all(b["source"] == "weekly" and _d(b) >= 1 for b in blocks)
 
 
 def test_workers_take_the_trainer_block_settings():
     import finetune_chronos
     from finetune_stream import init_worker
 
-    saved = (
-        finetune_chronos.MAX_SERIES,
-        finetune_chronos.MAX_LAGS,
-        finetune_chronos.SOURCES,
-    )
+    saved = (finetune_chronos.MAX_SERIES, finetune_chronos.SOURCES)
     try:
-        lags = {"daily": (28,)}
-        init_worker(100, lags, ("daily",), grid="r7", loss_days=7)
+        init_worker(100, ("daily",), loss_days=7)
         assert finetune_chronos.PARENTS is not None
         assert finetune_chronos.LOSS_HORIZON_DAYS == 7
         assert finetune_chronos.MAX_SERIES == 100
-        assert lags == finetune_chronos.MAX_LAGS
         assert finetune_chronos.SOURCES == ("daily",)
     finally:
-        (
-            finetune_chronos.MAX_SERIES,
-            finetune_chronos.MAX_LAGS,
-            finetune_chronos.SOURCES,
-        ) = saved
+        finetune_chronos.MAX_SERIES, finetune_chronos.SOURCES = saved
         finetune_chronos.PARENTS = None
         finetune_chronos.LOSS_HORIZON_DAYS = None
 
@@ -675,8 +618,9 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
     assert blocks
     for b in blocks:
         assert b["source"] == "3day"
-        # D runs 5-16 steps of 3 days.
-        assert 5 <= _d(b) <= 16
+        # D follows the lag rule in 3-day steps, at most the history.
+        assert _d(b) >= 1
+    assert max(_d(b) for b in blocks) >= 5
 
 
 def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
@@ -1168,10 +1112,10 @@ def test_a_batch_that_fits_is_not_cleared_first():
         return 0.5
 
     # The step before cleared the gradients and freed memory.
-    assert accumulate([1, 2], backward, lambda: zeroed.append(1), print) == 0.5
+    assert accumulate([1, 2], backward, lambda: zeroed.append(1)) == 0.5
     assert zeroed == []
     # Each retry after running out of memory starts from clear gradients.
-    assert accumulate([1, 2, 3], backward, lambda: zeroed.append(1), print)
+    assert accumulate([1, 2, 3], backward, lambda: zeroed.append(1))
     assert zeroed == [1]
 
 
@@ -1244,7 +1188,7 @@ def test_steps_in_a_row_do_not_sum_gradients():
         for _ in range(2):
             if clear_between:
                 optimiser.zero_grad()
-            value = accumulate([1, 2], backward, optimiser.zero_grad, print)
+            value = accumulate([1, 2], backward, optimiser.zero_grad)
             finite_step(params, optimiser, value)
         return [p.detach().clone() for p in params]
 
@@ -1303,7 +1247,7 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(
-        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r7"]
+        ["sims", "out", "--held-out-seeds", "1", "2"]
     )
     assert args.eval_every == fs.ft.EVAL_EVERY == 100
     assert args.by_source_every == fs.BY_SOURCE_EVERY == 200
@@ -1315,11 +1259,11 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
         fs.check_cadence(0, 0)
 
 
-def test_a_grid_with_no_file_is_refused():
+def test_a_missing_grid_file_is_refused(tmp_path):
     import finetune_chronos
 
-    with pytest.raises(ValueError, match="r99"):
-        finetune_chronos.use_design("r99")
+    with pytest.raises(FileNotFoundError, match=r"nowhere\.yaml"):
+        finetune_chronos.use_grid(tmp_path / "nowhere.yaml")
 
 
 def test_the_trainer_takes_its_design_from_the_grid():
@@ -1327,11 +1271,11 @@ def test_the_trainer_takes_its_design_from_the_grid():
     import finetune_stream as fs
 
     args = fs.build_parser().parse_args(
-        ["sims", "out", "--held-out-seeds", "1", "2", "--grid", "r7"]
+        ["sims", "out", "--held-out-seeds", "1", "2"]
     )
     assert args.sources is None
     try:
-        finetune_chronos.use_design(args.grid)
+        finetune_chronos.use_grid(args.grid_file)
         assert tuple(args.sources or finetune_chronos.SOURCE_SHARES) == (
             "daily",
             "weekly",
@@ -1393,10 +1337,10 @@ def _counts_of(places, days=140):
     return counts
 
 
-def test_r7_blocks_are_whole_systems_never_cut(monkeypatch):
+def test_blocks_are_whole_systems_never_cut(monkeypatch):
     from finetune_chronos import NATIONAL, outbreak_blocks
 
-    ft.use_design("r7")
+    ft.use_grid()
     try:
         monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.2)
         places = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
@@ -1411,14 +1355,15 @@ def test_r7_blocks_are_whole_systems_never_cut(monkeypatch):
         assert got
         # The whole system, or the country alone; never a subset.
         assert set(got) == {whole, (NATIONAL,)}
-        # A system over the series cap is skipped and said, not cut.
+        # A system over the series cap is still cut whole: no block is
+        # ever skipped for its size.
         monkeypatch.setattr(ft, "MAX_SERIES", 10)
         empty: list[str] = []
         blocks = outbreak_blocks(
             counts, places, np.random.default_rng(0), 3, empty=empty
         )
-        assert all(b["places"] == (NATIONAL,) for b in blocks)
-        assert any("over the series cap" in e for e in empty)
+        assert any(b["places"] == whole for b in blocks)
+        assert not any("series cap" in e for e in empty)
     finally:
         ft.PARENTS = None
 
@@ -1428,11 +1373,9 @@ def test_parents_come_from_the_grid_file(monkeypatch):
     from finetune_chronos import NATIONAL, outbreak_blocks
 
     grid = yaml.safe_load(
-        (
-            Path(__file__).parents[1] / "config/finetune/grids/r7.yaml"
-        ).read_text()
+        (Path(__file__).parents[1] / "config/finetune/grid.yaml").read_text()
     )
-    ft.use_design("r7")
+    ft.use_grid()
     try:
         # The grid's weights of each kind of parent, and its named
         # distributions of the share and the lag.
@@ -1464,3 +1407,132 @@ def test_parents_come_from_the_grid_file(monkeypatch):
     finally:
         ft.PARENTS = None
     assert ft.PARENTS is None
+
+
+def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
+    # Early cut-offs have no complete steps to read a delay from, so the
+    # shared rule takes as many lags as the history allows: they are kept,
+    # not skipped.
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    monkeypatch.setattr(ft, "SOURCES", ("daily",))
+    monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 1.0)
+    counts = _counts_of(["P1", "P2"], days=63)
+    blocks = outbreak_blocks(
+        counts, ["P1", "P2"], np.random.default_rng(0), 1, 4
+    )
+    assert len(blocks) == 4
+    for b in blocks:
+        assert b["places"] == (NATIONAL,)
+        lag = b["n_covariates"] // len(b["places"])
+        # Every lag series and two steps of context fit in the history.
+        assert 1 <= lag < 63
+        assert b["nowcast"] == lag
+
+
+def test_views_of_a_system_over_capacity_cover_every_leaf():
+    from finetune_chronos import NATIONAL, system_views
+
+    nested = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
+    whole = (NATIONAL, "P1", "P2", "P3", "A1", "A2", *nested)
+    # Within capacity: the whole system.
+    assert system_views(whole, len(whole)) == [("whole", whole, [])]
+    # Over it: the top levels aggregated up, and each place with its ages
+    # and its own total.
+    assert system_views(whole, 5) == [
+        ("top", (NATIONAL, "P1", "P2", "P3"), ["strata"]),
+        ("subtree", ("P1", "P1-A1", "P1-A2"), []),
+        ("subtree", ("P2", "P2-A1", "P2-A2"), []),
+        ("subtree", ("P3", "P3-A1", "P3-A2"), []),
+    ]
+    # A subtree over capacity is its total with as many leaves as fit.
+    assert system_views(whole, 2)[1:] == [
+        ("subtree", (f"P{p}", f"P{p}-A{a}"), [])
+        for p in range(1, 4)
+        for a in range(1, 3)
+    ]
+    # The top collapses further until it fits.
+    assert system_views(whole, 2)[0] == (
+        "top",
+        (NATIONAL,),
+        ["strata", "places"],
+    )
+    # Room for one place: the country, and each leaf alone.
+    assert system_views(whole, 1) == [
+        ("top", (NATIONAL,), ["strata", "places"]),
+        *[("subtree", (p,), []) for p in nested],
+    ]
+    # Flat places: the country, and its places in groups with it.
+    flat = (NATIONAL, "P01", "P02", "P03")
+    assert system_views(flat, 3) == [
+        ("top", (NATIONAL,), ["places"]),
+        ("subtree", (NATIONAL, "P01", "P02"), []),
+        ("subtree", (NATIONAL, "P03"), []),
+    ]
+
+
+def test_a_system_over_capacity_is_cut_into_views_with_exact_totals(
+    monkeypatch,
+):
+    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    ft.use_grid()
+    try:
+        monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.0)
+        monkeypatch.setitem(
+            ft.PARENTS,
+            "shares",
+            {"exact": 1.0, "unallocated": 0.0, "late_parent": 0.0},
+        )
+        places = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
+        counts = _counts_of(places)
+        whole = (NATIONAL, "P1", "P2", "P3", "A1", "A2", *places)
+        monkeypatch.setattr(ft, "BLOCK_LIMIT", None)
+        full = outbreak_blocks(counts, places, np.random.default_rng(0), 3)
+        assert full
+        assert all(b["places"] == whole for b in full)
+        assert all(b["view"] == {"kind": "whole"} for b in full)
+        series = [b["context"].shape[0] for b in full]
+        # Room for the country and its places in the largest blocks, not
+        # for their whole system.
+        limit = -(-max(series) * 5 // len(whole))
+        over = [n > limit for n in series]
+        assert any(over)
+        monkeypatch.setattr(ft, "BLOCK_LIMIT", limit)
+        cut = outbreak_blocks(counts, places, np.random.default_rng(0), 3)
+        assert len(cut) == len(full) + 3 * sum(over)
+        at = 0
+        for k, before in enumerate(full):
+            if not over[k]:
+                # A system within the limit stays whole.
+                assert cut[at]["places"] == whole
+                assert cut[at]["view"] == {"kind": "whole"}
+                at += 1
+                continue
+            views = cut[at : at + 4]
+            at += 4
+            kinds = [v["view"]["kind"] for v in views]
+            assert kinds == ["top", "subtree", "subtree", "subtree"]
+            assert views[0]["view"]["collapsed"] == ["strata"]
+            # Every leaf is in a block.
+            assert {p for v in views for p in v["places"] if "-" in p} == set(
+                places
+            )
+            for after in views:
+                n = after["context"].shape[0]
+                assert n <= limit
+                assert after["cut"] == before["cut"]
+                assert after["view"]["series_before"] == series[k]
+                assert after["view"]["series_after"] == n
+                assert after["view"]["places_before"] == len(whole)
+                assert after["view"]["places_after"] == len(after["places"])
+                # Totals stay exact: each place's series is the whole
+                # system's.
+                for i, place in enumerate(after["places"]):
+                    row = after["target_places"].index(i)
+                    was = before["target_places"].index(whole.index(place))
+                    np.testing.assert_array_equal(
+                        after["context"][row], before["context"][was]
+                    )
+    finally:
+        ft.PARENTS = None

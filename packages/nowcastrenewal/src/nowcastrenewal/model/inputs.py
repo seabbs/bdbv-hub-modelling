@@ -1,0 +1,439 @@
+# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+"""Model inputs from the tidy tables of a task.
+
+- `vintage_from_tables` builds the model's `Vintage` for one data vintage.
+- `imputation_pmf` cuts the data provider's imputation delay to the model.
+- `gravity_kernel` gives the importation kernel (`components.mixing`)
+  from the task's places.
+- `bvd_rows` and `bvd_inputs` turn BVDOutbreakSize estimates into the
+  inputs of the BVD term.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+from typing import Any, cast
+
+import numpy as np
+import pandas as pd
+
+from nowcastutils.releases import release_cutoff
+
+from ..components.mixing import distance_kernel, great_circle_km
+from .model import (
+    MAIN,
+    ModelConfig,
+    Vintage,
+    incubation_period,
+    seed_lead,
+)
+
+NATIONAL = "CD"
+"""Location code of the whole country."""
+START_COUNT = 5
+"""The week grid starts one week before national weekly onsets first
+reach this count. Earlier weeks are returned as observed."""
+
+
+def imputation_pmf(pmf: np.ndarray, dmax: int) -> np.ndarray:
+    """Return the data provider's imputation delay on days 0 to `dmax`.
+
+    Truncated at `dmax` and renormalised, or padded with zeros.
+
+    Parameters
+    ----------
+    pmf : numpy.ndarray
+        The daily pmf of the delay the provider subtracts from the
+        report date to impute a missing onset date
+        (`ForecastTask.imputation_delay`).
+    dmax : int
+        Longest delay kept.
+
+    Returns
+    -------
+    numpy.ndarray
+        The pmf on days 0 to `dmax`, summing to one.
+
+    Raises
+    ------
+    ValueError
+        If the pmf has no mass on days 0 to `dmax`.
+    """
+    out = np.zeros(dmax + 1)
+    kept = np.asarray(pmf, dtype=float)[: dmax + 1]
+    out[: kept.size] = kept
+    total = out.sum()
+    if not total > 0:
+        raise ValueError(f"The imputation delay has no mass on 0 to {dmax}.")
+    return np.asarray(out / total, dtype=float)
+
+
+def gravity_kernel(
+    locations: tuple[str, ...], table: pd.DataFrame, decay_km: float = 300.0
+) -> np.ndarray:
+    r"""Gravity kernel between provinces, rows receive.
+
+    $K_{pq} \propto N_p \exp(-D_{pq} / \text{decay})$ for $p \ne q$,
+    normalised per origin $q$ (`components.mixing.distance_kernel`), with
+    populations $N$ and great-circle distances $D$ between the centres,
+    both from `table`.
+
+    Parameters
+    ----------
+    locations : tuple of str
+        Province codes.
+    table : pandas.DataFrame
+        Locations with `population`, `latitude` and `longitude` columns
+        (`ForecastTask.places`).
+    decay_km : float, default 300.0
+        Distance scale of the decay.
+
+    Returns
+    -------
+    numpy.ndarray
+        Columns (origins) sum to one, zero diagonal.
+
+    Raises
+    ------
+    ValueError
+        If a province has no centre or population, or the kernel is not
+        finite.
+    """
+    rows = table.set_index("location").reindex(list(locations))
+    if rows["population"].isna().any():
+        raise ValueError("Missing province population.")
+    dist = great_circle_km(
+        rows["latitude"].to_numpy(float), rows["longitude"].to_numpy(float)
+    )
+    return distance_kernel(
+        dist, decay_km, "origin", weights=rows["population"].to_numpy(float)
+    )
+
+
+BVD_PROVINCES = {
+    "ituri": "CD-IT",
+    "nord_kivu": "CD-NK",
+    "haut_uele": "CD-HU",
+    "sud_kivu": "CD-SK",
+    "tshopo": "CD-TO",
+    "bas_uele": "CD-BU",
+    "sud_ubangi": "CD-SU",
+    "nord_ubangi": "CD-NU",
+}
+"""BVDOutbreakSize patch keys to hub province codes."""
+BVD_TAU_MIN = 0.05
+"""Floor on the SD of a BVD patch's deviation from the national log Rt."""
+Z90 = 1.6448536
+"""Standard normal 95% quantile, to turn a 90% interval into an SD."""
+
+
+def bvd_rows(
+    estimates: pd.DataFrame,
+    timeseries: pd.DataFrame,
+    draws: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Tidy BVDOutbreakSize summaries of one release into model rows.
+
+    Reads `province_estimates.csv`, `province_timeseries.csv` and,
+    optionally, `posterior_draws.csv`. The national term uses the draws
+    when given (mean and SD of log `R_T`), otherwise the `National` row
+    of the time series at `as_of`. Each patch carries the time series'
+    own national row as its reference, so the deviation uses one table.
+    Pooled patches (`pooled = 1`) share one row and list their members.
+
+    Parameters
+    ----------
+    estimates : pandas.DataFrame
+        `province_estimates.csv`.
+    timeseries : pandas.DataFrame
+        `province_timeseries.csv`.
+    draws : pandas.DataFrame, optional
+        `posterior_draws.csv`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `group`, `members`, `as_of`, `log_mean`, `log_sd`,
+        `ref_log_mean`, `ref_log_sd`.
+
+    Raises
+    ------
+    ValueError
+        On an unknown BVD patch key.
+    """
+    as_of = str(estimates["as_of"].iloc[0])
+    nat = timeseries.loc[
+        (timeseries["area"] == "National")
+        & (timeseries["date"] == as_of)
+        & (timeseries["series"] == "rt")
+    ].iloc[0]
+    ref_mean = float(np.log(nat["median"]))
+    ref_sd = float(np.log(nat["upper_90"] / nat["lower_90"]) / (2 * Z90))
+    if draws is not None:
+        log_rt = np.log(draws["R_T"].to_numpy(float))
+        nat_mean, nat_sd = float(log_rt.mean()), float(log_rt.std(ddof=1))
+    else:
+        nat_mean, nat_sd = ref_mean, ref_sd
+    rows = [("national", "", as_of, nat_mean, nat_sd, nat_mean, nat_sd)]
+    unknown = set(estimates["province"]) - set(BVD_PROVINCES)
+    if unknown:
+        raises = sorted(unknown)
+        raise ValueError(f"Unknown BVD patch keys {raises}.")
+    by_patch = estimates.groupby("patch", sort=False)
+    for patch, g in by_patch:
+        members = ";".join(BVD_PROVINCES[k] for k in g["province"])
+        row = g.iloc[0]
+        rows.append(
+            (
+                str(patch),
+                members,
+                as_of,
+                float(np.log(row["R_T_median"])),
+                float(np.log(row["R_T_upper"] / row["R_T_lower"]) / (2 * Z90)),
+                ref_mean,
+                ref_sd,
+            )
+        )
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "group",
+            "members",
+            "as_of",
+            "log_mean",
+            "log_sd",
+            "ref_log_mean",
+            "ref_log_sd",
+        ],
+    )
+
+
+def bvd_inputs(
+    rows: pd.DataFrame,
+    names: list[str],
+    start: dt.date,
+    masked: tuple[str, ...] = (),
+) -> dict[str, Any] | None:
+    """Map tidy BVD rows onto the modelled provinces.
+
+    Groups with no modelled member are dropped. Leaving a province out
+    drops the national term and its patch, since both carry its data.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        Rows from `bvd_rows`.
+    names : list of str
+        Modelled province codes, in model order.
+    start : datetime.date
+        First day of the model axis.
+    masked : tuple of str
+        Provinces left out of the fit.
+
+    Returns
+    -------
+    dict or None
+        `day`, `groups`, `values`, `scales` and `kinds` for
+        `RtPseudoObservation`, or None if nothing is left.
+    """
+    day = (pd.Timestamp(rows["as_of"].iloc[0]).date() - start).days
+    groups, values, scales, kinds = [], [], [], []
+    for row in rows.to_dict("records"):
+        log_mean, log_sd = float(row["log_mean"]), float(row["log_sd"])
+        if row["group"] == "national":
+            if masked:
+                continue
+            member = np.ones(len(names), bool)
+            value, scale, kind = log_mean, log_sd, 0
+        else:
+            codes = str(row["members"]).split(";")
+            if set(codes) & set(masked):
+                continue
+            ref_mean, ref_sd = (
+                float(row["ref_log_mean"]),
+                float(row["ref_log_sd"]),
+            )
+            member = np.array([p in codes for p in names])
+            value = log_mean - ref_mean
+            scale = float(np.sqrt(max(log_sd**2 - ref_sd**2, BVD_TAU_MIN**2)))
+            kind = 1
+        if member.any():
+            groups.append(member)
+            values.append(value)
+            scales.append(scale)
+            kinds.append(kind)
+    if not groups:
+        return None
+    return {
+        "day": day,
+        "groups": np.array(groups),
+        "values": np.array(values),
+        "scales": np.array(scales),
+        "kinds": np.array(kinds),
+    }
+
+
+def _saturday(day: str | dt.date) -> dt.date:
+    d = pd.Timestamp(day).date()
+    return d + dt.timedelta(days=(5 - d.weekday()) % 7)
+
+
+def vintage_from_tables(
+    target: pd.DataFrame,
+    delays: pd.DataFrame | None,
+    vintage: str,
+    locations: tuple[str, ...],
+    table: pd.DataFrame,
+    config: ModelConfig = MAIN,
+    horizon_weeks: int = 3,
+    masked: tuple[str, ...] = (),
+    bvd: pd.DataFrame | None = None,
+    release_pairs: dict[str, np.ndarray] | None = None,
+    *,
+    imputation_delay: np.ndarray,
+) -> Vintage:
+    """Build a `Vintage` from the target and delay rows of one vintage.
+
+    Every province in `locations` is modelled, those with no case yet
+    from a near-zero start with importation only. The week grid
+    starts one week before national weekly onsets first reach
+    `START_COUNT` and ends with the week holding the vintage's cut-off,
+    its latest onset day (`data.releases.release_cutoff`).
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Rows as in `bdbvhub.data.tidy.load_target`, with `cutoff`.
+    delays : pandas.DataFrame or None
+        Delay rows (`location`, `onset_week`, `delay`) at this vintage.
+    vintage : str
+        The `as_of` date.
+    locations : tuple of str
+        Provinces.
+    table : pandas.DataFrame
+        Locations with `population`, `latitude` and `longitude`
+        (`ForecastTask.places`).
+    config : ModelConfig
+        Model configuration.
+    horizon_weeks : int
+        Forecast weeks after the vintage week.
+    masked : tuple of str
+        Provinces whose likelihood is switched off (leave one out). They
+        stay in the latent process and their delays are left out.
+    bvd : pandas.DataFrame, optional
+        BVDOutbreakSize rows from `bvd_rows` for the release chosen for
+        this vintage (`ForecastTask.auxiliary["bvd"]`).
+    release_pairs : dict, optional
+        Rows of each earlier delay file and how many the file before it
+        had (`data.releases.release_pairs`).
+    imputation_delay : numpy.ndarray
+        The daily pmf of the delay the data provider subtracts to impute
+        a missing onset (`ForecastTask.imputation_delay`).
+
+    Returns
+    -------
+    Vintage
+        Model inputs.
+    """
+    rows = target.loc[
+        (target["vintage"] == vintage) & target["location"].isin(locations)
+    ]
+    wide = rows.pivot_table(
+        index="target_end_date",
+        columns="location",
+        values=["observed", "imputed", "total"],
+        aggfunc="sum",
+    ).fillna(0)
+    totals_wide = cast(pd.DataFrame, wide["total"])
+    active = tuple(locations)
+    national = totals_wide.reindex(columns=list(active)).fillna(0).sum(axis=1)
+    counts_by_week = national.to_numpy()
+    threshold = min(START_COUNT, counts_by_week.max())
+    big = int(np.argmax(counts_by_week >= threshold))
+    first = _saturday(str(national.index[max(0, big - 1)]))
+    start = first - dt.timedelta(days=6)
+    cutoff = (release_cutoff(target, vintage) - start).days
+    n_weeks = cutoff // 7 + 1
+    weeks = [
+        (first + dt.timedelta(weeks=i)).isoformat() for i in range(n_weeks)
+    ]
+
+    def grid(column: str, locs: tuple[str, ...]) -> np.ndarray:
+        out = cast(pd.DataFrame, wide[column]).reindex(
+            index=weeks, columns=list(locs)
+        )
+        return out.fillna(0).to_numpy(dtype=float)
+
+    # One delay table per modelled province, or one for a national fit.
+    n_places = 1 if config.national else len(active)
+    counts = np.zeros((n_weeks, n_places, config.dmax + 1))
+    if delays is not None and len(delays):
+        # Known onsets count every case, so negative delays go to 0 and
+        # delays past dmax to dmax, the last cell of the hazard pmf,
+        # rather than leaving the delay counts short of the known stream.
+        keep = delays.loc[
+            (
+                delays["location"].isin(active)
+                if active != (NATIONAL,)
+                else delays["location"].ne("")
+            )
+            & ~delays["location"].isin(masked)
+        ]
+        week = np.array(
+            [
+                (pd.Timestamp(w).date() - first).days // 7
+                for w in keep["onset_week"]
+            ],
+            dtype=int,
+        )
+        ok = (week >= 0) & (week < n_weeks)
+        delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
+        place = (
+            np.zeros(len(keep), dtype=int)
+            if config.national
+            else keep["location"].map(active.index).to_numpy(dtype=int)
+        )
+        np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
+
+    known, imputed = grid("observed", active), grid("imputed", active)
+    totals = known + imputed
+    pops = table.set_index("location").loc[list(active), "population"]
+    names = list(active)
+    if config.national:
+        known = known.sum(axis=1, keepdims=True)
+        imputed = imputed.sum(axis=1, keepdims=True)
+        pops = pd.Series([pops.sum()])
+        names = [active[0] if len(active) == 1 else NATIONAL]
+    kernel = None if len(names) == 1 else gravity_kernel(active, table)
+    return Vintage(
+        start_date=start,
+        cutoff=cutoff,
+        known=known,
+        imputed=imputed,
+        delay_counts=counts,
+        hub_delay_pmf=imputation_pmf(imputation_delay, config.dmax),
+        populations=pops.to_numpy(dtype=float),
+        kernel=kernel,
+        horizon_weeks=horizon_weeks,
+        names=names,
+        fit_mask=np.array([p not in masked for p in names]),
+        bvd=None
+        if bvd is None or config.national
+        else bvd_inputs(bvd, names, start, masked),
+        seed_days=None if config.national else _seed_days(totals),
+        release_pairs=release_pairs,
+    )
+
+
+def _seed_days(totals: np.ndarray) -> np.ndarray:
+    """Day each province's seeding starts, from its weekly case totals.
+
+    Provinces with cases in the first data week start at day 0. Later
+    provinces start `seed_lead` days before their first case week, since
+    infections precede onsets by the incubation period. Provinces with no
+    case are never seeded (`inf`), so their infections come only from
+    importation.
+    """
+    first = 7.0 * np.argmax(totals > 0, axis=0)
+    first[~(totals > 0).any(axis=0)] = np.inf
+    return np.where(first > 0, first - seed_lead(incubation_period()), 0.0)

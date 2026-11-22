@@ -13,17 +13,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.zones import ZoneData, hub_zones
-from bdbvhubrenewal.forecasters import (
-    NATIONAL,
-    ForecastTask,
-    FoundationModel,
-    ModelUnavailableError,
-    add_national,
-    check_samples,
-    get_model,
-    list_models,
-)
+from bdbvhub.data.zones import ZoneData, hub_zones
+from bdbvhub.models import get_model, list_models
 from nowcastbaselines.chain import NoWalkSpread
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcastbaselines.zones import (
@@ -37,11 +28,19 @@ from nowcastfoundation.forecaster import (
     LAYOUTS,
     MAX_LAG,
     SOURCES,
+    FoundationModel,
     chronos_sampler,
     hub_triangle,
     quantile_draws,
 )
 from nowcastutils import base
+from nowcastutils.base import (
+    NATIONAL,
+    ForecastTask,
+    ModelUnavailableError,
+    add_national,
+    check_samples,
+)
 from nowcastutils.dates import as_date
 from nowcastutils.hierarchy import is_zone, province_of
 from nowcastutils.snapshots import weekly_counts
@@ -140,14 +139,16 @@ def test_registered_as_fitted_models() -> None:
 def test_ragged_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
-    # The lag series stop at 28 days or 4 weeks, short of the 35-day truth
-    # delay. Running them to the truth delay (e43eda80c) was reverted: zone
-    # releases began on 2026-10-09, so at 5 weeks no lag 0 to 2 value of a
-    # zone fell in the context, Chronos-2 read partial counts as levels,
-    # and the forecasts and scores were worse.
+    # With the fixed cap, the lag series stop at 28 days or 4 weeks, short
+    # of the 35-day truth delay. Zone releases begin on 2026-10-09, so at 5
+    # weeks no lag 0 to 2 value of a zone falls in the context. The models
+    # estimate the lag count from the data by default
+    # (test_foundation_lags.py); this is the fixed cap the SI compares.
     store: list = []
     model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_ragged"), sample=_recording(store)
+        get_model(f"fm_chronos_{source}_ragged"),
+        sample=_recording(store),
+        lags=MAX_LAG[source],
     )
     model.forecast(task)
     groups, _ = store[0]
@@ -230,10 +231,12 @@ def test_quantile_draws_invert_the_quantile_function() -> None:
 
 
 @pytest.mark.parametrize("name", MODELS)
-def test_draws_are_counts_at_least_the_reported(
+def test_draws_are_not_negative_and_not_floored_at_the_reported(
     name: str, task: ForecastTask
 ) -> None:
-    for value in (-50.0, 0.0, 3.0):
+    # Chronos-2's output is kept as it is, at zero or above: not rounded,
+    # and not raised to the counts reported.
+    for value in (-50.0, 0.0, 3.5):
         model = dataclasses.replace(get_model(name), sample=_constant(value))
         out = model.forecast(task)
         check_samples(out, task)
@@ -244,11 +247,15 @@ def test_draws_are_counts_at_least_the_reported(
         }
         values = out["value"].to_numpy()
         assert (values >= 0).all()
-        assert np.array_equal(values, np.round(values))
-        reported = _reported(task, out)
-        assert (values >= reported).all()
-        if value < 0:
-            assert np.array_equal(values, reported)
+    # A draw of 3.5 stays 3.5 where it is read, a draw below what is
+    # reported stays below it.
+    out = dataclasses.replace(get_model(name), sample=_constant(3.5)).forecast(
+        task
+    )
+    assert (out["value"] % 1 != 0).any()
+    low = dataclasses.replace(get_model(name), sample=_constant(0.0))
+    out = low.forecast(task)
+    assert (out["value"].to_numpy() < _reported(task, out)).any()
     # Draws above the reported counts raise the forecast past them.
     high = dataclasses.replace(get_model(name), sample=_constant(1e4))
     out = high.forecast(task)
@@ -266,7 +273,7 @@ def test_gives_no_delay(name: str, task: ForecastTask) -> None:
 
 @pytest.mark.parametrize("source", SOURCES)
 def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
-    lags = MAX_LAG[source]
+    lags = get_model(f"fm_chronos_{source}_ragged").lag_count(task)
     # The country, the provinces and their zones are each a target.
     n_places = 1 + len(task.locations) + len(_zones(task))
     seen: dict[str, tuple] = {}
@@ -284,14 +291,16 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
     assert complete["target"].shape[0] == n_places
     assert "future_covariates" not in complete
     ragged, horizon = seen["ragged"]
-    # The targets are the hub-target series only; the lag series are
-    # covariates, with no copy of a target, of the places with cases.
-    assert ragged["target"].shape[0] == n_places
+    # The targets are the hub-target series and, for the daily source,
+    # each place's 7-day rolling sums; the lag series are covariates of
+    # every place, those with no cases too, as the fine-tuned model has.
+    rows = 2 if source == "daily" else 1
+    assert ragged["target"].shape[0] == rows * n_places
     future = ragged["future_covariates"]
     assert ragged["past_covariates"].keys() == future.keys()
     lagged = {name.rsplit("_lag_", 1)[0] for name in future}
-    assert lagged == _with_cases(task)
-    assert len(lagged) < n_places
+    assert lagged == set(ragged["places"])
+    assert _with_cases(task) < lagged
     assert len(future) == len(lagged) * lags
     for name, values in future.items():
         d = int(name.rsplit("_", 1)[1])
@@ -665,7 +674,7 @@ def test_adapter_of_another_sha256_fails_and_caches_nothing(
 def test_missing_adapter_is_stored_as_failed(
     task: ForecastTask, fake_checkpoint
 ) -> None:
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhub.store import store
 
     # The latest release lists its checksums but the adapter cannot be
     # downloaded. As a missing Chronos-2: a failed fit, not a fit with no
@@ -866,8 +875,8 @@ def test_zone_samples_come_straight_from_the_block(
 
 
 @pytest.mark.parametrize("layout", LAYOUTS)
-def test_daily_zones_keep_their_counts_with_no_weekly_zone_releases(
-    layout: str, task: ForecastTask, daily_zones: pd.DataFrame
+def test_daily_zones_are_forecast_with_no_weekly_zone_releases(
+    layout: str, task: ForecastTask
 ) -> None:
     bare = dataclasses.replace(task, zone_history=None)
     model = dataclasses.replace(
@@ -877,13 +886,9 @@ def test_daily_zones_keep_their_counts_with_no_weekly_zone_releases(
     check_samples(out, bare)
     own = out.loc[out["location"].map(is_zone)]
     assert set(own["location"]) == set(_zones(task))
-    # Reconciling keeps each zone's published count, so the zones are
-    # floored with no weekly zone release to floor them before.
-    counts = weekly_counts(daily_zones, task.vintage)
-    keys = ["location", "target_end_date"]
-    floor = own.merge(counts, on=keys, how="left")["total"].fillna(0)
-    assert (own["value"].to_numpy() >= floor.to_numpy()).all()
-    assert floor.sum() > 0
+    # The zones are forecast from their daily counts alone, not floored at
+    # them (no floor at the counts reported).
+    assert (own["value"].to_numpy() >= 0).all()
 
 
 def test_a_passing_github_error_is_retried(
@@ -1121,7 +1126,7 @@ def test_a_pending_realdata_checkpoint_names_what_is_missing(
 def test_the_realdata_models_wait_for_their_pin() -> None:
     # While the pin is pending they are not registered, so neither the
     # BDBV fit store nor a backtest resolves their checkpoint.
-    from bdbvhubrenewal.evaluation.store import stored_models
+    from bdbvhub.store.store import stored_models
 
     if foundation.realdata_pinned():
         pytest.skip("the realdata-ft release is pinned")
@@ -1191,3 +1196,63 @@ def test_rolling_rows_hold_each_days_seven_day_sum() -> None:
     weekly = week_rows(tri)
     sat = np.flatnonzero(weekly.ends)
     assert np.allclose(rows.totals[:, sat], weekly.totals[:, sat])
+
+
+def _segment(root: Path, settings: dict) -> Path:
+    """A training segment's folder: its settings and its adapter."""
+    import json
+
+    (root / "finetuned-ckpt").mkdir(parents=True)
+    (root / "settings.json").write_text(json.dumps(settings))
+    for name, data in _ADAPTER.items():
+        (root / "finetuned-ckpt" / name).write_bytes(data)
+    return root
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_local_segment_is_its_release_s_checkpoint(tmp_path: Path) -> None:
+    # A run scores its own segments before any release: the checkpoint is
+    # the one its release would give, so it keys the same stored fits, and
+    # its adapter is read in place, with no release in the store.
+    segment = _segment(tmp_path / "n100", {"hash": "abc"})
+    checkpoint = foundation.local_checkpoint(segment)
+    assert checkpoint == _checkpoint("abc")
+    assert repr(checkpoint) == repr(_checkpoint("abc"))
+    adapter = foundation.finetuned_adapter(checkpoint)
+    assert adapter == segment / "finetuned-ckpt"
+    assert not (tmp_path / "cache").exists()
+
+
+def test_a_local_segment_with_the_series_bias_is_a_slots_checkpoint(
+    tmp_path: Path,
+) -> None:
+    segment = _segment(tmp_path / "n100", {"hash": "abc", "series_bias": True})
+    assert foundation.local_checkpoint(segment).hash == "slots-abc"
+    assert foundation.checkpoint_spec({"hash": "abc"}) == "abc"
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_changed_local_adapter_fails(tmp_path: Path) -> None:
+    segment = _segment(tmp_path / "n100", {"hash": "abc"})
+    checkpoint = foundation.local_checkpoint(segment)
+    (segment / "finetuned-ckpt" / "adapter_model.safetensors").write_bytes(
+        b"other weights"
+    )
+    with pytest.raises(ValueError, match=r"adapter_model\.safetensors"):
+        foundation.finetuned_adapter(checkpoint)
+
+
+def test_the_finetuned_models_take_a_segment_folder_from_the_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def offline() -> list[dict]:
+        raise AssertionError("listed the releases")
+
+    segment = _segment(tmp_path / "n100", {"hash": "abc"})
+    monkeypatch.setattr(foundation, "finetuned_releases", offline)
+    monkeypatch.setenv(foundation.FINETUNED_ENV, str(segment))
+    model = get_model("fm_chronos_daily_ragged_ft")
+    assert model.checkpoint == _checkpoint("abc")
+    assert foundation.finetuned_adapter(model.checkpoint) == (
+        segment / "finetuned-ckpt"
+    )

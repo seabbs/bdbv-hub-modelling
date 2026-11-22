@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from bdbvhubrenewal.forecasters import ForecastTask, register_model
+from nowcastutils.base import ForecastTask, register_model
 
 
 @dataclass
@@ -25,7 +25,7 @@ class MyModel:
 register_model("my_model", MyModel, "One line describing it.")
 ```
 
-Import the module in `bdbvhubrenewal/forecasters/__init__.py`.
+Import the module in `bdbvhub/models.py`.
 The backtest, the [Backtest](../backtest.md) and [Nowcast](../nowcast.md) pages, `compare-hub` and `nowcast --model my_model` then include it.
 The backtest adds the national total, the horizons and the vintage kind.
 
@@ -33,7 +33,7 @@ For the leave-one-province-out check, set `supports_mask = True` and drop the pr
 
 ## Renewal variants
 
-A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
+A new renewal variant is one entry in `VARIANTS` in [`forecasters.renewal`][nowcastrenewal.forecaster].
 It names a base `ModelConfig` and the fields it changes.
 Fitted variants are not run by the docs build or the smoke tests.
 The [fit store](cli.md#fit-store) fits them once a variant is on `main`.

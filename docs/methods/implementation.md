@@ -6,7 +6,7 @@ How the [models](model.md) are built in code, computed and sampled.
 ## Code
 
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit, and runs in JAX with NumPyro.
-Its code is in [`bdbvhubrenewal.model`][bdbvhubrenewal.model] and the variants are in [`forecasters.renewal`][bdbvhubrenewal.forecasters.renewal].
+Its code is in [`nowcastrenewal.model`][nowcastrenewal.model] and the variants are in [`forecasters.renewal`][nowcastrenewal.forecaster].
 The model is configured by `ModelConfig`.
 
 ## PyRenew and what is built here
@@ -14,7 +14,7 @@ The model is configured by `ModelConfig`.
 | Component | PyRenew piece | Built here |
 |---|---|---|
 | Pooled $R_p(t)$ | `BaseSubpopulationInfections`, `WeeklyTemporalProcess` | `NonCentredRandomWalk`, for the frozen seeding weeks, the separate forecast steps and their reversion. |
-| Renewal with importation and depletion | `BaseSubpopulationInfections`, subclassed | `coupled_renewal`, called from `_infections_from_rt`, and `Importation`, which gives the mixing matrix as PyRenew's `mobility_matrix_rv` does. |
+| Renewal with importation and depletion | `BaseSubpopulationInfections`, subclassed | the shared `components.renewal.run_renewal`, called from `_infections_from_rt`, and the shared `components.mixing.Mixing`, which gives the mixing matrix as PyRenew's `mobility_matrix_rv` does. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_{p,s}(d)$ | None | `HazardDelay`, with province offsets and drifts from `pooled_walk`, as the Rt deviations. |
 | Missing onsets $m_p(t)$ | None | `MissingOnsetFraction`, a pooled walk of the same form as $R_p$ with its own parameters. |
@@ -67,7 +67,7 @@ Pandas only builds the inputs and the output frames.
 The model runs in single precision (float32), JAX's default.
 
 - Depletion is carried on $\log S$, which needs no subtraction, and $1 - e^{-y}$ is computed with `expm1`.
-- The generation interval, the incubation period and the hub's imputation delay are double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the integrated cdf (`model.censored`).
+- The generation interval, the incubation period and the hub's imputation delay are double interval censored in closed form, $G(d + 1) - 2G(d) + G(d - 1)$ with the integrated cdf (`components.pmfs`, primarycensored's form).
   The generation interval is computed once and the hub's delay once per release, both in float64, and the incubation period in float32 at each draw of its mean and SD (`CensoredPMF`); all match primarycensored.
 - The simulator's delays use the same closed form, truncated at their maximum delay and renormalised as primarycensored's $D$.
   In float64 they are within $10^{-8}$ of primarycensored, and in float32 within $4 \times 10^{-5}$ of numerical integration.

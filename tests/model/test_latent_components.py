@@ -1,0 +1,249 @@
+"""The simulator's renewal-step components against the R engine.
+
+The cases come live from `r/latent_cases.R`, which runs the R functions
+in `packages/nowcastfoundation/r/R/infections.R` and `observation.R`.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from typing import Any
+
+import jax
+import numpy as np
+import pandas as pd
+import pytest
+from numpyro import handlers
+from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
+
+from nowcastrenewal.components.mixing import mixing_matrix
+from nowcastrenewal.components.pmfs import (
+    Delay,
+    delay_pmf,
+    generation_time_pmf,
+)
+from nowcastrenewal.components.reference import ReferenceEvents
+from nowcastrenewal.components.renewal import Shifts, Variants, run_renewal
+from nowcastrenewal.latent.imports import Imports
+from nowcastrenewal.latent.mixing import PlaceMixing
+
+from .latent_r import load
+
+
+def gt_pmf(mean: float, family: str, cv: float) -> np.ndarray:
+    """The grid's generation time, from the shared pmfs."""
+    return generation_time_pmf(Delay.from_mean_cv(family, mean, cv))
+
+
+def incubation_pmf(mean: float, cv: float = 0.5) -> np.ndarray:
+    """The grid's infection-to-reference delay, from the shared pmfs."""
+    return delay_pmf(Delay.from_mean_cv("gamma", mean, cv))
+
+
+def matrix(x: Any) -> np.ndarray:
+    return np.array(x, dtype=float)
+
+
+def run(fn: Any, *args: Any, **kwargs: Any) -> Any:
+    """Run a component's sample in float64 under a seed."""
+    with jax.enable_x64(True):
+        return handlers.seed(fn, 0)(*args, **kwargs)
+
+
+def test_pmfs_match_the_r_engine() -> None:
+    # Both are primarycensored's double censored pmf: the engine's from
+    # `dpcens`, ours closed form (`test_pmfs.py`), to 1e-8.
+    f = load("pmfs")
+    for g in f["gt"]:
+        np.testing.assert_allclose(
+            gt_pmf(g["mean"], g["family"], g["cv"]),
+            g["pmf"],
+            rtol=1e-8,
+            atol=1e-12,
+        )
+    for g in f["incubation"]:
+        np.testing.assert_allclose(
+            incubation_pmf(g["mean"], g["cv"]), g["pmf"], rtol=1e-8, atol=1e-12
+        )
+
+
+@pytest.mark.parametrize("history", [False, True])
+def test_reference_events_match_the_r_engine(history: bool) -> None:
+    c = load("pmfs")["convolve"]
+    pmfs = [np.array(p) for p in c["pmfs"]]
+    asc = np.array([0.5, 1.0, 0.2])
+    events = ReferenceEvents(
+        "ref",
+        delay_rvs=[
+            DeterministicPMF(f"delay_{i}", p) for i, p in enumerate(pmfs)
+        ],
+        ascertainment_rv=DeterministicVariable("asc", asc),
+    )
+    before = np.array(c["before"]) if history else None
+    out = run(events.sample, matrix(c["x"]), before=before)
+    want = matrix(c["out_before"] if history else c["out"]) * asc
+    np.testing.assert_allclose(out, want, rtol=1e-12)
+
+
+def test_an_established_stratum_opens_at_its_ascertained_level() -> None:
+    # A stratum at a constant level before and during the span has
+    # constant expected reference events from day 1.
+    pmf = incubation_pmf(9.0)
+    events = ReferenceEvents(
+        "ref",
+        delay_rvs=[DeterministicPMF("d", pmf)],
+        ascertainment_rv=DeterministicVariable("asc", np.array([0.17])),
+    )
+    out = run(
+        events.sample, np.full((30, 1), 1503.0), before=np.array([1503.0])
+    )
+    np.testing.assert_allclose(out, 1503.0 * 0.17, rtol=1e-12)
+
+
+def _mixing(f: dict[str, Any], case: dict[str, Any]) -> PlaceMixing:
+    v = f["values"]
+    return PlaceMixing(
+        "mixing",
+        kind=case["mixing"],
+        share=v["mixing_eps"],
+        order=[i - 1 for i in v["mixing_order"]],
+        xy=np.stack([v["mixing_x"], v["mixing_y"]], axis=1),
+        distance_range=v["mixing_range"],
+        quiet=[v["quiet_places"] - 1],
+        switch=case["switch"],
+        switch_at=v["mixing_switch_at"],
+        switch_days=v["mixing_switch_days"],
+    )
+
+
+def test_place_mixing_matches_the_r_engine() -> None:
+    f = load("mixing")
+    strata = pd.DataFrame(f["strata"])
+    places = sorted(strata["place"].unique())
+    place = strata["place"].map(places.index).to_numpy()
+    age = strata["age"].to_numpy()
+    for case in f["cases"]:
+        K, eps = run(_mixing(f, case).sample, f["n"], place=place, age=age)
+        np.testing.assert_allclose(
+            K, matrix(case["K"]), rtol=1e-12, err_msg=case["mixing"]
+        )
+        np.testing.assert_allclose(
+            eps, case["eps"], rtol=1e-12, err_msg=case["mixing"]
+        )
+
+
+def test_imports_match_the_r_engine() -> None:
+    f = load("imports")
+    strata = pd.DataFrame(f["strata"])
+    v = f["values"]
+    for case in f["cases"]:
+        late = (
+            strata["place"].isin([f"P{i:02d}" for i in [v["late_places"]]])
+            & (case["seeding"] == "mid")
+        ).to_numpy()
+        imports = Imports(
+            "imports",
+            kind=case["imports"],
+            rate=v["import_rate"],
+            pulse_at=v["import_at"],
+            pulse_size=v["import_size"],
+            late=late,
+            late_at=v["late_at"],
+            late_days=v["late_days"],
+        )
+        np.testing.assert_allclose(
+            run(imports.sample, f["n"], unit=np.array(f["share"])),
+            matrix(case["out"]),
+            rtol=1e-12,
+            err_msg=f"{case['imports']} {case['seeding']}",
+        )
+
+
+def test_the_trickle_reaches_every_stratum_with_cases_but_late_ones() -> None:
+    late = np.array([False, True, False])
+    imports = Imports("imports", kind="none", late=late, trickle=0.3)
+    out = np.asarray(run(imports.sample, 10, unit=np.array([1.0, 1.0, 0.0])))
+    np.testing.assert_allclose(out[:, 0], 0.3)
+    np.testing.assert_allclose(out[:, 2], 0.0)
+    # The late stratum's own import is its unit over the late days.
+    assert out[:, 1].sum() == pytest.approx(1.0)
+
+
+def _renewal(f: dict[str, Any], which: str) -> Any:
+    start, log_r = matrix(f["start"]), matrix(f["log_r"])
+    kwargs: dict[str, Any] = {}
+    if which == "full":
+        s, v = f["shifts"], f["variants"]
+        with jax.enable_x64(True):
+            mixing = mixing_matrix(
+                matrix(f["K"]), np.array(f["eps"])[:, None], "received"
+            )
+        kwargs = {
+            "mixing": mixing,
+            "imports": matrix(f["imports"]),
+            "shifts": Shifts(
+                at=s["at"],
+                size=s["size"],
+                days=s["days"],
+                reactive=s["reactive"],
+                up=s["up"],
+            ),
+            "variants": Variants(
+                at=[v["at"]],
+                escape=[v["escape"]],
+                multiplier=[v["mult"]],
+                days=[v["days"]],
+            ),
+        }
+    if which == "exhaust":
+        start, log_r = start * 50, log_r + 1.5
+    with jax.enable_x64(True):
+        return run_renewal(
+            start,
+            np.array(f["gt"]),
+            np.exp(log_r),
+            np.array(f["population"]),
+            **kwargs,
+        )
+
+
+@pytest.mark.parametrize("which", ["plain", "full", "exhaust"])
+def test_the_renewal_step_matches_the_r_engine(which: str) -> None:
+    f = load("renewal")
+    out = _renewal(f, which)
+    want = f["runs"][which]
+    for key in ("infections", "r", "reff", "susceptible"):
+        np.testing.assert_allclose(
+            np.asarray(getattr(out, key)),
+            matrix(want[key]),
+            rtol=1e-9,
+            atol=1e-9,
+            err_msg=key,
+        )
+
+
+def test_the_exhausted_renewal_never_infects_more_than_its_population() -> None:
+    f = load("renewal")
+    out = _renewal(f, "exhaust")
+    pop = np.array(f["population"])
+    assert (np.asarray(out.infections).sum(axis=0) <= pop + 1e-6).all()
+    assert (np.asarray(out.susceptible) >= 0).all()
+
+
+def test_the_fitted_models_do_not_import_the_simulator_components() -> None:
+    # The fit keys hash the forecasters' import closure, so the simulator's
+    # components stay out of it and adding them refits nothing.
+    code = (
+        "import sys, nowcastrenewal.forecaster, nowcastrenewal.zones;"
+        "mods = ('imports', 'mixing');"
+        "print([m for m in mods"
+        " if f'nowcastrenewal.latent.{m}' in sys.modules])"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert out.stdout.strip() == "[]"

@@ -6,11 +6,11 @@ import pandas as pd
 import pytest
 from numpyro.infer import init_to_median
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.zones import zone_places
-from bdbvhubrenewal.model import MAIN, build_model, model_args
-from bdbvhubrenewal.model.inputs import vintage_from_tables
-from bdbvhubrenewal.model.zones import (
+from bdbvhub.data.delays import hub_delay_pmf
+from bdbvhub.data.zones import zone_places
+from nowcastrenewal.model import MAIN, build_model, model_args
+from nowcastrenewal.model.inputs import vintage_from_tables
+from nowcastrenewal.model.zones import (
     ZoneInfections,
     build_zone_model,
     nested_basis,
@@ -203,7 +203,7 @@ def test_zone_vintage_scores_delays_by_province(zone_vintage):
     assert v.parents.tolist() == [i // 2 for i in range(12)]
     assert v.delay_counts.shape == (v.n_weeks, 6, 61)
     assert v.kernel.shape == (12, 12)
-    np.testing.assert_allclose(v.kernel.sum(axis=1), 1.0)
+    np.testing.assert_allclose(v.kernel.sum(axis=0), 1.0)
     pops = zone_places().set_index("location")["population"]
     np.testing.assert_allclose(v.populations, pops[v.names].to_numpy())
 
@@ -226,7 +226,7 @@ def test_zone_model_shares_province_parts(zone_vintage):
 
 
 def test_zone_bvd_groups_map_by_province(outbreak, sim_tables):
-    from bdbvhubrenewal.model.inputs import bvd_inputs
+    from nowcastrenewal.model.inputs import bvd_inputs
 
     rows = pd.DataFrame(
         {
@@ -253,7 +253,7 @@ def test_zone_bvd_groups_map_by_province(outbreak, sim_tables):
 def test_mean_anchored_walk_starts_at_its_mean_level():
     from pyrenew.randomvariable import DistributionalVariable
 
-    from bdbvhubrenewal.model.zones import MeanAnchoredWalk
+    from nowcastrenewal.model.zones import MeanAnchoredWalk
 
     walk = MeanAnchoredWalk(
         DistributionalVariable("sd", numpyro.distributions.HalfNormal(0.3)),

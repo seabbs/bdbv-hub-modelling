@@ -1,10 +1,10 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Blocks, batches and memory budget for fine-tuning Chronos-2.
+"""Blocks and batches for fine-tuning Chronos-2.
 
 Cuts outbreaks from the simulator (packages/nowcastfoundation/r) into
 training blocks
-(`outbreak_blocks`), packs them into batches within a memory budget
-(`plan_batches`, `max_series`), without torch.
+(`outbreak_blocks`) and packs them into batches (`plan_batches`),
+without torch.
 `scripts/finetune_stream.py` trains on them and
 publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 `_ft` models load the newest one
@@ -13,11 +13,14 @@ publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
+from typing import Any, Final
 
 import numpy as np
 import pandas as pd
@@ -39,17 +42,13 @@ CONTEXT = 364
 """Steps of context in a block, left-padded with missing values."""
 
 
-MAX_LAGS = {
-    "weekly": tuple(range(2, 8)),
-    "daily": tuple(range(14, 50)),
-    "3day": tuple(range(5, 17)),
-    "daily+weekly": tuple(range(14, 50)),
-    "daily+rolling7": tuple(range(14, 50)),
-    "daily+3day": tuple(range(14, 50)),
-    "daily+rolling3": tuple(range(14, 50)),
-}
-"""Release lags $D$ the blocks are drawn from; daily blocks with period
-totals have daily lags."""
+LAG_RULE: Final = (
+    "one lag count a block: the largest of its places' truncation-aware "
+    "99% delays from the steps complete at the cut-off, at most the "
+    "history before it (nowcastfoundation.forecaster.lag_count, as "
+    "forecasts use)"
+)
+"""How a block's release lags are set (`training_block`)."""
 
 
 DAYS_PER_STEP = {
@@ -106,8 +105,8 @@ with gaps. Each block is a whole simulated system (`whole_system`), or
 its country alone.
 """
 
-GRID = "r7"
-"""The training grid by default (`use_design`)."""
+GRID_FILE = Path(__file__).parents[1] / "config" / "finetune" / "grid.yaml"
+"""The grid file the simulations are drawn from (`use_grid`)."""
 
 SOURCE_SHARES = dict(BLOCK_DESIGN["source_shares"])
 """Share of blocks of each layout (`BLOCK_DESIGN`)."""
@@ -123,26 +122,25 @@ SOURCES = tuple(SOURCE_SHARES)
 """Sources blocks are cut from, drawn at `SOURCE_SHARES`."""
 
 
-def use_design(grid: str) -> str:
-    """Set the training grid: its parents, with the one block design.
-
-    Returns
-    -------
-    str
-        The grid.
+def use_grid(grid_file: Path | str = GRID_FILE) -> None:
+    """Set the parents from the grid file (`grid_parents`).
 
     Raises
     ------
-    ValueError
-        For a grid with no file (`config/finetune/grids/<grid>.yaml`), so a
-        typo is not silently trained.
+    FileNotFoundError
+        If the grid file is missing, so a wrong path is not silently
+        trained with the even parent mix.
     """
-    global PARENTS
-    if not (GRIDS / f"{grid}.yaml").exists():
-        known = sorted(p.stem for p in GRIDS.glob("*.yaml"))
-        raise ValueError(f"grid {grid!r} has no grid file; known: {known}")
-    PARENTS = grid_parents(grid)
-    return grid
+    global PARENTS, SIMULATOR, CODE
+    path = Path(grid_file)
+    if not path.is_file():
+        raise FileNotFoundError(f"no grid file at {path}")
+    PARENTS = grid_parents(path)
+    # Named relative to the repository, so the hash does not depend on
+    # where the checkout is.
+    name = os.path.relpath(path.resolve(), ROOT.resolve())
+    SIMULATOR = simulator_files(Path(name).as_posix())
+    CODE = code_files(SIMULATOR)
 
 
 def native_cadence(source: str) -> str:
@@ -172,112 +170,111 @@ def check_sources(sources: tuple[str, ...]) -> None:
             and s not in ROLLING
         )
         or s not in DAYS_PER_STEP
-        or s not in MAX_LAGS
     ]
     if bad:
         raise ValueError(f"sources {bad} are neither native nor binned")
 
 
 def check_package(root: Path) -> None:
-    """Raise unless `bdbvhubrenewal` is imported from `root`'s src.
+    """Raise unless `nowcastfoundation` is imported from `root`'s packages.
 
     A venv linked from another worktree imports that worktree's package,
     whose blocks may differ from this one's.
     """
-    import bdbvhubrenewal
+    import nowcastfoundation
 
-    where = Path(bdbvhubrenewal.__file__).resolve()
-    if not where.is_relative_to((Path(root) / "src").resolve()):
+    where = Path(nowcastfoundation.__file__).resolve()
+    if not where.is_relative_to((Path(root) / "packages").resolve()):
         raise RuntimeError(
-            f"bdbvhubrenewal is imported from {where}, not this worktree "
+            f"nowcastfoundation is imported from {where}, not this worktree "
             f"({Path(root).resolve()})"
         )
 
 
-MEMORY_GB = 36.0
-"""The GPU memory budget of a training step, in GB: the trainer's cap on
-MPS memory (0.85 of a 55.7 GB working set) less room for the model and
-the held-out set."""
-
 MAX_SERIES = 2000
-"""Most series in a block. A block's series count is drawn log-uniformly
-up to it. With gradient checkpointing a block of 2,400 series fits the
-laptop's GPU memory (64 GB) but peaks at about 56 GB in training, so
-2,000 leaves headroom."""
+"""Most series in a block of sampled places, whose series count is drawn
+log-uniformly up to it, and in a batch of several blocks."""
 
 CUTS = 32
 """Snapshots (cut-off slots) of each observation draw, spread over its
 course: 32 blocks from one draw."""
 
-MEMORY_COST = {False: (0.0, 6.7e-5), True: (6.25e-3, 3.35e-6)}
-"""GPU memory of one training step in GB per series and per series
-squared, without and with gradient checkpointing: fitted to 800 series
-taking about 43 GB without it, and 1,000, 1,500 and 2,000 series taking
-9.6, 17.3 and 25.9 GB with it (Chronos-2 with LoRA and AdamW on an Apple
-M4 Max). Group attention makes it grow with the square of the series."""
-
-
-def memory_gb(series: int, checkpointed: bool) -> float:
-    """Return a training step's GPU memory in GB for `series` series."""
-    per, squared = MEMORY_COST[checkpointed]
-    return per * series + squared * series**2
-
-
-def _most_within(budget_gb: float, checkpointed: bool) -> int:
-    """Return the most series whose step fits `budget_gb`."""
-    per, squared = MEMORY_COST[checkpointed]
-    root = (-per + (per**2 + 4 * squared * budget_gb) ** 0.5) / (2 * squared)
-    return int(root)
-
-
-def checkpoint_above(budget_gb: float) -> int:
-    """Return the series above which a step needs gradient checkpointing."""
-    return _most_within(budget_gb, checkpointed=False)
-
-
-def max_series(budget_gb: float) -> int:
-    """Return the most series of a block that fits with checkpointing."""
-    return _most_within(budget_gb, checkpointed=True)
-
-
 ENGINE = "packages/nowcastfoundation/r"
 """The simulator engine, whose R files and description are hashed."""
 
-SIMULATOR = (
-    "config/finetune/grids/r7.yaml",
-    "workflow/scripts/simulate.R",
-    f"{ENGINE}/DESCRIPTION",
-    *(
-        f"{ENGINE}/R/{name}.R"
-        for name in (
-            "delays",
-            "design",
-            "grid",
-            "infections",
-            "nowcastfoundation-package",
-            "observation",
-            "reporting",
-            "simulate",
-            "utils",
-        )
-    ),
+SIMULATOR_PY = (
+    "packages/nowcastfoundation/src/nowcastfoundation/simulator",
+    "packages/nowcastrenewal/src/nowcastrenewal/latent",
+    "packages/nowcastrenewal/src/nowcastrenewal/components",
+    "packages/nowcastrenewal/src/nowcastrenewal/reporting",
 )
-"""The simulator's files: the grid, the rule's wrapper and the engine."""
+"""The simulator's Python: its entry point and draws, the latent step and
+the shared components it composes."""
 
-CODE = {
-    **{path: path for path in SIMULATOR},
-    "scripts/finetune_chronos.py": "scripts/finetune_chronos.py",
-    "src/bdbvhubrenewal/forecasters/finetune.py": (
-        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py"
-    ),
-}
+ROOT = Path(__file__).parents[1]
+"""The repository root, which the hashed paths are relative to."""
+
+
+def simulator_files(grid_file: str) -> tuple[str, ...]:
+    """Return the simulator's files: the grid, its Python and the R engine.
+
+    The Python is every file of `SIMULATOR_PY`, and the R engine its
+    description, reporting step (`inst/report.R`) and every R file
+    (`ENGINE/R/*.R`), found by glob so a new file is hashed without
+    listing it.
+    """
+    python = sorted(
+        str(p.relative_to(ROOT))
+        for folder in SIMULATOR_PY
+        for p in (ROOT / folder).glob("*.py")
+    )
+    engine = sorted(p.name for p in (ROOT / ENGINE / "R").glob("*.R"))
+    return (
+        grid_file,
+        *python,
+        f"{ENGINE}/DESCRIPTION",
+        f"{ENGINE}/inst/report.R",
+        *(f"{ENGINE}/R/{name}" for name in engine),
+    )
+
+
+def workflow_finetune(key: str) -> Any:
+    """Return the workflow's fine-tuning setting `key`.
+
+    `finetune.<key>` in workflow/config.yaml: the trainer's default.
+    """
+    import yaml
+
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    return config["finetune"][key]
+
+
+def workflow_grid_file() -> str:
+    """Return the workflow's grid file (`simulate.grid_file`)."""
+    import yaml
+
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    return str(config["simulate"]["grid_file"])
+
+
+def code_files(simulator: tuple[str, ...]) -> dict[str, str]:
+    """Return `CODE` for a simulator's files, each named by its path."""
+    files = (
+        *simulator,
+        "scripts/finetune_chronos.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
+    )
+    return {path: path for path in files}
+
+
+SIMULATOR = simulator_files(workflow_grid_file())
+"""The simulator's files, with the workflow's grid until a run sets its
+own (`use_grid`)."""
+
+CODE = code_files(SIMULATOR)
 """Files the checkpoint depends on, hashed into its settings: each
-file's name in `code_sha256`, then where it is now.
-
-A name is the file's path when checkpoints were first hashed and never
-changes, so moving a file changes no checkpoint's hash: update its path
-here only. The paths go into the settings outside the hash
-(`code_paths`), for `finetune_verify`."""
+file's name in `code_sha256`, then its path. The paths also go into the
+settings outside the hash (`code_paths`), for `finetune_verify`."""
 
 TRAINER = "scripts/finetune_stream.py"
 """The trainer's name in `code_sha256` (its path is its own file)."""
@@ -318,6 +315,11 @@ complete, unless an outbreak's settings give `max_delay` in days."""
 def _sha256(path: Path) -> str:
     """Return a file's SHA-256."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def code_sha256(path: str) -> str:
+    """Return the SHA-256 of a hashed code file, its path from `ROOT`."""
+    return _sha256(ROOT / path)
 
 
 QUIET_WINDOW_DAYS = 28
@@ -438,17 +440,14 @@ their sum, more than their sum (cases with no place), or reported through
 a later stream (`finetune.country_counts`). A block of some of the
 places is also not their sum. Parent means belongs to, not sums to."""
 
-GRIDS = Path(__file__).parents[1] / "config" / "finetune" / "grids"
-"""The grid files (`config/finetune/grids/<grid>.yaml`)."""
-
 PARENTS: dict | None = None
 """The grid's parents, from its file's `aggregation` (`grid_parents`), or
-None for a grid with no file, whose parents are `PARENT_MIX` drawn evenly
-with `finetune.PARENT_DRAWS`."""
+None before `use_grid` or for a grid with no `aggregation`, whose parents
+are `PARENT_MIX` drawn evenly with `finetune.PARENT_DRAWS`."""
 
 
-def grid_parents(grid: str) -> dict | None:
-    """Return a grid's parents from its file, or None if it has none.
+def grid_parents(path: Path) -> dict | None:
+    """Return the grid file's parents, or None if it sets none.
 
     The share of blocks with places whose country is their exact sum,
     has unallocated cases, or is reported later (`aggregation.parents`,
@@ -457,10 +456,7 @@ def grid_parents(grid: str) -> dict | None:
     """
     import yaml
 
-    path = GRIDS / f"{grid}.yaml"
-    if not path.exists():
-        return None
-    config = yaml.safe_load(path.read_text())
+    config = yaml.safe_load(Path(path).read_text())
     aggregation = config.get("aggregation")
     if aggregation is None:
         return None
@@ -527,12 +523,69 @@ def whole_system(
     groups = sorted({p.split("-")[0] for p in provinces})
     ages = sorted(
         {
-            p.split("-")[1]
-            for p in provinces
-            if re.fullmatch(r"A\d+", p.split("-")[1])
+            parts[1]
+            for parts in (p.split("-") for p in provinces)
+            if len(parts) > 1 and re.fullmatch(r"A\d+", parts[1])
         }
     )
     return (NATIONAL, *groups, *ages, *sorted(provinces)), "all_levels"
+
+
+BLOCK_LIMIT: int | None = None
+"""Most series in a block (`finetune.block_limit`), the training machine's
+block capacity, or None for no limit. A whole system over it is cut into
+views (`system_views`)."""
+
+VIEW_RULE: Final = (
+    "a whole system over the block limit becomes views that each fit: its "
+    "top levels aggregated up (strata into their places or regions, then "
+    "those into the country) and each region or place with its leaves and "
+    "its own total, as many leaves a block as fit"
+)
+"""The rule `system_views` follows, recorded in the settings."""
+
+
+def system_views(
+    places: tuple[str, ...], cap: int
+) -> list[tuple[str, tuple[str, ...], list[str]]]:
+    """Return the views of a whole system that hold at most `cap` places.
+
+    Each view is its kind, its places and the levels collapsed in it. A
+    system within `cap` is one view, `whole`. Over it, `top` is the
+    country with its places or regions, the strata summed into them, or
+    the country alone if those do not fit; and each `subtree` is a place
+    or region with its leaves and its own total (the country, for flat
+    places), as many leaves as fit with it, so every leaf is in one.
+    Totals are sums of what the system simulated, never estimates.
+    """
+    places = tuple(places)
+    if len(places) <= cap:
+        return [("whole", places, [])]
+    nested = any("-" in p for p in places)
+    if nested:
+        leaves = [p for p in places if "-" in p]
+        groups = sorted({p.split("-")[0] for p in leaves})
+        top: tuple[str, ...] = (NATIONAL, *groups)
+        collapsed = ["strata"]
+        if len(top) > cap:
+            top, collapsed = (NATIONAL,), ["strata", "places"]
+        trees = [
+            (g, [p for p in leaves if p.split("-")[0] == g]) for g in groups
+        ]
+    else:
+        top, collapsed = (NATIONAL,), ["places"]
+        trees = [(NATIONAL, [p for p in places if p != NATIONAL])]
+    out = [("top", top, collapsed)]
+    for total, members in trees:
+        if cap < 2:
+            out += [("subtree", (m,), []) for m in members]
+            continue
+        step = cap - 1
+        out += [
+            ("subtree", (total, *members[i : i + step]), [])
+            for i in range(0, len(members), step)
+        ]
+    return out
 
 
 def choose_places(
@@ -565,9 +618,9 @@ def choose_places(
         groups.setdefault(p.split("-")[0], []).append(p)
     ages = sorted(
         {
-            p.split("-")[1]
-            for p in provinces
-            if re.fullmatch(r"A\d+", p.split("-")[1])
+            parts[1]
+            for parts in (p.split("-") for p in provinces)
+            if len(parts) > 1 and re.fullmatch(r"A\d+", parts[1])
         }
     )
     chosen: list[str] = []
@@ -623,7 +676,8 @@ def outbreak_blocks(
     `picks`, only those (source, slot) blocks are cut. A block's series
     count is drawn log-uniformly from 1 to `MAX_SERIES`,
     and its places (`choose_places`) are about that many series at its
-    lag, with the country first. A block whose places have no release
+    lag, with the country first. Its release lags follow `LAG_RULE`, the
+    rule forecasts use. A block whose places have no release
     rows by its cut (strata with no cases) is skipped and, with `empty`,
     described there. Each block's releases run up to its cut at a cadence
     drawn for its source (`draw_cadence`), recorded as its `cadence`.
@@ -648,28 +702,30 @@ def outbreak_blocks(
         for j in range(cuts):
             if picks is not None and (source, j) not in picks:
                 continue
-            lag = int(rng.choice(MAX_LAGS[source]))
             width = DAYS_PER_STEP[source]
-            # At least two steps of context before the lags.
-            least = -(-(lag + 2) * width // 7)
+            # At least two steps of context before one lag.
+            least = -(-3 * width // 7)
             if len(cutoffs) <= least:
                 continue
             share = (j + rng.random()) / cuts
             cut = least + int(share * (len(cutoffs) - least))
+            # The most lags the history before the cut-off allows, with
+            # two steps of context: the block's lags are at most this.
+            history = (
+                dt.date.fromisoformat(cutoffs[cut])
+                - dt.date.fromisoformat(first[:10])
+            ).days // width
+            if history - 2 < 1:
+                continue
             places: tuple[str, ...] = (NATIONAL,)
             mix = "national"
-            # A place's rows: its counts, its lags and, with period totals,
-            # one more.
-            rows = lag + 1 + (source in MIXED or source in ROLLING)
+            # A place's rows at most: its counts, its lags and, with period
+            # totals, one more.
+            rows = history - 2 + 1 + (source in MIXED or source in ROLLING)
             if WHOLE_SYSTEM:
+                # The whole system, however many series: a block is never
+                # skipped for its size.
                 places, mix = whole_system(provinces, rng)
-                if len(places) * rows > MAX_SERIES:
-                    if empty is not None:
-                        empty.append(
-                            f"{source} cut {j}: {len(places)} places over "
-                            f"the series cap ({MAX_SERIES})"
-                        )
-                    continue
             elif len(provinces) > 1:
                 size = np.exp(rng.uniform(0, np.log(MAX_SERIES)))
                 fits = MAX_SERIES // rows - 1
@@ -691,13 +747,16 @@ def outbreak_blocks(
             # The releases follow the source's cadence (`CADENCES`), up to
             # the slot's cut.
             cadence = draw_cadence(source, option_rng)
+            days = release_days(first, cutoffs[cut], cadence, option_rng)
+            totals = any("-" in p for p in provinces)
+            # A view with the country draws its cases as the whole did.
+            country_rng = copy.deepcopy(parent_rng)
             block = training_block(
                 counts,
                 source,
                 places,
-                release_days(first, cutoffs[cut], cadence, option_rng),
-                max_lag=lag,
-                totals=any("-" in p for p in provinces),
+                days,
+                totals=totals,
                 parent=parent,
                 rng=parent_rng,
                 parent_draws=parents,
@@ -713,19 +772,80 @@ def outbreak_blocks(
                 block, DAYS_PER_STEP[source], QUIET_MIN_CASES
             ):
                 continue
-            padded = _pad(
-                block, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]
-            )
-            levels = target_levels(places)
-            padded["levels"] = tuple(levels[i] for i in block["target_places"])
-            padded["places"] = tuple(places)
-            padded["target_places"] = list(block["target_places"])
-            padded["parent"] = parent
-            padded |= options
-            padded["mix"] = mix
-            padded["source"] = source
-            padded["cadence"] = cadence
-            out.append(padded)
+            whole: dict[str, Any] = {"kind": "whole"}
+            views: list[
+                tuple[dict[str, Any], tuple[str, ...], str, str, dict[str, Any]]
+            ] = [(block, places, mix, parent, whole)]
+            series = int(block["context"].shape[0])
+            if BLOCK_LIMIT is not None and series > BLOCK_LIMIT:
+                views = []
+                cap = max(1, int(BLOCK_LIMIT * len(places) // series))
+                while True:
+                    views = []
+                    for kind, view, collapsed in system_views(places, cap):
+                        has_country = len(view) > 1 and view[0] == NATIONAL
+                        how = parent if has_country else "exact"
+                        part = training_block(
+                            counts,
+                            source,
+                            view,
+                            days,
+                            totals=totals,
+                            parent=how,
+                            rng=copy.deepcopy(country_rng),
+                            parent_draws=parents,
+                            **options,
+                        )
+                        if part is None or part["start"] < 2:
+                            if empty is not None:
+                                empty.append(
+                                    f"{source} cut {j} {kind}: "
+                                    f"{', '.join(view)}"
+                                )
+                            continue
+                        n = int(part["context"].shape[0])
+                        record: dict[str, Any] = {
+                            "kind": kind,
+                            "collapsed": collapsed,
+                            "places_before": len(places),
+                            "places_after": len(view),
+                            "series_before": series,
+                            "series_after": n,
+                        }
+                        view_mix = (
+                            "national"
+                            if view == (NATIONAL,)
+                            else "leaves_national"
+                            if kind == "top"
+                            else "subtree"
+                        )
+                        views.append((part, view, view_mix, how, record))
+                    # A view's lags can differ from the whole's: one still
+                    # over the limit takes fewer places.
+                    fits = all(
+                        v[0]["context"].shape[0] <= BLOCK_LIMIT for v in views
+                    )
+                    if fits or cap == 1:
+                        break
+                    cap -= 1
+            for part, view, view_mix, how, record in views:
+                padded = _pad(
+                    part, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]
+                )
+                levels = target_levels(view)
+                padded["levels"] = tuple(
+                    levels[i] for i in part["target_places"]
+                )
+                padded["places"] = tuple(view)
+                padded["target_places"] = list(part["target_places"])
+                padded["parent"] = how
+                padded |= options
+                padded["mix"] = view_mix
+                padded["source"] = source
+                padded["cadence"] = cadence
+                padded["cut"] = j
+                padded["view"] = record
+                out.append(padded)
     return out
 
 
@@ -745,8 +865,8 @@ def plan_batches(
     Blocks are shuffled and packed in that order into batches of one size
     class until a batch holds `batch_size` series, so batches of small
     blocks pack tightly and a large block is a batch on its own. No batch
-    of several blocks holds more than `most` series, the most the memory
-    budget allows (`max_series`). The batches are then shuffled.
+    of several blocks holds more than `most` series (the trainer passes
+    `MAX_SERIES`). The batches are then shuffled.
     """
     filling: dict[int, list[int]] = {}
     held: dict[int, int] = {}
@@ -803,7 +923,10 @@ def _settings_hash(settings: dict) -> str:
 
 
 def real_blocks(
-    line_list: pd.DataFrame, cuts: list[str], last_week: str, lag: int
+    line_list: pd.DataFrame,
+    cuts: list[str],
+    last_week: str,
+    lag: int | None = None,
 ) -> list[dict]:
     """Return weekly validation blocks of a real outbreak's delay table.
 

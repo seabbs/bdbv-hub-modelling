@@ -6,25 +6,24 @@
 # Simulation rounds to make or read, as round numbers.
 rounds: []
 
-# Each grid's rounds, validation and test rounds and training sources: a
-# run takes its grid's unless `finetune` sets them. The trainer monitors
-# the validation round; the test round is fresh seeds, never trained on
-# or monitored, and scored only for the final model. A round's number
-# sets its seeds and its release `sims-r<N>`, so no two grids share a
-# round (flowlib.grids): r7 validates on round 33, trains on 34 to 37 and
-# tests on 38, and never overwrites the earlier grids' rounds
-# (`retired_rounds`).
+# The grid's rounds, validation and test rounds and training sources: a
+# run takes these unless `finetune` sets them. The trainer monitors the
+# validation round; the test round is fresh seeds, never trained on or
+# monitored, and scored only for the final model. A round's number sets
+# its seeds and its release `sims-r<N>`, so a round is never simulated
+# twice (flowlib.grids): the grid validates on round 33, trains on 34 to
+# 37 and tests on 38.
 grid_rounds:
-  r7:
-    rounds: [34, 35, 36, 37]
-    validation_round: 33
-    test_round: 38
-    topup_round: null
-    sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
-      daily+rolling3]
+  rounds: [34, 35, 36, 37]
+  validation_round: 33
+  test_round: 38
+  topup_round: null
+  sources: [daily, weekly, 3day, daily+weekly, daily+rolling7, daily+3day,
+    daily+rolling3]
 
-# Rounds earlier grids (r1 to r6) used, first to last: their seeds and
-# sims-r<N> releases are never reused by a grid (flowlib.grids).
+# Rounds of earlier versions of the grid, first to last: their seeds and
+# sims-r<N> releases are never reused (flowlib.grids). When the grid
+# changes, its rounds join these and it takes new ones.
 retired_rounds: {first: 9, last: 32}
 
 # Whether `finetune` trains only the next segment, not every one in
@@ -36,7 +35,7 @@ simulate:
   # The grid the simulator runs: its factors, sampling distributions,
   # shares, floors and sim QC thresholds (the engine is
   # packages/nowcastfoundation/r).
-  grid_file: config/finetune/grids/r7.yaml
+  grid_file: config/finetune/grid.yaml
   # Round r is `batches` batches from seed `seed_base` + 100 r, each
   # `batch` outbreaks with exactly `draws` observation draws, each drawn
   # independently from the grid: 40 of 20, 800 simulations. A simulation
@@ -61,11 +60,10 @@ finetune:
   outbreaks: 3200
   # Training seeds: the rounds' batches in seed order, or a fixed list
   # from `seed_file` (one seed a line, in order). The validation round is
-  # one whole grid block, and the ten rounds after it the ten blocks
+  # one whole grid block, and the grid's training rounds the blocks
   # trained on. The trainer monitors the first `holdout` simulations of
   # the validation round; the scoring workflow scores it whole. Unset
-  # (null), the rounds, validation round and sources are the grid's
-  # (grid_rounds).
+  # (null), the rounds, validation round and sources are `grid_rounds`.
   rounds: null
   seed_file: null
   validation_round: null
@@ -77,12 +75,26 @@ finetune:
   # Chronos-2's recipe: one draw of each simulation cut at `cuts`
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
-  grid: r7
   draws: 1
   cuts: 14
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
+  # Series a training step packs blocks up to; part of the recipe and
+  # the settings hash.
+  batch_size: 256
+  # Series above which a training step recomputes activations in
+  # backward. Memory and speed only: the steps and the hash stay. A
+  # machine with less GPU memory sets it lower (CHECKPOINT_ABOVE in
+  # config/local.env, or --config finetune.checkpoint_above=N).
+  checkpoint_above: 733
+  # Most series in a training or held-out block: the block capacity of
+  # the smallest GPU that trains, measured with every block checkpointed,
+  # with a margin. A whole system over it is cut into views that each fit
+  # (finetune_chronos.system_views). Part of the recipe and the settings
+  # hash. A machine with more GPU memory may set it higher (BLOCK_LIMIT
+  # in config/local.env), which changes its checkpoints' hash.
+  block_limit: 1000
   sources: null
   univariate_share: 0.2
   # Days after the cut-off a training block's horizon, and so the loss,
@@ -107,7 +119,7 @@ finetune:
   eval: offload
   series_bias: true
   # Part of the settings hash: changing it changes every checkpoint's hash.
-  note: r7 run, 3,200 simulations
+  note: 3,200 simulations
   # Real validation blocks the trainer scores each checkpoint on, or null.
   # Null: BDBV is held out for the paper, so no BDBV blocks are scored in
   # development, and there is no other real-data set yet.
@@ -115,12 +127,21 @@ finetune:
   # The checkpoint checked against zero-shot on the held-out simulations.
   check_at: 800
 
+# The fine-tuning runs, by name: each takes `finetune` with its entry's
+# keys on top (rounds, seed_file, prefixes, outbreaks, cuts, the recipe),
+# and keeps its files in <ROOT>/runs/<name>/ (flowlib.runs). Every run
+# takes the same rules through the {run} wildcard.
+runs:
+  runa: {}
+
+# The runs `finetune` trains (null: every run in `runs`).
+train_runs: null
+
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).
-  # r6 is retired: its last checkpoint was released at 14:12 on 19 Nov, so
-  # only r7's are scored. Earlier checkpoints' cached rows stay in the
-  # tables.
+  # Only checkpoints of the current run, released after this time, are
+  # scored. Earlier checkpoints' cached rows stay in the tables.
   labels: null
   published_from: "2026-11-19T15:00:00Z"
   # Checkpoints left out, by label.
@@ -139,7 +160,7 @@ score:
 slots_check:
   # Each slots checkpoint against zero-shot Chronos-2 and the no-slots
   # checkpoint of its size (scripts/slots_check.py), in `shards` parts.
-  # Off: the script is not on main, and grid r5 trains no no-slots arm.
+  # Off: the script is not on main, and the run trains no no-slots arm.
   run: false
   shards: 2
   mem_mb: 6144

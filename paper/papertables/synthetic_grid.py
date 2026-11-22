@@ -219,15 +219,14 @@ def model_note(grid: dict[str, Any], grid_file: str) -> str:
         " epinowcast Stan model with fixed parameters and no likelihood.",
         f"epinowcast is pinned at commit `{grid['epinowcast_sha']}`.",
         "The simulator is the R package `packages/nowcastfoundation/r`,"
-        f" run on the grid config `{grid_file}` (grid `{grid['name']}`).",
+        f" run on the grid config `{grid_file}`.",
         "Each simulation draws every categorical setting independently from"
         " its levels' shares, and every continuous setting from its named"
         " sampling distribution, as the SI tables list.",
         "A parameter we did not set is drawn from its epinowcast prior.",
         f"Seed infections are at least {floors['seed']} and series at least"
         f" {floors['weeks']} weeks long.",
-        f"A draw that errors, reports fewer than {floors['min_cases']} cases"
-        " or fails the simulation checks is drawn again, up to"
+        "A draw that errors or reports no cases is drawn again, up to"
         f" {grid['tries']} times, then from a new design.",
         "",
         "##### Factors",
@@ -291,7 +290,7 @@ def heldout_note(config: dict) -> str:
         "",
         "The held-out set was reserved for the final evaluation.",
         "No model was scored on it during development.",
-        f"We checked the pipeline on the r3 pilot {_seeds(dev)}, whose"
+        f"We checked the pipeline on pilot simulations {_seeds(dev)}, whose"
         " forecasts are not results.",
         "",
         "##### Protocol",

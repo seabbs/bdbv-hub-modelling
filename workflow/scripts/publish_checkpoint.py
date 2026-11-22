@@ -22,7 +22,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import finetune_stream as fs  # noqa: E402
 
-from nowcastfoundation.forecaster import SLOTS_PREFIX, release_tag  # noqa: E402
+from nowcastfoundation.forecaster import (  # noqa: E402
+    checkpoint_spec,
+    release_tag,
+)
 from nowcastfoundation.sidecar import SIDECAR  # noqa: E402
 
 
@@ -31,7 +34,7 @@ def main() -> None:
     where, out = Path(sys.argv[1]), Path(sys.argv[2])
     settings = json.loads((where / "settings.json").read_text())
     key = settings["hash"]
-    spec = f"{SLOTS_PREFIX}{key}" if settings.get("series_bias") else key
+    spec = checkpoint_spec(settings)
     fs.publish(where, spec)
     # Uploaded on every run, so a release made before its sidecar gets it.
     sidecar = where / SIDECAR

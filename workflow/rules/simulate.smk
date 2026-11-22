@@ -96,16 +96,17 @@ rule simulate_batch:
         min_disk=LOCAL["MIN_DISK_GB"],
         max_load=LOCAL["MAX_LOAD"],
     shell:
-        # The simulator (engine, wrapper and grid) must be the committed one,
-        # as the manifest records
-        # the commit. A retry keeps the first attempt's log. R and Stan
-        # write temporary files to a folder of the batch's own, removed
-        # however the batch ends. Rscript is the one on PATH; the whole job
-        # command after it (the memory cap, timed.sh, nice and the tools R
-        # starts, such as make and bash) takes the system's tools first: R
-        # puts the system libraries on LD_LIBRARY_PATH, under which a bash
-        # from another prefix (such as linuxbrew) fails. Under a conda
-        # env's R this also puts the system compilers first.
+        # The simulator (its Python and R code and the grid) must be the
+        # committed one, as the manifest records the commit. A retry keeps
+        # the first attempt's log. The simulator, R and Stan write temporary
+        # files to a folder of the batch's own, removed however the batch
+        # ends. Rscript is the one on PATH, run by the simulator's reporting
+        # step (RSCRIPT); the whole job command after it (the memory cap,
+        # timed.sh, nice and the tools R starts, such as make and bash)
+        # takes the system's tools first: R puts the system libraries on
+        # LD_LIBRARY_PATH, under which a bash from another prefix (such as
+        # linuxbrew) fails. Under a conda env's R this also puts the system
+        # compilers first. JAX runs on one thread, as the job has one.
         """
         if ! git diff --quiet HEAD -- {params.engine} {params.grid}; then
             echo "the simulator or its grid differs from HEAD" >{log}
@@ -118,11 +119,14 @@ rule simulate_batch:
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
         rscript=$(command -v Rscript)
+        uv=$(command -v uv)
         TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_LIB={params.lib} \
+            RSCRIPT="$rscript" JAX_PLATFORMS=cpu \
+            XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
             PATH="$(getconf PATH):$PATH" {params.prefix} \
             workflow/scripts/timed.sh \
-            nice -n 19 "$rscript" workflow/scripts/simulate.R {params.grid} \
-            {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
+            nice -n 19 "$uv" run --frozen python -m nowcastfoundation.simulator \
+            {params.grid} {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
         """
 
@@ -196,12 +200,8 @@ rule sim_qc:
         TOOLS_ENV
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
-        # The grid's thresholds (its `qc`). The profiles rerun on mtime only,
-        # so a round already checked keeps its exclusions.
-        limits=SIM_QC_ARGS,
     shell:
-        "uv run python scripts/sim_qc.py {params.round_dir} {params.limits} "
-        "> {log} 2>&1"
+        "uv run python scripts/sim_qc.py {params.round_dir} > {log} 2>&1"
 
 
 rule round_ready:
@@ -217,14 +217,11 @@ rule round_ready:
         mark_ready(input, output, params, wildcards)
 
 
-# Refuses to upload into a release of another grid's batches: its notes
-# name the grid (`Grid r7.`), and unmarked releases are an earlier grid's
-# (flowlib.grids.release_grid).
+# Refuses to upload into the release of an earlier grid's round
+# (`retired_rounds`, flowlib.grids).
 GRID_GUARD = """
-        notes=$(gh release view {params.tag} -R {params.repo} --json body -q .body)
-        found=$(printf '%s\\n' "$notes" | sed -n 's/.*Grid \\(r[0-9][0-9]*\\)\\..*/\\1/p' | head -n 1)
-        if [ "${{found:-unmarked}}" != "{params.grid}" ]; then
-            echo "{params.tag} holds grid ${{found:-unmarked}}'s batches, not {params.grid}'s: not uploading"
+        if [ "{params.owner}" = retired ]; then
+            echo "{params.tag} holds an earlier grid's batches: not uploading"
             exit 1
         fi
 """
@@ -246,21 +243,23 @@ rule release_batch:
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
-        grid=grid_name(),
+        owner=lambda wc: grids.owner(
+            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
+        ),
         counts=rules.simulate_batch.output.counts,
         settings=rules.simulate_batch.output.settings,
     shell:
         """
         exec >{log} 2>&1
-        gh release view {params.tag} -R {params.repo} >/dev/null 2>&1 \
-            || gh release create {params.tag} -R {params.repo} --prerelease \
-                --title "Simulations, round {wildcards.round}" \
-                --notes "Fine-tuning simulations of round {wildcards.round}, one batch per asset, with their manifest rows. Grid {params.grid}." \
-                >/dev/null 2>&1 \
-            || gh release view {params.tag} -R {params.repo} >/dev/null
         """
         + GRID_GUARD
         + """
+        gh release view {params.tag} -R {params.repo} >/dev/null 2>&1 \
+            || gh release create {params.tag} -R {params.repo} --prerelease \
+                --title "Simulations, round {wildcards.round}" \
+                --notes "Fine-tuning simulations of round {wildcards.round}, one batch per asset, with their manifest rows." \
+                >/dev/null 2>&1 \
+            || gh release view {params.tag} -R {params.repo} >/dev/null
         gh release upload {params.tag} -R {params.repo} --clobber \
             {params.counts} {params.settings} {input.record}
         """
@@ -282,7 +281,9 @@ rule release_qc:
         repo=SIM["repo"],
         tag="sims-r{round}",
         named=f"{ROUNDS_DIR}/r{{round}}/qc/excluded-r{{round}}.csv",
-        grid=grid_name(),
+        owner=lambda wc: grids.owner(
+            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
+        ),
     shell:
         """
         exec >{log} 2>&1
@@ -330,12 +331,174 @@ rule simulate:
         expand(f"{ROUNDS_DIR}/r{{round}}/READY", round=config["rounds"]),
 
 
+rule round_summaries:
+    # One row per outbreak of a round (first draw, strata summed): design,
+    # drawn values, size, dynamics, R, delays and the phase at the
+    # training cut-offs (workflow/scripts/grid_summaries.py). From the
+    # round's batch files, not its manifest, so a summary of a round
+    # another run is simulating writes nothing into that round's records.
+    input:
+        lambda wc: [
+            f"{ROUNDS_DIR}/r{wc.round}/sims/{kind}-{seed}.{ext}"
+            for seed in seeds_of(wc.round)
+            for kind, ext in (
+                ("counts", "csv.gz"),
+                ("settings", "csv"),
+                ("latent", "csv.gz"),
+            )
+        ],
+    output:
+        f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/summaries/run.log",
+    conda:
+        TOOLS_ENV
+    params:
+        sims=lambda wc, input: Path(input[0]).parent,
+    shell:
+        "uv run python workflow/scripts/grid_summaries.py outbreaks "
+        "{params.sims} {output} > {log} 2>&1"
+
+
+rule grid_figures:
+    # The run's rounds side by side: each summary's ECDF and the shares of
+    # patterns and phases, with their quantiles and shares as a table.
+    input:
+        expand(
+            f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
+            round=config["rounds"],
+        ),
+    output:
+        ecdf=f"{ROUNDS_DIR}/figures/grid/compare-ecdf.png",
+        shares=f"{ROUNDS_DIR}/figures/grid/compare-shares.png",
+        table=f"{ROUNDS_DIR}/figures/grid/compare.csv",
+    log:
+        f"{ROUNDS_DIR}/figures/grid/run.log",
+    conda:
+        TOOLS_ENV
+    params:
+        out=lambda wc, output: Path(output.ecdf).parent,
+        sources=lambda wc, input: " ".join(
+            f"r{r}={path}" for r, path in zip(config["rounds"], input)
+        ),
+    shell:
+        """
+        uv run python workflow/scripts/grid_summaries.py compare \
+            {output.table} {params.sources} > {log} 2>&1
+        uv run python workflow/scripts/grid_figures.py {params.out} \
+            {params.sources} >> {log} 2>&1
+        """
+
+
+# The simulation report (workflow/scripts/sim_report.py): per round, and
+# over every round in `rounds`, the science of the simulated outbreaks
+# against the German development half and the paper's reference values.
+# Target `sim_reports`. The German triangle is the hub's, at
+# config/germany.toml's commit; no BDBV data.
+GERMANY_SPLIT = tomllib.loads(Path("config/germany.toml").read_text())[
+    "nowcast"
+]["split_date"]
+REFERENCE_VALUES = "paper/data/reference-values.csv"
+
+
+rule germany_triangle:
+    output:
+        f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv",
+    log:
+        f"{LOCAL['ROOT']}/germany/fetch.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        out=lambda wc, output: Path(output[0]).parent,
+    shell:
+        "uv run python -m bdbvhub.cli germany-fetch --out {params.out} "
+        "> {log} 2>&1"
+
+
+rule germany_dev_stats:
+    # The development half's series statistics: national, and medians
+    # over states and over age groups.
+    input:
+        rules.germany_triangle.output,
+    output:
+        f"{ROUNDS_DIR}/report/germany-dev.csv",
+    log:
+        f"{ROUNDS_DIR}/report/germany-dev.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        split=GERMANY_SPLIT,
+    shell:
+        "uv run python workflow/scripts/sim_report.py germany {input} "
+        "{params.split} {output} > {log} 2>&1"
+
+
+rule sim_report:
+    input:
+        summaries=rules.round_summaries.output,
+        germany=rules.germany_dev_stats.output,
+        refs=REFERENCE_VALUES,
+    output:
+        f"{ROUNDS_DIR}/r{{round}}/report/sim-report.html",
+    log:
+        f"{ROUNDS_DIR}/r{{round}}/report/run.log",
+    conda:
+        TOOLS_ENV
+    params:
+        source=lambda wc, input: (
+            f"r{wc.round}={ROUNDS_DIR}/r{wc.round}/sims:{input.summaries}"
+        ),
+    shell:
+        "uv run python workflow/scripts/sim_report.py render {output} "
+        "'Simulated outbreaks, round {wildcards.round}' {input.refs} "
+        "{input.germany} {params.source} > {log} 2>&1"
+
+
+rule sim_report_run:
+    # Every round in `rounds` together.
+    input:
+        summaries=expand(
+            f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
+            round=config["rounds"],
+        ),
+        germany=rules.germany_dev_stats.output,
+        refs=REFERENCE_VALUES,
+    output:
+        f"{ROUNDS_DIR}/report/sim-report.html",
+    log:
+        f"{ROUNDS_DIR}/report/run.log",
+    conda:
+        TOOLS_ENV
+    params:
+        title="Simulated outbreaks, rounds "
+        + ", ".join(str(r) for r in config["rounds"]),
+        sources=lambda wc, input: " ".join(
+            f"r{r}={ROUNDS_DIR}/r{r}/sims:{path}"
+            for r, path in zip(config["rounds"], input.summaries)
+        ),
+    shell:
+        "uv run python workflow/scripts/sim_report.py render {output} "
+        "'{params.title}' {input.refs} {input.germany} {params.sources} "
+        "> {log} 2>&1"
+
+
+rule sim_reports:
+    input:
+        expand(
+            f"{ROUNDS_DIR}/r{{round}}/report/sim-report.html",
+            round=config["rounds"],
+        ),
+        rules.sim_report_run.output,
+
+
 rule release:
     input:
-        # Never another grid's round: its release holds that grid's batches.
+        # Never an earlier grid's round: its release holds that grid's
+        # batches.
         lambda wc: grids.check_release(
-            config["rounds"], grid_name(), config["grid_rounds"],
-            config.get("retired_rounds"),
+            config["rounds"], config["grid_rounds"], config.get("retired_rounds")
         )
         or [],
         [

@@ -52,8 +52,11 @@ rule slots_check_shard:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         shards=SLC["shards"],
         blocks=f"{CACHE}/slots-check/blocks.pkl",
-        held=lambda wc: f"{held_seeds()[0]} {held_seeds()[-1]}",
-        sims=f"{ROUNDS_DIR}/r{FT['validation_round']}/sims",
+        # The first trained run's held-out round.
+        held=lambda wc: held_range(trained_runs()[0]),
+        sims=lambda wc: (
+            f"{ROUNDS_DIR}/r{RUNS[trained_runs()[0]].ft['validation_round']}/sims"
+        ),
         noslots=LOCAL["NOSLOTS_RUN"],
         germany=LOCAL["GERMANY_BLOCKS"],
     shell:
@@ -109,9 +112,9 @@ rule agg_data:
         """
         exec >{log} 2>&1
         export GITHUB_TOKEN=${{GITHUB_TOKEN:-$(gh auth token)}}
-        uv run python -m bdbvhubrenewal.cli data \
+        uv run python -m bdbvhub.cli data \
             --raw {params.root}/data/raw --out {params.root}/data --ref {params.ref}
-        uv run python -m bdbvhubrenewal.cli germany-fetch \
+        uv run python -m bdbvhub.cli germany-fetch \
             --out {params.root}/germany
         git show {params.zero_shot} >{output.zero_shot}
         git show {params.existing} >{output.existing}

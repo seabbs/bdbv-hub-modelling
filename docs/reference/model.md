@@ -3,30 +3,40 @@
 The PyRenew renewal model the renewal forecasters fit and sample from. See [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
-::: bdbvhubrenewal.model
+::: nowcastrenewal.model
     options:
       members: false
 
-::: bdbvhubrenewal.model.temporal
+::: nowcastrenewal.model.temporal
 
-::: bdbvhubrenewal.model.pooled
+::: nowcastrenewal.model.pooled
 
-::: bdbvhubrenewal.model.renewal
+::: nowcastrenewal.model.renewal
 
-::: bdbvhubrenewal.model.hazard_delay
+::: nowcastrenewal.model.hazard_delay
 
-::: bdbvhubrenewal.model.censored
+::: nowcastrenewal.components.pmfs
 
-::: bdbvhubrenewal.model.delays
+::: nowcastrenewal.components.mixing
 
-::: bdbvhubrenewal.model.observation
+::: nowcastrenewal.components.renewal
 
-::: bdbvhubrenewal.model.composition_noise
+::: nowcastrenewal.components.hazards
 
-::: bdbvhubrenewal.model.distributions
+::: nowcastrenewal.components.reference
 
-::: bdbvhubrenewal.model.rt_observation
+::: nowcastrenewal.components.noise
 
-::: bdbvhubrenewal.model.model
+::: nowcastrenewal.model.delays
 
-::: bdbvhubrenewal.model.inputs
+::: nowcastrenewal.model.observation
+
+::: nowcastrenewal.model.composition_noise
+
+::: nowcastrenewal.model.distributions
+
+::: nowcastrenewal.model.rt_observation
+
+::: nowcastrenewal.model.model
+
+::: nowcastrenewal.model.inputs

@@ -38,3 +38,16 @@ def test_ci_runs_the_engine_s_testthat_suite():
     assert "r-lib/actions/setup-r-dependencies@" in uses
     assert 'test_local("packages/nowcastfoundation/r"' in runs
     assert "stop_on_failure = TRUE" in runs
+
+
+def test_ci_can_solve_the_engine_s_dependencies():
+    """cmdstanr, a Suggests of the engine and of the pinned epinowcast, is
+    only on the stan-dev r-universe, so the engine job adds it."""
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    steps = workflow["jobs"]["engine"]["steps"]
+    repos = " ".join(
+        s.get("with", {}).get("extra-repositories", "") for s in steps
+    )
+    assert "stan-dev.r-universe.dev" in repos

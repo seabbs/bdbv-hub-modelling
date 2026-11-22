@@ -8,7 +8,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.germany import (
+from bdbvhub.models import get_model
+from nowcasteval.backtest import run_forecasts
+from nowcastgermany.data import (
     HORIZONS,
     OFFSETS,
     hub_forecasts,
@@ -19,8 +21,7 @@ from bdbvhubrenewal.data.germany import (
     place_code,
     read_triangle,
 )
-from bdbvhubrenewal.forecasters import NATIONAL, get_model
-from nowcasteval.backtest import run_forecasts
+from nowcastutils.base import NATIONAL
 
 FIXTURE = (
     Path(__file__).resolve().parents[1]
@@ -299,3 +300,43 @@ def test_hub_target_is_each_7_day_sum_as_each_release_reports_it(
 )
 def test_levels_are_the_paper_s(place: str, want: str) -> None:
     assert level(place) == want
+
+
+def test_tasks_take_the_horizons_asked_for(triangle: pd.DataFrame) -> None:
+    # Days after the nowcast date are forecast weeks; each offset keeps
+    # the horizons whose weeks end on its weekday.
+    horizons = tuple(range(28, -29, -1))
+    tasks = nowcast_tasks(
+        triangle, NOWCAST, n_samples=20, seed=1, horizons=horizons
+    )
+    by_offset = [tasks[2 * k] for k in range(7)]
+    for k, task in enumerate(by_offset):
+        ref = task.reference_date
+        got = [
+            (dt.date.fromisoformat(w) - ref).days for w in task.target_end_dates
+        ]
+        assert got == [h for h in sorted(horizons) if (-h - k) % 7 == 0]
+    ahead = {
+        (dt.date.fromisoformat(w) - t.reference_date).days
+        for t in by_offset
+        for w in t.target_end_dates
+    }
+    assert max(ahead) == 28
+
+
+def test_within_delay_keeps_the_counts_reported_by_that_delay() -> None:
+    from nowcastgermany.data import within_delay
+
+    # One day's count, reported 5 by day 0, 8 by day 40 and 10 by day 41.
+    tri = pd.DataFrame(
+        {
+            "reference_date": ["2021-01-01"] * 3,
+            "location": ["DE"] * 3,
+            "age_group": ["00+"] * 3,
+            "confirm": [5, 8, 10],
+            "report_date": ["2021-01-01", "2021-02-10", "2021-02-11"],
+        }
+    )
+    cut = within_delay(tri, 40)
+    assert cut["confirm"].tolist() == [5, 8]
+    assert within_delay(tri, 41).equals(tri)

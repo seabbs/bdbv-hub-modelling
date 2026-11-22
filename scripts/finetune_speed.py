@@ -42,7 +42,7 @@ import finetune_chronos as ft
 import finetune_stream as fs
 
 from nowcastfoundation import series_bias
-from nowcastfoundation.forecaster import torch_device
+from nowcastfoundation.backends.chronos2 import torch_device
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,8 +60,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--free-run", type=int, default=0)
     p.add_argument("--device", default="auto")
     p.add_argument("--threads", type=int)
-    p.add_argument("--memory-gb", type=float, default=ft.MEMORY_GB)
-    p.add_argument("--batch-size", type=int, default=256)
+    p.add_argument(
+        "--checkpoint-above",
+        type=int,
+        default=ft.workflow_finetune("checkpoint_above"),
+    )
+    p.add_argument(
+        "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
+    )
     p.add_argument("--blocks-per-simulation", type=int, default=32)
     p.add_argument("--draws-per-simulation", type=int, default=1)
     p.add_argument("--subset-seed", type=int, default=1)
@@ -90,8 +96,7 @@ def main() -> None:
     ft.UNIVARIATE_SHARE = args.univariate_share
     fs.DRAWS_PER_PASS = args.draws_per_simulation
     fs.SUBSET_SEED = args.subset_seed
-    fs.checkpoint_large_batches(ft.checkpoint_above(args.memory_gb))
-    ft.MAX_SERIES = min(ft.MAX_SERIES, ft.max_series(args.memory_gb))
+    fs.checkpoint_large_batches(args.checkpoint_above)
     k = args.blocks_per_simulation
     device = torch_device(args.device)
 
@@ -175,7 +180,7 @@ def main() -> None:
         times.update(dict.fromkeys(parts, 0.0))
         # As the trainer's loop: clear, accumulate, step, free.
         optimiser.zero_grad()
-        value = fs.accumulate(list(indices), backward, zero, print)
+        value = fs.accumulate(list(indices), backward, zero)
         timed(
             "optimiser",
             functools.partial(fs.finite_step, params, optimiser, value),
@@ -224,9 +229,8 @@ def main() -> None:
     summary = {
         "device": device,
         "threads": torch.get_num_threads(),
-        "memory_gb": args.memory_gb,
         "max_series": ft.MAX_SERIES,
-        "checkpoint_above": ft.checkpoint_above(args.memory_gb),
+        "checkpoint_above": args.checkpoint_above,
         "series_bias": args.series_bias,
         "sims": len(ids),
         "blocks": len(blocks),
@@ -282,7 +286,7 @@ def fs_step(model, accepted, device, params, optimiser):
             fs.free_memory()
 
         optimiser.zero_grad()
-        value = fs.accumulate(indices, backward, zero, print)
+        value = fs.accumulate(indices, backward, zero)
         fs.finite_step(params, optimiser, value)
         fs.free_memory()
         return value

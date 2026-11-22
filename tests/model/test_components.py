@@ -1,33 +1,33 @@
-from pathlib import Path
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import pandas as pd
 import pytest
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
-from bdbvhubrenewal.model import (
-    CensoredPMF,
+from nowcastrenewal.components.hazards import log_hazard_probs
+from nowcastrenewal.components.mixing import mixing_matrix
+from nowcastrenewal.components.pmfs import CensoredPMF
+from nowcastrenewal.components.renewal import (
+    ExponentialDepletion,
+    NoDepletion,
+    run_renewal,
+)
+from nowcastrenewal.model import (
     FixedTimeVarying,
     HazardDelay,
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,
-    censored_pmf,
-    coupled_renewal,
     generation_interval,
-    hazard_to_pmf,
     incubation_period,
-    mixing_matrix,
     onset_expectations,
     pooled_walk,
 )
-from bdbvhubrenewal.model.observation import backsample
+from nowcastrenewal.model.observation import backsample
 
 from .numpy_reference import (
     expected_imputed_onsets,
@@ -73,13 +73,6 @@ def seeded(fn, seed=0):
         return fn()
 
 
-def test_hazard_to_pmf_is_a_pmf_and_geometric_for_constant_hazard():
-    pmf = np.asarray(hazard_to_pmf(jnp.full((3, 20), jnp.log(0.2 / 0.8))))
-    assert pmf.shape == (3, 21)
-    np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-6)
-    np.testing.assert_allclose(pmf[0, :5], 0.2 * 0.8 ** np.arange(5), rtol=1e-5)
-
-
 def test_backsample_matches_reference():
     rng = np.random.default_rng(1)
     m, g = rng.gamma(2, 5, 50), rng.dirichlet(np.ones(15))
@@ -118,20 +111,8 @@ def test_onset_expectations_match_reference():
     )
 
 
-def test_mixing_conserves_transmission():
-    f = jnp.array([0.5, 0.3, 0.2])
-    k = uniform_kernel(3)
-    w = mixing_matrix(jnp.asarray(k), 0.1, f)
-    # In counts, column q of diag(f) W diag(1/f) sums to one.
-    counts = f[:, None] * w / f[None, :]
-    np.testing.assert_allclose(counts.sum(axis=0), 1.0, rtol=1e-6)
-    np.testing.assert_allclose(
-        mixing_matrix(jnp.asarray(k), 0.0, f), jnp.eye(3)
-    )
-
-
 @pytest.mark.parametrize("deplete", [False, True])
-def test_coupled_renewal_matches_reference(deplete):
+def test_the_fitted_renewal_matches_reference(deplete):
     rng = np.random.default_rng(3)
     g = generation_interval()
     n_init, n, p = len(g), 120, 3
@@ -150,13 +131,15 @@ def test_coupled_renewal_matches_reference(deplete):
         kernel=k,
         importation=0.05,
     )
-    x, _, _ = coupled_renewal(
+    run = run_renewal(
         jnp.asarray(seed[:, :n_init].T / pops),
-        jnp.asarray(rt),
         jnp.asarray(g),
-        mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)),
-        pool=1.0 if deplete else None,
+        jnp.asarray(rt),
+        1.0,
+        mixing=mixing_matrix(jnp.asarray(k), 0.05, "sent", jnp.asarray(f)),
+        depletion=ExponentialDepletion() if deplete else NoDepletion(),
     )
+    x = run.infections[n_init:]
     # Exact without depletion. With it, PyRenew's exponential depletion
     # matches the reference's linear form to first order (small y).
     rtol = 1e-4 if not deplete else 2e-2
@@ -170,11 +153,13 @@ def test_depletion_bounds_attack_rate():
     I0 = jnp.full((len(g), 2), 1e-4)
     rt = jnp.full((400, 2), 3.0)
     w = jnp.eye(2)
-    x, r_eff, _ = coupled_renewal(I0, rt, g, w, pool=1.0)
-    assert float(x.sum(axis=0).max() + I0.sum(axis=0).max()) <= 1.0 + 1e-6
-    assert float(r_eff[-1].max()) < 1.0
-    x_free, _, _ = coupled_renewal(I0, rt, g, w)
-    assert float(x_free.sum()) > 1e3
+    run = run_renewal(
+        I0, g, rt, 1.0, mixing=w, depletion=ExponentialDepletion()
+    )
+    assert float(run.infections.sum(axis=0).max()) <= 1.0 + 1e-6
+    assert float(run.reff[-1].max()) < 1.0
+    free = run_renewal(I0, g, rt, 1.0, mixing=w, depletion=NoDepletion())
+    assert float(free.infections.sum()) > 1e3
 
 
 def test_random_walk_and_pooled_walk_shapes():
@@ -258,7 +243,9 @@ def test_province_delays_pool_around_the_shared_delay():
     assert not np.allclose(spread[0], spread[-1])
     beta = tr["delay_beta"]["value"]
     np.testing.assert_allclose(
-        pmf[2, 10], hazard_to_pmf(beta + shift[10, 2]), rtol=1e-5
+        pmf[2, 10],
+        jnp.exp(log_hazard_probs(beta + shift[10, 2], close=True)),
+        rtol=1e-5,
     )
 
 
@@ -275,7 +262,9 @@ def test_hazard_delay_records_its_shape_and_shift():
     assert shift.shape[0] == 35
     # The pmf is the hazard pmf of shape plus shift on each day.
     np.testing.assert_allclose(
-        pmf[0, 10], hazard_to_pmf(beta + shift[10].squeeze()), rtol=1e-5
+        pmf[0, 10],
+        jnp.exp(log_hazard_probs(beta + shift[10].squeeze(), close=True)),
+        rtol=1e-5,
     )
 
 
@@ -295,12 +284,8 @@ def test_fixed_inputs_pad_with_last_row():
 
 
 def test_fast_kernels_match_reference_values_and_gradients():
-    import jax
 
-    from .reference_kernels import (
-        hazard_to_pmf_reference,
-        onset_expectations_reference,
-    )
+    from .reference_kernels import onset_expectations_reference
 
     rng = np.random.default_rng(5)
     n, dmax, p, cutoff = 50, 12, 3, 40
@@ -324,52 +309,10 @@ def test_fast_kernels_match_reference_values_and_gradients():
     )
     for a, b in zip(g_new, g_old, strict=True):
         np.testing.assert_allclose(a, b, rtol=1e-3, atol=1e-4)
-    x = jnp.asarray(rng.normal(-2, 1, (4, 20)))
-    np.testing.assert_allclose(
-        hazard_to_pmf(x), hazard_to_pmf_reference(x), rtol=1e-5, atol=1e-7
-    )
-
-
-DPCENS = pd.read_csv(Path(__file__).parent / "fixtures" / "dpcens.csv")
-"""primarycensored `dpcens` pmfs, from `fixtures/dpcens.R`."""
-
-
-def test_generation_interval_matches_primarycensored():
-    ref = DPCENS[DPCENS["case"] == "gi"]
-    np.testing.assert_allclose(generation_interval(), ref["p"], atol=1e-8)
-
-
-def test_incubation_period_matches_primarycensored():
-    ref = DPCENS[DPCENS["case"] == "incubation"]
-    np.testing.assert_allclose(incubation_period(), ref["p"], atol=1e-8)
-
-
-@pytest.mark.parametrize(
-    ("family", "mean", "cv"),
-    list(
-        DPCENS.loc[DPCENS["case"] == "delay", ["family", "mean", "cv"]]
-        .drop_duplicates()
-        .itertuples(index=False)
-    ),
-)
-def test_censored_pmf_matches_primarycensored(family, mean, cv):
-    ref = DPCENS[
-        (DPCENS["case"] == "delay")
-        & (DPCENS["family"] == family)
-        & (DPCENS["mean"] == mean)
-        & (DPCENS["cv"] == cv)
-    ]
-    with jax.enable_x64():
-        ours = np.asarray(censored_pmf(family, mean, cv, 60))
-    np.testing.assert_allclose(ours, ref["p"], atol=1e-8)
-    # The model runs in float32, good to the docstring's 3e-5.
-    with jax.enable_x64(False):
-        ours32 = np.asarray(censored_pmf(family, mean, cv, 60))
-    np.testing.assert_allclose(ours32, ref["p"], atol=3e-5)
 
 
 def test_onsets_are_infections_convolved_with_the_incubation_period():
-    from bdbvhubrenewal.model.observation import OnsetStreams
+    from nowcastrenewal.model.observation import OnsetStreams
 
     eta = incubation_period()
     streams = OnsetStreams(
@@ -388,38 +331,20 @@ def test_onsets_are_infections_convolved_with_the_incubation_period():
     assert streams.lookback_days() == len(eta) - 1
 
 
-def test_censored_pmf_rv_gives_the_closed_form_at_its_parameters():
+def test_onset_lookback_comes_from_a_random_pmfs_length():
+    from nowcastrenewal.model.observation import OnsetStreams
+
     rv = CensoredPMF(
         "incubation",
         "lognormal",
-        DeterministicVariable("incubation_mean", 6.3),
-        DeterministicVariable("incubation_sd", 3.5),
         28,
-    )
-    with jax.enable_x64():
-        pmf = np.asarray(rv())
-    np.testing.assert_allclose(pmf, incubation_period(), atol=1e-12)
-
-
-def test_censored_pmf_rv_samples_its_mean_and_sd():
-    from bdbvhubrenewal.model.observation import OnsetStreams
-
-    rv = CensoredPMF(
-        "incubation",
-        "lognormal",
-        DistributionalVariable(
+        mean_rv=DistributionalVariable(
             "incubation_mean", dist.TruncatedNormal(6.3, 0.54, low=1.0)
         ),
-        DistributionalVariable(
+        sd_rv=DistributionalVariable(
             "incubation_sd", dist.TruncatedNormal(3.5, 0.8, low=1.0)
         ),
-        28,
     )
-    with numpyro.handlers.trace() as tr, numpyro.handlers.seed(rng_seed=1):
-        pmf = rv()
-    assert {"incubation_mean", "incubation_sd"} <= set(tr)
-    assert pmf.shape == (29,)
-    assert float(pmf.sum()) == pytest.approx(1.0, abs=1e-5)
     # The lookback comes from the pmf's length without sampling it.
     streams = OnsetStreams(
         "onsets",
@@ -469,8 +394,8 @@ def test_hazard_delay_smoothness_prior_allows_real_fits():
 
 def test_generation_interval_matches_bvdoutbreaksize():
     # BVDOutbreakSize's prior means (priors.jl): mean 15.3, SD 9.3 days.
-    from bdbvhubrenewal.model.model import GI_MEAN, GI_SD, generation_interval
     from nowcastfoundation.simulate import SimulationSettings
+    from nowcastrenewal.model.model import GI_MEAN, GI_SD, generation_interval
 
     assert (GI_MEAN, GI_SD) == (15.3, 9.3)
     np.testing.assert_allclose(
@@ -478,71 +403,3 @@ def test_generation_interval_matches_bvdoutbreaksize():
     )
     s = SimulationSettings()
     assert (s.gi_mean, s.gi_sd) == (GI_MEAN, GI_SD)
-
-
-def test_imported_infections_are_part_of_the_total():
-    rng = np.random.default_rng(4)
-    g = generation_interval()
-    p = 3
-    f = np.array([0.5, 0.3, 0.2])
-    k = uniform_kernel(p)
-    w = np.asarray(mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)))
-    I0 = rng.uniform(0, 1e-5, (len(g), p))
-    rt = rng.uniform(0.6, 1.8, (60, p))
-    # Imported infections are part of the total, and none without coupling.
-    x, _, imp = coupled_renewal(
-        jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.asarray(w),
-        pool=0.05,
-    )  # fmt: skip
-    assert np.all(np.asarray(imp) <= np.asarray(x) + 1e-12)
-    assert float(np.asarray(imp).sum()) > 0
-    _, _, none = coupled_renewal(
-        jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.eye(p),
-    )  # fmt: skip
-    np.testing.assert_allclose(np.asarray(none), 0.0)
-
-
-def _quad_censored_pmf(family, mean, cv, dmax):
-    """Float64 double censored pmf by numerical integration, as a reference."""
-    from scipy import integrate, stats
-
-    if family == "gamma":
-        shape = 1 / cv**2
-        dist = stats.gamma(shape, scale=mean / shape)
-    else:
-        sdlog = np.sqrt(np.log1p(cv**2))
-        dist = stats.lognorm(sdlog, scale=mean / np.sqrt(1 + cv**2))
-
-    def cdf(x):
-        return dist.cdf(x) if x > 0 else 0.0
-
-    pmf = np.array(
-        [
-            integrate.quad(
-                lambda u, d=d: cdf(d + 1 - u) - cdf(d - u),
-                0,
-                1,
-                epsabs=1e-14,
-                epsrel=1e-12,
-                points=[0.0, 1.0],
-            )[0]
-            for d in range(dmax + 1)
-        ]
-    )
-    return pmf / pmf.sum()
-
-
-@pytest.mark.parametrize("family", ["gamma", "lognormal"])
-@pytest.mark.parametrize("cv", [0.3, 0.5, 1.0, 1.5, 2.0])
-@pytest.mark.parametrize("mean", [2.0, 8.0, 15.0])
-def test_censored_pmf_is_close_in_float32(family, cv, mean):
-    # The baselinenowcast port enables float64 on import, so pin float32.
-    with jax.enable_x64(False):
-        ours = np.asarray(censored_pmf(family, mean, cv, 60))
-    assert ours.dtype == np.float32
-    ref = _quad_censored_pmf(family, mean, cv, 60)
-    # float32 incomplete gamma is good to about 1e-6, and the closed form
-    # scales that by the delay, so errors are a few 1e-5 at most.
-    assert np.max(np.abs(ours - ref)) < 4e-5
-    big = ref > 1e-4
-    assert np.max(np.abs(ours[big] / ref[big] - 1)) < 2e-2
