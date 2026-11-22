@@ -43,8 +43,7 @@ import numpy as np
 import pandas as pd
 from scipy.signal import find_peaks
 
-SIM_DELAY_WEEKS = 8
-"""`finetune.chronos.SIM_DELAY_WEEKS`: weeks kept after the last cut-off."""
+from nowcastfoundation.finetune.chronos import SIM_DELAY_WEEKS
 
 GROWING = 0.01
 """Daily 14-day log growth above which a cut-off is in a rising phase."""
