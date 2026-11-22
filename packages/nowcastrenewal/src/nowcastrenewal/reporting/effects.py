@@ -39,14 +39,16 @@ import numpyro.distributions as dist
 from jax import Array
 from pyrenew.metaclass import RandomVariable
 
-from ..components.pmfs import Delay, censored_logit_hazard
+from ..components.pmfs import Delay, censored_log_pmf, censored_logit_hazard
 
 __all__ = [
     "CHANGE_TERMS",
     "ReferenceEffects",
     "ReferenceFrame",
+    "ReportEffects",
     "change_betas",
     "change_covariates",
+    "report_days",
 ]
 
 CHANGE_TERMS: dict[str, tuple[str, ...]] = {
@@ -279,6 +281,9 @@ class ReferenceEffects(RandomVariable):
         The simulation's design and values.
     max_delay : int
         Delays in the window, $D$.
+    as_log_pmf : bool
+        Return the parametric part as the delay's log pmf rather than its
+        logit hazard (epinowcast's `ref_as_p`, `expectation`).
     """
 
     def __init__(
@@ -288,12 +293,14 @@ class ReferenceEffects(RandomVariable):
         design: Mapping[str, Any],
         values: Mapping[str, Any],
         max_delay: int,
+        as_log_pmf: bool = False,
     ) -> None:
         super().__init__(name=name)
         self.frame = frame
         self.design = design
         self.values = values
         self.max_delay = max_delay
+        self.as_log_pmf = as_log_pmf
         self.parametric = design["delay_form"] != "non_parametric"
         self.hazard = design["delay_form"] != "parametric"
         self.covariates = change_covariates(frame, design, values)
@@ -372,6 +379,158 @@ class ReferenceEffects(RandomVariable):
             sigma = Delay.from_values(family, self.values).sigma
             mu = self.location()
             numpyro.deterministic(f"{self.name}::location", mu)
-            parametric = censored_logit_hazard(Delay(family, mu, sigma), D)
+            delay = Delay(family, mu, sigma)
+            parametric = (
+                censored_log_pmf(delay, D)
+                if self.as_log_pmf
+                else censored_logit_hazard(delay, D)
+            )
         non_parametric = self.non_parametric() if self.hazard else zeros
         return parametric, non_parametric
+
+
+_WEEKDAYS = (
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+)
+
+
+def report_days(
+    frame: ReferenceFrame,
+    design: Mapping[str, Any],
+    v: Mapping[str, Any],
+    max_delay: int,
+) -> np.ndarray | None:
+    """Return which days each stratum reports on, or None for every day.
+
+    Reports are made on the design's weekdays (`report_weekdays`, ";"
+    separated) unless it reports daily, and not at all over an outage:
+    the shocked place's report dates within the shock's window of
+    reference dates.
+
+    Parameters
+    ----------
+    frame : ReferenceFrame
+        The triangle's strata and dates.
+    design : mapping
+        The design (`report_days`, `report_weekdays`, `shocks`).
+    v : mapping
+        The values (`weeks`, `shock_*`).
+    max_delay : int
+        Delays in the window, $D$.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        1 on report days, by stratum and report day from the first
+        reference date, `(G, T + D - 1)`; None if every day is one.
+    """
+    G, T = len(frame.place), len(frame.dates)
+    n = T + max_delay - 1
+    dow = (frame.day_of_week[0] + np.arange(n)) % 7
+    daily = design["report_days"] == "daily"
+    outage = design["shocks"] == "outage"
+    if daily and not outage:
+        return None
+    on = np.ones((G, n), dtype=int)
+    if not daily:
+        days = [
+            _WEEKDAYS.index(d) for d in design["report_weekdays"].split(";")
+        ]
+        on[:, ~np.isin(dow, days)] = 0
+    if outage:
+        day = np.arange(n)
+        for k, p in enumerate(np.atleast_1d(v["shock_places"])):
+            a, b = _window(
+                np.atleast_1d(v["shock_at"])[k],
+                np.atleast_1d(v["shock_weeks"])[k],
+                v,
+            )
+            rows = frame.place == int(p) - 1
+            on[np.ix_(rows, (day >= a) & (day <= b))] = 0
+    return on
+
+
+class ReportEffects(RandomVariable):
+    r"""Report-date and reference-weekday effects of a simulation.
+
+    Returns the report-date logit hazard effect by stratum and report day,
+    `(G, T + D - 1)` (a report weekday effect where reports are daily
+    with one, else None), and the reference weekday's effect on the log
+    expected counts by stratum and reference day, `(G, T)` (or None).
+    Both are standard normal sites scaled by their standard deviations,
+    not centred (as epinowcast's report and observation modules):
+    `"{name}::day_of_week"` and `"{name}::reference_day_of_week"`.
+
+    Parameters
+    ----------
+    name : str
+        Name of the component.
+    frame : ReferenceFrame
+        The triangle's strata and dates.
+    design, values : mapping
+        The simulation's design and values.
+    max_delay : int
+        Delays in the window, $D$.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        frame: ReferenceFrame,
+        design: Mapping[str, Any],
+        values: Mapping[str, Any],
+        max_delay: int,
+    ) -> None:
+        super().__init__(name=name)
+        self.frame = frame
+        self.design = design
+        self.values = values
+        self.max_delay = max_delay
+
+    @property
+    def has_report_effect(self) -> bool:
+        """Whether reports are daily with a report weekday effect."""
+        return bool(
+            self.design["report_days"] == "daily"
+            and self.design["report_dow"] == "yes"
+        )
+
+    def sample(self, **kwargs: object) -> tuple[Array | None, Array | None]:
+        """Return the report-date and reference-weekday effects.
+
+        Parameters
+        ----------
+        **kwargs
+            Ignored, for the PyRenew interface.
+
+        Returns
+        -------
+        tuple
+            `(G, T + D - 1)` or None, and `(G, T)` or None.
+        """
+        G, T = len(self.frame.place), len(self.frame.dates)
+        report = None
+        if self.has_report_effect:
+            z = numpyro.sample(
+                f"{self.name}::day_of_week", dist.Normal(0.0, 1.0).expand([7])
+            )
+            n = T + self.max_delay - 1
+            dow = (self.frame.day_of_week[0] + np.arange(n)) % 7
+            report = jnp.broadcast_to(
+                float(self.values["dow_sd"]) * z[dow], (G, n)
+            )
+        reference = None
+        if self.design["reference_dow"] == "yes":
+            z = numpyro.sample(
+                f"{self.name}::reference_day_of_week",
+                dist.Normal(0.0, 1.0).expand([7]),
+            )
+            sd = float(self.values["reference_dow_sd"])
+            reference = jnp.broadcast_to(sd * z[self.frame.day_of_week], (G, T))
+        return report, reference
