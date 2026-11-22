@@ -15,7 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nowcastrenewal.reporting.delays import double_censored_logit_hazard
+from nowcastrenewal.components.pmfs import Delay, censored_logit_hazard
 from nowcastrenewal.reporting.triangle import (
     combine_logit_hazards,
     log_expected_counts,
@@ -35,8 +35,13 @@ def _inputs() -> dict[str, Any]:
     rng = np.random.default_rng(20261122)
     with jax.enable_x64(True):
         refp = np.asarray(
-            double_censored_logit_hazard(
-                "lognormal", np.log([2.0, 4.0, 3.0]), [0.6, 0.9, 1.2], D
+            censored_logit_hazard(
+                Delay(
+                    "lognormal",
+                    np.log([2.0, 4.0, 3.0]),
+                    np.array([0.6, 0.9, 1.2]),
+                ),
+                D,
             )
         )
     return {

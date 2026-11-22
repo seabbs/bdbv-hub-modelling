@@ -26,7 +26,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Final, Protocol
 
-import jax
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
@@ -319,7 +318,7 @@ def hub_delay_pmf(
     onset is $k = \lceil (X - U) / 24 \rceil$ days before the report.
     That is the double interval censored pmf of $X / 24$ days,
     primarycensored's `dpcens(k, pgengamma, pwindow = 1, swindow = 1)`,
-    in closed form from `model.censored.gengamma_censored_pmf`.
+    in closed form from `nowcastrenewal.components.pmfs`.
     The generalised gamma is fitted to the delays published at 2026-10-17
     as exact before `HUB_DOUBLE_CENSORED_FROM` and as double interval
     censored from then on, with the parameters in
@@ -338,7 +337,7 @@ def hub_delay_pmf(
         $\hat f$ on days 0 to `max_delay`.
     """
     # The model package needs PyRenew, which the data layer does not.
-    from nowcastrenewal.model.censored import gengamma_censored_pmf
+    from nowcastrenewal.components.pmfs import Delay, delay_pmf
 
     fit = (
         "double_censored"
@@ -346,6 +345,4 @@ def hub_delay_pmf(
         else "exact"
     )
     mu, sigma, q = HUB_GENGAMMA[fit]
-    with jax.enable_x64():
-        pmf = gengamma_censored_pmf(mu - np.log(24), sigma, q, max_delay)
-    return np.asarray(pmf, dtype=float)
+    return delay_pmf(Delay("gengamma", mu - np.log(24), sigma, q), max_delay)

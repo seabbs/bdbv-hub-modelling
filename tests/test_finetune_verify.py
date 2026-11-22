@@ -186,13 +186,16 @@ def test_the_simulator_hashes_its_grid_python_and_engine():
                     "imports",
                     "infections",
                     "mixing",
-                    "pmfs",
                     "reference",
                     "rt",
                     "simulate",
                     "start",
                     "strata",
                 ),
+            ),
+            (
+                "packages/nowcastrenewal/src/nowcastrenewal/components",
+                ("__init__", "pmfs"),
             ),
         )
         for name in names

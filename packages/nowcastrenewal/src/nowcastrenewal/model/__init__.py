@@ -23,7 +23,6 @@
 The package imports without JAX until this subpackage is imported.
 """
 
-from .censored import CensoredPMF, censored_pmf
 from .delays import (
     FixedTimeVarying,
 )
@@ -58,7 +57,6 @@ from .zones import build_model
 __all__ = [
     "BVD",
     "MAIN",
-    "CensoredPMF",
     "FixedTimeVarying",
     "HazardDelay",
     "Importation",
@@ -71,7 +69,6 @@ __all__ = [
     "RtPseudoObservation",
     "Vintage",
     "build_model",
-    "censored_pmf",
     "coupled_renewal",
     "fit",
     "forecast_trajectories",

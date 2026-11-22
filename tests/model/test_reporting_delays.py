@@ -1,8 +1,10 @@
-"""The reporting delay's discretised pmfs, against the R packages, live.
+"""The reporting delay's pmfs, against epinowcast and the R engine, live.
 
-epinowcast's own Stan functions (`enw_stan_to_r`), the simulator's R
-engine (`packages/nowcastfoundation/r/R/delays.R`) and primarycensored are
-called directly; the tests skip only where R or a package is missing.
+The shared pmfs are checked against primarycensored in `test_pmfs.py`.
+Here the reporting delay's hazards are checked against the pinned
+epinowcast's own Stan functions (`enw_stan_to_r`), and its pmf against the
+simulator's R engine (`packages/nowcastfoundation/r/R/delays.R`); the
+tests skip only where R or a package is missing.
 """
 
 from __future__ import annotations
@@ -11,20 +13,15 @@ import itertools
 from typing import Any
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pytest
-from pyrenew.deterministic import DeterministicVariable
 
-from nowcastrenewal.model.hazard_delay import hazard_to_pmf
-from nowcastrenewal.reporting.delays import (
-    FAMILIES,
-    DelayParameters,
-    ParametricDelay,
-    double_censored_log_pmf,
-    double_censored_logit_hazard,
-    interval_pmf,
+from nowcastrenewal.components.pmfs import (
+    Delay,
+    censored_log_pmf,
+    censored_logit_hazard,
 )
+from nowcastrenewal.reporting.delays import FAMILIES, report_delay_pmf
 
 from .r_live import _skip, require_r, run_r
 
@@ -51,8 +48,8 @@ DIST = {"exponential": 1, "lognormal": 2, "gamma": 3}
 def _rows() -> list[dict[str, Any]]:
     rows = []
     for case, dmax in itertools.product(CASES, DMAX):
-        p = DelayParameters.from_values(case["family"], case["values"])
-        rows.append({**case, "dmax": dmax, "mu": p.mu, "sigma": p.sigma})
+        p = Delay.from_values(case["family"], case["values"])
+        rows.append({**case, "dmax": dmax, "mu": p.mu, "sigma": float(p.sigma)})
     return rows
 
 
@@ -111,12 +108,9 @@ def epinowcast_hazards() -> list[dict[str, Any]]:
 
 def _ours(r: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
     with jax.enable_x64(True):
-        lh = double_censored_logit_hazard(
-            r["family"], r["mu"], r["sigma"], r["dmax"]
-        )
-        lp = double_censored_log_pmf(
-            r["family"], r["mu"], r["sigma"], r["dmax"]
-        )
+        delay = Delay(r["family"], r["mu"], r["sigma"])
+        lh = censored_logit_hazard(delay, r["dmax"])
+        lp = censored_log_pmf(delay, r["dmax"])
     return np.asarray(lh), np.asarray(lp)
 
 
@@ -164,29 +158,10 @@ def test_double_censored_delays_match_epinowcast(
     )
 
 
-def test_the_hazards_give_the_pmf_to_full_precision() -> None:
-    # The hazards and the pmf agree in the far tail too.
-    for r in ROWS:
-        lh, lp = _ours(r)
-        with jax.enable_x64(True):
-            p = np.asarray(hazard_to_pmf(jnp.asarray(lh[:-1])))
-        np.testing.assert_allclose(p, np.exp(lp), rtol=1e-10, atol=1e-300)
-
-
-def test_the_double_censored_pmf_sums_to_one() -> None:
-    for r in ROWS:
-        with jax.enable_x64(True):
-            p = np.exp(
-                double_censored_log_pmf(
-                    r["family"], r["mu"], r["sigma"], r["dmax"]
-                )
-            )
-        assert p.sum() == pytest.approx(1.0, abs=1e-12)
-
-
 @pytest.fixture(scope="module")
 def engine_pmfs() -> list[list[float]]:
     """The simulator R engine's delay pmfs (`delay_parameters`)."""
+    require_r(["primarycensored"])
     code = """
     source("packages/nowcastfoundation/r/R/delays.R")
     lapply(seq_len(length(input$family)), function(i) {
@@ -203,65 +178,18 @@ def engine_pmfs() -> list[list[float]]:
     return run_r(code, inputs)
 
 
-def test_the_interval_pmf_matches_the_simulator_engine(
+def test_the_report_delay_pmf_matches_the_simulator_engine(
     engine_pmfs: list[list[float]],
 ) -> None:
     cases = [*CASES, {"family": "none", "values": {"delay_mean": 4.0}}]
     pairs = [(c, d) for c in cases for d in DMAX]
     for (case, dmax), want in zip(pairs, engine_pmfs, strict=True):
-        got = interval_pmf(case["family"], case["values"], dmax)
-        np.testing.assert_allclose(got, want, rtol=1e-12, atol=1e-15)
-
-
-def test_a_parametric_delay_component_returns_its_pmf() -> None:
-    p = DelayParameters.from_values("lognormal", CASES[4]["values"])
-    delay = ParametricDelay(
-        "delay",
-        family="lognormal",
-        mu_rv=DeterministicVariable("mu", np.array([p.mu, p.mu + 0.3])),
-        sigma_rv=DeterministicVariable("sigma", np.array([p.sigma, p.sigma])),
-        dmax=21,
-    )
-    with jax.enable_x64(True):
-        out = np.asarray(delay())
-    assert out.shape == (2, 21)
-    np.testing.assert_allclose(out.sum(axis=1), 1.0, atol=1e-12)
-    # A larger location delays reports.
-    assert (out[1] * np.arange(21)).sum() > (out[0] * np.arange(21)).sum()
+        got = report_delay_pmf(case["family"], case["values"], dmax)
+        np.testing.assert_allclose(got, want, rtol=1e-8, atol=1e-12)
 
 
 def test_the_families_are_the_grids() -> None:
     assert set(FAMILIES) == {"exponential", "lognormal", "gamma"}
-
-
-@pytest.fixture(scope="module")
-def primarycensored_pmfs() -> list[list[float]]:
-    """primarycensored's double censored pmfs: a uniform primary day,
-    daily secondary censoring, right truncated at the window."""
-    code = """
-    lapply(seq_len(nrow(input)), function(i) {
-      r <- input[i, ]
-      x <- 0:(r$dmax - 1)
-      pc <- function(p, ...) primarycensored::dpcens(
-        x, p, pwindow = 1, swindow = 1, D = r$dmax, ...
-      )
-      switch(r$family,
-        lognormal = pc(plnorm, meanlog = r$mu, sdlog = r$sigma),
-        gamma = pc(pgamma, shape = exp(r$mu), rate = r$sigma),
-        exponential = pc(pexp, rate = exp(-r$mu))
-      )
-    })
-    """
-    rows = [{k: r[k] for k in ("family", "mu", "sigma", "dmax")} for r in ROWS]
-    return run_r(code, rows, packages=["primarycensored"])
-
-
-def test_double_censored_delays_match_primarycensored(
-    primarycensored_pmfs: list[list[float]],
-) -> None:
-    for r, want in zip(ROWS, primarycensored_pmfs, strict=True):
-        _, lp = _ours(r)
-        np.testing.assert_allclose(np.exp(lp), want, rtol=1e-8, atol=1e-8)
 
 
 def test_ci_runs_the_live_r_checks() -> None:

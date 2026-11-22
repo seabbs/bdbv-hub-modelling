@@ -26,10 +26,10 @@ from numpyro import handlers
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent import InfectionInitializationProcess
 
+from ..components.pmfs import Delay, delay_pmf, generation_time_pmf
 from .imports import Imports
 from .infections import StratifiedInfections
 from .mixing import PlaceMixing
-from .pmfs import gt_pmf, incubation_pmf
 from .reference import ReferenceEvents
 from .rt import KINDS, PlaceRt, RtPath
 from .start import InitializeStrata
@@ -104,7 +104,7 @@ def simulate_latent(
     n : int
         Days after the generation time's span.
     gt : numpy.ndarray
-        Generation time pmf (`pmfs.gt_pmf`).
+        Generation time pmf (`components.pmfs.generation_time_pmf`).
     strata : pandas.DataFrame
         The strata, with `place` (`P01`, ...), `age` (`A1`, ...) and
         `.group` (1-based), in epinowcast's group order.
@@ -245,7 +245,8 @@ def simulate_latent(
         "reference",
         delay_rvs=[
             DeterministicPMF(
-                f"incubation_{j}", incubation_pmf(m, incubation_cv)
+                f"incubation_{j}",
+                delay_pmf(Delay.from_mean_cv("gamma", m, incubation_cv)),
             )
             for j, m in enumerate(_vector(v, "incubation_mean")[group])
         ],
@@ -359,7 +360,11 @@ def simulate_latent_batch(
         sim_id = str(sim["id"])
         design, values = sim["design"], sim["values"]
         try:
-            gt = gt_pmf(values["gt_mean"], design["gt_family"], values["gt_cv"])
+            gt = generation_time_pmf(
+                Delay.from_mean_cv(
+                    design["gt_family"], values["gt_mean"], values["gt_cv"]
+                )
+            )
             with jax.enable_x64(True):
                 latent = handlers.seed(
                     simulate_latent, jax.random.key(int(sim["key"]))

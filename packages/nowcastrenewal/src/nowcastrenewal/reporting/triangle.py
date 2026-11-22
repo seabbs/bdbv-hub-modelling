@@ -52,7 +52,7 @@ def combine_logit_hazards(
     ----------
     parametric : Array
         $\eta^{p}$, shape $(G, T, D)$; its last delay is usually
-        $+\infty$ (`delays.double_censored_logit_hazard`).
+        $+\infty$ (`components.pmfs.censored_logit_hazard`).
     non_parametric : Array
         $\eta^{np}$, broadcast against `parametric`.
     report : Array
