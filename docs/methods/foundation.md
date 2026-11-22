@@ -64,6 +64,7 @@ The levels are coupled by a Gaussian copula (`nowcastutils.trajectories.couple`)
 Each of those forecasts is scored at the steps that are final by the task's release, as normal scores of its randomised PIT (`pit_scores`).
 With no earlier release the fit is independence.
 Independent and comonotone draws remain as named options (`coupling`) for the supplement.
+`couple` also has the Schaake shuffle (each sample ordered as one past window of observed or simulated values, `history_windows`); the foundation model does not use it yet.
 
 ## Counts
 
