@@ -61,6 +61,9 @@ rule simulate_batch:
         grid=GRID_FILE,
         engine=" ".join(simulator.ENGINE),
         prefix=LOCAL["SIM_PREFIX"],
+        jax_cache=LOCAL["JAX_CACHE"],
+        jax_cache_gb=LOCAL["JAX_CACHE_GB"],
+        jax_env=simulator.jax_cache_env(LOCAL["JAX_CACHE"]),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
         max_load=LOCAL["MAX_LOAD"],
@@ -69,7 +72,8 @@ rule simulate_batch:
         # as the manifest records the commit. A retry keeps the first
         # attempt's log. The simulator writes temporary files to a folder of
         # the batch's own, removed however the batch ends. JAX runs on one
-        # thread, as the job has one.
+        # thread, as the job has one, and shares its compiles with the
+        # host's other batches (flowlib.simulator.jax_cache_env).
         """
         if ! git diff --quiet HEAD -- {params.engine} {params.grid}; then
             echo "the simulator or its grid differs from HEAD" >{log}
@@ -81,8 +85,9 @@ rule simulate_batch:
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
+        workflow/scripts/trim_jax_cache.sh "{params.jax_cache}" {params.jax_cache_gb}
         uv=$(command -v uv)
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} JAX_PLATFORMS=cpu \
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} JAX_PLATFORMS=cpu {params.jax_env} \
             XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
             {params.prefix} workflow/scripts/timed.sh \
             nice -n 19 "$uv" run --frozen python -m nowcastfoundation.simulator \
