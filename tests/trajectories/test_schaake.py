@@ -37,11 +37,13 @@ def test_draws_take_the_ranks_of_the_windows():
     windows = _windows(400)
     fit = {"method": "schaake", "windows": windows}
     draws = couple(q, LEVELS, "schaake", fit, n_samples=400, seed=2)
-    # As many windows as samples: each sample is one window, so every
-    # cell's draws are ordered as that cell's window values.
-    for i, j in [(0, 0), (1, 3)]:
-        rho = spearmanr(draws[:, i, j], windows[:, i, j]).statistic
-        assert rho > 0.999
+    # As many windows as samples: each sample is one window, so any two
+    # cells' draws have the rank correlation of the windows' cells.
+    for a, b in [((0, 0), (1, 3)), ((0, 1), (0, 4))]:
+        got = spearmanr(draws[:, a[0], a[1]], draws[:, b[0], b[1]])
+        want = spearmanr(windows[:, a[0], a[1]], windows[:, b[0], b[1]])
+        # Up to ties in the flat tails beyond the end quantiles.
+        assert got.statistic == pytest.approx(want.statistic, abs=0.01)
     # The windows move together, so the draws do too.
     assert spearmanr(draws[:, 0, 0], draws[:, 1, 4]).statistic > 0.9
 
@@ -89,7 +91,8 @@ def test_history_windows_are_the_last_complete_stretches():
     # No more windows than the history holds; NaN stretches are skipped.
     values[0, 8] = np.nan
     got = history_windows(values, steps=3, n_windows=100)
-    assert got.shape == (5, 2, 3)
+    # 8 stretches, of which the 2 ending after the gap hold it.
+    assert got.shape == (6, 2, 3)
     assert np.isfinite(got).all()
 
 

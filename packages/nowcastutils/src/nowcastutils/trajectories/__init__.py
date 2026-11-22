@@ -12,7 +12,10 @@ mass), and joins the cells by a copula:
   quantile-only analogue of ensemble copula coupling;
 - `gaussian`: levels from a Gaussian copula with AR(1) correlation `rho`
   between steps and exchangeable correlation `s` between series, given
-  in `fit`.
+  in `fit`;
+- `schaake`: the Schaake shuffle, each sample's levels the ranks of one
+  past window of values (`fit["windows"]`), observed (`history_windows`)
+  or simulated.
 
 The parameters come from a `fit`; nothing is hard-coded. `fit_coupling`
 estimates them from normal scores of the model's own matured forecasts
@@ -28,9 +31,16 @@ from typing import Any, Final
 import numpy as np
 from scipy.special import ndtr, ndtri
 
-__all__ = ["METHODS", "couple", "fit_coupling", "pit_scores", "read_quantiles"]
+__all__ = [
+    "METHODS",
+    "couple",
+    "fit_coupling",
+    "history_windows",
+    "pit_scores",
+    "read_quantiles",
+]
 
-METHODS: Final = ("independent", "comonotone", "gaussian")
+METHODS: Final = ("independent", "comonotone", "gaussian", "schaake")
 """How `couple` joins the cells."""
 
 
@@ -98,6 +108,38 @@ def _gaussian_levels(
     return np.asarray(ndtr(path))
 
 
+def _schaake_levels(
+    windows: np.ndarray,
+    n_samples: int,
+    shape: tuple[int, int],
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Return uniform levels with the ranks of past windows.
+
+    Each sample takes one window, without replacement while there are
+    enough and reused otherwise. A cell's level is its window's rank among
+    the samples' windows at that cell, ties broken at random, plus a
+    uniform jitter, over `n_samples`: uniform in every cell, and ordered
+    across samples as the windows are.
+    """
+    windows = np.asarray(windows, dtype=float)
+    if windows.ndim != 3 or windows.shape[1:] != shape:
+        raise ValueError(
+            f"schaake windows must be [windows, {shape[0]}, {shape[1]}], "
+            f"got {windows.shape}"
+        )
+    if len(windows) == 0 or not np.isfinite(windows).all():
+        raise ValueError("schaake windows must be finite and not empty")
+    pick = rng.choice(len(windows), n_samples, replace=len(windows) < n_samples)
+    chosen = windows[pick]
+    tie = rng.random(chosen.shape)
+    order = np.lexsort((tie, chosen), axis=0)
+    rank = np.empty_like(order)
+    place = np.broadcast_to(np.arange(n_samples)[:, None, None], order.shape)
+    np.put_along_axis(rank, order, place, axis=0)
+    return np.asarray((rank + rng.random(chosen.shape)) / n_samples)
+
+
 def couple(
     quantiles: np.ndarray,
     levels: np.ndarray,
@@ -117,7 +159,8 @@ def couple(
     method : str
         One of `METHODS`.
     fit : mapping or None
-        The method's parameters: `rho` and `s` for `gaussian`.
+        The method's parameters: `rho` and `s` for `gaussian`, `windows`
+        `[windows, series, steps]` for `schaake`.
     n_samples : int
         Trajectories.
     seed : int
@@ -132,8 +175,9 @@ def couple(
     Raises
     ------
     ValueError
-        For an unknown method, or a `gaussian` fit without `rho` and `s`
-        or with them out of range.
+        For an unknown method, a `gaussian` fit without `rho` and `s`
+        or with them out of range, or a `schaake` fit without finite
+        windows of the forecast's shape.
     """
     quantiles = np.asarray(quantiles, dtype=float)
     levels = np.asarray(levels, dtype=float)
@@ -155,6 +199,10 @@ def couple(
                 f"got rho={rho}, s={s}"
             )
         u = _gaussian_levels(n_samples, series, steps, rho, s, rng)
+    elif method == "schaake":
+        if not fit or "windows" not in fit:
+            raise ValueError("a schaake coupling needs fit['windows']")
+        u = _schaake_levels(fit["windows"], n_samples, (series, steps), rng)
     else:
         raise ValueError(f"unknown method {method!r}; one of {METHODS}")
     values = np.sort(quantiles, axis=-1)
@@ -287,10 +335,15 @@ def fit_coupling(scores: np.ndarray, method: str) -> dict[str, Any]:
     Raises
     ------
     ValueError
-        For an unknown method.
+        For an unknown method, or `schaake`, whose fit is its windows.
     """
     if method not in METHODS:
         raise ValueError(f"unknown method {method!r}; one of {METHODS}")
+    if method == "schaake":
+        raise ValueError(
+            "a schaake fit is its windows, not scores: use history_windows "
+            "or simulated windows"
+        )
     if method != "gaussian":
         return {"method": method}
     z = np.asarray(scores, dtype=float)
@@ -317,3 +370,37 @@ def fit_coupling(scores: np.ndarray, method: str) -> dict[str, Any]:
         "n_step_pairs": int(n_steps),
         "n_series_pairs": int(n_series),
     }
+
+
+def history_windows(
+    values: np.ndarray, steps: int, n_windows: int
+) -> np.ndarray:
+    """Return the latest complete stretches of past values, as windows.
+
+    The Schaake shuffle's historical windows: every stretch of `steps`
+    consecutive steps of all series, newest first, one step apart, skipping
+    any with a value missing.
+
+    Parameters
+    ----------
+    values : numpy.ndarray
+        Past values `[series, time]`, oldest first, NaN where missing.
+    steps : int
+        Steps a window spans, the forecast's.
+    n_windows : int
+        Most windows to return.
+
+    Returns
+    -------
+    numpy.ndarray
+        Windows `[n, series, steps]`, `n <= n_windows`.
+    """
+    values = np.asarray(values, dtype=float)
+    out = []
+    for end in range(values.shape[1], steps - 1, -1):
+        window = values[:, end - steps : end]
+        if np.isfinite(window).all():
+            out.append(window)
+            if len(out) == n_windows:
+                break
+    return np.asarray(out).reshape(len(out), values.shape[0], steps)
