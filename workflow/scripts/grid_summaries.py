@@ -41,6 +41,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 from scipy.signal import find_peaks
 
 SIM_DELAY_WEEKS = 8
@@ -58,6 +59,7 @@ SETTINGS = [
     "trajectory",
     "delay_change",
     "gt_family",
+    "incubation_family",
     "report_days",
     "report_dow",
     "reference_dow",
@@ -69,7 +71,14 @@ SETTINGS = [
     "n_ages",
     "weeks",
 ]
-VALUES = ["gt_mean", "gt_cv", "incubation_mean", "ascertainment", "delay_mean"]
+VALUES = [
+    "gt_mean",
+    "gt_cv",
+    "incubation_mean",
+    "incubation_cv",
+    "ascertainment",
+    "delay_mean",
+]
 
 
 def _mean(x: object) -> float:
@@ -158,6 +167,44 @@ def delay_quantile(by_delay: pd.Series, q: float) -> float:
     return float(cum.index[np.argmax(cum.to_numpy() >= q - 1e-9)])
 
 
+def incubation_pmf(mean: float, cv: float, family: str) -> np.ndarray:
+    """Return the infection-to-reference delay's daily pmf, to its 99.9%."""
+    if family == "lognormal":
+        sdlog = np.sqrt(np.log1p(cv**2))
+        d = stats.lognorm(sdlog, scale=mean * np.exp(-(sdlog**2) / 2))
+    else:
+        d = stats.gamma(1 / cv**2, scale=mean * cv**2)
+    edges = np.arange(int(np.ceil(d.ppf(0.999))) + 2)
+    pmf = np.diff(d.cdf(edges))
+    return pmf / pmf.sum()
+
+
+def total_delay_stats(settings: pd.Series, by_delay: pd.Series) -> dict:
+    """Return the infection-to-report delay's 50%, 90% and 99% quantiles.
+
+    The strata's infection-to-reference pmfs, averaged, convolved with the
+    reporting delay's net counts by delay (negative ones dropped). Rounds
+    drawn before the CV and family were default to a gamma with CV 0.5.
+    """
+    means = str(settings.get("incubation_mean", "")).split(";")
+    means = [float(m) for m in means if m not in ("", "NA", "nan")]
+    cv = settings.get("incubation_cv", 0.5)
+    cv = 0.5 if pd.isna(cv) else float(cv)
+    family = settings.get("incubation_family", "gamma")
+    family = "gamma" if pd.isna(family) else str(family)
+    report = by_delay.clip(lower=0).sort_index()
+    if not means or report.sum() <= 0:
+        return {}
+    pmfs = [incubation_pmf(m, cv, family) for m in means]
+    inc = np.zeros(max(map(len, pmfs)))
+    for p in pmfs:
+        inc[: len(p)] += p / len(pmfs)
+    rep = np.zeros(int(report.index.max()) + 1)
+    rep[report.index.to_numpy(dtype=int)] = report.to_numpy(dtype=float)
+    total = pd.Series(np.convolve(inc, rep / rep.sum()))
+    return {f"total_q{q}": delay_quantile(total, q / 100) for q in (50, 90, 99)}
+
+
 def series_stats(counts: pd.DataFrame) -> dict:
     """Return the statistics one series is compared with Germany on.
 
@@ -244,6 +291,8 @@ def outbreak_row(
         weekly = c.groupby(pd.Grouper(key="reference_date", freq="7D"))["count"]
         row["peak_weekly"] = float(weekly.sum().max())
         row |= series_stats(c)
+        by_delay = c["count"].groupby(delay).sum()
+        row |= total_delay_stats(settings, by_delay)
         row |= phases(
             daily["onsets"], c["report_date"].min(), c["report_date"].max()
         )

@@ -587,11 +587,17 @@ LAYERS = [
                 "incubation",
                 False,
             ),
+            ("incubation_cv", "Infection to reference, CV", None, False),
             ("ascertainment", "Ascertainment", None, False),
             ("mean_daily", "Mean daily count, reported", None, True),
             ("zero_share", "Share of zero days", None, False),
         ],
-        ["observation", "obs_strata", "observation_strata"],
+        [
+            "observation",
+            "incubation_family",
+            "obs_strata",
+            "observation_strata",
+        ],
     ),
     (
         "Layer 3: reporting delays",
@@ -607,6 +613,9 @@ LAYERS = [
             ("delay_q99", "Delay 99% (days)", None, False),
             ("day0_share", "Share reported on day 0", None, False),
             ("mean_delay", "Mean delay, reported (days)", None, False),
+            ("total_q50", "Infection to report, median (days)", None, False),
+            ("total_q90", "Infection to report, 90% (days)", None, False),
+            ("total_q99", "Infection to report, 99% (days)", None, False),
         ],
         [
             "delay_change",
