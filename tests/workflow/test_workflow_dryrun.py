@@ -384,29 +384,50 @@ def _dag(tmp_path, target, config):
     return jobs, edges
 
 
-def test_a_checkpoint_s_evaluation_depends_on_step_0_and_earlier_settings(
+def test_a_checkpoint_s_evaluation_needs_only_step_0_and_earlier_settings(
     tmp_path,
 ):
+    # Not the segments' step evaluations, which queue behind the trainer:
+    # a checkpoint is scored between segments.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
     sidecar = tmp_path / "runs/runa/train/n500/held-out.json"
     jobs, edges = _dag(tmp_path, str(sidecar), OFFLOAD)
-    steps = [j for j, label in jobs.items() if label == "evaluate_steps"]
+    assert "evaluate_steps" not in jobs.values()
     (check,) = [
         j for j, label in jobs.items() if label == "evaluate_checkpoint"
     ]
+    (base,) = [j for j, label in jobs.items() if label == "evaluate_base"]
     (first,) = [
         j
         for j, label in jobs.items()
         if label.startswith("train_segment\\n") and "n: 250" in label
     ]
-    # One segment's step evaluation feeds the next's, which feeds the
-    # checkpoint's: step 0 is scored before the checkpoint.
-    chain = [(a, b) for a, b in edges if a in steps and b in steps]
-    assert len(chain) == 1
-    assert (chain[0][1], check) in edges
+    assert (base, check) in edges
     # The first checkpoint's settings are an input of n500's evaluation.
     assert (first, check) in edges
+
+
+def _priorities(out):
+    got = re.findall(
+        r"^(?:local)?rule (\w+):.*?^\s+priority: ([\d.]+)$",
+        out.stdout,
+        re.M | re.S,
+    )
+    by: dict[str, set[float]] = {}
+    for rule, p in got:
+        by.setdefault(rule, set()).add(float(p))
+    return by
+
+
+def test_checkpoint_evaluation_outranks_the_next_segment(tmp_path):
+    out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    by = _priorities(out)
+    trainer = max(by["train_segment"])
+    assert min(by["evaluate_checkpoint"]) > trainer
+    assert min(by["evaluate_base"]) > trainer
+    assert max(by["evaluate_steps"]) < trainer
 
 
 def test_finetune_never_publishes(tmp_path):

@@ -152,3 +152,20 @@ def test_steps_passes_a_segment_with_no_due_step(tmp_path, fake):
         ]
     )
     assert [c[1] for c in calls["evals"]] == [["start"]]
+
+
+def test_base_scores_only_step_0_and_once(tmp_path, fake):
+    mod, calls = fake
+    train = tmp_path / "train"
+    for step, kinds in ((0, ["start"]), (200, ["monitor"])):
+        snapshot(train, step, kinds)
+    first = checkpoint_at(train, 250, 200)
+    mod.main(["base", str(first), "--device", "cpu"])
+    assert [c[1] for c in calls["evals"]] == [["start"]]
+    assert (train / "evals" / "step-0000000.json").exists()
+    assert not (train / "evals" / "step-0000200.json").exists()
+    mod.main(["base", str(first), "--device", "cpu"])
+    assert len(calls["evals"]) == 1
+    # The segment's step evaluation then skips step 0.
+    mod.main(["steps", str(first), "--device", "cpu"])
+    assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]
