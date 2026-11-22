@@ -44,12 +44,12 @@ def write(path: Path, data: dict[str, Any]) -> None:
     tmp.rename(path)
 
 
-def score(base, adapter: Path, blocks, kinds, batch_size, real, device):
+def score(base, adapter: Path, blocks, kinds, batch_size, device):
     """Return the losses `kinds` ask for of `adapter`, and the seconds."""
     model = fresh(base, device)
     series_bias.attach_for(model, adapter)
     tick = time.perf_counter()
-    losses = fe.evaluate(adapter, model, blocks, kinds, batch_size, real)
+    losses = fe.evaluate(adapter, model, blocks, kinds, batch_size)
     del model
     fs.free_memory()
     return losses, time.perf_counter() - tick
@@ -77,7 +77,6 @@ def steps(
     where: Path,
     prev: Path | None,
     device: str,
-    real,
     every: int,
 ) -> None:
     """Score segment `where`'s step snapshots that have no result yet.
@@ -119,7 +118,6 @@ def steps(
             blocks[n],
             kinds,
             request.get("batch_size", 256),
-            real,
             device,
         )
         result = {
@@ -133,7 +131,7 @@ def steps(
         fs.log(f"{snap.name}: {', '.join(kinds)} in {seconds:.0f} s")
 
 
-def checkpoint(where: Path, device: str, real: Sequence[dict]) -> None:
+def checkpoint(where: Path, device: str) -> None:
     """Score a checkpoint's adapter and write its held-out sidecar."""
     train = where.parent
     settings = json.loads((where / "settings.json").read_text())
@@ -146,7 +144,6 @@ def checkpoint(where: Path, device: str, real: Sequence[dict]) -> None:
         blocks,
         ["checkpoint"],
         settings.get("batch_size", 256),
-        real,
         device,
     )
     start = evaluations.start_loss(train)
@@ -177,16 +174,14 @@ def main(argv: Sequence[str] | None = None) -> None:
         type=int,
         help="the trainer's --eval-every: each multiple must be scored",
     )
-    p.add_argument("--real-validation", type=Path)
     args = p.parse_args(argv)
     device = torch_device(args.device)
-    real = fs.load_blocks(args.real_validation) if args.real_validation else []
     if args.what == "steps":
         if args.eval_every is None:
             p.error("steps needs --eval-every")
-        steps(args.where, args.prev, device, real, args.eval_every)
+        steps(args.where, args.prev, device, args.eval_every)
     else:
-        checkpoint(args.where, device, real)
+        checkpoint(args.where, device)
 
 
 if __name__ == "__main__":

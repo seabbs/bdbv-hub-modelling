@@ -93,7 +93,6 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
         val,
         ["monitor", "by_source", "checkpoint"],
         batch_size=100,
-        real=val[:2],
     )
     assert got["eval_loss"] == fs.held_out_loss(
         model, val[: fs.ft.EVAL_BLOCKS], 100
@@ -102,7 +101,6 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
         model, val, 100, fs.ft.EVAL_BLOCKS
     )
     assert got["held_out_loss"] == fs.held_out_loss(model, val, 100)
-    assert got["real_validation_loss"] == fs.held_out_loss(model, val[:2], 100)
     assert got["held_out_loss_by_level"] == fs.held_out_by_level(
         model, val, fs.LEVEL_BLOCKS
     )
@@ -111,7 +109,7 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
     )
     assert np.isfinite(got["eval_loss"])
     # Each total comes with its nowcast and forecast parts.
-    for name in ("eval_loss", "held_out_loss", "real_validation_loss"):
+    for name in ("eval_loss", "held_out_loss"):
         assert got[f"{name}_nowcast"] + got[f"{name}_forecast"] == (
             pytest.approx(got[name], rel=1e-6)
         )

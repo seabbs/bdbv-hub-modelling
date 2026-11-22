@@ -105,8 +105,7 @@ def test_a_rule_that_notifies_runs_with_no_mailbox(tmp_path):
     n800 = tmp_path / "runs" / "runa" / "train" / "n800"
     n800.mkdir(parents=True)
     (n800 / "settings.json").write_text(
-        '{"held_out_loss": 0.4, "held_out_loss_start": 0.5,'
-        ' "real_validation_loss": 3.0}'
+        '{"held_out_loss": 0.4, "held_out_loss_start": 0.5}'
     )
     # Evaluated in the trainer, so the report needs only the checkpoint.
     overlay = tmp_path / "overlay.yaml"

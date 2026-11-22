@@ -194,13 +194,6 @@ def held_out_rows(checkpoint: str, settings: Mapping[str, Any]) -> pd.DataFrame:
     rows += [
         {"level": lv, "loss": by[lv]} for lv in HELD_OUT_LEVELS if lv in by
     ]
-    if "real_validation_loss" in settings:
-        rows.append(
-            {
-                "level": "real_validation",
-                "loss": settings["real_validation_loss"],
-            }
-        )
     out = pd.DataFrame(rows).assign(
         study="held_out",
         model="fm_chronos",

@@ -134,12 +134,6 @@ EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded
 EVALUATE_PRIORITY = 15
 
 
-def evaluate_real(wc):
-    """The trainer's real validation blocks, if the run has them."""
-    real = run_of(wc).ft["real_validation"]
-    return f"--real-validation {real}" if real else ""
-
-
 def evaluate_prev(wc):
     """The settings of the checkpoint before segment n, if any."""
     prev = run_of(wc).prev[int(wc.n)]
@@ -154,7 +148,6 @@ def evaluate_inputs_from(wc):
         f"{train}/{HELD_OUT_BLOCKS}",
         f"{train}/evals/step-0000000.json",
         *(f"{train}/n{p}/{SIDECAR}" for p in r.ft["prefixes"] if p < n),
-        *([r.ft["real_validation"]] if r.ft["real_validation"] else []),
     ]
 
 
@@ -265,8 +258,6 @@ def segment_inputs(wc):
     }
     if there.prev[n] is not None:
         out["prev"] = f"{train}/n{there.prev[n]}/settings.json"
-    if there.ft["real_validation"]:
-        out["real"] = there.ft["real_validation"]
     return out
 
 

@@ -114,7 +114,6 @@ rule train_segment:
         stop_from=lambda wc: run_of(wc).ft["outbreaks"] + 1,
         blocks=lambda wc: run_of(wc).ft["cuts"] * run_of(wc).ft["draws"],
         sources=lambda wc: " ".join(run_of(wc).ft["sources"]),
-        real=evaluate_real,
         bias=lambda wc: (
             f"--series-bias --bias-lr {run_of(wc).ft['bias_lr']}"
             if run_of(wc).ft["series_bias"]
@@ -188,7 +187,7 @@ rule train_segment:
             --subset-seed {params.subset_seed} \
             --learning-rate {params.learning_rate} \
             --sources {params.sources} \
-            --univariate-share {params.univariate_share} {params.real} \
+            --univariate-share {params.univariate_share} \
             {params.loss_horizon} {params.quiet} \
             --note "{params.note}" --chunk {params.chunk} \
             --eval-every {params.eval_every} \

@@ -29,17 +29,11 @@ rule evaluate_steps:
         prev=lambda wc, input: (
             f"--prev {Path(input.prev).parent}" if input.prev else ""
         ),
-        real=evaluate_real,
         device=machine.device(LOCAL),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [
             f"{train_dir(wc.run)}/evals/",
             f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
-            *(
-                [run_of(wc).ft["real_validation"]]
-                if run_of(wc).ft["real_validation"]
-                else []
-            ),
         ],
         copy_back=lambda wc: [f"{train_dir(wc.run)}/evals/"],
         eval_every=ft("eval_every"),
@@ -47,7 +41,7 @@ rule evaluate_steps:
         "DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} steps {{params.where}} {{params.prev}} "
         "--eval-every {params.eval_every} --device {params.device} "
-        "{params.real} > {log} 2>&1"
+        "> {log} 2>&1"
 
 
 rule evaluate_checkpoint:
@@ -74,11 +68,10 @@ rule evaluate_checkpoint:
         gpu=1,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        real=evaluate_real,
         device=machine.device(LOCAL),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=evaluate_inputs_from,
     shell:
         "DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} checkpoint {{params.where}} --device {{params.device}} "
-        "{params.real} > {log} 2>&1"
+        "> {log} 2>&1"

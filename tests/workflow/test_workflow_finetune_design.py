@@ -77,15 +77,8 @@ def _trainer_args(tmp_path, finetune=None, machine=""):
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n{machine}")
     target = tmp_path / "runs" / "runa" / "train" / "n100"
-    # The real validation blocks are made from data a test run lacks.
-    real = tmp_path / "real-validation.pkl"
-    real.write_text("")
     overlay = tmp_path / "overlay.yaml"
-    overlay.write_text(
-        yaml.safe_dump(
-            {"finetune": {"real_validation": str(real), **(finetune or {})}}
-        )
-    )
+    overlay.write_text(yaml.safe_dump({"finetune": finetune or {}}))
     out = subprocess.run(
         [
             str(snakemake),
@@ -189,14 +182,14 @@ def test_the_grid_s_sources_are_the_block_design():
 
 
 def test_development_scores_no_bdbv_blocks(tmp_path):
-    # BDBV is held out for the paper: the shipped config gives the
-    # trainer no real validation blocks and the check no BDBV loss.
+    # BDBV is held out for the paper: the trainer scores no real
+    # validation blocks and the check no BDBV loss.
     config = yaml.safe_load(
         (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
     )["finetune"]
-    assert config["real_validation"] is None
+    assert "real_validation" not in config
     assert "zero_shot_real" not in config
-    args = _trainer_args(tmp_path, {"real_validation": None})
+    args = _trainer_args(tmp_path)
     assert "--real-validation" not in args
 
 

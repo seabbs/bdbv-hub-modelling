@@ -145,7 +145,6 @@ FT = {
         "rounds": [2],
         "validation_round": 1,
         "sims_from": "local",
-        "real_validation": None,
     },
 }
 
