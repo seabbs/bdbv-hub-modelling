@@ -13,6 +13,7 @@ ENGINE = (
     "packages/nowcastrenewal/src/nowcastrenewal/latent",
     "packages/nowcastrenewal/src/nowcastrenewal/components",
     "packages/nowcastrenewal/src/nowcastrenewal/reporting",
+    "packages/nowcastrenewal/src/nowcastrenewal/simulation",
     "packages/nowcastfoundation/r",
 )
 """The simulator's code: its entry point and draws, the latent step, the

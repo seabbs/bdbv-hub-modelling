@@ -45,10 +45,10 @@ ONSETS = np.stack([np.linspace(1, 30, T), np.linspace(5, 15, T)], axis=1)
 
 
 def test_counts_average_to_the_expected_reports() -> None:
-    from nowcastrenewal.reporting.simulate import _frame
+    from nowcastrenewal.reporting.simulate import reporting_frame
 
     draws = 300
-    frame = _frame(VALS, T, PLACES, AGES)
+    frame = reporting_frame(VALS, T, PLACES, AGES)
     with (
         jax.enable_x64(True),
         handlers.trace() as tr,
