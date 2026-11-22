@@ -31,6 +31,7 @@ from ..components.hazards import log_hazard_probs
 
 __all__ = [
     "ReportingTriangle",
+    "aggregate_to_report_days",
     "combine_logit_hazards",
     "log_expected_counts",
     "report_day_groups",
@@ -93,6 +94,31 @@ def report_day_groups(reports: Array, window: int) -> Array:
     return jnp.where(nxt < window, nxt, -1)
 
 
+def aggregate_to_report_days(log_p: Array, reports: ArrayLike | None) -> Array:
+    r"""Move each delay's log probability to its report day.
+
+    Parameters
+    ----------
+    log_p : Array
+        Log probabilities by delay, `(G, T, D)`.
+    reports : array_like, optional
+        Report days (`effects.report_days`); None for every day.
+
+    Returns
+    -------
+    Array
+        `(G, T, D)`; a delay that is not a report day has $-\infty$.
+    """
+    if reports is None:
+        return log_p
+    window = log_p.shape[-1]
+    to = report_day_groups(jnp.asarray(reports), window)
+    hit = to[..., None, :] == jnp.arange(window)[:, None]
+    return jax.nn.logsumexp(
+        jnp.where(hit, log_p[..., None, :], -jnp.inf), axis=-1
+    )
+
+
 def log_expected_counts(
     log_lambda: Array, logit_hazard: Array, reports: Array | None = None
 ) -> Array:
@@ -114,14 +140,7 @@ def log_expected_counts(
     Array
         Shape $(G, T, D)$.
     """
-    log_p = log_hazard_probs(logit_hazard)
-    if reports is not None:
-        window = logit_hazard.shape[-1]
-        to = report_day_groups(reports, window)
-        hit = to[..., None, :] == jnp.arange(window)[:, None]
-        log_p = jax.nn.logsumexp(
-            jnp.where(hit, log_p[..., None, :], -jnp.inf), axis=-1
-        )
+    log_p = aggregate_to_report_days(log_hazard_probs(logit_hazard), reports)
     return log_lambda[..., None] + log_p
 
 

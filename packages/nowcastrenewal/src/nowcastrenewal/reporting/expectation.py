@@ -24,7 +24,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-import jax
 import jax.numpy as jnp
 import numpyro
 from jax import Array
@@ -38,34 +37,9 @@ from .effects import (
     ReportEffects,
     report_days,
 )
-from .triangle import combine_logit_hazards, report_day_groups
+from .triangle import aggregate_to_report_days, combine_logit_hazards
 
-__all__ = ["ReportingExpectation", "aggregate_to_report_days"]
-
-
-def aggregate_to_report_days(log_p: Array, reports: ArrayLike | None) -> Array:
-    r"""Move each delay's log probability to its report day.
-
-    Parameters
-    ----------
-    log_p : Array
-        Log probabilities by delay, `(G, T, D)`.
-    reports : array_like, optional
-        Report days (`effects.report_days`); None for every day.
-
-    Returns
-    -------
-    Array
-        `(G, T, D)`; a delay that is not a report day has $-\infty$.
-    """
-    if reports is None:
-        return log_p
-    window = log_p.shape[-1]
-    to = report_day_groups(jnp.asarray(reports), window)
-    hit = to[..., None, :] == jnp.arange(window)[:, None]
-    return jax.nn.logsumexp(
-        jnp.where(hit, log_p[..., None, :], -jnp.inf), axis=-1
-    )
+__all__ = ["ReportingExpectation"]
 
 
 class ReportingExpectation(RandomVariable):
