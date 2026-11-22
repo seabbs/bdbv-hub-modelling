@@ -299,3 +299,25 @@ def test_tables_score_no_bdbv_held_out_for_the_paper(
     ck.table(tmp_path, evidence, tmp_path / "checkpoints.csv", [])
     kept = pd.read_csv(evidence)
     assert kept["study"].tolist() == ["ebola"]
+
+
+def test_a_german_unit_scores_a_run_s_own_segment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A run scores each segment from its folder, before any release, under
+    # the label the rule gives it.
+    from nowcastfoundation import forecaster
+
+    seen = []
+    monkeypatch.setattr(
+        ck,
+        "germany_unit",
+        lambda cache, label, segment=None: seen.append((cache, label, segment)),
+    )
+    ck.main(["germany", str(tmp_path), "n100", str(tmp_path / "n100")])
+    assert seen == [(tmp_path, "n100", tmp_path / "n100")]
+    monkeypatch.delenv(forecaster.FINETUNED_ENV, raising=False)
+    ck._pin("n100", tmp_path / "n100")
+    assert forecaster.finetuned_spec() == str(tmp_path / "n100")
+    ck._pin("abc")
+    assert forecaster.finetuned_spec() == "abc"

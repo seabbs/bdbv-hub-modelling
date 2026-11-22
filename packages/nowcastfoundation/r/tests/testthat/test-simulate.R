@@ -49,22 +49,6 @@ test_that("independent strata share the outbreak's dates", {
   expect_length(run$out$values$stratum_population, length(where))
 })
 
-test_that("a draw reporting fewer than min_cases is drawn again", {
-  lib <- Sys.getenv("ENW_LIB")
-  skip_if_not(nzchar(lib) && dir.exists(file.path(lib, "epinowcast")),
-    "needs the pinned epinowcast in ENW_LIB")
-  withr::local_libpaths(lib, action = "prefix")
-  grid <- test_grid()
-  grid$floors$min_cases <- 1e12
-  grid$tries <- 2L
-  grid$designs <- 1L
-  model <- suppressMessages(epinowcast::enw_model(threads = FALSE))
-  expect_error(
-    simulate_batch(grid, 99903L, 1L, model = model, weeks = 8L),
-    "no design in 1"
-  )
-})
-
 test_that("the reporting delay varies by reference weekday when drawn", {
   lib <- Sys.getenv("ENW_LIB")
   skip_if_not(nzchar(lib) && dir.exists(file.path(lib, "epinowcast")),

@@ -226,8 +226,7 @@ def model_note(grid: dict[str, Any], grid_file: str) -> str:
         "A parameter we did not set is drawn from its epinowcast prior.",
         f"Seed infections are at least {floors['seed']} and series at least"
         f" {floors['weeks']} weeks long.",
-        f"A draw that errors, reports fewer than {floors['min_cases']} cases"
-        " or fails the simulation checks is drawn again, up to"
+        "A draw that errors or reports no cases is drawn again, up to"
         f" {grid['tries']} times, then from a new design.",
         "",
         "##### Factors",

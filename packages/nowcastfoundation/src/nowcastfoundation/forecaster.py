@@ -88,6 +88,7 @@ __all__ = [
     "HubTriangle",
     "Known",
     "Sampler",
+    "checkpoint_spec",
     "chronos_sampler",
     "finetuned_adapter",
     "finetuned_releases",
@@ -96,6 +97,7 @@ __all__ = [
     "hub_triangle",
     "lag_count",
     "layout_block",
+    "local_checkpoint",
     "native_sampler",
     "prefetch",
     "quantile_draws",
@@ -209,11 +211,16 @@ class Checkpoint:
         The release's tag prefix, `FINETUNED_PREFIX` or `REALDATA_PREFIX`.
         Left out of the repr, which keys stored fits; the hash tells the
         checkpoints apart.
+    path : str or None
+        A run's own adapter folder (`local_checkpoint`), read in place
+        instead of the release. Left out of the repr and of equality, so
+        it is the same checkpoint as its release.
     """
 
     hash: str
     sha256: tuple[tuple[str, str], ...]
     prefix: str = field(default=FINETUNED_PREFIX, repr=False)
+    path: str | None = field(default=None, repr=False, compare=False)
 
     @property
     def tag(self) -> str:
@@ -431,17 +438,59 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     )
 
 
+def checkpoint_spec(settings: Mapping[str, Any]) -> str:
+    """Return a checkpoint's spec from its training settings.
+
+    `slots-<hash>` for a checkpoint with the series bias, else the hash.
+    """
+    key = str(settings["hash"])
+    return f"{SLOTS_PREFIX}{key}" if settings.get("series_bias") else key
+
+
+def local_checkpoint(segment: Path | str) -> Checkpoint:
+    """Return a training segment's checkpoint, read from its folder.
+
+    The segment folder holds `settings.json` and its adapter in
+    `finetuned-ckpt/`. The checkpoint is the one its release would give
+    (`checkpoint_spec`, the SHA-256 of `ADAPTER_FILES`), so a run scores
+    its segments before, or without, publishing them.
+
+    Parameters
+    ----------
+    segment : pathlib.Path or str
+        The segment folder, `<run>/train/n<N>`.
+
+    Returns
+    -------
+    Checkpoint
+    """
+    segment = Path(segment)
+    settings = json.loads((segment / "settings.json").read_text())
+    adapter = segment / "finetuned-ckpt"
+    sums = tuple(
+        (name, hashlib.sha256((adapter / name).read_bytes()).hexdigest())
+        for name in ADAPTER_FILES
+    )
+    return Checkpoint(checkpoint_spec(settings), sums, path=str(adapter))
+
+
 def _finetuned(name: str, source: str) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
 
+    A spec that is a folder is a run's own segment (`local_checkpoint`).
     The weekly and daily models share the checkpoint. Each builds the
     block its zero-shot model builds (`PERIODS`); only the weights differ.
     """
+    spec = finetuned_spec()
     return FoundationModel(
         name,
         source,
         "ragged",
-        resolve_checkpoint(finetuned_spec()),
+        (
+            local_checkpoint(spec)
+            if Path(spec).is_dir()
+            else resolve_checkpoint(spec)
+        ),
         period=PERIODS.get(source),
     )
 
@@ -742,7 +791,8 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     `ADAPTER_FILES` and `settings.json`. They are kept in
     `FINETUNED_CACHE` only once all are downloaded, the settings hash
     matches and each adapter file has its SHA-256. A cached copy is
-    checked against the SHA-256 again on each use.
+    checked against the SHA-256 again on each use. A run's own
+    checkpoint (`local_checkpoint`) is its folder, checked the same way.
 
     Parameters
     ----------
@@ -764,6 +814,15 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
     """
+    if checkpoint.path is not None:
+        local = Path(checkpoint.path)
+        for name, expected in checkpoint.sha256:
+            sha = hashlib.sha256((local / name).read_bytes()).hexdigest()
+            if sha != expected:
+                raise ValueError(
+                    f"{name} in {local} has SHA-256 {sha}, not {expected}."
+                )
+        return local
     tag = checkpoint.tag
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag

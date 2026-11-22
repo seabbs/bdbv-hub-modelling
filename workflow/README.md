@@ -25,7 +25,7 @@ Low level, any output file, for example:
 
 ```sh
 uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
-uv run --group paper snakemake <RUN>/train/n800/settings.json            # one checkpoint
+uv run --group paper snakemake <ROOT>/runs/runa/train/n800/settings.json  # one checkpoint
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
 
@@ -39,7 +39,7 @@ A value may use another setting, `$ROOT` say, in any order.
 A variable in the environment wins, and with no file everything runs on this machine.
 The workflow uses:
 
-- paths: `ROOT` (rounds), `RUN` (the fine-tuning run), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
+- paths: `ROOT` (rounds, and the runs in `ROOT/runs/`), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
 - what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so a CPU machine sets `simulate score` and a GPU machine `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
 - resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope, or `workflow/scripts/mem_cap.sh {mem}` on macOS; `{mem}` becomes the job's budget), `MIN_FREE_GB`, `MIN_DISK_GB` and `MAX_LOAD` (memory, disk and a load average below which a heavy job starts; `MAX_LOAD` empty is the core count), `HEADROOM_CORES` and `HEADROOM_GB` (cores and memory kept free), `CORES` and `MEM_MB` (set them outright instead), `SIM_SLOTS` (batches at once, 2 by default) and `DEVICE` (`auto`: CUDA, then MPS, then the CPU);
 - sharing the rounds: `SIM_SEEDS` (the seeds this machine takes: seeds, `first-last` ranges or rounds as `r<N>`; empty: all), and on a helping machine `REMOTE` and `REMOTE_ROOT` (the rounds host and its rounds folder; empty: `ROOT`);
@@ -99,19 +99,23 @@ Outputs are in `<ROOT>/rounds/r<N>/`.
 
 ## 2. Fine-tune (`rules/finetune.smk`)
 
+Runs are entries of `runs` in `workflow/config.yaml`: a name and the `finetune` settings it changes (`workflow/flowlib/runs.py`).
+Every run takes the same rules through the `{run}` wildcard and keeps its files in `<ROOT>/runs/<run>/`; the rounds it trains on are shared.
+`finetune` trains the runs in `train_runs` (every run when unset).
+
 One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (`finetune.prefixes`).
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 
 - `seed_list`: the training seeds in order, the rounds' in seed order or a fixed `seed_file`. A run takes the grid's rounds (`grid_rounds`): it validates on round 33, trains on 34 to 37 and tests on 38. Rounds 9 to 32 belong to earlier versions of the grid (`retired_rounds`) and are never simulated again, as a round sets its seeds and its release `sims-r<N>`. When the grid changes, its rounds join `retired_rounds` and it takes new ones. The `release` target and each upload refuse a retired round.
-- `fetch_batch`: a batch into `<RUN>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
-- The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<RUN>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC exclusions in `<RUN>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
+- `fetch_batch`: a batch into `<ROOT>/runs/<run>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
+- The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<ROOT>/runs/<run>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC exclusions in `<ROOT>/runs/<run>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks after QC exclusions, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.
 - `evaluate_steps`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. After each segment, `evaluate_steps` scores the snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), with the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`). They take the GPU below the trainer, in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
 - `finetune`: every prefix.
 
-Outputs are in `<RUN>/train/n<N>/`.
+Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 ## 3. Publish (`rules/publish.smk`)
 
@@ -138,7 +142,7 @@ After each slots checkpoint's scores:
 ## 5. Dashboard (`workflow/flowlib/dashboard/`)
 
 `task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
-`task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<RUN>/reports/dashboard.html`.
+`task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a notes file) and Tables. Every chart has an info marker (`page/explain.json`).
 
