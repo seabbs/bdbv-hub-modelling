@@ -93,10 +93,10 @@ def test_a_batch_writes_its_four_files(run):
         assert column in settings
     assert (settings["weeks"] == 8).all()
     assert settings["reported"].all()
-    # Cases are the counts' total, at least the floor.
+    # Cases are the counts' total, none empty.
     total = counts.groupby(counts["outbreak"].str[:-2])["count"].sum()
     assert np.allclose(total[settings["outbreak"]], settings["cases"])
-    assert (settings["cases"] >= 10).all()
+    assert (settings["cases"] > 0).all()
 
 
 def test_the_latent_file_is_dated_from_the_offset(run):
@@ -166,14 +166,34 @@ def test_a_simulation_with_no_design_stops_the_batch(tmp_path):
     assert len(step.calls) >= grid["designs"]
 
 
-def test_too_few_cases_are_drawn_again(tmp_path):
+class EmptyFirst(OnTheDay):
+    """Report nothing for the first `k` draws, else one case each."""
+
+    def __init__(self, k: int):
+        super().__init__()
+        self.left = k
+
+    def report(self, jobs, _grid_file, _n_draws):
+        out = super().report(jobs, _grid_file, _n_draws)
+        for res in out:
+            rows = res.counts.iloc[:1].assign(count=1)
+            if self.left > 0:
+                rows = rows.iloc[:0]
+                self.left -= 1
+            res.counts = rows
+        return out
+
+
+def test_only_empty_draws_are_drawn_again(tmp_path):
     files = simulate_batch(
-        GRID_FILE, 6060, 2, tmp_path, reporting=OnTheDay(scale=1e-3), weeks=8
+        GRID_FILE, 6060, 1, tmp_path, reporting=EmptyFirst(2), weeks=8
     )
     failures = pd.read_csv(files["failures"])
-    assert (failures["reason"] == "fewer than 10 cases").any()
+    assert list(failures["reason"]) == ["no cases", "no cases"]
     settings = pd.read_csv(files["settings"])
-    assert (settings["cases"] >= 10).all()
+    # One case is kept: there is no minimum beyond an empty draw.
+    assert settings.loc[0, "cases"] == 1
+    assert settings.loc[0, "tries"] == 3
 
 
 def test_independent_strata_are_simulations_of_their_own():
