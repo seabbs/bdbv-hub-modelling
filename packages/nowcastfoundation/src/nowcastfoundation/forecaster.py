@@ -1129,8 +1129,8 @@ class FoundationModel:
         at the task's earlier releases (`_coupling_fit`); `independent`
         and `comonotone` need no fit and are the SI's comparisons.
     collect : list or None
-        Set by `prefetch`: the groups a forecast would predict are added
-        to it, and the forecast stops.
+        Private to `prefetch`: the groups a forecast would predict are
+        added to it, and the forecast stops.
     """
 
     name: str
@@ -1147,6 +1147,13 @@ class FoundationModel:
         default=None, repr=False, compare=False
     )
     reads_zones: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        """Check the coupling is one of `COUPLINGS`."""
+        if self.coupling not in COUPLINGS:
+            raise ValueError(
+                f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
+            )
 
     @property
     def needs_snapshots(self) -> bool:
@@ -1214,12 +1221,6 @@ class FoundationModel:
         horizon = len(tri.times) - start
         seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
         period = self._period(tri)
-        # Zero-shot and fine-tuned models build the same block, the
-        # zero-case places' lag rows included; only the weights differ.
-        if self.coupling not in COUPLINGS:
-            raise ValueError(
-                f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
-            )
         if horizon <= 0:
             # Every step of the target weeks is complete at the latest
             # release (the target ends at least the lag count before the
@@ -1227,6 +1228,8 @@ class FoundationModel:
             start = len(tri.times)
             drawn = np.zeros((task.n_samples, len(places), 0))
         else:
+            # Zero-shot and fine-tuned models build the same block, the
+            # zero-case places' lag rows included; only the weights differ.
             group = layout_block(tri, self.layout, places, start, period)
             sample = self.sample
             if sample is None:
@@ -1351,14 +1354,9 @@ class FoundationModel:
     ) -> list[tuple[Series, np.ndarray]]:
         """Return the block at each earlier release, with what matured.
 
-        The earlier releases are `coupling_releases`'. Each one's block
-        is built as the task's is, from its own releases and no later one,
-        with as many lags and its context ending as many steps before its
-        cut-off. With it come its
-        targets' values at the task's release over its horizon, NaN where
-        a step is not yet final there (at lag `D` or more,
-        `HubTriangle.n_context`): what the model's forecast at that
-        release is scored against.
+        Each block (at `coupling_releases`) is built as the task's is,
+        from releases up to its own. It comes with its targets' values at
+        the task's release, NaN where not yet final (`n_context`).
         """
         offset = tri.last - start
         lags = int(tri.partial.shape[2])

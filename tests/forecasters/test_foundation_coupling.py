@@ -1,4 +1,4 @@
-"""Chronos-2's trajectories joined by the fitted coupling (#356)."""
+"""Chronos-2's trajectories joined by the fitted coupling."""
 
 from __future__ import annotations
 
@@ -152,12 +152,66 @@ def test_prefetch_holds_the_earlier_forecasts_too(
     assert pipe.groups == 0
 
 
-def test_an_unknown_coupling_is_an_error(task: ForecastTask):
-    model = dataclasses.replace(
-        get_model("fm_chronos_daily_ragged"), coupling="schaake"
-    )
-    with pytest.raises(ValueError, match="unknown"):
-        model.forecast(task)
+def test_an_unknown_coupling_is_an_error_when_the_model_is_made():
+    with pytest.raises(ValueError, match="unknown coupling"):
+        dataclasses.replace(
+            get_model("fm_chronos_daily_ragged"), coupling="schaake"
+        )
+
+
+def test_with_no_earlier_release_the_fit_is_independence(
+    monkeypatch: pytest.MonkeyPatch, couplings: list, task: ForecastTask
+):
+    pipe = _Pipeline()
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
+    monkeypatch.setattr(foundation, "coupling_releases", lambda *_: [])
+    out = get_model("fm_chronos_daily_ragged").forecast(task)
+    assert not out.empty
+    assert pipe.groups == 1
+    method, fit = couplings[-1]
+    assert method == "gaussian"
+    assert (fit["n_origins"], fit["rho"], fit["s"]) == (0, 0.0, 0.0)
+
+
+def test_earlier_blocks_are_scored_on_what_is_final_now(
+    monkeypatch: pytest.MonkeyPatch, task: ForecastTask
+):
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
+    model = get_model("fm_chronos_daily_ragged")
+    calls = []
+    past_blocks = foundation.FoundationModel._past_blocks
+
+    def spy(self, rows, places, tri, start, horizon):
+        out = past_blocks(self, rows, places, tri, start, horizon)
+        calls.append((tri, start, horizon, out))
+        return out
+
+    monkeypatch.setattr(foundation.FoundationModel, "_past_blocks", spy)
+    model.forecast(task)
+    ((tri, start, horizon, past),) = calls
+    assert past
+    period = model._period(tri)
+    now = np.concatenate([tri.final, period.totals])
+    final = []
+    for block, seen in past:
+        # Each block is the task's block as it stood earlier: less context.
+        assert np.atleast_2d(block["target"]).shape[1] < start
+        assert seen.shape == (now.shape[0], horizon)
+        # Final steps first, then NaN from the first step not yet final.
+        n = int(np.isfinite(seen[0]).sum())
+        assert n > 0
+        assert np.isfinite(seen[0, :n]).all()
+        assert np.isnan(seen[:, n:]).all()
+        # They are the task's own values up to its last final step.
+        at = tri.n_context - n if n < horizon else None
+        if at is not None:
+            np.testing.assert_array_equal(
+                seen[: len(tri.final), :n],
+                now[: len(tri.final), at : tri.n_context],
+            )
+        final.append(n)
+    # Later releases have fewer steps final at the task's release.
+    assert final == sorted(final, reverse=True)
 
 
 def test_the_fit_takes_one_earlier_release_a_week_for_eight_weeks():
