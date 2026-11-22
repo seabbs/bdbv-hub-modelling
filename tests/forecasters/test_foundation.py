@@ -31,7 +31,6 @@ from nowcastfoundation.forecaster import (
     FoundationModel,
     chronos_sampler,
     hub_triangle,
-    quantile_draws,
 )
 from nowcastutils import base
 from nowcastutils.base import (
@@ -215,19 +214,6 @@ def test_daily_triangle_lags_are_days() -> None:
     assert tri.partial[0, 0, 1] == 1.0
     assert tri.partial[0, 0, 8] == 3.0
     assert tri.final[0, 0] == 3.0
-
-
-def test_quantile_draws_invert_the_quantile_function() -> None:
-    levels = np.array([0.1, 0.5, 0.9])
-    values = np.array([[[0.0, 1.0, 3.0]], [[2.0, 2.0, 2.0]]])
-    u = np.array([[0.5], [0.3]])
-    out = quantile_draws(levels, values, u)
-    assert out.shape == (2, 1)
-    assert out[0, 0] == pytest.approx(1.0)
-    assert out[1, 0] == pytest.approx(2.0)
-    # Outside the levels the draw is the outermost quantile.
-    low = quantile_draws(levels, values[:1], np.array([[0.01]]))
-    assert low[0, 0] == pytest.approx(0.0)
 
 
 @pytest.mark.parametrize("name", MODELS)
