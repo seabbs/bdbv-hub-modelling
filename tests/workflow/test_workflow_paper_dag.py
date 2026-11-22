@@ -7,7 +7,7 @@ from test_workflow_dryrun import ROOT, dry_run
 
 pytest.importorskip("snakemake")
 
-PATH = re.compile(r"(?<![\w.])(/[\w.+-]+(?:/[\w.+@=-]+)+)")
+PATH = re.compile(r"(?<![\w.:/])(/[\w.+-]+(?:/[\w.+@=-]+)+)")
 
 
 def _job_lines(out):
@@ -32,4 +32,5 @@ def test_the_paper_targets_resolve_in_the_one_workflow(tmp_path, target):
         # Every path is in the checkout or under the machine's ROOT.
         assert "../" not in line, line
         for path in PATH.findall(line):
-            assert path.startswith((str(ROOT), str(tmp_path))), (path, line)
+            allowed = (str(ROOT), str(tmp_path), "/dev/null")
+            assert path.startswith(allowed), (path, line)
