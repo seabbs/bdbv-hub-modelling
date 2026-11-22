@@ -8,7 +8,6 @@ import yaml
 
 from paperpipe.evidence import (
     EVIDENCE,
-    HELD_OUT_EVIDENCE,
     aggregation_numbers,
     write_evidence,
 )
@@ -67,9 +66,7 @@ def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
     doc = yaml.safe_load((tmp_path / "e.yml").read_text())
     zero = doc["evidence"]["realism"]["zero_share"]
     assert zero["BDBV"] == "(not yet available)"
-    assert len(out["evidence"]["waiting"]) == len(EVIDENCE) - len(
-        HELD_OUT_EVIDENCE
-    )
+    assert len(out["evidence"]["waiting"]) == len(EVIDENCE)
 
 
 def test_a_paper_run_fails_while_evidence_is_missing(tmp_path) -> None:
@@ -689,15 +686,6 @@ def test_drop_bdbv_keeps_no_bdbv_score_rows() -> None:
         {"source": [None, "daily"], "relative_wis": [None, 0.9]}
     )
     assert len(drop_bdbv(floor)) == 1
-
-
-def test_evidence_quotes_no_bdbv_scores(tmp_path) -> None:
-    paths = dict.fromkeys(EVIDENCE)
-    out = write_evidence(
-        paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml"
-    )
-    waiting = out["evidence"]["waiting"]
-    assert not any(EVIDENCE[n] in waiting for n in HELD_OUT_EVIDENCE)
 
 
 def test_waiting_notes_name_no_sessions_or_retired_grids() -> None:

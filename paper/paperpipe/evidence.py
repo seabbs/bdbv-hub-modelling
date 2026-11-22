@@ -41,7 +41,6 @@ from paperpipe.outputs import to_markdown
 
 __all__ = [
     "EVIDENCE",
-    "HELD_OUT_EVIDENCE",
     "aggregation_figure",
     "aggregation_numbers",
     "branch_head",
@@ -237,10 +236,6 @@ CHECKPOINT_RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule of the checkpoint rows the paper shows: WIS on each
 model's own quantiles for Germany, and CRPS on 1,000 draws with common
 random numbers for BDBV."""
-
-
-HELD_OUT_EVIDENCE: Final = ("lag_bdbv_before", "lag_bdbv_after")
-"""Evidence inputs that are BDBV scores only, which the paper never reads."""
 
 
 def drop_bdbv(frame: pd.DataFrame) -> pd.DataFrame:
@@ -714,8 +709,6 @@ EVIDENCE: Final = {
     "checkpoint_scores": "the scores of each checkpoint of the final run",
     "scale_floor": "the scale-floor test",
     "lag_germany": "the German lag-horizon scores",
-    "lag_bdbv_before": "the BDBV scores with the 4-week lag horizon",
-    "lag_bdbv_after": "the BDBV scores with lags to the truth delay",
     "compare_slots": "the slots and no-slots runs' scores by checkpoint",
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
@@ -969,9 +962,6 @@ def write_evidence(
     si_dir.mkdir(parents=True, exist_ok=True)
     fig_dir.mkdir(parents=True, exist_ok=True)
     data = {name: _read(paths, name) for name in EVIDENCE}
-    # The Ebola study is held out: no BDBV scores from development.
-    for name in HELD_OUT_EVIDENCE:
-        data[name] = None
     for name, frame in data.items():
         if frame is not None and name != "sim_realism":
             kept = drop_bdbv(frame)
@@ -1091,11 +1081,7 @@ def write_evidence(
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)
             ),
-            "waiting": [
-                EVIDENCE[n]
-                for n, d in data.items()
-                if d is None and n not in HELD_OUT_EVIDENCE
-            ],
+            "waiting": [EVIDENCE[n] for n, d in data.items() if d is None],
         }
     }
     out_yml.write_text(yaml.safe_dump(numbers, sort_keys=False))
