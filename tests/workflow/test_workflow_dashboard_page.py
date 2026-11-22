@@ -510,7 +510,8 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     assert st.rate == pytest.approx(1.0)
     assert st.mean_rate == pytest.approx(1.0)
     tiles, _ = page.status_tiles(st, ctx.runs[0])
-    assert "n/a" not in tiles.split("t_rate")[1].split("t_next")[0]
+    speed = tiles.split("Steps / s")[1].split("Next checkpoint")[0]
+    assert "n/a" not in speed
     assert "mean 1.000" in tiles
     assert f"of {st.at(1000)} steps" in tiles
     # Each segment still to come, with its ETA.

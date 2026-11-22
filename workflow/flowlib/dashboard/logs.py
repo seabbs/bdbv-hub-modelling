@@ -22,11 +22,13 @@ from nowcastfoundation.sidecar import SIDECAR, with_sidecar
 
 STEP = re.compile(
     r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] step (\d+): "
-    r"loss ([\d.eE+-]+), held-out \([^)]*\) ([\d.eE+-]+)"
+    r"loss ([\d.eE+-]+), held-out \([^)]*\) "
+    r"(?:([\d.eE+-]+)|left to the evaluator)"
     r"(?: \(nowcast ([\d.eE+-]+), forecast ([\d.eE+-]+)\))?"
     r"(?:, by source ((?:[\w+]+ [\d.eE+-]+(?:, |$))+))?"
 )
-"""A logged step of the trainer: time, step, loss, held-out loss, its
+"""A logged step of the trainer: time, step, loss, held-out loss (none
+for a run that leaves it to the evaluator), its
 nowcast and forecast parts if logged, and the held-out loss by source
 (any source names) every few hundred steps. The bias relations' means
 and ranges after it are read with `BIAS`."""
