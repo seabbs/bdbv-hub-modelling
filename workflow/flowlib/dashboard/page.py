@@ -173,6 +173,7 @@ class Context:
             levels=nowcasts.LEVELS,
             excluded=self.excluded,
             order=[(g["name"], g["match"]) for g in ds.get("groups") or ()],
+            unit=ds.get("unit") or key,
         )
 
 
