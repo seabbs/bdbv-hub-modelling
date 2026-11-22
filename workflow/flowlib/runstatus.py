@@ -1,12 +1,12 @@
-"""What this machine's workflow run is doing, for the monitor.
+"""What this machine's workflow run is doing.
 
 Each tick (`workflow/scripts/tick.py`) writes `<ROOT>/status/<host>.json`:
 the step it runs, whether a run is going, when it last wrote, and the
 running and recent jobs of its Snakemake run (rule, wildcards, the
 resources that place a job, start and end), read from the run's own log
 (`.snakemake/log`). With a rounds host (`REMOTE`) the file is copied to
-its `status/` folder too, so the monitor (`workflow/scripts/monitor.py`)
-sees every machine in one place. Standard library only.
+its `status/` folder too, so every machine's is in one place. Standard
+library only.
 """
 
 from __future__ import annotations

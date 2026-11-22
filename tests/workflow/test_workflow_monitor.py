@@ -52,7 +52,7 @@ def test_every_other_snakemake_run_reports_to_it(rel):
         line
         for line in text.splitlines()
         if re.search(r"snakemake\b", line)
-        and " -n" not in line
+        and not re.search(r"snakemake\b.*\s-n\b", line)
         and not line.lstrip().startswith("#")
     ]
     assert runs
