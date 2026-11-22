@@ -837,7 +837,7 @@ def flags(d: pd.DataFrame, failures: pd.DataFrame) -> str:
             f"<td>{len(m) / len(d):.1%}</td><td>{_ids(m)}</td></tr>"
         )
     out.append(
-        "<h3>Odd combinations (the sim-realism audit's list)</h3>"
+        "<h3>Odd combinations</h3>"
         "<table><tr><th>Combination</th><th>n</th><th>Share</th>"
         "<th>First outbreaks</th></tr>" + "".join(rows) + "</table>"
     )

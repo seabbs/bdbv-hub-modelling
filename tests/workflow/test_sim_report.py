@@ -107,7 +107,7 @@ def test_a_round_renders_one_self_contained_page(tmp_path):
     # Flags: the redrawn draw and the audit's combinations.
     assert "1 draws were redrawn, of 2 drawn" in page
     assert "no cases" in page
-    assert "Odd combinations" in page
+    assert "<h3>Odd combinations</h3>" in page
     assert "Fewer than 100 cases" in page
 
 
