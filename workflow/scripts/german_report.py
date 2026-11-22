@@ -10,9 +10,10 @@ colours. BDBV is never read.
 
     python workflow/scripts/german_report.py IN_DIR OUT_DIR \
         reference=Zero-shot randomwalknowcast="Random walk nowcast" \
-        r7-n800="r7 n800" ...
+        r7-n800="r7 n800" ... [--from LABEL=FOLDER ...]
 
-Each LABEL=NAME names a folder of IN_DIR. `reference` is zero-shot and
+Each LABEL=NAME names a folder of IN_DIR, or the FOLDER `--from` gives
+it. `reference` is zero-shot and
 `randomwalknowcast` the baseline; the others are fine-tuned checkpoints,
 shaded in the order given. Scores are cached in OUT_DIR/scores by each
 folder's files, so a rerun scores only changed folders.
@@ -167,14 +168,14 @@ def score_folder(folder: Path) -> pd.DataFrame:
 
 
 def scores(
-    in_dir: Path, out_dir: Path, names: Mapping[str, str]
+    folders: Mapping[str, Path], out_dir: Path, names: Mapping[str, str]
 ) -> pd.DataFrame:
     """Return every label's scores, scoring only changed folders."""
     cache = out_dir / "scores"
     cache.mkdir(parents=True, exist_ok=True)
     frames = []
     for label in names:
-        folder = in_dir / label
+        folder = folders[label]
         if not folder.is_dir() or not any(folder.glob("*.csv.gz")):
             continue
         path = cache / f"{label}-{folder_key(folder)}.csv.gz"
@@ -411,7 +412,7 @@ def _dataset() -> dict:
 
 
 def fans(
-    in_dir: Path, out_dir: Path, names: Mapping[str, str]
+    folders: Mapping[str, Path], out_dir: Path, names: Mapping[str, str]
 ) -> tuple[str, str]:
     """Return the dashboard's nowcast panels and the scripts they need.
 
@@ -427,7 +428,7 @@ def fans(
     links = {ZERO_SHOT: ZERO_SHOT, BASELINE: "reference-rw"}
     ft = [w for w in names if w not in links]
     for label in names:
-        target = in_dir / label
+        target = folders[label]
         if target.is_dir():
             (src / links.get(label, label)).symlink_to(target.resolve())
     run_list, sizes = [], {}
@@ -474,13 +475,13 @@ def fans(
 
 
 def build(
-    in_dir: Path,
+    folders: Mapping[str, Path],
     out_dir: Path,
     names: Mapping[str, str],
     heldout: Path | None = None,
 ) -> Path:
     """Write OUT_DIR/index.html and return its path."""
-    s = scores(in_dir, out_dir, names)
+    s = scores(folders, out_dir, names)
     order = [ZERO_SHOT, BASELINE, *[w for w in names if w not in (
         ZERO_SHOT, BASELINE)]]  # fmt: skip
     order = [w for w in order if w in names]
@@ -523,7 +524,7 @@ def build(
             ]  # fmt: skip
         parts.append(f"<div class=plots>{''.join(charts)}</div>")
         parts.append(table(tab, order, names))
-    panels, head = fans(in_dir, out_dir, names)
+    panels, head = fans(folders, out_dir, names)
     parts.append(
         "<h2>Nowcasts and forecasts</h2><p class=mut>Each model's 7-day "
         "sums by nowcast date, with the truth reported 40 days on. Pick "
@@ -533,6 +534,7 @@ def build(
     parts.append("<h2>Held-out validation round</h2>")
     parts.append(held_out(heldout))
     style = (ROOT / "workflow/flowlib/dashboard/page/style.css").read_text()
+    where = ", ".join(sorted({str(f.parent) for f in folders.values()}))
     doc = (
         "<!doctype html><html lang=en><meta charset=utf-8>"
         "<meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -540,7 +542,7 @@ def build(
         f"<style>{style}{page.ui_colours()}</style>{head}"
         "<h1>Fine-tuned Chronos-2 on the German development half</h1>"
         "<p class=mut>German development half only; BDBV is held out. "
-        f"Forecasts from {html.escape(str(in_dir))}.</p>" + "\n".join(parts)
+        f"Forecasts from {html.escape(where)}.</p>" + "\n".join(parts)
     )
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "index.html"
@@ -560,8 +562,15 @@ def main(argv: Sequence[str]) -> None:
         i = rest.index("--heldout")
         heldout = Path(rest[i + 1])
         del rest[i : i + 2]
+    given = {}
+    while "--from" in rest:
+        i = rest.index("--from")
+        label, folder = rest[i + 1].split("=", 1)
+        given[label] = Path(folder)
+        del rest[i : i + 2]
     names = dict(a.split("=", 1) for a in rest)
-    print(build(in_dir, out_dir, names, heldout))
+    folders = {label: given.get(label, in_dir / label) for label in names}
+    print(build(folders, out_dir, names, heldout))
 
 
 if __name__ == "__main__":

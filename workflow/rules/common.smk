@@ -4,6 +4,7 @@
 
 import functools
 import json
+import shlex
 import tomllib
 
 from flowlib import (
@@ -393,9 +394,14 @@ def unit_priority(base):
     return lambda wc: releases.priority(score_order(), wc.label, base)
 
 
+SCORE_DEVICE = LOCAL.get("SCORE_DEVICE") or None
+"""The device scoring units run torch on (SCORE_DEVICE in local.env), by
+default the machine's: `cpu` keeps them off a GPU a trainer is using."""
+
+
 def unit_env(wc, threads):
     """The unit's torch device, threads and Chronos-2 batch."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads))
+    return machine.shell_env(machine.torch_env(LOCAL, threads, SCORE_DEVICE))
 
 
 GERMANY_UNIT = "germany-days"
@@ -409,12 +415,53 @@ def unit_rows(study):
     return lambda wc: f"{CACHE}/{study}/{wc.label}/"
 
 
-def unit_shell(study):
+def unit_shell(study, segment=""):
+    """A unit of `study` caching under {params.cache} as {params.label};
+    `segment`, if given, is the run's own checkpoint folder it loads."""
     return (
         f"mkdir -p {{params.copy_back}} && {ROOM}{{params.prefix}} nice -n 19 "
-        f"env {{params.env}} {EVALUATE} {study} {CACHE} {{wildcards.label}} "
-        "> {log} 2>&1 && touch {output}"
+        f"env {{params.env}} {EVALUATE} {study} {{params.cache}} "
+        f"{{params.label}} {segment}> {{log}} 2>&1 && touch {{output}}"
     )
+
+
+def run_scores_dir(run):
+    """The run's score cache: its own checkpoints' units."""
+    return f"{RUNS_DIR}/{run}/scores"
+
+
+def run_units(run):
+    """The German units of the run's saved checkpoints."""
+    return [
+        f"{run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done"
+        for n in RUNS[run].ft["prefixes"]
+        if saved(run, n)
+    ]
+
+
+def references():
+    """The reference labels' German units, shared by every run."""
+    return expand(f"{CACHE}/{GERMANY_UNIT}/{{label}}.done", label=SC["reference"])
+
+
+def report_names(wc):
+    """The German report's LABEL=NAME arguments and reference folders."""
+    names = {"reference": "Zero-shot", "randomwalknowcast": "Random walk nowcast"}
+    names |= {
+        f"n{n}": f"{wc.run} n{n}"
+        for n in RUNS[wc.run].ft["prefixes"]
+        if saved(wc.run, n)
+    }
+    args = [shlex.quote(f"{k}={v}") for k, v in names.items()]
+    args += [
+        f"--from {label}={CACHE}/{GERMANY_UNIT}/{label}" for label in SC["reference"]
+    ]
+    return " ".join(args)
+
+
+def run_scores(wc=None):
+    """Each trained run's German report, over its saved checkpoints."""
+    return [f"{RUNS_DIR}/{run}/reports/german/index.html" for run in trained_runs()]
 
 
 def table_inputs(wc):
