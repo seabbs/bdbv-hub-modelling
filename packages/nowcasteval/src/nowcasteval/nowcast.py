@@ -390,7 +390,7 @@ def weeks_back_from_cutoff(
     pandas.Series
         Whole weeks, below 0 for weeks after the cut-off week.
     """
-    here = pd.Timestamp(epiweek_end(_cutoff(daily, vintage)))
+    here = pd.Timestamp(epiweek_end(release_cutoff(daily, vintage)))
     back = (here - pd.to_datetime(weeks.reset_index(drop=True))).dt.days // 7
     return back.astype(int).set_axis(weeks.index)
 
@@ -451,10 +451,10 @@ def reported_samples(
         kept = add_national(places) if whole else places
         return dict.fromkeys(later, kept)
     weeks = sorted(set(samples["target_end_date"]))
-    now = week_shares(curves, _cutoff(daily, origin), weeks)
+    now = week_shares(curves, release_cutoff(daily, origin), weeks)
     out = {}
     for o2 in later:
-        then = week_shares(curves, _cutoff(daily, o2), weeks)
+        then = week_shares(curves, release_cutoff(daily, o2), weeks)
         drawn = draw_reported(places.loc[mapped], reported, now, then, rng)
         both = pd.concat([drawn, places.loc[~mapped]], ignore_index=True)
         out[o2] = add_national(both) if whole else both
@@ -502,10 +502,6 @@ def _label(
         daily, origin, out["target_end_date"]
     )
     return out
-
-
-def _cutoff(daily: pd.DataFrame, vintage: str) -> dt.date:
-    return release_cutoff(daily.loc[daily["vintage"] == vintage], vintage)
 
 
 def _truth(real: pd.DataFrame, vintage: str) -> pd.DataFrame:

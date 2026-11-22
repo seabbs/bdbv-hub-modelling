@@ -42,7 +42,6 @@ from nowcastfoundation.simulate import SimulatedOutbreak
 from nowcastutils.base import ForecastTask, ModelUnavailableError, get_model
 from nowcastutils.dates import as_date
 from nowcastutils.files import write_csv
-from nowcastutils.releases import release_cutoff
 from nowcastutils.snapshots import weekly_counts
 
 log = logging.getLogger(__name__)
@@ -432,11 +431,6 @@ def _weeks(samples: pd.DataFrame, task: ForecastTask) -> pd.Series:
     """Weeks from the task's reference date to each sample's week."""
     ref = pd.Timestamp(task.reference_date)
     return (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
-
-
-def _cutoff(daily: pd.DataFrame, vintage: str) -> dt.date:
-    """Return the cut-off of a release."""
-    return release_cutoff(daily.loc[daily["vintage"] == vintage], vintage)
 
 
 def zone_relative_skill(
