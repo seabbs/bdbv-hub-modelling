@@ -119,3 +119,55 @@ def test_a_manifest_lists_the_batches_it_holds(tmp_path):
     )
     assert manifest.seeds(path) == {31000, 31002}
     assert manifest.seeds(tmp_path / "none.csv") == set()
+
+
+FIELDS = {"grid": "g1", "draws": 1, "batch": 20, "host": "h"}
+
+
+def test_a_record_keeps_the_manifest_s_row(tmp_path):
+    sims = _batch(tmp_path)
+    old = tmp_path / "manifest.csv"
+    old.write_text(f"{manifest.HEADER}\n9,30421,kept\n")
+    out = tmp_path / "record.csv"
+    manifest.record(out, old, sims, round_=9, seed=30421, mine=False, **FIELDS)
+    assert out.read_text() == "9,30421,kept\n"
+
+
+def test_a_record_of_a_batch_made_here_is_a_new_row(tmp_path):
+    sims = _batch(tmp_path)
+    out = tmp_path / "record.csv"
+    manifest.record(
+        out,
+        tmp_path / "none.csv",
+        sims,
+        round_=9,
+        seed=30421,
+        mine=True,
+        **FIELDS,
+    )
+    fields = out.read_text().strip().split(",")
+    assert fields[:4] == ["9", "30421", "block", "g1"]
+    assert re.fullmatch(r"[0-9a-f]{40}", fields[4])
+    assert fields[-2] == "h"
+
+
+def test_a_batch_from_elsewhere_needs_its_row(tmp_path):
+    sims = _batch(tmp_path)
+    with pytest.raises(ValueError, match="without its manifest row"):
+        manifest.record(
+            tmp_path / "r.csv",
+            tmp_path / "none.csv",
+            sims,
+            round_=9,
+            seed=30421,
+            mine=False,
+            **FIELDS,
+        )
+
+
+def test_ready_writes_the_seeds_then_the_time(tmp_path):
+    manifest.mark_ready([3, 1], tmp_path / "seeds.txt", tmp_path / "READY")
+    assert (tmp_path / "seeds.txt").read_text() == "3\n1\n"
+    assert re.fullmatch(
+        r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\n", (tmp_path / "READY").read_text()
+    )
