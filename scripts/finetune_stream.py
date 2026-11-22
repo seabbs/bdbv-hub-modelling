@@ -1478,9 +1478,6 @@ def build_parser() -> argparse.ArgumentParser:
     # Cases a block needs reported in the 28 days up to its cut-off to be
     # trained on (or held out); none: every block.
     parser.add_argument("--quiet-min-cases", type=int)
-    # Real validation blocks (`load_blocks`), scored at each checkpoint;
-    # not trained on. The workflow passes none: BDBV is held out.
-    parser.add_argument("--real-validation", type=Path)
     # Series a training step packs blocks up to (`plan_batches`).
     parser.add_argument(
         "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
@@ -1898,9 +1895,6 @@ def main() -> None:
     if args.real_training:
         real_training = load_blocks(args.real_training)
         log(f"{len(real_training)} real-data training blocks")
-    real_validation = (
-        load_blocks(args.real_validation) if args.real_validation else []
-    )
     t0 = time.perf_counter()
     # A segment stops at its prefix; one whose state is already there
     # only keeps it, and one past it fails (`until_start`).
@@ -2116,10 +2110,6 @@ def main() -> None:
             # hash, so a moved file keeps its checkpoints' hashes.
             settings["code_paths"] = code_paths(args.series_bias)
             settings["device"] = device
-            if args.real_validation:
-                settings["real_validation_sha256"] = ft._sha256(
-                    args.real_validation
-                )
             entry = {"step": step, "n_outbreaks": done}
             if offload:
                 # The evaluator scores the checkpoint's adapter.
@@ -2129,12 +2119,6 @@ def main() -> None:
                 parts = held_out_parts(model, val, args.batch_size)
                 settings["held_out_loss"] = parts["loss"]
                 settings |= loss_parts("held_out_loss", parts)
-                if args.real_validation:
-                    real_parts = held_out_parts(
-                        model, real_validation, args.batch_size
-                    )
-                    settings["real_validation_loss"] = real_parts["loss"]
-                    settings |= loss_parts("real_validation_loss", real_parts)
                 settings["held_out_loss_by_level"] = held_out_by_level(
                     model, val, LEVEL_BLOCKS
                 )
