@@ -444,7 +444,7 @@ Sampling distributions of the continuous simulation settings, read from the grid
 ![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
 
 Outbreak length is drawn from a log-normal distribution with median 30 weeks, and is at least 4 weeks.
-A simulation that fails or reports fewer than 10 cases is redrawn with a new seed.
+A simulation that fails or reports no cases is redrawn with a new seed.
 No simulation is rejected for its size, growth or reporting delay.
 We test the simulator so that a stratum never has more cases than its population.
 

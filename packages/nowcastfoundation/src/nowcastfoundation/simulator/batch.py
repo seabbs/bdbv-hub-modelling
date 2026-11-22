@@ -5,7 +5,7 @@ Each simulation draws its design and values (`draws`), runs its latent
 infections and expected onsets (`nowcastrenewal.latent`, PyRenew
 components), then its reporting (a `ReportingStep`: the R engine's
 epinowcast step by default).
-A draw that errors or reports fewer than `floors.min_cases` cases is drawn
+A draw that errors or reports no cases is drawn
 again, up to `tries` times, then from a new design, up to `designs`, so the
 batch always holds `n` simulations.
 Independent strata are single-stratum simulations of their own, with their
@@ -102,9 +102,9 @@ class _Batch:
     draws: int
     weeks: int | None
 
-    def redraw_reason(self, cases: float) -> str | None:
-        floor = self.grid["floors"]["min_cases"]
-        return f"fewer than {floor} cases" if cases < floor else None
+    @staticmethod
+    def redraw_reason(cases: float) -> str | None:
+        return "no cases" if cases <= 0 else None
 
     def cell(
         self, design: dict[str, Any], keys: tuple[int, ...], sim_id: str

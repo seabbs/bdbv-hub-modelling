@@ -42,11 +42,8 @@ floors:
   seed: 1
   weeks: 4
   period_days: 30
-  # A draw reporting fewer cases than this (over its draws' mean) is drawn
-  # again, as are draws that error.
-  min_cases: 10
 # No sim QC thresholds: a draw is drawn again only if it
-# errors or reports fewer than `floors$min_cases` cases. That cases never
+# errors or reports no cases. That cases never
 # exceed a stratum's population (without variants) is a simulator test.
 shares:
   controlled: 0.5      # early outbreaks brought towards R = 1
