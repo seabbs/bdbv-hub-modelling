@@ -417,3 +417,25 @@ def test_the_split_reaches_each_location_s_page_data(tmp_path):
     got = split["zero"]["7day"]["daily"]["2022-02-09"]
     assert got["nowcast"] == [None, 0]
     assert list(got["forecast"]) == ["1"]
+
+
+def test_a_run_s_own_score_folders_are_its_checkpoints(tmp_path):
+    # A run scores its saved checkpoints into <run>/scores/<unit>/n<N>;
+    # each is the run's checkpoint of that segment's hash.
+    cache = tmp_path / "cache" / "germany-days"
+    _quantiles(cache / "reference" / "2022-02-09.csv.gz", "randomwalknowcast")
+    run = tmp_path / "run"
+    (run / "train" / "n100").mkdir(parents=True)
+    (run / "train" / "n100" / "settings.json").write_text(
+        '{"hash": "abc123def456", "n_outbreaks": 100}'
+    )
+    _quantiles(
+        run / "scores" / "germany-days" / "n100" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged_ft",
+    )
+    _, refs = _setup()
+    rs = [runs.make_run("runa", str(run), live=True)]
+    built = nowcasts.build(cache, rs, refs, levels=PAGE, unit="germany-days")
+    assert "runa" in built["sets"]
+    assert "rw" in built["sets"]
+    assert built["folders"]["abc123def456"] == "runa-abc123def456"
