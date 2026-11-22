@@ -24,7 +24,7 @@ Pass Snakemake options after `--`: `task nowcast-foundation:score -- -n` is a dr
 Low level, any output file, for example:
 
 ```sh
-uv run --group paper snakemake <ROOT>/rounds/r4/sims/counts-30421.csv.gz  # one batch
+uv run --group paper snakemake <ROOT>/rounds/r34/sims/counts-33400.csv.gz  # one batch
 uv run --group paper snakemake <ROOT>/runs/runa/train/n800/settings.json  # one checkpoint
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
