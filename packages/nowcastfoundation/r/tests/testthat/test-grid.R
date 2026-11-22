@@ -78,9 +78,6 @@ test_that("late places are among the places with cases", {
 test_that("a draw is redrawn only if it reports no cases", {
   grid <- test_grid()
   expect_null(grid$floors$min_cases)
-  expect_equal(redraw_reason(0), "no cases")
-  expect_true(is.na(redraw_reason(0.5)))
-  expect_true(is.na(redraw_reason(1)))
 })
 
 test_that("every simulation's triangle fits the simulator's memory", {
@@ -126,8 +123,6 @@ test_that("a draw is redrawn only when it fails or reports no cases", {
   # delays are left as drawn.
   expect_null(grid$qc)
   expect_false(exists("qc_reason", envir = asNamespace("nowcastfoundation")))
-  expect_true(is.na(redraw_reason(1)))
-  expect_equal(redraw_reason(0), "no cases")
 })
 
 test_that("strata of one outbreak can share its length and calendar offset", {

@@ -1,10 +1,9 @@
-"""The reporting delay's pmfs, against epinowcast and the R engine, live.
+"""The reporting delay's pmfs, against epinowcast, live.
 
 The shared pmfs are checked against primarycensored in `test_pmfs.py`.
 Here the reporting delay's hazards are checked against the pinned
-epinowcast's own Stan functions (`enw_stan_to_r`), and its pmf against the
-simulator's R engine (`packages/nowcastfoundation/r/R/delays.R`); the
-tests skip only where R or a package is missing.
+epinowcast's own Stan functions (`enw_stan_to_r`); the tests skip only
+where R or a package is missing.
 """
 
 from __future__ import annotations
@@ -158,34 +157,22 @@ def test_double_censored_delays_match_epinowcast(
     )
 
 
-@pytest.fixture(scope="module")
-def engine_pmfs() -> list[list[float]]:
-    """The simulator R engine's delay pmfs (`delay_parameters`)."""
-    require_r(["primarycensored"])
-    code = """
-    source("packages/nowcastfoundation/r/R/delays.R")
-    lapply(seq_len(length(input$family)), function(i) {
-      v <- as.list(input$values[i, , drop = FALSE])
-      delay_parameters(input$family[i], v, input$dmax[i])$pmf
-    })
-    """
-    cases = [*CASES, {"family": "none", "values": {"delay_mean": 4.0}}]
-    inputs = {
-        "family": [c["family"] for c in cases for _ in DMAX],
-        "values": [c["values"] for c in cases for _ in DMAX],
-        "dmax": [d for _ in cases for d in DMAX],
-    }
-    return run_r(code, inputs)
-
-
-def test_the_report_delay_pmf_matches_the_simulator_engine(
-    engine_pmfs: list[list[float]],
-) -> None:
-    cases = [*CASES, {"family": "none", "values": {"delay_mean": 4.0}}]
-    pairs = [(c, d) for c in cases for d in DMAX]
-    for (case, dmax), want in zip(pairs, engine_pmfs, strict=True):
-        got = report_delay_pmf(case["family"], case["values"], dmax)
-        np.testing.assert_allclose(got, want, rtol=1e-8, atol=1e-12)
+def test_the_report_delay_pmf_is_the_shared_pmf_or_geometric() -> None:
+    # A parametric delay is the shared double censored pmf
+    # (`test_pmfs.py`); with no parametric part, a geometric delay with
+    # hazard 1 / (1 + mean), truncated at the window.
+    for case in CASES:
+        got = report_delay_pmf(case["family"], case["values"], 21)
+        with jax.enable_x64(True):
+            delay = Delay.from_values(case["family"], case["values"])
+            want = np.exp(np.asarray(censored_log_pmf(delay, 21)))
+        np.testing.assert_allclose(got, want, rtol=1e-12)
+    h = 1 / (1 + 4.0)
+    geometric = h * (1 - h) ** np.arange(21)
+    np.testing.assert_allclose(
+        report_delay_pmf("none", {"delay_mean": 4.0}, 21),
+        geometric / geometric.sum(),
+    )
 
 
 def test_the_families_are_the_grids() -> None:

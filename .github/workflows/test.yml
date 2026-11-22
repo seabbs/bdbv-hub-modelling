@@ -146,9 +146,9 @@ jobs:
           tests/model/test_reporting_expectation.py
           tests/model/test_revisions.py
 
-  # The simulator engine's testthat suite (packages/nowcastfoundation/r).
-  # Its hard dependencies only: the tests that run epinowcast skip without
-  # the pinned epinowcast (ENW_LIB), so they run where it is installed.
+  # The former R engine's testthat suite (packages/nowcastfoundation/r),
+  # the reference the simulator's draws and latent step are tested
+  # against. Its hard dependencies only.
   engine:
     runs-on: ubuntu-latest
     steps:
@@ -156,10 +156,6 @@ jobs:
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           use-public-rspm: true
-          # cmdstanr (a Suggests of the engine and of the pinned epinowcast
-          # in Remotes) is only on the stan-dev r-universe; without it pak
-          # cannot solve the engine's dependencies.
-          extra-repositories: https://stan-dev.r-universe.dev
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           working-directory: packages/nowcastfoundation/r

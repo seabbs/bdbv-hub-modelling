@@ -9,8 +9,7 @@
 # `refp_sd`, `refp_lh`, `refnp_lh`), with each design's column names and
 # the parameters, so the Python port can take the same values.
 #
-# The covariates and formulas copy the engine's
-# (`packages/nowcastfoundation/r/R/simulate.R`), with one change: the
+# The covariates and formulas are the simulator's, with one change: the
 # weekday effect within place is one factor (`dow_place`), as
 # `(1 | day_of_week:place)` cannot run at the pin.
 

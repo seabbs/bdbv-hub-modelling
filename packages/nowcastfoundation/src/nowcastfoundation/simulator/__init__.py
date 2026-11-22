@@ -2,8 +2,8 @@
 """The grid simulator of the fine-tuning simulations.
 
 `simulate_batch` (`batch`) is its one entry point: the design and value
-draws (`draws`), the latent step (`nowcastrenewal.latent`) and a reporting
-step (`reporting`), writing the batch's files.
+draws (`draws`), then each simulation as the joint PyRenew model
+(`nowcastrenewal.simulation.outbreak`), writing the batch's files.
 Run one batch from the command line with
 `python -m nowcastfoundation.simulator GRID N SEED OUT`.
 """
