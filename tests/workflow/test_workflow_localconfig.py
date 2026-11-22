@@ -57,11 +57,9 @@ def test_a_line_may_use_a_later_one(tmp_path):
 
 def test_a_line_may_use_a_default(tmp_path):
     path = tmp_path / "local.env"
-    path.write_text("SCORE_CACHE=$RUN/cache\n")
+    path.write_text("SCORE_CACHE=$ROOT/cache\n")
     cfg = localconfig.read(path, {"HOME": str(tmp_path)})
-    assert (
-        cfg["SCORE_CACHE"] == f"{tmp_path}/bdbv-rounds/checkpoints/slots/cache"
-    )
+    assert cfg["SCORE_CACHE"] == f"{tmp_path}/bdbv-rounds/cache"
 
 
 def test_a_setting_in_the_environment_is_seen_by_the_file(tmp_path):
@@ -94,7 +92,6 @@ def test_workflow_paths_default_under_the_rounds_folder(tmp_path):
     path = tmp_path / "local.env"
     path.write_text("ROOT=/data/rounds\n")
     cfg = localconfig.read(path, {"HOME": str(tmp_path)})
-    assert cfg["RUN"] == "/data/rounds/checkpoints/slots"
     assert cfg["SCORE_CACHE"] == "/data/rounds/scores"
     assert cfg["NOSLOTS_RUN"] == "/data/rounds/checkpoints"
     assert cfg["GERMANY_BLOCKS"] == "/data/rounds/germany/germany.pkl"

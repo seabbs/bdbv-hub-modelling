@@ -120,6 +120,16 @@ finetune:
   # The checkpoint checked against zero-shot on the held-out simulations.
   check_at: 800
 
+# The fine-tuning runs, by name: each takes `finetune` with its entry's
+# keys on top (rounds, seed_file, prefixes, outbreaks, cuts, the recipe),
+# and keeps its files in <ROOT>/runs/<name>/ (flowlib.runs). Every run
+# takes the same rules through the {run} wildcard.
+runs:
+  runa: {}
+
+# The runs `finetune` trains (null: every run in `runs`).
+train_runs: null
+
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).

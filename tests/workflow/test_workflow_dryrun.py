@@ -247,7 +247,7 @@ def _released(tmp_path, seeds):
 
 def _stale_list(tmp_path, seeds):
     """A batch list an earlier run wrote."""
-    where = tmp_path / "checkpoints" / "slots"
+    where = tmp_path / "runs" / "runa"
     where.mkdir(parents=True, exist_ok=True)
     (where / "available-batches.txt").write_text(
         "".join(f"{s}\n" for s in seeds)
@@ -282,7 +282,7 @@ def test_from_releases_each_run_lists_them_as_it_plans(tmp_path):
     _released(tmp_path, [*range(30100, 30140)])
     jobs = dry(tmp_path, "finetune", config=RELEASE)
     assert "available_batches" not in jobs
-    record = tmp_path / "checkpoints" / "slots" / "available-batches.txt"
+    record = tmp_path / "runs" / "runa" / "available-batches.txt"
     assert record.read_text().split() == [str(s) for s in range(30100, 30140)]
 
 
@@ -381,7 +381,7 @@ def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
     # evaluation waits for every earlier segment's.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    sidecar = "checkpoints/slots/train/n500/held-out.json"
+    sidecar = "runs/runa/train/n500/held-out.json"
     jobs = dry(tmp_path, str(tmp_path / sidecar), config=OFFLOAD)
     assert jobs["evaluate_steps"] == 2
     assert jobs["evaluate_checkpoint"] == 1
@@ -401,14 +401,16 @@ def test_a_checkpoint_s_evaluation_depends_on_step_0_and_earlier_settings(
 ):
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    sidecar = tmp_path / "checkpoints/slots/train/n500/held-out.json"
+    sidecar = tmp_path / "runs/runa/train/n500/held-out.json"
     jobs, edges = _dag(tmp_path, str(sidecar), OFFLOAD)
     steps = [j for j, label in jobs.items() if label == "evaluate_steps"]
     (check,) = [
         j for j, label in jobs.items() if label == "evaluate_checkpoint"
     ]
     (first,) = [
-        j for j, label in jobs.items() if label == "train_segment\\nn: 250"
+        j
+        for j, label in jobs.items()
+        if label.startswith("train_segment\\n") and "n: 250" in label
     ]
     # One segment's step evaluation feeds the next's, which feeds the
     # checkpoint's: step 0 is scored before the checkpoint.
@@ -425,7 +427,7 @@ def test_finetune_never_publishes(tmp_path):
 
 
 def test_finished_checkpoints_are_kept(tmp_path):
-    n250 = tmp_path / "checkpoints" / "slots" / "train" / "n250"
+    n250 = tmp_path / "runs" / "runa" / "train" / "n250"
     (n250 / "finetuned-ckpt").mkdir(parents=True)
     (n250 / "state").mkdir()
     (n250 / "settings.json").write_text("{}")
@@ -436,7 +438,7 @@ def test_finished_checkpoints_are_kept(tmp_path):
 
 
 def _checkpoint(tmp_path, n):
-    where = tmp_path / "checkpoints" / "slots" / "train" / f"n{n}"
+    where = tmp_path / "runs" / "runa" / "train" / f"n{n}"
     (where / "finetuned-ckpt").mkdir(parents=True)
     (where / "state").mkdir()
     (where / "settings.json").write_text("{}")
@@ -448,7 +450,7 @@ def test_the_live_run_switches_over_without_retraining(tmp_path):
     # The slots run: n250 to n750 saved without state of their
     # own, the trainer's state part way to n1000, and a seed list that
     # reaches 1,500 outbreaks so far.
-    train = tmp_path / "checkpoints" / "slots" / "train"
+    train = tmp_path / "runs" / "runa" / "train"
     for n in (250, 500, 750):
         where = train / f"n{n}"
         (where / "finetuned-ckpt").mkdir(parents=True)
@@ -556,7 +558,7 @@ def test_verify_alone_never_releases(tmp_path):
     _checkpoint(tmp_path, 250)
     jobs = dry(
         tmp_path,
-        f"{tmp_path}/checkpoints/slots/train/n250/verified.txt",
+        f"{tmp_path}/runs/runa/train/n250/verified.txt",
         config=FT,
     )
     assert jobs == {"verify_checkpoint": 1}
@@ -765,13 +767,13 @@ def test_a_failed_run_posts_a_mailbox_line(tmp_path):
     # with no losses.
     box = tmp_path / "box.md"
     _local(tmp_path, "NOTIFY=1", f"MAILBOX={box}")
-    n800 = tmp_path / "checkpoints" / "slots" / "train" / "n800"
+    n800 = tmp_path / "runs" / "runa" / "train" / "n800"
     n800.mkdir(parents=True)
     (n800 / "settings.json").write_text("{}")
     # Evaluated in the trainer, so the report needs only the checkpoint.
     overlay = tmp_path / "overlay.yaml"
     overlay.write_text("finetune:\n  eval: local\n")
-    target = tmp_path / "checkpoints" / "slots" / "reports" / "n800-check.txt"
+    target = tmp_path / "runs" / "runa" / "reports" / "n800-check.txt"
     out = subprocess.run(
         [
             str(SNAKEMAKE),
@@ -858,41 +860,26 @@ def test_the_rounds_host_s_manifests_and_exclusions_are_mirrored(tmp_path):
         "simulation\n30101-3\n"
     )
     dry(tmp_path, "finetune", config=REMOTE)
-    run = tmp_path / "checkpoints" / "slots"
+    run = tmp_path / "runs" / "runa"
     listed = (run / "available-batches.txt").read_text().split()
     assert listed == [str(s) for s in [*range(30100, 30140), 30200]]
     assert (run / "rounds" / "r1" / "qc" / "excluded.csv").exists()
     assert (run / "rounds" / "r2" / "manifest.csv").exists()
 
 
-NOBIAS = {**FT, "finetune": {**FT["finetune"], "series_bias": False}}
+NOBIAS = {
+    **FT,
+    "runs": {"nobias": {"series_bias": False}},
+    "train_runs": ["nobias"],
+}
 
 
-def test_a_no_bias_control_refuses_the_slots_run_s_folder(tmp_path):
-    local = tmp_path / "local.env"
-    local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
-    overlay = tmp_path / "overlay.yaml"
-    overlay.write_text(yaml.safe_dump(NOBIAS))
-    out = subprocess.run(
-        [str(SNAKEMAKE), "finetune", "-s", "workflow/Snakefile", "-n",
-         "--cores", "1", "--workflow-profile", "workflow/profiles/ci",
-         "--configfile", str(overlay)],
-        cwd=ROOT,
-        env={"PATH": str(SNAKEMAKE.parent) + ":/usr/bin:/bin",
-             "HOME": str(tmp_path), "LOCAL_CONFIG": str(local)},
-        capture_output=True,
-        text=True,
-    )  # fmt: skip
-    assert out.returncode != 0
-    assert "RUN" in out.stderr + out.stdout
-
-
-def test_a_no_bias_control_trains_in_its_own_folder(tmp_path):
-    (tmp_path / "local.env").write_text(
-        f"ROOT={tmp_path}\nHOST_NAME=test-host\nRUN={tmp_path}/nobias\n"
-    )
+def test_a_no_bias_control_is_a_run_in_its_own_folder(tmp_path):
     jobs = dry(tmp_path, "finetune", config=NOBIAS)
     assert jobs["train_segment"] == 2
+    out = dry_run(tmp_path, "finetune", config=NOBIAS, quiet=False)
+    assert f"{tmp_path}/runs/nobias/train/n250/settings.json" in out.stdout
+    assert "--series-bias" not in out.stdout
 
 
 def test_a_tick_trains_only_the_next_segment(tmp_path):
@@ -1147,9 +1134,9 @@ def test_a_fetched_batch_is_a_copy_not_a_link_to_its_source(tmp_path):
     now = time.time_ns()
     os.utime(counts, ns=(now, now))
     os.utime(settings, ns=(now + 10**6, now + 10**6))
-    run = tmp_path / "run"
+    run = tmp_path / "runs" / "runa"
     (tmp_path / "local.env").write_text(
-        f"ROOT={tmp_path}\nHOST_NAME=test-host\nRUN={run}\nSIMS_FROM=local\n"
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nSIMS_FROM=local\n"
     )
     out = dry_run(
         tmp_path,

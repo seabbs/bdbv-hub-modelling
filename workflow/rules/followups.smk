@@ -52,8 +52,11 @@ rule slots_check_shard:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         shards=SLC["shards"],
         blocks=f"{CACHE}/slots-check/blocks.pkl",
-        held=lambda wc: f"{held_seeds()[0]} {held_seeds()[-1]}",
-        sims=f"{ROUNDS_DIR}/r{FT['validation_round']}/sims",
+        # The first trained run's held-out round.
+        held=lambda wc: held_range(trained_runs()[0]),
+        sims=lambda wc: (
+            f"{ROUNDS_DIR}/r{RUNS[trained_runs()[0]].ft['validation_round']}/sims"
+        ),
         noslots=LOCAL["NOSLOTS_RUN"],
         germany=LOCAL["GERMANY_BLOCKS"],
     shell:
