@@ -245,3 +245,28 @@ def test_an_offloaded_checkpoint_lists_its_held_out_losses(tmp_path):
     (d / "held-out.json").write_text(json.dumps({"held_out_loss": 0.2}))
     ((_name, settings, _t),) = logs.checkpoints(tmp_path)
     assert settings == {"hash": "h", "held_out_loss": 0.2}
+
+
+def _batches(folder, seeds, have):
+    (folder / "seeds.txt").write_text("".join(f"{s}\n" for s in seeds))
+    (folder / "sims").mkdir(exist_ok=True)
+    for s in have:
+        rows = "".join(f"{s}-{i:04d}\n" for i in range(20))
+        (folder / "sims" / f"settings-{s}.csv").write_text("outbreak\n" + rows)
+
+
+def test_a_segment_waits_on_the_batches_it_needs_that_are_missing(tmp_path):
+    # Segment n800 takes 40 batches of 20 and one spare; 33431 failed and
+    # batches past the segment are not its concern.
+    seeds = list(range(33400, 33500))
+    have = [s for s in seeds[:60] if s != 33431]
+    _batches(tmp_path, seeds, have)
+    assert logs.waiting_batches(tmp_path, 800) == [33431]
+    assert logs.waiting_batches(tmp_path, 400) == []
+    # Missing batches count as full ones.
+    few = tmp_path / "few"
+    few.mkdir()
+    _batches(few, seeds, seeds[:10])
+    assert logs.waiting_batches(few, 400) == list(range(33410, 33421))
+    # A run with no seed list waits on nothing it can name.
+    assert logs.waiting_batches(tmp_path / "none", 400) == []

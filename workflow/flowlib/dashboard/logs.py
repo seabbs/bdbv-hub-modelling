@@ -321,3 +321,34 @@ def trainer_state(folder: Path | str) -> tuple[str, bool | None]:
     if pid is None and age is None:
         return "unknown", None
     return f"DEAD (pid {pid})" if pid else "DEAD (no recent status)", False
+
+
+def waiting_batches(folder: Path | str, n: int) -> list[int]:
+    """Return the batches segment `n` needs that the run does not have.
+
+    As the workflow picks them: the run's seeds (`seeds.txt`) in order
+    until they hold `n` outbreaks, and one spare. A batch here counts its
+    outbreaks (`sims/settings-<seed>.csv`); a missing one counts as the
+    size of those here (20 if none), so a stopped run can say which
+    batch it waits on. Held-out batches are not counted.
+    """
+    folder = Path(folder)
+    try:
+        seeds = [int(x) for x in (folder / "seeds.txt").read_text().split()]
+    except OSError:
+        return []
+    sizes = {}
+    for seed in seeds:
+        path = folder / "sims" / f"settings-{seed}.csv"
+        if path.is_file():
+            with path.open() as f:
+                sizes[seed] = max(0, sum(1 for _ in f) - 1)
+    full = max(sizes.values(), key=list(sizes.values()).count) if sizes else 20
+    total, need = 0, []
+    for seed in seeds:
+        if total >= n:
+            need.append(seed)
+            break
+        total += sizes.get(seed, full)
+        need.append(seed)
+    return [s for s in need if s not in sizes]
