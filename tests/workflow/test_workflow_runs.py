@@ -58,3 +58,9 @@ def test_each_run_trains_in_its_own_folder(tmp_path):
 def test_train_runs_picks_the_runs_finetune_trains(tmp_path):
     jobs = dry(tmp_path, "finetune", config={**TWO, "train_runs": ["b"]})
     assert jobs["train_segment"] == 1
+
+
+def test_a_local_run_folder_is_refused_with_the_fix():
+    cfg = runs.load_config()
+    with pytest.raises(ValueError, match="runs/<name>"):
+        runs.resolve(cfg, {"ROOT": "/data", "RUN": "/data/old"})
