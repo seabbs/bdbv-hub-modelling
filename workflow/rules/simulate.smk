@@ -9,7 +9,7 @@
 # manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
 # against the grid's thresholds (its `qc`),
 # and `round_ready` writes the seed lists and READY last. Every
-# simulation is kept: QC exclusions are a list (qc/excluded.csv).
+# simulation is kept: the QC only records summaries (qc/).
 #
 # Targets: `simulate` (the rounds in `rounds`), and the opt-in `release`,
 # which uploads each batch to the release sims-r<r>.
@@ -147,7 +147,6 @@ rule sim_qc:
     input:
         rules.round_manifest.output,
     output:
-        excluded=f"{ROUNDS_DIR}/r{{round}}/qc/excluded.csv",
         summary=f"{ROUNDS_DIR}/r{{round}}/qc/summary.txt",
     log:
         f"{ROUNDS_DIR}/r{{round}}/qc/run.log",
@@ -217,36 +216,6 @@ rule release_batch:
             || gh release view {params.tag} -R {params.repo} >/dev/null
         gh release upload {params.tag} -R {params.repo} --clobber \
             {params.counts} {params.settings} {input.record}
-        """
-
-
-rule release_qc:
-    # Opt-in (target `release`): the round's QC exclusions, so a machine
-    # training from the releases skips them too.
-    input:
-        rules.sim_qc.output.excluded,
-    output:
-        touch(f"{ROUNDS_DIR}/r{{round}}/released/qc.done"),
-    log:
-        f"{ROUNDS_DIR}/r{{round}}/logs/release-qc.log",
-    localrule: True
-    conda:
-        TOOLS_ENV
-    params:
-        repo=SIM["repo"],
-        tag="sims-r{round}",
-        named=f"{ROUNDS_DIR}/r{{round}}/qc/excluded-r{{round}}.csv",
-        owner=lambda wc: grids.owner(
-            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
-        ),
-    shell:
-        """
-        exec >{log} 2>&1
-        """
-        + GRID_GUARD
-        + """
-        cp {input} {params.named}
-        gh release upload {params.tag} -R {params.repo} --clobber {params.named}
         """
 
 
@@ -460,4 +429,3 @@ rule release:
             for r in config["rounds"]
             for s in seeds_of(r)
         ],
-        expand(f"{ROUNDS_DIR}/r{{r}}/released/qc.done", r=config["rounds"]),

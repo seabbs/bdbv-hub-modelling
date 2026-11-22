@@ -170,12 +170,6 @@ def training_seeds(run):
     return [s for r in f["rounds"] for s in seeds_of(r)]
 
 
-def release_rounds(run, n):
-    """The rounds segment n trains on, space separated."""
-    rounds = sorted({round_of(s) for s in segment_seeds(run, n)})
-    return " ".join(str(r) for r in rounds)
-
-
 def held_seeds(run):
     return seeds_of(RUNS[run].ft["validation_round"])
 
@@ -205,37 +199,21 @@ def available_seeds(run):
     return order
 
 
-def exclusion_files(run):
-    """The sim-QC exclusion lists here now."""
-    there = RUNS[run]
-    paths = [Path(f"{there.dir}/excluded.csv")]
-    paths += Path(ROUNDS_DIR).glob("r*/qc/excluded.csv")
-    paths += Path(there.mirror).glob("r*/qc/excluded.csv")
-    paths += Path(f"{there.dir}/excluded-releases").glob("*.csv")
-    return sorted(str(p) for p in paths if p.is_file())
-
-
-def known_exclusions(run):
-    """The sim-QC exclusions known now."""
-    return set().union(*(segments.excluded(p) for p in exclusion_files(run)))
-
-
-def kept_or_full(run, seed, skip):
-    """A batch's kept outbreaks if simulated, else a full batch."""
+def outbreaks_or_full(run, seed):
+    """A batch's outbreaks if simulated, else a full batch."""
     for settings in (
         Path(f"{RUNS[run].dir}/sims/settings-{seed}.csv"),
         Path(f"{ROUNDS_DIR}/r{round_of(seed)}/sims/settings-{seed}.csv"),
     ):
         if settings.exists():
-            return segments.kept_outbreaks(settings, skip)
+            return segments.batch_outbreaks(settings)
     return SIM["batch"]
 
 
 def segment_seeds(run, n):
     """The seeds segment n needs: n outbreaks, one spare, the held-out."""
-    skip = known_exclusions(run)
     order = available_seeds(run)
-    need = segments.seeds_for(n, order, lambda s: kept_or_full(run, s, skip))
+    need = segments.seeds_for(n, order, lambda s: outbreaks_or_full(run, s))
     spare = order[len(need) : len(need) + 1]
     return need + spare + held_seeds(run)
 
@@ -252,9 +230,6 @@ def segment_inputs(wc):
             f"{there.dir}/sims/settings-{{seed}}.csv", seed=segment_seeds(run, n)
         ),
         "seeds": f"{there.dir}/seeds.txt",
-        # Read for the seeds above and by the trainer: inputs, so a
-        # worker elsewhere has them (flowlib.compute).
-        "qc": exclusion_files(run),
     }
     if there.prev[n] is not None:
         out["prev"] = f"{train}/n{there.prev[n]}/settings.json"
@@ -279,7 +254,6 @@ def saved(run, n):
 def trainable(run):
     """The prefixes done or within reach of the seed list."""
     f = RUNS[run].ft
-    skip = known_exclusions(run)
     order = available_seeds(run)
     # A spare batch past each prefix but the run's last, which takes
     # every training simulation.
@@ -290,7 +264,7 @@ def trainable(run):
         or segments.reachable(
             n + SIM["batch"] * (n < f["outbreaks"]),
             order,
-            lambda s: kept_or_full(run, s, skip),
+            lambda s: outbreaks_or_full(run, s),
         )
     ]
 
@@ -564,7 +538,7 @@ def listed_batches(run):
 
     Listed when the run plans, not kept in a file, so a later run sees
     rounds finished since. From the rounds host the manifests and QC
-    exclusions of its rounds are mirrored in the run's `rounds/`, and a
+    summaries of its rounds are mirrored in the run's `rounds/`, and a
     round counts once its QC has run; else the `sims-r<N>` releases'
     assets. Written to <run>/available-batches.txt for the record.
     """
@@ -575,17 +549,17 @@ def listed_batches(run):
     seeds = set()
     for r in rounds:
         if this.ft["sims_from"] == "remote":
-            # The manifest and QC exclusions of a round there so far.
+            # The manifest and QC summary of a round there so far.
             here = Path(f"{this.mirror}/r{r}")
             (here / "qc").mkdir(parents=True, exist_ok=True)
-            for name in ("manifest.csv", "qc/excluded.csv"):
+            for name in ("manifest.csv", "qc/summary.txt"):
                 there = f"{REMOTE_ROUNDS}/r{r}/{name}"
                 got = subprocess.run(
                     ["rsync", "-a", hosts._at(REMOTE, there), str(here / name)],
                     capture_output=True,
                     text=True,
                 )  # fmt: skip
-                # A round with no QC yet has no exclusions; a round not
+                # A round with no QC yet has no summary; a round not
                 # started has no manifest, and nor has an unreachable
                 # host, so that is said (the mirror kept so far stays).
                 if got.returncode and name == "manifest.csv":
@@ -593,9 +567,9 @@ def listed_batches(run):
                         f"could not copy {there}: {got.stderr.strip()[:200]}",
                         file=sys.stderr,
                     )
-            # QC runs once the round is whole: no batch it later excludes
-            # is trained on.
-            if (here / "qc" / "excluded.csv").exists():
+            # QC runs once the round is whole: only whole rounds are
+            # trained on.
+            if (here / "qc" / "summary.txt").exists():
                 seeds |= manifest.seeds(here / "manifest.csv")
             continue
         # A round not released yet has no release.
