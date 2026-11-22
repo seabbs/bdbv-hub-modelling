@@ -125,22 +125,6 @@ def test_the_code_names_are_the_files_paths():
         assert (root / path).exists(), path
 
 
-def test_every_engine_file_is_hashed_by_glob(tmp_path, monkeypatch):
-    import finetune_chronos as ft
-
-    engine = Path(__file__).parents[1] / ft.ENGINE / "R"
-    hashed = {p for p in ft.SIMULATOR if p.startswith(ft.ENGINE + "/R/")}
-    assert hashed == {f"{ft.ENGINE}/R/{p.name}" for p in engine.glob("*.R")}
-    # A new engine file is hashed without listing it.
-    (tmp_path / ft.ENGINE / "R").mkdir(parents=True)
-    for name in ("a.R", "new.R"):
-        (tmp_path / ft.ENGINE / "R" / name).write_text("")
-    monkeypatch.setattr(ft, "ROOT", tmp_path)
-    files = ft.simulator_files("g.yaml")
-    assert files[0] == "g.yaml"
-    assert f"{ft.ENGINE}/R/new.R" in files
-
-
 def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
     monkeypatch, tmp_path
 ):
@@ -167,11 +151,10 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
     assert grid not in ft.CODE
 
 
-def test_the_simulator_hashes_its_grid_python_and_engine():
+def test_the_simulator_hashes_its_grid_and_python():
     """The globs give the simulator's files, each named by its path."""
     import finetune_chronos as ft
 
-    engine = "packages/nowcastfoundation/r"
     python = {
         f"{folder}/{name}.py"
         for folder, names in (
@@ -226,22 +209,6 @@ def test_the_simulator_hashes_its_grid_python_and_engine():
     first = {
         "config/finetune/grid.yaml",
         *python,
-        f"{engine}/DESCRIPTION",
-        f"{engine}/inst/report.R",
-        *(
-            f"{engine}/R/{name}.R"
-            for name in (
-                "delays",
-                "design",
-                "grid",
-                "infections",
-                "nowcastfoundation-package",
-                "observation",
-                "reporting",
-                "simulate",
-                "utils",
-            )
-        ),
     }
     names = set(ft.code_files(ft.simulator_files("config/finetune/grid.yaml")))
     trainer = {

@@ -9,7 +9,6 @@ engine's epinowcast step where the pinned epinowcast is installed.
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -251,17 +250,9 @@ def test_settings_flatten_vectors_as_the_engine_does():
     assert row == {"a": 1.5, "b": "1;2", "c": "", "d": "TRUE", "e": "x"}
 
 
-def _needs_enw():
-    lib = os.environ.get("ENW_LIB")
-    if shutil.which("Rscript") is None:
-        return "needs Rscript"
-    if not lib or not (Path(lib) / "epinowcast").is_dir():
-        return "needs the pinned epinowcast in ENW_LIB"
-    return None
-
-
-@pytest.mark.skipif(_needs_enw() is not None, reason=_needs_enw() or "")
-def test_the_cli_simulates_through_epinowcast(tmp_path):
+def test_the_cli_simulates_through_the_joint_model(tmp_path):
+    # The simulate rule's command: each simulation is the joint PyRenew
+    # model, with no R.
     out = subprocess.run(
         [
             sys.executable,
@@ -273,15 +264,7 @@ def test_the_cli_simulates_through_epinowcast(tmp_path):
             str(tmp_path),
         ],
         cwd=ROOT,
-        # As the simulate rule runs it: the system's tools first for R's
-        # children (the model compiles into its own cache).
-        env={
-            **os.environ,
-            "ENW_WEEKS": "8",
-            "ENW_CACHE": str(tmp_path / "enwcache"),
-            "RSCRIPT": shutil.which("Rscript") or "Rscript",
-            "PATH": "/usr/bin:/bin:" + os.environ["PATH"],
-        },
+        env={**os.environ, "ENW_WEEKS": "8", "ENW_DRAWS": "2"},
         capture_output=True,
         text=True,
         timeout=1800,
@@ -289,13 +272,36 @@ def test_the_cli_simulates_through_epinowcast(tmp_path):
     assert out.returncode == 0, out.stderr[-3000:]
     settings = pd.read_csv(tmp_path / "settings-7171.csv")
     counts = pd.read_csv(tmp_path / "counts-7171.csv.gz")
+    latent = pd.read_csv(tmp_path / "latent-7171.csv.gz")
     assert len(settings) == 2
-    assert settings["r_version"].str.startswith("R version").all()
-    assert settings["enw_fingerprint"].notna().all()
-    assert "sqrt_phi_obs" in settings
+    assert settings["nowcastrenewal_version"].notna().all()
+    for key in (
+        "sqrt_phi_obs",
+        "lambda_hat",
+        "sum_p2",
+        "low_start_days",
+        "stratum_location",
+        "stratum_population",
+        "attack",
+    ):
+        assert key in settings, key
+    assert set(counts.columns) == set(sb.COUNTS)
+    assert set(latent.columns) == set(sb.LATENT)
     # Increments, so revisions can be negative; zeros are not written.
     assert (counts["count"] != 0).all()
     assert (
         pd.to_datetime(counts["report_date"])
         >= pd.to_datetime(counts["reference_date"])
     ).all()
+    # Two observation draws of each outbreak.
+    assert (
+        counts["outbreak"].str.rsplit("-", n=1).str[-1].isin(["1", "2"]).all()
+    )
+
+
+def test_the_joint_batch_repeats_from_its_seed(tmp_path):
+    a = simulate_batch(GRID_FILE, 9191, 2, tmp_path / "a", weeks=8)
+    b = simulate_batch(GRID_FILE, 9191, 2, tmp_path / "b", weeks=8)
+    pd.testing.assert_frame_equal(
+        pd.read_csv(a["counts"]), pd.read_csv(b["counts"])
+    )
