@@ -31,10 +31,7 @@ import json
 import os
 import shlex
 import sys
-import tomllib
 from pathlib import Path
-
-from snakemake.exceptions import WorkflowError
 
 
 include: "rules/common.smk"
@@ -46,7 +43,7 @@ for name, entry in EVIDENCE.items():
         name:
             f"evidence_{name}"
         output:
-            evidence_file(name),
+            FLOW.evidence_file(name),
         log:
             f"{R}/logs/evidence_{name}.log",
         conda:
@@ -68,7 +65,7 @@ for i, entry in enumerate(EBOLA.get("extra") or []):
         name:
             f"ebola_extra_{i}"
         input:
-            evidence_file(entry["evidence"]),
+            FLOW.evidence_file(entry["evidence"]),
         output:
             f"{R}/evidence/ebola-extra-{i}.csv.gz",
         log:
@@ -91,7 +88,7 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
         name:
             f"germany_extra_{i}"
         input:
-            evidence_file(entry["evidence"]),
+            FLOW.evidence_file(entry["evidence"]),
         output:
             f"{R}/evidence/germany-extra-{i}.csv.gz",
         log:
@@ -100,7 +97,7 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
             TOOLS_ENV
         params:
             python=PYTHON,
-            args=extra_args(entry),
+            args=FLOW.extra_args(entry),
         shell:
             "exec >{log} 2>&1; "
             "{params.python} -m paperpipe germany-extra --input {input} "
@@ -115,7 +112,7 @@ for _mode in MODES:
         name:
             f"synthetic_forecasts_{_mode}"
         input:
-            synthetic_simulations(_mode),
+            FLOW.synthetic_simulations(_mode),
         output:
             SYNTHETIC["forecasts"][_mode],
         log:
@@ -126,15 +123,10 @@ for _mode in MODES:
             heavy=1,
         params:
             python=PYTHON,
-            sims=lambda w, mode=_mode: SYNTHETIC["simulations"][mode],
-            seeds=" ".join(str(s) for s in run_settings(config, _mode).synthetic_seeds),
+            sims=SYNTHETIC["simulations"][_mode],
+            seeds=FLOW.seeds(_mode),
             # The fine-tuned models wait for the final run's checkpoint.
-            models=(
-                ""
-                if config.get("finetuned")
-                else "--models "
-                + " ".join(m for m in SYNTHETIC_MODELS if "_ft" not in m)
-            ),
+            models=FLOW.synthetic_models_arg(),
         shell:
             "exec >{log} 2>&1; "
             "{params.python} paper/scripts/run_synthetic.py {params.sims} "
@@ -299,7 +291,7 @@ rule ebola_backtest:
 
 rule data:
     input:
-        source_files,
+        FLOW.source_files,
     output:
         observations=f"{R}/{{mode}}/data/{{study}}-observations.csv.gz",
         locations=f"{R}/{{mode}}/data/{{study}}-locations.csv",
@@ -310,18 +302,10 @@ rule data:
         TOOLS_ENV
     params:
         python=PYTHON,
-        limits=limits,
-        sources=sources,
-        delay=lambda w: (
-            f"--delay {config['truth_delay'][w.study]}"
-            if w.study in config.get("truth_delay", {})
-            else ""
-        ),
-        note=lambda w: (
-            f"--note {shlex.quote(provisional(w.study))}"
-            if provisional(w.study)
-            else ""
-        ),
+        limits=FLOW.limits,
+        sources=FLOW.sources,
+        delay=FLOW.delay_arg,
+        note=FLOW.note_arg,
         config=shlex.quote(json.dumps(config)),
     shell:
         "exec >{log} 2>&1; "
@@ -345,8 +329,8 @@ rule forecasts:
         TOOLS_ENV
     params:
         python=PYTHON,
-        limits=limits,
-        sources=sources,
+        limits=FLOW.limits,
+        sources=FLOW.sources,
         n_samples=config["n_samples"],
     shell:
         "exec >{log} 2>&1; "
@@ -385,9 +369,7 @@ rule truth:
         TOOLS_ENV
     params:
         python=PYTHON,
-        rule=lambda w: (
-            "--first-after" if w.study in config.get("truth_first_after", []) else ""
-        ),
+        rule=FLOW.truth_rule_arg,
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe truth {params.rule} "
@@ -446,11 +428,7 @@ rule real_finetune:
     input:
         germany=f"{R}/{{mode}}/tables/si/germany-real-finetune.csv",
         # Development runs have no Ebola study, so Germany only.
-        ebola=lambda w: [
-            f"{R}/{w.mode}/tables/si/ebola-real-finetune.csv"
-            for s in studies(w.mode)
-            if s == "ebola"
-        ],
+        ebola=FLOW.ebola_real_finetune,
     output:
         f"{R}/{{mode}}/tables/si/real-finetune.md",
     log:
@@ -473,9 +451,9 @@ for study in STUDIES:
         name:
             f"figures_{study}"
         input:
-            **study_files(study),
+            **FLOW.study_files(study),
         output:
-            figures("{mode}", study),
+            FLOW.figures("{mode}", study),
         log:
             f"{R}/{{mode}}/logs/figures_{study}.log",
         conda:
@@ -483,7 +461,7 @@ for study in STUDIES:
         params:
             python=PYTHON,
             study=study,
-            split=lambda w, study=study: study_split(w.mode, study),
+            split=lambda w, study=study: FLOW.study_split(w.mode, study),
             config=shlex.quote(json.dumps(config)),
             main=f"{R}/{{mode}}/figures/main",
             si=f"{R}/{{mode}}/figures/si",
@@ -502,11 +480,11 @@ for study in STUDIES:
         name:
             f"score_tables_{study}"
         input:
-            locations=study_files(study)["locations"],
-            scores=study_files(study)["scores"],
-            meta=study_files(study)["meta"],
+            locations=FLOW.study_files(study)["locations"],
+            scores=FLOW.study_files(study)["scores"],
+            meta=FLOW.study_files(study)["meta"],
         output:
-            tables("{mode}", study),
+            FLOW.tables("{mode}", study),
         log:
             f"{R}/{{mode}}/logs/score_tables_{study}.log",
         conda:
@@ -514,7 +492,7 @@ for study in STUDIES:
         params:
             python=PYTHON,
             study=study,
-            split=lambda w, study=study: study_split(w.mode, study),
+            split=lambda w, study=study: FLOW.study_split(w.mode, study),
             main=f"{R}/{{mode}}/tables/main",
             si=f"{R}/{{mode}}/tables/si",
         shell:
@@ -523,7 +501,7 @@ for study in STUDIES:
             "--scores {input.scores} --locations {input.locations} "
             "--meta {input.meta} "
             "--main-dir {params.main} --si-dir {params.si} {params.split} "
-            f"--realdata-after {REALDATA_AFTER}"
+            f"--realdata-after {FLOW.realdata_after}"
 
 
 # Example simulations of the grid, from pilot simulations on an evidence
@@ -568,7 +546,7 @@ rule grid_tables:
         TOOLS_ENV
     params:
         python=PYTHON,
-        config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
+        config=shlex.quote(json.dumps(FLOW.grid_config())),
         si=f"{R}/{{mode}}/tables/si",
         grid_name=lambda w, input: input.grid,
     shell:
@@ -580,7 +558,7 @@ rule grid_tables:
 
 rule evidence:
     input:
-        **{n: evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+        **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -589,16 +567,12 @@ rule evidence:
         TOOLS_ENV
     params:
         python=PYTHON,
-        args=" ".join(
-            f"--{n.replace('_', '-')} {evidence_file(n)}"
-            for n in EVIDENCE
-            if n in EVIDENCE_NAMES
-        ),
+        args=FLOW.evidence_args(EVIDENCE_NAMES),
         si=f"{R}/{{mode}}/tables/si",
         fig=f"{R}/{{mode}}/figures/si",
         # The live fine-tuning run, whose newest scored checkpoints are
         # shown as preliminary.
-        live=(f"--live-run {config['live_run']}" if config.get("live_run") else ""),
+        live=FLOW.live_arg(),
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
@@ -608,12 +582,8 @@ rule evidence:
 
 rule summary:
     input:
-        meta=lambda w: [
-            study_files(s)["meta"].format(mode=w.mode) for s in studies(w.mode)
-        ],
-        scores=lambda w: [
-            f"{R}/{w.mode}/tables/main/{s}-scores.csv" for s in studies(w.mode)
-        ],
+        meta=FLOW.summary_meta,
+        scores=FLOW.summary_scores,
     output:
         f"{R}/{{mode}}/results.yml",
     log:
@@ -622,18 +592,18 @@ rule summary:
         TOOLS_ENV
     params:
         python=PYTHON,
+        args=FLOW.summary_args(),
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe summary --mode {wildcards.mode} "
         "--meta {input.meta} --scores {input.scores} --out {output} "
-        + (f"--finetuned {config['finetuned']}" if config.get("finetuned") else "")
-        + f" --realdata-after {REALDATA_AFTER}"
+        "{params.args}"
 
 
 # The paper reads `build`, so it shows the last run published.
 rule publish_paper:
     input:
-        outputs=lambda w: outputs(w.mode),
+        outputs=FLOW.outputs,
         summary=rules.summary.output,
     output:
         # Outside `build`, which each publish replaces.
@@ -647,12 +617,7 @@ rule publish_paper:
         build=BUILD,
         # The tables the paper includes from studies a development run
         # leaves out: placeholders, inside sections it does not show.
-        held=lambda w: " ".join(
-            f"{BUILD}/tables/{part}/{study}-{name}.md"
-            for study in STUDIES
-            if study not in studies(w.mode)
-            for part, name in HELD_OUT_INCLUDES
-        ),
+        held=FLOW.held_out_placeholders,
     shell:
         "exec >{log} 2>&1; "
         "rm -rf {params.build} && mkdir -p {params.build} && "
