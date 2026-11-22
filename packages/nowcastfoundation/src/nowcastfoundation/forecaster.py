@@ -1403,12 +1403,12 @@ class FoundationModel:
             sub = rows.loc[rows["vintage"].astype(str).str[:10] <= v]
             cut = _step(self.source, str(sub["cutoff"].max()))
             end = cut + dt.timedelta(days=width * max(ahead, 0))
-            try:
-                earlier = hub_triangle(
-                    sub, self.source, places, end.isoformat(), lags
-                )
-            except ValueError:
+            # A release before any of the places reported has no block.
+            if not sub["location"].isin(places).any():
                 continue
+            earlier = hub_triangle(
+                sub, self.source, places, end.isoformat(), lags
+            )
             first = earlier.last - offset
             if first < 2 or first + horizon != len(earlier.times):
                 continue
