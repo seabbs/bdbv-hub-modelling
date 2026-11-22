@@ -309,7 +309,8 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
     out = checkpoint_rows(rows, "one-model")
     assert set(out["study"]) == {"germany", "ebola"}
     assert sorted(out["checkpoint"]) == ["b", "b", "zero-shot"]
-    assert out.set_index("study").loc["ebola", "rel_wis"] == 0.8
+    # A row with no relative WIS stays empty, never filled from CRPS.
+    assert pd.isna(out.set_index("study").loc["ebola", "rel_wis"])
     # Old tables, with no run, grid or rule, give the zero-shot rows only.
     old = rows.drop(columns=["run", "grid", "rule", "rel_crps"]).iloc[:2]
     assert list(checkpoint_rows(old, "one-model")["checkpoint"]) == [
