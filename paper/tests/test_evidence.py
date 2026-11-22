@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -703,3 +704,12 @@ def test_waiting_notes_name_no_sessions_or_retired_grids() -> None:
     # The notes are rendered into the SI, so they say what each input is.
     code = re.compile(r"\bfm-|germany-chronos2|\br[3-6]\b")
     assert not [v for v in EVIDENCE.values() if code.search(v)]
+
+
+def test_no_evidence_input_is_bdbv_scores() -> None:
+    # The Ebola study is held out, so no development BDBV rows are inputs.
+    config = yaml.safe_load(
+        (Path(__file__).parents[1] / "workflow" / "config.yaml").read_text()
+    )
+    assert not [n for n in EVIDENCE if "bdbv" in n]
+    assert not [n for n in config["evidence"] if "bdbv" in n]
