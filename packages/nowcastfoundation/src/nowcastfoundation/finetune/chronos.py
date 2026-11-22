@@ -5,7 +5,7 @@ Cuts outbreaks from the simulator (packages/nowcastfoundation/r) into
 training blocks
 (`outbreak_blocks`) and packs them into batches (`plan_batches`),
 without torch.
-`scripts/finetune_stream.py` trains on them and
+`nowcastfoundation.finetune.stream` trains on them and
 publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 `_ft` models load the newest one
 (`forecasters.foundation.resolve_checkpoint`).
@@ -263,7 +263,7 @@ own (`use_grid`)."""
 CODE = code_files(SIMULATOR)
 """Files the checkpoint depends on, hashed into its settings: each
 file's name in `code_sha256`, then its path. The paths also go into the
-settings outside the hash (`code_paths`), for `finetune_verify`."""
+settings outside the hash (`code_paths`), for `finetune.verify`."""
 
 TRAINER = "packages/nowcastfoundation/src/nowcastfoundation/finetune/stream.py"
 """The trainer's name in `code_sha256` (its path is its own file)."""
@@ -384,7 +384,7 @@ def _pad(
     steps covering `loss_days` days after them, of `days_per_step` days
     each. Long context is cropped. The arrays are numpy, so blocks are
     cut without torch; the trainer makes them tensors
-    (`finetune_stream.tensors`).
+    (`finetune.stream.tensors`).
     """
     start, h = block["start"], block["horizon"]
     if loss_days is not None:

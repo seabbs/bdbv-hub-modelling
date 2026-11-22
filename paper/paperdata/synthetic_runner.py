@@ -5,7 +5,7 @@ The held-out outbreaks are simulations of the paper's synthetic grid
 (`synthetic.grid`) with seeds the fine-tune never saw. Each outbreak is
 released weekly, on one weekday from Wednesday to Saturday drawn by the
 outbreak, as for the training
-blocks (`scripts/finetune_chronos.py`). A release's vintage is its
+blocks (`nowcastfoundation.finetune.chronos`). A release's vintage is its
 cut-off.
 
 `origin_cutoffs` picks `n` origins per outbreak, spread evenly over the

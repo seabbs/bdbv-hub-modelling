@@ -5,8 +5,8 @@ The training outbreaks are taken in order of seed and index, in chunks of
 `CHUNK` outbreaks. A chunk is trained on as soon as every simulation
 batch it needs has finished (the workflow's `simulate_batch`), and the
 trainer waits for it otherwise. Within a chunk the blocks
-(`finetune_chronos.outbreak_blocks`, seeded per outbreak) are shuffled
-and packed by size (`finetune_chronos.plan_batches`). The learning rate
+(`finetune.chronos.outbreak_blocks`, seeded per outbreak) are shuffled
+and packed by size (`finetune.chronos.plan_batches`). The learning rate
 falls linearly to zero over the run's `--outbreaks` simulations
 (`sims_done`), so the checkpoint after the first N outbreaks is
 Chronos-2 fine-tuned on those N in one pass of that schedule. Each is
@@ -154,13 +154,13 @@ BIAS_CODE = {
     ),
 }
 """The series bias's code and its parent rule, hashed into its settings,
-by name then path as `finetune_chronos.CODE`."""
+by name then path as `finetune.chronos.CODE`."""
 
 
 def code_paths(bias: bool) -> dict[str, str]:
     """Return where each name in `code_sha256` is now.
 
-    The trainer's own file is named `finetune_chronos.TRAINER`, and the
+    The trainer's own file is named `finetune.chronos.TRAINER`, and the
     `foundation.<function>` entries are read from `foundation`.
     """
     paths = {
@@ -842,7 +842,7 @@ class ByLength:
     """Chronos-2 datasets of blocks, one for each prediction length.
 
     `_build_batch` takes indices of blocks that share a length
-    (`finetune_chronos.plan_by_length`), as `Chronos2Dataset` does.
+    (`finetune.chronos.plan_by_length`), as `Chronos2Dataset` does.
     """
 
     def __init__(
@@ -1432,7 +1432,7 @@ def build_parser() -> argparse.ArgumentParser:
     # Outbreaks per chunk: training starts once this many have landed.
     parser.add_argument("--chunk", type=int, default=CHUNK)
     # Real-data training blocks (for example the German data's first 40%,
-    # cut with `finetune_chronos` functions), spread over the chunks.
+    # cut with `finetune.chronos` functions), spread over the chunks.
     parser.add_argument("--real-training", type=Path)
     parser.add_argument("--held-out-seeds", type=int, nargs=2, required=True)
     parser.add_argument("--outbreaks", type=int, default=ft.PREFIXES[-1])
@@ -1460,7 +1460,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
     )
-    # Most series in a block (`finetune_chronos.BLOCK_LIMIT`): a system
+    # Most series in a block (`finetune.chronos.BLOCK_LIMIT`): a system
     # over it is cut into views that fit.
     parser.add_argument(
         "--block-limit", type=int, default=ft.workflow_finetune("block_limit")

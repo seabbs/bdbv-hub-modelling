@@ -210,7 +210,7 @@ def test_inference_gives_a_bias_model_its_rows_by_name(monkeypatch, tmp_path):
 
 def test_the_bias_survives_gradient_checkpointing(monkeypatch):
     # The trainer recomputes large batches' encoder blocks in backward
-    # (finetune_stream.checkpoint_large_batches); with the rows still
+    # (finetune.stream.checkpoint_large_batches); with the rows still
     # assigned, the recompute adds the same bias.
 
     from chronos.chronos2.model import Chronos2EncoderBlock

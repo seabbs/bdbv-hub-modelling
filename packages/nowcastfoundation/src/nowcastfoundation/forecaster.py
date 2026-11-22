@@ -205,7 +205,7 @@ class Checkpoint:
     Attributes
     ----------
     hash : str
-        Settings hash from `scripts/finetune_stream.py`. The release
+        Settings hash from `nowcastfoundation.finetune.stream`. The release
         is `tag`: `release_tag(hash)` for a simulation checkpoint, else
         `<prefix>-<hash>`.
     sha256 : tuple of (str, str)

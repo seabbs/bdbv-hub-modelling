@@ -407,7 +407,7 @@ PARENT_DRAWS: Final = {
 """The draws of a parent that does not sum (`country_counts`): the share
 of cases with no place, and the days the parent is reported after its
 places, rounded down to whole days. A grid file's `aggregation` gives its
-own (`finetune_chronos.PARENTS`)."""
+own (`finetune.chronos.PARENTS`)."""
 
 
 def draw_named(spec: dict[str, Any], rng: np.random.Generator) -> float:

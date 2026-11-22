@@ -5,7 +5,7 @@
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
 
 `steps` scores segment n<N>'s step snapshots, `checkpoint` its adapter, with
-the trainer's own losses (scripts/finetune_evaluate.py); the files are as
+the trainer's own losses (nowcastfoundation.finetune.evaluate); the files are as
 `flowlib.evaluations` says.
 """
 

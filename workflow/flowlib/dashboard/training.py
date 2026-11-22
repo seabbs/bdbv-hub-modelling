@@ -259,7 +259,7 @@ def views_summary(folder: Path | str) -> dict[str, int] | None:
     """Return the run's block views, or None if it has none.
 
     From `train/views.csv`, which the trainer writes for each system over
-    the block limit (`finetune_stream.record_views`): how many systems
+    the block limit (`finetune.stream.record_views`): how many systems
     were cut, how many of them are held out, the blocks they became and
     the largest series counts before and after.
     """

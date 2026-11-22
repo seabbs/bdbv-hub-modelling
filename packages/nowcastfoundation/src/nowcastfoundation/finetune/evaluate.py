@@ -102,7 +102,7 @@ def _covered(
     """Return each target step's 50% and 90% hits, step kind, source, level.
 
     A step is a nowcast step up to its block's cut-off
-    (`finetune_stream.nowcast_steps`), as the loss's parts split them.
+    (`finetune.stream.nowcast_steps`), as the loss's parts split them.
     """
     import torch
     from chronos.chronos2.dataset import DatasetMode

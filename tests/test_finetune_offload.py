@@ -1,4 +1,4 @@
-"""Evaluation offloaded from the trainer (`finetune_stream --eval offload`)."""
+"""Evaluation offloaded from the trainer (`finetune.stream --eval offload`)."""
 
 import json
 import sys

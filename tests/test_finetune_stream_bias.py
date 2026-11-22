@@ -1,4 +1,4 @@
-"""The trainer's series bias (`finetune_stream --series-bias`)."""
+"""The trainer's series bias (`finetune.stream --series-bias`)."""
 
 import sys
 from pathlib import Path
