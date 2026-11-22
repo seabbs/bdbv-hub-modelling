@@ -16,7 +16,7 @@ High level, one Taskfile task per target:
 | `task nowcast-foundation:push ROUNDS="19 18"` | `push` | a helping host's batches, pushed to the rounds host | the rounds host |
 | `task nowcast-foundation:finetune` | `finetune` | every checkpoint prefix of the run | no |
 | `task nowcast-foundation:publish` | `publish` | verify and release each checkpoint | GitHub releases |
-| `task nowcast-foundation:score` | `score` | score each released checkpoint, then its follow-ups | no |
+| `task nowcast-foundation:score` | `score` | score each released checkpoint | no |
 | `task nowcast-foundation:land` | `land` | commit the score tables to `evidence/` and push | git push |
 | `task paper` | `development` or `paper`, then `render` | the paper (section 6) | no |
 
@@ -39,7 +39,7 @@ A value may use another setting, `$ROOT` say, in any order.
 A variable in the environment wins, and with no file everything runs on this machine.
 The workflow uses:
 
-- paths: `ROOT` (rounds, and the runs in `ROOT/runs/`), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
+- paths: `ROOT` (rounds, and the runs in `ROOT/runs/`), `SCORE_CACHE`;
 - what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so a CPU machine sets `simulate score` and a GPU machine `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
 - resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope, or `workflow/scripts/mem_cap.sh {mem}` on macOS; `{mem}` becomes the job's budget), `SIM_PREFIX` (the prefix every simulation batch runs under instead, such as one systemd slice they all share; empty: none), `MIN_FREE_GB`, `MIN_DISK_GB` and `MAX_LOAD` (memory, disk and a load average below which a heavy job starts; `MAX_LOAD` empty is the core count), `HEADROOM_CORES` and `HEADROOM_GB` (cores and memory kept free), `CORES` and `MEM_MB` (set them outright instead), `SIM_SLOTS` (batches at once, 2 by default) and `DEVICE` (`auto`: CUDA, then MPS, then the CPU);
 - sharing the rounds: `SIM_SEEDS` (the seeds this machine takes: seeds, `first-last` ranges or rounds as `r<N>`; empty: all), and on a helping machine `REMOTE` and `REMOTE_ROOT` (the rounds host and its rounds folder; empty: `ROOT`);

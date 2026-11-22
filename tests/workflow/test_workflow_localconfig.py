@@ -15,7 +15,6 @@ def test_with_no_file_everything_is_on_this_machine(tmp_path):
     cfg = localconfig.read(tmp_path / "none.env", env)
     assert cfg["ROOT"] == f"{tmp_path}/bdbv-rounds"
     assert cfg["MAILBOX"] == ""
-    assert cfg["INBOX"] == ""
     assert cfg["JOB_PREFIX"] == ""
     assert cfg["SIM_PREFIX"] == ""
     assert cfg["HOST_NAME"]
@@ -94,8 +93,6 @@ def test_workflow_paths_default_under_the_rounds_folder(tmp_path):
     path.write_text("ROOT=/data/rounds\n")
     cfg = localconfig.read(path, {"HOME": str(tmp_path)})
     assert cfg["SCORE_CACHE"] == "/data/rounds/scores"
-    assert cfg["NOSLOTS_RUN"] == "/data/rounds/checkpoints"
-    assert cfg["GERMANY_BLOCKS"] == "/data/rounds/germany/germany.pkl"
 
 
 def test_the_path_comes_from_local_config_when_set(tmp_path):

@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Blocks and batches for fine-tuning Chronos-2.
 
-Cuts outbreaks from the simulator (packages/nowcastfoundation/r) into
+Cuts outbreaks from the simulator (nowcastfoundation.simulator) into
 training blocks
 (`outbreak_blocks`) and packs them into batches (`plan_batches`),
 without torch.

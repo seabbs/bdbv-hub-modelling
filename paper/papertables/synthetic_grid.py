@@ -1,6 +1,6 @@
 """The synthetic scenario grid tables and SI notes, read from the grid config.
 
-The grid config (`config/finetune/grids/<grid>.yaml`, the one the main
+The grid config (`config/finetune/grid.yaml`, the one the main
 workflow's `simulate.grid_file` names) defines the grid: categorical
 `factors` (levels with weights, drawn independently for each simulation),
 each placed in a layer by `factor_layers`, and named sampling
@@ -264,22 +264,12 @@ def heldout_note(config: dict) -> str:
     horizons = protocol["horizons"]
     seeds = config["heldout_seeds"]
     n = config["simulations_per_seed"]
-    blocks = config.get("blocks") or []
     dev = config["development_seeds"]
-    cover = (
-        [
-            f"These cover the complete balanced blocks {blocks[0]} to"
-            f" {blocks[-1]}, and simulations outside them are not used."
-        ]
-        if blocks
-        else []
-    )
     lines = [
         "#### The held-out synthetic set",
         "",
         f"The held-out set is simulated on grid `{config['grid']}` with"
         f" {_seeds(seeds)}, {n} simulations each.",
-        *cover,
         f"We evaluate draw {config['draw']} of each simulation, so the"
         " outbreaks are independent.",
         "The fine-tune never trains on these seeds.",

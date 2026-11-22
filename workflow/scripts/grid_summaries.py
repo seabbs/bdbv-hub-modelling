@@ -1,8 +1,8 @@
 """Per-outbreak summaries of a simulated round, and their comparison.
 
 Reads a round's `sims/` folder (`counts-<seed>.csv.gz`,
-`latent-<seed>.csv.gz`, `settings-<seed>.csv`), whichever engine wrote
-it, and writes one row per outbreak (first draw, strata summed):
+`latent-<seed>.csv.gz`, `settings-<seed>.csv`) and writes one row per
+outbreak (first draw, strata summed):
 
 - design: window, path, trajectory, delay change, GT family, strata;
 - drawn values: GT mean and CV, incubation mean, ascertainment, delay
