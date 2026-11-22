@@ -28,11 +28,11 @@ from nowcasteval import labels
 
 from . import (
     bias,
+    kv,
     level_loss_lora,
     logs,
     nowcasts,
     paperstyle,
-    pipeline,
     scores,
     svg,
     training,
@@ -83,7 +83,6 @@ class Context:
     mirror_status: str = ""
     delays: dict[str, int | None] = field(default_factory=dict)
     summarised: dict[str, tuple] = field(default_factory=dict)
-    where: pipeline.Where = field(default_factory=pipeline.Where)
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -209,8 +208,7 @@ def _fmt(v: Any, n: int = 4) -> str:
 def _dur(s: float | None) -> str:
     if s is None or s != s or s < 0:
         return "n/a"
-    s = int(s)
-    return f"{s // 3600}h {s % 3600 // 60:02d}m"
+    return kv.duration(s)
 
 
 def _size(name: str) -> int:
@@ -378,11 +376,10 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     trainer, alive = logs.trainer_state(folder) if folder else ("n/a", None)
     # A stopped run's next segment may wait on batches it lacks (failed or
     # still being simulated): name them.
+    missing: list[int] = []
     if folder and not alive and st.nxt and not st.pending:
-        missing = [str(s) for s in logs.waiting_batches(folder, st.nxt)]
+        missing = logs.waiting_batches(folder, st.nxt)
         if missing:
-            what = "batches" if len(missing) > 1 else "batch"
-            trainer = f"{trainer}; waiting for {what} {', '.join(missing)}"
             alive = False
     # The running segment's last line of any kind, not only a step.
     last = logs.RunLog(folder).last_line() if folder else None
@@ -394,22 +391,21 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     # A written checkpoint still being scored is named as itself.
     next_v = f"n{st.nxt}" if st.nxt else "none"
     eta = f"ETA {st.eta(st.nxt)}" if st.nxt else ""
-    next_s = ""
+    next_s: dict[str, Any] = {}
     if st.nxt:
-        done = (
-            f"{min(trained, st.nxt):.0f} of {st.nxt} simulations; "
+        next_s = {
+            "simulations": f"{min(trained, st.nxt):.0f}/{st.nxt}"
             if trained is not None
-            else ""
-        )
-        kind = "planned" if st.planned(st.nxt) else "estimated"
-        next_s = f"{done}step {st.at(st.nxt)} ({kind}), {eta}"
+            else None,
+            "step": st.at(st.nxt),
+            "step_is": "planned" if st.planned(st.nxt) else "estimated",
+            "ETA": st.eta(st.nxt),
+        }
     if st.pending:
-        since = datetime.fromtimestamp(
+        next_s["scoring"] = f"n{st.pending[0]}"
+        next_s["since"] = datetime.fromtimestamp(
             (folder / f"train/n{st.pending[0]}/{ADAPTER}").stat().st_mtime
         ).strftime("%H:%M")
-        next_s = "; ".join(
-            x for x in (next_s, f"n{st.pending[0]} scoring since {since}") if x
-        )
     p = st.params
     rates = "\n".join(f"{g} {v:.2e}" for g, v in p["current"].items()) or "n/a"
     if p["lr_steps"]:
@@ -424,35 +420,27 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "Step",
             "t_step",
             "n/a" if st.step is None else str(st.step),
-            "; ".join(
-                x
-                for x in (
-                    f"of {st.at(st.target)} steps"
-                    if st.target and st.step is not None
-                    else "",
-                    f"n{trained:.0f} of {st.target} simulations trained"
-                    if trained is not None
-                    else "",
-                )
-                if x
-            ),
+            {
+                "final_step": st.at(st.target)
+                if st.target and st.step is not None
+                else None,
+                "simulations_trained": f"{trained:.0f}/{st.target}"
+                if trained is not None
+                else None,
+            },
             "",
         ),
         (
             "Steps / s",
             "t_rate",
             f"{st.rate:.3f}" if st.rate else "n/a",
-            "; ".join(
-                x
-                for x in (
-                    f"mean {st.mean_rate:.3f}" if st.mean_rate else "",
-                    f"{st.sims_rate * 60:.2f} simulations/min"
-                    if st.sims_rate
-                    else "",
-                    f"over the last {_dur(st.span)}" if st.span else "",
-                )
-                if x
-            ),
+            {
+                "mean": st.mean_rate,
+                "simulations_per_min": st.sims_rate * 60
+                if st.sims_rate
+                else None,
+                "window_s": st.span,
+            },
             "",
         ),
         ("Next checkpoint", "t_next", next_v, next_s, ""),
@@ -460,26 +448,26 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "Segments",
             "t_segments",
             next_v,
-            " · ".join(
-                f"n{n} {st.eta(n)}"
+            {
+                f"n{n}": st.eta(n)
                 for n in st.params["prefixes"]
                 if n not in st.saved and n not in st.pending
-            ),
+            },
             "",
         ),
         (
             f"ETA n{st.target}",
             "t_eta",
             st.eta(st.target),
-            f"step {st.at(st.target)}",
+            {"step": st.at(st.target)},
             "",
         ),
-        ("Learning rates", "t_lr", rates, decay, ""),
+        ("Learning rates", "t_lr", rates, {"schedule": decay}, ""),
         (
             "Trainer",
             "t_trainer",
             trainer,
-            "",
+            {"waiting_for_batches": missing},
             "" if alive is None else " ok" if alive else " bad",
         ),
         (
@@ -488,9 +476,11 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             datetime.fromtimestamp(last_t).strftime("%H:%M:%S")
             if last_t
             else "n/a",
-            ("STALE " if stale else "")
-            + (_dur(age) + " ago" if age else "")
-            + (f": {last_text[:80]}" if last_text else ""),
+            {
+                "stale": stale or None,
+                "age_s": age,
+                "line": last_text[:80],
+            },
             " bad" if stale else "",
         ),
     ]
@@ -498,7 +488,7 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
         f'<div class="tile{cls}"><div class=k>{k}{tip(key)}</div>'
         f'<div class="v{" vl" if chr(10) in v else ""}">'
         f"{html.escape(v).replace(chr(10), '<br>')}</div>"
-        f"<div class=s>{html.escape(s)}</div></div>"
+        f"<div class=s>{kv.box(s)}</div></div>"
         for k, key, v, s, cls in tiles
     )
     done = f"n{trained:.0f} / " if trained is not None and st.nxt else ""
@@ -1009,20 +999,6 @@ def selector_data(ctx: Context, builts: Mapping[str, Any]) -> str:
     )
 
 
-def pipeline_section(ctx: Context, live: Run, st: Status) -> str:
-    """Return the live run's pipeline: its stages and what it waits on."""
-    alive = logs.trainer_state(live.folder)[1] if live.folder else None
-    train = {
-        "step": st.step,
-        "nxt": st.nxt,
-        "next_step": st.at(st.nxt) if st.nxt else None,
-        "trained": st.trained,
-    }
-    return pipeline.section(
-        pipeline.build(ctx.where, live.folder, train, alive)
-    )
-
-
 def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     """Return the live run, top bar status, selector data and sections.
 
@@ -1050,12 +1026,6 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         if live.folder
         else {}
     )
-    sub = (
-        f"stage: {html.escape(str(status.get('stage')))}; stream status "
-        f"{html.escape(str(status.get('time', '')))}"
-        if status
-        else ""
-    )
     info = {
         r.key: training.loss_run(
             r, ctx.log(r), _checkpoints(r), ctx.sims(r), None, r.colour
@@ -1075,23 +1045,19 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
     views = training.views_summary(live.folder) if live.folder else None
-    if views:
-        sub = f"{sub}; {html.escape(views)}" if sub else html.escape(views)
-    live_note = "" if ctx.once else "updates in place every 60 s; "
-    mirror = (
-        f"scores {html.escape(ctx.mirror_status)}; "
-        if ctx.mirror_status
-        else ""
-    )
+    about = {
+        "trainer_status": status,
+        "block_views": views,
+        "scores": ctx.mirror_status,
+        "updates_every_s": None if ctx.once else 60,
+    }
     parts = [
         (
             "status",
             "Status",
-            f"<div class=tiles>{tiles}</div>"
-            f"<div class=mut>{live_note}{mirror}{sub}</div>",
+            f"<div class=tiles>{tiles}</div>{kv.box(about)}",
             True,
         ),
-        ("pipeline", "Pipeline", pipeline_section(ctx, live, st), True),
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (

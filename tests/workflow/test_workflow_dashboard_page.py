@@ -196,7 +196,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
     assert (
         "n250 of 8000" not in out
     )  # the live step is 290, n is steps / 4.5625
-    assert "of 8000 simulations trained" in out
+    assert re.search(r"Simulations trained</span> <b>\d+/8000</b>", out)
     assert "slots n250 published" in out
     assert "other" not in out.split("Recent activity")[1]
     assert "id=gdata" in out
@@ -288,7 +288,7 @@ def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
     ctx.outbreaks = 8400
     ctx.prefixes = (250, 500, 1000, 2000, 4000, 8000)
     out = page.build(ctx)
-    assert "of 8400 simulations trained" in out
+    assert re.search(r"Simulations trained</span> <b>\d+/8400</b>", out)
     assert "of 8000" not in out
     planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
     st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
@@ -319,7 +319,7 @@ def test_a_segment_s_empty_folder_is_not_a_checkpoint_being_scored(tmp_path):
     # Snakemake makes the next segment's output folders when it starts.
     (folder / "train" / "n500" / "finetuned-ckpt").mkdir(parents=True)
     out = page.build(ctx)
-    assert "scoring since" not in out
+    assert "<span class=kvk>Scoring</span>" not in out
     bar = out.split("id=livebar>", 1)[1].split("</span></span>", 1)[0]
     # Simulations done of the next prefix, and when it is due.
     assert re.search(r"n\d+ / n500", bar)
@@ -332,7 +332,9 @@ def test_a_written_checkpoint_is_scored_as_itself_not_as_the_next(tmp_path):
     ckpt.mkdir(parents=True)
     (ckpt / "adapter_model.safetensors").write_bytes(b"")
     out = page.build(ctx)
-    assert re.search(r"n500 scoring since \d\d:\d\d", out)
+    assert re.search(
+        r"Scoring</span> <b>n500</b>.*?Since</span> <b>\d\d:\d\d</b>", out
+    )
     assert re.search(r"n\d+ / n750", out)
 
 
@@ -381,12 +383,12 @@ def test_the_next_checkpoint_names_its_simulations_and_planned_step(tmp_path):
         "99 series, 1000 steps\n"
     )
     out = page.build(ctx)
-    tile = out.split("Next checkpoint", 1)[1].split("</div></div>", 1)[0]
+    tile = out.split("Next checkpoint", 1)[1].split("Segments", 1)[0]
     assert ">n500<" in tile
     # 250 checkpointed at step 1140; n500's chunk planned as 1000 steps.
-    assert "of 500 simulations" in tile
-    assert "step 2140" in tile
-    assert "planned" in tile
+    assert "/500</b>" in tile
+    assert "Step</span> <b>2140</b>" in tile
+    assert "<b>planned</b>" in tile
 
 
 def test_every_configured_dataset_is_in_the_selector(tmp_path):
@@ -442,7 +444,7 @@ def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
     out = page.build(ctx)
     tile = out.split("Steps / s", 1)[1].split("</div></div>", 1)[0]
     assert "n/a" not in tile
-    assert "simulations/min" in tile
+    assert "Simulations per min" in tile
     eta = out.split("ETA n8000", 1)[1].split("</div></div>", 1)[0]
     assert "n/a" not in eta
 
@@ -514,11 +516,11 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     tiles, _ = page.status_tiles(st, ctx.runs[0])
     speed = tiles.split("Steps / s")[1].split("Next checkpoint")[0]
     assert "n/a" not in speed
-    assert "mean 1.000" in tiles
-    assert f"of {st.at(1000)} steps" in tiles
+    assert "Mean</span> <b>1</b>" in tiles
+    assert f"Final step</span> <b>{st.at(1000)}</b>" in tiles
     # Each segment still to come, with its ETA.
     for n in (500, 1000):
-        assert f"n{n} {st.eta(n)}" in tiles
+        assert f"n{n}</span> <b>{st.eta(n)}</b>" in tiles
 
 
 def test_a_stopped_run_names_the_batches_its_next_segment_waits_on(tmp_path):
@@ -544,10 +546,5 @@ def test_a_stopped_run_names_the_batches_its_next_segment_waits_on(tmp_path):
     st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
     tiles, _ = page.status_tiles(st, ctx.runs[0])
     trainer = tiles.split("Trainer")[1].split("Last log line")[0]
-    assert "waiting for batches 3, 8, 9, 10" in trainer
-
-
-def test_the_page_has_a_pipeline_section(tmp_path):
-    ctx = _machine(tmp_path)
-    assert "pipeline" in page.sections(ctx)
-    assert "Simulate rounds" in page.sections(ctx)["pipeline"]
+    assert "Waiting for batches" in trainer
+    assert all(f"<b>{s}</b>" in trainer for s in (3, 8, 9, 10))

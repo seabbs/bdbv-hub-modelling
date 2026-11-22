@@ -309,10 +309,13 @@ def test_block_views_are_summarised_from_the_run_s_record(tmp_path):
         "1-100,2-0001,weekly,0,subtree,30,9,2000,800,\n"
         "1-100,2-0001,weekly,0,subtree,30,9,2000,820,\n"
     )
-    assert training.views_summary(tmp_path) == (
-        "block views: 2 systems over the block limit (1 held-out) cut into "
-        "5 blocks; largest 3990 series, at most 900 after"
-    )
+    assert training.views_summary(tmp_path) == {
+        "systems_over_limit": 2,
+        "held_out": 1,
+        "blocks": 5,
+        "largest_series_before": 3990,
+        "largest_series_after": 900,
+    }
 
 
 def test_an_offloaded_run_s_steps_are_read_without_a_held_out_loss(tmp_path):
