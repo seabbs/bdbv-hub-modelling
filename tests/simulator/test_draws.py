@@ -128,6 +128,8 @@ def test_designs_fit_the_budget_and_report_on_their_days(grid):
                 got = days.split(";")
                 assert len(got) in (2, 3)
                 assert got == sorted(got, key=draws.WEEK.index)
+                # Fixed report days fall on weekdays, as the R engine's.
+                assert set(got) <= set(draws.WEEK[:5])
             case "weekly":
                 assert days in draws.WEEK
     assert draws.draw_design(grid, rng, weeks=9)["weeks"] == 9
