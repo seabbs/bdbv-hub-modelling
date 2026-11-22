@@ -189,18 +189,11 @@ def aggregation_numbers(
     return out
 
 
-def lag_numbers(
-    germany: pd.DataFrame,
-    before: pd.DataFrame | None = None,
-    after: pd.DataFrame | None = None,
-) -> dict:
+def lag_numbers(germany: pd.DataFrame) -> dict:
     """Return each model's relative WIS with the capped and longer lags.
 
-    Germany's national rows name the longer horizon `<model>_fix`; the
-    BDBV release backtest gives each horizon its own table, of which the
-    `all` nowcast rows of the complete target are compared. Values are
-    WIS relative to `randomwalknowcast`. Without the BDBV tables, only
-    Germany's.
+    Germany's national rows name the longer horizon `<model>_fix`.
+    Values are WIS relative to `randomwalknowcast`.
     """
     nat = germany.loc[germany["pool"] == "national"].set_index("model")
     rel = nat["rel_wis_randomwalknowcast"]
@@ -212,30 +205,12 @@ def lag_numbers(
         for m in rel.index
         if f"{m}_fix" in rel.index
     }
-
-    def pick(t: pd.DataFrame) -> pd.Series:
-        keep = (
-            (t["scale"] == "all")
-            & (t["target"] == "complete")
-            & (t["weeks"] == "nowcast")
-        )
-        return t.loc[keep].set_index("model")["rel_wis"]
-
-    if before is None or after is None:
-        return {"germany": de}
-    b, a = pick(before), pick(after)
-    bdbv = {
-        m: {"capped": round(float(b[m]), 2), "longer": round(float(a[m]), 2)}
-        for m in b.index
-        if m in a.index and m.startswith("fm_chronos")
-    }
-    return {"germany": de, "bdbv": bdbv}
+    return {"germany": de}
 
 
 CHECKPOINT_RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule of the checkpoint rows the paper shows: WIS on each
-model's own quantiles for Germany, and CRPS on 1,000 draws with common
-random numbers for BDBV."""
+model's own quantiles for Germany."""
 
 
 def drop_bdbv(frame: pd.DataFrame) -> pd.DataFrame:
@@ -263,7 +238,7 @@ def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
     its own panel. A row with no relative WIS keeps it empty.
     """
     out = tidy(scores)
-    out = out.loc[out["study"].isin(["germany", "ebola"])]
+    out = out.loc[out["study"] == "germany"]
     out = out.assign(
         rel_wis=out.get("rel_wis", np.nan),
         rel_log_wis=out.get("rel_log_wis", np.nan),
@@ -286,7 +261,7 @@ def slots_rows(
     """Return the runs with and without attention biases, by checkpoint.
 
     Sets are, one per level, the trainer's held-out loss and the relative
-    scores of each model on the German first half and the BDBV release backtest,
+    scores of each model on the German first half,
     in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
     `score`).
     """
@@ -306,13 +281,12 @@ def slots_rows(
             }
         )
     ]
-    case = rows.loc[rows["study"].isin(["germany", "ebola"])]
-    study = case["study"].map({"germany": "German", "ebola": "BDBV"})
+    case = rows.loc[rows["study"] == "germany"]
     source = case["model"].str.extract(r"_(daily|weekly)_")[0]
     out.append(
         pd.DataFrame(
             {
-                "set": study + " " + case["level"] + ", " + source,
+                "set": "German " + case["level"] + ", " + source,
                 "run": case["run"].map(names),
                 "outbreaks": case["outbreaks"],
                 "score": case["rel"],
@@ -543,14 +517,12 @@ def scale_floor_numbers(rows: pd.DataFrame) -> dict:
 
     Held-out simulation rows give, by model and series size (the first
     word of `size`), the median loss and the percentage of 99% quantiles
-    over 100 times the truth; BDBV rows give relative WIS by level,
-    source (daily or weekly) and model. Each value is keyed `none` (no
-    floor) or `floor`.
+    over 100 times the truth. Each value is keyed `none` (no floor) or
+    `floor`.
     """
     arm = {0: "none", 1: "floor"}
-    sims = rows.loc[rows["source"].isna()]
-    out: dict = {"sims": {}, "bdbv": {}}
-    for r in sims.itertuples():
+    out: dict = {"sims": {}}
+    for r in rows.itertuples():
         size = str(r.size).split()[0]
         node = out["sims"].setdefault(r.model, {}).setdefault(size, {})
         node.setdefault("median_loss", {})[arm[r.floor]] = round(
@@ -559,14 +531,6 @@ def scale_floor_numbers(rows: pd.DataFrame) -> dict:
         node.setdefault("q99_over_100x", {})[arm[r.floor]] = round(
             100 * float(r.share_q99_over_100x)
         )
-    for r in rows.loc[rows["source"].notna()].itertuples():
-        node = (
-            out["bdbv"]
-            .setdefault(r.size, {})
-            .setdefault(r.source, {})
-            .setdefault(r.model, {})
-        )
-        node[arm[r.floor]] = round(float(r.relative_wis), 2)
     return out
 
 
@@ -728,7 +692,6 @@ QUOTED: Final = {
 
 COPULA_STUDIES: Final = {
     "germany": "Germany",
-    "bdbv": "BDBV",
     "synthetic": "Held-out synthetic",
 }
 """The copula figure's studies, in its row order, all on development data."""
