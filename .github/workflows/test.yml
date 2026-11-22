@@ -131,6 +131,7 @@ jobs:
             any::yaml
             any::data.table
             any::flexsurv
+            any::posterior
           dependencies: '"hard"'
       - name: Install CmdStan
         run: Rscript -e 'cmdstanr::install_cmdstan(cores = 2)'
@@ -142,6 +143,7 @@ jobs:
           tests/model/test_reporting_delays.py
           tests/model/test_reporting_triangle.py
           tests/model/test_reporting_effects.py
+          tests/model/test_reporting_expectation.py
 
   # The simulator engine's testthat suite (packages/nowcastfoundation/r).
   # Its hard dependencies only: the tests that run epinowcast skip without
