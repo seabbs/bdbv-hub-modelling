@@ -255,11 +255,11 @@ def status_point(folder: Path | str) -> tuple[float, float] | None:
         return None
 
 
-def views_summary(folder: Path | str) -> str | None:
-    """Return a line on the run's block views, or None if it has none.
+def views_summary(folder: Path | str) -> dict[str, int] | None:
+    """Return the run's block views, or None if it has none.
 
     From `train/views.csv`, which the trainer writes for each system over
-    the block limit (`finetune_stream.record_views`): how many systems
+    the block limit (`finetune.stream.record_views`): how many systems
     were cut, how many of them are held out, the blocks they became and
     the largest series counts before and after.
     """
@@ -274,11 +274,13 @@ def views_summary(folder: Path | str) -> str | None:
     held = sum(1 for s in systems if s[0] == "held-out")
     before = max(int(r["series_before"]) for r in rows)
     after = max(int(r["series_after"]) for r in rows)
-    return (
-        f"block views: {len(systems)} systems over the block limit "
-        f"({held} held-out) cut into {len(rows)} blocks; largest {before} "
-        f"series, at most {after} after"
-    )
+    return {
+        "systems_over_limit": len(systems),
+        "held_out": held,
+        "blocks": len(rows),
+        "largest_series_before": before,
+        "largest_series_after": after,
+    }
 
 
 def step_at(
@@ -396,6 +398,18 @@ def loss_run(
         and isinstance(h.get("by_source"), dict)
     ] or [(r["step"], r["src"]) for r in rows if r.get("src")]
 
+    # The subset held-out loss by step: the offloaded evaluations' (the
+    # merged history), else the trainer's log lines.
+    held = [
+        (h["step"], h["eval_loss"], _parts(h, "eval_loss"))
+        for h in hist
+        if isinstance(h, dict) and h.get("eval_loss") is not None
+    ] or [
+        (r["step"], r["held"], r.get("parts") or {})
+        for r in rows
+        if r["held"] is not None
+    ]
+
     def x(step: float) -> float:
         return round(sims(step), 2)
 
@@ -437,16 +451,14 @@ def loss_run(
         "tr0": sum(v for _, v in train[:20]) / len(train[:20])
         if train
         else None,
-        "held": [
-            [x(r["step"]), r["held"]] for r in rows if r["held"] is not None
-        ],
+        "held": [[x(st), round(v, 5)] for st, v, _ in held],
         "ck": [
             [at(nm, s), s["held_out_loss"]]
             for nm, s, _ in checkpoints
             if s.get("held_out_loss")
         ],
         "held_parts": {
-            p: [[x(r["step"]), r["parts"][p]] for r in rows if r.get("parts")]
+            p: [[x(st), round(parts[p], 5)] for st, _, parts in held if parts]
             for p in PARTS
         },
         "ck_parts": {

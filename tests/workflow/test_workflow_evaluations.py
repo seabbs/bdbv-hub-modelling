@@ -101,15 +101,27 @@ def test_start_loss_falls_back_to_an_earlier_sidecar(tmp_path):
 
 
 def test_the_blocks_file_is_the_trainer_s():
-    import sys
-    from pathlib import Path
 
     pytest.importorskip("torch")
-    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
-    import finetune_stream as fs
     from flowlib import segments
 
     from nowcastfoundation import sidecar
+    from nowcastfoundation.finetune import stream as fs
 
     assert sidecar.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS
     assert segments.EVAL_MODES == fs.EVAL_MODES
+
+
+def test_the_check_alerts_only_when_zero_shot_is_not_beaten(tmp_path):
+    where = tmp_path / "n800"
+    write(where / "settings.json", {})
+    losses = {"held_out_loss": 0.3, "held_out_loss_start": 0.4}
+    write(where / "held-out.json", losses)
+    text, line = evaluations.check_report(where, "runa", 800, [100, 800, 1600])
+    assert text == "runa n800 beats zero-shot: held-out 0.3000 vs 0.4000"
+    assert line == text
+    losses = {"held_out_loss": 0.5, "held_out_loss_start": 0.4}
+    write(where / "held-out.json", losses)
+    text, line = evaluations.check_report(where, "runa", 800, [1600, 100])
+    assert "does NOT beat" in text
+    assert line == f"ALERT {text}; training goes on, check before n1600"

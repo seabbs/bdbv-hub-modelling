@@ -309,10 +309,13 @@ def test_block_views_are_summarised_from_the_run_s_record(tmp_path):
         "1-100,2-0001,weekly,0,subtree,30,9,2000,800,\n"
         "1-100,2-0001,weekly,0,subtree,30,9,2000,820,\n"
     )
-    assert training.views_summary(tmp_path) == (
-        "block views: 2 systems over the block limit (1 held-out) cut into "
-        "5 blocks; largest 3990 series, at most 900 after"
-    )
+    assert training.views_summary(tmp_path) == {
+        "systems_over_limit": 2,
+        "held_out": 1,
+        "blocks": 5,
+        "largest_series_before": 3990,
+        "largest_series_after": 900,
+    }
 
 
 def test_an_offloaded_run_s_steps_are_read_without_a_held_out_loss(tmp_path):
@@ -333,3 +336,29 @@ def test_the_mean_rate_leaves_out_the_gaps_of_restarts():
     points = [(t0, 0), (t0 + 100, 100), (t0 + 7300, 100), (t0 + 7350, 200)]
     assert training.mean_rate(points) == pytest.approx(200 / 150)
     assert training.mean_rate([(t0, 5)]) is None
+
+
+def test_an_offloaded_run_s_step_evaluations_are_its_held_out_line(tmp_path):
+    # The trainer logs no held-out loss when it offloads evaluation; each
+    # step's subset loss and its parts come from train/evals.
+    folder = tmp_path / "run"
+    train = folder / "train"
+    (train / "evals").mkdir(parents=True)
+    (train / "history.json").write_text(json.dumps([{"step": 0}]))
+    for step, loss in ((200, 0.3), (400, 0.2)):
+        (train / "evals" / f"step-{step:07d}.json").write_text(
+            json.dumps(
+                {
+                    "step": step,
+                    "eval_loss": loss,
+                    "eval_loss_nowcast": loss - 0.1,
+                    "eval_loss_forecast": 0.1,
+                }
+            )
+        )
+    run = runs.make_run("r", str(folder), live=True)
+    rows = [{"step": 200, "loss": 0.4, "held": None}]
+    got = training.loss_run(run, rows, [], lambda s: s / 4, None, "#111")
+    assert got["held"] == [[50.0, 0.3], [100.0, 0.2]]
+    assert got["held_parts"]["nowcast"] == [[50.0, 0.2], [100.0, 0.1]]
+    assert got["held_parts"]["forecast"] == [[50.0, 0.1], [100.0, 0.1]]

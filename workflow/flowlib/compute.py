@@ -43,7 +43,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from flowlib import localconfig, machine
+from flowlib import localconfig, machine, monitor
 
 MODES = ("single", "ssh")
 """The modes this module sets the pool of; any other `COMPUTE` names a
@@ -60,15 +60,17 @@ RULE_GROUPS = {
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
     "score_germany": "score",
-    "slots_check_shard": "score",
-    "agg_sanity": "score",
-    "agg_fit": "score",
-    "agg_rows": "score",
 }
 """Each placed rule's group; any other rule is in `any`."""
 
 GPU_RULES = frozenset(
-    {"train_segment", "evaluate_steps", "evaluate_checkpoint", "score_germany"}
+    {
+        "train_segment",
+        "evaluate_steps",
+        "evaluate_checkpoint",
+        "score_germany",
+        "score_run_germany",
+    }
 )
 """The rules taking the `gpu` resource. Placed on a worker by their
 group, each also takes that worker's own `gpu_<worker>`, so the pooled
@@ -81,13 +83,13 @@ MACHINE_KEYS = frozenset(
         "INBOX",
         "NOTIFY",
         "JOB_PREFIX",
+        "SIM_PREFIX",
         "SNAKEMAKE_PROFILE",
         "HEADROOM_CORES",
         "HEADROOM_GB",
         "CORES",
         "MEM_MB",
         "SIM_SLOTS",
-        "WORKFLOW_DIR",
         "DEVICE",
         "CHECKPOINT_ABOVE",
         "TARGETS",
@@ -99,7 +101,10 @@ MACHINE_KEYS = frozenset(
         "STATUS_EVERY",
         "MONITOR_HOST",
         "MONITOR_PORT",
-        "MONITOR_REFRESH",
+        "MONITOR_URL",
+        "MONITOR_DAG",
+        "MONITOR_DAG_OPTIONS",
+        "MONITOR_DAG_EVERY",
         "DASHBOARD_RUNS",
         "MIN_FREE_GB",
         "MIN_DISK_GB",
@@ -395,6 +400,19 @@ def args(
     path: str | None = None,
     budgets: Mapping[str, Mapping[str, int]] | None = None,
     checkout: str | Path = localconfig.ROOT,
+) -> list[str]:
+    """Return the Snakemake options of the profile, its pool and monitor.
+
+    The monitor's options (`flowlib.monitor`) come last.
+    """
+    return [*_profile_args(cfg, path, budgets, checkout), *monitor.args(cfg)]
+
+
+def _profile_args(
+    cfg: Mapping[str, str],
+    path: str | None,
+    budgets: Mapping[str, Mapping[str, int]] | None,
+    checkout: str | Path,
 ) -> list[str]:
     """Return the Snakemake options of the profile and its pool.
 

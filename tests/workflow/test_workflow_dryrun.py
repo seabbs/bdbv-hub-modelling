@@ -75,6 +75,46 @@ def test_simulate_runs_every_batch_of_a_round(tmp_path):
     assert jobs["round_ready"] == 1
 
 
+def _sim_commands(out):
+    return [
+        line
+        for line in out.stdout.splitlines()
+        if "nowcastfoundation.simulator" in line
+    ]
+
+
+def test_batches_run_by_count_under_the_shared_prefix_not_a_cap(tmp_path):
+    # SIM_SLOTS alone sets how many batches run at once: a batch claims
+    # no memory and has no cap of its own, only the machine's SIM_PREFIX
+    # (such as one systemd slice all batches share).
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
+        "JOB_PREFIX='percap {mem}'\nSIM_PREFIX='inslice'\n"
+    )
+    out = dry_run(tmp_path, "simulate", config={"rounds": [4]}, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    lines = _sim_commands(out)
+    assert len(lines) == 40
+    claims = re.findall(
+        r"rule simulate_batch:.*?resources: ([^\n]*)", out.stdout, re.S
+    )
+    assert len(claims) == 40
+    assert all("sim_slots=1" in c for c in claims)
+    assert not any(re.search(r"mem_mb=[1-9]", c) for c in claims)
+    shared = re.compile(r"eigen=false\s+inslice\s+workflow/scripts/timed\.sh")
+    assert all(shared.search(x) for x in lines)
+    assert not any("percap" in x for x in lines)
+
+
+def test_with_no_sim_prefix_a_batch_runs_bare(tmp_path):
+    out = dry_run(tmp_path, "simulate", config={"rounds": [4]}, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    lines = _sim_commands(out)
+    assert lines
+    bare = re.compile(r"eigen=false\s+workflow/scripts/timed\.sh")
+    assert all(bare.search(x) for x in lines)
+
+
 def test_simulate_never_releases(tmp_path):
     jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
     assert not any(k.startswith("release") for k in jobs)
@@ -660,28 +700,6 @@ def test_finished_units_are_kept(tmp_path):
     assert jobs["score_germany"] == 1
 
 
-def test_score_runs_no_follow_ups_by_default(tmp_path):
-    # Their scripts are not on main (test_every_script_a_rule_runs_exists).
-    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
-    jobs = dry(tmp_path, "score", config=config)
-    assert not {"slots_check_shard", "agg_fit", "fetch_adapter"} & set(jobs)
-
-
-def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
-    config = {
-        "score": {"labels": ["slots-aaa", "bbb"]},
-        "slots_check": {"run": True},
-        "agg": {"run": True},
-    }
-    jobs = dry(tmp_path, "score", config=config)
-    assert jobs["slots_check_shard"] == 2
-    assert jobs["slots_check_summary"] == 1
-    assert jobs["agg_fit"] == 2
-    assert jobs["agg_rows"] == 1
-    assert jobs["agg_sanity"] == 1
-    assert jobs["fetch_adapter"] == 1
-
-
 def _local(tmp_path, *lines):
     (tmp_path / "local.env").write_text(
         "\n".join([f"ROOT={tmp_path}", "HOST_NAME=test-host", *lines]) + "\n"
@@ -820,8 +838,6 @@ def _scored(tmp_path):
         os.utime(f, (old + 60, old + 60))
     return {
         "score": {"labels": ["aaa"]},
-        "slots_check": {"run": False},
-        "agg": {"run": False},
     }, stamps
 
 

@@ -25,7 +25,7 @@ it, and writes one row per outbreak (first draw, strata summed):
   last) and the largest stratum attack rate;
 - phase at the training cut-offs: the share of weekly cut-offs, from two
   weeks after the first report to `SIM_DELAY_WEEKS` + 5 weeks before the
-  last (as `finetune_chronos.outbreak_blocks` places them), where expected
+  last (as `finetune.chronos.outbreak_blocks` places them), where expected
   onsets grow (14-day growth over 0.01 a day), fall (under -0.01), are
   flat, or are low (under 1 a day).
 
@@ -44,7 +44,7 @@ import pandas as pd
 from scipy.signal import find_peaks
 
 SIM_DELAY_WEEKS = 8
-"""`finetune_chronos.SIM_DELAY_WEEKS`: weeks kept after the last cut-off."""
+"""`finetune.chronos.SIM_DELAY_WEEKS`: weeks kept after the last cut-off."""
 
 GROWING = 0.01
 """Daily 14-day log growth above which a cut-off is in a rising phase."""

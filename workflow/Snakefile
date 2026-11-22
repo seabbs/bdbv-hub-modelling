@@ -29,7 +29,6 @@ include: "rules/finetune.smk"
 include: "rules/evaluate.smk"
 include: "rules/publish.smk"
 include: "rules/score.smk"
-include: "rules/followups.smk"
 
 
 rule all:

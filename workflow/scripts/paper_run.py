@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "workflow"))
 
-from flowlib import localconfig, machine, notify  # noqa: E402
+from flowlib import localconfig, machine, monitor, notify  # noqa: E402
 
 RENDERS = ("development", "paper")
 
@@ -115,6 +115,7 @@ def main(argv: list[str]) -> int:
             "heavy=1",
             "--rerun-triggers",
             "mtime",
+            *monitor.args(cfg),
         ]
         where = ROOT
     else:

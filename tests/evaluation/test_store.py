@@ -195,6 +195,7 @@ def test_code_digest_ignores_docstrings_and_comments(tmp_path: Path) -> None:
     assert store.code_digest("renewal", root) != after
 
 
+@pytest.mark.slow
 def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     root = _copy_repo(tmp_path)
     models = ("renewal", "renewalbvd", "renewalsp", "randomwalknowcast")

@@ -5,7 +5,7 @@ Cuts outbreaks from the simulator (packages/nowcastfoundation/r) into
 training blocks
 (`outbreak_blocks`) and packs them into batches (`plan_batches`),
 without torch.
-`scripts/finetune_stream.py` trains on them and
+`nowcastfoundation.finetune.stream` trains on them and
 publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 `_ft` models load the newest one
 (`forecasters.foundation.resolve_checkpoint`).
@@ -103,7 +103,12 @@ with gaps. Each block is a whole simulated system (`whole_system`), or
 its country alone.
 """
 
-GRID_FILE = Path(__file__).parents[1] / "config" / "finetune" / "grid.yaml"
+ROOT = Path(__file__).resolve().parents[5]
+"""The repository root, which the hashed paths are relative to: this
+module is `packages/nowcastfoundation/src/nowcastfoundation/finetune/`
+under it in the workspace's editable install."""
+
+GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
 """The grid file the simulations are drawn from (`use_grid`)."""
 
 SOURCE_SHARES = dict(BLOCK_DESIGN["source_shares"])
@@ -207,9 +212,6 @@ SIMULATOR_PY = (
 """The simulator's Python: its entry point and draws, the latent step and
 the shared components it composes."""
 
-ROOT = Path(__file__).parents[1]
-"""The repository root, which the hashed paths are relative to."""
-
 
 def simulator_files(grid_file: str) -> tuple[str, ...]:
     """Return the simulator's files: the grid and its Python.
@@ -248,8 +250,8 @@ def code_files(simulator: tuple[str, ...]) -> dict[str, str]:
     """Return `CODE` for a simulator's files, each named by its path."""
     files = (
         *simulator,
-        "scripts/finetune_chronos.py",
-        "packages/nowcastfoundation/src/nowcastfoundation/finetune.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/chronos.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
     )
     return {path: path for path in files}
 
@@ -261,9 +263,9 @@ own (`use_grid`)."""
 CODE = code_files(SIMULATOR)
 """Files the checkpoint depends on, hashed into its settings: each
 file's name in `code_sha256`, then its path. The paths also go into the
-settings outside the hash (`code_paths`), for `finetune_verify`."""
+settings outside the hash (`code_paths`), for `finetune.verify`."""
 
-TRAINER = "scripts/finetune_stream.py"
+TRAINER = "packages/nowcastfoundation/src/nowcastfoundation/finetune/stream.py"
 """The trainer's name in `code_sha256` (its path is its own file)."""
 
 FOUNDATION_PATH = (
@@ -382,7 +384,7 @@ def _pad(
     steps covering `loss_days` days after them, of `days_per_step` days
     each. Long context is cropped. The arrays are numpy, so blocks are
     cut without torch; the trainer makes them tensors
-    (`finetune_stream.tensors`).
+    (`finetune.stream.tensors`).
     """
     start, h = block["start"], block["horizon"]
     if loss_days is not None:

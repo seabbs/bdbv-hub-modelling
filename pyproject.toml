@@ -84,9 +84,11 @@ docs = [
   "mkdocstrings[python]>=0.26",
 ]
 paper = [
+  "panoptes-ui>=1.6,<2",
   "snakefmt>=0.10",
   "snakemake>=9.27,<10",
   "snakemake-executor-plugin-cluster-generic>=1.0.9",
+  "snakemake-logger-plugin-panoptes>=0.3,<0.4",
 ]
 
 [tool.uv]
@@ -184,7 +186,7 @@ filterwarnings = [
 ]
 markers = [
   "network: tests that download from GitHub (deselect with '-m \"not network\"')",
-  "slow: model fits (deselect with '-m \"not slow\"')",
+  "slow: model fits, Chronos-2 inference, backtests and other long tests; CI runs them nightly, on dispatch and on PRs labelled full-tests",
 ]
 
 [tool.coverage.run]
@@ -320,3 +322,13 @@ disallow_subclassing_any = false
 # The series biases subclass torch's untyped `nn.Module` (torch is optional).
 module = ["nowcastfoundation.series_bias"]
 disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+# The fine-tuning trainer is not typed yet; mypy skips it.
+module = [
+  "nowcastfoundation.finetune.chronos",
+  "nowcastfoundation.finetune.evaluate",
+  "nowcastfoundation.finetune.stream",
+  "nowcastfoundation.finetune.verify",
+]
+ignore_errors = true

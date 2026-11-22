@@ -10,15 +10,13 @@ rule evaluate_steps:
         # Its steps start after the previous checkpoint's.
         prev=evaluate_prev,
         # After the previous segment's, so step 0 is scored first.
-        before=lambda wc: (
-            f"{train_dir(wc.run)}/evals/n{run_of(wc).prev[int(wc.n)]}.done"
-            if run_of(wc).prev[int(wc.n)]
-            else []
-        ),
+        before=evaluate_before,
     output:
         touch(f"{TRAIN}/evals/n{{n}}.done"),
     log:
         f"{TRAIN}/logs/evaluate-steps-n{{n}}.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/evaluate_steps/n{{n}}.tsv"
     priority: EVALUATE_PRIORITY
     conda:
         TOOLS_ENV
@@ -26,15 +24,10 @@ rule evaluate_steps:
         gpu=1,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        prev=lambda wc, input: (
-            f"--prev {Path(input.prev).parent}" if input.prev else ""
-        ),
+        prev=lambda wc, input: runs.option("--prev", evaluate_prev_dir(input)),
         device=machine.device(LOCAL),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
-        copy_in=lambda wc: [
-            f"{train_dir(wc.run)}/evals/",
-            f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
-        ],
+        copy_in=evaluate_copy_in,
         copy_back=lambda wc: [f"{train_dir(wc.run)}/evals/"],
         eval_every=ft("eval_every"),
     shell:
@@ -52,15 +45,13 @@ rule evaluate_checkpoint:
         steps=f"{TRAIN}/evals/n{{n}}.done",
         # Earlier checkpoints' settings: `evaluations.start_loss` reads their
         # held_out_loss_start when the run evaluated them in the trainer.
-        earlier=lambda wc: [
-            f"{train_dir(wc.run)}/n{p}/settings.json"
-            for p in run_of(wc).ft["prefixes"]
-            if p < int(wc.n)
-        ],
+        earlier=earlier_settings,
     output:
         f"{TRAIN}/n{{n}}/{SIDECAR}",
     log:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv"
     priority: EVALUATE_PRIORITY
     conda:
         TOOLS_ENV

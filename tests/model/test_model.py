@@ -7,9 +7,25 @@ from numpyro.infer import Predictive, init_to_median
 from bdbvhub.data.delays import hub_delay_pmf
 from nowcastrenewal.model import MAIN, ModelConfig, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
-from nowcastrenewal.model.model import LADDER, incubation_period, seed_lead
+from nowcastrenewal.model.model import incubation_period, seed_lead
 
 from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
+
+_SIMPLE = {
+    "streams": "total",
+    "truncation": False,
+    "coupling": "none",
+    "depletion": False,
+}
+CONFIGS = (
+    ModelConfig(national=True, **_SIMPLE),
+    ModelConfig(**_SIMPLE),
+    ModelConfig(**_SIMPLE | {"truncation": True}),
+    ModelConfig(coupling="none", depletion=False),
+    ModelConfig(depletion=False),
+    MAIN,
+)
+"""Configurations from the simplest model to the main one."""
 
 
 def trace(model, data, forecast=False):
@@ -55,7 +71,7 @@ def test_provinces_with_no_case_are_never_seeded(outbreak, sim_tables, table):
 @pytest.mark.parametrize(
     "cfg",
     [
-        *LADDER.values(),
+        *CONFIGS,
     ],
 )
 def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
@@ -167,10 +183,6 @@ def test_prior_predictive_is_bounded_by_depletion(sim_vintage, depletion):
         assert np.nanmax(share) > 1.0 or np.isnan(share).any()
 
 
-def test_main_is_the_last_ladder_step():
-    assert list(LADDER.values())[-1] == MAIN
-
-
 def test_real_data_kernels_are_finite(table):
     from bdbvhub.data.tidy import load_delays, load_target
 
@@ -244,6 +256,7 @@ def test_missingness_offsets_are_non_centred(sim_vintage):
     assert "log_rt0_offsets" in tr
 
 
+@pytest.mark.slow
 def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
     from nowcastrenewal.model import forecast_trajectories
 

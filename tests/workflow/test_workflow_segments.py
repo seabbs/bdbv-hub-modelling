@@ -147,3 +147,57 @@ def test_check_eval_accepts_local_and_offload_only():
     segments.check_eval("offload")
     with pytest.raises(ValueError, match="elsewhere"):
         segments.check_eval("elsewhere")
+
+
+def test_training_seeds_are_the_seed_file_s_else_the_rounds(tmp_path):
+    def of(r):
+        return [r * 10, r * 10 + 1]
+
+    assert segments.training_seeds(None, [2, 1], of) == [20, 21, 10, 11]
+    (tmp_path / "s.txt").write_text("5\n3\n")
+    assert segments.training_seeds(tmp_path / "s.txt", [2], of) == [5, 3]
+
+
+def test_available_seeds_stop_at_the_first_unlisted_batch():
+    order, held = [1, 2, 3, 4], [9]
+    assert segments.available_seeds(order, held, None) == order
+    assert segments.available_seeds(order, held, {1, 2, 4}) == []
+    assert segments.available_seeds(order, held, {1, 2, 4, 9}) == [1, 2]
+    assert segments.available_seeds(order, held, {1, 2, 3, 4, 9}) == order
+
+
+def test_outbreaks_come_from_the_first_settings_found(tmp_path):
+    settings = tmp_path / "b.csv"
+    assert segments.outbreaks_or_full([tmp_path / "a.csv", settings], 20) == 20
+    settings.write_text("outbreak\n1-1\n1-1\n1-2\n")
+    assert segments.outbreaks_or_full([tmp_path / "a.csv", settings], 20) == 2
+
+
+def test_a_segment_takes_its_seeds_one_spare_and_the_held_out():
+    got = segments.segment_seeds(40, [1, 2, 3, 4], [9], lambda _: 20)
+    assert got == [1, 2, 3, 9]
+
+
+def test_prefixes_need_a_spare_batch_but_the_last():
+    def kept(_):
+        return 20
+
+    def none(_):
+        return False
+
+    order = [1, 2, 3]
+    # 40 needs 60 (a spare batch); 60, the run's last, needs 60.
+    got = segments.trainable([20, 40, 60], 60, 20, order, none, kept)
+    assert got == [20, 40, 60]
+    got = segments.trainable([20, 40, 60], 80, 20, order, none, kept)
+    assert got == [20, 40]
+    got = segments.trainable([80], 80, 20, order, lambda n: n == 80, kept)
+    assert got == [80]
+
+
+def test_next_segment_only_asks_for_the_saved_and_the_next():
+    def saved(n):
+        return n == 100
+
+    assert segments.to_train([100, 200, 400], saved, False) == [100, 200, 400]
+    assert segments.to_train([100, 200, 400], saved, True) == [100, 200]

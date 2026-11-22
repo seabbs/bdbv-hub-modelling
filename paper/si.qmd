@@ -336,9 +336,8 @@ The dashboard was built with the help of a large language model.
 - The layer tables replace the grid tables after the layers, and the workflow's figures replace the example simulations and comparisons.
 - The published ranges for other diseases (@tbl-sim-diseases) are replaced by the sourced reference-values table, which the main text's coverage panel reads.
 - The simulator composes PyRenew's components [@placeholder] for infections, the infection to reference delay and observation noise, with small components on PyRenew's base classes where it has none.
-- The reporting step gives counts by reference and report date from epinowcast's observation model [@abbottepinowcast], or from a PyRenew reporting step that gives the same counts, behind one interface.
+- The reporting step is part of the same model and gives counts by reference and report date as epinowcast's observation model does [@abbottepinowcast].
 - We test the simulator by calling epinowcast, EpiNow2 [@placeholder] and primarycensored [@abbottprimarycensored] directly and comparing the outputs, with delay distributions matched to primarycensored's discretisation.
-- If the PyRenew reporting step is used, the notes below on epinowcast's simulation mode are dropped.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
 :::
 
@@ -368,7 +367,7 @@ The dashboard was built with the help of a large language model.
 #### Layer 3: reporting delays
 
 ::: {.callout-note title="Plan"}
-- We report cases by reference and report date through epinowcast's observation model.
+- We report cases by reference and report date through a reporting delay hazard, as epinowcast's observation model does.
 - The reporting delay has a drawn family and mean, and differs between places and age groups.
 - Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.
 - In a third of simulations, the mean delay varies by reference weekday, mostly within about 10%.
@@ -384,7 +383,7 @@ The dashboard was built with the help of a large language model.
 - In half of the simulations reporting every day, the chance of reporting varies by report weekday, mostly by a few percent and up to about 15%, with a tail to strong effects.
 - In a third of simulations, counts vary by reference weekday, mostly by a few percent.
 - Reporting shocks add backlogs or outages.
-- Revisions are not part of epinowcast's model but are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
+- Revisions are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
 - Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
 - Some cases are filed under a nearby reference day and moved later.
 - The target is still the final count, and lag series can then fall from one lag to the next.
@@ -454,12 +453,6 @@ We test the simulator so that a stratum never has more cases than its population
 
 The grid has one known limitation.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
-
-The simulator works around four limits of epinowcast's simulation mode, each until the linked epinowcast change.
-It uses `enw_simulate()` from a feature branch of epinowcast (commit e084b080), until [epinowcast#841](https://github.com/epinowcast/epinowcast/pull/841) is merged.
-It reads the posterior predictive counts (`pp_obs`) from the fit directly, as `enw_pp_summary()` is slow, and runs each batch of 20 simulations under a 16 GB memory cap, with one retry at 20 GB ([epinowcast#841](https://github.com/epinowcast/epinowcast/pull/841)).
-Gamma reporting delays have a coefficient of variation above 0.71, as a shape above 2 gives NaN tail hazards ([epinowcast#939](https://github.com/epinowcast/epinowcast/issues/939)).
-When the delay walks over weeks, its log spread walks at half the scale of its log location, as a zero scale sits on the parameter's lower bound, where Stan cannot start ([epinowcast#941](https://github.com/epinowcast/epinowcast/issues/941)).
 
 ![The simulated outbreaks (grey histograms) against the BDBV data and the German data by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
 
@@ -569,7 +562,7 @@ Choices tuned on development data, with their values and the data they were set 
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, PyRenew, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, PyRenew and numpyro for simulation, and scoringrules for scoring, checked against scoringutils.
 - A Snakemake workflow runs the evaluation from the raw data to every figure and table.
 :::
 

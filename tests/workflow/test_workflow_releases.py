@@ -64,3 +64,48 @@ def test_only_r7_checkpoints_are_scored():
         "publishedAt": "2026-11-19T14:12:48Z",
     }
     assert releases.labels([*LISTING, last_r6], config["published_from"]) == []
+
+
+def test_a_release_s_batches_and_none_before_it_is_made(monkeypatch):
+    import json
+    import subprocess
+
+    assets = ["counts-901.csv.gz", "settings-901.csv", "counts-902.csv.gz"]
+
+    def view(args, **_):
+        if "sims-r9" not in args:
+            return subprocess.CompletedProcess(args, 1, "", "not found")
+        out = json.dumps({"assets": [{"name": a} for a in assets]})
+        return subprocess.CompletedProcess(args, 0, out, "")
+
+    monkeypatch.setattr(releases.subprocess, "run", view)
+    assert releases.release_seeds("o/r", 9) == {901}
+    assert releases.release_seeds("o/r", 8) == set()
+
+
+def _cfg(**over):
+    return {"labels": None, "published_from": "2026-11-16T09:00:00Z"} | over
+
+
+def test_configured_labels_win_over_the_listing(tmp_path):
+    cfg = _cfg(labels=["x"])
+    assert releases.chosen(tmp_path / "none.json", cfg) == ["x"]
+    assert releases.oldest_first(tmp_path / "none.json", cfg) == ["x"]
+
+
+def test_listed_checkpoints_are_chosen_less_skipped(tmp_path):
+    import json
+
+    listing = tmp_path / "releases.json"
+    listing.write_text(json.dumps(LISTING))
+    got = releases.chosen(listing, _cfg(skip=["slots-bbb"]))
+    assert got == ["slots-ccc", "aaa"]
+    assert releases.oldest_first(listing, _cfg()) == [
+        "slots-ccc",
+        "aaa",
+        "slots-bbb",
+    ]
+
+
+def test_no_order_before_the_releases_are_listed(tmp_path):
+    assert releases.oldest_first(tmp_path / "none.json", _cfg()) == []

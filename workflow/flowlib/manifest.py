@@ -8,8 +8,10 @@ holds is kept as it is.
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import re
+import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -103,3 +105,75 @@ def seeds(manifest: Path | str) -> set[int]:
         return set()
     rows = path.read_text().splitlines()[1:]
     return {int(r.split(",")[1]) for r in rows if r.strip()}
+
+
+def stamp() -> str:
+    """Return the time now in UTC, as the manifests write it."""
+    return f"{dt.datetime.now(dt.UTC):%Y-%m-%dT%H:%M:%SZ}"
+
+
+def commit() -> str:
+    """Return the commit the workflow runs at."""
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def new_row(
+    sims: Path | str,
+    *,
+    round_: int,
+    seed: int,
+    grid: str,
+    draws: int,
+    batch: int,
+    host: str,
+) -> str:
+    """Return a grid block batch's row, at this commit and time."""
+    return row(
+        sims, round_=round_, seed=seed, kind="block", grid=grid,
+        commit=commit(), draws=draws, batch=batch, host=host,
+        finished=stamp(),
+    )  # fmt: skip
+
+
+def record(
+    out: Path | str,
+    old: Path | str,
+    sims: Path | str,
+    *,
+    round_: int,
+    seed: int,
+    mine: bool,
+    grid: str,
+    draws: int,
+    batch: int,
+    host: str,
+) -> None:
+    """Write a batch's row to `out`: the row manifest `old` holds, or a new one.
+
+    A batch simulated on another host (not `mine`) must arrive with its
+    row.
+    """
+    line = existing(old, round_, seed)
+    if line is None and not mine:
+        raise ValueError(f"batch {seed} arrived without its manifest row")
+    if line is None:
+        line = new_row(
+            sims, round_=round_, seed=seed, grid=grid, draws=draws,
+            batch=batch, host=host,
+        )  # fmt: skip
+    Path(out).write_text(f"{line}\n")
+
+
+def write_seeds(seeds: Iterable[int], path: Path | str) -> None:
+    """Write seeds one a line."""
+    Path(path).write_text("".join(f"{s}\n" for s in seeds))
+
+
+def mark_ready(
+    seeds: Iterable[int], seeds_file: Path | str, ready_file: Path | str
+) -> None:
+    """Write a round's seed list, then READY with the time."""
+    write_seeds(seeds, seeds_file)
+    Path(ready_file).write_text(f"{stamp()}\n")

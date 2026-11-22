@@ -41,7 +41,7 @@ The workflow uses:
 
 - paths: `ROOT` (rounds, and the runs in `ROOT/runs/`), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
 - what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so a CPU machine sets `simulate score` and a GPU machine `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
-- resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope, or `workflow/scripts/mem_cap.sh {mem}` on macOS; `{mem}` becomes the job's budget), `MIN_FREE_GB`, `MIN_DISK_GB` and `MAX_LOAD` (memory, disk and a load average below which a heavy job starts; `MAX_LOAD` empty is the core count), `HEADROOM_CORES` and `HEADROOM_GB` (cores and memory kept free), `CORES` and `MEM_MB` (set them outright instead), `SIM_SLOTS` (batches at once, 2 by default) and `DEVICE` (`auto`: CUDA, then MPS, then the CPU);
+- resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope, or `workflow/scripts/mem_cap.sh {mem}` on macOS; `{mem}` becomes the job's budget), `SIM_PREFIX` (the prefix every simulation batch runs under instead, such as one systemd slice they all share; empty: none), `MIN_FREE_GB`, `MIN_DISK_GB` and `MAX_LOAD` (memory, disk and a load average below which a heavy job starts; `MAX_LOAD` empty is the core count), `HEADROOM_CORES` and `HEADROOM_GB` (cores and memory kept free), `CORES` and `MEM_MB` (set them outright instead), `SIM_SLOTS` (batches at once, 2 by default) and `DEVICE` (`auto`: CUDA, then MPS, then the CPU);
 - sharing the rounds: `SIM_SEEDS` (the seeds this machine takes: seeds, `first-last` ranges or rounds as `r<N>`; empty: all), and on a helping machine `REMOTE` and `REMOTE_ROOT` (the rounds host and its rounds folder; empty: `ROOT`);
 - `HOST_NAME`.
 
@@ -84,7 +84,7 @@ Each outbreak draws its settings independently from the grid (`simulate.grid_fil
 The simulator is `nowcastfoundation.simulator` (`simulate_batch`, run as `python -m nowcastfoundation.simulator GRID N SEED OUT`).
 It draws each outbreak's design and values in Python and runs each outbreak as one numpyro model from the shared PyRenew components, its latent infections to its reported counts (`nowcastrenewal.simulation.outbreak`).
 
-- `simulate_batch`: one batch of the simulator, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and it runs with JAX on one thread.
+- `simulate_batch`: one batch of the simulator, under `SIM_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). Batches run by count (`sim_slots`), with no memory claim or cap of their own. A batch that fails is retried once. The simulator must be the committed one, and it runs with JAX on one thread.
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each simulation's summaries in the round's `qc/`. It sets no thresholds and nothing is excluded or deleted.
@@ -125,7 +125,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`).
 - `publish`: every checkpoint.
 
-## 4. Score (`rules/score.smk`, `rules/followups.smk`)
+## 4. Score (`rules/score.smk`)
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task nowcast-foundation:score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `score_germany`, `score_release`: the units of `nowcastfoundation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
@@ -138,19 +138,12 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
-After each slots checkpoint's scores:
-
-- `fetch_adapter`: its adapter from the release, checked against `sha256sums.txt`.
-- `slots_check_shard`, `slots_check_summary`: the slots check (`scripts/slots_check.py`) against zero-shot and the no-slots checkpoint of its size.
-- `agg_data`, `agg_sanity`, `agg_fit`, `agg_rows`: the aggregation arms (`scripts/agg/`), with the data pinned to the zero-shot rows' hub commit and a sanity check that a zero-shot arm reproduces its rows, once per package version.
-- `followups`: all of these; `score` includes them.
-
 ## 5. Dashboard (`workflow/flowlib/dashboard/`)
 
 `task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
 `task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
-The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Pipeline (simulate, fetch, cut, train, held-out evaluation and German scoring, with the current stage marked, each stage's progress and job timings from the newest Snakemake log in `WORKFLOW_DIR`, and the batches a stopped run waits on), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a notes file) and Tables. Every chart has an info marker (`page/explain.json`).
+The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a notes file) and Tables. Every chart has an info marker (`page/explain.json`).
 
 Settings:
 
@@ -208,18 +201,17 @@ Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add 
 
 ## Monitor
 
-`task nowcast-workflow:monitor` serves one page of what runs where: each machine's step, its running jobs (rule, wildcards, resources, start) and its recent ones.
-Each tick writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds while a step runs, and when it is skipped or ends (`workflow/flowlib/runstatus.py`, read from the run's own Snakemake log).
-With a rounds host (`REMOTE`) the file is copied to its `status/` folder, which the monitor reads, so one page shows every machine.
-A run that stops writing for two intervals, because it was killed or its machine went down, is shown as stale.
-The page is served on `MONITOR_HOST` and `MONITOR_PORT` and refreshes every `MONITOR_REFRESH` seconds, all from `config/local.env`.
-It is separate from the fine-tuning dashboard, of which several may run at once.
-Work run outside the workflow does not appear until it runs under the tick.
-
-We chose this over Panoptes.
-Snakemake 9 has no `--wms-monitor`; monitoring goes through logger plugins.
-The Panoptes logger plugin is not maintained by the Snakemake organisation, and Panoptes needs a server that every machine can reach.
-The status files need neither: the machines already reach the rounds host.
+`task nowcast-workflow:monitor` serves [Panoptes](https://github.com/panoptes-organization/panoptes), Snakemake's web monitor: every run's jobs, their state, what is running and what has failed, in one page.
+Every Snakemake run the tasks, ticks and paper scripts start reports to it through the logger plugin `snakemake-logger-plugin-panoptes` (`workflow/flowlib/monitor.py`), on by default.
+Runs report to `MONITOR_URL`; another machine's runs report to the serving machine's address, and an empty `MONITOR_URL` switches reporting off.
+The plugin drops events it cannot send, so a run goes on when no server is listening.
+The page is served on `MONITOR_HOST` and `MONITOR_PORT`, with its database in `<ROOT>/monitor/`, all from `config/local.env`.
+Panoptes has no DAG view, so the same server adds one at `/dag/` (`workflow/flowlib/monitor_server.py`, `workflow/flowlib/dag.py`).
+For each `MONITOR_DAG` target (`NAME=TARGET`) it draws the rule graph and the job DAG, each job pending, running, done or failed.
+A job Snakemake would not run is done; Panoptes gives the rest their state, so the colours follow the run on each visit.
+The graphs are built with `MONITOR_DAG_OPTIONS` every `MONITOR_DAG_EVERY` seconds, without a lock; `task nowcast-workflow:dag -- NAME=TARGET` builds one now.
+Each tick also writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds (`workflow/flowlib/runstatus.py`).
+The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), not jobs.
 
 ## CI
 

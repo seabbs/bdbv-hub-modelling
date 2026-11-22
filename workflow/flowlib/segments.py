@@ -59,7 +59,7 @@ def batch_priority(seed: int, base: float, seed_base: int) -> float:
 EVAL_MODES = ("local", "offload")
 """Where the trainer's held-out evaluation runs: in the trainer, or in the
 `evaluate` rules on whichever machine `WORKER_GROUPS` gives that group.
-Must match `EVAL_MODES` in scripts/finetune_stream.py (tested)."""
+Must match `EVAL_MODES` in nowcastfoundation.finetune.stream (tested)."""
 
 
 def check_eval(mode: str) -> None:
@@ -158,3 +158,84 @@ def reachable(n: int, seeds: Sequence[int], kept: Callable[[int], int]) -> bool:
     except ValueError:
         return False
     return True
+
+
+def training_seeds(
+    seed_file: Path | str | None,
+    rounds: Iterable[int],
+    seeds_of: Callable[[int], list[int]],
+) -> list[int]:
+    """Return a run's training seeds: `seed_file`'s, else its rounds'."""
+    if seed_file:
+        return [int(s) for s in Path(seed_file).read_text().split()]
+    return [s for r in rounds for s in seeds_of(r)]
+
+
+def available_seeds(
+    order: Sequence[int], held: Iterable[int], listed: set[int] | None
+) -> list[int]:
+    """Return the training seeds whose batches can be had now, in order.
+
+    `listed` None means this machine simulates them all. Else those
+    before the first batch not listed, and none until every held-out
+    batch is listed.
+    """
+    if listed is None:
+        return list(order)
+    if not set(held) <= listed:
+        return []
+    for i, seed in enumerate(order):
+        if seed not in listed:
+            return list(order[:i])
+    return list(order)
+
+
+def outbreaks_or_full(settings: Iterable[Path | str], full: int) -> int:
+    """Return the outbreaks of the first settings file found, else `full`."""
+    for path in settings:
+        if Path(path).exists():
+            return batch_outbreaks(path)
+    return full
+
+
+def segment_seeds(
+    n: int,
+    order: Sequence[int],
+    held: Sequence[int],
+    kept: Callable[[int], int],
+) -> list[int]:
+    """Return segment n's seeds: n outbreaks, one spare, the held-out."""
+    need = seeds_for(n, order, kept)
+    spare = list(order[len(need) : len(need) + 1])
+    return need + spare + list(held)
+
+
+def trainable(
+    prefixes: Iterable[int],
+    outbreaks: int,
+    batch: int,
+    order: Sequence[int],
+    saved: Callable[[int], bool],
+    kept: Callable[[int], int],
+) -> list[int]:
+    """Return the prefixes saved or within reach of the seed list.
+
+    Each prefix but the run's last (`outbreaks`, every training
+    simulation) needs a spare batch past it.
+    """
+    return [
+        n
+        for n in prefixes
+        if saved(n) or reachable(n + batch * (n < outbreaks), order, kept)
+    ]
+
+
+def to_train(
+    prefixes: Sequence[int], saved: Callable[[int], bool], next_only: bool
+) -> list[int]:
+    """Return the prefixes to ask for: all, or the saved and the next."""
+    if not next_only:
+        return list(prefixes)
+    done = [n for n in prefixes if saved(n)]
+    rest = [n for n in prefixes if n not in done]
+    return done + rest[:1]

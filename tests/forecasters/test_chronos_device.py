@@ -55,9 +55,11 @@ def test_one_device_resolver_for_scoring_and_training():
     from nowcastfoundation.backends import chronos2
 
     assert chronos2.torch_device("cuda:1") == "cuda:1"
-    scripts = __import__("pathlib").Path(__file__).parents[2] / "scripts"
-    for name in ("finetune_stream.py", "finetune_speed.py"):
-        assert "def pick_device" not in (scripts / name).read_text()
+    from nowcastfoundation.finetune import stream
+
+    path = __import__("pathlib").Path(stream.__file__)
+    assert "def pick_device" not in path.read_text()
+    assert not hasattr(stream, "pick_device")
 
 
 def test_chronos_batch_and_threads_are_machine_settings(monkeypatch):

@@ -106,6 +106,7 @@ def test_the_later_half_of_the_dates_is_held_out() -> None:
     assert len(development) - len(held) in (0, 1)
 
 
+@pytest.mark.slow
 def test_our_quantiles_are_the_samples_quantiles_at_the_hub_s_levels(
     forecasts: pd.DataFrame,
 ) -> None:
@@ -451,6 +452,7 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     np.testing.assert_array_equal(scores["wis"], 0)
 
 
+@pytest.mark.slow
 def test_a_sample_model_s_german_quantiles_use_the_draws_given(
     triangle: pd.DataFrame,
 ) -> None:
@@ -623,3 +625,25 @@ def test_models_see_only_the_counts_the_truth_holds(
         ["randomwalknowcast"], tri, ["2021-03-01"], 10, 1, max_delay=40
     )
     assert seen[0]["confirm"].tolist() == [8]
+
+
+def test_each_model_and_date_records_its_seconds(
+    triangle: pd.DataFrame,
+) -> None:
+    # Backtest time by model and date, so slow cells can be found.
+    timings: list[dict[str, object]] = []
+    dates = ["2021-10-04", "2021-10-05"]
+    germany_forecasts(
+        ["randomwalk", "randomwalknowcast"],
+        triangle,
+        dates,
+        n_samples=30,
+        seed=1,
+        timings=timings,
+    )
+    got = pd.DataFrame(timings)
+    assert sorted(zip(got["model"], got["origin"], strict=True)) == sorted(
+        (m, d) for m in ("randomwalk", "randomwalknowcast") for d in dates
+    )
+    assert (got["seconds"] >= 0).all()
+    assert set(got["stage"]) == {"forecast"}
