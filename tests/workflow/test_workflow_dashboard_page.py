@@ -548,3 +548,13 @@ def test_a_stopped_run_names_the_batches_its_next_segment_waits_on(tmp_path):
     trainer = tiles.split("Trainer")[1].split("Last log line")[0]
     assert "Waiting for batches" in trainer
     assert all(f"<b>{s}</b>" in trainer for s in (3, 8, 9, 10))
+
+
+def test_the_trainer_status_is_folded_and_the_loss_open(tmp_path):
+    ctx = _machine(tmp_path)
+    page_html = page.build(ctx)
+    status = page.sections(ctx)["status"]
+    fold = re.search(r"<details class=about>(.*?)</details>", status, re.S)
+    assert fold
+    assert "Trainer status" in fold[1]
+    assert "<details class=sec id=loss open>" in page_html
