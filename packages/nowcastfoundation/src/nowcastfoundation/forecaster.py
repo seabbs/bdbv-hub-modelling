@@ -81,6 +81,7 @@ __all__ = [
     "PERIODS",
     "REALDATA_PREFIX",
     "SLOTS_PREFIX",
+    "SLOTS_RELEASE_PREFIX",
     "SOURCES",
     "SUMS_FILE",
     "Checkpoint",
@@ -184,6 +185,9 @@ SLOTS_PREFIX: Final = "slots-"
 lookup, which takes only `chronos-ft-*` releases, never gives it to code
 without the bias."""
 
+SLOTS_RELEASE_PREFIX: Final = "chronos-slots"
+"""Tag prefix of the releases of checkpoints with the series bias."""
+
 
 def release_tag(spec: str) -> str:
     """Return the release tag of a checkpoint.
@@ -191,8 +195,8 @@ def release_tag(spec: str) -> str:
     `chronos-ft-<hash>`, or `chronos-slots-<hash>` for `slots-<hash>`.
     """
     if spec.startswith(SLOTS_PREFIX):
-        return f"chronos-{spec}"
-    return f"chronos-ft-{spec}"
+        return f"{SLOTS_RELEASE_PREFIX}-{spec.removeprefix(SLOTS_PREFIX)}"
+    return f"{FINETUNED_PREFIX}-{spec}"
 
 
 @dataclass(frozen=True)

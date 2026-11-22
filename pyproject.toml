@@ -253,7 +253,6 @@ ignore_imports = [
   "nowcasteval.scoresummary -> bdbvhub.reporting.site",
   "nowcastfoundation.checkpoint -> nowcastgermany.data",
   "nowcastfoundation.checkpoint -> nowcastgermany.evaluation",
-  "nowcastfoundation.live_checkpoint -> nowcastgermany.store",
   "nowcastfoundation.simulate -> bdbvhub.data.delays",
   "nowcastfoundation.simulate -> bdbvhub.data.tidy",
   "nowcastgermany.evaluation -> bdbvhub.data.tidy",
