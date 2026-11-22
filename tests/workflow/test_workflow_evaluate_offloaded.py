@@ -70,16 +70,38 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
         snapshot(train, step, kinds)
     first = checkpoint_at(train, 250, 200)
     second = checkpoint_at(train, 500, 400)
-    mod.main(["steps", str(first), "--device", "cpu"])
+    mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
     assert calls["loads"] == 1
     assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]
     got = json.loads((train / "evals" / "step-0000200.json").read_text())
     assert got["step"] == 200
     assert got["eval_loss"] == 0.3
     assert not (train / "evals" / "step-0000400.json").exists()
-    mod.main(["steps", str(second), "--prev", str(first), "--device", "cpu"])
+    mod.main(
+        [
+            "steps",
+            str(second),
+            "--prev",
+            str(first),
+            "--device",
+            "cpu",
+            "--eval-every",
+            "200",
+        ]
+    )
     assert len(calls["evals"]) == 3
-    mod.main(["steps", str(second), "--prev", str(first), "--device", "cpu"])
+    mod.main(
+        [
+            "steps",
+            str(second),
+            "--prev",
+            str(first),
+            "--device",
+            "cpu",
+            "--eval-every",
+            "200",
+        ]
+    )
     assert len(calls["evals"]) == 3
 
 
@@ -167,5 +189,5 @@ def test_base_scores_only_step_0_and_once(tmp_path, fake):
     mod.main(["base", str(first), "--device", "cpu"])
     assert len(calls["evals"]) == 1
     # The segment's step evaluation then skips step 0.
-    mod.main(["steps", str(first), "--device", "cpu"])
+    mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
     assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]

@@ -1,7 +1,8 @@
 # Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
-# score each segment's step snapshots and its checkpoint after it ends, in
-# the `evaluate` group (WORKER_GROUPS places it), on the GPU below the
-# trainer. Files and readers: workflow/flowlib/evaluations.py.
+# score each segment's step snapshots on the GPU below the trainer, and
+# step 0 and each checkpoint above it (between segments), in the
+# `evaluate` group (WORKER_GROUPS places it). Files and readers:
+# workflow/flowlib/evaluations.py.
 
 
 rule evaluate_steps:
@@ -44,12 +45,44 @@ rule evaluate_steps:
         "> {log} 2>&1"
 
 
+rule evaluate_base:
+    # Step 0 (base Chronos-2) on the held-out blocks, before the first
+    # segment's other steps: the start loss each checkpoint's sidecar needs.
+    input:
+        settings=lambda wc: (
+            f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
+        ),
+    output:
+        f"{TRAIN}/evals/step-0000000.json",
+    log:
+        f"{TRAIN}/logs/evaluate-base.log",
+    priority: EVALUATE_CHECKPOINT_PRIORITY
+    conda:
+        TOOLS_ENV
+    resources:
+        gpu=1,
+    params:
+        where=lambda wc, input: Path(input.settings).parent,
+        device=machine.device(LOCAL),
+        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
+        copy_in=lambda wc: [
+            f"{train_dir(wc.run)}/evals/step-0000000/",
+            f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
+        ],
+    shell:
+        "DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
+        f"{EVALUATE_PY} base {{params.where}} --device {{params.device}} "
+        "> {log} 2>&1"
+
+
 rule evaluate_checkpoint:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
         # Its segment's steps, chained back to step 0 (base Chronos-2).
-        steps=f"{TRAIN}/evals/n{{n}}.done",
+        # Step 0 (base Chronos-2) only, for the start loss: not the
+        # segments' step evaluations, which queue behind the trainer.
+        base=f"{TRAIN}/evals/step-0000000.json",
         # Earlier checkpoints' settings: `evaluations.start_loss` reads their
         # held_out_loss_start when the run evaluated them in the trainer.
         earlier=lambda wc: [
@@ -61,7 +94,7 @@ rule evaluate_checkpoint:
         f"{TRAIN}/n{{n}}/{SIDECAR}",
     log:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
-    priority: EVALUATE_PRIORITY
+    priority: EVALUATE_CHECKPOINT_PRIORITY
     conda:
         TOOLS_ENV
     resources:

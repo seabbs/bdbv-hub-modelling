@@ -365,14 +365,15 @@ def test_an_offloaded_checkpoint_publishes_with_its_held_out_losses(tmp_path):
 
 def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
     # Step 0 (base Chronos-2's loss, the sidecar's held_out_loss_start) is
-    # scored with the first segment's steps, so a later checkpoint's
-    # evaluation waits for every earlier segment's.
+    # scored on its own, so a checkpoint's evaluation waits for no
+    # segment's other steps.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
     sidecar = "runs/runa/train/n500/held-out.json"
     jobs = dry(tmp_path, str(tmp_path / sidecar), config=OFFLOAD)
-    assert jobs["evaluate_steps"] == 2
+    assert jobs["evaluate_base"] == 1
     assert jobs["evaluate_checkpoint"] == 1
+    assert "evaluate_steps" not in jobs
 
 
 def _dag(tmp_path, target, config):
