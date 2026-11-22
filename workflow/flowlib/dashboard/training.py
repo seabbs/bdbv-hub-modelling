@@ -9,6 +9,7 @@ learning rates its history logs; the losses from its history
 
 from __future__ import annotations
 
+import csv
 import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
@@ -231,6 +232,32 @@ def status_point(folder: Path | str) -> tuple[float, float] | None:
         return t, float(s["step"])
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def views_summary(folder: Path | str) -> str | None:
+    """Return a line on the run's block views, or None if it has none.
+
+    From `train/views.csv`, which the trainer writes for each system over
+    the block limit (`finetune_stream.record_views`): how many systems
+    were cut, how many of them are held out, the blocks they became and
+    the largest series counts before and after.
+    """
+    path = Path(folder) / "train" / "views.csv"
+    if not path.is_file():
+        return None
+    with path.open(newline="") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return None
+    systems = {(r["part"], r["outbreak"], r["source"], r["cut"]) for r in rows}
+    held = sum(1 for s in systems if s[0] == "held-out")
+    before = max(int(r["series_before"]) for r in rows)
+    after = max(int(r["series_after"]) for r in rows)
+    return (
+        f"block views: {len(systems)} systems over the block limit "
+        f"({held} held-out) cut into {len(rows)} blocks; largest {before} "
+        f"series, at most {after} after"
+    )
 
 
 def step_at(

@@ -1027,6 +1027,9 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     sizes = checkpoint_sizes(ctx, info, score_rows)
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
+    views = training.views_summary(live.folder) if live.folder else None
+    if views:
+        sub = f"{sub}; {html.escape(views)}" if sub else html.escape(views)
     live_note = "" if ctx.once else "updates in place every 60 s; "
     mirror = (
         f"scores {html.escape(ctx.mirror_status)}; "

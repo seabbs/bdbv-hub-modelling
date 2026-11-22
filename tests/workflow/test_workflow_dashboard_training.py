@@ -293,3 +293,23 @@ def test_an_offloaded_run_s_losses_reach_the_loss_plot(tmp_path):
     assert got["full0"] == 0.5
     assert got["bysrc"] == {"weekly": [[50, 0.25]]}
     assert got["train"] == [[50, 0.45]]
+
+
+def test_block_views_are_summarised_from_the_run_s_record(tmp_path):
+    train = tmp_path / "train"
+    train.mkdir()
+    # No record: no system was over the block limit.
+    assert training.views_summary(tmp_path) is None
+    (train / "views.csv").write_text(
+        "part,outbreak,source,cut,kind,places_before,places_after,"
+        "series_before,series_after,collapsed\n"
+        "held-out,1-0001,daily,3,top,40,6,3990,300,strata\n"
+        "held-out,1-0001,daily,3,subtree,40,12,3990,900,\n"
+        "1-100,2-0001,weekly,0,top,30,1,2000,40,strata+places\n"
+        "1-100,2-0001,weekly,0,subtree,30,9,2000,800,\n"
+        "1-100,2-0001,weekly,0,subtree,30,9,2000,820,\n"
+    )
+    assert training.views_summary(tmp_path) == (
+        "block views: 2 systems over the block limit (1 held-out) cut into "
+        "5 blocks; largest 3990 series, at most 900 after"
+    )
