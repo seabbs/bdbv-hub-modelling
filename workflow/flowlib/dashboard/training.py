@@ -255,8 +255,8 @@ def status_point(folder: Path | str) -> tuple[float, float] | None:
         return None
 
 
-def views_summary(folder: Path | str) -> str | None:
-    """Return a line on the run's block views, or None if it has none.
+def views_summary(folder: Path | str) -> dict[str, int] | None:
+    """Return the run's block views, or None if it has none.
 
     From `train/views.csv`, which the trainer writes for each system over
     the block limit (`finetune_stream.record_views`): how many systems
@@ -274,11 +274,13 @@ def views_summary(folder: Path | str) -> str | None:
     held = sum(1 for s in systems if s[0] == "held-out")
     before = max(int(r["series_before"]) for r in rows)
     after = max(int(r["series_after"]) for r in rows)
-    return (
-        f"block views: {len(systems)} systems over the block limit "
-        f"({held} held-out) cut into {len(rows)} blocks; largest {before} "
-        f"series, at most {after} after"
-    )
+    return {
+        "systems_over_limit": len(systems),
+        "held_out": held,
+        "blocks": len(rows),
+        "largest_series_before": before,
+        "largest_series_after": after,
+    }
 
 
 def step_at(

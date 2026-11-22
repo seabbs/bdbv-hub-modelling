@@ -16,6 +16,7 @@ from typing import Any
 
 _UNIT = re.compile(r"_(s|kb|mb|gb)$")
 _BYTES = {"kb": 1e3, "mb": 1e6, "gb": 1e9}
+_ACRONYMS = {"eta": "ETA", "gpu": "GPU", "cpu": "CPU", "lr": "LR"}
 
 
 def duration(seconds: float) -> str:
@@ -41,8 +42,17 @@ def size(n: float) -> str:
 
 
 def label(key: str) -> str:
-    """Return a key as a label: no unit suffix, words, a capital."""
-    words = _UNIT.sub("", str(key)).replace("_", " ").strip()
+    """Return a key as a label: no unit suffix, words, a capital.
+
+    A name with digits (a round `r34`, a checkpoint `n800`) is kept.
+    """
+    words = " ".join(
+        _ACRONYMS.get(w.lower(), w)
+        for w in _UNIT.sub("", str(key)).split("_")
+        if w
+    )
+    if any(c.isdigit() for c in words):
+        return words
     return words[:1].upper() + words[1:]
 
 
@@ -56,9 +66,9 @@ def value(key: str, v: Any) -> str:
             return duration(v)
         return size(v * _BYTES[unit[1]])
     if isinstance(v, int):
-        return f"{v:,}"
+        return str(v)
     if isinstance(v, float):
-        return f"{v:,.0f}" if abs(v) >= 1000 else f"{v:.3g}"
+        return f"{v:.0f}" if abs(v) >= 1000 else f"{v:.3g}"
     return str(v)
 
 

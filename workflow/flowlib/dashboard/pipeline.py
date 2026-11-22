@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from flowlib import runstatus
-from flowlib.dashboard import logs
+from flowlib.dashboard import kv, logs
 
 STAGES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
@@ -52,12 +52,12 @@ class Where:
 
 @dataclass
 class Stage:
-    """One stage as shown."""
+    """One stage as shown: its progress and its jobs, as labelled items."""
 
     key: str
     title: str
-    progress: str = ""
-    timing: str = ""
+    progress: dict[str, Any] = field(default_factory=dict)
+    jobs: dict[str, Any] = field(default_factory=dict)
     running: int = 0
 
 
@@ -67,12 +67,7 @@ class View:
 
     stages: list[Stage] = field(default_factory=list)
     current: str = ""
-    waiting: str = ""
-
-
-def _dur(seconds: float) -> str:
-    s = int(seconds)
-    return f"{s // 3600}h {s % 3600 // 60:02d}m" if s >= 3600 else f"{s // 60}m"
+    waiting: dict[str, Any] = field(default_factory=dict)
 
 
 def _jobs(where: Where) -> list[dict[str, Any]]:
@@ -82,8 +77,8 @@ def _jobs(where: Where) -> list[dict[str, Any]]:
     return runstatus.parse_log(log.read_text(errors="replace")) if log else []
 
 
-def _timing(jobs: Sequence[Mapping[str, Any]]) -> tuple[str, float | None]:
-    """Return a stage's job counts and mean time, and that mean (s)."""
+def _counts(jobs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Return a stage's jobs running, done and failed, and their mean time."""
     took = [
         (
             datetime.fromisoformat(j["ended"])
@@ -92,17 +87,12 @@ def _timing(jobs: Sequence[Mapping[str, Any]]) -> tuple[str, float | None]:
         for j in jobs
         if j["state"] == "done" and j["started"] and j["ended"]
     ]
-    mean = sum(took) / len(took) if took else None
-    running = sum(j["state"] == "running" for j in jobs)
-    failed = sum(j["state"] == "failed" for j in jobs)
-    parts = [
-        f"{running} running" if running else "",
-        f"{len(took)} done" + (f", {_dur(mean)} each" if mean else "")
-        if took
-        else "",
-        f"{failed} failed" if failed else "",
-    ]
-    return "; ".join(p for p in parts if p), mean
+    return {
+        "running": sum(j["state"] == "running" for j in jobs) or None,
+        "done": len(took) or None,
+        "mean_job_s": sum(took) / len(took) if took else None,
+        "failed": sum(j["state"] == "failed" for j in jobs) or None,
+    }
 
 
 def _simulated(where: Where) -> dict[int, int]:
@@ -152,50 +142,47 @@ def build(
     view = View()
     for key, title, rules in STAGES:
         mine = [j for j in jobs if j["rule"] in rules]
-        timing, mean = _timing(mine)
-        stage = Stage(
-            key,
-            title,
-            timing=timing,
-            running=sum(j["state"] == "running" for j in mine),
-        )
+        stage = Stage(key, title, jobs=_counts(mine))
+        stage.running = stage.jobs["running"] or 0
         view.stages.append(stage)
         if key == "simulate":
             done = _simulated(where)
-            stage.progress = " · ".join(
-                f"r{r} {n}/{where.batches}" for r, n in done.items()
-            )
+            stage.progress = {
+                f"r{r}": f"{n}/{where.batches}" for r, n in done.items()
+            }
             left = len(done) * where.batches - sum(done.values())
+            mean = stage.jobs["mean_job_s"]
+            stage.jobs["to_go"] = left or None
             if left and mean:
-                eta = left * mean / max(stage.running, 1)
-                stage.timing += f"; {left} to go, ETA {_dur(eta)}"
+                stage.jobs["eta_s"] = left * mean / max(stage.running, 1)
         elif key == "fetch" and folder:
             seeds = Path(folder, "seeds.txt")
-            total = len(seeds.read_text().split()) if seeds.is_file() else 0
-            have = len(list(Path(folder, "sims").glob("settings-*.csv")))
-            stage.progress = f"{have} of {total} training batches in the run"
-        elif key == "cut" and status:
-            split = status.get("split") or {}
-            if split.get("cut_s") is not None:
-                stage.progress = f"{_dur(split['cut_s'])} cutting this segment"
-        elif key == "train" and train.get("nxt"):
-            stage.progress = (
-                f"n{train['nxt']}: step {train.get('step') or 0} of "
-                f"{train.get('next_step')}"
+            order = seeds.read_text().split() if seeds.is_file() else []
+            have = sum(
+                Path(folder, "sims", f"settings-{s}.csv").is_file()
+                for s in order
             )
-            if train.get("trained") is not None:
-                stage.progress += (
-                    f"; {min(train['trained'], train['nxt']):.0f} of "
-                    f"{train['nxt']} simulations"
-                )
-            if status.get("stage"):
-                stage.timing = str(status["stage"])
-        if not stage.progress:
-            stage.progress = "; ".join(
-                f"{j['rule']} {j['wildcards']}".strip()
+            stage.progress = {"batches": f"{have}/{len(order)}"}
+        elif key == "cut":
+            split = status.get("split") or {}
+            stage.progress = {"cut_s": split.get("cut_s")}
+        elif key == "train" and train.get("nxt"):
+            stage.progress = {
+                "segment": f"n{train['nxt']}",
+                "step": f"{train.get('step') or 0}/{train.get('next_step')}",
+                "simulations": (
+                    f"{min(train['trained'], train['nxt']):.0f}/{train['nxt']}"
+                    if train.get("trained") is not None
+                    else None
+                ),
+                "trainer": status.get("stage"),
+            }
+        if not any(v is not None for v in stage.progress.values()):
+            stage.progress = {
+                j["rule"]: j["wildcards"]
                 for j in mine
                 if j["state"] == "running"
-            )
+            }
     stage_text = str(status.get("stage", "")).lower()
     since = _clock(status.get("waiting_since") or status.get("time") or "")
     missing = (
@@ -204,14 +191,12 @@ def build(
         else []
     )
     if missing:
-        what = "batches" if len(missing) > 1 else "batch"
-        view.waiting = f"waiting for {what} {', '.join(map(str, missing))}"
-        view.waiting += f" since {since}" if since else ""
+        view.waiting = {"waiting_for_batches": missing, "since": since}
         absent = any(not _in_rounds(where, s) for s in missing)
         view.current = "simulate" if absent else "fetch"
     elif alive:
         if status.get("waiting_since"):
-            view.waiting = f"trainer waiting for batches since {since}"
+            view.waiting = {"trainer_waiting_since": since}
             view.current = "fetch"
         elif "cut" in stage_text or "block" in stage_text:
             view.current = "cut"
@@ -228,8 +213,8 @@ def build(
 def section(view: View) -> str:
     """Return the pipeline as html.
 
-    The stage cards in order, the current one marked, and what the run
-    waits on.
+    The stage cards in order, the current one marked, each with its
+    progress and jobs as labelled items, and what the run waits on.
     """
     cards = []
     for s in view.stages:
@@ -240,14 +225,12 @@ def section(view: View) -> str:
         )
         cards.append(
             f'<div class="{cls}"><div class=k>{html.escape(s.title)}</div>'
-            f"<div>{html.escape(s.progress) or '&nbsp;'}</div>"
-            f"<div class=s>{html.escape(s.timing)}</div></div>"
+            f"{kv.box(s.progress)}{kv.box(s.jobs)}</div>"
         )
     wait = (
-        f"<div class=waitnote>{html.escape(view.waiting)}</div>"
+        f"<div class=waitnote>{kv.box(view.waiting)}</div>"
         if view.waiting
         else ""
     )
-    return (
-        f"<div class=pipe>{'<span class=arr>→</span>'.join(cards)}</div>{wait}"
-    )
+    arrow = "<span class=arr>→</span>"
+    return f"<div class=pipe>{arrow.join(cards)}</div>{wait}"
