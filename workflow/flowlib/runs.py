@@ -69,8 +69,15 @@ def resolve(
     A run's settings are `finetune` with its entry's keys on top, and the
     grid's rounds, validation round and sources where unset
     (`grids.resolve`). Where batches come from is this machine's choice
-    when it sets SIMS_FROM.
+    when it sets SIMS_FROM. A RUN folder in the local config is an error,
+    so a machine with one never starts a new run beside it.
     """
+    if local.get("RUN"):
+        raise ValueError(
+            f"RUN={local['RUN']} is set in the local config, but each run's "
+            "folder is $ROOT/runs/<name> (`runs` in workflow/config.yaml): "
+            "link that folder there and drop RUN"
+        )
     out = {}
     for name, overrides in (config.get("runs") or {}).items():
         ft = copy.deepcopy(dict(config["finetune"]))

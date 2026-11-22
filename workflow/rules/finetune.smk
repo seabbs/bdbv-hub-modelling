@@ -225,9 +225,9 @@ rule dashboard:
     # A static render of the dashboard for the configured runs, for a
     # finished run or the record; `task nowcast-foundation:dashboard` serves it live instead.
     output:
-        f"{RUNS_DIR}/reports/dashboard.html",
+        f"{LOCAL['ROOT']}/reports/dashboard.html",
     log:
-        f"{RUNS_DIR}/logs/dashboard.log",
+        f"{LOCAL['ROOT']}/logs/dashboard.log",
     localrule: True
     conda:
         TOOLS_ENV
