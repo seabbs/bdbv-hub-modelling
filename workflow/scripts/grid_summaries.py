@@ -1,0 +1,281 @@
+"""Per-outbreak summaries of a simulated round, and their comparison.
+
+Reads a round's `sims/` folder (`counts-<seed>.csv.gz`,
+`latent-<seed>.csv.gz`, `settings-<seed>.csv`), whichever engine wrote
+it, and writes one row per outbreak (first draw, strata summed):
+
+- design: window, path, trajectory, delay change, GT family, strata;
+- drawn values: GT mean and CV, incubation mean, ascertainment, delay
+  mean (strata averaged where per stratum);
+- size: infections, expected onsets, reported cases, attack rate, peak
+  weekly reported cases;
+- dynamics, on the 7-day centred mean of expected onsets: fastest growth
+  over 14 days, half-peak to peak and peak to half-peak of each major
+  peak (prominence at least 30% of the maximum, 28 days apart), number of
+  major peaks and a pattern;
+- R and effective R, infection weighted over strata: 5% and 95% over days;
+- delays, from the reported counts: mean delay and share reported within
+  7 days of the reference date;
+- phase at the training cut-offs: the share of weekly cut-offs, from two
+  weeks after the first report to `SIM_DELAY_WEEKS` + 5 weeks before the
+  last (as `finetune_chronos.outbreak_blocks` places them), where expected
+  onsets grow (14-day growth over 0.01 a day), fall (under -0.01), are
+  flat, or are low (under 1 a day).
+
+    uv run python workflow/scripts/grid_summaries.py outbreaks <sims> <out.csv>
+    uv run python workflow/scripts/grid_summaries.py compare <out.csv> \
+        <name>=<outbreaks.csv> [<name>=<outbreaks.csv> ...]
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from scipy.signal import find_peaks
+
+SIM_DELAY_WEEKS = 8
+"""`finetune_chronos.SIM_DELAY_WEEKS`: weeks kept after the last cut-off."""
+
+GROWING = 0.01
+"""Daily 14-day log growth above which a cut-off is in a rising phase."""
+
+LOW = 1.0
+"""Expected onsets a day under which a cut-off is in a low phase."""
+
+SETTINGS = [
+    "window",
+    "path",
+    "trajectory",
+    "delay_change",
+    "gt_family",
+    "report_days",
+    "report_dow",
+    "reference_dow",
+    "delay_dow",
+    "revisions",
+    "observation_strata",
+    "reporting_strata",
+    "n_places",
+    "n_ages",
+    "weeks",
+]
+VALUES = ["gt_mean", "gt_cv", "incubation_mean", "ascertainment", "delay_mean"]
+
+
+def _mean(x: object) -> float:
+    """Return a value, or the mean of a `;`-separated per-stratum value."""
+    if isinstance(x, str):
+        parts = [float(p) for p in x.split(";") if p not in ("", "NA")]
+        return float(np.mean(parts)) if parts else np.nan
+    return float(x)
+
+
+def dynamics(onsets: pd.Series) -> dict:
+    """Return the dynamics summaries of a daily expected-onset series."""
+    m = onsets.rolling(7, center=True, min_periods=7).mean().dropna()
+    out: dict = {"n_peaks": 0, "pattern": "low"}
+    if len(m) < 21 or m.max() < LOW:
+        return out
+    lg = np.log(m.clip(lower=0.5))
+    g14 = (lg - lg.shift(14)) / 14
+    out["max_growth_14d"] = float(g14.max())
+    out["min_growth_14d"] = float(g14.min())
+    v = m.to_numpy()
+    peaks, _ = find_peaks(v, prominence=0.3 * v.max(), distance=28)
+    rises, falls = [], []
+    for p in peaks:
+        left = np.where(v[:p] <= v[p] / 2)[0]
+        right = np.where(v[p:] <= v[p] / 2)[0]
+        if len(left):
+            rises.append(int(p - left[-1]))
+        if len(right):
+            falls.append(int(right[0]))
+    out["half_to_peak"] = float(np.median(rises)) if rises else np.nan
+    out["peak_to_half"] = float(np.median(falls)) if falls else np.nan
+    out["n_peaks"] = len(peaks)
+    top = int(np.argmax(v))
+    if len(peaks) >= 2:
+        out["pattern"] = "multi-wave"
+    elif len(peaks) == 1:
+        out["pattern"] = "wave"
+    elif top >= len(v) - 7:
+        out["pattern"] = "rising"
+    elif top <= 7:
+        out["pattern"] = "falling"
+    else:
+        out["pattern"] = "flat"
+    return out
+
+
+def phases(onsets: pd.Series, first: pd.Timestamp, last: pd.Timestamp) -> dict:
+    """Return the shares of weekly cut-offs in each phase."""
+    m = onsets.rolling(7, center=True, min_periods=1).mean()
+    lg = np.log(m.clip(lower=0.5))
+    g14 = (lg - lg.shift(14)) / 14
+    start = first + pd.Timedelta(weeks=2)
+    end = last - pd.Timedelta(weeks=SIM_DELAY_WEEKS + 5)
+    cuts = pd.date_range(start, end, freq="7D")
+    cuts = cuts[cuts.isin(m.index)]
+    if not len(cuts):
+        return {}
+    level, growth = m.loc[cuts], g14.loc[cuts].fillna(0)
+    low = level < LOW
+    up = ~low & (growth > GROWING)
+    down = ~low & (growth < -GROWING)
+    return {
+        "cutoffs": len(cuts),
+        "phase_low": float(low.mean()),
+        "phase_rising": float(up.mean()),
+        "phase_falling": float(down.mean()),
+        "phase_flat": float((~low & ~up & ~down).mean()),
+    }
+
+
+def weighted(latent: pd.DataFrame, col: str) -> pd.Series:
+    """Return a latent column averaged over strata by infections, daily."""
+    d = latent.dropna(subset=[col])
+    w = d["infections"].where(d["infections"] > 0, 0) + 1e-12
+    num = (d[col] * w).groupby(d["date"]).sum()
+    return num / w.groupby(d["date"]).sum()
+
+
+def outbreak_row(
+    settings: pd.Series, latent: pd.DataFrame, counts: pd.DataFrame
+) -> dict:
+    """Return one outbreak's summaries."""
+    row: dict = {"outbreak": settings["outbreak"]}
+    row |= {k: settings.get(k) for k in SETTINGS}
+    row |= {k: _mean(settings.get(k, np.nan)) for k in VALUES}
+    row["strata"] = latent["location"].nunique()
+    latent = latent.assign(date=pd.to_datetime(latent["date"]))
+    daily = latent.groupby("date")[["infections", "onsets"]].sum()
+    daily = daily.asfreq("D", fill_value=0)
+    row["infections"] = float(daily["infections"].sum())
+    row["onsets"] = float(daily["onsets"].sum())
+    row["attack"] = _mean(settings.get("attack", np.nan))
+    row |= dynamics(daily["onsets"])
+    for col in ("r", "reff"):
+        s = weighted(latent, col)
+        if len(s):
+            row[f"{col}_q05"], row[f"{col}_q95"] = np.quantile(s, [0.05, 0.95])
+    c = counts.assign(
+        reference_date=pd.to_datetime(counts["reference_date"]),
+        report_date=pd.to_datetime(counts["report_date"]),
+    )
+    total = c["count"].sum()
+    row["reported"] = float(total)
+    if total > 0:
+        delay = (c["report_date"] - c["reference_date"]).dt.days
+        row["mean_delay"] = float((delay * c["count"]).sum() / total)
+        row["reported_7d"] = float(c.loc[delay <= 7, "count"].sum() / total)
+        weekly = c.groupby(pd.Grouper(key="reference_date", freq="7D"))["count"]
+        row["peak_weekly"] = float(weekly.sum().max())
+        row |= phases(
+            daily["onsets"], c["report_date"].min(), c["report_date"].max()
+        )
+    return row
+
+
+def outbreaks(sims: Path) -> pd.DataFrame:
+    """Return the summaries of every outbreak in a round's `sims/`."""
+    rows = []
+    for path in sorted(sims.glob("settings-*.csv")):
+        seed = path.stem.split("-", 1)[1]
+        settings = pd.read_csv(path)
+        settings = settings.loc[:, ~settings.columns.duplicated()]
+        latent = pd.read_csv(sims / f"latent-{seed}.csv.gz")
+        counts = pd.read_csv(
+            sims / f"counts-{seed}.csv.gz",
+            usecols=["outbreak", "reference_date", "report_date", "count"],
+        )
+        counts = counts.loc[counts["outbreak"].str.endswith("-1")]
+        counts = counts.assign(outbreak=counts["outbreak"].str[:-2])
+        lat = dict(tuple(latent.groupby("outbreak")))
+        cnt = dict(tuple(counts.groupby("outbreak")))
+        for _, s in settings.iterrows():
+            o = s["outbreak"]
+            if o not in lat:
+                continue
+            rows.append(outbreak_row(s, lat[o], cnt.get(o, counts.iloc[:0])))
+    return pd.DataFrame(rows)
+
+
+QUANTILES = [0.05, 0.25, 0.5, 0.75, 0.95]
+SHARES = [
+    "window",
+    "path",
+    "pattern",
+    "delay_change",
+    "gt_family",
+    "report_days",
+]
+
+
+def compare(sources: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Return quantiles of each numeric summary and shares of each factor.
+
+    One row per (statistic, level) and one column block per source, so the
+    sources' distributions read side by side.
+    """
+    rows = []
+    numeric = [
+        c
+        for c in next(iter(sources.values())).columns
+        if c not in ("outbreak", *SETTINGS, "pattern")
+    ]
+    for name, d in sources.items():
+        for c in numeric:
+            v = pd.to_numeric(d[c], errors="coerce").dropna()
+            if not len(v):
+                continue
+            q = np.quantile(v, QUANTILES)
+            rows.append(
+                {
+                    "source": name,
+                    "statistic": c,
+                    "level": "",
+                    "n": len(v),
+                    "mean": v.mean(),
+                    **{
+                        f"q{int(p * 100):02d}": x
+                        for p, x in zip(QUANTILES, q, strict=True)
+                    },
+                }
+            )
+        for c in SHARES:
+            if c not in d:
+                continue
+            for level, share in d[c].value_counts(normalize=True).items():
+                rows.append(
+                    {
+                        "source": name,
+                        "statistic": f"share {c}",
+                        "level": level,
+                        "n": len(d),
+                        "mean": share,
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
+def main(argv: list[str]) -> None:
+    """Run `outbreaks` or `compare` from the command line."""
+    if argv[0] == "outbreaks":
+        out = outbreaks(Path(argv[1]))
+        out.to_csv(argv[2], index=False)
+        print(f"{len(out)} outbreaks -> {argv[2]}")
+    elif argv[0] == "compare":
+        sources = {
+            k: pd.read_csv(v) for k, v in (a.split("=", 1) for a in argv[2:])
+        }
+        compare(sources).to_csv(argv[1], index=False, float_format="%.4g")
+        print(f"comparison -> {argv[1]}")
+    else:
+        raise SystemExit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

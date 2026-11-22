@@ -1113,6 +1113,23 @@ def test_a_round_s_batch_runs_the_grid(tmp_path):
     assert "nowcastfoundation.simulator config/finetune/grid.yaml 20 " in shell
 
 
+def test_grid_figures_summarise_each_round_then_compare_them(tmp_path):
+    """The grid summaries and figures are workflow targets, per round."""
+    blocks = score_jobs(tmp_path, {"rounds": [4, 5]}, target="grid_figures")
+    text = " ".join("".join(blocks).replace("\\\n", " ").split())
+    rounds = tmp_path / "rounds"
+    for r in (4, 5):
+        assert (
+            f"grid_summaries.py outbreaks {rounds}/r{r}/sims "
+            f"{rounds}/r{r}/summaries/outbreaks.csv"
+        ) in text
+    assert f"r4={rounds}/r4/summaries/outbreaks.csv" in text
+    assert "grid_figures.py" in text
+    # From the batch files: no manifest or records of the round.
+    assert "rule round_manifest" not in "".join(blocks)
+    assert "rule batch_record" not in "".join(blocks)
+
+
 def test_a_fetched_batch_is_a_copy_not_a_link_to_its_source(tmp_path):
     # Snakemake touches a job's outputs one after another; through a hard
     # link that moves its inputs' times too, and a clock tick between the
