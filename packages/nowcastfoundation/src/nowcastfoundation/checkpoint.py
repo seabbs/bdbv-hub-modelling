@@ -50,8 +50,6 @@ from nowcastfoundation.sidecar import SIDECAR, with_sidecar
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule: WIS and CRPS on each model's own quantiles, from
 1000 draws on the common random stream (`nowcasteval.marginals`)."""
-OLD_RULE: Final = "samples-100"
-"""Rows written before the rule: WIS of 100 draws."""
 BASELINE: Final = "randomwalknowcast"
 REFERENCE: Final = "reference"
 REFERENCE_PIN: Final = "e8a1f5ae338b"
@@ -271,17 +269,15 @@ def relative(
 def merge_evidence(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
     """Add rule rows to the evidence, replacing the checkpoints' old ones.
 
-    The rule's rows of checkpoints not in `new` are kept, as are rows of
-    other rules.
+    The rule's rows of checkpoints not in `new` are kept; rows of any
+    other rule are dropped.
     """
     old = old.reindex(columns=COLUMNS)
-    old["rule"] = old["rule"].astype(object).fillna(OLD_RULE)
     mine = set(new["checkpoint"].astype(str))
     old = old.loc[
-        (old["rule"] != RULE) | ~old["checkpoint"].astype(str).isin(mine)
+        (old["rule"] == RULE) & ~old["checkpoint"].astype(str).isin(mine)
     ]
     out = pd.concat([old, new.reindex(columns=COLUMNS)], ignore_index=True)
-    out["target"] = out["target"].astype(object).fillna("7day")
     return out.sort_values([*SORT, "target"], kind="stable").reset_index(
         drop=True
     )
