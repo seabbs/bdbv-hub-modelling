@@ -40,3 +40,34 @@ def test_heavy_jobs_wait_below_the_load_ceiling(tmp_path):
     command = " ".join(out.stdout.split("rule simulate_batch", 1)[1].split())
     sims = tmp_path / "rounds" / "r4" / "sims"
     assert f"wait_for_room.sh 20 16 {sims} 12" in command
+
+
+def test_the_compile_cache_env_names_the_folder_and_its_cap():
+    env = simulator.jax_cache_env("/x/jax-cache", "2")
+    assert "JAX_COMPILATION_CACHE_DIR=/x/jax-cache" in env
+    assert "JAX_COMPILATION_CACHE_MAX_SIZE=2000000000" in env
+    # Every compile is cached, however small or quick.
+    assert "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0" in env
+    assert "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=0" in env
+    assert simulator.jax_cache_env("", "2") == ""
+
+
+def test_batches_share_a_compile_cache_under_root(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
+    )
+    batch = tmp_path / "rounds" / "r4" / "sims" / "counts-30400.csv.gz"
+    out = dry_run(tmp_path, str(batch), extra=["-p", "--quiet", "host"])
+    assert out.returncode == 0, out.stderr
+    command = " ".join(out.stdout.split("rule simulate_batch", 1)[1].split())
+    assert f"JAX_COMPILATION_CACHE_DIR={tmp_path}/jax-cache" in command
+
+
+def test_an_empty_cache_setting_turns_the_cache_off(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nJAX_CACHE=\n"
+    )
+    batch = tmp_path / "rounds" / "r4" / "sims" / "counts-30400.csv.gz"
+    out = dry_run(tmp_path, str(batch), extra=["-p", "--quiet", "host"])
+    assert out.returncode == 0, out.stderr
+    assert "JAX_COMPILATION_CACHE_DIR" not in out.stdout
