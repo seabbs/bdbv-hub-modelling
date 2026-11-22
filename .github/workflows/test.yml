@@ -130,12 +130,14 @@ jobs:
             any::pkgload
             any::yaml
             any::data.table
+            any::flexsurv
           dependencies: '"hard"'
       - name: Install CmdStan
         run: Rscript -e 'cmdstanr::install_cmdstan(cores = 2)'
       - name: Live R checks
         run: >-
-          uv run pytest -q tests/model/test_latent_components.py
+          uv run pytest -q tests/model/test_pmfs.py
+          tests/model/test_latent_components.py
           tests/model/test_latent_process.py
           tests/model/test_reporting_delays.py
           tests/model/test_reporting_triangle.py
