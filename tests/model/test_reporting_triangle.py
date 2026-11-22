@@ -100,7 +100,7 @@ def epinowcast_expected() -> dict[str, Any]:
     )
     n_sel <- rep$data$rep_agg_n_selected
     sel <- rep$data$rep_agg_selected_idx
-    refp <- rbind(as.matrix(input$refp_lh), Inf)
+    refp <- rbind(t(as.matrix(input$refp_lh)), Inf)  # (D, pmfs)
     dpmfs <- as.vector(t(input$dpmfs)) + 1L
     refnp <- input$refnp_lh
     refnp_flat <- unlist(lapply(seq_len(G), function(g) {
@@ -108,7 +108,9 @@ def epinowcast_expected() -> dict[str, Any]:
     }))
     rep_t <- T + D - 1
     srdlh <- as.vector(t(input$srdlh))
-    rdlurd <- matrix(seq_len(G * rep_t), G, rep_t, byrow = TRUE)
+    # Stan's 2-d integer arrays are lists of rows here.
+    rows <- function(m) lapply(seq_len(nrow(m)), function(i) m[i, ])
+    rdlurd <- rows(matrix(seq_len(G * rep_t), G, rep_t, byrow = TRUE))
     out <- list(lh = list(), lexp = list(), lexp_agg = list())
     for (g in seq_len(G)) for (t in seq_len(T)) {
       i <- (g - 1) * T + t
@@ -120,12 +122,10 @@ def epinowcast_expected() -> dict[str, Any]:
       tar <- input$log_lambda[g, t]
       none <- array(0L, 0)
       out$lh[[i]] <- lh
-      out$lexp[[i]] <- expected_obs(
-        tar, lh, l, 0L, 0L, none, matrix(0L, 0, 0)
-      )
+      out$lexp[[i]] <- expected_obs(tar, lh, l, 0L, 0L, none, list())
       out$lexp_agg[[i]] <- expected_obs(
         tar, lh, l, 0L, 1L, n_sel[g, t, 1:l],
-        matrix(sel[g, t, 1:l, 1:l], l, l)
+        rows(matrix(sel[g, t, 1:l, 1:l], l, l))
       )
     }
     out
@@ -145,7 +145,9 @@ def _cells() -> list[tuple[int, int, int]]:
     return [(g, t, min(D, T - t)) for g in range(G) for t in range(T)]
 
 
-def _as_float(xs: list[Any]) -> np.ndarray:
+def _as_float(xs: Any) -> np.ndarray:
+    # A one-delay cell comes back as a scalar (`auto_unbox`).
+    xs = xs if isinstance(xs, list) else [xs]
     named = {"Inf": np.inf, "-Inf": -np.inf, None: -np.inf}
     return np.array([named.get(x, x) for x in xs], dtype=float)
 
@@ -227,3 +229,23 @@ def test_ci_runs_the_triangle_checks() -> None:
         s.get("run", "") for s in workflow["jobs"]["r-live"]["steps"]
     )
     assert "tests/model/test_reporting_triangle.py" in runs
+
+
+def test_the_triangle_component_composes_its_parts() -> None:
+    from numpyro import handlers
+    from pyrenew.deterministic import DeterministicVariable
+
+    from nowcastrenewal.reporting.triangle import ReportingTriangle
+
+    triangle = ReportingTriangle(
+        "triangle",
+        parametric_rv=DeterministicVariable("p", _parametric()),
+        non_parametric_rv=DeterministicVariable("np", INPUTS["refnp_lh"]),
+        report_rv=DeterministicVariable("r", INPUTS["srdlh"]),
+        reports=REPORTS,
+    )
+    with jax.enable_x64(True), handlers.trace() as tr:
+        got = np.asarray(triangle(log_lambda=jnp.asarray(INPUTS["log_lambda"])))
+    _, want = _ours(aggregate=True)
+    np.testing.assert_array_equal(got, want)
+    assert "triangle::log_expected" in tr
