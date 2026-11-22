@@ -10,13 +10,17 @@ from pyrenew.randomvariable import DistributionalVariable
 
 from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import CensoredPMF
+from nowcastrenewal.components.renewal import (
+    ExponentialDepletion,
+    NoDepletion,
+    run_renewal,
+)
 from nowcastrenewal.model import (
     FixedTimeVarying,
     HazardDelay,
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,
-    coupled_renewal,
     generation_interval,
     hazard_to_pmf,
     incubation_period,
@@ -115,7 +119,7 @@ def test_onset_expectations_match_reference():
 
 
 @pytest.mark.parametrize("deplete", [False, True])
-def test_coupled_renewal_matches_reference(deplete):
+def test_the_fitted_renewal_matches_reference(deplete):
     rng = np.random.default_rng(3)
     g = generation_interval()
     n_init, n, p = len(g), 120, 3
@@ -134,13 +138,15 @@ def test_coupled_renewal_matches_reference(deplete):
         kernel=k,
         importation=0.05,
     )
-    x, _, _ = coupled_renewal(
+    run = run_renewal(
         jnp.asarray(seed[:, :n_init].T / pops),
-        jnp.asarray(rt),
         jnp.asarray(g),
-        mixing_matrix(jnp.asarray(k), 0.05, "sent", jnp.asarray(f)),
-        pool=1.0 if deplete else None,
+        jnp.asarray(rt),
+        1.0,
+        mixing=mixing_matrix(jnp.asarray(k), 0.05, "sent", jnp.asarray(f)),
+        depletion=ExponentialDepletion() if deplete else NoDepletion(),
     )
+    x = run.infections[n_init:]
     # Exact without depletion. With it, PyRenew's exponential depletion
     # matches the reference's linear form to first order (small y).
     rtol = 1e-4 if not deplete else 2e-2
@@ -154,11 +160,13 @@ def test_depletion_bounds_attack_rate():
     I0 = jnp.full((len(g), 2), 1e-4)
     rt = jnp.full((400, 2), 3.0)
     w = jnp.eye(2)
-    x, r_eff, _ = coupled_renewal(I0, rt, g, w, pool=1.0)
-    assert float(x.sum(axis=0).max() + I0.sum(axis=0).max()) <= 1.0 + 1e-6
-    assert float(r_eff[-1].max()) < 1.0
-    x_free, _, _ = coupled_renewal(I0, rt, g, w)
-    assert float(x_free.sum()) > 1e3
+    run = run_renewal(
+        I0, g, rt, 1.0, mixing=w, depletion=ExponentialDepletion()
+    )
+    assert float(run.infections.sum(axis=0).max()) <= 1.0 + 1e-6
+    assert float(run.reff[-1].max()) < 1.0
+    free = run_renewal(I0, g, rt, 1.0, mixing=w, depletion=NoDepletion())
+    assert float(free.infections.sum()) > 1e3
 
 
 def test_random_walk_and_pooled_walk_shapes():
@@ -405,25 +413,3 @@ def test_generation_interval_matches_bvdoutbreaksize():
     )
     s = SimulationSettings()
     assert (s.gi_mean, s.gi_sd) == (GI_MEAN, GI_SD)
-
-
-def test_imported_infections_are_part_of_the_total():
-    rng = np.random.default_rng(4)
-    g = generation_interval()
-    p = 3
-    f = np.array([0.5, 0.3, 0.2])
-    k = uniform_kernel(p)
-    w = np.asarray(mixing_matrix(jnp.asarray(k), 0.05, "sent", jnp.asarray(f)))
-    I0 = rng.uniform(0, 1e-5, (len(g), p))
-    rt = rng.uniform(0.6, 1.8, (60, p))
-    # Imported infections are part of the total, and none without coupling.
-    x, _, imp = coupled_renewal(
-        jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.asarray(w),
-        pool=0.05,
-    )  # fmt: skip
-    assert np.all(np.asarray(imp) <= np.asarray(x) + 1e-12)
-    assert float(np.asarray(imp).sum()) > 0
-    _, _, none = coupled_renewal(
-        jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.eye(p),
-    )  # fmt: skip
-    np.testing.assert_allclose(np.asarray(none), 0.0)

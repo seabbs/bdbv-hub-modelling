@@ -43,7 +43,7 @@ from .observation import (
     onset_expectations,
 )
 from .pooled import PooledInitialValue, pooled_walk
-from .renewal import MetapopulationInfections, coupled_renewal
+from .renewal import MetapopulationInfections
 from .rt_observation import RtPseudoObservation
 from .temporal import NonCentredRandomWalk
 from .zones import build_model
@@ -62,7 +62,6 @@ __all__ = [
     "RtPseudoObservation",
     "Vintage",
     "build_model",
-    "coupled_renewal",
     "fit",
     "forecast_trajectories",
     "generation_interval",

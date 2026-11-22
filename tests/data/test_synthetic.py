@@ -116,12 +116,15 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
 
     from bdbvhub.data.tidy import PROVINCE_POPULATIONS
     from nowcastrenewal.components.mixing import mixing_matrix
+    from nowcastrenewal.components.renewal import (
+        ExponentialDepletion,
+        run_renewal,
+    )
     from nowcastrenewal.model.inputs import gravity_kernel as model_kernel
     from nowcastrenewal.model.model import (
         generation_interval,
         incubation_period,
     )
-    from nowcastrenewal.model.renewal import coupled_renewal
 
     s = outbreak.settings
     p = outbreak.parameters
@@ -144,14 +147,16 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
             seeding[day, i] = s.seed_size / pop[i]
     g = generation_interval(s.gi_mean, s.gi_sd)
     nu = s.effective_fraction
-    x, _, _ = coupled_renewal(
+    run = run_renewal(
         jnp.zeros((g.size, len(pop))),
-        jnp.asarray(rt),
         jnp.asarray(g),
-        w,
-        pool=nu,
+        jnp.asarray(rt),
+        nu,
+        mixing=w,
         seeding=jnp.asarray(seeding),
+        depletion=ExponentialDepletion(),
     )
+    x = run.infections[g.size :]
     onsets = p.pivot(index="date", columns="location", values="onsets")[
         list(s.locations)
     ].to_numpy()
