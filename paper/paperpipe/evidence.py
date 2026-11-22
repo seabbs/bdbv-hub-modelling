@@ -261,21 +261,14 @@ def drop_bdbv(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def _case_study_rows(scores: pd.DataFrame) -> pd.DataFrame:
-    """Return the case studies' rows of `CHECKPOINT_RULE`, one score column.
+    """Return the case studies' rows of `CHECKPOINT_RULE`.
 
-    BDBV's relative CRPS fills `rel_wis` where that is empty.
+    A row with no relative WIS keeps it empty.
     """
     out = scores
     if "rule" in out:
         out = out.loc[out["rule"] == CHECKPOINT_RULE]
-    out = out.loc[out["study"].isin(["germany", "ebola"])]
-    if "rel_crps" in out:
-        out = out.assign(rel_wis=out["rel_wis"].fillna(out["rel_crps"]))
-        if "rel_log_crps" in out and "rel_log_wis" in out:
-            out = out.assign(
-                rel_log_wis=out["rel_log_wis"].fillna(out["rel_log_crps"])
-            )
-    return out
+    return out.loc[out["study"].isin(["germany", "ebola"])]
 
 
 def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
@@ -283,12 +276,14 @@ def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
 
     Rows of `CHECKPOINT_RULE` and the hub target on the case studies'
     development data (`live_checkpoint.tidy`), at every level, each for
-    its own panel. BDBV's relative CRPS fills `rel_wis`, so one column
-    holds each study's relative score.
+    its own panel. A row with no relative WIS keeps it empty.
     """
     out = tidy(scores)
     out = out.loc[out["study"].isin(["germany", "ebola"])]
-    out = out.assign(rel_wis=out["rel"], rel_log_wis=out["rel_log"])
+    out = out.assign(
+        rel_wis=out.get("rel_wis", np.nan),
+        rel_log_wis=out.get("rel_log_wis", np.nan),
+    )
     live = out["run"] == run if "run" in out else False
     keep = (out["checkpoint"] == "zero-shot") | live
     return out.loc[keep].reset_index(drop=True)
