@@ -323,7 +323,9 @@ latent_onsets <- function(grid, n, gt, strata, design, v) {
   pad <- rep(NA_real_, n_gt)
   asc <- v$ascertainment[strata$.group]
   pmfs <- lapply(v$incubation_mean[strata$.group], incubation_pmf,
-    cv = grid$constants$incubation_cv
+    cv = if (is.null(v$incubation_cv)) 0.5 else v$incubation_cv,
+    family = if (is.null(design$incubation_family)) "gamma" else
+      design$incubation_family
   )
   # An established or endemic stratum ran at its level before the span
   # too, so its onsets open at that level rather than ramping up from zero

@@ -492,8 +492,16 @@ def draw_values(
     v["ascertainment"] = stratum_values(
         grid, obs, n_s, "ascertainment", rng, probability=True
     )
-    v["incubation_mean"] = stratum_values(
-        grid, obs, n_s, "incubation_mean", rng
+    # Infection to reference: a shared mean times a place effect and an
+    # age effect (strata are places, then ages), constant over time.
+    n_a = int(design["n_ages"])
+    v["incubation_cv"] = ds("incubation_cv")
+    v["incubation_place_sd"] = ds("incubation_place_sd")
+    v["incubation_age_sd"] = ds("incubation_age_sd")
+    place = v["incubation_place_sd"] * ds("pool_z", n_p)
+    age = v["incubation_age_sd"] * ds("pool_z", n_a)
+    v["incubation_mean"] = vec(
+        ds("incubation_mean") * np.exp(np.add.outer(place, age).ravel())
     )
     v["sqrt_phi"] = ds("sqrt_phi")
     v["obs_phi_sd"] = ds("obs_phi_sd")

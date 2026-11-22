@@ -320,7 +320,6 @@ def _run_pass(
     long, meta = simulate_latent_batch(
         sims,
         kinds=tuple(grid["factors"]["trajectory"]),
-        incubation_cv=float(grid["constants"]["incubation_cv"]),
     )
     by_id = {str(k): g for k, g in long.groupby("id", sort=False)}
     outcomes: dict[str, _Outcome] = {}
