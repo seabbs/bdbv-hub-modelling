@@ -104,7 +104,9 @@ INTERVAL_LEVELS = (0.05, 0.25, 0.75, 0.95)
 scores."""
 
 
-def _covered(model, blocks: Sequence[dict], batch_size: int) -> list[dict]:
+def _covered(
+    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+) -> list[dict[str, Any]]:
     """Return each target step's 50% and 90% hits, step kind, source, level.
 
     A step is a nowcast step up to its block's cut-off
@@ -134,9 +136,9 @@ def _covered(model, blocks: Sequence[dict], batch_size: int) -> list[dict]:
         0.0,
         1.0,
     )[None, :, None]
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     with torch.no_grad():
-        for indices in data.indices():
+        for indices in data.indices():  # type: ignore[no-untyped-call]
             batch = data._build_batch(indices)
             out = fs.forward(model, batch, accepted)
             raw = out.quantile_preds.float().cpu().numpy()
@@ -167,7 +169,7 @@ def _covered(model, blocks: Sequence[dict], batch_size: int) -> list[dict]:
 
 
 def held_out_coverage(
-    model, blocks: Sequence[dict], batch_size: int
+    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
 ) -> dict[str, float]:
     """Return the held-out 50% and 90% interval coverage of target steps.
 
