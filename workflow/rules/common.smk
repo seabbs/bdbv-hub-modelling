@@ -4,7 +4,6 @@
 
 import functools
 import json
-import shlex
 import tomllib
 
 from flowlib import (
@@ -16,6 +15,7 @@ from flowlib import (
     manifest,
     notify,
     releases,
+    scoring,
     segments,
     simulator,
 )
@@ -317,10 +317,7 @@ def checkpoint_labels(wc=None):
     """The checkpoints to score, less `score.skip`."""
     if SC["labels"] is not None:
         return list(SC["labels"])
-    path = checkpoints.release_list.get().output[0]
-    found = releases.labels(json.loads(Path(path).read_text()), SC["published_from"])
-    skip = set(SC.get("skip") or ())
-    return [lb for lb in found if lb not in skip]
+    return releases.chosen(checkpoints.release_list.get().output[0], SC)
 
 
 ROOM = (
@@ -335,17 +332,8 @@ UNIT_THREADS = int(LOCAL.get("SCORE_THREADS") or 2)
 
 
 def score_order():
-    """The checkpoint labels, oldest published first.
-
-    Read from the release list if it is there, none otherwise: a job's
-    priority cannot wait on the release_list checkpoint.
-    """
-    if SC["labels"] is not None:
-        return list(SC["labels"])
-    path = Path(f"{CACHE}/releases.json")
-    if not path.exists():
-        return []
-    return releases.by_time(json.loads(path.read_text()), SC["published_from"])
+    """The checkpoint labels, oldest published first (none before listed)."""
+    return releases.oldest_first(f"{CACHE}/releases.json", SC)
 
 
 def unit_priority(base):
@@ -366,7 +354,7 @@ def unit_env(wc, threads):
 GERMANY_UNIT = "germany-days"
 """The German units' cache folder, as `evaluation.checkpoint.GERMANY_UNIT`."""
 
-EVALUATE = "uv run --group chronos python -m nowcastfoundation.checkpoint"
+EVALUATE = scoring.EVALUATE
 
 
 def unit_rows(study):
@@ -375,13 +363,8 @@ def unit_rows(study):
 
 
 def unit_shell(study, segment=""):
-    """A unit of `study` caching under {params.cache} as {params.label};
-    `segment`, if given, is the run's own checkpoint folder it loads."""
-    return (
-        f"mkdir -p {{params.copy_back}} && {ROOM}{{params.prefix}} nice -n 19 "
-        f"env {{params.env}} {EVALUATE} {study} {{params.cache}} "
-        f"{{params.label}} {segment}> {{log}} 2>&1 && touch {{output}}"
-    )
+    """A unit's shell command (flowlib.scoring.unit_shell)."""
+    return scoring.unit_shell(study, ROOM, segment)
 
 
 def run_scores_dir(run):
@@ -405,17 +388,10 @@ def references():
 
 def report_names(wc):
     """The German report's LABEL=NAME arguments and reference folders."""
-    names = {"reference": "Zero-shot", "randomwalknowcast": "Random walk nowcast"}
-    names |= {
-        f"n{n}": f"{wc.run} n{n}"
-        for n in RUNS[wc.run].ft["prefixes"]
-        if saved(wc.run, n)
-    }
-    args = [shlex.quote(f"{k}={v}") for k, v in names.items()]
-    args += [
-        f"--from {label}={CACHE}/{GERMANY_UNIT}/{label}" for label in SC["reference"]
-    ]
-    return " ".join(args)
+    saved_ns = [n for n in RUNS[wc.run].ft["prefixes"] if saved(wc.run, n)]
+    return scoring.report_args(
+        wc.run, saved_ns, SC["reference"], f"{CACHE}/{GERMANY_UNIT}"
+    )
 
 
 def run_scores(wc=None):
