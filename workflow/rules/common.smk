@@ -40,16 +40,6 @@ def job_prefix(mem_mb):
     return LOCAL["JOB_PREFIX"].replace("{mem}", f"{int(mem_mb)}M")
 
 
-def git_commit():
-    """The commit the workflow runs at."""
-    return subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-
-
 # From simulate.smk.
 
 SIM = config["simulate"]
@@ -433,61 +423,35 @@ def unit_stamps(wc=None):
 
 def write_record(input, output, params, wildcards):
     """Write a batch's manifest row, kept if the manifest has it."""
-    import datetime as dt
-
-    r, s = int(wildcards.round), int(wildcards.seed)
-    line = manifest.existing(params.old, r, s)
-    if line is None and not here(s):
-        raise ValueError(f"batch {s} arrived without its manifest row")
-    line = line or manifest.row(
-        params.sims,
-        round_=r,
-        seed=s,
-        kind="block",
-        grid=grid_id(),
-        commit=git_commit(),
-        draws=SIM["draws"],
-        batch=SIM["batch"],
-        host=HOST,
-        finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    )
-    Path(output[0]).write_text(f"{line}\n")
+    manifest.record(
+        output[0], params.old, params.sims, round_=int(wildcards.round),
+        seed=int(wildcards.seed), mine=here(wildcards.seed), **batch_fields(),
+    )  # fmt: skip
 
 
-def write_ready(seeds, seeds_file, ready_file):
-    """Write a round's seed list, then READY with the time."""
-    import datetime as dt
-
-    Path(seeds_file).write_text("".join(f"{s}\n" for s in seeds))
-    Path(ready_file).write_text(f"{dt.datetime.now(dt.UTC):%Y-%m-%dT%H:%M:%SZ}\n")
+def batch_fields():
+    """The manifest row fields a batch takes from this host and grid."""
+    return {
+        "grid": grid_id(),
+        "draws": SIM["draws"],
+        "batch": SIM["batch"],
+        "host": HOST,
+    }
 
 
 def mark_ready(input, output, params, wildcards):
     """Write a round's seed list and READY, and say so."""
     seeds = seeds_of(wildcards.round)
-    write_ready(seeds, output.seeds, output.ready)
+    manifest.mark_ready(seeds, output.seeds, output.ready)
     qc = Path(input[0]).read_text().strip()
-    say(
-        f"round {wildcards.round} ready: {len(seeds)} batches, one grid " f"block; {qc}"
-    )
+    say(f"round {wildcards.round} ready: {len(seeds)} batches, one grid block; {qc}")
 
 
 def push_record(input, output, params, wildcards):
     """Send a helping host's batch and its manifest row to the rounds host."""
-    import datetime as dt
-
-    r, s = int(wildcards.round), int(wildcards.seed)
-    row = manifest.row(
-        params.sims,
-        round_=r,
-        seed=s,
-        kind="block",
-        grid=grid_id(),
-        commit=git_commit(),
-        draws=SIM["draws"],
-        batch=SIM["batch"],
-        host=HOST,
-        finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    s = int(wildcards.seed)
+    row = manifest.new_row(
+        params.sims, round_=int(wildcards.round), seed=s, **batch_fields()
     )
     hosts.push(params.sims, s, params.there, row, REMOTE)
 
@@ -549,42 +513,16 @@ def listed_batches(run):
 
 
 def check_report(input, output, params, wildcards):
-    """Report whether checkpoint `check_at` beats zero-shot, and say so.
-
-    On the held-out simulations only: BDBV is held out for the paper.
-    """
-    there, n = RUNS[wildcards.run], int(wildcards.n)
-    s = evaluations.checkpoint_settings(Path(input[0]).parent)
-    ok = s["held_out_loss"] < s["held_out_loss_start"]
-    text = (
-        f"{wildcards.run} n{n} {'beats' if ok else 'does NOT beat'} zero-shot: "
-        f"held-out {s['held_out_loss']:.4f} vs "
-        f"{s['held_out_loss_start']:.4f}"
-    )
+    """Report whether checkpoint `check_at` beats zero-shot, and say so."""
+    text, line = evaluations.check_report(
+        Path(input[0]).parent, wildcards.run, int(wildcards.n),
+        RUNS[wildcards.run].ft["prefixes"],
+    )  # fmt: skip
     Path(output[0]).write_text(f"{text}\n")
-    after = [p for p in sorted(there.ft["prefixes"]) if p > n]
-    nxt = f", check before n{after[0]}" if after else ""
-    say(text if ok else f"ALERT {text}; training goes on{nxt}")
+    say(line)
 
 
 def land_tables(input, output, params, wildcards):
     """Commit the score tables on the evidence branch and push them."""
-    import shutil
-
-    def git(*args):
-        return subprocess.run(
-            ["git", *args], check=True, capture_output=True, text=True
-        ).stdout.strip()
-
-    notify.check_branch(git("rev-parse", "--abbrev-ref", "HEAD"), params.branch)
-    shutil.copy(input[0], params.evidence)
-    shutil.copy(input[1], params.checkpoints)
-    git("add", params.evidence, params.checkpoints)
-    if git("diff", "--cached", "--name-only"):
-        git("commit", "-q", "-m", "evidence: checkpoint scores")
-    git("push", "-q", "origin", params.branch)
-    git("fetch", "-q", "origin", params.branch)
-    head = git("rev-parse", "HEAD")
-    if head != git("rev-parse", f"origin/{params.branch}"):
-        raise SystemExit(f"{head} is not on origin/{params.branch}")
+    head = notify.land(input, params.evidence, params.checkpoints, params.branch)
     say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")
