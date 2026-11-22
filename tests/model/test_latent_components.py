@@ -21,9 +21,13 @@ from pyrenew.latent.infection_functions import (
     logistic_susceptibility_adjustment,
 )
 
+from nowcastrenewal.components.pmfs import (
+    Delay,
+    delay_pmf,
+    generation_time_pmf,
+)
 from nowcastrenewal.latent.imports import Imports
 from nowcastrenewal.latent.mixing import PlaceMixing, count_mixing
-from nowcastrenewal.latent.pmfs import gt_pmf, incubation_pmf
 from nowcastrenewal.latent.reference import ReferenceEvents
 from nowcastrenewal.latent.strata import (
     ExponentialDepletion,
@@ -34,6 +38,16 @@ from nowcastrenewal.latent.strata import (
 )
 
 from .latent_r import load
+
+
+def gt_pmf(mean: float, family: str, cv: float) -> np.ndarray:
+    """The grid's generation time, from the shared pmfs."""
+    return generation_time_pmf(Delay.from_mean_cv(family, mean, cv))
+
+
+def incubation_pmf(mean: float, cv: float = 0.5) -> np.ndarray:
+    """The grid's infection-to-reference delay, from the shared pmfs."""
+    return delay_pmf(Delay.from_mean_cv("gamma", mean, cv))
 
 
 def matrix(x: Any) -> np.ndarray:
@@ -47,14 +61,19 @@ def run(fn: Any, *args: Any, **kwargs: Any) -> Any:
 
 
 def test_pmfs_match_the_r_engine() -> None:
+    # Both are primarycensored's double censored pmf: the engine's from
+    # `dpcens`, ours closed form (`test_pmfs.py`), to 1e-8.
     f = load("pmfs")
     for g in f["gt"]:
         np.testing.assert_allclose(
-            gt_pmf(g["mean"], g["family"], g["cv"]), g["pmf"], rtol=1e-10
+            gt_pmf(g["mean"], g["family"], g["cv"]),
+            g["pmf"],
+            rtol=1e-8,
+            atol=1e-12,
         )
     for g in f["incubation"]:
         np.testing.assert_allclose(
-            incubation_pmf(g["mean"], g["cv"]), g["pmf"], rtol=1e-10
+            incubation_pmf(g["mean"], g["cv"]), g["pmf"], rtol=1e-8, atol=1e-12
         )
 
 

@@ -1,24 +1,20 @@
-from pathlib import Path
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
-import pandas as pd
 import pytest
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
+from nowcastrenewal.components.pmfs import CensoredPMF
 from nowcastrenewal.model import (
-    CensoredPMF,
     FixedTimeVarying,
     HazardDelay,
     MissingOnsetFraction,
     NonCentredRandomWalk,
     PooledInitialValue,
-    censored_pmf,
     coupled_renewal,
     generation_interval,
     hazard_to_pmf,
@@ -295,7 +291,6 @@ def test_fixed_inputs_pad_with_last_row():
 
 
 def test_fast_kernels_match_reference_values_and_gradients():
-    import jax
 
     from .reference_kernels import (
         hazard_to_pmf_reference,
@@ -330,44 +325,6 @@ def test_fast_kernels_match_reference_values_and_gradients():
     )
 
 
-DPCENS = pd.read_csv(Path(__file__).parent / "fixtures" / "dpcens.csv")
-"""primarycensored `dpcens` pmfs, from `fixtures/dpcens.R`."""
-
-
-def test_generation_interval_matches_primarycensored():
-    ref = DPCENS[DPCENS["case"] == "gi"]
-    np.testing.assert_allclose(generation_interval(), ref["p"], atol=1e-8)
-
-
-def test_incubation_period_matches_primarycensored():
-    ref = DPCENS[DPCENS["case"] == "incubation"]
-    np.testing.assert_allclose(incubation_period(), ref["p"], atol=1e-8)
-
-
-@pytest.mark.parametrize(
-    ("family", "mean", "cv"),
-    list(
-        DPCENS.loc[DPCENS["case"] == "delay", ["family", "mean", "cv"]]
-        .drop_duplicates()
-        .itertuples(index=False)
-    ),
-)
-def test_censored_pmf_matches_primarycensored(family, mean, cv):
-    ref = DPCENS[
-        (DPCENS["case"] == "delay")
-        & (DPCENS["family"] == family)
-        & (DPCENS["mean"] == mean)
-        & (DPCENS["cv"] == cv)
-    ]
-    with jax.enable_x64():
-        ours = np.asarray(censored_pmf(family, mean, cv, 60))
-    np.testing.assert_allclose(ours, ref["p"], atol=1e-8)
-    # The model runs in float32, good to the docstring's 3e-5.
-    with jax.enable_x64(False):
-        ours32 = np.asarray(censored_pmf(family, mean, cv, 60))
-    np.testing.assert_allclose(ours32, ref["p"], atol=3e-5)
-
-
 def test_onsets_are_infections_convolved_with_the_incubation_period():
     from nowcastrenewal.model.observation import OnsetStreams
 
@@ -388,38 +345,20 @@ def test_onsets_are_infections_convolved_with_the_incubation_period():
     assert streams.lookback_days() == len(eta) - 1
 
 
-def test_censored_pmf_rv_gives_the_closed_form_at_its_parameters():
-    rv = CensoredPMF(
-        "incubation",
-        "lognormal",
-        DeterministicVariable("incubation_mean", 6.3),
-        DeterministicVariable("incubation_sd", 3.5),
-        28,
-    )
-    with jax.enable_x64():
-        pmf = np.asarray(rv())
-    np.testing.assert_allclose(pmf, incubation_period(), atol=1e-12)
-
-
-def test_censored_pmf_rv_samples_its_mean_and_sd():
+def test_onset_lookback_comes_from_a_random_pmfs_length():
     from nowcastrenewal.model.observation import OnsetStreams
 
     rv = CensoredPMF(
         "incubation",
         "lognormal",
-        DistributionalVariable(
+        28,
+        mean_rv=DistributionalVariable(
             "incubation_mean", dist.TruncatedNormal(6.3, 0.54, low=1.0)
         ),
-        DistributionalVariable(
+        sd_rv=DistributionalVariable(
             "incubation_sd", dist.TruncatedNormal(3.5, 0.8, low=1.0)
         ),
-        28,
     )
-    with numpyro.handlers.trace() as tr, numpyro.handlers.seed(rng_seed=1):
-        pmf = rv()
-    assert {"incubation_mean", "incubation_sd"} <= set(tr)
-    assert pmf.shape == (29,)
-    assert float(pmf.sum()) == pytest.approx(1.0, abs=1e-5)
     # The lookback comes from the pmf's length without sampling it.
     streams = OnsetStreams(
         "onsets",
@@ -500,49 +439,3 @@ def test_imported_infections_are_part_of_the_total():
         jnp.asarray(I0), jnp.asarray(rt), jnp.asarray(g), jnp.eye(p),
     )  # fmt: skip
     np.testing.assert_allclose(np.asarray(none), 0.0)
-
-
-def _quad_censored_pmf(family, mean, cv, dmax):
-    """Float64 double censored pmf by numerical integration, as a reference."""
-    from scipy import integrate, stats
-
-    if family == "gamma":
-        shape = 1 / cv**2
-        dist = stats.gamma(shape, scale=mean / shape)
-    else:
-        sdlog = np.sqrt(np.log1p(cv**2))
-        dist = stats.lognorm(sdlog, scale=mean / np.sqrt(1 + cv**2))
-
-    def cdf(x):
-        return dist.cdf(x) if x > 0 else 0.0
-
-    pmf = np.array(
-        [
-            integrate.quad(
-                lambda u, d=d: cdf(d + 1 - u) - cdf(d - u),
-                0,
-                1,
-                epsabs=1e-14,
-                epsrel=1e-12,
-                points=[0.0, 1.0],
-            )[0]
-            for d in range(dmax + 1)
-        ]
-    )
-    return pmf / pmf.sum()
-
-
-@pytest.mark.parametrize("family", ["gamma", "lognormal"])
-@pytest.mark.parametrize("cv", [0.3, 0.5, 1.0, 1.5, 2.0])
-@pytest.mark.parametrize("mean", [2.0, 8.0, 15.0])
-def test_censored_pmf_is_close_in_float32(family, cv, mean):
-    # The baselinenowcast port enables float64 on import, so pin float32.
-    with jax.enable_x64(False):
-        ours = np.asarray(censored_pmf(family, mean, cv, 60))
-    assert ours.dtype == np.float32
-    ref = _quad_censored_pmf(family, mean, cv, 60)
-    # float32 incomplete gamma is good to about 1e-6, and the closed form
-    # scales that by the delay, so errors are a few 1e-5 at most.
-    assert np.max(np.abs(ours - ref)) < 4e-5
-    big = ref > 1e-4
-    assert np.max(np.abs(ours[big] / ref[big] - 1)) < 2e-2

@@ -1,11 +1,12 @@
 # The infection-to-reference-event delay (incubation, or infection to
-# test or admission) on 0, 1, ... days: a discretised gamma with CV `cv`
-# and mean `mean`, to its 99.9% quantile.
+# test or admission) on 0, 1, ... days: a gamma with CV `cv` and mean
+# `mean`, double interval censored (primarycensored), to its 99.9%
+# quantile.
 incubation_pmf <- function(mean, cv = 0.5) {
   shape <- 1 / cv^2
-  q <- qgamma(0.999, shape, shape / mean)
-  pmf <- diff(pgamma(0:max(1L, as.integer(ceiling(q))), shape, shape / mean))
-  pmf / sum(pmf)
+  n <- max(1L, as.integer(ceiling(qgamma(0.999, shape, shape / mean))))
+  primarycensored::dpcens(0:n, pgamma, D = n + 1, shape = shape,
+    rate = shape / mean)
 }
 
 # Each column of `x` (days by strata) convolved with its own pmf in

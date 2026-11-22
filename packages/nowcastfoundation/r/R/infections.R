@@ -74,20 +74,21 @@ stratum_imports <- function(n, share, strata, design, v) {
 }
 
 # A generation time on 1, ..., n days, n its 99.9% quantile, from its
-# family (gamma or lognormal), mean and CV.
+# family (gamma or lognormal), mean and CV: double interval censored
+# (primarycensored, a uniform primary day), left truncated at a day.
 gt_pmf <- function(mean, family, cv) {
   if (family == "gamma") {
     k <- 1 / cv^2
-    cdf <- function(d) pgamma(d, k, k / mean)
+    args <- list(pdist = pgamma, shape = k, rate = k / mean)
     q <- qgamma(0.999, k, k / mean)
   } else {
     sdlog <- sqrt(log(1 + cv^2))
     meanlog <- log(mean) - sdlog^2 / 2
-    cdf <- function(d) plnorm(d, meanlog, sdlog)
+    args <- list(pdist = plnorm, meanlog = meanlog, sdlog = sdlog)
     q <- qlnorm(0.999, meanlog, sdlog)
   }
-  pmf <- diff(cdf(0:max(2L, as.integer(ceiling(q)))))
-  pmf / sum(pmf)
+  n <- max(2L, as.integer(ceiling(q)))
+  do.call(primarycensored::dpcens, c(list(1:n, L = 1, D = n + 1), args))
 }
 
 # `n` weeks of an AR(1) walk on log R around 0 (R = 1).

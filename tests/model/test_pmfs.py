@@ -228,8 +228,8 @@ def _quad_pmf(delay: Delay, n: int) -> np.ndarray:
 
 
 @pytest.mark.parametrize("family", ["gamma", "lognormal"])
-@pytest.mark.parametrize("cv", [0.3, 1.0, 2.0])
-@pytest.mark.parametrize("mean", [2.0, 15.0])
+@pytest.mark.parametrize("cv", [0.3, 0.5, 1.0, 1.5, 2.0])
+@pytest.mark.parametrize("mean", [2.0, 8.0, 15.0])
 def test_the_pmf_is_close_in_float32(
     family: str, cv: float, mean: float
 ) -> None:

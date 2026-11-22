@@ -12,7 +12,7 @@ Expected onsets are infections convolved with the model's incubation
 period (`nowcastrenewal.model.model.incubation_period`).
 Confirmed cases are Poisson with mean $\alpha(t)$ times expected onsets.
 Each is reported after a double censored Gamma delay
-(`nowcastrenewal.model.censored.censored_pmf`) whose mean $\mu(t)$
+(`nowcastrenewal.components.pmfs.censored_pmf`) whose mean $\mu(t)$
 changes over time, has no onset with probability $\pi$ at its report
 day, and is published after a lag of 0 to 3 days.
 
@@ -39,7 +39,7 @@ from numpy.typing import NDArray
 
 from bdbvhub.data.delays import hub_delay_pmf
 from bdbvhub.data.tidy import PROVINCE_POPULATIONS, province_places
-from nowcastrenewal.model.censored import censored_pmf
+from nowcastrenewal.components.pmfs import Delay, censored_pmf
 from nowcastrenewal.model.inputs import gravity_kernel as model_gravity_kernel
 from nowcastrenewal.model.model import (
     GI_MEAN,
@@ -628,12 +628,15 @@ def simulate_outbreak(
         path = np.asarray(s.missing_path, dtype=float)
         miss = path[np.minimum(np.arange(n_days), path.size - 1)]
     mu = s.delay_mean[0] + (s.delay_mean[1] - s.delay_mean[0]) * t / n_days
-    # Daily double censored Gamma delays, as the model's `censored_pmf`,
-    # long enough that truncation is negligible.
+    # Daily double censored Gamma delays (`components.pmfs`), long enough
+    # that truncation is negligible.
     delay_cdf = np.cumsum(
         np.asarray(
             jax.vmap(
-                lambda m: censored_pmf("gamma", m, s.delay_cv, MAX_SIM_DELAY)
+                lambda m: censored_pmf(
+                    Delay.from_mean_cv("gamma", m, s.delay_cv),
+                    MAX_SIM_DELAY + 1,
+                )
             )(jnp.asarray(mu))
         ),
         axis=1,

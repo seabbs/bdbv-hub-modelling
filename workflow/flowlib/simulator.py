@@ -11,10 +11,11 @@ ROOT = Path(__file__).parents[2]
 ENGINE = (
     "packages/nowcastfoundation/src/nowcastfoundation/simulator",
     "packages/nowcastrenewal/src/nowcastrenewal/latent",
+    "packages/nowcastrenewal/src/nowcastrenewal/components",
     "packages/nowcastfoundation/r",
 )
-"""The simulator's code: its entry point and draws, the latent step and
-the R engine's reporting step."""
+"""The simulator's code: its entry point and draws, the latent step, the
+shared components it composes and the R engine's reporting step."""
 
 
 def read_grid(grid_file: Path | str) -> dict:

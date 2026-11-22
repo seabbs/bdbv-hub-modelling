@@ -39,7 +39,7 @@ from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
 from nowcastutils.releases import release_cutoff
 
-from .censored import CensoredPMF
+from ..components.pmfs import CensoredPMF
 from .composition_noise import MultinomialNoise
 from .delays import FixedTimeVarying
 from .hazard_delay import HazardDelay
@@ -1138,20 +1138,20 @@ def build_zone_model(
             temporal_pmf_rv=CensoredPMF(
                 "infection_to_onset",
                 "lognormal",
+                INCUBATION_LENGTH,
                 # BVDOutbreakSize's priors (onset_incidence_model).
-                DistributionalVariable(
+                mean_rv=DistributionalVariable(
                     "incubation_mean",
                     dist.TruncatedNormal(
                         INCUBATION_MEAN, INCUBATION_MEAN_SD, low=1.0
                     ),
                 ),
-                DistributionalVariable(
+                sd_rv=DistributionalVariable(
                     "incubation_sd",
                     dist.TruncatedNormal(
                         INCUBATION_SD, INCUBATION_SD_SD, low=1.0
                     ),
                 ),
-                INCUBATION_LENGTH,
             ),
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=None

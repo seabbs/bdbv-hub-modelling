@@ -204,8 +204,10 @@ ENGINE = "packages/nowcastfoundation/r"
 SIMULATOR_PY = (
     "packages/nowcastfoundation/src/nowcastfoundation/simulator",
     "packages/nowcastrenewal/src/nowcastrenewal/latent",
+    "packages/nowcastrenewal/src/nowcastrenewal/components",
 )
-"""The simulator's Python: its entry point and draws, and the latent step."""
+"""The simulator's Python: its entry point and draws, the latent step and
+the shared components it composes."""
 
 ROOT = Path(__file__).parents[1]
 """The repository root, which the hashed paths are relative to."""

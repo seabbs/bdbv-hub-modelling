@@ -15,7 +15,7 @@ The PyRenew renewal model the renewal forecasters fit and sample from. See [Gett
 
 ::: nowcastrenewal.model.hazard_delay
 
-::: nowcastrenewal.model.censored
+::: nowcastrenewal.components.pmfs
 
 ::: nowcastrenewal.model.delays
 

@@ -20,7 +20,7 @@ import pandas as pd
 import pytest
 from numpyro import handlers
 
-from nowcastrenewal.latent.pmfs import gt_pmf
+from nowcastrenewal.components.pmfs import Delay, generation_time_pmf
 from nowcastrenewal.latent.rt import (
     KINDS,
     PlaceRt,
@@ -36,6 +36,11 @@ from nowcastrenewal.latent.simulate import (
 from nowcastrenewal.latent.start import InitializeStrata
 
 from .latent_r import load
+
+
+def gt_pmf(mean: float, family: str, cv: float) -> np.ndarray:
+    """The grid's generation time, from the shared pmfs."""
+    return generation_time_pmf(Delay.from_mean_cv(family, mean, cv))
 
 
 def matrix(x: Any) -> np.ndarray:
