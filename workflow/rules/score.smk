@@ -14,6 +14,9 @@
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany-days/<label>.done
 # (`GERMANY_UNIT`); `germany` is the unit's study name.
+# Opt-in, not in `score`: <SCORE_CACHE>/coupling/<label>-summary.csv, the
+# SI's evidence on joining quantiles into trajectories
+# (nowcasteval.coupling), from that unit's cached quantiles, on the CPU.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
 
 
@@ -51,6 +54,24 @@ rule score_germany:
         copy_back=unit_rows(GERMANY_UNIT),
     shell:
         unit_shell("germany")
+
+
+rule coupling_germany:
+    input:
+        f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",
+    output:
+        scores=f"{CACHE}/coupling/{{label}}-scores.csv",
+        summary=f"{CACHE}/coupling/{{label}}-summary.csv",
+    log:
+        f"{CACHE}/log/coupling-{{label}}.log",
+    conda:
+        TOOLS_ENV
+    threads: 4
+    params:
+        unit=lambda wc: f"{CACHE}/{GERMANY_UNIT}/{wc.label}",
+    shell:
+        "uv run python -m nowcasteval.coupling {params.unit} "
+        "{output.scores} {output.summary} > {log} 2>&1"
 
 
 rule score_release:
