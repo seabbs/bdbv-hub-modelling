@@ -101,7 +101,9 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
     for levels in GRID["factors"].values():
         for level in levels:
             assert f"`{level}`" in model
-    assert GRID["epinowcast_sha"] in model
+    assert "PyRenew" in model
+    assert "enw_simulate" not in model
+    assert "epinowcast is pinned" not in model
     assert "config/finetune/grid.yaml" in model
     assert "finetune_simulate" not in model
     heldout = synthetic_grid.heldout_note(config)
