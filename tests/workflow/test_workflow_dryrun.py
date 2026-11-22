@@ -29,11 +29,12 @@ def dry(tmp_path, *targets, config=None, extra=()):
     return {k: int(v) for k, v in jobs.items() if k != "total"}
 
 
-def dry_run(tmp_path, *targets, config=None, extra=(), quiet=True):
+def dry_run(tmp_path, *targets, config=None, extra=(), quiet=True, dry=True):
     """Return the finished process of a dry run of `targets`.
 
     Programs in <tmp_path>/bin (a stand-in `gh`) come first on PATH. Not
-    `quiet`, the output holds each job's shell command.
+    `quiet`, the output holds each job's shell command. Not `dry`, the
+    jobs run.
     """
     local = tmp_path / "local.env"
     if not local.exists():
@@ -46,7 +47,7 @@ def dry_run(tmp_path, *targets, config=None, extra=(), quiet=True):
             *targets,
             "-s",
             "workflow/Snakefile",
-            "-n",
+            *(["-n"] if dry else []),
             *(["--quiet", "rules"] if quiet else []),
             "--cores",
             "1",
@@ -1110,3 +1111,41 @@ def test_a_round_s_batch_runs_the_grid(tmp_path):
     shell = text[text.index("-m nowcastfoundation.simulator") - 400 :]
     assert "ENW_CELLS" not in shell
     assert "nowcastfoundation.simulator config/finetune/grid.yaml 20 " in shell
+
+
+def test_a_fetched_batch_is_a_copy_not_a_link_to_its_source(tmp_path):
+    # Snakemake touches a job's outputs one after another; through a hard
+    # link that moves its inputs' times too, and a clock tick between the
+    # two touches leaves the counts older than the settings input, which
+    # fails the job.
+    import os
+    import time
+
+    sims = tmp_path / "rounds" / "r33" / "sims"
+    sims.mkdir(parents=True)
+    counts = sims / "counts-33300.csv.gz"
+    counts.write_bytes(gzip.compress(b"x\n"))
+    settings = sims / "settings-33300.csv"
+    settings.write_text("x\n")
+    now = time.time_ns()
+    os.utime(counts, ns=(now, now))
+    os.utime(settings, ns=(now + 10**6, now + 10**6))
+    run = tmp_path / "run"
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nRUN={run}\nSIMS_FROM=local\n"
+    )
+    out = dry_run(
+        tmp_path,
+        str(run / "sims" / "counts-33300.csv.gz"),
+        config=FT,
+        extra=("--allowed-rules", "fetch_batch"),
+        dry=False,
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    for name, source in (
+        ("counts-33300.csv.gz", counts),
+        ("settings-33300.csv", settings),
+    ):
+        fetched = run / "sims" / name
+        assert fetched.read_bytes() == source.read_bytes()
+        assert fetched.stat().st_ino != source.stat().st_ino
