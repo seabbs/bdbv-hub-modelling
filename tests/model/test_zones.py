@@ -203,7 +203,7 @@ def test_zone_vintage_scores_delays_by_province(zone_vintage):
     assert v.parents.tolist() == [i // 2 for i in range(12)]
     assert v.delay_counts.shape == (v.n_weeks, 6, 61)
     assert v.kernel.shape == (12, 12)
-    np.testing.assert_allclose(v.kernel.sum(axis=1), 1.0)
+    np.testing.assert_allclose(v.kernel.sum(axis=0), 1.0)
     pops = zone_places().set_index("location")["population"]
     np.testing.assert_allclose(v.populations, pops[v.names].to_numpy())
 

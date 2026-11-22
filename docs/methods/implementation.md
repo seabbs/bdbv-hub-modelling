@@ -14,7 +14,7 @@ The model is configured by `ModelConfig`.
 | Component | PyRenew piece | Built here |
 |---|---|---|
 | Pooled $R_p(t)$ | `BaseSubpopulationInfections`, `WeeklyTemporalProcess` | `NonCentredRandomWalk`, for the frozen seeding weeks, the separate forecast steps and their reversion. |
-| Renewal with importation and depletion | `BaseSubpopulationInfections`, subclassed | `coupled_renewal`, called from `_infections_from_rt`, and `Importation`, which gives the mixing matrix as PyRenew's `mobility_matrix_rv` does. |
+| Renewal with importation and depletion | `BaseSubpopulationInfections`, subclassed | `coupled_renewal`, called from `_infections_from_rt`, and the shared `components.mixing.Mixing`, which gives the mixing matrix as PyRenew's `mobility_matrix_rv` does. |
 | Ascertainment $\alpha(s)$ | `IndependentAscertainment` with a temporal process | None. |
 | Onset-to-report delay $f_{p,s}(d)$ | None | `HazardDelay`, with province offsets and drifts from `pooled_walk`, as the Rt deviations. |
 | Missing onsets $m_p(t)$ | None | `MissingOnsetFraction`, a pooled walk of the same form as $R_p$ with its own parameters. |

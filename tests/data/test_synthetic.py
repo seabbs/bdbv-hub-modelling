@@ -115,12 +115,13 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
     import jax.numpy as jnp
 
     from bdbvhub.data.tidy import PROVINCE_POPULATIONS
+    from nowcastrenewal.components.mixing import mixing_matrix
     from nowcastrenewal.model.inputs import gravity_kernel as model_kernel
     from nowcastrenewal.model.model import (
         generation_interval,
         incubation_period,
     )
-    from nowcastrenewal.model.renewal import coupled_renewal, mixing_matrix
+    from nowcastrenewal.model.renewal import coupled_renewal
 
     s = outbreak.settings
     p = outbreak.parameters
@@ -134,6 +135,7 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
     w = mixing_matrix(
         jnp.asarray(model_kernel(s.locations, table)),
         s.importation,
+        "sent",
         jnp.asarray(pop / pop.sum()),
     )
     seeding = np.zeros_like(rt)
