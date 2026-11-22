@@ -30,8 +30,9 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Cancel superseded pull request runs; let runs on main finish.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Off main, a newer push cancels the running run. On main the running
+  # run finishes and only the newest queued run waits.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   lint:

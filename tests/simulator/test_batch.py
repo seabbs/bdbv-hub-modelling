@@ -102,6 +102,7 @@ def run(tmp_path_factory):
     return files, model
 
 
+@pytest.mark.slow
 def test_a_batch_writes_its_four_files(run):
     files, _ = run
     assert {"counts", "settings", "latent"} <= set(files)
@@ -162,6 +163,7 @@ def test_a_failing_draw_is_drawn_again(tmp_path, stand_in):
     assert settings.loc[0, "designs"] == 1
 
 
+@pytest.mark.slow
 def test_a_simulation_with_no_design_stops_the_batch(tmp_path, stand_in):
     model = stand_in(fail=10**6)
     with pytest.raises(RuntimeError, match="no design in"):
@@ -172,6 +174,7 @@ def test_a_simulation_with_no_design_stops_the_batch(tmp_path, stand_in):
     assert len(model.calls) >= grid["designs"]
 
 
+@pytest.mark.slow
 def test_only_empty_draws_are_drawn_again(tmp_path, stand_in):
     stand_in(empty=2, cases=1)
     files = simulate_batch(GRID_FILE, 6060, 1, tmp_path, weeks=8)

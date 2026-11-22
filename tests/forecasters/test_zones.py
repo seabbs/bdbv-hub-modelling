@@ -353,6 +353,7 @@ def test_zone_task_is_a_zero_filled_randomwalk_task(
     assert zone_task(task, counts, zones).daily_history is None
 
 
+@pytest.mark.slow
 def test_hub_table_with_zones_validates(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
@@ -452,6 +453,7 @@ def test_zone_values_follow_the_zone_model_not_the_shares(
     assert not np.allclose(mine, theirs.reindex(mine.index))
 
 
+@pytest.mark.slow
 def test_zone_hub_table_validates_with_the_zone_models_own_draws(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
@@ -530,6 +532,7 @@ def test_only_the_random_walks_forecast_their_own_zones() -> None:
     assert not walks_own_zones("not-a-model")
 
 
+@pytest.mark.slow
 def test_walk_models_take_their_zone_draws_and_others_the_split(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
@@ -593,6 +596,7 @@ def test_reconcile_keeps_each_zones_published_count(
     assert floored.any()
 
 
+@pytest.mark.slow
 def test_reconcile_works_draw_by_draw(
     task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:

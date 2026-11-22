@@ -358,6 +358,7 @@ def test_a_finished_batch_is_read_once(tmp_path, monkeypatch):
     assert reads == []
 
 
+@pytest.mark.slow
 def test_strata_with_no_cases_give_no_empty_blocks():
     import pandas as pd
     from finetune_chronos import outbreak_blocks
@@ -543,6 +544,7 @@ def test_workers_take_the_trainer_block_settings():
         finetune_chronos.LOSS_HORIZON_DAYS = None
 
 
+@pytest.mark.slow
 def test_blocks_reach_deployed_sizes_on_many_places():
     import pandas as pd
     from finetune_chronos import outbreak_blocks
@@ -722,6 +724,7 @@ def test_a_block_is_quiet_below_the_threshold_whatever_follows():
     assert quiet(_raw([0, 0, 0], [9, 9, 9, 9], [[0] * 7] * 2), 1, 1)
 
 
+@pytest.mark.slow
 def test_quiet_cut_offs_are_not_cut_when_set(tmp_path, monkeypatch):
     import finetune_chronos
     from finetune_stream import cut
@@ -1298,6 +1301,7 @@ def _counts_of(places, days=140):
     return counts
 
 
+@pytest.mark.slow
 def test_blocks_are_whole_systems_never_cut(monkeypatch):
     from finetune_chronos import NATIONAL, outbreak_blocks
 
@@ -1329,6 +1333,7 @@ def test_blocks_are_whole_systems_never_cut(monkeypatch):
         ft.PARENTS = None
 
 
+@pytest.mark.slow
 def test_parents_come_from_the_grid_file(monkeypatch):
     import yaml
     from finetune_chronos import NATIONAL, outbreak_blocks
@@ -1432,6 +1437,7 @@ def test_views_of_a_system_over_capacity_cover_every_leaf():
     ]
 
 
+@pytest.mark.slow
 def test_a_system_over_capacity_is_cut_into_views_with_exact_totals(
     monkeypatch,
 ):
