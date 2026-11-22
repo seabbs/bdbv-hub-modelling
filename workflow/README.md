@@ -82,10 +82,9 @@ Each machine reruns its task as releases land, in its coordinator run (`task now
 Round r is `batches` batches of `batch` outbreaks, seeds from 30000 + 100 r, each with exactly one observation draw.
 Each outbreak draws its settings independently from the grid (`simulate.grid_file`, `config/finetune/grid.yaml`), and a round is used whole for training or as the held-out round.
 The simulator is `nowcastfoundation.simulator` (`simulate_batch`, run as `python -m nowcastfoundation.simulator GRID N SEED OUT`).
-It draws each outbreak's design and values in Python, runs its latent infections and onsets with `nowcastrenewal.latent` (PyRenew components), and reports them through the R engine `packages/nowcastfoundation/r` (`inst/report.R`, epinowcast), one Rscript call per pass of the batch.
+It draws each outbreak's design and values in Python and runs each outbreak as one numpyro model from the shared PyRenew components, its latent infections to its reported counts (`nowcastrenewal.simulation.outbreak`).
 
-- `epinowcast_lib`: installs the epinowcast the simulator is pinned to (`epinowcast_sha` in the grid config) from GitHub into `ROOT/rlib/epinowcast-<sha>`, once a machine, at nice 19 under `JOB_PREFIX`. Its dependencies must already be in R's libraries.
-- `simulate_batch`: one batch of the simulator, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and its whole command runs with that library, JAX on one thread, the Rscript first on PATH (`RSCRIPT`) and the system's tools ahead of PATH (R puts the system libraries on `LD_LIBRARY_PATH`, under which a bash from another prefix fails).
+- `simulate_batch`: one batch of the simulator, under `JOB_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). A batch that fails is retried once at the higher cap. The simulator must be the committed one, and it runs with JAX on one thread.
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each round (no thresholds: it records each simulation's summaries and an empty exclusion list), whose exclusions (`qc/excluded.csv`, with reason and evidence) the trainer skips. Nothing is deleted.

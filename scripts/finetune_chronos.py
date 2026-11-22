@@ -199,9 +199,6 @@ CUTS = 32
 """Snapshots (cut-off slots) of each observation draw, spread over its
 course: 32 blocks from one draw."""
 
-ENGINE = "packages/nowcastfoundation/r"
-"""The simulator engine, whose R files and description are hashed."""
-
 SIMULATOR_PY = (
     "packages/nowcastfoundation/src/nowcastfoundation/simulator",
     "packages/nowcastrenewal/src/nowcastrenewal/latent",
@@ -217,26 +214,17 @@ ROOT = Path(__file__).parents[1]
 
 
 def simulator_files(grid_file: str) -> tuple[str, ...]:
-    """Return the simulator's files: the grid, its Python and the R engine.
+    """Return the simulator's files: the grid and its Python.
 
-    The Python is every file of `SIMULATOR_PY`, and the R engine its
-    description, reporting step (`inst/report.R`) and every R file
-    (`ENGINE/R/*.R`), found by glob so a new file is hashed without
-    listing it.
+    The Python is every file of `SIMULATOR_PY`, found by glob so a new file
+    is hashed without listing it.
     """
     python = sorted(
         str(p.relative_to(ROOT))
         for folder in SIMULATOR_PY
         for p in (ROOT / folder).glob("*.py")
     )
-    engine = sorted(p.name for p in (ROOT / ENGINE / "R").glob("*.R"))
-    return (
-        grid_file,
-        *python,
-        f"{ENGINE}/DESCRIPTION",
-        f"{ENGINE}/inst/report.R",
-        *(f"{ENGINE}/R/{name}" for name in engine),
-    )
+    return (grid_file, *python)
 
 
 def workflow_finetune(key: str) -> Any:

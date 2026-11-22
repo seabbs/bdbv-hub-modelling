@@ -69,24 +69,8 @@ def here(seed):
     return hosts.simulates(int(seed), MINE)
 
 
-# The grid the simulator runs (its factors and sampling distributions),
-# and the epinowcast it is pinned to, installed once a machine under ROOT.
+# The grid the simulator runs (its factors and sampling distributions).
 GRID_FILE = SIM["grid_file"]
-ENW_SHA = simulator.epinowcast_sha(GRID_FILE)
-ENW_LIB = f"{LOCAL['ROOT']}/rlib/epinowcast-{ENW_SHA}"
-
-
-def batch_lib(wc):
-    """Already simulated batches take no library input.
-
-    So installing it never reruns them.
-    """
-    sims = Path(f"{ROUNDS_DIR}/r{wc.round}/sims")
-    done = all(
-        (sims / f"{kind}-{wc.seed}.{ext}").exists()
-        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
-    )
-    return [] if done else ancient(f"{ENW_LIB}/.installed")
 
 
 def batch_priority(wc):
