@@ -1109,11 +1109,6 @@ def _daily_frame(
     )[list(DAILY_COLUMNS)]
 
 
-def _at(rows: pd.DataFrame | None, vintage: str) -> pd.DataFrame | None:
-    """Return the rows of one release, or None."""
-    return None if rows is None else rows.loc[rows["vintage"] == vintage]
-
-
 def _rows(*tables: pd.DataFrame | None) -> pd.DataFrame | None:
     """Stack the tables that are there, None if none is."""
     there = [t for t in tables if t is not None and not t.empty]
