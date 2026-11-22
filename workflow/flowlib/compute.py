@@ -68,7 +68,13 @@ RULE_GROUPS = {
 """Each placed rule's group; any other rule is in `any`."""
 
 GPU_RULES = frozenset(
-    {"train_segment", "evaluate_steps", "evaluate_checkpoint", "score_germany"}
+    {
+        "train_segment",
+        "evaluate_steps",
+        "evaluate_checkpoint",
+        "score_germany",
+        "score_run_germany",
+    }
 )
 """The rules taking the `gpu` resource. Placed on a worker by their
 group, each also takes that worker's own `gpu_<worker>`, so the pooled
