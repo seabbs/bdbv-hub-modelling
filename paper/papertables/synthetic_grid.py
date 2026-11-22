@@ -214,12 +214,11 @@ def model_note(grid: dict[str, Any], grid_file: str) -> str:
         " transmission and immune-escape variants.",
         "Expected reference events are the infections convolved with the"
         " incubation period and scaled by the ascertainment.",
-        "The release triangle is drawn from the generative model of"
-        " epinowcast @placeholder with `enw_simulate()`, which runs the"
-        " epinowcast Stan model with fixed parameters and no likelihood.",
-        f"epinowcast is pinned at commit `{grid['epinowcast_sha']}`.",
-        "The simulator is the R package `packages/nowcastfoundation/r`,"
-        f" run on the grid config `{grid_file}`.",
+        "The release triangle is drawn from one numpyro model built from"
+        " PyRenew components @placeholder, sampled forward with the grid's"
+        " values fixed, whose reporting step follows epinowcast's"
+        " observation model @abbottepinowcast.",
+        f"The simulator runs on the grid config `{grid_file}`.",
         "Each simulation draws every categorical setting independently from"
         " its levels' shares, and every continuous setting from its named"
         " sampling distribution, as the SI tables list.",
