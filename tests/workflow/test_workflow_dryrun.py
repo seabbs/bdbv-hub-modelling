@@ -191,6 +191,7 @@ SMALL = {
         "chunk": 10,
         "batch_size": 64,
         "checkpoint_above": 0,
+        "block_limit": 700,
     },
 }
 
@@ -206,6 +207,16 @@ def test_a_small_trial_is_a_config_override(tmp_path):
     for line in trains:
         assert "--batch-size 64" in line
         assert "--checkpoint-above 0" in line
+        assert "--block-limit 700" in line
+
+
+def test_a_machine_s_block_limit_overrides_the_config(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nBLOCK_LIMIT=4000\n"
+    )
+    out = dry_run(tmp_path, "finetune", config=SMALL, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "--block-limit 4000" in out.stdout
 
 
 def test_a_machine_s_checkpoint_threshold_overrides_the_config(tmp_path):
