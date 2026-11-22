@@ -1494,8 +1494,8 @@ def build_parser() -> argparse.ArgumentParser:
     # segment resumes from (workflow/rules/finetune.smk).
     parser.add_argument("--until", type=int)
     # Evaluate in the trainer (local) or leave adapter snapshots for
-    # scripts/finetune_evaluate.py to score elsewhere (offload). Training
-    # and the settings hash are the same either way.
+    # finetune.evaluate to score elsewhere (offload; rules/evaluate.smk).
+    # Training and the settings hash are the same either way.
     parser.add_argument("--eval", choices=EVAL_MODES, default="local")
     # Steps between held-out evaluations: the monitor, and by source on
     # a multiple of its steps. They only score, so the steps trained and
@@ -1521,7 +1521,7 @@ def check_offload(mode: str, stop_from: int, outbreaks: int) -> None:
 def save_snapshot(model, where: Path, request: dict) -> None:
     """Save the adapter (and series bias) and what to evaluate on it.
 
-    For `scripts/finetune_evaluate.py`. Written beside `where` and then
+    For `finetune.evaluate`. Written beside `where` and then
     moved into place, so an evaluator never reads part of one. Reading
     the weights changes nothing the training uses.
     """
