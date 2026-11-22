@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import time
+import urllib.error
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -238,7 +239,9 @@ def zone_bvd_rows(
         )
         try:
             body = (download or bvd._download)(url)
-        except Exception:
+        except urllib.error.HTTPError as err:
+            if err.code != 404:
+                raise
             return None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(body)

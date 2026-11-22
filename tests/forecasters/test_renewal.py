@@ -20,6 +20,7 @@ from nowcastutils.base import (
     ForecastTask,
     check_samples,
 )
+from nowcastutils.dates import epiweek_end
 from nowcastutils.forecast import Forecast
 
 pytest.importorskip("pyrenew")
@@ -598,7 +599,7 @@ def test_the_model_cut_off_is_the_release_s_latest_onset_day(
         cut = data.start_date + dt.timedelta(days=data.cutoff)
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last
-        assert end == rn._saturday(last)
+        assert end == epiweek_end(last)
 
 
 def test_single_patch_fits_each_province_on_its_own(

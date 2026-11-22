@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import urllib.error
 from dataclasses import replace
+from email.message import Message
 from pathlib import Path
 from typing import Any
 
@@ -300,11 +302,18 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
     assert groups[-1] == [False, True, False]
     assert out["kinds"][-1] == 1
 
-    # No file and no download: no zone terms.
-    def fail(_: str) -> bytes:
+    # A release with no zone file (404): no zone terms.
+    def missing(url: str) -> bytes:
+        raise urllib.error.HTTPError(url, 404, "Not Found", Message(), None)
+
+    assert zr.zone_bvd_rows(release, tmp_path / "none", names, missing) is None
+
+    # Any other failure is an error, not a release without zones.
+    def offline(_: str) -> bytes:
         raise OSError("offline")
 
-    assert zr.zone_bvd_rows(release, tmp_path / "none", names, fail) is None
+    with pytest.raises(OSError, match="offline"):
+        zr.zone_bvd_rows(release, tmp_path / "none", names, offline)
 
 
 @pytest.mark.usefixtures("quiet_zones")

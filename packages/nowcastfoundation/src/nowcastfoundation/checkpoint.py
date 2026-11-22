@@ -48,7 +48,8 @@ import pandas as pd
 from nowcastfoundation.sidecar import SIDECAR, with_sidecar
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
-"""The scoring rule of 2026-11-16."""
+"""The scoring rule: WIS and CRPS on each model's own quantiles, from
+1000 draws on the common random stream (`nowcasteval.marginals`)."""
 OLD_RULE: Final = "samples-100"
 """Rows written before the rule: WIS of 100 draws."""
 BASELINE: Final = "randomwalknowcast"

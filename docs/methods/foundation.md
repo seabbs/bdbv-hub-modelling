@@ -65,6 +65,7 @@ Each of those forecasts is scored at the steps that are final by the task's rele
 With no earlier release the fit is independence.
 The 8 weeks are fixed for now; `choose_window` can instead pick the window online, as the one whose couplings had the lowest energy score on the latest matured releases, but the foundation model does not use it yet.
 Independent and comonotone draws remain as named options (`coupling`) for the supplement.
+`couple` also has the Schaake shuffle (each sample ordered as one past window of observed or simulated values, `history_windows`); the foundation model does not use it yet.
 
 ## Counts
 
