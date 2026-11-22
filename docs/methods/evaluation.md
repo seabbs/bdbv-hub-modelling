@@ -242,6 +242,7 @@ $$
 \text{WIS}(F, y) = \frac{1}{K + 1/2} \sum_{\tau} \left(\mathbb{1}\{y < q_\tau\} - \tau\right)\left(q_\tau - y\right), \qquad K = 3.
 $$
 Each 7-day sum's truth is its count in the data 40 days after it ends, the paper's 40-day truth.
+Our models see only reports made within 40 days of each reference date, so they forecast the count the truth holds.
 The backtest scores its complete weeks the same way, on the first release the truth delay after each week ([Real releases](#real-releases)).
 Relative scores divide a model's mean score by `randomwalknowcast`'s on the nowcasts both made.
 The paper's relative scores divide by the hub's own baseline, `KIT-frozen_baseline`.
