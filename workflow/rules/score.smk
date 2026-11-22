@@ -9,8 +9,8 @@
 # <label>/ and resumes from it; its done stamp is written when it exits
 # cleanly. `score_table` merges every label's rows into the evidence
 # tables in <SCORE_CACHE>/tables/, newest checkpoint first. A unit runs
-# torch on this machine's device (flowlib.machine) with SCORE_THREADS
-# threads, and takes the `gpu` resource, so units on one GPU queue.
+# torch on EVAL_DEVICE (the CPU by default; flowlib.machine.side_device)
+# with EVAL_THREADS threads, beside the trainer, which keeps the GPU.
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany-days/<label>.done
 # (`GERMANY_UNIT`); `germany` is the unit's study name.
@@ -53,7 +53,6 @@ rule score_germany:
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
-        gpu=1,
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
@@ -76,13 +75,12 @@ rule score_run_germany:
         f"{RUN}/scores/log/{GERMANY_UNIT}-n{{n}}.log",
     benchmark:
         f"{RUN}/scores/benchmarks/score_run_germany/n{{n}}.tsv"
-    priority: 5
+    priority: newest_first(5)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
-        gpu=1,
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,

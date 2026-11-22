@@ -82,9 +82,8 @@ rule train_segment:
         adapter=protected(f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors"),
     log:
         f"{TRAIN}/n{{n}}.log",
-    # In one pool the trainer, the run's critical path, goes first: before
-    # simulation (15) and checkpoint scoring (10 and below).
-    priority: 20
+    # The trainer, the run's critical path, goes before every other job.
+    priority: TRAIN_PRIORITY
     conda:
         TOOLS_ENV
     resources:
