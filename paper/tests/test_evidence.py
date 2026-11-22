@@ -685,3 +685,23 @@ def test_no_evidence_input_is_bdbv_scores() -> None:
     )
     assert not [n for n in EVIDENCE if "bdbv" in n]
     assert not [n for n in config["evidence"] if "bdbv" in n]
+
+
+def test_a_reference_row_counts_once_per_target() -> None:
+    base = {
+        "study": "germany",
+        "level": "national",
+        "location": "DE",
+        "origin_date": "2026-10-04",
+        "target_date": "2026-09-27",
+    }
+    rows = pd.DataFrame(
+        [
+            {**base, "model": "randomwalknowcast", "option": o, "wis": w}
+            for o, w in (("reference", 10.0), ("joint", 30.0))
+        ]
+        + [{**base, "model": "fm", "option": "joint", "wis": 5.0}]
+    )
+    assert aggregation_numbers(rows)["germany"]["national"]["fm"] == {
+        "joint": 0.5
+    }

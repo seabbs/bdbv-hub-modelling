@@ -93,6 +93,24 @@ def _pair(a: pd.Series, b: pd.Series) -> list[str]:
     ]
 
 
+def _relative_wis(scores: pd.DataFrame, reference: str) -> pd.Series:
+    """Return WIS relative to `reference` by study, level, model and option.
+
+    Summed over the targets each shares with `reference`, whose rows
+    count once per target.
+    """
+    keys = ["study", "level", "location", "origin_date", "target_date"]
+    ref = scores.loc[scores["model"] == reference, [*keys, "wis"]]
+    ref = ref.drop_duplicates(keys)
+    paired = scores.loc[scores["model"] != reference].merge(
+        ref, on=keys, suffixes=("", "_ref")
+    )
+    sums = paired.groupby(["study", "level", "model", "option"])[
+        ["wis", "wis_ref"]
+    ].sum()
+    return sums["wis"] / sums["wis_ref"]
+
+
 def aggregation_figure(
     scores: pd.DataFrame, reference: str = "randomwalknowcast"
 ) -> Figure:
@@ -111,16 +129,7 @@ def aggregation_figure(
     reference : str
         The model scores are relative to.
     """
-    keys = ["study", "level", "location", "origin_date", "target_date"]
-    ref = scores.loc[scores["model"] == reference, [*keys, "wis"]]
-    ref = ref.drop_duplicates(keys)
-    paired = scores.loc[scores["model"] != reference].merge(
-        ref, on=keys, suffixes=("", "_ref")
-    )
-    sums = paired.groupby(["study", "level", "model", "option"])[
-        ["wis", "wis_ref"]
-    ].sum()
-    rel = (sums["wis"] / sums["wis_ref"]).rename("rel").reset_index()
+    rel = _relative_wis(scores, reference).rename("rel").reset_index()
     panels = list(dict.fromkeys(zip(rel["study"], rel["level"], strict=True)))
     studies = list(dict.fromkeys(s for s, _ in panels))
     ncol = max(sum(s == st for s, _ in panels) for st in studies)
@@ -173,15 +182,7 @@ def aggregation_numbers(
     Keys are study, level, model and option (`OPTIONS`), and values the
     WIS relative to `reference` on shared targets, to two decimals.
     """
-    keys = ["study", "level", "location", "origin_date", "target_date"]
-    ref = scores.loc[scores["model"] == reference, [*keys, "wis"]]
-    paired = scores.loc[scores["model"] != reference].merge(
-        ref, on=keys, suffixes=("", "_ref")
-    )
-    sums = paired.groupby(["study", "level", "model", "option"])[
-        ["wis", "wis_ref"]
-    ].sum()
-    rel = (sums["wis"] / sums["wis_ref"]).round(2)
+    rel = _relative_wis(scores, reference).round(2)
     out: dict = {}
     for (study, level, model, option), value in rel.items():
         node = out.setdefault(study, {}).setdefault(level, {})
