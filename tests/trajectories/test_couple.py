@@ -89,3 +89,16 @@ def test_a_gaussian_coupling_with_no_correlation_is_independent():
     assert gau.sum(axis=2).std() == pytest.approx(
         ind.sum(axis=2).std(), rel=0.05
     )
+
+
+def test_read_quantiles_inverts_the_quantile_function() -> None:
+    levels = np.array([0.1, 0.5, 0.9])
+    values = np.array([[[0.0, 1.0, 3.0]], [[2.0, 2.0, 2.0]]])
+    u = np.array([[0.5], [0.3]])
+    out = read_quantiles(levels, values, u)
+    assert out.shape == (2, 1)
+    assert out[0, 0] == pytest.approx(1.0)
+    assert out[1, 0] == pytest.approx(2.0)
+    # Outside the levels the draw is the outermost quantile.
+    low = read_quantiles(levels, values[:1], np.array([[0.01]]))
+    assert low[0, 0] == pytest.approx(0.0)
