@@ -27,13 +27,13 @@ from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent import InfectionInitializationProcess
 
 from ..components.pmfs import Delay, delay_pmf, generation_time_pmf
+from ..components.renewal import DEPLETIONS, Shifts, Variants
 from .imports import Imports
 from .infections import StratifiedInfections
 from .mixing import PlaceMixing
 from .reference import ReferenceEvents
 from .rt import KINDS, PlaceRt, RtPath
 from .start import InitializeStrata
-from .strata import DEPLETIONS, Shifts, Variants
 
 __all__ = ["COLUMNS", "Latent", "simulate_latent", "simulate_latent_batch"]
 
@@ -118,7 +118,7 @@ def simulate_latent(
     incubation_cv : float
         The infection-to-reference delay's coefficient of variation.
     depletion : str
-        `"linear"` or `"exponential"` (`strata.DEPLETIONS`).
+        `"linear"` or `"exponential"` (`components.renewal.DEPLETIONS`).
 
     Returns
     -------

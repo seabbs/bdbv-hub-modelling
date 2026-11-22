@@ -4,7 +4,7 @@ r"""Simulate province outbreaks and publish them as hub-style vintages.
 The simulator draws from the model's own components with known
 parameters, so recovery can be checked and there is one implementation
 of the maths. Expected daily infections come from the model's renewal
-(`nowcastrenewal.model.renewal.coupled_renewal`), with its generation
+(`nowcastrenewal.components.renewal.run_renewal`), with its generation
 interval, gravity kernel, importation and depletion of the effective
 population, for $\log R_p(t) = \log R(t) + \delta_p$ with a national
 $R(t)$ that turns and fixed province offsets $\delta_p$.
@@ -41,6 +41,7 @@ from bdbvhub.data.delays import hub_delay_pmf
 from bdbvhub.data.tidy import PROVINCE_POPULATIONS, province_places
 from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import Delay, censored_pmf
+from nowcastrenewal.components.renewal import ExponentialDepletion, run_renewal
 from nowcastrenewal.model.inputs import gravity_kernel as model_gravity_kernel
 from nowcastrenewal.model.model import (
     GI_MEAN,
@@ -49,7 +50,6 @@ from nowcastrenewal.model.model import (
     generation_interval,
     incubation_period,
 )
-from nowcastrenewal.model.renewal import coupled_renewal
 from nowcastutils.base import NATIONAL
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.releases import release_cutoff
@@ -597,14 +597,19 @@ def simulate_outbreak(
         jnp.asarray(pop / pop.sum()),
     )
     nu = s.effective_fraction
-    x, r_eff, _ = coupled_renewal(
+    run = run_renewal(
         jnp.zeros((gi.size, n_loc)),
-        jnp.asarray(rt.T),
         jnp.asarray(gi),
-        mixing,
-        pool=nu,
+        jnp.asarray(rt.T),
+        nu,
+        mixing=mixing,
         seeding=jnp.asarray(seeding),
+        depletion=ExponentialDepletion(),
     )
+    x = run.infections[gi.size :]
+    # R S / nu on each day before its infections.
+    s_before = np.vstack([np.full((1, n_loc), nu), run.susceptible[:-1]])
+    r_eff = rt.T * s_before / nu
     # Onsets follow infections after the incubation period, as in the model.
     eta = incubation_period()
     infections = np.asarray(x, float)

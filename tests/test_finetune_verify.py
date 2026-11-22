@@ -190,12 +190,11 @@ def test_the_simulator_hashes_its_grid_python_and_engine():
                     "rt",
                     "simulate",
                     "start",
-                    "strata",
                 ),
             ),
             (
                 "packages/nowcastrenewal/src/nowcastrenewal/components",
-                ("__init__", "pmfs"),
+                ("__init__", "mixing", "pmfs", "renewal"),
             ),
         )
         for name in names

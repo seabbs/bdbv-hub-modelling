@@ -11,15 +11,11 @@ import sys
 from typing import Any
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
 from numpyro import handlers
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
-from pyrenew.latent.infection_functions import (
-    logistic_susceptibility_adjustment,
-)
 
 from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import (
@@ -27,16 +23,10 @@ from nowcastrenewal.components.pmfs import (
     delay_pmf,
     generation_time_pmf,
 )
+from nowcastrenewal.components.renewal import Shifts, Variants, run_renewal
 from nowcastrenewal.latent.imports import Imports
 from nowcastrenewal.latent.mixing import PlaceMixing
 from nowcastrenewal.latent.reference import ReferenceEvents
-from nowcastrenewal.latent.strata import (
-    ExponentialDepletion,
-    LinearDepletion,
-    Shifts,
-    Variants,
-    strata_renewal,
-)
 
 from .latent_r import load
 
@@ -209,7 +199,7 @@ def _renewal(f: dict[str, Any], which: str) -> Any:
     if which == "exhaust":
         start, log_r = start * 50, log_r + 1.5
     with jax.enable_x64(True):
-        return strata_renewal(
+        return run_renewal(
             start,
             np.array(f["gt"]),
             np.exp(log_r),
@@ -219,7 +209,7 @@ def _renewal(f: dict[str, Any], which: str) -> Any:
 
 
 @pytest.mark.parametrize("which", ["plain", "full", "exhaust"])
-def test_the_strata_renewal_matches_the_r_engine(which: str) -> None:
+def test_the_renewal_step_matches_the_r_engine(which: str) -> None:
     f = load("renewal")
     out = _renewal(f, which)
     want = f["runs"][which]
@@ -241,51 +231,12 @@ def test_the_exhausted_renewal_never_infects_more_than_its_population() -> None:
     assert (np.asarray(out.susceptible) >= 0).all()
 
 
-def test_exponential_depletion_is_pyrenews_logistic_adjustment() -> None:
-    # S (1 - e^{-R F / N}) is PyRenew's logistic susceptibility adjustment
-    # with the raw incidence R F, written with expm1.
-    with jax.enable_x64(True):
-        r = jnp.array([1.3, 0.8, 2.0])
-        force = jnp.array([50.0, 3.0, 400.0])
-        s = jnp.array([9000.0, 4000.0, 15000.0])
-        pop = jnp.array([1e4, 5e3, 2e4])
-        new = ExponentialDepletion()(r, force, s, pop, jnp.zeros(3))
-        want = logistic_susceptibility_adjustment(r * force, s / pop, pop)
-    np.testing.assert_allclose(new, want, rtol=1e-9)
-
-
-def test_exponential_depletion_is_linear_while_few_are_infected() -> None:
-    with jax.enable_x64(True):
-        r, force = jnp.array([1.5]), jnp.array([2.0])
-        s, pop, im = jnp.array([1e6]), jnp.array([1e6]), jnp.array([0.5])
-        lin = LinearDepletion()(r, force, s, pop, im)
-        exp = ExponentialDepletion()(r, force, s, pop, im)
-    np.testing.assert_allclose(exp, lin, rtol=1e-5)
-
-
-def test_both_depletions_stop_at_the_susceptibles() -> None:
-    with jax.enable_x64(True):
-        r, force = jnp.array([5.0]), jnp.array([1e5])
-        s, pop, im = jnp.array([10.0]), jnp.array([1e3]), jnp.array([20.0])
-        for depletion in (LinearDepletion(), ExponentialDepletion()):
-            assert float(depletion(r, force, s, pop, im)[0]) == 10.0
-
-
-def test_a_variant_raises_r_and_returns_immune_people_once() -> None:
-    v = Variants(at=[10.0], escape=[0.5], multiplier=[2.0], days=[4.0])
-    with jax.enable_x64(True):
-        m = np.asarray(v.multiplier_on(jnp.arange(1.0, 31.0)))
-    assert m[0] == pytest.approx(1.0, abs=1e-4)
-    assert m[-1] == pytest.approx(2.0, abs=1e-4)
-    assert m[9] == pytest.approx(1.5)
-
-
 def test_the_fitted_models_do_not_import_the_simulator_components() -> None:
     # The fit keys hash the forecasters' import closure, so the simulator's
     # components stay out of it and adding them refits nothing.
     code = (
         "import sys, nowcastrenewal.forecaster, nowcastrenewal.zones;"
-        "mods = ('imports', 'mixing', 'pmfs', 'reference', 'strata');"
+        "mods = ('imports', 'mixing', 'reference');"
         "print([m for m in mods"
         " if f'nowcastrenewal.latent.{m}' in sys.modules])"
     )

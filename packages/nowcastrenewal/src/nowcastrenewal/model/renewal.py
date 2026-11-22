@@ -2,13 +2,13 @@
 r"""Subpopulation renewal coupled by importation, with susceptible depletion.
 
 `MetapopulationInfections` is a PyRenew `BaseSubpopulationInfections` with
-a coupled renewal step (`coupled_renewal`) and the per-resident mixing
-matrix from the shared `components.mixing.Mixing`.
+the shared renewal step (`components.renewal.run_renewal`, per resident,
+with exponential depletion of the share at risk) and the per-resident
+mixing matrix from the shared `components.mixing.Mixing`.
 """
 
 from __future__ import annotations
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -19,111 +19,12 @@ from pyrenew.latent.base import LatentSample, PopulationStructure
 from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
 
+from ..components.renewal import (
+    ExponentialDepletion,
+    NoDepletion,
+    run_renewal,
+)
 from .pooled import pooled_walk
-
-
-def coupled_renewal(
-    I0: Array,
-    rt: Array,
-    gen_int: Array,
-    mixing: Array,
-    pool: Array | float | None = None,
-    seeding: Array | None = None,
-) -> tuple[Array, Array, Array]:
-    r"""Run a per-capita renewal with importation and depletion.
-
-    With $x_p(t)$ infections per resident, $\nu$ the effective share of
-    the population at risk (`pool`), $g$ the generation interval and $W$
-    from `components.mixing.mixing_matrix`,
-
-    $$y_p(t) = R_p(t) \sum_q W_{pq} \sum_{\tau \ge 1}
-    x_q(t - \tau) g(\tau),$$
-
-    $$x_p(t) = S_p(t) \{1 - e^{-y_p(t) / \nu}\}, \qquad
-    S_p(t + 1) = S_p(t) - x_p(t) = S_p(t) e^{-y_p(t) / \nu},$$
-
-    with $S_p$ the susceptibles per resident, starting from $\nu$ less
-    the seed, so cumulative infections never exceed the pool. This is
-    PyRenew's `logistic_susceptibility_adjustment` (Bhatt et al. 2023,
-    eq. 6) with population $\nu$, written with `expm1`: PyRenew's
-    `1 - exp(-y)` loses most of its digits in float32 at per-capita
-    rates near 1e-6, which makes the gradient noisy and stalls NUTS.
-    To first order in $y$ it is the linear-depletion renewal $x = S y / \nu$
-    (the NumPy reference in `tests/model/numpy_reference.py`). Without
-    a pool there is no depletion and $x_p(t) = y_p(t)$.
-
-    PyRenew's renewal scans (`compute_infections_from_rt` and
-    `compute_infections_from_rt_with_mobility`) carry no
-    transfer between provinces with depletion of a pool $\nu$. Hence
-    this scan, written as theirs: a pure function of the seed, $R$ and
-    the generation interval, called from the latent process.
-
-    Parameters
-    ----------
-    I0
-        Per-capita infections in the seeding period, shape `(n_init, P)`.
-        All rows count towards depletion; the last `len(gen_int)` rows
-        start the renewal.
-    rt
-        Reproduction numbers after seeding, shape `(n, P)`.
-    gen_int
-        Generation interval pmf, element 0 at lag 1 (PyRenew convention).
-    mixing
-        Mixing matrix $W$, shape `(P, P)`.
-    pool
-        Effective share of the population at risk, $\nu$. `None`
-        turns depletion off.
-    seeding
-        Seed infections per resident added to $y_p(t)$, `(n, P)`, for
-        provinces seeded after the start.
-
-    Returns
-    -------
-    tuple of Array
-        Infections `(n, P)`, the effective reproduction number
-        $R_p(t) S_p(t) / \nu$, `(n, P)`, and the infections from
-        importation, `(n, P)`: the off-diagonal part of $y$ as a share of
-        $y$, times the infections.
-    """
-    off = mixing - jnp.diag(jnp.diag(mixing))
-    rev_g = jnp.flip(jnp.asarray(gen_int))
-    history = I0[-rev_g.shape[0] :]
-    # The susceptible share of the pool is carried on the log scale:
-    # S(t + 1) = S(t) exp(-y / nu) exactly, so log S needs no subtraction
-    # of nearly equal numbers, and 1 - exp(-y / nu) is taken by expm1.
-    if pool is None:
-        log_share0 = jnp.zeros(rt.shape[1:])
-    else:
-        susceptible0 = jnp.clip(pool - I0.sum(axis=0), 0.0, pool)
-        log_share0 = jnp.log(jnp.clip(susceptible0 / pool, 1e-30, 1.0))
-
-    if seeding is None:
-        seeding = jnp.zeros_like(rt)
-
-    def step(
-        carry: tuple[Array, Array], inputs: tuple[Array, Array]
-    ) -> tuple[tuple[Array, Array], tuple[Array, Array, Array]]:
-        hist, log_share = carry
-        r_t, seed_t = inputs
-        force = rev_g @ hist
-        imported = r_t * (off @ force)
-        y = r_t * (mixing @ force) + seed_t
-        share = jnp.exp(log_share)
-        if pool is None:
-            x = y
-        else:
-            x = -pool * share * jnp.expm1(-y / pool)
-            log_share = log_share - y / pool
-        hist = jnp.concatenate([hist[1:], x[None, :]])
-        from_imports = x * jnp.where(
-            y > 0, imported / jnp.where(y > 0, y, 1), 0
-        )
-        return (hist, log_share), (x, r_t * share, from_imports)
-
-    _, (x, r_eff, from_imports) = jax.lax.scan(
-        step, (history, log_share0), (rt, seeding)
-    )
-    return x, r_eff, from_imports
 
 
 class MetapopulationInfections(BaseSubpopulationInfections):
@@ -136,9 +37,10 @@ class MetapopulationInfections(BaseSubpopulationInfections):
     Seeding is PyRenew's exponential seeding at the initial growth rate,
     but anchored so that `I0_rv` is the level on the first data day
     rather than the first seeding day.
-    The renewal is `coupled_renewal`, which sends a share $\varepsilon$
-    of transmission to other provinces through the mixing matrix of
-    `mixing_rv` and depletes each province's effective susceptible pool.
+    The renewal is `components.renewal.run_renewal`, which sends a share
+    $\varepsilon$ of transmission to other provinces through the mixing
+    matrix of `mixing_rv` and depletes each province's effective
+    susceptible pool.
     `sample` runs the steps of `BaseSubpopulationInfections.sample`, with
     the renewal in `_infections_from_rt`.
 
@@ -236,7 +138,7 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         pop: PopulationStructure,
         seeding: Array | None = None,
     ) -> tuple[Array, Array]:
-        r"""Infections and adjusted Rt after seeding, by `coupled_renewal`.
+        r"""Infections and adjusted Rt after seeding, by `run_renewal`.
 
         Records the infections from importation as `infections_imported`.
 
@@ -256,15 +158,27 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             if self.effective_population_rv is None
             else self.effective_population_rv()
         )
-        post, r_eff, imported = coupled_renewal(
-            I0, rt_raw, gen_int, mixing, pool, seeding
+        run = run_renewal(
+            I0,
+            gen_int,
+            rt_raw,
+            1.0 if pool is None else pool,
+            mixing=mixing,
+            seeding=seeding,
+            depletion=NoDepletion() if pool is None else ExponentialDepletion(),
         )
         with numpyro.handlers.scope(prefix=self.name, divider="::"):
             numpyro.deterministic(
                 "infections_imported",
-                jnp.vstack([jnp.zeros_like(I0), imported]),
+                jnp.vstack([jnp.zeros_like(I0), run.imported]),
             )
-        return post, r_eff
+        if pool is None:
+            return run.infections[I0.shape[0] :], rt_raw
+        # R S / nu on each day before its infections, from the step's
+        # susceptibles after each day.
+        s0 = jnp.clip(pool - I0.sum(axis=0), 0.0, pool)
+        before = jnp.vstack([s0[None, :], run.susceptible[:-1]])
+        return run.infections[I0.shape[0] :], rt_raw * before / pool
 
     def sample(
         self,
