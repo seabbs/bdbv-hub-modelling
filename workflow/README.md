@@ -206,6 +206,10 @@ Every Snakemake run the tasks, ticks and paper scripts start reports to it throu
 Runs report to `MONITOR_URL`; another machine's runs report to the serving machine's address, and an empty `MONITOR_URL` switches reporting off.
 The plugin drops events it cannot send, so a run goes on when no server is listening.
 The page is served on `MONITOR_HOST` and `MONITOR_PORT`, with its database in `<ROOT>/monitor/`, all from `config/local.env`.
+Panoptes has no DAG view, so the same server adds one at `/dag/` (`workflow/flowlib/monitor_server.py`, `workflow/flowlib/dag.py`).
+For each `MONITOR_DAG` target (`NAME=TARGET`) it draws the rule graph and the job DAG, each job pending, running, done or failed.
+A job Snakemake would not run is done; Panoptes gives the rest their state, so the colours follow the run on each visit.
+The graphs are built with `MONITOR_DAG_OPTIONS` every `MONITOR_DAG_EVERY` seconds, without a lock; `task nowcast-workflow:dag -- NAME=TARGET` builds one now.
 Each tick also writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds (`workflow/flowlib/runstatus.py`).
 The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), not jobs.
 
