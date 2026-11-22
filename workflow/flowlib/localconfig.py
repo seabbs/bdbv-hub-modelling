@@ -39,6 +39,9 @@ DEFAULTS = (
     ("NOSLOTS_RUN", "$ROOT/checkpoints"),
     ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
+    # The prefix every simulation batch runs under, with no cap of its
+    # own (such as one systemd slice they all share; empty: none).
+    ("SIM_PREFIX", ""),
     # The rounds host, as ssh names it (empty: this machine), and its
     # rounds folder (empty: ROOT), where a helping host pushes its
     # batches; the seeds this host simulates (flowlib.hosts; empty: all);
@@ -78,10 +81,15 @@ DEFAULTS = (
     ("STATUS_EVERY", "60"),
     # The workflow monitor (flowlib.monitor): the Panoptes server every
     # Snakemake run reports to (empty: off), and where
-    # `task nowcast-workflow:monitor` serves it.
+    # `task nowcast-workflow:monitor` serves it; the targets whose rule
+    # graph and job DAG it draws (flowlib.dag, NAME=TARGET), the Snakemake
+    # options they are built with, and every how many seconds.
     ("MONITOR_URL", "http://127.0.0.1:8795"),
     ("MONITOR_HOST", "127.0.0.1"),
     ("MONITOR_PORT", "8795"),
+    ("MONITOR_DAG", ""),
+    ("MONITOR_DAG_OPTIONS", ""),
+    ("MONITOR_DAG_EVERY", "900"),
     ("SCHEDULE_EVERY", "60"),
     # The coordinator run's pause between ticks, and after a failed one
     # (seconds; workflow/scripts/coordinate.py).

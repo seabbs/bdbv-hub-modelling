@@ -1055,7 +1055,11 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         (
             "status",
             "Status",
-            f"<div class=tiles>{tiles}</div>{kv.box(about)}",
+            # The trainer's status, views and sources: folded, as the tiles
+            # say where the run is.
+            f"<div class=tiles>{tiles}</div><details class=about>"
+            f"<summary class=mut>Trainer status</summary>{kv.box(about)}"
+            "</details>",
             True,
         ),
         ("loss", "Loss", loss_section(ctx, live, st), True),

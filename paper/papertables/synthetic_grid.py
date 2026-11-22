@@ -4,8 +4,8 @@ The grid config (`config/finetune/grids/<grid>.yaml`, the one the main
 workflow's `simulate.grid_file` names) defines the grid: categorical
 `factors` (levels with weights, drawn independently for each simulation),
 each placed in a layer by `factor_layers`, and named sampling
-`distributions`, each with its layer and the reason for it. The engine
-(`packages/nowcastfoundation/r`) reads the same file, so the tables cannot
+`distributions`, each with its layer and the reason for it. The simulator
+(`nowcastfoundation.simulator`) reads the same file, so the tables cannot
 drift from what is simulated.
 
 - `layer_tables`: the SI's two grid tables, strata and infections, and
@@ -214,12 +214,11 @@ def model_note(grid: dict[str, Any], grid_file: str) -> str:
         " transmission and immune-escape variants.",
         "Expected reference events are the infections convolved with the"
         " incubation period and scaled by the ascertainment.",
-        "The release triangle is drawn from the generative model of"
-        " epinowcast @placeholder with `enw_simulate()`, which runs the"
-        " epinowcast Stan model with fixed parameters and no likelihood.",
-        f"epinowcast is pinned at commit `{grid['epinowcast_sha']}`.",
-        "The simulator is the R package `packages/nowcastfoundation/r`,"
-        f" run on the grid config `{grid_file}`.",
+        "The release triangle is drawn from one numpyro model built from"
+        " PyRenew components @placeholder, sampled forward with the grid's"
+        " values fixed, whose reporting step follows epinowcast's"
+        " observation model @abbottepinowcast.",
+        f"The simulator runs on the grid config `{grid_file}`.",
         "Each simulation draws every categorical setting independently from"
         " its levels' shares, and every continuous setting from its named"
         " sampling distribution, as the SI tables list.",

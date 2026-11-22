@@ -20,6 +20,8 @@ rule evaluate_steps:
         touch(f"{TRAIN}/evals/n{{n}}.done"),
     log:
         f"{TRAIN}/logs/evaluate-steps-n{{n}}.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/evaluate_steps/n{{n}}.tsv"
     priority: EVALUATE_PRIORITY
     conda:
         TOOLS_ENV
@@ -94,6 +96,8 @@ rule evaluate_checkpoint:
         f"{TRAIN}/n{{n}}/{SIDECAR}",
     log:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv"
     priority: EVALUATE_CHECKPOINT_PRIORITY
     conda:
         TOOLS_ENV

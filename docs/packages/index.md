@@ -1,6 +1,6 @@
 # Packages
 
-The code behind the three projects, as seven packages.
+The code behind the three projects, as eight packages.
 { .page-subtitle }
 
 nowcastutils, nowcasteval and nowcastbaselines each have a docs site: getting started, how to, the API reference and how the package is used in the workflow.
@@ -14,6 +14,7 @@ The API of the others is in the [API reference](../reference/index.md).
 | ![](../assets/logos/nowcastbaselines/logo-mark.svg){ width="40" height="40" } | [**nowcastbaselines**](../nowcastbaselines/){ #nowcastbaselines } | The random walk and the random walk nowcast | [Docs site](../nowcastbaselines/), [API](../nowcastbaselines/reference/) |
 | ![](../assets/logos/nowcastfoundation/logo-mark.svg){ width="40" height="40" } | **nowcastfoundation**{ #nowcastfoundation } | Foundation model forecasts and fine-tuning on simulated outbreaks | [Using the fine-tuned model](../methods/finetuned-chronos.md) |
 | ![](../assets/logos/nowcastrenewal/logo-mark.svg){ width="40" height="40" } | **nowcastrenewal**{ #nowcastrenewal } | The renewal models and their BVDOutbreakSize inputs | [Renewal model](../reference/model.md), [Methods](../renewal/methods.md) |
+| | **nowcastgermany**{ #nowcastgermany } | The German hospitalisation nowcasting hub as a case study: its reporting triangles and forecasts as tasks | [API](../reference/index.md) |
 | ![](../assets/logos/bdbvhub/logo-mark.svg){ width="40" height="40" } | **bdbvhub**{ #bdbvhub } | Hub formatting, checks, the fit store and the submission | [Submission](../reference/submission.md) |
 
 - [Setup](../setup.md): install the package and the hub data.

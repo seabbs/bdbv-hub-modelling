@@ -17,6 +17,7 @@ def test_with_no_file_everything_is_on_this_machine(tmp_path):
     assert cfg["MAILBOX"] == ""
     assert cfg["INBOX"] == ""
     assert cfg["JOB_PREFIX"] == ""
+    assert cfg["SIM_PREFIX"] == ""
     assert cfg["HOST_NAME"]
 
 

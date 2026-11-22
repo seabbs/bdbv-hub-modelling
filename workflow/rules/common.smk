@@ -40,16 +40,6 @@ def job_prefix(mem_mb):
     return LOCAL["JOB_PREFIX"].replace("{mem}", f"{int(mem_mb)}M")
 
 
-def git_commit():
-    """The commit the workflow runs at."""
-    return subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-
-
 # From simulate.smk.
 
 SIM = config["simulate"]
@@ -174,9 +164,7 @@ def round_of(seed):
 def training_seeds(run):
     """The run's training seeds, in the order it trains on them."""
     f = RUNS[run].ft
-    if f["seed_file"]:
-        return [int(s) for s in Path(f["seed_file"]).read_text().split()]
-    return [s for r in f["rounds"] for s in seeds_of(r)]
+    return segments.training_seeds(f["seed_file"], f["rounds"], seeds_of)
 
 
 def held_seeds(run):
@@ -190,41 +178,30 @@ def held_range(run):
 
 
 def available_seeds(run):
-    """The training seeds whose batches can be had now, in order.
-
-    All of them from this machine's rounds, which the workflow simulates.
-    From the rounds host or releases, those before the first batch not
-    yet listed, and none until the validation round is all listed.
-    """
-    order = training_seeds(run)
-    if not RUNS[run].elsewhere:
-        return order
-    listed = listed_batches(run)
-    if not set(held_seeds(run)) <= listed:
-        return []
-    for i, seed in enumerate(order):
-        if seed not in listed:
-            return order[:i]
-    return order
+    """The training seeds whose batches can be had now, in order."""
+    listed = listed_batches(run) if RUNS[run].elsewhere else None
+    return segments.available_seeds(training_seeds(run), held_seeds(run), listed)
 
 
 def outbreaks_or_full(run, seed):
     """A batch's outbreaks if simulated, else a full batch."""
-    for settings in (
-        Path(f"{RUNS[run].dir}/sims/settings-{seed}.csv"),
-        Path(f"{ROUNDS_DIR}/r{round_of(seed)}/sims/settings-{seed}.csv"),
-    ):
-        if settings.exists():
-            return segments.batch_outbreaks(settings)
-    return SIM["batch"]
+    return segments.outbreaks_or_full(
+        [
+            f"{RUNS[run].dir}/sims/settings-{seed}.csv",
+            f"{ROUNDS_DIR}/r{round_of(seed)}/sims/settings-{seed}.csv",
+        ],
+        SIM["batch"],
+    )
 
 
 def segment_seeds(run, n):
     """The seeds segment n needs: n outbreaks, one spare, the held-out."""
-    order = available_seeds(run)
-    need = segments.seeds_for(n, order, lambda s: outbreaks_or_full(run, s))
-    spare = order[len(need) : len(need) + 1]
-    return need + spare + held_seeds(run)
+    return segments.segment_seeds(
+        n,
+        available_seeds(run),
+        held_seeds(run),
+        lambda s: outbreaks_or_full(run, s),
+    )
 
 
 def segment_inputs(wc):
@@ -263,29 +240,21 @@ def saved(run, n):
 def trainable(run):
     """The prefixes done or within reach of the seed list."""
     f = RUNS[run].ft
-    order = available_seeds(run)
-    # A spare batch past each prefix but the run's last, which takes
-    # every training simulation.
-    return [
-        n
-        for n in f["prefixes"]
-        if saved(run, n)
-        or segments.reachable(
-            n + SIM["batch"] * (n < f["outbreaks"]),
-            order,
-            lambda s: outbreaks_or_full(run, s),
-        )
-    ]
+    return segments.trainable(
+        f["prefixes"],
+        f["outbreaks"],
+        SIM["batch"],
+        available_seeds(run),
+        lambda n: saved(run, n),
+        lambda s: outbreaks_or_full(run, s),
+    )
 
 
 def to_train(run):
     """Prefixes `finetune` asks for of the run."""
-    prefixes = trainable(run)
-    if not config.get("next_segment_only"):
-        return prefixes
-    done = [n for n in prefixes if saved(run, n)]
-    rest = [n for n in prefixes if n not in done]
-    return done + rest[:1]
+    return segments.to_train(
+        trainable(run), lambda n: saved(run, n), config.get("next_segment_only")
+    )
 
 
 def finetune_inputs(wc):
@@ -442,61 +411,35 @@ def unit_stamps(wc=None):
 
 def write_record(input, output, params, wildcards):
     """Write a batch's manifest row, kept if the manifest has it."""
-    import datetime as dt
-
-    r, s = int(wildcards.round), int(wildcards.seed)
-    line = manifest.existing(params.old, r, s)
-    if line is None and not here(s):
-        raise ValueError(f"batch {s} arrived without its manifest row")
-    line = line or manifest.row(
-        params.sims,
-        round_=r,
-        seed=s,
-        kind="block",
-        grid=grid_id(),
-        commit=git_commit(),
-        draws=SIM["draws"],
-        batch=SIM["batch"],
-        host=HOST,
-        finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    )
-    Path(output[0]).write_text(f"{line}\n")
+    manifest.record(
+        output[0], params.old, params.sims, round_=int(wildcards.round),
+        seed=int(wildcards.seed), mine=here(wildcards.seed), **batch_fields(),
+    )  # fmt: skip
 
 
-def write_ready(seeds, seeds_file, ready_file):
-    """Write a round's seed list, then READY with the time."""
-    import datetime as dt
-
-    Path(seeds_file).write_text("".join(f"{s}\n" for s in seeds))
-    Path(ready_file).write_text(f"{dt.datetime.now(dt.UTC):%Y-%m-%dT%H:%M:%SZ}\n")
+def batch_fields():
+    """The manifest row fields a batch takes from this host and grid."""
+    return {
+        "grid": grid_id(),
+        "draws": SIM["draws"],
+        "batch": SIM["batch"],
+        "host": HOST,
+    }
 
 
 def mark_ready(input, output, params, wildcards):
     """Write a round's seed list and READY, and say so."""
     seeds = seeds_of(wildcards.round)
-    write_ready(seeds, output.seeds, output.ready)
+    manifest.mark_ready(seeds, output.seeds, output.ready)
     qc = Path(input[0]).read_text().strip()
-    say(
-        f"round {wildcards.round} ready: {len(seeds)} batches, one grid " f"block; {qc}"
-    )
+    say(f"round {wildcards.round} ready: {len(seeds)} batches, one grid block; {qc}")
 
 
 def push_record(input, output, params, wildcards):
     """Send a helping host's batch and its manifest row to the rounds host."""
-    import datetime as dt
-
-    r, s = int(wildcards.round), int(wildcards.seed)
-    row = manifest.row(
-        params.sims,
-        round_=r,
-        seed=s,
-        kind="block",
-        grid=grid_id(),
-        commit=git_commit(),
-        draws=SIM["draws"],
-        batch=SIM["batch"],
-        host=HOST,
-        finished=dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    s = int(wildcards.seed)
+    row = manifest.new_row(
+        params.sims, round_=int(wildcards.round), seed=s, **batch_fields()
     )
     hosts.push(params.sims, s, params.there, row, REMOTE)
 
@@ -506,94 +449,38 @@ def listed_batches(run):
     """The batches that can be had now, listed once per Snakemake run.
 
     Listed when the run plans, not kept in a file, so a later run sees
-    rounds finished since. From the rounds host the manifests and QC
-    summaries of its rounds are mirrored in the run's `rounds/`, and a
-    round counts once its QC has run; else the `sims-r<N>` releases'
-    assets. Written to <run>/available-batches.txt for the record.
+    rounds finished since: the rounds host's whole rounds, mirrored in
+    the run's `rounds/` (flowlib.hosts.mirrored_seeds), else the
+    `sims-r<N>` releases' batches. Written to
+    <run>/available-batches.txt for the record.
     """
     this = RUNS[run]
-    rounds = sorted(
-        {this.ft["validation_round"], *(round_of(s) for s in training_seeds(run))}
-    )
+    rounds = {this.ft["validation_round"], *map(round_of, training_seeds(run))}
     seeds = set()
-    for r in rounds:
+    for r in sorted(rounds):
         if this.ft["sims_from"] == "remote":
-            # The manifest and QC summary of a round there so far.
-            here = Path(f"{this.mirror}/r{r}")
-            (here / "qc").mkdir(parents=True, exist_ok=True)
-            for name in ("manifest.csv", "qc/summary.txt"):
-                there = f"{REMOTE_ROUNDS}/r{r}/{name}"
-                got = subprocess.run(
-                    ["rsync", "-a", hosts._at(REMOTE, there), str(here / name)],
-                    capture_output=True,
-                    text=True,
-                )  # fmt: skip
-                # A round with no QC yet has no summary; a round not
-                # started has no manifest, and nor has an unreachable
-                # host, so that is said (the mirror kept so far stays).
-                if got.returncode and name == "manifest.csv":
-                    print(
-                        f"could not copy {there}: {got.stderr.strip()[:200]}",
-                        file=sys.stderr,
-                    )
-            # QC runs once the round is whole: only whole rounds are
-            # trained on.
-            if (here / "qc" / "summary.txt").exists():
-                seeds |= manifest.seeds(here / "manifest.csv")
-            continue
-        # A round not released yet has no release.
-        got = subprocess.run(
-            ["gh", "release", "view", f"sims-r{r}", "-R", SIM["repo"],
-             "--json", "assets"],
-            capture_output=True,
-            text=True,
-        )  # fmt: skip
-        if got.returncode == 0:
-            names = [a["name"] for a in json.loads(got.stdout)["assets"]]
-            seeds |= releases.released_seeds(names)
+            seeds |= hosts.mirrored_seeds(
+                REMOTE, f"{REMOTE_ROUNDS}/r{r}", f"{this.mirror}/r{r}"
+            )
+        else:
+            seeds |= releases.release_seeds(SIM["repo"], r)
     record = Path(f"{this.dir}/available-batches.txt")
     record.parent.mkdir(parents=True, exist_ok=True)
-    record.write_text("".join(f"{s}\n" for s in sorted(seeds)))
+    manifest.write_seeds(sorted(seeds), record)
     return seeds
 
 
 def check_report(input, output, params, wildcards):
-    """Report whether checkpoint `check_at` beats zero-shot, and say so.
-
-    On the held-out simulations only: BDBV is held out for the paper.
-    """
-    there, n = RUNS[wildcards.run], int(wildcards.n)
-    s = evaluations.checkpoint_settings(Path(input[0]).parent)
-    ok = s["held_out_loss"] < s["held_out_loss_start"]
-    text = (
-        f"{wildcards.run} n{n} {'beats' if ok else 'does NOT beat'} zero-shot: "
-        f"held-out {s['held_out_loss']:.4f} vs "
-        f"{s['held_out_loss_start']:.4f}"
-    )
+    """Report whether checkpoint `check_at` beats zero-shot, and say so."""
+    text, line = evaluations.check_report(
+        Path(input[0]).parent, wildcards.run, int(wildcards.n),
+        RUNS[wildcards.run].ft["prefixes"],
+    )  # fmt: skip
     Path(output[0]).write_text(f"{text}\n")
-    after = [p for p in sorted(there.ft["prefixes"]) if p > n]
-    nxt = f", check before n{after[0]}" if after else ""
-    say(text if ok else f"ALERT {text}; training goes on{nxt}")
+    say(line)
 
 
 def land_tables(input, output, params, wildcards):
     """Commit the score tables on the evidence branch and push them."""
-    import shutil
-
-    def git(*args):
-        return subprocess.run(
-            ["git", *args], check=True, capture_output=True, text=True
-        ).stdout.strip()
-
-    notify.check_branch(git("rev-parse", "--abbrev-ref", "HEAD"), params.branch)
-    shutil.copy(input[0], params.evidence)
-    shutil.copy(input[1], params.checkpoints)
-    git("add", params.evidence, params.checkpoints)
-    if git("diff", "--cached", "--name-only"):
-        git("commit", "-q", "-m", "evidence: checkpoint scores")
-    git("push", "-q", "origin", params.branch)
-    git("fetch", "-q", "origin", params.branch)
-    head = git("rev-parse", "HEAD")
-    if head != git("rev-parse", f"origin/{params.branch}"):
-        raise SystemExit(f"{head} is not on origin/{params.branch}")
+    head = notify.land(input, params.evidence, params.checkpoints, params.branch)
     say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")

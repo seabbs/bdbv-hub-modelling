@@ -35,11 +35,12 @@ import gzip
 import json
 import logging
 import pickle
+import time
 import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
 import pandas as pd
@@ -415,6 +416,27 @@ def _tasks(
     return tasks
 
 
+def _timed_prefetch(
+    name: str,
+    model: FoundationModel,
+    tasks: Sequence[ForecastTask],
+    timings: list[dict[str, Any]] | None,
+) -> FoundationModel:
+    """`prefetch` the model, recording its seconds in `timings`."""
+    start = time.perf_counter()
+    out = prefetch(model, tasks, FORECAST_LEVELS)
+    if timings is not None:
+        timings.append(
+            {
+                "model": name,
+                "origin": "",
+                "stage": "prefetch",
+                "seconds": time.perf_counter() - start,
+            }
+        )
+    return out
+
+
 def germany_forecasts(
     models: Sequence[str],
     triangle: pd.DataFrame,
@@ -424,6 +446,7 @@ def germany_forecasts(
     tasks_dir: Path | None = None,
     horizons: Sequence[int] = HORIZONS,
     max_delay: int | None = None,
+    timings: list[dict[str, Any]] | None = None,
 ) -> pd.DataFrame:
     """Nowcast each date with each model, as quantiles at the hub's levels.
 
@@ -453,6 +476,11 @@ def germany_forecasts(
         only the counts reported within it (`data.germany.within_delay`),
         so they forecast the count the truth holds, not the eventual one.
         A `tasks_dir` must then be keyed on it.
+    timings : list, optional
+        Given, a row is appended for each model and date: `model`,
+        `origin`, `stage` (`forecast`) and `seconds`; and one for each
+        Chronos-2 model's batched pass over every date (`stage`
+        `prefetch`, `origin` empty).
 
     Returns
     -------
@@ -476,10 +504,10 @@ def germany_forecasts(
         }
         every = [t for ts in tasks.values() for t in ts]
         built = [
-            prefetch(m, every, FORECAST_LEVELS)
+            _timed_prefetch(name, m, every, timings)
             if isinstance(m, FoundationModel)
             else m
-            for m in built
+            for name, m in zip(models, built, strict=True)
         ]
         # The loop pops each date's tasks, which frees them only once this
         # list no longer holds them.
@@ -490,11 +518,14 @@ def germany_forecasts(
         mine = tasks.pop(date, None)
         if mine is None:
             mine = _tasks(triangle, date, n_samples, seed, tasks_dir, horizons)
+        spent = dict.fromkeys(models, 0.0)
         for task in mine:
-            for model in built:
+            for name, model in zip(models, built, strict=True):
+                start = time.perf_counter()
                 at = forecast_quantiles(
                     model, task, FORECAST_LEVELS, n_samples, seed
                 )
+                spent[name] += time.perf_counter() - start
                 if at.empty:
                     continue
                 # `hub_forecasts` moves rows to the hub's dates and places,
@@ -510,6 +541,11 @@ def germany_forecasts(
                         }
                     )
                 )
+        if timings is not None:
+            timings += [
+                {"model": m, "origin": date, "stage": "forecast", "seconds": t}
+                for m, t in spent.items()
+            ]
     if not frames:
         return pd.DataFrame(columns=[*keys, "quantile", "value"])
     out = pd.concat(frames, ignore_index=True)
