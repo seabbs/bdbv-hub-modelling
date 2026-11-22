@@ -87,6 +87,7 @@ MACHINE_KEYS = frozenset(
         "CORES",
         "MEM_MB",
         "SIM_SLOTS",
+        "WORKFLOW_DIR",
         "DEVICE",
         "CHECKPOINT_ABOVE",
         "TARGETS",

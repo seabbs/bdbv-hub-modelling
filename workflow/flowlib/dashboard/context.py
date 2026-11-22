@@ -18,7 +18,7 @@ import yaml
 
 from nowcasteval import labels
 
-from . import logs, paperstyle
+from . import logs, paperstyle, pipeline
 from . import runs as spec
 from .mirror import Source
 from .page import Context
@@ -140,6 +140,20 @@ def build(
             for i, t in enumerate(dash.get("notes") or [])
         ],
         excluded=excluded,
+        where=pipeline.Where(
+            rounds_dir=(
+                Path(local["ROOT"]).expanduser() / "rounds"
+                if local.get("ROOT")
+                else None
+            ),
+            rounds=tuple(
+                ft.get("rounds")
+                or (config.get("grid_rounds") or {}).get("rounds")
+                or ()
+            ),
+            batches=int((config.get("simulate") or {}).get("batches", 40)),
+            workflow_dir=Path(local.get("WORKFLOW_DIR") or root).expanduser(),
+        ),
     )
 
 

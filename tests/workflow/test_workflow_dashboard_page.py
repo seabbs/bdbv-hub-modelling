@@ -545,3 +545,9 @@ def test_a_stopped_run_names_the_batches_its_next_segment_waits_on(tmp_path):
     tiles, _ = page.status_tiles(st, ctx.runs[0])
     trainer = tiles.split("Trainer")[1].split("Last log line")[0]
     assert "waiting for batches 3, 8, 9, 10" in trainer
+
+
+def test_the_page_has_a_pipeline_section(tmp_path):
+    ctx = _machine(tmp_path)
+    assert "pipeline" in page.sections(ctx)
+    assert "Simulate rounds" in page.sections(ctx)["pipeline"]
