@@ -454,6 +454,6 @@ def test_a_run_s_own_score_folders_are_its_checkpoints(tmp_path):
     _, refs = _setup()
     rs = [runs.make_run("runa", str(run), live=True)]
     built = nowcasts.build(cache, rs, refs, levels=PAGE, unit="germany-days")
-    assert "runa" in built["sets"]
+    assert "abc123def456" in built["sets"]
     assert "rw" in built["sets"]
     assert built["folders"]["abc123def456"] == "runa-abc123def456"
