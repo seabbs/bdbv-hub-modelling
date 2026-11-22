@@ -336,3 +336,29 @@ def test_the_mean_rate_leaves_out_the_gaps_of_restarts():
     points = [(t0, 0), (t0 + 100, 100), (t0 + 7300, 100), (t0 + 7350, 200)]
     assert training.mean_rate(points) == pytest.approx(200 / 150)
     assert training.mean_rate([(t0, 5)]) is None
+
+
+def test_an_offloaded_run_s_step_evaluations_are_its_held_out_line(tmp_path):
+    # The trainer logs no held-out loss when it offloads evaluation; each
+    # step's subset loss and its parts come from train/evals.
+    folder = tmp_path / "run"
+    train = folder / "train"
+    (train / "evals").mkdir(parents=True)
+    (train / "history.json").write_text(json.dumps([{"step": 0}]))
+    for step, loss in ((200, 0.3), (400, 0.2)):
+        (train / "evals" / f"step-{step:07d}.json").write_text(
+            json.dumps(
+                {
+                    "step": step,
+                    "eval_loss": loss,
+                    "eval_loss_nowcast": loss - 0.1,
+                    "eval_loss_forecast": 0.1,
+                }
+            )
+        )
+    run = runs.make_run("r", str(folder), live=True)
+    rows = [{"step": 200, "loss": 0.4, "held": None}]
+    got = training.loss_run(run, rows, [], lambda s: s / 4, None, "#111")
+    assert got["held"] == [[50.0, 0.3], [100.0, 0.2]]
+    assert got["held_parts"]["nowcast"] == [[50.0, 0.2], [100.0, 0.1]]
+    assert got["held_parts"]["forecast"] == [[50.0, 0.1], [100.0, 0.1]]
