@@ -131,10 +131,7 @@ rule batch_record:
 
 rule round_manifest:
     input:
-        lambda wc: expand(
-            f"{ROUNDS_DIR}/r{wc.round}/records/record-{{seed}}.csv",
-            seed=seeds_of(wc.round),
-        ),
+        round_records,
     output:
         f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
     log:
@@ -198,9 +195,7 @@ rule release_batch:
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
-        owner=lambda wc: grids.owner(
-            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
-        ),
+        owner=release_owner,
         counts=rules.simulate_batch.output.counts,
         settings=rules.simulate_batch.output.settings,
     shell:
@@ -263,15 +258,7 @@ rule round_summaries:
     # round's batch files, not its manifest, so a summary of a round
     # another run is simulating writes nothing into that round's records.
     input:
-        lambda wc: [
-            f"{ROUNDS_DIR}/r{wc.round}/sims/{kind}-{seed}.{ext}"
-            for seed in seeds_of(wc.round)
-            for kind, ext in (
-                ("counts", "csv.gz"),
-                ("settings", "csv"),
-                ("latent", "csv.gz"),
-            )
-        ],
+        round_sims,
     output:
         f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
     log:
@@ -303,9 +290,7 @@ rule grid_figures:
         TOOLS_ENV
     params:
         out=lambda wc, output: Path(output.ecdf).parent,
-        sources=lambda wc, input: " ".join(
-            f"r{r}={path}" for r, path in zip(config["rounds"], input)
-        ),
+        sources=round_sources,
     shell:
         """
         uv run python workflow/scripts/grid_summaries.py compare \
@@ -371,9 +356,7 @@ rule sim_report:
     conda:
         TOOLS_ENV
     params:
-        source=lambda wc, input: (
-            f"r{wc.round}={ROUNDS_DIR}/r{wc.round}/sims:{input.summaries}"
-        ),
+        source=lambda wc, input: summary_sources([wc.round], [input.summaries]),
     shell:
         "uv run python workflow/scripts/sim_report.py render {output} "
         "'Simulated outbreaks, round {wildcards.round}' {input.refs} "
@@ -398,10 +381,7 @@ rule sim_report_run:
     params:
         title="Simulated outbreaks, rounds "
         + ", ".join(str(r) for r in config["rounds"]),
-        sources=lambda wc, input: " ".join(
-            f"r{r}={ROUNDS_DIR}/r{r}/sims:{path}"
-            for r, path in zip(config["rounds"], input.summaries)
-        ),
+        sources=lambda wc, input: summary_sources(config["rounds"], input.summaries),
     shell:
         "uv run python workflow/scripts/sim_report.py render {output} "
         "'{params.title}' {input.refs} {input.germany} {params.sources} "
@@ -421,10 +401,7 @@ rule release:
     input:
         # Never an earlier grid's round: its release holds that grid's
         # batches.
-        lambda wc: grids.check_release(
-            config["rounds"], config["grid_rounds"], config.get("retired_rounds")
-        )
-        or [],
+        release_check,
         [
             f"{ROUNDS_DIR}/r{r}/released/{s}.done"
             for r in config["rounds"]
