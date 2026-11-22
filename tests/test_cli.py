@@ -40,6 +40,7 @@ def _written(out: Path) -> pd.DataFrame:
     return pd.read_csv(files[0])
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_writes_zones(tmp_path: Path) -> None:
     args = ["nowcast", "--out", str(tmp_path / "sub")]
@@ -60,6 +61,7 @@ def test_cli_nowcast_writes_zones(tmp_path: Path) -> None:
     assert (nat == provs.groupby(keys)["value"].sum().reindex(nat.index)).all()
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_takes_a_fit_s_own_zones(tmp_path: Path) -> None:
     fit = tmp_path / "fit"
@@ -168,6 +170,7 @@ def test_plot_scores_by_truth() -> None:
     assert len(fig.axes[0].lines) == own["vintage"].nunique()
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root", "flat_model")
 def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     from evaluation.test_backtest import _MaskAware
@@ -368,6 +371,7 @@ def test_cli_fit_store_plans_fits_and_loads(
     ) == 1
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_forecasts_a_later_round_from_an_older_vintage(
     tmp_path: Path,
@@ -752,6 +756,7 @@ def _germany_data(tmp_path: Path) -> tuple[Path, Path]:
     return data, config
 
 
+@pytest.mark.slow
 def test_cli_germany_backtest_scores_a_block_of_dates(tmp_path: Path) -> None:
     data, config = _germany_data(tmp_path)
     out = tmp_path / "results"
@@ -873,6 +878,7 @@ def test_data_defaults_follow_bdbv_data_dir(
     assert getattr(args, attr) == f"elsewhere{path}"
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_cli_fit_store_archives_what_each_model_submits(
     flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -936,6 +942,7 @@ def test_cli_fit_store_archives_what_each_model_submits(
     assert set(pd.read_csv(out)["model"]) == {"flat"}
 
 
+@pytest.mark.slow
 def test_cli_germany_held_out_half_goes_to_its_own_directory(
     tmp_path: Path,
 ) -> None:
@@ -1090,6 +1097,7 @@ def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
     assert set(out["model"]) == {"renewal", "renewalsp"}
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_records_a_walk_models_copula(tmp_path: Path) -> None:
     out = tmp_path / "sub"

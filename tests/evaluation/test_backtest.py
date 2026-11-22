@@ -669,6 +669,7 @@ def test_recovery_run_by_date_chunk_matches_one_run(
         )
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("flat_model")
 def test_scenarios_run_by_date_match_one_run(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
@@ -702,6 +703,7 @@ def test_scenarios_run_by_date_match_one_run(
         pd.testing.assert_frame_equal(p[3], whole[3])
 
 
+@pytest.mark.slow
 def test_recovery_forecast_apart_by_model_scores_as_one_run(
     config: BacktestConfig, tmp_path: Path
 ) -> None:
@@ -726,6 +728,7 @@ def test_recovery_forecast_apart_by_model_scores_as_one_run(
     pd.testing.assert_frame_equal(energy, whole[2], check_dtype=False)
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("flat_model")
 def test_scenarios_forecast_apart_by_model_score_as_one_run(
     target: pd.DataFrame,

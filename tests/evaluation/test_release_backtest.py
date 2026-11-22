@@ -42,6 +42,7 @@ def result(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # 
     return release_backtest(tasks, daily, target)
 
 
+@pytest.mark.slow
 def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -389,6 +390,7 @@ def test_a_models_reported_scores_do_not_depend_on_other_models(
     pd.testing.assert_frame_equal(reported(alone.scores), reported(both.scores))
 
 
+@pytest.mark.slow
 def test_release_forecasts_made_apart_by_model_score_as_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,

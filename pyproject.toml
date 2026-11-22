@@ -184,7 +184,7 @@ filterwarnings = [
 ]
 markers = [
   "network: tests that download from GitHub (deselect with '-m \"not network\"')",
-  "slow: model fits (deselect with '-m \"not slow\"')",
+  "slow: model fits, Chronos-2 inference, backtests and other long tests; CI runs them nightly, on dispatch and on PRs labelled full-tests",
 ]
 
 [tool.coverage.run]

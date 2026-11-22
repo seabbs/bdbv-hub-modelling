@@ -32,6 +32,7 @@ def scores(
     return result[0]
 
 
+@pytest.mark.slow
 def test_energy_scores_every_zone_and_week_as_one_vector(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
@@ -105,6 +106,7 @@ def test_zone_forecasts_are_the_scored_forms_by_origin(
     assert set(forecasts["location"]) == set(scores["location"])
 
 
+@pytest.mark.slow
 def test_zone_backtest_by_origin_chunk_matches_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -146,6 +148,7 @@ def test_zone_backtest_of_no_origin_is_empty(
     assert all(t.empty for t in out)
 
 
+@pytest.mark.slow
 def test_zone_forecasts_made_apart_by_model_score_as_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,

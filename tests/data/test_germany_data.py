@@ -194,6 +194,7 @@ def test_each_offset_ends_its_weeks_k_days_earlier_on_the_same_data(
         assert back == [k + 7 * j for j in range(5) if k + 7 * j <= 28]
 
 
+@pytest.mark.slow
 def test_every_target_day_is_forecast_once(every_day) -> None:
     model = get_model("randomwalk")
     out = pd.concat(
