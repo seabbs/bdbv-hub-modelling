@@ -90,33 +90,20 @@ rule train_segment:
     resources:
         gpu=1,
     params:
-        prev_args=lambda wc: (
-            f"--prev {train_dir(wc.run)}/n{run_of(wc).prev[int(wc.n)]}/state "
-            f"--prev-n {run_of(wc).prev[int(wc.n)]}"
-            if run_of(wc).prev[int(wc.n)]
-            else ""
-        ),
+        prev_args=lambda wc: runs.resume_options(run_of(wc), int(wc.n)),
         held=lambda wc: held_range(wc.run),
         prefixes=lambda wc: " ".join(str(p) for p in run_of(wc).ft["prefixes"]),
         stop_from=lambda wc: run_of(wc).ft["outbreaks"] + 1,
         blocks=lambda wc: run_of(wc).ft["cuts"] * run_of(wc).ft["draws"],
         sources=lambda wc: " ".join(run_of(wc).ft["sources"]),
-        bias=lambda wc: (
-            f"--series-bias --bias-lr {run_of(wc).ft['bias_lr']}"
-            if run_of(wc).ft["series_bias"]
-            else ""
-        ),
+        options=lambda wc: runs.trainer_options(run_of(wc)),
         device=machine.device(LOCAL),
         # The checkpoint threshold: this machine's, if set, else the
         # config's (memory only).
-        checkpoint=lambda wc: (
-            LOCAL.get("CHECKPOINT_ABOVE") or run_of(wc).ft["checkpoint_above"]
-        ),
+        checkpoint=local_or_ft("CHECKPOINT_ABOVE", "checkpoint_above"),
         batch_size=ft("batch_size"),
         # The block capacity: this machine's, if set, else the config's.
-        block_limit=lambda wc: (
-            LOCAL.get("BLOCK_LIMIT") or run_of(wc).ft["block_limit"]
-        ),
+        block_limit=local_or_ft("BLOCK_LIMIT", "block_limit"),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
         # The run's folders, as functions: they hold the outputs.
@@ -129,31 +116,12 @@ rule train_segment:
         subset_seed=ft("subset_seed"),
         learning_rate=ft("learning_rate"),
         univariate_share=ft("univariate_share"),
-        loss_horizon=lambda wc: (
-            f"--loss-horizon-days {run_of(wc).ft['loss_horizon_days']}"
-            if run_of(wc).ft.get("loss_horizon_days") is not None
-            else ""
-        ),
-        quiet=lambda wc: (
-            f"--quiet-min-cases {run_of(wc).ft['quiet_min_cases']}"
-            if run_of(wc).ft.get("quiet_min_cases") is not None
-            else ""
-        ),
         note=ft("note"),
         chunk=ft("chunk"),
         eval_every=ft("eval_every"),
         by_source_every=ft("by_source_every"),
         eval_mode=ft("eval"),
-        # Files publishing reads beside the outputs, copied back with them
-        # from a worker elsewhere (flowlib.compute).
-        copy_back=lambda wc: [
-            f"{train_dir(wc.run)}/n{wc.n}/{name}"
-            for name in (
-                "outbreaks.txt",
-                "consumed.txt",
-                "finetuned-ckpt/adapter_config.json",
-            )
-        ],
+        copy_back=segment_copy_back,
     shell:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).
@@ -175,12 +143,11 @@ rule train_segment:
             --learning-rate {params.learning_rate} \
             --sources {params.sources} \
             --univariate-share {params.univariate_share} \
-            {params.loss_horizon} {params.quiet} \
             --note "{params.note}" --chunk {params.chunk} \
             --eval-every {params.eval_every} \
             --by-source-every {params.by_source_every} \
             --eval {params.eval_mode} \
-            {params.bias} \
+            {params.options} \
             --checkpoint-above {params.checkpoint} \
             --batch-size {params.batch_size} \
             --block-limit {params.block_limit} \
