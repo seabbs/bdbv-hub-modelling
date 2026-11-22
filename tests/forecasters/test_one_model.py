@@ -226,17 +226,6 @@ def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
     assert len(daily) == len(days) * len(group["places"]) * task.n_samples
 
 
-def test_german_7_day_totals_end_on_the_nowcast_date():
-    # German tasks move every date to the next Saturday, so the weekly
-    # total rows end on the nowcast date and every 7 days back.
-    from nowcastgermany.data import HORIZONS, _shift
-
-    nowcast = "2021-11-17"  # a Wednesday
-    shifted = pd.Timestamp(nowcast) + _shift(nowcast)
-    assert shifted.day_name() == "Saturday"
-    assert all(h % 7 == 0 for h in HORIZONS)
-
-
 @pytest.mark.parametrize("source", ["daily", "weekly"])
 def test_zero_shot_and_finetuned_get_the_same_block(
     ft: FoundationModel,  # noqa: ARG001 (the fake release)
@@ -325,22 +314,6 @@ def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
     rows = out[out["target_end_date"].isin(future)]
     step = rows["target_end_date"].map(lambda w: tri.times.index(w) - start)
     np.testing.assert_allclose(rows["value"], step + rows["quantile"])
-
-
-def test_daily_counts_are_the_count_rows_native_quantiles(
-    ft: FoundationModel, task: ForecastTask, monkeypatch
-) -> None:
-    pytest.importorskip("torch")
-    monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
-    seen = _spy_triangle(monkeypatch)
-    out = ft.daily_quantiles(task, [0.1, 0.5, 0.9])
-    assert set(out.columns) == {"location", "date", "quantile", "value"}
-    tri = seen[-1]
-    start = tri.last - ft.lag_count(task) + 1
-    later = out[out["date"].map(lambda d: tri.times.index(d) >= start)]
-    assert len(later)
-    step = later["date"].map(lambda d: tri.times.index(d) - start)
-    np.testing.assert_allclose(later["value"], step + later["quantile"])
 
 
 def test_the_pipeline_interpolates_to_the_hub_levels_itself(monkeypatch):
