@@ -1110,3 +1110,17 @@ def test_a_round_s_batch_runs_the_grid(tmp_path):
     shell = text[text.index("-m nowcastfoundation.simulator") - 400 :]
     assert "ENW_CELLS" not in shell
     assert "nowcastfoundation.simulator config/finetune/grid.yaml 20 " in shell
+
+
+def test_grid_figures_summarise_each_round_then_compare_them(tmp_path):
+    """The grid summaries and figures are workflow targets, per round."""
+    blocks = score_jobs(tmp_path, {"rounds": [4, 5]}, target="grid_figures")
+    text = " ".join("".join(blocks).replace("\\\n", " ").split())
+    rounds = tmp_path / "rounds"
+    for r in (4, 5):
+        assert (
+            f"grid_summaries.py outbreaks {rounds}/r{r}/sims "
+            f"{rounds}/r{r}/summaries/outbreaks.csv"
+        ) in text
+    assert f"r4={rounds}/r4/summaries/outbreaks.csv" in text
+    assert "grid_figures.py" in text
