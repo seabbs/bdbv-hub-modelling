@@ -89,3 +89,29 @@ def test_outbreak_rows_carry_the_series_statistics(tmp_path):
     assert row["day0_share"] == 0.75
     assert row["delay_q99"] == 3
     assert row["peak_share"] > 0.4
+
+
+def test_infection_to_report_delay_adds_the_incubation_to_the_reporting():
+    from scipy import stats
+
+    settings = pd.Series(
+        {"incubation_mean": "6;6", "incubation_cv": 0.5,
+         "incubation_family": "gamma"}
+    )  # fmt: skip
+    # Reported on the reference day: the total is the incubation alone.
+    at0 = gs.total_delay_stats(settings, pd.Series({0: 100.0}))
+    g = stats.gamma(4, scale=1.5)
+    for q in (50, 90, 99):
+        assert abs(at0[f"total_q{q}"] - g.ppf(q / 100)) <= 1
+    # A fixed 10-day reporting delay moves every quantile by 10 days.
+    at10 = gs.total_delay_stats(settings, pd.Series({10: 50.0}))
+    assert all(at10[k] == at0[k] + 10 for k in at0)
+    # Older rounds without a drawn CV or family: a gamma with CV 0.5.
+    old = gs.total_delay_stats(
+        pd.Series({"incubation_mean": 6.0}), pd.Series({0: 1.0})
+    )
+    assert old == at0
+    wide = settings.copy()
+    wide["incubation_family"], wide["incubation_cv"] = "lognormal", 1.0
+    lognormal = gs.total_delay_stats(wide, pd.Series({0: 1.0}))
+    assert lognormal["total_q99"] > at0["total_q99"]
