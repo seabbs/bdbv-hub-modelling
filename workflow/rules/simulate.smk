@@ -12,7 +12,10 @@
 # simulation is kept: the QC only records summaries (qc/).
 #
 # Targets: `simulate` (the rounds in `rounds`), and the opt-in `release`,
-# which uploads each batch to the release sims-r<r>.
+# which uploads each batch to the release sims-r<r>. Opt-in too:
+# <ROOT>/rounds/bench/simulator-<cpu|cuda>-n<n>-s<seed>.json, the
+# simulator's benchmark on one seeded batch of the grid
+# (nowcastfoundation.simulator.bench).
 #
 # Two hosts can share the rounds (flowlib.hosts): each lists the seeds
 # it takes in its local config (SIM_SEEDS; empty: all). A helping
@@ -25,6 +28,7 @@ wildcard_constraints:
     round=r"\d+",
     seed=r"\d+",
     n=r"\d+",
+    device=r"cpu|cuda",
 
 
 rule simulate_batch:
@@ -83,6 +87,28 @@ rule simulate_batch:
             nice -n 19 "$uv" run --frozen python -m nowcastfoundation.simulator \
             {params.grid} {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
+        """
+
+
+rule simulator_benchmark:
+    # Two passes of one batch, cold then warm, as a simulate_batch job
+    # runs (one thread, the round's draws) on the given JAX device.
+    output:
+        f"{ROUNDS_DIR}/bench/simulator-{{device}}-n{{n}}-s{{seed}}.json",
+    log:
+        f"{ROUNDS_DIR}/bench/logs/simulator-{{device}}-n{{n}}-s{{seed}}.log",
+    conda:
+        TOOLS_ENV
+    threads: 1
+    params:
+        draws=SIM["draws"],
+        grid=GRID_FILE,
+    shell:
+        """
+        ENW_DRAWS={params.draws} JAX_PLATFORMS={wildcards.device} \
+            XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
+            uv run --frozen python -m nowcastfoundation.simulator.bench \
+            {params.grid} {wildcards.n} {wildcards.seed} {output} >{log} 2>&1
         """
 
 
