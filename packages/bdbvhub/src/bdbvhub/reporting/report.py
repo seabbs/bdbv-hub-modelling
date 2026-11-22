@@ -86,6 +86,7 @@ from nowcasteval.plots import (
     baseline_share,
     comparison_colours,
     comparison_label,
+    location_names,
     model_style,
     plot_cutoff_days,
     plot_delay_check,
@@ -378,7 +379,7 @@ def make_report(
         daily, str(learnt["vintage"].max()), [NATIONAL, *fitted]
     )
     save_light_dark(
-        partial(plot_renewal_delay, learnt, baseline, _location_names(real)),
+        partial(plot_renewal_delay, learnt, baseline, location_names(real)),
         fig / "renewal-delay.svg",
     )
 
@@ -439,7 +440,7 @@ def _summaries(
 def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
     """Tabulate falls between consecutive releases, by place."""
     nat = real["location"] == NATIONAL
-    names = _location_names(real)
+    names = location_names(real)
     provinces = release_updates(real.loc[~nat])
     each = provinces.assign(
         place=[f"{names.get(p, p)} ({p})" for p in provinces["location"]]
@@ -647,7 +648,7 @@ def _release_section(
         },
         ours,
         colours,
-        _location_names(real),
+        location_names(real),
         default_on=[m for m in ours if m != base],
     )
     save_light_dark(
@@ -656,7 +657,7 @@ def _release_section(
             relative_crps(rep, ("pool", "location"), baseline=base),
             ours,
             colours,
-            _location_names(real),
+            location_names(real),
         ),
         fig / "scores-place.svg",
     )
@@ -972,7 +973,7 @@ def _zone_nowcast_section(
     every = pd.concat([national, at_release, *ran, stored], ignore_index=True)
     if "as_of" in every:
         every = every.loc[every["as_of"].isna()]
-    labels = _location_names(target)
+    labels = location_names(target)
     start = pd.Timestamp(task.reference_date) - pd.Timedelta(weeks=12)
     counts = zone_counts(
         daily_zones, task.vintage, start.strftime("%Y-%m-%d"), labels
@@ -1252,7 +1253,7 @@ def _zone_truth_changes(
     """
     daily_zones = load_daily_zones(data_dir)
     real = target.loc[target["kind"] == "real"]
-    names = _location_names(target)
+    names = location_names(target)
     end = pd.Timestamp(real["target_end_date"].max())
     start = (end - pd.Timedelta(weeks=16)).strftime("%Y-%m-%d")
     zones = pd.concat(
@@ -1804,7 +1805,7 @@ def _backtest_page(
         partial(
             plot_truth_changes,
             target,
-            _location_names(target),
+            location_names(target),
         ),
         fig / "truth-changes.svg",
     )
@@ -1843,7 +1844,7 @@ def _backtest_page(
                     ),
                     fig / f"forecasts-{m}-{loc.lower()}.svg",
                 )
-    labels = _location_names(target)
+    labels = location_names(target)
     explorer_src = None
     if shown:
         # The zone backtest's forecasts, as submitted, join the explorer.
@@ -2128,11 +2129,6 @@ def _checks_chart(
     }
 
 
-def _location_names(target: pd.DataFrame) -> dict[str, str]:
-    pairs = target[["location", "location_name"]].drop_duplicates()
-    return dict(zip(pairs["location"], pairs["location_name"], strict=False))
-
-
 HUB_METADATA_URL: Final = (
     "https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/"
     "model-metadata/{model}.yml"
@@ -2249,7 +2245,7 @@ def _comparison_page(
         baseline,
         on,
         colours,
-        _location_names(target),
+        location_names(target),
     )
     parts = []
     if not scores.empty:
@@ -2288,7 +2284,7 @@ def _comparison_page(
         explorer_data(
             labelled,
             target,
-            _location_names(target),
+            location_names(target),
             k,
             colours,
             truth_vintage=truth,

@@ -24,7 +24,6 @@ import datetime as dt
 import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 
 import pandas as pd
 
@@ -36,13 +35,17 @@ from nowcasteval.backtest import (
     real_vintages,
     score_tasks,
 )
-from nowcasteval.nowcast import complete_weeks, reported_samples
+from nowcasteval.nowcast import (
+    ForecastParts,
+    complete_weeks,
+    model_origin_rows,
+    reported_samples,
+    stack_parts,
+)
 from nowcasteval.scoring import energy_scores, relative_skill, score_forecasts
 from nowcastfoundation.simulate import SimulatedOutbreak
 from nowcastutils.base import ForecastTask, ModelUnavailableError, get_model
 from nowcastutils.dates import as_date
-from nowcastutils.files import write_csv
-from nowcastutils.releases import release_cutoff
 from nowcastutils.snapshots import weekly_counts
 
 log = logging.getLogger(__name__)
@@ -147,7 +150,7 @@ def zone_backtest(
 
 
 @dataclass(frozen=True)
-class ZoneForecasts:
+class ZoneForecasts(ForecastParts):
     """The forecasts `zone_backtest` scores, made apart from scoring.
 
     Every table has `origin`, so the forecasts of models run apart can be
@@ -170,39 +173,7 @@ class ZoneForecasts:
     delays: pd.DataFrame
 
     _NAMES = ("runs", "samples", "delays")
-
-    def write(self, out: Path | str) -> None:
-        """Write the tables to `out` as `zone-forecast-<table>.csv.gz`."""
-        Path(out).mkdir(parents=True, exist_ok=True)
-        for name in self._NAMES:
-            write_csv(
-                getattr(self, name), Path(out) / f"zone-forecast-{name}.csv.gz"
-            )
-
-    @classmethod
-    def read(cls, parts: Sequence[Path | str]) -> ZoneForecasts:
-        """Stack the tables `write` wrote to each part, in order."""
-        tables = {}
-        for name in cls._NAMES:
-            frames = []
-            for part in parts:
-                try:
-                    frames.append(
-                        pd.read_csv(
-                            Path(part) / f"zone-forecast-{name}.csv.gz",
-                            dtype={"origin": str, "vintage": str},
-                        )
-                    )
-                except pd.errors.EmptyDataError:
-                    continue
-            # A part with no rows (a block every model skips) adds none.
-            frames = [f for f in frames if len(f)] or frames[:1]
-            tables[name] = (
-                pd.concat(frames, ignore_index=True)
-                if frames
-                else pd.DataFrame(columns=["origin", "model"])
-            )
-        return cls(**tables)
+    _FILE = "zone-forecast-{}.csv.gz"
 
 
 def _zone_task(
@@ -268,15 +239,10 @@ def zone_forecasts(
             if summary is not None:
                 summaries.append(summary.assign(origin=vintage))
 
-    def stack(frames: list[pd.DataFrame]) -> pd.DataFrame:
-        if not frames:
-            return pd.DataFrame(columns=["origin", "model"])
-        return pd.concat(frames, ignore_index=True)
-
     return ZoneForecasts(
         pd.DataFrame(runs, columns=["origin", "model"]),
-        stack(samples),
-        stack(summaries),
+        stack_parts(samples),
+        stack_parts(summaries),
     )
 
 
@@ -330,7 +296,7 @@ def score_zones(
                 .drop(columns=["key", "origin"])
                 .reset_index(drop=True)
             )
-            summaries[name] = _summary(run.delays, name, vintage)
+            summaries[name] = model_origin_rows(run.delays, name, vintage)
             kept.append(
                 forecasts[name].assign(
                     model=name,
@@ -414,29 +380,10 @@ def score_zones(
     )
 
 
-def _summary(
-    table: pd.DataFrame, model: str, origin: str
-) -> pd.DataFrame | None:
-    """Return a model's delay summary at an origin, or None."""
-    if table.empty or "origin" not in table:
-        return None
-    mine = table.loc[
-        (table["model"] == model) & (table["origin"].astype(str) == origin)
-    ]
-    if mine.empty:
-        return None
-    return mine.drop(columns="origin").reset_index(drop=True)
-
-
 def _weeks(samples: pd.DataFrame, task: ForecastTask) -> pd.Series:
     """Weeks from the task's reference date to each sample's week."""
     ref = pd.Timestamp(task.reference_date)
     return (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
-
-
-def _cutoff(daily: pd.DataFrame, vintage: str) -> dt.date:
-    """Return the cut-off of a release."""
-    return release_cutoff(daily.loc[daily["vintage"] == vintage], vintage)
 
 
 def zone_relative_skill(

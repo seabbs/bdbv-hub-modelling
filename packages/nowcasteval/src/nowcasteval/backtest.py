@@ -37,7 +37,7 @@ import pandas as pd
 from bdbvhub.data.delays import hub_delay_pmf
 from bdbvhub.data.tidy import delays_for_vintage
 from bdbvhub.data.zones import ZoneData, hub_places
-from nowcasteval.nowcast import TRUTH_LEVEL
+from nowcasteval.nowcast import TRUTH_LEVEL, truth_from_vintage
 from nowcasteval.scoring import energy_scores, score_forecasts
 from nowcastfoundation.simulate import (
     SCENARIO_RT_SCALE,
@@ -90,7 +90,6 @@ __all__ = [
     "score_tasks",
     "tasks_for_scoring",
     "truth_changes",
-    "truth_from_vintage",
     "vintage_task",
 ]
 
@@ -701,27 +700,6 @@ def merge_by_model(path: Path | str, new: pd.DataFrame) -> pd.DataFrame:
     if kept.empty:
         return new
     return pd.concat([kept, new], ignore_index=True)
-
-
-def truth_from_vintage(target: pd.DataFrame, vintage: str) -> pd.DataFrame:
-    """Return one vintage's totals as a truth table.
-
-    Parameters
-    ----------
-    target : pandas.DataFrame
-        Target rows.
-    vintage : str
-        The vintage to use as truth.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns `location`, `target_end_date` and `truth`.
-    """
-    rows = target.loc[target["vintage"] == vintage]
-    return rows[["location", "target_end_date", "total"]].rename(
-        columns={"total": "truth"}
-    )
 
 
 def score_tasks(
