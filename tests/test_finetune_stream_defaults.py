@@ -71,3 +71,47 @@ def test_the_checkpoint_threshold_is_a_machine_setting_outside_the_hash():
     assert "checkpoint_above" in finetune_verify.NOT_HASHED
     assert "batch_size" not in finetune_verify.NOT_HASHED
     assert not hasattr(args, "memory_gb")
+
+
+def test_the_block_limit_is_the_workflow_config_s_and_hashed():
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    argv = ["sims", "out", "--held-out-seeds", "1", "2"]
+    args = fs.build_parser().parse_args(argv)
+    assert args.block_limit == config["finetune"]["block_limit"]
+    args = fs.build_parser().parse_args([*argv, "--block-limit", "900"])
+    assert args.block_limit == 900
+    # The limit shapes the blocks, so it is in the settings.
+    assert fs.view_settings(900) == {
+        "block_limit": 900,
+        "block_views": fs.ft.VIEW_RULE,
+    }
+
+
+def test_views_are_recorded_once_per_block(tmp_path):
+    import pandas as pd
+
+    view = {
+        "kind": "subtree",
+        "collapsed": [],
+        "places_before": 12,
+        "places_after": 3,
+        "series_before": 2400,
+        "series_after": 600,
+    }
+    top = {**view, "kind": "top", "collapsed": ["strata"], "places_after": 4}
+    pairs = [
+        ("1-0001", {"source": "daily", "cut": 3, "view": top}),
+        ("1-0001", {"source": "daily", "cut": 3, "view": view}),
+        ("1-0002", {"source": "daily", "cut": 3, "view": {"kind": "whole"}}),
+    ]
+    line = fs.record_views(tmp_path, pairs, "1-100")
+    assert line.startswith("1 systems over the block limit cut into 2 views")
+    # A resumed run cuts the same blocks again: no row is added twice.
+    fs.record_views(tmp_path, pairs, "1-100")
+    rows = pd.read_csv(tmp_path / fs.VIEWS_FILE)
+    assert len(rows) == 2
+    assert list(rows["kind"]) == ["top", "subtree"]
+    assert list(rows["collapsed"].fillna("")) == ["strata", ""]
+    assert fs.record_views(tmp_path, pairs[2:], "1-100") == (
+        "every system within the block limit"
+    )

@@ -88,6 +88,13 @@ finetune:
   # machine with less GPU memory sets it lower (CHECKPOINT_ABOVE in
   # config/local.env, or --config finetune.checkpoint_above=N).
   checkpoint_above: 733
+  # Most series in a training or held-out block: the block capacity of
+  # the smallest GPU that trains, measured with every block checkpointed,
+  # with a margin. A whole system over it is cut into views that each fit
+  # (finetune_chronos.system_views). Part of the recipe and the settings
+  # hash. A machine with more GPU memory may set it higher (BLOCK_LIMIT
+  # in config/local.env), which changes its checkpoints' hash.
+  block_limit: 1000
   sources: null
   univariate_share: 0.2
   # Days after the cut-off a training block's horizon, and so the loss,

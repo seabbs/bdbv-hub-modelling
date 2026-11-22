@@ -13,6 +13,7 @@ publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import json
@@ -529,6 +530,63 @@ def whole_system(
     return (NATIONAL, *groups, *ages, *sorted(provinces)), "all_levels"
 
 
+BLOCK_LIMIT: int | None = None
+"""Most series in a block (`finetune.block_limit`), the training machine's
+block capacity, or None for no limit. A whole system over it is cut into
+views (`system_views`)."""
+
+VIEW_RULE: Final = (
+    "a whole system over the block limit becomes views that each fit: its "
+    "top levels aggregated up (strata into their places or regions, then "
+    "those into the country) and each region or place with its leaves and "
+    "its own total, as many leaves a block as fit"
+)
+"""The rule `system_views` follows, recorded in the settings."""
+
+
+def system_views(
+    places: tuple[str, ...], cap: int
+) -> list[tuple[str, tuple[str, ...], list[str]]]:
+    """Return the views of a whole system that hold at most `cap` places.
+
+    Each view is its kind, its places and the levels collapsed in it. A
+    system within `cap` is one view, `whole`. Over it, `top` is the
+    country with its places or regions, the strata summed into them, or
+    the country alone if those do not fit; and each `subtree` is a place
+    or region with its leaves and its own total (the country, for flat
+    places), as many leaves as fit with it, so every leaf is in one.
+    Totals are sums of what the system simulated, never estimates.
+    """
+    places = tuple(places)
+    if len(places) <= cap:
+        return [("whole", places, [])]
+    nested = any("-" in p for p in places)
+    if nested:
+        leaves = [p for p in places if "-" in p]
+        groups = sorted({p.split("-")[0] for p in leaves})
+        top: tuple[str, ...] = (NATIONAL, *groups)
+        collapsed = ["strata"]
+        if len(top) > cap:
+            top, collapsed = (NATIONAL,), ["strata", "places"]
+        trees = [
+            (g, [p for p in leaves if p.split("-")[0] == g]) for g in groups
+        ]
+    else:
+        top, collapsed = (NATIONAL,), ["places"]
+        trees = [(NATIONAL, [p for p in places if p != NATIONAL])]
+    out = [("top", top, collapsed)]
+    for total, members in trees:
+        if cap < 2:
+            out += [("subtree", (m,), []) for m in members]
+            continue
+        step = cap - 1
+        out += [
+            ("subtree", (total, *members[i : i + step]), [])
+            for i in range(0, len(members), step)
+        ]
+    return out
+
+
 def choose_places(
     provinces: list[str], budget: int, rng: np.random.Generator
 ) -> tuple[tuple[str, ...], str]:
@@ -688,12 +746,16 @@ def outbreak_blocks(
             # The releases follow the source's cadence (`CADENCES`), up to
             # the slot's cut.
             cadence = draw_cadence(source, option_rng)
+            days = release_days(first, cutoffs[cut], cadence, option_rng)
+            totals = any("-" in p for p in provinces)
+            # A view with the country draws its cases as the whole did.
+            country_rng = copy.deepcopy(parent_rng)
             block = training_block(
                 counts,
                 source,
                 places,
-                release_days(first, cutoffs[cut], cadence, option_rng),
-                totals=any("-" in p for p in provinces),
+                days,
+                totals=totals,
                 parent=parent,
                 rng=parent_rng,
                 parent_draws=parents,
@@ -709,19 +771,80 @@ def outbreak_blocks(
                 block, DAYS_PER_STEP[source], QUIET_MIN_CASES
             ):
                 continue
-            padded = _pad(
-                block, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]
-            )
-            levels = target_levels(places)
-            padded["levels"] = tuple(levels[i] for i in block["target_places"])
-            padded["places"] = tuple(places)
-            padded["target_places"] = list(block["target_places"])
-            padded["parent"] = parent
-            padded |= options
-            padded["mix"] = mix
-            padded["source"] = source
-            padded["cadence"] = cadence
-            out.append(padded)
+            whole: dict[str, Any] = {"kind": "whole"}
+            views: list[
+                tuple[dict[str, Any], tuple[str, ...], str, str, dict[str, Any]]
+            ] = [(block, places, mix, parent, whole)]
+            series = int(block["context"].shape[0])
+            if BLOCK_LIMIT is not None and series > BLOCK_LIMIT:
+                views = []
+                cap = max(1, int(BLOCK_LIMIT * len(places) // series))
+                while True:
+                    views = []
+                    for kind, view, collapsed in system_views(places, cap):
+                        has_country = len(view) > 1 and view[0] == NATIONAL
+                        how = parent if has_country else "exact"
+                        part = training_block(
+                            counts,
+                            source,
+                            view,
+                            days,
+                            totals=totals,
+                            parent=how,
+                            rng=copy.deepcopy(country_rng),
+                            parent_draws=parents,
+                            **options,
+                        )
+                        if part is None or part["start"] < 2:
+                            if empty is not None:
+                                empty.append(
+                                    f"{source} cut {j} {kind}: "
+                                    f"{', '.join(view)}"
+                                )
+                            continue
+                        n = int(part["context"].shape[0])
+                        record: dict[str, Any] = {
+                            "kind": kind,
+                            "collapsed": collapsed,
+                            "places_before": len(places),
+                            "places_after": len(view),
+                            "series_before": series,
+                            "series_after": n,
+                        }
+                        view_mix = (
+                            "national"
+                            if view == (NATIONAL,)
+                            else "leaves_national"
+                            if kind == "top"
+                            else "subtree"
+                        )
+                        views.append((part, view, view_mix, how, record))
+                    # A view's lags can differ from the whole's: one still
+                    # over the limit takes fewer places.
+                    fits = all(
+                        v[0]["context"].shape[0] <= BLOCK_LIMIT for v in views
+                    )
+                    if fits or cap == 1:
+                        break
+                    cap -= 1
+            for part, view, view_mix, how, record in views:
+                padded = _pad(
+                    part, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]
+                )
+                levels = target_levels(view)
+                padded["levels"] = tuple(
+                    levels[i] for i in part["target_places"]
+                )
+                padded["places"] = tuple(view)
+                padded["target_places"] = list(part["target_places"])
+                padded["parent"] = how
+                padded |= options
+                padded["mix"] = view_mix
+                padded["source"] = source
+                padded["cadence"] = cadence
+                padded["cut"] = j
+                padded["view"] = record
+                out.append(padded)
     return out
 
 

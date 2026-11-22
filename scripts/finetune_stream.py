@@ -231,6 +231,57 @@ def horizon_settings(loss_days: int | None) -> dict:
     }
 
 
+def view_settings(limit: int | None) -> dict:
+    """Return the block limit's entry of a checkpoint's settings."""
+    if limit is None:
+        return {}
+    return {"block_limit": limit, "block_views": ft.VIEW_RULE}
+
+
+VIEWS_FILE = "views.csv"
+"""Each block cut from a system over the block limit, by outbreak, in the
+run's training folder (`record_views`)."""
+
+
+def record_views(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
+    """Add each view of a system over the block limit to `VIEWS_FILE`.
+
+    One row a block: the outbreak, the part of the run (`held-out` or the
+    outbreaks' segment), source, cut, view kind, levels collapsed and its
+    places and series before and after. Returns a line for the log.
+    """
+    rows = [
+        {
+            "part": part,
+            "outbreak": outbreak,
+            "source": block["source"],
+            "cut": block["cut"],
+            **{k: v for k, v in block["view"].items() if k != "collapsed"},
+            "collapsed": "+".join(block["view"]["collapsed"]),
+        }
+        for outbreak, block in pairs
+        if block.get("view", {}).get("kind", "whole") != "whole"
+    ]
+    if not rows:
+        return "every system within the block limit"
+    frame = pd.DataFrame(rows)
+    path = out / VIEWS_FILE
+    # A resumed run cuts its held-out blocks and its chunk again.
+    kept = (
+        pd.read_csv(path, dtype=str, keep_default_na=False)
+        if path.exists()
+        else frame.iloc[:0]
+    )
+    new = pd.concat([kept, frame]).astype(str).drop_duplicates()
+    new.to_csv(path, index=False)
+    systems = frame[["outbreak", "source", "cut"]].drop_duplicates()
+    return (
+        f"{len(systems)} systems over the block limit cut into "
+        f"{len(frame)} views (largest {frame['series_before'].max()} "
+        f"series, at most {frame['series_after'].max()} after)"
+    )
+
+
 def quiet_settings(min_cases: int | None) -> dict:
     """Return the quiet cut-off rule's entry of a checkpoint's settings."""
     if min_cases is None:
@@ -580,6 +631,7 @@ def init_worker(
     grid_file: Path | str = ft.GRID_FILE,
     loss_days: int | None = None,
     quiet_min_cases: int | None = None,
+    block_limit: int | None = None,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
@@ -588,6 +640,7 @@ def init_worker(
     ft.UNIVARIATE_SHARE = univariate
     ft.LOSS_HORIZON_DAYS = loss_days
     ft.QUIET_MIN_CASES = quiet_min_cases
+    ft.BLOCK_LIMIT = block_limit
     DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
 
 
@@ -1432,6 +1485,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
     )
+    # Most series in a block (`finetune_chronos.BLOCK_LIMIT`): a system
+    # over it is cut into views that fit.
+    parser.add_argument(
+        "--block-limit", type=int, default=ft.workflow_finetune("block_limit")
+    )
     parser.add_argument("--device", default=os.environ.get("DEVICE", "auto"))
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
@@ -1539,6 +1597,7 @@ def main() -> None:
     ft.UNIVARIATE_SHARE = args.univariate_share
     ft.LOSS_HORIZON_DAYS = args.loss_horizon_days
     ft.QUIET_MIN_CASES = args.quiet_min_cases
+    ft.BLOCK_LIMIT = args.block_limit
     global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
     EXCLUDE_FILE = args.exclude
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
@@ -1611,12 +1670,14 @@ def main() -> None:
             args.grid_file,
             ft.LOSS_HORIZON_DAYS,
             ft.QUIET_MIN_CASES,
+            ft.BLOCK_LIMIT,
         ),
     )
     held_pairs, empty = cut_in_workers(
         pool, sim_dir, held, args.seed, k, args.cut_workers
     )
     val = [b for _, b in held_pairs]
+    log(f"held-out: {record_views(out, held_pairs, 'held-out')}")
     if offload:
         save_blocks(val, out / HELD_OUT_BLOCKS)
     log(
@@ -1717,6 +1778,7 @@ def main() -> None:
         "context": ft.CONTEXT,
         **horizon_settings(ft.LOSS_HORIZON_DAYS),
         **quiet_settings(ft.QUIET_MIN_CASES),
+        **view_settings(ft.BLOCK_LIMIT),
         "seed": args.seed,
         "note": args.note,
     }
@@ -1878,6 +1940,10 @@ def main() -> None:
                 pool, sim_dir, chunk, args.seed, k, args.cut_workers
             )
         pairs, empty = _join(ahead.pop(tuple(chunk)))
+        log(
+            f"outbreaks {done + 1}-{hi}: "
+            f"{record_views(out, pairs, f'{done + 1}-{hi}')}"
+        )
         pairs += [
             (f"real-{i}", b)
             for i, b in real_share(
