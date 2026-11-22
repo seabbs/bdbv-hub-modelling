@@ -206,6 +206,7 @@ SIMULATOR_PY = (
     "packages/nowcastfoundation/src/nowcastfoundation/simulator",
     "packages/nowcastrenewal/src/nowcastrenewal/latent",
     "packages/nowcastrenewal/src/nowcastrenewal/components",
+    "packages/nowcastrenewal/src/nowcastrenewal/reporting",
 )
 """The simulator's Python: its entry point and draws, the latent step and
 the shared components it composes."""

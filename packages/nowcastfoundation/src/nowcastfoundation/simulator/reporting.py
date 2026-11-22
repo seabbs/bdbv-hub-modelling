@@ -6,8 +6,8 @@ its design, values and every stratum's expected onsets) and returns each
 one's reported counts as increments of its daily release triangle, with
 the values it added, or why it failed.
 `RscriptReporting` runs the R engine's `report_outbreak` (epinowcast) in
-one Rscript call per pass; a Python reporting step from PyRenew components
-(`nowcastrenewal.reporting`) can take its place by implementing `report`.
+one Rscript call per pass; `PyRenewReporting` runs the same reporting from
+the shared PyRenew components (`nowcastrenewal.reporting`).
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ import pandas as pd
 
 __all__ = [
     "COUNT_COLUMNS",
+    "PyRenewReporting",
     "ReportJob",
     "ReportResult",
     "ReportingStep",
@@ -237,3 +238,56 @@ class RscriptReporting:
     def software(self) -> dict[str, Any]:
         """Return R's version, BLAS, LAPACK and epinowcast's fingerprint."""
         return dict(self._stack)
+
+
+@dataclass
+class PyRenewReporting:
+    """The reporting step from the shared PyRenew components.
+
+    Each job's expected onsets go through
+    `nowcastrenewal.reporting.simulate.report_simulation`: the reporting
+    delay's effects, the report days, the observation noise and the
+    revisions as one numpyro model, sampled forward. It matches
+    epinowcast's expected reports at the simulator's pin (the replays in
+    `tests/model/test_reporting_*.py`), and stands in for
+    `RscriptReporting`.
+    """
+
+    def report(
+        self, jobs: Sequence[ReportJob], grid_file: str | Path, draws: int
+    ) -> list[ReportResult]:
+        """Return one result per job, in the jobs' order.
+
+        The grid file is not read: the jobs' values carry every setting.
+        """
+        from nowcastrenewal.reporting.simulate import report_simulation
+
+        del grid_file
+
+        empty = pd.DataFrame(columns=list(COUNT_COLUMNS))
+        out = []
+        for j in jobs:
+            try:
+                counts, added = report_simulation(
+                    j.design,
+                    j.vals,
+                    j.onsets,
+                    j.places,
+                    j.ages,
+                    j.seed,
+                    draws,
+                )
+            except (ValueError, FloatingPointError, KeyError) as e:
+                out.append(ReportResult(j.id, empty, error=str(e)))
+                continue
+            out.append(ReportResult(j.id, counts, vals={**j.vals, **added}))
+        return out
+
+    def software(self) -> dict[str, Any]:
+        """Return the versions of the packages the step runs."""
+        from importlib.metadata import version
+
+        return {
+            pkg: version(pkg)
+            for pkg in ("nowcastrenewal", "pyrenew", "numpyro", "jax")
+        }
