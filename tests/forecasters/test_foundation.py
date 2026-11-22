@@ -1196,3 +1196,63 @@ def test_rolling_rows_hold_each_days_seven_day_sum() -> None:
     weekly = week_rows(tri)
     sat = np.flatnonzero(weekly.ends)
     assert np.allclose(rows.totals[:, sat], weekly.totals[:, sat])
+
+
+def _segment(root: Path, settings: dict) -> Path:
+    """A training segment's folder: its settings and its adapter."""
+    import json
+
+    (root / "finetuned-ckpt").mkdir(parents=True)
+    (root / "settings.json").write_text(json.dumps(settings))
+    for name, data in _ADAPTER.items():
+        (root / "finetuned-ckpt" / name).write_bytes(data)
+    return root
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_local_segment_is_its_release_s_checkpoint(tmp_path: Path) -> None:
+    # A run scores its own segments before any release: the checkpoint is
+    # the one its release would give, so it keys the same stored fits, and
+    # its adapter is read in place, with no release in the store.
+    segment = _segment(tmp_path / "n100", {"hash": "abc"})
+    checkpoint = foundation.local_checkpoint(segment)
+    assert checkpoint == _checkpoint("abc")
+    assert repr(checkpoint) == repr(_checkpoint("abc"))
+    adapter = foundation.finetuned_adapter(checkpoint)
+    assert adapter == segment / "finetuned-ckpt"
+    assert not (tmp_path / "cache").exists()
+
+
+def test_a_local_segment_with_the_series_bias_is_a_slots_checkpoint(
+    tmp_path: Path,
+) -> None:
+    segment = _segment(tmp_path / "n100", {"hash": "abc", "series_bias": True})
+    assert foundation.local_checkpoint(segment).hash == "slots-abc"
+    assert foundation.checkpoint_spec({"hash": "abc"}) == "abc"
+
+
+@pytest.mark.usefixtures("releases")
+def test_a_changed_local_adapter_fails(tmp_path: Path) -> None:
+    segment = _segment(tmp_path / "n100", {"hash": "abc"})
+    checkpoint = foundation.local_checkpoint(segment)
+    (segment / "finetuned-ckpt" / "adapter_model.safetensors").write_bytes(
+        b"other weights"
+    )
+    with pytest.raises(ValueError, match=r"adapter_model\.safetensors"):
+        foundation.finetuned_adapter(checkpoint)
+
+
+def test_the_finetuned_models_take_a_segment_folder_from_the_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def offline() -> list[dict]:
+        raise AssertionError("listed the releases")
+
+    segment = _segment(tmp_path / "n100", {"hash": "abc"})
+    monkeypatch.setattr(foundation, "finetuned_releases", offline)
+    monkeypatch.setenv(foundation.FINETUNED_ENV, str(segment))
+    model = get_model("fm_chronos_daily_ragged_ft")
+    assert model.checkpoint == _checkpoint("abc")
+    assert foundation.finetuned_adapter(model.checkpoint) == (
+        segment / "finetuned-ckpt"
+    )
