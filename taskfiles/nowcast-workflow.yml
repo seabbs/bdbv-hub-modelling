@@ -32,9 +32,19 @@ tasks:
 
 
   monitor:
-    desc: Serve the workflow monitor, each machine's running and recent jobs from the status the ticks write (MONITOR_HOST, MONITOR_PORT, MONITOR_REFRESH in config/local.env)
+    desc: Serve the workflow monitor (Panoptes), every Snakemake run's jobs as they run, on MONITOR_HOST and MONITOR_PORT (config/local.env); runs report to MONITOR_URL
+    vars:
+      HOST:
+        sh: python3 workflow/flowlib/localconfig.py MONITOR_HOST
+      PORT:
+        sh: python3 workflow/flowlib/localconfig.py MONITOR_PORT
+      ROOT:
+        sh: python3 workflow/flowlib/localconfig.py ROOT
     cmds:
-      - python3 workflow/scripts/monitor.py
+      - mkdir -p "{{.ROOT}}/monitor"
+      - >-
+        PANOPTES_DB_URL="sqlite:///{{.ROOT}}/monitor/panoptes.db"
+        uv run --group paper panoptes --ip {{.HOST}} --port {{.PORT}}
 
 
   tick:

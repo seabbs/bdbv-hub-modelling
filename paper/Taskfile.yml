@@ -21,19 +21,19 @@ tasks:
     # The paper is a target of the project workflow, run from the root.
     dir: ..
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile development --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
+      - uv run --group paper snakemake -s workflow/Snakefile development --cores {{.CORES | default 4}} --resources heavy=1 $(python3 workflow/flowlib/monitor.py) {{.CLI_ARGS}}
   pipeline:paper:
     desc: Run the evaluation workflow with the held-out data, to paper/results/paper/
     # The paper is a target of the project workflow, run from the root.
     dir: ..
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile paper --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
+      - uv run --group paper snakemake -s workflow/Snakefile paper --cores {{.CORES | default 4}} --resources heavy=1 $(python3 workflow/flowlib/monitor.py) {{.CLI_ARGS}}
   render:
     desc: Run the development target and render the paper (HTML and PDF) from it
     # The paper is a target of the project workflow, run from the root.
     dir: ..
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
+      - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}} --resources heavy=1 $(python3 workflow/flowlib/monitor.py) {{.CLI_ARGS}}
   pipeline:dry:
     desc: Dry-run both workflow targets to check the DAG
     # The paper is a target of the project workflow, run from the root.

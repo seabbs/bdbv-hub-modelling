@@ -201,18 +201,13 @@ Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add 
 
 ## Monitor
 
-`task nowcast-workflow:monitor` serves one page of what runs where: each machine's step, its running jobs (rule, wildcards, resources, start) and its recent ones.
-Each tick writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds while a step runs, and when it is skipped or ends (`workflow/flowlib/runstatus.py`, read from the run's own Snakemake log).
-With a rounds host (`REMOTE`) the file is copied to its `status/` folder, which the monitor reads, so one page shows every machine.
-A run that stops writing for two intervals, because it was killed or its machine went down, is shown as stale.
-The page is served on `MONITOR_HOST` and `MONITOR_PORT` and refreshes every `MONITOR_REFRESH` seconds, all from `config/local.env`.
-It is separate from the fine-tuning dashboard, of which several may run at once.
-Work run outside the workflow does not appear until it runs under the tick.
-
-We chose this over Panoptes.
-Snakemake 9 has no `--wms-monitor`; monitoring goes through logger plugins.
-The Panoptes logger plugin is not maintained by the Snakemake organisation, and Panoptes needs a server that every machine can reach.
-The status files need neither: the machines already reach the rounds host.
+`task nowcast-workflow:monitor` serves [Panoptes](https://github.com/panoptes-organization/panoptes), Snakemake's web monitor: every run's jobs, their state, what is running and what has failed, in one page.
+Every Snakemake run the tasks, ticks and paper scripts start reports to it through the logger plugin `snakemake-logger-plugin-panoptes` (`workflow/flowlib/monitor.py`), on by default.
+Runs report to `MONITOR_URL`; another machine's runs report to the serving machine's address, and an empty `MONITOR_URL` switches reporting off.
+The plugin drops events it cannot send, so a run goes on when no server is listening.
+The page is served on `MONITOR_HOST` and `MONITOR_PORT`, with its database in `<ROOT>/monitor/`, all from `config/local.env`.
+Each tick also writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds (`workflow/flowlib/runstatus.py`).
+The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), not jobs.
 
 ## CI
 

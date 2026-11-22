@@ -43,7 +43,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from flowlib import localconfig, machine
+from flowlib import localconfig, machine, monitor
 
 MODES = ("single", "ssh")
 """The modes this module sets the pool of; any other `COMPUTE` names a
@@ -101,7 +101,7 @@ MACHINE_KEYS = frozenset(
         "STATUS_EVERY",
         "MONITOR_HOST",
         "MONITOR_PORT",
-        "MONITOR_REFRESH",
+        "MONITOR_URL",
         "DASHBOARD_RUNS",
         "MIN_FREE_GB",
         "MIN_DISK_GB",
@@ -397,6 +397,19 @@ def args(
     path: str | None = None,
     budgets: Mapping[str, Mapping[str, int]] | None = None,
     checkout: str | Path = localconfig.ROOT,
+) -> list[str]:
+    """Return the Snakemake options of the profile, its pool and monitor.
+
+    The monitor's options (`flowlib.monitor`) come last.
+    """
+    return [*_profile_args(cfg, path, budgets, checkout), *monitor.args(cfg)]
+
+
+def _profile_args(
+    cfg: Mapping[str, str],
+    path: str | None,
+    budgets: Mapping[str, Mapping[str, int]] | None,
+    checkout: str | Path,
 ) -> list[str]:
     """Return the Snakemake options of the profile and its pool.
 

@@ -1,77 +1,67 @@
-"""The workflow monitor: what runs where, from each machine's status."""
+"""Every Snakemake run reports to the Panoptes monitor, on by default."""
 
-import json
-import sys
-import threading
-import urllib.request
+import importlib.util
+import re
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[2] / "workflow" / "scripts"))
+import pytest
+from flowlib import compute, localconfig, monitor, schedule
 
-import monitor
+ROOT = Path(__file__).parents[2]
+URL = "http://127.0.0.1:8795"
 
 
-def _status(folder, host, updated, alive=True, every=60):
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / f"{host}.json").write_text(
-        json.dumps(
-            {
-                "host": host,
-                "step": "simulate finetune",
-                "alive": alive,
-                "updated": updated,
-                "every": every,
-                "running": [{"rule": "train_segment", "wildcards": "n=500"}],
-                "recent": [],
-            }
-        )
+def test_a_run_reports_to_the_machine_s_monitor():
+    got = monitor.args({"MONITOR_URL": URL})
+    assert got[:2] == ["--logger", "panoptes"]
+    assert got[got.index("--logger-panoptes-address") + 1] == URL
+
+
+def test_an_empty_address_switches_the_monitor_off():
+    assert monitor.args({"MONITOR_URL": ""}) == []
+
+
+def test_the_monitor_is_on_by_default(tmp_path):
+    cfg = localconfig.read(tmp_path / "none.env", {"HOME": str(tmp_path)})
+    assert cfg["MONITOR_URL"] == URL
+    assert cfg["MONITOR_PORT"] == "8795"
+
+
+def test_workflow_tasks_and_ticks_report_to_it():
+    cfg = {"CORES": "8", "MEM_MB": "32768", "MONITOR_URL": URL}
+    assert compute.args(cfg, path="")[-len(monitor.args(cfg)) :] == (
+        monitor.args(cfg)
     )
+    cfg |= {"SCHEDULE_TARGETS": "simulate"}
+    for _, cmd, _ in schedule.plan(cfg):
+        assert "panoptes" in cmd
 
 
-def test_every_machine_s_status_is_listed(tmp_path):
-    _status(tmp_path / "status", "host-a", "2026-11-18T12:00:00")
-    _status(tmp_path / "status", "host-b", "2026-11-18T12:00:30")
-    got = monitor.collect({"ROOT": str(tmp_path)}, now="2026-11-18T12:01:00")
-    assert [s["host"] for s in got] == ["host-a", "host-b"]
-    assert got[0]["age"] == 60
+@pytest.mark.parametrize(
+    "rel",
+    [
+        "paper/Taskfile.yml",
+        "scripts/paper.sh",
+        "tools/run_target.sh",
+        "workflow/scripts/paper_run.py",
+    ],
+)
+def test_every_other_snakemake_run_reports_to_it(rel):
+    text = (ROOT / rel).read_text()
+    runs = [
+        line
+        for line in text.splitlines()
+        if re.search(r"snakemake\b", line)
+        and not re.search(r"snakemake\b.*\s-n\b", line)
+        and not line.lstrip().startswith("#")
+    ]
+    assert runs
+    assert "monitor" in text
 
 
-def test_a_run_that_stops_writing_is_stale(tmp_path):
-    # A killed run's log still lists its jobs as started; its status
-    # stops being written, so the monitor says it is stale.
-    _status(tmp_path / "status", "host-a", "2026-11-18T12:00:00")
-    got = monitor.collect({"ROOT": str(tmp_path)}, now="2026-11-18T12:03:00")
-    assert got[0]["stale"] is True
-    fresh = monitor.collect({"ROOT": str(tmp_path)}, now="2026-11-18T12:01:30")
-    assert fresh[0]["stale"] is False
+def test_the_logger_plugin_is_in_the_workflow_group():
+    assert importlib.util.find_spec("snakemake_logger_plugin_panoptes")
 
 
-def test_an_idle_machine_is_not_stale(tmp_path):
-    _status(tmp_path / "status", "host-a", "2026-11-18T10:00:00", alive=False)
-    got = monitor.collect({"ROOT": str(tmp_path)}, now="2026-11-18T12:00:00")
-    assert got[0]["stale"] is False
-
-
-def test_no_status_yet_is_an_empty_list(tmp_path):
-    assert monitor.collect({"ROOT": str(tmp_path)}) == []
-
-
-def test_the_page_and_its_data_are_served_from_local_config(tmp_path):
-    _status(tmp_path / "status", "host-a", "2026-11-18T12:00:00")
-    cfg = {
-        "ROOT": str(tmp_path),
-        "MONITOR_HOST": "127.0.0.1",
-        "MONITOR_PORT": "0",
-        "MONITOR_REFRESH": "17",
-    }
-    server = monitor.server(cfg)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        url = f"http://127.0.0.1:{server.server_address[1]}"
-        page = urllib.request.urlopen(f"{url}/").read().decode()
-        data = json.loads(urllib.request.urlopen(f"{url}/status.json").read())
-    finally:
-        server.shutdown()
-    assert "17" in page
-    assert "<title>Workflow monitor</title>" in page
-    assert data[0]["host"] == "host-a"
+def test_the_custom_monitor_page_is_gone():
+    assert not (ROOT / "workflow" / "scripts" / "monitor.py").exists()
