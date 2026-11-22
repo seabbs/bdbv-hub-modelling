@@ -17,6 +17,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
+from nowcastutils.dates import epiweek_end
 from nowcastutils.releases import release_cutoff
 
 from ..components.mixing import distance_kernel, great_circle_km
@@ -273,11 +274,6 @@ def bvd_inputs(
     }
 
 
-def _saturday(day: str | dt.date) -> dt.date:
-    d = pd.Timestamp(day).date()
-    return d + dt.timedelta(days=(5 - d.weekday()) % 7)
-
-
 def vintage_from_tables(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
@@ -350,7 +346,7 @@ def vintage_from_tables(
     counts_by_week = national.to_numpy()
     threshold = min(START_COUNT, counts_by_week.max())
     big = int(np.argmax(counts_by_week >= threshold))
-    first = _saturday(str(national.index[max(0, big - 1)]))
+    first = epiweek_end(pd.Timestamp(national.index[max(0, big - 1)]).date())
     start = first - dt.timedelta(days=6)
     cutoff = (release_cutoff(target, vintage) - start).days
     n_weeks = cutoff // 7 + 1
