@@ -7,6 +7,7 @@ import json
 import tomllib
 
 from flowlib import (
+    compute,
     evaluations,
     grids,
     runs,
@@ -183,6 +184,7 @@ def train_dir(run):
 
 EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded.py"
 EVALUATE_PRIORITY = 15
+TRAIN_PRIORITY = compute.TRAIN_PRIORITY
 
 
 def evaluate_prev(wc):
@@ -378,9 +380,9 @@ ROOM = (
 )
 
 
-# A unit's CPU threads (SCORE_THREADS, default 2): a few, so simulations
-# keep the rest of the machine's cores.
-UNIT_THREADS = int(LOCAL.get("SCORE_THREADS") or 2)
+# The CPU threads of a job beside the trainer (EVAL_THREADS, default 2):
+# a few, so simulations keep the rest of the machine's cores.
+UNIT_THREADS = int(LOCAL.get("EVAL_THREADS") or 2)
 
 
 def score_order():
@@ -393,14 +395,19 @@ def unit_priority(base):
     return lambda wc: releases.priority(score_order(), wc.label, base)
 
 
-SCORE_DEVICE = LOCAL.get("SCORE_DEVICE") or None
-"""The device scoring units run torch on (SCORE_DEVICE in local.env), by
-default the machine's: `cpu` keeps them off a GPU a trainer is using."""
+EVAL_DEVICE = machine.side_device(LOCAL)
+"""The device evaluation and scoring run torch on (EVAL_DEVICE in
+local.env), the CPU by default: the GPU is the trainer's."""
+
+
+def newest_first(base):
+    """A job's priority beside the trainer: `base`, newer segments higher."""
+    return lambda wc: compute.side_priority(base, int(wc.n))
 
 
 def unit_env(wc, threads):
     """The unit's torch device, threads and Chronos-2 batch."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads, SCORE_DEVICE))
+    return machine.shell_env(machine.torch_env(LOCAL, threads, EVAL_DEVICE))
 
 
 GERMANY_UNIT = "germany-days"
