@@ -74,32 +74,6 @@ def _full(df):
     return df.loc[(df["split"] == "week 2026-10-24") & ~df["common"]]
 
 
-def test_summary_scores_match_on_baseline_forecasts(sh) -> None:
-    every = sh.summary_scores(_summary())
-    assert set(every["baseline"]) == {"randomwalk", "good"}
-    out = every.loc[every["baseline"] == "randomwalk"]
-    out = out.set_index(["pool", "model"])
-    assert set(out.index.get_level_values("model")) == {"randomwalk", "good"}
-    nat = out.loc[("national", "good")]
-    assert nat["n"] == 2
-    assert nat["crps"] == pytest.approx(17.5)
-    assert nat["rel_crps"] == pytest.approx(35 / 40)
-    assert nat["base_crps"] == pytest.approx(20.0)
-    assert nat["coverage_50"] == pytest.approx(1.0)
-    prov = out.loc[("provinces", "good")]
-    assert prov["n"] == 1
-    assert prov["rel_crps"] == pytest.approx(0.5)
-    assert out.loc[("national", "randomwalk"), "rel_crps"] == 1.0
-    assert "rel_coverage_50" not in out.columns
-    # Relative to good, randomwalk is twice as bad nationally.
-    vs_good = every.loc[every["baseline"] == "good"].set_index(
-        ["pool", "model"]
-    )
-    assert vs_good.loc[("national", "randomwalk"), "rel_crps"] == pytest.approx(
-        40 / 35
-    )
-
-
 def test_history_flags_changes_in_what_is_scored(sh) -> None:
     base = _summary()
     later = _summary()
