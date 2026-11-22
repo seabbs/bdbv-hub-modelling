@@ -259,7 +259,7 @@ def draw_design(
         case "fixed_days":
             k = int(rng.choice([2, 3]))
             report = ";".join(
-                WEEK[i] for i in sorted(rng.choice(7, k, replace=False))
+                WEEK[i] for i in sorted(rng.choice(5, k, replace=False))
             )
         case "weekly":
             report = WEEK[int(rng.integers(7))]
