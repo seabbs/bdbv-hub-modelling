@@ -8,6 +8,7 @@ from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
+from nowcastrenewal.components.hazards import log_hazard_probs
 from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import CensoredPMF
 from nowcastrenewal.components.renewal import (
@@ -22,7 +23,6 @@ from nowcastrenewal.model import (
     NonCentredRandomWalk,
     PooledInitialValue,
     generation_interval,
-    hazard_to_pmf,
     incubation_period,
     onset_expectations,
     pooled_walk,
@@ -71,13 +71,6 @@ def uniform_kernel(n):
 def seeded(fn, seed=0):
     with numpyro.handlers.seed(rng_seed=seed):
         return fn()
-
-
-def test_hazard_to_pmf_is_a_pmf_and_geometric_for_constant_hazard():
-    pmf = np.asarray(hazard_to_pmf(jnp.full((3, 20), jnp.log(0.2 / 0.8))))
-    assert pmf.shape == (3, 21)
-    np.testing.assert_allclose(pmf.sum(axis=1), 1.0, rtol=1e-6)
-    np.testing.assert_allclose(pmf[0, :5], 0.2 * 0.8 ** np.arange(5), rtol=1e-5)
 
 
 def test_backsample_matches_reference():
@@ -250,7 +243,9 @@ def test_province_delays_pool_around_the_shared_delay():
     assert not np.allclose(spread[0], spread[-1])
     beta = tr["delay_beta"]["value"]
     np.testing.assert_allclose(
-        pmf[2, 10], hazard_to_pmf(beta + shift[10, 2]), rtol=1e-5
+        pmf[2, 10],
+        jnp.exp(log_hazard_probs(beta + shift[10, 2], close=True)),
+        rtol=1e-5,
     )
 
 
@@ -267,7 +262,9 @@ def test_hazard_delay_records_its_shape_and_shift():
     assert shift.shape[0] == 35
     # The pmf is the hazard pmf of shape plus shift on each day.
     np.testing.assert_allclose(
-        pmf[0, 10], hazard_to_pmf(beta + shift[10].squeeze()), rtol=1e-5
+        pmf[0, 10],
+        jnp.exp(log_hazard_probs(beta + shift[10].squeeze(), close=True)),
+        rtol=1e-5,
     )
 
 
@@ -288,10 +285,7 @@ def test_fixed_inputs_pad_with_last_row():
 
 def test_fast_kernels_match_reference_values_and_gradients():
 
-    from .reference_kernels import (
-        hazard_to_pmf_reference,
-        onset_expectations_reference,
-    )
+    from .reference_kernels import onset_expectations_reference
 
     rng = np.random.default_rng(5)
     n, dmax, p, cutoff = 50, 12, 3, 40
@@ -315,10 +309,6 @@ def test_fast_kernels_match_reference_values_and_gradients():
     )
     for a, b in zip(g_new, g_old, strict=True):
         np.testing.assert_allclose(a, b, rtol=1e-3, atol=1e-4)
-    x = jnp.asarray(rng.normal(-2, 1, (4, 20)))
-    np.testing.assert_allclose(
-        hazard_to_pmf(x), hazard_to_pmf_reference(x), rtol=1e-5, atol=1e-7
-    )
 
 
 def test_onsets_are_infections_convolved_with_the_incubation_period():

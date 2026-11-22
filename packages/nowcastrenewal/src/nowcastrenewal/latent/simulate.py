@@ -6,7 +6,7 @@ simulation's design and values (layers 1 and 2 of the grid) and samples
 them: strata weights, R by stratum (`rt.PlaceRt`), the start
 (`start.InitializeStrata`), mixing, imports, the renewal
 (`infections.StratifiedInfections`) and the expected reference events
-(`reference.ReferenceEvents`). It is a numpyro model: run it under
+(`components.reference.ReferenceEvents`). It is a numpyro model: run it under
 `numpyro.handlers.seed` for a draw, or `numpyro.handlers.substitute` to
 replay given draws. `simulate_latent_batch` runs a batch, one key each.
 """
@@ -27,11 +27,11 @@ from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent import InfectionInitializationProcess
 
 from ..components.pmfs import Delay, delay_pmf, generation_time_pmf
+from ..components.reference import ReferenceEvents
 from ..components.renewal import DEPLETIONS, Shifts, Variants
 from .imports import Imports
 from .infections import StratifiedInfections
 from .mixing import PlaceMixing
-from .reference import ReferenceEvents
 from .rt import KINDS, PlaceRt, RtPath
 from .start import InitializeStrata
 
