@@ -76,7 +76,7 @@ def _trainer_args(tmp_path, finetune=None, machine=""):
     snakemake = Path(sys.executable).parent / "snakemake"
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n{machine}")
-    target = tmp_path / "checkpoints" / "slots" / "train" / "n100"
+    target = tmp_path / "runs" / "runa" / "train" / "n100"
     # The real validation blocks are made from data a test run lacks.
     real = tmp_path / "real-validation.pkl"
     real.write_text("")

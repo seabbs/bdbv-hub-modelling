@@ -8,10 +8,12 @@ rule evaluate_steps:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         # Its steps start after the previous checkpoint's.
-        prev=lambda wc: evaluate_prev(wc.n),
+        prev=evaluate_prev,
         # After the previous segment's, so step 0 is scored first.
         before=lambda wc: (
-            f"{TRAIN}/evals/n{PREV[int(wc.n)]}.done" if PREV[int(wc.n)] else []
+            f"{train_dir(wc.run)}/evals/n{run_of(wc).prev[int(wc.n)]}.done"
+            if run_of(wc).prev[int(wc.n)]
+            else []
         ),
     output:
         touch(f"{TRAIN}/evals/n{{n}}.done"),
@@ -30,16 +32,21 @@ rule evaluate_steps:
         real=evaluate_real,
         device=machine.device(LOCAL),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
-        copy_in=[
-            f"{TRAIN}/evals/",
-            f"{TRAIN}/{HELD_OUT_BLOCKS}",
-            *([FT["real_validation"]] if FT["real_validation"] else []),
+        copy_in=lambda wc: [
+            f"{train_dir(wc.run)}/evals/",
+            f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
+            *(
+                [run_of(wc).ft["real_validation"]]
+                if run_of(wc).ft["real_validation"]
+                else []
+            ),
         ],
-        copy_back=[f"{TRAIN}/evals/"],
+        copy_back=lambda wc: [f"{train_dir(wc.run)}/evals/"],
+        eval_every=ft("eval_every"),
     shell:
         "DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} steps {{params.where}} {{params.prev}} "
-        f"--eval-every {FT['eval_every']} --device {{params.device}} "
+        "--eval-every {params.eval_every} --device {params.device} "
         "{params.real} > {log} 2>&1"
 
 
@@ -52,7 +59,9 @@ rule evaluate_checkpoint:
         # Earlier checkpoints' settings: `evaluations.start_loss` reads their
         # held_out_loss_start when the run evaluated them in the trainer.
         earlier=lambda wc: [
-            f"{TRAIN}/n{p}/settings.json" for p in FT["prefixes"] if p < int(wc.n)
+            f"{train_dir(wc.run)}/n{p}/settings.json"
+            for p in run_of(wc).ft["prefixes"]
+            if p < int(wc.n)
         ],
     output:
         f"{TRAIN}/n{{n}}/{SIDECAR}",
@@ -68,7 +77,7 @@ rule evaluate_checkpoint:
         real=evaluate_real,
         device=machine.device(LOCAL),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
-        copy_in=lambda wc: evaluate_inputs_from(wc.n),
+        copy_in=evaluate_inputs_from,
     shell:
         "DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} checkpoint {{params.where}} --device {{params.device}} "

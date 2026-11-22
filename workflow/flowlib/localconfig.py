@@ -34,7 +34,6 @@ DEFAULTS = (
     ("MAILBOX", ""),
     ("INBOX", ""),
     # The workflow's own settings.
-    ("RUN", "$ROOT/checkpoints/slots"),
     ("SCORE_CACHE", "$ROOT/scores"),
     # The slots check's no-slots run and German blocks.
     ("NOSLOTS_RUN", "$ROOT/checkpoints"),

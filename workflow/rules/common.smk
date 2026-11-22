@@ -8,6 +8,7 @@ import json
 from flowlib import (
     evaluations,
     grids,
+    runs,
     hosts,
     localconfig,
     manifest,
@@ -109,15 +110,36 @@ def grid_id():
 
 # From finetune.smk.
 
-FT = grids.resolve(config["finetune"], config["grid_rounds"])
-# Where batches come from is this machine's choice when set.
-if LOCAL["SIMS_FROM"]:
-    FT["sims_from"] = LOCAL["SIMS_FROM"]
-RUN = LOCAL["RUN"]
+# The fine-tuning runs (`runs` in workflow/config.yaml, flowlib.runs):
+# each run's rules take the {run} wildcard, and its files are in
+# <ROOT>/runs/<run>/.
+RUNS = runs.resolve(config, LOCAL)
+RUNS_DIR = f"{LOCAL['ROOT']}/runs"
+RUN = f"{RUNS_DIR}/{{run}}"
 TRAIN = f"{RUN}/train"
 
-segments.check_chunks(FT["prefixes"], FT["chunk"], FT["outbreaks"])
-segments.check_eval(FT["eval"])
+
+wildcard_constraints:
+    run="[^/]+",
+
+
+def trained_runs():
+    """The runs `finetune` trains."""
+    return runs.trained(config, RUNS)
+
+
+def run_of(wc):
+    """A job's run."""
+    return RUNS[wc.run]
+
+
+def ft(key):
+    """A param: the job's run's `finetune` setting `key`."""
+    return lambda wc: RUNS[wc.run].ft[key]
+
+
+def train_dir(run):
+    return RUNS[run].train
 
 
 # From evaluate.smk.
@@ -126,76 +148,77 @@ EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded
 EVALUATE_PRIORITY = 15
 
 
-def evaluate_real(wc=None):
+def evaluate_real(wc):
     """The trainer's real validation blocks, if the run has them."""
-    real = FT["real_validation"]
+    real = run_of(wc).ft["real_validation"]
     return f"--real-validation {real}" if real else ""
 
 
-def evaluate_prev(n):
+def evaluate_prev(wc):
     """The settings of the checkpoint before segment n, if any."""
-    prev = PREV[int(n)]
-    return f"{TRAIN}/n{prev}/settings.json" if prev else []
+    prev = run_of(wc).prev[int(wc.n)]
+    return f"{train_dir(wc.run)}/n{prev}/settings.json" if prev else []
 
 
-def evaluate_inputs_from(n):
+def evaluate_inputs_from(wc):
     """Files a checkpoint's evaluation reads that no rule declares."""
+    r, n, train = run_of(wc), int(wc.n), train_dir(wc.run)
     return [
-        f"{TRAIN}/n{n}/finetuned-ckpt/",
-        f"{TRAIN}/{HELD_OUT_BLOCKS}",
-        f"{TRAIN}/evals/step-0000000.json",
-        *(f"{TRAIN}/n{p}/{SIDECAR}" for p in FT["prefixes"] if p < int(n)),
-        *([FT["real_validation"]] if FT["real_validation"] else []),
+        f"{train}/n{n}/finetuned-ckpt/",
+        f"{train}/{HELD_OUT_BLOCKS}",
+        f"{train}/evals/step-0000000.json",
+        *(f"{train}/n{p}/{SIDECAR}" for p in r.ft["prefixes"] if p < n),
+        *([r.ft["real_validation"]] if r.ft["real_validation"] else []),
     ]
 
 
-def offloaded(n):
+def offloaded(run, n):
     """Checkpoint n's held-out sidecar when the run offloads evaluation."""
-    if FT["eval"] != "offload":
+    if RUNS[run].ft["eval"] != "offload":
         return []
-    return f"{TRAIN}/n{n}/{SIDECAR}"
-
-
-PREV = dict((n, p) for p, n in segments.segments(FT["prefixes"]))
+    return f"{train_dir(run)}/n{n}/{SIDECAR}"
 
 
 def round_of(seed):
     return (int(seed) - SIM["seed_base"]) // 100
 
 
-def training_seeds():
+def training_seeds(run):
     """The run's training seeds, in the order it trains on them."""
-    if FT["seed_file"]:
-        return [int(s) for s in Path(FT["seed_file"]).read_text().split()]
-    return [s for r in FT["rounds"] for s in seeds_of(r)]
+    f = RUNS[run].ft
+    if f["seed_file"]:
+        return [int(s) for s in Path(f["seed_file"]).read_text().split()]
+    return [s for r in f["rounds"] for s in seeds_of(r)]
 
 
-def release_rounds(n):
+def release_rounds(run, n):
     """The rounds segment n trains on, space separated."""
-    return " ".join(str(r) for r in sorted({round_of(s) for s in segment_seeds(n)}))
+    rounds = sorted({round_of(s) for s in segment_seeds(run, n)})
+    return " ".join(str(r) for r in rounds)
 
 
-def held_seeds():
-    return seeds_of(FT["validation_round"])
+def held_seeds(run):
+    return seeds_of(RUNS[run].ft["validation_round"])
 
 
-ELSEWHERE = FT["sims_from"] in ("release", "remote")
-# The rounds host's rounds mirrored here: manifests and QC exclusions.
-MIRROR = f"{RUN}/rounds"
+def held_range(run):
+    """The run's held-out seeds, as the trainer takes them: first last."""
+    seeds = held_seeds(run)
+    return f"{seeds[0]} {seeds[-1]}"
 
 
-def available_seeds():
+def available_seeds(run):
     """The training seeds whose batches can be had now, in order.
 
     All of them from this machine's rounds, which the workflow simulates.
     From the rounds host or releases, those before the first batch not
     yet listed, and none until the validation round is all listed.
     """
-    order = training_seeds()
-    if not ELSEWHERE:
+    order = training_seeds(run)
+    if not RUNS[run].elsewhere:
         return order
-    listed = listed_batches()
-    if not set(held_seeds()) <= listed:
+    listed = listed_batches(run)
+    if not set(held_seeds(run)) <= listed:
         return []
     for i, seed in enumerate(order):
         if seed not in listed:
@@ -203,24 +226,25 @@ def available_seeds():
     return order
 
 
-def exclusion_files():
+def exclusion_files(run):
     """The sim-QC exclusion lists here now."""
-    paths = [Path(f"{RUN}/excluded.csv")]
+    there = RUNS[run]
+    paths = [Path(f"{there.dir}/excluded.csv")]
     paths += Path(ROUNDS_DIR).glob("r*/qc/excluded.csv")
-    paths += Path(MIRROR).glob("r*/qc/excluded.csv")
-    paths += Path(f"{RUN}/excluded-releases").glob("*.csv")
+    paths += Path(there.mirror).glob("r*/qc/excluded.csv")
+    paths += Path(f"{there.dir}/excluded-releases").glob("*.csv")
     return sorted(str(p) for p in paths if p.is_file())
 
 
-def known_exclusions():
+def known_exclusions(run):
     """The sim-QC exclusions known now."""
-    return set().union(*(segments.excluded(p) for p in exclusion_files()))
+    return set().union(*(segments.excluded(p) for p in exclusion_files(run)))
 
 
-def kept_or_full(seed, skip):
+def kept_or_full(run, seed, skip):
     """A batch's kept outbreaks if simulated, else a full batch."""
     for settings in (
-        Path(f"{RUN}/sims/settings-{seed}.csv"),
+        Path(f"{RUNS[run].dir}/sims/settings-{seed}.csv"),
         Path(f"{ROUNDS_DIR}/r{round_of(seed)}/sims/settings-{seed}.csv"),
     ):
         if settings.exists():
@@ -228,37 +252,40 @@ def kept_or_full(seed, skip):
     return SIM["batch"]
 
 
-def segment_seeds(n):
+def segment_seeds(run, n):
     """The seeds segment n needs: n outbreaks, one spare, the held-out."""
-    skip = known_exclusions()
-    order = available_seeds()
-    need = segments.seeds_for(n, order, lambda s: kept_or_full(s, skip))
+    skip = known_exclusions(run)
+    order = available_seeds(run)
+    need = segments.seeds_for(n, order, lambda s: kept_or_full(run, s, skip))
     spare = order[len(need) : len(need) + 1]
-    return need + spare + held_seeds()
+    return need + spare + held_seeds(run)
 
 
 def segment_inputs(wc):
-    n = int(wc.n)
+    run, n = wc.run, int(wc.n)
+    there, train = RUNS[run], train_dir(run)
     # A finished checkpoint is final: its batches are not gathered again,
     # so a machine without them never retrains it.
-    if Path(f"{TRAIN}/n{n}/settings.json").exists():
+    if Path(f"{train}/n{n}/settings.json").exists():
         return {}
     out = {
-        "sims": expand(f"{RUN}/sims/settings-{{seed}}.csv", seed=segment_seeds(n)),
-        "seeds": f"{RUN}/seeds.txt",
+        "sims": expand(
+            f"{there.dir}/sims/settings-{{seed}}.csv", seed=segment_seeds(run, n)
+        ),
+        "seeds": f"{there.dir}/seeds.txt",
         # Read for the seeds above and by the trainer: inputs, so a
         # worker elsewhere has them (flowlib.compute).
-        "qc": exclusion_files(),
+        "qc": exclusion_files(run),
     }
-    if PREV[n] is not None:
-        out["prev"] = f"{TRAIN}/n{PREV[n]}/settings.json"
-    if FT["real_validation"]:
-        out["real"] = FT["real_validation"]
+    if there.prev[n] is not None:
+        out["prev"] = f"{train}/n{there.prev[n]}/settings.json"
+    if there.ft["real_validation"]:
+        out["real"] = there.ft["real_validation"]
     return out
 
 
 def fetch_source(wc):
-    if FT["sims_from"] != "local":
+    if RUNS[wc.run].ft["sims_from"] != "local":
         return []
     r = round_of(wc.seed)
     return {
@@ -267,42 +294,56 @@ def fetch_source(wc):
     }
 
 
-CHECK = FT.get("check_at", 1000)
-AFTER = [n for n in sorted(FT["prefixes"]) if n > CHECK]
+def saved(run, n):
+    """Whether checkpoint n of the run is saved."""
+    return Path(f"{train_dir(run)}/n{n}/settings.json").exists()
 
 
-def trainable():
+def trainable(run):
     """The prefixes done or within reach of the seed list."""
-    skip = known_exclusions()
-    order = available_seeds()
+    f = RUNS[run].ft
+    skip = known_exclusions(run)
+    order = available_seeds(run)
     # A spare batch past each prefix but the run's last, which takes
     # every training simulation.
     return [
         n
-        for n in FT["prefixes"]
-        if Path(f"{TRAIN}/n{n}/settings.json").exists()
+        for n in f["prefixes"]
+        if saved(run, n)
         or segments.reachable(
-            n + SIM["batch"] * (n < FT["outbreaks"]),
+            n + SIM["batch"] * (n < f["outbreaks"]),
             order,
-            lambda s: kept_or_full(s, skip),
+            lambda s: kept_or_full(run, s, skip),
         )
     ]
 
 
-def to_train():
-    """Prefixes `finetune` asks for."""
-    # The no-bias control is another run: it must not train into the slots
-    # run's folder (RUN's default).
-    if not FT["series_bias"] and Path(RUN) == Path(LOCAL["ROOT"], "checkpoints/slots"):
-        raise ValueError(
-            f"a no-bias run (series_bias false) needs its own RUN, not {RUN}"
-        )
-    prefixes = trainable()
+def to_train(run):
+    """Prefixes `finetune` asks for of the run."""
+    prefixes = trainable(run)
     if not config.get("next_segment_only"):
         return prefixes
-    saved = [n for n in prefixes if Path(f"{TRAIN}/n{n}/settings.json").exists()]
-    rest = [n for n in prefixes if n not in saved]
-    return saved + rest[:1]
+    done = [n for n in prefixes if saved(run, n)]
+    rest = [n for n in prefixes if n not in done]
+    return done + rest[:1]
+
+
+def finetune_inputs(wc):
+    """Every trained run's checkpoints, held-out losses and check."""
+    out = []
+    for run in trained_runs():
+        there, train, ns = RUNS[run], train_dir(run), to_train(run)
+        out += [f"{train}/n{n}/settings.json" for n in ns]
+        # An offloaded run's held-out losses, scored after each segment.
+        out += [offloaded(run, n) for n in ns if offloaded(run, n)]
+        # A machine that publishes as it trains (PUBLISH in local.env).
+        if LOCAL["PUBLISH"]:
+            out += [f"{train}/n{n}/published.json" for n in ns]
+        # The check once its checkpoint is asked for, so one segment a run
+        # does not train on to it.
+        if there.check in ns:
+            out.append(f"{there.dir}/reports/n{there.check}-check.txt")
+    return out
 
 
 # From score.smk.
@@ -495,20 +536,24 @@ def push_record(input, output, params, wildcards):
 
 
 @functools.cache
-def listed_batches():
+def listed_batches(run):
     """The batches that can be had now, listed once per Snakemake run.
 
     Listed when the run plans, not kept in a file, so a later run sees
     rounds finished since. From the rounds host the manifests and QC
-    exclusions of its rounds are mirrored in MIRROR, and a round counts
-    once its QC has run; else the `sims-r<N>` releases' assets. Written to <RUN>/available-batches.txt for the record.
+    exclusions of its rounds are mirrored in the run's `rounds/`, and a
+    round counts once its QC has run; else the `sims-r<N>` releases'
+    assets. Written to <run>/available-batches.txt for the record.
     """
-    rounds = sorted({FT["validation_round"], *(round_of(s) for s in training_seeds())})
+    this = RUNS[run]
+    rounds = sorted(
+        {this.ft["validation_round"], *(round_of(s) for s in training_seeds(run))}
+    )
     seeds = set()
     for r in rounds:
-        if FT["sims_from"] == "remote":
+        if this.ft["sims_from"] == "remote":
             # The manifest and QC exclusions of a round there so far.
-            here = Path(f"{MIRROR}/r{r}")
+            here = Path(f"{this.mirror}/r{r}")
             (here / "qc").mkdir(parents=True, exist_ok=True)
             for name in ("manifest.csv", "qc/excluded.csv"):
                 there = f"{REMOTE_ROUNDS}/r{r}/{name}"
@@ -540,7 +585,7 @@ def listed_batches():
         if got.returncode == 0:
             names = [a["name"] for a in json.loads(got.stdout)["assets"]]
             seeds |= releases.released_seeds(names)
-    record = Path(f"{RUN}/available-batches.txt")
+    record = Path(f"{this.dir}/available-batches.txt")
     record.parent.mkdir(parents=True, exist_ok=True)
     record.write_text("".join(f"{s}\n" for s in sorted(seeds)))
     return seeds
@@ -551,15 +596,17 @@ def check_report(input, output, params, wildcards):
 
     On the held-out simulations only: BDBV is held out for the paper.
     """
+    there, n = RUNS[wildcards.run], int(wildcards.n)
     s = evaluations.checkpoint_settings(Path(input[0]).parent)
     ok = s["held_out_loss"] < s["held_out_loss_start"]
     text = (
-        f"n{CHECK} {'beats' if ok else 'does NOT beat'} zero-shot: "
+        f"{wildcards.run} n{n} {'beats' if ok else 'does NOT beat'} zero-shot: "
         f"held-out {s['held_out_loss']:.4f} vs "
         f"{s['held_out_loss_start']:.4f}"
     )
     Path(output[0]).write_text(f"{text}\n")
-    nxt = f", check before n{AFTER[0]}" if AFTER else ""
+    after = [p for p in sorted(there.ft["prefixes"]) if p > n]
+    nxt = f", check before n{after[0]}" if after else ""
     say(text if ok else f"ALERT {text}; training goes on{nxt}")
 
 

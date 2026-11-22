@@ -13,7 +13,6 @@ ROOT = Path(__file__).parents[2]
 CFG = {
     "COMPUTE": "ssh",
     "ROOT": "/srv/rounds",
-    "RUN": "/srv/rounds/checkpoints/r6",
     "SCORE_CACHE": "/srv/rounds/scores",
     "WORKERS": "server=local workstation=mac:/Users/me/rounds:/Users/me/repo",
     "WORKER_GROUPS": "train=workstation score=server",
@@ -85,7 +84,6 @@ def test_a_job_elsewhere_takes_the_run_settings_but_not_the_machine_ones():
     }
     env = compute.job_env(cfg, workstation)
     assert env["ROOT"] == "/Users/me/rounds"
-    assert env["RUN"] == "/Users/me/rounds/checkpoints/r6"
     assert env["SCORE_CACHE"] == "/Users/me/rounds/scores"
     assert env["SIMS_FROM"] == "local"
     assert env["COMPUTE"] == "single"
