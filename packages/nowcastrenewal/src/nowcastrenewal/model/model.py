@@ -211,25 +211,6 @@ MAIN = ModelConfig()
 """The main model configuration, with every default of `ModelConfig`."""
 BVD = ModelConfig(bvd=True)
 """Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
-_SIMPLE: dict[str, Any] = {
-    "streams": "total",
-    "truncation": False,
-    "coupling": "none",
-    "depletion": False,
-}
-LADDER: dict[str, ModelConfig] = {
-    "S0 national renewal": ModelConfig(national=True, **_SIMPLE),
-    "S1 + provinces (pooled Rt)": ModelConfig(**_SIMPLE),
-    "S2 + truncation (hub delay)": ModelConfig(
-        **_SIMPLE | {"truncation": True}
-    ),
-    "S3 + delays, missingness, imputation": ModelConfig(
-        coupling="none", depletion=False
-    ),
-    "S4 + coupling and importation": ModelConfig(depletion=False),
-    "S5 + depletion (main)": MAIN,
-}
-"""Configurations of the step-by-step build, in order."""
 
 
 @dataclass
