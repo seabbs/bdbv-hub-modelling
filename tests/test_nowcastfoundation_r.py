@@ -1,4 +1,4 @@
-"""The simulator engine's own tests (packages/nowcastfoundation/r)."""
+"""The former R engine's own tests (packages/nowcastfoundation/r)."""
 
 import shutil
 import subprocess
@@ -40,14 +40,10 @@ def test_ci_runs_the_engine_s_testthat_suite():
     assert "stop_on_failure = TRUE" in runs
 
 
-def test_ci_can_solve_the_engine_s_dependencies():
-    """cmdstanr, a Suggests of the engine and of the pinned epinowcast, is
-    only on the stan-dev r-universe, so the engine job adds it."""
-    import yaml
-
-    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
-    steps = workflow["jobs"]["engine"]["steps"]
-    repos = " ".join(
-        s.get("with", {}).get("extra-repositories", "") for s in steps
-    )
-    assert "stan-dev.r-universe.dev" in repos
+def test_the_engine_no_longer_needs_epinowcast():
+    """The simulator runs no R; the engine is a test reference only."""
+    description = (
+        ROOT / "packages/nowcastfoundation/r/DESCRIPTION"
+    ).read_text()
+    assert "epinowcast" not in description
+    assert "cmdstanr" not in description

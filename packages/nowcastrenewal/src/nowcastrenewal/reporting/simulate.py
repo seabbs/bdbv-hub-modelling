@@ -6,7 +6,7 @@ expected reports (`expectation.ReportingExpectation`), then for each
 observation draw the counts (`observation.ObservedReports`) and their
 revisions (`revisions.Revisions`). `report_simulation` samples it forward
 and returns the counts in the simulator's long format, with the values
-the step adds, as the R engine's `report_outbreak` returns them.
+the step adds, as the former R engine's `report_outbreak` did.
 """
 
 from __future__ import annotations

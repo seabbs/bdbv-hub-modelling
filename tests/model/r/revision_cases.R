@@ -1,5 +1,5 @@
-# Revisions of reported counts: a copy of the simulator R engine's
-# `revise_counts` (packages/nowcastfoundation/r/R/reporting.R), and its
+# Revisions of reported counts: a copy of the simulator's former R
+# engine's `revise_counts` (its R/reporting.R, now deleted), and its
 # random draws, for tests/model/test_revisions.py.
 
 suppressMessages(library(data.table))

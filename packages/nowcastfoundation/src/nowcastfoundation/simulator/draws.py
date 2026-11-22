@@ -7,7 +7,7 @@ names, sampling distributions and shares, read from the same grid file.
 A design holds the categorical settings and the structure they imply; the
 values hold every continuous setting, by layer.
 Vectors are lists, and place indices count from 1 as in R, so a design and
-its values pass to the R reporting step and the settings files as they are.
+its values pass to the joint model and the settings files as they are.
 
 Every draw takes a numpy `Generator`; `generator(seed, *keys)` gives one
 keyed by the batch's seed and the simulation's place in it, so one

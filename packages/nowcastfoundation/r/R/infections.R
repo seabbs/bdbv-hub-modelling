@@ -259,7 +259,7 @@ renewal_infections <- function(start, gt, log_r, population, mixing = NULL,
 }
 
 # Expected onsets (ascertained infections) on the generation time's
-# span plus `n` days, for `simulate_outbreak`. Strata weights are
+# span plus `n` days. Strata weights are
 # drawn (`stratum_sd`, quiet places none). Each place's population is split over
 # its ages by their weights. An early window starts each stratum with
 # cases from a seed on the last day before it (at least 1); an endemic or
