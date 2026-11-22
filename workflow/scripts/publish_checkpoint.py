@@ -3,11 +3,11 @@
     python workflow/scripts/publish_checkpoint.py CHECKPOINT OUT
 
 CHECKPOINT is a run's `n<N>/` folder. A checkpoint with the series bias
-is released as `chronos-slots-<hash>`, else `chronos-ft-<hash>`, as
-scripts/finetune_stream.py did with `--publish`. Safe to run again: a
-release whose sums match is left as it is. An offloaded checkpoint's
-held-out losses (`held-out.json`, rules/evaluate.smk) are uploaded to its
-release beside its settings. OUT records the tag.
+is released as `chronos-slots-<hash>`, else `chronos-ft-<hash>`. Safe
+to run again: a release whose sums match is left as it is. An
+offloaded checkpoint's held-out losses (`held-out.json`,
+rules/evaluate.smk) are uploaded to its release beside its settings.
+OUT records the tag.
 """
 
 from __future__ import annotations
@@ -17,14 +17,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).parents[2]
-
-from nowcastfoundation.finetune import stream as fs  # noqa: E402
-from nowcastfoundation.forecaster import (  # noqa: E402
+from nowcastfoundation.finetune import stream as fs
+from nowcastfoundation.forecaster import (
     checkpoint_spec,
     release_tag,
 )
-from nowcastfoundation.sidecar import SIDECAR  # noqa: E402
+from nowcastfoundation.sidecar import SIDECAR
 
 
 def main() -> None:

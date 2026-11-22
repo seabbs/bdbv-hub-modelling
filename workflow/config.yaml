@@ -33,8 +33,8 @@ next_segment_only: false
 
 simulate:
   # The grid the simulator runs: its factors, sampling distributions,
-  # shares, floors and sim QC thresholds (the engine is
-  # packages/nowcastfoundation/r).
+  # shares, floors and sim QC thresholds (nowcastfoundation.simulator
+  # reads it).
   grid_file: config/finetune/grid.yaml
   # Round r is `batches` batches from seed `seed_base` + 100 r, each
   # `batch` outbreaks with exactly `draws` observation draws, each drawn
@@ -197,7 +197,7 @@ dashboard:
     studies: [ebola]
     mail: "\\bebola\\b|\\bBDBV\\b(?![-_])"
   # Mailbox lines shown (a regular expression).
-  mail_filter: "slots|ckpt-scores|agg-slots|slots-check|fm-finetune|sim round|workflow:"
+  mail_filter: "slots|ckpt-scores|fm-finetune|sim round|workflow:"
   # Where scores are mirrored to when REMOTE is set, and how often (s).
   mirror: output/dashboard/mirror
   mirror_every: 300

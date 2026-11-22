@@ -87,7 +87,6 @@ MACHINE_KEYS = frozenset(
     {
         "HOST_NAME",
         "MAILBOX",
-        "INBOX",
         "NOTIFY",
         "JOB_PREFIX",
         "SIM_PREFIX",
