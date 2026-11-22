@@ -127,6 +127,10 @@ rule train_segment:
             LOCAL.get("CHECKPOINT_ABOVE") or run_of(wc).ft["checkpoint_above"]
         ),
         batch_size=ft("batch_size"),
+        # The block capacity: this machine's, if set, else the config's.
+        block_limit=lambda wc: (
+            LOCAL.get("BLOCK_LIMIT") or run_of(wc).ft["block_limit"]
+        ),
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
         # The run's folders, as functions: they hold the outputs.
@@ -193,6 +197,7 @@ rule train_segment:
             --exclude {params.run}/excluded.csv {params.bias} \
             --checkpoint-above {params.checkpoint} \
             --batch-size {params.batch_size} \
+            --block-limit {params.block_limit} \
             --until {wildcards.n} >>{log} 2>&1
         # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/segment_saved.py {output.settings} \

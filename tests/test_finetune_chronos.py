@@ -1493,29 +1493,37 @@ def test_a_system_over_capacity_is_cut_into_views_with_exact_totals(
         assert all(b["places"] == whole for b in full)
         assert all(b["view"] == {"kind": "whole"} for b in full)
         series = [b["context"].shape[0] for b in full]
-        # Room for the country and its places, not for the whole system.
+        # Room for the country and its places in the largest blocks, not
+        # for their whole system.
         limit = -(-max(series) * 5 // len(whole))
-        assert min(series) > limit
+        over = [n > limit for n in series]
+        assert any(over)
         monkeypatch.setattr(ft, "BLOCK_LIMIT", limit)
         cut = outbreak_blocks(counts, places, np.random.default_rng(0), 3)
-        assert len(cut) == 4 * len(full)
+        assert len(cut) == len(full) + 3 * sum(over)
+        at = 0
         for k, before in enumerate(full):
-            views = cut[4 * k : 4 * k + 4]
-            assert [v["view"]["kind"] for v in views] == [
-                "top",
-                *["subtree"] * 3,
-            ]
+            if not over[k]:
+                # A system within the limit stays whole.
+                assert cut[at]["places"] == whole
+                assert cut[at]["view"] == {"kind": "whole"}
+                at += 1
+                continue
+            views = cut[at : at + 4]
+            at += 4
+            kinds = [v["view"]["kind"] for v in views]
+            assert kinds == ["top", "subtree", "subtree", "subtree"]
+            assert views[0]["view"]["collapsed"] == ["strata"]
             # Every leaf is in a block.
             assert {p for v in views for p in v["places"] if "-" in p} == set(
                 places
             )
             for after in views:
-                assert after["context"].shape[0] <= limit
+                n = after["context"].shape[0]
+                assert n <= limit
                 assert after["cut"] == before["cut"]
                 assert after["view"]["series_before"] == series[k]
-                assert (
-                    after["view"]["series_after"] == after["context"].shape[0]
-                )
+                assert after["view"]["series_after"] == n
                 assert after["view"]["places_before"] == len(whole)
                 assert after["view"]["places_after"] == len(after["places"])
                 # Totals stay exact: each place's series is the whole
@@ -1526,6 +1534,5 @@ def test_a_system_over_capacity_is_cut_into_views_with_exact_totals(
                     np.testing.assert_array_equal(
                         after["context"][row], before["context"][was]
                     )
-            assert views[0]["view"]["collapsed"] == ["strata"]
     finally:
         ft.PARENTS = None

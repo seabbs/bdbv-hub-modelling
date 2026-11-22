@@ -85,3 +85,33 @@ def test_the_block_limit_is_the_workflow_config_s_and_hashed():
         "block_limit": 900,
         "block_views": fs.ft.VIEW_RULE,
     }
+
+
+def test_views_are_recorded_once_per_block(tmp_path):
+    import pandas as pd
+
+    view = {
+        "kind": "subtree",
+        "collapsed": [],
+        "places_before": 12,
+        "places_after": 3,
+        "series_before": 2400,
+        "series_after": 600,
+    }
+    top = {**view, "kind": "top", "collapsed": ["strata"], "places_after": 4}
+    pairs = [
+        ("1-0001", {"source": "daily", "cut": 3, "view": top}),
+        ("1-0001", {"source": "daily", "cut": 3, "view": view}),
+        ("1-0002", {"source": "daily", "cut": 3, "view": {"kind": "whole"}}),
+    ]
+    line = fs.record_views(tmp_path, pairs, "1-100")
+    assert line.startswith("1 systems over the block limit cut into 2 views")
+    # A resumed run cuts the same blocks again: no row is added twice.
+    fs.record_views(tmp_path, pairs, "1-100")
+    rows = pd.read_csv(tmp_path / fs.VIEWS_FILE)
+    assert len(rows) == 2
+    assert list(rows["kind"]) == ["top", "subtree"]
+    assert list(rows["collapsed"].fillna("")) == ["strata", ""]
+    assert fs.record_views(tmp_path, pairs[2:], "1-100") == (
+        "every system within the block limit"
+    )
