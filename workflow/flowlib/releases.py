@@ -14,7 +14,9 @@ takes.
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 from collections.abc import Iterable, Mapping, Sequence
 
 FT = "chronos-ft-"
@@ -72,3 +74,19 @@ def released_seeds(names: Iterable[str]) -> set[int]:
         if m and m[3] == ext[m[1]]:
             have.setdefault(int(m[2]), set()).add(m[1])
     return {s for s, kinds in have.items() if len(kinds) == 2}
+
+
+def release_seeds(repo: str, round_: int) -> set[int]:
+    """Return the batches release `sims-r<round_>` of `repo` holds.
+
+    None for a round not released yet.
+    """
+    got = subprocess.run(
+        ["gh", "release", "view", f"sims-r{round_}", "-R", repo,
+         "--json", "assets"],
+        capture_output=True,
+        text=True,
+    )  # fmt: skip
+    if got.returncode:
+        return set()
+    return released_seeds(a["name"] for a in json.loads(got.stdout)["assets"])

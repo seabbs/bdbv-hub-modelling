@@ -64,3 +64,20 @@ def test_only_r7_checkpoints_are_scored():
         "publishedAt": "2026-11-19T14:12:48Z",
     }
     assert releases.labels([*LISTING, last_r6], config["published_from"]) == []
+
+
+def test_a_release_s_batches_and_none_before_it_is_made(monkeypatch):
+    import json
+    import subprocess
+
+    assets = ["counts-901.csv.gz", "settings-901.csv", "counts-902.csv.gz"]
+
+    def view(args, **_):
+        if "sims-r9" not in args:
+            return subprocess.CompletedProcess(args, 1, "", "not found")
+        out = json.dumps({"assets": [{"name": a} for a in assets]})
+        return subprocess.CompletedProcess(args, 0, out, "")
+
+    monkeypatch.setattr(releases.subprocess, "run", view)
+    assert releases.release_seeds("o/r", 9) == {901}
+    assert releases.release_seeds("o/r", 8) == set()
