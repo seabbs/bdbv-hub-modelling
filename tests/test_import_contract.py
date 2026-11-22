@@ -1,4 +1,4 @@
-"""The packages import one way, as import-linter's contract says."""
+"""The packages import one way and each installs and imports alone."""
 
 from __future__ import annotations
 
@@ -40,3 +40,14 @@ def test_the_packages_keep_the_contract() -> None:
     assert run.returncode == 0, run.stdout + run.stderr
     # Every listed exception is still an import, so the list only shrinks.
     assert "No matches for ignored import" not in run.stdout + run.stderr
+
+
+def test_ci_installs_and_imports_every_package_alone() -> None:
+    import yaml
+
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "packages.yml").read_text()
+    )
+    matrix = workflow["jobs"]["alone"]["strategy"]["matrix"]["package"]
+    packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
+    assert set(matrix) == packages
