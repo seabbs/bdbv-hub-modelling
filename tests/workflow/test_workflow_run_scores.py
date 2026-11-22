@@ -53,9 +53,9 @@ def test_the_report_reads_the_run_and_the_shared_reference(tmp_path):
     )
 
 
-def test_scoring_can_keep_off_the_trainer_device(tmp_path):
+def test_scoring_keeps_off_the_trainer_device_by_default(tmp_path):
     _checkpoint(tmp_path, 250)
-    blocks = _blocks(tmp_path, "SCORE_DEVICE=cpu\n")
+    blocks = _blocks(tmp_path, "DEVICE=cuda\n")
     units = [b for b in blocks if re.match(r"rule score_(run_)?germany:", b)]
     assert len(units) == 2
     for unit in units:
