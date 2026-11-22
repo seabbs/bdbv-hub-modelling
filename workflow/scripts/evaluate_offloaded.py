@@ -5,7 +5,7 @@
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
 
 `steps` scores segment n<N>'s step snapshots, `checkpoint` its adapter, with
-the trainer's own losses (scripts/finetune_evaluate.py); the files are as
+the trainer's own losses (nowcastfoundation.finetune.evaluate); the files are as
 `flowlib.evaluations` says.
 """
 
@@ -21,15 +21,14 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "workflow"))
 
-import finetune_evaluate as fe  # noqa: E402
-import finetune_stream as fs  # noqa: E402
 from flowlib import evaluations  # noqa: E402
 
 from nowcastfoundation import series_bias  # noqa: E402
 from nowcastfoundation.backends.chronos2 import torch_device  # noqa: E402
+from nowcastfoundation.finetune import evaluate as fe  # noqa: E402
+from nowcastfoundation.finetune import stream as fs  # noqa: E402
 
 
 def fresh(base, device: str):

@@ -244,6 +244,7 @@ def test_missingness_offsets_are_non_centred(sim_vintage):
     assert "log_rt0_offsets" in tr
 
 
+@pytest.mark.slow
 def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
     from nowcastrenewal.model import forecast_trajectories
 

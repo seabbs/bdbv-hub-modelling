@@ -53,6 +53,7 @@ __all__ = [
     "comparison_colours",
     "comparison_label",
     "hub_styles",
+    "location_names",
     "model_colour",
     "model_dash",
     "model_style",
@@ -357,7 +358,19 @@ def _grid(
     return fig, flat[:n]
 
 
-def _names(target: pd.DataFrame) -> dict[str, str]:
+def location_names(target: pd.DataFrame) -> dict[str, str]:
+    """Return each location's name, from `location` and `location_name`.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Rows with `location` and `location_name`.
+
+    Returns
+    -------
+    dict of str to str
+        Name by location code.
+    """
     pairs = target[["location", "location_name"]].drop_duplicates()
     return dict(zip(pairs["location"], pairs["location_name"], strict=False))
 
@@ -399,7 +412,7 @@ def plot_target(
     """
     locs = list(locations or _locations_by_size(target))
     vints = sorted(target["vintage"].unique())
-    names = _names(target)
+    names = location_names(target)
     fig, axes = _grid(len(locs), 3)
     cmap = mpl.colormaps["Blues"]
     shades = np.linspace(0.35, 0.95, len(vints))
@@ -492,7 +505,7 @@ def plot_release_counts(
     rev = rev.loc[rev["target_end_date"].isin(recent)]
     releases = sorted(rev["vintage"].unique())
     at = {v: i for i, v in enumerate(releases)}
-    names = _names(target)
+    names = location_names(target)
     palette = MODEL_COLOURS[mode]
     fig, axes = _grid(len(locs), 3, width=3.6, height=3.0)
     for ax, loc in zip(axes, locs, strict=True):
@@ -633,7 +646,7 @@ def plot_imputed_share(
     share = imputed_share(target)
     locs = list(locations or _locations_by_size(target, 5))
     vints = sorted(share["vintage"].unique())
-    names = _names(target)
+    names = location_names(target)
     palette = MODEL_COLOURS[mode]
     fig, axes = _grid(len(locs), 3)
     for ax, loc in zip(axes, locs, strict=True):
@@ -672,7 +685,7 @@ def plot_imputed_by_release(
         One line for the country and one per province with cases.
     """
     share = imputed_by_release(target)
-    names = _names(target)
+    names = location_names(target)
     palette = MODEL_COLOURS[mode]
     fig, ax = plt.subplots(figsize=(7.2, 3.6), layout="constrained")
     for i, loc in enumerate(_locations_by_size(target)):
@@ -859,7 +872,7 @@ def plot_delay_distribution(
     """
     counts = delays["location"].value_counts()
     locs = list(counts.index[counts >= 10])
-    names = _names(delays)
+    names = location_names(delays)
     fig, axes = _grid(len(locs), 3)
     colour = MODEL_COLOURS[mode][0]
     bins = list(np.arange(-0.5, max_delay + 1.5))
@@ -901,7 +914,7 @@ def plot_delays_over_time(
     summ = delay_summary(latest, by=("location", "onset_week"))
     summ = summ.loc[summ["n"] >= min_cases]
     locs = list(latest["location"].value_counts().index[:4])
-    names = _names(latest)
+    names = location_names(latest)
     palette = MODEL_COLOURS[mode]
     fig, (ax, ax2) = plt.subplots(
         2,
@@ -1289,7 +1302,7 @@ def plot_location_grid(
     ref = pd.Timestamp(fc["reference_date"].iloc[0])
     end = pd.Timestamp(fc["target_end_date"].max())
     start = ref - pd.Timedelta(weeks=weeks_before)
-    names = _names(real)
+    names = location_names(real)
     ink = THEMES[mode]
     cut = _incomplete_after(truth_v, complete_after_weeks)
     fig, axes = _grid(len(locations), ncol, width=3.6, height=2.5)
@@ -1651,7 +1664,7 @@ def plot_nowcast(
         )
     ax.axvline(mdates.date2num(ref), color=ink["muted"], lw=0.8, ls=":")
     _shade_incomplete(ax, cut, mode)
-    names = _names(rows)
+    names = location_names(rows)
     ax.set_title(
         f"{names.get(location, location)} ({location}): vintage {vintage}, "
         f"reference date {ref.date()}"
@@ -1823,7 +1836,7 @@ def plot_hub_round(
     locs = [loc for loc in locations if loc in set(q["location"])]
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()
-    names = _names(real)
+    names = location_names(real)
     ink = THEMES[mode]
     cut = _incomplete_after(latest, complete_after_weeks)
     n_col = max(len(locs), 1)

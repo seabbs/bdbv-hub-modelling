@@ -8,9 +8,8 @@ learning-rate schedule, step and batch position are in that state, so
 the segments in turn are the one continuous run.
 
 A batch (`simulate_batch`: `<n>` simulations from `<seed>`) holds the outbreaks
-`<seed>-<index>` its settings file lists, less those the sim QC
-excluded, so how many batches a prefix needs is known only once they
-are simulated.
+`<seed>-<index>` its settings file lists, so how many batches a prefix
+needs is known only once they are simulated.
 """
 
 from __future__ import annotations
@@ -60,7 +59,7 @@ def batch_priority(seed: int, base: float, seed_base: int) -> float:
 EVAL_MODES = ("local", "offload")
 """Where the trainer's held-out evaluation runs: in the trainer, or in the
 `evaluate` rules on whichever machine `WORKER_GROUPS` gives that group.
-Must match `EVAL_MODES` in scripts/finetune_stream.py (tested)."""
+Must match `EVAL_MODES` in nowcastfoundation.finetune.stream (tested)."""
 
 
 def check_eval(mode: str) -> None:
@@ -90,7 +89,7 @@ def seeds_for(
 ) -> list[int]:
     """Return the first seeds of `seeds` whose batches hold `n` outbreaks.
 
-    `kept(seed)` gives a batch's outbreaks after exclusions. It is asked
+    `kept(seed)` gives a batch's outbreaks. It is asked
     in order and only until there are enough, so in a Snakemake input
     function it can wait on each batch through a checkpoint.
     """
@@ -106,26 +105,10 @@ def seeds_for(
     return out
 
 
-def excluded(path: Path | str) -> set[str]:
-    """Return the simulations a sim-QC exclusion file lists.
-
-    As the trainer reads it: one a line, or a CSV with a `simulation`
-    column first; no file is no exclusions.
-    """
-    path = Path(path)
-    if not path.exists():
-        return set()
-    lines = [x.strip() for x in path.read_text().splitlines()]
-    if lines and lines[0].startswith("simulation"):
-        lines = [x.split(",")[0] for x in lines[1:]]
-    return {x for x in lines if x}
-
-
-def kept_outbreaks(settings: Path | str, skip: set[str]) -> int:
-    """Return how many outbreaks of a batch's settings file are kept."""
+def batch_outbreaks(settings: Path | str) -> int:
+    """Return how many outbreaks a batch's settings file holds."""
     rows = Path(settings).read_text().splitlines()[1:]
-    ids = {r.split(",")[0] for r in rows if r.strip()}
-    return len(ids - skip)
+    return len({r.split(",")[0] for r in rows if r.strip()})
 
 
 def _done(state: Path) -> int:
@@ -175,9 +158,3 @@ def reachable(n: int, seeds: Sequence[int], kept: Callable[[int], int]) -> bool:
     except ValueError:
         return False
     return True
-
-
-def gather_exclusions(paths: Iterable[Path | str], out: Path | str) -> None:
-    """Write the sim-QC exclusions of several rounds as one CSV."""
-    rows = sorted(set().union(*(excluded(p) for p in paths)))
-    Path(out).write_text("".join(["simulation\n", *(f"{r}\n" for r in rows)]))

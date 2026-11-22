@@ -9,16 +9,16 @@ and, with `--png`, a 200 dpi `fig1-pipeline.png` with `rsvg-convert`
 
 The panels are:
 
-- A, the assumptions in the epinowcast simulations
-  (packages/nowcastfoundation/r), one box per stage;
+- A, the assumptions in the simulations
+  (`nowcastfoundation.simulator`), one box per stage;
 - B, the reporting triangle laid out as ragged series for Chronos-2
-  (`forecasters.foundation.layout_block`), each place's count and lag
+  (`nowcastfoundation.forecaster.layout_block`), each place's count and lag
   series joined by a learned attention bias for rows of the same place,
   and another for a place and its parent, all places in one group;
 - C, a training block cut from a simulated release history
-  (`forecasters.finetune.training_block`) and the LoRA adapters;
+  (`nowcastfoundation.finetune.training_block`) and the LoRA adapters;
 - D, forecasting with the fine-tuned model
-  (`forecasters.foundation.chronos_sampler`).
+  (`nowcastfoundation.forecaster.chronos_sampler`).
 
 Units are points at the final size, 6.5 inches wide, so font sizes are
 the printed sizes.

@@ -19,7 +19,7 @@
 # training seeds count up to the first batch not yet listed, and nothing
 # trains before the whole validation round is (`listed_batches`, listed
 # afresh each time a run plans). From the rounds host, its rounds'
-# manifests and QC exclusions are mirrored in <ROOT>/runs/<run>/rounds/.
+# manifests and QC summaries are mirrored in <ROOT>/runs/<run>/rounds/.
 
 
 rule fetch_batch:
@@ -97,18 +97,6 @@ rule train_segment:
             if run_of(wc).prev[int(wc.n)]
             else ""
         ),
-        # The released exclusions of the rounds this segment trains on.
-        release_args=lambda wc: (
-            f"--release-rounds {release_rounds(wc.run, int(wc.n))} "
-            f"--repo {SIM['repo']}"
-            if run_of(wc).ft["sims_from"] == "release"
-            else ""
-        ),
-        # Where the QC exclusions are: this machine's rounds, or the
-        # rounds host's mirrored here.
-        rounds=lambda wc: (
-            run_of(wc).mirror if run_of(wc).ft["sims_from"] == "remote" else ROUNDS_DIR
-        ),
         held=lambda wc: held_range(wc.run),
         prefixes=lambda wc: " ".join(str(p) for p in run_of(wc).ft["prefixes"]),
         stop_from=lambda wc: run_of(wc).ft["outbreaks"] + 1,
@@ -171,8 +159,8 @@ rule train_segment:
         # The run's own state resumes it; the state kept with the prefix
         # before replaces it if missing or behind (flowlib.segments).
         """
-        uv run python workflow/scripts/prepare_segment.py {params.train} {params.run} \
-            {params.rounds} {params.prev_args} {params.release_args} >{log}
+        uv run python workflow/scripts/prepare_segment.py {params.train} \
+            {params.prev_args} >{log}
         DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 \
             PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
             PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
@@ -193,7 +181,7 @@ rule train_segment:
             --eval-every {params.eval_every} \
             --by-source-every {params.by_source_every} \
             --eval {params.eval_mode} \
-            --exclude {params.run}/excluded.csv {params.bias} \
+            {params.bias} \
             --checkpoint-above {params.checkpoint} \
             --batch-size {params.batch_size} \
             --block-limit {params.block_limit} \

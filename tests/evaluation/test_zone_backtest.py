@@ -32,6 +32,7 @@ def scores(
     return result[0]
 
 
+@pytest.mark.slow
 def test_energy_scores_every_zone_and_week_as_one_vector(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
@@ -105,6 +106,7 @@ def test_zone_forecasts_are_the_scored_forms_by_origin(
     assert set(forecasts["location"]) == set(scores["location"])
 
 
+@pytest.mark.slow
 def test_zone_backtest_by_origin_chunk_matches_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -146,6 +148,7 @@ def test_zone_backtest_of_no_origin_is_empty(
     assert all(t.empty for t in out)
 
 
+@pytest.mark.slow
 def test_zone_forecasts_made_apart_by_model_score_as_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -184,6 +187,18 @@ def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
     run = ZoneForecasts.read([tmp_path / "a", tmp_path / "b"])
     assert list(run.samples.columns) == ["key", "origin", "value"]
     assert len(run.runs) == 1
+
+
+def test_zone_forecasts_read_keeps_text_that_looks_missing(
+    tmp_path: Path,
+) -> None:
+    from bdbvhub.zones import ZoneForecasts
+
+    empty = pd.DataFrame(columns=["origin", "model"])
+    runs = pd.DataFrame({"origin": ["2026-10-24"], "model": ["NA"]})
+    ZoneForecasts(runs, empty, empty).write(tmp_path / "a")
+    run = ZoneForecasts.read([tmp_path / "a"])
+    assert run.runs["model"].tolist() == ["NA"]
 
 
 def test_zone_relative_skill_scores_crps(scores: pd.DataFrame) -> None:

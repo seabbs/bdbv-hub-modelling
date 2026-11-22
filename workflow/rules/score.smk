@@ -19,6 +19,10 @@
 # (nowcasteval.coupling), from that unit's cached quantiles, on the CPU.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
 
+wildcard_constraints:
+    label=r"slots-[0-9a-f]+|[0-9a-f]+|reference[a-z-]*",
+
+
 
 checkpoint release_list:
     # Lists the releases to score; `task nowcast-foundation:score` reruns it.
@@ -70,6 +74,8 @@ rule score_run_germany:
         f"{RUN}/scores/{GERMANY_UNIT}/n{{n}}.done",
     log:
         f"{RUN}/scores/log/{GERMANY_UNIT}-n{{n}}.log",
+    benchmark:
+        f"{RUN}/scores/benchmarks/score_run_germany/n{{n}}.tsv"
     priority: 5
     conda:
         TOOLS_ENV
@@ -205,7 +211,6 @@ rule score:
         unit_stamps,
         rules.score_table.output,
         run_scores,
-        lambda wc: followups(wc),
 
 
 rule benchmarks:

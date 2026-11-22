@@ -114,3 +114,28 @@ def test_centred_with_no_free_step_holds_the_start():
     # The forecast walks on from the held start.
     z = tr["w_z_future"]["value"]
     np.testing.assert_allclose(x[3:], 1.0 + jnp.cumsum(0.5 * z, axis=0))
+
+
+def test_a_mean_anchored_walk_is_the_walk_shifted_to_its_start():
+    from nowcastrenewal.model.zones import MeanAnchoredWalk
+
+    sd = DeterministicVariable("sd", 0.3)
+    x0 = jnp.array([1.0, -2.0])
+    args = (12,)
+    kw = {"initial_value": x0, "n_processes": 2}
+    base = seed(NonCentredRandomWalk(sd, frozen=2, n_fit=8).sample, 3)(
+        *args, **kw
+    )
+    anchored = seed(MeanAnchoredWalk(sd, frozen=2, n_fit=8).sample, 3)(
+        *args, **kw
+    )
+    np.testing.assert_allclose(anchored[:8].mean(0), x0, rtol=1e-6)
+    np.testing.assert_allclose(
+        anchored, base - base[:8].mean(0) + x0, rtol=1e-6, atol=1e-6
+    )
+
+
+def test_a_mean_anchored_walk_only_overrides_its_anchor():
+    from nowcastrenewal.model.zones import MeanAnchoredWalk
+
+    assert "sample" not in vars(MeanAnchoredWalk)

@@ -86,6 +86,7 @@ from nowcasteval.plots import (
     baseline_share,
     comparison_colours,
     comparison_label,
+    location_names,
     model_style,
     plot_cutoff_days,
     plot_delay_check,
@@ -378,7 +379,7 @@ def make_report(
         daily, str(learnt["vintage"].max()), [NATIONAL, *fitted]
     )
     save_light_dark(
-        partial(plot_renewal_delay, learnt, baseline, _location_names(real)),
+        partial(plot_renewal_delay, learnt, baseline, location_names(real)),
         fig / "renewal-delay.svg",
     )
 
@@ -439,7 +440,7 @@ def _summaries(
 def _downward_table(real: pd.DataFrame, zones: pd.DataFrame) -> str:
     """Tabulate falls between consecutive releases, by place."""
     nat = real["location"] == NATIONAL
-    names = _location_names(real)
+    names = location_names(real)
     provinces = release_updates(real.loc[~nat])
     each = provinces.assign(
         place=[f"{names.get(p, p)} ({p})" for p in provinces["location"]]
@@ -647,7 +648,7 @@ def _release_section(
         },
         ours,
         colours,
-        _location_names(real),
+        location_names(real),
         default_on=[m for m in ours if m != base],
     )
     save_light_dark(
@@ -656,7 +657,7 @@ def _release_section(
             relative_crps(rep, ("pool", "location"), baseline=base),
             ours,
             colours,
-            _location_names(real),
+            location_names(real),
         ),
         fig / "scores-place.svg",
     )
@@ -972,7 +973,7 @@ def _zone_nowcast_section(
     every = pd.concat([national, at_release, *ran, stored], ignore_index=True)
     if "as_of" in every:
         every = every.loc[every["as_of"].isna()]
-    labels = _location_names(target)
+    labels = location_names(target)
     start = pd.Timestamp(task.reference_date) - pd.Timedelta(weeks=12)
     counts = zone_counts(
         daily_zones, task.vintage, start.strftime("%Y-%m-%d"), labels
@@ -1100,80 +1101,6 @@ def _nowcast_forecasts(
     return pd.concat(frames, ignore_index=True)
 
 
-_LADDER_SECTIONS = (
-    (
-        "Rungs",
-        "What each rung adds, and what was decided.",
-        ("step", "rung", "description", "decision"),
-    ),
-    (
-        "Sampler",
-        "Sampler diagnostics of the fit to the real vintage.",
-        (
-            "real_seconds",
-            "real_max_rhat",
-            "real_min_ess",
-            "real_min_ess_per_s",
-            "real_divergent",
-            "real_depth_hits",
-        ),
-    ),
-    (
-        "Recovery",
-        "Fits to a simulated outbreak with known parameters.",
-        (
-            "sim_max_rhat",
-            "sim_rt_mae",
-            "sim_turn_error",
-            "sim_ppc90",
-            "sim_crps_national",
-            "sim_crps_province",
-            "sim_cov90_national_ahead",
-            "sim_cov90_province_ahead",
-        ),
-    ),
-    (
-        "Scores",
-        "Forecasts from the real vintage, scored against a later release.",
-        (
-            "real_ppc90",
-            "real_crps_national",
-            "real_crps_province",
-            "real_cov90_national_now",
-            "real_cov90_national_ahead",
-            "real_cov90_province_now",
-            "real_cov90_province_ahead",
-            "prior_wild",
-        ),
-    ),
-)
-"""Sections of the Model building page, with the ladder columns each shows."""
-
-_LADDER_LABELS = {
-    "step": "Step",
-    "rung": "Rung",
-    "description": "Adds",
-    "decision": "Decision",
-    "seconds": "Seconds",
-    "max_rhat": "Max R-hat",
-    "min_ess": "Min ESS",
-    "min_ess_per_s": "Min ESS per second",
-    "divergent": "Divergent share",
-    "depth_hits": "Depth cap share",
-    "rt_mae": "Rt MAE",
-    "turn_error": "Days off the Rt = 1 crossing",
-    "ppc90": "PPC 90% coverage",
-    "crps_national": "National CRPS",
-    "crps_province": "Province CRPS",
-    "cov90_national_now": "National 90% coverage, nowcast",
-    "cov90_national_ahead": "National 90% coverage, ahead",
-    "cov90_province_now": "Province 90% coverage, nowcast",
-    "cov90_province_ahead": "Province 90% coverage, ahead",
-    "prior_wild": "Prior draws past 10x the peak",
-}
-"""Column headers of the Model building tables, without the sim_ or real_."""
-
-
 def _evidence_link(evidence: object) -> str:
     """Render a log row's evidence as a link."""
     if not isinstance(evidence, str) or not evidence:
@@ -1192,35 +1119,6 @@ def _development_log(path: Path) -> str:
     log["evidence"] = log["evidence"].map(_evidence_link)
     log.columns = [c.capitalize() for c in log.columns]
     return log.to_markdown(index=False) + "\n"
-
-
-def _ladder_label(column: str) -> str:
-    """Return the header of a ladder column."""
-    key = column.removeprefix("sim_").removeprefix("real_")
-    return _LADDER_LABELS.get(key, column)
-
-
-def _ladder_page(path: Path) -> str:
-    """Return the Model building tables from the ladder results."""
-    ladder = pd.read_csv(path)
-    if "step" in ladder:
-        ladder = ladder.sort_values("step")
-    parts = []
-    for title, lead, columns in _LADDER_SECTIONS:
-        cols = [c for c in columns if c in ladder]
-        if not cols:
-            continue
-        if "rung" not in cols:
-            cols = ["rung", *cols]
-        metrics = [c for c in cols if c not in ("step", "rung")]
-        shown = ladder.dropna(subset=metrics, how="all")[cols].round(3)
-        # tabulate blanks None but prints NaN, so cells go to objects first.
-        shown = shown.astype(object).where(shown.notna(), None)
-        table = shown.rename(columns=_ladder_label).to_markdown(
-            index=False, missingval=""
-        )
-        parts.append(f"## {title}\n\n{lead}\n\n{table}\n")
-    return "\n".join(parts)
 
 
 def _lopo_section(path: Path) -> str:
@@ -1252,7 +1150,7 @@ def _zone_truth_changes(
     """
     daily_zones = load_daily_zones(data_dir)
     real = target.loc[target["kind"] == "real"]
-    names = _location_names(target)
+    names = location_names(target)
     end = pd.Timestamp(real["target_end_date"].max())
     start = (end - pd.Timedelta(weeks=16)).strftime("%Y-%m-%d")
     zones = pd.concat(
@@ -1804,7 +1702,7 @@ def _backtest_page(
         partial(
             plot_truth_changes,
             target,
-            _location_names(target),
+            location_names(target),
         ),
         fig / "truth-changes.svg",
     )
@@ -1843,7 +1741,7 @@ def _backtest_page(
                     ),
                     fig / f"forecasts-{m}-{loc.lower()}.svg",
                 )
-    labels = _location_names(target)
+    labels = location_names(target)
     explorer_src = None
     if shown:
         # The zone backtest's forecasts, as submitted, join the explorer.
@@ -1925,7 +1823,6 @@ def _backtest_page(
         else "",
     )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
-    _write(gen / "ladder.md", _ladder_page(res / "ladder.csv"))
     _write(
         gen / "development-log.md",
         _development_log(res / "development-log.csv"),
@@ -2128,11 +2025,6 @@ def _checks_chart(
     }
 
 
-def _location_names(target: pd.DataFrame) -> dict[str, str]:
-    pairs = target[["location", "location_name"]].drop_duplicates()
-    return dict(zip(pairs["location"], pairs["location_name"], strict=False))
-
-
 HUB_METADATA_URL: Final = (
     "https://github.com/InsightNet-US/BDBV-Modeling-Hub/blob/main/"
     "model-metadata/{model}.yml"
@@ -2249,7 +2141,7 @@ def _comparison_page(
         baseline,
         on,
         colours,
-        _location_names(target),
+        location_names(target),
     )
     parts = []
     if not scores.empty:
@@ -2288,7 +2180,7 @@ def _comparison_page(
         explorer_data(
             labelled,
             target,
-            _location_names(target),
+            location_names(target),
             k,
             colours,
             truth_vintage=truth,

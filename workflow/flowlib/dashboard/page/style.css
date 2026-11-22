@@ -78,3 +78,7 @@ font-size:12px;margin:4px 0}.wrap{overflow-x:auto}
 .fs{position:fixed;inset:0;z-index:50;margin:0;max-width:none;border-radius:0;overflow:auto;background:var(--bg);padding:16px}
 .fs svg[width="100%"]{max-height:85vh}body.fsopen{overflow:hidden}
 .lab{fill:var(--fg);font-size:11px}
+.kv{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.kvi{background:var(--bg);border:1px solid var(--line);border-radius:6px;
+padding:2px 6px;font-size:12px;display:flex;gap:4px;align-items:baseline;
+flex-wrap:wrap}.kvi .kv{margin-top:0}.kvk{color:var(--mut);font-size:11px}

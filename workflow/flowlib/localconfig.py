@@ -73,13 +73,20 @@ DEFAULTS = (
     # (empty: none; flowlib.schedule), every how many minutes, and the timer
     # (cron, systemd or launchd; empty: by platform).
     ("SCHEDULE_TARGETS", ""),
-    # The status each tick writes for the monitor, every how many seconds
-    # (flowlib.runstatus), and where the monitor page is served
-    # (workflow/scripts/monitor.py) and how often it refreshes (seconds).
+    # The status each tick writes, every how many seconds
+    # (flowlib.runstatus).
     ("STATUS_EVERY", "60"),
+    # The workflow monitor (flowlib.monitor): the Panoptes server every
+    # Snakemake run reports to (empty: off), and where
+    # `task nowcast-workflow:monitor` serves it; the targets whose rule
+    # graph and job DAG it draws (flowlib.dag, NAME=TARGET), the Snakemake
+    # options they are built with, and every how many seconds.
+    ("MONITOR_URL", "http://127.0.0.1:8795"),
     ("MONITOR_HOST", "127.0.0.1"),
-    ("MONITOR_PORT", "8766"),
-    ("MONITOR_REFRESH", "30"),
+    ("MONITOR_PORT", "8795"),
+    ("MONITOR_DAG", ""),
+    ("MONITOR_DAG_OPTIONS", ""),
+    ("MONITOR_DAG_EVERY", "900"),
     ("SCHEDULE_EVERY", "60"),
     # The coordinator run's pause between ticks, and after a failed one
     # (seconds; workflow/scripts/coordinate.py).

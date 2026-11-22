@@ -101,7 +101,6 @@ __all__ = [
     "local_checkpoint",
     "native_sampler",
     "prefetch",
-    "quantile_draws",
     "realdata_pinned",
     "realdata_spec",
     "register_realdata_models",
@@ -206,7 +205,7 @@ class Checkpoint:
     Attributes
     ----------
     hash : str
-        Settings hash from `scripts/finetune_stream.py`. The release
+        Settings hash from `nowcastfoundation.finetune.stream`. The release
         is `tag`: `release_tag(hash)` for a simulation checkpoint, else
         `<prefix>-<hash>`.
     sha256 : tuple of (str, str)
@@ -755,37 +754,6 @@ def lag_count(
         reached = np.flatnonzero(share >= quantile - 1e-12)
         lags.append(int(reached[0]) + 1 if reached.size else most)
     return min(max(lags), most) if lags else most
-
-
-def quantile_draws(
-    levels: np.ndarray, values: np.ndarray, u: np.ndarray
-) -> np.ndarray:
-    """Read quantile functions at uniform draws.
-
-    Linear between the levels and flat beyond them.
-
-    Parameters
-    ----------
-    levels : numpy.ndarray
-        Increasing quantile levels, `[Q]`.
-    values : numpy.ndarray
-        Quantiles at those levels, `[..., Q]`. They are sorted first, so
-        crossed quantiles give a valid function.
-    u : numpy.ndarray
-        Uniform draws, the shape of `values` less its last axis.
-
-    Returns
-    -------
-    numpy.ndarray
-        The draws, the shape of `u`.
-    """
-    values = np.sort(values, axis=-1)
-    hi = np.clip(np.searchsorted(levels, u), 1, len(levels) - 1)
-    lo = hi - 1
-    weight = np.clip((u - levels[lo]) / (levels[hi] - levels[lo]), 0.0, 1.0)
-    at_lo = np.take_along_axis(values, lo[..., None], axis=-1)[..., 0]
-    at_hi = np.take_along_axis(values, hi[..., None], axis=-1)[..., 0]
-    return np.asarray(at_lo + weight * (at_hi - at_lo))
 
 
 def finetuned_adapter(checkpoint: Checkpoint) -> Path:

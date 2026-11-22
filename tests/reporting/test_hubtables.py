@@ -62,6 +62,7 @@ def test_hub_quantiles_take_other_levels() -> None:
     assert list(out["value"]) == pytest.approx(list(want))
 
 
+@pytest.mark.slow
 def test_hub_tables_cover_country_provinces_and_zones(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -141,6 +142,7 @@ def test_hub_tables_take_a_zone_fit_s_own_zones(
     assert not set(split["location"]) & set(zones)
 
 
+@pytest.mark.slow
 def test_a_models_own_zones_stay_apart_from_its_provinces(
     target: pd.DataFrame,
     delays: pd.DataFrame,

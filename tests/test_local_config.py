@@ -17,13 +17,10 @@ def test_the_local_config_is_not_tracked():
 
 
 def test_the_trainer_takes_its_device_from_the_machine():
-    import sys
 
     # torch_device imports torch, which CI's test env does not install.
     pytest.importorskip("torch")
-
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     assert fs.torch_device("cpu") == "cpu"
     assert fs.torch_device("auto") in {"cuda", "mps", "cpu"}

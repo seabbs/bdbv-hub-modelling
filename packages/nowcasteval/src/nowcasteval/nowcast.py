@@ -56,7 +56,7 @@ import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, ClassVar, Final, Self
 
 import numpy as np
 import pandas as pd
@@ -79,6 +79,7 @@ from nowcastutils.base import (
     list_models,
 )
 from nowcastutils.dates import as_date, epiweek_end
+from nowcastutils.files import write_csv
 from nowcastutils.hierarchy import province_of
 from nowcastutils.releases import release_cutoff
 
@@ -88,12 +89,14 @@ __all__ = [
     "RANDOM_WALK",
     "SUMMARY_LEVELS",
     "TRUTH_LEVEL",
+    "ForecastParts",
     "ReleaseBacktest",
     "ReleaseForecasts",
     "complete_weeks",
     "delay_curves",
     "draw_reported",
     "forecast_releases",
+    "model_origin_rows",
     "relative_crps",
     "relative_energy",
     "release_backtest",
@@ -102,8 +105,10 @@ __all__ = [
     "resolve_truth_delay",
     "rolling_truth",
     "score_releases",
+    "stack_parts",
     "stored_delays",
     "summarise",
+    "truth_from_vintage",
     "week_shares",
     "weeks_back_from_cutoff",
 ]
@@ -346,9 +351,11 @@ def complete_weeks(
     real = target.loc[target["kind"] == "real"]
     releases = sorted(str(v) for v in real["vintage"].unique())
     before = [v for v in releases if v < vintage]
-    rows = _truth(real, vintage).rename(columns={"truth": "now"})
+    rows = truth_from_vintage(real, vintage).rename(columns={"truth": "now"})
     if before:
-        prev = _truth(real, before[-1]).rename(columns={"truth": "then"})
+        prev = truth_from_vintage(real, before[-1]).rename(
+            columns={"truth": "then"}
+        )
         rows = rows.merge(prev, on=["location", "target_end_date"], how="left")
     else:
         rows["then"] = np.nan
@@ -390,7 +397,7 @@ def weeks_back_from_cutoff(
     pandas.Series
         Whole weeks, below 0 for weeks after the cut-off week.
     """
-    here = pd.Timestamp(epiweek_end(_cutoff(daily, vintage)))
+    here = pd.Timestamp(epiweek_end(release_cutoff(daily, vintage)))
     back = (here - pd.to_datetime(weeks.reset_index(drop=True))).dt.days // 7
     return back.astype(int).set_axis(weeks.index)
 
@@ -451,10 +458,10 @@ def reported_samples(
         kept = add_national(places) if whole else places
         return dict.fromkeys(later, kept)
     weeks = sorted(set(samples["target_end_date"]))
-    now = week_shares(curves, _cutoff(daily, origin), weeks)
+    now = week_shares(curves, release_cutoff(daily, origin), weeks)
     out = {}
     for o2 in later:
-        then = week_shares(curves, _cutoff(daily, o2), weeks)
+        then = week_shares(curves, release_cutoff(daily, o2), weeks)
         drawn = draw_reported(places.loc[mapped], reported, now, then, rng)
         both = pd.concat([drawn, places.loc[~mapped]], ignore_index=True)
         out[o2] = add_national(both) if whole else both
@@ -504,12 +511,22 @@ def _label(
     return out
 
 
-def _cutoff(daily: pd.DataFrame, vintage: str) -> dt.date:
-    return release_cutoff(daily.loc[daily["vintage"] == vintage], vintage)
+def truth_from_vintage(target: pd.DataFrame, vintage: str) -> pd.DataFrame:
+    """Return one vintage's totals as a truth table.
 
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Target rows.
+    vintage : str
+        The vintage to use as truth.
 
-def _truth(real: pd.DataFrame, vintage: str) -> pd.DataFrame:
-    rows = real.loc[real["vintage"] == vintage]
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `location`, `target_end_date` and `truth`.
+    """
+    rows = target.loc[target["vintage"] == vintage]
     return rows[["location", "target_end_date", "total"]].rename(
         columns={"total": "truth"}
     )
@@ -715,8 +732,66 @@ def release_backtest(
     )
 
 
+def stack_parts(frames: Sequence[pd.DataFrame]) -> pd.DataFrame:
+    """Stack a run's tables, or return an empty one with `model` and `origin`.
+
+    Parameters
+    ----------
+    frames : sequence of pandas.DataFrame
+        Tables of one kind from each origin or part.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The stacked rows.
+    """
+    if not frames:
+        return pd.DataFrame(columns=["model", "origin"])
+    return pd.concat(frames, ignore_index=True)
+
+
 @dataclass(frozen=True)
-class ReleaseForecasts:
+class ForecastParts:
+    """Tables of a forecast run, written one file each and stacked by `read`.
+
+    A subclass lists its tables, in field order, in `_NAMES` and names
+    their files with `_FILE`, a format string taking the table's name.
+    """
+
+    _NAMES: ClassVar[tuple[str, ...]] = ()
+    _FILE: ClassVar[str] = "{}.csv.gz"
+
+    def write(self, out: Path | str) -> None:
+        """Write each table to `out`, as named by `_FILE`."""
+        Path(out).mkdir(parents=True, exist_ok=True)
+        for name in self._NAMES:
+            write_csv(getattr(self, name), Path(out) / self._FILE.format(name))
+
+    @classmethod
+    def read(cls, parts: Sequence[Path | str]) -> Self:
+        """Stack the tables `write` wrote to each part, in order."""
+        tables = {}
+        for name in cls._NAMES:
+            frames = []
+            for part in parts:
+                try:
+                    frame = pd.read_csv(
+                        Path(part) / cls._FILE.format(name),
+                        dtype={"origin": str, "vintage": str},
+                        keep_default_na=False,
+                        na_values=[""],
+                    )
+                except pd.errors.EmptyDataError:
+                    continue
+                frames.append(frame)
+            # A part with no rows (a block every model skips) adds none.
+            frames = [f for f in frames if len(f)] or frames[:1]
+            tables[name] = stack_parts(frames)
+        return cls(**tables)
+
+
+@dataclass(frozen=True)
+class ReleaseForecasts(ForecastParts):
     """The forecasts `release_backtest` scores, made apart from scoring.
 
     Each table has `model` and `origin`, so the forecasts of models run
@@ -743,40 +818,7 @@ class ReleaseForecasts:
     fits: pd.DataFrame
 
     _NAMES = ("runs", "samples", "delays", "fits")
-
-    def write(self, out: Path | str) -> None:
-        """Write the tables to `out` as `release-<table>.csv.gz`."""
-        from nowcastutils.files import write_csv
-
-        Path(out).mkdir(parents=True, exist_ok=True)
-        for name in self._NAMES:
-            write_csv(getattr(self, name), Path(out) / f"release-{name}.csv.gz")
-
-    @classmethod
-    def read(cls, parts: Sequence[Path | str]) -> ReleaseForecasts:
-        """Stack the tables `write` wrote to each part, in order."""
-        tables = {}
-        for name in cls._NAMES:
-            frames = []
-            for part in parts:
-                try:
-                    frame = pd.read_csv(
-                        Path(part) / f"release-{name}.csv.gz",
-                        dtype={"origin": str, "vintage": str},
-                        keep_default_na=False,
-                        na_values=[""],
-                    )
-                except pd.errors.EmptyDataError:
-                    continue
-                frames.append(frame)
-            # A part with no rows (a block every model skips) adds none.
-            frames = [f for f in frames if len(f)] or frames[:1]
-            tables[name] = (
-                pd.concat(frames, ignore_index=True)
-                if frames
-                else pd.DataFrame(columns=["model", "origin"])
-            )
-        return cls(**tables)
+    _FILE = "release-{}.csv.gz"
 
 
 def forecast_releases(
@@ -858,16 +900,11 @@ def forecast_releases(
             fits.insert(1, "origin", task.vintage)
             fit_rows.append(fits)
 
-    def stack(frames: list[pd.DataFrame]) -> pd.DataFrame:
-        if not frames:
-            return pd.DataFrame(columns=["model", "origin"])
-        return pd.concat(frames, ignore_index=True)
-
     return ReleaseForecasts(
         pd.DataFrame(runs, columns=["origin", "model", "status", "reason"]),
-        stack(samples),
-        stack(delays),
-        stack(fit_rows),
+        stack_parts(samples),
+        stack_parts(delays),
+        stack_parts(fit_rows),
     )
 
 
@@ -953,7 +990,7 @@ def score_releases(
                 .drop(columns=["model", "origin"])
                 .reset_index(drop=True)
             )
-            summaries[name] = _rows(run.delays, name, task.vintage)
+            summaries[name] = model_origin_rows(run.delays, name, task.vintage)
             fit_rows.append(_fit_part(run.fits, name, task.vintage))
         _check_distinct(forecasts, task.vintage)
         learnt = (
@@ -965,7 +1002,7 @@ def score_releases(
             forecasts[str(key)] = grp[cols]
             have = learnt.loc[learnt["model"] == key]
             summaries[str(key)] = None if have.empty else have
-        reported = _truth(real, task.vintage).rename(
+        reported = truth_from_vintage(real, task.vintage).rename(
             columns={"truth": "reported"}
         )
         # Each model draws from its own stream, so its scores do not depend
@@ -995,7 +1032,7 @@ def score_releases(
         target, daily, latest, rule=complete_rule, weeks=complete_after
     )
     complete = (
-        _truth(real, latest)
+        truth_from_vintage(real, latest)
         .assign(truth_vintage=latest)
         .merge(
             done.loc[done["complete"], ["location", "target_end_date"]],
@@ -1021,8 +1058,25 @@ def _relabel(frame: pd.DataFrame, complete: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _rows(table: pd.DataFrame, model: str, origin: str) -> pd.DataFrame | None:
-    """Return a run model's delay summary at an origin, or None."""
+def model_origin_rows(
+    table: pd.DataFrame, model: str, origin: str
+) -> pd.DataFrame | None:
+    """Return a run model's rows at an origin, without `origin`, or None.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+        Rows of every model and origin, such as a run's delay summaries.
+    model : str
+        The model.
+    origin : str
+        The origin, compared as text.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        None if the table or the model's rows at the origin are empty.
+    """
     if table.empty or "origin" not in table:
         return None
     mine = table.loc[
@@ -1075,7 +1129,7 @@ def _score(
     samples = pd.concat(frames, ignore_index=True)
     scored, energy = [], []
     for (tgt, truth_v), grp in samples.groupby(["target", "truth_vintage"]):
-        truth = _truth(real, str(truth_v))
+        truth = truth_from_vintage(real, str(truth_v))
         if tgt == "complete":
             # Each week's truth, and the release it is from.
             truth = complete
@@ -1130,7 +1184,7 @@ def _quantiles(samples: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
     at = {
         role: pd.concat(
             [
-                _truth(real, str(v)).assign(**{col: str(v)})
+                truth_from_vintage(real, str(v)).assign(**{col: str(v)})
                 for v in sorted(set(q[col]))
             ]
         ).rename(columns={"truth": role})

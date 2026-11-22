@@ -135,6 +135,7 @@ def test_kept_share_matches_the_direct_lookup():
             np.testing.assert_allclose(a, b, rtol=1e-10)
 
 
+@pytest.mark.slow
 def test_full_model_density_and_gradient_are_unchanged(
     sim_vintage, monkeypatch
 ):
