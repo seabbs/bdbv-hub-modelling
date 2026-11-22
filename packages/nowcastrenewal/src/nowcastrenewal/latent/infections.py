@@ -23,6 +23,7 @@ from jax.typing import ArrayLike
 from pyrenew.latent.base import BaseLatentInfectionProcess, LatentSample
 from pyrenew.metaclass import RandomVariable
 
+from ..components.mixing import mixing_matrix
 from .strata import Depletion, Shifts, Variants, strata_renewal
 
 __all__ = ["StratifiedInfections"]
@@ -127,11 +128,10 @@ class StratifiedInfections(BaseLatentInfectionProcess):
         """
         n = n_days_post_init
         log_rt = self.log_rt_rv(n=n, place=self.place)
-        mixing = (
-            None
-            if self.mixing_rv is None
-            else self.mixing_rv(n=n, place=self.place, age=self.age)
-        )
+        mixing = None
+        if self.mixing_rv is not None:
+            kernel, share = self.mixing_rv(n=n, place=self.place, age=self.age)
+            mixing = mixing_matrix(kernel, share[:, None], "received")
         imports = (
             None
             if self.imports_rv is None

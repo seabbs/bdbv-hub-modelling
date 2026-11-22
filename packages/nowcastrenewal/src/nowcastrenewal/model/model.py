@@ -252,7 +252,8 @@ class Vintage:
     populations : numpy.ndarray
         Province populations, `(P,)`.
     kernel : numpy.ndarray or None
-        Row-normalised importation kernel between modelled provinces.
+        Importation kernel between modelled provinces, rows receive,
+        normalised per origin (`inputs.gravity_kernel`).
     horizon_weeks : int
         Forecast horizon in weeks.
     names : list of str

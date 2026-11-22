@@ -3,7 +3,7 @@
 
 - `vintage_from_tables` builds the model's `Vintage` for one data vintage.
 - `imputation_pmf` cuts the data provider's imputation delay to the model.
-- `province_distances` and `gravity_kernel` give the importation kernel
+- `gravity_kernel` gives the importation kernel (`components.mixing`)
   from the task's places.
 - `bvd_rows` and `bvd_inputs` turn BVDOutbreakSize estimates into the
   inputs of the BVD term.
@@ -19,6 +19,7 @@ import pandas as pd
 
 from nowcastutils.releases import release_cutoff
 
+from ..components.mixing import distance_kernel, great_circle_km
 from .model import (
     MAIN,
     ModelConfig,
@@ -67,51 +68,15 @@ def imputation_pmf(pmf: np.ndarray, dmax: int) -> np.ndarray:
     return np.asarray(out / total, dtype=float)
 
 
-def province_distances(
-    locations: tuple[str, ...], places: pd.DataFrame
-) -> np.ndarray:
-    """Great-circle distances in km between province centres.
-
-    Parameters
-    ----------
-    locations : tuple of str
-        Province codes.
-    places : pandas.DataFrame
-        Locations with `latitude` and `longitude` columns
-        (`ForecastTask.places`).
-
-    Returns
-    -------
-    numpy.ndarray
-        Symmetric, zero diagonal.
-
-    Raises
-    ------
-    ValueError
-        If a province has no centre.
-    """
-    centres = places.set_index("location").reindex(list(locations))
-    if centres[["latitude", "longitude"]].isna().any().any():
-        raise ValueError("Missing province centre.")
-    lat = np.radians(centres["latitude"].to_numpy(float))
-    lon = np.radians(centres["longitude"].to_numpy(float))
-    a = (
-        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
-        + np.cos(lat[:, None])
-        * np.cos(lat[None, :])
-        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
-    )
-    return np.asarray(2 * 6371 * np.arcsin(np.sqrt(a)), dtype=float)
-
-
 def gravity_kernel(
     locations: tuple[str, ...], table: pd.DataFrame, decay_km: float = 300.0
 ) -> np.ndarray:
-    r"""Row-normalised gravity kernel between provinces.
+    r"""Gravity kernel between provinces, rows receive.
 
-    $K_{qp} \propto N_p \exp(-D_{qp} / \text{decay})$ for $q \ne p$,
-    with populations $N$ and great-circle distances $D$ between the
-    centres, both from `table`.
+    $K_{pq} \propto N_p \exp(-D_{pq} / \text{decay})$ for $p \ne q$,
+    normalised per origin $q$ (`components.mixing.distance_kernel`), with
+    populations $N$ and great-circle distances $D$ between the centres,
+    both from `table`.
 
     Parameters
     ----------
@@ -126,7 +91,7 @@ def gravity_kernel(
     Returns
     -------
     numpy.ndarray
-        Rows sum to one, zero diagonal.
+        Columns (origins) sum to one, zero diagonal.
 
     Raises
     ------
@@ -134,16 +99,15 @@ def gravity_kernel(
         If a province has no centre or population, or the kernel is not
         finite.
     """
-    pops = table.set_index("location")["population"].reindex(list(locations))
-    if pops.isna().any():
+    rows = table.set_index("location").reindex(list(locations))
+    if rows["population"].isna().any():
         raise ValueError("Missing province population.")
-    dist = province_distances(locations, table)
-    k = pops.to_numpy(float)[None, :] * np.exp(-dist / decay_km)
-    np.fill_diagonal(k, 0.0)
-    k = k / k.sum(axis=1, keepdims=True)
-    if not np.all(np.isfinite(k)):
-        raise ValueError("Importation kernel is not finite.")
-    return np.asarray(k, dtype=float)
+    dist = great_circle_km(
+        rows["latitude"].to_numpy(float), rows["longitude"].to_numpy(float)
+    )
+    return distance_kernel(
+        dist, decay_km, "origin", weights=rows["population"].to_numpy(float)
+    )
 
 
 BVD_PROVINCES = {

@@ -21,13 +21,14 @@ from pyrenew.latent.infection_functions import (
     logistic_susceptibility_adjustment,
 )
 
+from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import (
     Delay,
     delay_pmf,
     generation_time_pmf,
 )
 from nowcastrenewal.latent.imports import Imports
-from nowcastrenewal.latent.mixing import PlaceMixing, count_mixing
+from nowcastrenewal.latent.mixing import PlaceMixing
 from nowcastrenewal.latent.reference import ReferenceEvents
 from nowcastrenewal.latent.strata import (
     ExponentialDepletion,
@@ -142,17 +143,6 @@ def test_place_mixing_matches_the_r_engine() -> None:
         )
 
 
-def test_count_mixing_moves_infections_between_strata() -> None:
-    # A row's giving share is eps times its row sum, as r7: a row whose
-    # kernel row sums to a half gives away half as much.
-    K = jnp.array([[0.0, 0.5], [1.0, 0.0]])
-    force = jnp.array([10.0, 4.0])
-    W = count_mixing(K, jnp.array([0.2]))[0]
-    np.testing.assert_allclose(
-        W @ force, force + 0.2 * (K @ force - K.sum(axis=1) * force)
-    )
-
-
 def test_imports_match_the_r_engine() -> None:
     f = load("imports")
     strata = pd.DataFrame(f["strata"])
@@ -195,8 +185,12 @@ def _renewal(f: dict[str, Any], which: str) -> Any:
     kwargs: dict[str, Any] = {}
     if which == "full":
         s, v = f["shifts"], f["variants"]
+        with jax.enable_x64(True):
+            mixing = mixing_matrix(
+                matrix(f["K"]), np.array(f["eps"])[:, None], "received"
+            )
         kwargs = {
-            "mixing": (matrix(f["K"]), np.array(f["eps"])),
+            "mixing": mixing,
             "imports": matrix(f["imports"]),
             "shifts": Shifts(
                 at=s["at"],

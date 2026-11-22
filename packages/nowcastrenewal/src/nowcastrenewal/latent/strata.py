@@ -6,8 +6,8 @@ starting infections, the reproduction numbers and the generation time, in
 the form of PyRenew's renewal scans and `model.renewal.coupled_renewal`. It
 adds what those lack:
 
-- mixing between strata in counts (`mixing.count_mixing`), with a share
-  that may change each day;
+- mixing between strata in counts (`components.mixing.mixing_matrix`),
+  with a share that may change each day;
 - a choice of susceptible depletion (`LinearDepletion`, the simulator's
   default, or `ExponentialDepletion`, the fitted models' form);
 - imports added after depletion (`imports.Imports`);
@@ -30,8 +30,6 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 from jax.typing import ArrayLike
-
-from .mixing import count_mixing
 
 __all__ = [
     "DEPLETIONS",
@@ -200,7 +198,7 @@ def strata_renewal(
     gt: ArrayLike,
     rt: ArrayLike,
     population: ArrayLike,
-    mixing: tuple[ArrayLike, ArrayLike] | None = None,
+    mixing: ArrayLike | None = None,
     imports: ArrayLike | None = None,
     shifts: Shifts | None = None,
     variants: Variants | None = None,
@@ -209,7 +207,7 @@ def strata_renewal(
     r"""Run each stratum's renewal in counts.
 
     Each day, with $F$ the generation-time-weighted past infections and
-    $W_t$ from `mixing.count_mixing`, the new infections are
+    $W_t$ from `components.mixing.mixing_matrix`, the new infections are
     `depletion(R_t, W_t F, S_t, N, imports_t)`, after shifts and variants
     have set $R_t$ and escape has refilled $S_t$.
 
@@ -224,9 +222,9 @@ def strata_renewal(
         Reproduction numbers before shifts and variants, `(n, k)`.
     population : array_like
         Each stratum's population, `(k,)`.
-    mixing : tuple of array_like, optional
-        The kernel $K$ `(k, k)`, rows receive, and its share
-        $\varepsilon_t$ `(n,)` (`mixing.PlaceMixing`). `None` is none.
+    mixing : array_like, optional
+        The mixing matrix in counts, `(n, k, k)` or `(k, k)`
+        (`components.mixing.mixing_matrix`). `None` is none.
     imports : array_like, optional
         Imported infections, `(n, k)` (`imports.Imports`).
     shifts : Shifts, optional
@@ -250,7 +248,7 @@ def strata_renewal(
     if mixing is None:
         W = jnp.broadcast_to(jnp.eye(k), (n, k, k))
     else:
-        W = count_mixing(mixing[0], jnp.broadcast_to(mixing[1], (n,)))
+        W = jnp.broadcast_to(jnp.asarray(mixing), (n, k, k))
     imp = jnp.zeros((n, k)) if imports is None else jnp.asarray(imports)
     sh = (shifts or Shifts()).arrays()
     va = variants or Variants()

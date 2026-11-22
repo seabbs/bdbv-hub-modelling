@@ -39,6 +39,7 @@ from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
 from nowcastutils.releases import release_cutoff
 
+from ..components.mixing import Mixing, distance_kernel, great_circle_km
 from ..components.pmfs import CensoredPMF
 from .composition_noise import MultinomialNoise
 from .delays import FixedTimeVarying
@@ -81,7 +82,7 @@ from .pooled import (
     sum_to_zero_basis,
 )
 from .publication_lag import ReleasePairLikelihood
-from .renewal import Importation, MetapopulationInfections
+from .renewal import MetapopulationInfections
 from .rt_observation import RtPseudoObservation
 from .temporal import NonCentredRandomWalk
 
@@ -627,37 +628,6 @@ class ZoneOnsetStreams(OnsetStreams):
         super()._score_delays(by_province, counts)
 
 
-def place_distances(centres: pd.DataFrame) -> np.ndarray:
-    """Great-circle distances in km between place centres.
-
-    Parameters
-    ----------
-    centres : pandas.DataFrame
-        Columns `latitude` and `longitude`, one row per place.
-
-    Returns
-    -------
-    numpy.ndarray
-        Symmetric, zero diagonal.
-
-    Raises
-    ------
-    ValueError
-        If a place has no centre.
-    """
-    if centres[["latitude", "longitude"]].isna().any().any():
-        raise ValueError("Missing place centre.")
-    lat = np.radians(centres["latitude"].to_numpy(float))
-    lon = np.radians(centres["longitude"].to_numpy(float))
-    a = (
-        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
-        + np.cos(lat[:, None])
-        * np.cos(lat[None, :])
-        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
-    )
-    return np.asarray(2 * 6371 * np.arcsin(np.sqrt(a)), dtype=float)
-
-
 def zone_bvd_inputs(
     rows: pd.DataFrame,
     names: list[str],
@@ -699,28 +669,27 @@ def zone_bvd_inputs(
 def zone_kernel(
     zones: tuple[str, ...], table: pd.DataFrame, decay_km: float = DECAY_KM
 ) -> np.ndarray:
-    r"""Row-normalised gravity kernel between zones.
+    r"""Gravity kernel between zones, rows receive.
 
-    $K_{qz} \propto N_z \exp(-D_{qz} / \text{decay})$ for $q \ne z$, with
+    $K_{pq} \propto N_p \exp(-D_{pq} / \text{decay})$ for $p \ne q$,
+    normalised per origin $q$ (`components.mixing.distance_kernel`), with
     WorldPop counts $N$ from `table` and great-circle distances $D$
     between zone centroids (`ForecastTask.places`).
 
     Returns
     -------
     numpy.ndarray
-        Rows sum to one, zero diagonal.
+        Columns (origins) sum to one, zero diagonal.
     """
     rows = table.set_index("location").reindex(list(zones))
-    pops = rows["population"]
-    if pops.isna().any():
+    if rows["population"].isna().any():
         raise ValueError("Missing zone population.")
-    dist_km = place_distances(rows)
-    k = pops.to_numpy(float)[None, :] * np.exp(-dist_km / decay_km)
-    np.fill_diagonal(k, 0.0)
-    k = k / k.sum(axis=1, keepdims=True)
-    if not np.all(np.isfinite(k)):
-        raise ValueError("Importation kernel is not finite.")
-    return np.asarray(k, dtype=float)
+    dist = great_circle_km(
+        rows["latitude"].to_numpy(float), rows["longitude"].to_numpy(float)
+    )
+    return distance_kernel(
+        dist, decay_km, "origin", weights=rows["population"].to_numpy(float)
+    )
 
 
 def zone_vintage_from_tables(
@@ -984,10 +953,11 @@ def build_zone_model(
 
     mixing = None
     if config.coupling == "gravity" and data.kernel is not None:
-        mixing = Importation(
+        mixing = Mixing(
             "mixing",
             DeterministicVariable("kernel", data.kernel),
             DistributionalVariable("importation", dist.Beta(1, 100)),
+            outflow="sent",
         )
 
     effective_population = None

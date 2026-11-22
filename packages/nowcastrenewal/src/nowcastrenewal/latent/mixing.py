@@ -1,18 +1,12 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Mixing between places in counts, with a share that may switch over time.
+r"""The simulator's kernel between strata and its share over time.
 
 `PlaceMixing` builds the kernel $K$ between strata (rows receive, each
-age mixing with the same age elsewhere) and the share $\varepsilon_t$ of
-each day. `count_mixing` turns them into the matrix that mixes the
-generation-time-weighted infections $F$,
-
-$$F^* = \{I + \varepsilon_t (K - \operatorname{diag}(K \mathbf{1}))\} F,$$
-
-so a stratum gives away $\varepsilon_t$ times its kernel row sum and takes
-$\varepsilon_t K F$. This is the simulator's form.
-`model.renewal.mixing_matrix`, which the fitted models use, takes a share
-per origin from a row-normalised kernel and agrees with it only when every
-row sums to 1.
+age mixing with the same age elsewhere, normalised per receiver) and the
+share $\varepsilon_t$ of each day, from the grid's mixing kinds. The
+mixing matrix is the shared `components.mixing.mixing_matrix` with
+`outflow="received"`: each stratum's force is
+$(1 - \varepsilon_t) F_p + \varepsilon_t \sum_q K_{pq} F_q$.
 """
 
 from __future__ import annotations
@@ -25,34 +19,14 @@ from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.metaclass import RandomVariable
 
-__all__ = ["KINDS", "PlaceMixing", "count_mixing"]
+from ..components.mixing import distance_kernel, normalise_kernel
+
+__all__ = ["KINDS", "PlaceMixing"]
 
 KINDS = ("none", "symmetric", "asymmetric", "distance", "time_varying")
 """Mixing kinds: none; every place with every other; only from places
 earlier in an order; decaying with distance; and the distance kernel
 switching on or off over time."""
-
-
-def count_mixing(kernel: ArrayLike, share: ArrayLike) -> Array:
-    r"""Return the mixing matrix of each day in counts.
-
-    Parameters
-    ----------
-    kernel : array_like
-        $K$, strata by strata, rows receive.
-    share : array_like
-        $\varepsilon_t$, one per day.
-
-    Returns
-    -------
-    Array
-        $I + \varepsilon_t (K - \operatorname{diag}(K \mathbf{1}))$,
-        shape `(n, k, k)`.
-    """
-    K = jnp.asarray(kernel)
-    eps = jnp.atleast_1d(jnp.asarray(share))
-    move = K - jnp.diag(K.sum(axis=1))
-    return jnp.eye(K.shape[0])[None] + eps[:, None, None] * move[None]
 
 
 class PlaceMixing(RandomVariable):
@@ -149,15 +123,11 @@ class PlaceMixing(RandomVariable):
                 raise ValueError(f"{self.kind} mixing needs xy and a range")
             xy = self.xy[:n_places]
             dist = np.sqrt(((xy[:, None, :] - xy[None, :, :]) ** 2).sum(-1))
-            kernel = np.exp(-dist / self.distance_range)
-            kernel *= 1 - np.eye(n_places)
+            kernel = distance_kernel(dist, self.distance_range, "receiver")
         quiet = [q for q in self.quiet if q < n_places]
         kernel[quiet, :] = 0
         kernel[:, quiet] = 0
-        rows = kernel.sum(axis=1)
-        give = rows > 0
-        kernel[give] = kernel[give] / rows[give, None]
-        return kernel
+        return normalise_kernel(kernel, "receiver")
 
     def shares(self, n: int) -> np.ndarray:
         r"""Return $\varepsilon_t$ on each of `n` days.

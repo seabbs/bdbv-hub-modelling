@@ -2,8 +2,8 @@
 r"""Subpopulation renewal coupled by importation, with susceptible depletion.
 
 `MetapopulationInfections` is a PyRenew `BaseSubpopulationInfections` with
-a coupled renewal step (`coupled_renewal`) and the mixing matrix from an
-`Importation` component.
+a coupled renewal step (`coupled_renewal`) and the per-resident mixing
+matrix from the shared `components.mixing.Mixing`.
 """
 
 from __future__ import annotations
@@ -22,42 +22,6 @@ from pyrenew.metaclass import RandomVariable
 from .pooled import pooled_walk
 
 
-def mixing_matrix(
-    kernel: ArrayLike, importation: ArrayLike, fractions: ArrayLike
-) -> Array:
-    r"""Per-capita mixing matrix from a row-normalised importation kernel.
-
-    In counts the force on province $p$ is
-    $(1 - \varepsilon) F_p + \varepsilon \sum_q K_{qp} F_q$. Per resident
-    of $p$, with population fractions $f$,
-
-    $$W = (1 - \varepsilon) I + \varepsilon
-    \operatorname{diag}(1/f) K^\top \operatorname{diag}(f).$$
-
-    Parameters
-    ----------
-    kernel
-        Row-normalised kernel with zero diagonal, shape `(P, P)`.
-    importation
-        Share $\varepsilon$ of transmission sent to other provinces, a
-        scalar or one per origin.
-    fractions
-        Population fractions, shape `(P,)`.
-
-    Returns
-    -------
-    Array
-        Shape `(P, P)`.
-    """
-    kernel, fractions = jnp.asarray(kernel), jnp.asarray(fractions)
-    n = fractions.shape[0]
-    # A vector of shares is one per origin: row p keeps 1 - eps_p of its
-    # own force and takes eps_q of origin q's.
-    eps = jnp.broadcast_to(jnp.asarray(importation), (n,))
-    imported = kernel.T * (eps * fractions)[None, :] / fractions[:, None]
-    return jnp.asarray(jnp.diag(1 - eps) + imported)
-
-
 def coupled_renewal(
     I0: Array,
     rt: Array,
@@ -70,7 +34,7 @@ def coupled_renewal(
 
     With $x_p(t)$ infections per resident, $\nu$ the effective share of
     the population at risk (`pool`), $g$ the generation interval and $W$
-    from `mixing_matrix`,
+    from `components.mixing.mixing_matrix`,
 
     $$y_p(t) = R_p(t) \sum_q W_{pq} \sum_{\tau \ge 1}
     x_q(t - \tau) g(\tau),$$
@@ -162,72 +126,6 @@ def coupled_renewal(
     return x, r_eff, from_imports
 
 
-class Importation(RandomVariable):
-    r"""Per-capita mixing matrix from an importation kernel and share.
-
-    $$W = (1 - \varepsilon) I + \varepsilon
-    \operatorname{diag}(1/f) K^\top \operatorname{diag}(f),$$
-
-    from `mixing_matrix`, with $K$ from `kernel_rv` (row-normalised,
-    rows are origins, zero diagonal), $\varepsilon$ from `share_rv` and
-    the population fractions $f$ passed at sample time. It plays the
-    part of PyRenew's `mobility_matrix_rv`, as one component the latent
-    process calls, so the kernel may be fixed or random.
-    """
-
-    def __init__(
-        self, name: str, kernel_rv: RandomVariable, share_rv: RandomVariable
-    ) -> None:
-        r"""Initialize the importation component.
-
-        Parameters
-        ----------
-        name
-            Name of the component.
-        kernel_rv
-            Returns $K$, shape `(P, P)`. A fixed kernel is a
-            `DeterministicVariable`.
-        share_rv
-            Returns $\varepsilon$, the share of transmission sent to
-            other provinces.
-
-        Raises
-        ------
-        TypeError
-            If `kernel_rv` or `share_rv` is not a `RandomVariable`.
-        """
-        for label, rv in (("kernel_rv", kernel_rv), ("share_rv", share_rv)):
-            if not isinstance(rv, RandomVariable):
-                raise TypeError(f"{label} must be a RandomVariable.")
-        super().__init__(name=name)
-        self.kernel_rv = kernel_rv
-        self.share_rv = share_rv
-
-    def __repr__(self) -> str:
-        """Return string representation."""
-        return (
-            f"Importation(name={self.name!r}, kernel_rv={self.kernel_rv!r}, "
-            f"share_rv={self.share_rv!r})"
-        )
-
-    def sample(self, fractions: ArrayLike, **kwargs: object) -> Array:
-        """Sample the mixing matrix.
-
-        Parameters
-        ----------
-        fractions
-            Population share of each province, `(P,)`.
-        **kwargs
-            Ignored, for the PyRenew interface.
-
-        Returns
-        -------
-        Array
-            $W$, shape `(P, P)`.
-        """
-        return mixing_matrix(self.kernel_rv(), self.share_rv(), fractions)
-
-
 class MetapopulationInfections(BaseSubpopulationInfections):
     r"""Province renewal with importation and susceptible depletion.
 
@@ -267,7 +165,7 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         ----------
         mixing_rv
             Returns the mixing matrix $W$ given the population fractions
-            (`Importation`). `None` turns coupling off.
+            (`components.mixing.Mixing`). `None` turns coupling off.
         effective_population_rv
             $\nu$. `None` turns susceptible depletion off.
         rt_observation

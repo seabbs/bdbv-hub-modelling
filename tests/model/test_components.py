@@ -8,6 +8,7 @@ from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
 
+from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import CensoredPMF
 from nowcastrenewal.model import (
     FixedTimeVarying,
@@ -19,7 +20,6 @@ from nowcastrenewal.model import (
     generation_interval,
     hazard_to_pmf,
     incubation_period,
-    mixing_matrix,
     onset_expectations,
     pooled_walk,
 )
@@ -114,18 +114,6 @@ def test_onset_expectations_match_reference():
     )
 
 
-def test_mixing_conserves_transmission():
-    f = jnp.array([0.5, 0.3, 0.2])
-    k = uniform_kernel(3)
-    w = mixing_matrix(jnp.asarray(k), 0.1, f)
-    # In counts, column q of diag(f) W diag(1/f) sums to one.
-    counts = f[:, None] * w / f[None, :]
-    np.testing.assert_allclose(counts.sum(axis=0), 1.0, rtol=1e-6)
-    np.testing.assert_allclose(
-        mixing_matrix(jnp.asarray(k), 0.0, f), jnp.eye(3)
-    )
-
-
 @pytest.mark.parametrize("deplete", [False, True])
 def test_coupled_renewal_matches_reference(deplete):
     rng = np.random.default_rng(3)
@@ -150,7 +138,7 @@ def test_coupled_renewal_matches_reference(deplete):
         jnp.asarray(seed[:, :n_init].T / pops),
         jnp.asarray(rt),
         jnp.asarray(g),
-        mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)),
+        mixing_matrix(jnp.asarray(k), 0.05, "sent", jnp.asarray(f)),
         pool=1.0 if deplete else None,
     )
     # Exact without depletion. With it, PyRenew's exponential depletion
@@ -425,7 +413,7 @@ def test_imported_infections_are_part_of_the_total():
     p = 3
     f = np.array([0.5, 0.3, 0.2])
     k = uniform_kernel(p)
-    w = np.asarray(mixing_matrix(jnp.asarray(k), 0.05, jnp.asarray(f)))
+    w = np.asarray(mixing_matrix(jnp.asarray(k), 0.05, "sent", jnp.asarray(f)))
     I0 = rng.uniform(0, 1e-5, (len(g), p))
     rt = rng.uniform(0.6, 1.8, (60, p))
     # Imported infections are part of the total, and none without coupling.

@@ -39,6 +39,7 @@ from numpy.typing import NDArray
 
 from bdbvhub.data.delays import hub_delay_pmf
 from bdbvhub.data.tidy import PROVINCE_POPULATIONS, province_places
+from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import Delay, censored_pmf
 from nowcastrenewal.model.inputs import gravity_kernel as model_gravity_kernel
 from nowcastrenewal.model.model import (
@@ -48,7 +49,7 @@ from nowcastrenewal.model.model import (
     generation_interval,
     incubation_period,
 )
-from nowcastrenewal.model.renewal import coupled_renewal, mixing_matrix
+from nowcastrenewal.model.renewal import coupled_renewal
 from nowcastutils.base import NATIONAL
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.releases import release_cutoff
@@ -592,6 +593,7 @@ def simulate_outbreak(
     mixing = mixing_matrix(
         jnp.asarray(model_gravity_kernel(s.locations, table)),
         s.importation,
+        "sent",
         jnp.asarray(pop / pop.sum()),
     )
     nu = s.effective_fraction
