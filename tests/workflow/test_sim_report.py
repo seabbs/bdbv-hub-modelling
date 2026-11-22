@@ -102,6 +102,10 @@ def test_a_round_renders_one_self_contained_page(tmp_path):
     assert "<title>Simulated outbreaks, round 1</title>" in page
     # The gallery: the early outbreak, with its figure inline.
     assert "early window: 1-0001 (r1)" in page
+    # The random gallery and the round's shares of R path pieces.
+    assert "random 1: 1-0001 (r1)" in page
+    assert "<h3>Shares over the round</h3>" in page
+    assert "<td>R path</td><td>growth</td><td>1</td><td>100%</td>" in page
     assert page.count("data:image/png;base64,") >= 2
     assert 'src="http' not in page
     # Flags: the redrawn draw and the audit's combinations.
@@ -109,6 +113,33 @@ def test_a_round_renders_one_self_contained_page(tmp_path):
     assert "no cases" in page
     assert "<h3>Odd combinations</h3>" in page
     assert "Fewer than 100 cases" in page
+
+
+def test_shares_count_shifts_and_reactive_ones():
+    d = pd.DataFrame(
+        {"shift_at": [np.nan, "0.2", "0.1;0.5;0.7;0.9"],
+         "shift_reactive": [np.nan, "FALSE", "FALSE;TRUE;TRUE;FALSE"],
+         "variants": [False, True, False]}
+    )  # fmt: skip
+    page = sr.shares(d)
+    assert "<td>R shifts</td><td>0</td><td>1</td>" in page
+    assert "<td>3+</td><td>1</td>" in page
+    assert "<td>a reactive shift</td><td>no</td><td>2</td>" in page
+    assert "<td>yes</td><td>1</td>" in page
+
+
+def test_the_random_gallery_is_seeded_and_ignores_regimes():
+    d = pd.DataFrame(
+        {"round": "r1", "outbreak": [f"1-{i:04d}" for i in range(1, 101)]}
+    )
+    a = [o["outbreak"] for _, o in sr.pick_random(d)]
+    b = [
+        o["outbreak"]
+        for _, o in sr.pick_random(d.sample(frac=1, random_state=3))
+    ]
+    assert a == b
+    assert len(set(a)) == 24
+    assert a != [f"1-{i:04d}" for i in range(1, 25)]
 
 
 def test_reference_bands_are_one_per_disease_in_the_summaries_units():
