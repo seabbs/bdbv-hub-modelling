@@ -1125,6 +1125,9 @@ def test_grid_figures_summarise_each_round_then_compare_them(tmp_path):
         ) in text
     assert f"r4={rounds}/r4/summaries/outbreaks.csv" in text
     assert "grid_figures.py" in text
+    # From the batch files: no manifest or records of the round.
+    assert "rule round_manifest" not in "".join(blocks)
+    assert "rule batch_record" not in "".join(blocks)
 
 
 def test_a_fetched_batch_is_a_copy_not_a_link_to_its_source(tmp_path):

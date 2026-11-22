@@ -334,9 +334,19 @@ rule simulate:
 rule round_summaries:
     # One row per outbreak of a round (first draw, strata summed): design,
     # drawn values, size, dynamics, R, delays and the phase at the
-    # training cut-offs (workflow/scripts/grid_summaries.py).
+    # training cut-offs (workflow/scripts/grid_summaries.py). From the
+    # round's batch files, not its manifest, so a summary of a round
+    # another run is simulating writes nothing into that round's records.
     input:
-        rules.round_manifest.output,
+        lambda wc: [
+            f"{ROUNDS_DIR}/r{wc.round}/sims/{kind}-{seed}.{ext}"
+            for seed in seeds_of(wc.round)
+            for kind, ext in (
+                ("counts", "csv.gz"),
+                ("settings", "csv"),
+                ("latent", "csv.gz"),
+            )
+        ],
     output:
         f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
     log:
@@ -344,7 +354,7 @@ rule round_summaries:
     conda:
         TOOLS_ENV
     params:
-        sims=lambda wc, input: Path(input[0]).parent / "sims",
+        sims=lambda wc, input: Path(input[0]).parent,
     shell:
         "uv run python workflow/scripts/grid_summaries.py outbreaks "
         "{params.sims} {output} > {log} 2>&1"
