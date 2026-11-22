@@ -623,3 +623,25 @@ def test_models_see_only_the_counts_the_truth_holds(
         ["randomwalknowcast"], tri, ["2021-03-01"], 10, 1, max_delay=40
     )
     assert seen[0]["confirm"].tolist() == [8]
+
+
+def test_each_model_and_date_records_its_seconds(
+    triangle: pd.DataFrame,
+) -> None:
+    # Backtest time by model and date, so slow cells can be found.
+    timings: list[dict[str, object]] = []
+    dates = ["2021-10-04", "2021-10-05"]
+    germany_forecasts(
+        ["randomwalk", "randomwalknowcast"],
+        triangle,
+        dates,
+        n_samples=30,
+        seed=1,
+        timings=timings,
+    )
+    got = pd.DataFrame(timings)
+    assert sorted(zip(got["model"], got["origin"], strict=True)) == sorted(
+        (m, d) for m in ("randomwalk", "randomwalknowcast") for d in dates
+    )
+    assert (got["seconds"] >= 0).all()
+    assert set(got["stage"]) == {"forecast"}
