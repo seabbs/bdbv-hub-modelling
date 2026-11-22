@@ -56,7 +56,7 @@ import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import numpy as np
 import pandas as pd
@@ -86,6 +86,7 @@ __all__ = [
     "COMPLETE_GROWTH",
     "COMPLETE_WEEKS",
     "RANDOM_WALK",
+    "SUMMARY_LEVELS",
     "TRUTH_LEVEL",
     "ReleaseBacktest",
     "ReleaseForecasts",
@@ -124,7 +125,8 @@ COMPLETE_GROWTH = 0.02
 TRUTH_LEVEL = 0.98
 """Share of the national count reported by the estimated truth delay."""
 
-_LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95)
+SUMMARY_LEVELS: Final = (0.05, 0.25, 0.5, 0.75, 0.95)
+"""Quantile levels of the nowcast summaries, as columns `q5` to `q95`."""
 _KEYS = (
     "model",
     "origin",
@@ -1122,8 +1124,8 @@ def _score(
 def _quantiles(samples: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
     """Quantiles of every forecast, with the count at the origin and truth."""
     grp = samples.groupby([*_KEYS, "weeks_back"])["value"]
-    q = grp.quantile(np.array(_LEVELS)).unstack()
-    q.columns = [f"q{int(100 * p)}" for p in _LEVELS]
+    q = grp.quantile(np.array(SUMMARY_LEVELS)).unstack()
+    q.columns = [f"q{int(100 * p)}" for p in SUMMARY_LEVELS]
     q = q.reset_index()
     at = {
         role: pd.concat(

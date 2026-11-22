@@ -18,6 +18,7 @@ import pandas as pd
 from bdbvhub.models import get_model
 from bdbvhub.reporting.explorer import compact, trajectories
 from nowcastbaselines.zones import zone_forecast
+from nowcasteval.nowcast import SUMMARY_LEVELS
 from nowcastutils.base import ForecastTask
 from nowcastutils.hierarchy import province_of
 from nowcastutils.snapshots import weekly_counts
@@ -28,8 +29,7 @@ __all__ = [
     "zone_nowcast",
 ]
 
-_QUANTILES = (0.05, 0.25, 0.5, 0.75, 0.95)
-_QCOLS = ("q5", "q25", "q50", "q75", "q95")
+_QCOLS = tuple(f"q{int(100 * p)}" for p in SUMMARY_LEVELS)
 
 
 def zone_nowcast(
@@ -123,7 +123,10 @@ def zone_counts(
 def _quantiles(samples: pd.DataFrame) -> pd.DataFrame:
     grp = samples.groupby(["location", "target_end_date"])["value"]
     out = pd.concat(
-        {c: grp.quantile(p) for c, p in zip(_QCOLS, _QUANTILES, strict=True)},
+        {
+            c: grp.quantile(p)
+            for c, p in zip(_QCOLS, SUMMARY_LEVELS, strict=True)
+        },
         axis=1,
     )
     return out.reset_index()

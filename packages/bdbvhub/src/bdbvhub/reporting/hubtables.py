@@ -26,6 +26,7 @@ from bdbvhub.submission.hub import (
     zones_need_not_sum,
 )
 from nowcastbaselines.zones import zones_for_model
+from nowcasteval.scoring import QUANTILE_LEVELS
 from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS, ForecastTask
 from nowcastutils.files import write_csv
 from nowcastutils.hierarchy import is_zone
@@ -38,14 +39,9 @@ __all__ = [
     "write_hub_tables",
 ]
 
-HUB_QUANTILE_LEVELS: Final = (
-    0.01,
-    0.025,
-    *np.round(np.arange(0.05, 0.951, 0.05), 2),
-    0.975,
-    0.99,
-)
-"""The 23 quantile levels of hubverse quantile forecasts."""
+HUB_QUANTILE_LEVELS: Final = tuple(float(q) for q in QUANTILE_LEVELS)
+"""The 23 quantile levels of hubverse quantile forecasts
+(`nowcasteval.scoring.QUANTILE_LEVELS`)."""
 
 
 def hub_quantiles(
