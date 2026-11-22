@@ -197,9 +197,23 @@ def test_the_simulator_hashes_its_grid_python_and_engine():
                     "__init__",
                     "hazards",
                     "mixing",
+                    "noise",
                     "pmfs",
                     "reference",
                     "renewal",
+                ),
+            ),
+            (
+                "packages/nowcastrenewal/src/nowcastrenewal/reporting",
+                (
+                    "__init__",
+                    "delays",
+                    "effects",
+                    "expectation",
+                    "observation",
+                    "revisions",
+                    "simulate",
+                    "triangle",
                 ),
             ),
         )
