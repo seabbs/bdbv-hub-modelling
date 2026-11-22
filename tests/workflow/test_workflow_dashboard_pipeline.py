@@ -41,6 +41,7 @@ def _setup(tmp_path, stage, age_s, failed=33431):
         (run / "sims" / f"settings-{s}.csv").write_text(
             "outbreak\n" + "".join(f"{s}-{i}\n" for i in range(20))
         )
+    (run / "sims" / "settings-33300.csv").write_text("outbreak\n")
     status = run / "train" / "stream-status.json"
     status.parent.mkdir(parents=True)
     status.write_text(
@@ -99,30 +100,32 @@ def test_a_stopped_run_waiting_on_a_failed_batch_is_at_simulate(tmp_path):
     where, run = _setup(tmp_path, "stopped at n400", 3600)
     view = pipeline.build(where, run, TRAIN, alive=None)
     assert view.current == "simulate"
-    assert "waiting for batch 33431" in view.waiting
-    assert "since 16:41" in view.waiting
+    assert view.waiting == {"waiting_for_batches": [33431], "since": "16:41"}
     by = {s.key: s for s in view.stages}
-    assert "r34 39/40" in by["simulate"].progress
-    assert "1 failed" in by["simulate"].timing
-    assert "20m" in by["simulate"].timing
-    assert "157" not in by["fetch"].progress
-    assert "39 of 40" in by["fetch"].progress
-    assert "1 running" in by["evaluate"].timing
-    assert "evaluate_checkpoint n=400" in by["evaluate"].progress
+    assert by["simulate"].progress == {"r34": "39/40"}
+    assert by["simulate"].jobs["failed"] == 1
+    assert by["simulate"].jobs["mean_job_s"] == 1200
+    assert by["simulate"].jobs["to_go"] == 1
+    assert by["fetch"].progress == {"batches": "39/40"}
+    assert by["evaluate"].jobs["running"] == 1
+    assert by["evaluate"].progress == {"evaluate_checkpoint": "n=400"}
 
 
 def test_a_training_run_is_at_train_with_its_step(tmp_path):
     where, run = _setup(tmp_path, "training n800", 10, failed=None)
     view = pipeline.build(where, run, TRAIN, alive=True)
     assert view.current == "train"
-    assert view.waiting == ""
+    assert view.waiting == {}
     train = {s.key: s for s in view.stages}["train"]
-    assert "n800: step 9889 of 19778" in train.progress
-    assert "396 of 800 simulations" in train.progress
+    assert train.progress["segment"] == "n800"
+    assert train.progress["step"] == "9889/19778"
+    assert train.progress["simulations"] == "396/800"
 
 
 def test_the_section_marks_the_current_stage(tmp_path):
     where, run = _setup(tmp_path, "stopped at n400", 3600)
     out = pipeline.section(pipeline.build(where, run, TRAIN, alive=None))
     assert re.search(r'class="stg cur"[^>]*>.*?Simulate', out, re.S)
-    assert "waiting for batch 33431" in out
+    assert "Waiting for batches</span> <div class=kv>" in out
+    assert "<b>33431</b>" in out
+    assert "<span class=kvk>Mean job</span> <b>20 min</b>" in out
