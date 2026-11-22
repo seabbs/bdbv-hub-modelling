@@ -68,7 +68,7 @@ def test_series_statistics_read_the_delays_weekdays_and_updates():
             "report_date": ref + pd.to_timedelta(np.tile([0, 3, 9], 70), "D"),
             # Mondays report twice as much on the day; one downward update.
             "count": np.tile([6, 3, 1], 70)
-            * np.where(np.repeat(days.dayofweek, 3) == 0, 2, 1),
+            * np.where(np.repeat(days.day_of_week, 3) == 0, 2, 1),
         }
     )
     c.loc[2, "count"] = -1
