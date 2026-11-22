@@ -145,7 +145,7 @@ def test_the_paper_targets_build_with_no_mailbox(tmp_path):
             "--cores",
             "1",
         ],
-        cwd=ROOT / "paper",
+        cwd=ROOT,
         env=_bare_env(tmp_path),
         capture_output=True,
         text=True,
