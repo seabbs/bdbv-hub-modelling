@@ -62,7 +62,6 @@ import numpy as np
 import pandas as pd
 
 from nowcasteval.scoring import (
-    SCORE_COLUMNS,
     energy_scores,
     relative_skill,
     score_forecasts,
@@ -107,7 +106,6 @@ __all__ = [
     "score_releases",
     "stack_parts",
     "stored_delays",
-    "summarise",
     "truth_from_vintage",
     "week_shares",
     "weeks_back_from_cutoff",
@@ -1198,32 +1196,6 @@ def _quantiles(samples: pd.DataFrame, real: pd.DataFrame) -> pd.DataFrame:
         on=["truth_vintage", "location", "target_end_date"],
         how="left",
     )
-
-
-def summarise(
-    scores: pd.DataFrame, by: Sequence[str] = ("target", "model")
-) -> pd.DataFrame:
-    """Average scores over forecasts, with the number of forecasts.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        `ReleaseBacktest.scores`.
-    by : sequence of str
-        Columns to group by.
-
-    Returns
-    -------
-    pandas.DataFrame
-        The group columns, `n` and the mean CRPS, coverage of the 50% and
-        90% intervals and bias.
-    """
-    cols = ["crps", "coverage_50", "coverage_90", "bias"]
-    assert set(cols) <= set(SCORE_COLUMNS)
-    grp = scores.groupby(list(by))
-    out = grp[cols].mean()
-    out.insert(0, "n", grp.size())
-    return out.reset_index()
 
 
 def relative_crps(

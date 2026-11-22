@@ -23,10 +23,10 @@ from nowcasteval.nowcast import (
     release_backtest,
     reporting_delay,
     rolling_truth,
-    summarise,
     week_shares,
     weeks_back_from_cutoff,
 )
+from nowcasteval.scoring import summarise_scores
 from nowcastutils.base import MissingSnapshots
 
 
@@ -72,7 +72,7 @@ def test_every_model_is_scored_on_each_later_release(
     rep = s.loc[(s["target"] == "reported") & (s["origin"] == "2026-10-17")]
     assert set(rep["truth_vintage"]) == set(later[2:])
     # Every model is scored on the same forecasts of a target.
-    for _, g in summarise(s).groupby("target"):
+    for _, g in summarise_scores(s, ("target", "model")).groupby("target"):
         assert g["n"].nunique() == 1
     # Forecast weeks are scored once a later release reports them.
     assert (rep["weeks_back"] < 0).any()
