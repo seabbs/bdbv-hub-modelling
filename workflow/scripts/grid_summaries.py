@@ -16,6 +16,13 @@ it, and writes one row per outbreak (first draw, strata summed):
 - R and effective R, infection weighted over strata: 5% and 95% over days;
 - delays, from the reported counts: mean delay and share reported within
   7 days of the reference date;
+- the series statistics the German development half is compared on
+  (`series_stats`): delay median, 90% and 99%, the share reported on the
+  reference date, the reference-weekday amplitude, the share of
+  non-zero updates that are negative, mean daily count, share of zero
+  days, and the sd and maximum of weekly log growth;
+- the peak's place in the series (`peak_share`, 0 the first day, 1 the
+  last) and the largest stratum attack rate;
 - phase at the training cut-offs: the share of weekly cut-offs, from two
   weeks after the first report to `SIM_DELAY_WEEKS` + 5 weeks before the
   last (as `finetune_chronos.outbreak_blocks` places them), where expected
@@ -134,6 +141,65 @@ def phases(onsets: pd.Series, first: pd.Timestamp, last: pd.Timestamp) -> dict:
     }
 
 
+def _max(x: object) -> float:
+    """Return a value, or the largest of a `;`-separated per-stratum value."""
+    if isinstance(x, str):
+        parts = [float(p) for p in x.split(";") if p not in ("", "NA")]
+        return float(np.max(parts)) if parts else np.nan
+    return float(x)
+
+
+def delay_quantile(by_delay: pd.Series, q: float) -> float:
+    """Return the first delay by which a share `q` of the net count is in."""
+    total = by_delay.sum()
+    if total <= 0:
+        return np.nan
+    cum = by_delay.sort_index().cumsum() / total
+    return float(cum.index[np.argmax(cum.to_numpy() >= q - 1e-9)])
+
+
+def series_stats(counts: pd.DataFrame) -> dict:
+    """Return the statistics one series is compared with Germany on.
+
+    `counts` has `reference_date`, `report_date` (dates) and `count`, the
+    change reported on that report date. As the sim-realism audit: delays
+    pooled over reference dates, the weekday amplitude the largest over
+    the smallest weekday mean of the final count over its centred 7-day
+    mean, and weekly growth over weeks with at least 10 cases.
+    """
+    delay = (counts["report_date"] - counts["reference_date"]).dt.days
+    by_delay = counts["count"].groupby(delay).sum()
+    total = by_delay.sum()
+    out: dict = {}
+    if total <= 0:
+        return out
+    for q in (50, 90, 99):
+        out[f"delay_q{q}"] = delay_quantile(by_delay, q / 100)
+    out["day0_share"] = float(by_delay.get(0, 0) / total)
+    nonzero = counts["count"] != 0
+    out["negative_share"] = float(
+        (counts.loc[nonzero, "count"] < 0).mean() if nonzero.any() else 0
+    )
+    final = counts.groupby("reference_date")["count"].sum()
+    final = final.asfreq("D", fill_value=0)
+    out["mean_daily"] = float(final.mean())
+    out["zero_share"] = float((final <= 0).mean())
+    m = final.rolling(7, center=True, min_periods=7).mean()
+    ratio = (final / m)[m > 0]
+    if len(ratio) >= 14:
+        by_day = ratio.groupby(ratio.index.day_of_week).mean()
+        if by_day.min() > 0:
+            out["weekday_amplitude"] = float(by_day.max() / by_day.min())
+    weekly = final.resample("7D").sum()
+    weekly = weekly.iloc[1:-1] if len(weekly) > 2 else weekly.iloc[:0]
+    lg = np.log(weekly.where(weekly >= 10))
+    growth = (lg - lg.shift(1)).dropna()
+    if len(growth) >= 2:
+        out["weekly_growth_sd"] = float(growth.std())
+        out["weekly_growth_max"] = float(growth.max())
+    return out
+
+
 def weighted(latent: pd.DataFrame, col: str) -> pd.Series:
     """Return a latent column averaged over strata by infections, daily."""
     d = latent.dropna(subset=[col])
@@ -156,7 +222,11 @@ def outbreak_row(
     row["infections"] = float(daily["infections"].sum())
     row["onsets"] = float(daily["onsets"].sum())
     row["attack"] = _mean(settings.get("attack", np.nan))
+    row["attack_max"] = _max(settings.get("attack", np.nan))
     row |= dynamics(daily["onsets"])
+    if daily["onsets"].max() > 0 and len(daily) > 1:
+        top = int(np.argmax(daily["onsets"].to_numpy()))
+        row["peak_share"] = top / (len(daily) - 1)
     for col in ("r", "reff"):
         s = weighted(latent, col)
         if len(s):
@@ -173,6 +243,7 @@ def outbreak_row(
         row["reported_7d"] = float(c.loc[delay <= 7, "count"].sum() / total)
         weekly = c.groupby(pd.Grouper(key="reference_date", freq="7D"))["count"]
         row["peak_weekly"] = float(weekly.sum().max())
+        row |= series_stats(c)
         row |= phases(
             daily["onsets"], c["report_date"].min(), c["report_date"].max()
         )

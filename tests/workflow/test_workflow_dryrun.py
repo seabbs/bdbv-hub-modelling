@@ -1153,3 +1153,31 @@ def test_a_fetched_batch_is_a_copy_not_a_link_to_its_source(tmp_path):
         fetched = run / "sims" / name
         assert fetched.read_bytes() == source.read_bytes()
         assert fetched.stat().st_ino != source.stat().st_ino
+
+
+def test_sim_reports_render_each_round_and_the_rounds_together(tmp_path):
+    """The simulation report is a workflow target, per round and over all."""
+    blocks = score_jobs(tmp_path, {"rounds": [4, 5]}, target="sim_reports")
+    text = " ".join("".join(blocks).replace("\\\n", " ").split())
+    rounds = tmp_path / "rounds"
+    assert f"germany-fetch --out {tmp_path}/germany" in text
+    triangle = tmp_path / "germany" / "COVID-19_hospitalizations.csv"
+    assert (
+        f"sim_report.py germany {triangle}"
+        f" 2022-02-10 {rounds}/report/germany-dev.csv"
+    ) in text
+    for r in (4, 5):
+        assert (
+            f"sim_report.py render {rounds}/r{r}/report/sim-report.html"
+        ) in text
+        assert (
+            f"r{r}={rounds}/r{r}/sims:{rounds}/r{r}/summaries/outbreaks.csv"
+            in text
+        )
+    assert f"sim_report.py render {rounds}/report/sim-report.html" in text
+    assert "'Simulated outbreaks, rounds 4, 5'" in text
+    # From the batch files and the German triangle only: nothing of the
+    # rounds' records, and no BDBV data.
+    joined = "".join(blocks)
+    assert "rule batch_record" not in joined
+    assert "bdbvhub.cli data" not in joined
