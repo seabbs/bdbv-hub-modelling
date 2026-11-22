@@ -37,7 +37,7 @@ class Run:
 
     @property
     def mirror(self) -> str:
-        """The rounds host's manifests and QC exclusions, mirrored."""
+        """The rounds host's manifests and QC summaries, mirrored."""
         return f"{self.dir}/rounds"
 
     @property

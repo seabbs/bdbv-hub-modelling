@@ -4,11 +4,9 @@ Summarises each simulation of `ROUND_DIR/sims` (`summaries`): cases,
 strata with cases, the largest stratum's cases over its population, the
 largest week-on-week rise in weekly cases by reference date and the
 reporting delay. The grid sets no thresholds, so no simulation is
-excluded. `excluded.csv` is written empty because the trainer and the
-releases read it.
+excluded.
 
-Records the input table, the exclusions (`excluded.csv`: simulation,
-reason, evidence), `decisions.json` and a one-line summary in
+Records the input table, `decisions.json` and a one-line summary in
 `ROUND_DIR/qc/`. Simulations are never deleted. Run from the repo root:
 
     uv run python scripts/sim_qc.py ROUND_DIR
@@ -134,21 +132,17 @@ def main() -> None:
     qc.mkdir(parents=True, exist_ok=True)
     table = summaries(args.round_dir / "sims")
     table.to_csv(qc / "input.csv", index=False)
-    excluded = pd.DataFrame(columns=["simulation", "reason", "evidence"])
-    excluded.to_csv(qc / "excluded.csv", index=False)
-    n_out = 0
     (qc / "decisions.json").write_text(
         json.dumps(
             {
                 "check": "no thresholds (scripts/sim_qc.py)",
                 "n_simulations": len(table),
-                "excluded": [],
             },
             indent=1,
         )
     )
     (qc / "summary.txt").write_text(
-        f"sim QC excluded {n_out} of {len(table)} simulations"
+        f"sim QC summarised {len(table)} simulations"
     )
     print((qc / "summary.txt").read_text())
 

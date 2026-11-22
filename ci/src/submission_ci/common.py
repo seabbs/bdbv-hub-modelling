@@ -7,6 +7,7 @@ in a fake that records the calls and returns scripted output.
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
@@ -177,3 +178,23 @@ def markdown_table(header: Sequence[str], rows: Iterable[Sequence[str]]) -> str:
     ]
     lines.extend("| " + " | ".join(r) + " |" for r in rows)
     return "\n".join(lines)
+
+
+def finite(x: Any) -> float:
+    """Return `x` as a float, NaN if it is not a finite number."""
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return math.nan
+    return v if math.isfinite(v) else math.nan
+
+
+def json_safe(x: Any) -> Any:
+    """Return `x` with non-finite floats as None, through dicts and lists."""
+    if isinstance(x, float) and not math.isfinite(x):
+        return None
+    if isinstance(x, dict):
+        return {k: json_safe(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [json_safe(v) for v in x]
+    return x

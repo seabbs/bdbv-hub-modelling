@@ -40,7 +40,9 @@ from typing import Any
 from .common import (
     STATUS_LABEL,
     append_summary,
+    finite,
     fmt,
+    json_safe,
     markdown_table,
     read_json,
     set_outputs,
@@ -60,20 +62,12 @@ def _pct(level: float) -> int:
     return round(100 * float(level))
 
 
-def _num(x: Any) -> float:
-    try:
-        v = float(x)
-    except (TypeError, ValueError):
-        return math.nan
-    return v if math.isfinite(v) else math.nan
-
-
 def coverage(rows: Sequence[Mapping[str, Any]], pct: int) -> float:
     """Share of observed counts inside the `pct`% interval."""
     hits = []
     for r in rows:
-        y = _num(r.get("observed"))
-        lo, hi = _num(r.get(f"lower_{pct}")), _num(r.get(f"upper_{pct}"))
+        y = finite(r.get("observed"))
+        lo, hi = finite(r.get(f"lower_{pct}")), finite(r.get(f"upper_{pct}"))
         if not any(math.isnan(v) for v in (y, lo, hi)):
             hits.append(lo <= y <= hi)
     return sum(hits) / len(hits) if hits else math.nan
@@ -81,7 +75,7 @@ def coverage(rows: Sequence[Mapping[str, Any]], pct: int) -> float:
 
 def pit_summary(pits: Sequence[Any]) -> dict[str, Any]:
     """KS distance from uniform, outer-decile share, mean and shape."""
-    u = sorted(p for p in (_num(x) for x in pits) if not math.isnan(p))
+    u = sorted(p for p in (finite(x) for x in pits) if not math.isnan(p))
     n = len(u)
     if not n:
         return {"n": 0, "ks": None, "outer": None, "mean": None, "shape": ""}
@@ -344,16 +338,6 @@ def markdown(c: PPCCheck, lim: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _clean(x: Any) -> Any:
-    if isinstance(x, float) and not math.isfinite(x):
-        return None
-    if isinstance(x, dict):
-        return {k: _clean(v) for k, v in x.items()}
-    if isinstance(x, list):
-        return [_clean(v) for v in x]
-    return x
-
-
 def summarise(
     fit_id: str,
     ppc_path: Path,
@@ -376,7 +360,7 @@ def summarise(
     data = asdict(check)
     data["thresholds"] = lim
     data["headline"] = headline(check, _pct(lim["level"]))
-    write_json(out_dir / "ppc-summary.json", _clean(data))
+    write_json(out_dir / "ppc-summary.json", json_safe(data))
     return check
 
 

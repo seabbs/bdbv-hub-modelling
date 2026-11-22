@@ -80,6 +80,22 @@ def test_the_fit_reads_only_truth_reported_by_the_origin():
     got = coupling.coupling_scores(rows, ["gaussian"], n_samples=50)
     assert (got["rho"] == 0.0).all()
     assert (got["s"] == 0.0).all()
+    got = coupling.coupling_scores(rows, ["schaake"], n_samples=50)
+    assert (got["n_windows"] == 0).all()
+
+
+def test_schaake_orders_draws_as_matured_windows(scores):
+    shuffled = scores.loc[scores["coupling"] == "schaake"]
+    # The first origin has no matured window: independence. Later ones
+    # take windows of the truth reported by then, up to one per draw.
+    assert shuffled["n_windows"].iloc[0] == 0
+    assert shuffled["n_windows"].iloc[-1] > 0
+    assert (shuffled["n_windows"] <= 300).all()
+    assert scores.loc[scores["coupling"] != "schaake", "n_windows"].isna().all()
+    table = coupling.summary(scores, n_boot=200)
+    sums = table.loc[table["score"] == "sum_crps"].set_index("coupling")
+    # Past windows move together over steps, as the truth does.
+    assert sums.loc["schaake", "ratio"] < 0.95
 
 
 def test_the_command_writes_scores_and_summary(tmp_path):
@@ -89,7 +105,7 @@ def test_the_command_writes_scores_and_summary(tmp_path):
     for o, g in rows.groupby("origin"):
         g.to_csv(unit / f"{o}.csv.gz", index=False, compression="gzip")
     coupling.main([str(unit), str(tmp_path / "s.csv"), str(tmp_path / "t.csv")])
-    assert len(pd.read_csv(tmp_path / "s.csv")) == 4 * 3
+    assert len(pd.read_csv(tmp_path / "s.csv")) == 4 * len(coupling.COUPLINGS)
     assert set(pd.read_csv(tmp_path / "t.csv")["coupling"]) == set(
         coupling.COUPLINGS
     )

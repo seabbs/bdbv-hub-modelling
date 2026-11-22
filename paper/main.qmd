@@ -364,7 +364,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Key references: [@Dudley2026; @Dudley2025; @Dooley2023; @Hollmann2025; @Ansari2025].
 - **Against the literature.**
   - Other uses of foundation models in infectious disease modelling.
-    Key references: [@Kalahasti2026; @Cai2026; @Wang2025; @Jafari2026; @Du2025; @Li2025; @Aygun2025; @Martinson2026].
+    Key references: [@Kalahasti2026; @Cai2026; @Wang2025; @Jafari2026; @Du2025; @Li2025; @Aygun2025; @Martinson2026; @Koucha2026].
   - Fine-tuning in other domains.
     Key references: [@Laglil2026; @Das2024b; @Hu2021].
   - Other nowcasting approaches.

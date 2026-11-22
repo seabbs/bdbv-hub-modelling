@@ -60,15 +60,17 @@ RULE_GROUPS = {
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
     "score_germany": "score",
-    "slots_check_shard": "score",
-    "agg_sanity": "score",
-    "agg_fit": "score",
-    "agg_rows": "score",
 }
 """Each placed rule's group; any other rule is in `any`."""
 
 GPU_RULES = frozenset(
-    {"train_segment", "evaluate_steps", "evaluate_checkpoint", "score_germany"}
+    {
+        "train_segment",
+        "evaluate_steps",
+        "evaluate_checkpoint",
+        "score_germany",
+        "score_run_germany",
+    }
 )
 """The rules taking the `gpu` resource. Placed on a worker by their
 group, each also takes that worker's own `gpu_<worker>`, so the pooled
@@ -87,6 +89,7 @@ MACHINE_KEYS = frozenset(
         "CORES",
         "MEM_MB",
         "SIM_SLOTS",
+        "WORKFLOW_DIR",
         "DEVICE",
         "CHECKPOINT_ABOVE",
         "TARGETS",

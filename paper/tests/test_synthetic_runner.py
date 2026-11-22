@@ -358,7 +358,7 @@ CONFIG = Path(__file__).parents[1] / "workflow" / "config.yaml"
 
 def test_factors_include_every_factor_of_the_held_out_grid() -> None:
     cfg = yaml.safe_load(CONFIG.read_text())["synthetic"]
-    grid = yaml.safe_load((CONFIG.parents[1] / cfg["grid_file"]).read_text())
+    grid = yaml.safe_load((CONFIG.parents[2] / cfg["grid_file"]).read_text())
     assert set(synthetic.FACTORS) >= set(grid["factors"])
 
 

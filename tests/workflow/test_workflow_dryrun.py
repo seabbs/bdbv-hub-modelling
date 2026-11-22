@@ -315,7 +315,7 @@ def test_from_the_rounds_host_a_round_is_listed_once_its_qc_ran(tmp_path):
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert "train_segment" not in jobs
     (r2 / "qc").mkdir()
-    (r2 / "qc" / "excluded.csv").write_text("simulation,reason,evidence\n")
+    (r2 / "qc" / "summary.txt").write_text("sim QC summarised\n")
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert jobs["train_segment"] == 1
     assert jobs["fetch_batch"] == 13 + 1 + 40
@@ -660,28 +660,6 @@ def test_finished_units_are_kept(tmp_path):
     assert jobs["score_germany"] == 1
 
 
-def test_score_runs_no_follow_ups_by_default(tmp_path):
-    # Their scripts are not on main (test_every_script_a_rule_runs_exists).
-    config = {"score": {"labels": ["slots-aaa", "bbb"]}}
-    jobs = dry(tmp_path, "score", config=config)
-    assert not {"slots_check_shard", "agg_fit", "fetch_adapter"} & set(jobs)
-
-
-def test_score_runs_the_follow_ups_of_slots_checkpoints_only(tmp_path):
-    config = {
-        "score": {"labels": ["slots-aaa", "bbb"]},
-        "slots_check": {"run": True},
-        "agg": {"run": True},
-    }
-    jobs = dry(tmp_path, "score", config=config)
-    assert jobs["slots_check_shard"] == 2
-    assert jobs["slots_check_summary"] == 1
-    assert jobs["agg_fit"] == 2
-    assert jobs["agg_rows"] == 1
-    assert jobs["agg_sanity"] == 1
-    assert jobs["fetch_adapter"] == 1
-
-
 def _local(tmp_path, *lines):
     (tmp_path / "local.env").write_text(
         "\n".join([f"ROOT={tmp_path}", "HOST_NAME=test-host", *lines]) + "\n"
@@ -714,11 +692,6 @@ def test_where_batches_come_from_is_the_machine_s(tmp_path):
     _local(tmp_path, "SIMS_FROM=release")
     jobs = dry(tmp_path, "finetune", config=FT)
     assert "simulate_batch" not in jobs
-
-
-def test_release_carries_each_round_s_exclusions(tmp_path):
-    jobs = dry(tmp_path, "release", config={"rounds": [4]})
-    assert jobs["release_qc"] == 1
 
 
 def test_at_most_two_simulations_run_at_once(tmp_path):
@@ -825,8 +798,6 @@ def _scored(tmp_path):
         os.utime(f, (old + 60, old + 60))
     return {
         "score": {"labels": ["aaa"]},
-        "slots_check": {"run": False},
-        "agg": {"run": False},
     }, stamps
 
 
@@ -839,19 +810,15 @@ def test_land_runs_only_when_the_tables_changed(tmp_path):
     assert jobs["land"] == 1
 
 
-def test_the_rounds_host_s_manifests_and_exclusions_are_mirrored(tmp_path):
+def test_the_rounds_host_s_manifests_and_qc_are_mirrored(tmp_path):
     # The rounds host is this machine here (REMOTE empty), its rounds in
     # REMOTE_ROOT: round 1 whole, round 2 so far one batch.
     _rounds_host(tmp_path, {1: range(30100, 30140), 2: [30200]})
-    host = tmp_path / "host"
-    (host / "rounds" / "r1" / "qc" / "excluded.csv").write_text(
-        "simulation\n30101-3\n"
-    )
     dry(tmp_path, "finetune", config=REMOTE)
     run = tmp_path / "runs" / "runa"
     listed = (run / "available-batches.txt").read_text().split()
     assert listed == [str(s) for s in [*range(30100, 30140), 30200]]
-    assert (run / "rounds" / "r1" / "qc" / "excluded.csv").exists()
+    assert (run / "rounds" / "r1" / "qc" / "summary.txt").exists()
     assert (run / "rounds" / "r2" / "manifest.csv").exists()
 
 
@@ -911,9 +878,7 @@ def _rounds_host(tmp_path, rounds):
             f"{r},{s},block,r7,c,1,20,a,b,,1,2.0,h,t\n" for s in seeds
         )
         (where / "manifest.csv").write_text("header\n" + rows)
-        (where / "qc" / "excluded.csv").write_text(
-            "simulation,reason,evidence\n"
-        )
+        (where / "qc" / "summary.txt").write_text("sim QC summarised\n")
     local = tmp_path / "local.env"
     local.write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\nREMOTE_ROOT={host}\n"
@@ -1065,14 +1030,12 @@ def _done_round(root, r, batches=40):
             for s in range(first, first + batches)
         ],
         [d / "manifest.csv"],
-        [d / "qc" / "excluded.csv", d / "qc" / "summary.txt"],
+        [d / "qc" / "summary.txt"],
         [d / "seeds.txt", d / "READY"],
     ]
     for k, files in enumerate(stages):
         for f in files:
-            if f.name == "excluded.csv":
-                f.write_text("simulation,reason,evidence\n")
-            elif f.name.startswith("settings-"):
+            if f.name.startswith("settings-"):
                 f.write_text("outbreak\n")
             else:
                 f.write_text("x\n")

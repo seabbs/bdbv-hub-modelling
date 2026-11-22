@@ -189,6 +189,18 @@ def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
     assert len(run.runs) == 1
 
 
+def test_zone_forecasts_read_keeps_text_that_looks_missing(
+    tmp_path: Path,
+) -> None:
+    from bdbvhub.zones import ZoneForecasts
+
+    empty = pd.DataFrame(columns=["origin", "model"])
+    runs = pd.DataFrame({"origin": ["2026-10-24"], "model": ["NA"]})
+    ZoneForecasts(runs, empty, empty).write(tmp_path / "a")
+    run = ZoneForecasts.read([tmp_path / "a"])
+    assert run.runs["model"].tolist() == ["NA"]
+
+
 def test_zone_relative_skill_scores_crps(scores: pd.DataFrame) -> None:
     rel = zone_relative_skill(scores).set_index("model")
     assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)
