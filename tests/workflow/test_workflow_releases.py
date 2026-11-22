@@ -81,3 +81,31 @@ def test_a_release_s_batches_and_none_before_it_is_made(monkeypatch):
     monkeypatch.setattr(releases.subprocess, "run", view)
     assert releases.release_seeds("o/r", 9) == {901}
     assert releases.release_seeds("o/r", 8) == set()
+
+
+def _cfg(**over):
+    return {"labels": None, "published_from": "2026-11-16T09:00:00Z"} | over
+
+
+def test_configured_labels_win_over_the_listing(tmp_path):
+    cfg = _cfg(labels=["x"])
+    assert releases.chosen(tmp_path / "none.json", cfg) == ["x"]
+    assert releases.oldest_first(tmp_path / "none.json", cfg) == ["x"]
+
+
+def test_listed_checkpoints_are_chosen_less_skipped(tmp_path):
+    import json
+
+    listing = tmp_path / "releases.json"
+    listing.write_text(json.dumps(LISTING))
+    got = releases.chosen(listing, _cfg(skip=["slots-bbb"]))
+    assert got == ["slots-ccc", "aaa"]
+    assert releases.oldest_first(listing, _cfg()) == [
+        "slots-ccc",
+        "aaa",
+        "slots-bbb",
+    ]
+
+
+def test_no_order_before_the_releases_are_listed(tmp_path):
+    assert releases.oldest_first(tmp_path / "none.json", _cfg()) == []
