@@ -4,8 +4,8 @@ The grid config (`config/finetune/grids/<grid>.yaml`, the one the main
 workflow's `simulate.grid_file` names) defines the grid: categorical
 `factors` (levels with weights, drawn independently for each simulation),
 each placed in a layer by `factor_layers`, and named sampling
-`distributions`, each with its layer and the reason for it. The engine
-(`packages/nowcastfoundation/r`) reads the same file, so the tables cannot
+`distributions`, each with its layer and the reason for it. The simulator
+(`nowcastfoundation.simulator`) reads the same file, so the tables cannot
 drift from what is simulated.
 
 - `layer_tables`: the SI's two grid tables, strata and infections, and
