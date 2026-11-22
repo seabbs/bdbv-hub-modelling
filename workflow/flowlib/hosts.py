@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 import shlex
 import subprocess
+import sys
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
@@ -107,3 +108,33 @@ def push(
         f"grep -q {q(f'^{round_},{seed_},')} {q(str(rman))} || "
         f"echo {q(row)} >> {q(str(rman))}",
     )
+
+
+def mirrored_seeds(
+    remote: str, there: Path | str, here: Path | str
+) -> set[int]:
+    """Mirror a round's manifest and QC summary; return its whole batches.
+
+    Copies `there`/manifest.csv and qc/summary.txt on `remote` to
+    `here`. QC runs once the round is whole, so a round counts only once
+    its summary is there; until then it has no batches. A manifest that
+    cannot be copied (round not started, host unreachable) is said on
+    stderr and the mirror kept so far stays.
+    """
+    here = Path(here)
+    (here / "qc").mkdir(parents=True, exist_ok=True)
+    for name in ("manifest.csv", "qc/summary.txt"):
+        source = f"{there}/{name}"
+        got = subprocess.run(
+            ["rsync", "-a", _at(remote, source), str(here / name)],
+            capture_output=True,
+            text=True,
+        )
+        if got.returncode and name == "manifest.csv":
+            print(
+                f"could not copy {source}: {got.stderr.strip()[:200]}",
+                file=sys.stderr,
+            )
+    if not (here / "qc" / "summary.txt").exists():
+        return set()
+    return manifest.seeds(here / "manifest.csv")

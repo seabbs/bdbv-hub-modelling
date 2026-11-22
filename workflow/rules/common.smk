@@ -440,54 +440,24 @@ def listed_batches(run):
     """The batches that can be had now, listed once per Snakemake run.
 
     Listed when the run plans, not kept in a file, so a later run sees
-    rounds finished since. From the rounds host the manifests and QC
-    summaries of its rounds are mirrored in the run's `rounds/`, and a
-    round counts once its QC has run; else the `sims-r<N>` releases'
-    assets. Written to <run>/available-batches.txt for the record.
+    rounds finished since: the rounds host's whole rounds, mirrored in
+    the run's `rounds/` (flowlib.hosts.mirrored_seeds), else the
+    `sims-r<N>` releases' batches. Written to
+    <run>/available-batches.txt for the record.
     """
     this = RUNS[run]
-    rounds = sorted(
-        {this.ft["validation_round"], *(round_of(s) for s in training_seeds(run))}
-    )
+    rounds = {this.ft["validation_round"], *map(round_of, training_seeds(run))}
     seeds = set()
-    for r in rounds:
+    for r in sorted(rounds):
         if this.ft["sims_from"] == "remote":
-            # The manifest and QC summary of a round there so far.
-            here = Path(f"{this.mirror}/r{r}")
-            (here / "qc").mkdir(parents=True, exist_ok=True)
-            for name in ("manifest.csv", "qc/summary.txt"):
-                there = f"{REMOTE_ROUNDS}/r{r}/{name}"
-                got = subprocess.run(
-                    ["rsync", "-a", hosts._at(REMOTE, there), str(here / name)],
-                    capture_output=True,
-                    text=True,
-                )  # fmt: skip
-                # A round with no QC yet has no summary; a round not
-                # started has no manifest, and nor has an unreachable
-                # host, so that is said (the mirror kept so far stays).
-                if got.returncode and name == "manifest.csv":
-                    print(
-                        f"could not copy {there}: {got.stderr.strip()[:200]}",
-                        file=sys.stderr,
-                    )
-            # QC runs once the round is whole: only whole rounds are
-            # trained on.
-            if (here / "qc" / "summary.txt").exists():
-                seeds |= manifest.seeds(here / "manifest.csv")
-            continue
-        # A round not released yet has no release.
-        got = subprocess.run(
-            ["gh", "release", "view", f"sims-r{r}", "-R", SIM["repo"],
-             "--json", "assets"],
-            capture_output=True,
-            text=True,
-        )  # fmt: skip
-        if got.returncode == 0:
-            names = [a["name"] for a in json.loads(got.stdout)["assets"]]
-            seeds |= releases.released_seeds(names)
+            seeds |= hosts.mirrored_seeds(
+                REMOTE, f"{REMOTE_ROUNDS}/r{r}", f"{this.mirror}/r{r}"
+            )
+        else:
+            seeds |= releases.release_seeds(SIM["repo"], r)
     record = Path(f"{this.dir}/available-batches.txt")
     record.parent.mkdir(parents=True, exist_ok=True)
-    record.write_text("".join(f"{s}\n" for s in sorted(seeds)))
+    manifest.write_seeds(sorted(seeds), record)
     return seeds
 
 
