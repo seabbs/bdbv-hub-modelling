@@ -103,7 +103,12 @@ with gaps. Each block is a whole simulated system (`whole_system`), or
 its country alone.
 """
 
-GRID_FILE = Path(__file__).parents[1] / "config" / "finetune" / "grid.yaml"
+ROOT = Path(__file__).resolve().parents[5]
+"""The repository root, which the hashed paths are relative to: this
+module is `packages/nowcastfoundation/src/nowcastfoundation/finetune/`
+under it in the workspace's editable install."""
+
+GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
 """The grid file the simulations are drawn from (`use_grid`)."""
 
 SOURCE_SHARES = dict(BLOCK_DESIGN["source_shares"])
@@ -206,9 +211,6 @@ SIMULATOR_PY = (
 )
 """The simulator's Python: its entry point and draws, the latent step and
 the shared components it composes."""
-
-ROOT = Path(__file__).parents[1]
-"""The repository root, which the hashed paths are relative to."""
 
 
 def simulator_files(grid_file: str) -> tuple[str, ...]:

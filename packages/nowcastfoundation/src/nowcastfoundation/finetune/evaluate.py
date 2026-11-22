@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
-import sys
 import time
 from collections.abc import Sequence
 from pathlib import Path
@@ -24,12 +23,10 @@ from typing import Any
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent))
-import finetune_chronos as ft
-import finetune_stream as fs
-
 from nowcastfoundation import series_bias
 from nowcastfoundation.backends.chronos2 import torch_device
+from nowcastfoundation.finetune import chronos as ft
+from nowcastfoundation.finetune import stream as fs
 
 KINDS = ("start", "monitor", "by_source", "checkpoint")
 

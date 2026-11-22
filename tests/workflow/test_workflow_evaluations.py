@@ -101,15 +101,12 @@ def test_start_loss_falls_back_to_an_earlier_sidecar(tmp_path):
 
 
 def test_the_blocks_file_is_the_trainer_s():
-    import sys
-    from pathlib import Path
 
     pytest.importorskip("torch")
-    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
-    import finetune_stream as fs
     from flowlib import segments
 
     from nowcastfoundation import sidecar
+    from nowcastfoundation.finetune import stream as fs
 
     assert sidecar.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS
     assert segments.EVAL_MODES == fs.EVAL_MODES

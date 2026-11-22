@@ -37,7 +37,6 @@ import os
 import pickle
 import shutil
 import subprocess
-import sys
 import time
 import zlib
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
@@ -47,6 +46,8 @@ import numpy as np
 import pandas as pd
 
 from nowcastfoundation import series_bias
+from nowcastfoundation.finetune import chronos as ft
+from nowcastfoundation.finetune import verify
 from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
@@ -54,10 +55,6 @@ from nowcastfoundation.forecaster import (
     release_tag,
     torch_device,
 )
-
-sys.path.insert(0, str(Path(__file__).parent))
-import finetune_chronos as ft
-import finetune_verify
 
 CHUNK = 500
 """Outbreaks per chunk."""
@@ -2123,7 +2120,7 @@ def main() -> None:
             # A checkpoint whose hash does not recompute from its commit
             # is kept but not published. An offloaded run does not publish
             # (`--publish` is refused with it).
-            mismatch = finetune_verify.problems(where)
+            mismatch = verify.problems(where)
             if mismatch:
                 log(f"n{done} not published: {'; '.join(mismatch)}")
             elif args.publish:

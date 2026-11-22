@@ -1,11 +1,8 @@
 """Held-out loss of the fine-tune by source."""
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-import finetune_stream as fs
 import pytest
+
+from nowcastfoundation.finetune import stream as fs
 
 
 def test_held_out_loss_is_reported_by_source(monkeypatch):

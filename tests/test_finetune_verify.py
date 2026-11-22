@@ -3,16 +3,16 @@
 import inspect
 import json
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-
-from finetune_verify import function_source, problems, settings_problems
-
 from nowcastfoundation import forecaster as foundation
+from nowcastfoundation.finetune.verify import (
+    function_source,
+    problems,
+    settings_problems,
+)
 
 FOUNDATION = Path(foundation.__file__)
 
@@ -112,7 +112,7 @@ def test_released_checkpoints_give_their_hash(name):
 
 
 def test_the_code_names_are_the_files_paths():
-    import finetune_chronos as ft
+    from nowcastfoundation.finetune import chronos as ft
 
     assert set(ft.CODE) == {
         *ft.SIMULATOR,
@@ -130,7 +130,7 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
 ):
     import shutil
 
-    import finetune_chronos as ft
+    from nowcastfoundation.finetune import chronos as ft
 
     grid = "config/finetune/grid.yaml"
     assert ft.SIMULATOR[0] == ft.workflow_grid_file() == grid
@@ -153,7 +153,7 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
 
 def test_the_simulator_hashes_its_grid_and_python():
     """The globs give the simulator's files, each named by its path."""
-    import finetune_chronos as ft
+    from nowcastfoundation.finetune import chronos as ft
 
     python = {
         f"{folder}/{name}.py"
@@ -219,7 +219,7 @@ def test_the_simulator_hashes_its_grid_and_python():
 
 
 def test_code_files_hash_the_same_from_any_directory(tmp_path, monkeypatch):
-    import finetune_chronos as ft
+    from nowcastfoundation.finetune import chronos as ft
 
     name = next(iter(ft.CODE))
     here = ft.code_sha256(ft.CODE[name])
