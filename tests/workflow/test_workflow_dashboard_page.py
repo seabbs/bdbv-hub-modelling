@@ -488,3 +488,32 @@ def test_the_score_card_has_the_horizon_parts(tmp_path):
     data = _gdata(page.sections(_machine(tmp_path))["nowcasts"])
     assert [h[0] for h in data["horizon"]] == list(labels.HORIZON_PARTS)
     assert {h[0]: h[2] for h in data["horizon"]} == labels.HORIZON_FILLS
+
+
+OFFLOADED = (
+    "2026-11-16 16:{m:02d}:00 [train] step {s}: loss 0.5, held-out "
+    "(monitor, by_source) left to the evaluator, 10 s"
+)
+
+
+def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    # An offloaded run logs steps with no held-out loss.
+    (folder / "train.log").write_text(
+        "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
+    )
+    ctx.outbreaks = 1000
+    ctx.prefixes = (250, 500, 1000)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert st.rate == pytest.approx(1.0)
+    assert st.mean_rate == pytest.approx(1.0)
+    tiles, _ = page.status_tiles(st, ctx.runs[0])
+    speed = tiles.split("Steps / s")[1].split("Next checkpoint")[0]
+    assert "n/a" not in speed
+    assert "mean 1.000" in tiles
+    assert f"of {st.at(1000)} steps" in tiles
+    # Each segment still to come, with its ETA.
+    for n in (500, 1000):
+        assert f"n{n} {st.eta(n)}" in tiles
