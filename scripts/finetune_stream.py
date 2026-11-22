@@ -461,22 +461,6 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
     return True
 
 
-EXCLUDE_FILE: Path | None = None
-"""Simulations the sim QC excluded (`--exclude`), one a line or a CSV
-with a `simulation` column. It is read again before each new batch, as a
-continuous run's rounds bring their exclusions with them."""
-
-
-def excluded() -> set[str]:
-    """Return the simulations in `EXCLUDE_FILE`, if any."""
-    if EXCLUDE_FILE is None or not EXCLUDE_FILE.exists():
-        return set()
-    lines = [x.strip() for x in EXCLUDE_FILE.read_text().splitlines()]
-    if lines and lines[0].startswith("simulation"):
-        lines = [x.split(",")[0] for x in lines[1:]]
-    return {x for x in lines if x}
-
-
 def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
     """Return a finished batch's outbreaks in order, or None if not done.
 
@@ -486,8 +470,6 @@ def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
         if not seed_done(sim_dir, seed):
             return None
         ids = read_ids(sim_dir / f"settings-{seed}.csv")
-        skip = excluded()
-        ids = [i for i in ids if i not in skip]
         _READY[sim_dir, seed] = sorted(ids, key=ft._order)
     return _READY[sim_dir, seed]
 
@@ -1478,9 +1460,6 @@ def build_parser() -> argparse.ArgumentParser:
     # Cases a block needs reported in the 28 days up to its cut-off to be
     # trained on (or held out); none: every block.
     parser.add_argument("--quiet-min-cases", type=int)
-    # Real validation blocks (`load_blocks`), scored at each checkpoint;
-    # not trained on. The workflow passes none: BDBV is held out.
-    parser.add_argument("--real-validation", type=Path)
     # Series a training step packs blocks up to (`plan_batches`).
     parser.add_argument(
         "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
@@ -1496,8 +1475,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--grid-file", type=Path, default=ft.GRID_FILE)
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--blocks-per-simulation", type=int, default=12)
-    # Sim QC exclusions (scripts/sim_qc.py), read before each new batch.
-    parser.add_argument("--exclude", type=Path)
     parser.add_argument(
         "--prefixes", type=int, nargs="+", default=list(ft.PREFIXES)
     )
@@ -1598,8 +1575,7 @@ def main() -> None:
     ft.LOSS_HORIZON_DAYS = args.loss_horizon_days
     ft.QUIET_MIN_CASES = args.quiet_min_cases
     ft.BLOCK_LIMIT = args.block_limit
-    global EXCLUDE_FILE, DRAWS_PER_PASS, SUBSET_SEED
-    EXCLUDE_FILE = args.exclude
+    global DRAWS_PER_PASS, SUBSET_SEED
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
     # Read once at start: the worktree may move on while training.
@@ -1898,9 +1874,6 @@ def main() -> None:
     if args.real_training:
         real_training = load_blocks(args.real_training)
         log(f"{len(real_training)} real-data training blocks")
-    real_validation = (
-        load_blocks(args.real_validation) if args.real_validation else []
-    )
     t0 = time.perf_counter()
     # A segment stops at its prefix; one whose state is already there
     # only keeps it, and one past it fails (`until_start`).
@@ -2116,10 +2089,6 @@ def main() -> None:
             # hash, so a moved file keeps its checkpoints' hashes.
             settings["code_paths"] = code_paths(args.series_bias)
             settings["device"] = device
-            if args.real_validation:
-                settings["real_validation_sha256"] = ft._sha256(
-                    args.real_validation
-                )
             entry = {"step": step, "n_outbreaks": done}
             if offload:
                 # The evaluator scores the checkpoint's adapter.
@@ -2129,12 +2098,6 @@ def main() -> None:
                 parts = held_out_parts(model, val, args.batch_size)
                 settings["held_out_loss"] = parts["loss"]
                 settings |= loss_parts("held_out_loss", parts)
-                if args.real_validation:
-                    real_parts = held_out_parts(
-                        model, real_validation, args.batch_size
-                    )
-                    settings["real_validation_loss"] = real_parts["loss"]
-                    settings |= loss_parts("real_validation_loss", real_parts)
                 settings["held_out_loss_by_level"] = held_out_by_level(
                     model, val, LEVEL_BLOCKS
                 )

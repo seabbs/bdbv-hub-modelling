@@ -117,10 +117,6 @@ finetune:
   series_bias: true
   # Part of the settings hash: changing it changes every checkpoint's hash.
   note: 3,200 simulations
-  # Real validation blocks the trainer scores each checkpoint on, or null.
-  # Null: BDBV is held out for the paper, so no BDBV blocks are scored in
-  # development, and there is no other real-data set yet.
-  real_validation: null
   # The checkpoint checked against zero-shot on the held-out simulations.
   check_at: 800
 

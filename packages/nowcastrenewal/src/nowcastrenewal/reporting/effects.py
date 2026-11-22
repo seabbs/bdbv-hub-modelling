@@ -20,9 +20,9 @@ delays, $s_w \sum_{j \le d} z_{w,j}$ (epinowcast's `rw(delay)`), plus an
 iid effect by delay, plus, when there is no parametric part, an
 intercept, the covariates and the random effects (centred).
 
-The forms, and the simulator's values for each term, are the simulator R
-engine's (`report_outbreak`) at the epinowcast pin; two differences are
-listed in `ReferenceEffects`. PyRenew has no reporting-delay regression,
+The forms, and the simulator's values for each term, are epinowcast's at
+the pinned commit; two differences are listed in `ReferenceEffects`.
+PyRenew has no reporting-delay regression,
 so this is our own `RandomVariable`.
 """
 

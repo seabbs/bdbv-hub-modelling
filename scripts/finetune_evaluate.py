@@ -50,7 +50,6 @@ def evaluate(
     blocks: Sequence[dict],
     kinds: Sequence[str],
     batch_size: int,
-    real: Sequence[dict] = (),
 ) -> dict[str, Any]:
     """Return the losses `kinds` ask for of `base` with `adapter`.
 
@@ -86,10 +85,6 @@ def evaluate(
             model, val, batch_size, ft.EVAL_BLOCKS
         )
     if "checkpoint" in kinds:
-        if real:
-            parts = fs.held_out_parts(model, list(real), batch_size)
-            out["real_validation_loss"] = parts["loss"]
-            out |= fs.loss_parts("real_validation_loss", parts)
         out["held_out_loss_by_level"] = fs.held_out_by_level(
             model, val, fs.LEVEL_BLOCKS
         )
@@ -209,7 +204,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, required=True)
     # Checked against KINDS by `evaluate`.
     p.add_argument("--kinds", nargs="+")
-    p.add_argument("--real-validation", type=Path)
     p.add_argument(
         "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
     )
@@ -242,12 +236,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     blocks = load_blocks(
         args.train / fs.HELD_OUT_BLOCKS, request.get("n_validation")
     )
-    real = fs.load_blocks(args.real_validation) if args.real_validation else []
     device = torch_device(args.device)
     base = load_base(device)
     series_bias.attach_for(base, adapter)
     tick = time.perf_counter()
-    losses = evaluate(adapter, base, blocks, kinds, batch_size, real)
+    losses = evaluate(adapter, base, blocks, kinds, batch_size)
     result = {
         **{k: request[k] for k in ("step", "n_outbreaks") if k in request},
         **losses,

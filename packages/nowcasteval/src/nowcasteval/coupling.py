@@ -18,6 +18,13 @@ scores (`pit_scores`) of the model's forecasts at the origins of the
 not have known. `summary` gives each coupling's mean score as a ratio to
 `independent`, with a paired bootstrap interval over origins.
 
+The Schaake shuffle at an origin orders the draws as windows of the
+truth reported by then (`history_windows`): every stretch of the
+origin's end dates, of all places, whose truth had matured, newest
+first, up to one per draw. With none it is independence. The truth is
+the unit's own, so windows exist only from the truth's delay after the
+unit's first origin (40 days in Germany).
+
 Input rows are a German unit's cache (`nowcastfoundation.checkpoint`):
 `model`, `origin`, `location`, `target_end_date`, `horizon`, `quantile`,
 `value`, `truth` and `truth_vintage`.
@@ -34,9 +41,14 @@ import numpy as np
 import pandas as pd
 
 from nowcasteval.scoring import coverage_sample, crps_sample, energy_sample
-from nowcastutils.trajectories import couple, fit_coupling, pit_scores
+from nowcastutils.trajectories import (
+    couple,
+    fit_coupling,
+    history_windows,
+    pit_scores,
+)
 
-COUPLINGS: Final = ("independent", "comonotone", "gaussian")
+COUPLINGS: Final = ("independent", "comonotone", "gaussian", "schaake")
 """The couplings compared, `independent` first as the reference."""
 
 FIT_DAYS: Final = 56
@@ -122,6 +134,46 @@ def _fit(
     return fit_coupling(np.stack(scores), "gaussian")
 
 
+def _matured(
+    rows: pd.DataFrame, places: list[str], dates: list[str]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return each cell's truth and its report day `[places, dates]`."""
+    first = rows.drop_duplicates(CELL)
+    p = pd.Index(places).get_indexer(pd.Index(first["location"]))
+    d = pd.Index(dates).get_indexer(pd.Index(first["target_end_date"]))
+    truth = np.full((len(places), len(dates)), np.nan)
+    day = np.full_like(truth, np.inf)
+    truth[p, d] = first["truth"].to_numpy(dtype=float)
+    day[p, d] = pd.to_datetime(first["truth_vintage"]).map(_days)
+    return truth, day
+
+
+def _schaake(
+    q: np.ndarray,
+    ok: np.ndarray,
+    origin: int,
+    levels: np.ndarray,
+    history: tuple[np.ndarray, np.ndarray],
+    n_samples: int,
+    seed: int,
+) -> tuple[np.ndarray, int]:
+    """Return Schaake draws on the origin's end dates and the windows used.
+
+    The other end dates keep zero draws, as `_scores` reads only `ok`.
+    """
+    truth, day = history
+    cols = np.flatnonzero(ok.any(axis=0))
+    seen = np.where(day <= origin, truth, np.nan)
+    windows = history_windows(seen, len(cols), n_samples)
+    draws = np.zeros((n_samples, *ok.shape))
+    if len(windows):
+        fit, method = {"windows": windows}, "schaake"
+    else:
+        fit, method = {}, "independent"
+    draws[:, :, cols] = couple(q[:, cols], levels, method, fit, n_samples, seed)
+    return draws, len(windows)
+
+
 def _scores(draws: np.ndarray, a: dict[str, np.ndarray]) -> dict[str, float]:
     """Return the joint scores of one origin's trajectories."""
     truth, ok = a["truth"], _cells(a) & np.isfinite(a["truth"])
@@ -171,12 +223,14 @@ def coupling_scores(
     -------
     pandas.DataFrame
         One row per `model`, `origin` and `coupling`: `n_cells`, `energy`,
-        `log_energy`, `sum_crps`, `sum_cover90` and the fit's `rho` and
-        `s` (NaN for couplings without them).
+        `log_energy`, `sum_crps`, `sum_cover90`, the gaussian fit's `rho`
+        and `s`, and the Schaake windows used, `n_windows` (NaN for the
+        other couplings).
     """
     out = []
     for model, own in rows.groupby("model", sort=True):
         places, dates, levels = _grid(own)
+        history = _matured(own, places, dates)
         origins = [
             (
                 int(_days(pd.Timestamp(str(o)))),
@@ -189,9 +243,18 @@ def coupling_scores(
             ok = _cells(a)
             q = np.where(ok[..., None], a["quantiles"], 0.0)
             for method in couplings:
-                rng = np.random.default_rng([seed, day, 1])
-                fit = _fit(method, day, origins, levels, fit_days, rng)
-                draws = couple(q, levels, method, fit, n_samples, seed + day)
+                n_windows = np.nan
+                if method == "schaake":
+                    fit: dict[str, Any] = {}
+                    draws, n_windows = _schaake(
+                        q, ok, day, levels, history, n_samples, seed + day
+                    )
+                else:
+                    rng = np.random.default_rng([seed, day, 1])
+                    fit = _fit(method, day, origins, levels, fit_days, rng)
+                    draws = couple(
+                        q, levels, method, fit, n_samples, seed + day
+                    )
                 out.append(
                     {
                         "model": model,
@@ -200,6 +263,7 @@ def coupling_scores(
                         **_scores(draws, a),
                         "rho": fit.get("rho", np.nan),
                         "s": fit.get("s", np.nan),
+                        "n_windows": n_windows,
                     }
                 )
     return pd.DataFrame(out)

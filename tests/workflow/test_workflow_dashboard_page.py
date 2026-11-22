@@ -3,7 +3,9 @@
 import csv
 import gzip
 import json
+import os
 import re
+import time
 from datetime import datetime, timedelta
 
 import pytest
@@ -517,3 +519,35 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     # Each segment still to come, with its ETA.
     for n in (500, 1000):
         assert f"n{n} {st.eta(n)}" in tiles
+
+
+def test_a_stopped_run_names_the_batches_its_next_segment_waits_on(tmp_path):
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    (folder / "train.log").write_text(
+        "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
+    )
+    status = folder / "train" / "stream-status.json"
+    status.parent.mkdir(parents=True, exist_ok=True)
+    status.write_text(json.dumps({"stage": "stopped at n250"}))
+    old = time.time() - 3600
+    os.utime(status, (old, old))
+    (folder / "seeds.txt").write_text("".join(f"{s}\n" for s in range(50)))
+    (folder / "sims").mkdir(exist_ok=True)
+    for s in (0, 1, 2, 4, 5, 6, 7):
+        (folder / "sims" / f"settings-{s}.csv").write_text(
+            "outbreak\n" + "".join(f"{s}-{i}\n" for i in range(50))
+        )
+    ctx.outbreaks = 1000
+    ctx.prefixes = (250, 500, 1000)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    tiles, _ = page.status_tiles(st, ctx.runs[0])
+    trainer = tiles.split("Trainer")[1].split("Last log line")[0]
+    assert "waiting for batches 3, 8, 9, 10" in trainer
+
+
+def test_the_page_has_a_pipeline_section(tmp_path):
+    ctx = _machine(tmp_path)
+    assert "pipeline" in page.sections(ctx)
+    assert "Simulate rounds" in page.sections(ctx)["pipeline"]

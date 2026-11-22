@@ -35,11 +35,11 @@ def test_a_round_is_its_batches_seeds():
     assert seeds == list(range(30400, 30440))
 
 
-def test_seeds_for_counts_kept_outbreaks_in_list_order():
+def test_seeds_for_counts_outbreaks_in_list_order():
     kept = {30101: 25, 30100: 20, 30103: 25, 30102: 25}
     order = [30101, 30100, 30103, 30102]
     assert segments.seeds_for(45, order, kept.__getitem__) == [30101, 30100]
-    # An exclusion pushes the prefix into the next batch.
+    # A short batch pushes the prefix into the next batch.
     assert segments.seeds_for(46, order, kept.__getitem__) == [
         30101,
         30100,
@@ -63,23 +63,12 @@ def test_seeds_for_fails_when_the_list_is_too_short():
         segments.seeds_for(60, [1, 2], lambda _s: 25)
 
 
-def test_kept_outbreaks_leave_out_exclusions(tmp_path):
+def test_batch_outbreaks_counts_the_settings_rows(tmp_path):
     settings = tmp_path / "settings-30101.csv"
     settings.write_text(
         "outbreak,r0\n30101-0001,1\n30101-0002,1\n30101-0003,1\n"
     )
-    assert segments.kept_outbreaks(settings, {"30101-0002"}) == 2
-    assert segments.kept_outbreaks(settings, set()) == 3
-
-
-def test_excluded_reads_a_list_or_a_csv(tmp_path):
-    plain = tmp_path / "plain.txt"
-    plain.write_text("30101-0002\n\n30101-0003\n")
-    table = tmp_path / "table.csv"
-    table.write_text("simulation,reason\n30101-0004,flat\n")
-    assert segments.excluded(plain) == {"30101-0002", "30101-0003"}
-    assert segments.excluded(table) == {"30101-0004"}
-    assert segments.excluded(tmp_path / "none.txt") == set()
+    assert segments.batch_outbreaks(settings) == 3
 
 
 def _state(path, done):
@@ -135,16 +124,6 @@ def test_the_first_segment_starts_from_base(tmp_path):
 def test_reachable_prefixes_fit_the_seed_list():
     assert segments.reachable(500, [1] * 21, lambda _s: 25)
     assert not segments.reachable(2000, [1] * 21, lambda _s: 25)
-
-
-def test_exclusions_are_gathered_into_one_file(tmp_path):
-    a = tmp_path / "a.csv"
-    a.write_text("simulation,reason,evidence\n30101-0002,flat,x\n")
-    b = tmp_path / "b.csv"
-    b.write_text("simulation,reason,evidence\n")
-    out = tmp_path / "excluded.csv"
-    segments.gather_exclusions([a, b, tmp_path / "none.csv"], out)
-    assert segments.excluded(out) == {"30101-0002"}
 
 
 def test_batches_run_in_seed_order():

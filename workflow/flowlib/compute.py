@@ -54,7 +54,6 @@ GROUPS = ("simulate", "train", "evaluate", "publish", "score", "any")
 
 RULE_GROUPS = {
     "simulate_batch": "simulate",
-    "epinowcast_lib": "simulate",
     "train_segment": "train",
     "evaluate_steps": "evaluate",
     "evaluate_checkpoint": "evaluate",
@@ -89,6 +88,7 @@ MACHINE_KEYS = frozenset(
         "CORES",
         "MEM_MB",
         "SIM_SLOTS",
+        "WORKFLOW_DIR",
         "DEVICE",
         "CHECKPOINT_ABOVE",
         "TARGETS",

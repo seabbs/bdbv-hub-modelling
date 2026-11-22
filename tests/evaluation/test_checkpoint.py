@@ -143,29 +143,20 @@ def test_merge_keeps_other_checkpoints_rule_rows():
     assert sorted(got["checkpoint"]) == ["abc", "old"]
 
 
-def test_merge_keeps_other_rules_rows_and_replaces_the_rules():
+def test_merge_keeps_only_the_rules_rows():
     old = pd.DataFrame(
         [
-            {
-                "study": "ebola",
-                "rule": ck.RULE,
-                "checkpoint": "abc",
-                "level": "x",
-            },
-            {
-                "study": "ebola",
-                "rule": "other",
-                "checkpoint": "abc",
-                "level": "x",
-            },
+            {"study": "ebola", "rule": ck.RULE, "checkpoint": "abc"},
+            {"study": "ebola", "rule": "other", "checkpoint": "old"},
+            {"study": "ebola", "rule": None, "checkpoint": "old"},
         ]
-    )
+    ).assign(level="x")
     new = pd.DataFrame(
         [{"study": "ebola", "rule": ck.RULE, "checkpoint": "abc", "level": "y"}]
     )
     got = ck.merge_evidence(old, new)
-    assert sorted(got["level"]) == ["x", "y"]
-    assert set(got.loc[got["rule"] == ck.RULE, "level"]) == {"y"}
+    assert got["level"].tolist() == ["y"]
+    assert set(got["rule"]) == {ck.RULE}
 
 
 def test_held_out_rows_from_settings():

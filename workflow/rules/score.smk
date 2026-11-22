@@ -52,8 +52,65 @@ rule score_germany:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
         copy_back=unit_rows(GERMANY_UNIT),
+        cache=lambda wc, output: Path(output[0]).parents[1],
+        label=lambda wc: wc.label,
     shell:
         unit_shell("germany")
+
+
+rule score_run_germany:
+    # A run's own checkpoint n<N>, loaded from its segment folder with no
+    # release, cached in the run's folder.
+    input:
+        settings=f"{TRAIN}/n{{n}}/settings.json",
+        adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+    output:
+        f"{RUN}/scores/{GERMANY_UNIT}/n{{n}}.done",
+    log:
+        f"{RUN}/scores/log/{GERMANY_UNIT}-n{{n}}.log",
+    priority: 5
+    conda:
+        TOOLS_ENV
+    threads: UNIT_THREADS
+    resources:
+        mem_mb=SC["mem_mb"],
+        gpu=1,
+    params:
+        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        env=unit_env,
+        copy_back=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}/n{wc.n}/",
+        cache=lambda wc, output: Path(output[0]).parents[1],
+        label=lambda wc: f"n{wc.n}",
+        segment=lambda wc, input: Path(input.settings).parent,
+    shell:
+        unit_shell("germany", "{params.segment} ")
+
+
+rule german_report:
+    # The run's checkpoints on the German development half against
+    # zero-shot and randomwalknowcast (workflow/scripts/german_report.py).
+    input:
+        references(),
+        lambda wc: run_units(wc.run),
+    output:
+        f"{RUN}/reports/german/index.html",
+    log:
+        f"{RUN}/logs/german-report.log",
+    conda:
+        TOOLS_ENV
+    params:
+        units=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}",
+        out=lambda wc, output: Path(output[0]).parent,
+        names=report_names,
+    shell:
+        "uv run python workflow/scripts/german_report.py {params.units} "
+        "{params.out} {params.names} > {log} 2>&1"
+
+
+rule run_scores:
+    # Each trained run's saved checkpoints, scored and reported.
+    input:
+        run_scores,
 
 
 rule coupling_germany:
@@ -143,4 +200,5 @@ rule score:
         # built would be "missing, no update" and never scored.
         unit_stamps,
         rules.score_table.output,
+        run_scores,
         lambda wc: followups(wc),

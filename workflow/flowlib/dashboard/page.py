@@ -32,6 +32,7 @@ from . import (
     logs,
     nowcasts,
     paperstyle,
+    pipeline,
     scores,
     svg,
     training,
@@ -82,6 +83,7 @@ class Context:
     mirror_status: str = ""
     delays: dict[str, int | None] = field(default_factory=dict)
     summarised: dict[str, tuple] = field(default_factory=dict)
+    where: pipeline.Where = field(default_factory=pipeline.Where)
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -374,6 +376,14 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     folder = live.folder
     trained = st.trained
     trainer, alive = logs.trainer_state(folder) if folder else ("n/a", None)
+    # A stopped run's next segment may wait on batches it lacks (failed or
+    # still being simulated): name them.
+    if folder and not alive and st.nxt and not st.pending:
+        missing = [str(s) for s in logs.waiting_batches(folder, st.nxt)]
+        if missing:
+            what = "batches" if len(missing) > 1 else "batch"
+            trainer = f"{trainer}; waiting for {what} {', '.join(missing)}"
+            alive = False
     # The running segment's last line of any kind, not only a step.
     last = logs.RunLog(folder).last_line() if folder else None
     last_t, last_text = last or (st.last_t, "")
@@ -999,6 +1009,20 @@ def selector_data(ctx: Context, builts: Mapping[str, Any]) -> str:
     )
 
 
+def pipeline_section(ctx: Context, live: Run, st: Status) -> str:
+    """Return the live run's pipeline: its stages and what it waits on."""
+    alive = logs.trainer_state(live.folder)[1] if live.folder else None
+    train = {
+        "step": st.step,
+        "nxt": st.nxt,
+        "next_step": st.at(st.nxt) if st.nxt else None,
+        "trained": st.trained,
+    }
+    return pipeline.section(
+        pipeline.build(ctx.where, live.folder, train, alive)
+    )
+
+
 def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     """Return the live run, top bar status, selector data and sections.
 
@@ -1067,6 +1091,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
             f"<div class=mut>{live_note}{mirror}{sub}</div>",
             True,
         ),
+        ("pipeline", "Pipeline", pipeline_section(ctx, live, st), True),
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (

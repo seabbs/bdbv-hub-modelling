@@ -4,6 +4,7 @@
 
 import functools
 import json
+import shlex
 import tomllib
 
 from flowlib import (
@@ -69,24 +70,8 @@ def here(seed):
     return hosts.simulates(int(seed), MINE)
 
 
-# The grid the simulator runs (its factors and sampling distributions),
-# and the epinowcast it is pinned to, installed once a machine under ROOT.
+# The grid the simulator runs (its factors and sampling distributions).
 GRID_FILE = SIM["grid_file"]
-ENW_SHA = simulator.epinowcast_sha(GRID_FILE)
-ENW_LIB = f"{LOCAL['ROOT']}/rlib/epinowcast-{ENW_SHA}"
-
-
-def batch_lib(wc):
-    """Already simulated batches take no library input.
-
-    So installing it never reruns them.
-    """
-    sims = Path(f"{ROUNDS_DIR}/r{wc.round}/sims")
-    done = all(
-        (sims / f"{kind}-{wc.seed}.{ext}").exists()
-        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
-    )
-    return [] if done else ancient(f"{ENW_LIB}/.installed")
 
 
 def batch_priority(wc):
@@ -149,12 +134,6 @@ EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded
 EVALUATE_PRIORITY = 15
 
 
-def evaluate_real(wc):
-    """The trainer's real validation blocks, if the run has them."""
-    real = run_of(wc).ft["real_validation"]
-    return f"--real-validation {real}" if real else ""
-
-
 def evaluate_prev(wc):
     """The settings of the checkpoint before segment n, if any."""
     prev = run_of(wc).prev[int(wc.n)]
@@ -169,7 +148,6 @@ def evaluate_inputs_from(wc):
         f"{train}/{HELD_OUT_BLOCKS}",
         f"{train}/evals/step-0000000.json",
         *(f"{train}/n{p}/{SIDECAR}" for p in r.ft["prefixes"] if p < n),
-        *([r.ft["real_validation"]] if r.ft["real_validation"] else []),
     ]
 
 
@@ -190,12 +168,6 @@ def training_seeds(run):
     if f["seed_file"]:
         return [int(s) for s in Path(f["seed_file"]).read_text().split()]
     return [s for r in f["rounds"] for s in seeds_of(r)]
-
-
-def release_rounds(run, n):
-    """The rounds segment n trains on, space separated."""
-    rounds = sorted({round_of(s) for s in segment_seeds(run, n)})
-    return " ".join(str(r) for r in rounds)
 
 
 def held_seeds(run):
@@ -227,37 +199,21 @@ def available_seeds(run):
     return order
 
 
-def exclusion_files(run):
-    """The sim-QC exclusion lists here now."""
-    there = RUNS[run]
-    paths = [Path(f"{there.dir}/excluded.csv")]
-    paths += Path(ROUNDS_DIR).glob("r*/qc/excluded.csv")
-    paths += Path(there.mirror).glob("r*/qc/excluded.csv")
-    paths += Path(f"{there.dir}/excluded-releases").glob("*.csv")
-    return sorted(str(p) for p in paths if p.is_file())
-
-
-def known_exclusions(run):
-    """The sim-QC exclusions known now."""
-    return set().union(*(segments.excluded(p) for p in exclusion_files(run)))
-
-
-def kept_or_full(run, seed, skip):
-    """A batch's kept outbreaks if simulated, else a full batch."""
+def outbreaks_or_full(run, seed):
+    """A batch's outbreaks if simulated, else a full batch."""
     for settings in (
         Path(f"{RUNS[run].dir}/sims/settings-{seed}.csv"),
         Path(f"{ROUNDS_DIR}/r{round_of(seed)}/sims/settings-{seed}.csv"),
     ):
         if settings.exists():
-            return segments.kept_outbreaks(settings, skip)
+            return segments.batch_outbreaks(settings)
     return SIM["batch"]
 
 
 def segment_seeds(run, n):
     """The seeds segment n needs: n outbreaks, one spare, the held-out."""
-    skip = known_exclusions(run)
     order = available_seeds(run)
-    need = segments.seeds_for(n, order, lambda s: kept_or_full(run, s, skip))
+    need = segments.seeds_for(n, order, lambda s: outbreaks_or_full(run, s))
     spare = order[len(need) : len(need) + 1]
     return need + spare + held_seeds(run)
 
@@ -274,14 +230,9 @@ def segment_inputs(wc):
             f"{there.dir}/sims/settings-{{seed}}.csv", seed=segment_seeds(run, n)
         ),
         "seeds": f"{there.dir}/seeds.txt",
-        # Read for the seeds above and by the trainer: inputs, so a
-        # worker elsewhere has them (flowlib.compute).
-        "qc": exclusion_files(run),
     }
     if there.prev[n] is not None:
         out["prev"] = f"{train}/n{there.prev[n]}/settings.json"
-    if there.ft["real_validation"]:
-        out["real"] = there.ft["real_validation"]
     return out
 
 
@@ -303,7 +254,6 @@ def saved(run, n):
 def trainable(run):
     """The prefixes done or within reach of the seed list."""
     f = RUNS[run].ft
-    skip = known_exclusions(run)
     order = available_seeds(run)
     # A spare batch past each prefix but the run's last, which takes
     # every training simulation.
@@ -314,7 +264,7 @@ def trainable(run):
         or segments.reachable(
             n + SIM["batch"] * (n < f["outbreaks"]),
             order,
-            lambda s: kept_or_full(run, s, skip),
+            lambda s: outbreaks_or_full(run, s),
         )
     ]
 
@@ -393,9 +343,14 @@ def unit_priority(base):
     return lambda wc: releases.priority(score_order(), wc.label, base)
 
 
+SCORE_DEVICE = LOCAL.get("SCORE_DEVICE") or None
+"""The device scoring units run torch on (SCORE_DEVICE in local.env), by
+default the machine's: `cpu` keeps them off a GPU a trainer is using."""
+
+
 def unit_env(wc, threads):
     """The unit's torch device, threads and Chronos-2 batch."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads))
+    return machine.shell_env(machine.torch_env(LOCAL, threads, SCORE_DEVICE))
 
 
 GERMANY_UNIT = "germany-days"
@@ -409,12 +364,53 @@ def unit_rows(study):
     return lambda wc: f"{CACHE}/{study}/{wc.label}/"
 
 
-def unit_shell(study):
+def unit_shell(study, segment=""):
+    """A unit of `study` caching under {params.cache} as {params.label};
+    `segment`, if given, is the run's own checkpoint folder it loads."""
     return (
         f"mkdir -p {{params.copy_back}} && {ROOM}{{params.prefix}} nice -n 19 "
-        f"env {{params.env}} {EVALUATE} {study} {CACHE} {{wildcards.label}} "
-        "> {log} 2>&1 && touch {output}"
+        f"env {{params.env}} {EVALUATE} {study} {{params.cache}} "
+        f"{{params.label}} {segment}> {{log}} 2>&1 && touch {{output}}"
     )
+
+
+def run_scores_dir(run):
+    """The run's score cache: its own checkpoints' units."""
+    return f"{RUNS_DIR}/{run}/scores"
+
+
+def run_units(run):
+    """The German units of the run's saved checkpoints."""
+    return [
+        f"{run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done"
+        for n in RUNS[run].ft["prefixes"]
+        if saved(run, n)
+    ]
+
+
+def references():
+    """The reference labels' German units, shared by every run."""
+    return expand(f"{CACHE}/{GERMANY_UNIT}/{{label}}.done", label=SC["reference"])
+
+
+def report_names(wc):
+    """The German report's LABEL=NAME arguments and reference folders."""
+    names = {"reference": "Zero-shot", "randomwalknowcast": "Random walk nowcast"}
+    names |= {
+        f"n{n}": f"{wc.run} n{n}"
+        for n in RUNS[wc.run].ft["prefixes"]
+        if saved(wc.run, n)
+    }
+    args = [shlex.quote(f"{k}={v}") for k, v in names.items()]
+    args += [
+        f"--from {label}={CACHE}/{GERMANY_UNIT}/{label}" for label in SC["reference"]
+    ]
+    return " ".join(args)
+
+
+def run_scores(wc=None):
+    """Each trained run's German report, over its saved checkpoints."""
+    return [f"{RUNS_DIR}/{run}/reports/german/index.html" for run in trained_runs()]
 
 
 def table_inputs(wc):
@@ -455,7 +451,7 @@ def main_scores(wc):
 
 def src_tree():
     return subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD:src"],
+        ["git", "rev-parse", "--short", "HEAD:packages"],
         capture_output=True,
         text=True,
         check=True,
@@ -542,7 +538,7 @@ def listed_batches(run):
 
     Listed when the run plans, not kept in a file, so a later run sees
     rounds finished since. From the rounds host the manifests and QC
-    exclusions of its rounds are mirrored in the run's `rounds/`, and a
+    summaries of its rounds are mirrored in the run's `rounds/`, and a
     round counts once its QC has run; else the `sims-r<N>` releases'
     assets. Written to <run>/available-batches.txt for the record.
     """
@@ -553,17 +549,17 @@ def listed_batches(run):
     seeds = set()
     for r in rounds:
         if this.ft["sims_from"] == "remote":
-            # The manifest and QC exclusions of a round there so far.
+            # The manifest and QC summary of a round there so far.
             here = Path(f"{this.mirror}/r{r}")
             (here / "qc").mkdir(parents=True, exist_ok=True)
-            for name in ("manifest.csv", "qc/excluded.csv"):
+            for name in ("manifest.csv", "qc/summary.txt"):
                 there = f"{REMOTE_ROUNDS}/r{r}/{name}"
                 got = subprocess.run(
                     ["rsync", "-a", hosts._at(REMOTE, there), str(here / name)],
                     capture_output=True,
                     text=True,
                 )  # fmt: skip
-                # A round with no QC yet has no exclusions; a round not
+                # A round with no QC yet has no summary; a round not
                 # started has no manifest, and nor has an unreachable
                 # host, so that is said (the mirror kept so far stays).
                 if got.returncode and name == "manifest.csv":
@@ -571,9 +567,9 @@ def listed_batches(run):
                         f"could not copy {there}: {got.stderr.strip()[:200]}",
                         file=sys.stderr,
                     )
-            # QC runs once the round is whole: no batch it later excludes
-            # is trained on.
-            if (here / "qc" / "excluded.csv").exists():
+            # QC runs once the round is whole: only whole rounds are
+            # trained on.
+            if (here / "qc" / "summary.txt").exists():
                 seeds |= manifest.seeds(here / "manifest.csv")
             continue
         # A round not released yet has no release.

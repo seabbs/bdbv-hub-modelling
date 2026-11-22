@@ -3,9 +3,8 @@
 
     python -m nowcastfoundation.simulator GRID N SEED OUT
 
-ENW_LIB (the pinned epinowcast's library), ENW_DRAWS (observation draws
-per simulation), ENW_WEEKS (a pilot's fixed length) and RSCRIPT as the
-simulate rule sets them.
+ENW_DRAWS (observation draws per simulation) and ENW_WEEKS (a pilot's
+fixed length) as the simulate rule sets them.
 """
 
 from __future__ import annotations
@@ -33,8 +32,6 @@ def main(argv: list[str] | None = None) -> None:
         args.n,
         args.out,
         draws=int(os.environ.get("ENW_DRAWS", "1")),
-        rscript=os.environ.get("RSCRIPT", "Rscript"),
-        enw_lib=os.environ.get("ENW_LIB"),
         weeks=int(weeks) if weeks else None,
     )
 

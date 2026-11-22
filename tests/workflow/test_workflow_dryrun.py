@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from flowlib import simulator
 
 pytest.importorskip("snakemake")
 
@@ -102,7 +101,7 @@ def test_batches_run_by_count_under_the_shared_prefix_not_a_cap(tmp_path):
     assert len(claims) == 40
     assert all("sim_slots=1" in c for c in claims)
     assert not any(re.search(r"mem_mb=[1-9]", c) for c in claims)
-    shared = re.compile(r':\$PATH"\s+inslice\s+workflow/scripts/timed\.sh')
+    shared = re.compile(r"eigen=false\s+inslice\s+workflow/scripts/timed\.sh")
     assert all(shared.search(x) for x in lines)
     assert not any("percap" in x for x in lines)
 
@@ -112,7 +111,7 @@ def test_with_no_sim_prefix_a_batch_runs_bare(tmp_path):
     assert out.returncode == 0, out.stderr + out.stdout
     lines = _sim_commands(out)
     assert lines
-    bare = re.compile(r':\$PATH"\s+workflow/scripts/timed\.sh')
+    bare = re.compile(r"eigen=false\s+workflow/scripts/timed\.sh")
     assert all(bare.search(x) for x in lines)
 
 
@@ -135,27 +134,6 @@ def test_batches_already_simulated_are_kept(tmp_path):
         (sims / f"settings-{seed}.csv").write_text("outbreak\n")
     jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
     assert jobs["simulate_batch"] == 38
-
-
-def _enw_lib(tmp_path):
-    """The pinned epinowcast's library under the machine's ROOT."""
-    grid = "config/finetune/grid.yaml"
-    return tmp_path / "rlib" / f"epinowcast-{simulator.epinowcast_sha(grid)}"
-
-
-def test_simulate_installs_the_pinned_epinowcast_first(tmp_path):
-    # Without it the simulator would load whatever epinowcast R finds.
-    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
-    assert jobs["epinowcast_lib"] == 1
-
-
-def test_the_pinned_epinowcast_is_installed_once_a_machine(tmp_path):
-    lib = _enw_lib(tmp_path)
-    lib.mkdir(parents=True)
-    (lib / ".installed").write_text("")
-    jobs = dry(tmp_path, "simulate", config={"rounds": [4]})
-    assert "epinowcast_lib" not in jobs
-    assert jobs["simulate_batch"] == 40
 
 
 SPLIT = {"rounds": [10]}
@@ -207,7 +185,6 @@ FT = {
         "rounds": [2],
         "validation_round": 1,
         "sims_from": "local",
-        "real_validation": None,
     },
 }
 
@@ -378,7 +355,7 @@ def test_from_the_rounds_host_a_round_is_listed_once_its_qc_ran(tmp_path):
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert "train_segment" not in jobs
     (r2 / "qc").mkdir()
-    (r2 / "qc" / "excluded.csv").write_text("simulation,reason,evidence\n")
+    (r2 / "qc" / "summary.txt").write_text("sim QC summarised\n")
     jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert jobs["train_segment"] == 1
     assert jobs["fetch_batch"] == 13 + 1 + 40
@@ -779,11 +756,6 @@ def test_where_batches_come_from_is_the_machine_s(tmp_path):
     assert "simulate_batch" not in jobs
 
 
-def test_release_carries_each_round_s_exclusions(tmp_path):
-    jobs = dry(tmp_path, "release", config={"rounds": [4]})
-    assert jobs["release_qc"] == 1
-
-
 def test_at_most_two_simulations_run_at_once(tmp_path):
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\n")
@@ -902,19 +874,15 @@ def test_land_runs_only_when_the_tables_changed(tmp_path):
     assert jobs["land"] == 1
 
 
-def test_the_rounds_host_s_manifests_and_exclusions_are_mirrored(tmp_path):
+def test_the_rounds_host_s_manifests_and_qc_are_mirrored(tmp_path):
     # The rounds host is this machine here (REMOTE empty), its rounds in
     # REMOTE_ROOT: round 1 whole, round 2 so far one batch.
     _rounds_host(tmp_path, {1: range(30100, 30140), 2: [30200]})
-    host = tmp_path / "host"
-    (host / "rounds" / "r1" / "qc" / "excluded.csv").write_text(
-        "simulation\n30101-3\n"
-    )
     dry(tmp_path, "finetune", config=REMOTE)
     run = tmp_path / "runs" / "runa"
     listed = (run / "available-batches.txt").read_text().split()
     assert listed == [str(s) for s in [*range(30100, 30140), 30200]]
-    assert (run / "rounds" / "r1" / "qc" / "excluded.csv").exists()
+    assert (run / "rounds" / "r1" / "qc" / "summary.txt").exists()
     assert (run / "rounds" / "r2" / "manifest.csv").exists()
 
 
@@ -974,9 +942,7 @@ def _rounds_host(tmp_path, rounds):
             f"{r},{s},block,r7,c,1,20,a,b,,1,2.0,h,t\n" for s in seeds
         )
         (where / "manifest.csv").write_text("header\n" + rows)
-        (where / "qc" / "excluded.csv").write_text(
-            "simulation,reason,evidence\n"
-        )
+        (where / "qc" / "summary.txt").write_text("sim QC summarised\n")
     local = tmp_path / "local.env"
     local.write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\nREMOTE_ROOT={host}\n"
@@ -1128,14 +1094,12 @@ def _done_round(root, r, batches=40):
             for s in range(first, first + batches)
         ],
         [d / "manifest.csv"],
-        [d / "qc" / "excluded.csv", d / "qc" / "summary.txt"],
+        [d / "qc" / "summary.txt"],
         [d / "seeds.txt", d / "READY"],
     ]
     for k, files in enumerate(stages):
         for f in files:
-            if f.name == "excluded.csv":
-                f.write_text("simulation,reason,evidence\n")
-            elif f.name.startswith("settings-"):
+            if f.name.startswith("settings-"):
                 f.write_text("outbreak\n")
             else:
                 f.write_text("x\n")

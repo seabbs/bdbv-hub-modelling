@@ -1,6 +1,6 @@
-"""Revisions of reported counts, against the simulator engine's, live.
+"""Revisions of reported counts, against the former R engine's, live.
 
-`tests/model/r/revision_cases.R` revises counts with a copy of the R
+`tests/model/r/revision_cases.R` revises counts with a copy of the former R
 engine's `revise_counts` and returns its draws; the port
 (`reporting.revisions.Revisions`) takes the same draws and must give the
 same revised counts.

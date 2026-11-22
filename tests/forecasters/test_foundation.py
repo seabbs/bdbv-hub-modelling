@@ -1138,6 +1138,8 @@ def test_the_realdata_models_wait_for_their_pin() -> None:
 def test_native_quantiles_pass_chronos_only_its_keys(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # The sampler converts its quantiles with torch.
+    pytest.importorskip("torch")
     # A block carries `target_places` for the series bias; Chronos-2's
     # predict_quantiles rejects any key but target and the covariates.
     allowed = {"target", "past_covariates", "future_covariates"}

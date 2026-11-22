@@ -1,18 +1,17 @@
 """The simulator's entry point (`nowcastfoundation.simulator.simulate_batch`).
 
-The batch logic runs with a Python stand-in for the reporting step (each
-stratum's expected onsets reported on their reference day), so it needs
-neither R nor epinowcast; one test runs the whole simulator with the R
-engine's epinowcast step where the pinned epinowcast is installed.
+The batch logic runs with a stand-in for the joint model (each stratum
+reporting a few cases on the day); two tests run the whole simulator, the
+joint PyRenew model, end to end.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -20,62 +19,87 @@ import pytest
 
 from nowcastfoundation.simulator import batch as sb
 from nowcastfoundation.simulator import draws, simulate_batch
-from nowcastfoundation.simulator.reporting import COUNT_COLUMNS, ReportResult
+from nowcastrenewal.reporting.simulate import COUNT_COLUMNS
+from nowcastrenewal.simulation import outbreak as joint
 
 ROOT = Path(__file__).parents[2]
 GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
 
 
 class OnTheDay:
-    """Report each stratum's rounded expected onsets on their own day."""
+    """A stand-in for the joint model (`simulate_outbreak`).
 
-    def __init__(self, fail: set[str] | None = None, scale: float = 1.0):
-        self.fail = fail or set()
-        self.scale = scale
-        self.calls: list[list[str]] = []
+    Each stratum reports one case on each of its first `cases` days, on
+    the day; the first `fail` calls raise and the next `empty` report
+    nothing. Records each call's design.
+    """
 
-    def report(self, jobs, _grid_file, _n_draws):
-        self.calls.append([j.id for j in jobs])
-        out = []
-        for j in jobs:
-            assert len(j.places) == len(j.ages) == np.shape(j.onsets)[1]
-            outbreak = j.id.split("/")[0]
-            if j.id in self.fail or outbreak in self.fail:
-                out.append(
-                    ReportResult(j.id, pd.DataFrame(), error="stand-in error")
-                )
-                continue
-            on = np.rint(np.asarray(j.onsets) * self.scale).astype(int)
-            days, strata = np.nonzero(on)
-            dates = pd.Timestamp("2026-01-03") + pd.to_timedelta(days, "D")
-            rows = pd.DataFrame(
-                {
-                    "draw": 1,
-                    "location": [f"S{s + 1}" for s in strata],
-                    "reference_date": dates.strftime("%Y-%m-%d"),
-                    "report_date": dates.strftime("%Y-%m-%d"),
-                    "count": on[days, strata],
-                }
-            )
-            out.append(
-                ReportResult(
-                    j.id,
-                    rows[list(COUNT_COLUMNS)],
-                    vals={**j.vals, "reported": True},
-                )
-            )
-        return out
+    def __init__(self, fail: int = 0, empty: int = 0, cases: int = 3):
+        self.fail, self.empty, self.cases = fail, empty, cases
+        self.calls: list[dict] = []
 
-    def software(self):
-        return {"reporting": "on-the-day"}
+    def __call__(self, _key, n_days, strata, design, values, draws=1, **_kw):
+        self.calls.append(design)
+        if self.fail:
+            self.fail -= 1
+            raise ValueError("stand-in error")
+        k = len(strata)
+        days = np.arange(n_days)
+        path = pd.DataFrame(
+            {
+                "day": days,
+                "infections": 1.0,
+                "onsets": 1.0,
+                "r": 1.0,
+                "reff": 1.0,
+            }
+        )
+        latent = SimpleNamespace(
+            path=path, stratum_population=np.full(k, 100.0), attack=0.1
+        )
+        dates = pd.Timestamp("2026-01-03") + pd.to_timedelta(
+            int(values["offset"]) + days[: self.cases], "D"
+        )
+        rows = [
+            {
+                "draw": d,
+                "location": f"S{s + 1}",
+                "reference_date": t.strftime("%Y-%m-%d"),
+                "report_date": t.strftime("%Y-%m-%d"),
+                "count": 1,
+            }
+            for d in range(1, draws + 1)
+            for s in range(k)
+            for t in dates
+        ]
+        counts = pd.DataFrame(rows, columns=list(COUNT_COLUMNS))
+        if self.empty:
+            self.empty -= 1
+            counts = counts.iloc[:0]
+        added = {"stratum_location": [f"S{s + 1}" for s in range(k)]}
+        return latent, counts, {**added, "reported": True}
+
+
+@pytest.fixture
+def stand_in(monkeypatch):
+    """Put a stand-in in place of the joint model."""
+
+    def use(**kw):
+        model = OnTheDay(**kw)
+        monkeypatch.setattr(joint, "simulate_outbreak", model)
+        return model
+
+    return use
 
 
 @pytest.fixture(scope="module")
 def run(tmp_path_factory):
     out = tmp_path_factory.mktemp("batch")
-    step = OnTheDay()
-    files = simulate_batch(GRID_FILE, 4242, 4, out, reporting=step, weeks=8)
-    return files, step
+    model = OnTheDay()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(joint, "simulate_outbreak", model)
+        files = simulate_batch(GRID_FILE, 4242, 4, out, weeks=8)
+    return files, model
 
 
 def test_a_batch_writes_its_four_files(run):
@@ -89,7 +113,13 @@ def test_a_batch_writes_its_four_files(run):
     assert list(settings["outbreak"]) == [f"4242-{i:04d}" for i in range(1, 5)]
     assert set(counts["outbreak"]) == {f"{o}-1" for o in settings["outbreak"]}
     assert settings.columns.is_unique
-    for column in ("tries", "designs", "cases", "seconds", "reporting"):
+    for column in (
+        "tries",
+        "designs",
+        "cases",
+        "seconds",
+        "nowcastrenewal_version",
+    ):
         assert column in settings
     assert (settings["weeks"] == 8).all()
     assert settings["reported"].all()
@@ -112,42 +142,18 @@ def test_the_latent_file_is_dated_from_the_offset(run):
         )
 
 
-def test_simulations_advance_together_in_passes(run):
-    _, step = run
-    assert len(step.calls[0]) == 4
-    assert all(len(set(c)) == len(c) for c in step.calls)
-
-
-def test_a_batch_repeats_from_its_seed(tmp_path, run):
+def test_a_batch_repeats_from_its_seed(tmp_path, run, stand_in):
     files, _ = run
-    again = simulate_batch(
-        GRID_FILE, 4242, 4, tmp_path, reporting=OnTheDay(), weeks=8
-    )
+    stand_in()
+    again = simulate_batch(GRID_FILE, 4242, 4, tmp_path, weeks=8)
     a = pd.read_csv(files["counts"])
     b = pd.read_csv(again["counts"])
     pd.testing.assert_frame_equal(a, b)
 
 
-class FailFirst(OnTheDay):
-    """Fail the first `k` draws."""
-
-    def __init__(self, k: int):
-        super().__init__()
-        self.left = k
-
-    def report(self, jobs, _grid_file, _n_draws):
-        self.fail = set()
-        for j in jobs:
-            if self.left > 0:
-                self.fail.add(j.id)
-                self.left -= 1
-        return super().report(jobs, _grid_file, _n_draws)
-
-
-def test_a_failing_draw_is_drawn_again(tmp_path):
-    files = simulate_batch(
-        GRID_FILE, 5151, 1, tmp_path, reporting=FailFirst(2), weeks=8
-    )
+def test_a_failing_draw_is_drawn_again(tmp_path, stand_in):
+    stand_in(fail=2)
+    files = simulate_batch(GRID_FILE, 5151, 1, tmp_path, weeks=8)
     failures = pd.read_csv(files["failures"])
     assert len(failures) == 2
     assert (failures["reason"] == "stand-in error").all()
@@ -156,40 +162,20 @@ def test_a_failing_draw_is_drawn_again(tmp_path):
     assert settings.loc[0, "designs"] == 1
 
 
-def test_a_simulation_with_no_design_stops_the_batch(tmp_path):
-    step = OnTheDay(fail={"5150-0001"})
+def test_a_simulation_with_no_design_stops_the_batch(tmp_path, stand_in):
+    model = stand_in(fail=10**6)
     with pytest.raises(RuntimeError, match="no design in"):
-        simulate_batch(GRID_FILE, 5150, 1, tmp_path, reporting=step, weeks=8)
+        simulate_batch(GRID_FILE, 5150, 1, tmp_path, weeks=8)
     grid = draws.read_grid(GRID_FILE)
-    # One job per try, `tries` per design, `designs` designs (independent
+    # One call per try, `tries` per design, `designs` designs (independent
     # strata fail their first stratum, so they take the same calls).
-    assert len(step.calls) >= grid["designs"]
+    assert len(model.calls) >= grid["designs"]
 
 
-class EmptyFirst(OnTheDay):
-    """Report nothing for the first `k` draws, else one case each."""
-
-    def __init__(self, k: int):
-        super().__init__()
-        self.left = k
-
-    def report(self, jobs, _grid_file, _n_draws):
-        out = super().report(jobs, _grid_file, _n_draws)
-        for res in out:
-            rows = res.counts.iloc[:1].assign(count=1)
-            if self.left > 0:
-                rows = rows.iloc[:0]
-                self.left -= 1
-            res.counts = rows
-        return out
-
-
-def test_only_empty_draws_are_drawn_again(tmp_path):
-    files = simulate_batch(
-        GRID_FILE, 6060, 1, tmp_path, reporting=EmptyFirst(2), weeks=8
-    )
+def test_only_empty_draws_are_drawn_again(tmp_path, stand_in):
+    stand_in(empty=2, cases=1)
+    files = simulate_batch(GRID_FILE, 6060, 1, tmp_path, weeks=8)
     failures = pd.read_csv(files["failures"])
-    # The two empty draws, and any the stand-in leaves empty itself.
     assert len(failures) >= 2
     assert (failures["reason"] == "no cases").all()
     settings = pd.read_csv(files["settings"])
@@ -251,17 +237,9 @@ def test_settings_flatten_vectors_as_the_engine_does():
     assert row == {"a": 1.5, "b": "1;2", "c": "", "d": "TRUE", "e": "x"}
 
 
-def _needs_enw():
-    lib = os.environ.get("ENW_LIB")
-    if shutil.which("Rscript") is None:
-        return "needs Rscript"
-    if not lib or not (Path(lib) / "epinowcast").is_dir():
-        return "needs the pinned epinowcast in ENW_LIB"
-    return None
-
-
-@pytest.mark.skipif(_needs_enw() is not None, reason=_needs_enw() or "")
-def test_the_cli_simulates_through_epinowcast(tmp_path):
+def test_the_cli_simulates_through_the_joint_model(tmp_path):
+    # The simulate rule's command: each simulation is the joint PyRenew
+    # model, with no R.
     out = subprocess.run(
         [
             sys.executable,
@@ -273,15 +251,7 @@ def test_the_cli_simulates_through_epinowcast(tmp_path):
             str(tmp_path),
         ],
         cwd=ROOT,
-        # As the simulate rule runs it: the system's tools first for R's
-        # children (the model compiles into its own cache).
-        env={
-            **os.environ,
-            "ENW_WEEKS": "8",
-            "ENW_CACHE": str(tmp_path / "enwcache"),
-            "RSCRIPT": shutil.which("Rscript") or "Rscript",
-            "PATH": "/usr/bin:/bin:" + os.environ["PATH"],
-        },
+        env={**os.environ, "ENW_WEEKS": "8", "ENW_DRAWS": "2"},
         capture_output=True,
         text=True,
         timeout=1800,
@@ -289,13 +259,36 @@ def test_the_cli_simulates_through_epinowcast(tmp_path):
     assert out.returncode == 0, out.stderr[-3000:]
     settings = pd.read_csv(tmp_path / "settings-7171.csv")
     counts = pd.read_csv(tmp_path / "counts-7171.csv.gz")
+    latent = pd.read_csv(tmp_path / "latent-7171.csv.gz")
     assert len(settings) == 2
-    assert settings["r_version"].str.startswith("R version").all()
-    assert settings["enw_fingerprint"].notna().all()
-    assert "sqrt_phi_obs" in settings
+    assert settings["nowcastrenewal_version"].notna().all()
+    for key in (
+        "sqrt_phi_obs",
+        "lambda_hat",
+        "sum_p2",
+        "low_start_days",
+        "stratum_location",
+        "stratum_population",
+        "attack",
+    ):
+        assert key in settings, key
+    assert set(counts.columns) == set(sb.COUNTS)
+    assert set(latent.columns) == set(sb.LATENT)
     # Increments, so revisions can be negative; zeros are not written.
     assert (counts["count"] != 0).all()
     assert (
         pd.to_datetime(counts["report_date"])
         >= pd.to_datetime(counts["reference_date"])
     ).all()
+    # Two observation draws of each outbreak.
+    assert (
+        counts["outbreak"].str.rsplit("-", n=1).str[-1].isin(["1", "2"]).all()
+    )
+
+
+def test_the_joint_batch_repeats_from_its_seed(tmp_path):
+    a = simulate_batch(GRID_FILE, 9191, 2, tmp_path / "a", weeks=8)
+    b = simulate_batch(GRID_FILE, 9191, 2, tmp_path / "b", weeks=8)
+    pd.testing.assert_frame_equal(
+        pd.read_csv(a["counts"]), pd.read_csv(b["counts"])
+    )

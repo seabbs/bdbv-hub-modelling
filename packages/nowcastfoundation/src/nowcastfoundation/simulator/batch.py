@@ -1,10 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Simulate a batch of outbreaks from the grid config.
 
-Each simulation draws its design and values (`draws`), runs its latent
-infections and expected onsets (`nowcastrenewal.latent`, PyRenew
-components), then its reporting (a `ReportingStep`: the R engine's
-epinowcast step by default).
+Each simulation draws its design and values (`draws`), then runs as one
+numpyro model from the shared PyRenew components, its latent infections to
+its reported counts (`nowcastrenewal.simulation.outbreak`).
 A draw that errors or reports no cases is drawn
 again, up to `tries` times, then from a new design, up to `designs`, so the
 batch always holds `n` simulations.
@@ -13,10 +12,9 @@ own designs, sharing the outbreak's series length, calendar offset and
 observation family.
 
 The simulations advance together in passes: each pass runs one draw of
-every simulation still without one, through one latent batch and one
-reporting call. Every draw's generator is keyed by the batch seed and the
-draw's place (simulation, design, stratum, try), so a simulation's draws
-do not depend on the others'.
+every simulation still without one. Every draw's generator is keyed by
+the batch seed and the draw's place (simulation, design, stratum, try), so
+a simulation's draws do not depend on the others'.
 """
 
 from __future__ import annotations
@@ -36,7 +34,6 @@ import numpy as np
 import pandas as pd
 
 from .draws import draw_design, draw_values, generator, read_grid
-from .reporting import ReportingStep, ReportJob, RscriptReporting
 
 __all__ = [
     "COUNTS",
@@ -71,8 +68,9 @@ LATENT = (
 START = dt.date(2026, 1, 3)
 """A series' first day with offset 0 (the R engine's)."""
 
-# Generator tags, so no two kinds of draw share a key.
-DESIGN, VALUES, SHARED, STRATUM, LATENT_KEY, REPORT_KEY = range(1, 7)
+# Generator tags, so no two kinds of draw share a key (6 was the old
+# reporting step's).
+DESIGN, VALUES, SHARED, STRATUM, LATENT_KEY = range(1, 6)
 
 
 @dataclass
@@ -294,95 +292,58 @@ def _n_days(values: Mapping[str, Any]) -> int:
     return 7 * (int(values["weeks"]) + int(values["max_delay"]) // 7 + 4)
 
 
-def _run_pass(
-    batch: _Batch,
-    jobs: Sequence[_Job],
-    reporting: ReportingStep,
-    grid_file: str | Path,
-) -> list[_Outcome]:
-    """Run one draw of each job: the latent batch, then the reporting."""
-    from nowcastrenewal.latent.simulate import simulate_latent_batch
+def _run_joint(batch: _Batch, jobs: Sequence[_Job]) -> list[_Outcome]:
+    """Run one draw of each job through the joint model.
+
+    Each simulation is one numpyro model, its latent infections to its
+    reported counts (`nowcastrenewal.simulation.outbreak`), sampled under
+    one key. Any error is the simulation's, so it is drawn again.
+    """
+    from nowcastrenewal.simulation import outbreak
 
     grid = batch.grid
-    sims = [
-        {
-            "id": j.id,
-            "key": int(
-                generator(batch.seed, *j.key, LATENT_KEY).integers(2**31 - 1)
-            ),
-            "n_days": _n_days(j.vals),
-            "design": j.design,
-            "values": j.vals,
-            "strata": _strata(j.design),
-        }
-        for j in jobs
-    ]
-    long, meta = simulate_latent_batch(
-        sims,
-        kinds=tuple(grid["factors"]["trajectory"]),
-        incubation_cv=float(grid["constants"]["incubation_cv"]),
-    )
-    by_id = {str(k): g for k, g in long.groupby("id", sort=False)}
-    outcomes: dict[str, _Outcome] = {}
-    report_jobs = []
+    out = []
     for j in jobs:
-        m = meta[j.id]
-        if m["error"] is not None:
-            outcomes[j.id] = _Outcome(error=str(m["error"]))
+        key = int(generator(batch.seed, *j.key, LATENT_KEY).integers(2**31 - 1))
+        try:
+            latent, counts, added = outbreak.simulate_outbreak(
+                key,
+                _n_days(j.vals),
+                pd.DataFrame(_strata(j.design)),
+                j.design,
+                j.vals,
+                batch.draws,
+                kinds=tuple(grid["factors"]["trajectory"]),
+                incubation_cv=float(grid["constants"]["incubation_cv"]),
+            )
+        except Exception as e:  # any error is the draw's: drawn again
+            msg = (
+                str(e) if type(e) is ValueError else f"{type(e).__name__}: {e}"
+            )
+            out.append(_Outcome(error=msg))
             continue
-        rows = by_id[j.id]
-        onsets = (
-            rows[rows["group"] > 0]
-            .pivot(index="day", columns="group", values="onsets")
-            .sort_index()
-            .to_numpy()
-        )
-        whole = rows[rows["group"] == 0].sort_values("day")
+        path = latent.path
         dates = [
             (
                 START + dt.timedelta(days=int(j.vals["offset"]) + int(d))
             ).isoformat()
-            for d in whole["day"]
+            for d in path["day"]
         ]
-        latent = pd.DataFrame(
-            {
-                "day": whole["day"].to_numpy(),
-                "infections": whole["infections"].to_numpy(),
-                "onsets": whole["onsets"].to_numpy(),
-                "r": whole["r"].to_numpy(),
-                "reff": whole["reff"].to_numpy(),
-                "date": dates,
-                "location": "all",
-            }
-        )
         values = {
             **j.vals,
-            "stratum_population": list(m["stratum_population"]),
-            "attack": m["attack"],
+            "stratum_population": latent.stratum_population.tolist(),
+            "attack": latent.attack,
+            **added,
         }
-        outcomes[j.id] = _Outcome(vals=values, latent=latent)
-        seed = generator(batch.seed, *j.key, REPORT_KEY).integers(1, 2**31 - 1)
-        strata = _strata(j.design)
-        report_jobs.append(
-            ReportJob(
-                j.id,
-                int(seed),
-                j.design,
-                values,
-                onsets,
-                places=[s["place"] for s in strata],
-                ages=[s["age"] for s in strata],
+        out.append(
+            _Outcome(
+                vals=values,
+                counts=counts,
+                latent=path.assign(date=dates, location="all"),
+                cases=float(counts["count"].sum()) / batch.draws,
             )
         )
-    for r in reporting.report(report_jobs, grid_file, batch.draws):
-        o = outcomes[r.id]
-        if r.error is not None:
-            o.error = r.error
-            continue
-        o.vals = r.vals
-        o.counts = r.counts
-        o.cases = float(r.counts["count"].sum()) / batch.draws
-    return [outcomes[j.id] for j in jobs]
+    return out
 
 
 def simulate_batch(
@@ -392,9 +353,6 @@ def simulate_batch(
     out_dir: str | Path,
     *,
     draws: int = 1,
-    reporting: ReportingStep | None = None,
-    rscript: str = "Rscript",
-    enw_lib: str | None = None,
     weeks: int | None = None,
 ) -> dict[str, Path]:
     """Simulate a batch of outbreaks and write its files.
@@ -413,11 +371,6 @@ def simulate_batch(
         `failures-<seed>.csv`.
     draws : int
         Observation draws per simulation.
-    reporting : ReportingStep, optional
-        The reporting step; the R engine's epinowcast step
-        (`RscriptReporting` with `rscript` and `enw_lib`) if `None`.
-    rscript, enw_lib : str
-        The default reporting step's Rscript and pinned epinowcast library.
     weeks : int, optional
         Fix every series' length (pilots).
 
@@ -432,8 +385,6 @@ def simulate_batch(
         If a simulation gets no outbreak from `designs` designs.
     """
     grid = read_grid(grid_file)
-    if reporting is None:
-        reporting = RscriptReporting(rscript=rscript, enw_lib=enw_lib)
     batch = _Batch(grid, int(seed), int(draws), weeks)
     running: dict[int, Draw] = {}
     pending: dict[int, _Job] = {}
@@ -445,9 +396,7 @@ def simulate_batch(
     while pending:
         order = sorted(pending)
         t0 = time.monotonic()
-        outcomes = _run_pass(
-            batch, [pending[i] for i in order], reporting, grid_file
-        )
+        outcomes = _run_joint(batch, [pending[i] for i in order])
         share = (time.monotonic() - t0) / len(order)
         for i, outcome in zip(order, outcomes, strict=True):
             seconds[i] += share
@@ -457,7 +406,7 @@ def simulate_batch(
                 done[i] = stop.value
                 del pending[i]
     stack = {
-        **reporting.software(),
+        "nowcastrenewal_version": metadata.version("nowcastrenewal"),
         "python_version": platform.python_version(),
         **{
             f"{name}_version": metadata.version(name)
