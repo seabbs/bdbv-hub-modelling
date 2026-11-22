@@ -19,8 +19,9 @@ mass), and joins the cells by a copula:
 
 The parameters come from a `fit`; nothing is hard-coded. `fit_coupling`
 estimates them from normal scores of the model's own matured forecasts
-(`pit_scores`). This module depends on numpy and scipy only, so any model
-can use it.
+(`pit_scores`), and `choose_window` picks how many of those origins to fit
+from by the energy score (`energy_score`) on the latest matured ones.
+This module depends on numpy and scipy only, so any model can use it.
 """
 
 from __future__ import annotations
@@ -33,7 +34,9 @@ from scipy.special import ndtr, ndtri
 
 __all__ = [
     "METHODS",
+    "choose_window",
     "couple",
+    "energy_score",
     "fit_coupling",
     "history_windows",
     "pit_scores",
@@ -404,3 +407,109 @@ def history_windows(
             if len(out) == n_windows:
                 break
     return np.asarray(out).reshape(len(out), values.shape[0], steps)
+
+
+def energy_score(draws: np.ndarray, observed: np.ndarray) -> float:
+    r"""Return the energy score of trajectories on the observed cells.
+
+    $\mathrm{ES} = E\|X - y\| - \tfrac12 E\|X - X'\|$ over the cells
+    where `observed` is finite, the second term from each draw and the
+    next (Gneiting et al. 2008), so the cost is linear in the draws. It
+    estimates the same score as `nowcasteval.scoring.energy_sample`'s fair
+    estimator, without its cost quadratic in the draws, and is noisier.
+
+    Parameters
+    ----------
+    draws : numpy.ndarray
+        Trajectories `[n, ...]`.
+    observed : numpy.ndarray
+        Values, the shape of one trajectory, NaN where not observed.
+
+    Returns
+    -------
+    float
+        The score (lower is better), NaN with no observed cell.
+    """
+    draws = np.asarray(draws, dtype=float)
+    observed = np.asarray(observed, dtype=float)
+    ok = np.isfinite(observed)
+    if not ok.any():
+        return float("nan")
+    x = draws[:, ok]
+    to_truth = np.linalg.norm(x - observed[ok], axis=1).mean()
+    spread = np.linalg.norm(x - np.roll(x, 1, axis=0), axis=1).mean()
+    return float(to_truth - 0.5 * spread)
+
+
+def choose_window(
+    scores: np.ndarray,
+    quantiles: np.ndarray,
+    levels: np.ndarray,
+    observed: np.ndarray,
+    candidates: tuple[int, ...],
+    n_eval: int,
+    seed: int = 0,
+    method: str = "gaussian",
+    n_samples: int = 200,
+) -> dict[str, Any]:
+    """Return the look-back window whose couplings scored best of late.
+
+    For each candidate window `w` and each of the latest `n_eval` origins,
+    the coupling is fitted (`fit_coupling`) from the `w` origins before
+    it, that origin's quantiles are coupled (`couple`) and the draws are
+    scored against what was observed there (`energy_score`). The window
+    with the lowest mean score wins; ties go to the earlier candidate.
+    Every candidate is scored on the same draws of levels at an origin.
+
+    Parameters
+    ----------
+    scores : numpy.ndarray
+        `pit_scores` of the matured origins, `[origins, series, steps]`,
+        oldest first.
+    quantiles : numpy.ndarray
+        Their quantiles `[origins, series, steps, Q]` at `levels`.
+    levels : numpy.ndarray
+        Increasing quantile levels, `[Q]`.
+    observed : numpy.ndarray
+        What was reported, `[origins, series, steps]`, NaN where not final.
+    candidates : tuple of int
+        Windows to compare, in origins.
+    n_eval : int
+        Latest origins each candidate is scored on; fewer than the origins.
+    seed : int
+        Seed for the draws.
+    method : str
+        The coupling fitted, one of `METHODS` with a scores fit.
+    n_samples : int
+        Trajectories per origin.
+
+    Returns
+    -------
+    dict
+        `window`, the mean `energy` of each candidate and `n_eval`.
+
+    Raises
+    ------
+    ValueError
+        With no candidates, or `n_eval` not below the origins.
+    """
+    scores = np.asarray(scores, dtype=float)
+    n_origins = scores.shape[0]
+    if not candidates:
+        raise ValueError("choose_window needs candidates")
+    if not 0 < n_eval < n_origins:
+        raise ValueError(
+            f"n_eval must be between 1 and {n_origins - 1}, got {n_eval}"
+        )
+    energy = {}
+    for w in candidates:
+        got = []
+        for k in range(n_origins - n_eval, n_origins):
+            fit = fit_coupling(scores[max(0, k - w) : k], method)
+            draws = couple(
+                quantiles[k], levels, method, fit, n_samples, seed + k
+            )
+            got.append(energy_score(draws, observed[k]))
+        energy[int(w)] = float(np.nanmean(got))
+    window = min(energy, key=lambda w: (energy[w], candidates.index(w)))
+    return {"window": window, "energy": energy, "n_eval": int(n_eval)}
