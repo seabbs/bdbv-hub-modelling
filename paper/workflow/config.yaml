@@ -171,8 +171,6 @@ evidence:
   # Pending: the realised shares of each combination of block
   # layout and options.
   block_combinations: null
-  # Pending: the final grid's ranges against published values.
-  sim_diseases: null
 
 # Data the development runs use.
 development:

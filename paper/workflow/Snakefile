@@ -584,6 +584,8 @@ rule evidence:
         # The final run's held-out loss by level (workflow rule heldout_curve).
         heldout=FLOW.heldout_curve(),
         realism=rules.sim_realism.output,
+        # The published-range table's rows (workflow rule sim_diseases).
+        diseases=FLOW.sim_diseases(),
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -603,6 +605,7 @@ rule evidence:
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
         "--finetune-heldout {input.heldout} "
         "--sim-summaries {input.realism[0]} --sim-realism {input.realism[1]} "
+        "--sim-diseases {input.diseases} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 

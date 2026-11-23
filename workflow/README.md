@@ -145,7 +145,7 @@ Reports read the other steps' outputs back for people, each with one script.
 
 - `round_summaries`: one row per outbreak of a round (`r<N>/summaries/outbreaks.csv`, `workflow/scripts/grid_summaries.py`): design, drawn values, size, dynamics, R, delays and the phase at the training cut-offs.
 - `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
-- `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them.
+- `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them. `sim_diseases` gives the grid's training rounds' ranges against the published values by disease (`report/sim-diseases.csv`), for the SI's disease table.
 - `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.
 - `benchmarks`: opt-in, the seconds and peak memory of every forecast and score job and the seconds by model and date, as one CSV in `<SCORE_CACHE>/` (`flowlib.benchmarks`).
 
