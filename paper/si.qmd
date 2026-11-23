@@ -511,18 +511,6 @@ We score the country and each province by the CRPS and 90% coverage, and each le
 - Ebola trajectory scores use the same truth as every other Ebola score, with $D$ the 98% point of the hub data's national reporting delay.
 :::
 
-### Aggregation options
-
-Chronos-2 can forecast every level of a place hierarchy in one block, or each level on its own, and the daily model can give weekly totals in its block or as sums of its days.
-We compare five options for the zero-shot and fine-tuned models:
-(a) all levels in one joint block;
-(b) each level in its own block;
-(c) the lowest level only, summed up to the others with draws paired at random;
-(d) the lowest level only, summed up after pairing its draws with the rolling copula;
-(e) for the daily model, weekly totals from its in-block weekly row, against its days summed to weeks after pairing them with a rolling correlation over days, and at random.
-Options (d) and (e) test whether pairing draws with the copula before summing narrows the gap to forecasting the total directly.
-Option (e) is inference only, on the final checkpoint.
-
 ### Scoring
 
 ::: {.callout-note title="Plan"}
@@ -583,14 +571,6 @@ Choices tuned on development data, with their values and the data they were set 
 - The median rolling $\rho_p$ over origins is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} origins falling back to the prior.
 
 ![Each score of `randomwalk` and `randomwalknowcast` with the rolling $\rho_p$ relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level's places and weeks on the log scale. Development data only.](build/figures/si/copula-impact.png){#fig-copula-impact}
-
-### Joint block or aggregation
-
-Our Chronos-2 models use the joint block.
-On the German development half, level by level is competitive for the daily zero-shot model ({{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.level >}} against {{< meta evidence.aggregation.germany.national.fm_chronos_daily_ragged.joint >}} at the national level) and for age groups.
-@fig-aggregation gives every option by study and level, with WIS relative to `randomwalknowcast` on the same targets.
-
-![WIS of each aggregation option relative to `randomwalknowcast` on the same targets, by study and level, one marker per model: (a) joint block, (b) level by level, (c) lowest level summed at random, (d) lowest level summed after pairing, and (e) the daily model's weekly row against its days summed after pairing and at random. German development half.](build/figures/si/aggregation.png){#fig-aggregation}
 
 ### Checkpoint curve
 
