@@ -83,17 +83,13 @@ def test_run_of_a_checkpoint(settings, run):
     assert ck.run_of(settings) == run
 
 
-def test_outbreaks_and_grid_from_settings_or_release_text():
-    assert ck.outbreaks_and_grid({"n_outbreaks": 500, "grid": "r5"}, {}) == (
+def test_outbreaks_and_grid_come_from_settings_only():
+    # A checkpoint's settings.json holds both; release text is not read.
+    assert ck.outbreaks_and_grid({"n_outbreaks": 500, "grid": "r5"}) == (
         500,
         "r5",
     )
-    release = {
-        "name": "x",
-        "body": "trained on 2,000 simulated outbreaks, round 4",
-    }
-    assert ck.outbreaks_and_grid({}, release) == (2000, "r4")
-    assert ck.outbreaks_and_grid({}, {}) == (0, "unknown")
+    assert ck.outbreaks_and_grid({}) == (0, "unknown")
 
 
 def _scores(models, checkpoints, levels, base=1.0):
@@ -212,7 +208,7 @@ def test_the_cli_names_its_units():
         ck.main(["nope", "cache"])
 
 
-def test_release_unit_writes_settings_and_release(tmp_path, monkeypatch):
+def test_release_unit_writes_settings_only(tmp_path, monkeypatch):
     def fake(cmd, **_kw):
         class Out:
             stdout = json.dumps({"name": "n", "body": "b"})
@@ -228,7 +224,8 @@ def test_release_unit_writes_settings_and_release(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "heldout" / "abc.json").read_text()) == {
         "grid": "r5"
     }
-    assert (tmp_path / "heldout" / "abc-release.json").exists()
+    # Release text is not read: settings.json holds what the tables use.
+    assert not (tmp_path / "heldout" / "abc-release.json").exists()
 
 
 def test_release_unit_merges_an_offloaded_release_s_held_out_losses(
@@ -260,10 +257,6 @@ def test_release_unit_merges_an_offloaded_release_s_held_out_losses(
     ck.release_unit(tmp_path, "abc")
     got = json.loads((tmp_path / "heldout" / "abc.json").read_text())
     assert got == {"grid": "r6", "held_out_loss": 0.2}
-    release = json.loads(
-        (tmp_path / "heldout" / "abc-release.json").read_text()
-    )
-    assert release == {"name": "n", "body": "b"}
 
 
 def test_cached_draws_keep_the_7day_target(tmp_path):
