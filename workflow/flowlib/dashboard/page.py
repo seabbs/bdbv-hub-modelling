@@ -857,7 +857,7 @@ def nowcasts_section(
     controls = controls.replace("{tip}", tip("nowcast"))
     return (
         controls + f'<script type="application/json" id=gdata>{data}</script>'
-        f"<script>{_asset('nowcasts.js')}</script>"
+        f"<script>{_asset('bars.js')}\n{_asset('nowcasts.js')}</script>"
     )
 
 
