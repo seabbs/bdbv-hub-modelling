@@ -43,10 +43,15 @@ epiforecasts/BVDOutbreakSize (`src/scoring.jl`).
 
 `relative_skill` divides a model's mean score by the baseline's mean score
 over the forecasts both made.
+`pairwise_skill` is scoringutils' pairwise relative skill, for models
+that forecast different targets: each pair's mean score ratio on the
+forecasts both made, a model's geometric mean of its ratios, scaled to a
+reference model.
 """
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence
 from typing import Final
 
@@ -64,6 +69,7 @@ __all__ = [
     "crps_sample",
     "energy_sample",
     "energy_scores",
+    "pairwise_skill",
     "relative_skill",
     "scale_of",
     "score_cells",
@@ -684,3 +690,107 @@ def relative_skill(
         den = grp[f"{m}_base"].mean()
         out[f"relative_{m}"] = num / den.where(den > 0)
     return out.reset_index()
+
+
+def _theta(wide: pd.DataFrame) -> pd.Series:
+    # Each model's geometric mean of its mean score ratios, with itself
+    # (ratio 1) and every model it shares forecasts with.
+    models = list(wide.columns)
+    vals = wide.to_numpy(dtype=float)
+    have = ~np.isnan(vals)
+    logs: dict[str, list[float]] = {m: [0.0] for m in models}
+    for i, j in itertools.combinations(range(len(models)), 2):
+        both = have[:, i] & have[:, j]
+        if not both.any():
+            continue
+        ratio = vals[both, i].sum() / vals[both, j].sum()
+        if np.isnan(ratio):
+            continue
+        logs[models[i]].append(float(np.log(ratio)))
+        logs[models[j]].append(float(-np.log(ratio)))
+    return pd.Series(
+        {
+            m: np.exp(np.mean(v)) if len(v) > 1 else np.nan
+            for m, v in logs.items()
+        }
+    )
+
+
+def pairwise_skill(
+    scores: pd.DataFrame,
+    reference: str,
+    by: Sequence[str] = (),
+    metrics: Sequence[str] = ("wis", "log_wis"),
+    match_on: Sequence[str] = (
+        "kind",
+        "vintage",
+        "reference_date",
+        "location",
+        "target_end_date",
+    ),
+    rounds: str = "reference_date",
+) -> pd.DataFrame:
+    """Return each model's pairwise relative skill, scaled to `reference`.
+
+    As scoringutils' `get_pairwise_comparisons`: for each pair of
+    models, the ratio of their summed scores on the forecasts both made;
+    a model's skill is the geometric mean of its ratios against every
+    model, itself (ratio 1) included; the scaled skill divides it by the
+    reference's. Pairs with no forecasts in common are left out. Models
+    can so be compared when they forecast different targets. Values
+    below 1 mean the model beats the reference.
+
+    Unlike scoringutils, a model that shares forecasts with no other
+    model has no skill (rather than 1).
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        One row per model and forecast, with `model`, the `match_on` and
+        `by` columns and each metric.
+    reference : str
+        The model the skills are scaled to.
+    by : sequence of str
+        Columns to compare within, such as `("horizon",)`.
+    metrics : sequence of str
+        Scores to compare, each on its own (such as WIS on the natural
+        and on the log scale).
+    match_on : sequence of str
+        Columns that, with `by`, identify the same forecast across
+        models (scoringutils' forecast unit without `model`).
+    rounds : str
+        The column whose distinct values are counted as each model's
+        rounds.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model`, the `by` columns, `n` (the model's forecasts),
+        `rounds` (its distinct `rounds` values), and for each metric
+        `skill_<metric>` (the geometric mean) and `relative_<metric>`
+        (scaled to the reference, which has 1; missing without the
+        reference). Rows within each `by` group.
+    """
+    by = list(by)
+    match = list(dict.fromkeys([*match_on, *by]))
+    parts = scores.groupby(by) if by else [((), scores)]
+    frames, keys = [], []
+    for key, part in parts:
+        grp = part.groupby("model")
+        frame = grp.size().rename("n").to_frame()
+        frame["rounds"] = grp[rounds].nunique()
+        for m in metrics:
+            wide = part.pivot_table(
+                index=match, columns="model", values=m, aggfunc="first"
+            )
+            theta = _theta(wide)
+            frame[f"skill_{m}"] = theta
+            frame[f"relative_{m}"] = theta / theta.get(reference, np.nan)
+        frames.append(frame)
+        keys.append(key)
+    if by:
+        res = pd.concat(frames, keys=keys, names=by).reset_index()
+    else:
+        res = frames[0].reset_index()
+    cols = ["model", *by, "n", "rounds"]
+    return res[cols + [c for c in res.columns if c not in cols]]
