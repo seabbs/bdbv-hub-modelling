@@ -136,8 +136,11 @@ def test_the_command_line_prints_one_setting(tmp_path):
 
 
 def test_paper_cores_come_from_the_local_config():
+    # The paper's tasks run its targets through paper_run.py, which takes
+    # this machine's budget (flowlib.machine).
     taskfile = (ROOT / "paper" / "Taskfile.yml").read_text()
-    assert "localconfig.py CORES" in taskfile
+    assert "--cores {{.CORES" not in taskfile
+    assert "paper_run.py --targets development" in taskfile
     script = (ROOT / "scripts" / "paper.sh").read_text()
     assert "localconfig.py CORES" in script
 
