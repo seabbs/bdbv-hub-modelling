@@ -1,6 +1,6 @@
 """Checkpoint scoring units' commands and the German report's arguments.
 
-A unit is one `nowcastfoundation.checkpoint` study for one checkpoint
+A unit is one `nowcastgermany.checkpoint` study for one checkpoint
 label, cached under its study folder (rules/score.smk). `Scoring` holds
 what `score.smk`, `evaluate.smk` and the report rules ask of the units;
 `common.smk` builds one and binds its methods.
@@ -12,15 +12,15 @@ import shlex
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
-from flowlib import machine, notify, releases
+from flowlib import forecast, machine, notify, releases
 from flowlib.training import Training
 
-EVALUATE = "uv run --group chronos python -m nowcastfoundation.checkpoint"
+EVALUATE = "uv run --group chronos python -m nowcastgermany.checkpoint"
 """The scoring CLI."""
 
 REFERENCE_NAMES = {
     "reference": "Zero-shot",
-    "randomwalknowcast": "Random walk nowcast",
+    "randomwalknowcast_daily": "Random walk nowcast (daily)",
 }
 """The German report's names of the reference unit's models."""
 
@@ -66,7 +66,8 @@ class Scoring:
         The workflow config (`score`).
     local : mapping
         This machine's settings (`localconfig.read`): SCORE_CACHE, the
-        room to wait for, EVAL_DEVICE and EVAL_THREADS.
+        room to wait for and FORECAST_DEVICE/FORECAST_THREADS, which
+        override the config's `forecast` (`flowlib.forecast`).
     training : Training
         The fine-tuning runs whose checkpoints are scored.
     checkpoints : object
@@ -90,12 +91,11 @@ class Scoring:
             f"workflow/scripts/wait_for_room.sh {local['MIN_FREE_GB']} "
             f"{local['MIN_DISK_GB']} {self.cache} {local['MAX_LOAD']} && "
         )
-        # The CPU threads of a job beside the trainer (EVAL_THREADS,
-        # default 2): a few, so simulations keep the rest of the cores.
-        self.unit_threads = int(local.get("EVAL_THREADS") or 2)
-        # The device evaluation and scoring run torch on, the CPU by
-        # default: the GPU is the trainer's.
-        self.eval_device = machine.side_device(local)
+        # Every forecasting job's device and threads (`forecast` in the
+        # config, which the machine may override).
+        self.forecast = forecast.settings(config, local)
+        self.unit_threads = self.forecast.threads
+        self.eval_device = self.forecast.device
 
     def checkpoint_labels(self, wc: Any = None) -> list[str]:  # noqa: ARG002
         """Return the checkpoints to score, less `score.skip`."""
@@ -113,8 +113,9 @@ class Scoring:
         return lambda wc: releases.priority(self.score_order(), wc.label, base)
 
     def unit_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
-        """Return the unit's torch device, threads and Chronos-2 batch."""
+        """Return the unit's device (torch and JAX), threads and batch."""
         env = machine.torch_env(self.local, threads, self.eval_device)
+        env["JAX_PLATFORMS"] = forecast.JAX_PLATFORM[self.eval_device]
         return machine.shell_env(env)
 
     def unit_rows(self, study: str) -> Callable[[Any], str]:

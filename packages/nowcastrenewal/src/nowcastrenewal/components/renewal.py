@@ -18,7 +18,7 @@ the share at risk $\nu$, $W$ per resident).
 It adds to PyRenew's scans what they lack:
 
 - a choice of susceptible depletion: none, `LinearDepletion` (the
-  simulator's default, the R engine's form) or `ExponentialDepletion`
+  simulator's default) or `ExponentialDepletion`
   (the fitted models' form, PyRenew's `logistic_susceptibility_adjustment`
   written with `expm1`, see below);
 - mixing between places with a share that may change each day;
@@ -101,7 +101,7 @@ class NoDepletion:
 class LinearDepletion:
     r"""$\min(y S / N + \iota, S)$: linear in the susceptible share.
 
-    The simulator's default (the R engine's form).
+    The simulator's default.
     """
 
     depletes: bool = True

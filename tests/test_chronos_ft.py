@@ -149,7 +149,7 @@ def test_the_triangle_is_laid_out_as_the_ragged_block(
 
 
 @pytest.mark.usefixtures("fake")
-def test_forecasts_are_quantiles_of_the_final_count_at_least_reported() -> None:
+def test_forecasts_are_quantiles_of_the_final_count() -> None:
     tri = _triangle()
     out = chronos_ft.forecast_triangle(
         tri, horizon=2, model=None, quantile_levels=(0.1, 0.5, 0.9)
@@ -164,14 +164,11 @@ def test_forecasts_are_quantiles_of_the_final_count_at_least_reported() -> None:
     assert len(out) == 4 * 3
     assert sorted(set(out["step"])) == [-1, 0, 1, 2]
     assert out["reference"].max() == tri.index[-1] + 2 * pd.Timedelta("7D")
-    reported = np.nansum(tri.to_numpy(), axis=1)
-    nowcast = out.loc[out["step"] <= 0]
-    for _, row in nowcast.iterrows():
-        at = tri.index.get_loc(row["reference"])
-        assert row["value"] >= reported[at]
-    # The fake gives 0, 1, 2 by level, and nothing is reported ahead.
-    future = out.loc[out["step"] == 2].sort_values("quantile_level")
-    np.testing.assert_array_equal(future["value"], [0.0, 1.0, 2.0])
+    # The fake gives 0, 1, 2 by level at every step, taken as they are:
+    # the rows still being reported are not raised to their counts.
+    for _, rows in out.groupby("step"):
+        rows = rows.sort_values("quantile_level")
+        np.testing.assert_array_equal(rows["value"], [0.0, 1.0, 2.0])
 
 
 def test_places_share_one_block(fake: _FakePipeline) -> None:

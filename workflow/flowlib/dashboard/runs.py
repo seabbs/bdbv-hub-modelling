@@ -193,18 +193,35 @@ def split_label(name: str) -> tuple[str, str]:
     return m.group(0), name[: m.start()]
 
 
+INTERIM = "interim"
+"""A run's folder of checkpoints exported mid-segment (`s<step>`)."""
+
+
+def checkpoint_settings(folder: Path) -> list[Path]:
+    """Return a run's saved checkpoints' settings, interim ones too."""
+    train = Path(folder) / "train"
+    return [
+        *sorted(train.glob("n*/settings.json")),
+        *sorted(train.glob(f"{INTERIM}/s*/settings.json")),
+    ]
+
+
 def folder_hashes(folder: Path | None) -> set[str]:
-    """Return the checkpoint hashes a training output folder has saved."""
+    """Return the checkpoint hashes a training output folder has saved.
+
+    An interim checkpoint's hash (`interim-s<step>-<hash>`) counts by its
+    own hash (`split_label`).
+    """
     if folder is None:
         return set()
     out = set()
-    for s in Path(folder).glob("train/n*/settings.json"):
+    for s in checkpoint_settings(Path(folder)):
         try:
             key = json.loads(s.read_text()).get("hash")
         except (OSError, ValueError):
             continue
         if key:
-            out.add(str(key))
+            out.add(split_label(str(key))[0])
     return out
 
 

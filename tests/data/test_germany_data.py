@@ -12,7 +12,6 @@ from bdbvhub.models import get_model
 from nowcasteval.backtest import run_forecasts
 from nowcastgermany.data import (
     HORIZONS,
-    OFFSETS,
     hub_changes,
     hub_forecasts,
     hub_target,
@@ -21,6 +20,7 @@ from nowcastgermany.data import (
     nowcast_tasks,
     place_code,
     read_triangle,
+    weekly_task,
 )
 from nowcastutils.base import NATIONAL
 
@@ -42,11 +42,6 @@ def triangle() -> pd.DataFrame:
 
 @pytest.fixture(scope="module")
 def tasks(triangle: pd.DataFrame):
-    return nowcast_tasks(triangle, NOWCAST, n_samples=20, seed=1, offsets=(0,))
-
-
-@pytest.fixture(scope="module")
-def every_day(triangle: pd.DataFrame):
     return nowcast_tasks(triangle, NOWCAST, n_samples=20, seed=1)
 
 
@@ -153,61 +148,45 @@ def test_a_count_corrected_to_zero_is_not_carried(
     )
     both = pd.concat([triangle.loc[keep], zero], ignore_index=True)
     daily = nowcast_tasks(both, NOWCAST, n_samples=20, seed=1)[0].daily_history
-    shift = dt.date(2021, 10, 23) - dt.date.fromisoformat(NOWCAST)
-    onset = (dt.date(2021, 9, 1) + shift).isoformat()
     late = daily.loc[
         (daily["location"] == NATIONAL)
-        & (daily["onset_date"] == onset)
-        & (daily["vintage"] >= (dt.date(2021, 10, 1) + shift).isoformat())
+        & (daily["onset_date"] == "2021-09-01")
+        & (daily["vintage"] >= "2021-10-01")
     ]
     assert late.empty
 
 
-def test_dates_move_to_the_next_saturday(tasks) -> None:
+def test_tasks_keep_real_dates(tasks) -> None:
     for task in tasks:
-        # 2021-10-20 is a Wednesday, three days before a Saturday.
-        assert task.reference_date == dt.date(2021, 10, 23)
-        assert task.reference_date.weekday() == 5
+        # 2021-10-20 is a Wednesday; nothing moves to a Saturday.
+        assert task.reference_date == dt.date(2021, 10, 20)
+        assert task.cutoff == NOWCAST
+        # Every horizon's day is a target date of the one task.
         assert task.target_end_dates == tuple(
             (task.reference_date + dt.timedelta(days=h)).isoformat()
-            for h in (-28, -21, -14, -7, 0)
+            for h in sorted(HORIZONS)
         )
-        assert task.daily_history["vintage"].max() == "2021-10-23"
+        assert task.daily_history["vintage"].max() == NOWCAST
 
 
-def test_each_offset_ends_its_weeks_k_days_earlier_on_the_same_data(
-    every_day,
+def test_weekly_models_forecast_the_sums_that_end_hub_weeks(tasks) -> None:
+    for task in tasks:
+        weekly = weekly_task(task)
+        # The Saturdays of the hub's days back from Wednesday 2021-10-20.
+        assert weekly.target_end_dates == tuple(
+            (task.reference_date + dt.timedelta(days=h)).isoformat()
+            for h in (-25, -18, -11, -4)
+        )
+        assert weekly.daily_history is task.daily_history
+
+
+def test_a_nowcast_date_has_one_states_and_one_age_groups_task(
+    tasks,
 ) -> None:
-    # One states and one age groups task per offset.
-    assert len(every_day) == 2 * len(OFFSETS)
-    for k, task in enumerate(every_day[::2]):
-        ends = [dt.date.fromisoformat(e) for e in task.target_end_dates]
-        assert all(e.weekday() == 5 for e in ends)
-        # Dates move so the nowcast date less k is a Saturday; the data
-        # stop at the nowcast date, k days into the next week.
-        shift = task.reference_date - dt.date.fromisoformat(NOWCAST)
-        assert max(ends) == task.reference_date - dt.timedelta(days=k)
-        assert task.cutoff == task.reference_date.isoformat()
-        assert task.daily_history["vintage"].max() == task.cutoff
-        assert 0 <= shift.days <= 6
-        # Days back from the nowcast date: k, k + 7, ... up to 28.
-        back = sorted((task.reference_date - e).days for e in ends)
-        assert back == [k + 7 * j for j in range(5) if k + 7 * j <= 28]
-
-
-@pytest.mark.slow
-def test_every_target_day_is_forecast_once(every_day) -> None:
-    model = get_model("randomwalk")
-    out = pd.concat(
-        hub_forecasts(run_forecasts([model], [task]), task, NOWCAST)
-        for task in every_day
-    )
-    assert sorted(set(out["horizon"])) == sorted(HORIZONS)
-    assert (
-        pd.to_datetime(out["target_end_date"])
-        - pd.to_datetime(out["forecast_date"])
-    ).dt.days.equals(out["horizon"])
-    assert out.groupby(["location", "horizon"]).size().eq(20).all()
+    # One forecast with one context end gives every 7-day sum.
+    assert len(tasks) == 2
+    assert tasks[0].daily_history["vintage"].max() == tasks[0].cutoff
+    assert tasks[0].cutoff == tasks[1].cutoff
 
 
 def test_releases_are_the_counts_reported_by_each_report_date(
@@ -217,7 +196,7 @@ def test_releases_are_the_counts_reported_by_each_report_date(
     daily = states.daily_history.set_index(
         ["vintage", "location", "onset_date"]
     )
-    # Meldedatum 2021-09-01 as reported by 2021-09-10, moved three days.
+    # Meldedatum 2021-09-01 as reported by 2021-09-10.
     want = triangle.loc[
         (triangle["location"] == "DE-BY")
         & (triangle["age_group"] == "00+")
@@ -225,10 +204,10 @@ def test_releases_are_the_counts_reported_by_each_report_date(
         & (triangle["report_date"] == "2021-09-10"),
         "confirm",
     ].item()
-    got = daily.loc[("2021-09-13", place_code("DE-BY"), "2021-09-04")]
+    got = daily.loc[("2021-09-10", place_code("DE-BY"), "2021-09-01")]
     assert got["observed"] == want
     assert got["imputed"] == 0
-    assert got["cutoff"] == "2021-09-13"
+    assert got["cutoff"] == "2021-09-10"
 
 
 def test_weekly_target_sums_each_release_to_hub_weeks(tasks) -> None:
@@ -248,12 +227,13 @@ def test_weekly_target_sums_each_release_to_hub_weeks(tasks) -> None:
 
 @pytest.mark.slow
 def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
+    # A model of weekly steps forecasts the hub weeks of each task.
     model = get_model("randomwalk")
     out = pd.concat(
-        hub_forecasts(run_forecasts([model], [task]), task, NOWCAST)
-        for task in tasks
+        hub_forecasts(run_forecasts([model], [w]), w, NOWCAST)
+        for w in map(weekly_task, tasks)
     )
-    assert set(out["horizon"]) == {0, -7, -14, -21, -28}
+    assert set(out["horizon"]) == {-4, -11, -18, -25}
     assert set(out["forecast_date"]) == {NOWCAST}
     assert (
         pd.to_datetime(out["target_end_date"])
@@ -306,25 +286,16 @@ def test_levels_are_the_paper_s(place: str, want: str) -> None:
 
 
 def test_tasks_take_the_horizons_asked_for(triangle: pd.DataFrame) -> None:
-    # Days after the nowcast date are forecast weeks; each offset keeps
-    # the horizons whose weeks end on its weekday.
+    # Days after the nowcast date are forecasts, in the same task.
     horizons = tuple(range(28, -29, -1))
-    tasks = nowcast_tasks(
+    states = nowcast_tasks(
         triangle, NOWCAST, n_samples=20, seed=1, horizons=horizons
-    )
-    by_offset = [tasks[2 * k] for k in range(7)]
-    for k, task in enumerate(by_offset):
-        ref = task.reference_date
-        got = [
-            (dt.date.fromisoformat(w) - ref).days for w in task.target_end_dates
-        ]
-        assert got == [h for h in sorted(horizons) if (-h - k) % 7 == 0]
-    ahead = {
-        (dt.date.fromisoformat(w) - t.reference_date).days
-        for t in by_offset
-        for w in t.target_end_dates
-    }
-    assert max(ahead) == 28
+    )[0]
+    ref = states.reference_date
+    got = [
+        (dt.date.fromisoformat(w) - ref).days for w in states.target_end_dates
+    ]
+    assert got == sorted(horizons)
 
 
 def test_within_delay_keeps_the_counts_reported_by_that_delay() -> None:

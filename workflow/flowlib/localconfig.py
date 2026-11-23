@@ -129,8 +129,8 @@ def _unquote(value: str) -> str:
 OPTIONAL = (
     "BLOCK_LIMIT",
     "CHRONOS_BATCH",
-    "EVAL_DEVICE",
-    "EVAL_THREADS",
+    "FORECAST_DEVICE",
+    "FORECAST_THREADS",
     "HF_HOME",
     "MPS_HIGH_WATERMARK",
     "PRECISION",

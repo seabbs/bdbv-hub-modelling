@@ -59,7 +59,7 @@ ROWS = _rows()
 def epinowcast_hazards() -> list[dict[str, Any]]:
     """epinowcast's discretised logit hazards and log pmfs, one R run.
 
-    At the engine's pin (`packages/nowcastfoundation/r/DESCRIPTION`)
+    At CI's pin (`.github/workflows/test.yml`, job `r-live`)
     epinowcast discretises the parametric delay with primarycensored
     (`primarycensored_pmf.stan`).
     """
@@ -71,7 +71,7 @@ def epinowcast_hazards() -> list[dict[str, Any]]:
         packages=["epinowcast"],
     )
     if not has:
-        _skip("needs epinowcast at the engine's pin (primarycensored_pmf)")
+        _skip("needs epinowcast at CI's pin (primarycensored_pmf)")
     code = """
     # A new target directory: functions are exposed only from a fresh
     # build, not from epinowcast's cached model.

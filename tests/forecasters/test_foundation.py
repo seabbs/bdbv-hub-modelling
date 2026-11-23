@@ -217,11 +217,10 @@ def test_daily_triangle_lags_are_days() -> None:
 
 
 @pytest.mark.parametrize("name", MODELS)
-def test_draws_are_not_negative_and_not_floored_at_the_reported(
+def test_draws_are_kept_as_drawn_at_zero_or_above(
     name: str, task: ForecastTask
 ) -> None:
-    # Chronos-2's output is kept as it is, at zero or above: not rounded,
-    # and not raised to the counts reported.
+    # Chronos-2's output is kept as it is, at zero or above, not rounded.
     for value in (-50.0, 0.0, 3.5):
         model = dataclasses.replace(get_model(name), sample=_constant(value))
         out = model.forecast(task)
@@ -273,14 +272,16 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
         groups, horizon = store[0]
         assert len(groups) == 1
         seen[layout] = (groups[0], horizon)
+    # The targets are the hub-target series and, for the daily source,
+    # each place's 7-day rolling sums, in both layouts; the complete block
+    # has no lag series.
+    rows = 2 if source == "daily" else 1
     complete, _ = seen["complete"]
-    assert complete["target"].shape[0] == n_places
+    assert complete["target"].shape[0] == rows * n_places
     assert "future_covariates" not in complete
     ragged, horizon = seen["ragged"]
-    # The targets are the hub-target series and, for the daily source,
-    # each place's 7-day rolling sums; the lag series are covariates of
-    # every place, those with no cases too, as the fine-tuned model has.
-    rows = 2 if source == "daily" else 1
+    # The lag series are covariates of every place, those with no cases
+    # too, as the fine-tuned model has.
     assert ragged["target"].shape[0] == rows * n_places
     future = ragged["future_covariates"]
     assert ragged["past_covariates"].keys() == future.keys()
@@ -842,12 +843,8 @@ def test_zone_samples_come_straight_from_the_block(
     own = zoned.loc[zoned["location"].map(is_zone)]
     provinces = _provinces(zoned)
     # The block's own zone series: nothing sums them to the provinces
-    # (the stand-in draws each series apart, so they do not sum), and
-    # each keeps its published count.
+    # (the stand-in draws each series apart, so they do not sum).
     assert check_zone_coherence(provinces, own)
-    keys = ["location", "target_end_date"]
-    floor = own.merge(counts, on=keys, how="left")["total"].fillna(0).to_numpy()
-    assert (own["value"].to_numpy() >= floor).all()
     # The hub file takes them as they are.
     split = zones_for_model(
         "fm_chronos_weekly_ragged", task, zoned, counts, zones, daily_zones
@@ -872,8 +869,7 @@ def test_daily_zones_are_forecast_with_no_weekly_zone_releases(
     check_samples(out, bare)
     own = out.loc[out["location"].map(is_zone)]
     assert set(own["location"]) == set(_zones(task))
-    # The zones are forecast from their daily counts alone, not floored at
-    # them (no floor at the counts reported).
+    # The zones are forecast from their daily counts alone.
     assert (own["value"].to_numpy() >= 0).all()
 
 

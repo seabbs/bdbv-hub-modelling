@@ -57,7 +57,7 @@ The output has one row per place, reference time and quantile level:
 | `reference` | the row's reference time, extended past the last row for dates and numbers |
 | `step` | rows after the last: 0 is the last row, below 0 the rows still being reported, above 0 rows ahead (`horizon`) |
 | `quantile_level` | the level, Chronos-2's own unless `quantile_levels` is given |
-| `value` | the quantile of the row's final count, never below the count reported so far |
+| `value` | the quantile of the row's final count |
 
 A dict of triangles, one per place with the same rows and delays, is forecast as one group, so Chronos-2 sees every place at once.
 `model=None` uses the pretrained Chronos-2, for a comparison with the fine-tuned one.

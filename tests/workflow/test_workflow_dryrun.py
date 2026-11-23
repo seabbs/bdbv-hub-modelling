@@ -660,14 +660,14 @@ def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
     for block in units:
         assert "scripts/checkpoint_scores.py" not in block
     shells = "".join(units)
-    assert "-m nowcastfoundation.checkpoint germany" in shells
+    assert "-m nowcastgermany.checkpoint germany" in shells
 
 
 def test_units_make_the_rows_folder_a_worker_brings_back(tmp_path):
     blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     shells = "".join(blocks)
     # The folder the shared evaluation writes German rows to.
-    from nowcastfoundation.checkpoint import GERMANY_UNIT
+    from nowcastgermany.checkpoint import GERMANY_UNIT
 
     assert f"mkdir -p {tmp_path}/scores/{GERMANY_UNIT}/aaa/" in shells
 
@@ -1033,7 +1033,7 @@ def test_score_units_run_torch_beside_the_trainer_on_the_cpu(tmp_path):
 
 def test_score_threads_are_a_machine_setting(tmp_path):
     config = {"score": {"labels": ["aaa"]}}
-    blocks = score_jobs(tmp_path, config, "EVAL_THREADS=3\n")
+    blocks = score_jobs(tmp_path, config, "FORECAST_THREADS=3\n")
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert units
     assert all(re.search(r"threads: 3\b", b) for b in units)
@@ -1181,7 +1181,7 @@ def test_sim_reports_render_each_round_and_the_rounds_together(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4, 5]}, target="sim_reports")
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
     rounds = tmp_path / "rounds"
-    assert f"germany-fetch --out {tmp_path}/germany" in text
+    assert f"nowcastgermany.cli fetch --out {tmp_path}/germany" in text
     triangle = tmp_path / "germany" / "COVID-19_hospitalizations.csv"
     assert (
         f"sim_report.py germany {triangle}"

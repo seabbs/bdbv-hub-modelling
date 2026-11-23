@@ -19,12 +19,12 @@ with the count reported by then, the layout of epinowcast's
 - Germany is the country. The states are provinces in one task and the age
   groups provinces in another, each summing to Germany (`place_code`).
 - The hub's targets are the 7-day sums ending on every day from the
-  nowcast date to 28 days before it (`HORIZONS`). The models forecast
-  Saturday weeks, so a nowcast date gives one pair of tasks per weekday
-  offset k (`OFFSETS`): every date moves forward by the 0 to 6 days from
-  the nowcast date less k to the next Saturday, so the sums ending k,
-  k + 7, ... days before the nowcast date are Saturday weeks. The data
-  still stop at the nowcast date, k days into the next week.
+  nowcast date to 28 days before it, and the days after it to forecast
+  (`HORIZONS`). A nowcast date gives one pair of tasks whose target dates
+  are all of them, so every sum comes from one forecast with one context
+  end. Dates are real: the nowcast date is the cut-off, whatever its
+  weekday. A model of weekly steps forecasts the sums ending on Saturdays
+  (`weekly_task`).
 
 `hub_forecasts` moves the forecasts back and names the places as the hub
 does, and `hub_target` gives the 7-day sums as each report date gives
@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
@@ -49,7 +50,6 @@ __all__ = [
     "ALL_AGES",
     "GERMANY",
     "HORIZONS",
-    "OFFSETS",
     "PLACE_NAMES",
     "STATES",
     "hub_forecasts",
@@ -59,6 +59,7 @@ __all__ = [
     "nowcast_tasks",
     "place_code",
     "read_triangle",
+    "weekly_task",
     "within_delay",
 ]
 
@@ -101,10 +102,6 @@ PLACE_NAMES: Final = {
 HORIZONS: Final = tuple(range(0, -29, -1))
 """Days from the nowcast date to the end of each 7-day sum forecast: the
 hub's 29 targets, `"<h> day ahead inc hosp"`."""
-
-OFFSETS: Final = tuple(range(7))
-"""Weekday offsets: offset k's tasks end their weeks k, k + 7, ... days
-before the nowcast date (`nowcast_tasks`)."""
 
 _DAILY = ["vintage", "location", "onset_date", "observed", "imputed", "cutoff"]
 
@@ -276,28 +273,14 @@ def read_triangle(path: Path | str) -> pd.DataFrame:
     )
 
 
-def _shift(nowcast_date: str, offset: int = 0) -> dt.timedelta:
-    """Return the days from the nowcast date less `offset` to a Saturday."""
-    anchor = as_date(nowcast_date) - dt.timedelta(days=offset)
-    return epiweek_end(anchor) - anchor
-
-
-def _moved(dates: pd.Series, shift: dt.timedelta) -> pd.Series:
-    """Move ISO dates by `shift`, each distinct date once."""
-    codes, unique = pd.factorize(dates)
-    moved = (pd.to_datetime(unique) + shift).strftime("%Y-%m-%d")
-    return pd.Series(np.asarray(moved)[codes], index=dates.index)
-
-
 def nowcast_tasks(
     triangle: pd.DataFrame,
     nowcast_date: str,
     n_samples: int,
     seed: int,
-    offsets: Sequence[int] = OFFSETS,
     horizons: Sequence[int] = HORIZONS,
 ) -> list[ForecastTask]:
-    """Return the states and age groups tasks of a nowcast date, by offset.
+    """Return the states and the age groups task of a nowcast date.
 
     Parameters
     ----------
@@ -309,8 +292,6 @@ def nowcast_tasks(
         Samples per forecast.
     seed : int
         Seed of the tasks' random numbers.
-    offsets : sequence of int
-        Weekday offsets (`OFFSETS`, all of them by default).
     horizons : sequence of int
         Days from the nowcast date to the end of each 7-day sum, the
         hub's (`HORIZONS`) by default. Days after it are forecasts.
@@ -318,12 +299,10 @@ def nowcast_tasks(
     Returns
     -------
     list of ForecastTask
-        For each offset k, the task of the states in the triangle, then
-        that of the age groups, each with Germany as the country. Dates
-        move so the nowcast date less k is a Saturday. The reference date
-        and cut-off are the nowcast date moved, and the weeks end on the
-        `horizons` that are k, k + 7, ... days before it (or 7 - k,
-        14 - k, ... days after it).
+        The task of the states in the triangle, then that of the age
+        groups, each with Germany as the country. The reference date and
+        cut-off are the nowcast date, and the target dates are every
+        horizon's day, so one forecast gives every 7-day sum.
     """
     # The hub has age groups for every state, but only Germany's are
     # nowcast.
@@ -336,31 +315,13 @@ def nowcast_tasks(
     ]
     rows = _carried(rows)
     rows = rows.loc[rows["confirm"] != 0]
-    tasks = []
-    for offset in offsets:
-        tasks += _offset_tasks(
-            rows, nowcast_date, offset, n_samples, seed, horizons
-        )
-    return tasks
-
-
-def _offset_tasks(
-    rows: pd.DataFrame,
-    nowcast_date: str,
-    offset: int,
-    n_samples: int,
-    seed: int,
-    horizons: Sequence[int] = HORIZONS,
-) -> list[ForecastTask]:
-    """Return one offset's two tasks (`nowcast_tasks`)."""
-    shift = _shift(nowcast_date, offset)
-    ref = as_date(nowcast_date) + shift
-    vintage = _moved(rows["report_date"], shift)
+    ref = as_date(nowcast_date)
+    vintage = rows["report_date"]
     daily = pd.DataFrame(
         {
             "vintage": vintage,
             "location": _place_codes(rows["location"], rows["age_group"]),
-            "onset_date": _moved(rows["reference_date"], shift),
+            "onset_date": rows["reference_date"],
             "observed": rows["confirm"],
             "imputed": 0,
             "cutoff": vintage,
@@ -376,8 +337,9 @@ def _offset_tasks(
             if place_code(GERMANY, a) in present
         ),
     )
-    back = [h for h in sorted(horizons) if (-h - offset) % 7 == 0]
-    weeks = tuple((ref + dt.timedelta(days=h)).isoformat() for h in back)
+    days = tuple(
+        (ref + dt.timedelta(days=h)).isoformat() for h in sorted(horizons)
+    )
     tasks = []
     for places in groups:
         keep = {NATIONAL, *places}
@@ -394,7 +356,7 @@ def _offset_tasks(
                 ].reset_index(drop=True),
                 delays=None,
                 locations=places,
-                target_end_dates=weeks,
+                target_end_dates=days,
                 n_samples=n_samples,
                 seed=seed,
                 target_history=history.reset_index(drop=True),
@@ -402,6 +364,18 @@ def _offset_tasks(
             )
         )
     return tasks
+
+
+def weekly_task(task: ForecastTask) -> ForecastTask:
+    """Return the task with only the target dates that end hub weeks.
+
+    Models of weekly steps forecast hub weeks, so of a `nowcast_tasks`
+    task they forecast the 7-day sums ending on Saturdays.
+    """
+    weeks = tuple(
+        d for d in task.target_end_dates if epiweek_end(d) == as_date(d)
+    )
+    return replace(task, target_end_dates=weeks)
 
 
 def _place_codes(locations: pd.Series, ages: pd.Series) -> np.ndarray:

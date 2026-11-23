@@ -93,11 +93,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - We save checkpoints at 100, 200, 400, 800, 1,600 and 3,200 simulations.
 - We report the final checkpoint, where the learning rate reaches zero, and select no checkpoint on real data.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
-- We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
 - The number of lag series, in training and at prediction alike, is the largest over the block's places of each place's reporting delay 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
-- We compare the model with attention biases with one fine-tuned without them (SI).
-- We fine-tune Chronos-2 on complete counts only, without delay series, and compare it with the ragged model (SI).
-- We fine-tune Chronos-2 on real data and compare it with the model fine-tuned on simulations (SI).
 - We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.
 - We plot each checkpoint's scores, with both as reference lines (SI).
 - Figure 1 shows the simulation, the ragged series, training and forecasting.
@@ -112,7 +108,7 @@ Group attention has learned biases for a series attending to the other series of
 The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation (same place: a place's count series and its lag series).
 Beside it, one place's daily rows carry a weekly total row, missing until the last day of each week.
 (C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final simulated counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained.
-(D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.](figures/fig1-pipeline.svg){#fig-pipeline}
+(D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u.](figures/fig1-pipeline.svg){#fig-pipeline}
 
 ### Synthetic data generation
 
@@ -162,8 +158,9 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - Our models see only reports made within 40 days of each reference date, so they forecast the count the truth holds.
 - We score the hub's target, 7-day sums, ending on each day from the nowcast date to 28 days before it.
 - We score only the hub's targets, and the SI adds our models' forecasts up to 4 weeks after the nowcast date.
-- Our models forecast weeks ending on Saturdays, so each nowcast date gives seven sets of forecasts, one for each weekday offset $k$ from 0 to 6.
-- For offset $k$, every date moves forward so that $k$ days before the nowcast date is a Saturday, and back again for scoring.
+- Each nowcast date is forecast once, so every 7-day sum comes from one forecast.
+- Chronos-2 reads each day's 7-day sum from its own rolling-sum series, or sums its daily draws when it sees complete counts.
+- The random walks forecast weeks ending on Saturdays, so they give the sums ending 0, 7, 14, 21 and 28 days before the nowcast date.
 - We score each model on its own quantiles at the hub's seven levels.
 - As @Wolffram2023 did, we replace one team's erroneous values by its nowcast of the day before, and fill another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
 - Chronos-2 gives quantiles directly, which we interpolate linearly to the hub's levels, with no sampling.
@@ -183,14 +180,28 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - We score only the hub's own targets and horizons.
 - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
 - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
-- We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, with $D$ the 98% point of the hub data's reporting delay, taking the hub teams' quantiles from their samples.
+- We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, taking the hub teams' quantiles from their samples.
+- We score each week against its count in the first release at least $D$ days after the week ends, with $D$ the 98% point of the hub data's reporting delay.
+- By then nearly all of a week's cases are reported, so the truth changes little afterwards while every round can still be scored.
 - $D$ is part of the scoring rule, not a choice tuned on the data.
 - The SI compares the samples directly with the fair CRPS.
 - We score Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
 - Quantiles from 100 draws are noisier than those from 1,000, so WIS is biased against the hub teams, and the fair CRPS in the SI checks this.
-- Chronos-2's submitted trajectories come from its quantiles through a copula, and the SI scores them with and without it (Correlated trajectories).
 - The fine-tuned models use the final run's last checkpoint, at 3,200 simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
+:::
+
+### Sensitivity analyses
+
+::: {.callout-note title="Plan"}
+- We nowcast in two steps, giving the point nowcast of our baselinenowcast port to Chronos-2 as complete counts, both zero-shot and with the fine-tuned model, with no further fine-tuning.
+- The fine-tuned model on this input shows what the synthetic data teach beyond the reporting delays.
+- We fine-tune Chronos-2 on real data, the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
+- We fine-tune one run without the attention biases and one without lag series, and compare each with the main run.
+- We compare the lag count rule with a fixed cap of 4 weeks or 28 days.
+- We compare the joint block with forecasting each level alone and with summing the lowest level.
+- We compare the walks' rolling copula with no pairing, and score Chronos-2's submitted trajectories with its copula, with independent cells and comonotone.
+- The SI gives each in full.
 :::
 
 ### Implementation
@@ -226,7 +237,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {#tbl-live-summary}
 {{< include build/tables/si/live-summary.md >}}
 
-Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Held-out synthetic data
@@ -236,8 +247,6 @@ Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: na
 - We summarise their scores.
 - The SI gives each checkpoint's scores by the number of simulations it was trained on (Checkpoint curve).
 - The SI describes the held-out set (Synthetic data generation).
-- The SI compares the model with attention biases with one fine-tuned without them (Attention biases for place and parent against none).
-- The SI compares the ragged model with one fine-tuned without delay series (Delays against no delays).
 - The SI shows the dashboard we used to review fine-tuning (Monitoring fine-tuning).
 :::
 
@@ -266,8 +275,6 @@ Held-out synthetic data: mean scores, coverage and number of forecasts of each m
 ::: {.callout-note title="Plan"}
 - We show national nowcasts against the other models.
 - We summarise the scores.
-- The SI compares the model fine-tuned on real data with the one fine-tuned on simulations (Real-data fine-tune against synthetic).
-- The SI compares this lag count with a fixed cap of 4 weeks or 28 days (Foundation model setup).
 - The SI gives daily nowcasts for both case studies against `randomwalknowcast` (Daily nowcasts).
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
@@ -297,7 +304,6 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {.callout-note title="Plan"}
 - We show national nowcasts against the other submissions.
 - We summarise the scores.
-- The SI compares the walks with the rolling copula and with no pairing (Impact of correlated trajectories).
 :::
 
 ::::: {.content-visible when-meta="results.ebola.shown"}
@@ -323,6 +329,27 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 :::
 
 :::::
+
+### Sensitivity analyses
+
+::: {.callout-note title="Plan"}
+- One short paragraph per analysis, each pointing to its SI section.
+- The lag count against a fixed cap and the joint block against each level alone and the sum of the lowest level have no SI section yet, and get a paragraph when they do.
+:::
+
+Against `randomwalknowcast`, zero-shot Chronos-2 on the two-step input scored {{< meta results.synthetic.models.fm_chronos_daily_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.fm_chronos_daily_twostep >}} on the German {{< meta results.germany.scope >}}.
+The fine-tuned model on the same input scored {{< meta results.synthetic.models.fm_chronos_daily_twostep_ft >}} and {{< meta results.germany.models.fm_chronos_daily_twostep_ft >}}, and on the ragged layout {{< meta results.synthetic.models.fm_chronos_daily_ragged_ft >}} and {{< meta results.germany.models.fm_chronos_daily_ragged_ft >}}.
+
+::: {.content-visible when-meta="results.ebola.shown"}
+On the Ebola {{< meta results.ebola.scope >}}, zero-shot Chronos-2 and the fine-tuned model on the two-step input and the fine-tuned model on the ragged layout scored {{< meta results.ebola.models.fm_chronos_daily_twostep >}}, {{< meta results.ebola.models.fm_chronos_daily_twostep_ft >}} and {{< meta results.ebola.models.fm_chronos_daily_ragged_ft >}}.
+:::
+
+We score the model fine-tuned on real data on the German held-out half and on Ebola rounds after its last training release, {{< meta results.realdata_after >}}, against the model fine-tuned on simulations (SI, Real-data fine-tune against synthetic).
+
+We compare the runs without attention biases and without lag series with the main run by validation loss and German development scores at each checkpoint (SI, Attention biases for place and parent against none, and Delays against no delays).
+
+The median rolling $\rho_p$ between German states was {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, and the SI compares it with no pairing (SI, Impact of correlated trajectories).
+The SI also scores Chronos-2's trajectories with its copula, with independent cells and comonotone (SI, Correlated trajectories).
 
 ## Discussion
 

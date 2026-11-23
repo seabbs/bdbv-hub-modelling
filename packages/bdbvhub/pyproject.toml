@@ -26,6 +26,8 @@ dependencies = [
 bdbvhub = "bdbvhub.cli:main"
 # The command's name before the packages split.
 bdbvhubrenewal = "bdbvhub.cli:main"
+fit-store-branch = "bdbvhub.store.branch:main"
+results-release = "bdbvhub.submission.release:main"
 
 [tool.uv.sources]
 nowcastutils = { workspace = true }

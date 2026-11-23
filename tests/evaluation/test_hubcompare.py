@@ -222,6 +222,9 @@ def test_load_comparison_config() -> None:
     assert cfg.baseline == "randomwalknowcast"
     assert cfg.submitted == "data/our-submissions"
     assert "CD" in cfg.locations
+    # Substituted weeks are scored apart from chain-start weeks.
+    assert cfg.substituted == "apart"
+    assert cfg.submissions_table.endswith("submissions.csv")
 
 
 def test_resolve_baseline() -> None:
@@ -679,3 +682,71 @@ def test_summarise_comparison_scores_crps(
     assert rows.loc["flat", "rel_log_crps"] == pytest.approx(1)
     assert {"crps", "log_crps"} <= set(table.columns)
     assert not any("wis" in c for c in table.columns)
+
+
+def _submitted(model: str, ref: str, source: str = "submitted") -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "model": model,
+            "source": source,
+            "reference_date": ref,
+            "location": "CD",
+            "target_end_date": "2026-11-21",
+            "sample": [1, 2],
+            "value": 1.0,
+        }
+    )
+
+
+SUBMISSIONS = pd.DataFrame(
+    {
+        "reference_date": ["2026-11-14", "2026-11-21", "2026-11-21"],
+        "hub_id": ["seabbs-renewal", "seabbs-renewal", "seabbs-rwnowcast"],
+        "model": ["renewalbvd", "renewalsp", "randomwalknowcast"],
+        "chain_start": ["renewalbvd", "renewalbvd", "randomwalknowcast"],
+        "substituted": ["false", "true", "false"],
+    }
+)
+
+
+def test_substituted_weeks_are_scored_under_their_own_label() -> None:
+    """A week a fallback went out under seabbs-renewal is not scored as
+    the chain's start (Sam, #768 item 14)."""
+    from bdbvhub.compare import split_substituted, substituted_label
+
+    forecasts = pd.concat(
+        [
+            _submitted("seabbs-renewal", "2026-11-14"),
+            _submitted("seabbs-renewal", "2026-11-21"),
+            _submitted("seabbs-rwnowcast", "2026-11-21"),
+            _submitted("teamA", "2026-11-21", source="hub"),
+            _submitted("renewalbvd", "2026-11-21", source="real"),
+        ]
+    )
+    out = split_substituted(forecasts, SUBMISSIONS, "apart")
+    got = set(zip(out["model"], out["reference_date"], strict=True))
+    label = substituted_label("seabbs-renewal", "renewalsp")
+    assert label == "seabbs-renewal [renewalsp]"
+    assert got == {
+        ("seabbs-renewal", "2026-11-14"),
+        (label, "2026-11-21"),
+        ("seabbs-rwnowcast", "2026-11-21"),
+        ("teamA", "2026-11-21"),
+        ("renewalbvd", "2026-11-21"),
+    }
+    assert len(out) == len(forecasts)
+
+
+def test_substituted_weeks_can_be_kept_together() -> None:
+    from bdbvhub.compare import split_substituted
+
+    forecasts = _submitted("seabbs-renewal", "2026-11-21")
+    out = split_substituted(forecasts, SUBMISSIONS, "together")
+    assert out["model"].unique().tolist() == ["seabbs-renewal"]
+
+
+def test_an_unknown_substituted_mode_stops() -> None:
+    from bdbvhub.compare import split_substituted
+
+    with pytest.raises(ValueError, match="substituted"):
+        split_substituted(_submitted("x", "2026-11-21"), SUBMISSIONS, "mix")

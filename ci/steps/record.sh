@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Record a live run's outcome on the ledger branch and archive the
 # round's small files there, so the next run knows which data each round
-# used and the submissions outlive the 90-day artefact limit.
+# used and the submissions outlive the 90-day artefact limit. Also
+# rewrites submissions.csv there: each round's submitted model per hub id.
 #
 #   LEDGER_BRANCH  default submission-ledger
 #   REFERENCE_DATE, DATA_COMMIT, AS_OF, ACTION, PR_URL, PRODUCED_BY,
@@ -62,6 +63,11 @@ write_record() {
   [ -n "${CHRONOS_GATE:-}" ] && archive_gate "$CHRONOS_GATE" "$chronos_archive"
   record_model "${CHRONOS_ID:-}" "${CHRONOS_ACTION:-}" "${CHRONOS_PR_URL:-}" \
     "${CHRONOS_PRODUCED_BY:-}" "${CHRONOS_SKIPPED:-}" "$chronos_archive"
+  # Each round's submitted model and chain start per hub id, from the
+  # records and archived gates above (submission_ci.submissions).
+  sci submissions-table --state "$ledger/state.json" --ledger "$ledger" \
+    --policy "$POLICY" --hub-config "${HUB_TOML:-$CI_DIR/../config/hub.toml}" \
+    --out "$ledger/submissions.csv"
 }
 
 # The gate's small files: provenance, PR body, the selected file and plot.

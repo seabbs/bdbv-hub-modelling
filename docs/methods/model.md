@@ -24,7 +24,7 @@ flowchart TD
     PM["<b>Place model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
     RN["<b>renewal</b><br/>zones with recent cases<br/>fitted together<br/>+ pooled log R walk<br/>+ province and zone<br/>sum-to-zero AR(1) deviations<br/>+ importation between zones<br/>+ share at risk<br/>+ delay pooled by province<br/>+ silent zones by introductions<br/>provinces are zone sums"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
-    SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>no share at risk"]
+    SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>+ share at risk"]
 
     PM -- "nest zones in provinces" --> RN
     RN -- "add external Rt" --> BV
@@ -38,7 +38,7 @@ Each place $p$ has the model below: a province in `renewalsp`, a health zone in 
 ```mermaid
 flowchart TD
     subgraph TR["Transmission"]
-        RT["log R<sub>p</sub>(t)<br/>weekly random walk"]
+        RT["log R<sub>p</sub>(t)<br/>weekly AR(1)"]
         GI["Generation interval g"]
         INF["Infections per resident x<sub>p</sub>(t)"]
     end
@@ -82,12 +82,17 @@ The fit axis is the data weeks, extended for `renewalbvd` as [below](#bvdoutbrea
 ### Reproduction number
 
 $$
-\log R_p(t) = \log R_p(t - 1) + \sigma_R z(t),
+\log R_p(t) = \phi_R \log R_p(t - 1) + \sigma_R z(t),
+\qquad
+\phi_R = 2^{-1/h_R},
+\qquad
+h_R \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks},
 \qquad
 \sigma_R \sim \mathcal{N}^+(0, 0.2^2),
 $$
 
 with standard normal steps $z(t)$, sampled non-centred, and a start $\mathcal{N}(0, 0.5^2)$.
+So log R reverts towards 0 (R of 1) with a fitted half-life, the prior of BVDOutbreakSize's deviations.
 
 ### Renewal
 
@@ -99,7 +104,9 @@ $$
 
 $g$ is BVDOutbreakSize's Gamma generation interval (mean 15.3, SD 9.3 days), double interval censored as $G(d + 1) - 2G(d) + G(d - 1)$ with $G$ the integrated cdf, on lags 1 to 42 and renormalised (mean 14.8, SD 8.4 days), as in primarycensored[^pcens][^park].
 Seeds are $e_p \sim \text{LogNormal}(0, 1.5^2)$ infections per day that will be confirmed, or $I_{0,p} = e_p / (\alpha_0 N_p)$ infections per resident, on the first data day.
-The seed is projected back over the seeding weeks at the growth rate implied by $R_p$ and $g$, clipped to $[-0.05, 0.3]$ per day.
+The seed is projected back over the seeding weeks at a daily growth rate $r_s$ shared by all places, $r_s \sim \text{LogNormal}(\log(\log 2 / 11.7), 0.30^2)$.
+This is BVDOutbreakSize's prior on the outbreak's cryptic growth, a median doubling time of 11.7 days from the BEAST X analysis.
+A growing seed only falls going back, so it never exceeds its level on the first data day.
 
 ### Ascertainment
 
@@ -182,9 +189,7 @@ The hub fits the delays as exact for releases up to 2026-10-24 and as double int
 ### Forecasts
 
 The random walks carry $\alpha$ and $f$ to the forecast horizon, $m$ keeps its last value, and each of 100 trajectories is one posterior draw.
-Past the fit axis the walk of $\log R$ reverts towards 0 with a fixed half-life of 2 weeks, $\log R(t) = 2^{-1/2} \log R(t - 1) + \sigma_R z(t)$, so it does not compound growth over the horizon.
-In `renewal` this is the pooled trend, and the province and zone deviations keep their AR(1) ([below](#pooled-reproduction-number)).
-The reversion leaves the fit unchanged.
+Past the fit axis $\log R$ continues the AR(1) it was fitted with, with the same half-life and step SD, as do the province and zone deviations in `renewal` ([below](#pooled-reproduction-number)).
 A trajectory is the final known plus final imputed counts.
 Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
 Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.
@@ -206,7 +211,7 @@ Leaving a province out removes the known and imputed counts of its zones and its
 
 ```mermaid
 flowchart TD
-    LR["Pooled log R(t)<br/>weekly random walk"]
+    LR["Pooled log R(t)<br/>weekly AR(1)"]
     DV["Province deviations δ<sub>p</sub>(t)<br/>sum-to-zero AR(1)"]
     ZV["Zone deviations ε<sub>z</sub>(t)<br/>sum-to-zero AR(1)<br/>within each province"]
     RP["log R<sub>z</sub>(t) = log R(t) + δ<sub>p(z)</sub>(t) + ε<sub>z</sub>(t)"]
@@ -330,7 +335,8 @@ The national trajectory is the sum of the provinces, with no unassigned componen
 
 `renewalsp` fits the [place model](#province-model) to each province's series on its own, one fit after another with the same code.
 Nothing is pooled or shared between provinces: each has its own Rt walk, delay, missing-onset share and ascertainment.
-One series cannot inform the share at risk, so there is no depletion.
+It keeps the share at risk and depletion of the zone models, so the three models differ only in what each removes.
+One series barely informs $\nu$, so it stays close to its prior.
 Every province with a case in the random walks' walk window is fitted, however few its cases.
 A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
 National is the sum of the provinces plus the data's national gap.
@@ -374,12 +380,12 @@ R_{\mathcal{G}}(t_b) = \frac{\sum_{z \in \mathcal{G}} \Omega_z\, R_z(t_b)}{\sum_
 \mathcal{G} \in \{\text{CD}, k\}.
 $$
 
-With the term down-weighted by $\zeta = 0.5$, the likelihood gains
+With the release's SDs inflated by a factor $\kappa = \sqrt{2} \approx 1.41$, the likelihood gains
 
 $$
-\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_{\text{CD}}(t_b),\, \sigma_{\text{CD}}^2/\zeta\big),
+\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_{\text{CD}}(t_b),\, \kappa^2 \sigma_{\text{CD}}^2\big),
 \qquad
-\tilde\mu_k - \tilde\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_k(t_b) - \log R_{\text{CD}}(t_b),\, \sigma_{\Delta,k}^2/\zeta\big),
+\tilde\mu_k - \tilde\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_k(t_b) - \log R_{\text{CD}}(t_b),\, \kappa^2 \sigma_{\Delta,k}^2\big),
 \qquad
 \sigma_{\Delta,k}^2 = \max(\tilde\sigma_k^2 - \tilde\sigma_{\text{CD}}^2,\, 0.05^2).
 $$
@@ -388,7 +394,11 @@ $\mu_{\text{CD}}$ and $\sigma_{\text{CD}}$ are the mean and SD of the release's 
 $\tilde\mu_k$ and $\tilde\sigma_k$ are each patch's log median and SD, the SD from the 90% interval.
 $\tilde\mu_{\text{CD}}$ and $\tilde\sigma_{\text{CD}}$ are the same summaries of the national estimate the patches are relative to, or $\mu_{\text{CD}}$ and $\sigma_{\text{CD}}$ if the release has none.
 Leaving a province out drops the national term and the patch that holds it.
-The term adds no parameters, and $\zeta = 0$ gives `renewal`.
+$\kappa$ says how much we trust an external estimate built partly on the same case data as ours.
+At $\kappa = 1$ those data would count twice at full weight, so we widen the estimates and they move our Rt mainly where our own data are weak.
+$\kappa$ is set by that judgement, like a prior, and is not tuned on scores.
+$\kappa = \sqrt{2}$ halves the precision, a power prior with tempering 0.5.
+The term adds no parameters, and $\kappa = \infty$ gives `renewal`.
 
 ## Health zones
 

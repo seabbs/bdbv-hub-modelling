@@ -1,5 +1,7 @@
 """The renewal model with health zones as its places."""
 
+import dataclasses
+
 import numpy as np
 import numpyro
 import pandas as pd
@@ -119,6 +121,7 @@ def test_nested_basis_leaves_out_inactive_places():
     assert within.shape == (5, 1)
 
 
+@pytest.mark.slow
 def test_one_zone_per_province_is_the_province_model(
     outbreak, sim_tables, table
 ):
@@ -279,3 +282,70 @@ def test_anchored_starts_are_non_centred(zone_vintage):
     # Anchored starts sample no centred offsets, only non-centred ones.
     assert "log_rt0_offsets" not in params
     assert "log_rt0_province_z" in params
+
+
+def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
+    zone_vintage, outbreak, sim_tables, table
+):
+    # Option (a), #736: the pooled log Rt walk and the province and zone
+    # deviations are AR(1) with a fitted half-life, and the forecast
+    # continues that process with no forecast-only reversion.
+    import nowcastrenewal.model.model as module
+
+    assert not hasattr(module, "FORECAST_RT_HALF_LIFE")
+    day = VINTAGE_DAYS[-1]
+    target, delays = sim_tables[day]
+    vintage = vintage_date(outbreak, day)
+    province = vintage_from_tables(
+        target,
+        delays,
+        vintage,
+        SIM_LOCATIONS[:1],
+        table,
+        imputation_delay=hub_delay_pmf(vintage),
+    )
+    centred = dataclasses.replace(MAIN, national=True, centred_rt=True)
+    _, params = _params(build_zone_model(zone_vintage), zone_vintage)
+    for name in ("rt_sd", "rt_dev_sd", "rt_zone_dev_sd"):
+        assert f"{name}_half_life" in params, name
+    # One province has no deviations, so its trend is its only Rt walk.
+    for config in (MAIN, centred):
+        _, params = _params(build_model(province, config), province)
+        assert "rt_sd_half_life" in params
+
+
+def test_the_seed_grows_at_bvdoutbreaksizes_cryptic_growth_prior(
+    zone_vintage,
+):
+    # #768 item 6: one shared seed growth rate with BVDOutbreakSize's
+    # prior on cryptic growth, in place of a clip on the growth implied
+    # by the first Rt.
+    from nowcastrenewal.model.model import SEED_DOUBLING_DAYS
+
+    assert SEED_DOUBLING_DAYS == 11.7
+    model = build_zone_model(zone_vintage)
+    tr, params = _params(model, zone_vintage)
+    assert np.shape(params["seed_growth"]) == ()
+    prior = tr["seed_growth"]["fn"]
+    median = float(np.exp(prior.base_dist.loc))
+    assert median == pytest.approx(np.log(2) / 11.7, rel=1e-6)
+
+
+def test_seeding_stays_within_the_pool_under_the_prior(zone_vintage):
+    import jax
+
+    model = build_zone_model(zone_vintage)
+    latent = model.latent
+
+    def draw(key):
+        with numpyro.handlers.seed(rng_seed=key):
+            seed_total = latent._initial_infections(latent.I0_rv(), 10)[0].sum(
+                axis=0
+            )
+            return seed_total, latent.effective_population_rv()
+
+    seeded, pool = jax.vmap(draw)(jax.random.split(jax.random.key(0), 4000))
+    within = np.mean(np.asarray(seeded) < np.asarray(pool)[:, None], axis=0)
+    # Every zone, the smallest included, keeps its seed within its
+    # at-risk pool in at least 99.9% of prior draws.
+    assert within.min() >= 0.999, within.min()

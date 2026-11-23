@@ -44,9 +44,11 @@ def triangle() -> pd.DataFrame:
 @pytest.fixture(scope="module")
 def forecasts(triangle: pd.DataFrame) -> pd.DataFrame:
     drawn = germany_forecasts(
-        ["randomwalk", "randomwalknowcast"],
+        ["randomwalknowcast_daily"],
         triangle,
-        ["2021-10-04", "2021-10-05"],
+        # One date: each date is 7 offsets' tasks per model, and every
+        # test here holds for one as for many.
+        ["2021-10-04"],
         n_samples=30,
         seed=1,
     )
@@ -70,15 +72,14 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
     )
     # Germany is daily only: no weekly model.
     assert config.models == (
-        "randomwalk",
-        "randomwalknowcast",
+        "randomwalknowcast_daily",
         "fm_chronos_daily_complete",
         "fm_chronos_daily_ragged",
         "fm_chronos_daily_ragged_ft",
     )
     assert config.truth_delay == 40
     assert config.submissions
-    assert config.baseline == "randomwalknowcast"
+    assert config.baseline == "randomwalknowcast_daily"
     assert config.paper_baseline == "KIT-frozen_baseline"
 
 
@@ -120,7 +121,7 @@ def test_scores_are_quantile_scores_on_the_d_day_truth(
 ) -> None:
     assert set(SCORE_COLUMNS) <= set(scores.columns)
     assert "log_wis" not in scores.columns
-    assert set(scores["origin"]) == {"2021-10-04", "2021-10-05"}
+    assert set(scores["origin"]) == {"2021-10-04"}
     assert set(scores["horizon"]) <= set(HORIZONS)
     assert set(scores["pool"]) == {"national", "states", "age"}
     ends = sorted(set(scores["target_end_date"]))
@@ -144,7 +145,7 @@ def test_sums_with_no_release_d_days_on_are_not_scored(
 def test_relative_scores_are_against_the_baseline_given(
     scores: pd.DataFrame,
 ) -> None:
-    for base in ("randomwalknowcast", "randomwalk"):
+    for base in ("randomwalknowcast_daily",):
         rel = relative_scores(scores, ("pool",), base)
         rel = rel.set_index(["pool", "model"])
         assert rel.loc[("national", base), "rel_wis"] == pytest.approx(1)
@@ -502,6 +503,7 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
         return pd.DataFrame()
 
     monkeypatch.setattr(de, "_tasks", tasks)
+    monkeypatch.setattr(de, "_own", lambda _model, task: task)
     monkeypatch.setattr(de, "get_model", lambda name: name)
     monkeypatch.setattr(de, "forecast_quantiles", quantiles)
     dates = ["2021-10-04", "2021-10-05", "2021-10-06"]
@@ -533,6 +535,7 @@ def test_chronos_is_prefetched_at_the_levels_it_forecasts(
     monkeypatch.setattr(de, "get_model", lambda _name: Chronos())
     monkeypatch.setattr(de, "prefetch", prefetch)
     monkeypatch.setattr(de, "_tasks", lambda *_a: ["task"])
+    monkeypatch.setattr(de, "_own", lambda _model, task: task)
     monkeypatch.setattr(de, "forecast_quantiles", quantiles)
     de.germany_forecasts(["chronos2"], pd.DataFrame(), ["2021-10-04"], 10, 1)
     assert seen["prefetch"] == seen["forecast"]
@@ -654,15 +657,16 @@ def test_each_model_and_date_records_its_seconds(
     assert set(got["stage"]) == {"forecast"}
 
 
-def test_daily_rows_are_the_offset_0_tasks_own_daily_quantiles(
+def test_daily_rows_are_each_tasks_own_daily_quantiles(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The daily view: each real day once, from the offset-0 tasks (states,
-    # then ages), as the model's own quantiles of its daily count rows. A
-    # model without them gives no daily rows.
+    # The daily view: each real day once, from the date's tasks (states,
+    # then ages), the same forecast as the 7-day sums, as the model's own
+    # quantiles of its daily count rows. A model without them gives no
+    # daily rows.
     from nowcastgermany import evaluation as de
 
-    tasks = ["s0", "a0", "s1", "a1"]
+    tasks = ["s0", "a0"]
     seen: list[str] = []
 
     class Own:
@@ -698,6 +702,7 @@ def test_daily_rows_are_the_offset_0_tasks_own_daily_quantiles(
         de, "forecast_quantiles", lambda *_a, **_k: pd.DataFrame()
     )
     monkeypatch.setattr(de, "hub_forecasts", moved)
+    monkeypatch.setattr(de, "_own", lambda _model, task: task)
     out = de.germany_forecasts(
         ["own", "none"], pd.DataFrame(), ["2021-10-04"], 10, 1,
         targets=("7day", "daily"),

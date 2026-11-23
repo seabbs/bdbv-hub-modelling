@@ -53,7 +53,6 @@ from .inputs import (
 )
 from .model import (
     ALPHA0,
-    FORECAST_RT_HALF_LIFE,
     GEN_INT_LENGTH,
     INCUBATION_LENGTH,
     INCUBATION_MEAN,
@@ -62,6 +61,8 @@ from .model import (
     INCUBATION_SD_SD,
     MAIN,
     MAX_PUBLICATION_LAG,
+    SEED_DOUBLING_DAYS,
+    SEED_GROWTH_LOG_SD,
     SUNDAY,
     ModelConfig,
     Vintage,
@@ -263,7 +264,6 @@ def _zone_walk(
     sd: float,
     n_weeks: int,
     ar: bool = False,
-    forecast_half_life: float | None = None,
     anchor: bool = True,
     centred: bool = False,
 ) -> TemporalProcess:
@@ -279,7 +279,7 @@ def _zone_walk(
     anchored_walk = anchor and name in ANCHORED
     if centred and anchored_walk:
         raise ValueError(f"{name} is anchored, so it cannot be centred.")
-    process = _named_walk(name, sd, n_weeks, ar, forecast_half_life, centred)
+    process = _named_walk(name, sd, n_weeks, ar, centred)
     if not anchored_walk:
         return process
     inner = process.inner
@@ -288,7 +288,6 @@ def _zone_walk(
         frozen=inner.frozen,
         n_fit=inner.n_fit,
         half_life_rv=inner.half_life_rv,
-        forecast_half_life=inner.forecast_half_life,
     )
     return WeeklyTemporalProcess(anchored, start_dow=SUNDAY)
 
@@ -522,9 +521,7 @@ class ZoneInfections(MetapopulationInfections):
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()
         I0 = self._validate_and_prepare_I0(jnp.asarray(self.I0_rv()), pop)
-        I0_all, seeding = self._initial_infections(
-            I0, rt[0], gen_int, n_days_post_init
-        )
+        I0_all, seeding = self._initial_infections(I0, n_days_post_init)
         post, r_eff = self._infections_from_rt(
             rt[n_init:], I0_all, gen_int, pop, seeding
         )
@@ -793,12 +790,9 @@ def build_zone_model(
         sd: float,
         n_weeks: int,
         ar: bool = False,
-        forecast_half_life: float | None = None,
         centred: bool = False,
     ) -> TemporalProcess:
-        return _zone_walk(
-            name, sd, n_weeks, ar, forecast_half_life, anchor, centred
-        )
+        return _zone_walk(name, sd, n_weeks, ar, anchor, centred)
 
     if data.parents is None:
         raise ValueError("A zone model needs each zone's province.")
@@ -866,7 +860,7 @@ def build_zone_model(
             "rt_sd",
             0.2,
             fit_weeks(data, config),
-            forecast_half_life=FORECAST_RT_HALF_LIFE,
+            ar=True,
             centred=config.centred_rt,
         ),
         subpop_rt_deviation_process=_zone_walk_a(
@@ -881,8 +875,16 @@ def build_zone_model(
             "rt_zone_dev_sd", 0.1, fit_weeks(data, config), ar=True
         ),
         own=data.own,
+        # One growth rate for every place's seed before the data, with
+        # BVDOutbreakSize's prior on the outbreak's cryptic growth.
+        seed_growth_rv=DistributionalVariable(
+            "seed_growth",
+            dist.LogNormal(
+                np.log(np.log(2.0) / SEED_DOUBLING_DAYS), SEED_GROWTH_LOG_SD
+            ),
+        ),
         rt_observation=RtPseudoObservation(
-            "bvd", alpha=config.bvd_alpha, **data.bvd
+            "bvd", sd_inflation=config.bvd_sd_inflation, **data.bvd
         )
         if config.bvd and data.bvd is not None
         else None,

@@ -1,6 +1,6 @@
-"""Fixtures for the baselinenowcast port.
+"""Cases for the baselinenowcast port.
 
-The oracle tests run in float64, as the R package does.
+The tests run in float64, as the R package does.
 """
 
 from __future__ import annotations

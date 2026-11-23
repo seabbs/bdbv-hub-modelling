@@ -14,8 +14,9 @@ held out for the paper (`nowcast_dates`).
 
 `germany_forecasts` runs our models on the tasks of each nowcast date
 (`nowcastgermany.data.nowcast_tasks`), for the sums ending on
-every day from 0 to 28 days back (`HORIZONS`, one task pair per weekday
-offset), and keeps their quantiles at
+every day from 0 to 28 days back (`HORIZONS`, one task pair per date, so
+one forecast with one context end gives every sum), and keeps their
+quantiles at
 `QUANTILE_LEVELS`: a model's own where it gives them, else those of its
 samples (`nowcasteval.marginals.forecast_quantiles`).
 `team_forecasts` takes the hub teams' submitted quantiles at the same
@@ -61,6 +62,7 @@ from nowcastgermany.data import (
     hub_target,
     level,
     nowcast_tasks,
+    weekly_task,
     within_delay,
 )
 from nowcastutils.base import ForecastTask
@@ -179,7 +181,13 @@ class GermanyConfig:
     submissions : tuple of str
         Paths there of the hub teams' submissions.
     first_date, last_date : str
-        The first and last nowcast date.
+        The first and last nowcast date of the hub's evaluation, the dates
+        the hub teams are compared on.
+    development_start : str
+        The first nowcast date the checkpoint units score
+        (`development_dates`): the first whose oldest hub target starts
+        on a data day. The models' lag window is capped by the history
+        the task holds there. Defaults to `first_date`.
     split_date : str
         The first nowcast date of the held-out half. The dates before it
         are for development.
@@ -233,6 +241,12 @@ class GermanyConfig:
     horizons: tuple[int, ...] = HORIZONS
     targets: tuple[str, ...] = ("7day",)
     daily_baseline: str = "fm_chronos_daily_ragged"
+    development_start: str = ""
+
+    def __post_init__(self) -> None:
+        """Start development at the hub's first date unless set."""
+        if not self.development_start:
+            object.__setattr__(self, "development_start", self.first_date)
 
 
 def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
@@ -308,6 +322,7 @@ def load_germany_config(
         daily_baseline=raw["scoring"].get(
             "daily_baseline", "fm_chronos_daily_ragged"
         ),
+        development_start=now.get("development_start", ""),
     )
 
 
@@ -330,6 +345,17 @@ def nowcast_dates(config: GermanyConfig, held_out: bool = False) -> list[str]:
     days = pd.date_range(config.first_date, config.last_date, freq="D")
     dates = [d.date().isoformat() for d in days]
     return [d for d in dates if (d >= config.split_date) == held_out]
+
+
+def development_dates(config: GermanyConfig) -> list[str]:
+    """Return the checkpoint units' nowcast dates, oldest first.
+
+    From `GermanyConfig.development_start`, before the hub's first date
+    where it is earlier, to the day before the split date. The held-out
+    half is unchanged (`nowcast_dates`).
+    """
+    days = pd.date_range(config.development_start, config.split_date)
+    return [d.date().isoformat() for d in days][:-1]
 
 
 def fetch_germany(  # pragma: no cover - network
@@ -419,7 +445,7 @@ def _tasks(
 ) -> list[ForecastTask]:
     """Return a date's tasks, from the store `root` if it holds them.
 
-    The store holds each date's tasks of every offset as a gzip-compressed
+    The store holds each date's tasks (states, ages) as a gzip-compressed
     pickle (level 1: about 40 times smaller, and fast to read). Tasks of
     other horizons than the hub's are kept in a folder named by them.
     """
@@ -438,6 +464,18 @@ def _tasks(
     tmp.write_bytes(gzip.compress(raw, compresslevel=1))
     tmp.rename(path)
     return tasks
+
+
+def _own(model: Any, task: ForecastTask) -> ForecastTask:
+    """Return the task as `model` forecasts it.
+
+    A model of daily steps (`source` "daily": the daily Chronos-2 models
+    and `randomwalknowcast_daily`) forecasts every target date of a
+    `nowcast_tasks` task; a model of weekly steps, the hub weeks only
+    (`weekly_task`).
+    """
+    daily = getattr(model, "source", None) == "daily"
+    return task if daily else weekly_task(task)
 
 
 def _timed_prefetch(
@@ -508,8 +546,8 @@ def germany_forecasts(
         `prefetch`, `origin` empty).
     targets : sequence of str
         Views of `TARGETS` to forecast. `daily` rows are each day's count,
-        from the offset-0 tasks only so each day is forecast once, as a
-        model's own quantiles of its daily count rows
+        from the same forecast as the 7-day sums, as a model's own
+        quantiles of its daily count rows
         (`FoundationModel.daily_quantiles`); a model without them gives
         none.
 
@@ -535,7 +573,7 @@ def germany_forecasts(
         }
         every = [t for ts in tasks.values() for t in ts]
         built = [
-            _timed_prefetch(name, m, every, timings)
+            _timed_prefetch(name, m, [_own(m, t) for t in every], timings)
             if isinstance(m, FoundationModel)
             else m
             for name, m in zip(models, built, strict=True)
@@ -556,8 +594,9 @@ def germany_forecasts(
         for task in mine:
             for name, model in zip(models, built, strict=True):
                 start = time.perf_counter()
+                own = _own(model, task)
                 at = forecast_quantiles(
-                    model, task, FORECAST_LEVELS, n_samples, seed
+                    model, own, FORECAST_LEVELS, n_samples, seed
                 )
                 spent[name] += time.perf_counter() - start
                 if at.empty:
@@ -565,7 +604,7 @@ def germany_forecasts(
                 # `hub_forecasts` moves rows to the hub's dates and places,
                 # carrying each row's level where it carries a sample.
                 moved = hub_forecasts(
-                    at.rename(columns={"quantile": "sample"}), task, date
+                    at.rename(columns={"quantile": "sample"}), own, date
                 )
                 frames.append(
                     moved.rename(
@@ -576,8 +615,7 @@ def germany_forecasts(
                     ).assign(target="7day")
                 )
         if daily:
-            # The first two tasks are offset 0's (states, then ages).
-            frames += _daily_rows(models, built, mine[:2], date)
+            frames += _daily_rows(models, built, mine, date)
         if timings is not None:
             timings += [
                 {"model": m, "origin": date, "stage": "forecast", "seconds": t}

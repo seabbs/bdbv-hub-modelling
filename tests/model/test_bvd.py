@@ -1,5 +1,6 @@
-"""The BVDOutbreakSize-informed variant (tempered Rt pseudo-observation)."""
+"""The BVDOutbreakSize-informed variant (Rt pseudo-observation)."""
 
+import math
 from dataclasses import replace
 from pathlib import Path
 
@@ -65,7 +66,7 @@ def test_pseudo_observation_density_is_analytic():
     inf = jnp.ones((70, 2)).at[:, 1].set(3.0)
     obs = RtPseudoObservation(
         "bvd",
-        0.5,
+        2.0,
         14,
         [[True, True], [False, True]],
         [0.1, -0.3],
@@ -77,7 +78,7 @@ def test_pseudo_observation_density_is_analytic():
     national = jnp.log((1.2 + 3 * 0.8) / 4)
     model = jnp.array([national, jnp.log(0.8) - national])
     expect = norm.logpdf(
-        jnp.array([0.1, -0.3]), model, jnp.array([0.2, 0.25]) / jnp.sqrt(0.5)
+        jnp.array([0.1, -0.3]), model, 2.0 * jnp.array([0.2, 0.25])
     ).sum()
     got = tr["bvd_rt_obs"]["fn"].log_prob(tr["bvd_rt_obs"]["value"]).sum()
     assert float(got) == pytest.approx(float(expect), rel=1e-5)
@@ -100,13 +101,14 @@ def sim_with_bvd(outbreak, sim_tables, table, release, config):
     )
 
 
-def test_alpha_zero_reproduces_main(outbreak, sim_tables, table, release):
-    data = sim_with_bvd(
-        outbreak, sim_tables, table, release, replace(BVD, bvd_alpha=0.0)
-    )
+def test_an_infinite_sd_inflation_reproduces_main(
+    outbreak, sim_tables, table, release
+):
+    off = replace(BVD, bvd_sd_inflation=math.inf)
+    data = sim_with_bvd(outbreak, sim_tables, table, release, off)
     assert data.bvd is not None
     plain = build_model(data, MAIN)
-    zero = build_model(data, replace(BVD, bvd_alpha=0.0))
+    zero = build_model(data, off)
     tr = trace(plain, data)
     params = {
         k: v["value"]
@@ -167,3 +169,10 @@ def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
         },
     )[0]
     assert np.isfinite(float(ld))
+
+
+def test_the_bvd_weight_is_an_sd_inflation_of_root_two():
+    # The BVDOutbreakSize SDs are inflated by sqrt(2) until Sam sets the
+    # value (the old tempering of 0.5).
+    assert BVD.bvd_sd_inflation == pytest.approx(math.sqrt(2.0))
+    assert not hasattr(BVD, "bvd_alpha")

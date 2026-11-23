@@ -66,9 +66,10 @@ RULE_GROUPS = {
 """Each placed rule's group; any other rule is in `any`."""
 
 GPU_RULES = frozenset({"train_segment"})
-"""The rules taking the `gpu` resource: the trainer only, so the GPU is
-the run's for every segment. Evaluation, scoring and figures run beside
-it on the CPU (`machine.side_device`). Placed on a worker by its group,
+"""The rules taking the `gpu` resource: the trainer, so the GPU is the
+run's for every segment. Evaluation, scoring and figures run beside it on
+the forecasting device (`flowlib.forecast`), and with `forecast.gpu:
+exclusive` on CUDA take `gpu` too. Placed on a worker by its group,
 a GPU rule also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""
 

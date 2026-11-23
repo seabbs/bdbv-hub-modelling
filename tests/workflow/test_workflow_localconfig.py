@@ -141,8 +141,8 @@ def test_paper_cores_come_from_the_local_config():
     taskfile = (ROOT / "paper" / "Taskfile.yml").read_text()
     assert "--cores {{.CORES" not in taskfile
     assert "paper_run.py --targets development" in taskfile
-    script = (ROOT / "scripts" / "paper.sh").read_text()
-    assert "localconfig.py CORES" in script
+    runner = (ROOT / "workflow" / "scripts" / "paper_run.py").read_text()
+    assert 'cfg.get("CORES")' in runner
 
 
 @pytest.mark.parametrize(
@@ -174,10 +174,10 @@ def test_a_host_s_seeds_profile_and_rounds_host_are_local(tmp_path):
 
 def test_a_setting_nothing_reads_is_an_error(tmp_path):
     path = tmp_path / "local.env"
-    path.write_text("ROOT=/r\nEVAL_THREADS=4\nSCORE_THREADS=4\n")
+    path.write_text("ROOT=/r\nFORECAST_THREADS=4\nSCORE_THREADS=4\n")
     with pytest.raises(ValueError, match="SCORE_THREADS") as err:
         localconfig.check(path, {})
-    assert "EVAL_THREADS" not in str(err.value)
+    assert "FORECAST_THREADS" not in str(err.value)
 
 
 def test_a_setting_another_line_uses_is_not_an_error(tmp_path):

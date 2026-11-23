@@ -151,6 +151,18 @@ runs:
 # train after Run A, so they never take its GPU.
 train_runs: [runa]
 
+# The device and CPU threads of every forecasting job: checkpoint scoring
+# (the German units), held-out evaluation, backtests (German, Ebola), hub
+# forecasts and the paper's runs (flowlib.forecast). A machine overrides
+# them with FORECAST_DEVICE and FORECAST_THREADS in config/local.env.
+# With device cuda, gpu says how a job meets the trainer's GPU: exclusive
+# takes the `gpu` resource, so the job waits for a free GPU; share runs it
+# beside the trainer on the same GPU (more GPU memory, slower training).
+forecast:
+  device: cpu
+  threads: 2
+  gpu: exclusive
+
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).
@@ -184,7 +196,7 @@ dashboard:
     # (nowcasteval.labels: MODEL_LABELS, MODEL_STYLES).
     - key: zero
       paper_model: fm_chronos_daily_ragged
-      model: "^(?!randomwalknowcast$)(?!.*_complete$)"
+      model: "^(?!randomwalknowcast)(?!.*_complete$)"
       checkpoint: zero-shot
       role: start
     - key: complete
@@ -193,7 +205,7 @@ dashboard:
       checkpoint: zero-shot
     - key: rw
       paper_model: randomwalknowcast
-      model: "^randomwalknowcast$"
+      model: "^randomwalknowcast(_daily)?$"
       role: baseline
   # Score studies in selector order with their labels, the order of their
   # levels, and the target, score, source and level shown first.

@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
-from bnc_helpers import read, read_ints, read_vec
+from bnc_helpers import RECON, ZEROS, ZEROS_PMF, read, read_vec
 
 from nowcastbaselines.baselinenowcast import (
     fill_row,
@@ -66,7 +66,7 @@ def test_hub_weeks_sum_days_and_propagate_unobserved() -> None:
 def _recon() -> tuple[np.ndarray, np.ndarray, np.ndarray, int, int, int]:
     """A right-truncated triangle as daily release snapshots."""
     tri = read("recon", "tri")
-    d, n, n_use = read_ints("recon", "settings")
+    d, n, n_use = RECON
     t = np.arange(n)
     counts = np.zeros((1, n, n))
     for r in range(n):
@@ -99,26 +99,28 @@ def test_daily_snapshots_reproduce_the_filled_row_totals() -> None:
     np.testing.assert_allclose(got, read_vec("recon", "row_totals"), rtol=1e-12)
 
 
-def _skip() -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
-    d, n_loc, _ = read_ints("skip", "settings")
-    counts = np.stack(
-        [np.nan_to_num(read("skip", f"counts_{i + 1}")) for i in range(n_loc)]
+def test_pair_sums_skip_cells_unobserved_in_either_release() -> None:
+    # Three releases (cut-offs on days 2, 4 and 5) of two places with a
+    # delay window of 3. Day 1 is missing from release 1, so the pair
+    # sums skip it at age 1 of pair 0; release 1 reports 0 on day 4, a
+    # zero denominator at age 0 of pair 1. Junk fills unobserved cells.
+    j = 12345.0
+    one = [
+        [5, 6, 7, j, j, j],
+        [6, j, 9, 4, 0, j],
+        [6, 9, 11, 6, 3, 1],
+    ]
+    counts = np.array([one, np.multiply(one, 2)], dtype=float)
+    observed = np.array(
+        [[1, 1, 1, 0, 0, 0], [1, 0, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1]], bool
     )
-    observed = read("skip", "observed").astype(bool)
-    cut = np.array(read_ints("skip", "cut"))
-    return counts, observed, cut, d
-
-
-def test_pair_sums_skip_unobserved_cells_as_in_r() -> None:
-    counts, observed, cut, d = _skip()
-    n_loc, n_rel, _ = counts.shape
-    pairs = np.arange(n_rel - 1)
-    # Garbage under False must never enter.
-    junk = np.where(observed[None], counts, 12345.0)
-    num, den = pair_sums(junk, observed, cut, pairs, d)
-    r = read("skip", "pair_sums").reshape(n_loc, n_rel - 1, 2, d)
-    np.testing.assert_allclose(num, r[:, :, 0])
-    np.testing.assert_allclose(den, r[:, :, 1])
+    cut = np.array([2, 4, 5])
+    num, den = pair_sums(counts, observed, cut, np.arange(2), 3)
+    # Age x of pair p is day cut[p] - x in releases p and p + 1.
+    want_num = np.array([[9.0, 0, 6], [3, 6, 11]])
+    want_den = np.array([[7.0, 0, 5], [0, 4, 9]])
+    np.testing.assert_array_equal(num, [want_num, 2 * want_num])
+    np.testing.assert_array_equal(den, [want_den, 2 * want_den])
 
 
 def _toy() -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -200,7 +202,7 @@ def test_the_delay_is_never_negative() -> None:
 
 
 def test_fill_row_matches_r_apply_delay_on_zero_rows() -> None:
-    tri, pmf = read("zeros", "tri"), read_vec("zeros", "pmf")
+    tri, pmf = ZEROS, ZEROS_PMF
     want = np.cumsum(read("zeros", "apply"), axis=1)
     cdf = np.cumsum(pmf)
     for row in np.flatnonzero(np.isnan(tri).any(axis=1)):

@@ -31,6 +31,12 @@ sci() {
   uv run --quiet --project "$CI_DIR" "$@"
 }
 
+# The main repo's fit store branch (bdbvhub.store.branch): standard
+# library only, so it runs without the forecast environment.
+store_branch() {
+  python3 -I "$CI_DIR/../packages/bdbvhub/src/bdbvhub/store/branch.py" "$@"
+}
+
 # Run the main repo's CLI (word-split on purpose), outside the
 # submission-ci environment that `sci` may have activated.
 cli() {

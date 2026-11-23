@@ -29,7 +29,7 @@ def test_the_fast_tier_runs_no_slow_tests():
     assert "-n auto" in runs
 
 
-@pytest.mark.parametrize("job", ["full", "r-live", "engine", "chronos"])
+@pytest.mark.parametrize("job", ["full", "r-live", "chronos"])
 def test_fits_and_replays_run_nightly_on_dispatch_or_when_labelled(job):
     workflow = _workflow("test.yml")
     when = workflow["jobs"][job]["if"]
@@ -48,14 +48,26 @@ def test_the_chronos_job_runs_every_torch_gated_test_with_torch():
     assert "pytest" in runs
 
 
-@pytest.mark.parametrize(
-    ("name", "job"),
-    [("pages.yml", "prep"), ("baselinenowcast.yml", "fixtures")],
-)
-def test_backtests_and_fixtures_are_opt_in_on_pull_requests(name, job):
-    workflow = _workflow(name)
-    assert OPT_IN in workflow["jobs"][job]["if"]
+def test_backtests_are_opt_in_on_pull_requests():
+    workflow = _workflow("pages.yml")
+    assert OPT_IN in workflow["jobs"]["prep"]["if"]
     assert "labeled" in _triggers(workflow)["pull_request"]["types"]
+
+
+def test_r_live_checks_the_baselinenowcast_port_at_the_pin():
+    # R baselinenowcast runs live in r-live, slow sampler checks too; no
+    # fixtures or workflow of their own.
+    steps = _workflow("test.yml")["jobs"]["r-live"]["steps"]
+    text = yaml.safe_dump(steps)
+    assert (
+        "epinowcast/baselinenowcast@999d1ad50e27921a4078175d6315bbd655878888"
+        in text
+    )
+    assert "any::zoo" in text
+    runs = [s.get("run", "") for s in steps]
+    assert any("tests/baselinenowcast" in r and '-m ""' in r for r in runs)
+    assert not (WORKFLOWS / "baselinenowcast.yml").exists()
+    assert not (ROOT / "tests" / "baselinenowcast" / "fixtures").exists()
 
 
 @pytest.mark.parametrize(
@@ -72,6 +84,59 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     group = yaml.safe_load(path.read_text()).get("concurrency")
     if not isinstance(group, dict) or "cancel-in-progress" not in group:
         pytest.skip("no cancellable concurrency group")
-    assert group["cancel-in-progress"] == (
-        "${{ github.ref != 'refs/heads/main' }}"
+    keep = "${{ github.ref != 'refs/heads/main' }}"
+    if path.name == "test.yml":
+        # Tests keeps next's runs too (every merge gets a verdict).
+        keep = (
+            "${{ github.ref != 'refs/heads/main' && "
+            "github.ref != 'refs/heads/next' }}"
+        )
+    assert group["cancel-in-progress"].strip() == keep
+
+
+def test_a_pull_request_runs_one_test_job_of_at_most_15_minutes():
+    # The workflow and paper tests run inside the fast tier, with
+    # Snakemake (the paper group), rather than in jobs of their own.
+    assert not (WORKFLOWS / "workflow.yml").exists()
+    assert not (WORKFLOWS / "paper-tests.yml").exists()
+    job = _workflow("test.yml")["jobs"]["test"]
+    assert job["timeout-minutes"] <= 15
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    assert "--group paper pytest" in runs
+    paper = [s for s in job["steps"] if s.get("working-directory") == "paper"]
+    assert paper
+    assert "pytest" in paper[0]["run"]
+    assert "--durations" in runs
+
+
+def test_no_test_runs_in_both_the_full_and_the_chronos_job():
+    steps = _workflow("test.yml")["jobs"]["full"]["steps"]
+    full = " ".join(s.get("run", "") for s in steps)
+    chronos = " ".join(
+        s.get("run", "")
+        for s in _workflow("test.yml")["jobs"]["chronos"]["steps"]
     )
+    grep = "(importorskip|find_spec)"
+    assert grep in full
+    assert grep in chronos
+    assert "--ignore=" in full
+
+
+def test_every_merge_into_next_gets_a_fast_tier_run():
+    # Pull request runs are cancelled when the merge loop deletes the
+    # branch, so a push to next runs the fast tier, and a newer merge
+    # does not cancel the running one.
+    workflow = _workflow("test.yml")
+    assert "next" in _triggers(workflow)["push"]["branches"]
+    keep = workflow["concurrency"]["cancel-in-progress"]
+    assert "refs/heads/next" in keep
+
+
+def test_the_r_live_job_installs_what_the_live_r_tests_call():
+    steps = _workflow("test.yml")["jobs"]["r-live"]["steps"]
+    packages = " ".join(
+        str(s.get("with", {}).get("packages", "")) for s in steps
+    )
+    # primarycensored's fitdistdoublecens needs fitdistrplus (a Suggests).
+    for name in ("primarycensored", "flexsurv", "fitdistrplus"):
+        assert name in packages

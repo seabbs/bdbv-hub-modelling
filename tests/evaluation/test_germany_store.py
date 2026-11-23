@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from nowcastfoundation.checkpoint import GERMANY_UNIT
+from nowcastgermany.checkpoint import GERMANY_UNIT
 from nowcastgermany.evaluation import load_germany_config
 from nowcastgermany.store import (
     STORED_MODELS,
@@ -229,8 +229,8 @@ def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
 def test_the_load_command_writes_the_chosen_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
+    from nowcastgermany import cli
 
     store = tmp_path / "store"
     for tag in ("chronos-ft-aaa", "chronos-ft-bbb"):
@@ -242,7 +242,7 @@ def test_the_load_command_writes_the_chosen_checkpoint(
     assert (
         cli.main(
             [
-                "germany-ft-load",
+                "ft-load",
                 "--config",
                 str(ROOT / "config" / "germany.toml"),
                 "--finetune",
@@ -270,15 +270,15 @@ def test_the_load_command_writes_the_chosen_checkpoint(
 def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
+    from nowcastgermany import cli
 
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: RELEASES)
     monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
     out = tmp_path / "parts" / "germany"
     note = tmp_path / "ft-checkpoint.json"
     args = [
-        "germany-ft-load",
+        "ft-load",
         "--config",
         str(ROOT / "config" / "germany.toml"),
         "--finetune",
@@ -322,8 +322,8 @@ def test_only_the_live_run_s_checkpoints_are_shown() -> None:
 def test_the_load_command_shows_the_live_run_with_its_label(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
+    from nowcastgermany import cli
 
     releases = [
         *RELEASES,
@@ -345,7 +345,7 @@ def test_the_load_command_shows_the_live_run_with_its_label(
     ).to_csv(scores, index=False)
     note = tmp_path / "results" / "ft-checkpoint.json"
     args = [
-        "germany-ft-load",
+        "ft-load",
         "--config",
         str(ROOT / "config" / "germany.toml"),
         "--finetune",

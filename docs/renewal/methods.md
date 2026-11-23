@@ -29,7 +29,7 @@ Transmission between zones follows a gravity kernel on zone populations and cent
 Infections deplete a learnt share of each zone's population at risk, so growth slows as that share is used up.
 
 The log reproduction number of a zone is the sum of three parts.
-A shared trend, the mean of the zones' log Rt, follows a weekly random walk.
+A shared trend, the mean of the zones' log Rt, follows a weekly AR(1) process that decays to zero (Rt of 1).
 A province deviation and a zone deviation within its province follow weekly AR(1) processes that decay to zero, each summing to zero over its level.
 So zones borrow strength from their province and provinces from the country, and a zone with few cases stays close to its province.
 As in BVDOutbreakSize's zone model, only zones with at least 30 cases by the cut-off get a deviation of their own.
@@ -60,9 +60,10 @@ We add its Rt estimates to our model as a down-weighted pseudo-observation of ou
 We take the newest BVDOutbreakSize release whose files were updated by the forecast's cut-off and whose joint fit's worst R-hat is at most 1.1 ([Data methods](../methods/data.md#bvdoutbreaksize-estimates)).
 At that release's data cut-off, our infection-weighted national Rt is matched to the release's national log Rt, and each patch's Rt relative to national is matched to the patch's estimate.
 Each fitted zone with a zone estimate in the release gets a term of its own in the same way.
-The terms are normal, with the release's variance multiplied by $1/\zeta$ and $\zeta = 0.5$, which tempers the likelihood as in a power prior[^ibrahim].
+The terms are normal, with the release's SDs multiplied by an inflation factor $\kappa = \sqrt{2} \approx 1.41$, a power prior with tempering $1/\kappa^2 = 0.5$[^ibrahim].
+$\kappa$ says how much we trust an external estimate built partly on the same case data as ours.
 So the external estimates move our Rt where our data are weak but do not override them.
-The term adds no parameters, and $\zeta = 0$ gives `renewal` exactly.
+The term adds no parameters, and $\kappa = \infty$ gives `renewal` exactly.
 We call the model with this term `renewalbvd`.
 
 Every renewal model also inherits from BVDOutbreakSize the generation interval, the incubation period priors, the prior on the half-life of the province deviations and the sum-to-zero basis for the deviations.
@@ -73,8 +74,8 @@ Without a qualifying release `renewalbvd` is `renewal`.
 To see what the joint fit adds, we also fit the same model to one place at a time.
 The place is the only patch in its fit.
 So it has no shared trend with other places, no deviations, no transmission from other places and no BVDOutbreakSize term.
-Its delay and missing-onset share are its own, and its log Rt is a single weekly random walk.
-One place's series cannot inform the share at risk, so this model has no depletion.
+Its delay and missing-onset share are its own, and its log Rt is a single weekly AR(1) process.
+It keeps the share at risk and its depletion, though one place's series barely informs it.
 Its other parts and priors are those of `renewal`.
 In code it is the same model builder as the zone fits, with each place as its own patch.
 We fit it to each province with a case, and split each province's forecast into its zones by their recent share of cases ([Renewal models](../methods/model.md#health-zones)).
@@ -89,15 +90,16 @@ The main priors are below, and the rest are on the [Renewal models](../methods/m
 
 | Quantity | Prior | Source |
 |---|---|---|
-| Step SD of the shared log Rt walk | $\mathcal{N}^+(0, 0.2^2)$ | weakly informative |
+| Step SD of the shared log Rt trend | $\mathcal{N}^+(0, 0.2^2)$ | weakly informative |
 | Start of log Rt | $\mathcal{N}(0, 0.5^2)$ | weakly informative |
 | Step SD of the province and zone deviations | $\mathcal{N}^+(0, 0.1^2)$ | weakly informative |
-| Half-life of the deviations | $\text{LogNormal}(\log 6, 0.6^2)$ weeks | BVDOutbreakSize |
+| Half-life of the shared trend and the deviations | $\text{LogNormal}(\log 6, 0.6^2)$ weeks | BVDOutbreakSize |
 | Spread of the starting deviations | $\mathcal{N}^+(0, 0.3^2)$ | weakly informative |
 | Importation share | $\text{Beta}(1, 100)$ | mostly local transmission |
 | Share at risk | $\text{LogNormal}(\log 0.05, 0.75^2)$ | weakly informative |
 | Incubation period mean and SD | $\mathcal{N}(6.3, 0.54^2)$ and $\mathcal{N}(3.5, 0.8^2)$ days | BVDOutbreakSize, MacNeil et al.[^macneil] |
 | Seed infections per day | $\text{LogNormal}(0, 1.5^2)$ | weakly informative |
+| Seed growth rate before the data | $\text{LogNormal}(\log(\log 2 / 11.7), 0.30^2)$ per day | BVDOutbreakSize |
 | Negative binomial overdispersion | $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$ | weakly informative |
 | Province delay offsets | $\mathcal{N}^+(0, 0.5^2)$ spread | weakly informative |
 
@@ -108,7 +110,7 @@ Each zone fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other d
 `renewalsp` runs 2 chains of 500 warm-up and 750 draws per province.
 Each chain starts from its own draw from the prior.
 The walks are sampled non-centred and anchored at their mean over the fit, which removes a ridge between a walk's level and its first steps.
-In `renewalsp` the log Rt walk is the only Rt process.
+In `renewalsp` the log Rt AR(1) is the only Rt process.
 In a province with at least 250 cases by the cut-off, the data pin its level closely, so we sample its weekly levels directly (centred) rather than its standardised steps.
 With fewer cases a centred walk funnels, so those provinces keep the non-centred walk.
 A fit runs on a 4-core CI runner in 1.4 to 3.1 hours at the origins 2026-10-17 to 2026-11-15.
@@ -123,7 +125,7 @@ Each fit writes them to its `diagnostics.json`, which the fit store keeps.
 ## Forecasting and hub targets
 
 Each of 100 forecast trajectories is one posterior draw.
-Past the data, the shared trend in log Rt reverts towards zero with a half-life of 2 weeks, so growth does not compound over the horizon, and the deviations keep their AR(1).
+Past the data, the shared trend and the deviations continue the AR(1) processes they were fitted with, so log Rt reverts towards zero with its fitted half-life.
 A trajectory is the final count of known onsets, those reported by the cut-off plus a negative binomial draw of those reported later, plus the final imputed onsets.
 The hub's target is `wk inc confirmed cases` as 100 samples for 4 weeks before the reference date to 3 weeks after it, for every zone, province and the country ([Hub specification](../submission/hub-spec.md)).
 Zone trajectories go into the hub file as they are, and provinces and the country are their sums.
@@ -145,7 +147,7 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
   Both did worse than `randomwalknowcast` at the national level at the two latest origins.
 - The delay is by province, so zones in the same province cannot differ in how fast they report.
 - Silent zones are forecast by the random walk's introduction layer, independent of the fit, so a new zone's cases do not come from its neighbours' transmission.
-- The tempering $\zeta$ is fixed, not learnt or tuned on scores.
+- The SD inflation $\kappa$ is set by judgement, not learnt or tuned on scores.
 
 [^worldpop]: WorldPop (2025). Global high resolution population denominators. [www.worldpop.org](https://www.worldpop.org).
 

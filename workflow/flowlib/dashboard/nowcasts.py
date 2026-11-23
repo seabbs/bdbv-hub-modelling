@@ -35,7 +35,7 @@ from nowcasteval.scoring import wis_quantile
 
 from .paperstyle import WIS_PARTS
 from .rows import num, sources
-from .runs import Classifier, Reference, Run, split_label
+from .runs import INTERIM, Classifier, Reference, Run, split_label
 
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 """The cached quantile levels."""
@@ -409,15 +409,21 @@ def folders(
     """Return each forecast folder and the checkpoint name it stands for.
 
     The shared cache's folders by their own names, and, with `unit`, each
-    run's own scored checkpoints (`<run>/scores/<unit>/n<N>`) as
-    `<run>-<hash>`, the hash of its segment's `train/n<N>/settings.json`.
+    run's own scored checkpoints (`<run>/scores/<unit>/n<N>`, and interim
+    ones in `interim/s<step>`) as `<run>-<hash>`, the hash of its
+    `train/n<N>/settings.json` (or `train/interim/s<step>/`).
     """
     out = [(p, p.name) for p in sorted(cache.iterdir()) if p.is_dir()]
     for r in run_list if unit else ():
         if r.folder is None:
             continue
-        for p in sorted(Path(r.folder, "scores", unit).glob("n*")):
-            settings = Path(r.folder, "train", p.name, "settings.json")
+        scored = Path(r.folder, "scores", unit)
+        for p in [
+            *sorted(scored.glob("n*")),
+            *sorted(scored.glob(f"{INTERIM}/s*")),
+        ]:
+            rel = p.relative_to(scored)
+            settings = Path(r.folder, "train", rel, "settings.json")
             try:
                 key = json.loads(settings.read_text()).get("hash")
             except (OSError, ValueError):
@@ -686,11 +692,11 @@ def meta(
             if run is None:
                 continue
             n = sizes.get(s) or 0
-            label = (
-                f"{by_key[run].label} n{n} {s}"
-                if n
-                else (f"{by_key[run].label} {s}")
-            )
+            # An interim checkpoint, exported mid-segment, says so.
+            what = f"n{n} " if n else ""
+            if INTERIM in built["folders"].get(s, ""):
+                what += f"{INTERIM} "
+            label = f"{by_key[run].label} {what}{s}"
             out.append({"id": s, "label": label, "run": run, "n": n})
     ref_rank = {k: i for i, k in enumerate(refs)}
     run_rank = {r.key: i for i, r in enumerate(run_list)}

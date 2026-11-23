@@ -7,8 +7,8 @@ build: paper/build
 render: development
 studies: [synthetic, germany, ebola]
 # The paper's final fine-tuning run: its folder, a `runs` entry of the
-# workflow (workflow/config.yaml), under the machine's ROOT. Its held-out
-# loss curve is the SI's (rule heldout_curve), and every `_ft` model
+# workflow (workflow/config.yaml), under the machine's ROOT. Its validation
+# loss curve is the SI's (rule validation_curve), and every `_ft` model
 # loads its newest saved checkpoint, train/n<N>
 # (nowcastfoundation.forecaster.newest_segment); before it has one the
 # fine-tuned forecasts are pending. Null leaves the run out.
@@ -79,7 +79,7 @@ germany:
   # Further forecasts of the benchmark from evidence rows (`evidence`
   # below), such as models run outside config/germany.toml: `models`
   # keeps the models matching a regular expression, `suffix` renames
-  # them, and `backtest` reads a `germany-backtest` table. A development
+  # them, and `backtest` reads a `nowcastgermany backtest` table. A development
   # run fails if one holds a held-out date.
   # `provisional` notes what is to be redone, in every German caption.
   # The Chronos-2 models are in config/germany.toml.
@@ -150,7 +150,7 @@ nowcasts:
 # paper run.
 evidence:
   # Scores of every run's checkpoints on the German development half and
-  # the trainer's held-out loss, the workflow's comparison (rule
+  # the trainer's validation loss, the workflow's comparison (rule
   # comparison). The live run's newest scored checkpoints are shown as
   # preliminary (nowcastfoundation.live_checkpoint).
   checkpoint_scores:
