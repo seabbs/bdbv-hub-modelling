@@ -129,7 +129,7 @@ class Scoring:
         """Return the run's score cache: its own checkpoints' units."""
         return f"{self.training.dir}/{run}/scores"
 
-    def _saved(self, run: str) -> list[int]:
+    def saved_prefixes(self, run: str) -> list[int]:
         """Return the run's saved checkpoint prefixes."""
         prefixes = self.training.runs[run].ft["prefixes"]
         return [n for n in prefixes if self.training.saved(run, n)]
@@ -137,7 +137,7 @@ class Scoring:
     def run_units(self, run: str) -> list[str]:
         """Return the German units of the run's saved checkpoints."""
         unit = f"{self.run_scores_dir(run)}/{GERMANY_UNIT}"
-        return [f"{unit}/n{n}.done" for n in self._saved(run)]
+        return [f"{unit}/n{n}.done" for n in self.saved_prefixes(run)]
 
     def references(self) -> list[str]:
         """Return the reference labels' German units, shared by every run."""
@@ -148,7 +148,7 @@ class Scoring:
         """Return the German report's LABEL=NAME arguments and folders."""
         return report_args(
             wc.run,
-            self._saved(wc.run),
+            self.saved_prefixes(wc.run),
             self.sc["reference"],
             f"{self.cache}/{GERMANY_UNIT}",
         )

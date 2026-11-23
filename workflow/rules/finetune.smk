@@ -173,7 +173,6 @@ rule checkpoint_check:
         check_report(input, output, params, wildcards)
 
 
-
 rule block_combinations:
     # The realised share of each combination of block layout and options
     # over the run's training (the SI table), from its final checkpoint.
