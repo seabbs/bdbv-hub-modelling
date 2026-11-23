@@ -431,13 +431,16 @@ class ZoneRenewalModel(RenewalModel):
             f"variant={self.name} sampling done seconds={seconds:.0f} "
             f"cpu_seconds={cpu_seconds:.0f}"
         )
-        draws = pr.forecast_trajectories(
-            model,
-            data,
-            task.n_samples,
-            seed=task.seed,
-            as_of=tuple(report_cutoffs(task, data)),
-        )
+        draws = {
+            **pr.forecast_trajectories(
+                model,
+                data,
+                task.n_samples,
+                seed=task.seed,
+                as_of=tuple(report_cutoffs(task, data)),
+            ),
+            "rt": pr.weekly_rt(model, data, seed=task.seed),
+        }
         by_chain = model.mcmc.get_samples(group_by_chain=True)
         trace = {
             k: np.asarray(by_chain[k])
