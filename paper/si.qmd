@@ -490,7 +490,7 @@ Weeks are not paired with each other, so a province's own weeks are not kept as 
 $\rho_p$ comes from the model's own matured errors.
 For a count $y$ that an earlier release nowcast with negative binomial distribution function $F$, and that the origin release reports, the randomised PIT is $u = F(y - 1) + U\,(F(y) - F(y - 1))$ with $U \sim \mathrm{U}(0, 1)$, and its normal score is $\Phi^{-1}(u)$.
 We use pairs of provinces in one week, from the releases of the last 8 weeks.
-With $n$ pairs whose Pearson correlation is $r$, the estimate is $(n r + w \rho_0) / (n + w)$ with $w = 10$ and $\rho_0 = 0.7$, kept within $[0, 0.95]$.
+With $n$ pairs whose Pearson correlation is $r$, the estimate is $(n r + w \rho_0) / (n + w)$ with $w = 10$ and $\rho_0 = 0.1$, kept within $[0, 0.95]$.
 The shrinkage only guards thin windows (@tbl-tuned-choices).
 
 **Scores.**
@@ -531,13 +531,14 @@ Relative WIS compares each model with the baseline on the forecasts both made, w
 ### Choices tuned on development data
 
 @tbl-tuned-choices lists each choice we tuned and the data it was set on.
-The copula weight of the walk baselines was set on the Ebola release backtest before BDBV was held out from development.
+The copula weight of the walk baselines was set on the Ebola release backtest before BDBV was held out from development; its prior was set there after.
 
 ::: {#tbl-tuned-choices}
 | Choice | Value | Set on |
 |---|---|---|
 | Floor on Chronos-2's scale at inference | None, Chronos-2's default | Held-out simulations |
 | Copula shrinkage weight $w$ | 10, the weakest of 0, 10, 30 and 100, which scored within 1% of one another | Ebola release backtest |
+| Copula prior $\rho_0$ | 0.1, the lowest energy score of 0 to 0.9, all within 0.7%; the error window (4 to 16 weeks) and cap (0.9 to 0.99) scored the same | Ebola release backtest |
 | Realism checks of the simulation grid | Grid ranges | German development half and published ranges for other diseases |
 
 Choices tuned on development data, with their values and the data they were set on.
