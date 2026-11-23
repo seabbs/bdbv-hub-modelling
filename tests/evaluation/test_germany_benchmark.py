@@ -419,8 +419,9 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
         for (loc, age), counts in places.items()
     ).reset_index(drop=True)
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Extrapolate())
+    # Germany is daily only: every model forecasts every target day.
     drawn = germany_forecasts(
-        ["fm_chronos_daily_ragged", "fm_chronos_weekly_ragged"],
+        ["fm_chronos_daily_ragged"],
         triangle,
         ["2021-01-06"],
         n_samples=10,
@@ -442,10 +443,7 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
         count[p].loc[e - pd.Timedelta(days=6) : e].sum()
         for p, e in zip(scores["location"], end, strict=True)
     ]
-    assert set(scores["model"]) == {
-        "fm_chronos_daily_ragged",
-        "fm_chronos_weekly_ragged",
-    }
+    assert set(scores["model"]) == {"fm_chronos_daily_ragged"}
     assert set(scores["horizon"]) == set(HORIZONS)
     assert (
         end
