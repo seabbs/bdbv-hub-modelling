@@ -215,15 +215,16 @@ factors:
     periodic: 1
     walk: 1
     slowdown: 1
-  # Report days: every day in half (with a report-date weekday
+  # Report days: every day in 45% (with a report-date weekday
   # effect in half of these, `report_dow`), Monday to Friday in a quarter,
   # two or three fixed days a week in 15% (drawn from Monday to Friday) and
-  # one day a week in 10% (any day).
+  # one day a week in 15% (any day), as BDBV's weekly releases of daily
+  # onsets.
   report_days:
-    daily: 10
+    daily: 9
     weekdays: 5
     fixed_days: 3
-    weekly: 2
+    weekly: 3
   revisions:
     'no': 7
     'yes': 3
