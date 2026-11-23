@@ -43,10 +43,17 @@ __all__ = [
 ]
 
 MAX_RHO: Final = 0.95
-"""Largest $\rho_p$ `estimate_rho` gives."""
+"""Largest $\rho_p$ `estimate_rho` gives. On the release backtest
+(`nowcasteval.pairing.bdbv_candidates`, 5 origins) caps of 0.9, 0.95 and
+0.99 score the same, as no estimate reaches 0.3."""
 
-PRIOR: Final = 0.7
-"""The $\rho_p$ estimates are shrunk towards."""
+PRIOR: Final = 0.1
+"""The $\rho_p$ estimates are shrunk towards, and the value where no earlier
+release can be scored. Chosen on the release backtest
+(`nowcasteval.pairing.bdbv_candidates`) as the lowest mean provinces
+energy score from 0, 0.1, 0.2, 0.3, 0.5, 0.7 and 0.9 (0.998 of the mean;
+all within 0.7%). It acts at the 2 origins of 5 with no earlier release;
+the other 3 estimate 0.16 to 0.27."""
 
 PRIOR_WEIGHT: Final = 10.0
 """Pairs the prior counts as in `estimate_rho`'s shrinkage, a guard for
@@ -55,7 +62,9 @@ which scored within 1% of one another; 10 is the weakest that still
 guards a window with few pairs."""
 
 WINDOW_WEEKS: Final = 8
-"""The latest weeks of releases whose errors are used (`error_scores`)."""
+"""The latest weeks of releases whose errors are used (`error_scores`). On
+the release backtest windows of 4, 8, 12 and 16 weeks score within 0.06%
+of one another, so it is kept."""
 
 
 @dataclass(frozen=True)
@@ -91,7 +100,7 @@ class CopulaSettings:
 CANDIDATES: Final = tuple(
     CopulaSettings(prior, PRIOR_WEIGHT, cap, window)
     for prior, cap, window in itertools.product(
-        (0.3, 0.5, 0.7, 0.9), (0.9, 0.95, 0.99), (4, 8, 12, 16)
+        (0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9), (0.9, 0.95, 0.99), (4, 8, 12, 16)
     )
 )
 """The settings scored on the release backtest

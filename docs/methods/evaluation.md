@@ -160,7 +160,7 @@ At each forecast $\rho_p$ is estimated from the model's own matured errors: each
 Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score.
 $r$ is the Pearson correlation of the scores of two provinces in the same week of one release.
 With $n$ such pairs the estimate is $(n r + w \rho_0)/(n + w)$, floored at 0 and capped at 0.95, with $w = 10$ chosen on the release backtest so the estimate dominates.
-The prior $\rho_0 = 0.7$ only guards thin windows.
+The prior $\rho_0 = 0.1$, the value where no earlier release can be scored, is the best of 0 to 0.9 on the release backtest; the window and cap make no difference there.
 Each forecast's $\rho_p$, the pairs behind it and whether it fell back to the prior are recorded (a submission's `copula.json`).
 How much pairing matters is on the [Pairing sensitivity](../pairing.md) page.
 
