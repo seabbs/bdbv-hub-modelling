@@ -49,7 +49,7 @@ def test_the_stored_ft_model_is_not_forecast_by_pages() -> None:
 
 def test_the_built_german_page_is_checked_for_held_out_dates() -> None:
     run = _build_script()
-    check = run.index("scripts/check_germany_site.py")
+    check = run.index("germany-site-check")
     assert run.index("mkdocs build") < check
 
 

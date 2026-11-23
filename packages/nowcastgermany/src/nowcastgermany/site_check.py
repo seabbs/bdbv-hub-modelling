@@ -1,28 +1,34 @@
 """Check the built site's German page names no held-out nowcast date.
 
-    uv run python scripts/check_germany_site.py SITE
+    uv run germany-site-check SITE [--config config/germany.toml]
 
-SITE is the built site (`mkdocs build`, `_site`). Reads the German page
-and its summary and explorer JSON (`reporting.germany.held_out_leaks`)
+Run from the repo root. SITE is the built site (`mkdocs build`,
+`_site`). Reads the German page and its summary and explorer JSON
+(`reporting.held_out_leaks`)
 and exits non-zero, listing them, if any names a date on or after the
 split date in config/germany.toml (or after it, in the page's prose).
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
 from nowcastgermany.evaluation import load_germany_config
 from nowcastgermany.reporting import held_out_leaks
 
-ROOT = Path(__file__).resolve().parents[1]
 
-
-def main(argv: list[str]) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Check SITE's German page."""
-    site = Path(argv[0]) if argv else Path("_site")
-    split = load_germany_config(ROOT / "config" / "germany.toml").split_date
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("site", type=Path, nargs="?", default=Path("_site"))
+    parser.add_argument(
+        "--config", type=Path, default=Path("config/germany.toml")
+    )
+    args = parser.parse_args(argv)
+    site = args.site
+    split = load_germany_config(args.config).split_date
     files = [
         site / "germany" / "index.html",
         site / "figures" / "scoresummary-germany-latest.json",
@@ -41,4 +47,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main())

@@ -11,7 +11,7 @@ the data each date saw (`bdbvhubrenewal germany-asof`).
 Only the development half, nowcast dates before the split date, is shown:
 the results are filtered to it, and the page refuses to write a nowcast
 date on or after it (`held_out_leaks`), which CI checks again on the built
-site (`scripts/check_germany_site.py`).
+site (`germany-site-check`, `site_check`).
 The configured hidden models start switched off.
 The fine-tuned models' forecasts come from the store
 (`nowcastgermany.store`); the page names the checkpoint
