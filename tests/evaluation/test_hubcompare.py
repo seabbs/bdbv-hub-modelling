@@ -752,6 +752,24 @@ def test_an_unknown_substituted_mode_stops() -> None:
         split_substituted(_submitted("x", "2026-11-21"), SUBMISSIONS, "mix")
 
 
+def test_with_submissions_keeps_the_hub_copy_of_rounds_not_held_here() -> None:
+    """data/our-submissions holds some rounds only: the hub's copy of our
+    other rounds is scored, not dropped."""
+    from bdbvhub.compare import with_submissions
+
+    ids = {"renewalbvd": "seabbs-renewal"}
+    forecasts = pd.concat(
+        [
+            _submitted("seabbs-renewal", "2026-11-07", source="hub"),
+            _submitted("seabbs-renewal", "2026-11-14", source="hub"),
+        ]
+    )
+    held = _submitted("seabbs-renewal", "2026-11-07", source="hub")
+    out = with_submissions(forecasts, held, ids)
+    got = set(zip(out["source"], out["reference_date"], strict=True))
+    assert got == {("submitted", "2026-11-07"), ("hub", "2026-11-14")}
+
+
 def _git(cwd: Path, *args: str) -> None:
     import subprocess
 
