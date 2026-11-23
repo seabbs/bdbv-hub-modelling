@@ -1260,3 +1260,18 @@ def test_the_finetuned_models_take_a_segment_folder_from_the_run(
     assert foundation.finetuned_adapter(model.checkpoint) == (
         segment / "finetuned-ckpt"
     )
+
+
+def test_a_fine_tuned_complete_model_builds_the_complete_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # For checkpoints trained on complete counts (the no-delays run).
+    monkeypatch.setattr(foundation, "finetuned_spec", lambda: "abc123")
+    import functools
+
+    fake = functools.cache(lambda spec, *_: spec)
+    monkeypatch.setattr(foundation, "resolve_checkpoint", fake)
+    assert "fm_chronos_daily_complete_ft" in {m.name for m in list_models()}
+    model = get_model("fm_chronos_daily_complete_ft")
+    zero = get_model("fm_chronos_daily_complete")
+    assert (model.layout, model.period) == (zero.layout, zero.period)

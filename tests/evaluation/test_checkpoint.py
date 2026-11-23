@@ -47,6 +47,20 @@ def test_each_label_runs_the_german_config_s_models(tmp_path):
         "fm_chronos_daily_ragged",
     )
     assert ck.label_models("abc123", config) == ("fm_chronos_daily_ragged_ft",)
+    # A checkpoint trained on complete counts runs the complete `_ft` model.
+    assert ck.label_models("abc123", config, "complete") == (
+        "fm_chronos_daily_complete_ft",
+    )
+
+
+def test_a_segment_s_layout_is_read_from_its_settings(tmp_path):
+    import json
+
+    (tmp_path / "settings.json").write_text(json.dumps({"note": "x"}))
+    assert ck.segment_layout(tmp_path) == "ragged"
+    assert ck.segment_layout(None) == "ragged"
+    (tmp_path / "settings.json").write_text(json.dumps({"layout": "complete"}))
+    assert ck.segment_layout(tmp_path) == "complete"
 
 
 def test_the_german_config_has_no_weekly_models():
