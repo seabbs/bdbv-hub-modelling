@@ -378,12 +378,12 @@ R_{\mathcal{G}}(t_b) = \frac{\sum_{z \in \mathcal{G}} \Omega_z\, R_z(t_b)}{\sum_
 \mathcal{G} \in \{\text{CD}, k\}.
 $$
 
-With the term down-weighted by $\zeta = 0.5$, the likelihood gains
+With the release's SDs inflated by a factor $\kappa = \sqrt{2} \approx 1.41$, the likelihood gains
 
 $$
-\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_{\text{CD}}(t_b),\, \sigma_{\text{CD}}^2/\zeta\big),
+\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_{\text{CD}}(t_b),\, \kappa^2 \sigma_{\text{CD}}^2\big),
 \qquad
-\tilde\mu_k - \tilde\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_k(t_b) - \log R_{\text{CD}}(t_b),\, \sigma_{\Delta,k}^2/\zeta\big),
+\tilde\mu_k - \tilde\mu_{\text{CD}} \sim \mathcal{N}\big(\log R_k(t_b) - \log R_{\text{CD}}(t_b),\, \kappa^2 \sigma_{\Delta,k}^2\big),
 \qquad
 \sigma_{\Delta,k}^2 = \max(\tilde\sigma_k^2 - \tilde\sigma_{\text{CD}}^2,\, 0.05^2).
 $$
@@ -392,7 +392,11 @@ $\mu_{\text{CD}}$ and $\sigma_{\text{CD}}$ are the mean and SD of the release's 
 $\tilde\mu_k$ and $\tilde\sigma_k$ are each patch's log median and SD, the SD from the 90% interval.
 $\tilde\mu_{\text{CD}}$ and $\tilde\sigma_{\text{CD}}$ are the same summaries of the national estimate the patches are relative to, or $\mu_{\text{CD}}$ and $\sigma_{\text{CD}}$ if the release has none.
 Leaving a province out drops the national term and the patch that holds it.
-The term adds no parameters, and $\zeta = 0$ gives `renewal`.
+$\kappa$ says how much we trust an external estimate built partly on the same case data as ours.
+At $\kappa = 1$ those data would count twice at full weight, so we widen the estimates and they move our Rt mainly where our own data are weak.
+$\kappa$ is set by that judgement, like a prior, and is not tuned on scores.
+$\kappa = \sqrt{2}$ halves the precision, a power prior with tempering 0.5.
+The term adds no parameters, and $\kappa = \infty$ gives `renewal`.
 
 ## Health zones
 

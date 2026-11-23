@@ -60,9 +60,10 @@ We add its Rt estimates to our model as a down-weighted pseudo-observation of ou
 We take the newest BVDOutbreakSize release whose files were updated by the forecast's cut-off and whose joint fit's worst R-hat is at most 1.1 ([Data methods](../methods/data.md#bvdoutbreaksize-estimates)).
 At that release's data cut-off, our infection-weighted national Rt is matched to the release's national log Rt, and each patch's Rt relative to national is matched to the patch's estimate.
 Each fitted zone with a zone estimate in the release gets a term of its own in the same way.
-The terms are normal, with the release's variance multiplied by $1/\zeta$ and $\zeta = 0.5$, which tempers the likelihood as in a power prior[^ibrahim].
+The terms are normal, with the release's SDs multiplied by an inflation factor $\kappa = \sqrt{2} \approx 1.41$, a power prior with tempering $1/\kappa^2 = 0.5$[^ibrahim].
+$\kappa$ says how much we trust an external estimate built partly on the same case data as ours.
 So the external estimates move our Rt where our data are weak but do not override them.
-The term adds no parameters, and $\zeta = 0$ gives `renewal` exactly.
+The term adds no parameters, and $\kappa = \infty$ gives `renewal` exactly.
 We call the model with this term `renewalbvd`.
 
 Every renewal model also inherits from BVDOutbreakSize the generation interval, the incubation period priors, the prior on the half-life of the province deviations and the sum-to-zero basis for the deviations.
@@ -145,7 +146,7 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
   Both did worse than `randomwalknowcast` at the national level at the two latest origins.
 - The delay is by province, so zones in the same province cannot differ in how fast they report.
 - Silent zones are forecast by the random walk's introduction layer, independent of the fit, so a new zone's cases do not come from its neighbours' transmission.
-- The tempering $\zeta$ is fixed, not learnt or tuned on scores.
+- The SD inflation $\kappa$ is set by judgement, not learnt or tuned on scores.
 
 [^worldpop]: WorldPop (2025). Global high resolution population denominators. [www.worldpop.org](https://www.worldpop.org).
 

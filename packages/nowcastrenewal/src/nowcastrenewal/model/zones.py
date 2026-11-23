@@ -876,7 +876,7 @@ def build_zone_model(
         ),
         own=data.own,
         rt_observation=RtPseudoObservation(
-            "bvd", alpha=config.bvd_alpha, **data.bvd
+            "bvd", sd_inflation=config.bvd_sd_inflation, **data.bvd
         )
         if config.bvd and data.bvd is not None
         else None,

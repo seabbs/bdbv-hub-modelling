@@ -11,8 +11,8 @@
 - `composition_noise`: multinomial and Dirichlet-multinomial noise for
   counts by category given totals (the delay counts).
 - `distributions`: a Dirichlet-multinomial scored on its non-zero cells.
-- `rt_observation`: external Rt estimates as a tempered
-  pseudo-observation (the BVDOutbreakSize term).
+- `rt_observation`: external Rt estimates as a pseudo-observation with
+  inflated SDs (the BVDOutbreakSize term).
 - `model`: `ModelConfig`, the configurations, fitting and forecasting.
 - `zones`: the model builder, with health zones nested in provinces or
   each place its own patch (`build_model`).
