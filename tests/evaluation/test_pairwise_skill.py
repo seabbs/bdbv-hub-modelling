@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -66,8 +68,20 @@ rbindlist(out, fill = TRUE)
 """
 
 
+_PACKAGES = ("scoringutils", "data.table", "jsonlite")
+_VERSION = "2.3.0"
+
+
 @pytest.fixture(scope="module")
 def r_skill() -> pd.DataFrame:
+    # The pairwise API is scoringutils 2's; an older install skips here
+    # (CI's r-live job installs 2.3.0 and fails instead).
+    have = run_r('as.character(packageVersion("scoringutils"))', {}, _PACKAGES)
+    if have != _VERSION:
+        reason = f"needs scoringutils {_VERSION} (found {have})"
+        if os.environ.get("R_LIVE_REQUIRED"):
+            pytest.fail(reason)
+        pytest.skip(reason)
     scores = _scores()
     out = run_r(
         _R,
@@ -76,7 +90,7 @@ def r_skill() -> pd.DataFrame:
             "metrics": ["wis", "log_wis"],
             "reference": "ref",
         },
-        packages=("scoringutils", "data.table", "jsonlite"),
+        packages=_PACKAGES,
     )
     return pd.DataFrame(out)
 
