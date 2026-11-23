@@ -195,9 +195,13 @@ def test_fit_code_covers_what_a_stored_fit_runs(
     daily: pd.DataFrame,
     config: BacktestConfig,
 ) -> None:
+    from bdbvhub.data.zones import load_zone_data
     from bdbvhub.store import store
 
-    tasks = store.origin_tasks(target, delays, config, daily)
+    data = ROOT / "tests" / "fixtures" / "data"
+    tasks = store.origin_tasks(
+        target, delays, config, daily, load_zone_data(data)
+    )
     task = tasks[sorted(tasks)[-1]]
     if model == "renewalsp":
         task = dataclasses.replace(task, locations=task.locations[:2])
