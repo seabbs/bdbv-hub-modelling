@@ -20,8 +20,8 @@ from nowcastgermany.data import (
     nowcast_tasks,
     place_code,
     read_triangle,
-    weekly_task,
 )
+from nowcastgermany.pairing import hub_weeks
 from nowcastutils.base import NATIONAL
 
 FIXTURE = (
@@ -171,7 +171,7 @@ def test_tasks_keep_real_dates(tasks) -> None:
 
 def test_weekly_models_forecast_the_sums_that_end_hub_weeks(tasks) -> None:
     for task in tasks:
-        weekly = weekly_task(task)
+        weekly = hub_weeks(task)
         # The Saturdays of the hub's days back from Wednesday 2021-10-20.
         assert weekly.target_end_dates == tuple(
             (task.reference_date + dt.timedelta(days=h)).isoformat()
@@ -231,7 +231,7 @@ def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
     model = get_model("randomwalk")
     out = pd.concat(
         hub_forecasts(run_forecasts([model], [w]), w, NOWCAST)
-        for w in map(weekly_task, tasks)
+        for w in map(hub_weeks, tasks)
     )
     assert set(out["horizon"]) == {-4, -11, -18, -25}
     assert set(out["forecast_date"]) == {NOWCAST}
@@ -362,3 +362,13 @@ def test_daily_truth_is_each_day_s_count_reported_by_the_delay(
             assert row["truth_vintage"].tolist() == [by]
     # 2021-10-15 + 10 days is after the last report date.
     assert got.loc[got["target_end_date"] == days[2], "truth"].isna().all()
+
+
+def test_german_scoring_has_no_weekly_step_special_case() -> None:
+    # Every German model forecasts every day of the one task; only the
+    # pairing evidence, whose walks have weekly steps, keeps hub weeks.
+    from nowcastgermany import data, evaluation, pairing
+
+    assert not hasattr(data, "weekly_task")
+    assert not hasattr(evaluation, "_own")
+    assert callable(pairing.hub_weeks)
