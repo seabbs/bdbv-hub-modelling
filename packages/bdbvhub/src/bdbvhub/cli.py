@@ -15,8 +15,8 @@ Commands:
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `fit-store`: list the fitted models' fits the store lacks, make one,
-  load the stored fits into the results (`evaluation.store`), or archive
-  every candidate's forecasts for a round (`evaluation.store_archive`).
+  load the stored fits into the results (`bdbvhub.store.store`), or archive
+  every candidate's forecasts for a round (`bdbvhub.store.archive`).
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
@@ -294,7 +294,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Score randomwalk and randomwalknowcast with no pairing and "
         "with their provinces paired by the rolling rho_p, from one "
         "forecast each, on the BDBV release backtest "
-        "(`evaluation.pairing`); the German study is `nowcastgermany "
+        "(`nowcasteval.pairing`); the German study is `nowcastgermany "
         "pairing-sensitivity`.",
     )
     pst.add_argument("--study", choices=["bdbv"], default="bdbv")
@@ -1361,7 +1361,7 @@ def _hub_forecast(
 
 
 def _fit_store_archive(args: argparse.Namespace) -> int:
-    """Run `fit-store archive` (`evaluation.store_archive`).
+    """Run `fit-store archive` (`bdbvhub.store.archive`).
 
     Returns 1 if an argument is missing, the origin is no real one, a
     policy candidate (or a model in `--models`) is missing, or any model

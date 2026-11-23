@@ -91,7 +91,6 @@ __all__ = [
     "delay_sums",
     "final_growth",
     "levels",
-    "own_ages",
     "retro_errors",
     "start_weeks",
     "walk_changes",
@@ -333,34 +332,6 @@ def delay_sums(
         settings.max_delay,
     )
     return pairs, np.asarray(num)[:, :n], np.asarray(den)[:, :n], gaps
-
-
-def own_ages(
-    den: np.ndarray, parent: np.ndarray, settings: Settings
-) -> np.ndarray:
-    """Return where each place's own data fit its delay, by age.
-
-    Unused. `fit_delay` picks own or pooled per place.
-
-    Parameters
-    ----------
-    den : numpy.ndarray
-        Denominators from `delay_sums`, `[L, P, D]`.
-    parent : numpy.ndarray
-        Parent of each place, -1 for the country, `[L]`.
-    settings : Settings
-        Settings.
-
-    Returns
-    -------
-    numpy.ndarray
-        `[L, D]`, true where the denominator at an age, summed over the
-        pairs, is at least `Settings.min_level` cases. The country is
-        always true.
-    """
-    own = den.sum(axis=1) >= settings.min_level
-    own[parent < 0] = True
-    return np.asarray(own)
 
 
 def fit_delay(

@@ -230,6 +230,30 @@ def status_point(folder: Path | str) -> tuple[float, float] | None:
         return None
 
 
+def status_position(folder: Path | str) -> dict[str, Any] | None:
+    """Return the trainer's position from its status, or None.
+
+    The step, the simulations trained (`outbreaks`), the segment, its
+    target and the stage, from `train/stream-status.json` whatever the
+    stage: the one source of where the run is, also while it cuts after
+    a restart, when its log has no step yet.
+    """
+    s = CACHE.get(Path(folder) / "train" / "stream-status.json")
+    if not isinstance(s, dict):
+        return None
+    try:
+        step, outbreaks = int(s["step"]), int(s["outbreaks"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return {
+        "step": step,
+        "outbreaks": outbreaks,
+        "segment": s.get("segment"),
+        "target": s.get("target"),
+        "stage": s.get("stage"),
+    }
+
+
 def views_summary(folder: Path | str) -> dict[str, int] | None:
     """Return the run's block views, or None if it has none.
 
@@ -256,27 +280,6 @@ def views_summary(folder: Path | str) -> dict[str, int] | None:
         "largest_series_before": before,
         "largest_series_after": after,
     }
-
-
-def step_at(
-    pairs: Sequence[tuple[int, int]], n: int, spo: float = 1.0
-) -> tuple[int, bool]:
-    """Return the step at which `n` simulations are trained, from `anchors`.
-
-    With whether it is planned: a checkpoint or a planned chunk ends at
-    `n`. Otherwise past the last pair at the run's mean rate so far, or
-    `spo` steps a simulation if no pair is known past step 0.
-    """
-    pairs = list(pairs) or [(0, 0)]
-    for s, k in pairs:
-        if k == n:
-            return s, True
-    for (s0, n0), (s1, n1) in pairwise(pairs):
-        if n0 < n < n1:
-            return round(s0 + (s1 - s0) * (n - n0) / (n1 - n0)), False
-    s1, n1 = pairs[-1]
-    rate = s1 / n1 if n1 else spo
-    return round(s1 + (n - n1) * rate), False
 
 
 def sims_at(

@@ -260,12 +260,29 @@ def with_submissions(
     Returns
     -------
     pandas.DataFrame
-        `forecasts` without the hub's copy of our submissions, and the
-        submitted rows under their hub id with `source` `submitted`. Our
-        main builds stay for every round.
+        `forecasts` without the hub's copy of the rounds `submitted`
+        holds, and the submitted rows under their hub id with `source`
+        `submitted`. The hub's copy of our other rounds and our main
+        builds stay.
     """
     ours = list(hub_ids.values())
-    copy = (forecasts["source"] == "hub") & forecasts["model"].isin(ours)
+    held = set(
+        zip(
+            submitted["model"],
+            submitted["reference_date"].astype(str),
+            strict=True,
+        )
+    )
+    keys = zip(
+        forecasts["model"],
+        forecasts["reference_date"].astype(str),
+        strict=True,
+    )
+    copy: np.ndarray = (
+        (forecasts["source"] == "hub").to_numpy(dtype=bool)
+        & forecasts["model"].isin(ours).to_numpy(dtype=bool)
+        & np.array([k in held for k in keys], dtype=bool)
+    )
     sub = submitted.assign(source="submitted")[list(SAMPLE_COLUMNS)]
     return pd.concat([forecasts.loc[~copy], sub], ignore_index=True)
 
@@ -340,10 +357,13 @@ def split_substituted(
     return forecasts.assign(model=new)
 
 
-def fetch_submissions_table(  # pragma: no cover - git
+def fetch_submissions_table(
     dest: Path | str, branch: str = "submission-ledger"
-) -> Path:
+) -> Path | None:
     """Copy the ledger branch's `submissions.csv` to `dest`.
+
+    The submit workflow writes it when it records a round; until then the
+    ledger has none, and this says so and returns `None`.
 
     Parameters
     ----------
@@ -354,18 +374,22 @@ def fetch_submissions_table(  # pragma: no cover - git
 
     Returns
     -------
-    pathlib.Path
-        `dest`.
+    pathlib.Path or None
+        `dest`, or `None` if the ledger has no table yet.
     """
     import subprocess
 
-    subprocess.run(["git", "fetch", "-q", "origin", branch], check=True)
-    text = subprocess.run(
+    subprocess.run(["git", "fetch", "-q", "origin", branch], check=False)
+    shown = subprocess.run(
         ["git", "show", f"origin/{branch}:submissions.csv"],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
-    ).stdout
+    )
+    if shown.returncode != 0:
+        print(f"The {branch} branch has no submissions.csv yet.")
+        return None
+    text = shown.stdout
     out = Path(dest)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text)

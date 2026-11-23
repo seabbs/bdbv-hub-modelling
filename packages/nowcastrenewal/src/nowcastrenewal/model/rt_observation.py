@@ -13,6 +13,34 @@ from jax.typing import ArrayLike
 from pyrenew.metaclass import RandomVariable
 
 
+def group_rt(rt: ArrayLike, weight: ArrayLike, members: ArrayLike) -> Array:
+    r"""Return the Rt of groups of places, weighted by their infections.
+
+    $$R_G = \frac{\sum_{p \in G} w_p R_p}{\sum_{p \in G} w_p}.$$
+
+    A place with no weight adds nothing, whatever its Rt. A group with
+    no weight has no Rt (NaN).
+
+    Parameters
+    ----------
+    rt
+        Rt of each place, `(..., P)`.
+    weight
+        Infections of each place, `(..., P)`.
+    members
+        Membership of each group, `(G, P)`.
+
+    Returns
+    -------
+    Array
+        `(..., G)` group Rt.
+    """
+    weight = jnp.asarray(weight)
+    members = jnp.asarray(members, dtype=weight.dtype)
+    num = jnp.where(weight > 0, weight * jnp.asarray(rt), 0.0)
+    return (num @ members.T) / (weight @ members.T)
+
+
 class RtPseudoObservation(RandomVariable):
     r"""External Rt estimates as a pseudo-observation with inflated SDs.
 
@@ -151,10 +179,9 @@ class RtPseudoObservation(RandomVariable):
             w = w * fractions
         r = rt[n_init + self.day]
 
-        def log_rt(member: Array) -> Array:
-            return jnp.log((member * w * r).sum(-1) / (member * w).sum(-1))
-
-        return log_rt(self.groups), log_rt(jnp.ones_like(w))
+        group = jnp.log(group_rt(r, w, self.groups))
+        national = jnp.log(group_rt(r, w, jnp.ones((1, w.shape[-1]))))[0]
+        return group, national
 
     def sample(
         self,

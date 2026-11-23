@@ -190,7 +190,12 @@ class ModelConfig:
         $\sqrt{2}$ halves the precision, the power prior with tempering
         0.5. `math.inf` gives the model without the term, exactly.
     dmax : int
-        Maximum onset-to-report delay in days.
+        Maximum onset-to-report delay in days. Longer delays of known
+        onsets are counted at `dmax`, the last cell of the hazard pmf,
+        so the delay counts keep every case. At 60 days this lumps few
+        cases: in the 2026-11-15 release 0.47% of known-onset delays
+        exceed 60 days (99% are within 37). A longer axis would add
+        hazard cells that those few cases barely inform.
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
@@ -262,7 +267,7 @@ class Vintage:
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
     release_pairs : dict or None
         Rows of each earlier delay file and how many the file before it
-        had (`data.releases.release_pairs`), or None.
+        had (`nowcastutils.releases.release_pairs`), or None.
     """
 
     start_date: dt.date
@@ -660,4 +665,92 @@ def forecast_trajectories(
         "insample": insample,
         "draw": keep,
         "as_reported": as_reported,
+    }
+
+
+RT_SITE: Final = "latent::rt_subpop_adjusted"
+"""Each place's effective Rt: Rt times its susceptible share."""
+INFECTIONS_SITE: Final = "latent_infections_by_subpop"
+"""Each place's infections per resident."""
+
+
+def weekly_rt(
+    model: MultiSignalModel,
+    data: Vintage,
+    posterior: dict[str, Any] | None = None,
+    seed: int = 1,
+    chunk: int = 200,
+) -> dict[str, Any]:
+    r"""Draw each place's weekly effective Rt, by week of infection.
+
+    Every posterior draw is used, so quantiles carry the full posterior
+    uncertainty. The axis is the forecast axis (`model_args` with
+    `forecast`), so the weeks after the data take the forecast Rt. Each
+    place's weekly Rt weights its daily effective Rt (Rt times its
+    susceptible share) by the infections of each day,
+
+    $$R_{p,w} = \frac{\sum_{t \in w} I_p(t) R_p(t)}{\sum_{t \in w} I_p(t)},$$
+
+    and the weight is $\sum_{t \in w} I_p(t)$, as counts, so groups of
+    places pool with `rt_observation.group_rt`.
+
+    Parameters
+    ----------
+    model : MultiSignalModel
+        A fitted model, from `fit`.
+    data : Vintage
+        The model inputs it was fitted to.
+    posterior : dict, optional
+        Posterior draws to use instead of `model.mcmc`.
+    seed : int, default 1
+        Random seed of the first chunk; chunk `k` uses `seed + k`.
+    chunk : int, default 200
+        Draws taken at once, to bound memory.
+
+    Returns
+    -------
+    dict
+        `rt` and `weight`, `(n_draws, n_weeks, P)` (`rt` is NaN where a
+        place has no infections in a week), and `start`, the first day
+        of the axis, `n_init` days before `start_date`.
+    """
+    if posterior is None:
+        posterior = model.mcmc.get_samples()
+    # The fit's own Rt and infections stop at the data, so they are
+    # redrawn on the forecast axis.
+    sampled = {
+        k: v
+        for k, v in posterior.items()
+        if k not in (RT_SITE, INFECTIONS_SITE)
+    }
+    n = next(iter(sampled.values())).shape[0]
+    args = model_args(model, data, forecast=True)
+    pops = np.asarray(data.populations, dtype=float)
+    rts, weights = [], []
+    for k, lo in enumerate(range(0, n, chunk)):
+        part = {key: v[lo : lo + chunk] for key, v in sampled.items()}
+        pred = Predictive(
+            model.sample,
+            posterior_samples=part,
+            return_sites=[RT_SITE, INFECTIONS_SITE],
+        )(random.key(seed + k), **args)
+        rt = np.asarray(pred[RT_SITE], dtype=float)
+        counts = np.asarray(pred[INFECTIONS_SITE], dtype=float) * pops
+        m, days, p = rt.shape
+        weeks = days // 7
+        rt = rt[:, : 7 * weeks].reshape(m, weeks, 7, p)
+        counts = counts[:, : 7 * weeks].reshape(m, weeks, 7, p)
+        weight = counts.sum(axis=2)
+        total = (counts * rt).sum(axis=2)
+        rts.append(
+            np.divide(
+                total, weight, out=np.full_like(total, np.nan), where=weight > 0
+            )
+        )
+        weights.append(weight)
+    n_init = model.latent.n_initialization_points
+    return {
+        "rt": np.concatenate(rts),
+        "weight": np.concatenate(weights),
+        "start": data.start_date - dt.timedelta(days=n_init),
     }

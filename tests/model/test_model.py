@@ -1,3 +1,5 @@
+import datetime as dt
+
 import numpy as np
 import numpyro
 import pytest
@@ -326,3 +328,54 @@ def test_centred_rt_samples_the_baseline_levels(sim_vintage):
         tr["log_rt_baseline_x"]["value"].size
         == plain["log_rt_baseline_z"]["value"].size
     )
+
+
+def _prior_draws(model, data, n=4):
+    """Prior draws of every site, as `mcmc.get_samples` holds them."""
+    return Predictive(model.sample, num_samples=n)(
+        random.key(2), **model_args(model, data)
+    )
+
+
+def test_weekly_rt_is_infection_weighted_by_week_of_infection(sim_vintage):
+    from nowcastrenewal.model import weekly_rt
+
+    model = build_model(sim_vintage, MAIN)
+    posterior = _prior_draws(model, sim_vintage)
+    out = weekly_rt(model, sim_vintage, posterior, seed=3)
+    n_init = model.latent.n_initialization_points
+    n_weeks = n_init // 7 + sim_vintage.n_weeks + sim_vintage.horizon_weeks
+    p = len(sim_vintage.names)
+    # Every draw, on the forecast axis: the fit-time sites are redrawn.
+    assert out["rt"].shape == out["weight"].shape == (4, n_weeks, p)
+    # The axis starts the seeding days before the first data Sunday.
+    assert out["start"] == sim_vintage.start_date - dt.timedelta(days=n_init)
+    # The effective Rt and the infection counts of the same draws.
+    latent = {
+        k: v
+        for k, v in posterior.items()
+        if k
+        not in ("latent::rt_subpop_adjusted", "latent_infections_by_subpop")
+    }
+    pred = Predictive(
+        model.sample,
+        posterior_samples=latent,
+        return_sites=[
+            "latent::rt_subpop_adjusted",
+            "latent_infections_by_subpop",
+        ],
+    )(random.key(3), **model_args(model, sim_vintage, forecast=True))
+    rt = np.asarray(pred["latent::rt_subpop_adjusted"])
+    counts = np.asarray(pred["latent_infections_by_subpop"]) * np.asarray(
+        sim_vintage.populations
+    )
+    week = 7 * (n_init // 7 + 2)
+    w = counts[:, week : week + 7]
+    np.testing.assert_allclose(out["weight"][:, week // 7], w.sum(1), rtol=1e-5)
+    np.testing.assert_allclose(
+        out["rt"][:, week // 7],
+        (w * rt[:, week : week + 7]).sum(1) / w.sum(1),
+        rtol=1e-5,
+    )
+    assert np.all(out["weight"] >= 0)
+    assert np.all(np.isnan(out["rt"]) == (out["weight"] == 0))

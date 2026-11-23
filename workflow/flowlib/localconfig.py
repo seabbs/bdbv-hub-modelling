@@ -54,6 +54,11 @@ DEFAULTS = (
     ("REMOTE_ROOT", ""),
     ("SIM_SEEDS", ""),
     ("SNAKEMAKE_PROFILE", ""),
+    # Where the dashboard (workflow/scripts/dashboard.py) listens: its
+    # host (an address of this machine; 127.0.0.1 keeps it local) and
+    # port.
+    ("DASHBOARD_HOST", "127.0.0.1"),
+    ("DASHBOARD_PORT", "8765"),
     # This machine's budget for workflow/profiles/default
     # (flowlib.machine): its cores and memory less the headroom kept free,
     # unless CORES and MEM_MB set them; simulation batches at once; and

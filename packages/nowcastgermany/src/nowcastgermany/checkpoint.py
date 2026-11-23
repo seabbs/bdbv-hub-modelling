@@ -9,7 +9,7 @@ with `rule` = `RULE`:
 
 - `germany`: the development half of the German benchmark
   (config/germany.toml), quantile WIS and log WIS on each model's own
-  quantiles (`evaluation.germany.germany_forecasts`), by level.
+  quantiles (`nowcastgermany.evaluation.germany_forecasts`), by level.
 - `held_out`: the trainer's held-out loss from the release's
   settings.json (unit `release`).
 
@@ -17,7 +17,7 @@ BDBV is held out for the paper, so no BDBV rows are scored here.
 
 Relative scores divide by randomwalknowcast's on the cells every model
 and checkpoint of a level made. Every score comes from
-`evaluation.scoring`, as the paper's and the dashboard's do. Rows are
+`nowcasteval.scoring`, as the paper's and the dashboard's do. Rows are
 keyed by checkpoint hash and run, with the checkpoint's outbreaks and
 grid.
 
@@ -79,7 +79,7 @@ COVERAGE: Final = (50, 90)
 GERMANY_COVERAGE: Final = (50, 95)
 """The German rows' intervals: the hub's quantiles have no 0.05 or 0.95,
 so there is no 90% interval and its rows keep the 95% one the hub
-scored (`evaluation.germany`)."""
+scored (`nowcastgermany.evaluation`)."""
 WIS_PARTS: Final = ("dispersion", "overprediction", "underprediction")
 """WIS's components (Bracher et al. 2021), which sum to it."""
 REPO: Final = "seabbs/BDBVHubRenewal"
@@ -387,7 +387,8 @@ def german_tasks_dir(
     """Return the store of the German tasks every checkpoint scores.
 
     Keyed on what the tasks are built from: the triangle file's bytes,
-    the task-building code (`data.germany` and the `data.dates` it uses),
+    the task-building code (`nowcastgermany.data` and the
+    `nowcastutils.dates` it uses),
     the fields of the `ForecastTask` they are pickled as, the draws and
     seed, and the longest delay the models see (`max_delay`).
     """
@@ -412,21 +413,61 @@ def german_tasks_dir(
 
 
 WRITTEN_FILE: Final = "written.tsv"
-"""A unit folder's record of each date written and its task store."""
+"""A unit folder's record of each date and model written, with its key."""
+
+EVERY: Final = "*"
+"""The model of a record that covers every model of its date."""
 
 
-def written(root: Path) -> dict[str, str]:
-    """Return each date a unit wrote and the task store it read."""
+def written(root: Path) -> dict[tuple[str, str], str]:
+    """Return the key each date's rows of each model were written with.
+
+    Lines are `date<TAB>model<TAB>key`, or `date<TAB>key` for every model
+    of the date (`EVERY`); a later line replaces an earlier one.
+    """
     path = Path(root) / WRITTEN_FILE
     if not path.exists():
         return {}
-    pairs = (line.split("\t") for line in path.read_text().splitlines())
-    return {p[0]: p[1] for p in pairs if len(p) == 2}
+    out: dict[tuple[str, str], str] = {}
+    for line in path.read_text().splitlines():
+        p = line.split("\t")
+        if len(p) == 2:
+            out[(p[0], EVERY)] = p[1]
+        elif len(p) == 3:
+            out[(p[0], p[1])] = p[2]
+    return out
 
 
-def _record(root: Path, date: str, tasks: str) -> None:
+def _record(root: Path, date: str, keys: Mapping[str, str]) -> None:
     with (Path(root) / WRITTEN_FILE).open("a") as f:
-        f.write(f"{date}\t{tasks}\n")
+        f.writelines(f"{date}\t{m}\t{k}\n" for m, k in keys.items())
+
+
+def model_key(model: str) -> str:
+    """Return a digest of what a model's forecasts depend on, past its tasks.
+
+    The source of the package the model's class lives in (every module, so
+    a change to a helper counts), the German forecasting code
+    (`nowcastgermany.evaluation`) and the German config.
+    """
+    import hashlib
+    import importlib
+    import inspect
+
+    from nowcastutils.base import list_models
+
+    spec = next(s for s in list_models() if s.name == model)
+    factory = getattr(spec.factory, "func", spec.factory)
+    package = importlib.import_module(factory.__module__.split(".")[0])
+    files = sorted(Path(inspect.getfile(package)).parent.rglob("*.py"))
+    from nowcastgermany import evaluation as de
+
+    files += [Path(de.__file__), Path(GERMANY_CONFIG)]
+    h = hashlib.sha256()
+    for f in files:
+        h.update(f.name.encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()[:12]
 
 
 def _reaches(path: Path, last: int, targets: Sequence[str]) -> bool:
@@ -468,27 +509,43 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     record_precision(root)
     dates = de.development_dates(config)
     last = max(config.horizons)
-    # A date is kept only if forecast from this task store: the tasks'
-    # building code is in its name (`german_tasks_dir`).
-    tasks = tasks_dir.name
-    have = written(root)
-    todo = [
-        d
-        for d in dates
-        if have.get(d) != tasks
-        or not _reaches(root / f"{d}.csv.gz", last, config.targets)
-    ]
     models = list(label_models(label, layout=segment_layout(segment)))
+    # A date's rows are kept only if forecast from this task store: the
+    # tasks' building code is in its name (`german_tasks_dir`). The
+    # reference's do not depend on a checkpoint, so each model's are also
+    # keyed on its own code and the German config (`model_key`), and a
+    # change redoes that model's rows alone.
+    tasks = tasks_dir.name
+    want = {
+        m: f"{tasks}-{model_key(m)}" if label == REFERENCE else tasks
+        for m in models
+    }
+    have = written(root)
+    groups: dict[tuple[str, ...], list[str]] = {}
+    for d in dates:
+        full = not _reaches(root / f"{d}.csv.gz", last, config.targets)
+        need = tuple(
+            m
+            for m in models
+            if full or have.get((d, m), have.get((d, EVERY))) != want[m]
+        )
+        if need:
+            groups.setdefault(need, []).append(d)
+    todo = [(need, d) for need, ds in groups.items() for d in ds]
     # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
     # a stopped run resumes.
     step = score_dates()
-    for i in range(0, len(todo), step):
-        chunk = todo[i : i + step]
+    chunks = [
+        (need, ds[i : i + step])
+        for need, ds in groups.items()
+        for i in range(0, len(ds), step)
+    ]
+    for i, (need, chunk) in enumerate(chunks):
         start = time.monotonic()
         timings: list[dict[str, Any]] = []
         fc = de.germany_forecasts(
-            models,
+            list(need),
             triangle,
             chunk,
             config.n_samples,
@@ -507,11 +564,19 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
         fc = de.with_truth(fc, triangle, config.truth_delay)
         for date in chunk:
             mine = fc.loc[fc["origin"] == date].reset_index(drop=True)
-            _write(mine, root / f"{date}.csv.gz")
-            _record(root, date, tasks)
+            out = root / f"{date}.csv.gz"
+            if len(need) < len(models) and out.exists():
+                # The other models' rows of the date are kept.
+                old = pd.read_csv(out)
+                mine = pd.concat(
+                    [old.loc[~old["model"].isin(need)], mine],
+                    ignore_index=True,
+                )
+            _write(mine, out)
+            _record(root, date, {m: want[m] for m in need})
         _free()
         took = time.monotonic() - start
-        done = len(dates) - len(todo) + i + len(chunk)
+        done = len(dates) - len(todo) + sum(len(c) for _, c in chunks[: i + 1])
         print(
             f"germany {label} {len(chunk)} dates to {chunk[-1]} "
             f"({done}/{len(dates)}): {took:.0f} s",

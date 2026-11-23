@@ -36,6 +36,7 @@ from .model import (
     generation_interval,
     incubation_period,
     model_args,
+    weekly_rt,
 )
 from .observation import (
     MissingOnsetFraction,
@@ -68,4 +69,5 @@ __all__ = [
     "model_args",
     "onset_expectations",
     "pooled_walk",
+    "weekly_rt",
 ]

@@ -94,18 +94,12 @@ class Context:
     def sims(self, run: Run) -> Callable[[float], float]:
         """Return the simulations a run has trained by a step.
 
-        From its own checkpoints and logged chunks (`training.anchors`).
+        From its own checkpoints and logged chunks (`training.anchors`),
+        for the curves' simulations axis; where the run is now comes from
+        its status alone (`live_status`).
         """
         pairs, spo = self._anchors(run)
         return lambda step: training.sims_at(pairs, step, spo)
-
-    def steps(self, run: Run) -> Callable[[int], tuple[int, bool]]:
-        """Return the step a run trains `n` simulations by, and if planned.
-
-        From its own checkpoints and logged chunks (`training.step_at`).
-        """
-        pairs, spo = self._anchors(run)
-        return lambda n: training.step_at(pairs, n, spo)
 
     def _anchors(self, run: Run) -> tuple[list[tuple[int, int]], float]:
         cks = _checkpoints(run)
@@ -180,19 +174,21 @@ def _checkpoints(run: Run) -> list[tuple[str, dict, float | None]]:
 
 @dataclass
 class Status:
-    """The live run's state, for the tiles and the sticky bar."""
+    """The live run's state, for the tiles and the sticky bar.
+
+    `step` and `trained` (simulations) are the trainer's status
+    (`training.status_position`), None without one; `rate` is the steps
+    a second since the last restart.
+    """
 
     step: int | None
     rate: float | None
     last_t: float | None
     params: dict[str, Any]
-    spo: float
     saved: set[int]
     pending: list[int]
     nxt: int | None
     trained: float | None = None
-    steps: Callable[[int], tuple[int, bool]] | None = None
-    sims_rate: float | None = None
     span: float | None = None
     mean_rate: float | None = None
 
@@ -201,31 +197,20 @@ class Status:
         """Return the final checkpoint's size."""
         return max(self.params["prefixes"] or [0])
 
-    def at(self, n: int) -> int:
-        """Return the step at which checkpoint `n` is saved."""
-        return self.steps(n)[0] if self.steps else round(n * self.spo)
-
-    def planned(self, n: int) -> bool:
-        """Return whether checkpoint `n`'s step is planned, not estimated."""
-        return bool(self.steps and self.steps(n)[1])
-
     def eta(self, n: int | None) -> str:
-        """Return the time until checkpoint `n` at the recent speed.
+        """Return the time until checkpoint `n` at the rate since restart.
 
-        From simulations a minute where known (the checkpoints are
-        simulation counts), else from steps a second.
+        The steps still to go are the simulations still to go at the
+        run's own steps a simulation so far (`step / trained`).
         """
-        if not n or self.step is None:
+        if not n or self.step is None or not self.trained:
             return "n/a"
-        if self.sims_rate and self.trained is not None:
-            if self.trained >= n:
-                return "due now"
-            return _dur((n - self.trained) / self.sims_rate)
+        if self.trained >= n:
+            return "due now"
         if not self.rate:
             return "n/a"
-        if self.at(n) <= self.step:
-            return "due now"
-        return _dur((self.at(n) - self.step) / self.rate)
+        spo = self.step / self.trained
+        return _dur((n - self.trained) * spo / self.rate)
 
 
 def run_sizes(prefixes: Sequence[int], outbreaks: int) -> list[int]:
@@ -237,22 +222,20 @@ def run_sizes(prefixes: Sequence[int], outbreaks: int) -> list[int]:
 
 
 def live_status(
-    live: Run,
-    rows: list[dict[str, Any]],
-    planned: Sequence[int],
-    sims: Callable[[float], float] | None = None,
-    steps: Callable[[int], tuple[int, bool]] | None = None,
+    live: Run, rows: list[dict[str, Any]], planned: Sequence[int]
 ) -> Status:
-    """Return the live run's step, speed, schedule and checkpoints.
+    """Return the live run's position, speed and checkpoints.
 
     `planned` are its checkpoints, with those saved (`logs.prefixes`).
-    `sims` (`Context.sims`) gives the simulations trained by its step,
-    as the rate decays over simulations; `steps` (`Context.steps`) the
-    step a checkpoint is saved at.
+    The step and simulations trained are the trainer's status alone
+    (`training.status_position`); the logged steps since the last
+    restart (`training.resumed_at`) and the status give the rate.
     """
-    step = rows[-1]["step"] if rows else None
-    last_t = rows[-1]["t"] if rows else None
     folder = live.folder
+    last_t = rows[-1]["t"] if rows else None
+    position = training.status_position(folder) if folder else None
+    step = position["step"] if position else None
+    trained = float(position["outbreaks"]) if position else None
     # Timestamped steps: every logged step, and the trainer's status file
     # (written every few steps), as evaluations log a step only every few
     # hundred (`training.recent_rate`).
@@ -260,17 +243,10 @@ def live_status(
     status = training.status_point(folder) if folder else None
     if status:
         points.append(status)
-        if step is None or status[1] > step:
-            step = int(status[1])
     since = training.resumed_at(folder) if folder else None
     rate, span = training.recent_rate(points, since=since)
-    sims_rate = None
-    if rate and span and sims:
-        newest = max(points)
-        first_s = newest[1] - rate * span
-        done = sims(newest[1]) - sims(first_s)
-        sims_rate = done / span if done > 0 else None
-    trained = sims(step) if sims and step is not None else None
+    if since is not None and not any(t >= since for t, _ in points):
+        rate, span = None, None
     params = (
         training.run_params(
             folder, training.history(live), step, planned, trained
@@ -285,9 +261,6 @@ def live_status(
         }
     )
     sizes = params["prefixes"]
-    spo = training.steps_per_simulation(_checkpoints(live))
-    if trained and step:
-        spo = step / trained
     saved = {
         n
         for n in sizes
@@ -303,20 +276,15 @@ def live_status(
         and (folder / f"train/n{n}/{ADAPTER}").exists()
     ]
     nxt = next((n for n in sizes if n not in saved and n not in pending), None)
-    if trained is None and step is not None:
-        trained = step / spo
     return Status(
         step,
         rate,
         last_t,
         params,
-        spo,
         saved,
         pending,
         nxt,
         trained,
-        steps,
-        sims_rate,
         span,
         training.mean_rate(points),
     )
@@ -340,9 +308,8 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     last_t, last_text = last or (st.last_t, "")
     age = now - last_t if last_t else None
     stale = age is not None and age > STALE
-    # The next prefix, the simulations done of it, and the step it is
-    # saved at: planned once its chunk is, else at the mean rate so far.
-    # A written checkpoint still being scored is named as itself.
+    # The next prefix, the simulations done of it and its ETA. A written
+    # checkpoint still being scored is named as itself.
     next_v = f"n{st.nxt}" if st.nxt else "none"
     eta = f"ETA {st.eta(st.nxt)}" if st.nxt else ""
     next_s: dict[str, Any] = {}
@@ -351,8 +318,6 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "simulations": f"{min(trained, st.nxt):.0f}/{st.nxt}"
             if trained is not None
             else None,
-            "step": st.at(st.nxt),
-            "step_is": "planned" if st.planned(st.nxt) else "estimated",
             "ETA": st.eta(st.nxt),
         }
     if st.pending:
@@ -373,9 +338,6 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "t_step",
             "n/a" if st.step is None else str(st.step),
             {
-                "final_step": st.at(st.target)
-                if st.target and st.step is not None
-                else None,
                 "simulations_trained": f"{trained:.0f}/{st.target}"
                 if trained is not None
                 else None,
@@ -388,9 +350,6 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             f"{st.rate:.3f}" if st.rate else "n/a",
             {
                 "mean": st.mean_rate,
-                "simulations_per_min": st.sims_rate * 60
-                if st.sims_rate
-                else None,
                 "window_s": st.span,
             },
             "",
@@ -411,7 +370,7 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             f"ETA n{st.target}",
             "t_eta",
             st.eta(st.target),
-            {"step": st.at(st.target)},
+            {},
             "",
         ),
         ("Learning rates", "t_lr", rates, {"schedule": decay}, ""),
@@ -850,7 +809,7 @@ def nowcasts_section(
     controls = controls.replace("{tip}", tip("nowcast"))
     return (
         controls + f'<script type="application/json" id=gdata>{data}</script>'
-        f"<script>{_asset('nowcasts.js')}</script>"
+        f"<script>{_asset('bars.js')}\n{_asset('nowcasts.js')}</script>"
     )
 
 
@@ -959,8 +918,6 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         live,
         rows,
         run_sizes(ctx.prefixes, ctx.outbreaks),
-        ctx.sims(live),
-        ctx.steps(live),
     )
     tiles, bar = status_tiles(st, live)
     status = (

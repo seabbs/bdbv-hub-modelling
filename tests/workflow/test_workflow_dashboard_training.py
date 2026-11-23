@@ -177,16 +177,6 @@ def test_a_run_from_the_workflow_decays_over_its_simulations(tmp_path):
     assert got["current"]["adapter"] == pytest.approx(1e-5 * 0.75)
 
 
-def test_the_step_a_checkpoint_is_saved_at_comes_from_planned_chunks():
-    cks = [("n250", {"steps": 1500, "n_outbreaks": 250}, None)]
-    pairs = training.anchors(cks, {0: (250, 1500), 250: (500, 1400)})
-    # n500's chunk is planned: its step is known.
-    assert training.step_at(pairs, 500) == (2900, True)
-    # n750 is not: at the run's mean rate so far, 5.8 steps a simulation.
-    assert training.step_at(pairs, 750) == (4350, False)
-    assert training.step_at([(0, 0)], 250, spo=4.0) == (1000, False)
-
-
 def test_the_rate_uses_logged_steps_and_the_status_over_a_long_enough_window():
     # Evaluations every 400 steps leave one logged step in 30 minutes; the
     # status file's step and time make the second point.

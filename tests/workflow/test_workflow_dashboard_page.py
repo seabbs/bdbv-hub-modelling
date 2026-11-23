@@ -49,6 +49,17 @@ def _machine(tmp_path):
         )
         + "\n"
     )
+    # A running trainer's status: where the run is.
+    (run / "train" / "stream-status.json").write_text(
+        json.dumps(
+            {
+                "stage": "training",
+                "step": 290,
+                "outbreaks": 260,
+                "time": "2026-11-16 16:29:00",
+            }
+        )
+    )
     scores_dir = tmp_path / "scores" / "tables"
     scores_dir.mkdir(parents=True)
     with (scores_dir / "checkpoint-scores.csv").open("w") as f:
@@ -348,20 +359,15 @@ def test_the_last_log_line_is_the_running_segment_s(tmp_path):
     assert "resumed at step 1140" in tile
 
 
-def test_the_next_checkpoint_names_its_simulations_and_planned_step(tmp_path):
+def test_the_next_checkpoint_names_its_simulations_and_eta(tmp_path):
     ctx = _machine(tmp_path)
-    folder = ctx.runs[0].folder
-    (folder / "train" / "n500.log").write_text(
-        "2026-11-16 16:30:00 [train] outbreaks 251-500: 9 blocks, "
-        "99 series, 1000 steps\n"
-    )
     out = page.build(ctx)
     tile = out.split("Next checkpoint", 1)[1].split("Segments", 1)[0]
     assert ">n500<" in tile
-    # 250 checkpointed at step 1140; n500's chunk planned as 1000 steps.
-    assert "/500</b>" in tile
-    assert "Step</span> <b>2140</b>" in tile
-    assert "<b>planned</b>" in tile
+    # The status's 260 simulations of n500's 500, and no planned step.
+    assert "260/500</b>" in tile
+    assert "Step</span>" not in tile
+    assert "ETA</span> <b>n/a</b>" not in tile
 
 
 def test_every_configured_dataset_is_in_the_selector(tmp_path):
@@ -408,7 +414,6 @@ def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
     out = page.build(ctx)
     tile = out.split("Steps / s", 1)[1].split("</div></div>", 1)[0]
     assert "n/a" not in tile
-    assert "Simulations per min" in tile
     eta = out.split("ETA n8000", 1)[1].split("</div></div>", 1)[0]
     assert "n/a" not in eta
 
@@ -464,6 +469,19 @@ OFFLOADED = (
 )
 
 
+def _status(folder, step, outbreaks, stage="training"):
+    (folder / "train" / "stream-status.json").write_text(
+        json.dumps(
+            {
+                "stage": stage,
+                "step": step,
+                "outbreaks": outbreaks,
+                "time": "2026-11-16 16:29:00",
+            }
+        )
+    )
+
+
 def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     ctx = _machine(tmp_path)
     folder = ctx.runs[0].folder
@@ -471,6 +489,7 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     (folder / "train" / "n250.log").write_text(
         "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
     )
+    _status(folder, step=1740, outbreaks=300)
     ctx.outbreaks = 1000
     ctx.prefixes = (250, 500, 1000)
     planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
@@ -481,7 +500,6 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     speed = tiles.split("Steps / s")[1].split("Next checkpoint")[0]
     assert "n/a" not in speed
     assert "Mean</span> <b>1</b>" in tiles
-    assert f"Final step</span> <b>{st.at(1000)}</b>" in tiles
     # Each segment still to come, with its ETA.
     for n in (500, 1000):
         assert f"n{n}</span> <b>{st.eta(n)}</b>" in tiles
@@ -548,3 +566,66 @@ def test_the_trainer_s_losses_are_labelled_validation(tmp_path):
     text = re.sub(r"<script.*?</script>", "", out, flags=re.S)
     assert "Validation loss" in out
     assert "held-out loss" not in text.lower()
+
+
+def test_a_just_restarted_run_shows_its_position_from_the_status(tmp_path):
+    # Lead 00:20: after a restart the new segment log has no step lines,
+    # and the page showed an old evaluation's step (37,200, 1592/3200)
+    # with an ETA from it. Step and simulations come only from the
+    # trainer's status; with no step since the restart there is no ETA.
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    (folder / "train" / "stream-status.json").write_text(
+        json.dumps(
+            {
+                "stage": "cutting held-out blocks of 90 outbreaks",
+                "step": 51250,
+                "outbreaks": 2200,
+                "segment": "n3200",
+                "target": 3200,
+                "time": "2026-11-23 18:03:21",
+            }
+        )
+    )
+    (folder / "train" / "n250.log").write_text(
+        "2026-11-23 18:02:50 [train] resumed at step 51250\n"
+    )
+    ctx.outbreaks = 3200
+    ctx.prefixes = (250, 1600, 3200)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert st.step == 51250
+    assert st.trained == 2200
+    assert st.eta(3200) == "n/a"
+    tiles, _ = page.status_tiles(st, ctx.runs[0])
+    assert "Simulations trained</span> <b>2200/3200</b>" in tiles
+
+
+def test_the_etas_come_from_the_status_and_the_rate_alone(tmp_path):
+    # Lead 01:05 sweep (14): no step or simulations interpolated from the
+    # checkpoints and logged chunks. The status gives the step and the
+    # simulations (so its steps a simulation), the log the rate.
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    (folder / "train" / "n250.log").write_text(
+        "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
+    )
+    _status(folder, step=1740, outbreaks=300)
+    ctx.outbreaks = 1000
+    ctx.prefixes = (250, 500, 1000)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert (st.step, st.trained) == (1740, 300)
+    assert st.eta(500) == page._dur((500 - 300) * 1740 / 300 / st.rate)
+    tiles, _ = page.status_tiles(st, ctx.runs[0])
+    assert "Final step" not in tiles
+    assert "estimated" not in tiles
+
+
+def test_without_a_status_the_position_is_not_known(tmp_path):
+    ctx = _machine(tmp_path)
+    (ctx.runs[0].folder / "train" / "stream-status.json").unlink()
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert (st.step, st.trained) == (None, None)
+    assert st.eta(max(planned)) == "n/a"

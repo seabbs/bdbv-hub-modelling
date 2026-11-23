@@ -10,7 +10,7 @@ How the models are built in code and sampled is on the [Implementation](implemen
 ## Overview
 
 `renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
-`renewalbvd` fits the same zones ([`forecasters/zonerenewal.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/zones.py), [`model/zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/model/zones.py)).
+`renewalbvd` fits the same zones ([`zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/zones.py), [`model/zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/model/zones.py)).
 Their provinces are the sums of their zones, and the country is the sum of the provinces.
 `renewalsp` fits the place model to each province on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
@@ -197,6 +197,18 @@ In `renewal` a province's trajectory is the sum of its zones' trajectories of th
 The national trajectory is the sum of the provinces plus an unassigned component.
 The component is $\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in data weeks and $\rho \sum_p \tilde y_{p,i}(w)$ after, with $\tilde y_{p,i}$ trajectory $i$ of province $p$.
 $\rho$ is the component's share of the provinces' total over the last 4 data weeks.
+
+### Weekly Rt { #weekly-rt }
+
+Each fit also gives the hub's `wk R_t` target, the weekly effective reproduction number by week of infection.
+For place $p$ and week $w$ it is the daily effective Rt (Rt times the susceptible share) weighted by that day's infections,
+$$R_{p,w} = \frac{\sum_{t \in w} I_p(t) R^{\text{eff}}_p(t)}{\sum_{t \in w} I_p(t)}.$$
+A province above fitted zones and the country pool their fitted places in the same way, weighting each by $\sum_{t \in w} I_p(t)$, draw by draw.
+Places outside the fit have no Rt and add nothing to their province or the country.
+Fits of provinces on their own (`renewalsp`) pair draws by index, as their trajectories do.
+The quantiles are taken over every posterior draw, not the 100 trajectories, and weeks after the data take the forecast Rt.
+The fit directory holds them as `rt.csv.gz` (`location`, `target_end_date`, `output_type_id`, `value`).
+This Rt is estimated from the hub's onsets, including its imputed onsets, so it is likely to react more slowly than transmission ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61)).
 
 ## Zone model (`renewal`) { #partially-pooled }
 

@@ -2,7 +2,7 @@
 r"""How much pairing the walk models' draws matters (the sensitivity page).
 
 `randomwalk` and `randomwalknowcast` pair their province draws within
-each week inside their forecast (`forecasters.copula.pair_walks`). Here
+each week inside their forecast (`nowcastbaselines.copula.pair_walks`). Here
 each forecasts a task once and gives its draws under both pairings
 (`VARIANTS`): none (`off`) and the rolling $\rho_p$ it uses (`rolling`),
 from its unpaired draws (`RandomWalk.unpaired`). Pairing only reorders

@@ -1,6 +1,9 @@
 """The page's scripts and style name no study, place, run or host."""
 
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -123,3 +126,42 @@ def test_the_horizon_split_pools_the_common_nowcast_dates():
     assert "(com||[]).forEach" in pool
     assert "(ds||[])" not in pool
     assert "nowcast date(s) shown" not in js
+
+
+def test_nowcasts_over_time_draw_every_shown_model_over_any_span():
+    # Over time, every ticked model is drawn (as one nowcast date draws
+    # them), with no single-model choice, and the origins can be every
+    # scored date.
+    html = (PAGE / "nowcasts.html").read_text()
+    js = (PAGE / "nowcasts.js").read_text()
+    assert "id=gmodl" not in html
+    assert "<option value=0>all</option>" in html
+    eff = js[js.index("function effective(") :]
+    assert eff[: eff.index("}") + 1] == "function effective(){return ticked()}"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+def test_the_horizon_split_draws_a_visible_bar_for_every_value():
+    # The split's bars were a few pixels wide; each value gets a bar of
+    # visible width and a height that grows with it.
+    script = (
+        "const {groupedBars}=require(process.argv[1]);"
+        "const g=['now','wk 1','wk 2','wk 3','wk 4'];"
+        "const v={now:53,'wk 1':120,'wk 2':150,'wk 3':170,'wk 4':190};"
+        "const ms=[1,2,3,4,5,6,7].map(i=>({id:'m'+i,values:v}));"
+        "console.log(JSON.stringify(groupedBars(g,ms,520,170).bars))"
+    )
+    out = subprocess.run(
+        ["node", "-e", script, str(PAGE / "bars.js")],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    bars = json.loads(out.stdout)
+    assert len(bars) == 35
+    assert all(b["w"] >= 6 and b["h"] >= 10 for b in bars)
+    now = [b["h"] for b in bars if b["g"] == "now"]
+    wk4 = [b["h"] for b in bars if b["g"] == "wk 4"]
+    assert min(wk4) > max(now)
+    js = (PAGE / "nowcasts.js").read_text()
+    assert "groupedBars(" in js

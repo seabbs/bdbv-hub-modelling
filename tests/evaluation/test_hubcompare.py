@@ -750,3 +750,57 @@ def test_an_unknown_substituted_mode_stops() -> None:
 
     with pytest.raises(ValueError, match="substituted"):
         split_substituted(_submitted("x", "2026-11-21"), SUBMISSIONS, "mix")
+
+
+def test_with_submissions_keeps_the_hub_copy_of_rounds_not_held_here() -> None:
+    """data/our-submissions holds some rounds only: the hub's copy of our
+    other rounds is scored, not dropped."""
+    from bdbvhub.compare import with_submissions
+
+    ids = {"renewalbvd": "seabbs-renewal"}
+    forecasts = pd.concat(
+        [
+            _submitted("seabbs-renewal", "2026-11-07", source="hub"),
+            _submitted("seabbs-renewal", "2026-11-14", source="hub"),
+        ]
+    )
+    held = _submitted("seabbs-renewal", "2026-11-07", source="hub")
+    out = with_submissions(forecasts, held, ids)
+    got = set(zip(out["source"], out["reference_date"], strict=True))
+    assert got == {("submitted", "2026-11-07"), ("hub", "2026-11-14")}
+
+
+def _git(cwd: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_fetch_submissions_table_goes_on_without_a_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Until main records a round the ledger has no submissions.csv, and
+    `compare-hub --fetch` (Pages) must not stop on it."""
+    from bdbvhub.compare import fetch_submissions_table
+
+    origin, clone = tmp_path / "origin", tmp_path / "clone"
+    origin.mkdir()
+    _git(origin, "init", "-q", "-b", "submission-ledger")
+    (origin / "state.json").write_text("{}")
+    _git(origin, "add", "state.json")
+    _git(origin, "commit", "-q", "-m", "ledger")
+    _git(tmp_path, "clone", "-q", str(origin), str(clone))
+    monkeypatch.chdir(clone)
+    dest = tmp_path / "out" / "submissions.csv"
+    assert fetch_submissions_table(dest) is None
+    assert not dest.exists()
+    (origin / "submissions.csv").write_text("reference_date,hub_id\n")
+    _git(origin, "add", "submissions.csv")
+    _git(origin, "commit", "-q", "-m", "table")
+    assert fetch_submissions_table(dest) == dest
+    assert dest.read_text() == "reference_date,hub_id\n"
