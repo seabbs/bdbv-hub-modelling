@@ -11,6 +11,7 @@ Steps, in workflow order:
 - `joint-scores`: sample trajectories scored jointly (energy score);
 - `figures` and `score-tables`: main-text and SI outputs;
 - `evidence`: SI tables, figures and numbers from evidence branches;
+- `realism`: the grid's simulations against the German development half;
 - `ebola-extra`: further Ebola samples, kept to some models;
 - `germany-extra`: further German forecasts as a paper table;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
@@ -38,7 +39,7 @@ from paperpipe.config import (
     keep_finetuned,
     run_settings,
 )
-from paperpipe.evidence import EVIDENCE, write_evidence
+from paperpipe.evidence import EVIDENCE, realism_reference, write_evidence
 from paperpipe.meta import baseline_of, read_meta, write_meta
 from paperpipe.outputs import (
     joint_table,
@@ -207,6 +208,12 @@ def _evidence(a: argparse.Namespace) -> None:
         )
 
 
+def _realism(a: argparse.Namespace) -> None:
+    sims = pd.concat([pd.read_csv(p) for p in a.summaries], ignore_index=True)
+    sims.to_csv(a.out_sims, index=False)
+    realism_reference(pd.read_csv(a.germany), sims).to_csv(a.out_reference)
+
+
 def _ebola_extra(a: argparse.Namespace) -> None:
     raw = pd.read_csv(a.input)
     _write(raw.loc[raw["model"].str.match(a.models)], a.out)
@@ -370,6 +377,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="The live fine-tuning run, by the checkpoint scores' `run`.",
     )
     p.set_defaults(run=_evidence)
+
+    p = sub.add_parser("realism")
+    p.add_argument("summaries", type=Path, nargs="+")
+    p.add_argument("--germany", type=Path, required=True)
+    p.add_argument("--out-sims", type=Path, required=True)
+    p.add_argument("--out-reference", type=Path, required=True)
+    p.set_defaults(run=_realism)
 
     p = sub.add_parser("ebola-extra")
     p.add_argument("--input", type=Path, required=True)

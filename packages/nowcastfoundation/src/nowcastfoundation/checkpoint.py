@@ -388,11 +388,25 @@ def german_tasks_dir(
     return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
 
-def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
-    """Nowcast each German development date, own quantiles with truth.
+def _reaches(path: Path, last: int) -> bool:
+    """Whether a unit's date file holds horizons up to `last` days.
 
-    The fine-tuned models load the release `label` names, or a run's own
-    `segment` folder (`<run>/train/n<N>`) when given, cached as `label`.
+    Files written before the forecast days were added end at the
+    nowcast date, so their dates are forecast again.
+    """
+    if not path.exists():
+        return False
+    horizon = pd.read_csv(path, usecols=["horizon"])["horizon"]
+    return bool(len(horizon)) and int(horizon.max()) >= last
+
+
+def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
+    """Forecast each German development date, own quantiles with truth.
+
+    Each date is forecast at the German config's horizons (`horizons`):
+    the hub's nowcast and the forecast days after it. The fine-tuned
+    models load the release `label` names, or a run's own `segment`
+    folder (`<run>/train/n<N>`) when given, cached as `label`.
     """
     from nowcastgermany import evaluation as de
     from nowcastgermany.data import hub_triangle
@@ -409,7 +423,8 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     root.mkdir(parents=True, exist_ok=True)
     record_precision(root)
     dates = de.nowcast_dates(config, held_out=False)
-    todo = [d for d in dates if not (root / f"{d}.csv.gz").exists()]
+    last = max(config.horizons)
+    todo = [d for d in dates if not _reaches(root / f"{d}.csv.gz", last)]
     models = list(label_models(label))
     # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
@@ -427,6 +442,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
             config.seed,
             tasks_dir,
             max_delay=config.truth_delay,
+            horizons=config.horizons,
             timings=timings,
         )
         # Seconds by model and date, for the `benchmarks` target.
@@ -524,7 +540,9 @@ def germany_rows(folders: Mapping[str, Path]) -> pd.DataFrame:
         fc = _cached(folder)
         if fc is None:
             continue
-        fc = fc.loc[fc["origin"] < config.split_date]
+        # The table scores the hub's horizons only, as the paper scores
+        # the teams; the forecast days are for the page.
+        fc = fc.loc[(fc["origin"] < config.split_date) & (fc["horizon"] <= 0)]
         nat = de.score_germany(fc, config.truth_delay)
         logged = fc.assign(
             value=np.log1p(fc["value"].clip(lower=0)),

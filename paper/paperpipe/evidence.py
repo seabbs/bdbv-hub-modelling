@@ -57,6 +57,7 @@ __all__ = [
     "live_numbers",
     "realism_figure",
     "realism_numbers",
+    "realism_reference",
     "rho_medians",
     "scale_floor_numbers",
     "slots_rows",
@@ -583,6 +584,51 @@ def realism_figure(
     return fig
 
 
+GERMANY_KINDS: Final = {
+    "national": "Germany national",
+    "states": "Germany states",
+    "ages": "Germany ages",
+}
+"""The German development half's series, as the realism columns name them."""
+
+REALISM_QUANTILES: Final = (0.05, 0.5, 0.95)
+"""The simulations' quantiles of each summary in the realism table."""
+
+
+def realism_reference(
+    germany: pd.DataFrame, sims: pd.DataFrame
+) -> pd.DataFrame:
+    """Return each summary's German values and simulated quantiles.
+
+    Parameters
+    ----------
+    germany : pandas.DataFrame
+        The German development half's statistics (`kind`, `statistic`,
+        `value`), from the workflow's rule germany_dev_stats.
+    sims : pandas.DataFrame
+        One row per simulated outbreak of the grid's training rounds, one
+        column per summary (rule round_summaries).
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per summary in both, the index; a column per German series
+        (`GERMANY_KINDS`) and `sim_q5`, `sim_q50` and `sim_q95`.
+    """
+    wide = germany.pivot(index="statistic", columns="kind", values="value")
+    wide = wide.reindex(columns=list(GERMANY_KINDS)).rename(
+        columns=GERMANY_KINDS
+    )
+    names = [s for s in wide.index if s in sims]
+    values = sims[names].apply(pd.to_numeric, errors="coerce")
+    out = wide.loc[names]
+    for q in REALISM_QUANTILES:
+        out[f"sim_q{round(100 * q)}"] = values.quantile(q).to_numpy()
+    out.index.name = None
+    out.columns.name = None
+    return out
+
+
 def realism_numbers(reference: pd.DataFrame) -> dict:
     """Return each summary's simulated quantiles and data values.
 
@@ -630,7 +676,7 @@ EVIDENCE: Final = {
     "aggregation_scores": "the per-target aggregation scores",
     "finetune_heldout": "the final run's held-out loss curve",
     "sim_summaries": "per-outbreak summaries of the final grid's simulations",
-    "sim_realism": "the data reference values",
+    "sim_realism": "the German development half's values",
     "sim_diseases": "the published disease values",
     "checkpoint_scores": "the scores of each checkpoint of the final run",
     "scale_floor": "the scale-floor test",
@@ -661,7 +707,7 @@ QUOTED: Final = {
         for m in COPULA_MODELS
     },
     "realism": {
-        "zero_share": {"sim_q95": NOT_YET, "BDBV": NOT_YET},
+        "zero_share": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
         "delay_q99": {"sim_q95": NOT_YET, "Germany_states": NOT_YET},
     },
 }
