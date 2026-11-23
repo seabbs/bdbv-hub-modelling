@@ -39,7 +39,7 @@ import shutil
 import subprocess
 import time
 import zlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -47,7 +47,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from nowcastfoundation import series_bias
+from nowcastfoundation import series_bias, sidecar
 from nowcastfoundation.finetune import chronos as ft
 from nowcastfoundation.finetune import combinations, simulations, verify
 from nowcastfoundation.forecaster import (
@@ -1384,6 +1384,55 @@ def save_state(where: Path, model, optimiser, state: dict) -> None:
     shutil.rmtree(old, ignore_errors=True)
 
 
+def backfill(
+    train: Path,
+    prefixes: Sequence[int],
+    blocks: list[dict],
+    device: str,
+    batch_size: int,
+    report: Callable[..., None],
+) -> None:
+    """Write the held-out sidecar of each pending checkpoint, newest first.
+
+    Each is scored on a copy of base Chronos-2 with its adapter
+    (`evaluate.write_checkpoint_sidecar`), freed before the next.
+    """
+    from nowcastfoundation.finetune import evaluate as fe
+
+    todo = pending_checkpoints(train, prefixes)
+    if not todo:
+        return
+    base = fe.load_base("cpu")
+    for where in todo:
+        report(stage=f"backfilling held-out losses of {where.name}")
+        got = fe.write_checkpoint_sidecar(
+            where, base, blocks, device, batch_size
+        )
+        log(
+            f"{where.name}: backfilled held-out loss "
+            f"{got['held_out_loss']:.4f} in {got['seconds']:.0f} s"
+        )
+        free_memory()
+
+
+def pending_checkpoints(train: Path, prefixes: Sequence[int]) -> list[Path]:
+    """Return the saved checkpoints without held-out losses, newest first.
+
+    A checkpoint has them in its settings (evaluated in the trainer) or in
+    its sidecar (`sidecar.SIDECAR`, evaluated offloaded or backfilled).
+    """
+    out = []
+    for n in sorted(prefixes, reverse=True):
+        where = train / f"n{n}"
+        settings = where / "settings.json"
+        if not settings.exists() or (where / sidecar.SIDECAR).exists():
+            continue
+        if "held_out_loss" in json.loads(settings.read_text()):
+            continue
+        out.append(where)
+    return out
+
+
 def resume_progress(where: Path, until: int | None, outbreaks: int) -> dict:
     """Return the step and outbreaks a run resumes from, and its segment.
 
@@ -2239,6 +2288,10 @@ def main(root: Path | None = None) -> None:
         snapshot()
         report(stage="training", step=step, outbreaks=done, split=split)
     pool.shutdown(cancel_futures=True)
+    if done == args.outbreaks:
+        # After the final checkpoint, nothing else trains: score each saved
+        # checkpoint still without held-out losses, newest first.
+        backfill(out, args.prefixes, val, str(device), args.batch_size, report)
     if args.until is not None and done == args.until:
         # A segment: the next one resumes from the state kept with n<N>.
         snapshot()

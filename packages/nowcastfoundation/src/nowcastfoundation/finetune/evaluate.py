@@ -21,7 +21,7 @@ from typing import Any
 
 import numpy as np
 
-from nowcastfoundation import series_bias
+from nowcastfoundation import series_bias, sidecar
 from nowcastfoundation.finetune import chronos as ft
 from nowcastfoundation.finetune import stream as fs
 from nowcastfoundation.forecaster import CHRONOS_MODEL, CHRONOS_REVISION
@@ -241,6 +241,47 @@ def snapshot_result(
         "device": device,
         "seconds": seconds,
     }
+
+
+def write_checkpoint_sidecar(
+    where: Path,
+    base: Any,
+    blocks: list[dict[str, Any]],
+    device: str,
+    batch_size: int = 256,
+) -> dict[str, Any]:
+    """Score checkpoint `where` on the held-out blocks; write its sidecar.
+
+    The sidecar (`sidecar.SIDECAR`, beside its settings) holds the
+    checkpoint's held-out losses and base Chronos-2's (`sidecar.start_loss`).
+
+    Raises
+    ------
+    ValueError
+        If the run has no base Chronos-2 loss to put beside them.
+    """
+    start = sidecar.start_loss(where.parent)
+    if start is None:
+        raise ValueError(
+            f"{where}: no base Chronos-2 loss: neither evals/step-0000000.json "
+            "nor a locally evaluated checkpoint's held_out_loss_start"
+        )
+    losses, seconds = score(
+        base,
+        where / "finetuned-ckpt",
+        blocks,
+        ["checkpoint"],
+        batch_size,
+        device,
+    )
+    out = {
+        "held_out_loss_start": start,
+        **losses,
+        "device": device,
+        "seconds": seconds,
+    }
+    write_json(where / sidecar.SIDECAR, out)
+    return out
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
