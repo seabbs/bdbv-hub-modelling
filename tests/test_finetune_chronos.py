@@ -1519,3 +1519,9 @@ def test_a_system_over_capacity_is_cut_into_views_with_exact_totals(
                     )
     finally:
         ft.PARENTS = None
+
+
+def test_the_grid_file_has_a_default_outside_a_checkout(monkeypatch, tmp_path):
+    # Installed alone, the package has no workflow/config.yaml to read.
+    monkeypatch.setattr(ft, "ROOT", tmp_path)
+    assert ft.workflow_grid_file() == ft.DEFAULT_GRID_FILE

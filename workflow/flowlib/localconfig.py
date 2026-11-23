@@ -85,7 +85,7 @@ DEFAULTS = (
     # `task nowcast-workflow:monitor` serves it; the targets whose rule
     # graph and job DAG it draws (flowlib.dag, NAME=TARGET), the Snakemake
     # options they are built with, and every how many seconds.
-    ("MONITOR_URL", "http://127.0.0.1:8795"),
+    ("MONITOR_URL", "http://$MONITOR_HOST:$MONITOR_PORT"),
     ("MONITOR_HOST", "127.0.0.1"),
     ("MONITOR_PORT", "8795"),
     ("MONITOR_DAG", ""),
