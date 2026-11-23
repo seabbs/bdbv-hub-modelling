@@ -263,6 +263,21 @@ class PaperFlow:
         ]
         return files if all(Path(f).exists() for f in files) else []
 
+    def example_files(self) -> dict[str, list[str]]:
+        """Return the SI examples' simulation files, by kind.
+
+        The examples are picked from the development round, so the
+        held-out round is never read for them. Each pick names a
+        simulation, `<seed>-<n>`, and the files are its seed's.
+        """
+        folder = self.synthetic["simulations"]["development"]
+        picks = self.synthetic["examples"]["picks"]
+        seeds = sorted({str(sim).split("-")[0] for sim, _ in picks})
+        return {
+            "counts": [f"{folder}/counts-{s}.csv.gz" for s in seeds],
+            "settings": [f"{folder}/settings-{s}.csv" for s in seeds],
+        }
+
     # A study's data ------------------------------------------------------
 
     def sources(self, w: Wildcards) -> str:

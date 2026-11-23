@@ -3,10 +3,11 @@
 `examples_figure` draws a few contrasting simulations of the grid, one
 panel each: the final daily counts by onset date, and the counts known at
 three release dates, so the reporting delay is visible. The workflow's
-`sim_examples` rule runs it on pilot simulations of the grid
+`sim_examples` rule runs it on the development round's simulations
 (`synthetic.examples` in the workflow config).
 
-Usage: python -m paperfigs.sim_examples --sims DIR --picks JSON --out PNG
+Usage: python -m paperfigs.sim_examples --counts CSV... --settings CSV...
+    --picks JSON --out PNG
 """
 
 from __future__ import annotations
@@ -109,20 +110,17 @@ def examples_figure(
 
 
 def main() -> None:
-    """Draw the figure from the pilot simulations' files."""
+    """Draw the figure from the simulations' files."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sims", type=Path, required=True)
+    parser.add_argument("--counts", type=Path, nargs="+", required=True)
+    parser.add_argument("--settings", type=Path, nargs="+", required=True)
     parser.add_argument(
         "--picks", required=True, help="[[simulation, label], ...] as JSON."
     )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    counts = pd.concat(
-        pd.read_csv(p) for p in sorted(args.sims.glob("counts-*.csv.gz"))
-    )
-    settings = pd.concat(
-        pd.read_csv(p) for p in sorted(args.sims.glob("settings-*.csv"))
-    )
+    counts = pd.concat(pd.read_csv(p) for p in args.counts)
+    settings = pd.concat(pd.read_csv(p) for p in args.settings)
     picks = [tuple(p) for p in json.loads(args.picks)]
     fig = examples_figure(counts, settings, picks)
     args.out.parent.mkdir(parents=True, exist_ok=True)
