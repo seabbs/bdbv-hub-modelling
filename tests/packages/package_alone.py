@@ -53,7 +53,7 @@ KNOWN: dict[str, set[str]] = {
         "bdbvhub.store.archive",
         "bdbvhub.store.digest",
         "bdbvhub.store.store",
-        "bdbvhub.zones",
+        "nowcastbdbv.zones",
     },
 }
 """Modules that fail to import alone, by package, as of 2026-11-22."""

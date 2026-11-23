@@ -13,7 +13,7 @@ It reads the hub's data (`nowcastbdbv`), fits and stores the models, writes and 
 - The hub's data streams, delays and health zones are in [`nowcastbdbv.data`](../nowcastbdbv/src/nowcastbdbv/data/).
 - [`models`](src/bdbvhub/models.py): the model registry.
 - [`store`](src/bdbvhub/store/): the fit store, its archive and the backtest digest.
-- [`compare`](src/bdbvhub/compare.py), [`zones`](src/bdbvhub/zones.py): comparison with the hub's forecasts, and health-zone forecasts.
+- [`compare`](src/bdbvhub/compare.py): comparison with the hub's forecasts. Health-zone forecasts are in [`nowcastbdbv.zones`](../nowcastbdbv/src/nowcastbdbv/zones.py).
 - [`submission`](src/bdbvhub/submission/): the hub file writer and checks, model metadata, the rounds and the CI fit configurations.
 - [`reporting`](src/bdbvhub/reporting/): the docs pages, tables and explorer.
 - [`cli`](src/bdbvhub/cli.py): the command.
