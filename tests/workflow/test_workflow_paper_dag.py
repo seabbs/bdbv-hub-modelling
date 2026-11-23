@@ -24,7 +24,13 @@ def _job_lines(out):
 def test_the_paper_targets_resolve_in_the_one_workflow(tmp_path, target):
     out = dry_run(tmp_path, target, quiet=False, extra=["-p"])
     assert out.returncode == 0, out.stderr + out.stdout
-    for rule in (target, "publish_paper", "summary", "evidence"):
+    for rule in (
+        target,
+        "publish_paper",
+        "summary",
+        "evidence",
+        "heldout_curve",
+    ):
         assert f"rule {rule}:" in out.stdout
     lines = _job_lines(out.stdout)
     assert lines

@@ -237,6 +237,14 @@ def round_of(seed):
     return (int(seed) - SIM["seed_base"]) // 100
 
 
+def heldout_curve_inputs(wc):
+    """Each of the run's checkpoints, with its held-out losses."""
+    train, ns = train_dir(wc.run), RUNS[wc.run].ft["prefixes"]
+    return [f"{train}/n{n}/settings.json" for n in ns] + [
+        f for n in ns for f in offloaded(wc.run, n)
+    ]
+
+
 def training_seeds(run):
     """The run's training seeds, in the order it trains on them."""
     f = RUNS[run].ft

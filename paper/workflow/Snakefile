@@ -560,6 +560,8 @@ rule grid_tables:
 rule evidence:
     input:
         **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+        # The final run's held-out loss by level (workflow rule heldout_curve).
+        heldout=FLOW.heldout_curve(),
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -577,6 +579,7 @@ rule evidence:
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "--finetune-heldout {input.heldout} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 
