@@ -427,7 +427,7 @@ def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
     monkeypatch.setattr(ck, "record_precision", lambda _root: None)
     monkeypatch.setattr(ck, "_free", lambda: None)
     monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: Path(TASKS))
-    monkeypatch.setattr(ck, "score_dates", lambda: 100)
+    monkeypatch.setattr(ck, "score_dates", lambda: 1000)
 
 
 def test_a_german_unit_forecasts_the_config_s_horizons(

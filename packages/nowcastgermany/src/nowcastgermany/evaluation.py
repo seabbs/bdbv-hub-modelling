@@ -181,7 +181,13 @@ class GermanyConfig:
     submissions : tuple of str
         Paths there of the hub teams' submissions.
     first_date, last_date : str
-        The first and last nowcast date.
+        The first and last nowcast date of the hub's evaluation, the dates
+        the hub teams are compared on.
+    development_start : str
+        The first nowcast date the checkpoint units score
+        (`development_dates`): the first whose oldest hub target starts
+        on a data day. The models' lag window is capped by the history
+        the task holds there. Defaults to `first_date`.
     split_date : str
         The first nowcast date of the held-out half. The dates before it
         are for development.
@@ -235,6 +241,12 @@ class GermanyConfig:
     horizons: tuple[int, ...] = HORIZONS
     targets: tuple[str, ...] = ("7day",)
     daily_baseline: str = "fm_chronos_daily_ragged"
+    development_start: str = ""
+
+    def __post_init__(self) -> None:
+        """Start development at the hub's first date unless set."""
+        if not self.development_start:
+            object.__setattr__(self, "development_start", self.first_date)
 
 
 def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
@@ -310,6 +322,7 @@ def load_germany_config(
         daily_baseline=raw["scoring"].get(
             "daily_baseline", "fm_chronos_daily_ragged"
         ),
+        development_start=now.get("development_start", ""),
     )
 
 
@@ -332,6 +345,17 @@ def nowcast_dates(config: GermanyConfig, held_out: bool = False) -> list[str]:
     days = pd.date_range(config.first_date, config.last_date, freq="D")
     dates = [d.date().isoformat() for d in days]
     return [d for d in dates if (d >= config.split_date) == held_out]
+
+
+def development_dates(config: GermanyConfig) -> list[str]:
+    """Return the checkpoint units' nowcast dates, oldest first.
+
+    From `GermanyConfig.development_start`, before the hub's first date
+    where it is earlier, to the day before the split date. The held-out
+    half is unchanged (`nowcast_dates`).
+    """
+    days = pd.date_range(config.development_start, config.split_date)
+    return [d.date().isoformat() for d in days][:-1]
 
 
 def fetch_germany(  # pragma: no cover - network

@@ -466,7 +466,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     root = cache / GERMANY_UNIT / label
     root.mkdir(parents=True, exist_ok=True)
     record_precision(root)
-    dates = de.nowcast_dates(config, held_out=False)
+    dates = de.development_dates(config)
     last = max(config.horizons)
     # A date is kept only if forecast from this task store: the tasks'
     # building code is in its name (`german_tasks_dir`).
