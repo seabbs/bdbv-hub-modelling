@@ -341,3 +341,36 @@ def test_the_pipeline_interpolates_to_the_hub_levels_itself(monkeypatch):
         out[:, 0, :], np.arange(3)[None, :] + np.array(hub)[:, None]
     )
     assert "np.interp" not in Path(foundation.__file__).read_text()
+
+
+def test_the_reported_layout_adds_each_place_s_counts_to_date():
+    # The ragged block, plus one row per place of the counts reported by
+    # the cut-off: the target over the context, the partial counts of the
+    # last lags' steps, nothing after the cut-off.
+    from nowcastfoundation.forecaster import reported_block
+
+    tri = daily_tri()
+    tri = HubTriangle(tri.times, tri.final, tri.partial, last=11)
+    start = tri.n_context
+    group = reported_block(tri, PLACES, start)
+    ragged = layout_block(tri, "ragged", PLACES, start)
+    np.testing.assert_array_equal(group["target"], ragged["target"])
+    for p, place in enumerate(PLACES):
+        name = f"{place}_lag_reported"
+        past = group["past_covariates"][name]
+        ahead = group["future_covariates"][name]
+        np.testing.assert_array_equal(past, tri.final[p, :start])
+        np.testing.assert_array_equal(
+            ahead[: tri.last + 1 - start], tri.final[p, start : tri.last + 1]
+        )
+        assert np.isnan(ahead[tri.last + 1 - start :]).all()
+    # Every ragged lag row is kept, and each new row belongs to its place.
+    assert set(ragged["past_covariates"]) < set(group["past_covariates"])
+    place, _ = chronos2._group_rows(group)
+    assert len(place) == 2 + 2 * 3 + 2
+
+
+def test_the_daily_reported_model_is_registered_with_rolling_sums():
+    model = get_model("fm_chronos_daily_reported")
+    assert model.layout == "reported"
+    assert model.period == "rolling7"
