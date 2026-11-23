@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from bdbvhub.data.delays import hub_delay_pmf
 from bdbvhub.data.zones import zone_places
-from nowcastrenewal.model.inputs import gravity_kernel, imputation_pmf
+from nowcastrenewal.model import MAIN
+from nowcastrenewal.model.inputs import (
+    WeekTables,
+    gravity_kernel,
+    imputation_pmf,
+)
 
 
 def test_imputation_pmf_truncates_and_renormalises() -> None:
@@ -34,6 +40,36 @@ def test_the_kernel_comes_from_the_places_table() -> None:
     # From A, the larger and nearer B and C take more than they would
     # by distance alone.
     assert k[2, 0] > 0 and k[1, 0] > 0
+
+
+def test_the_kernel_names_places_with_no_population() -> None:
+    places = pd.DataFrame(
+        {"location": ["A"], "population": [1.0], "latitude": [0.0]}
+    ).assign(longitude=0.0)
+    with pytest.raises(ValueError, match=r"population for \['B'\]"):
+        gravity_kernel(("A", "B"), places)
+
+
+def test_delay_counts_clip_delays_and_leave_out_masked_places() -> None:
+    first = pd.Timestamp("2026-08-08").date()
+    weeks = WeekTables(pd.DataFrame(), first, 13, ["2026-08-08", "2026-08-15"])
+    delays = pd.DataFrame(
+        {
+            "location": ["A", "A", "B", "C"],
+            "onset_week": [
+                "2026-08-08",
+                "2026-08-15",
+                "2026-08-08",
+                "2026-08-08",
+            ],
+            "delay": [-2, 500, 3, 1],
+        }
+    )
+    counts = weeks.delay_counts(delays, ["A", "B"], MAIN, ("B",), every=False)
+    assert counts.shape == (2, 2, MAIN.dmax + 1)
+    assert counts[0, 0, 0] == 1
+    assert counts[1, 0, MAIN.dmax] == 1
+    assert counts.sum() == 2
 
 
 def test_zone_places_are_the_mapped_zones() -> None:

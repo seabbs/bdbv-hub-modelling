@@ -301,7 +301,7 @@ Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quanti
 - We compare this lag count with a fixed cap of 4 weeks or 28 days on the German development half.
 :::
 
-To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real` and `fm_chronos_weekly_ragged_real`).
+To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real`).
 It was trained on the German data and the BDBV data together.
 The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later.
 German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03.

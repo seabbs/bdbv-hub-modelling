@@ -14,10 +14,8 @@ the trainer's own losses (nowcastfoundation.finetune.evaluate); the files are as
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 import sys
-import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -27,33 +25,9 @@ sys.path.insert(0, str(ROOT / "workflow"))
 
 from flowlib import evaluations  # noqa: E402
 
-from nowcastfoundation import series_bias  # noqa: E402
 from nowcastfoundation.backends.chronos2 import torch_device  # noqa: E402
 from nowcastfoundation.finetune import evaluate as fe  # noqa: E402
 from nowcastfoundation.finetune import stream as fs  # noqa: E402
-
-
-def fresh(base, device: str):
-    """Return a copy of base Chronos-2 on `device`, for one adapter."""
-    return copy.deepcopy(base).to(device)
-
-
-def write(path: Path, data: dict[str, Any]) -> None:
-    """Write JSON beside `path` and move it into place."""
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=1))
-    tmp.rename(path)
-
-
-def score(base, adapter: Path, blocks, kinds, batch_size, device):
-    """Return the losses `kinds` ask for of `adapter`, and the seconds."""
-    model = fresh(base, device)
-    series_bias.attach_for(model, adapter)
-    tick = time.perf_counter()
-    losses = fe.evaluate(adapter, model, blocks, kinds, batch_size)
-    del model
-    fs.free_memory()
-    return losses, time.perf_counter() - tick
 
 
 def missing(train: Path, after: int, upto: int, every: int) -> list[str]:
@@ -123,28 +97,13 @@ def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
     base = fe.load_base("cpu")
     blocks: dict[Any, list[dict]] = {}
     for snap in todo:
-        request = json.loads((snap / "request.json").read_text())
-        n = request.get("n_validation")
+        n = json.loads((snap / "request.json").read_text()).get("n_validation")
         if n not in blocks:
             blocks[n] = fe.load_blocks(train / fs.HELD_OUT_BLOCKS, n)
-        kinds = request["kinds"]
-        losses, seconds = score(
-            base,
-            snap / "adapter",
-            blocks[n],
-            kinds,
-            request.get("batch_size", 256),
-            device,
-        )
-        result = {
-            **{k: request[k] for k in ("step", "n_outbreaks") if k in request},
-            **losses,
-            "kinds": list(kinds),
-            "device": device,
-            "seconds": seconds,
-        }
-        write(snap.with_name(snap.name + ".json"), result)
-        fs.log(f"{snap.name}: {', '.join(kinds)} in {seconds:.0f} s")
+        result = fe.snapshot_result(base, snap, blocks[n], device)
+        fe.write_json(snap.with_name(snap.name + ".json"), result)
+        kinds = ", ".join(result["kinds"])
+        fs.log(f"{snap.name}: {kinds} in {result['seconds']:.0f} s")
 
 
 def checkpoint(where: Path, device: str) -> None:
@@ -154,7 +113,7 @@ def checkpoint(where: Path, device: str) -> None:
     blocks = fe.load_blocks(
         train / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
     )
-    losses, seconds = score(
+    losses, seconds = fe.score(
         fe.load_base("cpu"),
         where / "finetuned-ckpt",
         blocks,
@@ -174,7 +133,7 @@ def checkpoint(where: Path, device: str) -> None:
         "device": device,
         "seconds": seconds,
     }
-    write(where / evaluations.SIDECAR, sidecar)
+    fe.write_json(where / evaluations.SIDECAR, sidecar)
     fs.log(f"{where.name}: held-out loss {losses['held_out_loss']:.4f}")
 
 

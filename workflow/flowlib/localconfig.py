@@ -32,12 +32,8 @@ DEFAULTS = (
     ("ROOT", "$HOME/bdbv-rounds"),
     # An optional local file of one-line notes (off unless NOTIFY is set).
     ("MAILBOX", ""),
-    ("INBOX", ""),
     # The workflow's own settings.
     ("SCORE_CACHE", "$ROOT/scores"),
-    # The slots check's no-slots run and German blocks.
-    ("NOSLOTS_RUN", "$ROOT/checkpoints"),
-    ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
     # The prefix every simulation batch runs under, with no cap of its
     # own (such as one systemd slice they all share; empty: none).
@@ -66,9 +62,6 @@ DEFAULTS = (
     ("MEM_MB", ""),
     ("SIM_SLOTS", ""),
     ("DEVICE", "auto"),
-    # The device held-out evaluation runs on (empty: DEVICE's). On the CPU
-    # it claims no GPU, so it runs beside the trainer.
-    ("EVAL_DEVICE", ""),
     # Series above which a training step recomputes activations in
     # backward (empty: the trainer's memory budget sets it); lower on a
     # small GPU. Memory only, outside the checkpoint's hash.

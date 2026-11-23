@@ -34,9 +34,13 @@ def fake(monkeypatch):
     mod = runner()
     calls = {"loads": 0, "evals": []}
 
+    class Base:
+        def to(self, _device):
+            return self
+
     def load_base(_device):
         calls["loads"] += 1
-        return object()
+        return Base()
 
     def evaluate(adapter, _base, _blocks, kinds, _batch, real=()):
         calls["evals"].append((Path(adapter), list(kinds), len(real)))
@@ -49,8 +53,7 @@ def fake(monkeypatch):
     monkeypatch.setattr(mod.fe, "load_base", load_base)
     monkeypatch.setattr(mod.fe, "evaluate", evaluate)
     monkeypatch.setattr(mod.fe, "load_blocks", lambda *_a, **_k: [{}, {}])
-    monkeypatch.setattr(mod, "fresh", lambda base, _device: base)
-    monkeypatch.setattr(mod.series_bias, "attach_for", lambda *_a: None)
+    monkeypatch.setattr(mod.fe.series_bias, "attach_for", lambda *_a: None)
     return mod, calls
 
 

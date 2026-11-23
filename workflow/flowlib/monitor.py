@@ -32,7 +32,8 @@ TIMEOUT = 2
 def args(cfg: Mapping[str, str]) -> list[str]:
     """Return the Snakemake options that report a run to the monitor.
 
-    None when `MONITOR_URL` is empty, which switches the monitor off.
+    None (an empty list) when `MONITOR_URL` is empty, which switches the
+    monitor off.
     """
     url = cfg.get("MONITOR_URL", "")
     if not url:

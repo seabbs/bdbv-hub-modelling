@@ -16,7 +16,7 @@ High level, one Taskfile task per target:
 | `task nowcast-foundation:push ROUNDS="19 18"` | `push` | a helping host's batches, pushed to the rounds host | the rounds host |
 | `task nowcast-foundation:finetune` | `finetune` | every checkpoint prefix of the run | no |
 | `task nowcast-foundation:publish` | `publish` | verify and release each checkpoint | GitHub releases |
-| `task nowcast-foundation:score` | `score` | score each released checkpoint, then its follow-ups | no |
+| `task nowcast-foundation:score` | `score` | score each released checkpoint | no |
 | `task nowcast-foundation:land` | `land` | commit the score tables to `evidence/` and push | git push |
 | `task paper` | `development` or `paper`, then `render` | the paper (section 6) | no |
 
@@ -39,7 +39,7 @@ A value may use another setting, `$ROOT` say, in any order.
 A variable in the environment wins, and with no file everything runs on this machine.
 The workflow uses:
 
-- paths: `ROOT` (rounds, and the runs in `ROOT/runs/`), `SCORE_CACHE`, `NOSLOTS_RUN` and `GERMANY_BLOCKS` (the slots check's);
+- paths: `ROOT` (rounds, and the runs in `ROOT/runs/`), `SCORE_CACHE`;
 - what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so a CPU machine sets `simulate score` and a GPU machine `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
 - resources: `JOB_PREFIX` (a per-job memory cap such as a `systemd-run` scope, or `workflow/scripts/mem_cap.sh {mem}` on macOS; `{mem}` becomes the job's budget), `SIM_PREFIX` (the prefix every simulation batch runs under instead, such as one systemd slice they all share; empty: none), `MIN_FREE_GB`, `MIN_DISK_GB` and `MAX_LOAD` (memory, disk and a load average below which a heavy job starts; `MAX_LOAD` empty is the core count), `HEADROOM_CORES` and `HEADROOM_GB` (cores and memory kept free), `CORES` and `MEM_MB` (set them outright instead), `SIM_SLOTS` (batches at once, 2 by default) and `DEVICE` (`auto`: CUDA, then MPS, then the CPU);
 - sharing the rounds: `SIM_SEEDS` (the seeds this machine takes: seeds, `first-last` ranges or rounds as `r<N>`; empty: all), and on a helping machine `REMOTE` and `REMOTE_ROOT` (the rounds host and its rounds folder; empty: `ROOT`);
@@ -113,7 +113,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `fetch_batch`: a batch into `<ROOT>/runs/<run>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
 - The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<ROOT>/runs/<run>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC summaries in `<ROOT>/runs/<run>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.
-- `evaluate_steps`, `evaluate_base`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. `evaluate_base` scores step 0 alone (base Chronos-2, the start loss), `evaluate_steps` a segment's snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), which needs only step 0. All rank below the trainer, as the GPU belongs to training for the whole run, and score their backlog newest first. They run on `EVAL_DEVICE` (default `DEVICE`); `cpu` claims no GPU, so they run beside the trainer. They use the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`) in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
+- `evaluate_steps`, `evaluate_base`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. `evaluate_base` scores step 0 alone (base Chronos-2, the start loss), `evaluate_steps` a segment's snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), which needs only step 0. They run on `EVAL_DEVICE` (the CPU by default) beside the trainer, newest first. They use the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`) in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
 - `finetune`: every prefix.
 
@@ -129,7 +129,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task nowcast-foundation:score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `score_germany`, `score_release`: the units of `nowcastfoundation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
-  Units run torch on the machine's device (or `SCORE_DEVICE`) with `SCORE_THREADS` threads and the `gpu` resource.
+  Units run torch on `EVAL_DEVICE` (the CPU by default) with `EVAL_THREADS` threads, beside the trainer: only `train_segment` takes the `gpu` resource, with the highest priority, so the next segment starts the moment the previous ends.
   BDBV is held out for the paper, so no BDBV unit runs.
 - `score_run_germany`: a run's own saved checkpoint `n<N>`, loaded from `<ROOT>/runs/<run>/train/n<N>` with no release, cached in `<ROOT>/runs/<run>/scores/`.
 - `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.

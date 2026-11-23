@@ -122,25 +122,12 @@ def test_lag_numbers_pair_each_model_with_its_longer_horizon() -> None:
         }
     )
 
-    def bdbv(value: float) -> pd.DataFrame:
-        return pd.DataFrame(
-            {
-                "scale": "all",
-                "target": "complete",
-                "weeks": "nowcast",
-                "model": ["fm_chronos_weekly_ragged", "randomwalk"],
-                "rel_wis": [value, 1.4],
-            }
-        )
-
-    out = lag_numbers(germany, bdbv(1.3), bdbv(3.2))
+    out = lag_numbers(germany)
     assert out["germany"]["fm_chronos_daily_ragged"] == {
         "capped": 2.9,
         "longer": 3.8,
     }
-    assert out["bdbv"] == {
-        "fm_chronos_weekly_ragged": {"capped": 1.3, "longer": 3.2}
-    }
+    assert set(out) == {"germany"}
 
 
 def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
@@ -173,28 +160,23 @@ def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
     }
 
 
-def test_scale_floor_numbers_split_simulations_and_bdbv() -> None:
+def test_scale_floor_numbers_by_model_and_size() -> None:
     from paperpipe.evidence import scale_floor_numbers
 
     rows = pd.DataFrame(
         {
-            "floor": [0, 1, 0, 1],
+            "floor": [0, 1],
             "model": "n4000",
-            "size": ["small (<=5)", "small (<=5)", "provinces", "provinces"],
-            "median_loss": [3.311, 4.814, None, None],
-            "share_q99_over_100x": [0.1067, 0.2845, None, None],
-            "source": [None, None, "weekly", "weekly"],
-            "relative_wis": [None, None, 4.2, 2.94],
+            "size": ["small (<=5)", "small (<=5)"],
+            "median_loss": [3.311, 4.814],
+            "share_q99_over_100x": [0.1067, 0.2845],
         }
     )
     out = scale_floor_numbers(rows)
     small = out["sims"]["n4000"]["small"]
     assert small["median_loss"] == {"none": 3.3, "floor": 4.8}
     assert small["q99_over_100x"] == {"none": 11, "floor": 28}
-    assert out["bdbv"]["provinces"]["weekly"]["n4000"] == {
-        "none": 4.2,
-        "floor": 2.94,
-    }
+    assert set(out) == {"sims"}
 
 
 def test_pair_is_blank_when_either_value_is_missing() -> None:
@@ -282,7 +264,8 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
             },
             {
                 **base,
-                "study": "ebola",
+                "study": "germany",
+                "level": "states",
                 "checkpoint": "b",
                 "run": "one-model",
                 "outbreaks": 1000,
@@ -305,10 +288,10 @@ def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
         ]
     )
     out = checkpoint_rows(rows, "one-model")
-    assert set(out["study"]) == {"germany", "ebola"}
+    assert set(out["study"]) == {"germany"}
     assert sorted(out["checkpoint"]) == ["b", "b", "zero-shot"]
     # A row with no relative WIS stays empty, never filled from CRPS.
-    assert pd.isna(out.set_index("study").loc["ebola", "rel_wis"])
+    assert pd.isna(out.set_index("level").loc["states", "rel_wis"])
     # Old tables, with no run, grid or rule, give the zero-shot rows only.
     old = rows.drop(columns=["run", "grid", "rule", "rel_crps"]).iloc[:2]
     assert list(checkpoint_rows(old, "one-model")["checkpoint"]) == [
@@ -574,7 +557,7 @@ def _si_copula() -> pd.DataFrame:
     rows = []
     for study, levels in [
         ("germany", ["national", "states", "ages"]),
-        ("bdbv", ["national", "provinces", "zones"]),
+        ("synthetic", ["national", "provinces", "zones"]),
     ]:
         for level in levels:
             for variant, value in (("off", 2.0), ("rolling", 1.0)):
@@ -608,8 +591,8 @@ def test_the_copula_figure_has_national_and_provinces_per_study() -> None:
     assert titles == {
         "Germany, national",
         "Germany, states",
-        "BDBV, national",
-        "BDBV, provinces",
+        "Held-out synthetic, national",
+        "Held-out synthetic, provinces",
     }
     labels = {t.get_text() for t in drawn[0].get_xticklabels()}
     assert labels == {"CRPS", "90% coverage", "ES (log)"}
@@ -702,3 +685,23 @@ def test_no_evidence_input_is_bdbv_scores() -> None:
     )
     assert not [n for n in EVIDENCE if "bdbv" in n]
     assert not [n for n in config["evidence"] if "bdbv" in n]
+
+
+def test_a_reference_row_counts_once_per_target() -> None:
+    base = {
+        "study": "germany",
+        "level": "national",
+        "location": "DE",
+        "origin_date": "2026-10-04",
+        "target_date": "2026-09-27",
+    }
+    rows = pd.DataFrame(
+        [
+            {**base, "model": "randomwalknowcast", "option": o, "wis": w}
+            for o, w in (("reference", 10.0), ("joint", 30.0))
+        ]
+        + [{**base, "model": "fm", "option": "joint", "wis": 5.0}]
+    )
+    assert aggregation_numbers(rows)["germany"]["national"]["fm"] == {
+        "joint": 0.5
+    }

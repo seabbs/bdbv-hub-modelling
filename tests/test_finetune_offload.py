@@ -147,31 +147,18 @@ def _snapshot_run(tmp_path, monkeypatch, n_validation: int) -> Path:
 
 
 @pytest.mark.usefixtures("short_context")
-def test_main_scores_a_snapshot_as_its_request_asks(tmp_path, monkeypatch):
+def test_a_snapshot_is_scored_as_its_request_asks(tmp_path, monkeypatch):
     where = _snapshot_run(tmp_path, monkeypatch, n_validation=4)
-    out = tmp_path / "result.json"
-    fe.main([str(where), "--train", str(tmp_path / "train"), "--out", str(out)])
-    got = json.loads(out.read_text())
+    blocks = fe.load_blocks(tmp_path / "train" / fs.HELD_OUT_BLOCKS, 4)
+    got = fe.snapshot_result(fe.load_base("cpu"), where, blocks, "cpu")
     assert got["step"] == 100
     assert got["kinds"] == ["monitor", "by_source"]
     assert {"eval_loss", "eval_loss_nowcast", "by_source"} <= set(got)
     assert "held_out_loss" not in got
+    out = tmp_path / "result.json"
+    fe.write_json(out, got)
+    assert json.loads(out.read_text())["step"] == 100
     assert not out.with_name(out.name + ".tmp").exists()
-
-
-@pytest.mark.usefixtures("short_context")
-def test_main_refuses_blocks_that_are_not_the_runs(tmp_path, monkeypatch):
-    where = _snapshot_run(tmp_path, monkeypatch, n_validation=5)
-    with pytest.raises(ValueError, match="4 held-out blocks"):
-        fe.main(
-            [
-                str(where),
-                "--train",
-                str(tmp_path / "train"),
-                "--out",
-                str(tmp_path / "result.json"),
-            ]
-        )
 
 
 @pytest.mark.usefixtures("short_context")

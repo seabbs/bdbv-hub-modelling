@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import dataclass
 from typing import Any, cast
 
 import numpy as np
@@ -72,7 +73,7 @@ def imputation_pmf(pmf: np.ndarray, dmax: int) -> np.ndarray:
 def gravity_kernel(
     locations: tuple[str, ...], table: pd.DataFrame, decay_km: float = 300.0
 ) -> np.ndarray:
-    r"""Gravity kernel between provinces, rows receive.
+    r"""Gravity kernel between places, rows receive.
 
     $K_{pq} \propto N_p \exp(-D_{pq} / \text{decay})$ for $p \ne q$,
     normalised per origin $q$ (`components.mixing.distance_kernel`), with
@@ -82,7 +83,7 @@ def gravity_kernel(
     Parameters
     ----------
     locations : tuple of str
-        Province codes.
+        Place codes.
     table : pandas.DataFrame
         Locations with `population`, `latitude` and `longitude` columns
         (`ForecastTask.places`).
@@ -97,12 +98,13 @@ def gravity_kernel(
     Raises
     ------
     ValueError
-        If a province has no centre or population, or the kernel is not
+        If a place has no centre or population, or the kernel is not
         finite.
     """
     rows = table.set_index("location").reindex(list(locations))
-    if rows["population"].isna().any():
-        raise ValueError("Missing province population.")
+    missing = rows.index[rows["population"].isna()].tolist()
+    if missing:
+        raise ValueError(f"Missing population for {missing}.")
     dist = great_circle_km(
         rows["latitude"].to_numpy(float), rows["longitude"].to_numpy(float)
     )
@@ -274,6 +276,137 @@ def bvd_inputs(
     }
 
 
+@dataclass(frozen=True)
+class WeekTables:
+    """One vintage's weekly onsets by place on the model's week grid.
+
+    The grid starts one week before national weekly onsets first reach
+    `START_COUNT` and ends with the week holding the vintage's cut-off,
+    its latest onset day (`data.releases.release_cutoff`).
+    """
+
+    wide: pd.DataFrame
+    """Weekly `observed`, `imputed` and `total` onsets by place."""
+    first: dt.date
+    """End of the first grid week."""
+    cutoff: int
+    """Days from the model start to the cut-off."""
+    weeks: list[str]
+    """Week end dates of the grid."""
+
+    @property
+    def start(self) -> dt.date:
+        """First day of the model axis."""
+        return self.first - dt.timedelta(days=6)
+
+    @classmethod
+    def from_target(
+        cls, target: pd.DataFrame, vintage: str, places: tuple[str, ...]
+    ) -> WeekTables:
+        """Return the grid of `places` at `vintage` from target rows."""
+        rows = target.loc[
+            (target["vintage"] == vintage) & target["location"].isin(places)
+        ]
+        wide = rows.pivot_table(
+            index="target_end_date",
+            columns="location",
+            values=["observed", "imputed", "total"],
+            aggfunc="sum",
+        ).fillna(0)
+        totals = cast(pd.DataFrame, wide["total"])
+        national = totals.reindex(columns=list(places)).fillna(0).sum(axis=1)
+        counts = national.to_numpy()
+        threshold = min(START_COUNT, counts.max())
+        big = int(np.argmax(counts >= threshold))
+        first = epiweek_end(
+            pd.Timestamp(national.index[max(0, big - 1)]).date()
+        )
+        start = first - dt.timedelta(days=6)
+        cutoff = (release_cutoff(target, vintage) - start).days
+        weeks = [
+            (first + dt.timedelta(weeks=i)).isoformat()
+            for i in range(cutoff // 7 + 1)
+        ]
+        return cls(wide, first, cutoff, weeks)
+
+    def values(self, column: str, places: tuple[str, ...]) -> np.ndarray:
+        """Return one column as weeks by `places`, zero where missing."""
+        out = cast(pd.DataFrame, self.wide[column]).reindex(
+            index=self.weeks, columns=list(places)
+        )
+        return out.fillna(0).to_numpy(dtype=float)
+
+    def delay_counts(
+        self,
+        delays: pd.DataFrame | None,
+        places: list[str],
+        config: ModelConfig,
+        masked: tuple[str, ...],
+        *,
+        every: bool,
+    ) -> np.ndarray:
+        """Count delays by grid week, place and delay day.
+
+        One table per place in `places`, or one for a national fit.
+        Known onsets count every case, so negative delays go to 0 and
+        delays past `dmax` to `dmax`, the last cell of the hazard pmf,
+        rather than leaving the delay counts short of the known stream.
+        With `every`, rows of any place are kept, as for a fit to the
+        whole country. Rows of `masked` places are left out.
+        """
+        n_places = 1 if config.national else len(places)
+        counts = np.zeros((len(self.weeks), n_places, config.dmax + 1))
+        if delays is None or not len(delays):
+            return counts
+        keep = delays.loc[
+            (
+                delays["location"].ne("")
+                if every
+                else delays["location"].isin(places)
+            )
+            & ~delays["location"].isin(masked)
+        ]
+        week = np.array(
+            [
+                (pd.Timestamp(w).date() - self.first).days // 7
+                for w in keep["onset_week"]
+            ],
+            dtype=int,
+        )
+        ok = (week >= 0) & (week < len(self.weeks))
+        delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
+        place = (
+            np.zeros(len(keep), dtype=int)
+            if config.national
+            else keep["location"].map(places.index).to_numpy(dtype=int)
+        )
+        np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
+        return counts
+
+    def onsets(
+        self, places: tuple[str, ...], table: pd.DataFrame, config: ModelConfig
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list[str]]:
+        """Return the onsets and populations of the modelled places.
+
+        Returns
+        -------
+        tuple
+            Known and imputed onsets (summed for a national fit), their
+            total by place, the populations and the modelled names.
+        """
+        known = self.values("observed", places)
+        imputed = self.values("imputed", places)
+        totals = known + imputed
+        pops = table.set_index("location").loc[list(places), "population"]
+        names = list(places)
+        if config.national:
+            known = known.sum(axis=1, keepdims=True)
+            imputed = imputed.sum(axis=1, keepdims=True)
+            pops = pd.Series([pops.sum()])
+            names = [places[0] if len(places) == 1 else NATIONAL]
+        return known, imputed, totals, pops.to_numpy(dtype=float), names
+
+
 def vintage_from_tables(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
@@ -331,84 +464,22 @@ def vintage_from_tables(
     Vintage
         Model inputs.
     """
-    rows = target.loc[
-        (target["vintage"] == vintage) & target["location"].isin(locations)
-    ]
-    wide = rows.pivot_table(
-        index="target_end_date",
-        columns="location",
-        values=["observed", "imputed", "total"],
-        aggfunc="sum",
-    ).fillna(0)
-    totals_wide = cast(pd.DataFrame, wide["total"])
     active = tuple(locations)
-    national = totals_wide.reindex(columns=list(active)).fillna(0).sum(axis=1)
-    counts_by_week = national.to_numpy()
-    threshold = min(START_COUNT, counts_by_week.max())
-    big = int(np.argmax(counts_by_week >= threshold))
-    first = epiweek_end(pd.Timestamp(national.index[max(0, big - 1)]).date())
-    start = first - dt.timedelta(days=6)
-    cutoff = (release_cutoff(target, vintage) - start).days
-    n_weeks = cutoff // 7 + 1
-    weeks = [
-        (first + dt.timedelta(weeks=i)).isoformat() for i in range(n_weeks)
-    ]
-
-    def grid(column: str, locs: tuple[str, ...]) -> np.ndarray:
-        out = cast(pd.DataFrame, wide[column]).reindex(
-            index=weeks, columns=list(locs)
-        )
-        return out.fillna(0).to_numpy(dtype=float)
-
-    # One delay table per modelled province, or one for a national fit.
-    n_places = 1 if config.national else len(active)
-    counts = np.zeros((n_weeks, n_places, config.dmax + 1))
-    if delays is not None and len(delays):
-        # Known onsets count every case, so negative delays go to 0 and
-        # delays past dmax to dmax, the last cell of the hazard pmf,
-        # rather than leaving the delay counts short of the known stream.
-        keep = delays.loc[
-            (
-                delays["location"].isin(active)
-                if active != (NATIONAL,)
-                else delays["location"].ne("")
-            )
-            & ~delays["location"].isin(masked)
-        ]
-        week = np.array(
-            [
-                (pd.Timestamp(w).date() - first).days // 7
-                for w in keep["onset_week"]
-            ],
-            dtype=int,
-        )
-        ok = (week >= 0) & (week < n_weeks)
-        delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
-        place = (
-            np.zeros(len(keep), dtype=int)
-            if config.national
-            else keep["location"].map(active.index).to_numpy(dtype=int)
-        )
-        np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
-
-    known, imputed = grid("observed", active), grid("imputed", active)
-    totals = known + imputed
-    pops = table.set_index("location").loc[list(active), "population"]
-    names = list(active)
-    if config.national:
-        known = known.sum(axis=1, keepdims=True)
-        imputed = imputed.sum(axis=1, keepdims=True)
-        pops = pd.Series([pops.sum()])
-        names = [active[0] if len(active) == 1 else NATIONAL]
+    grid = WeekTables.from_target(target, vintage, active)
+    start = grid.start
+    counts = grid.delay_counts(
+        delays, list(active), config, masked, every=active == (NATIONAL,)
+    )
+    known, imputed, totals, pops, names = grid.onsets(active, table, config)
     kernel = None if len(names) == 1 else gravity_kernel(active, table)
     return Vintage(
         start_date=start,
-        cutoff=cutoff,
+        cutoff=grid.cutoff,
         known=known,
         imputed=imputed,
         delay_counts=counts,
         hub_delay_pmf=imputation_pmf(imputation_delay, config.dmax),
-        populations=pops.to_numpy(dtype=float),
+        populations=pops,
         kernel=kernel,
         horizon_weeks=horizon_weeks,
         names=names,

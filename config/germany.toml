@@ -29,15 +29,15 @@ last_date = "2022-04-29"
 # 2021-11-22 to 2022-02-09 (80 dates) are for development, 2022-02-10 to
 # 2022-04-29 (79 dates) are held out for the paper and not scored here.
 split_date = "2022-02-10"
+# Germany is scored and shown on daily data only: every model takes the
+# daily releases (no weekly source) and forecasts the hub's 7-day rolling
+# sums. The checkpoint units run the Chronos-2 models listed here.
 models = [
   "randomwalk",
   "randomwalknowcast",
   "fm_chronos_daily_complete",
-  "fm_chronos_weekly_complete",
   "fm_chronos_daily_ragged",
-  "fm_chronos_weekly_ragged",
   "fm_chronos_daily_ragged_ft",
-  "fm_chronos_weekly_ragged_ft",
 ]
 # Chronos-2 fine-tuned on real data alone, the German development half and
 # BDBV to date (scripts/finetune_realdata.py on the germany-ft branch), run
@@ -45,11 +45,10 @@ models = [
 # fine-tuned on simulations.
 held_out_models = [
   "fm_chronos_daily_ragged_real",
-  "fm_chronos_weekly_ragged_real",
 ]
 # Draws per forecast and their seed, the same for every model. A model's own
 # quantiles at the hub's seven levels are scored where it gives them (the
-# weekly Chronos-2 models); every other forecast is scored from the
+# ragged Chronos-2 models); every other forecast is scored from the
 # quantiles of its draws.
 n_samples = 1000
 seed = 20261027

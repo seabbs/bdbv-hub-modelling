@@ -7,6 +7,7 @@ import json
 import tomllib
 
 from flowlib import (
+    compute,
     evaluations,
     grids,
     runs,
@@ -182,27 +183,8 @@ def train_dir(run):
 # From evaluate.smk.
 
 EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded.py"
-# Below the trainer's (20): the GPU belongs to training for the whole run.
 EVALUATE_PRIORITY = 15
-# Step 0, which every checkpoint's evaluation needs: before any of them.
-EVALUATE_BASE_PRIORITY = EVALUATE_PRIORITY + 0.1
-# CPU threads an evaluation job takes.
-EVALUATE_THREADS = 4
-
-
-def evaluate_priority(wc):
-    """An evaluation's priority: below the trainer, newer checkpoints first."""
-    return EVALUATE_PRIORITY + int(wc.n) / 1e5
-
-
-def evaluate_device():
-    """The device evaluation runs on: EVAL_DEVICE, else the machine's."""
-    return LOCAL.get("EVAL_DEVICE") or machine.device(LOCAL)
-
-
-def evaluate_gpu():
-    """The GPU an evaluation claims: none on the CPU, beside the trainer."""
-    return 0 if evaluate_device() == "cpu" else 1
+TRAIN_PRIORITY = compute.TRAIN_PRIORITY
 
 
 def evaluate_prev(wc):
@@ -398,9 +380,9 @@ ROOM = (
 )
 
 
-# A unit's CPU threads (SCORE_THREADS, default 2): a few, so simulations
-# keep the rest of the machine's cores.
-UNIT_THREADS = int(LOCAL.get("SCORE_THREADS") or 2)
+# The CPU threads of a job beside the trainer (EVAL_THREADS, default 2):
+# a few, so simulations keep the rest of the machine's cores.
+UNIT_THREADS = int(LOCAL.get("EVAL_THREADS") or 2)
 
 
 def score_order():
@@ -413,14 +395,19 @@ def unit_priority(base):
     return lambda wc: releases.priority(score_order(), wc.label, base)
 
 
-SCORE_DEVICE = LOCAL.get("SCORE_DEVICE") or None
-"""The device scoring units run torch on (SCORE_DEVICE in local.env), by
-default the machine's: `cpu` keeps them off a GPU a trainer is using."""
+EVAL_DEVICE = machine.side_device(LOCAL)
+"""The device evaluation and scoring run torch on (EVAL_DEVICE in
+local.env), the CPU by default: the GPU is the trainer's."""
+
+
+def newest_first(base):
+    """A job's priority beside the trainer: `base`, newer segments higher."""
+    return lambda wc: compute.side_priority(base, int(wc.n))
 
 
 def unit_env(wc, threads):
     """The unit's torch device, threads and Chronos-2 batch."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads, SCORE_DEVICE))
+    return machine.shell_env(machine.torch_env(LOCAL, threads, EVAL_DEVICE))
 
 
 GERMANY_UNIT = "germany-days"

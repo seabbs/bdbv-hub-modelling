@@ -233,3 +233,22 @@ def test_the_fit_takes_one_earlier_release_a_week_for_eight_weeks():
         range(56, 0, -7)
     )
     assert foundation.coupling_releases(daily[:1]) == []
+
+
+def test_earlier_blocks_raise_errors_other_than_no_rows(
+    monkeypatch: pytest.MonkeyPatch, task: ForecastTask
+):
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
+    hub_triangle = foundation.hub_triangle
+    calls = []
+
+    def broken(rows, source, places, last_time, max_lag=None):
+        calls.append(last_time)
+        # The task's own triangle is built first; earlier ones break.
+        if len(calls) > 1:
+            raise ValueError("a malformed release")
+        return hub_triangle(rows, source, places, last_time, max_lag)
+
+    monkeypatch.setattr(foundation, "hub_triangle", broken)
+    with pytest.raises(ValueError, match="malformed"):
+        get_model("fm_chronos_daily_ragged").forecast(task)

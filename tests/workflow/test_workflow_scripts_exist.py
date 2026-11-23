@@ -3,8 +3,6 @@
 import re
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).parents[2]
 RULES = [
     ROOT / "workflow" / "Snakefile",
@@ -18,11 +16,6 @@ def _missing() -> list[str]:
     return sorted(p for p in named if not (ROOT / p).exists())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="some fine-tuning and scoring scripts a rule runs are not in "
-    "the repository; remove this mark when they are",
-)
 def test_every_script_a_rule_runs_exists() -> None:
     assert _missing() == []
 

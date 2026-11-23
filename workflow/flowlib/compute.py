@@ -64,25 +64,30 @@ RULE_GROUPS = {
 }
 """Each placed rule's group; any other rule is in `any`."""
 
-GPU_RULES = frozenset(
-    {
-        "train_segment",
-        "evaluate_steps",
-        "evaluate_base",
-        "evaluate_checkpoint",
-        "score_germany",
-        "score_run_germany",
-    }
-)
-"""The rules taking the `gpu` resource. Placed on a worker by their
-group, each also takes that worker's own `gpu_<worker>`, so the pooled
+GPU_RULES = frozenset({"train_segment"})
+"""The rules taking the `gpu` resource: the trainer only, so the GPU is
+the run's for every segment. Evaluation, scoring and figures run beside
+it on the CPU (`machine.side_device`). Placed on a worker by its group,
+a GPU rule also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""
+
+TRAIN_PRIORITY = 100
+"""The trainer's job priority, above every other job's, so the next
+segment starts the moment the previous ends."""
+
+
+def side_priority(base: float, n: int) -> float:
+    """Return a job's priority beside the trainer, newest segment first.
+
+    `base`, with segment `n`'s a fraction higher.
+    """
+    return base + n / 10**6
+
 
 MACHINE_KEYS = frozenset(
     {
         "HOST_NAME",
         "MAILBOX",
-        "INBOX",
         "NOTIFY",
         "JOB_PREFIX",
         "SIM_PREFIX",
@@ -93,7 +98,6 @@ MACHINE_KEYS = frozenset(
         "MEM_MB",
         "SIM_SLOTS",
         "DEVICE",
-        "EVAL_DEVICE",
         "CHECKPOINT_ABOVE",
         "TARGETS",
         "SCHEDULE_TARGETS",

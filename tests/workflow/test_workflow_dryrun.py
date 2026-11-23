@@ -469,41 +469,13 @@ def _jobs_of(out, rule):
     ]
 
 
-def test_evaluation_ranks_below_the_trainer_newest_first(tmp_path):
-    # The GPU belongs to training for the whole run: evaluation waits for
-    # it, and its backlog is scored newest first.
+def test_step_0_is_scored_before_any_checkpoint(tmp_path):
+    # Every checkpoint's sidecar needs step 0's loss.
     out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
-    trainer = max(j["priority"] for j in _jobs_of(out, "train_segment"))
-    for rule in ("evaluate_base", "evaluate_steps", "evaluate_checkpoint"):
-        assert all(j["priority"] < trainer for j in _jobs_of(out, rule))
-    for rule in ("evaluate_steps", "evaluate_checkpoint"):
-        by_n = sorted(
-            (int(re.search(r"n=(\d+)", j["wildcards"])[1]), j["priority"])
-            for j in _jobs_of(out, rule)
-        )
-        assert [p for _, p in by_n] == sorted(p for _, p in by_n)
-        assert by_n[0][1] < by_n[-1][1]
     (base,) = _jobs_of(out, "evaluate_base")
     assert base["priority"] > max(
         j["priority"] for j in _jobs_of(out, "evaluate_checkpoint")
-    )
-
-
-def test_evaluation_on_the_cpu_claims_no_gpu(tmp_path):
-    (tmp_path / "local.env").write_text(
-        f"ROOT={tmp_path}\nHOST_NAME=test-host\nEVAL_DEVICE=cpu\n"
-    )
-    out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
-    assert out.returncode == 0, out.stderr + out.stdout
-    for rule in ("evaluate_base", "evaluate_steps", "evaluate_checkpoint"):
-        jobs = _jobs_of(out, rule)
-        assert jobs
-        for j in jobs:
-            assert "gpu=0" in j["resources"] or "gpu" not in j["resources"]
-            assert "--device cpu" in j["shell"]
-    assert all(
-        "gpu=1" in j["resources"] for j in _jobs_of(out, "train_segment")
     )
 
 
@@ -1061,7 +1033,7 @@ def test_score_units_run_torch_on_the_machine_device(tmp_path):
 
 def test_score_threads_are_a_machine_setting(tmp_path):
     config = {"score": {"labels": ["aaa"]}}
-    blocks = score_jobs(tmp_path, config, "SCORE_THREADS=3\n")
+    blocks = score_jobs(tmp_path, config, "EVAL_THREADS=3\n")
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert units
     assert all(re.search(r"threads: 3\b", b) for b in units)

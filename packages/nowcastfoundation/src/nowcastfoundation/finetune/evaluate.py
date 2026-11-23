@@ -1,11 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-r"""Score an adapter snapshot of `scripts/finetune_stream.py --eval offload`.
+"""Score adapter snapshots and checkpoints of an offloaded run.
 
 Scores the trainer's saved held-out blocks with its own loss functions,
 so the losses are those the trainer would have logged.
-
-    uv run --group chronos python scripts/finetune_evaluate.py \
-        TRAIN/evals/step-0000100 --train TRAIN --out result.json
+workflow/scripts/evaluate_offloaded.py runs it (rules/evaluate.smk).
 
 Kinds: `start` (step 0), `monitor` (the logged held-out loss),
 `by_source` and `checkpoint` (a checkpoint's held-out settings).
@@ -13,7 +11,7 @@ Kinds: `start` (step 0), `monitor` (the logged held-out loss),
 
 from __future__ import annotations
 
-import argparse
+import copy
 import inspect
 import json
 import time
@@ -24,7 +22,6 @@ from typing import Any
 import numpy as np
 
 from nowcastfoundation import series_bias
-from nowcastfoundation.backends.chronos2 import torch_device
 from nowcastfoundation.finetune import chronos as ft
 from nowcastfoundation.finetune import stream as fs
 
@@ -191,23 +188,6 @@ def held_out_coverage(
     return out
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Return the command-line parser."""
-    p = argparse.ArgumentParser(description=__doc__)
-    # A snapshot folder (adapter/ and request.json) or a checkpoint's
-    # finetuned-ckpt folder.
-    p.add_argument("snapshot", type=Path)
-    p.add_argument("--train", type=Path, required=True)
-    p.add_argument("--out", type=Path, required=True)
-    # Checked against KINDS by `evaluate`.
-    p.add_argument("--kinds", nargs="+")
-    p.add_argument(
-        "--batch-size", type=int, default=ft.workflow_finetune("batch_size")
-    )
-    p.add_argument("--device", default="auto")
-    return p
-
-
 def load_base(device: str):
     """Return base Chronos-2 on `device`."""
     from chronos import Chronos2Pipeline
@@ -217,39 +197,48 @@ def load_base(device: str):
     ).model
 
 
-def main(argv: Sequence[str] | None = None) -> None:
-    """Score a snapshot and write its losses as JSON."""
-    args = build_parser().parse_args(argv)
-    snapshot = args.snapshot
-    request_file = snapshot / "request.json"
-    request = (
-        json.loads(request_file.read_text()) if request_file.exists() else {}
-    )
-    adapter = snapshot / "adapter" if request else snapshot
-    kinds = args.kinds or request.get("kinds")
-    if not kinds:
-        raise SystemExit(f"no kinds asked for {snapshot}")
-    batch_size = request.get("batch_size", args.batch_size)
-    blocks = load_blocks(
-        args.train / fs.HELD_OUT_BLOCKS, request.get("n_validation")
-    )
-    device = torch_device(args.device)
-    base = load_base(device)
-    series_bias.attach_for(base, adapter)
+def score(
+    base, adapter: Path, blocks: list[dict], kinds, batch_size: int, device: str
+) -> tuple[dict[str, Any], float]:
+    """Return the losses `kinds` ask for of `adapter`, and the seconds.
+
+    Scores a copy of base Chronos-2 on `device` with the adapter (and its
+    series bias) attached, then frees it.
+    """
+    model = copy.deepcopy(base).to(device)
+    series_bias.attach_for(model, adapter)
     tick = time.perf_counter()
-    losses = evaluate(adapter, base, blocks, kinds, batch_size)
-    result = {
+    losses = evaluate(adapter, model, blocks, kinds, batch_size)
+    del model
+    fs.free_memory()
+    return losses, time.perf_counter() - tick
+
+
+def snapshot_result(
+    base, snapshot: Path, blocks: list[dict], device: str
+) -> dict[str, Any]:
+    """Return a step snapshot's losses, as its `request.json` asks."""
+    request = json.loads((snapshot / "request.json").read_text())
+    kinds = request["kinds"]
+    losses, seconds = score(
+        base,
+        snapshot / "adapter",
+        blocks,
+        kinds,
+        request.get("batch_size", 256),
+        device,
+    )
+    return {
         **{k: request[k] for k in ("step", "n_outbreaks") if k in request},
         **losses,
         "kinds": list(kinds),
         "device": device,
-        "seconds": time.perf_counter() - tick,
+        "seconds": seconds,
     }
-    tmp = args.out.with_name(args.out.name + ".tmp")
-    tmp.write_text(json.dumps(result, indent=1))
-    tmp.rename(args.out)
-    fs.log(f"{snapshot.name}: {', '.join(kinds)} in {result['seconds']:.0f} s")
 
 
-if __name__ == "__main__":
-    main()
+def write_json(path: Path, data: dict[str, Any]) -> None:
+    """Write JSON beside `path` and move it into place."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=1))
+    tmp.rename(path)

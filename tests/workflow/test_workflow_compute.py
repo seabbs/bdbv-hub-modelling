@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -202,8 +203,36 @@ def test_a_worker_s_gpu_is_its_own_for_the_groups_placed_on_it():
     assert "gpu_server=1" in res
     sets = got[got.index("--set-resources") + 1 : got.index("--resources")]
     assert "train_segment:gpu_workstation=1" in sets
-    assert "score_germany:gpu_server=1" in sets
+    assert not any(s.startswith("score_germany:") for s in sets)
     assert not any(s.startswith("score_bdbv:") for s in sets)
+
+
+def test_only_the_trainer_takes_the_gpu():
+    # The GPU is the trainer's for the whole run: evaluation, scoring and
+    # figures run beside it on the CPU and never hold the next segment up.
+    assert {"train_segment"} == compute.GPU_RULES
+
+
+def test_the_trainer_comes_before_every_other_job():
+    rules = ROOT / "workflow" / "rules"
+    seen = {}
+    for smk in rules.glob("*.smk"):
+        rule = None
+        for line in smk.read_text().splitlines():
+            if line.startswith(("rule ", "checkpoint ")):
+                rule = line.split()[1].rstrip(":")
+            elif line.strip().startswith("priority:"):
+                seen[rule] = line.split(":", 1)[1].strip()
+    assert seen.pop("train_segment") == "TRAIN_PRIORITY"
+    for rule, value in seen.items():
+        numbers = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", value)]
+        assert all(x < compute.TRAIN_PRIORITY for x in numbers), rule
+    assert compute.side_priority(15, 3200) < compute.TRAIN_PRIORITY
+
+
+def test_side_jobs_take_the_newest_checkpoint_first():
+    assert compute.side_priority(15, 800) > compute.side_priority(15, 400)
+    assert compute.side_priority(15, 100) > 15
 
 
 def test_the_gpu_rules_are_those_that_take_the_gpu():
@@ -214,8 +243,7 @@ def test_the_gpu_rules_are_those_that_take_the_gpu():
         for line in smk.read_text().splitlines():
             if line.startswith(("rule ", "checkpoint ")):
                 rule = line.split()[1].rstrip(":")
-            # gpu=1, or a machine's choice (evaluation: none on the CPU).
-            elif line.strip() in ("gpu=1,", "gpu=evaluate_gpu(),"):
+            elif line.strip() == "gpu=1,":
                 found.add(rule)
     assert found == compute.GPU_RULES
 
@@ -262,7 +290,6 @@ def test_evaluation_is_a_group_a_host_can_place():
     assert "evaluate" in compute.GROUPS
     for rule in ("evaluate_steps", "evaluate_base", "evaluate_checkpoint"):
         assert compute.RULE_GROUPS[rule] == "evaluate"
-        assert rule in compute.GPU_RULES
 
 
 def test_a_job_on_a_worker_reads_nothing_from_the_session(tmp_path):
