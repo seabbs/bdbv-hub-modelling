@@ -196,6 +196,10 @@ class GermanyConfig:
         Models switched off on the page until the reader switches them on.
     plot_every : int
         The nowcast plots show every this many development dates.
+    horizons : tuple of int
+        Days from the nowcast date to the end of each 7-day sum the
+        checkpoint units forecast: `forecast_days` ahead down to the hub's
+        28 days back (`HORIZONS`).
     """
 
     repo: str
@@ -216,6 +220,7 @@ class GermanyConfig:
     hidden: tuple[str, ...]
     plot_every: int
     held_out_models: tuple[str, ...] = ()
+    horizons: tuple[int, ...] = HORIZONS
 
 
 def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
@@ -284,6 +289,9 @@ def load_germany_config(
         hidden=tuple(raw["page"]["hidden"]),
         plot_every=int(raw["page"]["plot_every"]),
         held_out_models=tuple(now.get("held_out_models", ())),
+        horizons=tuple(
+            range(int(now.get("forecast_days", 0)), min(HORIZONS) - 1, -1)
+        ),
     )
 
 
