@@ -196,6 +196,9 @@ class GermanyConfig:
         The model the page's relative scores divide by.
     paper_baseline : str
         The model the paper's relative scores divide by, the hub's own.
+    daily_baseline : str
+        The model relative scores on daily counts divide by (`baseline`
+        gives no daily rows).
     hidden : tuple of str
         Models switched off on the page until the reader switches them on.
     plot_every : int
@@ -229,6 +232,7 @@ class GermanyConfig:
     held_out_models: tuple[str, ...] = ()
     horizons: tuple[int, ...] = HORIZONS
     targets: tuple[str, ...] = ("7day",)
+    daily_baseline: str = "fm_chronos_daily_ragged"
 
 
 def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
@@ -301,6 +305,9 @@ def load_germany_config(
             range(int(now.get("forecast_days", 0)), min(HORIZONS) - 1, -1)
         ),
         targets=tuple(now.get("targets", ("7day",))),
+        daily_baseline=raw["scoring"].get(
+            "daily_baseline", "fm_chronos_daily_ragged"
+        ),
     )
 
 

@@ -124,6 +124,46 @@ rule run_table:
         "{params.reference} {wildcards.run} {output} > {log} 2>&1"
 
 
+rule daily_table:
+    # A run's saved checkpoints on both German views, daily counts and
+    # 7-day sums, relative to the German config's references.
+    input:
+        references=references(),
+        units=lambda wc: run_units(wc.run),
+    output:
+        f"{RUN}/reports/compare-daily.csv",
+    log:
+        f"{RUN}/logs/daily-table.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        evaluate=EVALUATE,
+        train=lambda wc: train_dir(wc.run),
+        scores=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}",
+        reference=lambda wc, input: input.references[0].removesuffix(".done"),
+    shell:
+        "{params.evaluate} daily {params.train} {params.scores} "
+        "{params.reference} {wildcards.run} {output} > {log} 2>&1"
+
+
+rule compare_daily:
+    # Every run's daily table in one, the paper's `compare_daily`.
+    input:
+        expand(f"{RUN}/reports/compare-daily.csv", run=list(RUNS)),
+    output:
+        f"{RUNS_DIR}/compare-daily.csv",
+    log:
+        f"{RUNS_DIR}/logs/compare-daily.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        evaluate=EVALUATE,
+    shell:
+        "{params.evaluate} compare {output} {input} > {log} 2>&1"
+
+
 rule comparison:
     # Every run's checkpoints in one table, for the fine-tuning
     # comparisons (paperpipe.evidence.COMPARISONS).

@@ -153,8 +153,10 @@ evidence:
   # preliminary (nowcastfoundation.live_checkpoint).
   checkpoint_scores:
     file: $ROOT/runs/comparison.csv
-  # Pending: daily and hub-target scores from the target column.
-  compare_daily: null
+  # Each run's checkpoints on daily counts and on the 7-day sums, relative
+  # to the German config's references (workflow rule compare_daily).
+  compare_daily:
+    file: $ROOT/runs/compare-daily.csv
   # The realised shares of each combination of block layout and options
   # (rule block_combinations). From the no-slots run: Run A's trainer
   # predates the joint tally, and no-slots cuts the same blocks.
