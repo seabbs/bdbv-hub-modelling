@@ -199,3 +199,15 @@ def test_a_release_feeds_the_first_round_still_open_on_its_day() -> None:
     assert round_of(pd.Timestamp("2026-11-11")) == pd.Timestamp("2026-11-21")
     assert round_of(pd.Timestamp("2026-11-10")) == pd.Timestamp("2026-11-14")
     assert round_of(pd.Timestamp("2026-11-18")) == pd.Timestamp("2026-11-28")
+
+
+def test_the_store_history_is_written_without_holding_it_whole(
+    store, tmp_path, monkeypatch
+):
+    def whole(*_):
+        raise AssertionError("the whole history was built")
+
+    monkeypatch.setattr(ebola, "store_samples", whole)
+    path = tmp_path / "fit-store-history.csv.gz"
+    assert ebola.write_store_history(store, "fit-store", path) == 100
+    assert set(ebola.history_samples(path)["value"]) == {5}

@@ -125,3 +125,20 @@ def test_the_no_delays_run_is_run_a_on_complete_counts():
     }
     assert "--layout complete" in runs.trainer_options(found["nodelays"])
     assert "--layout" not in runs.trainer_options(found["runa"])
+
+
+def test_a_variant_trains_only_after_the_runs_finetune_trains(tmp_path):
+    # Asked for (by the paper's block combinations, say), a run outside
+    # `train_runs` starts only once those runs' final checkpoints exist,
+    # so it never takes their GPU.
+    target = f"{tmp_path}/runs/b/train/n250/settings.json"
+    jobs = dry(tmp_path, target, config={**TWO, "train_runs": ["a"]})
+    assert jobs["train_segment"] == 3
+    # A run that `finetune` trains waits on no other.
+    target = f"{tmp_path}/runs/a/train/n250/settings.json"
+    assert (
+        dry(tmp_path, target, config={**TWO, "train_runs": ["a"]})[
+            "train_segment"
+        ]
+        == 1
+    )

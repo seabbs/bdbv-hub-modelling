@@ -243,7 +243,11 @@ class Training:
         )
 
     def segment_inputs(self, wc: Any) -> dict[str, Any]:
-        """Return a segment's batches, seed list and previous checkpoint."""
+        """Return a segment's batches, seed list and previous checkpoint.
+
+        A run's first segment, if `finetune` does not train the run, also
+        takes the final checkpoints of the runs it does train.
+        """
         run, n = wc.run, int(wc.n)
         there, train = self.runs[run], self.train_dir(run)
         # A finished checkpoint is final: its batches are not gathered
@@ -259,6 +263,14 @@ class Training:
         }
         if there.prev[n] is not None:
             out["prev"] = f"{train}/n{there.prev[n]}/settings.json"
+        elif run not in self.trained_runs():
+            # A run outside `train_runs` starts once their final
+            # checkpoints exist, so it never takes their GPU.
+            out["after"] = [
+                f"{self.train_dir(r)}/n{self.runs[r].ft['prefixes'][-1]}"
+                "/settings.json"
+                for r in self.trained_runs()
+            ]
         return out
 
     def fetch_source(self, wc: Any) -> dict[str, str] | list[str]:
