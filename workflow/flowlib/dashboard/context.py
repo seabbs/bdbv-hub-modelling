@@ -51,6 +51,24 @@ def references(
     return spec.load_references(resolved, cli)
 
 
+def workflow_runs(
+    config: Mapping[str, Any], local: Mapping[str, str]
+) -> list[dict[str, str]]:
+    """Return the workflow's runs (`runs`) as dashboard runs.
+
+    Each from its folder, `<ROOT>/runs/<name>` (flowlib.runs), so the
+    dashboard shows them with no other setting; `dashboard.runs`, the
+    machine's and the command line's runs come after and may replace one.
+    """
+    if not local.get("ROOT"):
+        return []
+    root = Path(local["ROOT"]).expanduser()
+    return [
+        {"key": name, "source": str(root / "runs" / name)}
+        for name in config.get("runs") or {}
+    ]
+
+
 def build(
     config: Mapping[str, Any],
     local: Mapping[str, str],
@@ -95,7 +113,11 @@ def build(
         if k not in hidden_studies
     }
     run_list = spec.load_runs(
-        [*(dash.get("runs") or []), *(extra.get("runs") or [])],
+        [
+            *workflow_runs(config, local),
+            *(dash.get("runs") or []),
+            *(extra.get("runs") or []),
+        ],
         local.get("DASHBOARD_RUNS", ""),
         runs,
     )
