@@ -359,3 +359,34 @@ def test_hub_changes_put_the_tail_at_81_days_and_drop_unreported() -> None:
     assert long.loc[81] == 2.0
     assert 80 not in long.index
     assert len(long) == 81
+
+
+def test_daily_truth_is_each_day_s_count_reported_by_the_delay(
+    triangle: pd.DataFrame,
+) -> None:
+    # The daily view's truth: a day's count as reported `delay` days after
+    # it, straight from the triangle's rows; none where that report is not
+    # in the data yet.
+    from nowcastgermany.data import daily_truth
+
+    days = ["2021-09-01", "2021-09-20", "2021-10-15"]
+    got = daily_truth(triangle, days, 10)
+    for place, age in [("DE", "00+"), ("DE-BY", "00+"), ("DE", "80+")]:
+        name = age if age != "00+" else place
+        for day in days[:2]:
+            by = (
+                dt.date.fromisoformat(day) + dt.timedelta(days=10)
+            ).isoformat()
+            raw = triangle.loc[
+                (triangle["location"] == place)
+                & (triangle["age_group"] == age)
+                & (triangle["reference_date"] == day)
+                & (triangle["report_date"] <= by)
+            ].sort_values("report_date")
+            row = got.loc[
+                (got["location"] == name) & (got["target_end_date"] == day)
+            ]
+            assert row["truth"].tolist() == [float(raw["confirm"].iloc[-1])]
+            assert row["truth_vintage"].tolist() == [by]
+    # 2021-10-15 + 10 days is after the last report date.
+    assert got.loc[got["target_end_date"] == days[2], "truth"].isna().all()

@@ -130,3 +130,24 @@ def test_the_command_scores_the_hub_s_horizons_only(tmp_path, monkeypatch):
     monkeypatch.setattr(coupling, "coupling_scores", scores)
     coupling.main([str(unit), str(tmp_path / "s.csv"), str(tmp_path / "t.csv")])
     assert max(seen[0]) <= 0
+
+
+def test_the_command_scores_the_7day_sums_only(tmp_path, monkeypatch):
+    # A unit's daily counts are another view; the coupling evidence is on
+    # the hub's 7-day sums.
+    unit = tmp_path / "unit"
+    unit.mkdir()
+    rows = _rows(n_origins=2)
+    both = pd.concat([rows.assign(target="7day"), rows.assign(target="daily")])
+    for o, g in both.groupby("origin"):
+        g.to_csv(unit / f"{o}.csv.gz", index=False, compression="gzip")
+    seen = []
+    real = coupling.coupling_scores
+
+    def scores(rows):
+        seen.append(set(rows["target"]))
+        return real(rows, n_samples=50, seed=1)
+
+    monkeypatch.setattr(coupling, "coupling_scores", scores)
+    coupling.main([str(unit), str(tmp_path / "s.csv"), str(tmp_path / "t.csv")])
+    assert seen == [{"7day"}]

@@ -644,3 +644,108 @@ def test_each_model_and_date_records_its_seconds(
     )
     assert (got["seconds"] >= 0).all()
     assert set(got["stage"]) == {"forecast"}
+
+
+def test_daily_rows_are_the_offset_0_tasks_own_daily_quantiles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The daily view: each real day once, from the offset-0 tasks (states,
+    # then ages), as the model's own quantiles of its daily count rows. A
+    # model without them gives no daily rows.
+    from nowcastgermany import evaluation as de
+
+    tasks = ["s0", "a0", "s1", "a1"]
+    seen: list[str] = []
+
+    class Own:
+        def daily_quantiles(self, task, levels):
+            seen.append(task)
+            return pd.DataFrame(
+                {
+                    "location": "DE",
+                    "date": "2021-10-04",
+                    "quantile": list(levels),
+                    "value": 1.0,
+                }
+            )
+
+    def moved(rows, _task, date):
+        return pd.DataFrame(
+            {
+                "model": rows["model"].to_numpy(),
+                "location": rows["location"].to_numpy(),
+                "forecast_date": date,
+                "target_end_date": rows["target_end_date"].to_numpy(),
+                "horizon": 0,
+                "sample": rows["sample"].to_numpy(),
+                "value": rows["value"].to_numpy(),
+            }
+        )
+
+    monkeypatch.setattr(de, "_tasks", lambda *_a, **_k: list(tasks))
+    monkeypatch.setattr(
+        de, "get_model", lambda name: Own() if name == "own" else object()
+    )
+    monkeypatch.setattr(
+        de, "forecast_quantiles", lambda *_a, **_k: pd.DataFrame()
+    )
+    monkeypatch.setattr(de, "hub_forecasts", moved)
+    out = de.germany_forecasts(
+        ["own", "none"], pd.DataFrame(), ["2021-10-04"], 10, 1,
+        targets=("7day", "daily"),
+    )  # fmt: skip
+    assert seen == ["s0", "a0"]
+    assert set(out["target"]) == {"daily"}
+    assert set(out["model"]) == {"own"}
+    assert sorted(out["quantile"].unique()) == sorted(de.FORECAST_LEVELS)
+
+
+def test_daily_rows_take_the_day_s_truth_and_7day_rows_the_sum_s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nowcastgermany import evaluation as de
+
+    calls: dict[str, list[str]] = {}
+
+    def daily(_triangle, days, _delay):
+        calls["daily"] = list(days)
+        return pd.DataFrame(
+            {
+                "location": "DE",
+                "target_end_date": list(days),
+                "truth": 5.0,
+                "truth_vintage": "2021-11-13",
+            }
+        )
+
+    def sums(_target, _delay):
+        return pd.DataFrame(
+            {
+                "location": ["DE"],
+                "target_end_date": ["2021-10-04"],
+                "truth": [70.0],
+                "truth_vintage": ["2021-11-13"],
+            }
+        )
+
+    monkeypatch.setattr(de, "daily_truth", daily)
+    monkeypatch.setattr(de, "hub_target", lambda _t, ends: list(ends))
+    monkeypatch.setattr(de, "rolling_truth", sums)
+    fc = pd.DataFrame(
+        {
+            "model": "m",
+            "target": ["7day", "daily"],
+            "origin": "2021-10-04",
+            "location": "DE",
+            "target_end_date": "2021-10-04",
+            "horizon": 0,
+            "quantile": 0.5,
+            "value": 1.0,
+        }
+    )
+    out = de.with_truth(fc, pd.DataFrame(), 40)
+    assert out.set_index("target")["truth"].to_dict() == {
+        "7day": 70.0,
+        "daily": 5.0,
+    }
+    assert calls["daily"] == ["2021-10-04"]

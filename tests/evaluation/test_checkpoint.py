@@ -335,10 +335,17 @@ def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
     from nowcastgermany import data as dg
     from nowcastgermany import evaluation as de
 
-    def forecasts(_models, _triangle, dates, *_args, horizons, **_kwargs):
-        seen.append((list(dates), tuple(horizons)))
+    def forecasts(
+        _models, _triangle, dates, *_args, horizons, targets, **_kwargs
+    ):
+        seen.append((list(dates), tuple(horizons), tuple(targets)))
         return pd.DataFrame(
-            [{"origin": d, "horizon": h} for d in dates for h in horizons]
+            [
+                {"origin": d, "horizon": h, "target": t}
+                for d in dates
+                for h in horizons
+                for t in targets
+            ]
         )
 
     monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
@@ -361,7 +368,7 @@ def test_a_german_unit_forecasts_the_config_s_horizons(
     _unit_stubs(monkeypatch, seen)
     ck.germany_unit(tmp_path, "reference")
     want = load_germany_config("config/germany.toml").horizons
-    assert {h for _, h in seen} == {want}
+    assert {h for _, h, _ in seen} == {want}
     out = pd.read_csv(
         tmp_path / ck.GERMANY_UNIT / "reference" / f"{seen[0][0][0]}.csv.gz"
     )
@@ -383,7 +390,11 @@ def test_a_german_unit_redoes_dates_without_the_forecast_days(
         root / f"{first}.csv.gz", index=False
     )
     pd.DataFrame(
-        {"origin": [second], "horizon": [max(config.horizons)]}
+        {
+            "origin": second,
+            "horizon": max(config.horizons),
+            "target": list(config.targets),
+        }
     ).to_csv(root / f"{second}.csv.gz", index=False)
     seen: list = []
     _unit_stubs(monkeypatch, seen)
@@ -424,3 +435,33 @@ def test_the_evidence_table_scores_the_hub_s_horizons_only(
     ck.germany_rows(tmp_path, ["reference"])
     assert seen
     assert all(s == {0} for s in seen)
+
+
+def test_the_german_config_gives_both_daily_views() -> None:
+    # Germany is shown as daily counts and as the hub's 7-day sums.
+    from nowcastgermany.evaluation import load_germany_config
+
+    config = load_germany_config("config/germany.toml")
+    assert config.targets == ("7day", "daily")
+
+
+def test_a_german_unit_forecasts_the_config_s_targets_and_redoes_others(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A date file with the 7-day sums alone, to the last horizon, is
+    # forecast again for its daily counts.
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config("config/germany.toml")
+    first = de.nowcast_dates(config, held_out=False)[0]
+    root = tmp_path / ck.GERMANY_UNIT / "n100"
+    root.mkdir(parents=True)
+    pd.DataFrame(
+        {"origin": [first], "horizon": [max(config.horizons)],
+         "target": ["7day"]}
+    ).to_csv(root / f"{first}.csv.gz", index=False)  # fmt: skip
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    ck.germany_unit(tmp_path, "n100")
+    assert first in seen[0][0]
+    assert {t for *_, t in seen} == {config.targets}
