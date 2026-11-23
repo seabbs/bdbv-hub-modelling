@@ -81,7 +81,7 @@ class Source:
             # does not fail the mirror while it has none.
             self._add(
                 f"dataset:{key}",
-                ds.get("source") or f"{cache}/{key}",
+                ds.get("source") or f"{cache}/{ds.get('unit') or key}",
                 local,
                 folder=True,
                 required=not ds.get("missing"),

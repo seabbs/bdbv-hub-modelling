@@ -174,6 +174,7 @@ class Context:
             excluded=self.excluded,
             order=[(g["name"], g["match"]) for g in ds.get("groups") or ()],
             sources=ds.get("sources"),
+            unit=ds.get("unit") or key,
         )
 
 

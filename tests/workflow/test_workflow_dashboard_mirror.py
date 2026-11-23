@@ -145,3 +145,22 @@ def test_a_dataset_that_may_be_empty_does_not_fail_the_mirror(tmp_path):
     required = {n: r for n, (_, _, _, r) in src._items.items()}
     assert required["dataset:germany"]
     assert not required["dataset:held_out"]
+
+
+def test_a_dataset_reads_its_scoring_unit_s_folder(tmp_path):
+    # The German units cache their forecasts in germany-days.
+    cfg = {"REMOTE": "", "SCORE_CACHE": str(tmp_path / "s"), "MAILBOX": ""}
+    datasets = [{"key": "germany", "unit": "germany-days"}]
+    src = mirror.Source(cfg, tmp_path / "m", datasets=datasets, root=tmp_path)
+    assert src.dataset("germany") == tmp_path / "s" / "germany-days"
+
+
+def test_the_german_dataset_is_the_german_units_folder():
+    import yaml
+
+    root = Path(__file__).parents[2]
+    cfg = yaml.safe_load((root / "workflow" / "config.yaml").read_text())
+    (germany,) = [
+        d for d in cfg["dashboard"]["datasets"] if d["key"] == "germany"
+    ]
+    assert germany["unit"] == "germany-days"

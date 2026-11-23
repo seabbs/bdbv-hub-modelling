@@ -56,6 +56,7 @@ RULE_GROUPS = {
     "simulate_batch": "simulate",
     "train_segment": "train",
     "evaluate_steps": "evaluate",
+    "evaluate_base": "evaluate",
     "evaluate_checkpoint": "evaluate",
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",

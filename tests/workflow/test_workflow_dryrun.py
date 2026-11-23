@@ -405,14 +405,15 @@ def test_an_offloaded_checkpoint_publishes_with_its_held_out_losses(tmp_path):
 
 def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
     # Step 0 (base Chronos-2's loss, the sidecar's held_out_loss_start) is
-    # scored with the first segment's steps, so a later checkpoint's
-    # evaluation waits for every earlier segment's.
+    # scored on its own, so a checkpoint's evaluation waits for no
+    # segment's other steps.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
     sidecar = "runs/runa/train/n500/held-out.json"
     jobs = dry(tmp_path, str(tmp_path / sidecar), config=OFFLOAD)
-    assert jobs["evaluate_steps"] == 2
+    assert jobs["evaluate_base"] == 1
     assert jobs["evaluate_checkpoint"] == 1
+    assert "evaluate_steps" not in jobs
 
 
 def _dag(tmp_path, target, config):
@@ -424,29 +425,58 @@ def _dag(tmp_path, target, config):
     return jobs, edges
 
 
-def test_a_checkpoint_s_evaluation_depends_on_step_0_and_earlier_settings(
+def test_a_checkpoint_s_evaluation_needs_only_step_0_and_earlier_settings(
     tmp_path,
 ):
+    # Not the segments' step evaluations, which queue behind the trainer:
+    # a checkpoint is scored between segments.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
     sidecar = tmp_path / "runs/runa/train/n500/held-out.json"
     jobs, edges = _dag(tmp_path, str(sidecar), OFFLOAD)
-    steps = [j for j, label in jobs.items() if label == "evaluate_steps"]
+    assert "evaluate_steps" not in jobs.values()
     (check,) = [
         j for j, label in jobs.items() if label == "evaluate_checkpoint"
     ]
+    (base,) = [j for j, label in jobs.items() if label == "evaluate_base"]
     (first,) = [
         j
         for j, label in jobs.items()
         if label.startswith("train_segment\\n") and "n: 250" in label
     ]
-    # One segment's step evaluation feeds the next's, which feeds the
-    # checkpoint's: step 0 is scored before the checkpoint.
-    chain = [(a, b) for a, b in edges if a in steps and b in steps]
-    assert len(chain) == 1
-    assert (chain[0][1], check) in edges
+    assert (base, check) in edges
     # The first checkpoint's settings are an input of n500's evaluation.
     assert (first, check) in edges
+
+
+def _field(block, key):
+    m = re.search(rf"^\s+{key}: (.*)$", block, re.M)
+    return m[1] if m else ""
+
+
+def _jobs_of(out, rule):
+    """Each planned job of `rule`: its wildcards, priority and resources."""
+    blocks = re.split(r"^\[[^\]]+\]$", out.stdout, flags=re.M)
+    return [
+        {
+            "wildcards": _field(b, "wildcards"),
+            "priority": float(_field(b, "priority") or 0),
+            "resources": _field(b, "resources"),
+            "shell": b,
+        }
+        for b in blocks
+        if re.search(rf"^(?:local)?rule {rule}:$", b, re.M)
+    ]
+
+
+def test_step_0_is_scored_before_any_checkpoint(tmp_path):
+    # Every checkpoint's sidecar needs step 0's loss.
+    out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    (base,) = _jobs_of(out, "evaluate_base")
+    assert base["priority"] > max(
+        j["priority"] for j in _jobs_of(out, "evaluate_checkpoint")
+    )
 
 
 def test_finetune_never_publishes(tmp_path):
