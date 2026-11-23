@@ -522,3 +522,20 @@ def test_the_trainer_status_is_folded_and_the_loss_open(tmp_path):
     assert fold
     assert "Trainer status" in fold[1]
     assert "<details class=sec id=loss open>" in page_html
+
+
+def test_checkpoint_tables_show_the_rolling_row_check(tmp_path):
+    # The 7-day row's gap to the sum of its daily rows, and its roughness
+    # over that sum's (1 is as smooth as the daily rows' sums).
+    ctx = _machine(tmp_path)
+    s = ctx.runs[0].folder / "train" / "n250" / "settings.json"
+    settings = json.loads(s.read_text())
+    settings["held_out_rolling"] = {
+        "daily+rolling7_gap": 0.05,
+        "daily+rolling7_rough": 0.012,
+        "daily+rolling7_rough_daily_sum": 0.003,
+    }
+    s.write_text(json.dumps(settings))
+    out = page.build(ctx)
+    assert "<th>7-day row gap<th>7-day row roughness" in out
+    assert "<td>0.050<td>4.00" in out
