@@ -1039,9 +1039,9 @@ def layout_block(
     Returns
     -------
     Series
-        The targets' context, the place of each target row
-        (`target_places`, indices into `places`), and for `ragged` each
-        place's lag series as past and future covariates.
+        The targets' context, the places (`places`), the place of each
+        target row (`target_places`, indices into `places`), and for
+        `ragged` each place's lag series as past and future covariates.
     """
     target = tri.final[:, :start]
     target_places = list(range(len(places)))
@@ -1049,7 +1049,11 @@ def layout_block(
         target = np.concatenate([target, period.totals[:, :start]])
         target_places += target_places
     if layout == "complete":
-        return {"target": target, "target_places": target_places}
+        return {
+            "target": target,
+            "places": list(places),
+            "target_places": target_places,
+        }
     lags = tri.partial.shape[2]
     names = [f"{p}_lag_{d}" for p in places for d in range(lags)]
     cells = tri.partial.transpose(0, 2, 1).reshape(len(names), -1)
