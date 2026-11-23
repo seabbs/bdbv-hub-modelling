@@ -168,7 +168,7 @@ def test_the_simulator_hashes_its_grid_and_python():
         for folder, names in (
             (
                 "packages/nowcastfoundation/src/nowcastfoundation/simulator",
-                ("__init__", "__main__", "batch", "draws"),
+                ("__init__", "__main__", "batch", "bench", "draws"),
             ),
             (
                 "packages/nowcastrenewal/src/nowcastrenewal/latent",

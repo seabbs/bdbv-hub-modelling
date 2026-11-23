@@ -158,6 +158,7 @@ def test_wrong_data_shape_is_rejected(sim_vintage):
         )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("depletion", [True, False])
 def test_prior_predictive_is_bounded_by_depletion(sim_vintage, depletion):
     cfg = ModelConfig(depletion=depletion)

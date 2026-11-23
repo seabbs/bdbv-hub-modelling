@@ -37,7 +37,7 @@ from pathlib import Path
 include: "rules/common.smk"
 
 
-for name, entry in EVIDENCE.items():
+for name, entry in FLOW.pinned().items():
 
     rule:
         name:
@@ -247,6 +247,62 @@ rule ebola_hub:
         "rm -rf {params.hub}.clone && "
         "git clone --quiet --depth 1 {params.repo} {params.hub}.clone && "
         "rm -rf {params.hub} && mv {params.hub}.clone {params.hub}"
+
+
+if FLOW.store_history():
+
+    # Our stored forecasts made before each round closed, from the fit
+    # store's history release, checked against its checksum.
+    rule fit_store_history:
+        output:
+            FLOW.store_history(),
+        log:
+            f"{R}/logs/fit_store_history.log",
+        conda:
+            TOOLS_ENV
+        params:
+            repo=EBOLA["store_history"]["repo"],
+            tag=EBOLA["store_history"]["tag"],
+            asset=EBOLA["store_history"]["asset"],
+            tmp=f"{R}/evidence/fit-store-history.tmp",
+        shell:
+            "exec >{log} 2>&1; "
+            "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+            "gh release download {params.tag} -R {params.repo} "
+            "-p {params.asset} -p {params.asset}.sha256 -D {params.tmp} && "
+            "(cd {params.tmp} && sha256sum -c {params.asset}.sha256) && "
+            "mv {params.tmp}/{params.asset} {output} && rm -rf {params.tmp}"
+
+    # Opt-in: publish the fit store's history (`paperpipe fit-store-history`)
+    # with its checksum, replacing the release's assets.
+    rule publish_fit_store_history:
+        output:
+            touch(f"{R}/evidence/fit-store-history.published"),
+        log:
+            f"{R}/logs/publish_fit_store_history.log",
+        localrule: True
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+            repo=EBOLA["store_history"]["repo"],
+            branch=EBOLA["store_history"]["branch"],
+            tag=EBOLA["store_history"]["tag"],
+            asset=EBOLA["store_history"]["asset"],
+            tmp=f"{R}/evidence/history-upload",
+        shell:
+            "exec >{log} 2>&1; "
+            "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+            "git fetch -q origin {params.branch} && "
+            "{params.python} -m paperpipe fit-store-history "
+            "--ref origin/{params.branch} --out {params.tmp}/{params.asset} && "
+            "(cd {params.tmp} && sha256sum {params.asset} > {params.asset}.sha256) && "
+            "(gh release view {params.tag} -R {params.repo} > /dev/null || "
+            "gh release create {params.tag} -R {params.repo} --prerelease "
+            "--title 'Fit store history' "
+            "--notes 'The first fit of each model and origin, made before its round closed.') && "
+            "gh release upload {params.tag} -R {params.repo} --clobber "
+            "{params.tmp}/{params.asset} {params.tmp}/{params.asset}.sha256"
 
 
 rule ebola_backtest_draws:
@@ -510,9 +566,11 @@ for study in STUDIES:
             f"--realdata-after {FLOW.realdata_after}"
 
 
-# Example simulations of the grid, from pilot simulations on an evidence
-# branch (`paperfigs.sim_examples`).
+# Example simulations of the grid, from the development round
+# (`paperfigs.sim_examples`).
 rule sim_examples:
+    input:
+        **FLOW.example_files(),
     output:
         f"{R}/{{mode}}/figures/si/sim-examples.png",
     log:
@@ -521,18 +579,96 @@ rule sim_examples:
         TOOLS_ENV
     params:
         python=PYTHON,
-        ref=SYNTHETIC["examples"]["ref"],
-        path=SYNTHETIC["examples"]["path"],
         picks=shlex.quote(json.dumps(SYNTHETIC["examples"]["picks"])),
-        tmp=f"{R}/{{mode}}/sim-examples",
     shell:
         "exec >{log} 2>&1; "
-        "(git cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
-        "git fetch -q origin {params.ref}) && "
-        "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-        "git archive {params.ref} {params.path} | tar -x -C {params.tmp} "
-        "&& {params.python} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
-        "--picks {params.picks} --out {output}"
+        "{params.python} -m paperfigs.sim_examples --counts {input.counts} "
+        "--settings {input.settings} --picks {params.picks} --out {output}"
+
+
+# The walk models' scores with no pairing and with the rolling rho_p, on
+# development data only (`nowcasteval.pairing`): the German development
+# half, and the development seeds' outbreaks as the synthetic runner
+# forecasts them. `si_copula` summarises both for the SI's copula figure.
+rule pairing_germany:
+    input:
+        TRIANGLE,
+    output:
+        f"{R}/evidence/pairing/pairing-germany.csv.gz",
+    log:
+        f"{R}/logs/pairing_germany.log",
+    conda:
+        TOOLS_ENV
+    resources:
+        heavy=1,
+    params:
+        bdbv=BDBV,
+        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+        out=lambda w, output: Path(output[0]).parent,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.bdbv} pairing-sensitivity --study germany {params.args} "
+        "--out {params.out}"
+
+
+rule pairing_synthetic:
+    input:
+        FLOW.synthetic_simulations("development"),
+    output:
+        f"{R}/evidence/pairing/pairing-synthetic.csv.gz",
+    log:
+        f"{R}/logs/pairing_synthetic.log",
+    conda:
+        TOOLS_ENV
+    resources:
+        heavy=1,
+    params:
+        python=PYTHON,
+        sims=SYNTHETIC["simulations"]["development"],
+        seeds=FLOW.seeds("development"),
+        samples=config["synthetic"]["samples"],
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} paper/scripts/pairing_synthetic.py {params.sims} "
+        "{output} --seeds {params.seeds} --samples {params.samples}"
+
+
+rule si_copula:
+    input:
+        rules.pairing_germany.output,
+        rules.pairing_synthetic.output,
+    output:
+        f"{R}/evidence/si-copula.csv",
+    log:
+        f"{R}/logs/si_copula.log",
+    conda:
+        TOOLS_ENV
+    params:
+        python=PYTHON,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe pairing {input} --out {output}"
+
+
+# The grid's training rounds against the German development half, for
+# the SI's realism figure and numbers (`paperpipe realism`).
+rule sim_realism:
+    input:
+        **FLOW.realism_inputs(),
+    output:
+        sims=f"{R}/evidence/sim-summaries.csv",
+        reference=f"{R}/evidence/sim-realism.csv",
+    log:
+        f"{R}/logs/sim_realism.log",
+    conda:
+        TOOLS_ENV
+    params:
+        python=PYTHON,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe realism {input.rounds} "
+        "--germany {input.germany} --out-sims {output.sims} "
+        "--out-reference {output.reference}"
 
 
 # The grid tables and SI notes, read from the grid config
@@ -565,6 +701,12 @@ rule grid_tables:
 rule evidence:
     input:
         **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+        # The final run's held-out loss by level (workflow rule heldout_curve).
+        heldout=FLOW.heldout_curve(),
+        realism=rules.sim_realism.output,
+        # The published-range table's rows (workflow rule sim_diseases).
+        diseases=FLOW.sim_diseases(),
+        copula=rules.si_copula.output,
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -582,6 +724,10 @@ rule evidence:
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "--finetune-heldout {input.heldout} "
+        "--sim-summaries {input.realism[0]} --sim-realism {input.realism[1]} "
+        "--sim-diseases {input.diseases} "
+        "--si-copula {input.copula} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 

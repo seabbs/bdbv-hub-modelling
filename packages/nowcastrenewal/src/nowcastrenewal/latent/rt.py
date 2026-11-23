@@ -41,6 +41,7 @@ __all__ = [
     "RtPath",
     "WeeklyNoise",
     "daily_walk",
+    "vector",
 ]
 
 KINDS = (
@@ -95,7 +96,8 @@ def _plogis(x: np.ndarray) -> np.ndarray:
     return np.asarray(1 / (1 + np.exp(-x)))
 
 
-def _vector(x: Any) -> np.ndarray:
+def vector(x: Any) -> np.ndarray:
+    """Return a drawn value as a float vector, empty for None."""
     return np.atleast_1d(np.asarray([] if x is None else x, dtype=float))
 
 
@@ -157,8 +159,8 @@ class RtPath:
         kw = {k: float(values[k]) for k in names if values.get(k) is not None}
         return cls(
             kind=kind,
-            wave_scale=tuple(_vector(values.get("wave_scale", [1.0]))),
-            walk=tuple(_vector(values.get("walk_r", [0.0]))),
+            wave_scale=tuple(vector(values.get("wave_scale", [1.0]))),
+            walk=tuple(vector(values.get("walk_r", [0.0]))),
             **kw,
         )
 

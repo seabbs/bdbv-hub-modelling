@@ -246,6 +246,7 @@ def test_weekly_target_sums_each_release_to_hub_weeks(tasks) -> None:
     assert set(states.target_history["vintage"]) == set(daily["vintage"])
 
 
+@pytest.mark.slow
 def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
     model = get_model("randomwalk")
     out = pd.concat(

@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
+from nowcastfoundation.forecaster import local_checkpoint, newest_segment
+
 from paperpipe.config import run_settings, run_studies
 from paperpipe.outputs import (
     JOINT_STUDIES,
@@ -71,7 +73,8 @@ class PaperFlow:
         The workflow config (`paper/workflow/config.yaml`), as `load`
         leaves it.
     evidence : mapping
-        Each evidence entry that is set, with the `ref` it is read at.
+        Each evidence entry that is set: a `ref` and `path` it is read
+        at, or a `file` the workflow writes.
     realdata_after : str
         The last BDBV release the real-data models trained on.
     """
@@ -92,16 +95,17 @@ class PaperFlow:
 
         The simulation folders are expanded in `config` itself (`expand`,
         `flowlib.localconfig.expand`), so each step that is passed the
-        config reads the same folders. A set `finetuned` checkpoint is
-        put in the environment as `BDBV_CHRONOS_FT`, which every `_ft`
-        model loads.
+        config reads the same folders, as are the final run's and the
+        rounds' folders and evidence `file`s. `finetuned` is the spec of the
+        final run's newest saved checkpoint, whose folder is put in the
+        environment as `BDBV_CHRONOS_FT`, which every `_ft` model loads.
 
         Parameters
         ----------
         config : dict
             The workflow config.
         evidence : mapping
-            Each evidence entry that is set, with its `ref`.
+            Each evidence entry that is set, with its `ref` or `file`.
         root : pathlib.Path
             The repository root, holding `config/finetune.toml`.
         expand : callable
@@ -131,10 +135,24 @@ class PaperFlow:
             mode: expand(folder)
             for mode, folder in synthetic["simulations"].items()
         }
-        if config.get("finetuned"):
-            os.environ.update(BDBV_CHRONOS_FT=str(config["finetuned"]))
+        config["final_run"] = expand(config["final_run"])
+        config["rounds_dir"] = expand(config["rounds_dir"])
+        # The `_ft` models load the final run's newest saved checkpoint,
+        # pending until it has one. Outputs record its spec, not its folder.
+        segment = newest_segment(Path(config["final_run"]) / "train")
+        config["finetuned"] = (
+            None if segment is None else local_checkpoint(segment).hash
+        )
+        if segment is not None:
+            os.environ.update(BDBV_CHRONOS_FT=str(segment))
         with (root / "config" / "finetune.toml").open("rb") as f:
             after = tomllib.load(f)["realdata_bdbv"]["release"]
+        evidence = {
+            name: {**entry, "file": expand(entry["file"])}
+            if "file" in entry
+            else entry
+            for name, entry in evidence.items()
+        }
         return cls(config, evidence, str(after))
 
     # Settings ------------------------------------------------------------
@@ -185,9 +203,15 @@ class PaperFlow:
 
     # Evidence ------------------------------------------------------------
 
+    def pinned(self) -> dict[str, Mapping[str, str]]:
+        """Return the evidence entries read from a git commit."""
+        return {n: e for n, e in self.evidence.items() if "file" not in e}
+
     def evidence_file(self, name: str) -> str:
-        """Return an evidence file, named by its commit."""
+        """Return an evidence file: the workflow's, or named by its commit."""
         entry = self.evidence[name]
+        if "file" in entry:
+            return entry["file"]
         suffix = "".join(Path(entry["path"]).suffixes)
         return f"{self.results}/evidence/{name}-{entry['ref'][:12]}{suffix}"
 
@@ -198,6 +222,30 @@ class PaperFlow:
             for n in self.evidence
             if n in names
         )
+
+    def heldout_curve(self) -> str:
+        """Return the final run's held-out loss curve (rule heldout_curve)."""
+        return f"{self.config['final_run']}/heldout-curve.csv"
+
+    def realism_inputs(self) -> dict[str, Any]:
+        """Return the realism step's inputs.
+
+        The grid's training rounds' summaries and the German development
+        half's statistics (workflow rules round_summaries and
+        germany_dev_stats).
+        """
+        where = self.config["rounds_dir"]
+        return {
+            "germany": f"{where}/report/germany-dev.csv",
+            "rounds": [
+                f"{where}/r{r}/summaries/outbreaks.csv"
+                for r in self.config["grid_rounds"]["rounds"]
+            ],
+        }
+
+    def sim_diseases(self) -> str:
+        """Return the disease table's rows (workflow rule sim_diseases)."""
+        return f"{self.config['rounds_dir']}/report/sim-diseases.csv"
 
     def live_arg(self) -> str:
         """Return the live run option, whose newest checkpoints are shown."""
@@ -263,6 +311,21 @@ class PaperFlow:
         ]
         return files if all(Path(f).exists() for f in files) else []
 
+    def example_files(self) -> dict[str, list[str]]:
+        """Return the SI examples' simulation files, by kind.
+
+        The examples are picked from the development round, so the
+        held-out round is never read for them. Each pick names a
+        simulation, `<seed>-<n>`, and the files are its seed's.
+        """
+        folder = self.synthetic["simulations"]["development"]
+        picks = self.synthetic["examples"]["picks"]
+        seeds = sorted({str(sim).split("-")[0] for sim, _ in picks})
+        return {
+            "counts": [f"{folder}/counts-{s}.csv.gz" for s in seeds],
+            "settings": [f"{folder}/settings-{s}.csv" for s in seeds],
+        }
+
     # A study's data ------------------------------------------------------
 
     def sources(self, w: Wildcards) -> str:
@@ -294,11 +357,17 @@ class PaperFlow:
             if ebola["candidates"]:
                 files = " ".join(shlex.quote(c) for c in ebola["candidates"])
                 args.append(f"--candidates {files}")
-            if ebola["store"]:
-                args.append(f"--store {shlex.quote(ebola['store'])}")
-                args.append(f"--store-ref {ebola['store_ref']}")
+            history = self.store_history()
+            if history:
+                args.append(f"--store-history {history}")
             return " ".join(args)
         return ""
+
+    def store_history(self) -> str | None:
+        """Return the fit store's history file, fetched from its release."""
+        if not self.ebola.get("store_history"):
+            return None
+        return f"{self.results}/evidence/fit-store-history.csv.gz"
 
     def source_files(self, w: Wildcards) -> list[str]:
         """Files a study's real data come from, built by other rules."""
@@ -310,7 +379,16 @@ class PaperFlow:
             hub = f"{ebola['hub']}/target-data/time-series.csv"
             target = f"{ebola['data']}/target.csv"
             draws = [self.ebola_draws] if ebola.get("n_samples") else []
-            return [hub, target, ebola["backtest"], *self.ebola_extra(), *draws]
+            history = self.store_history()
+            stored = [history] if history else []
+            return [
+                hub,
+                target,
+                ebola["backtest"],
+                *self.ebola_extra(),
+                *draws,
+                *stored,
+            ]
         if w.study == "synthetic" and self.synthetic_simulations(w.mode):
             return [self.synthetic["forecasts"][w.mode]]
         return []

@@ -24,7 +24,13 @@ def _job_lines(out):
 def test_the_paper_targets_resolve_in_the_one_workflow(tmp_path, target):
     out = dry_run(tmp_path, target, quiet=False, extra=["-p"])
     assert out.returncode == 0, out.stderr + out.stdout
-    for rule in (target, "publish_paper", "summary", "evidence"):
+    for rule in (
+        target,
+        "publish_paper",
+        "summary",
+        "evidence",
+        "heldout_curve",
+    ):
         assert f"rule {rule}:" in out.stdout
     lines = _job_lines(out.stdout)
     assert lines
@@ -34,3 +40,26 @@ def test_the_paper_targets_resolve_in_the_one_workflow(tmp_path, target):
         for path in PATH.findall(line):
             allowed = (str(ROOT), str(tmp_path), "/dev/null")
             assert path.startswith(allowed), (path, line)
+
+
+@pytest.mark.parametrize("target", ["paper", "development"])
+def test_the_paper_s_realism_reads_the_grid_s_rounds(tmp_path, target):
+    out = dry_run(tmp_path, target, quiet=False, extra=["-p"])
+    assert out.returncode == 0, out.stderr + out.stdout
+    for rule in ("sim_realism", "round_summaries", "germany_dev_stats"):
+        assert f"rule {rule}:" in out.stdout
+
+
+def test_the_paper_s_disease_table_is_a_workflow_output(tmp_path):
+    out = dry_run(tmp_path, "development", quiet=False, extra=["-p"])
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "rule sim_diseases:" in out.stdout
+    assert "--sim-diseases" in out.stdout
+
+
+def test_the_copula_scores_are_workflow_outputs(tmp_path):
+    out = dry_run(tmp_path, "development", quiet=False, extra=["-p"])
+    assert out.returncode == 0, out.stderr + out.stdout
+    for rule in ("pairing_germany", "pairing_synthetic", "si_copula"):
+        assert f"rule {rule}:" in out.stdout
+    assert "--si-copula" in out.stdout

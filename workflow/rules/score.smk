@@ -98,6 +98,50 @@ rule run_scores:
         run_scores,
 
 
+rule run_table:
+    # A run's saved checkpoints in the tables' rows (German relative
+    # scores and held-out losses), under the run's name.
+    input:
+        references=references(),
+        units=lambda wc: run_units(wc.run),
+        offloaded=lambda wc: [
+            f for n in saved_prefixes(wc.run) for f in offloaded(wc.run, n)
+        ],
+    output:
+        f"{RUN}/reports/checkpoint-scores.csv",
+    log:
+        f"{RUN}/logs/run-table.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        evaluate=EVALUATE,
+        train=lambda wc: train_dir(wc.run),
+        scores=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}",
+        reference=lambda wc, input: input.references[0].removesuffix(".done"),
+    shell:
+        "{params.evaluate} run {params.train} {params.scores} "
+        "{params.reference} {wildcards.run} {output} > {log} 2>&1"
+
+
+rule comparison:
+    # Every run's checkpoints in one table, for the fine-tuning
+    # comparisons (paperpipe.evidence `compare_*`).
+    input:
+        expand(f"{RUN}/reports/checkpoint-scores.csv", run=list(RUNS)),
+    output:
+        f"{RUNS_DIR}/comparison.csv",
+    log:
+        f"{RUNS_DIR}/logs/comparison.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        evaluate=EVALUATE,
+    shell:
+        "{params.evaluate} compare {output} {input} > {log} 2>&1"
+
+
 rule coupling_germany:
     input:
         f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",

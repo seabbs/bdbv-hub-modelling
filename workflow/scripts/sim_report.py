@@ -16,6 +16,8 @@ paper's reference values (`paper/data/reference-values.csv`):
 
     uv run python workflow/scripts/sim_report.py germany \
         <COVID-19_hospitalizations.csv> <split_date> <out.csv>
+    uv run python workflow/scripts/sim_report.py diseases <out.csv> \
+        <reference-values.csv> <outbreaks.csv> [...]
     uv run python workflow/scripts/sim_report.py render <out.html> <title> \
         <reference-values.csv> <germany.csv> \
         <name>=<sims_dir>:<outbreaks.csv> [...]
@@ -664,11 +666,17 @@ LAYERS = [
                 "incubation",
                 False,
             ),
+            ("incubation_cv", "Infection to reference, CV", None, False),
             ("ascertainment", "Ascertainment", None, False),
             ("mean_daily", "Mean daily count, reported", None, True),
             ("zero_share", "Share of zero days", None, False),
         ],
-        ["observation", "obs_strata", "observation_strata"],
+        [
+            "observation",
+            "incubation_family",
+            "obs_strata",
+            "observation_strata",
+        ],
     ),
     (
         "Layer 3: reporting delays",
@@ -684,6 +692,9 @@ LAYERS = [
             ("delay_q99", "Delay 99% (days)", None, False),
             ("day0_share", "Share reported on day 0", None, False),
             ("mean_delay", "Mean delay, reported (days)", None, False),
+            ("total_q50", "Infection to report, median (days)", None, False),
+            ("total_q90", "Infection to report, 90% (days)", None, False),
+            ("total_q99", "Infection to report, 99% (days)", None, False),
         ],
         [
             "delay_change",
@@ -757,6 +768,46 @@ def layers(d: pd.DataFrame, de: pd.DataFrame, refs: pd.DataFrame) -> str:
         fig2.tight_layout()
         parts.append(f"<h3>{title}</h3>{png(fig)}{png(fig2)}")
     return "\n".join(parts)
+
+
+DISEASE_SUMMARIES = [
+    (col, label, ref)
+    for _, numeric, _ in LAYERS
+    for col, label, ref, _ in numeric
+    if ref
+]
+"""The summaries with published values, as (column, label, quantity)."""
+
+
+def diseases(d: pd.DataFrame, refs: pd.DataFrame) -> pd.DataFrame:
+    """Return each summary's simulated range against published values.
+
+    One row per summary of `DISEASE_SUMMARIES` in `d`: its label, its
+    5%, 50% and 95% points over the outbreaks, each disease's band
+    (`bands_of`) and the sources' DOIs, for the SI's disease table.
+    """
+    rows = []
+    for col, label, quantity in DISEASE_SUMMARIES:
+        v = pd.to_numeric(d.get(col), errors="coerce")
+        v = pd.Series(v).dropna()
+        if not len(v):
+            continue
+        q5, q50, q95 = np.quantile(v, [0.05, 0.5, 0.95])
+        bands = bands_of(refs, quantity)
+        dois = refs.loc[refs["quantity"] == quantity, "source_doi"]
+        rows.append(
+            {
+                "summary": label,
+                "sim_q5": q5,
+                "sim_q50": q50,
+                "sim_q95": q95,
+                "published": "; ".join(
+                    f"{name} {lo:.3g} to {hi:.3g}" for name, lo, hi in bands
+                ),
+                "sources": "; ".join(dict.fromkeys(dois.dropna().astype(str))),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def _fmt(x: float) -> str:
@@ -987,10 +1038,15 @@ def render(
 
 
 def main(argv: list[str]) -> None:
-    """Run `germany` or `render` from the command line."""
+    """Run `germany`, `diseases` or `render` from the command line."""
     if argv[0] == "germany":
         germany(Path(argv[1]), argv[2]).to_csv(argv[3], index=False)
         print(f"Germany -> {argv[3]}")
+    elif argv[0] == "diseases":
+        refs = pd.read_csv(argv[2])
+        d = pd.concat([pd.read_csv(p) for p in argv[3:]], ignore_index=True)
+        diseases(d, refs).to_csv(argv[1], index=False)
+        print(f"diseases -> {argv[1]}")
     elif argv[0] == "render":
         render(Path(argv[1]), argv[2], Path(argv[3]), Path(argv[4]), argv[5:])
     else:

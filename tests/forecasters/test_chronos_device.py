@@ -67,19 +67,23 @@ def test_chronos_batch_and_threads_are_machine_settings(monkeypatch):
 
     from nowcastfoundation import forecaster as foundation
 
-    seen = {}
+    seen: dict = {"batch": []}
 
     class Pipeline:
         def predict_quantiles(self, inputs, batch_size=None, **_kw):
-            seen["batch"] = batch_size
+            seen["batch"].append(batch_size)
             return [None] * len(inputs), None
 
-    monkeypatch.setenv("CHRONOS_BATCH", "64")
+    # Each pass is one Chronos-2 batch of its rows, at most CHRONOS_BATCH.
+    monkeypatch.setenv("CHRONOS_BATCH", "2")
     monkeypatch.setenv("TORCH_THREADS", "3")
     monkeypatch.setattr(torch, "set_num_threads", lambda n: seen.update(n=n))
     foundation._predict(
-        Pipeline(), [{"target": [[1.0]]}], 2, __import__("numpy").array([0.5])
+        Pipeline(),
+        [{"target": [[1.0]]}] * 3,
+        2,
+        __import__("numpy").array([0.5]),
     )
-    assert seen["batch"] == 64
+    assert seen["batch"] == [2, 1]
     foundation.apply_threads()
     assert seen["n"] == 3

@@ -5,13 +5,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 RULES = ROOT / "workflow" / "rules"
-STEPS = ("simulate", "finetune", "evaluate", "publish", "score", "report")
+STEPS = (
+    "simulate",
+    "finetune",
+    "evaluate",
+    "publish",
+    "score",
+    "report",
+    "paper",
+    "monitor",
+)
 REPORTS = {
     "round_summaries",
     "grid_figures",
     "germany_triangle",
     "germany_dev_stats",
     "sim_report",
+    "sim_diseases",
     "sim_report_run",
     "sim_reports",
     "german_report",
@@ -39,3 +49,14 @@ def test_reports_are_their_own_step():
     assert _rules("report") == REPORTS
     for step in ("simulate", "score"):
         assert not _rules(step) & REPORTS
+
+
+def test_the_paper_is_its_own_step():
+    text = (RULES / "paper.smk").read_text()
+    assert "module paper_workflow:" in text
+    assert "use rule * from paper_workflow" in text
+    assert "module " not in (ROOT / "workflow" / "Snakefile").read_text()
+
+
+def test_the_monitor_builds_each_target_s_graphs():
+    assert _rules("monitor") == {"monitor_dag", "monitor"}

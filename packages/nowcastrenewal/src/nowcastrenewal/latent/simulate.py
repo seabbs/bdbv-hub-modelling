@@ -32,7 +32,7 @@ from ..components.renewal import DEPLETIONS, Shifts, Variants
 from .imports import Imports
 from .infections import StratifiedInfections
 from .mixing import PlaceMixing
-from .rt import KINDS, PlaceRt, RtPath
+from .rt import KINDS, PlaceRt, RtPath, vector
 from .start import InitializeStrata
 
 __all__ = ["COLUMNS", "Latent", "simulate_latent", "simulate_latent_batch"]
@@ -43,8 +43,7 @@ strata in order."""
 
 
 def _vector(values: Mapping[str, Any], name: str) -> np.ndarray:
-    x = values.get(name)
-    return np.atleast_1d(np.asarray([] if x is None else x, dtype=float))
+    return vector(values.get(name))
 
 
 @dataclass
@@ -116,7 +115,9 @@ def simulate_latent(
         The path kinds an independent place draws from (the grid's
         trajectory levels).
     incubation_cv : float
-        The infection-to-reference delay's coefficient of variation.
+        The infection-to-reference delay's coefficient of variation when
+        `values` has no `incubation_cv` (with a gamma when `design` has no
+        `incubation_family`).
     depletion : str
         `"linear"` or `"exponential"` (`components.renewal.DEPLETIONS`).
 
@@ -241,12 +242,16 @@ def simulate_latent(
     r = np.asarray(tr["latent::r"]["value"])
     reff = np.asarray(tr["latent::reff"]["value"])
     group = strata[".group"].to_numpy().astype(int) - 1
+    # The drawn infection-to-reference family and CV; a design that does
+    # not draw them takes a gamma with `incubation_cv`.
+    family = design.get("incubation_family", "gamma")
+    cv = float(values.get("incubation_cv", incubation_cv))
     events = ReferenceEvents(
         "reference",
         delay_rvs=[
             DeterministicPMF(
                 f"incubation_{j}",
-                delay_pmf(Delay.from_mean_cv("gamma", m, incubation_cv)),
+                delay_pmf(Delay.from_mean_cv(family, m, cv)),
             )
             for j, m in enumerate(_vector(v, "incubation_mean")[group])
         ],

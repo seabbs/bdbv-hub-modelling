@@ -46,6 +46,7 @@ def test_energy_scores_every_zone_and_week_as_one_vector(
     assert got["max"].equals(cells.rename("max"))
 
 
+@pytest.mark.slow
 def test_both_baselines_are_scored_at_zone_level(
     scores: pd.DataFrame, vintages: list[str]
 ) -> None:
@@ -74,6 +75,7 @@ def test_both_baselines_are_scored_at_zone_level(
     assert per.between(20, 300).all()
 
 
+@pytest.mark.slow
 def test_every_model_scores_the_same_zones_and_weeks(
     scores: pd.DataFrame,
 ) -> None:
@@ -84,6 +86,7 @@ def test_every_model_scores_the_same_zones_and_weeks(
     assert (keys == keys.iloc[0]).all()
 
 
+@pytest.mark.slow
 def test_relative_skill_is_against_the_zone_randomwalk(
     scores: pd.DataFrame,
 ) -> None:
@@ -96,6 +99,7 @@ def test_relative_skill_is_against_the_zone_randomwalk(
     assert mine.index.min() == -4
 
 
+@pytest.mark.slow
 def test_zone_forecasts_are_the_scored_forms_by_origin(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
@@ -201,6 +205,7 @@ def test_zone_forecasts_read_keeps_text_that_looks_missing(
     assert run.runs["model"].tolist() == ["NA"]
 
 
+@pytest.mark.slow
 def test_zone_relative_skill_scores_crps(scores: pd.DataFrame) -> None:
     rel = zone_relative_skill(scores).set_index("model")
     assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)

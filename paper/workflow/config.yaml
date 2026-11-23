@@ -6,14 +6,17 @@ build: paper/build
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]
-# The final fine-tuning run (with series slots) writes each checkpoint to
-# `finetune_run`/n<outbreaks>/ and publishes it as `chronos-ft-<hash>`.
-# `finetuned` is the checkpoint every `_ft` model of the workflow loads;
-# null leaves the fine-tuned forecasts pending. scripts/follow_checkpoint.py
-# sets it.
-finetune_run: output/checkpoints/slots
-finetuned: null
-final_checkpoints: []
+# The paper's final fine-tuning run: its folder, a `runs` entry of the
+# workflow (workflow/config.yaml), under the machine's ROOT. Its held-out
+# loss curve is the SI's (rule heldout_curve), and every `_ft` model
+# loads its newest saved checkpoint, train/n<N>
+# (nowcastfoundation.forecaster.newest_segment); before it has one the
+# fine-tuned forecasts are pending.
+final_run: $ROOT/runs/runa
+# The simulation rounds' folder under the machine's ROOT (the workflow's
+# rounds): the SI's realism reads the grid's training rounds
+# (`grid_rounds.rounds`) and the German development half's statistics.
+rounds_dir: $ROOT/rounds
 # The live fine-tuning run (the checkpoint scores' `run`) whose newest
 # scored checkpoints the SI curve, comparisons and tables show as
 # preliminary, from `evidence.checkpoint_scores` at its branch head.
@@ -32,18 +35,16 @@ synthetic:
   simulations_per_seed: 20
   # Draws per forecast of each model on the held-out simulations.
   samples: 1000
-  # Example simulations for the SI figure (`paperfigs.sim_examples`): pilot
-  # simulations of the grid on an evidence branch, each with its label.
+  # Example simulations for the SI figure (`paperfigs.sim_examples`),
+  # from the development round, each `<seed>-<n>` with its label.
   examples:
-    ref: 5e99233c5ca4eed4de3dcf26139d26f676a79e5d
-    path: pilot/sims
     picks:
-      - [90004-0001, Multi-wave over 52 weeks]
-      - [90003-0002, Concentrated spread]
-      - [90002-0002, Bunched reports]
-      - [90002-0003, Delay slowdown]
-      - [90001-0001, Places by age groups]
-      - [90003-0003, Poisson observations]
+      - [33325-0008, Multi-wave over 53 weeks]
+      - [33300-0001, Concentrated spread]
+      - [33300-0014, Bunched reports]
+      - [33300-0010, Delay slowdown]
+      - [33300-0002, Places by age groups]
+      - [33300-0003, Poisson observations]
   # The simulations of each run's seeds, whose settings give the grid's
   # realised values.
   simulations:
@@ -97,8 +98,14 @@ ebola:
   hub: data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
   candidates: [data/candidate-forecasts.csv.gz]
-  store: .
-  store_ref: origin/fit-store
+  # Our stored forecasts made before each round closed: the fit store's
+  # history, published as a release asset (rule publish_fit_store_history)
+  # and fetched with its checksum (rule fit_store_history).
+  store_history:
+    repo: seabbs/bdbv-hub-modelling
+    branch: fit-store
+    tag: fit-store-history
+    asset: fit-store-history.csv.gz
 
 # What the nowcast panels show (`paperfigs.nowcasts`). The main panel
 # shows the national series of a case study, or one synthetic outbreak;
@@ -132,29 +139,14 @@ nowcasts:
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
-  # Scores of the final run's checkpoints on the case studies (ckpt-scores).
-  # Followed at the branch head, never pinned: each run shows the live
-  # run's newest scored checkpoints (nowcastfoundation.live_checkpoint),
-  # as preliminary.
+  # Scores of the runs' checkpoints on the case studies, the workflow's
+  # score table (rule score_table). The live run's newest scored
+  # checkpoints are shown as preliminary (nowcastfoundation.live_checkpoint).
   checkpoint_scores:
-    branch: checkpoint-scoring
-    path: evidence/checkpoint-scores.csv
-  # Pending: the scale-floor test on the final run's checkpoints.
-  scale_floor: null
-  # The lag-horizon test of the ragged layout.
-  lag_germany:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: results/germany-chronos-dev/scores.csv
-  # The walks' scores with no pairing and the rolling rho_p, by study and
-  # level, on development data (`summarise_pairing` rows). Pending:
-  # the rows on evidence/fm-copula.
-  si_copula: null
+    file: $SCORE_CACHE/tables/checkpoint-scores.csv
   # Each walk model's rho_p by origin, the rows of its rounds' copula.json
   # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
   copula_rho: null
-  aggregation_scores:
-    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
-    path: results/agg/aggregation-scores.csv.gz
   # Each fine-tuning comparison's scores by checkpoint (paperpipe.evidence:
   # set, run, outbreaks, score). Pending: the runs' checkpoints.
   compare_slots: null
@@ -165,14 +157,6 @@ evidence:
   # Pending: the realised shares of each combination of block
   # layout and options.
   block_combinations: null
-  # Pending: the final run's held-out loss curve.
-  finetune_heldout: null
-  # Pending: summaries of the final grid's simulations.
-  sim_summaries: null
-  # Pending: the final grid's realism comparison.
-  sim_realism: null
-  # Pending: the final grid's ranges against published values.
-  sim_diseases: null
 
 # Data the development runs use.
 development:

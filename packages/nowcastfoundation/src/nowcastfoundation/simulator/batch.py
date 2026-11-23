@@ -68,8 +68,7 @@ LATENT = (
 START = dt.date(2026, 1, 3)
 """A series' first day with offset 0 (the R engine's)."""
 
-# Generator tags, so no two kinds of draw share a key (6 was the old
-# reporting step's).
+# Generator tags, so no two kinds of draw share a key.
 DESIGN, VALUES, SHARED, STRATUM, LATENT_KEY = range(1, 6)
 
 
@@ -314,7 +313,6 @@ def _run_joint(batch: _Batch, jobs: Sequence[_Job]) -> list[_Outcome]:
                 j.vals,
                 batch.draws,
                 kinds=tuple(grid["factors"]["trajectory"]),
-                incubation_cv=float(grid["constants"]["incubation_cv"]),
             )
         except Exception as e:  # any error is the draw's: drawn again
             msg = (

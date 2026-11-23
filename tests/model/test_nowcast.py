@@ -53,6 +53,7 @@ def test_nowcast_keeps_known_and_recentres_imputed(sim_vintage, config):
     assert 0.5 < np.median(centre) < 2.0
 
 
+@pytest.mark.slow
 def test_masked_provinces_do_not_see_their_counts(sim_vintage, config):
     mask = np.ones(len(sim_vintage.names), dtype=bool)
     mask[0] = False
