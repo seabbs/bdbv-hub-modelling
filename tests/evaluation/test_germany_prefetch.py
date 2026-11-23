@@ -72,10 +72,10 @@ def test_dates_share_chronos_passes(monkeypatch: pytest.MonkeyPatch) -> None:
         .sort_values([*together.columns[:5], "quantile"], kind="stable")
         .reset_index(drop=True),
     )
-    # The dates' tasks share their horizons, so all of them take the
-    # passes of one: a pass for each model, schema and horizon.
-    assert len(set(calls)) == 1
-    assert pipe.calls == calls[0]
+    # Dates whose tasks share a schema share passes. Each date's lags
+    # come from its own reporting delay (#548), so the schemas, and so
+    # the passes, need not be the same for every date.
+    assert max(calls) <= pipe.calls < sum(calls)
 
 
 def test_tasks_are_built_once_and_reused(
