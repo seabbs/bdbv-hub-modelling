@@ -654,3 +654,38 @@ def test_bad_rt_quantiles_fail(tmp_path: Path, rows: list[list[Any]]) -> None:
 def test_rt_week_the_round_does_not_take_fails(tmp_path: Path) -> None:
     rows = [[*r[:2], "2026-10-17", *r[3:]] for r in _rt_rows()]
     assert statuses(_rt_sub(tmp_path, rows), tasks=_rt_tasks())["rt"] == "fail"
+
+
+def _place_check(counts: dict[str, float], median: float, q975: float) -> Any:
+    weeks = ("2026-11-14", "2026-11-21", "2026-11-28")
+    s = Samples(columns=[], rows=0)
+    # 40 draws: 39 at the median and one high draw to set the 97.5%.
+    for i in range(1, 41):
+        for w in weeks:
+            s.values["CD-HU"][str(i)][w] = q975 if i == 40 else median
+    obs = Observed(as_of="2026-11-15", counts={"CD-HU": counts})
+    return check_plausible(s, obs, dt.date(2026, 11, 21), 1, POLICY.checks)
+
+
+def test_poisson_limits_of_the_recent_maximum_replace_the_floor() -> None:
+    from submission_ci.check_forecast import poisson_limits  # type: ignore[attr-defined]
+
+    # The exact 95% limits of a Poisson mean given a count of 0, 1 and 54.
+    assert poisson_limits(0, 0.975) == pytest.approx((0.0, 3.689), abs=1e-3)
+    assert poisson_limits(1, 0.975) == pytest.approx((0.0253, 5.572), abs=1e-3)
+    lo54, hi54 = poisson_limits(54, 0.975)
+    assert lo54 == pytest.approx(40.56, abs=0.05)
+    assert hi54 == pytest.approx(70.46, abs=0.05)
+    assert "plausible_floor" not in POLICY.checks
+    none = {"2026-10-31": 0.0, "2026-11-07": 0.0, "2026-11-14": 0.0}
+    # A place with no recent case may forecast an introduction ...
+    assert _place_check(none, 0.0, 5.0).status == "pass"
+    # ... but not a median over 5 times its upper limit, 3.69.
+    assert _place_check(none, 30.0, 40.0).status == "fail"
+    one = {"2026-10-31": 1.0, "2026-11-07": 0.0, "2026-11-14": 0.0}
+    # A median of 0 is plausible after a recent maximum of 1.
+    assert _place_check(one, 0.0, 18.5).status == "pass"
+    big = {"2026-10-31": 54.0, "2026-11-07": 40.0, "2026-11-14": 30.0}
+    # Under 1/20 of the lower limit, 40.6, once that is a case or more.
+    assert _place_check(big, 1.0, 10.0).status == "fail"
+    assert _place_check(big, 3.0, 10.0).status == "pass"
