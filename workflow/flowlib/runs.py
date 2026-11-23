@@ -118,8 +118,8 @@ def resume_options(run: Run, n: int) -> str:
 def trainer_options(run: Run) -> str:
     """Return the run's optional trainer arguments, each only when set.
 
-    The series bias and its rate, the loss horizon and the quiet-block
-    floor.
+    The series bias and its rate, the loss horizon, the quiet-block
+    floor and a layout other than ragged.
     """
     f = run.ft
     bias = f"--series-bias --bias-lr {f['bias_lr']}" if f["series_bias"] else ""
@@ -129,6 +129,7 @@ def trainer_options(run: Run) -> str:
             option("--loss-horizon-days", f.get("loss_horizon_days")),
             option("--quiet-min-cases", f.get("quiet_min_cases")),
             bias,
+            "" if f["layout"] == "ragged" else f"--layout {f['layout']}",
         )
         if a
     )

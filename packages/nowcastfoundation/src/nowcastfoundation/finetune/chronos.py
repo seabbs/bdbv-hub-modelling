@@ -381,6 +381,29 @@ def quiet(block: dict, days_per_step: int, min_cases: int) -> bool:
     return reported_cases(block, days_per_step, QUIET_WINDOW_DAYS) < min_cases
 
 
+LAYOUT = "ragged"
+"""The layout of the training blocks (`nowcastfoundation.forecaster.LAYOUTS`):
+`ragged`, the counts to the last complete step and each place's lag
+series; or `complete`, the same blocks without their lag series
+(`complete_block`), so the context ends at the last complete step."""
+
+
+def complete_block(block: dict) -> dict:
+    """Return a block without its lag series: the complete layout.
+
+    The targets keep their counts to the last complete step (`start`) and
+    the truth after it; the nowcast and forecast steps are as before.
+    `block` is `finetune.training_block`'s, before padding.
+    """
+    targets = block["context"][: block["n_targets"]]
+    return block | {
+        "context": targets,
+        "future_covariates": targets[:, block["start"] :].copy(),
+        "n_covariates": 0,
+        "n_future_covariates": 0,
+    }
+
+
 def _pad(
     block: dict,
     context: int,
@@ -829,6 +852,8 @@ def outbreak_blocks(
                         break
                     cap -= 1
             for part, view, view_mix, how, record in views:
+                if LAYOUT == "complete":
+                    part = complete_block(part)
                 padded = _pad(
                     part, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]
                 )

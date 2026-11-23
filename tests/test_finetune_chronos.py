@@ -1524,3 +1524,42 @@ def test_the_grid_file_has_a_default_outside_a_checkout(monkeypatch, tmp_path):
     # Installed alone, the package has no workflow/config.yaml to read.
     monkeypatch.setattr(ft, "ROOT", tmp_path)
     assert ft.workflow_grid_file() == ft.DEFAULT_GRID_FILE
+
+
+def test_a_complete_block_is_the_ragged_block_without_its_lag_series():
+    from nowcastfoundation.finetune.chronos import complete_block
+
+    nan = np.nan
+    lags = [[0, 0, 0, 2, 3, nan, nan], [0, 0, 0, 4, nan, nan, nan]]
+    raw = _raw([5, 0, 1], [6, 7, 8, 9], lags)
+    out = complete_block(raw)
+    # The counts to the last complete step, then the truth: no lag series,
+    # so the context ends at `start`.
+    np.testing.assert_array_equal(out["context"], raw["context"][:1])
+    assert (out["n_covariates"], out["n_future_covariates"]) == (0, 0)
+    assert (out["start"], out["nowcast"]) == (3, 2)
+
+
+@pytest.mark.slow
+def test_the_complete_layout_cuts_the_ragged_blocks_without_lag_series(
+    monkeypatch,
+):
+    from nowcastfoundation.finetune.chronos import outbreak_blocks
+
+    ft.use_grid()
+    counts = _counts_of(["P01", "P02"])
+    ragged = outbreak_blocks(counts, ["P01", "P02"], np.random.default_rng(3))
+    monkeypatch.setattr(ft, "LAYOUT", "complete")
+    complete = outbreak_blocks(counts, ["P01", "P02"], np.random.default_rng(3))
+    # The same blocks in the same order, so both runs see the same data.
+    assert len(complete) == len(ragged) > 0
+    for r, c in zip(ragged, complete, strict=True):
+        assert (c["source"], c["cut"], c["places"]) == (
+            r["source"],
+            r["cut"],
+            r["places"],
+        )
+        np.testing.assert_array_equal(
+            c["context"], r["context"][: r["n_targets"]]
+        )
+        assert c["n_covariates"] == c["n_future_covariates"] == 0

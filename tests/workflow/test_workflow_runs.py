@@ -15,7 +15,7 @@ TWO = {
 
 def test_the_committed_runs_are_run_a_and_its_variants():
     cfg = runs.load_config()
-    assert list(cfg["runs"]) == ["runa", "noslots"]
+    assert list(cfg["runs"]) == ["runa", "noslots", "nodelays"]
 
 
 def test_only_run_a_trains_until_the_variants_are_due():
@@ -87,7 +87,12 @@ def test_a_local_run_folder_is_refused_with_the_fix():
 
 
 def _run(**ft):
-    base = {"prefixes": [100, 200], "series_bias": False, "bias_lr": 0.001}
+    base = {
+        "prefixes": [100, 200],
+        "series_bias": False,
+        "bias_lr": 0.001,
+        "layout": "ragged",
+    }
     return runs.Run("r", base | ft, "/x/r")
 
 
@@ -108,6 +113,18 @@ def test_trainer_options_name_only_the_settings_given():
         _run(series_bias=True, loss_horizon_days=7, quiet_min_cases=None)
     )
     assert got == "--loss-horizon-days 7 --series-bias --bias-lr 0.001"
+
+
+def test_the_no_delays_run_is_run_a_on_complete_counts():
+    cfg = runs.load_config()
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    a, b = found["runa"].ft, found["nodelays"].ft
+    assert (a["layout"], b["layout"]) == ("ragged", "complete")
+    assert {k: v for k, v in a.items() if k != "layout"} == {
+        k: v for k, v in b.items() if k != "layout"
+    }
+    assert "--layout complete" in runs.trainer_options(found["nodelays"])
+    assert "--layout" not in runs.trainer_options(found["runa"])
 
 
 def test_a_variant_trains_only_after_the_runs_finetune_trains(tmp_path):

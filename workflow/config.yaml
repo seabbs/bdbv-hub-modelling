@@ -115,6 +115,11 @@ finetune:
   # same either way.
   eval: offload
   series_bias: true
+  # The training blocks' layout: ragged (each place's counts to the last
+  # complete step and its lag series) or complete (the same blocks
+  # without their lag series, so the context ends at the last complete
+  # step). Ragged adds nothing to the settings hash.
+  layout: ragged
   # Part of the settings hash: changing it changes every checkpoint's hash.
   note: 3,200 simulations
   # The checkpoint checked against zero-shot on the held-out simulations.
@@ -129,6 +134,9 @@ runs:
   # Run A without the attention biases (the paper's no-slots comparison,
   # paperpipe.evidence.WITHOUT_BIASES).
   noslots: {series_bias: false}
+  # Run A on complete counts, without lag series (the paper's delays
+  # comparison).
+  nodelays: {layout: complete}
 
 # The runs `finetune` trains (null: every run in `runs`). The variants
 # train after Run A, so they never take its GPU.
