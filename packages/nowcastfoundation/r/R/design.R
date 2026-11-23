@@ -182,6 +182,9 @@ draw_values <- function(grid, design) {
   v$gt_mean <- ds("gt_mean")
   v$gt_cv <- ds("gt_cv")
   v$amplitude <- ds("amplitude")
+  # A controlled path starts at its own R and settles towards 1.
+  v$control_r <- ds("control_r")
+  if (v$path == "controlled") v$amplitude <- log(v$control_r)
   v$flat <- ds("flat")
   v$peak <- ds("peak")
   v$period <- max(grid$floors$period_days, ds("period"))
