@@ -174,3 +174,14 @@ def test_pairs_with_no_shared_targets_are_left_out() -> None:
         assert got.loc[m, "relative_wis"] == pytest.approx(
             alone.loc[m, "relative_wis"]
         )
+
+
+def test_a_model_alone_is_its_own_reference() -> None:
+    scores = _scores()
+    got = pairwise_skill(
+        scores.loc[scores["model"] == "ref"],
+        reference="ref",
+        match_on=("location", "reference_date", "horizon"),
+    ).set_index("model")
+    assert got.loc["ref", "relative_wis"] == 1
+    assert got.loc["ref", "skill_wis"] == 1

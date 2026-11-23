@@ -700,6 +700,7 @@ def _theta(wide: pd.DataFrame) -> pd.Series:
     vals = wide.to_numpy(dtype=float)
     have = ~np.isnan(vals)
     logs: dict[str, list[float]] = {m: [0.0] for m in models}
+    alone = len(models) == 1
     for i, j in itertools.combinations(range(len(models)), 2):
         both = have[:, i] & have[:, j]
         if not both.any():
@@ -711,7 +712,7 @@ def _theta(wide: pd.DataFrame) -> pd.Series:
         logs[models[j]].append(float(-np.log(ratio)))
     return pd.Series(
         {
-            m: np.exp(np.mean(v)) if len(v) > 1 else np.nan
+            m: np.exp(np.mean(v)) if len(v) > 1 or alone else np.nan
             for m, v in logs.items()
         }
     )
@@ -742,7 +743,7 @@ def pairwise_skill(
     below 1 mean the model beats the reference.
 
     Unlike scoringutils, a model that shares forecasts with no other
-    model has no skill (rather than 1).
+    model has no skill (rather than 1), unless it is the only model.
 
     Parameters
     ----------
