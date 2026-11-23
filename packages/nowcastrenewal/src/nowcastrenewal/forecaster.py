@@ -55,6 +55,7 @@ from nowcastutils.base import (
     register_model,
 )
 from nowcastutils.dates import epiweek_end
+from nowcastutils.devices import usable_cpus
 from nowcastutils.files import write_csv
 from nowcastutils.forecast import Forecast
 from nowcastutils.hierarchy import is_zone
@@ -131,14 +132,6 @@ MAX_PROVINCE_WORKERS: Final = 4
 not filled by one fit."""
 
 
-def _cores() -> int:
-    """Return the CPUs this process may run on."""
-    try:
-        return len(os.sched_getaffinity(0))
-    except AttributeError:  # pragma: no cover - not Linux
-        return os.cpu_count() or 1
-
-
 def province_workers(num_chains: int, n_provinces: int) -> int:
     """Return how many provinces a per-province variant fits at once.
 
@@ -172,7 +165,7 @@ def province_workers(num_chains: int, n_provinces: int) -> int:
             )
         workers = int(env)
     else:
-        workers = min(MAX_PROVINCE_WORKERS, _cores() // max(1, num_chains))
+        workers = min(MAX_PROVINCE_WORKERS, usable_cpus() // max(1, num_chains))
     return max(1, min(workers, n_provinces))
 
 
