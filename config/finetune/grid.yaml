@@ -692,16 +692,16 @@ distributions:
     why: a backlog of x2 to x5 on the mean delay
   dow_sd:
     dist: lognormal
-    median: 0.2
-    sdlog: 0.6
+    median: 0.3
+    sdlog: 0.5
     layer: reporting
-    why: weekday effects on reports with a log weekday profile sd of 0.075-0.54 (5-95%), spanning BDBV's daily onsets (0.13) and German hospitalisations by place and age (median 0.38)
+    why: weekday effects on reports with a log weekday profile sd of 0.13-0.69 (5-95%), German-strength (0.3-0.4, German hospitalisations by place and age median 0.38) common and BDBV-mild (daily onsets 0.13) kept
   reference_dow_sd:
     dist: lognormal
-    median: 0.2
-    sdlog: 0.6
+    median: 0.3
+    sdlog: 0.5
     layer: reporting
-    why: weekday effects on counts with a log weekday profile sd of 0.075-0.54 (5-95%), spanning BDBV's daily onsets (0.13) and German hospitalisations by place and age (median 0.38)
+    why: weekday effects on counts with a log weekday profile sd of 0.13-0.69 (5-95%), German-strength (0.3-0.4, German hospitalisations by place and age median 0.38) common and BDBV-mild (daily onsets 0.13) kept
   delay_dow_sd:
     dist: lognormal
     median: 0.08
