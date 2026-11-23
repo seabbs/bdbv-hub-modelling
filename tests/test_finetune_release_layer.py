@@ -100,6 +100,12 @@ def _filled(block):
     return np.isfinite(rows).sum()
 
 
+def _history(block):
+    """Return the first target's context, from its first onset."""
+    row = block["context"][0, : ft.CONTEXT]
+    return row[np.isfinite(row)]
+
+
 def test_a_late_block_keeps_its_counts_and_loses_its_early_lag_cells():
     off = {(b["source"], b["cut"]): b for b in _blocks(None)}
     late = _blocks(START_ALL)
@@ -109,12 +115,14 @@ def test_a_late_block_keeps_its_counts_and_loses_its_early_lag_cells():
         assert b["release_start_days"] == 40
         # A block cut before its start day has the cut's release alone.
         assert b["first_release"] >= "2026-02-12" or b["releases"] == 1
-        targets = slice(0, b["n_targets"])
-        # The counts row holds the whole history at the cut.
-        np.testing.assert_array_equal(
-            np.isfinite(a["context"][targets]),
-            np.isfinite(b["context"][targets]),
-        )
+        # The counts row holds the whole history known at the cut, from
+        # the first onset. Compared over the context both share: the lag
+        # rule can give the late block another lag count, so its context
+        # ends at another step, after which the row is the truth (#889).
+        ha, hb = _history(a), _history(b)
+        n = min(len(ha), len(hb))
+        assert n > 0
+        np.testing.assert_array_equal(ha[:n], hb[:n])
         if b["n_covariates"]:
             assert _filled(b) < _filled(a)
 
