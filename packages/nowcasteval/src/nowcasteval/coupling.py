@@ -19,11 +19,8 @@ not have known. `summary` gives each coupling's mean score as a ratio to
 `independent`, with a paired bootstrap interval over origins.
 
 The Schaake shuffle at an origin orders the draws as windows of the
-truth reported by then (`history_windows`): every stretch of the
-origin's end dates, of all places, whose truth had matured, newest
-first, up to one per draw. With none it is independence. The truth is
-the unit's own, so windows exist only from the truth's delay after the
-unit's first origin (40 days in Germany).
+truth reported by then (`history_windows`), consecutive days of all
+places, newest first, up to one per draw; with none it is independence.
 
 Input rows are a German unit's cache (`nowcastfoundation.checkpoint`):
 `model`, `origin`, `location`, `target_end_date`, `horizon`, `quantile`,
@@ -85,16 +82,28 @@ def _origin(
     shape = (len(places), len(dates))
     quantiles = np.full((*shape, len(levels)), np.nan)
     quantiles[p, d, q] = rows["value"].to_numpy(dtype=float)
-    out: dict[str, np.ndarray] = {"quantiles": quantiles}
+    return {"quantiles": quantiles, **_fill(rows, places, dates)}
+
+
+def _fill(
+    rows: pd.DataFrame, places: list[str], dates: list[str]
+) -> dict[str, np.ndarray]:
+    """Return each cell's truth, horizon and report day on a grid.
+
+    `truth`, `horizon` and `vintage` (the truth's report day) on
+    `[places, dates]`, NaN where no row has the cell. A unit has one
+    truth per cell, so any row of the cell gives it.
+    """
     first = rows.drop_duplicates(CELL)
     p = pd.Index(places).get_indexer(pd.Index(first["location"]))
     d = pd.Index(dates).get_indexer(pd.Index(first["target_end_date"]))
+    out = {}
     for name, col in [
         ("truth", first["truth"]),
         ("horizon", first["horizon"]),
         ("vintage", pd.to_datetime(first["truth_vintage"]).map(_days)),
     ]:
-        a = np.full(shape, np.nan)
+        a = np.full((len(places), len(dates)), np.nan)
         a[p, d] = np.asarray(col, dtype=float)
         out[name] = a
     return out
@@ -136,16 +145,16 @@ def _fit(
 
 def _matured(
     rows: pd.DataFrame, places: list[str], dates: list[str]
-) -> tuple[np.ndarray, np.ndarray]:
-    """Return each cell's truth and its report day `[places, dates]`."""
-    first = rows.drop_duplicates(CELL)
-    p = pd.Index(places).get_indexer(pd.Index(first["location"]))
-    d = pd.Index(dates).get_indexer(pd.Index(first["target_end_date"]))
-    truth = np.full((len(places), len(dates)), np.nan)
-    day = np.full_like(truth, np.inf)
-    truth[p, d] = first["truth"].to_numpy(dtype=float)
-    day[p, d] = pd.to_datetime(first["truth_vintage"]).map(_days)
-    return truth, day
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return the truth and its report day on every calendar day.
+
+    `[places, days]` from the first end date to the last, so windows are
+    consecutive days, and each of `dates`' position among the days.
+    """
+    days = pd.date_range(dates[0], dates[-1], freq="D").strftime("%Y-%m-%d")
+    cells = _fill(rows, places, list(days))
+    at = pd.Index(days).get_indexer(pd.Index(dates))
+    return cells["truth"], cells["vintage"], at
 
 
 def _schaake(
@@ -153,23 +162,29 @@ def _schaake(
     ok: np.ndarray,
     origin: int,
     levels: np.ndarray,
-    history: tuple[np.ndarray, np.ndarray],
+    history: tuple[np.ndarray, np.ndarray, np.ndarray],
     n_samples: int,
     seed: int,
 ) -> tuple[np.ndarray, int]:
     """Return Schaake draws on the origin's end dates and the windows used.
 
-    The other end dates keep zero draws, as `_scores` reads only `ok`.
+    `history` is `_matured`'s. The other end dates keep zero draws, as
+    `_scores` reads only `ok`.
+
+    Raises
+    ------
+    ValueError
+        If the origin's end dates are not consecutive days.
     """
-    truth, day = history
+    truth, day, at = history
     cols = np.flatnonzero(ok.any(axis=0))
+    if np.any(np.diff(at[cols]) != 1):
+        raise ValueError("an origin's end dates must be consecutive days")
     seen = np.where(day <= origin, truth, np.nan)
     windows = history_windows(seen, len(cols), n_samples)
+    method = "schaake" if len(windows) else "independent"
+    fit = {"windows": windows} if len(windows) else {}
     draws = np.zeros((n_samples, *ok.shape))
-    if len(windows):
-        fit, method = {"windows": windows}, "schaake"
-    else:
-        fit, method = {}, "independent"
     draws[:, :, cols] = couple(q[:, cols], levels, method, fit, n_samples, seed)
     return draws, len(windows)
 
