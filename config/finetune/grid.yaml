@@ -195,8 +195,10 @@ factors:
   obs_strata:
     shared: 1
     dispersion: 1
+  # Strata mostly deviate moderately within one outbreak (linked); each
+  # stratum an outbreak of its own in a quarter.
   strata_link:
-    linked: 1
+    linked: 3
     independent: 1
   window:
     early: 5
