@@ -1,4 +1,4 @@
-"""Tests for the NonCentredRandomWalk temporal process."""
+"""Tests for the shared NonCentredRandomWalk temporal process."""
 
 import jax.numpy as jnp
 import numpy as np
@@ -7,7 +7,7 @@ from numpyro.handlers import seed, trace
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.latent.temporal_processes import TemporalProcess
 
-from nowcastrenewal.model import NonCentredRandomWalk
+from nowcastrenewal.components.walks import NonCentredRandomWalk
 
 
 def test_is_a_temporal_process():

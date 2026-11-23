@@ -36,6 +36,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from nowcastgermany.data import hub_changes
+
 sys.path.insert(0, str(Path(__file__).parent))
 import grid_summaries as gs
 
@@ -54,16 +56,9 @@ REF_COLOUR = "#1baf7a"
 def german_series(wide: pd.DataFrame) -> dict[tuple[str, str], pd.DataFrame]:
     """Return each German series as changes by reference and report date.
 
-    Changes after 80 days are put at 81 days, as `hub_triangle` does.
+    Changes after 80 days are at 81 days (`hub_changes`).
     """
-    cols = [c for c in wide.columns if c.startswith("value_")]
-    long = wide.melt(
-        id_vars=["date", "location", "age_group"],
-        value_vars=cols,
-        var_name="delay",
-        value_name="count",
-    ).dropna(subset=["count"])
-    long["delay"] = long["delay"].map({c: i for i, c in enumerate(cols)})
+    long = hub_changes(wide).rename(columns={"change": "count"})
     ref = pd.to_datetime(long["date"])
     long = long.assign(
         reference_date=ref,

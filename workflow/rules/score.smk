@@ -19,9 +19,9 @@
 # (nowcasteval.coupling), from that unit's cached quantiles, on the CPU.
 # `land` (opt-in) commits the tables to evidence/ and pushes.
 
+
 wildcard_constraints:
     label=r"slots-[0-9a-f]+|[0-9a-f]+|reference[a-z-]*",
-
 
 
 checkpoint release_list:
@@ -221,8 +221,10 @@ rule benchmarks:
     log:
         f"{CACHE}/log/benchmarks.log",
     localrule: True
+    conda:
+        TOOLS_ENV
     params:
-        roots=lambda wc: f"{CACHE} {config['results']} {RUNS_DIR}",
+        roots=f"{CACHE} {config['results']} {RUNS_DIR}",
     shell:
         "uv run python workflow/scripts/benchmarks.py {output} {params.roots} "
         "> {log} 2>&1"

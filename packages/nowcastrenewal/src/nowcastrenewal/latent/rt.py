@@ -2,8 +2,9 @@
 r"""Reproduction number paths for simulated outbreaks, by place and stratum.
 
 - `RtPath`: a deterministic log R path of one of `KINDS`.
-- `WeeklyNoise`: an AR(1) on the weekly scale, held for 7 days, from
-  PyRenew's `ARProcess`, starting at 0 in the first week.
+- `WeeklyNoise`: an AR(1) on the weekly scale, held for 7 days, starting
+  at 0 in the first week: PyRenew's `WeeklyTemporalProcess` over the
+  shared `NonCentredRandomWalk`.
 - `PlaceRt`: each stratum's log R. Places share a path, follow their own,
   add correlated weekly noise to it or lag it. A slow drift and weekly
   noise scaled by `1 - coupling` are added to every stratum.
@@ -27,8 +28,11 @@ import numpyro
 import numpyro.distributions as dist
 from jax import Array
 from jax.typing import ArrayLike
+from pyrenew.deterministic import DeterministicVariable
+from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.metaclass import RandomVariable
-from pyrenew.process import ARProcess
+
+from ..components.walks import NonCentredRandomWalk
 
 __all__ = [
     "KINDS",
@@ -57,8 +61,8 @@ amplitude decaying onto that walk (`controlled`), and shapes on log R."""
 RELATIONS = ("shared", "independent", "correlated", "lagged")
 """How places' paths relate."""
 
-# The weekly noise's autocorrelation.
-_AUTOREG = 0.8
+# The weekly noise's half-life in weeks, for an autocorrelation of 0.8.
+_HALF_LIFE = math.log(0.5) / math.log(0.8)
 
 
 def daily_walk(
@@ -223,9 +227,10 @@ class RtPath:
 class WeeklyNoise(RandomVariable):
     r"""An AR(1) on the weekly scale, 0 in the first week, held for 7 days.
 
-    $e_0 = 0$ and $e_w = 0.8 e_{w-1} + \sigma z_w$, from PyRenew's
-    `ARProcess`. The standard normals $z$ are the sample site
-    `"{noise_name}_decentered"`.
+    $e_0 = 0$ and $e_w = 0.8 e_{w-1} + \sigma z_w$: PyRenew's
+    `WeeklyTemporalProcess` over the shared `NonCentredRandomWalk`, with
+    the weeks starting on the first day. The standard normals $z$ are the
+    sample site `"{noise_name}_z"`.
 
     Parameters
     ----------
@@ -233,9 +238,26 @@ class WeeklyNoise(RandomVariable):
         Name of the component.
     """
 
-    def __init__(self, name: str) -> None:
-        super().__init__(name=name)
-        self.ar = ARProcess(name=f"{name}_ar")
+    def process(self, sd: float) -> WeeklyTemporalProcess:
+        r"""Return the weekly process with innovation sd $\sigma$.
+
+        Parameters
+        ----------
+        sd : float
+            The innovations' sd, $\sigma$.
+
+        Returns
+        -------
+        pyrenew.latent.temporal_processes.WeeklyTemporalProcess
+            The AR(1), its weeks starting on day 0.
+        """
+        walk = NonCentredRandomWalk(
+            DeterministicVariable(f"{self.name}_sd", sd),
+            half_life_rv=DeterministicVariable(
+                f"{self.name}_half_life", _HALF_LIFE
+            ),
+        )
+        return WeeklyTemporalProcess(walk, start_dow=0)
 
     def sample(
         self, n: int, sd: float, noise_name: str, **kwargs: object
@@ -249,7 +271,7 @@ class WeeklyNoise(RandomVariable):
         sd : float
             The innovations' sd, $\sigma$.
         noise_name : str
-            The innovations' sample site.
+            Prefix of the innovations' sample site.
         **kwargs
             Ignored, for the PyRenew interface.
 
@@ -258,15 +280,10 @@ class WeeklyNoise(RandomVariable):
         Array
             Shape `(n,)`, constant within each week.
         """
-        weeks = math.ceil(n / 7)
-        e = self.ar(
-            noise_name=noise_name,
-            n=weeks,
-            autoreg=jnp.array([_AUTOREG]),
-            init_vals=jnp.array([0.0]),
-            noise_sd=sd,
+        e = self.process(sd).sample(
+            n_timepoints=n, name_prefix=noise_name, first_day_dow=0
         )
-        return jnp.repeat(jnp.asarray(e), 7)[:n]
+        return jnp.asarray(e)[:, 0]
 
 
 class PlaceRt(RandomVariable):

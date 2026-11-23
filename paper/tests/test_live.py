@@ -20,10 +20,10 @@ def _scores() -> pd.DataFrame:
         ("slots-z", "slots-zeroinit", 500),
     ]:
         for model in MODELS:
-            for level in ("national", "provinces"):
+            for level in ("national", "states"):
                 rows.append(
                     {
-                        "study": "ebola",
+                        "study": "germany",
                         "level": level,
                         "model": model,
                         "checkpoint": ck,
@@ -32,14 +32,12 @@ def _scores() -> pd.DataFrame:
                         "n": 10,
                         "rule": RULE,
                         "target": "7day",
-                        "rel_crps": 2.0 - n / 1000,
-                        "rel_log_crps": 1.5,
-                        "last_origin": "2026-11-08",
+                        "rel_wis": 3.0 - n / 1000,
                     }
                 )
             rows.append(
                 {
-                    "study": "germany",
+                    "study": "ebola",
                     "level": "national",
                     "model": model,
                     "checkpoint": ck,
@@ -48,7 +46,9 @@ def _scores() -> pd.DataFrame:
                     "n": 10,
                     "rule": RULE,
                     "target": "7day",
-                    "rel_wis": 3.0,
+                    "rel_crps": 2.0 - n / 1000,
+                    "rel_log_crps": 1.5,
+                    "last_origin": "2026-11-08",
                 }
             )
         if n:
@@ -74,8 +74,9 @@ def test_the_curve_keeps_zero_shot_and_the_live_run_by_level() -> None:
 
     out = checkpoint_rows(_scores(), "one-model")
     assert set(out["checkpoint"]) == {"zero-shot", "slots-a", "slots-b"}
-    # Each level is kept, for its own panel.
-    assert set(out["level"]) == {"national", "provinces"}
+    # Each level is kept, for its own panel, and BDBV is held out.
+    assert set(out["level"]) == {"national", "states"}
+    assert set(out["study"]) == {"germany"}
 
 
 def test_the_attention_bias_comparison_comes_from_checkpoint_scores() -> None:
@@ -84,7 +85,8 @@ def test_the_attention_bias_comparison_comes_from_checkpoint_scores() -> None:
     out = slots_rows(_scores(), "one-model")
     assert set(out["run"]) == {"attention biases", "no biases"}
     # One set per study and level, not pooled.
-    assert {"BDBV national, daily", "BDBV provinces, daily"} <= set(out["set"])
+    assert {"German national, daily", "German states, daily"} <= set(out["set"])
+    assert not any(name.startswith("BDBV") for name in out["set"])
     assert "Held-out loss, all" not in set(out["set"])
     assert set(out.columns) >= {"set", "run", "outbreaks", "score"}
 

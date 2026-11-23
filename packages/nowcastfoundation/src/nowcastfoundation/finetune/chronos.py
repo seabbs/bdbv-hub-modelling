@@ -31,6 +31,7 @@ from nowcastfoundation.finetune import (
     MIXED,
     ROLLING,
     release_days,
+    release_weekday,
     training_block,
     weekly_cutoffs,
 )
@@ -671,8 +672,7 @@ def outbreak_blocks(
     described there. Each block's releases run up to its cut at a cadence
     drawn for its source (`draw_cadence`), recorded as its `cadence`.
     """
-    # Cut-offs fall Wednesday to Saturday, as the hub's releases do.
-    weekday = int(rng.integers(2, 6))
+    weekday = release_weekday(rng)
     first = str(counts["report_date"].min())
     end = pd.Timestamp(counts["report_date"].max()).date()
     last = end - dt.timedelta(weeks=delay_weeks + 5)

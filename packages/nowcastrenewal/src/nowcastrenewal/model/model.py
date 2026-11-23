@@ -27,9 +27,9 @@ from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
 from ..components.pmfs import Delay, delay_pmf, generation_time_pmf
+from ..components.walks import NonCentredRandomWalk
 from .composition_noise import DirichletMultinomialNoise
 from .pooled import PooledInitialValue
-from .temporal import NonCentredRandomWalk
 
 SUNDAY = 6
 """Weekday number of Sunday (Monday is 0), the first day of a hub week."""
