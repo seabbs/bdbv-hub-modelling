@@ -1,7 +1,6 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """The province renewal model, built on PyRenew (JAX, NumPyro).
 
-- `temporal`: a non-centred random walk or AR(1) temporal process.
 - `pooled`: pooled group values and sum-to-zero group deviations.
 - `renewal`: the coupled renewal with importation, seeding and
   depletion.
@@ -22,6 +21,7 @@
 The package imports without JAX until this subpackage is imported.
 """
 
+from ..components.walks import NonCentredRandomWalk
 from .delays import (
     FixedTimeVarying,
 )
@@ -45,7 +45,6 @@ from .observation import (
 from .pooled import PooledInitialValue, pooled_walk
 from .renewal import MetapopulationInfections
 from .rt_observation import RtPseudoObservation
-from .temporal import NonCentredRandomWalk
 from .zones import build_model
 
 __all__ = [
