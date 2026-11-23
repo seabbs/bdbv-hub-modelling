@@ -238,6 +238,14 @@ def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
     assert "79 development dates missing" in run.stderr
 
 
+def _latest_pin(tmp_path: Path) -> Path:
+    """A config/finetune.toml that takes the latest release, as these
+    tests choose among fake releases whatever the committed file pins."""
+    path = tmp_path / "finetune.toml"
+    path.write_text('hash = "latest"\nrealdata = ""\n')
+    return path
+
+
 def test_the_load_command_writes_the_chosen_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -258,7 +266,7 @@ def test_the_load_command_writes_the_chosen_checkpoint(
                 "--config",
                 str(ROOT / "config" / "germany.toml"),
                 "--finetune",
-                str(ROOT / "config" / "finetune.toml"),
+                str(_latest_pin(tmp_path)),
                 "--store",
                 str(store),
                 "--out",
@@ -294,7 +302,7 @@ def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
         "--config",
         str(ROOT / "config" / "germany.toml"),
         "--finetune",
-        str(ROOT / "config" / "finetune.toml"),
+        str(_latest_pin(tmp_path)),
         "--store",
         str(tmp_path / "missing"),
         "--out",
@@ -361,7 +369,7 @@ def test_the_load_command_shows_the_live_run_with_its_label(
         "--config",
         str(ROOT / "config" / "germany.toml"),
         "--finetune",
-        str(ROOT / "config" / "finetune.toml"),
+        str(_latest_pin(tmp_path)),
         "--store",
         str(store),
         "--out",

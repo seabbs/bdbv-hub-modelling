@@ -455,10 +455,6 @@ def test_finetuned_models_are_the_ragged_models_with_the_checkpoint(
     assert model.checkpoint.sha256[1][1] in repr(model)
 
 
-def test_the_models_take_the_latest_release_by_default() -> None:
-    assert foundation.finetuned_spec() == "latest"
-
-
 def _listing(*releases: tuple[str, str, bool]) -> list[dict]:
     return [
         {"tag_name": tag, "published_at": at, "draft": draft}

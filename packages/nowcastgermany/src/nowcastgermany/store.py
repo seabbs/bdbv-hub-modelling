@@ -108,7 +108,8 @@ def choose_checkpoint(
     wins: the final run's checkpoint, once the scorer has stored it.
     Otherwise the checkpoint `spec` pins, as the `_ft` models load it
     (`foundation.resolve_checkpoint`): the newest `FINETUNED_PREFIX` release for
-    `"latest"`, else that hash's release. If its forecasts are not stored
+    `"latest"`, else that spec's release (`chronos-slots-<hash>` for
+    `slots-<hash>`). If its forecasts are not stored
     yet, the newest stored `FINETUNED_PREFIX` release is shown instead.
 
     Parameters
@@ -140,7 +141,7 @@ def choose_checkpoint(
     if spec == "latest":
         pinned = ft[-1] if ft else None
     else:
-        pinned = f"{FINETUNED_PREFIX}-{spec}"
+        pinned = foundation_release_tag(spec)
     if slots:
         return slots[-1], pinned
     if live is not None:
