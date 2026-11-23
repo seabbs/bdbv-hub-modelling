@@ -99,9 +99,11 @@ rule simulate_batch:
 rule simulator_benchmark:
     # Two passes of one batch, first then again, as a simulate_batch job
     # runs (one thread, the round's draws) on the given JAX device. The
-    # benchmarks share a compile cache of their own, kept between runs, so
-    # the first pass is cold on an empty cache and, after another seed's
-    # benchmark, times what a batch on a host with a warm cache sees.
+    # benchmarks of one simulator code share a compile cache of their own,
+    # kept between runs: the first pass is cold on an empty cache and,
+    # after another seed's benchmark, times what a batch on a host with a
+    # warm cache sees. Each code has its own folder, so two versions
+    # benchmarked from one ROOT never read each other's compiles.
     output:
         f"{ROUNDS_DIR}/bench/simulator-{{device}}-n{{n}}-s{{seed}}.json",
     log:
@@ -113,7 +115,7 @@ rule simulator_benchmark:
         draws=SIM["draws"],
         grid=GRID_FILE,
         jax_env=lambda wc: simulator.jax_cache_env(
-            f"{ROUNDS_DIR}/bench/jax-cache-{wc.device}"
+            f"{ROUNDS_DIR}/bench/jax-cache-{wc.device}-{simulator.engine_id()}"
         ),
     shell:
         """
