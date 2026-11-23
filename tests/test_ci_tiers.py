@@ -130,3 +130,13 @@ def test_every_merge_into_next_gets_a_fast_tier_run():
     assert "next" in _triggers(workflow)["push"]["branches"]
     keep = workflow["concurrency"]["cancel-in-progress"]
     assert "refs/heads/next" in keep
+
+
+def test_the_r_live_job_installs_what_the_live_r_tests_call():
+    steps = _workflow("test.yml")["jobs"]["r-live"]["steps"]
+    packages = " ".join(
+        str(s.get("with", {}).get("packages", "")) for s in steps
+    )
+    # primarycensored's fitdistdoublecens needs fitdistrplus (a Suggests).
+    for name in ("primarycensored", "flexsurv", "fitdistrplus"):
+        assert name in packages
