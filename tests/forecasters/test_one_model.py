@@ -227,7 +227,7 @@ def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
     late = daily.loc[daily["date"].isin(future)]
     assert not late.empty
     # The count rows drew 1, the total rows 1000 and up: daily values come
-    # from the count rows as drawn, not floored at the counts reported.
+    # from the count rows as drawn.
     assert (late["value"] == 1.0).all()
     # Every day of the target weeks is there, for every place and sample.
     first = pd.Timestamp(task.target_end_dates[0]) - pd.Timedelta(days=6)
@@ -310,7 +310,7 @@ def _spy_triangle(monkeypatch) -> list:
 def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
     ft: FoundationModel, task: ForecastTask, monkeypatch
 ) -> None:
-    # No draws, no rounding, no floor at the reported count: the 7-day
+    # No draws and no rounding: the 7-day
     # sum of a week past the context is its aggregate row's own quantile.
     pytest.importorskip("torch")
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
