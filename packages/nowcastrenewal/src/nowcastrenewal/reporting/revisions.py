@@ -2,7 +2,7 @@
 r"""Revisions of a reporting triangle's counts.
 
 Each reported count $y$ of stratum $g$, reference day $t$ and report day
-$r$ may be revised (the simulator R engine's `revise_counts`):
+$r$ may be revised:
 
 - cases reported in error, Poisson($o_g y$), are in the releases from $r$
   and removed $k_g$ days later;

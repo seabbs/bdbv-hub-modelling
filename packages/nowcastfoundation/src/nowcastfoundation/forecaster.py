@@ -139,9 +139,9 @@ COUPLINGS: Final = ("online", "independent", "comonotone")
 and are the supplement's comparisons."""
 
 PERIODS: Final = {"daily": "rolling7"}
-"""The aggregate row each place has in a ragged block, by source
-(`FoundationModel.period`): the daily source's 7-day rolling sums, from
-which the hub's 7-day target is read."""
+"""The aggregate row each place has in a block, ragged or complete, by
+source (`FoundationModel.period`): the daily source's 7-day rolling sums,
+from which the hub's 7-day target is read."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -506,7 +506,7 @@ def _finetuned(
 
     A spec that is a folder is a run's own segment (`local_checkpoint`).
     The weekly and daily models share the checkpoint. Each builds the
-    block its zero-shot model of `layout` builds (`PERIODS` for ragged);
+    block its zero-shot model of `layout` builds (`PERIODS` rows in both);
     only the weights differ. The complete layout is for checkpoints
     trained on complete counts (the no-delays run).
     """
@@ -520,7 +520,7 @@ def _finetuned(
             if Path(spec).is_dir()
             else resolve_checkpoint(spec)
         ),
-        period=PERIODS.get(source) if layout == "ragged" else None,
+        period=PERIODS.get(source),
     )
 
 
@@ -1328,13 +1328,26 @@ class FoundationModel:
                 final, (task.n_samples, *final.shape)
             ).copy()
             steps[:, :, start:] = drawn[:, : len(places)]
-            # The hub's target is weekly: the daily source is summed to it.
-            week_of = np.array(
-                [_step("weekly", t).isoformat() for t in tri.times]
-            )
-            values = np.stack(
-                [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
-            )
+            # The hub's target is weekly: the daily source is summed to
+            # it, the 7 days ending on each target date (its epiweek where
+            # the date is a Saturday).
+            if self.source == "daily":
+                ends = [tri.times.index(w) for w in weeks]
+                values = np.stack(
+                    [
+                        steps[:, :, max(0, e - 6) : e + 1].sum(axis=2)
+                        for e in ends
+                    ],
+                    axis=2,
+                )
+            else:
+                week_of = np.array(
+                    [_step("weekly", t).isoformat() for t in tri.times]
+                )
+                values = np.stack(
+                    [steps[:, :, week_of == w].sum(axis=2) for w in weeks],
+                    axis=2,
+                )
         n, n_loc = task.n_samples, len(places)
         weekly_out = pd.DataFrame(
             {
@@ -1716,7 +1729,7 @@ for _source in SOURCES:
                 _name,
                 _source,
                 _layout,
-                period=PERIODS.get(_source) if _layout == "ragged" else None,
+                period=PERIODS.get(_source),
             ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, every target in one block.",

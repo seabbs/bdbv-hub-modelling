@@ -172,6 +172,7 @@ def _revised(seed: int) -> tuple:
     raise RuntimeError("no simulation with revisions ran")
 
 
+@pytest.mark.slow
 def test_flat_draws_leave_the_expected_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -203,6 +204,7 @@ def _totals(sim: tuple, keys: range) -> np.ndarray:
     )
 
 
+@pytest.mark.slow
 def test_flat_draws_match_the_counts_in_distribution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
