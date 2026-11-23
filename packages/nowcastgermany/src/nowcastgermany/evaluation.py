@@ -362,7 +362,7 @@ def fetch_germany(  # pragma: no cover - network
     dict
         The sources, also written to `dest/sources.json`.
     """
-    from bdbvhub.data.tidy import _request
+    from nowcastbdbv.data.tidy import _request
 
     out = Path(dest)
     out.mkdir(parents=True, exist_ok=True)

@@ -6,7 +6,7 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive, init_to_median
 
-from bdbvhub.data.delays import hub_delay_pmf
+from nowcastbdbv.data.delays import hub_delay_pmf
 from nowcastrenewal.model import MAIN, ModelConfig, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
 from nowcastrenewal.model.model import incubation_period, seed_lead
@@ -187,7 +187,7 @@ def test_prior_predictive_is_bounded_by_depletion(sim_vintage, depletion):
 
 
 def test_real_data_kernels_are_finite(table):
-    from bdbvhub.data.tidy import load_delays, load_target
+    from nowcastbdbv.data.tidy import load_delays, load_target
 
     from .conftest import MAIN_REPO_DATA
 

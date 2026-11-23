@@ -31,12 +31,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhub.data.tidy import load_target
 from bdbvhub.reporting.explorer import (
     explorer_data,
     explorer_html,
     write_explorer,
 )
+from nowcastbdbv.data.tidy import load_target
 from nowcasteval.plots import (
     comparison_colours,
     comparison_label,

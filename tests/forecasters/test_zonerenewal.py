@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.zones import load_zone_data
 from bdbvhub.models import get_model
+from nowcastbdbv.data.zones import load_zone_data
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastrenewal import forecaster as rn
 from nowcastrenewal import zones as zr

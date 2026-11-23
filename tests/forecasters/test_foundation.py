@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.zones import ZoneData, hub_zones
 from bdbvhub.models import get_model, list_models
 from nowcastbaselines.chain import NoWalkSpread
 from nowcastbaselines.randomwalk import RandomWalk
@@ -22,6 +21,7 @@ from nowcastbaselines.zones import (
     check_zone_coherence,
     zones_for_model,
 )
+from nowcastbdbv.data.zones import ZoneData, hub_zones
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation.forecaster import (

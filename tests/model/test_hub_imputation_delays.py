@@ -5,7 +5,7 @@ The hub fits a generalised gamma in hours to the delays it published at
 2026-11-01 used flexsurv with status 1, so each delay is exact; from
 2026-11-01 it is double interval censored with primarycensored. This
 refits both from the hub's archived delays and compares each
-`(mu, sigma, Q)` with the constants in `bdbvhub.data.delays`, to a
+`(mu, sigma, Q)` with the constants in `nowcastbdbv.data.delays`, to a
 relative tolerance of 1e-3 for flexsurv and 5e-3 for primarycensored's
 `fitdistdoublecens`, whose optimiser stops within about 0.2% of the
 optimum (1.6.0 gives sigma 0.9385 and Q 0.7147 for 0.9369 and 0.7158).
@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from bdbvhub.data.delays import HUB_GENGAMMA
+from nowcastbdbv.data.delays import HUB_GENGAMMA
 
 from .r_live import run_r
 

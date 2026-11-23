@@ -22,9 +22,9 @@ from typing import Any, Final
 
 import pandas as pd
 
-from bdbvhub.data.zones import ZoneData
 from bdbvhub.store import store
 from bdbvhub.submission.hub import HUB_COLUMNS, own_national
+from nowcastbdbv.data.zones import ZoneData
 from nowcasteval.backtest import BacktestConfig, vintage_task
 from nowcastrenewal.zones import ZONES_FILE
 from nowcastutils.base import (

@@ -37,7 +37,7 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
-from bdbvhub.data.tidy import load_target
+from nowcastbdbv.data.tidy import load_target
 from nowcasteval.backtest import load_config
 from nowcasteval.nowcast import resolve_truth_delay
 

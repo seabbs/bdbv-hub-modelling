@@ -287,8 +287,8 @@ def bdbv_sensitivity(
     pandas.DataFrame
         `variant_scores` rows of every model, variant, origin and level.
     """
-    from bdbvhub.data.tidy import load_daily, load_delays, load_target
     from bdbvhub.store.store import origin_tasks
+    from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
     from nowcasteval.backtest import load_config, real_vintages
     from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
 
@@ -352,8 +352,8 @@ def bdbv_candidates(
         `variant_scores` rows by candidate (`variant`, its label), with
         the candidate's `rho_provinces` and `fallback` at that origin.
     """
-    from bdbvhub.data.tidy import load_daily, load_delays, load_target
     from bdbvhub.store.store import origin_tasks
+    from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
     from nowcasteval.backtest import load_config, real_vintages
     from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
 

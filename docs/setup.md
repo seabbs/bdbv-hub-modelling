@@ -48,7 +48,7 @@ It forecasts with the random walk nowcast from one release, scores the forecast 
 import dataclasses
 from pathlib import Path
 
-from bdbvhub.data.tidy import (
+from nowcastbdbv.data.tidy import (
     delays_for_vintage,
     load_daily,
     load_delays,
