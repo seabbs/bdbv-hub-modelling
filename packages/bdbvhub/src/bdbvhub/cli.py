@@ -1773,6 +1773,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
     if args.fetch:  # pragma: no cover - network
         hc.fetch_hub_submissions(hub_dir, cache, ref=cfg.ref)
+        hc.fetch_submissions_table(cfg.submissions_table)
     hub = hc.load_hub_submissions(hub_dir, cache)
     target, delays = load_target(args.data), load_delays(args.data)
     daily = load_daily(args.data)
@@ -1812,6 +1813,13 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
+    table_file = Path(cfg.submissions_table)
+    if table_file.exists():
+        table = pd.read_csv(table_file, dtype=str, keep_default_na=False)
+    else:
+        print(f"No {table_file} (run with --fetch): no week is split.")
+        table = pd.DataFrame()
+    forecasts = hc.split_substituted(forecasts, table, cfg.substituted)
     zones = hc.zone_truth(load_health_zones(args.data), codes, target)
     scores, energy, pending = hc.score_comparison(
         forecasts, target, delays, config, daily, zones
@@ -1843,6 +1851,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         "preferred_baseline": cfg.baseline,
         "locations": list(cfg.locations),
         "hub_ids": hub_ids,
+        "substituted": cfg.substituted,
         "accessed": accessed,
     }
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
