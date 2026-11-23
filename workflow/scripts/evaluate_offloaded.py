@@ -131,7 +131,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     p.add_argument("what", choices=("steps", "base", "checkpoint"))
     p.add_argument("where", type=Path)
     p.add_argument("--prev", type=Path)
-    p.add_argument("--device", default="auto")
+    # The rule passes `forecast.device` (flowlib.forecast); never detected.
+    p.add_argument("--device", required=True)
     p.add_argument(
         "--eval-every",
         type=int,
