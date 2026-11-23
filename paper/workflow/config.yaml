@@ -14,6 +14,10 @@ studies: [synthetic, germany, ebola]
 finetune_run: output/checkpoints/slots
 finetuned: null
 final_checkpoints: []
+# The paper's final fine-tuning run: its folder, a `runs` entry of the
+# workflow (workflow/config.yaml), under the machine's ROOT. Its held-out
+# loss curve is the SI's (rule heldout_curve).
+final_run: $ROOT/runs/runa
 # The live fine-tuning run (the checkpoint scores' `run`) whose newest
 # scored checkpoints the SI curve, comparisons and tables show as
 # preliminary, from `evidence.checkpoint_scores` at its branch head.
@@ -165,8 +169,6 @@ evidence:
   # Pending: the realised shares of each combination of block
   # layout and options.
   block_combinations: null
-  # Pending: the final run's held-out loss curve.
-  finetune_heldout: null
   # Pending: summaries of the final grid's simulations.
   sim_summaries: null
   # Pending: the final grid's realism comparison.
