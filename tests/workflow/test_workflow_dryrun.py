@@ -1202,3 +1202,13 @@ def test_sim_reports_render_each_round_and_the_rounds_together(tmp_path):
     joined = "".join(blocks)
     assert "rule batch_record" not in joined
     assert "bdbvhub.cli data" not in joined
+
+
+def test_the_comparison_scores_every_run_s_checkpoints(tmp_path):
+    out = dry_run(
+        tmp_path, f"{tmp_path}/runs/comparison.csv", config=FT, quiet=False
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "rule comparison:" in out.stdout
+    assert "rule run_table:" in out.stdout
+    assert f"{tmp_path}/runs/runa/reports/checkpoint-scores.csv" in out.stdout
