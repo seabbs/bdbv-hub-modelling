@@ -606,6 +606,26 @@ def cut(
     return out
 
 
+def cut_code_sha256() -> dict[str, str]:
+    """Return the hashes of the code that decides the cut blocks.
+
+    The simulator and block-design files (`ft.CODE`), and the sources of
+    the trainer's sampling (`snapshots`, `cut`) and the foundation's
+    layout (`ft.FOUNDATION_CODE`). Not the whole trainer file: an edit to
+    training, evaluation or status leaves saved blocks valid
+    (`held_out_blocks`).
+    """
+    sources = {f"stream.{f.__name__}": f for f in (snapshots, cut)}
+    sources |= {f"foundation.{f.__name__}": f for f in ft.FOUNDATION_CODE}
+    return {
+        **{n: ft.code_sha256(p) for n, p in ft.CODE.items()},
+        **{
+            n: hashlib.sha256(inspect.getsource(f).encode()).hexdigest()
+            for n, f in sources.items()
+        },
+    }
+
+
 def init_worker(
     max_series: int,
     sources: tuple[str, ...],
@@ -1788,10 +1808,7 @@ def main(root: Path | None = None) -> None:
         "quiet_min_cases": ft.QUIET_MIN_CASES,
         "block_limit": ft.BLOCK_LIMIT,
         **layout_settings(ft.LAYOUT),
-        "code_sha256": {
-            **{n: ft.code_sha256(p) for n, p in ft.CODE.items()},
-            ft.TRAINER: ft._sha256(Path(__file__)),
-        },
+        "code_sha256": cut_code_sha256(),
     }
     val = held_out_blocks(out, key, cut_held_out)
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
