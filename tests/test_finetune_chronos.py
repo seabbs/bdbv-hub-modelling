@@ -610,6 +610,7 @@ def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
         assert b["context"].shape[1] == CONTEXT + length
 
 
+@pytest.mark.slow
 def test_a_loss_horizon_stops_blocks_days_after_the_cut_off(
     tmp_path, monkeypatch
 ):
@@ -1024,6 +1025,7 @@ def test_the_code_commit_is_the_trainers_repository(tmp_path, monkeypatch):
     assert code_commit() == here
 
 
+@pytest.mark.slow
 def test_mixed_blocks_keep_each_target_rows_place_and_level(monkeypatch):
     import pandas as pd
 
@@ -1202,6 +1204,7 @@ def _lag_fill(b) -> float:
     return float(np.isfinite(ctx[n:, seen]).mean())
 
 
+@pytest.mark.slow
 def test_blocks_record_their_cadence_and_daily_releases_fill_lags(
     tmp_path, monkeypatch
 ):

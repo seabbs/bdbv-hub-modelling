@@ -50,6 +50,7 @@ def _scipy(d):
     raise AssertionError(d)
 
 
+@pytest.mark.slow
 def test_factor_levels_follow_their_weights(grid):
     rng = draws.generator(1)
     n = 20_000

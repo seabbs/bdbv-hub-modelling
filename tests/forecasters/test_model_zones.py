@@ -111,6 +111,7 @@ def _fake_renewal(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+@pytest.mark.slow
 def test_renewal_forecast_and_fit_dir_carry_the_submitted_zones(
     zone_task: ForecastTask,
     tmp_path: Path,
@@ -137,6 +138,7 @@ def test_renewal_forecast_and_fit_dir_carry_the_submitted_zones(
     pd.testing.assert_frame_equal(_sorted(read), _sorted(out))
 
 
+@pytest.mark.slow
 def test_the_submitted_file_is_unchanged(
     zone_task: ForecastTask,
     tmp_path: Path,

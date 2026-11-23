@@ -550,6 +550,7 @@ def test_walk_models_take_their_zone_draws_and_others_the_split(
     )
 
 
+@pytest.mark.slow
 def test_reconcile_keeps_each_zones_published_count(
     task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:

@@ -643,6 +643,7 @@ def _stack(parts: list[pd.DataFrame]) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True)
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("flat_model")
 def test_recovery_run_by_date_chunk_matches_one_run(
     config: BacktestConfig,
