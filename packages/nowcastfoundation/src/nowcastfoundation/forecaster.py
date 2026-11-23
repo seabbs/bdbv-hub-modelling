@@ -1045,6 +1045,79 @@ def layout_block(
     }
 
 
+BLOCK_LIMIT_ENV: Final = "CHRONOS_BLOCK_LIMIT"
+"""The environment variable of `FoundationModel.block_limit`."""
+
+
+def block_views(
+    places: Sequence[str], cap: int
+) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    """Return the views of a block's places, at most `cap` places each.
+
+    Each view is its places and the places it forecasts; every place is
+    forecast by exactly one view. Within `cap`, the whole block. Over it,
+    as training's `system_views`: the country with its provinces (or, if
+    they do not fit, chunks of provinces under the country, the first
+    forecasting the country) forecasts them, and each province with as
+    many of its zones as fit forecasts those zones. Every place is its own
+    series of the task; nothing is summed. `cap` is at least 2.
+    """
+    places = tuple(places)
+    if len(places) <= cap:
+        return [(places, places)]
+    step = max(1, cap - 1)
+    zones = [
+        p for p in places if p.count("-") >= 2 and province_of(p) in places
+    ]
+    tops = [p for p in places if p not in zones]
+    country, provinces = tops[0], tops[1:]
+    out: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    if len(tops) <= cap:
+        out.append((tuple(tops), tuple(tops)))
+    else:
+        for i in range(0, len(provinces), step):
+            chunk = tuple(provinces[i : i + step])
+            mine = (country, *chunk) if i == 0 else chunk
+            out.append(((country, *chunk), mine))
+    for province in provinces:
+        own = [z for z in zones if province_of(z) == province]
+        for i in range(0, len(own), step):
+            chunk = tuple(own[i : i + step])
+            out.append(((province, *chunk), chunk))
+    return out
+
+
+def _sub(
+    tri: HubTriangle, places: Sequence[str], view: Sequence[str]
+) -> HubTriangle:
+    """Return `tri`'s rows of the places of `view`."""
+    at = [list(places).index(p) for p in view]
+    return replace(tri, final=tri.final[at], partial=tri.partial[at])
+
+
+def _owned(
+    parts: Sequence[np.ndarray],
+    views: Sequence[tuple[tuple[str, ...], tuple[str, ...]]],
+    places: Sequence[str],
+    period: bool,
+) -> np.ndarray:
+    """Return each place's draws from the view that forecasts it.
+
+    Rows as one block of `places`: the count rows, then (with `period`)
+    the aggregate rows.
+    """
+    n, _, h = parts[0].shape
+    k = len(places)
+    out = np.zeros((n, k * (1 + period), h))
+    for (view, mine), draws in zip(views, parts, strict=True):
+        for p in mine:
+            i, j = list(places).index(p), view.index(p)
+            out[:, i] = draws[:, j]
+            if period:
+                out[:, k + i] = draws[:, len(view) + j]
+    return out
+
+
 def _walk_start(task: ForecastTask) -> str:
     """Return the earliest week `randomwalk` starts its walk from.
 
@@ -1164,6 +1237,12 @@ class FoundationModel:
     collect : list or None
         Private to `prefetch`: the groups a forecast would predict are
         added to it, and the forecast stops.
+    block_limit : int or None
+        Most series in one block Chronos-2 predicts, the machine's block
+        capacity; a task's block over it is cut into views
+        (`block_views`), as training cuts a system over its limit. None
+        (the default) reads `CHRONOS_BLOCK_LIMIT` from the environment,
+        else no limit.
     """
 
     name: str
@@ -1181,14 +1260,17 @@ class FoundationModel:
     collect: list[tuple[Series, int]] | None = field(
         default=None, repr=False, compare=False
     )
+    block_limit: int | None = None
     reads_zones: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
-        """Check the coupling is one of `COUPLINGS`."""
+        """Check the coupling; read the block limit from the environment."""
         if self.coupling not in COUPLINGS:
             raise ValueError(
                 f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
             )
+        if self.block_limit is None and os.environ.get(BLOCK_LIMIT_ENV):
+            self.block_limit = int(os.environ[BLOCK_LIMIT_ENV])
 
     @property
     def period(self) -> str | None:
@@ -1275,17 +1357,29 @@ class FoundationModel:
         else:
             # Zero-shot and fine-tuned models build the same block, the
             # zero-case places' lag rows included; only the weights differ.
-            group = layout_block(tri, self.layout, places, start, period)
+            # A block over the block limit is cut into views.
+            views = self._views(places, tri)
+            groups = [
+                layout_block(
+                    _sub(tri, places, view),
+                    self.layout,
+                    view,
+                    start,
+                    self._period(_sub(tri, places, view)),
+                )
+                for view, _ in views
+            ]
+            whole = len(views) == 1
             sample = self.sample
             if sample is None:
                 past = (
                     self._past_blocks(rows, places, tri, start, horizon)
-                    if self.coupling == "online"
+                    if self.coupling == "online" and whole
                     else []
                 )
                 if self.collect is not None:
                     self.collect.extend(
-                        (g, horizon) for g in [group, *(p[0] for p in past)]
+                        (g, horizon) for g in [*groups, *(p[0] for p in past)]
                     )
                     raise _CollectedError
                 sample = partial(
@@ -1301,7 +1395,12 @@ class FoundationModel:
                         as_date(str(task.vintage)[:10]).toordinal(),
                     ),
                 )
-            draws = sample([group], horizon, task.n_samples, seed)[0]
+            parts = sample(groups, horizon, task.n_samples, seed)
+            draws = (
+                parts[0]
+                if whole
+                else _owned(parts, views, places, period is not None)
+            )
             # Counts are not negative; Chronos-2's output is otherwise kept
             # as it is, not rounded.
             drawn = np.maximum(draws, 0.0)
@@ -1380,6 +1479,21 @@ class FoundationModel:
             else lag_count(full, self.source)
         )
         return replace(full, partial=full.partial[:, :, :lags])
+
+    def _views(
+        self, places: Sequence[str], tri: HubTriangle
+    ) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+        """Return the block's views under `block_limit` (`block_views`).
+
+        A place's series are its count row, its aggregate row (`period`)
+        and, for `ragged`, its lag series.
+        """
+        if not self.block_limit:
+            return [(tuple(places), tuple(places))]
+        per = 1 + (self.period is not None)
+        if self.layout == "ragged":
+            per += int(tri.partial.shape[2])
+        return block_views(places, max(2, self.block_limit // per))
 
     def lag_count(self, task: ForecastTask) -> int:
         """Return the lag count the model gives `task`'s block."""
