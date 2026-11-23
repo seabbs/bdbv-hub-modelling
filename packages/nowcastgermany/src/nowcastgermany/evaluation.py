@@ -24,8 +24,8 @@ horizons.
 `with_truth` adds each sum's truth, its count in the data $D$ days after
 it ends, the paper's 40-day truth (`rolling_truth`).
 `score_germany` scores both by `score_quantiles`, and `relative_scores`
-divides each model's mean scores by a baseline's on the forecasts both
-made: `randomwalknowcast` on the page, the hub's own baseline in the paper.
+gives each model's pairwise relative skill, scaled to a reference:
+`randomwalknowcast_daily` on the page, the hub's own baseline in the paper.
 `paper_forecasts` writes the forecasts as the paper's long table.
 """
 
@@ -50,7 +50,7 @@ from scipy.stats import norm
 from bdbvhub.models import get_model, list_models
 from nowcasteval.marginals import forecast_quantiles
 from nowcasteval.nowcast import rolling_truth
-from nowcasteval.scoring import relative_skill, score_quantiles
+from nowcasteval.scoring import pairwise_skill, score_quantiles
 from nowcastfoundation.forecaster import FoundationModel, prefetch
 from nowcastgermany.data import (
     ALL_AGES,
@@ -362,7 +362,7 @@ def fetch_germany(  # pragma: no cover - network
     dict
         The sources, also written to `dest/sources.json`.
     """
-    from bdbvhub.data.tidy import _request
+    from nowcastbdbv.data.tidy import _request
 
     out = Path(dest)
     out.mkdir(parents=True, exist_ok=True)
@@ -963,7 +963,12 @@ def team_forecasts(
 def relative_scores(
     scores: pd.DataFrame, by: Sequence[str], baseline: str
 ) -> pd.DataFrame:
-    """Divide each model's mean scores by the baseline's on the same forecasts.
+    """Return each model's pairwise relative scores and its own means.
+
+    The relative scores are `nowcasteval.scoring.pairwise_skill`, so
+    models that forecast different nowcasts (hub teams that missed
+    dates) compare fairly. The means are over each model's own
+    forecasts.
 
     Parameters
     ----------
@@ -972,31 +977,35 @@ def relative_scores(
     by : sequence of str
         Columns of a cell other than `model`.
     baseline : str
-        The model to divide by, such as `GermanyConfig.baseline`.
+        The model the relative scores are scaled to, such as
+        `GermanyConfig.baseline`.
 
     Returns
     -------
     pandas.DataFrame
-        One row per cell and model, over the forecasts the baseline also
-        made: `n`, `wis`, `rel_wis`, `ae_median`, `rel_ae_median`, and
-        the coverage of the 50% and 95% intervals.
+        One row per cell and model: `n` (its forecasts), `rounds` (its
+        nowcast dates), `wis`, `rel_wis`, `ae_median`, `rel_ae_median`,
+        and the coverage of the 50% and 95% intervals.
     """
+    by = list(by)
     match = ("target", "origin", "truth_vintage", "location", "target_end_date")
-    rel = relative_skill(
+    rel = pairwise_skill(
         scores,
         baseline,
         by=by,
         metrics=("wis", "ae_median"),
         match_on=match,
-        means=("wis", "ae_median", "coverage_50", "coverage_95"),
+        rounds="origin",
     )
-    rel = rel.rename(
+    mean_cols = ["wis", "ae_median", "coverage_50", "coverage_95"]
+    means = scores.groupby([*by, "model"])[mean_cols].mean().reset_index()
+    rel = rel.merge(means, on=[*by, "model"]).rename(
         columns={
             "relative_wis": "rel_wis",
             "relative_ae_median": "rel_ae_median",
         }
     )
-    cols = ["n", "wis", "rel_wis", "ae_median", "rel_ae_median"]
+    cols = ["n", "rounds", "wis", "rel_wis", "ae_median", "rel_ae_median"]
     return rel[[*by, "model", *cols, "coverage_50", "coverage_95"]]
 
 

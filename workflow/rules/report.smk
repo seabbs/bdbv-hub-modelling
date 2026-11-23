@@ -301,8 +301,9 @@ rule hub_submissions_table:
 
 
 rule hub_comparison:
-    # Every hub team's files and ours scored on the same truth
-    # (`compare-hub` with no live model). The data folder is also set as
+    # Every hub team's files and ours scored on the same truth, beside
+    # `hub_rounds.models` rerun on current code for each round
+    # (`compare-hub --models`). The data folder is also set as
     # BDBV_DATA_DIR, which the hub's places are read from.
     input:
         target=rules.hub_data.output,
@@ -319,11 +320,12 @@ rule hub_comparison:
     params:
         data=lambda wc, input: Path(input.target[0]).parent,
         out=lambda wc, output: Path(output.scores).parent,
+        models=" ".join(config["hub_rounds"]["models"]),
     shell:
         "BDBV_DATA_DIR={params.data} uv run bdbvhub compare-hub --fetch "
         "--data {params.data} --hub-dir {params.data}/hub-submissions "
         "--cache-dir {params.data}/raw/hub-submissions --out {params.out} "
-        "--results {params.out}/results --models --stored "
+        "--results {params.out}/results --models {params.models} --stored "
         "--submissions-table {input.table} > {log} 2>&1"
 
 

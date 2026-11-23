@@ -294,7 +294,7 @@ $$
 
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K \mathrm{diag}(N)$ mixes transmission between zones, with $\varepsilon \sim \text{Beta}(1, 100)$.
 - $K$ is a gravity kernel with rows that receive, normalised per origin, $K_{zq} \propto N_z e^{-D_{zq}/300\,\text{km}}$ for $q \ne z$, with $D$ the great-circle distance between zone centroids.
-- $N_z$ is the zone's WorldPop 2025 count and its centroid is that of its largest polygon, both from the map behind the province centres ([`zone_centres.csv`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/bdbvhub/src/bdbvhub/data/zone_centres.csv)).
+- $N_z$ is the zone's WorldPop 2025 count and its centroid is that of its largest polygon, both from the map behind the province centres ([`zone_centres.csv`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastbdbv/src/nowcastbdbv/data/zone_centres.csv)).
   The 19 hub zones the map lacks, none with a case, take their province's centre and mean zone population.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share at risk.
   $S_z$ starts at $\nu$ less the seed, so infections never exceed $\nu N_z$.
@@ -390,7 +390,7 @@ R_{\mathcal{G}}(t_b) = \frac{\sum_{z \in \mathcal{G}} \Omega_z\, R_z(t_b)}{\sum_
 \mathcal{G} \in \{\text{CD}, k\}.
 $$
 
-With the release's SDs inflated by a factor $\kappa = \sqrt{2} \approx 1.41$, the likelihood gains
+With the release's SDs inflated by a factor $\kappa = 1.5$, the likelihood gains
 
 $$
 \mu_{\text{CD}} \sim \mathcal{N}\big(\log R_{\text{CD}}(t_b),\, \kappa^2 \sigma_{\text{CD}}^2\big),
@@ -407,7 +407,7 @@ Leaving a province out drops the national term and the patch that holds it.
 $\kappa$ says how much we trust an external estimate built partly on the same case data as ours.
 At $\kappa = 1$ those data would count twice at full weight, so we widen the estimates and they move our Rt mainly where our own data are weak.
 $\kappa$ is set by that judgement, like a prior, and is not tuned on scores.
-$\kappa = \sqrt{2}$ halves the precision, a power prior with tempering 0.5.
+$\kappa = 1.5$ is a power prior with tempering $1/\kappa^2 \approx 0.44$.
 The term adds no parameters, and $\kappa = \infty$ gives `renewal`.
 
 ## Health zones

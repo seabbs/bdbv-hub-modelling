@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.zones import ZoneData, hub_zones
 from bdbvhub.models import get_model, list_models
 from nowcastbaselines.chain import NoWalkSpread
 from nowcastbaselines.randomwalk import RandomWalk
@@ -22,6 +21,7 @@ from nowcastbaselines.zones import (
     check_zone_coherence,
     zones_for_model,
 )
+from nowcastbdbv.data.zones import ZoneData, hub_zones
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation.forecaster import (
@@ -1276,3 +1276,69 @@ def test_the_hub_models_load_the_interim_hub_checkpoint(
     spec = foundation.finetuned_spec(root / "config" / "finetune.toml")
     assert spec == "slots-72661eb7efaa"
     assert foundation.release_tag(spec) == "chronos-slots-72661eb7efaa"
+
+
+def _own_last(seen: list):
+    # Each series' draws are its own last context value, so which block a
+    # place is forecast in must not change its forecast.
+    def sample(groups, horizon, n, _seed):
+        out = []
+        for g in groups:
+            seen.append(g)
+            target = np.atleast_2d(g["target"])
+            last = target[:, -1][None, :, None]
+            out.append(np.broadcast_to(last, (n, target.shape[0], horizon)))
+        return out
+
+    return sample
+
+
+def test_the_active_zone_rule_forecasts_every_place_once(
+    task: ForecastTask,
+) -> None:
+    model = get_model("fm_chronos_daily_ragged")
+    whole_seen: list = []
+    split_seen: list = []
+    whole = dataclasses.replace(model, sample=_own_last(whole_seen))
+    split = dataclasses.replace(
+        model, sample=_own_last(split_seen), active_zone_cases=10**9
+    )
+    a = whole.forecast_both(task)
+    b = split.forecast_both(task)
+    # No zone passes the threshold: the joint block is the country and
+    # provinces, and every zone comes from its province's view.
+    assert len(whole_seen) == 1
+    provinces = {province_of(z) for z in _zones(task)}
+    assert len(split_seen) == 1 + len(provinces)
+    for x, y in zip(a, b, strict=True):
+        cols = list(x.columns[:-1])
+        pd.testing.assert_frame_equal(
+            x.sort_values(cols).reset_index(drop=True),
+            y.sort_values(cols).reset_index(drop=True),
+        )
+
+
+def test_block_sizes_report_each_view_s_places_and_series(
+    task: ForecastTask,
+) -> None:
+    model = dataclasses.replace(
+        get_model("fm_chronos_daily_ragged"), active_zone_cases=10**9
+    )
+    sizes = model.block_sizes(task)
+    lags = model.lag_count(task)
+    assert list(sizes.columns) == [
+        "view",
+        "part",
+        "places",
+        "forecasts",
+        "target_rows",
+        "lag_series",
+        "series",
+    ]
+    joint = sizes.loc[sizes["part"] == "joint"].iloc[0]
+    assert joint["places"] == 1 + len(task.locations)
+    assert joint["target_rows"] == 2 * joint["places"]
+    assert joint["lag_series"] == lags * joint["places"]
+    assert joint["series"] == joint["target_rows"] + joint["lag_series"]
+    zones = sizes.loc[sizes["part"] == "zones"]
+    assert zones["forecasts"].sum() == len(_zones(task))

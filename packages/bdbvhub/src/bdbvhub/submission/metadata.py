@@ -171,7 +171,7 @@ MODEL_METADATA = {
             "The model's national, province and zone Rt in the week of the "
             "newest BVDOutbreakSize release published by the cut-off are tied "
             "to that release's Rt estimates by a likelihood term with their "
-            "SDs inflated by 1.41. " + _ZONE_SUMS + _RENEWAL_OBSERVATION
+            "SDs inflated by 1.5. " + _ZONE_SUMS + _RENEWAL_OBSERVATION
         ),
         "data_inputs": (
             _RENEWAL_INPUTS + " The newest BVDOutbreakSize release published "

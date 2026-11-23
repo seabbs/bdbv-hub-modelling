@@ -30,8 +30,9 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from bdbvhub.data.delays import delay_summary
-from bdbvhub.data.tidy import (
+from bdbvhub.reporting.site import site_baseline
+from nowcastbdbv.data.delays import delay_summary
+from nowcastbdbv.data.tidy import (
     cutoff_window,
     downward_summary,
     imputed_by_release,
@@ -40,7 +41,6 @@ from bdbvhub.data.tidy import (
     release_updates,
     revision_table,
 )
-from bdbvhub.reporting.site import site_baseline
 from nowcastutils.base import NATIONAL
 
 __all__ = [
@@ -1619,7 +1619,7 @@ def plot_nowcast(
         Observed, imputed and total cases by onset week, and each model's
         sample trajectories, 50% and 90% intervals and median.
     """
-    from bdbvhub.data.tidy import load_daily, load_delays, load_target
+    from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
     from nowcasteval.backtest import load_config, make_tasks, run_forecasts
     from nowcastutils.base import get_model
 
@@ -1978,7 +1978,7 @@ def plot_submission(
     matplotlib.figure.Figure
         A grid with one panel per location.
     """
-    from bdbvhub.data.tidy import load_target
+    from nowcastbdbv.data.tidy import load_target
     from nowcastutils.hierarchy import province_of
 
     target = load_target(data_dir) if target is None else target

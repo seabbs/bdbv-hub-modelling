@@ -81,7 +81,7 @@ jobs:
         run: >-
           uv run --group paper pytest -q -n auto --dist worksteal --durations=30
           --junitxml=pytest-durations.xml
-          ${{ github.event_name != 'pull_request' && '--cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub --cov-report=term-missing --cov-report=xml' || '' }}
+          ${{ github.ref == 'refs/heads/main' && '--cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=nowcastbdbv --cov=bdbvhub --cov-report=term-missing --cov-report=xml' || '' }}
       - name: Paper tests
         working-directory: paper
         run: uv run --group paper pytest -q -n auto --dist worksteal --durations=10 tests
@@ -96,7 +96,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload coverage to Codecov
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.xml
@@ -214,7 +214,8 @@ jobs:
       # epinowcast at the commit the simulator's reporting ports, and
       # baselinenowcast 0.2.2 (not on CRAN yet: the commit that set it).
       # fitdistrplus: primarycensored's fitdistdoublecens needs it (a
-      # Suggests), for tests/model/test_hub_imputation_delays.py. No
+      # Suggests), for tests/model/test_hub_imputation_delays.py.
+      # scoringutils 2.3.0: tests/evaluation/test_pairwise_skill.py. No
       # comments inside `packages`: pak reads every line as a package.
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
@@ -229,6 +230,7 @@ jobs:
             any::flexsurv
             any::fitdistrplus
             any::posterior
+            scoringutils@2.3.0
           dependencies: '"hard"'
       - name: Install CmdStan
         run: Rscript -e 'cmdstanr::install_cmdstan(cores = 2)'
@@ -241,6 +243,7 @@ jobs:
           tests/model/test_reporting_triangle.py
           tests/model/test_reporting_effects.py
           tests/model/test_reporting_expectation.py
+          tests/evaluation/test_pairwise_skill.py
       # With the slow sampler checks.
       - name: Live baselinenowcast checks
         run: uv run pytest -q -m "" tests/baselinenowcast

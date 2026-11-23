@@ -102,7 +102,7 @@ def delay_summary(
     Parameters
     ----------
     delays : pandas.DataFrame
-        Delay line data (see `bdbvhub.data.tidy.tidy_delays`).
+        Delay line data (see `nowcastbdbv.data.tidy.tidy_delays`).
     by : sequence of str
         Columns to group by.
 

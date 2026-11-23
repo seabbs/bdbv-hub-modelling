@@ -130,3 +130,14 @@ def test_a_complete_block_has_its_nowcast_steps_without_lag_series():
     assert fs.nowcast_steps(block | {"nowcast": 3}) == 3
     ragged = {"n_targets": 2, "n_covariates": 6, "places": ("A", "B")}
     assert fs.nowcast_steps(ragged) == 3
+
+
+def test_the_trainer_does_not_publish():
+    # Lead 01:05 (20): publishing is the workflow's `publish_checkpoint`
+    # (with an offloaded run's losses); the trainer's own flag was a
+    # second, half-wired way that refused offloaded runs.
+    import pytest
+
+    argv = "SIM OUT --train-seeds 1 2 --held-out-seeds 3 4 --publish"
+    with pytest.raises(SystemExit):
+        fs.build_parser().parse_args(argv.split())

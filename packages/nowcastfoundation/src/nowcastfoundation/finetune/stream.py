@@ -10,14 +10,13 @@ and packed by size (`finetune.chronos.plan_batches`). The learning rate
 falls linearly to zero over the run's `--outbreaks` simulations
 (`sims_done`), so the checkpoint after the first N outbreaks is
 Chronos-2 fine-tuned on those N in one pass of that schedule. Each is
-saved in `OUT/n<N>` with its consumed order and settings hash, and
-published as the release `chronos-ft-<hash>` when `--publish` is set.
+saved in `OUT/n<N>` with its consumed order and settings hash; the
+workflow's `publish_checkpoint` releases it (`publish`).
 Held-out loss is on the first `--holdout` outbreaks of the held-out
 seeds, simulated first.
 
     uv run --group chronos python scripts/finetune_stream.py SIM_DIR OUT \
-        --train-seeds FIRST LAST --held-out-seeds FIRST LAST \
-        --publish
+        --train-seeds FIRST LAST --held-out-seeds FIRST LAST
 
 The workflow's `finetune` rule runs it (workflow/rules/finetune.smk).
 
@@ -49,12 +48,11 @@ import pandas as pd
 
 from nowcastfoundation import series_bias, sidecar
 from nowcastfoundation.finetune import chronos as ft
-from nowcastfoundation.finetune import combinations, simulations, verify
+from nowcastfoundation.finetune import combinations, simulations
 from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
     LAYOUTS,
-    SLOTS_PREFIX,
     release_tag,
     torch_device,
 )
@@ -1599,7 +1597,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--note", default="")
     parser.add_argument("--grid-file", type=Path, default=ft.GRID_FILE)
-    parser.add_argument("--publish", action="store_true")
     parser.add_argument("--blocks-per-simulation", type=int, default=12)
     parser.add_argument(
         "--prefixes", type=int, nargs="+", default=list(ft.PREFIXES)
@@ -1787,11 +1784,6 @@ def main(root: Path | None = None) -> None:
         check_offload(args.eval, args.stop_from, args.outbreaks)
     except ValueError as error:
         parser.error(str(error))
-    # A release carries the held-out losses, which an offloaded run's
-    # checkpoint does not have: nothing in the workflow evaluates its
-    # snapshots or adds their losses yet.
-    if args.eval == "offload" and args.publish:
-        parser.error("--eval offload cannot publish")
     offload = args.eval == "offload"
 
     def training_seeds() -> range | list[int]:
@@ -2356,17 +2348,6 @@ def main(root: Path | None = None) -> None:
                 f"{memory()}"
             )
             report(last_checkpoint=f"n{done} {key}")
-            # A checkpoint whose hash does not recompute from its commit
-            # is kept but not published. An offloaded run does not publish
-            # (`--publish` is refused with it).
-            mismatch = verify.problems(where)
-            if mismatch:
-                log(f"n{done} not published: {'; '.join(mismatch)}")
-            elif args.publish:
-                # Bias checkpoints are released apart (`release_tag`).
-                spec = f"{SLOTS_PREFIX}{key}" if args.series_bias else key
-                publish(where, spec)
-                report(last_release=release_tag(spec))
             # From `stop_from` on, go on only while the last doubling cut
             # held-out loss by more than `min_gain`; an offloaded run never
             # reaches `stop_from` (`check_offload`).

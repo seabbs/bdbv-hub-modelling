@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.delays import hub_delay_pmf
-from bdbvhub.data.zones import zone_places
+from nowcastbdbv.data.delays import hub_delay_pmf
+from nowcastbdbv.data.zones import zone_places
 from nowcastrenewal.model import MAIN
 from nowcastrenewal.model.inputs import (
     WeekTables,

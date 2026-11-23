@@ -21,6 +21,7 @@ members = [
     "bdbvhub",
     "bdbvhubrenewal",
     "nowcastbaselines",
+    "nowcastbdbv",
     "nowcasteval",
     "nowcastfoundation",
     "nowcastgermany",
@@ -209,6 +210,7 @@ dependencies = [
     { name = "jax" },
     { name = "matplotlib" },
     { name = "nowcastbaselines" },
+    { name = "nowcastbdbv" },
     { name = "nowcasteval" },
     { name = "nowcastfoundation" },
     { name = "nowcastgermany" },
@@ -226,6 +228,7 @@ requires-dist = [
     { name = "jax", specifier = ">=0.12.0" },
     { name = "matplotlib", specifier = ">=3.8,<4" },
     { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
+    { name = "nowcastbdbv", editable = "packages/nowcastbdbv" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
     { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
     { name = "nowcastgermany", editable = "packages/nowcastgermany" },
@@ -247,6 +250,7 @@ dependencies = [
     { name = "jax" },
     { name = "matplotlib" },
     { name = "nowcastbaselines" },
+    { name = "nowcastbdbv" },
     { name = "nowcasteval" },
     { name = "nowcastfoundation" },
     { name = "nowcastgermany" },
@@ -305,6 +309,7 @@ requires-dist = [
     { name = "jax", specifier = ">=0.12.0" },
     { name = "matplotlib", specifier = ">=3.8,<4" },
     { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
+    { name = "nowcastbdbv", editable = "packages/nowcastbdbv" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
     { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
     { name = "nowcastgermany", editable = "packages/nowcastgermany" },
@@ -2397,6 +2402,27 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "pandas", specifier = ">=2.1,<4" },
     { name = "scipy", specifier = ">=1.11,<2" },
+]
+
+[[package]]
+name = "nowcastbdbv"
+version = "0.1.0"
+source = { editable = "packages/nowcastbdbv" }
+dependencies = [
+    { name = "nowcastrenewal" },
+    { name = "nowcastutils" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "tzdata" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "nowcastrenewal", editable = "packages/nowcastrenewal" },
+    { name = "nowcastutils", editable = "packages/nowcastutils" },
+    { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "pandas", specifier = ">=2.1,<4" },
+    { name = "tzdata", specifier = ">=2024.1" },
 ]
 
 [[package]]

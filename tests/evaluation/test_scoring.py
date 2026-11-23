@@ -245,6 +245,40 @@ def test_energy_scores_share_cells_and_scale() -> None:
     assert (es["log_energy"] < es["energy"]).all()
 
 
+def test_energy_scores_take_object_typed_values() -> None:
+    # Samples joined from frames of mixed types (such as stored fits
+    # beside new ones) can hold Python ints in object columns, which
+    # numpy's log1p refuses; they score as the same numbers in floats.
+    rng = np.random.default_rng(7)
+    rows = [
+        {
+            "model": model,
+            "origin": "2026-08-18",
+            "location": loc,
+            "target_end_date": "2026-09-05",
+            "sample": i + 1,
+            "value": int(v),
+        }
+        for model in ("a", "b")
+        for loc in ("CD", "CD-IT", "CD-NK")
+        for i, v in enumerate(rng.poisson(30, 20))
+    ]
+    truth = pd.DataFrame(
+        {
+            "location": ["CD", "CD-IT", "CD-NK"],
+            "target_end_date": ["2026-09-05"] * 3,
+            "truth": [30, 20, 10],
+        }
+    )
+    floats = pd.DataFrame(rows)
+    mixed = floats.astype({"value": object})
+    want = energy_scores(floats, truth, unit=("origin",))
+    got = energy_scores(
+        mixed, truth.astype({"truth": object}), unit=("origin",)
+    )
+    pd.testing.assert_frame_equal(got, want)
+
+
 def test_relative_skill_is_mean_over_mean_on_the_matched_set() -> None:
     # The model has no forecast for week 3, so it is left out of both
     # means. Mean over mean is (1 + 9) / (2 + 3) = 2, not the mean of the

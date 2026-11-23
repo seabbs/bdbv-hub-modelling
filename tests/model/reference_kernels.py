@@ -14,7 +14,7 @@ def backsample(missing: ArrayLike, pmf: ArrayLike) -> jax.Array:
     r"""Spread missing-onset cases back from report day with a delay pmf.
 
     $a(s) = \sum_d m(s + d) \hat f(d)$, the hub's back-sampling in
-    expectation (`bdbvhub.data.delays.expected_imputed_onsets`).
+    expectation (`nowcastbdbv.data.delays.expected_imputed_onsets`).
     Mass that would fall before day 0 is lost.
 
     Parameters

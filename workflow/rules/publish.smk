@@ -1,5 +1,8 @@
 # Publishing checkpoints.
 #
+# A checkpoint is a run's `n<N>` folder or an interim one,
+# `interim/s<step>` (`finetune.interim`), the `{ck}` wildcard.
+#
 # `verify_checkpoint` checks that a checkpoint's hash recomputes from its
 # commit (`finetune-verify`); `publish_checkpoint` releases a
 # verified one (workflow/scripts/publish_checkpoint.py). Publishing writes
@@ -7,14 +10,18 @@
 # `finetune` or `all`.
 
 
+wildcard_constraints:
+    ck=r"n\d+|interim/s\d+",
+
+
 rule verify_checkpoint:
     input:
-        settings=f"{TRAIN}/n{{n}}/settings.json",
-        adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        settings=f"{TRAIN}/{{ck}}/settings.json",
+        adapter=f"{TRAIN}/{{ck}}/finetuned-ckpt/adapter_model.safetensors",
     output:
-        f"{TRAIN}/n{{n}}/verified.txt",
+        f"{TRAIN}/{{ck}}/verified.txt",
     log:
-        f"{TRAIN}/n{{n}}/verify.log",
+        f"{TRAIN}/{{ck}}/verify.log",
     localrule: True
     conda:
         TOOLS_ENV
@@ -28,11 +35,11 @@ rule publish_checkpoint:
     input:
         rules.verify_checkpoint.output,
         # An offloaded checkpoint is released with its held-out losses.
-        lambda wc: offloaded(wc.run, wc.n),
+        lambda wc: offloaded(wc.run, wc.ck[1:]) if wc.ck[0] == "n" else [],
     output:
-        f"{TRAIN}/n{{n}}/published.json",
+        f"{TRAIN}/{{ck}}/published.json",
     log:
-        f"{TRAIN}/n{{n}}/publish.log",
+        f"{TRAIN}/{{ck}}/publish.log",
     localrule: True
     conda:
         TOOLS_ENV
@@ -43,7 +50,7 @@ rule publish_checkpoint:
         exec >{log} 2>&1
         uv run python workflow/scripts/publish_checkpoint.py {params.where} {output}
         # An optional notification line; it never fails the rule.
-        uv run python workflow/scripts/notify.py "checkpoint n{wildcards.n} published:" \
+        uv run python workflow/scripts/notify.py "checkpoint {wildcards.ck} published:" \
             "$(cat {output})" || true
         """
 
