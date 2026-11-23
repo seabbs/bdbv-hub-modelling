@@ -1,4 +1,4 @@
-"""The BVDOutbreakSize-informed variant (tempered Rt pseudo-observation)."""
+"""The BVDOutbreakSize-informed variant (Rt pseudo-observation)."""
 
 import math
 from dataclasses import replace

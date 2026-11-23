@@ -233,8 +233,8 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "renewalbvd",
-            "Zone renewal informed by BVDOutbreakSize Rt, as a tempered "
-            "pseudo-observation; provinces are zone sums.",
+            "Zone renewal informed by BVDOutbreakSize Rt, as a "
+            "pseudo-observation with inflated SDs; provinces are zone sums.",
             base="BVD",
         ),
     )

@@ -172,10 +172,17 @@ class ModelConfig:
         `None` (default) estimates it with a log-normal prior; a number
         fixes it.
     bvd : bool
-        Add BVDOutbreakSize Rt as a tempered pseudo-observation
+        Add BVDOutbreakSize Rt as a pseudo-observation
         (`RtPseudoObservation`), when the vintage carries it.
-    bvd_alpha : float
-        Its tempering. 0 gives the model without it, exactly.
+    bvd_sd_inflation : float
+        Factor $\kappa \ge 1$ on the SDs of the BVDOutbreakSize Rt
+        estimates. It sets how much we trust an external estimate built
+        partly on the same case data as ours: at 1 we would count those
+        data twice at full weight, and larger values widen the estimates
+        so they move our Rt mainly where our own data are weak. It is set
+        by that judgement, like a prior, and is not tuned on scores.
+        $\sqrt{2}$ halves the precision, the power prior with tempering
+        0.5. `math.inf` gives the model without the term, exactly.
     dmax : int
         Maximum onset-to-report delay in days.
     delay_counts : {"multinomial", "dirichlet-multinomial"}
@@ -196,7 +203,7 @@ class ModelConfig:
     depletion: bool = True
     effective_population: float | None = None
     bvd: bool = False
-    bvd_alpha: float = 0.5
+    bvd_sd_inflation: float = 2.0**0.5
     dmax: int = 60
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"

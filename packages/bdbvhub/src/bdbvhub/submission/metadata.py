@@ -132,7 +132,7 @@ MODEL_METADATA = {
         "methods": (
             "A renewal model per health zone with pooled Rt, importation and "
             "depletion, with Rt tied to the newest BVDOutbreakSize estimates "
-            "by a tempered likelihood. Provinces are zone sums."
+            "with their SDs inflated. Provinces are zone sums."
         ),
         "methods_long": (
             "We model infections in each health zone with recent cases with "
@@ -144,8 +144,8 @@ MODEL_METADATA = {
             "Zones with no recent case take a random walk introduction layer. "
             "The model's national, province and zone Rt in the week of the "
             "newest BVDOutbreakSize release published by the cut-off are tied "
-            "to that release's Rt estimates by a likelihood term tempered by "
-            "0.5. " + _ZONE_SUMS + _RENEWAL_OBSERVATION
+            "to that release's Rt estimates by a likelihood term with their "
+            "SDs inflated by 1.41. " + _ZONE_SUMS + _RENEWAL_OBSERVATION
         ),
         "data_inputs": (
             _RENEWAL_INPUTS + " The newest BVDOutbreakSize release published "
