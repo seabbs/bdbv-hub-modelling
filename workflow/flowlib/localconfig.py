@@ -8,7 +8,8 @@ order, or of the environment; a line that uses itself (`ROOT=$ROOT/x`)
 takes the environment's value, empty if unset. Nothing else of the
 shell's syntax is read (no `~`, `${X:-y}` or `$(...)`). A variable set in
 the environment wins over the file. With no file everything runs on this
-machine.
+machine. The workflow refuses a file setting something nothing reads
+(`check`).
 
 Shell scripts read one setting with
 `python3 workflow/flowlib/localconfig.py KEY`.
@@ -26,6 +27,7 @@ from string import Template
 ROOT = Path(__file__).parents[2]
 DEFAULT = ROOT / "config" / "local.env"
 KEY = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+USES = re.compile(r"\$(?:\{([A-Z_][A-Z0-9_]*)\}|([A-Z_][A-Z0-9_]*))")
 
 DEFAULTS = (
     ("HOST_NAME", None),
@@ -127,18 +129,80 @@ def _unquote(value: str) -> str:
     return value
 
 
-def _lines(path: Path) -> list[tuple[str, str]]:
-    """Return the file's settings as written, as (key, value) pairs."""
-    if not path.is_file():
-        return []
+OPTIONAL = (
+    "BLOCK_LIMIT",
+    "CHRONOS_BATCH",
+    "DASHBOARD_CONFIG",
+    "EVAL_DEVICE",
+    "EVAL_THREADS",
+    "HF_HOME",
+    "MPS_HIGH_WATERMARK",
+    "PRECISION",
+    "REMOTE_MAILBOX",
+    "REMOTE_SCORE_CACHE",
+    "RUN",
+    "SCORE_DATES",
+)
+"""Settings read where set, with no default (`RUN` only to refuse it)."""
+
+KNOWN = frozenset(key for key, _ in DEFAULTS) | frozenset(OPTIONAL)
+"""Every setting something reads."""
+
+
+def lines_of(text: str) -> list[tuple[str, str]]:
+    """Return a local config's settings as written, as (key, value) pairs."""
     out = []
-    for line in path.read_text().splitlines():
+    for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         key, sep, value = line.partition("=")
         if sep and KEY.match(key):
             out.append((key, value))
     return out
+
+
+def _lines(path: Path) -> list[tuple[str, str]]:
+    """Return the file's settings as written, as (key, value) pairs."""
+    return lines_of(path.read_text()) if path.is_file() else []
+
+
+def check(
+    path: Path | str | None = None, environ: Mapping[str, str] | None = None
+) -> None:
+    """Raise if the local config sets something nothing reads.
+
+    A setting outside `KNOWN` is allowed only where another line uses it
+    (`$NAME` or `${NAME}`), so a mistyped name fails here instead of
+    being ignored.
+
+    Parameters
+    ----------
+    path
+        The local config; by default `$LOCAL_CONFIG`, else
+        `config/local.env`.
+    environ
+        The environment; by default `os.environ`.
+
+    Raises
+    ------
+    ValueError
+        Naming each setting nothing reads.
+    """
+    env = os.environ if environ is None else environ
+    if path is None:
+        path = env.get("LOCAL_CONFIG") or DEFAULT
+    pairs = _lines(Path(path))
+    used = {
+        m.group(1) or m.group(2)
+        for _, value in pairs
+        for m in USES.finditer(value)
+    }
+    unread = sorted({k for k, _ in pairs} - KNOWN - used)
+    if unread:
+        raise ValueError(
+            f"{path} sets {', '.join(unread)}, which nothing reads: "
+            "config/local.env.example lists the settings"
+        )
 
 
 def read(
