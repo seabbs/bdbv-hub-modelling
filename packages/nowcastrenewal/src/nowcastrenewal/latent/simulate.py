@@ -175,9 +175,11 @@ def simulate_latent(
     # An established epidemic ran at its level before the span too: its
     # onsets take that history, about the level over the mean incubation.
     group = strata[".group"].to_numpy().astype(int) - 1
-    history = 0.0 if early else np.where(on, unit, 0.0) * _vector(
-        v, "incubation_mean"
-    )[group]
+    history = (
+        0.0
+        if early
+        else np.where(on, unit, 0.0) * _vector(v, "incubation_mean")[group]
+    )
     if (np.asarray(start()).sum(axis=0) + history > population).any():
         raise ValueError("an established epidemic larger than its population")
     places = sorted(strata["place"].unique())

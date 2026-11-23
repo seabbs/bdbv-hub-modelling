@@ -455,5 +455,6 @@ def test_places_nest_in_two_to_six_regions(grid):
             seen.add(k)
         # Every region has a place, and regions are as even as they can be.
         sizes = np.bincount(region, minlength=k + 1)[1:]
-        assert sizes.min() >= 1 and sizes.max() - sizes.min() <= 1
+        assert sizes.min() >= 1
+        assert sizes.max() - sizes.min() <= 1
     assert seen == {2, 3, 4, 5, 6}
