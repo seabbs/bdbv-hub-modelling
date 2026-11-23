@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from nowcastgermany.evaluation import load_germany_config
-from nowcastgermany.site_check import main
+from nowcastgermany.reporting import check_site as main
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "config" / "germany.toml"

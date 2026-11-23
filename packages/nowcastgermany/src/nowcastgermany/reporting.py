@@ -11,7 +11,7 @@ the data each date saw (`bdbvhubrenewal germany-asof`).
 Only the development half, nowcast dates before the split date, is shown:
 the results are filtered to it, and the page refuses to write a nowcast
 date on or after it (`held_out_leaks`), which CI checks again on the built
-site (`germany-site-check`, `site_check`).
+site (`germany-site-check`, `check_site`).
 The configured hidden models start switched off.
 The fine-tuned models' forecasts come from the store
 (`nowcastgermany.store`); the page names the checkpoint
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from collections.abc import Collection, Iterable, Sequence
 from pathlib import Path
 from typing import Final
@@ -43,6 +44,7 @@ from nowcastgermany.data import PLACE_NAMES, level
 from nowcastgermany.evaluation import (
     TEAM_NAMES,
     GermanyConfig,
+    load_germany_config,
     nowcast_dates,
     relative_scores,
 )
@@ -468,3 +470,38 @@ def germany_page(
         raise ValueError(
             "The German page names held-out dates: " + "; ".join(leaks[:5])
         )
+
+
+def check_site(argv: Sequence[str] | None = None) -> int:
+    """Check the built site's German page names no held-out nowcast date.
+
+    The `germany-site-check SITE [--config config/germany.toml]` command,
+    run from the repo root after `mkdocs build`. Reads the German page
+    and its summary and explorer JSON (`held_out_leaks`) and returns 1,
+    listing them, if any names a date on or after the split date (or
+    after it, in the page's prose), or if one is not built.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description=check_site.__doc__)
+    parser.add_argument("site", type=Path, nargs="?", default=Path("_site"))
+    parser.add_argument(
+        "--config", type=Path, default=Path("config/germany.toml")
+    )
+    args = parser.parse_args(argv)
+    split = load_germany_config(args.config).split_date
+    files = [
+        args.site / "germany" / "index.html",
+        args.site / "figures" / "scoresummary-germany-latest.json",
+        args.site / "figures" / "explorer-germany.json",
+    ]
+    missing = [str(f) for f in files if not f.exists()]
+    if missing:
+        print(f"Not built: {', '.join(missing)}", file=sys.stderr)
+        return 1
+    leaks = held_out_leaks(files, split)
+    for leak in leaks:
+        print(f"::error::held-out date on the German page: {leak}")
+    if not leaks:
+        print(f"The German page names no nowcast date from {split} on.")
+    return 1 if leaks else 0
