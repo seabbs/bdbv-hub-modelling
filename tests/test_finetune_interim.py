@@ -42,6 +42,7 @@ def _run(tmp_path):
                 "tokens": 9,
                 "held_out_loss": 0.18,
                 "seconds": 1.0,
+                "checkpoint_above": 0,
                 "code_commit": "c0ffee",
                 "code_sha256": {},
             }
