@@ -1,6 +1,6 @@
 """Checkpoint scoring units' commands and the German report's arguments.
 
-A unit is one `nowcastfoundation.checkpoint` study for one checkpoint
+A unit is one `nowcastgermany.checkpoint` study for one checkpoint
 label, cached under its study folder (rules/score.smk). `Scoring` holds
 what `score.smk`, `evaluate.smk` and the report rules ask of the units;
 `common.smk` builds one and binds its methods.
@@ -15,7 +15,7 @@ from typing import Any
 from flowlib import machine, notify, releases
 from flowlib.training import Training
 
-EVALUATE = "uv run --group chronos python -m nowcastfoundation.checkpoint"
+EVALUATE = "uv run --group chronos python -m nowcastgermany.checkpoint"
 """The scoring CLI."""
 
 REFERENCE_NAMES = {

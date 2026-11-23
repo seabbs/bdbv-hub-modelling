@@ -43,7 +43,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from nowcastfoundation.checkpoint import GERMANY_UNIT
+from nowcastgermany.checkpoint import GERMANY_UNIT
 from nowcastgermany.evaluation import (
     load_germany_config,
     nowcast_dates,

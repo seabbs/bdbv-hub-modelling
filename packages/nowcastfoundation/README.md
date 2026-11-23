@@ -18,7 +18,6 @@ It is for anyone using our fine-tuned checkpoints on their own data, and for wor
 - [`finetune`](src/nowcastfoundation/finetune/): training blocks (`chronos`), the streaming trainer (`stream`), held-out scoring (`evaluate`) and hash checks (`verify`).
 - [`series_bias`](src/nowcastfoundation/series_bias.py): the attention bias that ties a place's series together and to its parent.
 - [`sidecar`](src/nowcastfoundation/sidecar.py): an offloaded checkpoint's held-out losses.
-- [`checkpoint`](src/nowcastfoundation/checkpoint.py): scoring each published checkpoint against the references.
 - [`live_checkpoint`](src/nowcastfoundation/live_checkpoint.py), [`live_checkpoint_page`](src/nowcastfoundation/live_checkpoint_page.py): the live run's newest checkpoints as preliminary results.
 - [`simulate`](src/nowcastfoundation/simulate.py): province outbreaks published as hub-style releases, for backtests and the docs' examples.
 - [`r/`](r/): an R package of the R simulation code. Tests load it to check the latent components against R.

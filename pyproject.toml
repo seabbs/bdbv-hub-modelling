@@ -254,8 +254,6 @@ ignore_imports = [
   "nowcasteval.plots -> bdbvhub.reporting.site",
   "nowcasteval.plots -> nowcastbaselines.chain",
   "nowcasteval.scoresummary -> bdbvhub.reporting.site",
-  "nowcastfoundation.checkpoint -> nowcastgermany.data",
-  "nowcastfoundation.checkpoint -> nowcastgermany.evaluation",
   "nowcastfoundation.simulate -> bdbvhub.data.delays",
   "nowcastfoundation.simulate -> bdbvhub.data.tidy",
   "nowcastgermany.evaluation -> bdbvhub.data.tidy",

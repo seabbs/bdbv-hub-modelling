@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from nowcastfoundation.checkpoint import GERMANY_UNIT
+from nowcastgermany.checkpoint import GERMANY_UNIT
 from nowcastgermany.evaluation import load_germany_config
 from nowcastgermany.store import (
     STORED_MODELS,
