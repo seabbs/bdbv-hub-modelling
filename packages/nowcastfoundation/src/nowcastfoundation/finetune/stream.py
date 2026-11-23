@@ -39,8 +39,10 @@ import shutil
 import subprocess
 import time
 import zlib
+from collections.abc import Callable
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -72,6 +74,8 @@ evals (the default of `--by-source-every`)."""
 EVAL_MODES = ("local", "offload")
 """Where held-out evaluation runs (`--eval`)."""
 HELD_OUT_BLOCKS = "held-out-blocks.pkl"
+HELD_OUT_KEY = "held-out-blocks.json"
+"""What the saved held-out blocks were cut from (`held_out_blocks`)."""
 """The held-out blocks an offloaded run saves for its evaluator."""
 
 POLL = 60
@@ -1534,6 +1538,31 @@ def save_blocks(blocks: list[dict], path: Path) -> None:
     tmp.rename(path)
 
 
+def held_out_blocks(
+    out: Path, key: dict[str, Any], cut: Callable[[], list[dict]]
+) -> list[dict]:
+    """Return the held-out blocks, cut once for each `key`.
+
+    `key` holds everything the cut depends on: the outbreaks, seeds,
+    settings and code. Blocks saved under the same key are loaded, so a
+    restart or the next segment skips the cut (about 20 minutes on the
+    CPU for 90 outbreaks); otherwise `cut()`'s are saved with the key.
+    """
+    key = json.loads(json.dumps(key))
+    path, saved = out / HELD_OUT_BLOCKS, out / HELD_OUT_KEY
+    if (
+        path.is_file()
+        and saved.is_file()
+        and json.loads(saved.read_text()) == key
+    ):
+        return load_blocks(path)
+    blocks = cut()
+    saved.unlink(missing_ok=True)
+    save_blocks(blocks, path)
+    saved.write_text(json.dumps(key))
+    return blocks
+
+
 def check_cadence(eval_every: int, by_source_every: int) -> None:
     """Raise unless both are positive and by source is on monitor steps."""
     if eval_every <= 0 or by_source_every <= 0:
@@ -1624,7 +1653,6 @@ def main(root: Path | None = None) -> None:
         time.sleep(POLL)
     held = held[: args.holdout]
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
-    report(stage=f"cutting held-out blocks of {len(held)} outbreaks")
     # Checkpointing follows from the memory budget; the blocks and steps
     # do not, so every machine trains on the same ones.
     checkpoint_large_batches(args.checkpoint_above)
@@ -1644,17 +1672,37 @@ def main(root: Path | None = None) -> None:
             ft.BLOCK_LIMIT,
         ),
     )
-    held_pairs, empty = cut_in_workers(
-        pool, sim_dir, held, args.seed, k, args.cut_workers
-    )
-    val = [b for _, b in held_pairs]
-    log(f"held-out: {record_views(out, held_pairs, 'held-out')}")
-    if offload:
-        save_blocks(val, out / HELD_OUT_BLOCKS)
-    log(
-        f"{len(held)} held-out outbreaks, {len(val)} blocks, "
-        f"{len(empty)} skipped with no rows"
-    )
+
+    def cut_held_out() -> list[dict]:
+        report(stage=f"cutting held-out blocks of {len(held)} outbreaks")
+        held_pairs, empty = cut_in_workers(
+            pool, sim_dir, held, args.seed, k, args.cut_workers
+        )
+        log(f"held-out: {record_views(out, held_pairs, 'held-out')}")
+        log(f"held-out: {len(empty)} skipped with no rows")
+        return [b for _, b in held_pairs]
+
+    # Everything the cut depends on; the same key loads the saved blocks.
+    key = {
+        "outbreaks": held,
+        "seed": args.seed,
+        "blocks_per_simulation": k,
+        "max_series": ft.MAX_SERIES,
+        "sources": list(ft.SOURCES),
+        "univariate_share": ft.UNIVARIATE_SHARE,
+        "draws": DRAWS_PER_PASS,
+        "subset_seed": SUBSET_SEED,
+        "grid_sha256": ft._sha256(Path(args.grid_file)),
+        "loss_horizon_days": ft.LOSS_HORIZON_DAYS,
+        "quiet_min_cases": ft.QUIET_MIN_CASES,
+        "block_limit": ft.BLOCK_LIMIT,
+        "code_sha256": {
+            **{n: ft.code_sha256(p) for n, p in ft.CODE.items()},
+            ft.TRAINER: ft._sha256(Path(__file__)),
+        },
+    }
+    val = held_out_blocks(out, key, cut_held_out)
+    log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = torch_device(args.device)
