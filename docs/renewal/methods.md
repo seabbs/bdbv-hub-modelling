@@ -60,7 +60,7 @@ We add its Rt estimates to our model as a down-weighted pseudo-observation of ou
 We take the newest BVDOutbreakSize release whose files were updated by the forecast's cut-off and whose joint fit's worst R-hat is at most 1.1 ([Data methods](../methods/data.md#bvdoutbreaksize-estimates)).
 At that release's data cut-off, our infection-weighted national Rt is matched to the release's national log Rt, and each patch's Rt relative to national is matched to the patch's estimate.
 Each fitted zone with a zone estimate in the release gets a term of its own in the same way.
-The terms are normal, with the release's SDs multiplied by an inflation factor $\kappa = \sqrt{2} \approx 1.41$, a power prior with tempering $1/\kappa^2 = 0.5$[^ibrahim].
+The terms are normal, with the release's SDs multiplied by an inflation factor $\kappa = 1.5$, a power prior with tempering $1/\kappa^2 \approx 0.44$[^ibrahim].
 $\kappa$ says how much we trust an external estimate built partly on the same case data as ours.
 So the external estimates move our Rt where our data are weak but do not override them.
 The term adds no parameters, and $\kappa = \infty$ gives `renewal` exactly.
