@@ -48,14 +48,26 @@ def test_the_chronos_job_runs_every_torch_gated_test_with_torch():
     assert "pytest" in runs
 
 
-@pytest.mark.parametrize(
-    ("name", "job"),
-    [("pages.yml", "prep"), ("baselinenowcast.yml", "fixtures")],
-)
-def test_backtests_and_fixtures_are_opt_in_on_pull_requests(name, job):
-    workflow = _workflow(name)
-    assert OPT_IN in workflow["jobs"][job]["if"]
+def test_backtests_are_opt_in_on_pull_requests():
+    workflow = _workflow("pages.yml")
+    assert OPT_IN in workflow["jobs"]["prep"]["if"]
     assert "labeled" in _triggers(workflow)["pull_request"]["types"]
+
+
+def test_r_live_checks_the_baselinenowcast_port_at_the_pin():
+    # R baselinenowcast runs live in r-live, slow sampler checks too; no
+    # fixtures or workflow of their own.
+    steps = _workflow("test.yml")["jobs"]["r-live"]["steps"]
+    text = yaml.safe_dump(steps)
+    assert (
+        "epinowcast/baselinenowcast@999d1ad50e27921a4078175d6315bbd655878888"
+        in text
+    )
+    assert "any::zoo" in text
+    runs = [s.get("run", "") for s in steps]
+    assert any("tests/baselinenowcast" in r and '-m ""' in r for r in runs)
+    assert not (WORKFLOWS / "baselinenowcast.yml").exists()
+    assert not (ROOT / "tests" / "baselinenowcast" / "fixtures").exists()
 
 
 @pytest.mark.parametrize(
