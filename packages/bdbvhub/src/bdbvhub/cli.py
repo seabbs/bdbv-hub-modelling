@@ -200,6 +200,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     back = sub.add_parser("backtest", help="Run the backtest.")
     back.add_argument("--config", default="config/backtest.toml")
+    back.add_argument(
+        "--samples",
+        type=int,
+        help="draws per forecast scored, in place of the config's "
+        "[samples] backtest",
+    )
     back.add_argument("--data", default=data_dir)
     back.add_argument("--models", nargs="*", default=None)
     back.add_argument("--results", default="results")
@@ -817,6 +823,8 @@ def _backtest(args: argparse.Namespace) -> int:
     from nowcastrenewal.forecaster import sampler_settings
 
     config = bt.load_config(args.config)
+    if args.samples is not None:
+        config = dataclasses.replace(config, score_samples=args.samples)
     bt.apply_sampler(config)
     host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
