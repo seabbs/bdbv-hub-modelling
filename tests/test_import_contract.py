@@ -57,7 +57,7 @@ STUDIES = ("nowcastgermany",)
 """Study packages, which build on the generic ones and never the reverse
 (Sam, 2026-11-23)."""
 
-STUDY_FREE = ("nowcastfoundation",)
+STUDY_FREE = ("nowcastfoundation", "nowcasteval")
 """Packages whose modules import no study yet, function-level imports
 included; the rest follow one PR at a time, then an import-linter
 contract replaces this list."""

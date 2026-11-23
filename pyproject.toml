@@ -247,8 +247,6 @@ ignore_imports = [
   "nowcasteval.pairing -> bdbvhub.data.tidy",
   "nowcasteval.pairing -> bdbvhub.store.store",
   "nowcasteval.pairing -> nowcastbaselines.randomwalk",
-  "nowcasteval.pairing -> nowcastgermany.data",
-  "nowcasteval.pairing -> nowcastgermany.evaluation",
   "nowcasteval.plots -> bdbvhub.data.delays",
   "nowcasteval.plots -> bdbvhub.data.tidy",
   "nowcasteval.plots -> bdbvhub.reporting.site",
