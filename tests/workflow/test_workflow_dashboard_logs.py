@@ -270,3 +270,21 @@ def test_a_segment_waits_on_the_batches_it_needs_that_are_missing(tmp_path):
     assert logs.waiting_batches(few, 400) == list(range(33410, 33421))
     # A run with no seed list waits on nothing it can name.
     assert logs.waiting_batches(tmp_path / "none", 400) == []
+
+
+def test_a_run_reads_only_its_segment_logs(tmp_path):
+    (tmp_path / "train").mkdir()
+    for old in ("train.log", "train-launcher.log"):
+        (tmp_path / old).write_text(
+            LINE.format(step=10, loss=0.5, held=0.4) + "\n"
+        )
+    (tmp_path / "train" / "n250.log").write_text(
+        LINE.format(step=20, loss=0.45, held=0.39) + "\n"
+    )
+    assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [20]
+
+
+def test_a_pid_file_says_nothing_about_the_trainer(tmp_path):
+    # Only the stream status counts: nothing writes trainer.pid.
+    (tmp_path / "trainer.pid").write_text(f"{os.getpid()}\n")
+    assert logs.trainer_state(tmp_path) == ("unknown", None)

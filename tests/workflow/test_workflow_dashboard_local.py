@@ -205,3 +205,15 @@ datasets:
     assert "ebola rows" not in mail
     # Agent names are not BDBV lines.
     assert "bdbv-scoring" in mail
+
+
+def test_the_committed_datasets_are_quantiles_with_nowcasts():
+    import yaml
+
+    config = yaml.safe_load(
+        (context.ROOT / "workflow" / "config.yaml").read_text()
+    )
+    datasets = config["dashboard"]["datasets"]
+    assert "held_out" not in [d["key"] for d in datasets]
+    for d in datasets:
+        assert not {"format", "missing", "truth_source"} & set(d)
