@@ -34,7 +34,7 @@ from nowcasteval.scoring import wis_quantile
 
 from .paperstyle import WIS_PARTS
 from .rows import num, sources
-from .runs import Classifier, Reference, Run, shade, split_label
+from .runs import Classifier, Reference, Run, split_label
 
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 """The cached quantile levels."""
@@ -621,8 +621,8 @@ def meta(
     """Return each series' label, run, size and colour, in page order.
 
     References first, in their configured order, then other reference
-    models by name, then each run's checkpoints by size, shaded light to
-    dark when the run has a hue.
+    models by name, then each run's checkpoints by size, in the run's
+    colour.
     """
     which = Classifier(run_list, references, excluded)
     refs = {r.key: r for r in references}
@@ -654,7 +654,7 @@ def meta(
             run = which.run_of(built["folders"].get(s, s))
             if run is None:
                 continue
-            n = sizes.get(s) or by_key[run].n.get(s) or 0
+            n = sizes.get(s) or 0
             label = (
                 f"{by_key[run].label} n{n} {s}"
                 if n
@@ -670,8 +670,7 @@ def meta(
             else (1, run_rank[m["run"]], m["n"], m["id"])
         )
     )
-    for run in run_list:
-        group = [m for m in out if m["run"] == run.key]
-        for i, m in enumerate(group):
-            m["color"] = shade(run, i, len(group))
+    for m in out:
+        if m["run"] != "ref":
+            m["color"] = by_key[m["run"]].colour
     return out
