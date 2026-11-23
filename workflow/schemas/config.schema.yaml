@@ -68,6 +68,7 @@ $defs:
       eval: {enum: [local, offload]}
       series_bias: {type: boolean}
       layout: {enum: [ragged, complete]}
+      real_training: {enum: [null, germany]}
       note: {type: string}
       check_at: {$ref: "#/$defs/positive"}
 
@@ -149,6 +150,7 @@ properties:
           - eval
           - series_bias
           - layout
+          - real_training
           - note
           - check_at
 

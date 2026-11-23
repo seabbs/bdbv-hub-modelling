@@ -15,7 +15,7 @@ TWO = {
 
 def test_the_committed_runs_are_run_a_and_its_variants():
     cfg = runs.load_config()
-    assert list(cfg["runs"]) == ["runa", "noslots", "nodelays"]
+    assert list(cfg["runs"]) == ["runa", "noslots", "nodelays", "realdata"]
 
 
 def test_only_run_a_trains_until_the_variants_are_due():
@@ -92,6 +92,7 @@ def _run(**ft):
         "series_bias": False,
         "bias_lr": 0.001,
         "layout": "ragged",
+        "real_training": None,
     }
     return runs.Run("r", base | ft, "/x/r")
 
@@ -142,3 +143,26 @@ def test_a_variant_trains_only_after_the_runs_finetune_trains(tmp_path):
         ]
         == 1
     )
+
+
+def test_the_real_data_run_is_run_a_with_the_german_blocks():
+    cfg = runs.load_config()
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    a, b = found["runa"].ft, found["realdata"].ft
+    assert (a["real_training"], b["real_training"]) == (None, "germany")
+    assert {k: v for k, v in a.items() if k != "real_training"} == {
+        k: v for k, v in b.items() if k != "real_training"
+    }
+    blocks = "/data/runs/realdata/real-training.pkl"
+    assert f"--real-training {blocks}" in runs.trainer_options(
+        found["realdata"]
+    )
+    assert "--real-training" not in runs.trainer_options(found["runa"])
+
+
+def test_the_real_data_run_cuts_its_german_blocks_before_training(tmp_path):
+    target = f"{tmp_path}/runs/realdata/real-training.pkl"
+    out = dry_run(tmp_path, target, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "nowcastfoundation.finetune.germany" in out.stdout
+    assert "germany_triangle" in out.stdout

@@ -191,6 +191,24 @@ rule block_combinations:
         "$(dirname {input}) {output} > {log} 2>&1"
 
 
+rule real_training_blocks:
+    # A run's real-data training blocks (`finetune.real_training`): the
+    # German triangle's reports before the first scored German date, cut
+    # as the German tasks lay it out (nowcastfoundation.finetune.germany).
+    input:
+        f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv",
+    output:
+        f"{RUN}/real-training.pkl",
+    log:
+        f"{RUN}/logs/real-training.log",
+    conda:
+        TOOLS_ENV
+    threads: 4
+    shell:
+        "uv run python -m nowcastfoundation.finetune.germany {input} {output} "
+        "--workers {threads} > {log} 2>&1"
+
+
 rule finetune:
     input:
         finetune_inputs,
