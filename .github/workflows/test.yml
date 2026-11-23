@@ -178,10 +178,11 @@ jobs:
           printf '%s\n' "${files[@]}"
           uv run --no-sync pytest -q -m "" --durations=30 "${files[@]}"
 
-  # Live checks of the simulator's PyRenew components against the R
-  # packages they stand in for (tests/model/r_live.py): epinowcast's own
-  # Stan functions and primarycensored. R_LIVE_REQUIRED makes a missing
-  # package fail rather than skip.
+  # Live checks against the R packages our code stands in for
+  # (tests/model/r_live.py): epinowcast's own Stan functions and
+  # primarycensored for the simulator's PyRenew components, and
+  # baselinenowcast for its port. R_LIVE_REQUIRED makes a missing package
+  # fail rather than skip.
   r-live:
     runs-on: ubuntu-latest
     if: >-
@@ -199,11 +200,14 @@ jobs:
         with:
           use-public-rspm: true
           extra-repositories: https://stan-dev.r-universe.dev
-      # epinowcast at the commit the simulator's reporting ports.
+      # epinowcast at the commit the simulator's reporting ports, and
+      # baselinenowcast 0.2.2 (not on CRAN yet: the commit that set it).
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           packages: |
             epinowcast/epinowcast@e084b080
+            epinowcast/baselinenowcast@999d1ad50e27921a4078175d6315bbd655878888
+            any::zoo
             primarycensored@1.6.0
             any::cmdstanr
             any::jsonlite
@@ -222,3 +226,6 @@ jobs:
           tests/model/test_reporting_triangle.py
           tests/model/test_reporting_effects.py
           tests/model/test_reporting_expectation.py
+      # With the slow sampler checks.
+      - name: Live baselinenowcast checks
+        run: uv run pytest -q -m "" tests/baselinenowcast

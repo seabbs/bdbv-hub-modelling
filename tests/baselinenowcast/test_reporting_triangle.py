@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 import pytest
-from bnc_helpers import Case, from_na, read, read_vec
+from bnc_helpers import TOY, Case, from_na, read, read_vec
 
 from nowcastbaselines.baselinenowcast import (
     allocate_reference_times,
@@ -96,20 +96,20 @@ def test_rolling_sum_matches_numpy() -> None:
 
 @pytest.mark.parametrize("structure", [0, 9, [3, 3]])
 def test_structure_aborts(structure: object) -> None:
-    c = from_na(read("toy", "tri"))
+    c = from_na(TOY)
     with pytest.raises(ValueError):
         apply_reporting_structure(*c, structure=structure)
 
 
 @pytest.mark.parametrize("n", [-1, 99])
 def test_truncate_aborts_on_n_out_of_range(n: int) -> None:
-    v, m = from_na(read("toy", "tri"))
+    v, m = from_na(TOY)
     with pytest.raises(ValueError):
         truncate_to_rows(v, m, n=n)
 
 
 def test_allocation_aborts() -> None:
-    _, m = from_na(read("toy", "tri"))
+    _, m = from_na(TOY)
     with pytest.raises(ValueError):
         allocate_reference_times(m, scale_factor=-1)
     with pytest.raises(ValueError):

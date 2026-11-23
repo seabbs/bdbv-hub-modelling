@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from bnc_helpers import Case, read, read_ints
+from bnc_helpers import NB_DRAWS, NB_SAMPLE, Case, first_delays, read
 
 from nowcastbaselines.baselinenowcast import (
     apply_delay,
@@ -28,6 +28,7 @@ pytestmark = pytest.mark.filterwarnings(
 )
 
 N_DRAW = 20000
+MODES = ["id", "agg", "week"]
 
 
 def _moments(x: jax.Array) -> tuple[float, float]:
@@ -60,9 +61,8 @@ def _agree(
 
 
 def test_sample_nb_matches_r_moments() -> None:
-    par = read("nb", "sample_par")
     mom = read("nb", "sample_mom")
-    for i, (mu, size) in enumerate(par):
+    for i, (mu, size) in enumerate(NB_SAMPLE):
         key = jax.random.key(i)
         x = sample_nb(key, jnp.full((N_DRAW,), mu), size)
         m, v = _moments(x)
@@ -72,7 +72,7 @@ def test_sample_nb_matches_r_moments() -> None:
             N_DRAW,
             np.array(mom[i, 0]),
             np.array(mom[i, 1]),
-            20000,
+            NB_DRAWS,
         )
 
 
@@ -101,14 +101,16 @@ def _prepared(case: Case) -> tuple[jax.Array, jax.Array]:
     return pre, apply_delay(pre, case.mask, pmf)
 
 
-@pytest.mark.parametrize("mode", ["id", "agg"])
+@pytest.mark.parametrize("mode", MODES)
 @pytest.mark.slow
 def test_sample_nowcasts_match_r_in_distribution(case: Case, mode: str) -> None:
-    n_r = read_ints(case.name, "draws")[0]
+    n_r = case.draws
     r = read(case.name, f"samples_{mode}")
-    kwargs = {}
-    if mode == "agg":
+    kwargs: dict[str, object] = {}
+    if mode in ("agg", "week"):
         kwargs["ref_time_aggregator"] = partial(rolling_sum, k=case.k)
+    if mode == "week":
+        kwargs["delay_aggregator"] = first_delays
     out = baselinenowcast(
         case.values, case.mask, jax.random.key(11), draws=n_r, **kwargs
     )
