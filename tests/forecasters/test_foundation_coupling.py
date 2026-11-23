@@ -265,3 +265,24 @@ def test_earlier_blocks_raise_errors_other_than_no_rows(
     monkeypatch.setattr(foundation, "hub_triangle", broken)
     with pytest.raises(ValueError, match="malformed"):
         get_model("fm_chronos_daily_ragged").forecast(task)
+
+
+def test_a_block_over_the_limit_is_coupled_as_one_block(
+    monkeypatch: pytest.MonkeyPatch, couplings: list, task: ForecastTask
+):
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
+    model = get_model("fm_chronos_daily_ragged")
+    per = 2 + model.lag_count(task)
+    cut = dataclasses.replace(model, block_limit=3 * per)
+    assert len(cut._views(*_places_and_triangle(cut, task))) > 1
+    out = cut.forecast(task)
+    assert not out.empty
+    # The views' quantiles are put back together and coupled once, by the
+    # whole block's fit: its Schaake windows span every place.
+    ((method, fit),) = couplings
+    assert (method, fit["chosen_by"]) == ("schaake", "fallback")
+
+
+def _places_and_triangle(model, task):
+    rows, places, weeks = model._rows(task)
+    return places, model._triangle(rows, places, weeks[-1])
