@@ -160,6 +160,7 @@ def _latent(sim: tuple, key: int, pad: int, lag_bucket: int = 1) -> Any:
         )
 
 
+@pytest.mark.slow
 def test_padded_latent_runs_are_the_runs_without_padding() -> None:
     ran = 0
     for i, sim in enumerate(_sims(4242, 12)):
@@ -217,6 +218,7 @@ def _revised(seed: int) -> tuple:
     raise RuntimeError("no simulation with revisions ran")
 
 
+@pytest.mark.slow
 def test_bucketed_outbreaks_expect_the_same_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -262,6 +264,7 @@ def _totals(sim: tuple, keys: range) -> np.ndarray:
     return np.asarray(out, dtype=float)
 
 
+@pytest.mark.slow
 def test_bucketed_counts_match_in_distribution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

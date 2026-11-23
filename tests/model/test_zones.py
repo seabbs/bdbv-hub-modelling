@@ -119,6 +119,7 @@ def test_nested_basis_leaves_out_inactive_places():
     assert within.shape == (5, 1)
 
 
+@pytest.mark.slow
 def test_one_zone_per_province_is_the_province_model(
     outbreak, sim_tables, table
 ):
