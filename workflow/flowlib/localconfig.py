@@ -130,6 +130,7 @@ def _unquote(value: str) -> str:
 
 
 OPTIONAL = (
+    "BLOCK_LIMIT",
     "CHRONOS_BATCH",
     "DASHBOARD_CONFIG",
     "EVAL_DEVICE",
