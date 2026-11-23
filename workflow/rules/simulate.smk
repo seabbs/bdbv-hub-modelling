@@ -119,7 +119,8 @@ rule simulator_benchmark:
         ),
     shell:
         """
-        ENW_DRAWS={params.draws} JAX_PLATFORMS={wildcards.device} {params.jax_env} \
+        ENW_DRAWS={params.draws} JAX_PLATFORMS={wildcards.device} \
+            {params.jax_env} \
             XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
             uv run --frozen python -m nowcastfoundation.simulator.bench \
             {params.grid} {wildcards.n} {wildcards.seed} {output} >{log} 2>&1
