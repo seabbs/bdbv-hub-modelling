@@ -35,7 +35,6 @@ __all__ = [
     "WIS_PART_FILLS",
     "WIS_PART_STACK",
     "model_label",
-    "tint",
 ]
 
 MODEL_LABELS: Final[dict[str, str]] = {
@@ -218,10 +217,3 @@ def model_label(model: str) -> str:
     if model.endswith(_REAL) and " (" in base:
         return f"Fine-tuned on real data ({base.split(' (', 1)[1]}"
     return MODEL_LABELS.get(model, model)
-
-
-def tint(colour: str, share: float) -> str:
-    """Return `share` of a hex `colour` mixed with white, as hex."""
-    rgb = [int(colour.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4)]
-    mixed = [round(share * c + (1 - share) * 255) for c in rgb]
-    return "#" + "".join(f"{c:02x}" for c in mixed)
