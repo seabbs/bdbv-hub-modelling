@@ -657,3 +657,55 @@ def test_a_german_unit_redoes_dates_forecast_from_other_tasks(
     assert unrecorded in done
     assert current not in done
     assert ck.written(root)[old] == TASKS
+
+
+def test_a_reference_unit_redoes_only_the_models_whose_code_changed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The reference's forecasts do not depend on a checkpoint, so each
+    # date's rows of a model are kept until that model's code or the
+    # German config changes (`model_key`); a change redoes that model's
+    # rows alone and keeps the others'.
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config("config/germany.toml")
+    dates = de.nowcast_dates(config)
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    asked: list = []
+    real = de.germany_forecasts
+
+    def forecasts(models, *args, **kwargs):
+        asked.append(tuple(models))
+        return real(models, *args, **kwargs).assign(model=models[0])
+
+    monkeypatch.setattr(ck, "label_models", lambda *_a, **_k: ("a", "b"))
+    keys = {"a": "code-a", "b": "code-b"}
+    monkeypatch.setattr(ck, "model_key", lambda m: keys[m])
+    root = tmp_path / ck.GERMANY_UNIT / ck.REFERENCE
+    monkeypatch.setattr(de, "germany_forecasts", forecasts)
+    ck.germany_unit(tmp_path, ck.REFERENCE)
+    assert asked == [("a", "b")]
+    keys["b"] = "code-b2"
+    asked.clear()
+    ck.germany_unit(tmp_path, ck.REFERENCE)
+    assert asked == [("b",)]
+    one = pd.read_csv(root / f"{dates[0]}.csv.gz")
+    assert set(one["model"]) == {"a", "b"}
+    asked.clear()
+    ck.germany_unit(tmp_path, ck.REFERENCE)
+    assert asked == []
+
+
+def test_a_checkpoint_unit_keys_its_dates_on_the_task_store_alone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A checkpoint's forecasts are its own: its dates are kept while the
+    # task store is the same, whatever the models' code.
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    monkeypatch.setattr(ck, "model_key", lambda _m: "changes every call")
+    ck.germany_unit(tmp_path, "n100")
+    seen.clear()
+    ck.germany_unit(tmp_path, "n100")
+    assert seen == []
