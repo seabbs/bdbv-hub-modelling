@@ -2030,6 +2030,7 @@ def _germany_backtest(args: argparse.Namespace) -> int:
 def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
     from nowcasteval import pairing
     from nowcastgermany import evaluation as de
+    from nowcastgermany import pairing as germany_pairing
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -2058,7 +2059,9 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
                 done / f"{date}-rho.csv.gz",
             )
             if not (path.exists() and rho_path.exists()):
-                scored, rho = pairing.germany_sensitivity(data, config, [date])
+                scored, rho = germany_pairing.germany_sensitivity(
+                    data, config, [date]
+                )
                 write_csv(scored, path)
                 write_csv(rho, rho_path)
         scores = pd.concat(
