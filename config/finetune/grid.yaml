@@ -140,12 +140,13 @@ factors:
     parametric: 1
     non_parametric: 1
     both: 1
-  # Weekday effects are rare and mostly small: on counts by
-  # reference date in a third, on the delay by reference weekday in a
-  # third, and on reports (daily reporting only) in half.
+  # Weekday effects on counts by reference date in two thirds, as most
+  # daily surveillance shows one (BDBV and German daily counts both do);
+  # on the delay by reference weekday in a third, and on reports (daily
+  # reporting only) in half.
   reference_dow:
-    'no': 2
-    'yes': 1
+    'no': 1
+    'yes': 2
   delay_dow:
     'no': 2
     'yes': 1
@@ -691,16 +692,16 @@ distributions:
     why: a backlog of x2 to x5 on the mean delay
   dow_sd:
     dist: lognormal
-    median: 0.12
-    sdlog: 0.5
+    median: 0.2
+    sdlog: 0.6
     layer: reporting
-    why: weekday effects on reports mostly a few to 15%, a tail to strong
+    why: weekday effects on reports with a log weekday profile sd of 0.075-0.54 (5-95%), spanning BDBV's daily onsets (0.13) and German hospitalisations by place and age (median 0.38)
   reference_dow_sd:
     dist: lognormal
-    median: 0.12
-    sdlog: 0.5
+    median: 0.2
+    sdlog: 0.6
     layer: reporting
-    why: weekday effects on counts mostly a few to 15%, a tail to strong
+    why: weekday effects on counts with a log weekday profile sd of 0.075-0.54 (5-95%), spanning BDBV's daily onsets (0.13) and German hospitalisations by place and age (median 0.38)
   delay_dow_sd:
     dist: lognormal
     median: 0.08
