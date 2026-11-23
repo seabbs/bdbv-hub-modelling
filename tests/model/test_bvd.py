@@ -171,8 +171,8 @@ def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
     assert np.isfinite(float(ld))
 
 
-def test_the_bvd_weight_is_an_sd_inflation_of_root_two():
-    # The BVDOutbreakSize SDs are inflated by sqrt(2) until Sam sets the
-    # value (the old tempering of 0.5).
-    assert BVD.bvd_sd_inflation == pytest.approx(math.sqrt(2.0))
+def test_the_bvd_weight_is_an_sd_inflation_of_one_and_a_half():
+    # Sam's value (#768 item 5): the BVDOutbreakSize SDs are inflated by
+    # 1.5, a power prior with tempering 1 / 1.5^2.
+    assert BVD.bvd_sd_inflation == 1.5
     assert not hasattr(BVD, "bvd_alpha")
