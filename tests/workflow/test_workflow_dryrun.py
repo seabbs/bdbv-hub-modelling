@@ -1232,3 +1232,14 @@ def test_the_daily_comparison_scores_every_run_s_checkpoints(tmp_path):
     assert "rule compare_daily:" in out.stdout
     assert "rule daily_table:" in out.stdout
     assert f"{tmp_path}/runs/runa/reports/compare-daily.csv" in out.stdout
+
+
+def test_an_interim_checkpoint_verifies_then_releases(tmp_path):
+    # Lead 01:50 (Sam): the hub's fine-tuned model is an interim
+    # checkpoint (`finetune.interim`), released through the same rules.
+    where = tmp_path / "runs" / "runa" / "train" / "interim" / "s48100"
+    (where / "finetuned-ckpt").mkdir(parents=True)
+    (where / "settings.json").write_text("{}")
+    (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
+    jobs = dry(tmp_path, f"{where}/published.json", config=FT)
+    assert jobs == {"verify_checkpoint": 1, "publish_checkpoint": 1}
