@@ -89,13 +89,26 @@ def test_centred_matches_non_centred_in_distribution():
     np.testing.assert_allclose(a.std(0), b.std(0), rtol=0.06)
 
 
-def test_centred_needs_a_random_walk():
-    with pytest.raises(ValueError, match="centred"):
-        NonCentredRandomWalk(
-            DeterministicVariable("sd", 0.1),
-            half_life_rv=DeterministicVariable("h", 6.0),
-            centred=True,
+def test_a_centred_ar1_matches_the_non_centred_ar1_in_distribution():
+    from jax import random, vmap
+
+    half_life = DeterministicVariable("h", 3.0)
+    kw = {"n_fit": 8, "frozen": 1, "half_life_rv": half_life}
+    rw_nc = NonCentredRandomWalk(DeterministicVariable("sd", 0.3), **kw)
+    rw_c = NonCentredRandomWalk(
+        DeterministicVariable("sd", 0.3), centred=True, **kw
+    )
+
+    def draw(rw, key):
+        return seed(rw.sample, rng_seed=key)(
+            12, initial_value=1.0, n_processes=1
         )
+
+    keys = random.split(random.key(2), 4000)
+    a = vmap(lambda k: draw(rw_nc, k))(keys)
+    b = vmap(lambda k: draw(rw_c, k))(keys)
+    np.testing.assert_allclose(a.mean(0), b.mean(0), atol=0.03)
+    np.testing.assert_allclose(a.std(0)[2:], b.std(0)[2:], rtol=0.06)
 
 
 def test_centred_with_no_free_step_holds_the_start():

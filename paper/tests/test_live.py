@@ -88,7 +88,7 @@ def test_the_attention_bias_comparison_comes_from_checkpoint_scores() -> None:
     # One set per study and level, not pooled.
     assert {"German national, daily", "German states, daily"} <= set(out["set"])
     assert not any(name.startswith("BDBV") for name in out["set"])
-    assert "Held-out loss, all" not in set(out["set"])
+    assert "Validation loss, all" not in set(out["set"])
     assert set(out.columns) >= {"set", "run", "outbreaks", "score"}
 
 
@@ -173,3 +173,14 @@ def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
     assert COMPARISONS["delays"][0] in waiting
     assert COMPARISONS["realdata"][0] in waiting
     assert (tmp_path / "fig" / "compare-delays.png").is_file()
+
+
+def test_the_trainer_s_loss_is_named_the_validation_loss() -> None:
+    from paperpipe.evidence import COMPARISONS, comparison_rows
+
+    scores = _scores()
+    scores.loc[scores["study"] == "held_out", "level"] = "national"
+    labels = COMPARISONS["slots"][1]
+    out = comparison_rows(scores, "one-model", "no-slots", labels)
+    assert "Validation loss, national" in set(out["set"])
+    assert not out["set"].str.startswith("Held-out").any()

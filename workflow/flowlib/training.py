@@ -141,7 +141,7 @@ class Training:
         train = self.train_dir(run)
         return [f"{train}/n{n}/{SIDECAR}", f"{train}/evals/n{n}.done"]
 
-    def heldout_curve_inputs(self, wc: Any) -> list[str]:
+    def validation_curve_inputs(self, wc: Any) -> list[str]:
         """Return each of the run's checkpoints, with its held-out losses."""
         train, ns = self.train_dir(wc.run), self.runs[wc.run].ft["prefixes"]
         return [f"{train}/n{n}/settings.json" for n in ns] + [

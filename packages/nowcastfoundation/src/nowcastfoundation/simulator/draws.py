@@ -1,9 +1,8 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Draw a simulation's design and values from the grid config.
 
-The Python form of the R engine's `draw_design` and `draw_values`
-(`packages/nowcastfoundation/r/R/grid.R`, `design.R`): the same settings,
-names, sampling distributions and shares, read from the same grid file.
+Each setting, name, sampling distribution and share is read from the
+grid file (`config/finetune/grid.yaml`).
 A design holds the categorical settings and the structure they imply; the
 values hold every continuous setting, by layer.
 Vectors are lists, and place indices count from 1 as in R, so a design and
@@ -318,7 +317,7 @@ def stratum_values(
 
 
 def delay_q99(family: str, v: Mapping[str, Any]) -> float:
-    """Return the delay's 99th centile (the R engine's `delay_parameters`).
+    """Return the delay's 99th centile.
 
     With no parametric delay (`"none"`), the delay is geometric with the
     drawn mean, counted in failures as R's `qgeom`.
@@ -380,7 +379,7 @@ def draw_values(
     Returns
     -------
     dict
-        The values, under the R engine's names: scalars as numbers or
+        The values, under the grid's names: scalars as numbers or
         text, vectors as lists, place indices from 1.
     """
 

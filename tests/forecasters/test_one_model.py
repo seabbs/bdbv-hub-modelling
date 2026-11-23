@@ -119,10 +119,20 @@ def test_the_weekly_and_daily_finetuned_models_share_one_adapter(ft):
     assert weekly.checkpoint == ft.checkpoint
     assert (weekly.source, weekly.period) == ("weekly", None)
     assert (ft.source, ft.period) == ("daily", "rolling7")
-    # The zero-shot daily model has the same rolling rows; complete data
-    # alone has none.
+    # The zero-shot daily models have the same rolling rows, complete
+    # data too: the layouts differ only in the lag rows.
     assert get_model("fm_chronos_daily_ragged").period == "rolling7"
-    assert get_model("fm_chronos_daily_complete").period is None
+    assert get_model("fm_chronos_daily_complete").period == "rolling7"
+
+
+def test_a_complete_block_has_daily_and_rolling_rows_and_no_lags():
+    tri, start = daily_tri(), 10
+    rows = foundation.rolling_rows(tri, 7)
+    group = layout_block(tri, "complete", PLACES, start, period=rows)
+    np.testing.assert_array_equal(group["target"][:2], tri.final[:, :start])
+    np.testing.assert_array_equal(group["target"][2:], rows.totals[:, :start])
+    assert list(group["target_places"]) == [0, 1, 0, 1]
+    assert "past_covariates" not in group
 
 
 def _aggregate_sampler(store: list):
