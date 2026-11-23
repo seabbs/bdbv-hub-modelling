@@ -397,3 +397,12 @@ def test_reporting_delay_shapes_are_not_capped_at_2(grid):
     shape = _scipy(grid["distributions"]["delay_shape"])
     assert shape.ppf(0.975) > 3
     assert shape.ppf(0.025) < 0.3
+
+
+def test_strata_mostly_deviate_moderately_from_a_shared_path(grid):
+    # Lead 01:20: moderate strata deviations. Strata are mostly linked
+    # (one outbreak), not each an outbreak of its own.
+    link = grid["factors"]["strata_link"]
+    assert link["independent"] / sum(link.values()) <= 0.25
+    coupling = _scipy(grid["distributions"]["coupling"])
+    assert coupling.ppf(0.025) >= 0.5
