@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import datetime as dt
 import html
-import itertools
 import json
 import shutil
 import sys
@@ -44,6 +43,7 @@ from nowcasteval.plots import (
 )
 from nowcasteval.scorechart import write_score_chart
 from nowcasteval.scoresummary import summary_html, summary_rows
+from nowcasteval.scoring import pairwise_skill
 
 ROOT = Path(__file__).parents[2]
 
@@ -142,36 +142,16 @@ def labelled(frame: pd.DataFrame) -> pd.DataFrame:
 def pairwise(scores: pd.DataFrame, reference: str) -> pd.DataFrame:
     """Pairwise relative WIS, scaled to `reference` (the hubs' way).
 
-    For each pair of models, the ratio of their mean WIS on the cells
-    both forecast; a model's relative WIS is the geometric mean of its
-    ratios against every other model, divided by `reference`'s.
+    `nowcasteval.scoring.pairwise_skill` on the cells, with each model's
+    cells, rounds and mean coverage.
     """
-    wide = scores.pivot_table(index=list(MATCH), columns="model", values="wis")
-    models = list(wide.columns)
-    ratios: dict[str, list[float]] = {m: [] for m in models}
-    for a, b in itertools.permutations(models, 2):
-        both = wide[[a, b]].dropna()
-        if len(both) and both[b].mean() > 0:
-            ratios[a].append(both[a].mean() / both[b].mean())
-    theta = {
-        m: float(np.exp(np.mean(np.log(r)))) if r else np.nan
-        for m, r in ratios.items()
-    }
-    base = theta.get(reference, np.nan)
-    rows = []
-    for m in models:
-        own = scores.loc[scores["model"] == m]
-        rows.append(
-            {
-                "model": m,
-                "relative_wis": theta[m] / base,
-                "cells": len(own),
-                "rounds": own["reference_date"].nunique(),
-                "coverage_50": own["coverage_50"].mean(),
-                "coverage_90": own["coverage_90"].mean(),
-            }
-        )
-    return pd.DataFrame(rows).sort_values("relative_wis")
+    skill = pairwise_skill(
+        scores, reference, metrics=("wis",), match_on=MATCH
+    ).rename(columns={"n": "cells"})
+    cover = scores.groupby("model")[["coverage_50", "coverage_90"]].mean()
+    tab = skill.merge(cover, left_on="model", right_index=True)
+    cols = ["model", "relative_wis", "cells", "rounds"]
+    return tab[[*cols, *cover.columns]].sort_values("relative_wis")
 
 
 def fmt(v: float, n: int = 2) -> str:
@@ -358,9 +338,10 @@ def build(
         "the intervals, against the latest release.</p>",
         explorer_html(f"{rel}/explorer.json", "Forecast explorer"),
         "<h2>Pairwise relative WIS</h2>",
-        "<p class=mut>As the hubs rank teams: each pair's mean WIS ratio on "
-        "the cells both forecast, a model's geometric mean over the "
-        "others, scaled so seabbs-rwnowcast is 1. Complete weeks.</p>",
+        "<p class=mut>As the hubs rank teams (scoringutils' pairwise "
+        "comparisons): each pair's mean WIS ratio on the cells both "
+        "forecast, a model's geometric mean over every model, itself "
+        "included, scaled so seabbs-rwnowcast is 1. Complete weeks.</p>",
         small_table(tab) if len(tab) else "<p>Nothing scored yet.</p>",
     ]
     doc = (
