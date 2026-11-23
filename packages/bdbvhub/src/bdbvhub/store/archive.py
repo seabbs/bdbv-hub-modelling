@@ -39,6 +39,7 @@ from nowcastutils.forecast import Forecast
 __all__ = [
     "COLUMNS",
     "FILE",
+    "ArchiveError",
     "Hub",
     "archive",
     "candidate_models",
@@ -237,6 +238,25 @@ def _stored(
     )
 
 
+class ArchiveError(Exception):
+    """Models `archive` could not archive, with the table of the others."""
+
+    def __init__(self, failed: Mapping[str, str], table: pd.DataFrame) -> None:
+        """Name each failed model and keep the archived models' table.
+
+        Parameters
+        ----------
+        failed : mapping
+            The error of each model that failed, by model.
+        table : pandas.DataFrame
+            `COLUMNS` for the models that were archived.
+        """
+        self.failed = dict(failed)
+        self.table = table
+        names = ", ".join(sorted(self.failed))
+        super().__init__(f"Not archived: {names}.")
+
+
 def archive(
     root: Path | str,
     task: ForecastTask,
@@ -272,13 +292,19 @@ def archive(
         `COLUMNS`: each model's hub table, with its fit's `key`, `commit`
         and `fitted_at`, and whether it is the fit of the current code
         and data (`current`). A model forecast now has the current
-        commit and time and no key. A model that cannot be archived,
-        such as a stored model with no good fit, has no rows and is
-        reported on standard error.
+        commit and time and no key.
+
+    Raises
+    ------
+    ArchiveError
+        If a model cannot be archived, such as a stored model with no good
+        fit. Every other model is archived first, and the error holds
+        their table. Each failure's traceback goes to standard error.
     """
     digest = code or store.code_digest
     stored = set(store.stored_models())
     rows = [pd.DataFrame(columns=COLUMNS)]
+    failed: dict[str, str] = {}
     for model, config in models.items():
         try:
             if model in stored:
@@ -303,6 +329,10 @@ def archive(
         except Exception as err:
             print(f"{model} not archived: {err!r}.", file=sys.stderr)
             print(traceback.format_exc(), file=sys.stderr)
+            failed[model] = repr(err)
             continue
         rows.append(table.assign(model=model, vintage=task.vintage))
-    return pd.concat(rows, ignore_index=True)[list(COLUMNS)]
+    out = pd.concat(rows, ignore_index=True)[list(COLUMNS)]
+    if failed:
+        raise ArchiveError(failed, out)
+    return out

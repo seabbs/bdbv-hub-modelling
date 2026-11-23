@@ -405,14 +405,15 @@ def test_an_offloaded_checkpoint_publishes_with_its_held_out_losses(tmp_path):
 
 def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
     # Step 0 (base Chronos-2's loss, the sidecar's held_out_loss_start) is
-    # scored with the first segment's steps, so a later checkpoint's
-    # evaluation waits for every earlier segment's.
+    # scored on its own, so a checkpoint's evaluation waits for no
+    # segment's other steps.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
     sidecar = "runs/runa/train/n500/held-out.json"
     jobs = dry(tmp_path, str(tmp_path / sidecar), config=OFFLOAD)
-    assert jobs["evaluate_steps"] == 2
+    assert jobs["evaluate_base"] == 1
     assert jobs["evaluate_checkpoint"] == 1
+    assert "evaluate_steps" not in jobs
 
 
 def _dag(tmp_path, target, config):
@@ -424,29 +425,58 @@ def _dag(tmp_path, target, config):
     return jobs, edges
 
 
-def test_a_checkpoint_s_evaluation_depends_on_step_0_and_earlier_settings(
+def test_a_checkpoint_s_evaluation_needs_only_step_0_and_earlier_settings(
     tmp_path,
 ):
+    # Not the segments' step evaluations, which queue behind the trainer:
+    # a checkpoint is scored between segments.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
     sidecar = tmp_path / "runs/runa/train/n500/held-out.json"
     jobs, edges = _dag(tmp_path, str(sidecar), OFFLOAD)
-    steps = [j for j, label in jobs.items() if label == "evaluate_steps"]
+    assert "evaluate_steps" not in jobs.values()
     (check,) = [
         j for j, label in jobs.items() if label == "evaluate_checkpoint"
     ]
+    (base,) = [j for j, label in jobs.items() if label == "evaluate_base"]
     (first,) = [
         j
         for j, label in jobs.items()
         if label.startswith("train_segment\\n") and "n: 250" in label
     ]
-    # One segment's step evaluation feeds the next's, which feeds the
-    # checkpoint's: step 0 is scored before the checkpoint.
-    chain = [(a, b) for a, b in edges if a in steps and b in steps]
-    assert len(chain) == 1
-    assert (chain[0][1], check) in edges
+    assert (base, check) in edges
     # The first checkpoint's settings are an input of n500's evaluation.
     assert (first, check) in edges
+
+
+def _field(block, key):
+    m = re.search(rf"^\s+{key}: (.*)$", block, re.M)
+    return m[1] if m else ""
+
+
+def _jobs_of(out, rule):
+    """Each planned job of `rule`: its wildcards, priority and resources."""
+    blocks = re.split(r"^\[[^\]]+\]$", out.stdout, flags=re.M)
+    return [
+        {
+            "wildcards": _field(b, "wildcards"),
+            "priority": float(_field(b, "priority") or 0),
+            "resources": _field(b, "resources"),
+            "shell": b,
+        }
+        for b in blocks
+        if re.search(rf"^(?:local)?rule {rule}:$", b, re.M)
+    ]
+
+
+def test_step_0_is_scored_before_any_checkpoint(tmp_path):
+    # Every checkpoint's sidecar needs step 0's loss.
+    out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    (base,) = _jobs_of(out, "evaluate_base")
+    assert base["priority"] > max(
+        j["priority"] for j in _jobs_of(out, "evaluate_checkpoint")
+    )
 
 
 def test_finetune_never_publishes(tmp_path):
@@ -569,7 +599,7 @@ def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # trainer (the run's critical path) goes first, then the simulations
     # it trains on, then checkpoint scoring (score.smk, 10 and below).
     got = priorities(tmp_path, "finetune", config=FT)
-    assert got["train_segment"] == 20
+    assert got["train_segment"] == 100
     assert 15 <= got["simulate_batch"] < 16
 
 
@@ -986,16 +1016,16 @@ def score_jobs(tmp_path, config, local_extra="", target="score"):
     return re.split(r"\n(?=(?:local)?rule \w+:)", out.stdout)
 
 
-def test_score_units_run_torch_on_the_machine_device(tmp_path):
+def test_score_units_run_torch_beside_the_trainer_on_the_cpu(tmp_path):
     config = {"score": {"labels": ["aaa", "bbb"]}}
     blocks = score_jobs(tmp_path, config)
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert len(units) == 3
     for block in units:
-        assert "DEVICE=cuda" in block
+        assert "DEVICE=cpu" in block
         assert "OMP_NUM_THREADS=1 " not in block
         assert "CUDA_VISIBLE_DEVICES" not in block
-        assert re.search(r"resources: .*gpu=1", block)
+        assert not re.search(r"resources: .*gpu=1", block)
         # A few threads, not the machine: simulations keep their cores.
         assert re.search(r"threads: 2\b", block)
         assert "--xla_cpu_multi_thread_eigen=false" in block
@@ -1172,3 +1202,21 @@ def test_sim_reports_render_each_round_and_the_rounds_together(tmp_path):
     joined = "".join(blocks)
     assert "rule batch_record" not in joined
     assert "bdbvhub.cli data" not in joined
+
+
+def test_the_comparison_scores_every_run_s_checkpoints(tmp_path):
+    out = dry_run(
+        tmp_path, f"{tmp_path}/runs/comparison.csv", config=FT, quiet=False
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "rule comparison:" in out.stdout
+    assert "rule run_table:" in out.stdout
+    assert f"{tmp_path}/runs/runa/reports/checkpoint-scores.csv" in out.stdout
+
+
+def test_a_run_s_block_combinations_come_from_its_final_checkpoint(tmp_path):
+    target = f"{tmp_path}/runs/runa/train/block-combinations.csv"
+    out = dry_run(tmp_path, target, config=FT, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "rule block_combinations:" in out.stdout
+    assert f"{tmp_path}/runs/runa/train/n500/settings.json" in out.stdout

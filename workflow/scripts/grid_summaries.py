@@ -44,6 +44,7 @@ import pandas as pd
 from scipy import stats
 from scipy.signal import find_peaks
 
+from nowcastfoundation.finetune import delay_quantile
 from nowcastfoundation.finetune.chronos import SIM_DELAY_WEEKS
 
 GROWING = 0.01
@@ -155,15 +156,6 @@ def _max(x: object) -> float:
         parts = [float(p) for p in x.split(";") if p not in ("", "NA")]
         return float(np.max(parts)) if parts else np.nan
     return float(x)
-
-
-def delay_quantile(by_delay: pd.Series, q: float) -> float:
-    """Return the first delay by which a share `q` of the net count is in."""
-    total = by_delay.sum()
-    if total <= 0:
-        return np.nan
-    cum = by_delay.sort_index().cumsum() / total
-    return float(cum.index[np.argmax(cum.to_numpy() >= q - 1e-9)])
 
 
 def incubation_pmf(mean: float, cv: float, family: str) -> np.ndarray:

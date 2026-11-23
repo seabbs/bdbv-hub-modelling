@@ -35,7 +35,7 @@ import pandas as pd
 ROOT = Path(__file__).parents[2]
 sys.path.insert(0, str(ROOT / "workflow"))
 
-from flowlib.dashboard import nowcasts, page, svg  # noqa: E402
+from flowlib.dashboard import context, nowcasts, page, svg  # noqa: E402
 from flowlib.dashboard import runs as spec  # noqa: E402
 
 from nowcasteval import labels  # noqa: E402
@@ -379,22 +379,7 @@ def _references() -> list[spec.Reference]:
     import yaml
 
     config = yaml.safe_load((ROOT / "workflow/config.yaml").read_text())
-    out = []
-    for e in config["dashboard"]["references"]:
-        pm = e["paper_model"]
-        colour, dash = labels.MODEL_STYLES[pm]
-        out.append(
-            spec.make_reference(
-                e["key"],
-                e["model"],
-                label=labels.model_label(pm),
-                colour=colour,
-                checkpoint=e.get("checkpoint"),
-                role=e.get("role"),
-                dash=dash,
-            )
-        )
-    return out
+    return context.references(config["dashboard"]["references"])
 
 
 def _dataset() -> dict:

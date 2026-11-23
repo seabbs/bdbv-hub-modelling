@@ -334,7 +334,7 @@ The dashboard was built with the help of a large language model.
 - Layer 1 is the epidemic setting, and layers 2 to 5 are the delays and surveillance quirks fine-tuning teaches.
 - The workflow simulates outbreaks from the grid config and writes every figure below, so a change to the grid regenerates the tables and figures.
 - The layer tables replace the grid tables after the layers, and the workflow's figures replace the example simulations and comparisons.
-- The published ranges for other diseases (@tbl-sim-diseases) are replaced by the sourced reference-values table, which the main text's coverage panel reads.
+- The main text's coverage panel reads the sourced reference-values table, as @tbl-sim-diseases does.
 - The simulator composes PyRenew's components [@placeholder] for infections, the infection to reference delay and observation noise, with small components on PyRenew's base classes where it has none.
 - The reporting step is part of the same model and gives counts by reference and report date as epinowcast's observation model does [@abbottepinowcast].
 - We test the simulator by calling epinowcast, EpiNow2 [@placeholder] and primarycensored [@abbottprimarycensored] directly and comparing the outputs, with delay distributions matched to primarycensored's discretisation.
@@ -440,7 +440,7 @@ Sampling distributions of the continuous simulation settings, read from the grid
 :::
 
 
-![Six contrasting simulations of the grid, from pilot simulations: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
+![Six contrasting simulations of the grid, from the development round: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
 
 Outbreak length is drawn from a log-normal distribution with median 30 weeks, and is at least 4 weeks.
 A simulation that fails or reports no cases is redrawn with a new seed.
@@ -454,7 +454,7 @@ We test the simulator so that a stratum never has more cases than its population
 The grid has one known limitation.
 Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
 
-![The simulated outbreaks (grey histograms) against the BDBV data and the German data by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
+![The simulated outbreaks of the grid's training rounds (grey histograms) against the German development half, nationally, by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
 
 ::: {#tbl-sim-diseases}
 {{< include build/tables/si/sim-diseases.md >}}

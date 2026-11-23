@@ -36,17 +36,6 @@ def nice(lo: float, hi: float, n: int = 5) -> list[float]:
     return ticks
 
 
-def rolling(rows: Sequence[tuple[float, float]], k: int) -> list[tuple]:
-    """Return each point with the mean of it and the `k - 1` before it."""
-    out, acc = [], []
-    for x, y in rows:
-        acc.append(y)
-        if len(acc) > k:
-            acc.pop(0)
-        out.append((x, sum(acc) / len(acc)))
-    return out
-
-
 def chart(
     title: str,
     series: Sequence[tuple[Any, ...]],

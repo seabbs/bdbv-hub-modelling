@@ -18,7 +18,7 @@ High level, one Taskfile task per target:
 | `task nowcast-foundation:publish` | `publish` | verify and release each checkpoint | GitHub releases |
 | `task nowcast-foundation:score` | `score` | score each released checkpoint | no |
 | `task nowcast-foundation:land` | `land` | commit the score tables to `evidence/` and push | git push |
-| `task paper` | `development` or `paper`, then `render` | the paper (section 6) | no |
+| `task paper` | `development` or `paper`, then `render` | the paper (section 7) | no |
 
 Pass Snakemake options after `--`: `task nowcast-foundation:score -- -n` is a dry run, and a file path builds just that output.
 Low level, any output file, for example:
@@ -28,6 +28,9 @@ uv run --group paper snakemake <ROOT>/rounds/r34/sims/counts-33400.csv.gz  # one
 uv run --group paper snakemake <ROOT>/runs/runa/train/n800/settings.json  # one checkpoint
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
+
+The settings in `workflow/config.yaml`, with any `--configfile` or `--config` on top, are checked against `workflow/schemas/config.schema.yaml` when the workflow loads, so a misspelt or unknown setting is an error before any job runs.
+A run in `runs` takes any `finetune` setting and no other.
 
 Helpers: `task nowcast-workflow:dag` draws the rule graph, `task nowcast-workflow:progress` lists what exists and what would run, `task nowcast-workflow:report` writes Snakemake's HTML report, and `task nowcast-workflow:check` runs the tests and dry runs CI runs.
 
@@ -89,9 +92,7 @@ It draws each outbreak's design and values in Python and runs each outbreak as o
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each simulation's summaries in the round's `qc/`. It sets no thresholds and nothing is excluded or deleted.
 - `round_ready`: the seed list and `READY`, last.
-- `round_summaries`: one row per outbreak of a round (`r<N>/summaries/outbreaks.csv`, `workflow/scripts/grid_summaries.py`): design, drawn values, size, dynamics, R, delays and the phase at the training cut-offs.
-- `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
-- `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them.
+- `simulator_benchmark`: opt-in, two passes of one batch, cold then warm, as a `simulate_batch` job runs it on a given JAX device, in the rounds' `bench/`.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release`: opt-in, each batch to its round's release.
 - `push_batch`, `push`: on a helping host, its seeds (`SIM_SEEDS`), each pushed to the rounds host's round (`REMOTE`, `REMOTE_ROOT`): its files, then its manifest row (`flowlib.hosts`).
@@ -113,7 +114,8 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `fetch_batch`: a batch into `<ROOT>/runs/<run>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
 - The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<ROOT>/runs/<run>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC summaries in `<ROOT>/runs/<run>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.
-- `evaluate_steps`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. After each segment, `evaluate_steps` scores the snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), with the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`). They take the GPU below the trainer, in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
+- `evaluate_steps`, `evaluate_base`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. `evaluate_base` scores step 0 alone (base Chronos-2, the start loss), `evaluate_steps` a segment's snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), which needs only step 0. They run on `EVAL_DEVICE` (the CPU by default) beside the trainer, newest first. They use the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`) in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
+- `heldout_curve`: a run's held-out loss by level at the start and at each checkpoint, against simulations trained (`<run>/heldout-curve.csv`, `flowlib.evaluations.heldout_curve`). The paper's `evidence` rule reads the final run's.
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
 - `finetune`: every prefix.
 
@@ -132,13 +134,22 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
   Units run torch on `EVAL_DEVICE` (the CPU by default) with `EVAL_THREADS` threads, beside the trainer: only `train_segment` takes the `gpu` resource, with the highest priority, so the next segment starts the moment the previous ends.
   BDBV is held out for the paper, so no BDBV unit runs.
 - `score_run_germany`: a run's own saved checkpoint `n<N>`, loaded from `<ROOT>/runs/<run>/train/n<N>` with no release, cached in `<ROOT>/runs/<run>/scores/`.
-- `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.
 - `run_scores`: every trained run's saved checkpoints and report; `score` includes it.
 - `coupling_germany`: a checkpoint's German forecasts' coupling scores and summary (`nowcasteval.coupling`), from its German unit, in `<SCORE_CACHE>/coupling/`.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
-## 5. Dashboard (`workflow/flowlib/dashboard/`)
+## 5. Report (`rules/report.smk`)
+
+Reports read the other steps' outputs back for people, each with one script.
+
+- `round_summaries`: one row per outbreak of a round (`r<N>/summaries/outbreaks.csv`, `workflow/scripts/grid_summaries.py`): design, drawn values, size, dynamics, R, delays and the phase at the training cut-offs.
+- `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
+- `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them. `sim_diseases` gives the grid's training rounds' ranges against the published values by disease (`report/sim-diseases.csv`), for the SI's disease table.
+- `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.
+- `benchmarks`: opt-in, the seconds and peak memory of every forecast and score job and the seconds by model and date, as one CSV in `<SCORE_CACHE>/` (`flowlib.benchmarks`).
+
+## 6. Dashboard (`workflow/flowlib/dashboard/`)
 
 `task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
 `task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
@@ -147,8 +158,9 @@ The page has a sticky bar (section links, the live run's step, one run and refer
 
 Settings:
 
-- `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV: samples, summarised to quantiles with the scorer's truth rule and sample CRPS), the notes filter.
-- `config/dashboard.local.yaml` (git ignores it; `config/dashboard.example.yaml` is committed; `DASHBOARD_CONFIG` in `config/local.env` names another file): this machine's runs (training output folders with a hue, the live run, a base run, or release prefixes), exclusions, the mirror folder, and where the score table, each dataset, the BDBV truth table, extra tables, notes and the notes file come from. A `host:path` source is copied read-only with rsync over ssh; nothing is written back.
+- `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), the notes filter.
+- `config/dashboard.local.yaml` (git ignores it; `config/dashboard.example.yaml` is committed; `DASHBOARD_CONFIG` in `config/local.env` names another file): this machine's runs (training output folders with a hue, the live run, a base run, or release prefixes), exclusions, the mirror folder, and where the score table, each dataset, extra tables, notes and the notes file come from. A `host:path` source is copied read-only with rsync over ssh; nothing is written back.
+- `workflow/config.yaml`'s `runs`: each run, from `<ROOT>/runs/<name>`, shown with no other setting, so `task nowcast-foundation:dashboard` alone shows the workflow's runs.
 - `DASHBOARD_RUNS` and `--run`, `--ref`: more runs and references on top.
 
 On a machine that trains while another scores:
@@ -160,7 +172,7 @@ uv run --group paper python workflow/scripts/dashboard.py --port 8765
 # open the address it prints; with the venv active, plain `python` works too
 ```
 
-## 6. Paper (`paper/workflow/Snakefile`)
+## 7. Paper (`rules/paper.smk`, `paper/workflow/Snakefile`)
 
 A module of this workflow (`use rule * from paper_workflow`), run from the repository root; its paths are from the root and its outputs are in `paper/results/<mode>/`.
 `development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.
@@ -169,7 +181,7 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 - Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
 - Evidence read from git (`evidence_aggregation_scores`, `evidence_checkpoint_scores`, `evidence_lag_germany`), gathered by `evidence`.
-- Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `grid_tables`, `summary` and `publish_paper`.
+- Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `grid_tables`, `summary` and `publish_paper`.
 
 ## Scheduled runs
 
@@ -210,6 +222,7 @@ Panoptes has no DAG view, so the same server adds one at `/dag/` (`workflow/flow
 For each `MONITOR_DAG` target (`NAME=TARGET`) it draws the rule graph and the job DAG, each job pending, running, done or failed.
 A job Snakemake would not run is done; Panoptes gives the rest their state, so the colours follow the run on each visit.
 The graphs are built with `MONITOR_DAG_OPTIONS` every `MONITOR_DAG_EVERY` seconds, without a lock; `task nowcast-workflow:dag -- NAME=TARGET` builds one now.
+In the workflow (`rules/monitor.smk`), `monitor_dag` builds one target's graphs into `<ROOT>/monitor/dag/<name>.json` and `monitor` every `MONITOR_DAG` target's; both are opt-in.
 Each tick also writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds (`workflow/flowlib/runstatus.py`).
 The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), not jobs.
 

@@ -31,6 +31,7 @@ from nowcastfoundation.finetune import (
     MIXED,
     ROLLING,
     release_days,
+    release_weekday,
     training_block,
     weekly_cutoffs,
 )
@@ -238,11 +239,22 @@ def workflow_finetune(key: str) -> Any:
     return config["finetune"][key]
 
 
+DEFAULT_GRID_FILE = "config/finetune/grid.yaml"
+"""The grid file when there is no workflow config: the package alone."""
+
+
 def workflow_grid_file() -> str:
-    """Return the workflow's grid file (`simulate.grid_file`)."""
+    """Return the workflow's grid file (`simulate.grid_file`).
+
+    `DEFAULT_GRID_FILE` outside a checkout, where the package is
+    installed alone and has no workflow config to read.
+    """
     import yaml
 
-    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    path = ROOT / "workflow" / "config.yaml"
+    if not path.is_file():
+        return DEFAULT_GRID_FILE
+    config = yaml.safe_load(path.read_text())
     return str(config["simulate"]["grid_file"])
 
 
@@ -671,8 +683,7 @@ def outbreak_blocks(
     described there. Each block's releases run up to its cut at a cadence
     drawn for its source (`draw_cadence`), recorded as its `cadence`.
     """
-    # Cut-offs fall Wednesday to Saturday, as the hub's releases do.
-    weekday = int(rng.integers(2, 6))
+    weekday = release_weekday(rng)
     first = str(counts["report_date"].min())
     end = pd.Timestamp(counts["report_date"].max()).date()
     last = end - dt.timedelta(weeks=delay_weeks + 5)

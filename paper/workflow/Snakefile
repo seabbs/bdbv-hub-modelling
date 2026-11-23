@@ -105,7 +105,7 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
 
 
 # The synthetic runner forecasts each run's simulated outbreaks once they
-# exist (`scripts/run_synthetic.py`), with 1,000 draws per forecast.
+# exist (`scripts/run_synthetic.py`), at `synthetic.samples` draws per forecast.
 for _mode in MODES:
 
     rule:
@@ -127,10 +127,11 @@ for _mode in MODES:
             seeds=FLOW.seeds(_mode),
             # The fine-tuned models wait for the final run's checkpoint.
             models=FLOW.synthetic_models_arg(),
+            samples=config["synthetic"]["samples"],
         shell:
             "exec >{log} 2>&1; "
             "{params.python} paper/scripts/run_synthetic.py {params.sims} "
-            "{output} --seeds {params.seeds} --samples 1000 --device cpu "
+            "{output} --seeds {params.seeds} --samples {params.samples} --device cpu "
             "--threads 1 {params.models}"
 
 
@@ -264,16 +265,13 @@ rule ebola_backtest_draws:
     params:
         bdbv=BDBV,
         models=" ".join(EBOLA["backtest_models"]),
-        n=EBOLA.get("n_samples", 100),
+        n=EBOLA["n_samples"],
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
     shell:
         "exec >{log} 2>&1; "
         "mkdir -p {params.folder} && "
-        "sed 's/^backtest = .*/backtest = {params.n}/' {params.config} "
-        "> {params.folder}/backtest.toml && "
-        "grep -q '^backtest = {params.n}$' {params.folder}/backtest.toml && "
-        "{params.bdbv} backtest --config {params.folder}/backtest.toml "
+        "{params.bdbv} backtest --config {params.config} --samples {params.n} "
         "--models {params.models} --no-recovery "
         "--results {params.folder}/results --output {params.folder}"
 
@@ -512,9 +510,11 @@ for study in STUDIES:
             f"--realdata-after {FLOW.realdata_after}"
 
 
-# Example simulations of the grid, from pilot simulations on an evidence
-# branch (`paperfigs.sim_examples`).
+# Example simulations of the grid, from the development round
+# (`paperfigs.sim_examples`).
 rule sim_examples:
+    input:
+        **FLOW.example_files(),
     output:
         f"{R}/{{mode}}/figures/si/sim-examples.png",
     log:
@@ -523,18 +523,32 @@ rule sim_examples:
         TOOLS_ENV
     params:
         python=PYTHON,
-        ref=SYNTHETIC["examples"]["ref"],
-        path=SYNTHETIC["examples"]["path"],
         picks=shlex.quote(json.dumps(SYNTHETIC["examples"]["picks"])),
-        tmp=f"{R}/{{mode}}/sim-examples",
     shell:
         "exec >{log} 2>&1; "
-        "(git cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
-        "git fetch -q origin {params.ref}) && "
-        "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-        "git archive {params.ref} {params.path} | tar -x -C {params.tmp} "
-        "&& {params.python} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
-        "--picks {params.picks} --out {output}"
+        "{params.python} -m paperfigs.sim_examples --counts {input.counts} "
+        "--settings {input.settings} --picks {params.picks} --out {output}"
+
+
+# The grid's training rounds against the German development half, for
+# the SI's realism figure and numbers (`paperpipe realism`).
+rule sim_realism:
+    input:
+        **FLOW.realism_inputs(),
+    output:
+        sims=f"{R}/evidence/sim-summaries.csv",
+        reference=f"{R}/evidence/sim-realism.csv",
+    log:
+        f"{R}/logs/sim_realism.log",
+    conda:
+        TOOLS_ENV
+    params:
+        python=PYTHON,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe realism {input.rounds} "
+        "--germany {input.germany} --out-sims {output.sims} "
+        "--out-reference {output.reference}"
 
 
 # The grid tables and SI notes, read from the grid config
@@ -567,6 +581,11 @@ rule grid_tables:
 rule evidence:
     input:
         **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+        # The final run's held-out loss by level (workflow rule heldout_curve).
+        heldout=FLOW.heldout_curve(),
+        realism=rules.sim_realism.output,
+        # The published-range table's rows (workflow rule sim_diseases).
+        diseases=FLOW.sim_diseases(),
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -584,6 +603,9 @@ rule evidence:
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "--finetune-heldout {input.heldout} "
+        "--sim-summaries {input.realism[0]} --sim-realism {input.realism[1]} "
+        "--sim-diseases {input.diseases} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 

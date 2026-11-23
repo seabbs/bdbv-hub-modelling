@@ -37,6 +37,7 @@ from . import (
     svg,
     training,
 )
+from .logs import _size
 from .mirror import Source
 from .runs import Reference, Run, split_label
 
@@ -81,8 +82,6 @@ class Context:
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
     mirror_status: str = ""
-    delays: dict[str, int | None] = field(default_factory=dict)
-    summarised: dict[str, tuple] = field(default_factory=dict)
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -116,57 +115,20 @@ class Context:
         cks = _checkpoints(run)
         chunks = self._runlog(run).chunks() if run.folder else {}
         pairs = training.anchors(cks, chunks)
-        return pairs, training.steps_per_simulation(0, [], cks)
+        return pairs, training.steps_per_simulation(cks)
 
     def dataset(self, key: str) -> Mapping[str, Any]:
-        """Return a configured dataset by key (a quantiles one if unknown)."""
+        """Return a configured dataset by key (an empty one if unknown)."""
         return next(
             (d for d in self.datasets if d["key"] == key),
-            {"key": key, "label": key, "format": "quantiles", "groups": []},
+            {"key": key, "label": key, "groups": []},
         )
-
-    def forecasts(self, key: str) -> Path:
-        """Return the quantile files a dataset's panels read.
-
-        A samples dataset's are its summaries (`summarise`), never made
-        while a page is built.
-        """
-        if self.dataset(key).get("format") != "samples":
-            return self.source.dataset(key)
-        return self.source.root / f"{key}-quantiles"
-
-    def summarise(self) -> None:
-        """Summarise each samples dataset whose truth or files changed.
-
-        Run at start, before a static render and in the background loop.
-        """
-        for ds in self.datasets:
-            if ds.get("format") != "samples":
-                continue
-            key = ds["key"]
-            folder = self.source.dataset(key)
-            truth = self.source.truth(key)
-            if truth is None or not truth.is_file() or not folder.is_dir():
-                continue
-            sig = (
-                truth.stat().st_mtime_ns,
-                tuple(
-                    (str(f), f.stat().st_mtime_ns)
-                    for f in sorted(folder.glob("*/*.csv.gz"))
-                ),
-            )
-            if self.summarised.get(key) == sig:
-                continue
-            self.delays[key] = nowcasts.summarise_samples(
-                folder, self.forecasts(key), truth, ds
-            )
-            self.summarised[key] = sig
 
     def nowcasts(self, key: str) -> dict[str, Any] | None:
         """Return a dataset's nowcasts, rebuilt only when its files change."""
         ds = self.dataset(key)
         return nowcasts.cached_build(
-            self.forecasts(key),
+            self.source.dataset(key),
             self.runs,
             self.references,
             self.stores.setdefault(key, {}),
@@ -174,6 +136,7 @@ class Context:
             excluded=self.excluded,
             order=[(g["name"], g["match"]) for g in ds.get("groups") or ()],
             sources=ds.get("sources"),
+            unit=ds.get("unit") or key,
         )
 
 
@@ -210,11 +173,6 @@ def _dur(s: float | None) -> str:
     if s is None or s != s or s < 0:
         return "n/a"
     return kv.duration(s)
-
-
-def _size(name: str) -> int:
-    digits = re.sub(r"\D", "", name)
-    return int(digits) if digits else 0
 
 
 def _checkpoints(run: Run) -> list[tuple[str, dict, float | None]]:
@@ -288,11 +246,10 @@ def live_status(
 ) -> Status:
     """Return the live run's step, speed, schedule and checkpoints.
 
-    `planned` are its checkpoints unless the trainer's command line names
-    them (`logs.prefixes`). `sims` (`Context.sims`) gives the
-    simulations trained by its step, for a run that decays over
-    simulations, not steps; `steps` (`Context.steps`) the step a
-    checkpoint is saved at.
+    `planned` are its checkpoints, with those saved (`logs.prefixes`).
+    `sims` (`Context.sims`) gives the simulations trained by its step,
+    as the rate decays over simulations; `steps` (`Context.steps`) the
+    step a checkpoint is saved at.
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
@@ -313,15 +270,13 @@ def live_status(
         first_s = newest[1] - rate * span
         done = sims(newest[1]) - sims(first_s)
         sims_rate = done / span if done > 0 else None
-    args = logs.trainer_args(folder) if folder else ""
     trained = sims(step) if sims and step is not None else None
     params = (
         training.run_params(
-            folder, training.history(live), step, args, planned, trained
+            folder, training.history(live), step, planned, trained
         )
         if folder
         else {
-            "lr_steps": 0,
             "lr_outbreaks": 0,
             "groups": {},
             "current": {},
@@ -330,10 +285,8 @@ def live_status(
         }
     )
     sizes = params["prefixes"]
-    spo = training.steps_per_simulation(
-        params["lr_steps"], sizes, _checkpoints(live)
-    )
-    if trained and step and not params["lr_steps"]:
+    spo = training.steps_per_simulation(_checkpoints(live))
+    if trained and step:
         spo = step / trained
     saved = {
         n
@@ -362,7 +315,7 @@ def live_status(
         pending,
         nxt,
         trained,
-        None if params["lr_steps"] else steps,
+        steps,
         sims_rate,
         span,
         training.mean_rate(points),
@@ -409,9 +362,7 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
         ).strftime("%H:%M")
     p = st.params
     rates = "\n".join(f"{g} {v:.2e}" for g, v in p["current"].items()) or "n/a"
-    if p["lr_steps"]:
-        decay = f"linear decay to 0 at step {p['lr_steps']}"
-    elif p["lr_outbreaks"]:
+    if p["lr_outbreaks"]:
         decay = f"linear decay to 0 at {p['lr_outbreaks']} simulations"
     else:
         decay = "constant"
@@ -519,7 +470,7 @@ def lr_card(
     by_sims = bool(params["lr_outbreaks"] and sims)
     width, height = 190, 150
     left, right, top, bottom = 34, 6, 6, 18
-    decays = params["lr_steps"] or (params["lr_outbreaks"] if by_sims else 0)
+    decays = params["lr_outbreaks"] if by_sims else 0
 
     def x_of(s: float) -> float:
         return sims(s) if by_sims and sims else s
@@ -776,20 +727,13 @@ INPUT_LABELS = {"daily": "daily counts", "weekly": "weekly totals"}
 """The nowcast panels' model inputs, as the control names them."""
 
 
-def _caption(ctx: Context, ds: Mapping[str, Any]) -> str:
-    text = ds.get("truth", "")
-    delay = ctx.delays.get(ds["key"])
-    return text.replace("{delay}", "" if delay is None else str(delay))
-
-
 def nowcasts_section(
     ctx: Context, sizes: Mapping[str, int], builts: Mapping[str, Any]
 ) -> str:
     """Return the nowcast panels of every dataset, behind a selector.
 
-    Every configured dataset is listed (Germany's development half and
-    the held-out simulations; BDBV is held out). One with no
-    nowcasts yet is listed as empty, with why (its `missing`), so the
+    Every configured dataset is listed (Germany's development half; BDBV
+    is held out). One with no nowcasts yet is listed as empty, so the
     selector always offers it.
     """
     datasets, sources = [], set()
@@ -802,7 +746,6 @@ def nowcasts_section(
                     "label": ds.get("label", ds["key"]),
                     "metric": ds.get("metric", ""),
                     "empty": True,
-                    "missing": ds.get("missing", ""),
                     "truth": "",
                     "meta": [],
                     "locs": [],
@@ -835,7 +778,7 @@ def nowcasts_section(
                 "key": ds["key"],
                 "label": ds.get("label", ds["key"]),
                 "metric": ds.get("metric", ""),
-                "truth": _caption(ctx, ds),
+                "truth": ds.get("truth", ""),
                 "target": ds.get("target", ""),
                 "meta": meta,
                 "locs": built["locs"],

@@ -38,7 +38,13 @@ import numpy as np
 import pandas as pd
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcasteval.backtest import run_forecasts
-from nowcastfoundation.finetune import releases, weekly_cutoffs
+from nowcastfoundation.finetune import delay_quantile as share_delay
+from nowcastfoundation.finetune import (
+    release_weekday,
+    releases,
+    simulations,
+    weekly_cutoffs,
+)
 from nowcastutils.base import NATIONAL, ForecastModel, ForecastTask, get_model
 from nowcastutils.dates import epiweek_end
 from nowcastutils.hierarchy import parent as parent_of
@@ -65,7 +71,6 @@ __all__ = [
     "release_cutoffs",
     "sample_table",
     "series_label",
-    "simulation_id",
     "truth_table",
 ]
 
@@ -192,11 +197,10 @@ def release_cutoffs(counts: pd.DataFrame, outbreak: str) -> list[str]:
         The cut-offs, ISO format.
     """
     rng = np.random.default_rng(zlib.crc32(outbreak.encode()))
-    weekday = int(rng.integers(2, 6))
     return weekly_cutoffs(
         str(counts["report_date"].min()),
         str(counts["report_date"].max()),
-        weekday,
+        release_weekday(rng),
     )
 
 
@@ -553,7 +557,7 @@ def factor_table(counts: pd.DataFrame, settings: pd.DataFrame) -> pd.DataFrame:
     outbreak = str(counts["outbreak"].iloc[0])
     places = sorted(set(truth_table(counts)["location"]))
     factors = [f for f in FACTORS if f in settings]
-    mine = settings["outbreak"] == simulation_id(outbreak)
+    mine = settings["outbreak"] == simulations(counts["outbreak"]).iloc[0]
     row = settings.loc[mine, factors].iloc[0]
     out = pd.DataFrame(
         {"location": [series_label(outbreak, p) for p in places]}
@@ -588,9 +592,7 @@ def delay_quantile(counts: pd.DataFrame, q: float) -> int:
     longest = pd.Timedelta(weeks=longest_delay_weeks(counts))
     seen = ref <= rep.max() - longest
     delay = (rep - ref).dt.days[seen]
-    by = counts.loc[seen, "count"].groupby(delay).sum().sort_index()
-    share = by.cumsum() / by.sum()
-    return int(share.index[np.argmax(share.to_numpy() >= q - 1e-12)])
+    return int(share_delay(counts.loc[seen, "count"].groupby(delay).sum(), q))
 
 
 def longest_delay_weeks(counts: pd.DataFrame) -> int:
@@ -604,15 +606,6 @@ def longest_delay_weeks(counts: pd.DataFrame) -> int:
         - pd.to_datetime(counts["reference_date"])
     ).dt.days.max()
     return -(-int(delay) // 7)
-
-
-def simulation_id(outbreak: str) -> str:
-    """Return the simulation of an outbreak, `<seed>-<index>-<draw>`.
-
-    The settings have one row per simulation, `<seed>-<index>`.
-    """
-    parts = outbreak.split("-")
-    return "-".join(parts[:2])
 
 
 def first_draws(counts: pd.DataFrame, draw: int = 1) -> pd.DataFrame:

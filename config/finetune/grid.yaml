@@ -1,5 +1,5 @@
-# The grid of the fine-tuning simulations: the simulator engine
-# (packages/nowcastfoundation/r) reads every factor, sampling distribution,
+# The grid of the fine-tuning simulations: the simulator
+# (nowcastfoundation.simulator) reads every factor, sampling distribution,
 # share and floor from here, and the paper's grid tables and figures read
 # the same file. Five layers: infections; strata (places, ages and how they
 # relate); observation (infection to reference event, ascertainment, count
@@ -17,14 +17,11 @@
 #   definition, base plus a Poisson with `mean`; `rates`: Poisson means.
 # - `floors`: the only floors on drawn values, and the fewest reported
 #   cases a simulation may have before it is drawn again.
-epinowcast_sha: e084b080
 # The simulator's memory: a simulation's reporting triangle has at most
 # `max_triangle_cells` cells (strata x longest delay x days, the days being
-# 7 x (weeks + longest delay in weeks + 4)). The R engine takes about 8 KB
-# a cell (96 strata x 126 days x 364 days peaked at 35 GB), so this is
-# about 13 GB, under the simulate rule's 16 GB. A design's strata must fit
-# at the shortest delay; a delay whose longest delay does not fit takes
-# the longest that does. Independent strata are each a simulation of their
+# 7 x (weeks + longest delay in weeks + 4)), which bounds a simulation's
+# memory and time. A design's strata must fit at the shortest delay; a
+# delay whose longest delay does not fit takes the longest that does. Independent strata are each a simulation of their
 # own, so at most `max_independent` of them.
 max_triangle_cells: 1600000
 max_independent: 8

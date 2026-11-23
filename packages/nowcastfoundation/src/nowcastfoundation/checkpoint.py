@@ -26,6 +26,8 @@ Usage:
   python -m nowcastfoundation.checkpoint release CACHE HASH
   python -m nowcastfoundation.checkpoint table CACHE EVIDENCE \\
     CHECKPOINTS HASH...
+  python -m nowcastfoundation.checkpoint run TRAIN SCORES REFERENCE RUN OUT
+  python -m nowcastfoundation.checkpoint compare OUT TABLE...
 """
 
 from __future__ import annotations
@@ -386,11 +388,25 @@ def german_tasks_dir(
     return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
 
-def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
-    """Nowcast each German development date, own quantiles with truth.
+def _reaches(path: Path, last: int) -> bool:
+    """Whether a unit's date file holds horizons up to `last` days.
 
-    The fine-tuned models load the release `label` names, or a run's own
-    `segment` folder (`<run>/train/n<N>`) when given, cached as `label`.
+    Files written before the forecast days were added end at the
+    nowcast date, so their dates are forecast again.
+    """
+    if not path.exists():
+        return False
+    horizon = pd.read_csv(path, usecols=["horizon"])["horizon"]
+    return bool(len(horizon)) and int(horizon.max()) >= last
+
+
+def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
+    """Forecast each German development date, own quantiles with truth.
+
+    Each date is forecast at the German config's horizons (`horizons`):
+    the hub's nowcast and the forecast days after it. The fine-tuned
+    models load the release `label` names, or a run's own `segment`
+    folder (`<run>/train/n<N>`) when given, cached as `label`.
     """
     from nowcastgermany import evaluation as de
     from nowcastgermany.data import hub_triangle
@@ -407,7 +423,8 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     root.mkdir(parents=True, exist_ok=True)
     record_precision(root)
     dates = de.nowcast_dates(config, held_out=False)
-    todo = [d for d in dates if not (root / f"{d}.csv.gz").exists()]
+    last = max(config.horizons)
+    todo = [d for d in dates if not _reaches(root / f"{d}.csv.gz", last)]
     models = list(label_models(label))
     # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
@@ -425,6 +442,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
             config.seed,
             tasks_dir,
             max_delay=config.truth_delay,
+            horizons=config.horizons,
             timings=timings,
         )
         # Seconds by model and date, for the `benchmarks` target.
@@ -499,27 +517,32 @@ def _cached(root: Path) -> pd.DataFrame | None:
 
 
 def _with_precision(
-    rows: pd.DataFrame, root: Path, labels: Sequence[str]
+    rows: pd.DataFrame, folders: Mapping[str, Path]
 ) -> pd.DataFrame:
     """Give each checkpoint's rows the precision its unit forecast in."""
     at = {
-        ("zero-shot" if lb == REFERENCE else lb): unit_precision(root / lb)
-        for lb in labels
+        ("zero-shot" if lb == REFERENCE else lb): unit_precision(folder)
+        for lb, folder in folders.items()
     }
     return rows.assign(precision=rows["checkpoint"].map(at))
 
 
-def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
-    """Return the German development half's rule rows."""
+def germany_rows(folders: Mapping[str, Path]) -> pd.DataFrame:
+    """Return the German development half's rule rows.
+
+    `folders` gives each label's cached German unit.
+    """
     from nowcastgermany import evaluation as de
 
     config = de.load_germany_config("config/germany.toml")
     parts = []
-    for label in labels:
-        fc = _cached(cache / GERMANY_UNIT / label)
+    for label, folder in folders.items():
+        fc = _cached(folder)
         if fc is None:
             continue
-        fc = fc.loc[fc["origin"] < config.split_date]
+        # The table scores the hub's horizons only, as the paper scores
+        # the teams; the forecast days are for the page.
+        fc = fc.loc[(fc["origin"] < config.split_date) & (fc["horizon"] <= 0)]
         nat = de.score_germany(fc, config.truth_delay)
         logged = fc.assign(
             value=np.log1p(fc["value"].clip(lower=0)),
@@ -535,7 +558,7 @@ def germany_rows(cache: Path, labels: Sequence[str]) -> pd.DataFrame:
         return pd.DataFrame(columns=COLUMNS)
     sc = pd.concat(parts, ignore_index=True).rename(columns={"pool": "level"})
     out = relative(matched(sc, GERMANY_CELL), "germany", ("wis", "log_wis"))
-    return _with_precision(out, cache / GERMANY_UNIT, labels)
+    return _with_precision(out, folders)
 
 
 def _existing(path: Path, columns: Sequence[str]) -> pd.DataFrame:
@@ -563,7 +586,7 @@ def table(
     # those already in `evidence` are kept.
     new = pd.concat(
         [
-            germany_rows(cache, labels),
+            germany_rows({lb: cache / GERMANY_UNIT / lb for lb in labels}),
             *(held_out_rows(h, m[0]) for h, m in meta.items()),
         ],
         ignore_index=True,
@@ -589,6 +612,64 @@ def table(
     return new
 
 
+def run_table(
+    train: Path, scores: Path, reference: Path, run: str
+) -> pd.DataFrame:
+    """Score a run's own saved checkpoints into the tables' rows.
+
+    Each saved segment `n<N>` of `train` is a checkpoint labelled `n<N>`:
+    its German unit cached in `scores/n<N>` (rule score_run_germany),
+    beside zero-shot's in `reference`, and its held-out losses from its
+    settings and sidecar. Rows carry the run's name as `run`.
+    """
+    segments = sorted(
+        (
+            d
+            for d in Path(train).glob("n*")
+            if d.name[1:].isdigit() and (d / "settings.json").is_file()
+        ),
+        key=lambda d: int(d.name[1:]),
+    )
+    settings = {}
+    for d in segments:
+        sidecar = d / SIDECAR
+        settings[d.name] = with_sidecar(
+            json.loads((d / "settings.json").read_text()),
+            json.loads(sidecar.read_text()) if sidecar.is_file() else None,
+        )
+    folders = {REFERENCE: Path(reference)} | {
+        d.name: Path(scores) / d.name
+        for d in segments
+        if (Path(scores) / d.name).is_dir()
+    }
+    new = pd.concat(
+        [
+            germany_rows(folders),
+            *(held_out_rows(lb, s) for lb, s in settings.items()),
+        ],
+        ignore_index=True,
+    )
+    meta = {lb: outbreaks_and_grid(s, {}) for lb, s in settings.items()}
+    new["outbreaks"] = new["checkpoint"].map(
+        {lb: m[0] for lb, m in meta.items()}
+    )
+    new["outbreaks"] = new["outbreaks"].fillna(0).astype(int)
+    new["grid"] = new["checkpoint"].map({lb: m[1] for lb, m in meta.items()})
+    new["run"] = np.where(new["checkpoint"] == "zero-shot", "zero-shot", run)
+    new["chosen"] = False
+    return new.reindex(columns=COLUMNS)
+
+
+def comparison(tables: Sequence[pd.DataFrame]) -> pd.DataFrame:
+    """Return the runs' tables as one, with zero-shot's rows once."""
+    rows = pd.concat(tables, ignore_index=True)
+    zero = rows["run"] == "zero-shot"
+    return pd.concat(
+        [rows.loc[zero].drop_duplicates(), rows.loc[~zero]],
+        ignore_index=True,
+    )
+
+
 def main(argv: Sequence[str]) -> None:
     """Run one unit, or rebuild the tables."""
     if len(argv) < 3:
@@ -599,6 +680,12 @@ def main(argv: Sequence[str]) -> None:
         germany_unit(cache, argv[2], segment)
     elif study == "release":
         release_unit(cache, argv[2])
+    elif study == "run" and len(argv) == 6:
+        out = run_table(cache, Path(argv[2]), Path(argv[3]), argv[4])
+        out.round(4).to_csv(argv[5], index=False)
+    elif study == "compare" and len(argv) >= 3:
+        tables = [pd.read_csv(p) for p in argv[2:]]
+        comparison(tables).to_csv(cache, index=False)
     elif study == "table" and len(argv) >= 4:
         new = table(cache, Path(argv[2]), Path(argv[3]), argv[4:])
         print(new.round(3).to_string(index=False), flush=True)

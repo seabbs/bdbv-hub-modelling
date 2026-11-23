@@ -199,7 +199,7 @@ def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
     (where / "settings.json").write_text(
         json.dumps({"n_validation": len(val), "batch_size": 100, "steps": 200})
     )
-    runner.main(["steps", str(where), "--device", "cpu"])
+    runner.main(["steps", str(where), "--device", "cpu", "--eval-every", "200"])
     runner.main(["checkpoint", str(where), "--device", "cpu"])
     step = json.loads((train / "evals" / "step-0000200.json").read_text())
     assert step["eval_loss"] == fs.held_out_loss(

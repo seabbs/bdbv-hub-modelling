@@ -151,3 +151,14 @@ def test_reference_bands_are_one_per_disease_in_the_summaries_units():
     # 30.2 days is ln 2 over those.
     assert np.isclose(growth["dengue"][1], 0.213 / 7)
     assert np.isclose(growth["ebola"][1], np.log(2) / 12.84)
+
+
+def test_diseases_give_each_summary_s_range_against_published_values():
+    refs = pd.read_csv(ROOT / "paper" / "data" / "reference-values.csv")
+    d = pd.DataFrame({"gt_mean": np.linspace(0, 100, 101), "other": 1.0})
+    out = sr.diseases(d, refs)
+    assert list(out["summary"]) == ["Generation time mean (days)"]
+    row = out.iloc[0]
+    assert (row["sim_q5"], row["sim_q50"], row["sim_q95"]) == (5, 50, 95)
+    assert "ebola* 10 to 16.1" in row["published"]
+    assert "10.1093/aje/kwu209" in row["sources"].split("; ")

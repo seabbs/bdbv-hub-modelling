@@ -111,12 +111,11 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
 
 
 def keep_mirrored(ctx: page.Context, every: float) -> None:
-    """Refresh copies and summaries every `every` seconds, outside requests."""
+    """Refresh copies and warm nowcasts every `every` s, outside requests."""
 
     def loop() -> None:
         while True:
             status = ctx.source.refresh()
-            ctx.summarise()
             with LOCK:
                 ctx.mirror_status = status
                 # Warm each dataset's nowcasts, so pages do not build them.
@@ -136,7 +135,6 @@ def write_once(ctx: page.Context, out: Path) -> int:
     """
     ctx.mirror_status = ctx.source.refresh()
     print(ctx.mirror_status)
-    ctx.summarise()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(page.build(ctx))
     print("wrote", out)
@@ -152,7 +150,7 @@ def main() -> None:
     )
     if a.once:
         sys.exit(write_once(ctx, a.once))
-    # Copies and summaries are kept fresh in the background, from the start
+    # Copies and nowcasts are kept fresh in the background, from the start
     # and also on a machine whose sources are all local, so no page waits.
     keep_mirrored(ctx, float(config["dashboard"].get("mirror_every", 300)))
     server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx))

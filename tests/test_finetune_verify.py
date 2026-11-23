@@ -192,6 +192,7 @@ def test_the_simulator_hashes_its_grid_and_python():
                     "pmfs",
                     "reference",
                     "renewal",
+                    "walks",
                 ),
             ),
             (

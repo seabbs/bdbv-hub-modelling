@@ -1,16 +1,11 @@
-"""Nowcast panels for any dataset: quantile or sample forecasts."""
+"""Nowcast panels for any dataset, from quantile forecasts."""
 
 import csv
 import gzip
-import os
 
 import numpy as np
-import pandas as pd
 import pytest
 from flowlib.dashboard import nowcasts, runs
-
-from nowcasteval.nowcast import reporting_delay, rolling_truth
-from nowcasteval.scoring import crps_sample
 
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 PAGE = (0.025, 0.25, 0.5, 0.75, 0.975)
@@ -197,88 +192,6 @@ def test_one_location_has_truth_and_latest_by_target(tmp_path):
     assert got["truth"]["7day"] == {"t": ["2022-02-01"], "y": [10.0]}
 
 
-def _releases(path):
-    weeks = pd.date_range("2026-08-01", periods=6, freq="7D")
-    rows = []
-    for v in pd.date_range("2026-08-15", periods=5, freq="7D"):
-        for w in weeks[weeks <= v]:
-            age = (v - w).days
-            total = 100 if age >= 14 else 60
-            for loc in ("CD", "CD-KN"):
-                rows.append(
-                    {
-                        "kind": "real",
-                        "vintage": v.date().isoformat(),
-                        "location": loc,
-                        "target_end_date": w.date().isoformat(),
-                        "total": total,
-                        "cutoff": v.date().isoformat(),
-                    }
-                )
-    pd.DataFrame(rows).to_csv(path, index=False)
-    return pd.DataFrame(rows)
-
-
-def test_samples_are_scored_against_the_scorer_s_truth(tmp_path):
-    target = _releases(tmp_path / "target.csv")
-    raw = tmp_path / "raw" / "reference"
-    raw.mkdir(parents=True)
-    rng = np.random.default_rng(1)
-    draws = rng.poisson(90, 200).astype(float)
-    with gzip.open(raw / "2026-08-29.csv.gz", "wt") as f:
-        w = csv.writer(f)
-        w.writerow(
-            [
-                "location",
-                "target_end_date",
-                "sample",
-                "value",
-                "model",
-                "origin",
-                "target",
-            ]
-        )
-        for i, v in enumerate(draws):
-            w.writerow(
-                [
-                    "CD",
-                    "2026-08-01",
-                    i,
-                    v,
-                    "fm_chronos_daily_ragged",
-                    "2026-08-29",
-                    "7day",
-                ]
-            )
-    ds = {
-        "key": "bdbv",
-        "truth_level": 0.98,
-        "truth_skip": [],
-        "national": "CD",
-        "targets": ["7day"],
-    }
-    out = tmp_path / "summary"
-    delay = nowcasts.summarise_samples(
-        tmp_path / "raw", out, tmp_path / "target.csv", ds
-    )
-    real = target.assign(location=target["location"])
-    assert delay == reporting_delay(real, 0.98, (), "CD")
-    truth = rolling_truth(real, delay)
-    y = truth.loc[
-        (truth.location == "CD") & (truth.target_end_date == "2026-08-01"),
-        "truth",
-    ].item()
-    with gzip.open(out / "reference" / "2026-08-29.csv.gz", "rt") as f:
-        rows = list(csv.DictReader(f))
-    # The seven levels and the 90% interval's.
-    assert {r["quantile"] for r in rows} == {*SEVEN, "0.05", "0.95"}
-    assert float(rows[0]["truth"]) == y
-    assert float(rows[0]["score"]) == pytest.approx(
-        crps_sample(y, draws), abs=1e-3
-    )
-    assert float(rows[0]["latest"]) == 100
-
-
 def test_wis_parts_on_both_scales_sum_to_each_scale_s_wis(tmp_path):
     from nowcasteval.scoring import wis_quantile
 
@@ -342,44 +255,6 @@ def test_with_5_and_95_quantiles_bands_and_coverage_are_90(tmp_path):
     )
 
 
-def test_summaries_from_before_the_90_interval_are_written_again(tmp_path):
-    raw = tmp_path / "raw" / "reference" / "2026-08-29.csv.gz"
-    raw.parent.mkdir(parents=True)
-    pd.DataFrame(
-        {
-            "sample": range(50),
-            "value": range(50),
-            "model": "m",
-            "origin": "2026-08-29",
-            "location": "CD",
-            "target_end_date": "2026-08-01",
-            "target": "7day",
-        }
-    ).to_csv(raw, index=False)
-    target = tmp_path / "target.csv"
-    pd.DataFrame(
-        {
-            "location": ["CD"],
-            "target_end_date": ["2026-08-01"],
-            "vintage": ["2026-08-29"],
-            "total": [10],
-            "kind": ["real"],
-        }
-    ).to_csv(target, index=False)
-    out = tmp_path / "summary"
-    old = out / "reference" / "2026-08-29.csv.gz"
-    old.parent.mkdir(parents=True)
-    old.write_bytes(gzip.compress(b"model,quantile\n"))
-    future = raw.stat().st_mtime + 100
-    os.utime(old, (future, future))
-    ds = {"key": "bdbv", "national": "CD", "targets": ["7day"]}
-    nowcasts.summarise_samples(tmp_path / "raw", out, target, ds)
-    with gzip.open(old, "rt") as f:
-        levels = {r["quantile"] for r in csv.DictReader(f)}
-    assert {"0.05", "0.95"} <= levels
-    assert (out / ".levels").exists()
-
-
 def test_wis_splits_into_nowcast_and_forecast_weeks_ahead():
     # Target dates up to the nowcast date are the nowcast part; later ones
     # the forecast part, by week ahead (days 1 to 7 are week 1).
@@ -435,3 +310,25 @@ def test_a_dataset_shows_only_the_model_inputs_its_config_lists(tmp_path):
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE, sources={"daily"})
     for by_target in built["series"]["DE"].values():
         assert set(by_target["7day"]) == {"daily"}
+
+
+def test_a_run_s_own_score_folders_are_its_checkpoints(tmp_path):
+    # A run scores its saved checkpoints into <run>/scores/<unit>/n<N>;
+    # each is the run's checkpoint of that segment's hash.
+    cache = tmp_path / "cache" / "germany-days"
+    _quantiles(cache / "reference" / "2022-02-09.csv.gz", "randomwalknowcast")
+    run = tmp_path / "run"
+    (run / "train" / "n100").mkdir(parents=True)
+    (run / "train" / "n100" / "settings.json").write_text(
+        '{"hash": "abc123def456", "n_outbreaks": 100}'
+    )
+    _quantiles(
+        run / "scores" / "germany-days" / "n100" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged_ft",
+    )
+    _, refs = _setup()
+    rs = [runs.make_run("runa", str(run), live=True)]
+    built = nowcasts.build(cache, rs, refs, levels=PAGE, unit="germany-days")
+    assert "abc123def456" in built["sets"]
+    assert "rw" in built["sets"]
+    assert built["folders"]["abc123def456"] == "runa-abc123def456"
