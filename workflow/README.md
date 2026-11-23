@@ -181,7 +181,7 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 - Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
 - Evidence read from git (`evidence_aggregation_scores`, `evidence_checkpoint_scores`, `evidence_lag_germany`), gathered by `evidence`.
-- Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `grid_tables`, `summary` and `publish_paper`.
+- Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `pairing_germany`, `pairing_synthetic` and `si_copula` (the walks' scores with and without pairing, on development data), `grid_tables`, `summary` and `publish_paper`.
 
 ## Scheduled runs
 

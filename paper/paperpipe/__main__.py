@@ -12,6 +12,7 @@ Steps, in workflow order:
 - `figures` and `score-tables`: main-text and SI outputs;
 - `evidence`: SI tables, figures and numbers from evidence branches;
 - `realism`: the grid's simulations against the German development half;
+- `pairing`: the walks' scores with and without pairing, summarised;
 - `ebola-extra`: further Ebola samples, kept to some models;
 - `germany-extra`: further German forecasts as a paper table;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
@@ -214,6 +215,13 @@ def _realism(a: argparse.Namespace) -> None:
     realism_reference(pd.read_csv(a.germany), sims).to_csv(a.out_reference)
 
 
+def _pairing(a: argparse.Namespace) -> None:
+    from nowcasteval.pairing import summarise_pairing
+
+    rows = pd.concat([pd.read_csv(p) for p in a.scores], ignore_index=True)
+    summarise_pairing(rows).to_csv(a.out, index=False)
+
+
 def _ebola_extra(a: argparse.Namespace) -> None:
     raw = pd.read_csv(a.input)
     _write(raw.loc[raw["model"].str.match(a.models)], a.out)
@@ -384,6 +392,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-sims", type=Path, required=True)
     p.add_argument("--out-reference", type=Path, required=True)
     p.set_defaults(run=_realism)
+
+    p = sub.add_parser("pairing")
+    p.add_argument("scores", type=Path, nargs="+")
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_pairing)
 
     p = sub.add_parser("ebola-extra")
     p.add_argument("--input", type=Path, required=True)

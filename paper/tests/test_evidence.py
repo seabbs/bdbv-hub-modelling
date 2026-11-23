@@ -659,8 +659,8 @@ def test_the_copula_figure_has_national_and_provinces_per_study() -> None:
     assert titles == {
         "Germany, national",
         "Germany, states",
-        "Held-out synthetic, national",
-        "Held-out synthetic, provinces",
+        "Synthetic, national",
+        "Synthetic, provinces",
     }
     labels = {t.get_text() for t in drawn[0].get_xticklabels()}
     assert labels == {"CRPS", "90% coverage", "ES (log)"}

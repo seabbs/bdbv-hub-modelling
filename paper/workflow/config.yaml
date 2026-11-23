@@ -151,10 +151,6 @@ evidence:
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: results/germany-chronos-dev/scores.csv
-  # The walks' scores with no pairing and the rolling rho_p, by study and
-  # level, on development data (`summarise_pairing` rows). Pending:
-  # the rows on evidence/fm-copula.
-  si_copula: null
   # Each walk model's rho_p by origin, the rows of its rounds' copula.json
   # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
   copula_rho: null

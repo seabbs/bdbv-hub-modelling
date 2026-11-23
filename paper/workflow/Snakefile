@@ -530,6 +530,70 @@ rule sim_examples:
         "--settings {input.settings} --picks {params.picks} --out {output}"
 
 
+# The walk models' scores with no pairing and with the rolling rho_p, on
+# development data only (`nowcasteval.pairing`): the German development
+# half, and the development seeds' outbreaks as the synthetic runner
+# forecasts them. `si_copula` summarises both for the SI's copula figure.
+rule pairing_germany:
+    input:
+        TRIANGLE,
+    output:
+        f"{R}/evidence/pairing/pairing-germany.csv.gz",
+    log:
+        f"{R}/logs/pairing_germany.log",
+    conda:
+        TOOLS_ENV
+    resources:
+        heavy=1,
+    params:
+        bdbv=BDBV,
+        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+        out=lambda w, output: Path(output[0]).parent,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.bdbv} pairing-sensitivity --study germany {params.args} "
+        "--out {params.out}"
+
+
+rule pairing_synthetic:
+    input:
+        FLOW.synthetic_simulations("development"),
+    output:
+        f"{R}/evidence/pairing/pairing-synthetic.csv.gz",
+    log:
+        f"{R}/logs/pairing_synthetic.log",
+    conda:
+        TOOLS_ENV
+    resources:
+        heavy=1,
+    params:
+        python=PYTHON,
+        sims=SYNTHETIC["simulations"]["development"],
+        seeds=FLOW.seeds("development"),
+        samples=config["synthetic"]["samples"],
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} paper/scripts/pairing_synthetic.py {params.sims} "
+        "{output} --seeds {params.seeds} --samples {params.samples}"
+
+
+rule si_copula:
+    input:
+        rules.pairing_germany.output,
+        rules.pairing_synthetic.output,
+    output:
+        f"{R}/evidence/si-copula.csv",
+    log:
+        f"{R}/logs/si_copula.log",
+    conda:
+        TOOLS_ENV
+    params:
+        python=PYTHON,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe pairing {input} --out {output}"
+
+
 # The grid's training rounds against the German development half, for
 # the SI's realism figure and numbers (`paperpipe realism`).
 rule sim_realism:
@@ -584,6 +648,7 @@ rule evidence:
         # The final run's held-out loss by level (workflow rule heldout_curve).
         heldout=FLOW.heldout_curve(),
         realism=rules.sim_realism.output,
+        copula=rules.si_copula.output,
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -603,6 +668,7 @@ rule evidence:
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
         "--finetune-heldout {input.heldout} "
         "--sim-summaries {input.realism[0]} --sim-realism {input.realism[1]} "
+        "--si-copula {input.copula} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 
