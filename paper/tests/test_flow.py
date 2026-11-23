@@ -158,11 +158,11 @@ def test_grid_config_has_both_runs_seeds() -> None:
 
 def test_evidence_files_are_named_by_their_commit() -> None:
     entry = {"ref": "0123456789abcdef", "path": "evidence/x.csv.gz"}
-    flow = PaperFlow(CONFIG, {"lag_germany": entry}, "2026-08-01")
-    path = flow.evidence_file("lag_germany")
-    assert path.endswith("evidence/lag_germany-0123456789ab.csv.gz")
-    names = {"lag_germany": "waiting note"}
-    assert flow.evidence_args(names) == f"--lag-germany {path}"
+    flow = PaperFlow(CONFIG, {"scale_floor": entry}, "2026-08-01")
+    path = flow.evidence_file("scale_floor")
+    assert path.endswith("evidence/scale_floor-0123456789ab.csv.gz")
+    names = {"scale_floor": "waiting note"}
+    assert flow.evidence_args(names) == f"--scale-floor {path}"
     assert flow.evidence_args({}) == ""
 
 
