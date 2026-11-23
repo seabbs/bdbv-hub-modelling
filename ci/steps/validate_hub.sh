@@ -7,7 +7,7 @@
 # hub validation bundle against the hub checkout:
 #
 #   1. `bdbvhubrenewal validate` (hub_validate.py, Python, fast);
-#   2. scripts/validate-hub.R (hubValidations, the hub's own checks),
+#   2. tests/submission/hub_validation/validate_hub.R (hubValidations, the hub's own checks),
 #      unless R_VALIDATION=false.
 #
 # Both see the appended file and the hub's copy when the hub already has
@@ -54,5 +54,6 @@ cli validate --hub "$HUB_PATH" --metadata-dir "$stage" ${window[@]+"${window[@]}
 if [ "${R_VALIDATION:-true}" != "false" ]; then
   echo "== hubValidations (R)"
   VALIDATION_JSON="$stage/r-validation.json" PREVIOUS="${PREVIOUS_FILE:-}" \
-    Rscript scripts/validate-hub.R "$HUB_PATH" "$csv" "$yml"
+    Rscript tests/submission/hub_validation/validate_hub.R \
+      "$HUB_PATH" "$csv" "$yml"
 fi
