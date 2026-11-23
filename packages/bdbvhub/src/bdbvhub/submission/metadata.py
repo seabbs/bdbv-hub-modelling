@@ -116,8 +116,8 @@ MODEL_METADATA = {
         "methods_long": (
             "We fit a renewal process in PyRenew to each province's series "
             "on its own. "
-            "Each has its own weekly AR(1) on log Rt, with no pooling, "
-            "importation or depletion. "
+            "Each has its own weekly AR(1) on log Rt and susceptible "
+            "depletion, with no pooling or importation. "
             "A province with no case in the last nine weeks is zero until an "
             "introduction, then a random walk. "
             + _ZONE_SPLIT

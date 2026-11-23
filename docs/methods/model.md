@@ -24,7 +24,7 @@ flowchart TD
     PM["<b>Place model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
     RN["<b>renewal</b><br/>zones with recent cases<br/>fitted together<br/>+ pooled log R walk<br/>+ province and zone<br/>sum-to-zero AR(1) deviations<br/>+ importation between zones<br/>+ share at risk<br/>+ delay pooled by province<br/>+ silent zones by introductions<br/>provinces are zone sums"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
-    SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>no share at risk"]
+    SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>+ share at risk"]
 
     PM -- "nest zones in provinces" --> RN
     RN -- "add external Rt" --> BV
@@ -333,7 +333,8 @@ The national trajectory is the sum of the provinces, with no unassigned componen
 
 `renewalsp` fits the [place model](#province-model) to each province's series on its own, one fit after another with the same code.
 Nothing is pooled or shared between provinces: each has its own Rt walk, delay, missing-onset share and ascertainment.
-One series cannot inform the share at risk, so there is no depletion.
+It keeps the share at risk and depletion of the zone models, so the three models differ only in what each removes.
+One series barely informs $\nu$, so it stays close to its prior.
 Every province with a case in the random walks' walk window is fitted, however few its cases.
 A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
 National is the sum of the provinces plus the data's national gap.
