@@ -179,25 +179,6 @@ def test_a_study_without_rows_still_waits(tmp_path) -> None:
     assert not (tmp_path / "si" / "aggregation-cost.md").exists()
 
 
-def test_lag_numbers_pair_each_model_with_its_longer_horizon() -> None:
-    from paperpipe.evidence import lag_numbers
-
-    germany = pd.DataFrame(
-        {
-            "pool": "national",
-            "model": ["fm_chronos_daily_ragged", "fm_chronos_daily_ragged_fix"],
-            "rel_wis_randomwalknowcast": [2.9, 3.8],
-        }
-    )
-
-    out = lag_numbers(germany)
-    assert out["germany"]["fm_chronos_daily_ragged"] == {
-        "capped": 2.9,
-        "longer": 3.8,
-    }
-    assert set(out) == {"germany"}
-
-
 def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
     from paperpipe.evidence import checkpoint_figure, checkpoint_numbers
 

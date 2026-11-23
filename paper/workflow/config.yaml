@@ -147,10 +147,6 @@ evidence:
     path: evidence/checkpoint-scores.csv
   # Pending: the scale-floor test on the final run's checkpoints.
   scale_floor: null
-  # The lag-horizon test of the ragged layout.
-  lag_germany:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: results/germany-chronos-dev/scores.csv
   # The walks' scores with no pairing and the rolling rho_p, by study and
   # level, on development data (`summarise_pairing` rows). Pending:
   # the rows on evidence/fm-copula.
