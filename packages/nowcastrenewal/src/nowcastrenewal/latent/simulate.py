@@ -32,7 +32,7 @@ from ..components.renewal import DEPLETIONS, Shifts, Variants
 from .imports import Imports
 from .infections import StratifiedInfections
 from .mixing import PlaceMixing
-from .rt import KINDS, PlaceRt, RtPath
+from .rt import KINDS, PlaceRt, RtPath, vector
 from .start import InitializeStrata
 
 __all__ = ["COLUMNS", "Latent", "simulate_latent", "simulate_latent_batch"]
@@ -43,8 +43,7 @@ strata in order."""
 
 
 def _vector(values: Mapping[str, Any], name: str) -> np.ndarray:
-    x = values.get(name)
-    return np.atleast_1d(np.asarray([] if x is None else x, dtype=float))
+    return vector(values.get(name))
 
 
 @dataclass
