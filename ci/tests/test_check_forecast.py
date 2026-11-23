@@ -668,7 +668,7 @@ def _place_check(counts: dict[str, float], median: float, q975: float) -> Any:
 
 
 def test_poisson_limits_of_the_recent_maximum_replace_the_floor() -> None:
-    from submission_ci.check_forecast import poisson_limits  # type: ignore[attr-defined]
+    from submission_ci.check_forecast import poisson_limits
 
     # The exact 95% limits of a Poisson mean given a count of 0, 1 and 54.
     assert poisson_limits(0, 0.975) == pytest.approx((0.0, 3.689), abs=1e-3)
