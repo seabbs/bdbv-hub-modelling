@@ -243,8 +243,8 @@ def simulate_latent(
     r = np.asarray(tr["latent::r"]["value"])
     reff = np.asarray(tr["latent::reff"]["value"])
     group = strata[".group"].to_numpy().astype(int) - 1
-    # The drawn infection-to-reference family and CV; grids before they
-    # were drawn used a gamma with `incubation_cv`.
+    # The drawn infection-to-reference family and CV; a design that does
+    # not draw them takes a gamma with `incubation_cv`.
     family = design.get("incubation_family", "gamma")
     cv = float(values.get("incubation_cv", incubation_cv))
     events = ReferenceEvents(
