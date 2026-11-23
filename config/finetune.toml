@@ -9,6 +9,17 @@
 # submission's (Sam, 2026-11-24): release chronos-slots-72661eb7efaa.
 hash = "slots-72661eb7efaa"
 
+# The fine-tuned models' blocks: one joint block of the country, every
+# province and the active zones (at least `active_zone_cases` cases in the
+# `active_zone_weeks` weeks to the cut-off and one in the last
+# `active_zone_recent_weeks`, as reported then), and one block per
+# province of the province and all its zones, from which every other zone
+# takes its forecast (`nowcastfoundation.forecaster.active_views`). Leave
+# `active_zone_cases` out for every zone in the joint block.
+active_zone_cases = 20
+active_zone_weeks = 8
+active_zone_recent_weeks = 4
+
 # The Chronos-2 checkpoint fine-tuned on real data alone, the German
 # development half and the public BDBV data up to the release in
 # config/finetune/realdata.toml on the germany-ft branch
