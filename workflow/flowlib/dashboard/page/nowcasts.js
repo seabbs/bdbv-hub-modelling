@@ -222,10 +222,17 @@ function wisChart(d,eff,ds){
     if(HR&&((HR[2]!==null&&7*k-6>HR[2])||(HR[1]!==null&&7*k<HR[1])))return;ahead[k]=ahead[k]||[0,0];ahead[k][0]+=f[0]*f[1];ahead[k][1]+=f[1]})});
   var out=[];if(now[1])out.push(["nowcast","now",now[0]/now[1]]);
   Object.keys(ahead).sort(function(a,b){return a-b}).forEach(function(k){out.push(["forecast","wk "+k,ahead[k][0]/ahead[k][1]])});return out}
- var hz=sel.map(pool),hmax=Math.max.apply(null,hz.reduce(function(a,r){return a.concat(r.map(function(x){return x[2]}))},[0]))*1.05||1,h5='';
- sel.forEach(function(id,i){var y=2+i*RH,bars=hz[i],bw2=(W-60)/Math.max(1,bars.length);
-  h5+=lab(id,y);bars.forEach(function(b,j){var w=Math.max(0,b[2]/hmax*(bw2-34)),x=j*bw2;
-   h5+='<rect x="'+x+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+fillKind(colour(id),HF[b[0]]||"solid")+'" stroke="'+colour(id)+'" stroke-width=".8"><title>'+(b[0]=="nowcast"?"nowcast part":"forecast, week "+b[1].slice(3)+" ahead")+': '+C.metric+' '+fmt(b[2])+'</title></rect><text x="'+(x+w+2)+'" y="'+(y+22)+'" class=ax>'+b[1]+'</text>'})});
+ // Grouped bars (bars.js): a group per part, a bar per model, the value
+ // above each bar.
+ var hz=sel.map(pool),grp=[];
+ hz.forEach(function(r){r.forEach(function(x){if(grp.indexOf(x[1])<0)grp.push(x[1])})});
+ grp.sort(function(a,b){return (a=="now"?-1:+a.slice(3))-(b=="now"?-1:+b.slice(3))});
+ var H5=Math.max(170,H2),gb=groupedBars(grp,sel.map(function(id,i){var v={};hz[i].forEach(function(x){v[x[1]]=x[2]});return {id:id,values:v}}),W,H5),h5='';
+ [0,0.5,1].forEach(function(f){var v=gb.top*f,y=H5-gb.bottom-f*(H5-gb.bottom-12);h5+='<line x1="'+gb.left+'" x2="'+W+'" y1="'+y+'" y2="'+y+'" class=grid /><text x="'+(gb.left-4)+'" y="'+(y+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
+ grp.forEach(function(g,gi){h5+='<text x="'+(gb.left+(gi+0.5)*gb.width)+'" y="'+(H5-3)+'" text-anchor=middle class=ax>'+g+'</text>'});
+ gb.bars.forEach(function(b){var kind=b.g=="now"?"nowcast":"forecast";
+  h5+='<rect x="'+b.x+'" y="'+b.y+'" width="'+b.w+'" height="'+b.h+'" fill="'+fillKind(colour(b.m),HF[kind]||"solid")+'" stroke="'+colour(b.m)+'" stroke-width=".8"><title>'+shortLab(b.m)+', '+(b.g=="now"?"nowcast part":"forecast, week "+b.g.slice(3)+" ahead")+': '+C.metric+' '+fmt(b.v)+'</title></rect>'
+  +'<text transform="translate('+(b.x+b.w/2+3)+','+(b.y-2)+') rotate(-90)" class=ax style="font-size:8px">'+fmt(b.v)+'</text>'});
  // Models whose files hold no forecast days are named, not left to look like zero.
  var noFc=sel.filter(function(id,i){return !hz[i].some(function(x){return x[0]=="forecast"})}).map(shortLab);
  var hzNote=noFc.length&&(!HR||HR[2]===null||HR[2]>0)?'<div class=mut style="font-size:11px">No forecast days on the common dates: '+noFc.join(", ")+'.</div>':'';
@@ -251,7 +258,7 @@ function wisChart(d,eff,ds){
  // its hidden defs hold every bar's pattern once.
  var top=(any?'<div style="font-size:11px">'+key()+'</div>':'<svg width=0 height=0 style="position:absolute">'+defs()+'</svg>');
  $("gwis").innerHTML=top+'<div class=gscores>'+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
-  +rows(C.metric+" by part of the horizon",h5,H2,"wissplit",'<div style="font-size:11px">'+hzKey+'</div>'+hzNote)+byDay+'</div>'
+  +rows(C.metric+" by part of the horizon",h5,H5,"wissplit",'<div style="font-size:11px">'+hzKey+'</div>'+hzNote)+byDay+'</div>'
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
 function chips(){var h='';
