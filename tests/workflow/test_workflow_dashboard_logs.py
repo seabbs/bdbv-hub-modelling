@@ -64,21 +64,10 @@ def test_checkpoints_are_listed_by_size(tmp_path):
     ]
 
 
-def test_prefixes_from_the_trainer_command_line_or_saved_folders(tmp_path):
-    args = "python scripts/finetune_stream.py a b --prefixes 250 500 8000 --x"
-    assert logs.prefixes(tmp_path, args, (250,)) == [250, 500, 8000]
+def test_prefixes_are_the_saved_folders_with_the_default(tmp_path):
     (tmp_path / "train" / "n750").mkdir(parents=True)
-    got = logs.prefixes(tmp_path, "", default=(250, 1000))
+    got = logs.prefixes(tmp_path, default=(250, 1000))
     assert got == [250, 750, 1000]
-
-
-def test_a_trainer_is_alive_while_its_pid_runs(tmp_path):
-    (tmp_path / "trainer.pid").write_text(f"{os.getpid()}\n")
-    text, alive = logs.trainer_state(tmp_path)
-    assert alive is True
-    assert str(os.getpid()) in text
-    (tmp_path / "trainer.pid").write_text("999999999\n")
-    assert logs.trainer_state(tmp_path)[1] is False
 
 
 def _status(folder, stage, age_s):
@@ -89,20 +78,14 @@ def _status(folder, stage, age_s):
     os.utime(path, (when, when))
 
 
-def test_a_fresh_stream_status_means_alive_whatever_the_pid(tmp_path):
-    # Under Snakemake the pid file is an old launcher's.
-    (tmp_path / "trainer.pid").write_text("999999999\n")
+def test_a_fresh_stream_status_means_alive(tmp_path):
     _status(tmp_path, "training", 60)
     text, alive = logs.trainer_state(tmp_path)
     assert alive is True
     assert "status" in text
-    # No pid file at all.
-    (tmp_path / "trainer.pid").unlink()
-    assert logs.trainer_state(tmp_path)[1] is True
 
 
-def test_a_stale_status_and_a_dead_pid_mean_dead(tmp_path):
-    (tmp_path / "trainer.pid").write_text("999999999\n")
+def test_a_stale_status_means_dead(tmp_path):
     _status(tmp_path, "training", 3600)
     assert logs.trainer_state(tmp_path)[1] is False
 
@@ -115,9 +98,9 @@ def test_a_stopped_run_is_neither_alive_nor_dead(tmp_path):
         assert stage in text
 
 
-def test_a_run_reads_every_segment_log_and_the_old_train_log(tmp_path):
+def test_a_run_reads_every_segment_log(tmp_path):
     (tmp_path / "train").mkdir()
-    (tmp_path / "train.log").write_text(
+    (tmp_path / "train" / "n100.log").write_text(
         LINE.format(step=10, loss=0.5, held=0.4) + "\n"
     )
     (tmp_path / "train" / "n250.log").write_text(
@@ -132,11 +115,11 @@ def test_a_run_reads_every_segment_log_and_the_old_train_log(tmp_path):
     assert [r["step"] for r in log.rows()] == [10, 20, 30]
 
 
-def test_a_train_log_linked_to_a_segment_log_is_read_once(tmp_path):
+def test_a_segment_log_reached_by_two_names_is_read_once(tmp_path):
     (tmp_path / "train").mkdir()
     seg = tmp_path / "train" / "n2000.log"
     seg.write_text(LINE.format(step=20, loss=0.45, held=0.39) + "\n")
-    (tmp_path / "train.log").symlink_to(seg)
+    (tmp_path / "train" / "n02000.log").symlink_to(seg)
     assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [20]
 
 
@@ -203,22 +186,8 @@ def test_planned_chunks_are_read_newest_last(tmp_path):
     assert logs.Log(path).chunks() == {0: (250, 1500), 250: (500, 1450)}
 
 
-def test_a_renamed_launcher_log_is_read_with_the_segment_logs(tmp_path):
-    (tmp_path / "train").mkdir()
-    (tmp_path / "train-launcher.log").write_text(
-        LINE.format(step=10, loss=0.5, held=0.4) + "\n"
-    )
-    (tmp_path / "train" / "n2000.log").write_text(
-        LINE.format(step=20, loss=0.4, held=0.3) + "\n"
-    )
-    assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [10, 20]
-
-
 def test_the_last_line_is_the_newest_segment_log_s_last_line(tmp_path):
     (tmp_path / "train").mkdir()
-    (tmp_path / "train.log").write_text(
-        LINE.format(step=10, loss=0.5, held=0.4) + "\n"
-    )
     (tmp_path / "train" / "n250.log").write_text(
         LINE.format(step=20, loss=0.4, held=0.3) + "\n"
     )
@@ -270,3 +239,21 @@ def test_a_segment_waits_on_the_batches_it_needs_that_are_missing(tmp_path):
     assert logs.waiting_batches(few, 400) == list(range(33410, 33421))
     # A run with no seed list waits on nothing it can name.
     assert logs.waiting_batches(tmp_path / "none", 400) == []
+
+
+def test_a_run_reads_only_its_segment_logs(tmp_path):
+    (tmp_path / "train").mkdir()
+    for old in ("train.log", "train-launcher.log"):
+        (tmp_path / old).write_text(
+            LINE.format(step=10, loss=0.5, held=0.4) + "\n"
+        )
+    (tmp_path / "train" / "n250.log").write_text(
+        LINE.format(step=20, loss=0.45, held=0.39) + "\n"
+    )
+    assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [20]
+
+
+def test_a_pid_file_says_nothing_about_the_trainer(tmp_path):
+    # Only the stream status counts: nothing writes trainer.pid.
+    (tmp_path / "trainer.pid").write_text(f"{os.getpid()}\n")
+    assert logs.trainer_state(tmp_path) == ("unknown", None)

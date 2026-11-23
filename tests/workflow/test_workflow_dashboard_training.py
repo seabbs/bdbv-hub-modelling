@@ -20,40 +20,28 @@ def test_the_log_reads_any_source_names(tmp_path):
     }
 
 
-def test_run_params_from_the_command_line_settings_and_history(tmp_path):
+def test_run_params_from_the_settings_and_history(tmp_path):
     n = tmp_path / "train" / "n250"
     n.mkdir(parents=True)
-    (n / "settings.json").write_text(json.dumps({"lr_steps": 999}))
-    args = (
-        "python scripts/finetune_stream.py --learning-rate 1e-5 "
-        "--lr-steps 36500 --bias-lr 1e-3 --prefixes 250 500 8000"
-    )
+    settings = {
+        "learning_rate": 1e-5,
+        "lora": {"r": 8},
+        "series_bias": {"learning_rate": 1e-3},
+        "lr_decay": "linear to zero over the outbreaks",
+    }
+    (n / "settings.json").write_text(json.dumps(settings))
     hist = [{"step": 100, "lr": {"LoRA": 9e-6, "bias": 9e-4}}]
-    got = training.run_params(tmp_path, hist, 100, args, (250,))
-    assert got["lr_steps"] == 36500
-    assert got["groups"] == {"adapter": 1e-5, "bias": 1e-3, "LoRA": 9e-6}
+    got = training.run_params(tmp_path, hist, 100, (250, 500))
+    assert got["groups"] == {"LoRA": 1e-5, "bias": 1e-3}
     assert got["current"]["bias"] == 9e-4
-    assert got["prefixes"] == [250, 500, 8000]
+    assert got["lr_outbreaks"] == 500
+    assert got["prefixes"] == [250, 500]
 
 
-def test_run_params_decay_linearly_without_history(tmp_path):
-    args = "x --learning-rate 1e-5 --lr-steps 1000 --prefixes 250"
-    got = training.run_params(tmp_path, [], 250, args, (250,))
-    assert got["current"]["adapter"] == 1e-5 * 0.75
-
-
-def test_run_params_decay_over_the_outbreaks_without_a_step_count(tmp_path):
-    args = "x --learning-rate 1e-5 --outbreaks 8400 --prefixes 250 8400"
-    got = training.run_params(tmp_path, [], 0, args, (250,))
-    assert got["lr_steps"] == 0
-    assert got["lr_outbreaks"] == 8400
-
-
-def test_steps_per_simulation_follow_the_schedule_or_the_last_checkpoint():
-    assert training.steps_per_simulation(36500, [250, 8000], []) == 4.5625
+def test_steps_per_simulation_follow_the_last_checkpoint():
     cks = [("n500", {"steps": 2000, "n_outbreaks": 500}, None)]
-    assert training.steps_per_simulation(0, [250, 500], cks) == 4.0
-    assert training.steps_per_simulation(0, [250], []) == 1.0
+    assert training.steps_per_simulation(cks) == 4.0
+    assert training.steps_per_simulation([]) == 1.0
 
 
 def test_loss_runs_take_held_out_by_source_from_history(tmp_path):
@@ -171,8 +159,8 @@ def test_with_nothing_known_steps_map_at_the_given_rate():
 
 
 def test_a_run_from_the_workflow_decays_over_its_simulations(tmp_path):
-    # Snakemake starts the trainer: no pid file, so no command line. The
-    # settings say the rate falls over the run's simulations (`default`).
+    # The settings say the rate falls over the run's simulations
+    # (`default`).
     n = tmp_path / "train" / "n250"
     n.mkdir(parents=True)
     (n / "settings.json").write_text(
@@ -183,7 +171,7 @@ def test_a_run_from_the_workflow_decays_over_its_simulations(tmp_path):
             }
         )
     )
-    got = training.run_params(tmp_path, [], 3000, "", (250, 8400), sims=2100)
+    got = training.run_params(tmp_path, [], 3000, (250, 8400), sims=2100)
     assert got["lr_outbreaks"] == 8400
     assert got["current"]["adapter"] == pytest.approx(1e-5 * 0.75)
 
@@ -212,18 +200,6 @@ def test_the_rate_uses_logged_steps_and_the_status_over_a_long_enough_window():
     # One point, or none: no rate.
     assert training.recent_rate([(t0, 5)]) == (None, None)
     assert training.recent_rate([]) == (None, None)
-
-
-def test_a_falling_logged_rate_is_a_decay_even_without_lr_decay(tmp_path):
-    n = tmp_path / "train" / "n250"
-    n.mkdir(parents=True)
-    (n / "settings.json").write_text(json.dumps({"learning_rate": 1e-5}))
-    hist = [
-        {"step": 400, "lr": {"lora": 9.9e-6}},
-        {"step": 800, "lr": {"lora": 9.7e-6}},
-    ]
-    got = training.run_params(tmp_path, hist, 800, "", (250, 8400), sims=160)
-    assert got["lr_outbreaks"] == 8400
 
 
 def test_loss_runs_carry_checkpoint_losses_by_layout_and_level(tmp_path):

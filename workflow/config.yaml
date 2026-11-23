@@ -201,24 +201,18 @@ dashboard:
   # Where scores are mirrored to when REMOTE is set, and how often (s).
   mirror: output/dashboard/mirror
   mirror_every: 300
-  # The nowcast panels' datasets, in selector order. format: quantiles
-  # (rows carry quantile, value and truth) or samples (rows carry sample and
-  # value; quantiles, truth and the sample CRPS come from truth_source, the
-  # release table, with the scorer's truth rule: each week's count in the
-  # first release D days or more after it, D the age by which truth_level
-  # of the national count is reported, leaving out truth_skip releases).
-  # source: the per-checkpoint forecast folders (default: SCORE_CACHE/<key>;
-  # a local file can name a "host:path"). targets: those shown, or all.
-  # sources: the model inputs shown (daily, weekly), or all. target: a
-  # line under the panels saying what every model forecasts.
-  # truth: the truth line's caption ({delay} is D for samples datasets).
+  # The nowcast panels' datasets, in selector order. Rows carry quantile,
+  # value and truth. source: the per-checkpoint forecast folders (default:
+  # SCORE_CACHE/<key>; a local file can name a "host:path"). sources: the
+  # model inputs shown (daily, weekly), or all.
+  # target: a line under the panels saying what every model forecasts.
+  # truth: the truth line's caption.
   datasets:
     - key: germany
       label: Germany (development half)
       # The scoring units' cache folder (evaluation.checkpoint.GERMANY_UNIT),
       # in SCORE_CACHE and in each run's own <run>/scores.
       unit: germany-days
-      format: quantiles
       metric: WIS
       truth: latest vintage of the forecast files
       # Germany is daily only (config/germany.toml): its models take the
@@ -231,14 +225,3 @@ dashboard:
         - {name: national, match: "^DE$"}
         - {name: states, match: "^DE-"}
         - {name: ages, match: "^(\\d\\d-\\d\\d|80\\+)$"}
-    # The held-out simulations. No scoring unit writes their
-    # nowcasts per checkpoint yet, so the selector lists them as empty
-    # until one fills <SCORE_CACHE>/held_out.
-    - key: held_out
-      label: Held-out simulations
-      format: quantiles
-      metric: WIS
-      truth: the simulation's final counts
-      missing: >-
-        the scoring workflow scores the trainer's held-out loss only, and
-        writes no per-checkpoint nowcasts for these simulations yet

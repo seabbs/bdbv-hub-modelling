@@ -1,16 +1,13 @@
 """A training run's schedule and losses, for the status and loss plots.
 
-The schedule comes from the trainer's command line (`--learning-rate`,
-`--outbreaks`, `--<group>-lr`, `--prefixes`, or `--lr-steps` of runs
-that decayed over steps), its saved settings and the
-learning rates its history logs; the losses from its history
-(`train/history.json`), log rows and checkpoint settings.
+The schedule comes from the run's saved settings and the learning rates
+its history logs; the losses from its history (`train/history.json`),
+log rows and checkpoint settings.
 """
 
 from __future__ import annotations
 
 import csv
-import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from itertools import pairwise
@@ -18,51 +15,28 @@ from pathlib import Path
 from typing import Any
 
 from ..evaluations import merged_history
-from .logs import CACHE, prefixes
+from .logs import CACHE, _size, prefixes
 from .runs import Run
-
-
-def _size(name: str) -> int:
-    digits = re.sub(r"\D", "", name)
-    return int(digits) if digits else 0
-
-
-def _falls(hist: Any) -> bool:
-    """Return whether any optimiser group's logged rate fell over steps."""
-    seen: dict[str, float] = {}
-    for h in hist if isinstance(hist, list) else []:
-        v = h.get("lr") if isinstance(h, dict) else None
-        if isinstance(v, list):
-            v = {str(i): x for i, x in enumerate(v)}
-        elif not isinstance(v, dict):
-            v = {"lr": v} if v is not None else {}
-        for g, x in v.items():
-            if g in seen and float(x) < seen[g]:
-                return True
-            seen[g] = float(x)
-    return False
 
 
 def run_params(
     folder: Path | str,
     hist: Any,
     step: int | None,
-    args: str,
     default: Sequence[int],
     sims: float | None = None,
 ) -> dict[str, Any]:
     """Return a run's schedule.
 
-    `default` are the run's checkpoint sizes, the last its simulations,
-    unless the trainer's command line `args` names them; `sims` is the
-    simulations trained by `step`, for the current rate of a run that
-    decays over simulations.
+    `default` are the run's checkpoint sizes, the last its simulations;
+    `sims` is the simulations trained by `step`, for the current rate,
+    which falls linearly to zero over the run's simulations (the
+    trainer's `lr_decay`).
 
     Returns
     -------
     dict
-        `lr_steps` (runs that decayed over steps), `lr_outbreaks` (the
-        simulations the rate falls to zero over, otherwise), the
+        `lr_outbreaks` (the simulations the rate falls to zero over), the
         optimiser `groups` (name -> base rate), each
         group's `current` rate, the rates its history `logged` (name ->
         [(step, rate)]) and the checkpoint `prefixes`.
@@ -77,36 +51,13 @@ def run_params(
     )
     settings = [s for _, s in saved if isinstance(s, dict)]
     last = settings[-1] if settings else {}
-    m = re.search(r"--lr-steps\s+(\d+)", args)
-    lr_steps = int(m.group(1)) if m else int(last.get("lr_steps") or 0)
-    # Runs without a step count decay over `--outbreaks`, as their
-    # settings record (`lr_decay`); older runs with settings but no
-    # `lr_decay` kept a constant rate.
-    # A trainer the workflow starts leaves no command line: its run's
-    # simulations are the last of `default`.
-    m = re.search(r"--outbreaks\s+(\d+)", args)
-    # A rate the history logs falling is a decay whatever the settings say.
-    decays = last.get("lr_decay") or not settings or _falls(hist)
-    total = int(m.group(1)) if m else max(default, default=0)
-    lr_outbreaks = total if decays and not lr_steps else 0
+    lr_outbreaks = max(default, default=0)
     groups: dict[str, float] = {}
-    base_name = (
-        "LoRA" if last.get("lora") or "--series-bias" in args else "adapter"
-    )
-    m = re.search(r"--learning-rate\s+(\S+)", args)
-    if m:
-        groups[base_name] = float(m.group(1))
-    elif last.get("learning_rate"):
+    base_name = "LoRA" if last.get("lora") else "adapter"
+    if last.get("learning_rate"):
         groups[base_name] = float(last["learning_rate"])
-    for m in re.finditer(r"--([a-z][a-z-]*)-lr\s+(\S+)", args):
-        groups[m.group(1)] = float(m.group(2))
     for k, v in last.items():
-        named = any(
-            re.fullmatch(r"\w*" + k.split("_")[-1] + r"\w*", g)
-            for g in groups
-            if g != base_name
-        )
-        if isinstance(v, dict) and v.get("learning_rate") and not named:
+        if isinstance(v, dict) and v.get("learning_rate"):
             groups.setdefault(
                 k.replace("series_", ""), float(v["learning_rate"])
             )
@@ -136,34 +87,26 @@ def run_params(
     for g, base in groups.items():
         if g in logged:
             current[g] = logged[g][-1][1]
-        elif lr_steps and step is not None:
-            current[g] = base * max(0.0, 1 - step / lr_steps)
         elif lr_outbreaks and sims is not None:
             current[g] = base * max(0.0, 1 - sims / lr_outbreaks)
         elif step is not None:
             current[g] = base
     return {
-        "lr_steps": lr_steps,
         "lr_outbreaks": lr_outbreaks,
         "groups": groups,
         "current": current,
         "logged": logged,
-        "prefixes": prefixes(folder, args, default),
+        "prefixes": prefixes(folder, default),
     }
 
 
 def steps_per_simulation(
-    lr_steps: int,
-    sizes: Sequence[int],
     checkpoints: Sequence[tuple[str, Mapping, Any]],
 ) -> float:
     """Return the trainer's steps per simulated outbreak.
 
-    The learning-rate schedule spans the final prefix; without one, the
-    last checkpoint's own ratio, else 1.
+    The last checkpoint's own ratio, else 1.
     """
-    if lr_steps and sizes:
-        return lr_steps / max(sizes)
     for _, s, _ in reversed(checkpoints):
         if s.get("steps") and s.get("n_outbreaks"):
             return s["steps"] / s["n_outbreaks"]

@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from flowlib.dashboard import logs, mirror, page, runs
+from flowlib.dashboard import mirror, page, runs
 
 LINE = "2026-11-16 16:{m:02d}:00 [train] step {s}: loss {l}, held-out (x) {h}"
 
@@ -42,7 +42,7 @@ def _machine(tmp_path):
             [{"step": 0, "held_out_loss": 0.47, "by_source": {"weekly": 0.25}}]
         )
     )
-    (run / "train.log").write_text(
+    (run / "train" / "n250.log").write_text(
         "\n".join(
             LINE.format(m=i, s=10 * i, l=0.5 - i / 100, h=0.45)
             for i in range(30)
@@ -247,27 +247,6 @@ def test_the_mailbox_section_is_hidden_without_a_mailbox(tmp_path):
     assert "Recent activity" not in page.build(ctx)
 
 
-def test_samples_are_summarised_outside_page_builds(tmp_path, monkeypatch):
-    from flowlib.dashboard import nowcasts
-
-    ctx = _machine(tmp_path)
-    ctx.datasets = [{"key": "b", "format": "samples", "groups": []}]
-    calls = []
-    monkeypatch.setattr(
-        nowcasts, "summarise_samples", lambda *a, **_k: calls.append(a) or 14
-    )
-    truth = tmp_path / "truth.csv"
-    truth.write_text("kind\n")
-    (tmp_path / "scores" / "b").mkdir(parents=True)
-    monkeypatch.setattr(ctx.source, "truth", lambda _key: truth)
-    page.build(ctx)
-    assert calls == []
-    ctx.summarise()
-    ctx.summarise()  # nothing changed: the summaries are not redone
-    assert len(calls) == 1
-    assert ctx.delays["b"] == 14
-
-
 def test_checkpoint_tables_have_a_column_per_source(tmp_path):
     ctx = _machine(tmp_path)
     out = page.build(ctx)
@@ -283,8 +262,6 @@ def test_run_sizes_drop_prefixes_past_the_run_and_end_at_it():
 
 def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
     ctx = _machine(tmp_path)
-    # The fixture's run has no trainer command line to name its prefixes.
-    assert logs.trainer_args(ctx.runs[0].folder) == ""
     ctx.outbreaks = 8400
     ctx.prefixes = (250, 500, 1000, 2000, 4000, 8000)
     out = page.build(ctx)
@@ -397,13 +374,7 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
     ctx = _machine(tmp_path)
     ctx.datasets = [
         *ctx.datasets,
-        {"key": "other", "label": "Other", "format": "samples"},
-        {
-            "key": "held_out",
-            "label": "Held-out simulations",
-            "format": "quantiles",
-            "missing": "the scoring workflow writes none yet",
-        },
+        {"key": "other", "label": "Other"},
     ]
     sel = page.sections(ctx)["nowcasts"]
     data = _gdata(sel)
@@ -411,9 +382,6 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
         (d["key"], d["label"], bool(d.get("empty"))) for d in data["datasets"]
     ]
     assert ("other", "Other", True) in got
-    assert ("held_out", "Held-out simulations", True) in got
-    held = next(d for d in data["datasets"] if d["key"] == "held_out")
-    assert "the scoring workflow writes none yet" in held["missing"]
 
 
 def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
@@ -424,7 +392,7 @@ def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
     ctx = _machine(tmp_path)
     folder = ctx.runs[0].folder
     now = datetime.now().replace(microsecond=0)
-    (folder / "train.log").write_text(
+    (folder / "train" / "n250.log").write_text(
         LINE.format(m=0, s=800, l=0.5, h=0.45).replace(
             "2026-11-16 16:00:00",
             f"{now - timedelta(minutes=40):%Y-%m-%d %H:%M:%S}",
@@ -504,7 +472,7 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     ctx = _machine(tmp_path)
     folder = ctx.runs[0].folder
     # An offloaded run logs steps with no held-out loss.
-    (folder / "train.log").write_text(
+    (folder / "train" / "n250.log").write_text(
         "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
     )
     ctx.outbreaks = 1000
@@ -526,7 +494,7 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
 def test_a_stopped_run_names_the_batches_its_next_segment_waits_on(tmp_path):
     ctx = _machine(tmp_path)
     folder = ctx.runs[0].folder
-    (folder / "train.log").write_text(
+    (folder / "train" / "n250.log").write_text(
         "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
     )
     status = folder / "train" / "stream-status.json"

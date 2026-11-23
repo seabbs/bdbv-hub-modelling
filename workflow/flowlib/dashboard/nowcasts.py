@@ -2,13 +2,9 @@
 
 A dataset's forecasts are one folder per label (`reference`,
 `reference-complete`, or a checkpoint such as `slots-<hash>`), each with
-one file per nowcast date. A `quantiles` dataset's rows carry
-`quantile`, `value`, `truth` and optionally `target` and `score`; a
-`samples` dataset's rows carry `sample` and `value`, and are summarised
-to quantile files first (`summarise_samples`), with the truth and sample
-CRPS the checkpoint scoring uses (`evaluation.nowcast.rolling_truth`,
-`reporting_delay`, `evaluation.scoring.crps_sample`). A row with no
-target is the 7-day target.
+one file per nowcast date. Rows carry `quantile`, `value`, `truth` and
+optionally `target` and `score`. A row with no target is the 7-day
+target.
 
 Every row goes to the configured reference it matches, else, in a
 reference folder, to its model by name (`model:<name>`, such as a hub
@@ -17,9 +13,8 @@ unclaimed checkpoints are left out. The page draws `levels`; coverage,
 bias and the WIS use the seven cached levels.
 
 Bands and coverage are 50% and 90%, as in the paper: the 90% interval
-from the 5% and 95% quantiles where a file has them (`OUTER`; summarised
-samples do), else the 95% interval, as the German hub's quantiles stop
-at 2.5% and 97.5%.
+from the 5% and 95% quantiles where a file has them (`OUTER`), else the
+95% interval, as the German hub's quantiles stop at 2.5% and 97.5%.
 """
 
 from __future__ import annotations
@@ -35,8 +30,7 @@ import numpy as np
 import pandas as pd
 
 from nowcasteval import labels
-from nowcasteval.nowcast import reporting_delay, rolling_truth
-from nowcasteval.scoring import crps_sample, wis_quantile
+from nowcasteval.scoring import wis_quantile
 
 from .paperstyle import WIS_PARTS
 from .rows import num, sources
@@ -49,9 +43,6 @@ LEVELS = tuple(float(q) for q in SEVEN)
 
 OUTER = ("0.05", "0.95")
 """The 90% interval's quantiles, used for bands and coverage if present."""
-
-SUMMARY_LEVELS = tuple(sorted((*SEVEN, *OUTER), key=float))
-"""The levels a summary of samples holds (`summarise_samples`)."""
 
 PAGE_LEVELS = (0.025, 0.25, 0.5, 0.75, 0.975)
 """Default levels of `build`; the page draws all seven (`LEVELS`)."""
@@ -565,111 +556,3 @@ def meta(
         for i, m in enumerate(group):
             m["color"] = shade(run, i, len(group))
     return out
-
-
-def summarise_samples(
-    raw: Path | str,
-    out: Path | str,
-    truth_path: Path | str,
-    ds: Mapping[str, Any],
-) -> int | None:
-    """Write quantile files from a samples dataset's files.
-
-    Each `raw/<label>/<origin>.csv.gz` newer than its summary or the
-    truth table becomes `out/<label>/<origin>.csv.gz`, with the seven
-    quantiles, the truth (each week's count in the first release `D`
-    days after it, `D` the age by which `truth_level` of the `national`
-    count is reported, leaving out `truth_skip` releases), the sample
-    CRPS and the latest release's count. Summaries hold
-    `SUMMARY_LEVELS`, the seven and the 90% interval's; a folder written
-    with other levels (`.levels`) is summarised again.
-
-    Returns
-    -------
-    int or None
-        The truth delay `D` in days, or None if none can be set.
-    """
-    raw, out, truth_path = Path(raw), Path(out), Path(truth_path)
-    target = pd.read_csv(truth_path, dtype={"kind": str})
-    real = target.loc[target["kind"] == "real"].copy()
-    delay = reporting_delay(
-        real,
-        float(ds.get("truth_level", 0.98)),
-        tuple(ds.get("truth_skip") or ()),
-        ds.get("national", "CD"),
-    )
-    truth = (
-        rolling_truth(real, delay).set_index(["location", "target_end_date"])
-        if delay is not None
-        else pd.DataFrame(columns=["truth", "truth_vintage"])
-    )
-    last = real.loc[real["vintage"] == real["vintage"].max()]
-    latest = last.set_index(["location", "target_end_date"])["total"]
-    t_mt = truth_path.stat().st_mtime
-    wanted = set(ds.get("targets") or ())
-    marker = out / ".levels"
-    levels = " ".join(SUMMARY_LEVELS)
-    again = not marker.exists() or marker.read_text().strip() != levels
-    for f in sorted(raw.glob("*/*.csv.gz")):
-        dst = out / f.parent.name / f.name
-        fresh = dst.exists() and dst.stat().st_mtime >= max(
-            f.stat().st_mtime, t_mt
-        )
-        if fresh and not again:
-            continue
-        frame = pd.read_csv(f)
-        if "target" not in frame:
-            frame["target"] = TARGET
-        frame["target"] = frame["target"].fillna(TARGET)
-        if wanted:
-            frame = frame.loc[frame["target"].isin(wanted)]
-        rows = []
-        keys = ["model", "origin", "location", "target_end_date", "target"]
-        for (model, origin, loc, week, tgt), g in frame.groupby(keys):
-            x = np.sort(g["value"].to_numpy(float))
-            hit = (loc, week) in truth.index
-            y = float(truth.loc[(loc, week), "truth"]) if hit else None
-            vintage = truth.loc[(loc, week), "truth_vintage"] if hit else ""
-            sc = "" if y is None else round(crps_sample(y, x), 3)
-            lt = latest.get((loc, week), "")
-            for q in SUMMARY_LEVELS:
-                rows.append(
-                    [
-                        model,
-                        origin,
-                        loc,
-                        week,
-                        q,
-                        round(float(np.quantile(x, float(q))), 2),
-                        "" if y is None else y,
-                        vintage,
-                        tgt,
-                        sc,
-                        lt,
-                    ]
-                )
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dst.with_suffix(".tmp")
-        with gzip.open(tmp, "wt", newline="") as fh:
-            w = csv.writer(fh)
-            w.writerow(
-                [
-                    "model",
-                    "origin",
-                    "location",
-                    "target_end_date",
-                    "quantile",
-                    "value",
-                    "truth",
-                    "truth_vintage",
-                    "target",
-                    "score",
-                    "latest",
-                ]
-            )
-            w.writerows(rows)
-        tmp.replace(dst)
-    if again:
-        out.mkdir(parents=True, exist_ok=True)
-        marker.write_text(levels + "\n")
-    return delay
