@@ -240,6 +240,7 @@ def test_settings_flatten_vectors_as_the_engine_does():
     assert row == {"a": 1.5, "b": "1;2", "c": "", "d": "TRUE", "e": "x"}
 
 
+@pytest.mark.slow
 def test_the_cli_simulates_through_the_joint_model(tmp_path):
     # The simulate rule's command: each simulation is the joint PyRenew
     # model, with no R.
@@ -289,6 +290,7 @@ def test_the_cli_simulates_through_the_joint_model(tmp_path):
     )
 
 
+@pytest.mark.slow
 def test_the_joint_batch_repeats_from_its_seed(tmp_path):
     a = simulate_batch(GRID_FILE, 9191, 2, tmp_path / "a", weeks=8)
     b = simulate_batch(GRID_FILE, 9191, 2, tmp_path / "b", weeks=8)

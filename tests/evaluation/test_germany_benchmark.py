@@ -114,6 +114,7 @@ def test_our_quantiles_are_the_samples_quantiles_at_the_hub_s_levels(
     assert per["value"].is_monotonic_increasing.all()
 
 
+@pytest.mark.slow
 def test_scores_are_quantile_scores_on_the_d_day_truth(
     triangle: pd.DataFrame, scores: pd.DataFrame
 ) -> None:
@@ -130,6 +131,7 @@ def test_scores_are_quantile_scores_on_the_d_day_truth(
     assert (both["truth_vintage_x"] == both["truth_vintage_y"]).all()
 
 
+@pytest.mark.slow
 def test_sums_with_no_release_d_days_on_are_not_scored(
     scores: pd.DataFrame,
 ) -> None:
@@ -138,6 +140,7 @@ def test_sums_with_no_release_d_days_on_are_not_scored(
     assert scores["target_end_date"].max() <= "2021-10-10"
 
 
+@pytest.mark.slow
 def test_relative_scores_are_against_the_baseline_given(
     scores: pd.DataFrame,
 ) -> None:
@@ -253,6 +256,7 @@ def test_team_forecasts_replace_rki_errors_by_the_minus_one_day_nowcast(
     assert got.loc[("RKI", 0.25), "value"] == pytest.approx(300)
 
 
+@pytest.mark.slow
 def test_teams_are_scored_as_our_models(
     triangle: pd.DataFrame,
     submissions: pd.DataFrame,
@@ -276,6 +280,7 @@ def test_team_forecasts_keep_the_dates_given(
     assert team_forecasts(submissions, ["2021-10-05"]).empty
 
 
+@pytest.mark.slow
 def test_paper_table_follows_the_paper_schema(
     forecasts: pd.DataFrame,
 ) -> None:
@@ -533,6 +538,7 @@ def test_chronos_is_prefetched_at_the_levels_it_forecasts(
     assert seen["prefetch"] == seen["forecast"]
 
 
+@pytest.mark.slow
 def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
     forecasts: pd.DataFrame,
 ) -> None:
@@ -549,6 +555,7 @@ def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
     assert set(paper["quantile_level"].round(6)) == set(QUANTILE_LEVELS)
 
 
+@pytest.mark.slow
 def test_scores_add_90_coverage_and_keep_wis_on_the_hub_levels(
     forecasts: pd.DataFrame, scores: pd.DataFrame
 ) -> None:
@@ -624,6 +631,7 @@ def test_models_see_only_the_counts_the_truth_holds(
     assert seen[0]["confirm"].tolist() == [8]
 
 
+@pytest.mark.slow
 def test_each_model_and_date_records_its_seconds(
     triangle: pd.DataFrame,
 ) -> None:

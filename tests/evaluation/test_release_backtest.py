@@ -60,6 +60,7 @@ def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
         assert (ran["n_reported"] > 0).all()
 
 
+@pytest.mark.slow
 def test_every_model_is_scored_on_each_later_release(
     result,  # type: ignore[no-untyped-def]
     vintages: list[str],
@@ -79,6 +80,7 @@ def test_every_model_is_scored_on_each_later_release(
     assert (rep["weeks_back"] < 0).any()
 
 
+@pytest.mark.slow
 def test_randomwalk_is_scored_on_its_samples_as_they_are(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -92,6 +94,7 @@ def test_randomwalk_is_scored_on_its_samples_as_they_are(
     pd.testing.assert_frame_equal(by_release[0], by_release[1])
 
 
+@pytest.mark.slow
 def test_energy_scores_each_scale_on_the_same_samples(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -129,6 +132,7 @@ def test_complete_weeks_come_from_later_releases_only(
         complete_weeks(target, daily, "2026-11-01", rule="pi")
 
 
+@pytest.mark.slow
 def test_complete_target_only_has_complete_weeks(
     result,  # type: ignore[no-untyped-def]
     target: pd.DataFrame,
@@ -157,6 +161,7 @@ def test_weeks_back_count_from_the_cutoff_week(
     assert got.tolist() == [0, 1, -1]
 
 
+@pytest.mark.slow
 def test_relative_crps_is_against_randomwalk(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -255,6 +260,7 @@ def test_a_stored_model_is_mapped_by_its_own_delay_or_scored_complete(
     assert set(flat["target"]) == {"complete"}
 
 
+@pytest.mark.slow
 def test_quantiles_carry_the_reported_count_and_truth(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
