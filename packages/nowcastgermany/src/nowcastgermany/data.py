@@ -294,7 +294,7 @@ def nowcast_tasks(
     nowcast_date: str,
     n_samples: int,
     seed: int,
-    offsets: Sequence[int] = OFFSETS,
+    offsets: Sequence[int] | None = OFFSETS,
     horizons: Sequence[int] = HORIZONS,
 ) -> list[ForecastTask]:
     """Return the states and age groups tasks of a nowcast date, by offset.
@@ -310,7 +310,9 @@ def nowcast_tasks(
     seed : int
         Seed of the tasks' random numbers.
     offsets : sequence of int
-        Weekday offsets (`OFFSETS`, all of them by default).
+        Weekday offsets (`OFFSETS`, all of them by default). None gives
+        one task of each group whose target dates are every horizon's
+        day, so every 7-day sum comes from one forecast.
     horizons : sequence of int
         Days from the nowcast date to the end of each 7-day sum, the
         hub's (`HORIZONS`) by default. Days after it are forecasts.
@@ -336,6 +338,11 @@ def nowcast_tasks(
     ]
     rows = _carried(rows)
     rows = rows.loc[rows["confirm"] != 0]
+    if offsets is None:
+        # One task for every horizon: no weekday offsets to stitch.
+        return _offset_tasks(
+            rows, nowcast_date, 0, n_samples, seed, horizons, every_day=True
+        )
     tasks = []
     for offset in offsets:
         tasks += _offset_tasks(
@@ -351,8 +358,13 @@ def _offset_tasks(
     n_samples: int,
     seed: int,
     horizons: Sequence[int] = HORIZONS,
+    every_day: bool = False,
 ) -> list[ForecastTask]:
-    """Return one offset's two tasks (`nowcast_tasks`)."""
+    """Return one offset's two tasks (`nowcast_tasks`).
+
+    With `every_day` the tasks' target dates are every horizon's day,
+    not only the days `offset` makes Saturdays.
+    """
     shift = _shift(nowcast_date, offset)
     ref = as_date(nowcast_date) + shift
     vintage = _moved(rows["report_date"], shift)
@@ -376,7 +388,7 @@ def _offset_tasks(
             if place_code(GERMANY, a) in present
         ),
     )
-    back = [h for h in sorted(horizons) if (-h - offset) % 7 == 0]
+    back = [h for h in sorted(horizons) if every_day or (-h - offset) % 7 == 0]
     weeks = tuple((ref + dt.timedelta(days=h)).isoformat() for h in back)
     tasks = []
     for places in groups:

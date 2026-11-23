@@ -391,3 +391,24 @@ def test_daily_truth_is_each_day_s_count_reported_by_the_delay(
             assert row["truth_vintage"].tolist() == [by]
     # 2021-10-15 + 10 days is after the last report date.
     assert got.loc[got["target_end_date"] == days[2], "truth"].isna().all()
+
+
+def test_one_task_a_group_targets_every_horizon_day(
+    triangle: pd.DataFrame,
+) -> None:
+    # No offsets: every 7-day sum is read from one forecast of each group.
+    one = nowcast_tasks(triangle, NOWCAST, n_samples=20, seed=1, offsets=None)
+    assert len(one) == 2
+    stitched = nowcast_tasks(triangle, NOWCAST, n_samples=20, seed=1)
+    want = sorted(d for t in stitched[::2] for d in _real(t))
+    assert sorted(_real(one[0])) == want
+    assert len(want) == len(set(want))
+
+
+def _real(task) -> list[str]:
+    """The task's target dates moved back to the real calendar."""
+    shift = pd.Timestamp(task.cutoff) - pd.Timestamp(NOWCAST)
+    return [
+        (pd.Timestamp(d) - shift).date().isoformat()
+        for d in task.target_end_dates
+    ]
