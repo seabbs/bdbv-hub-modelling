@@ -164,5 +164,5 @@ def test_the_real_data_run_cuts_its_german_blocks_before_training(tmp_path):
     target = f"{tmp_path}/runs/realdata/real-training.pkl"
     out = dry_run(tmp_path, target, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
-    assert "nowcastfoundation.finetune.germany" in out.stdout
+    assert "nowcastgermany.finetune_blocks" in out.stdout
     assert "germany_triangle" in out.stdout
