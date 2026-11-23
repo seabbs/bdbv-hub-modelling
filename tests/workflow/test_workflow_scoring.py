@@ -41,7 +41,7 @@ def _scoring(tmp_path, labels=None, listing=None):
         "MIN_FREE_GB": "1",
         "MIN_DISK_GB": "2",
         "MAX_LOAD": "",
-        "EVAL_THREADS": "",
+        "FORECAST_THREADS": "",
     }
     trained = training.Training(cfg, local, rounds.Rounds(cfg, local, None))
     listed = SimpleNamespace(output=[listing])

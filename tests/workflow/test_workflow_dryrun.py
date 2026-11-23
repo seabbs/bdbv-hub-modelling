@@ -1033,7 +1033,7 @@ def test_score_units_run_torch_beside_the_trainer_on_the_cpu(tmp_path):
 
 def test_score_threads_are_a_machine_setting(tmp_path):
     config = {"score": {"labels": ["aaa"]}}
-    blocks = score_jobs(tmp_path, config, "EVAL_THREADS=3\n")
+    blocks = score_jobs(tmp_path, config, "FORECAST_THREADS=3\n")
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert units
     assert all(re.search(r"threads: 3\b", b) for b in units)
