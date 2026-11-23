@@ -185,6 +185,8 @@ def test_one_location_has_truth_and_latest_by_target(tmp_path):
         "score",
         "parts",
         "split",
+        "ranges",
+        "byday",
         "stats",
         "truth",
         "latest",
@@ -400,3 +402,145 @@ def test_plotted_truth_is_the_raw_count_in_both_german_views(tmp_path):
         "t": ends,
         "y": [sum(raw(back(e, k), by(e)) for k in range(7)) for e in ends],
     }
+
+
+def _days(path, model, origin, offsets, target=None):
+    # One quantile set per target date, `offsets` days from `origin`, each
+    # with its own truth so each day's WIS differs.
+    path.parent.mkdir(parents=True, exist_ok=True)
+    o = np.datetime64(origin)
+    cols = ["model", "location", "target_end_date", "quantile", "value"]
+    cols += ["truth", "truth_vintage", "target"]
+    with gzip.open(path, "wt") as f:
+        w = csv.DictWriter(f, cols)
+        w.writeheader()
+        for k, d in enumerate(offsets):
+            for i, q in enumerate(SEVEN):
+                w.writerow(
+                    {
+                        "model": model,
+                        "location": "DE",
+                        "target_end_date": str(o + np.timedelta64(d, "D")),
+                        "quantile": q,
+                        "value": 8.0 + i,
+                        "truth": 9.0 + 2 * k,
+                        "truth_vintage": "2022-03-01",
+                        "target": target or "7day",
+                    }
+                )
+
+
+Q7 = [8.0 + i for i in range(7)]
+
+
+def test_rows_outside_the_configured_days_are_left_out(tmp_path):
+    _days(
+        tmp_path / "reference" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged",
+        "2022-02-09",
+        [-30, -5, 3, 40],
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(
+        tmp_path, rs, refs, levels=nowcasts.LEVELS, days=(-28, 28)
+    )
+    one = built["series"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"]
+    assert one["t"] == ["2022-02-04", "2022-02-12"]
+    got = built["score"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"]
+    want = (nowcasts.wis(Q7, 11.0) + nowcasts.wis(Q7, 13.0)) / 2
+    assert got == pytest.approx(want, abs=0.01)
+
+
+def test_each_horizon_range_has_its_own_scores(tmp_path):
+    _days(
+        tmp_path / "reference" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged",
+        "2022-02-09",
+        [-5, 0, 3],
+    )
+    rs, refs = _setup()
+    ranges = {"all": (None, None), "nowcast": (None, 0), "forecast": (1, None)}
+    built = nowcasts.build(
+        tmp_path,
+        rs,
+        refs,
+        levels=nowcasts.LEVELS,
+        days=(-28, 28),
+        ranges=ranges,
+    )
+    page = nowcasts.location(built, "DE")
+    # By range, then score, stats or parts, keyed as the page's own.
+    by = {
+        k: {p: v[p]["zero"]["7day"]["daily"]["2022-02-09"] for p in v}
+        for k, v in page["ranges"].items()
+    }
+    w = [nowcasts.wis(Q7, y) for y in (9.0, 11.0, 13.0)]
+    assert by["nowcast"]["score"] == pytest.approx((w[0] + w[1]) / 2, abs=0.01)
+    assert by["forecast"]["score"] == pytest.approx(w[2], abs=0.01)
+    assert by["all"]["score"] == pytest.approx(sum(w) / 3, abs=0.01)
+    for part in by.values():
+        assert len(part["stats"]) == 4
+        assert len(part["parts"]) == 7
+
+
+def test_wis_by_day_of_the_horizon_reaches_the_page(tmp_path):
+    _days(
+        tmp_path / "reference" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged",
+        "2022-02-09",
+        [-5, 3],
+        target="daily",
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=nowcasts.LEVELS)
+    page = nowcasts.location(built, "DE")
+    got = page["byday"]["zero"]["daily"]["daily"]["2022-02-09"]
+    assert got == {
+        "-5": pytest.approx(nowcasts.wis(Q7, 9.0), abs=1e-4),
+        "3": pytest.approx(nowcasts.wis(Q7, 11.0), abs=1e-4),
+    }
+
+
+def test_the_german_panels_take_their_days_from_the_german_config():
+    days, ranges, default = nowcasts.horizons(
+        {
+            "horizons": {
+                "days": "config/germany.toml",
+                "ranges": {"all": [None, None], "ahead": [1, None]},
+                "default": "all",
+            }
+        }
+    )
+    assert days == (-28, 28)
+    assert ranges == {"all": (-28, 28), "ahead": (1, 28)}
+    assert default == "all"
+    assert nowcasts.horizons({}) == (None, {}, None)
+
+
+def test_ranges_keep_every_folder_s_files(tmp_path):
+    for origin in ("2022-02-02", "2022-02-09"):
+        _days(
+            tmp_path / "reference" / f"{origin}.csv.gz",
+            "fm_chronos_daily_ragged",
+            origin,
+            [-5, 3],
+        )
+    _days(
+        tmp_path / "slots-aaaaaa" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged_ft",
+        "2022-02-09",
+        [-5, 3],
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(
+        tmp_path,
+        rs,
+        refs,
+        levels=nowcasts.LEVELS,
+        days=(-28, 28),
+        ranges={"nowcast": (-28, 0)},
+    )
+    score = built["score"]["DE"]
+    zero = sorted(score["zero"]["7day"]["daily"])
+    assert zero == ["2022-02-02", "2022-02-09"]
+    assert list(score["aaaaaa"]["7day"]["daily"]) == ["2022-02-09"]

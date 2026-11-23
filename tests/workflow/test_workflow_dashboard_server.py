@@ -50,6 +50,8 @@ def test_one_location_s_data_is_served(server):
         "score",
         "parts",
         "split",
+        "ranges",
+        "byday",
         "stats",
         "truth",
         "latest",
