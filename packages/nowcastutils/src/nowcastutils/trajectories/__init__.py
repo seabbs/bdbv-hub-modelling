@@ -19,8 +19,9 @@ mass), and joins the cells by a copula:
 
 The parameters come from a `fit`; nothing is hard-coded. `fit_coupling`
 estimates them from normal scores of the model's own matured forecasts
-(`pit_scores`), and `choose_window` picks how many of those origins to fit
-from by the energy score (`energy_score`) on the latest matured ones.
+(`pit_scores`), and `choose_coupling` picks the coupling and how many of
+those origins to fit it from by the energy score (`energy_score`) of each
+candidate's draws on the matured earlier forecasts.
 This module depends on numpy and scipy only, so any model can use it.
 """
 
@@ -33,8 +34,10 @@ import numpy as np
 from scipy.special import ndtr, ndtri
 
 __all__ = [
+    "CANDIDATES",
     "METHODS",
-    "choose_window",
+    "MIN_EARLIER",
+    "choose_coupling",
     "couple",
     "energy_score",
     "fit_coupling",
@@ -487,75 +490,186 @@ def energy_score(draws: np.ndarray, observed: np.ndarray) -> float:
     return float(to_truth - 0.5 * spread)
 
 
-def choose_window(
+CANDIDATES: Final = (
+    ("gaussian", 2),
+    ("gaussian", 4),
+    ("gaussian", 8),
+    ("schaake", None),
+)
+"""The couplings `choose_coupling` compares by default: the gaussian
+copula fitted over the latest 2, 4 or 8 origins (two is the fewest that
+give evidence, as one origin's pairs are not independent), and the
+Schaake shuffle on the series' own history. Which one is used, and so the
+look-back window, is chosen from the data at each forecast."""
+
+MIN_EARLIER: Final = 2
+"""Earlier origins an origin needs to be scored on in `choose_coupling`:
+the fewest a gaussian fit has evidence from."""
+
+
+def _label(method: str, window: int | None) -> str:
+    """Return a candidate's name, as `choose_coupling` reports it."""
+    return method if window is None else f"{method}-{window}"
+
+
+def _candidate_fit(
+    method: str,
+    window: int | None,
     scores: np.ndarray,
+    history: np.ndarray | None,
+    steps: int,
+    n_samples: int,
+) -> dict[str, Any] | None:
+    """Return a candidate's fit from what came before, or None if it has none.
+
+    A gaussian fit from the latest `window` origins of `scores`; Schaake
+    windows from `history` (`history_windows`), None without any.
+    """
+    if method == "schaake":
+        if history is None:
+            return None
+        windows = history_windows(history, steps, n_samples)
+        if not len(windows):
+            return None
+        return {"method": method, "windows": windows}
+    if method == "gaussian":
+        latest = scores[-window:] if window else scores
+        if len(latest) == 0:
+            latest = np.full((0, *scores.shape[1:]), np.nan)
+        return fit_coupling(latest, method)
+    return fit_coupling(scores, method)
+
+
+def choose_coupling(
     quantiles: np.ndarray,
     levels: np.ndarray,
     observed: np.ndarray,
-    candidates: tuple[int, ...],
-    n_eval: int,
-    seed: int = 0,
-    method: str = "gaussian",
-    n_samples: int = 200,
+    history: np.ndarray | None,
+    starts: np.ndarray | None,
+    n_samples: int,
+    seed: int,
+    candidates: tuple[tuple[str, int | None], ...] = CANDIDATES,
 ) -> dict[str, Any]:
-    """Return the look-back window whose couplings scored best of late.
+    """Return the coupling, with its fit, whose draws scored best of late.
 
-    For each candidate window `w` and each of the latest `n_eval` origins,
-    the coupling is fitted (`fit_coupling`) from the `w` origins before
-    it, that origin's quantiles are coupled (`couple`) and the draws are
-    scored against what was observed there (`energy_score`). The window
-    with the lowest mean score wins; ties go to the earlier candidate.
-    Every candidate is scored on the same draws of levels at an origin.
+    Each earlier origin with at least `MIN_EARLIER` before it and a value
+    reported since is scored: every candidate is fitted from what came
+    before it (the gaussian from the normal scores, `pit_scores`, of the
+    latest `window` earlier origins; the Schaake shuffle from windows of
+    `history` before the origin's first step), that origin's quantiles are
+    coupled (`couple`) on the steps up to its last reported one, with the
+    same seed for every candidate, and the draws are scored against what
+    was reported (`energy_score`). The candidate with the lowest mean
+    score over origins every candidate could be fitted at wins; ties go
+    to the earlier candidate; a candidate that could not be fitted at one
+    of the origins scored drops out. The winner is then fitted from
+    everything before the forecast. With nothing to compare on, the
+    gaussian over the longest window is used when there are `MIN_EARLIER`
+    origins to fit it from, else the Schaake shuffle when the history has
+    windows, else the gaussian (independence), and the record says so
+    (`chosen_by`).
 
     Parameters
     ----------
-    scores : numpy.ndarray
-        `pit_scores` of the matured origins, `[origins, series, steps]`,
-        oldest first.
     quantiles : numpy.ndarray
-        Their quantiles `[origins, series, steps, Q]` at `levels`.
+        The model's earlier forecasts' quantiles `[origins, series, steps,
+        Q]` at `levels`, oldest first, on the forecast's series and steps.
     levels : numpy.ndarray
         Increasing quantile levels, `[Q]`.
     observed : numpy.ndarray
-        What was reported, `[origins, series, steps]`, NaN where not final.
-    candidates : tuple of int
-        Windows to compare, in origins.
-    n_eval : int
-        Latest origins each candidate is scored on; fewer than the origins.
-    seed : int
-        Seed for the draws.
-    method : str
-        The coupling fitted, one of `METHODS` with a scores fit.
+        What has been reported of their targets, `[origins, series,
+        steps]`, NaN where not final.
+    history : numpy.ndarray or None
+        The series' reported values `[series, time]` before the forecast's
+        first step, NaN where missing; None for no Schaake shuffle.
+    starts : numpy.ndarray or None
+        Each origin's first step as a column of `history`, `[origins]`.
     n_samples : int
-        Trajectories per origin.
+        Trajectories, and the most Schaake windows.
+    seed : int
+        Seed for the scores' and the draws' uniforms.
+    candidates : tuple of (str, int or None)
+        Each candidate's method and gaussian window in origins.
 
     Returns
     -------
     dict
-        `window`, the mean `energy` of each candidate and `n_eval`.
+        The chosen fit, which `couple` takes, with `window`, the mean
+        `energy` of each candidate compared, by name, `n_eval` (origins
+        scored on),
+        `chosen_by` (`energy` or `fallback`) and, for the Schaake shuffle,
+        `n_windows`.
 
     Raises
     ------
     ValueError
-        With no candidates, or `n_eval` not below the origins.
+        With no candidates, or a history without `starts` for each origin.
     """
-    scores = np.asarray(scores, dtype=float)
-    n_origins = scores.shape[0]
     if not candidates:
-        raise ValueError("choose_window needs candidates")
-    if not 0 < n_eval < n_origins:
-        raise ValueError(
-            f"n_eval must be between 1 and {n_origins - 1}, got {n_eval}"
-        )
-    energy = {}
-    for w in candidates:
-        got = []
-        for k in range(n_origins - n_eval, n_origins):
-            fit = fit_coupling(scores[max(0, k - w) : k], method)
+        raise ValueError("choose_coupling needs candidates")
+    quantiles = np.asarray(quantiles, dtype=float)
+    observed = np.asarray(observed, dtype=float)
+    levels = np.asarray(levels, dtype=float)
+    n_origins, _, steps = observed.shape
+    if history is not None:
+        history = np.asarray(history, dtype=float)
+        if starts is None or len(starts) != n_origins:
+            raise ValueError("a history needs starts, one per origin")
+    first = np.zeros(n_origins, dtype=int) if starts is None else starts
+    rng = np.random.default_rng([seed, 1])
+    scores = pit_scores(quantiles, levels, observed, rng)
+    now = {
+        c: _candidate_fit(*c, scores, history, steps, n_samples)
+        for c in candidates
+    }
+    usable = [c for c in candidates if now[c] is not None]
+    got: dict[tuple[str, int | None], list[float]] = {c: [] for c in usable}
+    n_eval = 0
+    for k in range(MIN_EARLIER, n_origins):
+        reported = np.flatnonzero(np.isfinite(observed[k]).any(axis=0))
+        if not len(reported):
+            continue
+        n = int(reported[-1]) + 1
+        past = None if history is None else history[:, : int(first[k])]
+        n_eval += 1
+        for c in usable:
+            fit = _candidate_fit(*c, scores[:k], past, steps, n_samples)
+            if fit is None:
+                got[c].append(np.nan)
+                continue
+            if "windows" in fit:
+                fit["windows"] = fit["windows"][:, :, :n]
             draws = couple(
-                quantiles[k], levels, method, fit, n_samples, seed + k
+                quantiles[k][:, :n], levels, c[0], fit, n_samples, seed + k
             )
-            got.append(energy_score(draws, observed[k]))
-        energy[int(w)] = float(np.nanmean(got))
-    window = min(energy, key=lambda w: (energy[w], candidates.index(w)))
-    return {"window": window, "energy": energy, "n_eval": int(n_eval)}
+            got[c].append(energy_score(draws, observed[k][:, :n]))
+    # Compared on the same origins: a candidate with no fit at one of them
+    # (the Schaake shuffle with too little history then) drops out.
+    scored = [c for c in usable if n_eval and np.isfinite(got[c]).all()]
+    if scored:
+        mean = {c: float(np.mean(got[c])) for c in scored}
+        chosen = min(scored, key=lambda c: (mean[c], scored.index(c)))
+        chosen_by = "energy"
+    else:
+        mean, chosen_by = {}, "fallback"
+        gaussian = [c for c in usable if c[0] == "gaussian"]
+        schaake = [c for c in usable if c[0] == "schaake"]
+        longest = max(gaussian, key=lambda c: c[1] or 0, default=None)
+        if longest is not None and (n_origins >= MIN_EARLIER or not schaake):
+            chosen = longest
+        else:
+            chosen = (schaake or usable)[0]
+    fit = now[chosen] or _candidate_fit(
+        *chosen, scores, history, steps, n_samples
+    )
+    assert fit is not None
+    out = {
+        **fit,
+        "window": chosen[1],
+        "energy": {_label(*c): e for c, e in mean.items()},
+        "n_eval": n_eval,
+        "chosen_by": chosen_by,
+    }
+    if "windows" in fit:
+        out["n_windows"] = len(fit["windows"])
+    return out

@@ -74,8 +74,9 @@ def test_a_recent_change_in_coupling_favours_the_short_window():
     assert (got["method"], got["window"]) == ("gaussian", 4)
     assert got["energy"]["gaussian-4"] < got["energy"]["gaussian-40"]
     assert got["chosen_by"] == "energy"
-    # Fitted at the forecast from the latest 4 origins, which move together.
-    assert got["rho"] > 0.5
+    # Fitted at the forecast from the latest 4 origins, which move together
+    # (shrunk, as 4 origins are little evidence).
+    assert got["rho"] > 0.2
     assert got["n_origins"] == 4
 
 
@@ -109,7 +110,7 @@ def _mirrored(n, steps=6, seed=0):
     q = np.broadcast_to(ndtri(LEVELS), (n, 2, steps, len(LEVELS)))
     level = rng.standard_normal((n, 1, steps))
     observed = np.concatenate([level, -level], axis=1)
-    past = rng.standard_normal((1, 200))
+    past = rng.standard_normal((1, 300))
     history = np.concatenate([past, -past])
     starts = np.full(n, history.shape[1])
     return np.array(q), observed, history, starts
@@ -128,17 +129,36 @@ def test_the_schaake_shuffle_wins_where_history_shows_the_dependence():
     )
 
 
-def test_with_no_origin_to_compare_on_schaake_then_gaussian():
+def test_with_nothing_to_compare_on_the_fallback_is_still_fitted():
+    # Two origins: none has two before it to be scored on, but they fit
+    # the gaussian copula.
     q, observed, history, starts = _mirrored(2)
     got = choose_coupling(q, LEVELS, observed, history, starts, 50, seed=3)
     assert (got["method"], got["chosen_by"], got["n_eval"]) == (
-        "schaake",
+        "gaussian",
         "fallback",
         0,
     )
-    got = choose_coupling(q, LEVELS, observed, None, None, 50, seed=3)
-    assert (got["method"], got["chosen_by"]) == ("gaussian", "fallback")
     assert got["window"] == max(w for m, w in CANDIDATES if m == "gaussian")
+    # One origin fits nothing: the Schaake shuffle on the history.
+    got = choose_coupling(
+        q[:1], LEVELS, observed[:1], history, starts[:1], 50, seed=3
+    )
+    assert (got["method"], got["chosen_by"]) == ("schaake", "fallback")
+    # With neither, the gaussian with no evidence: independence.
+    got = choose_coupling(q[:1], LEVELS, observed[:1], None, None, 50, seed=3)
+    assert (got["method"], got["rho"], got["s"]) == ("gaussian", 0.0, 0.0)
+
+
+def test_a_candidate_with_no_fit_at_an_origin_drops_out():
+    # History only from just before the latest origins: the Schaake
+    # shuffle has no windows at the earlier ones it would be scored on.
+    q, observed, history, starts = _mirrored(12)
+    starts = np.r_[np.full(10, 3), np.full(2, history.shape[1])]
+    got = choose_coupling(q, LEVELS, observed, history, starts, 50, seed=3)
+    assert "schaake" not in got["energy"]
+    assert got["method"] == "gaussian"
+    assert got["chosen_by"] == "energy"
 
 
 def test_unmatured_cells_are_left_out_of_the_comparison():
