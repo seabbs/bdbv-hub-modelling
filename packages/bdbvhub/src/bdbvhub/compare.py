@@ -67,6 +67,7 @@ __all__ = [
     "ComparisonConfig",
     "attribution",
     "fetch_hub_submissions",
+    "fetch_submissions_table",
     "forecast_quantiles",
     "hub_cells",
     "load_comparison_config",
@@ -77,8 +78,10 @@ __all__ = [
     "own_hub_ids",
     "resolve_baseline",
     "score_comparison",
+    "split_substituted",
     "stored_forecasts",
     "submission_dir",
+    "substituted_label",
     "summarise_comparison",
     "trajectory_samples",
     "with_submissions",
@@ -140,6 +143,14 @@ class ComparisonConfig:
     submitted : str
         Directory holding the forecasts we submitted to the hub, as
         `model-output/<hub id>/*.csv.gz`.
+    submissions_table : str
+        The ledger's table of each round's submitted model per hub id
+        (`submission_ci.submissions`), fetched by `--fetch`.
+    substituted : str
+        `apart` scores a week a fallback went out under one of our hub
+        ids under its own label (`substituted_label`), so the chain's
+        start is never mixed with another model; `together` keeps it
+        under the hub id.
     """
 
     baseline: str = "randomwalk"
@@ -147,6 +158,8 @@ class ComparisonConfig:
     locations: tuple[str, ...] = ("CD",)
     ref: str = "main"
     submitted: str = "data/our-submissions"
+    submissions_table: str = "data/raw/submission-ledger/submissions.csv"
+    substituted: str = "apart"
 
 
 def load_comparison_config(
@@ -172,6 +185,10 @@ def load_comparison_config(
         locations=tuple(raw.get("locations", default.locations)),
         ref=str(raw.get("ref", default.ref)),
         submitted=str(raw.get("submitted", default.submitted)),
+        submissions_table=str(
+            raw.get("submissions_table", default.submissions_table)
+        ),
+        substituted=str(raw.get("substituted", default.substituted)),
     )
 
 
@@ -251,6 +268,108 @@ def with_submissions(
     copy = (forecasts["source"] == "hub") & forecasts["model"].isin(ours)
     sub = submitted.assign(source="submitted")[list(SAMPLE_COLUMNS)]
     return pd.concat([forecasts.loc[~copy], sub], ignore_index=True)
+
+
+SUBSTITUTED_MODES: Final = ("apart", "together")
+"""How `split_substituted` treats a substituted week."""
+
+
+def substituted_label(hub_id: str, model: str) -> str:
+    """Return the label of a week `model` went out under `hub_id`.
+
+    Parameters
+    ----------
+    hub_id : str
+        Our hub id, such as `seabbs-renewal`.
+    model : str
+        The model that went out instead of the chain's start.
+
+    Returns
+    -------
+    str
+        Such as `seabbs-renewal [renewalsp]`.
+    """
+    return f"{hub_id} [{model}]"
+
+
+def split_substituted(
+    forecasts: pd.DataFrame, table: pd.DataFrame, mode: str = "apart"
+) -> pd.DataFrame:
+    """Relabel the weeks a fallback went out under one of our hub ids.
+
+    Parameters
+    ----------
+    forecasts : pandas.DataFrame
+        Samples with `model` and `reference_date`, our submissions under
+        their hub id (`with_submissions`).
+    table : pandas.DataFrame
+        The ledger's submissions table: `reference_date`, `hub_id`,
+        `model` and `substituted` (`true`, `false` or empty).
+    mode : str
+        `apart` gives a substituted week `substituted_label`; `together`
+        leaves every week under its hub id.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `forecasts`, with substituted weeks relabelled under `apart`.
+        Other teams' forecasts and our main builds are unchanged.
+
+    Raises
+    ------
+    ValueError
+        If `mode` is not one of `SUBSTITUTED_MODES`.
+    """
+    if mode not in SUBSTITUTED_MODES:
+        raise ValueError(
+            f"substituted must be one of {SUBSTITUTED_MODES}, not {mode!r}"
+        )
+    if mode == "together" or table.empty:
+        return forecasts
+    subs = table.loc[table["substituted"].astype(str) == "true"]
+    labels = {
+        (str(r.reference_date), str(r.hub_id)): substituted_label(
+            str(r.hub_id), str(r.model)
+        )
+        for r in subs.itertuples()
+    }
+    keys = zip(
+        forecasts["reference_date"].astype(str), forecasts["model"], strict=True
+    )
+    new = [labels.get(k, k[1]) for k in keys]
+    return forecasts.assign(model=new)
+
+
+def fetch_submissions_table(  # pragma: no cover - git
+    dest: Path | str, branch: str = "submission-ledger"
+) -> Path:
+    """Copy the ledger branch's `submissions.csv` to `dest`.
+
+    Parameters
+    ----------
+    dest : pathlib.Path or str
+        Where to write it.
+    branch : str
+        The ledger branch on `origin`.
+
+    Returns
+    -------
+    pathlib.Path
+        `dest`.
+    """
+    import subprocess
+
+    subprocess.run(["git", "fetch", "-q", "origin", branch], check=True)
+    text = subprocess.run(
+        ["git", "show", f"origin/{branch}:submissions.csv"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    out = Path(dest)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text)
+    return out
 
 
 def attribution(accessed: str) -> str:
