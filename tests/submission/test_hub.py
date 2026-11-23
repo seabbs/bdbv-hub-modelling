@@ -306,3 +306,27 @@ def test_counts_and_rt_together_pass_the_hub_checks(tmp_path: Path) -> None:
         path, RT_HUB, metadata_dirs=[METADATA], skip_window=True
     )
     assert [c.check for c in rep.failed] == []
+
+
+def test_nowcast_adds_a_fits_rt_for_the_rounds_weeks(tmp_path: Path) -> None:
+    """`nowcast --fit` adds the fit's `RT_FILE` as `wk R_t` rows for the
+    weeks the round takes; a fit without one adds nothing."""
+    from bdbvhub.cli import _with_rt
+    from nowcastrenewal.forecaster import RT_FILE
+
+    tasks = FIXTURES / "hub-snapshot-rt" / "hub-config" / "tasks.json"
+    counts = _table(_samples(), "2026-11-28")
+    fit = tmp_path / "fit"
+    fit.mkdir()
+    assert _with_rt(counts, fit, tasks, "2026-11-28", FORECAST_DATE) is counts
+    _rt(("2026-11-14", "2026-11-21", "2026-11-28")).to_csv(
+        fit / RT_FILE, index=False
+    )
+    out = _with_rt(counts, fit, tasks, "2026-11-28", FORECAST_DATE)
+    rt = out.loc[out["target"] == "wk R_t"]
+    assert sorted(set(rt["target_end_date"])) == ["2026-11-21", "2026-11-28"]
+    assert len(out) == len(counts) + len(rt)
+    # A round with no wk R_t task adds nothing.
+    assert len(_with_rt(counts, fit, tasks, "2026-10-31", FORECAST_DATE)) == (
+        len(counts)
+    )
