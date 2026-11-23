@@ -10,22 +10,25 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from bdbvhub.data.zones import load_zone_data
 from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastrenewal import forecaster as rn
 from nowcastrenewal import zones as zr
-from nowcastutils.base import ForecastTask
+from nowcastutils.base import ForecastTask, ModelUnavailableError
 from nowcastutils.hierarchy import is_zone, province_of
 
 pytest.importorskip("pyrenew")
 
 ROOT = Path(__file__).resolve().parents[2]
+DATA = ROOT / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture
 def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
     rows = target.loc[target["vintage"] == "2026-10-17"]
-    return make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
+    config = BacktestConfig(n_samples=20, seed=3)
+    return make_tasks(rows, delays, config, zones=load_zone_data(DATA))[0]
 
 
 @pytest.fixture
@@ -100,6 +103,27 @@ def test_renewal_and_renewalbvd_fit_zones() -> None:
     assert type(get_model("renewalsp")) is rn.RenewalModel
     # The zone fit's representation differs, so it keys a stored fit.
     assert repr(model) != repr(rn.RenewalModel(rn.VARIANTS["renewalbvd"]))
+
+
+def test_a_zone_fit_forecasts_the_zones_its_task_holds(
+    task: ForecastTask,
+) -> None:
+    # The task's zone codes are what the forecast is checked against
+    # (`nowcastutils.base._check_block`), so the fit takes its zones
+    # from them, not from the data directory.
+    mine = [z for z in task.zone_codes if province_of(z) in task.locations]
+    fewer = replace(task, zone_codes=tuple(mine[::2]))
+    assert zr.task_zones(fewer) == tuple(sorted(mine[::2]))
+
+
+def test_a_real_task_with_no_zone_codes_has_no_zone_fit(
+    task: ForecastTask,
+) -> None:
+    bare = replace(task, zone_codes=())
+    with pytest.raises(ModelUnavailableError, match="zone codes"):
+        zr.task_zones(bare)
+    with pytest.raises(ModelUnavailableError, match="zone codes"):
+        get_model("renewal").forecast(bare)
 
 
 def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
