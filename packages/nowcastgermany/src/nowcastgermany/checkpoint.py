@@ -37,7 +37,6 @@ import dataclasses
 import gc
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -187,24 +186,15 @@ def run_of(settings: Mapping[str, Any]) -> str:
     return "slots-zeroinit" if slots.get("init") == "zero" else "slots"
 
 
-def outbreaks_and_grid(
-    settings: Mapping[str, Any], release: Mapping[str, str]
-) -> tuple[int, str]:
-    """Return a checkpoint's training outbreaks and grid.
+def outbreaks_and_grid(settings: Mapping[str, Any]) -> tuple[int, str]:
+    """Return a checkpoint's training outbreaks and grid, from settings.json.
 
-    From settings.json, else the release's title and body ("2,000
-    simulated outbreaks", "round 4"), else 0 and `unknown`.
+    0 and `unknown` where the settings have none.
     """
-    text = f"{release.get('name', '')} {release.get('body', '')}"
-    outbreaks = settings.get("n_outbreaks")
-    if outbreaks is None:
-        found = re.search(r"([\d,]+) (?:simulated )?(?:\w+ )?outbreaks", text)
-        outbreaks = int(found.group(1).replace(",", "")) if found else 0
-    grid = settings.get("grid")
-    if grid is None:
-        found = re.search(r"round (\d+)", text)
-        grid = f"r{found.group(1)}" if found else "unknown"
-    return int(outbreaks), str(grid)
+    return (
+        int(settings.get("n_outbreaks") or 0),
+        str(settings.get("grid") or "unknown"),
+    )
 
 
 def chosen(rows: pd.DataFrame) -> pd.Series:
@@ -586,7 +576,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
 
 
 def release_unit(cache: Path, label: str) -> None:
-    """Fetch a release's settings.json and its title and body."""
+    """Fetch a release's settings.json, with its held-out sidecar if any."""
     from nowcastfoundation.forecaster import release_tag
 
     root = cache / "heldout"
@@ -599,15 +589,14 @@ def release_unit(cache: Path, label: str) -> None:
         check=True,
     )  # fmt: skip
     view = subprocess.run(
-        ["gh", "release", "view", tag_, "-R", REPO, "--json",
-         "name,body,assets"],
+        ["gh", "release", "view", tag_, "-R", REPO, "--json", "assets"],
         check=True,
         capture_output=True,
         text=True,
     )  # fmt: skip
     release = json.loads(view.stdout)
     # Offloaded checkpoints keep their held-out losses in a sidecar.
-    if SIDECAR in {a["name"] for a in release.pop("assets", [])}:
+    if SIDECAR in {a["name"] for a in release.get("assets", [])}:
         sidecar = root / f"{label}-{SIDECAR}"
         subprocess.run(
             ["gh", "release", "download", tag_, "-R", REPO, "-p", SIDECAR,
@@ -617,7 +606,6 @@ def release_unit(cache: Path, label: str) -> None:
         settings = json.loads(Path(out).read_text())
         merged = with_sidecar(settings, json.loads(sidecar.read_text()))
         Path(out).write_text(json.dumps(merged, indent=1))
-    (root / f"{label}-release.json").write_text(json.dumps(release))
 
 
 # Table -----------------------------------------------------------------
@@ -707,10 +695,7 @@ def table(
     meta = {}
     for h in hashes:
         settings = json.loads((cache / "heldout" / f"{h}.json").read_text())
-        release = json.loads(
-            (cache / "heldout" / f"{h}-release.json").read_text()
-        )
-        meta[h] = (settings, *outbreaks_and_grid(settings, release))
+        meta[h] = (settings, *outbreaks_and_grid(settings))
     labels = [REFERENCE, *hashes]
     # BDBV is held out for the paper: no BDBV rows are computed, and
     # those already in `evidence` are kept.
@@ -778,7 +763,7 @@ def daily_table(
     }
     outbreaks = {
         d.name: outbreaks_and_grid(
-            json.loads((d / "settings.json").read_text()), {}
+            json.loads((d / "settings.json").read_text())
         )[0]
         for d in _segments(train)
     }
@@ -830,7 +815,7 @@ def run_table(
         ],
         ignore_index=True,
     )
-    meta = {lb: outbreaks_and_grid(s, {}) for lb, s in settings.items()}
+    meta = {lb: outbreaks_and_grid(s) for lb, s in settings.items()}
     new["outbreaks"] = new["checkpoint"].map(
         {lb: m[0] for lb, m in meta.items()}
     )
