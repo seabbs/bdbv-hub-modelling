@@ -34,6 +34,12 @@ split_date = "2022-02-10"
 # 28 days after it (4 weeks), as the held-out loss splits them. The hub's
 # horizons, 0 to 28 days back, stay the scored nowcast.
 forecast_days = 28
+# The views the checkpoint units forecast and the page shows, both on daily
+# data: the hub's 7-day rolling sums (`7day`) and each day's count
+# (`daily`), each scored on its truth as reported 40 days after it ends.
+# Daily counts come from the models with their own quantiles of them (the
+# ragged Chronos-2 models).
+targets = ["7day", "daily"]
 # Germany is scored and shown on daily data only: every model takes the
 # daily releases (no weekly source) and forecasts the hub's 7-day rolling
 # sums. The checkpoint units run the Chronos-2 models listed here.

@@ -386,16 +386,19 @@ def german_tasks_dir(
     return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
 
-def _reaches(path: Path, last: int) -> bool:
-    """Whether a unit's date file holds horizons up to `last` days.
+def _reaches(path: Path, last: int, targets: Sequence[str]) -> bool:
+    """Whether a unit's date file holds `targets` up to `last` days.
 
-    Files written before the forecast days were added end at the
-    nowcast date, so their dates are forecast again.
+    Files written before the forecast days or a target were added are
+    forecast again. A file with no `target` column holds 7-day sums.
     """
     if not path.exists():
         return False
-    horizon = pd.read_csv(path, usecols=["horizon"])["horizon"]
-    return bool(len(horizon)) and int(horizon.max()) >= last
+    rows = pd.read_csv(path)
+    if rows.empty or int(rows["horizon"].max()) < last:
+        return False
+    held = set(rows["target"]) if "target" in rows else {"7day"}
+    return set(targets) <= held
 
 
 def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
@@ -422,7 +425,11 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     record_precision(root)
     dates = de.nowcast_dates(config, held_out=False)
     last = max(config.horizons)
-    todo = [d for d in dates if not _reaches(root / f"{d}.csv.gz", last)]
+    todo = [
+        d
+        for d in dates
+        if not _reaches(root / f"{d}.csv.gz", last, config.targets)
+    ]
     models = list(label_models(label))
     # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
@@ -441,6 +448,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
             tasks_dir,
             max_delay=config.truth_delay,
             horizons=config.horizons,
+            targets=config.targets,
             timings=timings,
         )
         # Seconds by model and date, for the `benchmarks` target.

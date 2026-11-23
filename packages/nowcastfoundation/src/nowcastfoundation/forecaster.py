@@ -1493,6 +1493,41 @@ class FoundationModel:
         out["quantile"] = at[out["sample"].to_numpy() - 1]
         return out[["location", "target_end_date", "quantile", "value"]]
 
+    def daily_quantiles(
+        self, task: ForecastTask, levels: Sequence[float]
+    ) -> pd.DataFrame | None:
+        """Return Chronos-2's own quantiles of each day's count.
+
+        The daily count rows of the block `quantiles` reads its aggregate
+        rows from: each day is one step, so it has a native quantile, from
+        the same prediction (`known`). As in `forecast_both` each day is
+        floored at the count reported, which is monotone, so path `k` is
+        still the quantile at level `k`.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+        levels : sequence of float
+            Increasing quantile levels.
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            Columns `location`, `date`, `quantile` and `value`, or None
+            where the model has no aggregate rows (the weekly source, or no
+            period).
+        """
+        if self.source != "daily" or self.period is None:
+            return None
+        at = np.asarray(levels, dtype=float)
+        run = replace(
+            self, sample=native_sampler(at, self.checkpoint, self.known)
+        )
+        _, out = run.forecast_both(replace(task, n_samples=len(at)))
+        out["quantile"] = at[out["sample"].to_numpy() - 1]
+        return out[["location", "date", "quantile", "value"]]
+
 
 def native_sampler(
     levels: np.ndarray,

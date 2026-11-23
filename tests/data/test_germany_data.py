@@ -367,7 +367,7 @@ def test_daily_truth_is_each_day_s_count_reported_by_the_delay(
     # The daily view's truth: a day's count as reported `delay` days after
     # it, straight from the triangle's rows; none where that report is not
     # in the data yet.
-    from nowcastgermany.data import daily_truth
+    from nowcastgermany.evaluation import daily_truth
 
     days = ["2021-09-01", "2021-09-20", "2021-10-15"]
     got = daily_truth(triangle, days, 10)
