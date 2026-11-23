@@ -6,8 +6,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.tidy import load_daily_zones
-from bdbvhub.data.zones import hub_zones
 from bdbvhub.models import get_model
 from bdbvhub.reporting.hubtables import (
     HUB_QUANTILE_LEVELS,
@@ -16,6 +14,8 @@ from bdbvhub.reporting.hubtables import (
     write_hub_tables,
 )
 from nowcastbaselines.zones import ZoneAllocator
+from nowcastbdbv.data.tidy import load_daily_zones
+from nowcastbdbv.data.zones import hub_zones
 from nowcasteval import backtest as bt
 from nowcastutils.base import NATIONAL
 from nowcastutils.hierarchy import is_zone, province_of

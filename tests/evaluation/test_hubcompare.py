@@ -24,7 +24,7 @@ from bdbvhub.compare import (
     submission_dir,
     summarise_comparison,
 )
-from bdbvhub.data.zones import hub_zones, load_zone_data
+from nowcastbdbv.data.zones import hub_zones, load_zone_data
 from nowcasteval.backtest import BacktestConfig
 from nowcasteval.plots import comparison_colours, plot_hub_round
 from nowcastutils.dates import reference_date_for_vintage

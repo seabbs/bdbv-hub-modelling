@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.zones import ZoneData, hub_zones
 from bdbvhub.models import get_model
+from nowcastbdbv.data.zones import ZoneData, hub_zones
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation import forecaster as foundation
 from nowcastutils import trajectories

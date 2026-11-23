@@ -58,9 +58,9 @@ from typing import Any, Final
 
 import pandas as pd
 
-from bdbvhub.data.tidy import load_daily, load_delays, load_target
-from bdbvhub.data.zones import ZoneData, load_zone_data
 from bdbvhub.models import get_model, list_models
+from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
+from nowcastbdbv.data.zones import ZoneData, load_zone_data
 from nowcasteval.backtest import (
     BacktestConfig,
     load_config,
@@ -140,7 +140,7 @@ RECORD_CODE: Final = "packages/bdbvhub/src/bdbvhub/submission/fitting.py"
 fit records (`fit_files`). The models with a fit directory
 (`renewal.FIT_VARIANTS`) hold the whole file in their keys."""
 
-STORE_DATA: Final = "packages/bdbvhub/src/bdbvhub/data/*.csv"
+STORE_DATA: Final = "packages/nowcastbdbv/src/nowcastbdbv/data/*.csv"
 """The package's data files, which a fit may read (the province centres
 of the renewal models' gravity kernel). Every stored fit's key holds
 them."""
@@ -273,6 +273,7 @@ KEY_PACKAGES: Final = (
     "nowcastfoundation",
     "nowcastrenewal",
     "nowcastgermany",
+    "nowcastbdbv",
     "bdbvhub",
 )
 """The workspace's packages, whose import lines leave a fit key: their

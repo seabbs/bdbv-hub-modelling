@@ -49,9 +49,9 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from bdbvhub.data.zones import ZoneData
 from bdbvhub.models import get_model, list_models
 from nowcastbaselines.zones import zone_task
+from nowcastbdbv.data.zones import ZoneData
 from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
 from nowcasteval.nowcast import release_backtest
 from nowcasteval.scoring import relative_skill, summarise_scores
@@ -457,7 +457,7 @@ def fetch_hub_submissions(  # pragma: no cover - network
         A manifest with the commit, the access date and each kept file,
         also written to `dest/manifest.json`.
     """
-    from bdbvhub.data.tidy import HUB_REPO, _api, _raw
+    from nowcastbdbv.data.tidy import HUB_REPO, _api, _raw
 
     token = token or os.environ.get("GITHUB_TOKEN")
     keep, other = Path(dest), Path(cache)

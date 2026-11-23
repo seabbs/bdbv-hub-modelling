@@ -7,8 +7,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.tidy import load_health_zones
-from bdbvhub.data.zones import hub_zones
 from bdbvhub.submission.hub import to_hub_table, write_submission
 from bdbvhub.submission.validate import Hub, validate_submission
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
@@ -20,6 +18,8 @@ from nowcastbaselines.zones import (
     zone_task,
     zones_for_model,
 )
+from nowcastbdbv.data.tidy import load_health_zones
+from nowcastbdbv.data.zones import hub_zones
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.base import NATIONAL, ForecastTask
 from nowcastutils.hierarchy import province_of

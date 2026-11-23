@@ -1,7 +1,7 @@
 # bdbvhub
 
 Nowcasts and forecasts for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub), built on the `nowcast*` packages.
-It reads the hub's data, fits and stores the models, writes and checks the weekly hub file, and builds the docs site's hub pages.
+It reads the hub's data (`nowcastbdbv`), fits and stores the models, writes and checks the weekly hub file, and builds the docs site's hub pages.
 
 ## Start here
 
@@ -10,7 +10,7 @@ It reads the hub's data, fits and stores the models, writes and checks the weekl
 
 ## Modules
 
-- [`data`](src/bdbvhub/data/): download, tidy and load the hub's data streams, its delays and health zones.
+- The hub's data streams, delays and health zones are in [`nowcastbdbv.data`](../nowcastbdbv/src/nowcastbdbv/data/).
 - [`models`](src/bdbvhub/models.py): the model registry.
 - [`store`](src/bdbvhub/store/): the fit store, its archive and the backtest digest.
 - [`compare`](src/bdbvhub/compare.py), [`zones`](src/bdbvhub/zones.py): comparison with the hub's forecasts, and health-zone forecasts.

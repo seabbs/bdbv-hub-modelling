@@ -19,7 +19,7 @@ day, and is published after a lag of 0 to 3 days.
 `SimulatedOutbreak.vintage` publishes what the hub would show at a date:
 known onsets by onset week, missing onsets given an onset by subtracting
 a delay drawn from the hub's imputation delay at that date
-(`bdbvhub.data.delays.hub_delay_pmf`), their total, and the
+(`nowcastbdbv.data.delays.hub_delay_pmf`), their total, and the
 delay line data.
 `SimulatedOutbreak.truth` is the final total once every case is reported.
 """
@@ -37,8 +37,8 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhub.data.delays import hub_delay_pmf
-from bdbvhub.data.tidy import PROVINCE_POPULATIONS, province_places
+from nowcastbdbv.data.delays import hub_delay_pmf
+from nowcastbdbv.data.tidy import PROVINCE_POPULATIONS, province_places
 from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import Delay, censored_pmf
 from nowcastrenewal.components.renewal import ExponentialDepletion, run_renewal
@@ -255,7 +255,7 @@ class SimulatedOutbreak:
         Returns
         -------
         tuple of pandas.DataFrame
-            The target rows (as `bdbvhub.data.tidy.load_target`, with
+            The target rows (as `nowcastbdbv.data.tidy.load_target`, with
             `kind = "simulated"`) and the delay line data, each with
             `cutoff`, the release less `cutoff_lag`.
         """
@@ -366,7 +366,7 @@ class SimulatedOutbreak:
         Returns
         -------
         pandas.DataFrame
-            Rows as `bdbvhub.data.tidy.load_health_zones`: `vintage`,
+            Rows as `nowcastbdbv.data.tidy.load_health_zones`: `vintage`,
             `location`, `location_name`, `province`, `target_end_date`,
             with `observed` (known onsets) and `imputed` beside `total`,
             and `cutoff`.

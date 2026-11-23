@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data import tidy
-from bdbvhub.data.tidy import load_daily, load_delays, load_target
+from nowcastbdbv.data import tidy
+from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcasteval.backtest import BacktestConfig
 from nowcastutils.base import ForecastTask
 
@@ -192,14 +192,14 @@ def config() -> BacktestConfig:
 
 @pytest.fixture(scope="session")
 def health_zones() -> pd.DataFrame:
-    from bdbvhub.data.tidy import load_health_zones
+    from nowcastbdbv.data.tidy import load_health_zones
 
     return load_health_zones(DATA)
 
 
 @pytest.fixture(scope="session")
 def daily_zones() -> pd.DataFrame:
-    from bdbvhub.data.tidy import load_daily_zones
+    from nowcastbdbv.data.tidy import load_daily_zones
 
     return load_daily_zones(DATA)
 

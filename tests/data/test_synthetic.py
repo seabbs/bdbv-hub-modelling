@@ -114,7 +114,7 @@ def test_simulated_missing_onsets_follow_the_report_day() -> None:
 def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: ignore[no-untyped-def]
     import jax.numpy as jnp
 
-    from bdbvhub.data.tidy import PROVINCE_POPULATIONS
+    from nowcastbdbv.data.tidy import PROVINCE_POPULATIONS
     from nowcastrenewal.components.mixing import mixing_matrix
     from nowcastrenewal.components.renewal import (
         ExponentialDepletion,
@@ -132,7 +132,7 @@ def test_simulated_onsets_follow_the_model_renewal(outbreak) -> None:  # type: i
         list(s.locations)
     ].to_numpy()
     pop = np.array([PROVINCE_POPULATIONS[q] for q in s.locations])
-    from bdbvhub.data.tidy import province_places
+    from nowcastbdbv.data.tidy import province_places
 
     table = province_places(s.locations)
     w = mixing_matrix(

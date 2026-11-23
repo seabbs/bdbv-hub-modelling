@@ -36,9 +36,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhub.data.tidy import load_daily, load_delays, load_target
 from bdbvhub.models import get_model
 from bdbvhub.store import store
+from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcasteval import backtest as bt
 from nowcasteval.nowcast import relative_crps, release_backtest
 from nowcasteval.plots import plot_location_grid, save_light_dark

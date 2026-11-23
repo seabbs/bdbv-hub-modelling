@@ -433,7 +433,7 @@ def rt_check_from_fit(fit_dir: Path | str, data_dir: Path | str) -> str:
     """
     import json
 
-    from bdbvhub.data.tidy import load_health_zones, load_target
+    from nowcastbdbv.data.tidy import load_health_zones, load_target
     from nowcasteval.plots import location_names
     from nowcastrenewal import bvd as bvd_mod
     from nowcastrenewal.forecaster import RT_FILE, SAMPLES_FILE

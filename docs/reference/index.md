@@ -21,7 +21,7 @@ Run from the repository root after `bdbvhubrenewal data` has written the tidy ta
 ```python
 import dataclasses
 
-from bdbvhub.data.tidy import (
+from nowcastbdbv.data.tidy import (
     delays_for_vintage,
     load_daily,
     load_delays,
