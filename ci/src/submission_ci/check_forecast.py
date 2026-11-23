@@ -431,17 +431,15 @@ def check_plausible(
     """Rule out a forecast far from the recent data, at each location.
 
     The base is the largest of the last `plausible_recent_weeks` observed
-    weeks, floored at `plausible_floor`. For each week from the nowcast
-    to the last horizon, the median must lie within
-    `plausible_median_ratio` times the base, the 97.5% quantile within
-    `plausible_q975_ratio` times it, and, where the recent maximum is at
-    least the floor, the median above the maximum over
+    weeks, with no floor. For each week from the nowcast to the last
+    horizon, the median must lie within `plausible_median_ratio` times
+    the base, the 97.5% quantile within `plausible_q975_ratio` times it,
+    and, where the base is above 0, the median above the base over
     `plausible_low_ratio` unless it is at least the count already
     observed for that week. Locations without observed data (the health
     zones) are skipped. Any breach fails, so the chain moves on.
     """
     n_recent = int(c["plausible_recent_weeks"])
-    floor = float(c["plausible_floor"])
     hi, tail, lo = (
         float(c["plausible_median_ratio"]),
         float(c["plausible_q975_ratio"]),
@@ -454,8 +452,7 @@ def check_plausible(
         if not series:
             continue
         recent = [series[w] for w in sorted(series)[-n_recent:]]
-        top = max(recent, default=0.0)
-        base = max(top, floor)
+        base = max(recent, default=0.0)
         for w in weeks:
             values = s.week_values(loc, w)
             if not values:
@@ -477,16 +474,12 @@ def check_plausible(
                         f"{fmt(tail)} times the recent maximum {fmt(base)}",
                     )
                 )
-            elif (
-                top >= floor
-                and med < top / lo
-                and med < series.get(w, math.inf)
-            ):
+            elif base > 0 and med < base / lo and med < series.get(w, math.inf):
                 found.append(
                     (
                         "fail",
                         f"{loc} {w}: median {fmt(med)} is under 1/"
-                        f"{fmt(lo)} of the recent maximum {fmt(top)}",
+                        f"{fmt(lo)} of the recent maximum {fmt(base)}",
                     )
                 )
     return _result("plausible", found, "within range of the recent data")

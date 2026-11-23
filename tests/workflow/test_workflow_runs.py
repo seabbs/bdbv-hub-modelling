@@ -116,6 +116,16 @@ def test_trainer_options_name_only_the_settings_given():
     assert got == "--loss-horizon-days 7 --series-bias --bias-lr 0.001"
 
 
+def test_the_release_layer_is_passed_only_when_a_run_names_one():
+    # Lead 10:35: late release starts and weekly releases drawn at
+    # fine-tune time; no run takes it until its entry names the file.
+    assert runs.load_config()["finetune"]["release_layer"] is None
+    assert "--release-layer" not in runs.trainer_options(_run())
+    path = "config/finetune/release-layer.yaml"
+    got = runs.trainer_options(_run(release_layer=path))
+    assert got == f"--release-layer {path}"
+
+
 def test_the_no_delays_run_is_run_a_on_complete_counts():
     cfg = runs.load_config()
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})

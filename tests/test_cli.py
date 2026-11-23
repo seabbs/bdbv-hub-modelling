@@ -635,7 +635,7 @@ def test_zone_backtest_of_a_skipped_block_writes_empty_files(
         del args, kwargs
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-    monkeypatch.setattr("bdbvhub.zones.zone_backtest", nothing)
+    monkeypatch.setattr("nowcastbdbv.zones.zone_backtest", nothing)
     names = ["zone-scores.csv", "zone-energy.csv", "zone-quantiles.csv"]
     outs = [
         "--out", str(tmp_path / names[0]),

@@ -11,11 +11,17 @@ dependencies = [
   "pandas>=2.1,<4",
   "tzdata>=2024.1",
   "nowcastutils",
+  "nowcasteval",
+  "nowcastbaselines",
+  "nowcastfoundation",
   "nowcastrenewal",
 ]
 
 [tool.uv.sources]
 nowcastutils = { workspace = true }
+nowcasteval = { workspace = true }
+nowcastbaselines = { workspace = true }
+nowcastfoundation = { workspace = true }
 nowcastrenewal = { workspace = true }
 
 [build-system]
