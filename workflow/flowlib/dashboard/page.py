@@ -78,8 +78,6 @@ class Context:
     logs: dict[str, logs.RunLog] = field(default_factory=dict)
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
-    warm: bool = False
-    """Nowcasts are built in the background (`refresh`), not on request."""
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -123,17 +121,7 @@ class Context:
         )
 
     def nowcasts(self, key: str) -> dict[str, Any] | None:
-        """Return a dataset's nowcasts, rebuilt only when its files change.
-
-        When `warm`, the last build (None before the first): a background
-        thread calls `refresh`, so no request waits on a build.
-        """
-        if self.warm:
-            return self.stores.get(key, {}).get("built")
-        return self.refresh(key)
-
-    def refresh(self, key: str) -> dict[str, Any] | None:
-        """Rebuild a dataset's nowcasts if its files changed; return them."""
+        """Return a dataset's nowcasts, rebuilt only when its files change."""
         ds = self.dataset(key)
         days, ranges, _ = nowcasts.horizons(ds)
         return nowcasts.cached_build(
@@ -274,7 +262,8 @@ def live_status(
         points.append(status)
         if step is None or status[1] > step:
             step = int(status[1])
-    rate, span = training.recent_rate(points)
+    since = training.resumed_at(folder) if folder else None
+    rate, span = training.recent_rate(points, since=since)
     sims_rate = None
     if rate and span and sims:
         newest = max(points)
@@ -639,6 +628,27 @@ def bias_section(ctx: Context, live: Run, st: Status) -> str:
     )
 
 
+ROLLING_CHECK = "daily+rolling7"
+"""The held-out source whose rolling-sum rows the checkpoint tables check
+against its daily rows (`finetune.evaluate.rolling_consistency`)."""
+
+
+def rolling_check(s: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """Return a checkpoint's 7-day row gap and relative roughness.
+
+    The gap is the 7-day row's median off the 7-day sums of the daily
+    rows' medians, per unit of those sums; the roughness is the 7-day
+    row's over those sums', so 1 is as smooth as the daily rows' sums
+    and more copies their day-of-week cycle. None where not scored.
+    """
+    check = s.get("held_out_rolling") or {}
+    gap = check.get(f"{ROLLING_CHECK}_gap")
+    rough = check.get(f"{ROLLING_CHECK}_rough")
+    base = check.get(f"{ROLLING_CHECK}_rough_daily_sum")
+    ratio = rough / base if rough is not None and base else None
+    return gap, ratio
+
+
 def checkpoint_table(
     run: Run, info: Mapping[str, Any], mode: str, sources: Sequence[str] = ()
 ) -> str:
@@ -659,11 +669,13 @@ def checkpoint_table(
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>nowcast part"
-        f"<th>forecast part<th>held-out start{by_head}<th>saved</tr>"
+        f"<th>forecast part<th>7-day row gap<th>7-day row roughness"
+        f"<th>held-out start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
         ho = s.get("held_out_loss")
+        gap, rough = rolling_check(s)
         cells = [
             html.escape(run.label),
             name,
@@ -678,6 +690,8 @@ def checkpoint_table(
                     s.get("held_out_loss_forecast"),
                 )
             ),
+            _fmt(gap, 3) or "n/a",
+            _fmt(rough, 2) or "n/a",
             _fmt(s.get("held_out_loss_start")),
             *(_fmt(by.get(src)) or "n/a" for src in sources),
             datetime.fromtimestamp(mtime).strftime("%m-%d %H:%M")
@@ -1011,8 +1025,7 @@ def sections(ctx: Context) -> dict[str, str]:
     `bar` is the top bar's status; the rest are each section's content
     (`<details id=...>` without its summary).
     """
-    _, bar, _, parts = _parts(ctx)
-    return {"bar": bar} | {key: content for key, _, content, _ in parts}
+    return render(ctx)[1]
 
 
 def build(ctx: Context) -> str:
@@ -1023,7 +1036,16 @@ def build(ctx: Context) -> str:
     ValueError
         If no run is configured.
     """
+    return render(ctx)[0]
+
+
+def render(ctx: Context) -> tuple[str, dict[str, str]]:
+    """Return the dashboard page and its in-place parts, from one build.
+
+    The parts are `sections`'; the page is `build`'s.
+    """
     live, bar, seldata, parts = _parts(ctx)
+    updates = {"bar": bar} | {key: content for key, _, content, _ in parts}
     nav = "".join(
         f'<a href="#{key}">{NAV.get(key, title)}</a>'
         for key, title, _, _ in parts
@@ -1047,7 +1069,7 @@ def build(ctx: Context) -> str:
         "t=window.ftExplain[k];return t?'<span class=info tabindex=0 "
         'data-tip="\'+t.replace(/"/g,"&quot;")+\'">\\u24d8</span>\':""};'
     )
-    return (
+    page = (
         "<!doctype html><html><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
         "<title>Fine-tuning dashboard</title>"
@@ -1058,3 +1080,4 @@ def build(ctx: Context) -> str:
         f"{_asset('expand.js')}\n{'' if ctx.once else _asset('live.js')}"
         "</script></body></html>"
     )
+    return page, updates

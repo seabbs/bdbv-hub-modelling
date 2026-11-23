@@ -229,3 +229,38 @@ def test_checkpoints_and_the_start_get_interval_coverage(tmp_path, kind):
     # Every scored step is a nowcast step or a forecast step.
     assert cover["nowcast_n"] + cover["forecast_n"] == cover["n"] > 0
     assert cover["source_daily_n"] + cover["source_weekly_n"] == cover["n"]
+
+
+def rolling_toy(seed: int) -> dict:
+    """A toy daily+rolling7 block: each place's counts, sums, then lags."""
+    block = toy_block(seed)
+    x = block["context"]
+    n = block["n_targets"]
+    sums = np.stack([np.convolve(r, np.ones(7))[: x.shape[1]] for r in x[:n]])
+    return {
+        **block,
+        "context": np.concatenate([x[:n], sums, x[n:]]).astype(np.float32),
+        "n_targets": 2 * n,
+        "levels": ["national", "leaf", "leaf"] * 2,
+        "source": "daily+rolling7",
+    }
+
+
+@pytest.mark.usefixtures("short_context")
+@pytest.mark.parametrize("kind", ["start", "checkpoint"])
+def test_checkpoints_and_the_start_check_rolling_rows_sum_daily_rows(
+    tmp_path, kind
+):
+    model = trained()
+    where = tmp_path / "step-0000100"
+    fs.save_snapshot(model, where, {"step": 100})
+    base = tiny_model()
+    series_bias.attach(base)
+    val = [*blocks(2), rolling_toy(5), rolling_toy(6)]
+    got = fe.evaluate(where / "adapter", base, val, [kind], 100)
+    check = got["held_out_rolling"]
+    assert check["daily+rolling7_n"] == 2 * 3 * val[2]["prediction_length"]
+    for key in ("gap", "rough", "rough_daily_sum", "rough_truth"):
+        assert np.isfinite(check[f"daily+rolling7_{key}"])
+    # Sources without rolling rows have nothing to check.
+    assert not any(k.startswith(("daily_", "weekly_")) for k in check)
