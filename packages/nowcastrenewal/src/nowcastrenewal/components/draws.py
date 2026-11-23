@@ -109,6 +109,8 @@ class PaddedDraws(dist.Distribution):
         """
         shape = tuple(sample_shape) + tuple(self.batch_shape)
         n = math.prod(shape)
+        if n == 0:
+            return jnp.asarray(self.base.sample(key, sample_shape))
         size = flat_size(n)
         params = {
             name: jnp.pad(
@@ -159,8 +161,8 @@ class padded_draws(Messenger):  # noqa: N801 (a numpyro handler)
     def process_message(self, msg: dict[str, Any]) -> None:
         """Wrap a large sample site's distribution in `PaddedDraws`.
 
-        A masked distribution (as PyRenew's count noise makes) keeps its
-        mask over the wrapped one.
+        A masked distribution (as numpyro's `mask` handler makes around
+        the count noise) keeps its mask over the wrapped one.
         """
         fn = msg.get("fn")
         if msg["type"] != "sample" or msg["is_observed"]:

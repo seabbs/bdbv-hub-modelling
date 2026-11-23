@@ -78,6 +78,14 @@ def test_flat_sizes_are_few_and_mostly_cells() -> None:
     assert len(set(sizes.tolist())) <= 1 + 4 * 12
 
 
+def test_an_empty_site_draws_nothing() -> None:
+    with jax.enable_x64(True):
+        x = PaddedDraws(dist.Poisson(jnp.ones((2, 0, 4)))).sample(
+            jax.random.key(0)
+        )
+    assert x.shape == (2, 0, 4)
+
+
 def test_only_large_unobserved_sites_are_drawn_flat() -> None:
     on = jnp.arange(24).reshape(2, 3, 4) % 2 == 0
 
