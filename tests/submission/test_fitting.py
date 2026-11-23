@@ -176,7 +176,8 @@ def test_national_coherence_reports_a_gap(target: pd.DataFrame) -> None:
     assert summary["streams"]["imputed"]["weeks_with_gap"] == 0
     assert summary["streams"]["total"]["max_abs_gap"] == 3
     assert {r["stream"] for r in summary["rows"]} == {"observed", "total"}
-    assert "unassigned" in summary["handling"]
+    assert "unassigned" not in summary["handling"]
+    assert "stop" in summary["handling"]
 
 
 def test_cli_plot_ppc(tmp_path: Path) -> None:

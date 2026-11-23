@@ -4,11 +4,11 @@
 (see INTEGRATION.md): for each stream (`observed`, `imputed`, `total`)
 the weeks where the national count is not the sum of the provinces.
 This is a check on the data, not on a candidate, so it runs once, in
-`prepare`. A gap is handled in the model, through an unassigned national
-component, and noted, so it never warns or blocks:
+`prepare`. National is the sum of the provinces, so a gap fails loudly:
+the renewal fits stop on it (`nowcastrenewal.forecaster.check_national`).
 
-- `pass` when national equals the sum of provinces in every week, and
-  also when it does not, with `gap` set and a note of how it is handled;
+- `pass` when national equals the sum of provinces in every week;
+- `fail` when it does not, with `gap` set and the weeks listed;
 - `warn` only when the file cannot be read;
 - `n/a` (`skip`) when there is no file.
 
@@ -52,12 +52,6 @@ class Coherence:
     handling: str = ""
     gap: bool = False
 
-    def handled(self) -> str:
-        """A `Handled:` note on the gap, or empty when there is none."""
-        if not self.gap:
-            return ""
-        return f"{self.summary}; modelled as an unassigned national component"
-
 
 def assess(data: Mapping[str, Any] | None, error: str = "") -> Coherence:
     """Judge one `coherence.json` payload."""
@@ -83,6 +77,7 @@ def assess(data: Mapping[str, Any] | None, error: str = "") -> Coherence:
     if not (rows or gapped or data.get("coherent") is False):
         return out
     out.gap = True
+    out.status = "fail"
     st = "total" if "total" in gapped else next(iter(gapped), "")
     if st:
         v = gapped[st]
@@ -143,7 +138,7 @@ def details(c: Coherence) -> str:
             lines.append(f"\n... and {len(shown) - MAX_ROWS} more weeks.")
         lines.append("\n</details>\n")
     if c.handling:
-        lines.append(f"How the model handles it: {c.handling}\n")
+        lines.append(f"{c.handling}\n")
     return "\n".join(lines)
 
 
@@ -157,7 +152,11 @@ def markdown(c: Coherence) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Command line entry point. Never fails the step."""
+    """Command line entry point.
+
+    Never fails the step: a gap is reported as `fail` and annotated as an
+    error, and the renewal candidates stop on it.
+    """
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--coherence", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
@@ -175,6 +174,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     append_summary(md)
     set_outputs({"coherence": c.status})
     print(f"data coherence: {c.status} ({c.summary})")
+    if c.status == "fail":
+        print(f"::error::data coherence: {c.summary}")
     return 0
 
 

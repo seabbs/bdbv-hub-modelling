@@ -466,8 +466,8 @@ def cmd_coherence(args: argparse.Namespace) -> int:
         "coherent": not rows,
         "streams": streams,
         "rows": rows,
-        "handling": "The fixture model fits the provinces and adds the gap "
-        "as an unassigned national component.",
+        "handling": "The fixture fits stop when the hub counts cases "
+        "nationally but in no province, and this check fails.",
     }
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(data, indent=2))

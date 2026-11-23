@@ -170,9 +170,8 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     )
     samples = samples.loc[~own]
     # Provinces are the sums of their zones, sample by sample, and
-    # national is their sum, with no unassigned part.
+    # national is their sum.
     assert model.last_fit is not None
-    assert model.last_fit.unassigned is None
     keys = ["location", "target_end_date", "sample"]
     summed = (
         zones.assign(location=zones["location"].map(province_of))
@@ -194,6 +193,19 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     model.write_fit_dir(task, tmp_path, "main")
     written = pd.read_csv(tmp_path / zr.ZONES_FILE)
     assert set(written["location"]) == set(zones["location"])
+
+
+def test_zone_fit_refuses_national_cases_in_no_province(
+    task: ForecastTask,
+) -> None:
+    target = task.target.copy()
+    nat = target["location"] == "CD"
+    week = max(target.loc[nat, "target_end_date"])
+    target.loc[nat & (target["target_end_date"] == week), "total"] += 2
+    model = get_model("renewal")
+    assert isinstance(model, zr.ZoneRenewalModel)
+    with pytest.raises(ValueError, match="no province"):
+        model.forecast_fit(replace(task, target=target))
 
 
 def test_fit_renewal_fits_zones_and_writes_their_samples(
