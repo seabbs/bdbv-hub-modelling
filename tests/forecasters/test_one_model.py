@@ -125,6 +125,19 @@ def test_a_complete_block_has_daily_and_rolling_rows_and_no_lags():
     assert "past_covariates" not in group
 
 
+def test_a_complete_block_names_its_places_for_the_series_bias():
+    # The fine-tuned two-step model runs the complete layout through the
+    # series bias, which needs each target row's place and its parent.
+    tri, start = daily_tri(), 10
+    rows = foundation.rolling_rows(tri, 7)
+    group = layout_block(tri, "complete", PLACES, start, period=rows)
+    assert group["places"] == PLACES
+    place, parent = chronos2._group_rows(group)
+    par = series_bias.parents_of(PLACES)
+    assert list(place) == [0, 1, 0, 1]
+    assert list(parent) == [par[0], par[1], par[0], par[1]]
+
+
 def _aggregate_sampler(store: list):
     """Draws 1 on daily rows and 1000 + place on total rows."""
 
