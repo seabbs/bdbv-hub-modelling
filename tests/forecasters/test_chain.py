@@ -473,3 +473,52 @@ def test_the_fallback_fits_through_the_given_delay(daily: pd.DataFrame) -> None:
 
     chain._latest_fit(snap, Settings(), delay)
     assert calls == [False, True]
+
+
+def _unpadded_delay_counts(snap, r: int) -> np.ndarray:
+    # The counts each fit sees, built on the releases up to `r` only.
+    from nowcastbaselines.baselinenowcast import preprocess_negative_values
+
+    c = np.asarray(snap.counts, dtype=float)
+    n_loc, _, n_day = c.shape
+    obs = snap.observed[: r + 1]
+    cum = c[:, : r + 1]
+    prev = np.concatenate(
+        [np.zeros_like(cum[:, :1]), cum[:, :-1] * obs[None, :-1]], axis=1
+    )
+    inc = np.where(obs[None], cum - prev, 0.0)
+    rows = inc.transpose(0, 2, 1).reshape(n_loc * n_day, r + 1)
+    mask = np.tile(obs.T, (n_loc, 1))
+    fixed = np.asarray(preprocess_negative_values(rows, mask, validate=False))
+    fixed = fixed.reshape(n_loc, n_day, r + 1).transpose(0, 2, 1)
+    out = c.copy()
+    out[:, : r + 1] = np.where(obs[None], np.cumsum(fixed, axis=1), cum)
+    return out
+
+
+def test_every_release_s_fit_compiles_one_shape(snap24, monkeypatch) -> None:
+    # A fit at each release (the retrospective errors fit one per
+    # release) passes the same array shapes to the compiled functions,
+    # so JAX compiles them once a task, not once a release; the counts
+    # are those of the releases up to each one alone.
+    seen: dict[str, set] = {"rows": set(), "pairs": set()}
+    real_pre, real_pairs = chain.preprocess_negative_values, chain.pair_sums
+
+    def pre(rows, mask, validate=True):
+        seen["rows"].add(np.shape(rows))
+        return real_pre(rows, mask, validate=validate)
+
+    def pairs(counts, observed, cut, first, max_delay):
+        seen["pairs"].add(np.shape(first))
+        return real_pairs(counts, observed, cut, first, max_delay)
+
+    monkeypatch.setattr(chain, "preprocess_negative_values", pre)
+    monkeypatch.setattr(chain, "pair_sums", pairs)
+    n_rel = snap24.counts.shape[1]
+    for r in range(1, n_rel):
+        np.testing.assert_array_equal(
+            _delay_counts(snap24, r), _unpadded_delay_counts(snap24, r)
+        )
+        fit_delay(snap24, r, Settings())
+    assert len(seen["rows"]) == 1
+    assert len(seen["pairs"]) <= 2
