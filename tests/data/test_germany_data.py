@@ -13,6 +13,7 @@ from nowcasteval.backtest import run_forecasts
 from nowcastgermany.data import (
     HORIZONS,
     OFFSETS,
+    hub_changes,
     hub_forecasts,
     hub_target,
     hub_triangle,
@@ -341,3 +342,20 @@ def test_within_delay_keeps_the_counts_reported_by_that_delay() -> None:
     cut = within_delay(tri, 40)
     assert cut["confirm"].tolist() == [5, 8]
     assert within_delay(tri, 41).equals(tri)
+
+
+def test_hub_changes_put_the_tail_at_81_days_and_drop_unreported() -> None:
+    wide = pd.DataFrame(
+        {
+            "date": ["2021-05-01"],
+            "location": ["DE"],
+            "age_group": ["00+"],
+            **{f"value_{d}d": [1.0] for d in range(81)},
+            "value_>80d": [2.0],
+        }
+    )
+    wide.loc[0, "value_80d"] = None
+    long = hub_changes(wide).set_index("delay")["change"]
+    assert long.loc[81] == 2.0
+    assert 80 not in long.index
+    assert len(long) == 81
