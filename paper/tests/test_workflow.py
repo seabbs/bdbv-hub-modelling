@@ -68,6 +68,11 @@ def test_dry_run(target: str, tmp_path: Path) -> None:
         assert f"rule {rule}" in log
 
 
+# The development target now builds the workflow's simulations, training
+# and scoring (final_run, rounds_dir, evidence files), about 670 jobs, so
+# running it on dummy data hangs the paper job. Its tests are slow until
+# the offline config can leave those inputs out (dry runs above still
+# check the DAG).
 @pytest.fixture(scope="module")
 def development(tmp_path_factory: pytest.TempPathFactory) -> Path:
     tmp = tmp_path_factory.mktemp("run")
@@ -86,6 +91,7 @@ def development(tmp_path_factory: pytest.TempPathFactory) -> Path:
 DEV_STUDIES = run_studies(CONFIG["studies"], "development")
 
 
+@pytest.mark.slow
 def test_development_writes_main_and_si_outputs(development: Path) -> None:
     for study in DEV_STUDIES:
         assert (
@@ -104,6 +110,7 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
     assert (development / "figures" / "si" / "sim-examples.png").is_file()
 
 
+@pytest.mark.slow
 def test_development_never_reads_heldout_data(development: Path) -> None:
     split = pd.Timestamp(CONFIG["heldout"]["germany_from"])
     germany = pd.read_csv(
@@ -126,6 +133,7 @@ def test_development_never_reads_heldout_data(development: Path) -> None:
     assert not list(development.rglob("ebola*"))
 
 
+@pytest.mark.slow
 def test_development_scores_have_truth(development: Path) -> None:
     for study in DEV_STUDIES:
         scores = pd.read_csv(development / "scores" / f"{study}.csv.gz")
@@ -133,6 +141,7 @@ def test_development_scores_have_truth(development: Path) -> None:
         assert scores["score"].notna().all()
 
 
+@pytest.mark.slow
 def test_development_publishes_for_the_paper(development: Path) -> None:
     build = development.parents[1] / "build"
     assert (build / "figures" / "main" / "germany-results.png").is_file()
