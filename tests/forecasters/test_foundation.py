@@ -1162,11 +1162,7 @@ def test_native_quantiles_pass_chronos_only_its_keys(
 
 
 def test_rolling_rows_hold_each_days_seven_day_sum() -> None:
-    from nowcastfoundation.forecaster import (
-        HubTriangle,
-        rolling_rows,
-        week_rows,
-    )
+    from nowcastfoundation.forecaster import HubTriangle, rolling_rows
 
     times = [f"2026-09-{d:02d}" for d in range(1, 21)]
     final = np.arange(40, dtype=float).reshape(2, 20)
@@ -1176,10 +1172,10 @@ def test_rolling_rows_hold_each_days_seven_day_sum() -> None:
     assert rows.ends[6:].all()
     assert np.isnan(rows.totals[:, :6]).all()
     assert np.allclose(rows.totals[:, 10], final[:, 4:11].sum(1))
-    # On a Saturday it is the week's total, as the weekly rows give.
-    weekly = week_rows(tri)
-    sat = np.flatnonzero(weekly.ends)
-    assert np.allclose(rows.totals[:, sat], weekly.totals[:, sat])
+    # On a whole week's Saturday (09-12, 09-19) it is that week's total.
+    for sat in (11, 18):
+        week = final[:, sat - 6 : sat + 1].sum(1)
+        assert np.allclose(rows.totals[:, sat], week)
 
 
 def _segment(root: Path, settings: dict) -> Path:
