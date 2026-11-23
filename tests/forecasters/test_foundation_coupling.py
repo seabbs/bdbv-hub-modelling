@@ -155,7 +155,7 @@ def test_prefetch_holds_the_earlier_forecasts_too(
 def test_an_unknown_coupling_is_an_error_when_the_model_is_made():
     with pytest.raises(ValueError, match="unknown coupling"):
         dataclasses.replace(
-            get_model("fm_chronos_daily_ragged"), coupling="schaake"
+            get_model("fm_chronos_daily_ragged"), coupling="nonesuch"
         )
 
 

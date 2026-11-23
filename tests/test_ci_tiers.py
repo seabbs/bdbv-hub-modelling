@@ -27,13 +27,23 @@ def test_the_fast_tier_runs_no_slow_tests():
     assert "bdbvhubrenewal fit" not in runs
 
 
-@pytest.mark.parametrize("job", ["full", "r-live", "engine"])
+@pytest.mark.parametrize("job", ["full", "r-live", "engine", "chronos"])
 def test_fits_and_replays_run_nightly_on_dispatch_or_when_labelled(job):
     workflow = _workflow("test.yml")
     when = workflow["jobs"][job]["if"]
     for case in ("schedule", "workflow_dispatch", OPT_IN):
         assert case in when
     assert "schedule" in _triggers(workflow)
+
+
+def test_the_chronos_job_runs_every_torch_gated_test_with_torch():
+    # Tests that skip without torch run in a job that has it: the chronos
+    # group, CPU only, every file gated on it found, not listed.
+    steps = _workflow("test.yml")["jobs"]["chronos"]["steps"]
+    runs = " ".join(s.get("run", "") for s in steps)
+    assert "--group chronos" in runs
+    assert "importorskip" in runs
+    assert "pytest" in runs
 
 
 @pytest.mark.parametrize(
