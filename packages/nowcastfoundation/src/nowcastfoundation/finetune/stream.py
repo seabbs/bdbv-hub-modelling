@@ -47,7 +47,7 @@ import pandas as pd
 
 from nowcastfoundation import series_bias
 from nowcastfoundation.finetune import chronos as ft
-from nowcastfoundation.finetune import simulations, verify
+from nowcastfoundation.finetune import combinations, simulations, verify
 from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
@@ -2052,6 +2052,7 @@ def main(root: Path | None = None) -> None:
             cadences = seen.setdefault("cadences", {})
             cell = f"{block['source']}:{block['cadence']}"
             cadences[cell] = cadences.get(cell, 0) + 1
+        combinations.count(seen, blocks)
         # Blocks of strata with no cases by their cut are not laid out.
         mix["empty"] = mix.get("empty", 0) + len(empty)
         if done in prefixes:
@@ -2060,6 +2061,10 @@ def main(root: Path | None = None) -> None:
             # The release lists its outbreaks in the order trained.
             (where / "outbreaks.txt").write_text("\n".join(trained) + "\n")
             (where / "consumed.txt").write_text(consumed.read_text())
+            # The blocks' layout and options so far, outside the hash.
+            (where / combinations.FILE).write_text(
+                json.dumps(seen.get("combinations", {}))
+            )
             model.save_pretrained(where / "finetuned-ckpt")
             settings = {
                 **base,

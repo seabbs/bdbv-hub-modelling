@@ -168,6 +168,7 @@ def local_or_ft(key, setting):
 SEGMENT_COPY_BACK = (
     "outbreaks.txt",
     "consumed.txt",
+    "block-combinations.json",
     "finetuned-ckpt/adapter_config.json",
 )
 
