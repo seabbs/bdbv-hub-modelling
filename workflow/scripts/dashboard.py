@@ -75,16 +75,20 @@ class Pages:
             }
         self.html, self.parts, self.builts = html.encode(), parts, builts
 
+    def rebuild(self) -> None:
+        """Refresh, logging a failed build: the last good page stays."""
+        try:
+            self.refresh()
+        except Exception:
+            # The detail goes to the server's log, never to the browser.
+            traceback.print_exc(file=sys.stderr)
+
     def start(self, every: float) -> None:
         """Rebuild every `every` seconds in a background thread."""
 
         def loop() -> None:
             while True:
-                try:
-                    self.refresh()
-                except Exception:
-                    # The last good page stays; the detail goes to the log.
-                    traceback.print_exc(file=sys.stderr)
+                self.rebuild()
                 time.sleep(every)
 
         threading.Thread(target=loop, daemon=True).start()
@@ -99,7 +103,7 @@ def handler(
     """
     if pages is None:
         pages = Pages(ctx)
-        pages.refresh()
+        pages.rebuild()
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, body: bytes, kind: str) -> None:
