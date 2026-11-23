@@ -29,6 +29,12 @@ metadata-files:
 Each top-level bullet is one paragraph, with 2–3 supporting points.
 -->
 
+## Abstract
+
+::: {.callout-note title="Plan"}
+- We think fine-tuned foundation models like ours, and the same approach applied to newer industry-leading foundation models, should serve as baselines for other model developers and for forecast and nowcast hubs.
+:::
+
 ## Introduction
 
 ::: {.callout-note title="Plan"}
@@ -37,6 +43,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
   - Generic forecasting models do not use the reporting structure, so they treat incomplete recent counts as final.
   - Hub models built on foundation models correct for delays outside the model, not by adapting it.
   - They apply a revision or chain-ladder nowcast first, or raise the most recent weeks [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
+  - Forecast and nowcast hubs lack strong baselines that are cheap to run and general across pathogens, against which to judge new models.
   - Key references: [@hohle; @Johnson2025; @reichCollaborativeHubsMaking2022].
 - **Context.**
   - Nowcasting methods model reporting delays directly.
@@ -406,6 +413,10 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - A model fine-tuned on epinowcast simulations may emulate epinowcast in a fraction of its run time.
   - We did not compare with epinowcast, so we cannot say how close it is.
   - The same approach could emulate other slow packages.
+- **Fine-tuned foundation models as baselines.**
+  - We think fine-tuned foundation models like ours, and the same approach applied to newer industry-leading foundation models, should serve as baselines for other model developers and for hubs.
+  - They are cheap to run, general across pathogens, and improve as the base models improve.
+  - This needs open checkpoints, the simulation grid and the workflow that fine-tunes and scores them.
 - **Further work.**
   - Other foundation models.
   - More case studies.
@@ -418,6 +429,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Key references: [@Das2024a; @Woo2024; @Rasul2023; @Kamarthi2021; @Koemen2025; @respinow_hub_2025].
 - **Conclusions.**
   - Generic forecasting models can be reused, with domain knowledge added through simulated data.
+  - Fine-tuned foundation models, ours and the same approach on newer foundation models, should serve as baselines for model developers and for forecast and nowcast hubs.
   - More case studies are needed before routine use.
 :::
 
