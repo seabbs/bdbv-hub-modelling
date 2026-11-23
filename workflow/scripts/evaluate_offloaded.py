@@ -2,9 +2,11 @@
 
     python workflow/scripts/evaluate_offloaded.py steps TRAIN/n<N> \
         --eval-every K [--prev TRAIN/n<M>]
+    python workflow/scripts/evaluate_offloaded.py base TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
 
-`steps` scores segment n<N>'s step snapshots, `checkpoint` its adapter, with
+`steps` scores segment n<N>'s step snapshots, `base` step 0 alone (base
+Chronos-2, the start loss), `checkpoint` its adapter, with
 the trainer's own losses (nowcastfoundation.finetune.evaluate); the files are as
 `flowlib.evaluations` says.
 """
@@ -73,10 +75,25 @@ def steps(
             f"{' ...' if len(gone) > 5 else ''} in {train / 'evals'}"
             " (were the trainer's snapshots copied in?)"
         )
-    todo = evaluations.pending(train, after, upto)
+    score_snapshots(train, evaluations.pending(train, after, upto), device)
+
+
+def base_step(where: Path, device: str) -> None:
+    """Score step 0 (base Chronos-2) alone, unless it has a result.
+
+    A checkpoint's evaluation needs only this, so it can run between
+    segments rather than after every segment's step evaluation.
+    """
+    train = where.parent
+    score_snapshots(train, evaluations.pending(train, -1, 0), device)
+
+
+def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
+    """Score step snapshots `todo`, newest first, writing each result."""
     if not todo:
-        fs.log(f"{where.name}: no step snapshots to score")
+        fs.log(f"{train}: no step snapshots to score")
         return
+    todo = sorted(todo, key=evaluations.step_of, reverse=True)
     base = fe.load_base("cpu")
     blocks: dict[Any, list[dict]] = {}
     for snap in todo:
@@ -123,7 +140,7 @@ def checkpoint(where: Path, device: str) -> None:
 def main(argv: Sequence[str] | None = None) -> None:
     """Run `steps` or `checkpoint`."""
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("what", choices=("steps", "checkpoint"))
+    p.add_argument("what", choices=("steps", "base", "checkpoint"))
     p.add_argument("where", type=Path)
     p.add_argument("--prev", type=Path)
     p.add_argument("--device", default="auto")
@@ -138,6 +155,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.eval_every is None:
             p.error("steps needs --eval-every")
         steps(args.where, args.prev, device, args.eval_every)
+    elif args.what == "base":
+        base_step(args.where, device)
     else:
         checkpoint(args.where, device)
 
