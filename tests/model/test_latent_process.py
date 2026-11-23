@@ -110,6 +110,17 @@ def test_weekly_noise_is_an_ar1_held_for_a_week_from_zero() -> None:
     np.testing.assert_allclose(out, np.repeat(e, 7)[:30], rtol=1e-15)
 
 
+def test_weekly_noise_is_pyrenews_weekly_process_over_the_shared_walk() -> None:
+    from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
+
+    from nowcastrenewal.components.walks import NonCentredRandomWalk
+
+    noise = WeeklyNoise("w")
+    process = noise.process(0.2)
+    assert isinstance(process, WeeklyTemporalProcess)
+    assert isinstance(process.inner, NonCentredRandomWalk)
+
+
 def test_a_shared_relation_draws_only_the_strata_noise() -> None:
     path = RtPath("growth", amplitude=0.2)
     rt = PlaceRt("rt", path, "shared", noise_scale=5.0, coupling=1.0)
@@ -118,7 +129,7 @@ def test_a_shared_relation_draws_only_the_strata_noise() -> None:
             n=21, place=np.array([0, 0, 1])
         )
     sites = [k for k, s in trace.items() if s["type"] == "sample"]
-    assert sites == [f"rt_stratum_{j}_decentered" for j in range(3)]
+    assert sites == [f"rt_stratum_{j}_z" for j in range(3)]
 
 
 @pytest.mark.parametrize("early", [True, False])
