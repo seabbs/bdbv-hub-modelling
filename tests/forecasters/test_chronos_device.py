@@ -35,20 +35,18 @@ def test_chronos_loads_on_the_device_setting(loaded, monkeypatch):
     assert seen["device"] == "cuda:1"
 
 
-def test_auto_or_unset_detects_the_device(loaded, monkeypatch):
-    import torch
-
+def test_auto_or_unset_is_refused_at_load(loaded, monkeypatch):
+    # The device is configured, never detected (#827).
     foundation, seen = loaded
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
-    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
     for value in ("auto", None):
         if value is None:
             monkeypatch.delenv("DEVICE", raising=False)
         else:
             monkeypatch.setenv("DEVICE", value)
         foundation._chronos.cache_clear()
-        foundation._chronos(None)
-        assert seen["device"] == "cpu"
+        with pytest.raises(ValueError, match=r"DEVICE|auto"):
+            foundation._chronos(None)
+    assert "device" not in seen
 
 
 def test_one_device_resolver_for_scoring_and_training():
