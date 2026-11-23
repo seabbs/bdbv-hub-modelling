@@ -5,8 +5,10 @@ on:
     # Nightly, 05:17 UTC: the full tier (model fits, R replays, smoke runs).
     - cron: '17 5 * * *'
   workflow_dispatch:
+  # A push to next too: the merge loop deletes a PR's branch, which
+  # cancels its runs, so each merge into next gets a fast-tier run here.
   push:
-    branches: [main]
+    branches: [main, next]
     paths:
       - 'packages/**'
       - 'tests/**'
@@ -45,9 +47,11 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Off main, a newer push cancels the running run. On main the running
-  # run finishes and only the newest queued run waits.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Off main and next, a newer push cancels the running run. On main and
+  # next the running run finishes and only the newest queued run waits,
+  # so a merge is never left without a verdict by the next one.
+  cancel-in-progress: >-
+    ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/next' }}
 
 jobs:
   # The fast tier, on every push and pull request: every test not marked
@@ -85,6 +89,7 @@ jobs:
           name: pytest-durations
           path: pytest-durations.xml
           if-no-files-found: ignore
+          retention-days: 7
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:

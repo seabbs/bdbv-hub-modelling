@@ -84,9 +84,14 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     group = yaml.safe_load(path.read_text()).get("concurrency")
     if not isinstance(group, dict) or "cancel-in-progress" not in group:
         pytest.skip("no cancellable concurrency group")
-    assert group["cancel-in-progress"] == (
-        "${{ github.ref != 'refs/heads/main' }}"
-    )
+    keep = "${{ github.ref != 'refs/heads/main' }}"
+    if path.name == "test.yml":
+        # Tests keeps next's runs too (every merge gets a verdict).
+        keep = (
+            "${{ github.ref != 'refs/heads/main' && "
+            "github.ref != 'refs/heads/next' }}"
+        )
+    assert group["cancel-in-progress"].strip() == keep
 
 
 def test_a_pull_request_runs_one_test_job_of_at_most_15_minutes():
@@ -115,3 +120,13 @@ def test_no_test_runs_in_both_the_full_and_the_chronos_job():
     assert grep in full
     assert grep in chronos
     assert "--ignore=" in full
+
+
+def test_every_merge_into_next_gets_a_fast_tier_run():
+    # Pull request runs are cancelled when the merge loop deletes the
+    # branch, so a push to next runs the fast tier, and a newer merge
+    # does not cancel the running one.
+    workflow = _workflow("test.yml")
+    assert "next" in _triggers(workflow)["push"]["branches"]
+    keep = workflow["concurrency"]["cancel-in-progress"]
+    assert "refs/heads/next" in keep
