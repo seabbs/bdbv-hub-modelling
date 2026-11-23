@@ -5,7 +5,7 @@ var $=function(i){return document.getElementById(i)};
 var DASH=["","6 3","8 3 2 3","2 3"],MK=["circle","square","triangle","diamond"];
 var DEF=D.defaults||{};
 var FIRST=(DSS.find(function(d){return !d.empty})||DSS[0]).key;
-var S={ds:FIRST,locs:[],src:DEF.source||"",target:null,oi:null,latest:true,nd:4,step:2,mode:0,model:null,on:null,chk:{},yfit:0,ylog:false,bands:0};
+var S={ds:FIRST,locs:[],src:DEF.source||"",target:null,hz:null,oi:null,latest:true,nd:4,step:2,mode:0,model:null,on:null,chk:{},yfit:0,ylog:false,bands:0};
 var KEY="ftg5";
 try{var sv=JSON.parse(sessionStorage.getItem(KEY)||"null");if(sv)Object.keys(sv).forEach(function(k){S[k]=sv[k]})}catch(e){}
 if(!(S.nd>=2))S.nd=4;
@@ -19,12 +19,17 @@ function refs(){return C.meta.filter(function(m){return m.run=="ref"})}
 function ORI(){return C.origins}
 function TGT(){var a=C.targets||[];return a.indexOf(S.target)>=0?S.target:(a.indexOf(DEF.target)>=0?DEF.target:a[0]||"")}
 function tlab(v){return v?v.replace(/^(\d+)day$/,"$1-day"):"all"}
+// The horizon control (the dataset's `horizons`): one choice, [name, first
+// day, last day] from the nowcast date, for the bands, scores and WIS by day.
+function HZR(){var a=C.ranges||[];return a.find(function(r){return r[0]==S.hz})||a.find(function(r){return r[0]==C.range})||a[0]||null}
+function inRange(day,o){var r=HZR();if(!r)return true;var k=Math.round((ms(day)-ms(o))/864e5);return (r[1]===null||k>=r[1])&&(r[2]===null||k<=r[2])}
+function cut(f,o){var t=[],q=[];f.t.forEach(function(d,j){if(inRange(d,o)){t.push(d);q.push(f.q[j])}});return t.length?{t:t,q:q,band:f.band}:null}
 S.locs=(S.locs||[]).filter(function(l){return C.locs.indexOf(l)>=0});if(!S.locs.length&&C.locs.length)S.locs=[C.locs[0]];
 if(S.latest||ORI().indexOf(S.origin)<0){S.oi=ORI().length-1;S.latest=true}else S.oi=ORI().indexOf(S.origin);
 // Series ids are the configured reference keys and checkpoint hashes.
 function onKey(id){return id}
 function isOn(k){return ftSel.get().indexOf(k)>=0}
-function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,target:S.target,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,chk:S.chk,mode:S.mode,model:S.model}))}catch(e){}}
+function save(){try{sessionStorage.setItem(KEY,JSON.stringify({ds:S.ds,locs:S.locs,src:S.src,target:S.target,hz:S.hz,latest:S.latest,origin:ORI()[S.oi],nd:S.nd,step:S.step,chk:S.chk,mode:S.mode,model:S.model}))}catch(e){}}
 // A run's chosen checkpoints, smallest first, so lines, legend and scores share one order.
 function chosen(k){var all=ofRun(k),ids=all.map(function(m){return m.id}).filter(function(i){return (S.chk[k]||[]).indexOf(i)>=0});
  if(!ids.length&&all.length)ids=[all[all.length-1].id];return ids}
@@ -79,7 +84,7 @@ function panel(d,loc,ds,eff,small,W,FH){
  if(S.mode==1&&lat.length){pts=lat;lat=[]}
  var fs=[];
  eff.forEach(function(e){ds.forEach(function(o,di){var s=((d.series[e.id]||{})[TGT()]||{})[S.src],f=s&&s[o];
-  if(f){fs.push({e:e,f:f,di:di,o:o});f.q.forEach(function(q){ymax=Math.max(ymax,q[HI])})}})});
+  f=f&&cut(f,o);if(f){fs.push({e:e,f:f,di:di,o:o});f.q.forEach(function(q){ymax=Math.max(ymax,q[HI])})}})});
  var runBands=eff.some(function(e){return e.run!="ref"&&fs.some(function(z){return z.e===e})});
  ymax*=1.06;
  // y from the data shown, not from zero
@@ -141,19 +146,21 @@ function plots(){
   [].forEach.call($("gplot").querySelectorAll(".gp"),function(el,i){
    var p=panel(all[i],S.locs[i],ds,eff,small,Math.max(240,el.clientWidth),FH);p.miss.forEach(function(m){miss[m]=1});el.innerHTML=p.svg});
   var ms_=Object.keys(miss);
-  if(ms_.length)$("gplot").insertAdjacentHTML("beforeend",'<p class=mut>No forecast for some nowcast dates: '+ms_.join(", ")+'</p>');
+  if(ms_.length)$("gplot").insertAdjacentHTML("beforeend",'<p class=mut>No forecast in the horizon shown'+(HZR()?' ('+HZR()[0]+')':'')+' for some nowcast dates: '+ms_.join(", ")+'</p>');
   // The score card compares every ticked model, in either view.
   wisChart(all[0],ticked(),ds)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
 function wisChart(d,eff,ds){
- var W_=function(id){return ((d.score[id]||{})[TGT()]||{})[S.src]};
- var X_=function(id){return (((d.stats||{})[id]||{})[TGT()]||{})[S.src]};
+ // The scores of the horizon shown (d.ranges), else of every day.
+ var HR=HZR(),R=(HR&&d.ranges&&d.ranges[HR[0]])||{score:d.score,stats:d.stats,parts:d.parts};
+ var W_=function(id){return (((R.score||{})[id]||{})[TGT()]||{})[S.src]};
+ var X_=function(id){return (((R.stats||{})[id]||{})[TGT()]||{})[S.src]};
  var sel=eff.map(function(e){return e.id}).filter(function(id){return W_(id)&&X_(id)});
  if(!sel.length){$("gwis").innerHTML='<p class=mut>No scores available.</p>';return}
  var com=Object.keys(W_(sel[0])).filter(function(o){return sel.every(function(id){return W_(id)[o]!==undefined&&X_(id)[o]!==undefined})});
  if(!com.length){$("gwis").innerHTML='<p class=mut>No nowcast dates common to the selected checkpoints.</p>';return}
  var mean=function(f){return sel.map(function(id){var a=com.map(function(o){return f(id,o)});return a.reduce(function(x,y){return x+y},0)/a.length})};
  // WIS parts by row, natural then log scale (log(x+1)), where every common date has them.
- var P_=function(id){return (((d.parts||{})[id]||{})[TGT()]||{})[S.src]};
+ var P_=function(id){return (((R.parts||{})[id]||{})[TGT()]||{})[S.src]};
  var parts=sel.map(function(id){var p=P_(id);if(!p||!com.every(function(o){return p[o]}))return null;
   return [0,1,2,3,4,5,6].map(function(k){return com.reduce(function(a,o){return a+p[o][k]},0)/com.length})});
  // WIS parts differ by fill, not only shade: dispersion solid,
@@ -213,8 +220,9 @@ function wisChart(d,eff,ds){
  var S_=function(id){return (((d.split||{})[id]||{})[TGT()]||{})[S.src]};
  function pool(id){var s=S_(id)||{},now=[0,0],ahead={};
   (ds||[]).forEach(function(o){var e=s[o];if(!e)return;
-   if(e.nowcast[0]!==null){now[0]+=e.nowcast[0]*e.nowcast[1];now[1]+=e.nowcast[1]}
-   Object.keys(e.forecast||{}).forEach(function(k){var f=e.forecast[k];if(f[0]===null)return;ahead[k]=ahead[k]||[0,0];ahead[k][0]+=f[0]*f[1];ahead[k][1]+=f[1]})});
+   if(e.nowcast[0]!==null&&(!HR||HR[1]===null||HR[1]<=0)){now[0]+=e.nowcast[0]*e.nowcast[1];now[1]+=e.nowcast[1]}
+   Object.keys(e.forecast||{}).forEach(function(k){var f=e.forecast[k];if(f[0]===null)return;
+    if(HR&&((HR[2]!==null&&7*k-6>HR[2])||(HR[1]!==null&&7*k<HR[1])))return;ahead[k]=ahead[k]||[0,0];ahead[k][0]+=f[0]*f[1];ahead[k][1]+=f[1]})});
   var out=[];if(now[1])out.push(["nowcast","now",now[0]/now[1]]);
   Object.keys(ahead).sort(function(a,b){return a-b}).forEach(function(k){out.push(["forecast","wk "+k,ahead[k][0]/ahead[k][1]])});return out}
  var hz=sel.map(pool),hmax=Math.max.apply(null,hz.reduce(function(a,r){return a.concat(r.map(function(x){return x[2]}))},[0]))*1.05||1,h5='';
@@ -224,12 +232,28 @@ function wisChart(d,eff,ds){
    h5+='<rect x="'+x+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+fillKind(colour(id),HF[b[0]]||"solid")+'" stroke="'+colour(id)+'" stroke-width=".8"><title>'+(b[0]=="nowcast"?"nowcast part":"forecast, week "+b[1].slice(3)+" ahead")+': '+C.metric+' '+fmt(b[2])+'</title></rect><text x="'+(x+w+2)+'" y="'+(y+22)+'" class=ax>'+b[1]+'</text>'})});
  var hzNote=anyFc?'':'<div class=mut style="font-size:11px">No forecast dates in '+C.label+': its targets end at the nowcast date, so all of its '+C.metric+' is the nowcast part.</div>';
  var hzKey=HZ.map(function(h){return '<span class=lg><svg width=16 height=12 viewBox="0 0 16 12"><rect x=".5" y=".5" width="15" height="11" fill="'+fillKind("var(--fg)",h[2])+'" stroke="var(--fg)" stroke-width=".8" /></svg>'+h[1]+'</span>'}).join("");
+ // WIS by day of the horizon: one line a model, the mean over the
+ // common nowcast dates of each day's WIS (d.byday), days in the horizon shown.
+ var B_=function(id){return (((d.byday||{})[id]||{})[TGT()]||{})[S.src]};
+ var lines=sel.map(function(id){var b=B_(id)||{},acc={};
+  com.forEach(function(o){var e=b[o]||{};Object.keys(e).forEach(function(k){var kk=+k;
+   if(HR&&((HR[1]!==null&&kk<HR[1])||(HR[2]!==null&&kk>HR[2])))return;acc[kk]=acc[kk]||[0,0];acc[kk][0]+=e[k];acc[kk][1]++})});
+  return Object.keys(acc).map(Number).sort(function(a,b){return a-b}).map(function(k){return [k,acc[k][0]/acc[k][1]]})});
+ var allp=lines.reduce(function(a,l){return a.concat(l)},[]),h6='',H6=Math.max(H2,150);
+ if(allp.length){var kx0=Math.min.apply(null,allp.map(function(p){return p[0]})),kx1=Math.max.apply(null,allp.map(function(p){return p[0]})),wy=Math.max.apply(null,allp.map(function(p){return p[1]}))*1.05||1;
+  var L6=40,B6=18,sxk=function(k){return L6+(kx1==kx0?0.5:(k-kx0)/(kx1-kx0))*(W-L6-6)},syw=function(v){return 4+(1-v/wy)*(H6-B6-4)};
+  [0,0.5,1].forEach(function(f){var v=wy*f;h6+='<line x1="'+L6+'" x2="'+(W-6)+'" y1="'+syw(v)+'" y2="'+syw(v)+'" class=grid /><text x="'+(L6-4)+'" y="'+(syw(v)+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
+  if(kx0<=0&&kx1>=0)h6+='<line x1="'+sxk(0)+'" x2="'+sxk(0)+'" y1="4" y2="'+(H6-B6)+'" class=mark />';
+  [kx0,0,kx1].filter(function(k,i,a){return k>=kx0&&k<=kx1&&a.indexOf(k)==i}).forEach(function(k){h6+='<text x="'+sxk(k)+'" y="'+(H6-4)+'" text-anchor=middle class=ax>'+k+'</text>'});
+  lines.forEach(function(l,i){if(!l.length)return;var id=sel[i];
+   h6+='<polyline points="'+l.map(function(p){return sxk(p[0])+","+syw(p[1])}).join(" ")+'" fill=none stroke="'+colour(id)+'" stroke-width=1.8'+lineDash(id,rk[id]||0)+'><title>'+shortLab(id)+'</title></polyline>'})}
+ var byDay=allp.length?'<div class=gsc><h3>'+C.metric+' by day of the horizon'+(HR?' ('+HR[0]+')':'')+'</h3><svg viewBox="0 0 '+W+' '+H6+'" width="'+W+'" height="'+H6+'">'+h6+'</svg><div class=mut style="font-size:11px">days from the nowcast date; 0 marked</div></div>':'';
  var any=parts.some(function(p){return p});
  // One legend on top: the three parts' fills, labelled, in stack order;
  // its hidden defs hold every bar's pattern once.
  var top=(any?'<div style="font-size:11px">'+key()+'</div>':'<svg width=0 height=0 style="position:absolute">'+defs()+'</svg>');
  $("gwis").innerHTML=top+'<div class=gscores>'+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
-  +rows(C.metric+" by part of the horizon, nowcast date(s) shown",h5,H2,"wissplit",'<div style="font-size:11px">'+hzKey+'</div>'+hzNote)+'</div>'
+  +rows(C.metric+" by part of the horizon, nowcast date(s) shown",h5,H2,"wissplit",'<div style="font-size:11px">'+hzKey+'</div>'+hzNote)+byDay+'</div>'
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
 function chips(){var h='';
@@ -246,6 +270,8 @@ function draw(){
  ["gmodl","gndl","gstepl"].forEach(function(k){$(k).hidden=S.mode!=1});
  var tk=ticked(),cm=model();$("gmod").innerHTML=tk.map(function(e){return '<option value="'+e.id+'"'+(cm&&e.id==cm.id?' selected':'')+'>'+modelLab(e)+'</option>'}).join("");$("gstep").value=S.step;$("gsrc").value=S.src;$("gyfit").value=S.yfit;$("gylog").checked=S.ylog;$("gbands").value=S.bands;
  $("gtgtl").hidden=(C.targets||[]).length<2;
+ $("ghzl").hidden=!(C.ranges||[]).length;var hr=HZR();
+ $("ghz").innerHTML=(C.ranges||[]).map(function(r){return '<option value="'+r[0]+'"'+(hr&&r[0]==hr[0]?' selected':'')+'>'+r[0]+' ('+(r[1]===null?'':r[1])+' to '+(r[2]===null?'':r[2])+' days)</option>'}).join("");
  $("gtgt").innerHTML=(C.targets||[]).map(function(v){return '<option value="'+v+'"'+(v==TGT()?' selected':'')+'>'+tlab(v)+'</option>'}).join("");
  chips();locBtns();plots();save()}
 function build(){
@@ -254,6 +280,7 @@ function build(){
  $("gsl").min=0;$("gsl").max=ORI().length-1;
  $("gsrc").onchange=function(){S.src=this.value;draw()};
  $("gtgt").onchange=function(){S.target=this.value;draw()};
+ $("ghz").onchange=function(){S.hz=this.value;draw()};
  $("gnd").onchange=function(){S.nd=+this.value;draw()};
  $("gmode").onchange=function(){S.mode=+this.value;draw()};
  $("gmod").onchange=function(){S.model=this.value;draw()};

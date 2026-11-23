@@ -185,6 +185,8 @@ def test_one_location_has_truth_and_latest_by_target(tmp_path):
         "score",
         "parts",
         "split",
+        "ranges",
+        "byday",
         "stats",
         "truth",
         "latest",
@@ -467,8 +469,9 @@ def test_each_horizon_range_has_its_own_scores(tmp_path):
         ranges=ranges,
     )
     page = nowcasts.location(built, "DE")
+    # By range, then score, stats or parts, keyed as the page's own.
     by = {
-        k: v["zero"]["7day"]["daily"]["2022-02-09"]
+        k: {p: v[p]["zero"]["7day"]["daily"]["2022-02-09"] for p in v}
         for k, v in page["ranges"].items()
     }
     w = [nowcasts.wis(Q7, y) for y in (9.0, 11.0, 13.0)]
@@ -499,9 +502,7 @@ def test_wis_by_day_of_the_horizon_reaches_the_page(tmp_path):
 
 
 def test_the_german_panels_take_their_days_from_the_german_config():
-    from flowlib.dashboard import context
-
-    days, ranges, default = context.horizons(
+    days, ranges, default = nowcasts.horizons(
         {
             "horizons": {
                 "days": "config/germany.toml",
@@ -513,4 +514,33 @@ def test_the_german_panels_take_their_days_from_the_german_config():
     assert days == (-28, 28)
     assert ranges == {"all": (-28, 28), "ahead": (1, 28)}
     assert default == "all"
-    assert context.horizons({}) == (None, {}, None)
+    assert nowcasts.horizons({}) == (None, {}, None)
+
+
+def test_ranges_keep_every_folder_s_files(tmp_path):
+    for origin in ("2022-02-02", "2022-02-09"):
+        _days(
+            tmp_path / "reference" / f"{origin}.csv.gz",
+            "fm_chronos_daily_ragged",
+            origin,
+            [-5, 3],
+        )
+    _days(
+        tmp_path / "slots-aaaaaa" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged_ft",
+        "2022-02-09",
+        [-5, 3],
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(
+        tmp_path,
+        rs,
+        refs,
+        levels=nowcasts.LEVELS,
+        days=(-28, 28),
+        ranges={"nowcast": (-28, 0)},
+    )
+    score = built["score"]["DE"]
+    zero = sorted(score["zero"]["7day"]["daily"])
+    assert zero == ["2022-02-02", "2022-02-09"]
+    assert list(score["aaaaaa"]["7day"]["daily"]) == ["2022-02-09"]
