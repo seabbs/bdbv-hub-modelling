@@ -325,3 +325,12 @@ def test_the_evidence_reads_the_workflow_rules_outputs() -> None:
         "sim_summaries",
         "sim_realism",
     }
+
+
+def test_the_copula_evidence_reads_real_german_data_only() -> None:
+    files = _flow().workflow_evidence()
+    assert files["si_copula"].endswith("evidence/si-copula.csv")
+    assert files["copula_rho"].endswith("pairing-germany-rho.csv.gz")
+    dummy = _flow(germany__real=False).workflow_evidence()
+    assert "si_copula" not in dummy
+    assert "copula_rho" not in dummy
