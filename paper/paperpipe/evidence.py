@@ -39,7 +39,6 @@ from paperpipe.outputs import to_markdown
 
 __all__ = [
     "EVIDENCE",
-    "branch_head",
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
@@ -697,31 +696,6 @@ def comparison_figure(rows: pd.DataFrame) -> Figure:
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="outside lower center", ncol=len(runs))
     return fig
-
-
-def branch_head(branch: str, repo: Path | str = ".") -> str:
-    """Return the commit at the head of an evidence branch on `origin`.
-
-    The branch is fetched first, so each workflow run reads its newest
-    rows; an evidence file named by this commit is extracted anew when
-    the branch moves. Offline, the branch as last fetched is used.
-    """
-    import subprocess
-
-    def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", "-C", str(repo), *args],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
-
-    try:
-        git("fetch", "-q", "origin", branch)
-        return git("rev-parse", "FETCH_HEAD")
-    except subprocess.CalledProcessError:
-        # Offline: the branch as last fetched.
-        return git("rev-parse", f"origin/{branch}")
 
 
 def _read(paths: Mapping[str, Path | None], name: str) -> pd.DataFrame | None:
