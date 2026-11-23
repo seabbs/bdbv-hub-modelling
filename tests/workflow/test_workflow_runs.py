@@ -87,7 +87,12 @@ def test_a_local_run_folder_is_refused_with_the_fix():
 
 
 def _run(**ft):
-    base = {"prefixes": [100, 200], "series_bias": False, "bias_lr": 0.001}
+    base = {
+        "prefixes": [100, 200],
+        "series_bias": False,
+        "bias_lr": 0.001,
+        "layout": "ragged",
+    }
     return runs.Run("r", base | ft, "/x/r")
 
 

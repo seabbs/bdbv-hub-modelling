@@ -67,6 +67,7 @@ $defs:
       by_source_every: {$ref: "#/$defs/positive"}
       eval: {enum: [local, offload]}
       series_bias: {type: boolean}
+      layout: {enum: [ragged, complete]}
       note: {type: string}
       check_at: {$ref: "#/$defs/positive"}
 
@@ -147,6 +148,7 @@ properties:
           - by_source_every
           - eval
           - series_bias
+          - layout
           - note
           - check_at
 

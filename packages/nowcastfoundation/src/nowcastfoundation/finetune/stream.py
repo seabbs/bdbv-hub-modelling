@@ -53,6 +53,7 @@ from nowcastfoundation.finetune import combinations, simulations, verify
 from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
+    LAYOUTS,
     SLOTS_PREFIX,
     release_tag,
     torch_device,
@@ -280,6 +281,14 @@ def record_views(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
         f"{len(frame)} views (largest {frame['series_before'].max()} "
         f"series, at most {frame['series_after'].max()} after)"
     )
+
+
+def layout_settings(layout: str) -> dict:
+    """Return the block layout's entry of a checkpoint's settings.
+
+    The ragged layout, the default, adds nothing, so its hash is as before.
+    """
+    return {} if layout == "ragged" else {"layout": layout}
 
 
 def quiet_settings(min_cases: int | None) -> dict:
@@ -607,6 +616,7 @@ def init_worker(
     loss_days: int | None = None,
     quiet_min_cases: int | None = None,
     block_limit: int | None = None,
+    layout: str = "ragged",
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
@@ -616,6 +626,7 @@ def init_worker(
     ft.LOSS_HORIZON_DAYS = loss_days
     ft.QUIET_MIN_CASES = quiet_min_cases
     ft.BLOCK_LIMIT = block_limit
+    ft.LAYOUT = layout
     DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
 
 
@@ -915,6 +926,9 @@ def nowcast_steps(block: dict) -> int:
     its release lag, and each of its places has one lag series for each
     of those steps, so $D$ is its lag series over its places.
     """
+    if not int(block["n_covariates"]):
+        # A complete block has no lag series; it records its own.
+        return int(block["nowcast"])
     places = len(block.get("places", ())) or int(block["n_targets"])
     return int(block["n_covariates"]) // places
 
@@ -1439,6 +1453,9 @@ def build_parser() -> argparse.ArgumentParser:
     # daily triangle; one of them trains an adapter for it alone.
     # Every layout of the block design (`ft.BLOCK_DESIGN`) by default.
     parser.add_argument("--sources", nargs="+")
+    # The training blocks' layout: ragged (counts and lag series) or
+    # complete (the same blocks without their lag series).
+    parser.add_argument("--layout", choices=LAYOUTS, default="ragged")
     # Draws of each simulation this pass trains on, all 16 snapshots
     # each, picked by --subset-seed; all draws if not given.
     parser.add_argument("--draws-per-simulation", type=int)
@@ -1598,6 +1615,7 @@ def main(root: Path | None = None) -> None:
     ft.LOSS_HORIZON_DAYS = args.loss_horizon_days
     ft.QUIET_MIN_CASES = args.quiet_min_cases
     ft.BLOCK_LIMIT = args.block_limit
+    ft.LAYOUT = args.layout
     global DRAWS_PER_PASS, SUBSET_SEED
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
@@ -1670,6 +1688,7 @@ def main(root: Path | None = None) -> None:
             ft.LOSS_HORIZON_DAYS,
             ft.QUIET_MIN_CASES,
             ft.BLOCK_LIMIT,
+            ft.LAYOUT,
         ),
     )
 
@@ -1696,6 +1715,7 @@ def main(root: Path | None = None) -> None:
         "loss_horizon_days": ft.LOSS_HORIZON_DAYS,
         "quiet_min_cases": ft.QUIET_MIN_CASES,
         "block_limit": ft.BLOCK_LIMIT,
+        **layout_settings(ft.LAYOUT),
         "code_sha256": {
             **{n: ft.code_sha256(p) for n, p in ft.CODE.items()},
             ft.TRAINER: ft._sha256(Path(__file__)),
@@ -1798,6 +1818,7 @@ def main(root: Path | None = None) -> None:
         **horizon_settings(ft.LOSS_HORIZON_DAYS),
         **quiet_settings(ft.QUIET_MIN_CASES),
         **view_settings(ft.BLOCK_LIMIT),
+        **layout_settings(ft.LAYOUT),
         "seed": args.seed,
         "note": args.note,
     }
