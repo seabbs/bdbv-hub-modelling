@@ -164,3 +164,29 @@ def test_evidence_files_are_named_by_their_commit() -> None:
     names = {"lag_germany": "waiting note"}
     assert flow.evidence_args(names) == f"--lag-germany {path}"
     assert flow.evidence_args({}) == ""
+
+
+def test_evidence_from_a_workflow_output_is_read_where_it_is_written(
+    tmp_path: Path,
+) -> None:
+    germany = tmp_path / "germany.toml"
+    split = CONFIG["heldout"]["germany_from"]
+    germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "finetune.toml").write_text(
+        '[realdata_bdbv]\nrelease = "2026-08-01"\n'
+    )
+    config = copy.deepcopy(CONFIG)
+    config["germany"]["config"] = str(germany)
+    entry = {"file": "$SCORE_CACHE/tables/checkpoint-scores.csv"}
+    flow = PaperFlow.load(
+        config,
+        {"checkpoint_scores": entry},
+        tmp_path,
+        lambda f: f.replace("$SCORE_CACHE", "/s"),
+    )
+    path = "/s/tables/checkpoint-scores.csv"
+    assert flow.evidence_file("checkpoint_scores") == path
+    names = {"checkpoint_scores": "scores"}
+    assert flow.evidence_args(names) == f"--checkpoint-scores {path}"
+    assert flow.pinned() == {}
