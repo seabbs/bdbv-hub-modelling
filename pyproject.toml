@@ -329,6 +329,5 @@ module = [
   "nowcastfoundation.finetune.chronos",
   "nowcastfoundation.finetune.evaluate",
   "nowcastfoundation.finetune.stream",
-  "nowcastfoundation.finetune.verify",
 ]
 ignore_errors = true
