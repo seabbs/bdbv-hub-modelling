@@ -48,7 +48,6 @@ __all__ = [
     "diseases_table",
     "drop_bdbv",
     "heldout_figure",
-    "lag_numbers",
     "live_numbers",
     "realism_figure",
     "realism_numbers",
@@ -71,25 +70,6 @@ def _pair(a: pd.Series, b: pd.Series) -> list[str]:
         "" if pd.isna(x) or pd.isna(y) else f"{x:.2f} / {y:.2f}"
         for x, y in zip(a, b, strict=True)
     ]
-
-
-def lag_numbers(germany: pd.DataFrame) -> dict:
-    """Return each model's relative WIS with the capped and longer lags.
-
-    Germany's national rows name the longer horizon `<model>_fix`.
-    Values are WIS relative to `randomwalknowcast`.
-    """
-    nat = germany.loc[germany["pool"] == "national"].set_index("model")
-    rel = nat["rel_wis_randomwalknowcast"]
-    de = {
-        m: {
-            "capped": round(float(rel[m]), 2),
-            "longer": round(float(rel[f"{m}_fix"]), 2),
-        }
-        for m in rel.index
-        if f"{m}_fix" in rel.index
-    }
-    return {"germany": de}
 
 
 CHECKPOINT_RULE: Final = "own-quantile-wis_crps-1000-common"
@@ -528,7 +508,6 @@ EVIDENCE: Final = {
     "sim_realism": "the German development half's values",
     "sim_diseases": "the published disease values",
     "checkpoint_scores": "the scores of each checkpoint of the final run",
-    "lag_germany": "the German lag-horizon scores",
     "compare_slots": "the slots and no-slots runs' scores by checkpoint",
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
@@ -873,11 +852,6 @@ def write_evidence(
     numbers = {
         "evidence": {
             "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
-            "lag": (
-                None
-                if data["lag_germany"] is None
-                else lag_numbers(data["lag_germany"])
-            ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "live": live_numbers(raw, run),
             "realism": (
