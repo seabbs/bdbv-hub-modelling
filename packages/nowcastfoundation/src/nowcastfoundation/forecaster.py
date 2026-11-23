@@ -268,11 +268,12 @@ def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
 
 def active_zone_rule(
     path: Path | str = FINETUNED_CONFIG,
-) -> tuple[int | None, int]:
-    """Return the fine-tuned models' active-zone cases and weeks.
+) -> tuple[int | None, int, int]:
+    """Return the fine-tuned models' active-zone rule (`active_places`).
 
     `active_zone_cases` missing gives None: every zone in one block.
-    `active_zone_weeks` is 8 when missing.
+    `active_zone_weeks` is 8 and `active_zone_recent_weeks` 4 when
+    missing.
 
     Parameters
     ----------
@@ -282,12 +283,13 @@ def active_zone_rule(
     Returns
     -------
     tuple
-        The cases and the weeks.
+        The cases, the weeks and the recent weeks.
     """
     conf = tomllib.loads(Path(path).read_text())
     cases = conf.get("active_zone_cases")
     weeks = int(conf.get("active_zone_weeks", 8))
-    return (None if cases is None else int(cases)), weeks
+    recent = int(conf.get("active_zone_recent_weeks", 4))
+    return (None if cases is None else int(cases)), weeks, recent
 
 
 def _passing(err: BaseException) -> bool:
@@ -540,7 +542,7 @@ def _finetuned(
     trained on complete counts (the no-delays run).
     """
     spec = finetuned_spec()
-    cases, weeks = active_zone_rule()
+    cases, weeks, recent = active_zone_rule()
     return FoundationModel(
         name,
         source,
@@ -553,6 +555,7 @@ def _finetuned(
         two_step=two_step,
         active_zone_cases=cases,
         active_zone_weeks=weeks,
+        active_zone_recent_weeks=recent,
     )
 
 
@@ -1194,18 +1197,31 @@ def active_places(
     tri: HubTriangle,
     cases: int,
     weeks: int,
+    recent_weeks: int,
     source: str,
 ) -> set[str]:
-    """Return the zones with more than `cases` cases in the last `weeks`.
+    """Return the active zones.
 
-    Counts are as reported at the latest release, over the `weeks` weeks
-    of steps that end with its cut-off.
+    A zone is active with at least `cases` cases in the last `weeks`
+    weeks and at least one in the last `recent_weeks` weeks (0: no such
+    rule), as reported at the latest release, over the steps that end
+    with its cut-off.
     """
-    steps = weeks * (7 if source == "daily" else 1)
+    per = 7 if source == "daily" else 1
     end = tri.last + 1
-    recent = np.nansum(tri.final[:, max(0, end - steps) : end], axis=1)
+
+    def total(n_weeks: int) -> np.ndarray:
+        start = max(0, end - n_weeks * per)
+        return np.nansum(tri.final[:, start:end], axis=1)
+
+    window = total(weeks)
+    lately = total(recent_weeks) if recent_weeks else np.ones(len(places))
     at = {p: i for i, p in enumerate(places)}
-    return {z for z in _zones(places) if recent[at[z]] > cases}
+    return {
+        z
+        for z in _zones(places)
+        if window[at[z]] >= cases and lately[at[z]] >= 1
+    }
 
 
 def active_views(
@@ -1214,10 +1230,10 @@ def active_views(
     """Return the views of a block whose joint block holds active zones.
 
     The joint block is the country, every province and the `active`
-    zones (cut into `block_views` over `cap`). Every other zone takes its
-    forecast from the all-zones forecast, cut by province: each province
-    with its zones (as many as fit `cap`) forecasts its zones not in the
-    joint block. Every place is forecast by exactly one view.
+    zones (cut into `block_views` over `cap`). Each province has a block
+    of itself and all its zones (cut into chunks of zones under the
+    province over `cap`, as training cuts), which forecasts its zones not
+    in the joint block. Every place is forecast by exactly one view.
     """
     places = tuple(places)
     zones = _zones(places)
@@ -1406,13 +1422,16 @@ class FoundationModel:
         else no limit.
     active_zone_cases : int or None
         With a value, the joint block holds the country, every province
-        and the zones with more than this many cases in the last
-        `active_zone_weeks` weeks (`active_places`); the other zones take
-        their forecasts from a Chronos-2 forecast of every zone, cut by
-        province (`active_views`). None (the default): every zone in the
-        joint block.
+        and the active zones: at least this many cases in the last
+        `active_zone_weeks` weeks and one in the last
+        `active_zone_recent_weeks` (`active_places`). Every other zone
+        takes its forecast from its province's block, the province and
+        all its zones (`active_views`). None (the default): every zone in
+        the joint block.
     active_zone_weeks : int
         The weeks to the cut-off `active_zone_cases` counts over.
+    active_zone_recent_weeks : int
+        The weeks to the cut-off an active zone has a case in.
     """
 
     name: str
@@ -1434,6 +1453,7 @@ class FoundationModel:
     two_step: bool = False
     active_zone_cases: int | None = None
     active_zone_weeks: int = 8
+    active_zone_recent_weeks: int = 4
     reads_zones: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
@@ -1687,6 +1707,7 @@ class FoundationModel:
                 tri,
                 self.active_zone_cases,
                 self.active_zone_weeks,
+                self.active_zone_recent_weeks,
                 self.source,
             )
             return active_views(places, active, cap)
