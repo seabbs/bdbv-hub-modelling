@@ -1,6 +1,7 @@
 # Paper
 
 A paper on fine-tuning Chronos-2 on simulated outbreaks for nowcasting.
+Its reference model is `randomwalknowcast` from [nowcastbaselines](https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/), our JAX port of baselinenowcast with a random walk on top, which we develop as part of the paper.
 This page links to the rendered paper and to how it is reproduced.
 
 ## Where to start
