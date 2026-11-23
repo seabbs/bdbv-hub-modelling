@@ -130,3 +130,29 @@ def test_a_build_keeps_both_graphs(tmp_path):
     assert got["target"] == "all"
     assert len(got["jobs"]["nodes"]) == 5
     assert len(got["rules"]["nodes"]) == 3
+
+
+def test_the_page_loads_viz_js_s_browser_bundle():
+    # viz-js 3.29 ships the global `Viz` as dist/viz-global.js; the
+    # lib/viz-standalone.js of older releases is a 404, so no graph drew.
+    from flowlib import monitor_server as ms
+
+    assert ms.VIZ.endswith("@viz-js/viz@3.29.0/dist/viz-global.js")
+    assert ms.VIZ in ms.target_page(None, [], "x")
+
+
+def test_the_page_says_when_graphviz_does_not_load():
+    from flowlib import monitor_server as ms
+
+    page = ms.target_page(
+        {
+            "target": "t",
+            "built": "now",
+            "jobs": {"nodes": {}, "edges": []},
+            "rules": {"nodes": {}, "edges": []},
+        },
+        [],
+        "x",
+    )
+    assert "onerror=" in page
+    assert "Graphviz did not load" in page

@@ -30,8 +30,9 @@ from flowlib import dag, localconfig
 CHECKOUT = Path(__file__).resolve().parents[2]
 """The checkout whose workflow the graphs are built from."""
 
-VIZ = "https://cdn.jsdelivr.net/npm/@viz-js/viz@3.29.0/lib/viz-standalone.js"
-"""Graphviz in the browser, which draws the graphs."""
+VIZ = "https://cdn.jsdelivr.net/npm/@viz-js/viz@3.29.0/dist/viz-global.js"
+"""Graphviz in the browser, which draws the graphs: viz-js's bundle that
+defines the global `Viz` (from 3.x it is in dist/, not lib/)."""
 
 MAX_JOBS = 1500
 """Jobs above which the page draws the rule graph only."""
@@ -61,9 +62,12 @@ body {{ font-family: sans-serif; color: var(--fg); background: var(--bg);
 </style></head><body>
 <p><a href="/">Panoptes</a> · <a href="/dag/">DAG</a></p>
 {body}
-<script src="{viz}"></script>
+<p id="noviz" class="muted" hidden>Graphviz did not load from
+<a href="{viz}">{viz}</a>, so the graphs are not drawn.</p>
+<script src="{viz}"
+  onerror="document.getElementById('noviz').hidden = false"></script>
 <script>
-Viz.instance().then(viz => {{
+if (window.Viz) Viz.instance().then(viz => {{
   for (const el of document.querySelectorAll("script.dot")) {{
     const svg = viz.renderSVGElement(JSON.parse(el.textContent));
     svg.removeAttribute("width");
