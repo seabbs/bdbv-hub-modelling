@@ -113,3 +113,20 @@ def test_views_are_recorded_once_per_block(tmp_path):
     assert fs.record_views(tmp_path, pairs[2:], "1-100") == (
         "every system within the block limit"
     )
+
+
+def test_the_layout_is_ragged_and_out_of_the_settings_until_set():
+    argv = ["sims", "out", "--held-out-seeds", "1", "2"]
+    assert fs.build_parser().parse_args(argv).layout == "ragged"
+    args = fs.build_parser().parse_args([*argv, "--layout", "complete"])
+    assert args.layout == "complete"
+    # The default adds nothing, so the settings hash stays as it was.
+    assert fs.layout_settings("ragged") == {}
+    assert fs.layout_settings("complete") == {"layout": "complete"}
+
+
+def test_a_complete_block_has_its_nowcast_steps_without_lag_series():
+    block = {"n_targets": 2, "n_covariates": 0, "places": ("A", "B")}
+    assert fs.nowcast_steps(block | {"nowcast": 3}) == 3
+    ragged = {"n_targets": 2, "n_covariates": 6, "places": ("A", "B")}
+    assert fs.nowcast_steps(ragged) == 3
