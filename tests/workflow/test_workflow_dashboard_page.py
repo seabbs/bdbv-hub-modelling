@@ -464,6 +464,19 @@ OFFLOADED = (
 )
 
 
+def _status(folder, step, outbreaks, stage="training"):
+    (folder / "train" / "stream-status.json").write_text(
+        json.dumps(
+            {
+                "stage": stage,
+                "step": step,
+                "outbreaks": outbreaks,
+                "time": "2026-11-16 16:29:00",
+            }
+        )
+    )
+
+
 def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     ctx = _machine(tmp_path)
     folder = ctx.runs[0].folder
@@ -471,6 +484,7 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     (folder / "train" / "n250.log").write_text(
         "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
     )
+    _status(folder, step=1740, outbreaks=300)
     ctx.outbreaks = 1000
     ctx.prefixes = (250, 500, 1000)
     planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
@@ -481,7 +495,6 @@ def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
     speed = tiles.split("Steps / s")[1].split("Next checkpoint")[0]
     assert "n/a" not in speed
     assert "Mean</span> <b>1</b>" in tiles
-    assert f"Final step</span> <b>{st.at(1000)}</b>" in tiles
     # Each segment still to come, with its ETA.
     for n in (500, 1000):
         assert f"n{n}</span> <b>{st.eta(n)}</b>" in tiles
@@ -581,3 +594,32 @@ def test_a_just_restarted_run_shows_its_position_from_the_status(tmp_path):
     assert st.eta(3200) == "n/a"
     tiles, _ = page.status_tiles(st, ctx.runs[0])
     assert "Simulations trained</span> <b>2200/3200</b>" in tiles
+
+
+def test_the_etas_come_from_the_status_and_the_rate_alone(tmp_path):
+    # Lead 01:05 sweep (14): no step or simulations interpolated from the
+    # checkpoints and logged chunks. The status gives the step and the
+    # simulations (so its steps a simulation), the log the rate.
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    (folder / "train" / "n250.log").write_text(
+        "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
+    )
+    _status(folder, step=1740, outbreaks=300)
+    ctx.outbreaks = 1000
+    ctx.prefixes = (250, 500, 1000)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert (st.step, st.trained) == (1740, 300)
+    assert st.eta(500) == page._dur((500 - 300) * 1740 / 300 / st.rate)
+    tiles, _ = page.status_tiles(st, ctx.runs[0])
+    assert "Final step" not in tiles
+    assert "estimated" not in tiles
+
+
+def test_without_a_status_the_position_is_not_known(tmp_path):
+    ctx = _machine(tmp_path)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert (st.step, st.trained) == (None, None)
+    assert st.eta(max(planned)) == "n/a"
