@@ -27,9 +27,7 @@ MOVED = {
     "scripts/build_zone_centres.py": (
         "packages/bdbvhub/data-raw/build_zone_centres.py"
     ),
-    "scripts/hub_imputation_fit.R": (
-        "packages/bdbvhub/data-raw/hub_imputation_fit.R"
-    ),
+    "scripts/hub_imputation_fit.R": "tests/model/test_hub_imputation_delays.py",
     "tools/README.md": "deleted",
     "tools/paper_local.sh": "deleted",
     "tools/run_target.sh": "deleted",
