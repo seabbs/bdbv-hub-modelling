@@ -115,6 +115,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<ROOT>/runs/<run>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC summaries in `<ROOT>/runs/<run>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.
 - `evaluate_steps`, `evaluate_base`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. `evaluate_base` scores step 0 alone (base Chronos-2, the start loss), `evaluate_steps` a segment's snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), which needs only step 0. They run on `EVAL_DEVICE` (the CPU by default) beside the trainer, newest first. They use the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`) in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
+- `heldout_curve`: a run's held-out loss by level at the start and at each checkpoint, against simulations trained (`<run>/heldout-curve.csv`, `flowlib.evaluations.heldout_curve`). The paper's `evidence` rule reads the final run's.
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
 - `finetune`: every prefix.
 
@@ -159,6 +160,7 @@ Settings:
 
 - `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), the notes filter.
 - `config/dashboard.local.yaml` (git ignores it; `config/dashboard.example.yaml` is committed; `DASHBOARD_CONFIG` in `config/local.env` names another file): this machine's runs (training output folders with a hue, the live run, a base run, or release prefixes), exclusions, the mirror folder, and where the score table, each dataset, extra tables, notes and the notes file come from. A `host:path` source is copied read-only with rsync over ssh; nothing is written back.
+- `workflow/config.yaml`'s `runs`: each run, from `<ROOT>/runs/<name>`, shown with no other setting, so `task nowcast-foundation:dashboard` alone shows the workflow's runs.
 - `DASHBOARD_RUNS` and `--run`, `--ref`: more runs and references on top.
 
 On a machine that trains while another scores:
@@ -170,7 +172,7 @@ uv run --group paper python workflow/scripts/dashboard.py --port 8765
 # open the address it prints; with the venv active, plain `python` works too
 ```
 
-## 7. Paper (`paper/workflow/Snakefile`)
+## 7. Paper (`rules/paper.smk`, `paper/workflow/Snakefile`)
 
 A module of this workflow (`use rule * from paper_workflow`), run from the repository root; its paths are from the root and its outputs are in `paper/results/<mode>/`.
 `development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.
@@ -179,7 +181,7 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 - Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
 - Evidence read from git (`evidence_aggregation_scores`, `evidence_checkpoint_scores`, `evidence_lag_germany`), gathered by `evidence`.
-- Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `grid_tables`, `summary` and `publish_paper`.
+- Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `grid_tables`, `summary` and `publish_paper`.
 
 ## Scheduled runs
 
@@ -220,6 +222,7 @@ Panoptes has no DAG view, so the same server adds one at `/dag/` (`workflow/flow
 For each `MONITOR_DAG` target (`NAME=TARGET`) it draws the rule graph and the job DAG, each job pending, running, done or failed.
 A job Snakemake would not run is done; Panoptes gives the rest their state, so the colours follow the run on each visit.
 The graphs are built with `MONITOR_DAG_OPTIONS` every `MONITOR_DAG_EVERY` seconds, without a lock; `task nowcast-workflow:dag -- NAME=TARGET` builds one now.
+In the workflow (`rules/monitor.smk`), `monitor_dag` builds one target's graphs into `<ROOT>/monitor/dag/<name>.json` and `monitor` every `MONITOR_DAG` target's; both are opt-in.
 Each tick also writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds (`workflow/flowlib/runstatus.py`).
 The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), not jobs.
 

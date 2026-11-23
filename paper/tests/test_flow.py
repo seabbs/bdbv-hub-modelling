@@ -57,7 +57,7 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     root = tmp_path / "root"
     segment = root / "runs" / "runa" / "train" / "n800"
     (segment / "finetuned-ckpt").mkdir(parents=True)
-    (segment / "settings.json").write_text("{}")
+    (segment / "settings.json").write_text('{"hash": "abc123"}')
     for name in ("adapter_config.json", "adapter_model.safetensors"):
         (segment / "finetuned-ckpt" / name).write_text("")
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
@@ -68,7 +68,8 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     assert flow.synthetic["simulations"]["paper"] == sims
     # Steps passed the config read the same folders and checkpoint.
     assert config["synthetic"]["simulations"]["paper"] == sims
-    assert config["finetuned"] == str(segment)
+    # Outputs record the checkpoint's spec; only the models read the folder.
+    assert config["finetuned"] == "abc123"
     assert os.environ["BDBV_CHRONOS_FT"] == str(segment)
     assert flow.realdata_after == "2026-08-01"
 
@@ -97,6 +98,7 @@ def test_no_script_pins_the_checkpoint() -> None:
     paper = Path(__file__).parents[1]
     assert not (paper / "scripts" / "follow_checkpoint.py").exists()
     assert "finetuned" not in CONFIG
+    assert "finetune_run" not in CONFIG
     assert "final_checkpoints" not in CONFIG
     assert CONFIG["final_run"] == "$ROOT/runs/runa"
 
@@ -200,3 +202,20 @@ def test_evidence_files_are_named_by_their_commit() -> None:
     names = {"lag_germany": "waiting note"}
     assert flow.evidence_args(names) == f"--lag-germany {path}"
     assert flow.evidence_args({}) == ""
+
+
+def test_examples_are_read_from_the_development_round() -> None:
+    picks = [["33307-0006", "Multi-wave"], ["33300-0001", "Spread"]]
+    flow = _flow(synthetic__examples={"picks": picks})
+    files = flow.example_files()
+    folder = CONFIG["synthetic"]["simulations"]["development"]
+    assert files == {
+        "counts": [
+            f"{folder}/counts-33300.csv.gz",
+            f"{folder}/counts-33307.csv.gz",
+        ],
+        "settings": [
+            f"{folder}/settings-33300.csv",
+            f"{folder}/settings-33307.csv",
+        ],
+    }

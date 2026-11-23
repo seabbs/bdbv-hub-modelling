@@ -13,9 +13,29 @@ TWO = {
 }
 
 
-def test_the_committed_config_has_one_run():
+def test_the_committed_runs_are_run_a_and_its_variants():
     cfg = runs.load_config()
-    assert list(cfg["runs"]) == ["runa"]
+    assert list(cfg["runs"]) == ["runa", "noslots"]
+
+
+def test_only_run_a_trains_until_the_variants_are_due():
+    # The variants come after Run A (#261): `finetune` must not start them
+    # beside it on the GPU.
+    cfg = runs.load_config()
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    assert runs.trained(cfg, found) == ["runa"]
+
+
+def test_the_no_slots_run_is_run_a_without_the_attention_biases():
+    cfg = runs.load_config()
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    a, b = found["runa"].ft, found["noslots"].ft
+    assert a["series_bias"]
+    assert not b["series_bias"]
+    assert {k: v for k, v in a.items() if k != "series_bias"} == {
+        k: v for k, v in b.items() if k != "series_bias"
+    }
+    assert "--series-bias" not in runs.trainer_options(found["noslots"])
 
 
 def test_a_run_takes_the_finetune_defaults_and_its_overrides():

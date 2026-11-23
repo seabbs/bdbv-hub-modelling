@@ -24,7 +24,13 @@ def _job_lines(out):
 def test_the_paper_targets_resolve_in_the_one_workflow(tmp_path, target):
     out = dry_run(tmp_path, target, quiet=False, extra=["-p"])
     assert out.returncode == 0, out.stderr + out.stdout
-    for rule in (target, "publish_paper", "summary", "evidence"):
+    for rule in (
+        target,
+        "publish_paper",
+        "summary",
+        "evidence",
+        "heldout_curve",
+    ):
         assert f"rule {rule}:" in out.stdout
     lines = _job_lines(out.stdout)
     assert lines
@@ -34,3 +40,11 @@ def test_the_paper_targets_resolve_in_the_one_workflow(tmp_path, target):
         for path in PATH.findall(line):
             allowed = (str(ROOT), str(tmp_path), "/dev/null")
             assert path.startswith(allowed), (path, line)
+
+
+@pytest.mark.parametrize("target", ["paper", "development"])
+def test_the_paper_s_realism_reads_the_grid_s_rounds(tmp_path, target):
+    out = dry_run(tmp_path, target, quiet=False, extra=["-p"])
+    assert out.returncode == 0, out.stderr + out.stdout
+    for rule in ("sim_realism", "round_summaries", "germany_dev_stats"):
+        assert f"rule {rule}:" in out.stdout

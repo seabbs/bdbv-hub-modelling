@@ -101,3 +101,21 @@ rule evaluate_checkpoint:
         "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} checkpoint {{params.where}} --device {{params.device}} "
         "> {log} 2>&1"
+
+
+rule heldout_curve:
+    # The run's held-out loss by level at the start and at each
+    # checkpoint, against simulations trained: the paper's fine-tune
+    # curve (flowlib.evaluations.heldout_curve).
+    input:
+        heldout_curve_inputs,
+    output:
+        f"{RUN}/heldout-curve.csv",
+    localrule: True
+    params:
+        train=lambda wc: train_dir(wc.run),
+        prefixes=lambda wc: RUNS[wc.run].ft["prefixes"],
+    run:
+        evaluations.write_heldout_curve(
+            params.train, wildcards.run, params.prefixes, output[0]
+        )

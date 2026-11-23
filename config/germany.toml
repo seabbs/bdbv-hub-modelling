@@ -29,6 +29,11 @@ last_date = "2022-04-29"
 # 2021-11-22 to 2022-02-09 (80 dates) are for development, 2022-02-10 to
 # 2022-04-29 (79 dates) are held out for the paper and not scored here.
 split_date = "2022-02-10"
+# Days ahead of each nowcast date the checkpoint units also forecast, the
+# zero-shot reference and every checkpoint alike: 7-day sums ending up to
+# 28 days after it (4 weeks), as the held-out loss splits them. The hub's
+# horizons, 0 to 28 days back, stay the scored nowcast.
+forecast_days = 28
 # Germany is scored and shown on daily data only: every model takes the
 # daily releases (no weekly source) and forecasts the hub's 7-day rolling
 # sums. The checkpoint units run the Chronos-2 models listed here.

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
-from nowcastfoundation.forecaster import newest_segment
+from nowcastfoundation.forecaster import local_checkpoint, newest_segment
 
 from paperpipe.config import run_settings, run_studies
 from paperpipe.outputs import (
@@ -94,8 +94,9 @@ class PaperFlow:
 
         The simulation folders are expanded in `config` itself (`expand`,
         `flowlib.localconfig.expand`), so each step that is passed the
-        config reads the same folders. `finetuned` is the final run's
-        newest saved checkpoint (`final_run`), put in the environment as
+        config reads the same folders, as are the final run's and the
+        rounds' folders. `finetuned` is the spec of the final run's newest
+        saved checkpoint, whose folder is put in the environment as
         `BDBV_CHRONOS_FT`, which every `_ft` model loads.
 
         Parameters
@@ -133,10 +134,14 @@ class PaperFlow:
             mode: expand(folder)
             for mode, folder in synthetic["simulations"].items()
         }
+        config["final_run"] = expand(config["final_run"])
+        config["rounds_dir"] = expand(config["rounds_dir"])
         # The `_ft` models load the final run's newest saved checkpoint,
-        # pending until it has one.
-        segment = newest_segment(Path(expand(config["final_run"])) / "train")
-        config["finetuned"] = None if segment is None else str(segment)
+        # pending until it has one. Outputs record its spec, not its folder.
+        segment = newest_segment(Path(config["final_run"]) / "train")
+        config["finetuned"] = (
+            None if segment is None else local_checkpoint(segment).hash
+        )
         if segment is not None:
             os.environ.update(BDBV_CHRONOS_FT=str(segment))
         with (root / "config" / "finetune.toml").open("rb") as f:
@@ -205,6 +210,26 @@ class PaperFlow:
             if n in names
         )
 
+    def heldout_curve(self) -> str:
+        """Return the final run's held-out loss curve (rule heldout_curve)."""
+        return f"{self.config['final_run']}/heldout-curve.csv"
+
+    def realism_inputs(self) -> dict[str, Any]:
+        """Return the realism step's inputs.
+
+        The grid's training rounds' summaries and the German development
+        half's statistics (workflow rules round_summaries and
+        germany_dev_stats).
+        """
+        where = self.config["rounds_dir"]
+        return {
+            "germany": f"{where}/report/germany-dev.csv",
+            "rounds": [
+                f"{where}/r{r}/summaries/outbreaks.csv"
+                for r in self.config["grid_rounds"]["rounds"]
+            ],
+        }
+
     def live_arg(self) -> str:
         """Return the live run option, whose newest checkpoints are shown."""
         live = self.config.get("live_run")
@@ -268,6 +293,21 @@ class PaperFlow:
             for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
         ]
         return files if all(Path(f).exists() for f in files) else []
+
+    def example_files(self) -> dict[str, list[str]]:
+        """Return the SI examples' simulation files, by kind.
+
+        The examples are picked from the development round, so the
+        held-out round is never read for them. Each pick names a
+        simulation, `<seed>-<n>`, and the files are its seed's.
+        """
+        folder = self.synthetic["simulations"]["development"]
+        picks = self.synthetic["examples"]["picks"]
+        seeds = sorted({str(sim).split("-")[0] for sim, _ in picks})
+        return {
+            "counts": [f"{folder}/counts-{s}.csv.gz" for s in seeds],
+            "settings": [f"{folder}/settings-{s}.csv" for s in seeds],
+        }
 
     # A study's data ------------------------------------------------------
 

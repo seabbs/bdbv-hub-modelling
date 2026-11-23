@@ -331,7 +331,7 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     # Then they load its newest saved checkpoint.
     segment = run / "train" / "n800"
     (segment / "finetuned-ckpt").mkdir(parents=True)
-    (segment / "settings.json").write_text("{}")
+    (segment / "settings.json").write_text('{"hash": "abcdef123456"}')
     for name in ("adapter_config.json", "adapter_model.safetensors"):
         (segment / "finetuned-ckpt" / name).write_text("")
     pinned = _snakemake(
@@ -343,4 +343,4 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
         str(_offline(tmp_path, synthetic=synthetic, final_run=str(run))),
     )
     assert pinned.returncode == 0, pinned.stderr
-    assert f"--finetuned {segment}" in pinned.stdout + pinned.stderr
+    assert "--finetuned abcdef123456" in pinned.stdout + pinned.stderr
