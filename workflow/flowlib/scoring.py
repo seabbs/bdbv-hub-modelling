@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import shlex
 from collections.abc import Callable, Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
 from flowlib import forecast, machine, notify, releases
@@ -23,6 +24,48 @@ REFERENCE_NAMES = {
     "randomwalknowcast_daily": "Random walk nowcast (daily)",
 }
 """The German report's names of the reference unit's models."""
+
+REFERENCE = "reference"
+"""The label of the unit of the models no checkpoint changes."""
+
+REFERENCE_CODE = (
+    "packages/nowcastbaselines/src",
+    "packages/nowcastfoundation/src",
+    "packages/nowcastgermany/src/nowcastgermany/evaluation.py",
+    "config/germany.toml",
+)
+"""What the reference's forecasts depend on, past their tasks: its models'
+packages, the German forecasting code and config (as
+`nowcastgermany.checkpoint.model_key`)."""
+
+
+def reference_code(label: str, root: Path | str = ".") -> list[str]:
+    """Return the files the reference unit depends on; none for a checkpoint."""
+    if label != REFERENCE:
+        return []
+    out = []
+    for part in REFERENCE_CODE:
+        path = Path(root) / part
+        files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
+        out += [str(f.relative_to(root)) for f in files]
+    return out
+
+
+def reference_key(label: str, root: Path | str = ".") -> str:
+    """Return a digest of `reference_code`'s contents ("" for a checkpoint).
+
+    A rule parameter: Snakemake reruns the unit when it changes (not on
+    file times, so a checkout reruns nothing), and the unit redoes only
+    the rows of the models whose own key moved.
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    files = reference_code(label, root)
+    for f in files:
+        h.update(f.encode())
+        h.update((Path(root) / f).read_bytes())
+    return h.hexdigest()[:12] if files else ""
 
 
 def unit_shell(study: str, room: str, segment: str = "") -> str:

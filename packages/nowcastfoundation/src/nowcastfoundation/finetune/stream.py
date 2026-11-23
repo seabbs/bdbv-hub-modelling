@@ -1178,15 +1178,33 @@ def publish(where: Path, key: str, run=subprocess.run) -> None:
     log(f"uploaded {[f.name for f in missing]} to {tag}")
 
 
-def accumulate(indices: list[int], backward, zero) -> float:
+OOM_PAUSE = 60
+"""Seconds a block that runs out of memory alone waits before it reruns."""
+OOM_WAITS = 120
+"""Waits for memory (`OOM_PAUSE` each, two hours) before the run stops."""
+
+
+def wait_for_memory(waits: int) -> None:
+    """Log that memory ran out and sleep `OOM_PAUSE` seconds."""
+    log(
+        f"out of memory for a single block (wait {waits}/{OOM_WAITS}): "
+        f"another process may hold the GPU; retrying in {OOM_PAUSE} s"
+    )
+    time.sleep(OOM_PAUSE)
+
+
+def accumulate(
+    indices: list[int], backward, zero, wait=wait_for_memory
+) -> float:
     """Return a batch's loss, accumulating its gradients by `backward`.
 
     The gradients are clear when it starts (`finite_step`). If memory runs
     out, they are cleared and the memory freed (`zero`) and the batch is
     run again in halves, and so on, so every block is used once and they
     share the gradient as the whole batch would. A single block that runs
-    out is run once more, in case the memory was held for a moment by
-    another process.
+    out is run once more at once, then after each `wait` (called with the
+    wait's number), up to `OOM_WAITS` times, since another process on the
+    GPU may hold the memory for a while.
 
     Raises
     ------
@@ -1195,7 +1213,7 @@ def accumulate(indices: list[int], backward, zero) -> float:
         training, so the run stops (lower the checkpoint threshold).
     """
     parts = [indices]
-    retried: set = set()
+    retried: dict = {}
     retry = False
     while True:
         if retry:
@@ -1213,17 +1231,21 @@ def accumulate(indices: list[int], backward, zero) -> float:
         except RuntimeError as error:
             if "out of memory" not in str(error):
                 raise
-            if len(part) == 1 and part[0] not in retried:
-                retried.add(part[0])
-            elif len(part) == 1:
+            if len(part) > 1:
+                half = len(part) // 2
+                at = parts.index(part)
+                parts[at : at + 1] = [part[:half], part[half:]]
+                continue
+            runs = retried.get(part[0], 0)
+            if runs > OOM_WAITS:
                 raise RuntimeError(
                     f"block {part[0]} is too large for memory even alone; "
                     "lower checkpoint_above"
                 ) from error
-            else:
-                half = len(part) // 2
-                at = parts.index(part)
-                parts[at : at + 1] = [part[:half], part[half:]]
+            retried[part[0]] = runs + 1
+            if runs:
+                zero()
+                wait(runs)
 
 
 def finite_step(params: list, optimiser, value: float) -> bool:

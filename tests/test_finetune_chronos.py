@@ -218,15 +218,38 @@ def test_a_split_batch_starts_from_clear_gradients():
 
 
 def test_a_block_too_large_for_memory_stops_the_run():
-    from nowcastfoundation.finetune.stream import accumulate
+    from nowcastfoundation.finetune.stream import OOM_WAITS, accumulate
 
     def backward(part, _share):
         if 9 in part:
             raise RuntimeError("CUDA out of memory")
         return 0.5
 
+    waited: list[int] = []
     with pytest.raises(RuntimeError, match="too large for memory"):
-        accumulate([1, 9], backward, lambda: None)
+        accumulate([1, 9], backward, lambda: None, wait=waited.append)
+    # It waits for memory a set number of times before stopping.
+    assert waited == list(range(1, OOM_WAITS + 1))
+
+
+def test_a_block_waits_while_another_process_holds_the_memory():
+    # Overseer 18:00: Run A died when a scoring job held the GPU. A block
+    # that keeps running out waits and is run again; the run goes on.
+    from nowcastfoundation.finetune.stream import accumulate
+
+    calls: list[list[int]] = []
+    waited: list[int] = []
+
+    def backward(part, _share):
+        calls.append(list(part))
+        if len(calls) <= 4:
+            raise RuntimeError("CUDA out of memory")
+        return 0.5
+
+    assert accumulate([7], backward, lambda: None, wait=waited.append) == 0.5
+    assert calls == [[7]] * 5
+    # The first retry is at once, then it waits before each run.
+    assert waited == [1, 2, 3]
 
 
 def test_a_block_that_runs_out_once_is_retried():
