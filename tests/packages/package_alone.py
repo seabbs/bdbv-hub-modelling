@@ -37,6 +37,7 @@ KNOWN: dict[str, set[str]] = {
     "nowcastfoundation": {"nowcastfoundation.simulate"},
     "nowcastgermany": {
         "nowcastgermany.evaluation",
+        "nowcastgermany.pairing",
         "nowcastgermany.ft_store",
         "nowcastgermany.reporting",
     },
