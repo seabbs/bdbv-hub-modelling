@@ -184,7 +184,9 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - We score only the hub's own targets and horizons.
 - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
 - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
-- We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, with $D$ the 98% point of the hub data's reporting delay, taking the hub teams' quantiles from their samples.
+- We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, taking the hub teams' quantiles from their samples.
+- We score each week against its count in the first release at least $D$ days after the week ends, with $D$ the 98% point of the hub data's reporting delay.
+- By then nearly all of a week's cases are reported, so the truth changes little afterwards while every round can still be scored.
 - $D$ is part of the scoring rule, not a choice tuned on the data.
 - The SI compares the samples directly with the fair CRPS.
 - We score Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
