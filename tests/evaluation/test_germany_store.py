@@ -70,6 +70,18 @@ def test_release_tag_maps_scorer_labels() -> None:
             release_tag(bad)
 
 
+def test_a_slots_pin_names_its_slots_release() -> None:
+    """config/finetune.toml may pin a series-bias checkpoint
+    (`slots-<hash>`), whose release is `chronos-slots-<hash>`."""
+    releases = [
+        *RELEASES,
+        _release("chronos-slots-ddd", "2026-11-17T10:00:00Z"),
+    ]
+    assert choose_checkpoint(set(), releases, "slots-ddd")[1] == (
+        "chronos-slots-ddd"
+    )
+
+
 def test_latest_pin_takes_the_newest_ft_release() -> None:
     stored = {"chronos-ft-aaa", "chronos-ft-bbb"}
     assert choose_checkpoint(stored, RELEASES, "latest") == (
