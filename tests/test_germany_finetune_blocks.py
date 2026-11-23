@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nowcastfoundation.finetune import germany as fg
 from nowcastfoundation.finetune.stream import BLOCK_KEYS
+from nowcastgermany import finetune_blocks as fg
 
 
 def _wide(days: int = 160) -> pd.DataFrame:
