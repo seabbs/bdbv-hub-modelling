@@ -324,7 +324,7 @@ def germany_sensitivity(
     r"""Score both pairings on the German development half.
 
     Each nowcast date's states tasks (with Germany their sum) and age
-    groups tasks, one pair per weekday offset, are forecast as the German
+    groups tasks, one pair per date, are forecast as the German
     benchmark does (`data.germany.nowcast_tasks`, `hub_forecasts`). They
     give the 7-day sums ending every day from 0 to 28 days back. The truth
     is the sum reported the config's truth delay after it ends.
