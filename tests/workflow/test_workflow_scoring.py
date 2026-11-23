@@ -105,3 +105,7 @@ def test_the_reference_unit_reruns_when_its_models_code_changes():
     assert any(f.endswith("nowcastbaselines/randomwalk.py") for f in files)
     assert any(f.endswith("nowcastfoundation/forecaster.py") for f in files)
     assert scoring.reference_code("abc123def456") == []
+    # A digest of their contents, which the rule reruns on.
+    key = scoring.reference_key("reference")
+    assert len(key) == 12
+    assert scoring.reference_key("abc123def456") == ""

@@ -40,11 +40,7 @@ packages, the German forecasting code and config (as
 
 
 def reference_code(label: str, root: Path | str = ".") -> list[str]:
-    """Return the reference unit's code inputs; none for a checkpoint.
-
-    The rule reruns the unit when one changes, and the unit redoes only
-    the rows of the models whose key moved.
-    """
+    """Return the files the reference unit depends on; none for a checkpoint."""
     if label != REFERENCE:
         return []
     out = []
@@ -53,6 +49,23 @@ def reference_code(label: str, root: Path | str = ".") -> list[str]:
         files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
         out += [str(f.relative_to(root)) for f in files]
     return out
+
+
+def reference_key(label: str, root: Path | str = ".") -> str:
+    """Return a digest of `reference_code`'s contents ("" for a checkpoint).
+
+    A rule parameter: Snakemake reruns the unit when it changes (not on
+    file times, so a checkout reruns nothing), and the unit redoes only
+    the rows of the models whose own key moved.
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    files = reference_code(label, root)
+    for f in files:
+        h.update(f.encode())
+        h.update((Path(root) / f).read_bytes())
+    return h.hexdigest()[:12] if files else ""
 
 
 def unit_shell(study: str, room: str, segment: str = "") -> str:
