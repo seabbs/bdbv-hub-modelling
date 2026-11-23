@@ -1,4 +1,4 @@
-"""The deterministic sim-QC check of a round (scripts/sim_qc.py)."""
+"""The deterministic sim-QC check of a round (`sim-qc`)."""
 
 import subprocess
 import sys
@@ -29,7 +29,12 @@ def test_the_round_s_check_is_recorded(tmp_path):
     sims.mkdir(parents=True)
     _sim_dir(sims)
     subprocess.run(
-        [sys.executable, "scripts/sim_qc.py", str(tmp_path / "r1")],
+        [
+            sys.executable,
+            "-m",
+            "nowcastfoundation.finetune.qc",
+            str(tmp_path / "r1"),
+        ],
         cwd=ROOT,
         check=True,
     )

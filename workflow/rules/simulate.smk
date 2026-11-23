@@ -6,7 +6,7 @@
 # `draws` observation draws.
 # Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
-# manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
+# manifest joins them, the sim QC (`sim-qc`) checks the round
 # against the grid's thresholds (its `qc`),
 # and `round_ready` writes the seed lists and READY last. Every
 # simulation is kept: the QC only records summaries (qc/).
@@ -193,7 +193,7 @@ rule sim_qc:
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
     shell:
-        "uv run python scripts/sim_qc.py {params.round_dir} > {log} 2>&1"
+        "uv run sim-qc {params.round_dir} > {log} 2>&1"
 
 
 rule round_ready:

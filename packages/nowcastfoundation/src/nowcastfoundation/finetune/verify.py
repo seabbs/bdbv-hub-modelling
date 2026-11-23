@@ -8,7 +8,7 @@ out with (`code_sha256`), and the commit the trainer ran from
 settings hash from the hashed settings, and the sha256 of the outbreak
 lists, and prints any mismatch. It exits 1 if there is one.
 
-    python scripts/finetune_verify.py <ROOT>/runs/runa/train/n800
+    uv run finetune-verify <ROOT>/runs/runa/train/n800
 """
 
 from __future__ import annotations

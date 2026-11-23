@@ -3,7 +3,7 @@
 With `finetune.eval: offload` the trainer saves an adapter snapshot and a
 request at step 0 and each evaluation step (`train/evals/step-<k>/`) and
 writes checkpoints without their held-out losses
-(scripts/finetune_stream.py). The `evaluate` rules (rules/evaluate.smk,
+(`finetune-stream`). The `evaluate` rules (rules/evaluate.smk,
 run by workflow/scripts/evaluate_offloaded.py) score them: each step's
 result is `train/evals/step-<k>.json` and a checkpoint's is the sidecar
 `n<N>/held-out.json`, beside its `settings.json`, which is a protected

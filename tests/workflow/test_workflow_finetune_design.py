@@ -105,10 +105,8 @@ def _trainer_args(tmp_path, finetune=None, machine=""):
     )
     assert out.returncode == 0, out.stderr + out.stdout
     text = out.stdout.replace("\\\n", " ")
-    line = next(
-        ln for ln in text.splitlines() if "scripts/finetune_stream.py" in ln
-    )
-    words = shlex.split(line.split("scripts/finetune_stream.py", 1)[1])
+    line = next(ln for ln in text.splitlines() if "finetune-stream" in ln)
+    words = shlex.split(line.split("finetune-stream", 1)[1])
     # Up to the log redirect, `>> log` or `>>log` (as snakefmt writes it).
     end = next(i for i, w in enumerate(words) if w.startswith(">>"))
     return words[:end]
