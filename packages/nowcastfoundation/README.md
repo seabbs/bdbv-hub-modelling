@@ -21,7 +21,6 @@ It is for anyone using our fine-tuned checkpoints on their own data, and for wor
 - [`checkpoint`](src/nowcastfoundation/checkpoint.py): scoring each published checkpoint against the references.
 - [`live_checkpoint`](src/nowcastfoundation/live_checkpoint.py), [`live_checkpoint_page`](src/nowcastfoundation/live_checkpoint_page.py): the live run's newest checkpoints as preliminary results.
 - [`simulate`](src/nowcastfoundation/simulate.py): province outbreaks published as hub-style releases, for backtests and the docs' examples.
-- [`r/`](r/): an R package of the R simulation code. Tests load it to check the latent components against R.
 
 ## Next
 

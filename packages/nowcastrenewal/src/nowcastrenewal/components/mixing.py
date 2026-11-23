@@ -19,7 +19,7 @@ place keeps, $1 - \ell_p$, is set by `outflow`:
   force is a weighted average of its own and its sources'. With a kernel
   normalised per receiver (`per="receiver"`) and one share a day this is
   $(1 - \varepsilon_t) F_p + \varepsilon_t \sum_q K_{pq} F_q$: the
-  simulator's mixing (its R engine's form).
+  simulator's mixing.
 
 The two agree when the kernel is normalised both ways (the simulator's
 symmetric kind). Per resident, with population fractions $f$, the matrix

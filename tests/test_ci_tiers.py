@@ -29,7 +29,7 @@ def test_the_fast_tier_runs_no_slow_tests():
     assert "-n auto" in runs
 
 
-@pytest.mark.parametrize("job", ["full", "r-live", "engine", "chronos"])
+@pytest.mark.parametrize("job", ["full", "r-live", "chronos"])
 def test_fits_and_replays_run_nightly_on_dispatch_or_when_labelled(job):
     workflow = _workflow("test.yml")
     when = workflow["jobs"][job]["if"]

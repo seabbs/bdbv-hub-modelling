@@ -1,22 +1,16 @@
-"""Revisions of reported counts, against the former R engine's, live.
+"""Revisions of reported counts (`reporting.revisions`).
 
-`tests/model/r/revision_cases.R` revises counts with a copy of the former R
-engine's `revise_counts` and returns its draws; the port
-(`reporting.revisions.Revisions`) takes the same draws and must give the
-same revised counts.
+No external tool computes these revisions, so `revise` is checked on a
+hand-worked case and `Revisions` on what revisions must leave alone.
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
 from numpyro import handlers
 
 from nowcastrenewal.reporting.revisions import Revisions, revise
-
-from .r_live import run_r
 
 G, T, D = 3, 30, 8
 VALUES = {
@@ -41,44 +35,34 @@ def _counts() -> np.ndarray:
 COUNTS = _counts()
 
 
-def _engine() -> dict[str, Any]:
-    g, t, d = np.nonzero(COUNTS)
-    cells = {
-        "g": g.tolist(),
-        "t": t.tolist(),
-        "d": d.tolist(),
-        "count": COUNTS[g, t, d].tolist(),
-    }
-    return run_r(
-        'source("tests/model/r/revision_cases.R"); revision_case(input)',
-        {"cells": cells, "values": VALUES, "seed": 42},
-        packages=["data.table"],
+def test_revise_moves_errs_and_corrects_by_hand() -> None:
+    # Two cells of one stratum, ten days. Cell (t=2, d=1), report day 3:
+    # 5 cases, 2 in error, 1 moved a day earlier, corrected 3 days later
+    # (day 6). Cell (t=8, d=1), report day 9, the last: 4 cases, 1 in
+    # error, 2 moved 3 days later; the correction and the move are
+    # clipped to day 9, so they cancel there. Exact.
+    counts = np.zeros((1, 10, 3))
+    errors, moved, shift = (np.zeros_like(counts) for _ in range(3))
+    counts[0, 2, 1], errors[0, 2, 1], moved[0, 2, 1], shift[0, 2, 1] = (
+        5,
+        2,
+        1,
+        -1,
     )
-
-
-def _dense(rows: list[dict[str, Any]]) -> np.ndarray:
-    out = np.zeros((G, T, T))
-    for row in rows:
-        out[row["g"], row["t"], row["r"]] += row["count"]
-    return out
-
-
-def test_revisions_match_the_engine() -> None:
-    engine = _engine()
-    g, t, d = np.nonzero(COUNTS)
-    sites = {}
-    for name in ("errors", "moved", "later", "extra"):
-        x = np.zeros((G, T, D))
-        x[g, t, d] = engine["draws"][name]
-        sites[f"revisions::{name}"] = x
-    rev = Revisions(
-        "revisions",
-        VALUES["revise_over"],
-        VALUES["revise_move"],
-        VALUES["revise_keep"],
+    counts[0, 8, 1], errors[0, 8, 1], moved[0, 8, 1], shift[0, 8, 1] = (
+        4,
+        1,
+        2,
+        3,
     )
-    got = np.asarray(handlers.substitute(rev, data=sites)(counts=COUNTS))
-    np.testing.assert_allclose(got, _dense(engine["out"]), atol=1e-12)
+    out = np.asarray(revise(counts, errors, moved, shift, [3.0]))
+    want = np.zeros((1, 10, 10))
+    want[0, 2, 3] = 5 + 2 - 1
+    want[0, 2, 6] = -2 + 1
+    want[0, 1, 3] = 1
+    want[0, 1, 6] = -1
+    want[0, 8, 9] = 4
+    np.testing.assert_array_equal(out, want)
 
 
 def test_revisions_leave_the_final_counts() -> None:
@@ -101,15 +85,3 @@ def test_no_revisions_is_the_triangle_by_report_day() -> None:
         tt = np.arange(T - dd)
         want[:, tt, tt + dd] = COUNTS[:, tt, dd]
     np.testing.assert_allclose(out, want)
-
-
-def test_ci_runs_the_revision_checks() -> None:
-    import yaml
-
-    from .r_live import ROOT
-
-    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
-    runs = " ".join(
-        s.get("run", "") for s in workflow["jobs"]["r-live"]["steps"]
-    )
-    assert "tests/model/test_revisions.py" in runs

@@ -1,10 +1,10 @@
 """Run R code on JSON inputs and read its JSON output, for live checks.
 
-Tests compare our components with R packages (epinowcast, primarycensored,
-EpiNow2, the simulator's R engine) by calling them, not through committed
-fixtures. A test skips, with the reason, only where R or a package is
-missing; CI installs them (`.github/workflows/test.yml`, job `r-live`)
-and fails there instead of skipping.
+Tests compare our components with R packages (epinowcast and
+primarycensored) by calling them, not through committed fixtures. A
+test skips, with the reason, only where R or a package is missing; CI
+installs them (`.github/workflows/test.yml`, job `r-live`) and fails
+there instead of skipping.
 """
 
 from __future__ import annotations
