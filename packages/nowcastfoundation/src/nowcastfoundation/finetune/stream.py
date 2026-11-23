@@ -303,9 +303,8 @@ def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
 
     One row a block: the outbreak, the part of the run, source, cut,
     cadence, the drawn release-start delay in days, whether it has no
-    lag series, the first kept
-    release and the number of releases. Returns a line for the log, empty
-    without a layer.
+    lag series, the first kept release, the number of releases and the
+    cut's date. Returns a line for the log, empty without a layer.
     """
     if ft.RELEASE_LAYER is None or not pairs:
         return ""
@@ -318,6 +317,7 @@ def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
                 **{c: block[c] for c in cols},
                 "first_release": block["first_release"],
                 "releases": block["releases"],
+                "cut_date": block["cut_date"],
             }
             for outbreak, block in pairs
         ]
