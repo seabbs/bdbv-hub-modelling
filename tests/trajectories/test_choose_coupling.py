@@ -6,7 +6,9 @@ from scipy.special import ndtri
 
 from nowcastutils.trajectories import (
     CANDIDATES,
+    COUPLING_DAYS,
     choose_coupling,
+    coupling_releases,
     energy_score,
 )
 
@@ -62,17 +64,31 @@ def _origins(rhos, series=3, steps=8, seed=1):
     return np.array(q), z
 
 
-GAUSSIAN = (("gaussian", 4), ("gaussian", 40))
+GAUSSIAN = (("gaussian", 28), ("gaussian", 280))
+
+
+def _weekly(observed):
+    """Origins a week apart, and the forecast a week after the last."""
+    n = len(observed)
+    return 7 * np.arange(n), 7 * n
 
 
 def test_a_recent_change_in_coupling_favours_the_short_window():
     # Long ago steps were independent; lately they move together.
     q, observed = _origins([0.0] * 40 + [0.95] * 12)
     got = choose_coupling(
-        q, LEVELS, observed, None, None, 200, seed=2, candidates=GAUSSIAN
+        q,
+        LEVELS,
+        observed,
+        *_weekly(observed),
+        None,
+        None,
+        200,
+        seed=2,
+        candidates=GAUSSIAN,
     )
-    assert (got["method"], got["window"]) == ("gaussian", 4)
-    assert got["energy"]["gaussian-4"] < got["energy"]["gaussian-40"]
+    assert (got["method"], got["window"]) == ("gaussian", 28)
+    assert got["energy"]["gaussian-28"] < got["energy"]["gaussian-280"]
     assert got["chosen_by"] == "energy"
     # Fitted at the forecast from the latest 4 origins, which move together
     # (shrunk, as 4 origins are little evidence).
@@ -83,22 +99,46 @@ def test_a_recent_change_in_coupling_favours_the_short_window():
 def test_steady_coupling_favours_the_long_window():
     q, observed = _origins([0.6] * 52, seed=4)
     got = choose_coupling(
-        q, LEVELS, observed, None, None, 200, seed=2, candidates=GAUSSIAN
+        q,
+        LEVELS,
+        observed,
+        *_weekly(observed),
+        None,
+        None,
+        200,
+        seed=2,
+        candidates=GAUSSIAN,
     )
-    assert got["window"] == 40
+    assert got["window"] == 280
 
 
 def test_coupled_truth_is_coupled_and_independent_truth_is_not():
     both = (*GAUSSIAN, ("independent", None))
     q, coupled = _origins([0.9] * 30, seed=5)
     got = choose_coupling(
-        q, LEVELS, coupled, None, None, 200, seed=1, candidates=both
+        q,
+        LEVELS,
+        coupled,
+        *_weekly(coupled),
+        None,
+        None,
+        200,
+        seed=1,
+        candidates=both,
     )
     assert got["method"] == "gaussian"
-    assert got["energy"]["gaussian-40"] < got["energy"]["independent"]
+    assert got["energy"]["gaussian-280"] < got["energy"]["independent"]
     q, apart = _origins([0.0] * 30, seed=6)
     got = choose_coupling(
-        q, LEVELS, apart, None, None, 200, seed=1, candidates=GAUSSIAN
+        q,
+        LEVELS,
+        apart,
+        *_weekly(apart),
+        None,
+        None,
+        200,
+        seed=1,
+        candidates=GAUSSIAN,
     )
     # Shrunk to independence: no correlation the data do not show.
     assert abs(got["rho"]) < 0.1
@@ -120,7 +160,9 @@ def test_the_schaake_shuffle_wins_where_history_shows_the_dependence():
     # The exchangeable gaussian copula cannot mirror two series (s >= 0);
     # windows of a history that mirrors them can.
     q, observed, history, starts = _mirrored(12)
-    got = choose_coupling(q, LEVELS, observed, history, starts, 200, seed=3)
+    got = choose_coupling(
+        q, LEVELS, observed, *_weekly(observed), history, starts, 200, seed=3
+    )
     assert got["method"] == "schaake"
     assert got["n_windows"] == 200
     assert got["windows"].shape == (200, 2, 6)
@@ -133,7 +175,9 @@ def test_with_nothing_to_compare_on_the_fallback_is_still_fitted():
     # Two origins: none has two before it to be scored on, but they fit
     # the gaussian copula.
     q, observed, history, starts = _mirrored(2)
-    got = choose_coupling(q, LEVELS, observed, history, starts, 50, seed=3)
+    got = choose_coupling(
+        q, LEVELS, observed, *_weekly(observed), history, starts, 50, seed=3
+    )
     assert (got["method"], got["chosen_by"], got["n_eval"]) == (
         "gaussian",
         "fallback",
@@ -142,11 +186,27 @@ def test_with_nothing_to_compare_on_the_fallback_is_still_fitted():
     assert got["window"] == max(w for m, w in CANDIDATES if m == "gaussian")
     # One origin fits nothing: the Schaake shuffle on the history.
     got = choose_coupling(
-        q[:1], LEVELS, observed[:1], history, starts[:1], 50, seed=3
+        q[:1],
+        LEVELS,
+        observed[:1],
+        *_weekly(observed[:1]),
+        history,
+        starts[:1],
+        50,
+        seed=3,
     )
     assert (got["method"], got["chosen_by"]) == ("schaake", "fallback")
     # With neither, the gaussian with no evidence: independence.
-    got = choose_coupling(q[:1], LEVELS, observed[:1], None, None, 50, seed=3)
+    got = choose_coupling(
+        q[:1],
+        LEVELS,
+        observed[:1],
+        *_weekly(observed[:1]),
+        None,
+        None,
+        50,
+        seed=3,
+    )
     assert (got["method"], got["rho"], got["s"]) == ("gaussian", 0.0, 0.0)
 
 
@@ -155,7 +215,9 @@ def test_a_candidate_with_no_fit_at_an_origin_drops_out():
     # shuffle has no windows at the earlier ones it would be scored on.
     q, observed, history, starts = _mirrored(12)
     starts = np.r_[np.full(10, 3), np.full(2, history.shape[1])]
-    got = choose_coupling(q, LEVELS, observed, history, starts, 50, seed=3)
+    got = choose_coupling(
+        q, LEVELS, observed, *_weekly(observed), history, starts, 50, seed=3
+    )
     assert "schaake" not in got["energy"]
     assert got["method"] == "gaussian"
     assert got["chosen_by"] == "energy"
@@ -167,7 +229,15 @@ def test_unmatured_cells_are_left_out_of_the_comparison():
     cut[-3:, :, 4:] = np.nan
     cut[-1] = np.nan
     a = choose_coupling(
-        q, LEVELS, cut, None, None, 100, seed=1, candidates=GAUSSIAN
+        q,
+        LEVELS,
+        cut,
+        *_weekly(cut),
+        None,
+        None,
+        100,
+        seed=1,
+        candidates=GAUSSIAN,
     )
     assert a["n_eval"] == 12 - 2 - 1
     assert np.isfinite(list(a["energy"].values())).all()
@@ -175,12 +245,67 @@ def test_unmatured_cells_are_left_out_of_the_comparison():
 
 def test_the_choice_is_reproducible_and_checked():
     q, observed = _origins([0.5] * 12)
-    a = choose_coupling(q, LEVELS, observed, None, None, 100, seed=3)
-    b = choose_coupling(q, LEVELS, observed, None, None, 100, seed=3)
+    a = choose_coupling(
+        q, LEVELS, observed, *_weekly(observed), None, None, 100, seed=3
+    )
+    b = choose_coupling(
+        q, LEVELS, observed, *_weekly(observed), None, None, 100, seed=3
+    )
     assert a == b
     with pytest.raises(ValueError, match="candidates"):
         choose_coupling(
-            q, LEVELS, observed, None, None, 100, seed=3, candidates=()
+            q,
+            LEVELS,
+            observed,
+            *_weekly(observed),
+            None,
+            None,
+            100,
+            seed=3,
+            candidates=(),
         )
     with pytest.raises(ValueError, match="starts"):
-        choose_coupling(q, LEVELS, observed, np.zeros((3, 9)), None, 100, 3)
+        choose_coupling(
+            q,
+            LEVELS,
+            observed,
+            *_weekly(observed),
+            np.zeros((3, 9)),
+            None,
+            100,
+            3,
+        )
+    with pytest.raises(ValueError, match="days"):
+        choose_coupling(
+            q,
+            LEVELS,
+            observed,
+            [0, 7],
+            14,
+            None,
+            None,
+            100,
+            3,
+        )
+
+
+def test_comonotone_draws_win_where_each_series_keeps_its_level():
+    q, observed = _origins([0.999] * 20, seed=8)
+    got = choose_coupling(
+        q, LEVELS, observed, *_weekly(observed), None, None, 200, seed=4
+    )
+    assert got["method"] == "comonotone"
+    assert got["window"] is None
+
+
+def test_every_earlier_release_within_the_look_back_is_read():
+    daily = [
+        str(np.datetime64("2026-08-01") + np.timedelta64(k, "D"))
+        for k in range(100)
+    ]
+    got = coupling_releases(daily)
+    assert len(got) == COUPLING_DAYS
+    assert got[-1] == daily[-2]
+    assert coupling_releases(daily, days=7) == daily[-8:-1]
+    assert coupling_releases(daily[:1]) == []
+    assert coupling_releases([]) == []

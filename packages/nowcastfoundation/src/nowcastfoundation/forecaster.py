@@ -1300,7 +1300,7 @@ class FoundationModel:
                 )
                 if self.collect is not None:
                     self.collect.extend(
-                        (g, horizon) for g in [group, *(b for b, _, _ in past)]
+                        (g, horizon) for g in [group, *(p[0] for p in past)]
                     )
                     raise _CollectedError
                 sample = partial(
@@ -1313,6 +1313,7 @@ class FoundationModel:
                         seed,
                         self._history(tri, start),
                         task.n_samples,
+                        as_date(str(task.vintage)[:10]).toordinal(),
                     ),
                 )
             draws = sample([group], horizon, task.n_samples, seed)[0]
@@ -1417,13 +1418,14 @@ class FoundationModel:
         tri: HubTriangle,
         start: int,
         horizon: int,
-    ) -> list[tuple[Series, np.ndarray, int]]:
+    ) -> list[tuple[Series, np.ndarray, int, int]]:
         """Return the block at each earlier release, with what matured.
 
         Each block (at `coupling_releases`) is built as the task's is,
         from releases up to its own. It comes with its targets' values at
-        the task's release, NaN where not yet final (`n_context`), and its
-        first target step's index in the task's steps.
+        the task's release, NaN where not yet final (`n_context`), its
+        first target step's index in the task's steps, and its release's
+        day (an ordinal date).
         """
         offset = tri.last - start
         lags = int(tri.partial.shape[2])
@@ -1457,7 +1459,7 @@ class FoundationModel:
             block = layout_block(
                 earlier, self.layout, places, first, self._period(earlier)
             )
-            out.append((block, seen, at))
+            out.append((block, seen, at, as_date(v).toordinal()))
         return out
 
     def _values(self, tri: HubTriangle) -> np.ndarray:
@@ -1480,11 +1482,12 @@ class FoundationModel:
 
     def _coupling_fit(
         self,
-        past: Sequence[tuple[Series, np.ndarray, int]],
+        past: Sequence[tuple[Series, np.ndarray, int, int]],
         horizon: int,
         seed: int,
         history: np.ndarray,
         n_samples: int,
+        day: int,
     ) -> dict[str, Any]:
         """Return the coupling's fit for one task, and keep its record.
 
@@ -1500,19 +1503,21 @@ class FoundationModel:
             return fit
         pipeline = _chronos(self.checkpoint)
         levels = np.asarray(pipeline.quantiles, dtype=float)
-        native = _native(pipeline, [b for b, _, _ in past], horizon, self.known)
+        native = _native(pipeline, [p[0] for p in past], horizon, self.known)
         rows = history.shape[0]
         quantiles = np.zeros((len(past), rows, horizon, len(levels)))
         for k, q in enumerate(native):
             quantiles[k] = q[:rows]
         observed = np.full((len(past), rows, horizon), np.nan)
-        for k, (_, seen, _) in enumerate(past):
+        for k, (_, seen, _, _) in enumerate(past):
             observed[k] = seen
-        starts = np.array([at for _, _, at in past], dtype=int)
+        starts = np.array([p[2] for p in past], dtype=int)
         fit = choose_coupling(
             quantiles,
             levels,
             observed,
+            np.array([p[3] for p in past], dtype=int),
+            day,
             history,
             starts,
             n_samples=n_samples,
