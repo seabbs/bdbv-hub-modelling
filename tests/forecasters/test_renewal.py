@@ -647,12 +647,12 @@ def test_province_workers_fill_the_cores_with_chains(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(rn.PROVINCE_WORKERS_ENV, raising=False)
-    monkeypatch.setattr(rn, "_cores", lambda: 4)
+    monkeypatch.setattr(rn, "usable_cpus", lambda: 4)
     assert rn.province_workers(2, 5) == 2
     assert rn.province_workers(4, 5) == 1
     # No more workers than provinces, and a cap on a large host.
     assert rn.province_workers(2, 1) == 1
-    monkeypatch.setattr(rn, "_cores", lambda: 64)
+    monkeypatch.setattr(rn, "usable_cpus", lambda: 64)
     assert rn.province_workers(2, 20) == rn.MAX_PROVINCE_WORKERS
     monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "1")
     assert rn.province_workers(2, 5) == 1
