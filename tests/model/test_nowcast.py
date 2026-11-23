@@ -32,32 +32,32 @@ def prior_latent(model, data, n=20):
 
 
 @pytest.mark.slow
-def test_nowcast_keeps_known_and_recentres_imputed(sim_vintage, config):
-    model = build_model(sim_vintage, config)
+def test_nowcast_keeps_known_and_recentres_imputed(latest_vintage, config):
+    model = build_model(latest_vintage, config)
     draws = forecast_trajectories(
         model,
-        sim_vintage,
+        latest_vintage,
         n_trajectories=50,
-        posterior=prior_latent(model, sim_vintage, n=50),
+        posterior=prior_latent(model, latest_vintage, n=50),
     )
-    province = draws["province"][:, : sim_vintage.n_weeks]
+    province = draws["province"][:, : latest_vintage.n_weeks]
     # Known onsets only accumulate, so no draw is below them.
-    assert np.all(province >= sim_vintage.known[None])
+    assert np.all(province >= latest_vintage.known[None])
     # The hub re-imputes missing onsets at each vintage, so the imputed
     # count is drawn around its current value and can fall below it.
-    reported = sim_vintage.known + sim_vintage.imputed
+    reported = latest_vintage.known + latest_vintage.imputed
     assert np.any(province < reported[None])
-    imputed = province - sim_vintage.known[None]
-    big = sim_vintage.imputed >= 5
-    centre = np.median(imputed, axis=0)[big] / sim_vintage.imputed[big]
+    imputed = province - latest_vintage.known[None]
+    big = latest_vintage.imputed >= 5
+    centre = np.median(imputed, axis=0)[big] / latest_vintage.imputed[big]
     assert 0.5 < np.median(centre) < 2.0
 
 
 @pytest.mark.slow
-def test_masked_provinces_do_not_see_their_counts(sim_vintage, config):
-    mask = np.ones(len(sim_vintage.names), dtype=bool)
+def test_masked_provinces_do_not_see_their_counts(latest_vintage, config):
+    mask = np.ones(len(latest_vintage.names), dtype=bool)
     mask[0] = False
-    data = dataclasses.replace(sim_vintage, fit_mask=mask)
+    data = dataclasses.replace(latest_vintage, fit_mask=mask)
     shifted = dataclasses.replace(
         data, known=data.known + 1000 * ~mask[None, :]
     )
@@ -122,10 +122,12 @@ def test_kept_share_is_the_published_share_at_each_release():
     assert float(share[5]) == pytest.approx(1.0)
 
 
-def test_publication_lag_is_learnt_from_the_release_pairs(sim_vintage):
+def test_publication_lag_is_learnt_from_the_release_pairs(latest_vintage):
     from numpyro.infer.util import log_density
 
-    data = dataclasses.replace(sim_vintage, release_pairs=_pairs(np.full(6, 9)))
+    data = dataclasses.replace(
+        latest_vintage, release_pairs=_pairs(np.full(6, 9))
+    )
     model = build_model(data, MAIN)
     latent = prior_latent(model, data, 1)
     assert latent["publication_lag"].shape == (1, MAX_PUBLICATION_LAG + 1)
@@ -139,16 +141,16 @@ def test_publication_lag_is_learnt_from_the_release_pairs(sim_vintage):
 
     assert density(np.full(6, 9)) != pytest.approx(density(np.full(6, 2)))
     # With no earlier pair of delay files the lag has its prior only.
-    plain = model_args(model, sim_vintage)
+    plain = model_args(model, latest_vintage)
     assert "release_pairs" not in plain["onsets"]
 
 
-def test_dirichlet_multinomial_delays(sim_vintage):
+def test_dirichlet_multinomial_delays(latest_vintage):
     cfg = dataclasses.replace(MAIN, delay_counts="dirichlet-multinomial")
-    args = model_args(build_model(sim_vintage, MAIN), sim_vintage)
+    args = model_args(build_model(latest_vintage, MAIN), latest_vintage)
 
     def delay_site(config, values=None):
-        model = build_model(sim_vintage, config)
+        model = build_model(latest_vintage, config)
         run = numpyro.handlers.seed(model.sample, rng_seed=0)
         if values is not None:
             run = numpyro.handlers.substitute(run, values)
@@ -228,11 +230,13 @@ def test_by_place_with_one_delay_matches_the_shared_delay(weekly):
         np.testing.assert_allclose(places[key], shared[key], rtol=1e-5)
 
 
-def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
+def test_model_log_density_is_the_same_with_weekly_blocks(
+    latest_vintage, config
+):
     from numpyro.infer.util import log_density
 
-    model = build_model(sim_vintage, config)
-    args = model_args(model, sim_vintage)
+    model = build_model(latest_vintage, config)
+    args = model_args(model, latest_vintage)
     with numpyro.handlers.trace() as tr:
         numpyro.handlers.seed(model.sample, rng_seed=0)(**args)
     values = {
@@ -248,32 +252,30 @@ def test_model_log_density_is_the_same_with_weekly_blocks(sim_vintage, config):
     assert float(fast) == pytest.approx(float(dense), rel=1e-5)
 
 
-def test_negative_and_long_delays_are_clipped_not_dropped(
-    outbreak, sim_tables, table
-):
+def test_negative_and_long_delays_are_clipped_not_dropped(tables, table):
     from nowcastrenewal.model.inputs import vintage_from_tables
 
-    from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
+    from .conftest import PLACES, VINTAGES
 
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
+    day = VINTAGES[-1]
+    target, delays = tables[day]
     odd = delays.sort_values("onset_week").iloc[-2:].copy()
     odd["delay"] = [-3, 90]
     both = vintage_from_tables(
         target,
         pd.concat([delays, odd]),
-        vintage_date(outbreak, day),
-        SIM_LOCATIONS,
+        day,
+        PLACES,
         table,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
+        imputation_delay=hub_delay_pmf(day),
     )
     base = vintage_from_tables(
         target,
         delays,
-        vintage_date(outbreak, day),
-        SIM_LOCATIONS,
+        day,
+        PLACES,
         table,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
+        imputation_delay=hub_delay_pmf(day),
     )
     extra = both.delay_counts - base.delay_counts
     assert extra.sum() == 2
@@ -282,9 +284,9 @@ def test_negative_and_long_delays_are_clipped_not_dropped(
 
 
 @pytest.mark.slow
-def test_trajectories_name_their_posterior_draws(sim_vintage):
-    model = build_model(sim_vintage, MAIN)
-    latent = prior_latent(model, sim_vintage, n=8)
-    draws = forecast_trajectories(model, sim_vintage, 5, posterior=latent)
+def test_trajectories_name_their_posterior_draws(latest_vintage):
+    model = build_model(latest_vintage, MAIN)
+    latent = prior_latent(model, latest_vintage, n=8)
+    draws = forecast_trajectories(model, latest_vintage, 5, posterior=latent)
     assert draws["draw"].shape == (5,)
     assert np.all((draws["draw"] >= 0) & (draws["draw"] < 8))
