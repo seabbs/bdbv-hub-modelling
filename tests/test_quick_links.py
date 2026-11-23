@@ -115,3 +115,13 @@ def test_quick_links_use_compact_marks(where: str) -> None:
     widths = {int(w) for w in WIDTH.findall(text)}
     assert widths
     assert max(widths) <= 48
+
+
+def test_the_readme_puts_the_badges_after_the_quick_links() -> None:
+    text = (ROOT / "README.md").read_text()
+    intro = text[: text.index("## Quick links")]
+    assert "badge" not in intro
+    status = text.index("## Status")
+    assert text.index("## Quick links") < status
+    table = text[status : text.index("\n## ", status + 1)]
+    assert table.index("<details>") < table.index("| Component |")
