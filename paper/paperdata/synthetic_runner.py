@@ -124,6 +124,7 @@ COLUMNS: Final = (
 FACTORS: Final = (
     "window",
     "gt_family",
+    "incubation_family",
     "trajectory",
     "delay_family",
     "delay_form",

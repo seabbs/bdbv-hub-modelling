@@ -44,7 +44,8 @@ synthetic:
   # Draws per forecast of each model on the held-out simulations.
   samples: 1000
   # Example simulations for the SI figure (`paperfigs.sim_examples`),
-  # from the development round, each `<seed>-<n>` with its label.
+  # from the workflow's validation round (`rounds_dir`), each `<seed>-<n>`
+  # with its label.
   examples:
     picks:
       - [33325-0008, Multi-wave over 53 weeks]
