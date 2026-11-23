@@ -59,20 +59,24 @@ def test_a_page_with_no_runs_says_so(tmp_path):
 
 
 def test_a_server_error_is_logged_not_sent(tmp_path, monkeypatch):
+    # Requests read the last build (#778), so a failing build no longer
+    # reaches a request; an error while serving one still must not leak.
     ctx = _machine(tmp_path)
+    cls = dashboard.handler(ctx, dashboard.Pages(ctx))
 
-    def boom(_ctx):
+    def boom(_self, _have):
         raise RuntimeError("secret detail")
 
-    monkeypatch.setattr(dashboard.page, "build", boom)
+    monkeypatch.setattr(cls, "_sections", boom)
     err = io.StringIO()
     monkeypatch.setattr(sys, "stderr", err)
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx))
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), cls)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         with pytest.raises(urllib.error.HTTPError) as got:
             urllib.request.urlopen(
-                f"http://127.0.0.1:{srv.server_address[1]}/", timeout=30
+                f"http://127.0.0.1:{srv.server_address[1]}/sections.json",
+                timeout=30,
             )
         body = got.value.read().decode()
     finally:
