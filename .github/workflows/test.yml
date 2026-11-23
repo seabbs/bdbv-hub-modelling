@@ -190,6 +190,7 @@ jobs:
           uv run pytest -q tests/model/test_pmfs.py
           tests/model/test_latent_epinowcast.py
           tests/model/test_reporting_delays.py
+          tests/model/test_hub_imputation_delays.py
           tests/model/test_reporting_triangle.py
           tests/model/test_reporting_effects.py
           tests/model/test_reporting_expectation.py

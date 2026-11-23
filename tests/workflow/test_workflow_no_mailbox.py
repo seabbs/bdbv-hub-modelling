@@ -82,8 +82,6 @@ def test_the_shell_say_never_fails(tmp_path):
     "rel",
     [
         "paper/scripts/gather_heldout.sh",
-        "tools/paper_local.sh",
-        "tools/run_target.sh",
     ],
 )
 def test_scripts_report_through_the_opt_in_helper(rel):
@@ -92,10 +90,10 @@ def test_scripts_report_through_the_opt_in_helper(rel):
     assert '>> "$mb"' not in text
 
 
-def test_detached_job_helpers_are_optional_tools():
+def test_detached_job_helpers_are_gone():
     assert not (ROOT / "paper" / "scripts" / "run_target.sh").exists()
     assert not (ROOT / "paper" / "scripts" / "paper_local.sh").exists()
-    assert "optional" in (ROOT / "tools" / "README.md").read_text().lower()
+    assert not (ROOT / "tools").exists()
 
 
 pytest.importorskip("snakemake")

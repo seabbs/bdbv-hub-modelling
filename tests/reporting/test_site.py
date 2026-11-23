@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import inspect
 from pathlib import Path
 
@@ -69,13 +68,8 @@ def test_axis_labels_name_the_site_baseline() -> None:
 def test_comparisons_zones_and_history_use_randomwalknowcast() -> None:
     assert load_comparison_config().baseline == "randomwalknowcast"
     assert zones.ZONE_BASELINE == "randomwalknowcast"
-    spec = importlib.util.spec_from_file_location(
-        "score_history", ROOT / "scripts" / "score_history.py"
-    )
-    assert spec is not None
-    assert spec.loader is not None
-    history = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(history)
+    from nowcasteval import score_history as history
+
     assert history.DEFAULT_BASELINE == "randomwalknowcast"
 
 

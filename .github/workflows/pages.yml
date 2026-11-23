@@ -21,8 +21,6 @@ on:
       - 'results/**'
       - 'scripts/fit-store.sh'
       - 'scripts/results-release.sh'
-      - 'scripts/score_history.py'
-      - 'scripts/check_germany_site.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -41,8 +39,6 @@ on:
       - 'results/**'
       - 'scripts/fit-store.sh'
       - 'scripts/results-release.sh'
-      - 'scripts/score_history.py'
-      - 'scripts/check_germany_site.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -637,7 +633,7 @@ jobs:
             "$p"-scenario-{randomwalk,randomwalknowcast}-{falling,flat,rising}
       # The fine-tuned models' German forecasts, as the checkpoint
       # scorer made them, from the germany-ft-forecasts branch
-      # (scripts/germany_ft_store.py): the newest stored final-run
+      # (`germany-ft-store`): the newest stored final-run
       # (chronos-slots-*) checkpoint, else the one config/finetune.toml
       # pins. Development dates only. `concat-results` below stacks them
       # with the other models, so they are scored on the same cells.
@@ -708,7 +704,7 @@ jobs:
           git fetch -q --filter=blob:none --no-tags origin \
             +gh-pages:refs/remotes/origin/gh-pages \
             || echo "::warning::gh-pages could not be fetched"
-          uv run python scripts/score_history.py --ref origin/gh-pages \
+          uv run score-history --ref origin/gh-pages \
             --docs docs/generated --figures docs/figures \
             --current docs/figures --current-sha "$SHA" \
             --out output/score-history.csv
@@ -774,7 +770,7 @@ jobs:
           done
       # The German page and its data name no held-out nowcast date.
       - name: Check the German page for held-out dates
-        run: uv run python scripts/check_germany_site.py _site
+        run: uv run germany-site-check _site
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: site

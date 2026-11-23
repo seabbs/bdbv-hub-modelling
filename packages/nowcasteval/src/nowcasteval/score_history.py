@@ -5,7 +5,7 @@ The gh-pages branch keeps every deploy. A deploy from main is the commit
 `Deploying to gh-pages from @ <repo>@<sha>`, so each one maps to the
 main commit it was built from. Pull request previews are left out. Each
 deploy's `figures/scoresummary-backtest-<target>.json` holds the
-per-forecast scores the Backtest page summarises. This script summarises
+per-forecast scores the Backtest page summarises. This module summarises
 them as the page's overall view does (as `relative_skill`, over the
 forecasts the baseline also made), by baseline, target week, pool and
 model,
@@ -25,7 +25,7 @@ as reported, which is read as the `latest` target.
 Usage::
 
     git fetch origin gh-pages
-    uv run python scripts/score_history.py [--ref origin/gh-pages]
+    uv run score-history [--ref origin/gh-pages]
         [--out results/score-history.csv]
 
 With `--docs` and `--figures` it writes the Score history page's snippet
@@ -33,7 +33,7 @@ With `--docs` and `--figures` it writes the Score history page's snippet
 by `docs/javascripts/checkschart.js`), as the Pages build does. With
 `--current`, this build's own summaries are the last point. Without the
 branch the snippet says the history is unavailable. It imports pandas
-only, not the package, so the Pages step stays fast.
+only, not the rest of the package, so the Pages step stays fast.
 """
 
 from __future__ import annotations

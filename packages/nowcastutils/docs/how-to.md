@@ -70,4 +70,21 @@ fit = fit_coupling(pit_scores(earlier, levels, reported, rng), "gaussian")
 draws = couple(quantiles, levels, "gaussian", fit, n_samples=500, seed=1)
 ```
 
+`choose_coupling` does both in one step and also chooses the coupling: the gaussian over the earlier forecasts of the latest 14, 28 or 56 days, the Schaake shuffle on the series' own history, or comonotone draws, by the energy score of each one's draws on the earlier forecasts.
+Its result is a `fit` that `couple` takes.
+
+```python
+from nowcastutils.trajectories import choose_coupling
+
+earlier = np.repeat(quantiles[None], 12, axis=0)
+reported = earlier[..., 1] + rng.normal(0, 1, (12, 2, 3))
+history = rng.poisson(5.0, (2, 40)).astype(float)
+starts = np.arange(12) + 20
+days = 7 * np.arange(12)
+fit = choose_coupling(
+    earlier, levels, reported, days, 84, history, starts, n_samples=500, seed=1
+)
+draws = couple(quantiles, levels, fit["method"], fit, n_samples=500, seed=1)
+```
+
 Next: [Reference](reference.md).

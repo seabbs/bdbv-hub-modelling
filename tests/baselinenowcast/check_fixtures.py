@@ -10,7 +10,8 @@ fails too.
 
 Usage::
 
-    python3 scripts/check_fixtures.py tests/baselinenowcast/fixtures
+    python3 tests/baselinenowcast/check_fixtures.py \
+        tests/baselinenowcast/fixtures
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from flowlib.dashboard import mirror, page, runs
+from flowlib.dashboard import page, runs, sources
 
 LINE = "2026-11-16 16:{m:02d}:00 [train] step {s}: loss {l}, held-out (x) {h}"
 
@@ -123,9 +123,9 @@ def _machine(tmp_path):
             )
     box = tmp_path / "box.md"
     box.write_text("2026-11-16 16:00 x: slots n250 published\nother\n")
-    rs = runs.load_runs(
-        [], f"mine={run},label=my run,prefix=slots-,colour=#123456", []
-    )
+    rs = [
+        runs.make_run("mine", run, label="my run", colour="#123456", live=True)
+    ]
     refs = runs.load_references(
         [
             {
@@ -140,10 +140,7 @@ def _machine(tmp_path):
     return page.Context(
         runs=rs,
         references=refs,
-        source=mirror.Source(
-            {"REMOTE": "", "SCORE_CACHE": str(tmp_path / "scores")},
-            tmp_path / "m",
-        ),
+        source=sources.Sources({"SCORE_CACHE": str(tmp_path / "scores")}),
         rule="R",
         outbreaks=8000,
         learning_rate=1e-5,
@@ -230,8 +227,7 @@ def test_sections_are_the_page_s_parts(tmp_path):
 
 def test_checkpoint_sizes_also_come_from_the_score_table(tmp_path):
     ctx = _machine(tmp_path)
-    # A run known only by its release prefix, sized in the score table.
-    ctx.runs = list(ctx.runs) + list(runs.load_runs([], "other=other-ft-", []))
+    # A checkpoint with no saved settings, sized in the score table.
     sizes = page.checkpoint_sizes(
         ctx,
         {r.key: {"ck": page._checkpoints(r)} for r in ctx.runs},

@@ -12,10 +12,8 @@ CONFIG = {
         "learning_rate": 1e-5,
         "prefixes": [250, 500, 8400],
     },
+    "runs": {"runa": {}, "noslots": {}},
     "dashboard": {
-        "runs": [
-            {"key": "realdata", "source": "realdata-ft-", "colour": "#222"}
-        ],
         "references": [
             {
                 "key": "rw",
@@ -26,7 +24,6 @@ CONFIG = {
         ],
         "rule": "R",
         "mail_filter": "slots|ckpt",
-        "mirror": "output/dashboard/mirror",
         "datasets": [
             {
                 "key": "germany",
@@ -39,16 +36,52 @@ CONFIG = {
 }
 
 
-def test_runs_come_from_all_three_layers(tmp_path):
+def _workflow(tmp_path):
+    """The config, and this machine's settings."""
+    local = {"ROOT": str(tmp_path), "SCORE_CACHE": "/x", "MAILBOX": ""}
+    return CONFIG, local
+
+
+def test_runs_come_from_the_workflow_runs(tmp_path):
+    cfg, local = _workflow(tmp_path)
+    ctx = context.build(cfg, local)
+    assert [r.key for r in ctx.runs] == ["runa", "noslots"]
+    assert ctx.runs[0].folder == tmp_path / "runs" / "runa"
+    assert next(r for r in ctx.runs if r.live).key == "runa"
+
+
+def test_a_run_is_picked_by_name(tmp_path):
+    cfg, local = _workflow(tmp_path)
+    ctx = context.build(cfg, local, runs=["noslots"])
+    assert [r.key for r in ctx.runs] == ["noslots"]
+    assert ctx.runs[0].live
+
+
+def test_an_unknown_run_name_is_an_error(tmp_path):
+    cfg, local = _workflow(tmp_path)
+    with pytest.raises(SystemExit, match="runa, noslots"):
+        context.build(cfg, local, runs=["other"])
+
+
+def test_no_local_file_changes_the_dashboard(tmp_path):
+    cfg, local = _workflow(tmp_path)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "dashboard.local.yaml").write_text(
+        "rule: other\nruns: [{key: x, source: x-ft-}]\n"
+    )
+    path = tmp_path / "config" / "dashboard.local.yaml"
+    ctx = context.build(cfg, {**local, "DASHBOARD_CONFIG": str(path)})
+    assert ctx.rule == "R"
+    assert [r.key for r in ctx.runs] == ["runa", "noslots"]
+
+
+def test_the_machine_gives_the_scores_and_mailbox(tmp_path):
     local = {
-        "DASHBOARD_RUNS": f"slots={tmp_path},live",
-        "REMOTE": "",
+        "ROOT": str(tmp_path),
         "SCORE_CACHE": str(tmp_path / "s"),
         "MAILBOX": str(tmp_path / "m"),
     }
-    ctx = context.build(CONFIG, local, runs=["extra=x-ft-"], refs=[])
-    assert [r.key for r in ctx.runs] == ["realdata", "slots", "extra"]
-    assert next(r for r in ctx.runs if r.live).key == "slots"
+    ctx = context.build(CONFIG, local)
     assert [r.key for r in ctx.references] == ["rw"]
     assert ctx.rule == "R"
     assert ctx.outbreaks == 8400
@@ -56,32 +89,15 @@ def test_runs_come_from_all_three_layers(tmp_path):
     assert (
         ctx.source.scores == tmp_path / "s" / "tables" / "checkpoint-scores.csv"
     )
+    assert ctx.source.dataset("germany") == tmp_path / "s" / "germany"
     assert ctx.mailbox == tmp_path / "m"
 
 
-def test_a_remote_machine_reads_a_mirror(tmp_path):
-    local = {
-        "DASHBOARD_RUNS": "",
-        "REMOTE": "h",
-        "REMOTE_ROOT": "r",
-        "SCORE_CACHE": "/x",
-        "MAILBOX": "",
-    }
-    ctx = context.build(CONFIG, local, runs=[], refs=[], root=tmp_path)
-    assert ctx.source.root == tmp_path / "output/dashboard/mirror"
-    assert ctx.mailbox is None
-
-
-def test_no_runs_at_all_is_an_error():
-    cfg = {**CONFIG, "dashboard": {**CONFIG["dashboard"], "runs": []}}
-    local = {
-        "DASHBOARD_RUNS": "",
-        "REMOTE": "",
-        "SCORE_CACHE": "/x",
-        "MAILBOX": "",
-    }
+def test_no_runs_at_all_is_an_error(tmp_path):
+    cfg = {**CONFIG, "runs": {}}
+    local = {"ROOT": str(tmp_path), "SCORE_CACHE": "/x", "MAILBOX": ""}
     with pytest.raises(SystemExit, match="no runs"):
-        context.build(cfg, local, runs=[], refs=[])
+        context.build(cfg, local)
 
 
 def test_a_reference_can_take_its_paper_colour(tmp_path):
@@ -101,12 +117,7 @@ def test_a_reference_can_take_its_paper_colour(tmp_path):
             ],
         },
     }
-    local = {
-        "DASHBOARD_RUNS": f"a={tmp_path}",
-        "REMOTE": "",
-        "SCORE_CACHE": "/x",
-        "MAILBOX": "",
-    }
+    local = {"ROOT": str(tmp_path), "SCORE_CACHE": "/x", "MAILBOX": ""}
     ctx = context.build(cfg, local)
     assert ctx.references[0].colour == paperstyle.model_colour(
         "randomwalknowcast"
@@ -123,7 +134,6 @@ def test_runs_and_references_take_the_shared_display_names(tmp_path):
         **CONFIG,
         "dashboard": {
             **CONFIG["dashboard"],
-            "runs": [],
             "references": [
                 {
                     "key": "rw",
@@ -133,12 +143,7 @@ def test_runs_and_references_take_the_shared_display_names(tmp_path):
             ],
         },
     }
-    local = {
-        "DASHBOARD_RUNS": f"a={tmp_path}",
-        "REMOTE": "",
-        "SCORE_CACHE": "/x",
-        "MAILBOX": "",
-    }
+    local = {"ROOT": str(tmp_path), "SCORE_CACHE": "/x", "MAILBOX": ""}
     ctx = context.build(cfg, local)
     assert ctx.references[0].label == "Random walk nowcast"
     # A run with no label of its own is the fine-tuned model.
@@ -178,7 +183,7 @@ def test_runs_take_the_shared_name_and_colour_whatever_their_label(tmp_path):
     several = context.named_runs(
         [
             runs.make_run("a", str(old), label="grid r5"),
-            runs.make_run("slots", "slots-ft-"),
+            runs.make_run("slots", None),
             runs.make_run("r6", "/y", label="grid r6 (live)", live=True),
         ]
     )
@@ -201,24 +206,3 @@ def test_references_take_their_line_style_from_the_shared_map():
     assert paperstyle.model_dash("fm_chronos_daily_ragged") == "dotted"
     assert paperstyle.model_dash("fm_chronos_daily_complete") == "dashed"
     assert paperstyle.model_dash("fm_chronos_daily_ragged_ft") == "solid"
-
-
-def test_the_workflow_s_runs_show_with_no_other_setting(tmp_path):
-    # Each run in workflow/config.yaml's `runs` is shown from its folder,
-    # <ROOT>/runs/<name>, with nothing on the command line.
-    (tmp_path / "runs" / "runa").mkdir(parents=True)
-    cfg = {
-        **CONFIG,
-        "runs": {"runa": {}},
-        "dashboard": {**CONFIG["dashboard"], "runs": []},
-    }
-    local = {
-        "ROOT": str(tmp_path),
-        "DASHBOARD_RUNS": "",
-        "REMOTE": "",
-        "SCORE_CACHE": "/x",
-        "MAILBOX": "",
-    }
-    ctx = context.build(cfg, local, runs=[], refs=[])
-    assert [r.key for r in ctx.runs] == ["runa"]
-    assert ctx.runs[0].folder == tmp_path / "runs" / "runa"

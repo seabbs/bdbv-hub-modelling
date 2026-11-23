@@ -188,7 +188,10 @@ def test_every_run_is_in_the_level_and_lora_panels(tmp_path):
             )
         )
         folders[key] = folder
-    rs = runs.load_runs([], f"r5={folders['r5']};r6={folders['r6']},live", [])
+    rs = [
+        runs.make_run("r5", folders["r5"]),
+        runs.make_run("r6", folders["r6"], live=True),
+    ]
     out = level_loss_lora.section(rs)
     assert "leaf (r5)" in out
     assert "leaf (r6)" in out

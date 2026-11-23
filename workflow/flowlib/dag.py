@@ -129,61 +129,55 @@ def rule_state(counts: Mapping[str, int]) -> str:
     return "pending"
 
 
-def _label(text: str) -> str:
-    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
-    return escaped.replace("\n", "\\n")
+def group_wildcards(graph: Mapping) -> dict[str, dict[str, str]]:
+    """Return the wildcards each job is grouped and labelled by.
+
+    Its own (those its label shows) and each of its dependencies' that
+    has one value among them, so a job that gathers many (`all`) shows
+    none and one that reads one input of each (segment n<N>) shows it.
+    """
+    got = {}
+    for n, wildcards in _upstream(graph).items():
+        keys = [k for k, _ in wildcards]
+        own = dict(graph["nodes"][n]["wildcards"])
+        single = {k: v for k, v in wildcards if keys.count(k) == 1}
+        got[n] = dict(sorted({**single, **own}.items()))
+    return got
 
 
-def dot(graph: Mapping, fill: Mapping[str, str], labels: Mapping) -> str:
-    """Return a graph as dot, each node filled by its state."""
-    lines = [
-        "digraph dag {",
-        "  graph[bgcolor=transparent, rankdir=LR];",
-        '  node[shape=box, style="rounded,filled", fontname=Arial,'
-        " fontsize=10];",
-        "  edge[color=grey];",
-    ]
-    for n in graph["nodes"]:
-        lines.append(
-            f'  {n}[label="{_label(labels[n])}",'
-            f' fillcolor="{COLOURS[fill[n]]}", tooltip="{fill[n]}"];'
-        )
-    lines += [f"  {u} -> {v};" for u, v in graph["edges"]]
-    return "\n".join([*lines, "}"])
+def navigable(built: Mapping, seen: Iterable[Mapping]) -> dict:
+    """Return the page's data: the rule graph and each rule's jobs.
 
-
-def views(built: Mapping, seen: Iterable[Mapping]) -> dict:
-    """Return a target's rule graph and job DAG as coloured dot.
-
-    With each state's job count.
+    Each rule has its jobs' count by state and its state
+    (`rule_state`); each job its rule, wildcards (`group_wildcards`)
+    and state; the edges join rules, from the one made first.
     """
     jobs, rules = built["jobs"], built["rules"]
     job_states = states(jobs, seen)
     counts = rule_states(jobs, job_states)
-    rule_fill = {
-        n: rule_state(counts.get(node["rule"], {}))
-        for n, node in rules["nodes"].items()
-    }
-    rule_labels = {
-        n: "{}\n{} of {}".format(
-            node["rule"],
-            counts.get(node["rule"], {}).get("done", 0),
-            sum(counts.get(node["rule"], {}).values()),
-        )
-        for n, node in rules["nodes"].items()
-    }
-    job_labels = {
-        n: "\n".join(
-            [node["rule"], *(f"{k}: {v}" for k, v in node["wildcards"].items())]
-        )
-        for n, node in jobs["nodes"].items()
-    }
+    wildcards = group_wildcards(jobs)
     totals = dict.fromkeys(STATES, 0)
     for state in job_states.values():
         totals[state] += 1
     return {
-        "rules": dot(rules, rule_fill, rule_labels),
-        "jobs": dot(jobs, job_states, job_labels),
+        "rules": [
+            {
+                "id": n,
+                "rule": node["rule"],
+                "counts": counts.get(node["rule"], dict.fromkeys(STATES, 0)),
+                "state": rule_state(counts.get(node["rule"], {})),
+            }
+            for n, node in rules["nodes"].items()
+        ],
+        "edges": rules["edges"],
+        "jobs": [
+            {
+                "rule": node["rule"],
+                "wildcards": wildcards[n],
+                "state": job_states[n],
+            }
+            for n, node in jobs["nodes"].items()
+        ],
         "totals": totals,
     }
 

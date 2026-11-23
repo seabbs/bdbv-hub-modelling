@@ -3,7 +3,7 @@
 # E1 takes the chain ladder ratio of sums over the cells observed in
 # both releases of a pair and skips the others. Run from the repo root:
 #
-#   Rscript scripts/snapshot_fixtures.R
+#   Rscript tests/baselinenowcast/snapshot_fixtures.R
 #
 # Case recon: a right-truncated daily triangle. With a release on every
 # day and every denominator above 0, E1 reduces to baselinenowcast

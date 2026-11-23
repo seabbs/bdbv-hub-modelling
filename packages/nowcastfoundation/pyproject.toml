@@ -22,6 +22,11 @@ dependencies = [
   "nowcastrenewal[model]",
 ]
 
+[project.scripts]
+finetune-stream = "nowcastfoundation.finetune.stream:main"
+finetune-verify = "nowcastfoundation.finetune.verify:main"
+sim-qc = "nowcastfoundation.finetune.qc:main"
+
 [tool.uv.sources]
 nowcastutils = { workspace = true }
 nowcasteval = { workspace = true }

@@ -5,7 +5,7 @@ The Pages build never runs `STORED_MODELS` on the German benchmark. The
 checkpoint scorer (`scripts/checkpoint_scores.py germany` on the
 `checkpoint-scoring` branch) already nowcasts every development date
 with each published checkpoint, by `germany_forecasts` and `with_truth`
-as `bdbvhubrenewal germany-backtest` does. `scripts/germany_ft_store.py`
+as `bdbvhubrenewal germany-backtest` does. `germany-ft-store` (`ft_store`)
 writes a checkpoint's forecasts from its cache to the `STORE_BRANCH`
 branch, one directory per release tag (`write_stored`), and the Pages
 build loads the one `choose_checkpoint` picks (`bdbvhubrenewal

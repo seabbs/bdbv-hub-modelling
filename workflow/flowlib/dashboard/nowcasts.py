@@ -34,7 +34,7 @@ from nowcasteval.scoring import wis_quantile
 
 from .paperstyle import WIS_PARTS
 from .rows import num, sources
-from .runs import Classifier, Reference, Run, shade, split_label
+from .runs import Classifier, Reference, Run, split_label
 
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 """The cached quantile levels."""
@@ -213,10 +213,82 @@ def wis_split(
     }
 
 
+Range = tuple[int | None, int | None]
+"""Days from the nowcast date, first and last; None is open."""
+
+
+ROOT = Path(__file__).parents[3]
+
+
+def horizons(
+    dataset: Mapping[str, Any],
+) -> tuple[Range | None, dict[str, Range], str | None]:
+    """Return a dataset's horizon days, control choices and default.
+
+    From its `horizons`: `days`, a German config (TOML, its `horizons`:
+    the nowcast to `forecast_days` ahead) or [first, last]; `ranges`,
+    name: [first, last], None for the end of `days`; and `default`. With
+    none, every day is shown and there is no control.
+    """
+    spec = dataset.get("horizons") or {}
+    if not spec:
+        return None, {}, None
+    raw = spec.get("days")
+    days: Range | None
+    if isinstance(raw, str):
+        from nowcastgermany.evaluation import load_germany_config
+
+        hs = load_germany_config(ROOT / raw).horizons
+        days = (min(hs), max(hs))
+    elif raw:
+        days = (int(raw[0]), int(raw[1]))
+    else:
+        days = None
+    lo, hi = days or (None, None)
+    ranges = {
+        str(name): (
+            lo if span[0] is None else int(span[0]),
+            hi if span[1] is None else int(span[1]),
+        )
+        for name, span in (spec.get("ranges") or {}).items()
+    }
+    return days, ranges, spec.get("default")
+
+
+def _within(day: str, origin: str | None, span: Range | None) -> bool:
+    """Return whether target date `day` is in `span` days of `origin`."""
+    if span is None or origin is None:
+        return True
+    d = (pd.Timestamp(day) - pd.Timestamp(origin)).days
+    lo, hi = span
+    return (lo is None or d >= lo) and (hi is None or d <= hi)
+
+
+def _scored(
+    scored: Sequence[tuple[Sequence[float], float, float | None]],
+    outers: Sequence[Sequence[float] | None],
+) -> dict[str, Any]:
+    """Return the stats, mean score and, for WIS, its parts of forecasts."""
+    out: dict[str, Any] = {
+        "stats": stats([(q, y) for q, y, _ in scored], outers),
+        "score": round(
+            sum(s if s is not None else wis(q, y) for q, y, s in scored)
+            / len(scored),
+            2,
+        ),
+    }
+    # A file's own score may not be WIS, so it has no parts.
+    if all(s is None for _, _, s in scored):
+        out["parts"] = wis_parts([(q, y) for q, y, _ in scored])
+    return out
+
+
 def digest(
     rows: Mapping[tuple[str, str, str, str], Mapping[str, Mapping[str, Any]]],
     picks: Sequence[int],
     origin: str | None = None,
+    days: Range | None = None,
+    ranges: Mapping[str, Range] | None = None,
 ) -> list[tuple]:
     """Return one file's series, stats, score, truth and latest by key.
 
@@ -224,10 +296,17 @@ def digest(
     file only assembles these. Where every date has the `OUTER`
     quantiles, the outermost band drawn is 90%, from them, in place of
     the 2.5% and 97.5% quantiles (`series["band"]`), else 95%.
+
+    Target dates outside `days` of the nowcast date `origin` are left
+    out, so every model is drawn and scored over the same days. Each of
+    `ranges` (name: days) gets its own stats, score and parts
+    (`entry["ranges"]`), and each day's WIS is kept by its days from
+    `origin` (`entry["byday"]`), for the page's horizon control.
     """
     out = []
-    for (loc, sid, src, tgt), dates in rows.items():
-        times, drawn, scored, outers, days = [], [], [], [], []
+    for (loc, sid, src, tgt), all_dates in rows.items():
+        dates = {d: e for d, e in all_dates.items() if _within(d, origin, days)}
+        times, drawn, scored, outers, days_ = [], [], [], [], []
         ninety = all(all(k in dates[d]["q"] for k in OUTER) for d in dates)
         seen: dict[str, tuple[str, float]] = {}
         last: dict[str, float] = {}
@@ -244,7 +323,7 @@ def digest(
             drawn.append([round(band[i], 1) for i in picks])
             if e["y"] is not None:
                 scored.append((seven, e["y"], e["s"]))
-                days.append(day)
+                days_.append(day)
                 outers.append(outer)
                 seen[day] = (e["v"], e["y"])
             if e["l"] is not None:
@@ -255,25 +334,34 @@ def digest(
                 "series": {"t": times, "q": drawn, "band": 90 if ninety else 95}
             }
             if scored:
-                entry["stats"] = stats([(q, y) for q, y, _ in scored], outers)
-                entry["score"] = round(
-                    sum(s if s is not None else wis(q, y) for q, y, s in scored)
-                    / len(scored),
-                    2,
-                )
-                # A file's own score may not be WIS, so it has no parts.
-                if all(s is None for _, _, s in scored):
-                    entry["parts"] = wis_parts([(q, y) for q, y, _ in scored])
-                    if origin is not None:
-                        entry["split"] = wis_split(
-                            [
-                                (d, q, y)
-                                for d, (q, y, _) in zip(
-                                    days, scored, strict=True
-                                )
-                            ],
-                            origin,
+                entry |= _scored(scored, outers)
+                by_range = {}
+                for name, span in (ranges or {}).items():
+                    keep = [
+                        i
+                        for i, d in enumerate(days_)
+                        if _within(d, origin, span)
+                    ]
+                    if keep:
+                        by_range[name] = _scored(
+                            [scored[i] for i in keep], [outers[i] for i in keep]
                         )
+                if by_range:
+                    entry["ranges"] = by_range
+                if all(s is None for _, _, s in scored) and origin is not None:
+                    o = pd.Timestamp(origin)
+                    entry["byday"] = {
+                        str((pd.Timestamp(d) - o).days): round(wis(q, y), 4)
+                        for d, (q, y, _) in zip(days_, scored, strict=True)
+                    }
+                if "parts" in entry and origin is not None:
+                    entry["split"] = wis_split(
+                        [
+                            (d, q, y)
+                            for d, (q, y, _) in zip(days_, scored, strict=True)
+                        ],
+                        origin,
+                    )
         out.append((loc, sid, src, tgt, entry, seen, last))
     return out
 
@@ -318,8 +406,13 @@ def build(
     order: Sequence[tuple[str, str]] = (),
     sources: Iterable[str] | None = None,
     unit: str | None = None,
+    days: Range | None = None,
+    ranges: Mapping[str, Range] | None = None,
 ) -> dict[str, Any] | None:
     """Return every location's nowcasts by series, target, source, origin.
+
+    `days` and `ranges` are the horizon's days every model is shown over
+    and the horizon control's choices (`digest`).
 
     `sources` are the model inputs shown (a dataset's `sources`, such as
     Germany's daily only); None shows every input.
@@ -342,6 +435,8 @@ def build(
     score: dict = {}
     parts: dict = {}
     split: dict = {}
+    by_range: dict = {}
+    byday: dict = {}
     stat: dict = {}
     truth: dict = {}
     latest: dict = {}
@@ -360,10 +455,19 @@ def build(
                 st = path.stat()
             except OSError:
                 continue
-            key = (st.st_mtime_ns, st.st_size, tuple(picks))
+            key = (
+                st.st_mtime_ns,
+                st.st_size,
+                tuple(picks),
+                days,
+                tuple(sorted((ranges or {}).items())),
+            )
             if str(path) not in files or files[str(path)][0] != key:
                 rows = read_file(path, name, which)
-                files[str(path)] = (key, digest(rows, picks, origin))
+                files[str(path)] = (
+                    key,
+                    digest(rows, picks, origin, days, ranges),
+                )
             for loc, sid, src, tgt, entry, seen, last in files[str(path)][1]:
                 if keep is not None and src not in keep:
                     continue
@@ -385,6 +489,11 @@ def build(
                         _put(parts, keys, entry["parts"])
                     if "split" in entry:
                         _put(split, keys, entry["split"])
+                    if "byday" in entry:
+                        _put(byday, keys, entry["byday"])
+                    for span, part in entry.get("ranges", {}).items():
+                        for k, v in part.items():
+                            _put(by_range, [loc, span, k, *keys[1:]], v)
 
     def rank(loc: str) -> tuple[int, str]:
         hit = (i for i, (_, rx) in enumerate(order) if re.match(rx, loc))
@@ -404,6 +513,8 @@ def build(
         "score": score,
         "parts": parts,
         "split": split,
+        "ranges": by_range,
+        "byday": byday,
         "stats": stat,
         "truth": truth,
         "latest": latest,
@@ -445,6 +556,8 @@ def cached_build(
     order: Sequence[tuple[str, str]] = (),
     sources: Iterable[str] | None = None,
     unit: str | None = None,
+    days: Range | None = None,
+    ranges: Mapping[str, Range] | None = None,
 ) -> dict[str, Any] | None:
     """Return `build`'s result, reused while no file of the folders changes."""
     cache = Path(cache)
@@ -453,6 +566,8 @@ def cached_build(
         _signature(cache, run_list, unit) if cache.is_dir() else None,
         tuple(levels),
         shown,
+        days,
+        tuple(sorted((ranges or {}).items())),
     )
     if store.get("sig") != sig or "built" not in store:
         store["built"] = build(
@@ -465,6 +580,8 @@ def cached_build(
             order,
             shown,
             unit,
+            days,
+            ranges,
         )
         store["sig"] = sig
     return store["built"]
@@ -486,6 +603,8 @@ def location(built: Mapping[str, Any] | None, loc: str) -> dict[str, Any]:
         "score": built["score"].get(loc, {}),
         "parts": built.get("parts", {}).get(loc, {}),
         "split": built.get("split", {}).get(loc, {}),
+        "ranges": built.get("ranges", {}).get(loc, {}),
+        "byday": built.get("byday", {}).get(loc, {}),
         "stats": built["stats"].get(loc, {}),
         "truth": line(built["truth"].get(loc, {}), lambda v: v[1]),
         "latest": line(built["latest"].get(loc, {})),
@@ -502,8 +621,8 @@ def meta(
     """Return each series' label, run, size and colour, in page order.
 
     References first, in their configured order, then other reference
-    models by name, then each run's checkpoints by size, shaded light to
-    dark when the run has a hue.
+    models by name, then each run's checkpoints by size, in the run's
+    colour.
     """
     which = Classifier(run_list, references, excluded)
     refs = {r.key: r for r in references}
@@ -535,7 +654,7 @@ def meta(
             run = which.run_of(built["folders"].get(s, s))
             if run is None:
                 continue
-            n = sizes.get(s) or by_key[run].n.get(s) or 0
+            n = sizes.get(s) or 0
             label = (
                 f"{by_key[run].label} n{n} {s}"
                 if n
@@ -551,8 +670,7 @@ def meta(
             else (1, run_rank[m["run"]], m["n"], m["id"])
         )
     )
-    for run in run_list:
-        group = [m for m in out if m["run"] == run.key]
-        for i, m in enumerate(group):
-            m["color"] = shade(run, i, len(group))
+    for m in out:
+        if m["run"] != "ref":
+            m["color"] = by_key[m["run"]].colour
     return out

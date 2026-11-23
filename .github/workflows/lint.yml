@@ -9,7 +9,7 @@ on:
       - 'tests/**'
       - 'workflow/**'
       - 'paper/workflow/**'
-      - 'scripts/**'
+      - 'docs/hooks/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/lint.yml'
@@ -20,7 +20,7 @@ on:
       - 'tests/**'
       - 'workflow/**'
       - 'paper/workflow/**'
-      - 'scripts/**'
+      - 'docs/hooks/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/lint.yml'
@@ -45,8 +45,8 @@ jobs:
       - run: uv sync --frozen
       - name: Ruff and mypy
         run: |
-          uv run ruff check packages tests workflow scripts
-          uv run ruff format --check packages tests workflow scripts
+          uv run ruff check packages tests workflow docs/hooks
+          uv run ruff format --check packages tests workflow docs/hooks
           uv run mypy packages/*/src
       # The packages import one way (pyproject.toml's import-linter
       # contract).

@@ -57,7 +57,6 @@ __all__ = [
     "ZONE_VARIANTS",
     "ZoneRenewalFit",
     "ZoneRenewalModel",
-    "at_least_published",
     "sum_zones",
     "task_zones",
     "zone_target",
@@ -166,38 +165,6 @@ def _zone_walk_task(task: ForecastTask) -> ForecastTask:
         else pd.concat([task.daily_history, daily], ignore_index=True)
     )
     return zone_task(task, counts, task_zones(task), history)
-
-
-def at_least_published(
-    samples: pd.DataFrame, target: pd.DataFrame
-) -> pd.DataFrame:
-    """Raise each zone sample to the count its release already holds.
-
-    A week's final count can only add to what is published, so a sample
-    below it, which the imputed stream's draw can give in a zone with
-    few cases, takes the published count. Province samples summed from
-    the zones then hold the floor too, as a split of the provinces did.
-
-    Parameters
-    ----------
-    samples : pandas.DataFrame
-        Zone samples with `location`, `target_end_date` and `value`.
-    target : pandas.DataFrame
-        The zones' published weekly counts (`zone_target`).
-
-    Returns
-    -------
-    pandas.DataFrame
-        `samples` with each value at least its published `total`.
-    """
-    keys = ["location", "target_end_date"]
-    published = (
-        target.set_index(keys)["total"]
-        .reindex(pd.MultiIndex.from_frame(samples[keys].astype(str)))
-        .fillna(0)
-        .to_numpy()
-    )
-    return samples.assign(value=np.maximum(samples["value"], published))
 
 
 def sum_zones(samples: pd.DataFrame) -> pd.DataFrame:
@@ -598,9 +565,7 @@ class ZoneRenewalModel(RenewalModel):
             runs = self._run_all({"all": zt})
             zones.append(samples_table(zt, runs["all"].data, runs["all"].draws))
             later.extend(_as_reported(zt, runs["all"]))
-        zone_samples = at_least_published(
-            pd.concat(zones, ignore_index=True), zone_target(task)
-        )
+        zone_samples = pd.concat(zones, ignore_index=True)
         # The samples hold the zones too, so the forecast, the store and
         # the scores read the zone fit's own zones, not a split
         # (`forecasters.zones.with_zones` leaves them as they are).

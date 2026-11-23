@@ -107,7 +107,7 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
         {NAMES["down"]: [[1.0]]},
     )
     (d / "settings.json").write_text(json.dumps({"steps": 10}))
-    rs = runs.load_runs([], f"r={folder},live;x=x-", [])
+    rs = [runs.make_run("r", folder, live=True), runs.make_run("x", None)]
     got = bias.payload(rs, live_step=None)
     assert [r["key"] for r in got["runs"]] == ["r"]
     # Only the relations a run holds are listed; colours from the shared
@@ -155,12 +155,11 @@ def test_each_run_s_bias_is_its_own_logged_values_over_simulations(tmp_path):
     (slots / "settings.json").write_text(
         json.dumps({"steps": 900, "n_outbreaks": 250})
     )
-    rs = runs.load_runs(
-        [],
-        f"r5={tmp_path / 'r5'};r6={tmp_path / 'r6'},live;"
-        f"slots={tmp_path / 'slots'}",
-        [],
-    )
+    rs = [
+        runs.make_run("r5", tmp_path / "r5"),
+        runs.make_run("r6", tmp_path / "r6", live=True),
+        runs.make_run("slots", tmp_path / "slots"),
+    ]
     ctx = page.Context(
         runs=rs,
         references=[],
@@ -206,7 +205,7 @@ def test_each_run_shows_the_relations_it_logged(tmp_path):
         (tmp_path / key / "train" / "history.json").write_text(
             json.dumps([{"step": 100, "bias": rels}])
         )
-    rs = runs.load_runs([], f"a={tmp_path / 'a'},live;b={tmp_path / 'b'}", [])
+    rs = runs.load_runs([("a", tmp_path / "a"), ("b", tmp_path / "b")])
     got = bias.payload(rs, None)
     held = {
         r["key"]: {k for k, v in r["pts"].items() if v} for r in got["runs"]

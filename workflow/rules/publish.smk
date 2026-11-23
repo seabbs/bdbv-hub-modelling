@@ -1,7 +1,7 @@
 # Publishing checkpoints.
 #
 # `verify_checkpoint` checks that a checkpoint's hash recomputes from its
-# commit (scripts/finetune_verify.py); `publish_checkpoint` releases a
+# commit (`finetune-verify`); `publish_checkpoint` releases a
 # verified one (workflow/scripts/publish_checkpoint.py). Publishing writes
 # GitHub releases, so it is the opt-in target `publish`, never part of
 # `finetune` or `all`.
@@ -21,7 +21,7 @@ rule verify_checkpoint:
     params:
         where=lambda wc, input: Path(input.settings).parent,
     shell:
-        "uv run python scripts/finetune_verify.py {params.where} > {output} 2>{log}"
+        "uv run finetune-verify {params.where} > {output} 2>{log}"
 
 
 rule publish_checkpoint:
