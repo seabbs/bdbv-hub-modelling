@@ -137,11 +137,11 @@ def test_kept_share_matches_the_direct_lookup():
 
 @pytest.mark.slow
 def test_full_model_density_and_gradient_are_unchanged(
-    sim_vintage, monkeypatch
+    latest_vintage, monkeypatch
 ):
     """Fast paths against the daily blocks and direct lookup, 4 draws."""
     rng = np.random.default_rng(8)
-    data = dataclasses.replace(sim_vintage, release_pairs=_pairs(rng, 30))
+    data = dataclasses.replace(latest_vintage, release_pairs=_pairs(rng, 30))
     calls = []
 
     def spy(*args, **kwargs):
