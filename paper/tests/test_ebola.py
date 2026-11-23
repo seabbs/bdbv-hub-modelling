@@ -209,5 +209,5 @@ def test_the_store_history_is_written_without_holding_it_whole(
 
     monkeypatch.setattr(ebola, "store_samples", whole)
     path = tmp_path / "fit-store-history.csv.gz"
-    assert ebola.write_store_history(store, "fit-store", path) == 1
+    assert ebola.write_store_history(store, "fit-store", path) == 100
     assert set(ebola.history_samples(path)["value"]) == {5}

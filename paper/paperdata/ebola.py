@@ -31,7 +31,7 @@ from __future__ import annotations
 import gzip
 import json
 import subprocess
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Final
 
@@ -153,14 +153,14 @@ def _git(repo: str | Path, *args: str) -> bytes:
     ).stdout
 
 
-def store_samples(
-    repo: str | Path, ref: str = "origin/fit-store"
-) -> pd.DataFrame:
-    """Read the prospective fits from the fit store's history.
+def _prospective(repo: str | Path, ref: str) -> Iterator[pd.DataFrame]:
+    """Yield the samples of each prospective fit in the store's history.
 
-    Every fit file ever committed to `ref` is read. For each model and
-    origin the earliest good fit is kept, if it was made before the
-    round it forecasts closed.
+    Every fit file ever committed to `ref` is read once for its meta, so
+    only one fit is held at a time. For each model and origin the
+    earliest good fit with real forecasts is chosen, and kept if it was
+    made before the round it forecasts closed. The chosen fits are then
+    read again, one by one.
     """
     log = _git(
         repo,
@@ -178,46 +178,62 @@ def store_samples(
             commit = line.removeprefix("commit ")
         elif line.endswith(".json.gz"):
             added.setdefault(line, commit)
-    first: dict[tuple[str, str], tuple[str, pd.DataFrame]] = {}
-    for path, commit in added.items():
+
+    def real(path: str, commit: str) -> tuple[dict, pd.DataFrame]:
         fit = json.loads(
             gzip.decompress(_git(repo, "show", f"{commit}:{path}"))
         )
-        meta = fit["meta"]
+        table = fit["forecasts"]
+        frame = pd.DataFrame(table["data"], columns=table["columns"])
+        return fit["meta"], frame[frame["kind"] == "real"]
+
+    first: dict[tuple[str, str], tuple[str, str, str, pd.Timestamp]] = {}
+    for path, commit in added.items():
+        meta, frame = real(path, commit)
         if meta["status"] != "ok":
             continue
         key = (meta["model"], meta["origin"])
         if key in first and first[key][0] <= meta["fitted_at"]:
             continue
-        table = fit["forecasts"]
-        frame = pd.DataFrame(table["data"], columns=table["columns"])
-        frame = frame[frame["kind"] == "real"]
         if frame.empty:
             continue
-        first[key] = (meta["fitted_at"], _samples(frame))
-    frames = []
-    for fitted_at, out in first.values():
-        close = round_close(out["origin_date"].iloc[0])
-        if pd.Timestamp(fitted_at) <= close:
-            frames.append(out)
+        origin = pd.Timestamp(frame["reference_date"].iloc[0])
+        first[key] = (meta["fitted_at"], path, commit, origin)
+    for fitted_at, path, commit, origin in first.values():
+        if pd.Timestamp(fitted_at) <= round_close(origin):
+            yield _samples(real(path, commit)[1])
+
+
+def store_samples(
+    repo: str | Path, ref: str = "origin/fit-store"
+) -> pd.DataFrame:
+    """Read the prospective fits from the fit store's history.
+
+    For each model and origin the earliest good fit is kept, if it was
+    made before the round it forecasts closed (`_prospective`).
+    """
+    frames = list(_prospective(repo, ref))
     if not frames:
         return pd.DataFrame(columns=SAMPLE_COLUMNS)
     return pd.concat(frames, ignore_index=True)
 
 
-def write_store_history(
-    repo: str | Path, ref: str, out: str | Path
-) -> pd.DataFrame:
+def write_store_history(repo: str | Path, ref: str, out: str | Path) -> int:
     """Write the fit store's prospective fits (`store_samples`) to `out`.
 
-    The file is what `history_samples` reads, so the paper reads the
-    store's history without the branch.
+    The fits are written one at a time, so the history is never held
+    whole. The file is what `history_samples` reads, so the paper reads
+    the store's history without the branch. Returns the rows written.
     """
-    table = store_samples(repo, ref)
     path = Path(out)
     path.parent.mkdir(parents=True, exist_ok=True)
-    table.to_csv(path, index=False)
-    return table
+    rows = 0
+    with gzip.open(path, "wt", newline="") as f:
+        f.write(",".join(SAMPLE_COLUMNS) + "\n")
+        for frame in _prospective(repo, ref):
+            frame.to_csv(f, header=False, index=False)
+            rows += len(frame)
+    return rows
 
 
 def history_samples(path: str | Path) -> pd.DataFrame:
