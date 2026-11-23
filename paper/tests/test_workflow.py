@@ -320,7 +320,7 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     run = tmp_path / "run"
     # A run outside the workflow's runs folder has no rule for its curve.
     run.mkdir()
-    (run / "heldout-curve.csv").write_text("")
+    (run / "validation-curve.csv").write_text("")
     pending = _snakemake(
         "development",
         "-n",

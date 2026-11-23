@@ -312,11 +312,11 @@ The last 14 German nowcast dates were held out to monitor the loss.
 ### Monitoring fine-tuning
 
 A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (@fig-dashboard).
-It showed the training and held-out loss by source, each checkpoint's scores against `randomwalknowcast` with the zero-shot and complete-only references, and the German nowcasts by checkpoint.
+It showed the training and validation loss by source, each checkpoint's scores against `randomwalknowcast` with the zero-shot and complete-only references, and the German nowcasts by checkpoint.
 Reviewing it led to the complete-only reference in the checkpoint curve (@fig-checkpoint-curve).
 The dashboard was built with the help of a large language model.
 
-![The fine-tuning dashboard on 16 November 2026 at 17:29, with a run at 500 simulations: training and held-out loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
+![The fine-tuning dashboard on 16 November 2026 at 17:29, with a run at 500 simulations: training and validation loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
 
 ### Synthetic data generation
 
@@ -572,39 +572,39 @@ Choices tuned on development data, with their values and the data they were set 
 
 - We compare the final run's checkpoints, fine-tuned on 100, 200, 400, 800, 1,600 and 3,200 simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
-- @fig-finetune-heldout gives the trainer's held-out loss by level, for transparency, not to select a checkpoint.
+- @fig-finetune-validation gives the trainer's validation loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
 - The learning rate falls linearly to zero over the 3,200 simulations, so the earlier checkpoints are taken at 97% (100) to 50% (1,600) of the starting rate, and only the 3,200 checkpoint is annealed.
 
-![The trainer's held-out loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-heldout.png){#fig-finetune-heldout}
+![The trainer's validation loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-validation.png){#fig-finetune-validation}
 
 ![WIS (Germany, on each model's own quantiles) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
 
 ::: {#tbl-checkpoints}
 {{< include build/tables/si/checkpoint-table.md >}}
 
-Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Attention biases for place and parent against none
 
 - We compare the run with attention biases with a run without them.
 - Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
-- @fig-compare-slots shows the trainer's held-out loss and German first-half relative scores of both runs by checkpoint and level.
+- @fig-compare-slots shows the trainer's validation loss and German first-half relative scores of both runs by checkpoint and level.
 - @tbl-slots-summary gives each run's newest checkpoint.
 - The lag-swap test moves whole lag series to another place.
 - A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
 - Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
 - The lag-swap test is not yet scored for this run.
 
-![Attention biases against none: the trainer's held-out loss and German first-half relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
+![Attention biases against none: the trainer's validation loss and German first-half relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
 
 ::: {#tbl-slots-summary}
 {{< include build/tables/si/slots-summary.md >}}
 
-Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Delays against no delays
@@ -614,7 +614,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 - @fig-compare-delays shows both runs by checkpoint.
 - Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
 
-![Delays against no delays: held-out loss by source and German first-half relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
+![Delays against no delays: validation loss by source and German first-half relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
 
 ### Real-data fine-tune against synthetic
 

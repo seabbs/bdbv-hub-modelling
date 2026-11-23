@@ -103,21 +103,21 @@ rule evaluate_checkpoint:
         "> {log} 2>&1"
 
 
-rule heldout_curve:
-    # The run's held-out loss by level at the start and at each
+rule validation_curve:
+    # The run's validation loss by level at the start and at each
     # checkpoint, against simulations trained: the paper's fine-tune
-    # curve (flowlib.evaluations.heldout_curve).
+    # curve (flowlib.evaluations.validation_curve).
     input:
-        heldout_curve_inputs,
+        validation_curve_inputs,
     output:
-        f"{RUN}/heldout-curve.csv",
+        f"{RUN}/validation-curve.csv",
     log:
-        f"{RUN}/logs/heldout-curve.log",
+        f"{RUN}/logs/validation-curve.log",
     localrule: True
     params:
         train=lambda wc: train_dir(wc.run),
         prefixes=lambda wc: RUNS[wc.run].ft["prefixes"],
     run:
-        evaluations.write_heldout_curve(
+        evaluations.write_validation_curve(
             params.train, wildcards.run, params.prefixes, output[0]
         )

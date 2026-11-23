@@ -4,7 +4,7 @@
 The checkpoint scorer lands each checkpoint's scores in
 `evidence/checkpoint-scores.csv` on the `checkpoint-scoring` branch: the
 German development half (WIS), the BDBV release backtest (CRPS) and the
-trainer's held-out loss (`held_out`). The paper and the docs read that
+trainer's validation loss (`held_out`). The paper and the docs read that
 table at the branch head, never a pinned checkpoint, and take each
 study's newest checkpoint of the live run (`run`), labelled as
 preliminary with the number of simulations it was fine-tuned on.
@@ -62,7 +62,7 @@ def tidy(scores: pd.DataFrame) -> pd.DataFrame:
     """Return the shown rows, with one relative score column per scale.
 
     Keeps the case studies' rows of `RULE` and the hub target, and the
-    trainer's held-out loss. `rel` and `rel_log` hold Germany's WIS and
+    trainer's validation loss. `rel` and `rel_log` hold Germany's WIS and
     BDBV's CRPS relative to `randomwalknowcast`.
 
     BDBV rows that reach the scored hub rounds are dropped, with a
@@ -148,7 +148,7 @@ COLUMNS: Final = (
     "German WIS",
     "BDBV CRPS",
     "BDBV log CRPS",
-    "Held-out loss",
+    "Validation loss",
 )
 
 
@@ -157,7 +157,7 @@ def _row(rows: pd.DataFrame, zero_shot: bool = False) -> dict[str, str]:
         "German WIS": _pair(rows, "germany", "rel"),
         "BDBV CRPS": _pair(rows, "ebola", "rel"),
         "BDBV log CRPS": _pair(rows, "ebola", "rel_log"),
-        "Held-out loss": _loss(rows, zero_shot),
+        "Validation loss": _loss(rows, zero_shot),
     }
 
 
@@ -165,7 +165,7 @@ def checkpoint_table(scores: pd.DataFrame, run: str) -> pd.DataFrame:
     """Return zero-shot then each checkpoint of the live run, one row each.
 
     Columns are the national relative scores on development data (daily /
-    weekly model) and the trainer's held-out loss; a checkpoint not yet
+    weekly model) and the trainer's validation loss; a checkpoint not yet
     scored on a study is blank.
     """
     rows = tidy(scores)
@@ -176,8 +176,8 @@ def checkpoint_table(scores: pd.DataFrame, run: str) -> pd.DataFrame:
             **_row(rows.loc[rows["checkpoint"] == "zero-shot"]),
         }
     ]
-    # Zero-shot has no held-out row of its own; each row carries it.
-    out[0]["Held-out loss"] = _loss(live, zero_shot=True)
+    # Zero-shot has no validation row of its own; each row carries it.
+    out[0]["Validation loss"] = _loss(live, zero_shot=True)
     for n in sorted(live["outbreaks"].unique()):
         g = live.loc[live["outbreaks"] == n]
         out.append({"Simulations": f"{int(n):,}", **_row(g)})
@@ -198,7 +198,7 @@ def summary_table(scores: pd.DataFrame, run: str) -> pd.DataFrame:
         "German WIS": "germany",
         "BDBV CRPS": "ebola",
         "BDBV log CRPS": "ebola",
-        "Held-out loss": "held_out",
+        "Validation loss": "held_out",
     }
     cells = {"Simulations": "Newest checkpoint"}
     for name, study in study_of.items():
