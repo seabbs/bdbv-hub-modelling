@@ -145,8 +145,6 @@ evidence:
   checkpoint_scores:
     branch: checkpoint-scoring
     path: evidence/checkpoint-scores.csv
-  # Pending: the scale-floor test on the final run's checkpoints.
-  scale_floor: null
   # The lag-horizon test of the ragged layout.
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
