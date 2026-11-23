@@ -65,9 +65,8 @@ GERMANY_UNIT: Final = "germany-days"
 hub's 29 target days."""
 GERMANY_CHUNK: Final = 5
 """German dates forecast together (`germany_unit`) unless `SCORE_DATES`
-in the environment (local config) says otherwise. Each date has the
-tasks of 7 weekday offsets, so a chunk holds 7 times its dates' tasks:
-small enough for `score.mem_mb`."""
+in the environment (local config) says otherwise. Each date has two
+tasks (states, ages): small enough for `score.mem_mb`."""
 FINAL_OUTBREAKS: Final = 8400
 """The reported model is the live run's final checkpoint."""
 FINAL_GRID: Final = "r5"

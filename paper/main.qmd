@@ -162,8 +162,9 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - Our models see only reports made within 40 days of each reference date, so they forecast the count the truth holds.
 - We score the hub's target, 7-day sums, ending on each day from the nowcast date to 28 days before it.
 - We score only the hub's targets, and the SI adds our models' forecasts up to 4 weeks after the nowcast date.
-- Our models forecast weeks ending on Saturdays, so each nowcast date gives seven sets of forecasts, one for each weekday offset $k$ from 0 to 6.
-- For offset $k$, every date moves forward so that $k$ days before the nowcast date is a Saturday, and back again for scoring.
+- Each nowcast date is forecast once, so every 7-day sum comes from one forecast.
+- Chronos-2 reads each day's 7-day sum from its own rolling-sum series, or sums its daily draws when it sees complete counts.
+- The random walks forecast weeks ending on Saturdays, so they give the sums ending 0, 7, 14, 21 and 28 days before the nowcast date.
 - We score each model on its own quantiles at the hub's seven levels.
 - As @Wolffram2023 did, we replace one team's erroneous values by its nowcast of the day before, and fill another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
 - Chronos-2 gives quantiles directly, which we interpolate linearly to the hub's levels, with no sampling.

@@ -1328,13 +1328,26 @@ class FoundationModel:
                 final, (task.n_samples, *final.shape)
             ).copy()
             steps[:, :, start:] = drawn[:, : len(places)]
-            # The hub's target is weekly: the daily source is summed to it.
-            week_of = np.array(
-                [_step("weekly", t).isoformat() for t in tri.times]
-            )
-            values = np.stack(
-                [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
-            )
+            # The hub's target is weekly: the daily source is summed to
+            # it, the 7 days ending on each target date (its epiweek where
+            # the date is a Saturday).
+            if self.source == "daily":
+                ends = [tri.times.index(w) for w in weeks]
+                values = np.stack(
+                    [
+                        steps[:, :, max(0, e - 6) : e + 1].sum(axis=2)
+                        for e in ends
+                    ],
+                    axis=2,
+                )
+            else:
+                week_of = np.array(
+                    [_step("weekly", t).isoformat() for t in tri.times]
+                )
+                values = np.stack(
+                    [steps[:, :, week_of == w].sum(axis=2) for w in weeks],
+                    axis=2,
+                )
         n, n_loc = task.n_samples, len(places)
         weekly_out = pd.DataFrame(
             {
