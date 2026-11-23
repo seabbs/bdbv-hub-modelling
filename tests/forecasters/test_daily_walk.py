@@ -85,7 +85,7 @@ def _reported_sums(task, k):
 def test_the_7_day_view_gives_every_target_day_from_one_forecast(task, model):
     out = model.forecast(task)
     assert set(out["target_end_date"]) == set(task.target_end_dates)
-    assert set(out["sample"]) == set(range(task.n_samples))
+    assert set(out["sample"]) == set(range(1, task.n_samples + 1))
     assert (out["value"] >= 0).all()
     # National is the sum of the places by sample.
     wide = out.pivot_table(

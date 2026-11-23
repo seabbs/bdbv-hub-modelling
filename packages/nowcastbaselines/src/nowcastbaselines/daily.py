@@ -214,7 +214,7 @@ class DailyWalkNowcast:
             {
                 "location": np.repeat(names, n_s * n_d),
                 "target_end_date": np.tile(ends, n_loc * n_s),
-                "sample": np.tile(np.repeat(np.arange(n_s), n_d), n_loc),
+                "sample": np.tile(np.repeat(np.arange(1, n_s + 1), n_d), n_loc),
                 "value": values.reshape(-1),
             }
         )[list(SAMPLE_COLUMNS)]
