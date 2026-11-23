@@ -109,6 +109,7 @@ def test_a_late_block_keeps_its_counts_and_loses_its_early_lag_cells():
         assert b["release_start_days"] == 40
         # A block cut before its start day has the cut's release alone.
         assert b["first_release"] >= "2026-02-12" or b["releases"] == 1
+        assert b["first_release"] <= b["cut_date"]
         targets = slice(0, b["n_targets"])
         # The counts row holds the whole history at the cut.
         np.testing.assert_array_equal(

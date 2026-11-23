@@ -971,6 +971,7 @@ def outbreak_blocks(
                 padded["release_start_days"] = start_days
                 padded["first_release"] = days[0]
                 padded["releases"] = len(days)
+                padded["cut_date"] = days[-1]
                 padded["cut"] = j
                 padded["view"] = record
                 out.append(padded)
