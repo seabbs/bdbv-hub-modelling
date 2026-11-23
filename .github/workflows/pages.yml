@@ -326,13 +326,16 @@ jobs:
           path: output/parts
       # Every model scored together, in the order one run takes them, with
       # the stored models' forecasts, as one run of each backtest would.
+      # One process per backtest: their scores are independent, and all of
+      # them in one process ran the runner out of memory (main, 23:09).
       - name: Score the backtests
         run: |
           p=output/parts/parts
+          uv run bdbvhubrenewal score "$p"-development-{randomwalk,randomwalknowcast}
           uv run bdbvhubrenewal score \
-            "$p"-development-{randomwalk,randomwalknowcast} \
-            "$p"-recovery-randomwalk "$p"-recovery-randomwalknowcast-{0,1,2} \
-            "$p"-zones-{randomwalk,randomwalknowcast} \
+            "$p"-recovery-randomwalk "$p"-recovery-randomwalknowcast-{0,1,2}
+          uv run bdbvhubrenewal score "$p"-zones-{randomwalk,randomwalknowcast}
+          uv run bdbvhubrenewal score \
             "$p"-scenario-{randomwalk,randomwalknowcast}-{falling,flat,rising}
       # The fine-tuned models' German forecasts, as the checkpoint
       # scorer made them, from the germany-ft-forecasts branch
