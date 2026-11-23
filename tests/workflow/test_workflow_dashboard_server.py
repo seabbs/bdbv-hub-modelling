@@ -135,3 +135,21 @@ def test_before_the_first_build_the_page_says_it_is_building(tmp_path):
         assert 'http-equiv="refresh"' in body
     finally:
         srv.shutdown()
+
+
+def test_a_client_that_leaves_is_dropped_quietly(tmp_path, capsys):
+    # A browser that gives up mid-answer is not a server error.
+    class Gone:
+        def write(self, _b):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            pass
+
+    cls = dashboard.handler(_machine(tmp_path))
+    h = cls.__new__(cls)
+    h.path, h.command, h.request_version = "/favicon.ico", "GET", "HTTP/1.1"
+    h.requestline, h.client_address = "GET /favicon.ico HTTP/1.1", ("x", 0)
+    h.wfile = Gone()
+    h.do_GET()
+    assert "Traceback" not in capsys.readouterr().err
