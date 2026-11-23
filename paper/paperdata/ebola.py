@@ -179,29 +179,33 @@ def _prospective(repo: str | Path, ref: str) -> Iterator[pd.DataFrame]:
         elif line.endswith(".json.gz"):
             added.setdefault(line, commit)
 
-    def real(path: str, commit: str) -> tuple[dict, pd.DataFrame]:
-        fit = json.loads(
+    def read(path: str, commit: str) -> dict:
+        return json.loads(
             gzip.decompress(_git(repo, "show", f"{commit}:{path}"))
         )
+
+    def real(fit: dict) -> pd.DataFrame:
         table = fit["forecasts"]
         frame = pd.DataFrame(table["data"], columns=table["columns"])
-        return fit["meta"], frame[frame["kind"] == "real"]
+        return frame[frame["kind"] == "real"]
 
     first: dict[tuple[str, str], tuple[str, str, str, pd.Timestamp]] = {}
     for path, commit in added.items():
-        meta, frame = real(path, commit)
+        fit = read(path, commit)
+        meta = fit["meta"]
         if meta["status"] != "ok":
             continue
         key = (meta["model"], meta["origin"])
         if key in first and first[key][0] <= meta["fitted_at"]:
             continue
+        frame = real(fit)
         if frame.empty:
             continue
         origin = pd.Timestamp(frame["reference_date"].iloc[0])
         first[key] = (meta["fitted_at"], path, commit, origin)
     for fitted_at, path, commit, origin in first.values():
         if pd.Timestamp(fitted_at) <= round_close(origin):
-            yield _samples(real(path, commit)[1])
+            yield _samples(real(read(path, commit)))
 
 
 def store_samples(

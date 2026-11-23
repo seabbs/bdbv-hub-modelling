@@ -211,3 +211,21 @@ def test_the_store_history_is_written_without_holding_it_whole(
     path = tmp_path / "fit-store-history.csv.gz"
     assert ebola.write_store_history(store, "fit-store", path) == 100
     assert set(ebola.history_samples(path)["value"]) == {5}
+
+
+def test_the_store_history_skips_failed_fits_without_forecasts(store, tmp_path):
+    path = store / "renewal/2026-11-01/f.json.gz"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fit = {
+        "meta": {
+            "model": "renewal",
+            "origin": "2026-11-01",
+            "status": "failed",
+        },
+        "forecasts": {"columns": [], "data": []},
+    }
+    path.write_bytes(gzip.compress(json.dumps(fit).encode()))
+    _git(store, "add", "-A")
+    _git(store, "commit", "-q", "-m", "failed")
+    out = tmp_path / "fit-store-history.csv.gz"
+    assert ebola.write_store_history(store, "fit-store", out) == 100
