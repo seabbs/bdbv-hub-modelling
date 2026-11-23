@@ -761,3 +761,25 @@ def test_daily_rows_take_the_day_s_truth_and_7day_rows_the_sum_s(
         "daily": 5.0,
     }
     assert calls["daily"] == ["2021-10-04"]
+
+
+def test_the_truth_context_runs_from_plot_start_for_both_views(
+    triangle: pd.DataFrame,
+) -> None:
+    # The plots' truth before the first nowcast date: daily counts and
+    # 7-day sums, as reported the truth delay after each day.
+    import dataclasses
+
+    from nowcastgermany import evaluation as de
+
+    config = dataclasses.replace(
+        load_germany_config(ROOT / "config" / "germany.toml"),
+        plot_start="2021-09-01",
+        first_date="2021-10-04",
+        truth_delay=10,
+    )
+    out = de.truth_context(triangle, config)
+    assert set(out["target"]) == {"7day", "daily"}
+    assert out["target_end_date"].min() == "2021-09-01"
+    assert out["target_end_date"].max() <= "2021-10-10"
+    assert {"location", "truth", "truth_vintage"} <= set(out.columns)

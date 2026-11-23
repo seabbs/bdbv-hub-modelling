@@ -182,11 +182,10 @@ class GermanyConfig:
     first_date, last_date : str
         The first and last nowcast date of the hub's evaluation, the dates
         the hub teams are compared on.
-    development_start : str
-        The first nowcast date the checkpoint units score
-        (`development_dates`): the first whose oldest hub target starts
-        on a data day. The models' lag window is capped by the history
-        the task holds there. Defaults to `first_date`.
+    plot_start : str
+        The first day of the truth the plots show as context
+        (`truth_context`), before the first nowcast date. Scores stay on
+        the nowcast dates. Defaults to `first_date`.
     split_date : str
         The first nowcast date of the held-out half. The dates before it
         are for development.
@@ -240,12 +239,12 @@ class GermanyConfig:
     horizons: tuple[int, ...] = HORIZONS
     targets: tuple[str, ...] = ("7day",)
     daily_baseline: str = "fm_chronos_daily_ragged"
-    development_start: str = ""
+    plot_start: str = ""
 
     def __post_init__(self) -> None:
-        """Start development at the hub's first date unless set."""
-        if not self.development_start:
-            object.__setattr__(self, "development_start", self.first_date)
+        """Start the plots' truth at the hub's first date unless set."""
+        if not self.plot_start:
+            object.__setattr__(self, "plot_start", self.first_date)
 
 
 def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
@@ -321,7 +320,7 @@ def load_germany_config(
         daily_baseline=raw["scoring"].get(
             "daily_baseline", "fm_chronos_daily_ragged"
         ),
-        development_start=now.get("development_start", ""),
+        plot_start=now.get("plot_start", ""),
     )
 
 
@@ -344,17 +343,6 @@ def nowcast_dates(config: GermanyConfig, held_out: bool = False) -> list[str]:
     days = pd.date_range(config.first_date, config.last_date, freq="D")
     dates = [d.date().isoformat() for d in days]
     return [d for d in dates if (d >= config.split_date) == held_out]
-
-
-def development_dates(config: GermanyConfig) -> list[str]:
-    """Return the checkpoint units' nowcast dates, oldest first.
-
-    From `GermanyConfig.development_start`, before the hub's first date
-    where it is earlier, to the day before the split date. The held-out
-    half is unchanged (`nowcast_dates`).
-    """
-    days = pd.date_range(config.development_start, config.split_date)
-    return [d.date().isoformat() for d in days][:-1]
 
 
 def fetch_germany(  # pragma: no cover - network
@@ -747,6 +735,40 @@ def with_truth(
     if not parts:
         return forecasts.assign(truth=np.nan, truth_vintage=None)
     return pd.concat(parts, ignore_index=True)
+
+
+def truth_context(
+    triangle: pd.DataFrame, config: GermanyConfig
+) -> pd.DataFrame:
+    """Return the truth the plots show, from `plot_start` on.
+
+    Each place's daily count and 7-day sum of every day from
+    `GermanyConfig.plot_start` to the last development nowcast date, as
+    reported the truth delay after it, as the scores' truth
+    (`with_truth`). Days with no report that late have no row.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `location`, `target` (`7day` or `daily`), `target_end_date`,
+        `truth` and `truth_vintage`.
+    """
+    last = min(
+        pd.Timestamp(nowcast_dates(config)[-1]),
+        pd.Timestamp(triangle["report_date"].max())
+        - pd.Timedelta(days=config.truth_delay),
+    )
+    days = [
+        d.date().isoformat() for d in pd.date_range(config.plot_start, last)
+    ]
+    week = rolling_truth(hub_target(triangle, days), config.truth_delay)
+    day = daily_truth(triangle, days, config.truth_delay)
+    cols = ["location", "target", "target_end_date", "truth", "truth_vintage"]
+    out = pd.concat(
+        [week.assign(target="7day"), day.assign(target="daily")],
+        ignore_index=True,
+    )[cols]
+    return out.loc[out["truth"].notna()].reset_index(drop=True)
 
 
 def score_germany(forecasts: pd.DataFrame, truth_delay: int) -> pd.DataFrame:

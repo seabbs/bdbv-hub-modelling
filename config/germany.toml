@@ -29,12 +29,11 @@ last_date = "2022-04-29"
 # 2021-11-22 to 2022-02-09 (80 dates) are for development, 2022-02-10 to
 # 2022-04-29 (79 dates) are held out for the paper and not scored here.
 split_date = "2022-02-10"
-# The checkpoint units also score the development dates before the hub's
-# first date, from the first date whose oldest target (the 7-day sum
-# ending 28 days back) starts on or after the triangle's first day,
-# 2021-04-06. The models' lag window is capped by the history there. Hub
-# teams are compared from first_date only.
-development_start = "2021-05-10"
+# Nowcast dates and scores are the hub's submission window above. The
+# plots show the truth from this day on as context, the first whose 7-day
+# sum ending 28 days before it starts on the triangle's first day,
+# 2021-04-06; every task holds the triangle from its start.
+plot_start = "2021-05-10"
 # Days ahead of each nowcast date the checkpoint units also forecast, the
 # zero-shot reference and every checkpoint alike: 7-day sums ending up to
 # 28 days after it (4 weeks), as the held-out loss splits them. The hub's

@@ -417,6 +417,7 @@ def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
     monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
     monkeypatch.setattr(de, "germany_forecasts", forecasts)
     monkeypatch.setattr(de, "with_truth", lambda fc, *_a: fc)
+    monkeypatch.setattr(de, "truth_context", lambda *_a: pd.DataFrame())
     monkeypatch.setattr(ck, "record_precision", lambda _root: None)
     monkeypatch.setattr(ck, "_free", lambda: None)
     monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: Path(TASKS))
@@ -706,22 +707,19 @@ def test_a_checkpoint_unit_keys_its_dates_on_the_task_store_alone(
     assert seen == []
 
 
-def test_development_starts_at_the_first_date_with_every_hub_target() -> None:
-    # The triangle starts 2021-04-06; 2021-05-10 is the first nowcast date
-    # whose oldest 7-day sum (28 days back) starts on a data day. Hub teams
-    # stay compared from the first hub date only.
+def test_scores_are_the_hub_window_and_plots_start_earlier() -> None:
+    # German nowcast dates are the hub's submission window in the
+    # development half; the plots' truth starts at plot_start as context.
     from nowcastgermany import evaluation as de
 
     config = de.load_germany_config("config/germany.toml")
-    assert config.development_start == "2021-05-10"
-    dates = de.development_dates(config)
-    assert dates[0] == "2021-05-10"
-    assert dates[-1] < config.split_date
-    assert len(dates) == 196 + len(de.nowcast_dates(config))
-    assert de.nowcast_dates(config)[0] == config.first_date == "2021-11-22"
+    assert config.plot_start == "2021-05-10"
+    assert not hasattr(de, "development_dates")
+    dates = de.nowcast_dates(config)
+    assert (dates[0], dates[-1]) == ("2021-11-22", "2022-02-09")
 
 
-def test_a_german_unit_forecasts_the_earlier_development_dates(
+def test_a_german_unit_forecasts_only_the_hub_window(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from nowcastgermany import evaluation as de
@@ -731,4 +729,4 @@ def test_a_german_unit_forecasts_the_earlier_development_dates(
     ck.germany_unit(tmp_path, "n100")
     config = de.load_germany_config("config/germany.toml")
     done = [d for dates, *_ in seen for d in dates]
-    assert done == de.development_dates(config)
+    assert done == de.nowcast_dates(config)
