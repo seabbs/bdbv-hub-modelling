@@ -66,3 +66,30 @@ def test_no_rule_picks_a_device_itself():
             continue
         found += [f"{name}: {m.group(0)}" for m in re.finditer(PICKED, text)]
     assert found == []
+
+
+def test_cuda_lets_jax_fall_back_to_the_cpu():
+    # Chronos-2 (torch) uses CUDA; JAX picks CUDA where jaxlib has it and
+    # the CPU where it has not (archie's jaxlib): `cuda,cpu` fails there.
+    fc = forecast.Forecast("cuda", 2)
+    assert fc.variables()["DEVICE"] == "cuda"
+    assert fc.variables()["JAX_PLATFORMS"] == ""
+    assert "JAX_PLATFORMS=''" in fc.env
+
+
+def test_jax_starts_with_the_cuda_platform_list_without_cuda():
+    import os
+    import subprocess
+    import sys
+
+    pytest.importorskip("jax")
+    env = {**os.environ, **forecast.Forecast("cuda", 1).variables()}
+    out = subprocess.run(
+        [sys.executable, "-c", "import jax; print(jax.devices()[0].platform)"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr[-1000:]
+    assert out.stdout.strip() in {"cpu", "gpu", "cuda"}

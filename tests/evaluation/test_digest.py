@@ -196,6 +196,25 @@ def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
         assert zones not in fit_code(model, ROOT)
 
 
+def _bvd_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cache two BVD releases in a copy of the data (`BDBV_DATA_DIR`)."""
+    import json
+
+    from nowcastrenewal import bvd
+
+    data = tmp_path / "data"
+    shutil.copytree(ROOT / "tests" / "fixtures" / "data", data)
+    fixtures = ROOT / "tests" / "data" / "bvd"
+    releases = bvd.parse_releases(
+        json.loads((fixtures / "releases.json").read_text())
+    )
+    tags = ["results-3151", "results-3086"]
+    bvd.save_releases(releases.loc[releases["tag"].isin(tags)], data / "bvd")
+    for tag in tags:
+        shutil.copytree(fixtures / tag, data / "bvd" / tag)
+    monkeypatch.setenv("BDBV_DATA_DIR", str(data))
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("model", ["renewal", "renewalsp", "renewalbvd"])
 def test_fit_code_covers_what_a_stored_fit_runs(
@@ -204,11 +223,18 @@ def test_fit_code_covers_what_a_stored_fit_runs(
     delays: pd.DataFrame,
     daily: pd.DataFrame,
     config: BacktestConfig,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from bdbvhub.data.zones import load_zone_data
     from bdbvhub.store import store
 
     data = ROOT / "tests" / "fixtures" / "data"
+    if model == "renewalbvd":
+        # Two BVDOutbreakSize releases cached beside a copy of the data,
+        # so the fit reads them and never lists releases over the network
+        # (a 504 from the GitHub API once failed this test).
+        _bvd_cache(tmp_path, monkeypatch)
     tasks = store.origin_tasks(
         target, delays, config, daily, load_zone_data(data)
     )

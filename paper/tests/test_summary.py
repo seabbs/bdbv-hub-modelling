@@ -103,3 +103,34 @@ def test_summary_marks_each_study_it_has_as_shown() -> None:
     # The paper hides a study's results when its run has no entry for it.
     out = study_summary({"study": "germany", "source": "real"}, _scores())
     assert out["shown"] is True
+
+
+def test_summary_quotes_each_model_against_randomwalknowcast() -> None:
+    scores = pd.DataFrame(
+        {
+            "model": [
+                "KIT-frozen_baseline",
+                "randomwalknowcast",
+                "fm_chronos_daily_twostep",
+            ],
+            "rel_score": [1.0, 1.2, 0.9],
+            "rel_log_score": [1.0, 1.1, 0.95],
+            "rel_score_randomwalknowcast": [0.83, 1.0, 0.754],
+        }
+    )
+    out = study_summary({"study": "germany", "source": "real"}, scores)
+    assert out["models"]["fm_chronos_daily_twostep"] == 0.75
+    # A quoted model without scores yet reads as pending.
+    assert out["models"]["fm_chronos_daily_twostep_ft"] == "pending"
+
+
+def test_with_randomwalknowcast_the_baseline_its_scores_are_quoted() -> None:
+    scores = pd.DataFrame(
+        {
+            "model": ["randomwalknowcast", "fm_chronos_daily_ragged_ft"],
+            "rel_score": [1.0, 0.8],
+            "rel_log_score": [1.0, 0.9],
+        }
+    )
+    out = study_summary({"study": "synthetic", "source": "dummy"}, scores)
+    assert out["models"]["fm_chronos_daily_ragged_ft"] == 0.8

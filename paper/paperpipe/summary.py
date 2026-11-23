@@ -1,8 +1,9 @@
 """The numbers the paper quotes, as Quarto metadata.
 
 `study_summary` reads each study's run notes and main-text score table and
-returns one entry per study: where its data came from, its baseline, and
-the best model with its relative scores. `write_summary` writes them as
+returns one entry per study: where its data came from, its baseline, the
+best model with its relative scores, and each of `QUOTED_MODELS` against
+`randomwalknowcast`. `write_summary` writes them as
 YAML under `results`, so `main.qmd` and `si.qmd` quote them with
 `{{< meta results.<study>.<field> >}}`. Where a study has a split, the
 numbers are from its held-out half.
@@ -19,8 +20,9 @@ import yaml
 
 from paperfigs.periods import PERIODS
 from paperpipe.meta import DUMMY_LABEL, baseline_of
+from paperpipe.outputs import REFERENCE
 
-__all__ = ["study_summary", "write_summary"]
+__all__ = ["QUOTED_MODELS", "study_summary", "write_summary"]
 
 
 SCOPES: dict[str, tuple[str, str]] = {
@@ -29,6 +31,15 @@ SCOPES: dict[str, tuple[str, str]] = {
     "synthetic": ("development simulations", "held-out simulations"),
 }
 """Each study's development and scored parts, as the text names them."""
+
+QUOTED_MODELS: tuple[str, ...] = (
+    "fm_chronos_daily_complete",
+    "fm_chronos_daily_ragged",
+    "fm_chronos_daily_ragged_ft",
+    "fm_chronos_daily_twostep",
+    "fm_chronos_daily_twostep_ft",
+)
+"""Models whose scores against `randomwalknowcast` the text quotes."""
 
 
 def study_summary(
@@ -53,7 +64,9 @@ def study_summary(
         `best_rel_score`, `best_rel_log_score` and, where the baseline is
         another model, `best_rel_score_randomwalknowcast`, and `status`,
         which says when the scored part has no scores yet and is empty
-        otherwise, and `scope`, the part the numbers come from (`SCOPES`).
+        otherwise, and `scope`, the part the numbers come from (`SCOPES`),
+        and `models`, each of `QUOTED_MODELS` relative to
+        `randomwalknowcast`, or `pending` while it has no scores.
     """
     baseline = baseline_of(meta)
     dev, scored = SCOPES.get(meta["study"], ("", ""))
@@ -89,12 +102,29 @@ def study_summary(
             "rel_score_randomwalknowcast"
         ),
         "scope": scope,
+        "models": _against_reference(scores, baseline),
         "status": (
             ""
             if len(scores)
             else "There are no scored forecasts yet, as no forecast of "
             "the scored part has its truth reported."
         ),
+    }
+
+
+def _against_reference(
+    scores: pd.DataFrame, baseline: str
+) -> dict[str, float | str]:
+    """Return each quoted model's score relative to `REFERENCE`."""
+    col = "rel_score" if baseline == REFERENCE else f"rel_score_{REFERENCE}"
+    rel = (
+        scores.set_index("model")[col].dropna()
+        if col in scores.columns
+        else pd.Series(dtype=float)
+    )
+    return {
+        m: round(float(rel[m]), 2) if m in rel.index else "pending"
+        for m in QUOTED_MODELS
     }
 
 

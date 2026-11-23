@@ -29,6 +29,12 @@ last_date = "2022-04-29"
 # 2021-11-22 to 2022-02-09 (80 dates) are for development, 2022-02-10 to
 # 2022-04-29 (79 dates) are held out for the paper and not scored here.
 split_date = "2022-02-10"
+# The checkpoint units also score the development dates before the hub's
+# first date, from the first date whose oldest target (the 7-day sum
+# ending 28 days back) starts on or after the triangle's first day,
+# 2021-04-06. The models' lag window is capped by the history there. Hub
+# teams are compared from first_date only.
+development_start = "2021-05-10"
 # Days ahead of each nowcast date the checkpoint units also forecast, the
 # zero-shot reference and every checkpoint alike: 7-day sums ending up to
 # 28 days after it (4 weeks), as the held-out loss splits them. The hub's
@@ -38,14 +44,16 @@ forecast_days = 28
 # data: the hub's 7-day rolling sums (`7day`) and each day's count
 # (`daily`), each scored on its truth as reported 40 days after it ends.
 # Daily counts come from the models with their own quantiles of them (the
-# ragged Chronos-2 models).
+# ragged and complete Chronos-2 models and randomwalknowcast_daily).
 targets = ["7day", "daily"]
 # Germany is scored and shown on daily data only: every model takes the
-# daily releases (no weekly source) and forecasts the hub's 7-day rolling
-# sums. The checkpoint units run the Chronos-2 models listed here.
+# daily releases with real dates (no weekly source or steps) and forecasts
+# every day. randomwalknowcast_daily is baselinenowcast on the daily
+# triangle with a daily random walk: its 7-day sums have their errors
+# fitted on 7-day rolling sums, its daily counts on daily counts. The
+# checkpoint units run the models listed here.
 models = [
-  "randomwalk",
-  "randomwalknowcast",
+  "randomwalknowcast_daily",
   "fm_chronos_daily_complete",
   "fm_chronos_daily_ragged",
   "fm_chronos_daily_ragged_ft",
@@ -66,18 +74,17 @@ seed = 20261027
 
 [scoring]
 # Relative scores on the page divide by this model.
-baseline = "randomwalknowcast"
+baseline = "randomwalknowcast_daily"
 # The paper's relative scores divide by the hub's own baseline, as
 # Wolffram et al. (2023) compare to it.
 paper_baseline = "KIT-frozen_baseline"
-# Relative scores on daily counts divide by zero-shot Chronos-2 (ragged),
-# as `randomwalknowcast` forecasts the 7-day sums only.
+# Relative scores on daily counts divide by zero-shot Chronos-2 (ragged).
 daily_baseline = "fm_chronos_daily_ragged"
 
 [page]
 # Models switched off on the page until the reader switches them on. Both
 # stay in the scores and in the paper's table.
-hidden = ["randomwalk", "KIT-frozen_baseline"]
+hidden = ["KIT-frozen_baseline"]
 # The nowcast plots show every this many development dates, from the first.
 plot_every = 7
 
