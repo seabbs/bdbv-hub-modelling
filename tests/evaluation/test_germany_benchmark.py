@@ -68,16 +68,13 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "2022-04-29",
         159,
     )
+    # Germany is daily only: no weekly model.
     assert config.models == (
         "randomwalk",
         "randomwalknowcast",
-        *(
-            f"fm_chronos_{source}_{layout}"
-            for layout in ("complete", "ragged")
-            for source in ("daily", "weekly")
-        ),
+        "fm_chronos_daily_complete",
+        "fm_chronos_daily_ragged",
         "fm_chronos_daily_ragged_ft",
-        "fm_chronos_weekly_ragged_ft",
     )
     assert config.truth_delay == 40
     assert config.submissions
@@ -87,7 +84,7 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
 
 def test_german_trained_models_run_on_the_held_out_half_only() -> None:
     config = load_germany_config(ROOT / "config" / "germany.toml")
-    german = ("fm_chronos_daily_ragged_real", "fm_chronos_weekly_ragged_real")
+    german = ("fm_chronos_daily_ragged_real",)
     assert config.held_out_models == german
     # They were fine-tuned on the development half, so never score on it.
     assert not set(german) & set(run_models(config, held_out=False))

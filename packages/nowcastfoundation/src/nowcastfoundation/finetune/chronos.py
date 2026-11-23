@@ -2,8 +2,9 @@
 """Blocks and batches for fine-tuning Chronos-2.
 
 Cuts outbreaks from the simulator (nowcastfoundation.simulator) into
-training blocks (`outbreak_blocks`) and packs them into batches
-(`plan_batches`), without torch.
+training blocks
+(`outbreak_blocks`) and packs them into batches (`plan_batches`),
+without torch.
 `nowcastfoundation.finetune.stream` trains on them and
 publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 `_ft` models load the newest one

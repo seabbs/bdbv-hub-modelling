@@ -31,18 +31,28 @@ def test_a_unit_records_the_precision_it_forecast_in(tmp_path, monkeypatch):
     assert "precision" in ck.COLUMNS
 
 
-def test_each_label_runs_its_models():
-    assert ck.label_models("reference") == (
+def test_each_label_runs_the_german_config_s_models(tmp_path):
+    # Germany is daily only: the units run the models the German config
+    # lists, the reference its zero-shot ones, a checkpoint its `_ft` ones.
+    config = tmp_path / "germany.toml"
+    config.write_text(
+        "[nowcast]\n"
+        'models = ["randomwalk", "randomwalknowcast",'
+        ' "fm_chronos_daily_complete", "fm_chronos_daily_ragged",'
+        ' "fm_chronos_daily_ragged_ft"]\n'
+    )
+    assert ck.label_models("reference", config) == (
         "randomwalknowcast",
-        "fm_chronos_daily_ragged",
-        "fm_chronos_weekly_ragged",
         "fm_chronos_daily_complete",
-        "fm_chronos_weekly_complete",
+        "fm_chronos_daily_ragged",
     )
-    assert ck.label_models("abc123") == (
-        "fm_chronos_daily_ragged_ft",
-        "fm_chronos_weekly_ragged_ft",
-    )
+    assert ck.label_models("abc123", config) == ("fm_chronos_daily_ragged_ft",)
+
+
+def test_the_german_config_has_no_weekly_models():
+    models = ck.german_models()
+    assert models
+    assert not [m for m in models if "weekly" in m]
 
 
 @pytest.mark.parametrize(

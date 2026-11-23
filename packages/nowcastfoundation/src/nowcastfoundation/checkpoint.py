@@ -38,6 +38,7 @@ import re
 import subprocess
 import sys
 import time
+import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
@@ -54,10 +55,8 @@ BASELINE: Final = "randomwalknowcast"
 REFERENCE: Final = "reference"
 REFERENCE_PIN: Final = "e8a1f5ae338b"
 """The checkpoint the reference pins, which its models never load."""
-ZERO_SHOT: Final = ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged")
-FINETUNED: Final = tuple(f"{m}_ft" for m in ZERO_SHOT)
-COMPLETE: Final = ("fm_chronos_daily_complete", "fm_chronos_weekly_complete")
-"""Zero-shot Chronos-2 given complete data points only, a reference."""
+GERMANY_CONFIG: Final = Path("config/germany.toml")
+"""The German evaluation's config, whose `nowcast.models` the units run."""
 GERMANY_UNIT: Final = "germany-days"
 """The cache folder of the German units, which score every one of the
 hub's 29 target days."""
@@ -129,11 +128,26 @@ SORT: Final = ["rule", "study", "level", "model", "outbreaks", "checkpoint"]
 # Labels and checkpoints ------------------------------------------------
 
 
-def label_models(label: str) -> tuple[str, ...]:
-    """Return the models a label runs."""
+def german_models(config: Path = GERMANY_CONFIG) -> tuple[str, ...]:
+    """Return the models the German evaluation lists (`nowcast.models`)."""
+    return tuple(tomllib.loads(Path(config).read_text())["nowcast"]["models"])
+
+
+def label_models(label: str, config: Path = GERMANY_CONFIG) -> tuple[str, ...]:
+    """Return the models a label runs, of those the German config lists.
+
+    The reference runs the baseline and the zero-shot Chronos-2 models
+    (ragged and complete); a checkpoint runs the fine-tuned (`_ft`) ones.
+    """
+    models = german_models(config)
     if label == REFERENCE:
-        return (BASELINE, *ZERO_SHOT, *COMPLETE)
-    return FINETUNED
+        zero = [
+            m
+            for m in models
+            if m.startswith("fm_chronos_") and not m.endswith(("_ft", "_real"))
+        ]
+        return (BASELINE, *zero)
+    return tuple(m for m in models if m.endswith("_ft"))
 
 
 def run_of(settings: Mapping[str, Any]) -> str:

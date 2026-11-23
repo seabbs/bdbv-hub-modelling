@@ -173,6 +173,7 @@ class Context:
             levels=nowcasts.LEVELS,
             excluded=self.excluded,
             order=[(g["name"], g["match"]) for g in ds.get("groups") or ()],
+            sources=ds.get("sources"),
         )
 
 
@@ -771,6 +772,10 @@ def checkpoint_sizes(
     return sizes
 
 
+INPUT_LABELS = {"daily": "daily counts", "weekly": "weekly totals"}
+"""The nowcast panels' model inputs, as the control names them."""
+
+
 def _caption(ctx: Context, ds: Mapping[str, Any]) -> str:
     text = ds.get("truth", "")
     delay = ctx.delays.get(ds["key"])
@@ -831,6 +836,7 @@ def nowcasts_section(
                 "label": ds.get("label", ds["key"]),
                 "metric": ds.get("metric", ""),
                 "truth": _caption(ctx, ds),
+                "target": ds.get("target", ""),
                 "meta": meta,
                 "locs": built["locs"],
                 "origins": built["origins"],
@@ -879,7 +885,8 @@ def nowcasts_section(
     first = defaults.get("source")
     options = "".join(
         f'<option value="{html.escape(s, quote=True)}"'
-        f"{' selected' if s == first else ''}>{html.escape(s)}</option>"
+        f"{' selected' if s == first else ''}>"
+        f"{html.escape(INPUT_LABELS.get(s, s))}</option>"
         for s in sorted(sources)
     )
     controls = _asset("nowcasts.html").replace("{sources}", options)

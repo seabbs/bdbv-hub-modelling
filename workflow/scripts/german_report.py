@@ -40,18 +40,14 @@ from flowlib.dashboard import runs as spec  # noqa: E402
 
 from nowcasteval import labels  # noqa: E402
 from nowcasteval.scoring import score_quantiles  # noqa: E402
+from nowcastgermany.evaluation import QUANTILE_LEVELS as LEVELS  # noqa: E402
 
-LEVELS = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
-"""The German hub's quantile levels."""
 KEYS = ["model", "origin", "location", "target_end_date"]
 CELL = ["origin", "location", "target_end_date", "horizon"]
 PARTS = ("dispersion", "overprediction", "underprediction")
 ZERO_SHOT = "reference"
 BASELINE = "randomwalknowcast"
-FAMILIES = {
-    "fm_chronos_weekly_ragged": "Weekly ragged",
-    "fm_chronos_daily_ragged": "Daily ragged",
-}
+FAMILIES = {"fm_chronos_daily_ragged": "Daily ragged"}
 """Model families, each with its zero-shot and fine-tuned models."""
 FORECAST_WEEKS = (7, 14, 21, 28)
 """Horizons of the forecast weeks: the 7-day sums ending 7 to 28 days

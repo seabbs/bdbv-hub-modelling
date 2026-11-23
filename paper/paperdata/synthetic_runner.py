@@ -96,6 +96,12 @@ least this plus the outbreak's longest delay before its last report."""
 HORIZONS: Final = tuple(range(-4, 4))
 """Forecast weeks from the reference date."""
 
+ORIGINS: Final = 4
+"""Origins per outbreak, spread evenly over its releases."""
+
+DRAW: Final = 1
+"""The observation draw of each simulation scored."""
+
 COLUMNS: Final = (
     "study",
     "model",

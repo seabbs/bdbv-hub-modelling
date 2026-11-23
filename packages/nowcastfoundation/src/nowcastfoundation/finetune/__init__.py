@@ -2,8 +2,8 @@
 """Training blocks for fine-tuning Chronos-2 on simulated outbreaks.
 
 The simulator (nowcastfoundation.simulator) simulates the outbreaks'
-reporting triangles. See the Foundation models methods page for
-the training data.
+reporting triangles with the joint PyRenew model. See the Foundation
+models methods page for the training data.
 """
 
 from __future__ import annotations

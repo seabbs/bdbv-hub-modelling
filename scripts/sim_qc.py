@@ -1,13 +1,12 @@
 """Record one round of simulations' summaries.
 
 Summarises each simulation of `ROUND_DIR/sims` (`summaries`): cases,
-strata with cases, the largest stratum's cases over its population, the
-largest week-on-week rise in weekly cases by reference date and the
-reporting delay. The grid sets no thresholds, so no simulation is
-excluded.
+strata with cases, the largest week-on-week rise in weekly cases by
+reference date and the reporting delay. The grid sets no thresholds, so
+no simulation is excluded.
 
-Records the input table, `decisions.json` and a one-line summary in
-`ROUND_DIR/qc/`. Simulations are never deleted. Run from the repo root:
+Records the table and a one-line summary in `ROUND_DIR/qc/`.
+Simulations are never deleted. Run from the repo root:
 
     uv run python scripts/sim_qc.py ROUND_DIR
 """
@@ -15,9 +14,7 @@ Records the input table, `decisions.json` and a one-line summary in
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -28,7 +25,6 @@ CELL = [
     "n_ages",
     "spread",
     "trajectory",
-    "process",
     "delay_family",
     "delay_form",
     "delay_change",
@@ -42,33 +38,6 @@ CELL = [
     "delay_places",
     "strata_link",
 ]
-
-
-def cases_over_population(counts: pd.DataFrame, settings: Any) -> float:
-    """Return the largest ratio of a stratum's cases to its population.
-
-    Cases are each stratum's median total over draws. NaN unless the
-    settings give each stratum's location and population
-    (`stratum_location`, `stratum_population`, ";"-separated).
-    """
-    try:
-        where = str(settings["stratum_location"]).split(";")
-        size = [
-            float(x) for x in str(settings["stratum_population"]).split(";")
-        ]
-    except (KeyError, TypeError, ValueError):
-        return float("nan")
-    if len(where) != len(size):
-        return float("nan")
-    population = pd.Series(size, index=where)
-    cases = (
-        counts.groupby(["location", "outbreak"])["count"]
-        .sum()
-        .groupby("location")
-        .median()
-    )
-    ratio = cases / population.reindex(cases.index)
-    return float(ratio.max()) if ratio.notna().any() else float("nan")
 
 
 def summaries(sim_dir: Path) -> pd.DataFrame:
@@ -105,7 +74,6 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
                     "cases_min": float(per_draw.min()),
                     "cases_max": float(per_draw.max()),
                     "strata_with_cases": c["location"].nunique(),
-                    "cases_over_population": cases_over_population(c, s),
                     "weeks": int(first.size),
                     "peak_weekly": float(first.max()),
                     "max_weekly_log_growth": float(growth.max())
@@ -132,15 +100,6 @@ def main() -> None:
     qc.mkdir(parents=True, exist_ok=True)
     table = summaries(args.round_dir / "sims")
     table.to_csv(qc / "input.csv", index=False)
-    (qc / "decisions.json").write_text(
-        json.dumps(
-            {
-                "check": "no thresholds (scripts/sim_qc.py)",
-                "n_simulations": len(table),
-            },
-            indent=1,
-        )
-    )
     (qc / "summary.txt").write_text(
         f"sim QC summarised {len(table)} simulations"
     )

@@ -19,7 +19,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
-from typing import Any, cast
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -37,19 +37,17 @@ from pyrenew.metaclass import RandomVariable
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
-from nowcastutils.dates import epiweek_end
-from nowcastutils.releases import release_cutoff
-
-from ..components.mixing import Mixing, distance_kernel, great_circle_km
+from ..components.mixing import Mixing
 from ..components.pmfs import CensoredPMF
 from .composition_noise import MultinomialNoise
 from .delays import FixedTimeVarying
 from .hazard_delay import HazardDelay
 from .inputs import (
     NATIONAL,
-    START_COUNT,
+    WeekTables,
     _seed_days,
     bvd_inputs,
+    gravity_kernel,
     imputation_pmf,
 )
 from .model import (
@@ -85,9 +83,6 @@ from .publication_lag import ReleasePairLikelihood
 from .renewal import MetapopulationInfections
 from .rt_observation import RtPseudoObservation
 from .temporal import NonCentredRandomWalk
-
-DECAY_KM = 300.0
-"""Distance scale of the zone gravity kernel."""
 
 MIN_OWN_CASES = 30
 """Cases a zone needs by the cut-off for an Rt deviation of its own, as
@@ -618,32 +613,6 @@ def zone_bvd_inputs(
     return out
 
 
-def zone_kernel(
-    zones: tuple[str, ...], table: pd.DataFrame, decay_km: float = DECAY_KM
-) -> np.ndarray:
-    r"""Gravity kernel between zones, rows receive.
-
-    $K_{pq} \propto N_p \exp(-D_{pq} / \text{decay})$ for $p \ne q$,
-    normalised per origin $q$ (`components.mixing.distance_kernel`), with
-    WorldPop counts $N$ from `table` and great-circle distances $D$
-    between zone centroids (`ForecastTask.places`).
-
-    Returns
-    -------
-    numpy.ndarray
-        Columns (origins) sum to one, zero diagonal.
-    """
-    rows = table.set_index("location").reindex(list(zones))
-    if rows["population"].isna().any():
-        raise ValueError("Missing zone population.")
-    dist = great_circle_km(
-        rows["latitude"].to_numpy(float), rows["longitude"].to_numpy(float)
-    )
-    return distance_kernel(
-        dist, decay_km, "origin", weights=rows["population"].to_numpy(float)
-    )
-
-
 def zone_vintage_from_tables(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
@@ -704,89 +673,26 @@ def zone_vintage_from_tables(
     ZoneVintage
         Model inputs.
     """
-    rows = target.loc[
-        (target["vintage"] == vintage) & target["location"].isin(locations)
-    ]
-    wide = rows.pivot_table(
-        index="target_end_date",
-        columns="location",
-        values=["observed", "imputed", "total"],
-        aggfunc="sum",
-    ).fillna(0)
-    totals_wide = cast(pd.DataFrame, wide["total"])
     active = tuple(locations)
-    national = totals_wide.reindex(columns=list(active)).fillna(0).sum(axis=1)
-    counts_by_week = national.to_numpy()
-    threshold = min(START_COUNT, counts_by_week.max())
-    big = int(np.argmax(counts_by_week >= threshold))
-    first = epiweek_end(pd.Timestamp(national.index[max(0, big - 1)]).date())
-    start = first - dt.timedelta(days=6)
-    cutoff = (release_cutoff(target, vintage) - start).days
-    n_weeks = cutoff // 7 + 1
-    weeks = [
-        (first + dt.timedelta(weeks=i)).isoformat() for i in range(n_weeks)
-    ]
-
-    def grid(column: str, locs: tuple[str, ...]) -> np.ndarray:
-        out = cast(pd.DataFrame, wide[column]).reindex(
-            index=weeks, columns=list(locs)
-        )
-        return out.fillna(0).to_numpy(dtype=float)
-
-    # The province of each place, and the delay tables: one per modelled
-    # province, one per province of the zones, or one for a national fit.
+    grid = WeekTables.from_target(target, vintage, active)
+    start = grid.start
+    # The province of each zone; the delay tables are by province.
     parent_of = {z: z[:5] for z in active} if parents is None else dict(parents)
     parent_names = list(dict.fromkeys(parent_of[p] for p in active))
-    delay_places = parent_names
-    n_places = 1 if config.national else len(delay_places)
-    counts = np.zeros((n_weeks, n_places, config.dmax + 1))
-    if delays is not None and len(delays):
-        # Known onsets count every case, so negative delays go to 0 and
-        # delays past dmax to dmax, the last cell of the hazard pmf,
-        # rather than leaving the delay counts short of the known stream.
-        keep = delays.loc[
-            (
-                delays["location"].isin(delay_places)
-                if active != (NATIONAL,)
-                else delays["location"].ne("")
-            )
-            & ~delays["location"].isin(masked)
-        ]
-        week = np.array(
-            [
-                (pd.Timestamp(w).date() - first).days // 7
-                for w in keep["onset_week"]
-            ],
-            dtype=int,
-        )
-        ok = (week >= 0) & (week < n_weeks)
-        delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
-        place = (
-            np.zeros(len(keep), dtype=int)
-            if config.national
-            else keep["location"].map(delay_places.index).to_numpy(dtype=int)
-        )
-        np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
-
-    known, imputed = grid("observed", active), grid("imputed", active)
-    totals = known + imputed
-    pops = table.set_index("location").loc[list(active), "population"]
-    names = list(active)
-    if config.national:
-        known = known.sum(axis=1, keepdims=True)
-        imputed = imputed.sum(axis=1, keepdims=True)
-        pops = pd.Series([pops.sum()])
-        names = [active[0] if len(active) == 1 else NATIONAL]
-    kernel = None if len(names) == 1 else zone_kernel(active, table)
+    counts = grid.delay_counts(
+        delays, parent_names, config, masked, every=active == (NATIONAL,)
+    )
+    known, imputed, totals, pops, names = grid.onsets(active, table, config)
+    kernel = None if len(names) == 1 else gravity_kernel(active, table)
     off = [p in masked or parent_of.get(p, p) in masked for p in names]
     return ZoneVintage(
         start_date=start,
-        cutoff=cutoff,
+        cutoff=grid.cutoff,
         known=known,
         imputed=imputed,
         delay_counts=counts,
         hub_delay_pmf=imputation_pmf(imputation_delay, config.dmax),
-        populations=pops.to_numpy(dtype=float),
+        populations=pops,
         kernel=kernel,
         horizon_weeks=horizon_weeks,
         names=names,
