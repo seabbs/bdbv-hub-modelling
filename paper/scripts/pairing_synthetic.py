@@ -71,7 +71,8 @@ def main() -> None:
             for name in MODELS:
                 # As the synthetic runner gives each model its task.
                 mine = model_task(get_model(name), task)
-                for label, drawn in variant_forecasts(name, mine).items():
+                variants, _ = variant_forecasts(name, mine)
+                for label, drawn in variants.items():
                     frames.append(
                         variant_scores(
                             drawn,
