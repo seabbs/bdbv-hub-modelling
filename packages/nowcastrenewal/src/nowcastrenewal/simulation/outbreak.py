@@ -32,10 +32,20 @@ from ..latent.rt import KINDS
 from ..latent.simulate import Latent, simulate_latent
 from ..reporting.simulate import reporting_frame, reporting_model, tabulate
 
-__all__ = ["BUCKET", "bucket_days", "outbreak_model", "simulate_outbreak"]
+__all__ = [
+    "BUCKET",
+    "LAG_BUCKET",
+    "bucket_days",
+    "outbreak_model",
+    "simulate_outbreak",
+]
 
 BUCKET = 56
 """Days the latent arrays' length is rounded up to a multiple of."""
+
+LAG_BUCKET = 16
+"""Days the generation time and incubation pmfs are padded to a multiple
+of."""
 
 
 def bucket_days(n_days: int) -> int:
@@ -98,10 +108,15 @@ def outbreak_model(
         kinds,
         incubation_cv,
         depletion,
-        days=bucket_days(n_days) - len(gt),
+        days=bucket_days(n_days - len(gt)),
+        lag_bucket=LAG_BUCKET,
     )
     frame = reporting_frame(
-        values, n_days, list(strata["place"]), list(strata["age"])
+        values,
+        n_days,
+        list(strata["place"]),
+        list(strata["age"]),
+        days=bucket_days(n_days),
     )
     reporting_model(frame, design, values, latent.onsets, draws)
     return latent

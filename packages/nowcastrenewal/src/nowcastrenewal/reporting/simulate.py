@@ -49,6 +49,7 @@ def reporting_frame(
     n_days: int,
     places: Sequence[str],
     ages: Sequence[str],
+    days: int | None = None,
 ) -> ReferenceFrame:
     """Return a simulation's reporting frame: its strata and dates.
 
@@ -60,6 +61,9 @@ def reporting_frame(
         Days of the frame.
     places, ages : sequence of str
         Each stratum's place (`P01`, ...) and age group (`A1`, ...).
+    days : int, optional
+        Dates the frame's arrays run over, at least `n_days`; `n_days`
+        if None. Later dates pad them to a shared shape.
 
     Returns
     -------
@@ -68,9 +72,10 @@ def reporting_frame(
     """
     first = np.datetime64(START) + int(values["offset"])
     return ReferenceFrame(
-        dates=first + np.arange(n_days),
+        dates=first + np.arange(n_days if days is None else days),
         place=np.array([int(p[1:]) - 1 for p in places]),
         age=np.array([int(a[1:]) - 1 for a in ages]),
+        n_days=n_days,
     )
 
 
@@ -95,13 +100,16 @@ def reporting_model(
     design, values : mapping
         The simulation's design and values.
     onsets : array_like
-        Expected onsets, days by strata `(T, G)`; floored at 1e-8.
+        Expected onsets over the triangle's days, by strata; floored at
+        1e-8, and 0 on the frame's padded days.
     draws : int
         Observation draws: sites `"draw_{k}::reports::counts"` and, with
         revisions, `"draw_{k}::revisions::counts"`.
     """
     D = int(values["max_delay"])
-    log_lambda = jnp.log(jnp.maximum(jnp.asarray(onsets, dtype=float), 1e-8)).T
+    x = jnp.asarray(onsets, dtype=float)
+    x = jnp.pad(x, ((0, len(frame.dates) - x.shape[0]), (0, 0)))
+    log_lambda = jnp.log(jnp.maximum(x, 1e-8)).T
     expected = ReportingExpectation("expected", frame, design, values, D)
     log_expected = expected(log_lambda=log_lambda)
     observed = ObservedReports(
@@ -122,6 +130,7 @@ def reporting_model(
                     values["revise_over"],
                     values["revise_move"],
                     values["revise_keep"],
+                    frame.observed,
                 )(counts=counts)
             else:
                 numpyro.deterministic("reported", counts)
@@ -221,11 +230,12 @@ def tabulate(
     frames = []
     for k in range(draws):
         if design["revisions"] == "yes":
-            dense = np.asarray(tr[f"draw_{k}::revisions::counts"]["value"])
+            revised = tr[f"draw_{k}::revisions::counts"]["value"]
+            dense = np.asarray(revised)[:, :T, :T]
             g, t, r = np.nonzero(np.round(dense))
             count = np.round(dense[g, t, r])
         else:
-            tri = np.asarray(tr[f"draw_{k}::reported"]["value"])
+            tri = np.asarray(tr[f"draw_{k}::reported"]["value"])[:, :T]
             g, t, d = np.nonzero(tri)
             r = t + d
             keep = r <= T - 1

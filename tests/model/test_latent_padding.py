@@ -137,7 +137,7 @@ def _sims(seed: int, k: int) -> list[tuple[pd.DataFrame, dict, dict, int]]:
     raise RuntimeError("too few simulations")
 
 
-def _latent(sim: tuple, key: int, pad: int) -> Any:
+def _latent(sim: tuple, key: int, pad: int, lag_bucket: int = 1) -> Any:
     strata, design, values, n_days = sim
     gt = generation_time_pmf(
         Delay.from_mean_cv(
@@ -154,6 +154,7 @@ def _latent(sim: tuple, key: int, pad: int) -> Any:
             values,
             kinds=tuple(GRID["factors"]["trajectory"]),
             days=n + pad,
+            lag_bucket=lag_bucket,
         )
 
 
@@ -164,7 +165,7 @@ def test_padded_latent_runs_are_the_runs_without_padding() -> None:
             own = _latent(sim, i, 0)
         except ValueError:
             continue
-        padded = _latent(sim, i, PAD)
+        padded = _latent(sim, i, PAD, lag_bucket=16)
         for name in ("infections", "onsets", "r", "reff"):
             np.testing.assert_allclose(
                 getattr(padded, name),
@@ -184,33 +185,96 @@ def test_days_shorter_than_the_series_raise() -> None:
         _latent(sim, 0, -1)
 
 
-def test_bucketed_outbreaks_are_the_outbreaks_without_buckets(
+def _traced(sim: tuple, key: int) -> tuple[Any, dict[str, Any]]:
+    strata, design, values, n_days = sim
+    with (
+        jax.enable_x64(True),
+        handlers.trace() as tr,
+        handlers.seed(rng_seed=jax.random.key(key)),
+    ):
+        latent = outbreak.outbreak_model(n_days, strata, design, values)
+    return latent, tr
+
+
+def _unbucketed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(outbreak, "BUCKET", 1)
+    monkeypatch.setattr(outbreak, "LAG_BUCKET", 1)
+
+
+def _revised(seed: int) -> tuple:
+    """A grid simulation with revisions and a delay change that runs."""
+    for sim in _sims(seed, 60):
+        design = sim[1]
+        if design["revisions"] != "yes" or design["delay_change"] == "static":
+            continue
+        try:
+            _traced(sim, 0)
+        except ValueError:
+            continue
+        return sim
+    raise RuntimeError("no simulation with revisions ran")
+
+
+def test_bucketed_outbreaks_expect_the_same_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sims = _sims(818, 3)
+    sims = [*_sims(818, 3), _revised(818)]
 
-    def outbreaks() -> list[Any]:
+    def runs() -> list[Any]:
         out = []
-        for i, (strata, design, values, n_days) in enumerate(sims):
+        for i, sim in enumerate(sims):
             try:
-                out.append(
-                    outbreak.simulate_outbreak(
-                        i, n_days, strata, design, values, draws=2
-                    )
-                )
+                out.append(_traced(sim, i))
             except ValueError as e:
                 out.append(str(e))
         return out
 
-    bucketed = outbreaks()
-    assert all(outbreak.bucket_days(s[3]) % outbreak.BUCKET == 0 for s in sims)
-    monkeypatch.setattr(outbreak, "BUCKET", 1)
-    for a, b in zip(bucketed, outbreaks(), strict=True):
+    bucketed = runs()
+    _unbucketed(monkeypatch)
+    for sim, a, b in zip(sims, bucketed, runs(), strict=True):
         if isinstance(a, str):
             assert a == b
             continue
+        n_days = sim[3]
         np.testing.assert_allclose(a[0].onsets, b[0].onsets, rtol=RTOL)
-        pd.testing.assert_frame_equal(a[1], b[1])
-        assert a[2].keys() == b[2].keys()
-        for k in a[2]:
-            np.testing.assert_array_equal(a[2][k], b[2][k], err_msg=k)
+        site = "expected::log_expected"
+        expected = np.asarray(b[1][site]["value"])
+        assert expected.shape[1] == n_days
+        np.testing.assert_allclose(
+            np.asarray(a[1][site]["value"])[:, :n_days],
+            expected,
+            rtol=RTOL,
+            atol=RTOL,  # centred terms near 0 are summed in another order
+        )
+
+
+def _totals(sim: tuple, keys: range) -> np.ndarray:
+    """Each key's reported total."""
+    strata, design, values, n_days = sim
+    out = []
+    for key in keys:
+        _, counts, _ = outbreak.simulate_outbreak(
+            key, n_days, strata, design, values
+        )
+        out.append(counts["count"].sum())
+    return np.asarray(out, dtype=float)
+
+
+def test_bucketed_counts_match_in_distribution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Padding the triangle moves its count and revision draws, so the
+    # counts are the same in distribution, not draw for draw: with the
+    # same keys, the totals' mean and quantiles agree within their noise.
+    sim = _revised(4242)
+    keys = range(40)
+    bucketed = _totals(sim, keys)
+    _unbucketed(monkeypatch)
+    own = _totals(sim, keys)
+    diff = bucketed - own
+    se = diff.std(ddof=1) / np.sqrt(len(keys))
+    assert abs(diff.mean()) < 4 * se + 1e-9
+    for q in (0.1, 0.5, 0.9):
+        assert np.quantile(bucketed, q) == pytest.approx(
+            np.quantile(own, q), rel=0.05
+        )
