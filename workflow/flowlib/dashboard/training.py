@@ -230,6 +230,30 @@ def status_point(folder: Path | str) -> tuple[float, float] | None:
         return None
 
 
+def status_position(folder: Path | str) -> dict[str, Any] | None:
+    """Return the trainer's position from its status, or None.
+
+    The step, the simulations trained (`outbreaks`), the segment, its
+    target and the stage, from `train/stream-status.json` whatever the
+    stage: the one source of where the run is, also while it cuts after
+    a restart, when its log has no step yet.
+    """
+    s = CACHE.get(Path(folder) / "train" / "stream-status.json")
+    if not isinstance(s, dict):
+        return None
+    try:
+        step, outbreaks = int(s["step"]), int(s["outbreaks"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return {
+        "step": step,
+        "outbreaks": outbreaks,
+        "segment": s.get("segment"),
+        "target": s.get("target"),
+        "stage": s.get("stage"),
+    }
+
+
 def views_summary(folder: Path | str) -> dict[str, int] | None:
     """Return the run's block views, or None if it has none.
 

@@ -271,6 +271,13 @@ def live_status(
         done = sims(newest[1]) - sims(first_s)
         sims_rate = done / span if done > 0 else None
     trained = sims(step) if sims and step is not None else None
+    # Where the run is comes only from the trainer's status; the logs and
+    # evaluations give the rate since the restart, never the position.
+    position = training.status_position(folder) if folder else None
+    if position:
+        step, trained = position["step"], float(position["outbreaks"])
+        if since is not None and not any(t >= since for t, _ in points):
+            rate, span, sims_rate = None, None, None
     params = (
         training.run_params(
             folder, training.history(live), step, planned, trained

@@ -548,3 +548,36 @@ def test_the_trainer_s_losses_are_labelled_validation(tmp_path):
     text = re.sub(r"<script.*?</script>", "", out, flags=re.S)
     assert "Validation loss" in out
     assert "held-out loss" not in text.lower()
+
+
+def test_a_just_restarted_run_shows_its_position_from_the_status(tmp_path):
+    # Lead 00:20: after a restart the new segment log has no step lines,
+    # and the page showed an old evaluation's step (37,200, 1592/3200)
+    # with an ETA from it. Step and simulations come only from the
+    # trainer's status; with no step since the restart there is no ETA.
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    (folder / "train" / "stream-status.json").write_text(
+        json.dumps(
+            {
+                "stage": "cutting held-out blocks of 90 outbreaks",
+                "step": 51250,
+                "outbreaks": 2200,
+                "segment": "n3200",
+                "target": 3200,
+                "time": "2026-11-23 18:03:21",
+            }
+        )
+    )
+    (folder / "train" / "n250.log").write_text(
+        "2026-11-23 18:02:50 [train] resumed at step 51250\n"
+    )
+    ctx.outbreaks = 3200
+    ctx.prefixes = (250, 1600, 3200)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert st.step == 51250
+    assert st.trained == 2200
+    assert st.eta(3200) == "n/a"
+    tiles, _ = page.status_tiles(st, ctx.runs[0])
+    assert "Simulations trained</span> <b>2200/3200</b>" in tiles
