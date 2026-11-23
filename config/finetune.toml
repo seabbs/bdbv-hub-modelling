@@ -5,8 +5,9 @@
 # settings hash pins that release instead. Either way the adapter is
 # checked against the release's sha256sums.txt. Kept out of the code, so
 # the settings hash `nowcastfoundation.finetune.stream` gives does not
-# cover it.
-hash = "latest"
+# cover it. Pinned to Run A's interim checkpoint s48100, the hub
+# submission's (Sam, 2026-11-24): release chronos-slots-72661eb7efaa.
+hash = "slots-72661eb7efaa"
 
 # The Chronos-2 checkpoint fine-tuned on real data alone, the German
 # development half and the public BDBV data up to the release in

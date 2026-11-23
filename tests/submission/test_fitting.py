@@ -13,7 +13,7 @@ import pytest
 from bdbvhub.cli import main
 from bdbvhub.data.tidy import coherence_summary, national_coherence
 from bdbvhub.submission.fitting import (
-    list_configs,
+    get_config,
     randomwalk_config,
     register_config,
 )
@@ -53,9 +53,10 @@ def plain(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 def test_main_runs_the_renewal_model() -> None:
-    names = {c.name for c in list_configs()}
-    assert {"main", "renewalsp", "randomwalk"} <= names
-    assert "fallback" not in names
+    for name in ("main", "renewalsp", "randomwalk"):
+        assert get_config(name).name == name
+    with pytest.raises(KeyError):
+        get_config("fallback")
 
 
 def test_register_config_refuses_a_taken_name() -> None:
@@ -175,7 +176,8 @@ def test_national_coherence_reports_a_gap(target: pd.DataFrame) -> None:
     assert summary["streams"]["imputed"]["weeks_with_gap"] == 0
     assert summary["streams"]["total"]["max_abs_gap"] == 3
     assert {r["stream"] for r in summary["rows"]} == {"observed", "total"}
-    assert "unassigned" in summary["handling"]
+    assert "unassigned" not in summary["handling"]
+    assert "stop" in summary["handling"]
 
 
 def test_cli_plot_ppc(tmp_path: Path) -> None:

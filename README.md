@@ -7,28 +7,30 @@
 
 **Nowcasts and forecasts for the BDBV Modeling Hub, and the models and evaluation behind them.**
 
-This repository holds our modelling for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
-The hub collects weekly nowcasts and short-term forecasts of confirmed Bundibugyo virus disease cases in the 2026 outbreak in the Democratic Republic of the Congo.
-Teams submit sample trajectories of cases by week of symptom onset, nationally, by province and by health zone.
+We build models to nowcast and forecast cases for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
+The hub collects weekly forecasts of the 2026 Bundibugyo virus disease outbreak in the Democratic Republic of the Congo.
+Teams forecast confirmed cases by week of symptom onset for the country, its provinces and its health zones.
+Recent weeks are always incomplete because cases take time to be reported, so a nowcast estimates how many cases those weeks will finally hold.
 
-We fine-tune the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles.
-Our baselines in `nowcastbaselines` are `randomwalknowcast`, a JAX port of baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) with a random walk on top, and the random walk, `randomwalk`.
-Both belong to one paper, with `randomwalknowcast` as its reference model.
-The paper evaluates them on held-out simulations, the German COVID-19 hospitalisation nowcasting hub and the BDBV hub.
+We fine-tune a general-purpose forecasting model on simulated outbreaks so that it can nowcast and forecast cases from data that are still being reported.
+To judge whether fine-tuning helps, we compare it with simpler baselines: a standard nowcasting method with a random walk for forecasts, and the random walk on its own.
+We evaluate all of them on held-out simulations, on a German COVID-19 hospitalisation benchmark, and on the Ebola outbreak data.
+We describe this work in a paper.
 
-We submit two models from this work.
-`seabbs-rwnowcast` is `randomwalknowcast`, submitted each week.
-`seabbs-nowcastfm` is the fine-tuned Chronos-2 model, submitted once it is opted in.
+We submit two of these models to the hub each week.
+One is the standard nowcasting method with its random walk.
+The other is the fine-tuned model, once it is switched on for submission.
 
-Our renewal models are linked to a larger joint model, [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
-`renewalbvd` is the zone renewal model informed by the BVDOutbreakSize Rt estimates.
-Its ablations are `renewalsp`, which fits each province on its own, and `renewal`, the zone model without BVDOutbreakSize.
-We submit them as `seabbs-renewal`, the first of `renewalbvd`, `renewalsp` and `renewal`, in that order, that passes its checks.
+We also fit renewal models, which describe how new infections arise from earlier ones.
+Our main renewal model takes its estimates of how fast the outbreak spreads from a larger model of the whole outbreak, [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
+Two simpler versions, one without those estimates and one that fits each province on its own, show what each part adds.
+Each week we submit the first of the three that passes our checks, trying the main model first.
 
-We backtest every model on past hub releases, forecasting from each vintage and scoring against what later releases reported.
-The baselines and the foundation models are also run on the German nowcast benchmark.
-Every model is scored the same way, against the random walk and the random walk nowcast, and compared with the hub teams' forecasts.
-The [backtest](https://samabbott.co.uk/bdbv-hub-modelling/backtest/), [comparison with hub forecasts](https://samabbott.co.uk/bdbv-hub-modelling/comparison/) and [German nowcast benchmark](https://samabbott.co.uk/bdbv-hub-modelling/germany/) pages show the results.
+We check every model by backtesting.
+We rerun each model on the data as they stood at past dates and score its forecasts against what was reported later.
+Every model is scored the same way, against the two random walk baselines, and compared with the other teams' forecasts.
+The baselines and the fine-tuned model are also scored on the German benchmark.
+The [backtest](https://samabbott.co.uk/bdbv-hub-modelling/backtest/), [comparison with hub forecasts](https://samabbott.co.uk/bdbv-hub-modelling/comparison/) and [German benchmark](https://samabbott.co.uk/bdbv-hub-modelling/germany/) pages show the results.
 
 ## Quick links
 

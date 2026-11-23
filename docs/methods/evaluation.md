@@ -140,7 +140,7 @@ The run stops if an origin has no release snapshots or two models run here give 
 ## Correlated trajectories
 
 `randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the sum of the provinces, would be too narrow.
-Each pairs its province draws inside its own forecast (`forecasters.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
+Each pairs its province draws inside its own forecast (`nowcastbaselines.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
 The renewal models' draws are already joint trajectories, so they are left as they are: reordering would break their real dependence.
 `renewal` and `renewalbvd` fit their zones jointly and sum them to provinces, and `renewalsp` splits each province draw across its zones.
 
@@ -160,7 +160,7 @@ At each forecast $\rho_p$ is estimated from the model's own matured errors: each
 Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score.
 $r$ is the Pearson correlation of the scores of two provinces in the same week of one release.
 With $n$ such pairs the estimate is $(n r + w \rho_0)/(n + w)$, floored at 0 and capped at 0.95, with $w = 10$ chosen on the release backtest so the estimate dominates.
-The prior $\rho_0 = 0.7$ only guards thin windows.
+The prior $\rho_0 = 0.1$, the value where no earlier release can be scored, is the best of 0 to 0.9 on the release backtest; the window and cap make no difference there.
 Each forecast's $\rho_p$, the pairs behind it and whether it fell back to the prior are recorded (a submission's `copula.json`).
 How much pairing matters is on the [Pairing sensitivity](../pairing.md) page.
 
@@ -224,7 +224,7 @@ The German COVID-19 hospitalisation nowcasting hub[^wolffram] collected nowcasts
 
 1. Each day's data version is a release whose cut-off is that day, and the Meldedatum is the onset date. A release's count of a day is the count reported by then in the hub's reporting triangle, with the changes after 80 days put at 81 days, as epinowcast's `germany_covid19_hosp` does. A day's last count is carried to every later release.
 2. Germany is the country. The states are its provinces in one task and Germany's age groups its provinces in another. Germany's nowcast is the sum of the states.
-3. The hub's targets are the 7-day sums ending on every day from the nowcast date to 28 days before it. Each nowcast date is forecast once, so every sum comes from one forecast with one context end. Models of daily steps read each day's 7-day sum from their own rolling-sum row (ragged layout) or sum their daily draws (complete layout). Every date moves forward so that the nowcast date is a Saturday, and models of weekly steps forecast the sums ending 0, 7, 14, ... days before it. The data still stop at the nowcast date. The nowcasts then move back.
+3. The hub's targets are the 7-day sums ending on every day from the nowcast date to 28 days before it. Each nowcast date is forecast once, so every sum comes from one forecast with one context end. Models of daily steps read each day's 7-day sum from their own rolling-sum row (ragged layout) or sum their daily draws (complete layout). Dates are real: the nowcast date is the cut-off, whatever its weekday. Models of weekly steps forecast the sums that end on a Saturday.
 4. `randomwalk` and `randomwalknowcast` pair their draws inside their forecast, as on BDBV ([Correlated trajectories](#correlated-trajectories)). Each state's and age group's nowcast is unchanged, and Germany's, the sum of the paired states, widens.
 
 The nowcast dates are the paper's, every day from 2021-11-22 to 2022-04-29.

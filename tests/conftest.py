@@ -12,6 +12,10 @@ from bdbvhub.data.tidy import load_daily, load_delays, load_target
 from nowcasteval.backtest import BacktestConfig
 from nowcastutils.base import ForecastTask
 
+# Chronos-2 never detects a device (`chronos2.torch_device`): the tests
+# run on the CPU unless the environment names one, as CI does.
+os.environ.setdefault("DEVICE", "cpu")
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "tests" / "fixtures" / "data"
 """A frozen copy of the tidy hub data. It is never refreshed: the
@@ -73,7 +77,9 @@ def _fake_checkpoint_releases(
     """Resolve the fine-tuned checkpoint from a fake release list.
 
     No test reaches GitHub. The latest `chronos-ft-*` release is
-    `FAKE_CHECKPOINT`, with its `sha256sums.txt` only.
+    `FAKE_CHECKPOINT`, with its `sha256sums.txt` only, and the models take
+    the latest release (`BDBV_CHRONOS_FT=latest`), whatever
+    config/finetune.toml pins.
     """
     from nowcastfoundation import forecaster as foundation
 
@@ -86,6 +92,7 @@ def _fake_checkpoint_releases(
         )  # fmt: skip
         for name in ("adapter_model.safetensors", "adapter_config.json"):
             (root / f"chronos-ft-{FAKE_CHECKPOINT}" / name).unlink()
+    monkeypatch.setenv(foundation.FINETUNED_ENV, "latest")
     monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
     monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
     monkeypatch.setattr(

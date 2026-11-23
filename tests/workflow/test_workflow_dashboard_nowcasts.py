@@ -640,3 +640,34 @@ def test_a_unit_with_forecast_days_has_its_split_on_every_date(tmp_path):
     for part in split.values():
         assert part["nowcast"][1] == 2
         assert set(part["forecast"]) == {"1", "2"}
+
+
+def test_the_truth_context_reaches_the_page_before_the_first_forecast(
+    tmp_path,
+):
+    # A dataset's truth.csv.gz (the German plot context) adds truth days
+    # before any forecast file's, never replacing a file's own truth.
+    _days(
+        tmp_path / "reference" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged",
+        "2022-02-09",
+        [-5, 3],
+    )
+    import pandas as pd
+
+    pd.DataFrame(
+        {
+            "location": "DE",
+            "target": "7day",
+            "target_end_date": ["2021-06-01", "2022-02-04"],
+            "truth": [5.0, 999.0],
+            "truth_vintage": "2022-03-01",
+        }
+    ).to_csv(tmp_path / "truth.csv.gz", index=False)
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=nowcasts.LEVELS)
+    page = nowcasts.location(built, "DE")
+    line = page["truth"]["7day"]
+    got = dict(zip(line["t"], line["y"], strict=True))
+    assert got["2021-06-01"] == 5.0
+    assert got["2022-02-04"] == 9.0

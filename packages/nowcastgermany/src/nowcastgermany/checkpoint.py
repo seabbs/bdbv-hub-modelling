@@ -9,7 +9,7 @@ with `rule` = `RULE`:
 
 - `germany`: the development half of the German benchmark
   (config/germany.toml), quantile WIS and log WIS on each model's own
-  quantiles (`evaluation.germany.germany_forecasts`), by level.
+  quantiles (`nowcastgermany.evaluation.germany_forecasts`), by level.
 - `held_out`: the trainer's held-out loss from the release's
   settings.json (unit `release`).
 
@@ -17,7 +17,7 @@ BDBV is held out for the paper, so no BDBV rows are scored here.
 
 Relative scores divide by randomwalknowcast's on the cells every model
 and checkpoint of a level made. Every score comes from
-`evaluation.scoring`, as the paper's and the dashboard's do. Rows are
+`nowcasteval.scoring`, as the paper's and the dashboard's do. Rows are
 keyed by checkpoint hash and run, with the checkpoint's outbreaks and
 grid.
 
@@ -37,7 +37,6 @@ import dataclasses
 import gc
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -79,7 +78,7 @@ COVERAGE: Final = (50, 90)
 GERMANY_COVERAGE: Final = (50, 95)
 """The German rows' intervals: the hub's quantiles have no 0.05 or 0.95,
 so there is no 90% interval and its rows keep the 95% one the hub
-scored (`evaluation.germany`)."""
+scored (`nowcastgermany.evaluation`)."""
 WIS_PARTS: Final = ("dispersion", "overprediction", "underprediction")
 """WIS's components (Bracher et al. 2021), which sum to it."""
 REPO: Final = "seabbs/BDBVHubRenewal"
@@ -187,24 +186,15 @@ def run_of(settings: Mapping[str, Any]) -> str:
     return "slots-zeroinit" if slots.get("init") == "zero" else "slots"
 
 
-def outbreaks_and_grid(
-    settings: Mapping[str, Any], release: Mapping[str, str]
-) -> tuple[int, str]:
-    """Return a checkpoint's training outbreaks and grid.
+def outbreaks_and_grid(settings: Mapping[str, Any]) -> tuple[int, str]:
+    """Return a checkpoint's training outbreaks and grid, from settings.json.
 
-    From settings.json, else the release's title and body ("2,000
-    simulated outbreaks", "round 4"), else 0 and `unknown`.
+    0 and `unknown` where the settings have none.
     """
-    text = f"{release.get('name', '')} {release.get('body', '')}"
-    outbreaks = settings.get("n_outbreaks")
-    if outbreaks is None:
-        found = re.search(r"([\d,]+) (?:simulated )?(?:\w+ )?outbreaks", text)
-        outbreaks = int(found.group(1).replace(",", "")) if found else 0
-    grid = settings.get("grid")
-    if grid is None:
-        found = re.search(r"round (\d+)", text)
-        grid = f"r{found.group(1)}" if found else "unknown"
-    return int(outbreaks), str(grid)
+    return (
+        int(settings.get("n_outbreaks") or 0),
+        str(settings.get("grid") or "unknown"),
+    )
 
 
 def chosen(rows: pd.DataFrame) -> pd.Series:
@@ -387,7 +377,8 @@ def german_tasks_dir(
     """Return the store of the German tasks every checkpoint scores.
 
     Keyed on what the tasks are built from: the triangle file's bytes,
-    the task-building code (`data.germany` and the `data.dates` it uses),
+    the task-building code (`nowcastgermany.data` and the
+    `nowcastutils.dates` it uses),
     the fields of the `ForecastTask` they are pickled as, the draws and
     seed, and the longest delay the models see (`max_delay`).
     """
@@ -410,6 +401,9 @@ def german_tasks_dir(
         h.update(f"max_delay-{max_delay}".encode())
     return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
+
+TRUTH_FILE: Final = "truth.csv.gz"
+"""The German truth the plots show (`evaluation.truth_context`)."""
 
 WRITTEN_FILE: Final = "written.tsv"
 """A unit folder's record of each date and model written, with its key."""
@@ -506,7 +500,12 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     root = cache / GERMANY_UNIT / label
     root.mkdir(parents=True, exist_ok=True)
     record_precision(root)
-    dates = de.development_dates(config)
+    dates = de.nowcast_dates(config, held_out=False)
+    # The plots' truth from `plot_start`, shared by every unit.
+    _write(
+        de.truth_context(triangle, config),
+        cache / GERMANY_UNIT / TRUTH_FILE,
+    )
     last = max(config.horizons)
     models = list(label_models(label, layout=segment_layout(segment)))
     # A date's rows are kept only if forecast from this task store: the
@@ -585,7 +584,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
 
 
 def release_unit(cache: Path, label: str) -> None:
-    """Fetch a release's settings.json and its title and body."""
+    """Fetch a release's settings.json, with its held-out sidecar if any."""
     from nowcastfoundation.forecaster import release_tag
 
     root = cache / "heldout"
@@ -598,15 +597,14 @@ def release_unit(cache: Path, label: str) -> None:
         check=True,
     )  # fmt: skip
     view = subprocess.run(
-        ["gh", "release", "view", tag_, "-R", REPO, "--json",
-         "name,body,assets"],
+        ["gh", "release", "view", tag_, "-R", REPO, "--json", "assets"],
         check=True,
         capture_output=True,
         text=True,
     )  # fmt: skip
     release = json.loads(view.stdout)
     # Offloaded checkpoints keep their held-out losses in a sidecar.
-    if SIDECAR in {a["name"] for a in release.pop("assets", [])}:
+    if SIDECAR in {a["name"] for a in release.get("assets", [])}:
         sidecar = root / f"{label}-{SIDECAR}"
         subprocess.run(
             ["gh", "release", "download", tag_, "-R", REPO, "-p", SIDECAR,
@@ -616,7 +614,6 @@ def release_unit(cache: Path, label: str) -> None:
         settings = json.loads(Path(out).read_text())
         merged = with_sidecar(settings, json.loads(sidecar.read_text()))
         Path(out).write_text(json.dumps(merged, indent=1))
-    (root / f"{label}-release.json").write_text(json.dumps(release))
 
 
 # Table -----------------------------------------------------------------
@@ -706,10 +703,7 @@ def table(
     meta = {}
     for h in hashes:
         settings = json.loads((cache / "heldout" / f"{h}.json").read_text())
-        release = json.loads(
-            (cache / "heldout" / f"{h}-release.json").read_text()
-        )
-        meta[h] = (settings, *outbreaks_and_grid(settings, release))
+        meta[h] = (settings, *outbreaks_and_grid(settings))
     labels = [REFERENCE, *hashes]
     # BDBV is held out for the paper: no BDBV rows are computed, and
     # those already in `evidence` are kept.
@@ -777,7 +771,7 @@ def daily_table(
     }
     outbreaks = {
         d.name: outbreaks_and_grid(
-            json.loads((d / "settings.json").read_text()), {}
+            json.loads((d / "settings.json").read_text())
         )[0]
         for d in _segments(train)
     }
@@ -829,7 +823,7 @@ def run_table(
         ],
         ignore_index=True,
     )
-    meta = {lb: outbreaks_and_grid(s, {}) for lb, s in settings.items()}
+    meta = {lb: outbreaks_and_grid(s) for lb, s in settings.items()}
     new["outbreaks"] = new["checkpoint"].map(
         {lb: m[0] for lb, m in meta.items()}
     )

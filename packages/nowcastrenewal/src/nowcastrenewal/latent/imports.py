@@ -29,6 +29,9 @@ class Imports(RandomVariable):
     with a positive unit are imported a constant `rate` times their unit
     a day, or pulses of `pulse_size` times it at shares `pulse_at` of the
     way through, plus a constant `trickle` a day.
+    A pulse arrives over the days from its own along the generation-time
+    pmf (`spread`), as one generation of infections from outside would,
+    so it does not enter the renewal as a one-day spike.
 
     Parameters
     ----------
@@ -43,6 +46,10 @@ class Imports(RandomVariable):
         day, at least day 1; pulses on the same day count once).
     pulse_size : float
         For `pulses`, each pulse as a multiple of the unit.
+    spread : array_like
+        For `pulses`, the share of a pulse that arrives on its day and each
+        day after: the generation-time pmf. A pulse past the last day is
+        cut there.
     late : array_like of bool, optional
         Strata seeded late. `None` is none.
     late_at : float
@@ -60,7 +67,8 @@ class Imports(RandomVariable):
     Raises
     ------
     ValueError
-        If `kind` is not one of `KINDS`.
+        If `kind` is not one of `KINDS`, or `kind` is `pulses` with no
+        `spread`.
     """
 
     def __init__(
@@ -70,6 +78,7 @@ class Imports(RandomVariable):
         rate: float = 0.0,
         pulse_at: Sequence[float] | ArrayLike = (),
         pulse_size: float = 0.0,
+        spread: Sequence[float] | ArrayLike = (),
         late: ArrayLike | None = None,
         late_at: float = 0.0,
         late_days: int = 1,
@@ -78,11 +87,15 @@ class Imports(RandomVariable):
     ) -> None:
         if kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}")
+        spread = np.atleast_1d(np.asarray(spread, dtype=float))
+        if kind == "pulses" and not spread.size:
+            raise ValueError("pulses need a spread (the generation time)")
         super().__init__(name=name)
         self.kind = kind
         self.rate = rate
         self.pulse_at = np.atleast_1d(np.asarray(pulse_at, dtype=float))
         self.pulse_size = pulse_size
+        self.spread = spread
         self.late = None if late is None else np.asarray(late, dtype=bool)
         self.late_at = late_at
         self.late_days = int(late_days)
@@ -122,7 +135,9 @@ class Imports(RandomVariable):
             out[:, on] = self.rate * unit[on]
         elif self.kind == "pulses":
             at = np.maximum(1, np.round(self.pulse_at * h)).astype(int)
-            days = np.unique(at) - 1
-            out[np.ix_(days, np.flatnonzero(on))] += self.pulse_size * unit[on]
+            arrive = np.zeros(n + len(self.spread))
+            for day in np.unique(at) - 1:
+                arrive[day : day + len(self.spread)] += self.spread
+            out[:, on] += arrive[:n, None] * self.pulse_size * unit[on]
         out[:, on] += self.trickle
         return jnp.asarray(out)

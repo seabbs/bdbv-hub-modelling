@@ -154,11 +154,14 @@ Reports read the other steps' outputs back for people, each with one script.
 - `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
 - `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them. `sim_diseases` gives the grid's training rounds' ranges against the published values by disease (`report/sim-diseases.csv`), for the SI's disease table.
 - `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.
+- `hub_rounds`: our last `hub_rounds.rounds` hub rounds against every hub team on the hub's latest data, `<ROOT>/hub/hub-rounds.html` (`hub_rounds_report`, `workflow/scripts/hub_rounds_report.py`), copied to `REVIEW_DIR` when set. `hub_data` tidies the hub's data, `hub_submissions_table` reads which chain model went out from the ledger branch, and `hub_comparison` scores the hub's files as submitted (`compare-hub`, no model of ours run). They rerun when `<ROOT>/hub/head.txt` changes, which `workflow/scripts/hub_watch.sh` writes when the hub's data commit moves before it builds the target. Not part of `all`.
+- `rt_check`: the Rt sense check of a stored renewal fit before its `wk R_t` is submitted, `<rt_check.out_dir>/<model>-<origin>.html` (`bdbvhubrenewal rt-check`, `bdbvhub.reporting.rtcheck`): Rt by country, province and fitted zone over their cases, with BVDOutbreakSize's Rt. It reads the fit the store (`rt_check.store`) holds for the current code and is copied to `REVIEW_DIR` as `rt-check.html` when set. Not part of `all`.
 - `benchmarks`: opt-in, the seconds and peak memory of every forecast and score job and the seconds by model and date, as one CSV in `<SCORE_CACHE>/` (`flowlib.benchmarks`).
 
 ## 6. Dashboard (`workflow/flowlib/dashboard/`)
 
-`task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
+`task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py`, serves a page for a running fine-tune on the machine settings' `DASHBOARD_HOST` and `DASHBOARD_PORT` (default 127.0.0.1, port 8765); it is not a Snakemake job, so it never holds the workflow's lock.
+It is one process: the page is rebuilt in the background and a client that leaves is dropped, so it needs no proxy or restart loop.
 `task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a mailbox) and Tables. Every chart has an info marker (`page/explain.json`).
@@ -167,12 +170,12 @@ Settings:
 
 - `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), the notes filter.
 - `workflow/config.yaml`'s `runs`: the runs shown, each from `<ROOT>/runs/<name>`, the first live. `--run NAME` shows only the named runs, the first live.
-- `config/local.env`: `ROOT`, the scoring cache (`SCORE_CACHE`) the score table and each dataset's forecasts are read from, and the mailbox (`MAILBOX`).
+- `config/local.env` (or the file `LOCAL_CONFIG` names, outside the checkout): `ROOT`, the scoring cache (`SCORE_CACHE`) the score table and each dataset's forecasts are read from, the mailbox (`MAILBOX`), and where it listens (`DASHBOARD_HOST`, `DASHBOARD_PORT`).
 - `--ref`: more references, or ones replacing the configured.
 
 ```sh
 uv sync --group paper                                          # once
-uv run --group paper python workflow/scripts/dashboard.py --port 8765 --run runa
+LOCAL_CONFIG=/path/to/machine.env task nowcast-foundation:dashboard -- --run runa
 # open the address it prints
 ```
 

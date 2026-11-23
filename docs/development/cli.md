@@ -61,9 +61,9 @@ The key hashes:
 - the task at the origin, which holds only the releases up to it;
 - the model as built, including its variant and sampler settings;
 - the BVDOutbreakSize release, for `renewalbvd`;
-- the code the model's fit can run (its import closure with `evaluation/store.py` and `nowcasteval/backtest.py`), without docstrings or comments;
-  the zone split (`nowcastbaselines/zones.py`, `evaluation/zones.py`) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;
-  so are the key's own helper (`evaluation/digest.py`) and the plots (`nowcasteval/plots.py`), which a fit does not run;
+- the code the model's fit can run (its import closure with `bdbvhub/store/store.py` and `nowcasteval/backtest.py`), without docstrings or comments;
+  the zone split (`nowcastbaselines/zones.py`, `bdbvhub/zones.py`) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;
+  so are the key's own helper (`bdbvhub/store/digest.py`) and the plots (`nowcasteval/plots.py`), which a fit does not run;
 - the package's data files (`packages/bdbvhub/src/bdbvhub/data/*.csv`), such as the province centres of the gravity kernel;
 - the runtime dependencies in `uv.lock`.
 
@@ -72,7 +72,7 @@ A model code or sampler change refits every origin.
 A new hub release adds one fit per model.
 The task at each origin is the submission's (`backtest.vintage_task`): weeks from 6 before the reference date to one week past `[forecast] max_horizon`, so the next round can be forecast from the same fit when no new release comes, and the latest earlier delays for a release with none of its own.
 The backtest loads the weeks from `[forecast] min_horizon` to `max_horizon`.
-A submission candidate's fit also holds the fit directory the submission reads (samples, the unassigned national part, `ppc.json` and `diagnostics.json`), and the submission forecasts from it (`fit-store unpack`).
+A submission candidate's fit also holds the fit directory the submission reads (samples, `ppc.json` and `diagnostics.json`), and the submission forecasts from it (`fit-store unpack`).
 
 The workflow runs on pushes to `main` that change these inputs, every 6 hours for new hub releases, and when the submission finds a round's fits missing.
 It fits and stores the newest origin first, then the other origins, so a backfill never holds up a round.

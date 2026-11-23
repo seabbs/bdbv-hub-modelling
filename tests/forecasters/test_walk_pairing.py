@@ -119,3 +119,30 @@ def test_zones_are_their_own_forecasts_and_not_paired(
 def test_a_walk_model_is_not_mistaken_for_a_renewal_variant(name: str) -> None:
     # The fit store reads a renewal variant from a model's `variant`.
     assert not hasattr(get_model(name), "variant")
+
+
+@pytest.mark.parametrize("name", MODELS)
+def test_other_copula_settings_repair_the_same_draws(name: str, task) -> None:
+    from nowcastbaselines.copula import CopulaSettings
+
+    model, paired, off = _run(name, task)
+    same, fit = model.paired_with(model.copula)
+    pd.testing.assert_frame_equal(same, paired)
+    assert fit == model.copula_fit
+    low, fit = model.paired_with(CopulaSettings(prior=0.0, max_rho=0.0))
+    assert fit["rho_provinces"] == 0.0
+    pd.testing.assert_series_equal(_cells(low), _cells(off))
+
+
+def test_a_fallback_to_the_prior_is_logged_with_its_reason(
+    task, caplog
+) -> None:
+    from nowcastbaselines.copula import CopulaSettings
+
+    model, _, _ = _run("randomwalk", task)
+    # No release within a zero-week window: no scores, so the prior.
+    with caplog.at_level("WARNING", logger="nowcastbaselines.randomwalk"):
+        _, fit = model.paired_with(CopulaSettings(window_weeks=0))
+    assert fit["fallback"]
+    assert fit["reason"]
+    assert "falls back to the prior" in caplog.text

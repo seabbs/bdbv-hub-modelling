@@ -2,8 +2,8 @@
 """The docs' preliminary summary of the live fine-tuning run.
 
 Only the docs build runs it (the `live-checkpoint` command), so it may use
-the report-only tables (`evaluation.digest.REPORT_ONLY`). The scores it
-summarises are `reporting.live_checkpoint`'s.
+the report-only tables (`bdbvhub.store.digest.REPORT_ONLY`). The scores it
+summarises are `nowcastfoundation.live_checkpoint`'s.
 """
 
 from __future__ import annotations

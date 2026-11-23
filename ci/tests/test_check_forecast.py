@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -33,8 +34,7 @@ def statuses(path: Path, **kwargs: Any) -> dict[str, str]:
         settings=POLICY.checks,
         observed=OBS,
         expected_locations=LOCS,
-        tasks=TASKS,
-        **{"national_sidecar": _sidecar(), **kwargs},
+        **{"national_sidecar": _sidecar(), "tasks": TASKS, **kwargs},
     )
     return {c.name: c.status for c in checks}
 
@@ -49,8 +49,9 @@ def sub(tmp_path: Path, **kwargs: Any) -> Path:
 def test_plausible_file_passes(tmp_path: Path) -> None:
     s = statuses(sub(tmp_path))
     assert s.pop("baseline") == "skip" and s.pop("previous") == "skip"
-    # Zones are required only for baseline.
+    # Zones are required only for baseline, and the file has no wk R_t.
     assert s.pop("zones") == "skip"
+    assert s.pop("rt") == "skip"
     assert set(s.values()) == {"pass"}, s
     assert "plausible" in s
 
@@ -111,8 +112,7 @@ def _checks(path: Path, **kwargs: Any) -> dict[str, Any]:
         settings=POLICY.checks,
         observed=OBS,
         expected_locations=LOCS,
-        tasks=TASKS,
-        **{"national_sidecar": _sidecar(), **kwargs},
+        **{"national_sidecar": _sidecar(), "tasks": TASKS, **kwargs},
     )
     return {c.name: c for c in checks}
 
@@ -581,3 +581,76 @@ def test_direct_model_is_checked_against_the_baseline(tmp_path: Path) -> None:
         statuses(sub(tmp_path), kind="direct", baseline=base)["baseline"]
         == "pass"
     )
+
+
+RT_LEVELS = (0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4,
+             0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95,
+             0.975, 0.99)  # fmt: skip
+RT_WEEKS = ("2026-10-31", REF)
+
+
+def _rt_rows(
+    value: Any = lambda q: 0.6 + q, levels: tuple[float, ...] = RT_LEVELS
+) -> list[list[Any]]:
+    """`wk R_t` quantile rows for the reference week and the week before."""
+    return [
+        [REF, "wk R_t", w, loc, "quantile", q, value(q), "2026-11-02"]
+        for loc in ("CD", "CD-IT")
+        for w in RT_WEEKS
+        for q in levels
+    ]
+
+
+def _rt_tasks() -> dict[str, Any]:
+    """The fixture's tasks with the hub's optional wk R_t task added."""
+    tasks: dict[str, Any] = json.loads(json.dumps(TASKS))
+    rnd = tasks["rounds"][-1]
+    rt = json.loads(json.dumps(rnd["model_tasks"][0]))
+    rt["task_ids"]["target"] = {"required": None, "optional": ["wk R_t"]}
+    rt["task_ids"]["target_end_date"] = {
+        "required": None, "optional": list(RT_WEEKS)}  # fmt: skip
+    rt["output_type"] = {
+        "quantile": {
+            "output_type_id": {"required": list(RT_LEVELS)},
+            "is_required": False,
+            "value": {"type": "double", "minimum": 0},
+        }
+    }
+    rnd["model_tasks"].append(rt)
+    return tasks
+
+
+def _rt_sub(tmp_path: Path, rows: list[list[Any]]) -> Path:
+    return write_samples(
+        tmp_path / f"{REF}-seabbs-renewal.csv", make_samples() + rows
+    )
+
+
+def test_rt_quantiles_beside_the_counts_pass(tmp_path: Path) -> None:
+    """The counts are checked as before, and the wk R_t rows on their own."""
+    s = statuses(_rt_sub(tmp_path, _rt_rows()), tasks=_rt_tasks())
+    assert s.pop("rt") == "pass"
+    for name in ("schema", "values", "samples", "plausible", "national_sum"):
+        assert s[name] == "pass", (name, s)
+
+
+def test_no_rt_rows_skip_the_rt_check(tmp_path: Path) -> None:
+    assert statuses(sub(tmp_path))["rt"] == "skip"
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        _rt_rows(value=lambda q: 1.0 - q),  # decreasing in the level
+        _rt_rows(value=lambda q: q - 1),  # negative
+        _rt_rows(value=lambda q: q * math.nan),  # not finite
+        _rt_rows(levels=RT_LEVELS[:-1]),  # a level missing
+    ],
+)
+def test_bad_rt_quantiles_fail(tmp_path: Path, rows: list[list[Any]]) -> None:
+    assert statuses(_rt_sub(tmp_path, rows), tasks=_rt_tasks())["rt"] == "fail"
+
+
+def test_rt_week_the_round_does_not_take_fails(tmp_path: Path) -> None:
+    rows = [[*r[:2], "2026-10-17", *r[3:]] for r in _rt_rows()]
+    assert statuses(_rt_sub(tmp_path, rows), tasks=_rt_tasks())["rt"] == "fail"

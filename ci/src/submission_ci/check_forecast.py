@@ -10,6 +10,10 @@ Format (fail):
                  and, given `tasks.json`, valid locations and weeks.
   `values`       no negative, NaN, infinite or unparsable values.
   `samples`      exactly 100 samples per location, each a full trajectory.
+  `rt`           the optional `wk R_t` rows: quantiles at the hub's 23
+                 levels for each location and week, finite, at least 0
+                 and not decreasing in the level, for the weeks the
+                 round's `wk R_t` task takes. Skipped without such rows.
 
 Handled (warn or pass):
   `coverage`     every expected location, with every nowcast and
@@ -43,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import itertools
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
@@ -62,6 +67,8 @@ from .common import (
 )
 from .forecast_date import parse_date
 from .hubdata import (
+    RT_LEVELS,
+    RT_TARGET,
     SUBMISSION_COLUMNS,
     TARGET,
     Observed,
@@ -128,6 +135,71 @@ def _forecast_date_problems(s: Samples, ref: str) -> list[tuple[str, str]]:
     return []
 
 
+def _rt_weeks(tasks: Mapping[str, Any] | None, ref: str) -> set[str] | None:
+    """The weeks the round's `RT_TARGET` task takes; None without tasks."""
+    if tasks is None:
+        return None
+    out: set[str] = set()
+    for rnd in tasks.get("rounds", []):
+        for task in rnd.get("model_tasks", []):
+            ids = task.get("task_ids", {})
+
+            def opts(key: str, ids: Mapping[str, Any] = ids) -> list[str]:
+                spec = ids.get(key, {})
+                return [
+                    *(spec.get("required") or []),
+                    *(spec.get("optional") or []),
+                ]
+
+            if RT_TARGET not in opts("target"):
+                continue
+            refs = opts("reference_date")
+            if refs and ref not in refs:
+                continue
+            out.update(opts("target_end_date"))
+    return out
+
+
+def check_rt(s: Samples, ref: str, tasks: Mapping[str, Any] | None) -> Check:
+    """The `RT_TARGET` quantiles, apart from the count samples."""
+    if not s.rt:
+        return Check("rt", "skip", "no wk R_t rows")
+    found: list[tuple[str, str]] = []
+    if s.rt_output_types != {"quantile"}:
+        found.append(
+            ("fail", f"wk R_t output types {sorted(s.rt_output_types)}")
+        )
+    want = sorted(RT_LEVELS)
+    weeks = _rt_weeks(tasks, ref)
+    for loc in sorted(s.rt):
+        for week in sorted(s.rt[loc]):
+            levels = s.rt[loc][week]
+            where = f"{loc} {week}"
+            if weeks is not None and week not in weeks:
+                found.append(
+                    ("fail", f"{where}: not a week of the wk R_t task")
+                )
+            try:
+                got = sorted(float(q) for q in levels)
+            except ValueError:
+                found.append(("fail", f"{where}: unparsable quantile levels"))
+                continue
+            if got != want:
+                found.append(
+                    ("fail", f"{where}: {len(got)} levels, not the hub's 23")
+                )
+                continue
+            vals = [levels[q] for q in sorted(levels, key=float)]
+            if not all(math.isfinite(v) and v >= 0 for v in vals):
+                found.append(
+                    ("fail", f"{where}: a value is negative or not finite")
+                )
+            elif any(b < a for a, b in itertools.pairwise(vals)):
+                found.append(("fail", f"{where}: decreases with the level"))
+    n = sum(len(w) for w in s.rt.values())
+    return _result("rt", found, f"wk R_t: {n} location-weeks of quantiles")
+
+
 def check_schema(
     s: Samples,
     ref: str,
@@ -143,7 +215,7 @@ def check_schema(
         found.append(("fail", f"columns: missing {missing}, extra {extra}"))
     if s.output_types != {"sample"}:
         found.append(("fail", f"output types {sorted(s.output_types)}"))
-    if s.targets != {TARGET}:
+    if TARGET not in s.targets or s.targets - {TARGET, RT_TARGET}:
         found.append(("fail", f"targets {sorted(s.targets)}"))
     if s.reference_dates != {ref}:
         found.append(
@@ -591,6 +663,7 @@ def run_checks(
     out = [
         check_schema(s, reference_date, submission.name, tasks),
         check_values(s),
+        check_rt(s, reference_date, tasks),
         check_samples(s, int(settings["samples"])),
         check_coverage(
             s, ref, expected_locations, horizon, int(settings["nowcast_weeks"])

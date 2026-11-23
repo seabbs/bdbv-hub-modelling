@@ -8,7 +8,7 @@ without torch.
 `nowcastfoundation.finetune.stream` trains on them and
 publishes each checkpoint as the release `chronos-ft-<hash>`, which the
 `_ft` models load the newest one
-(`forecasters.foundation.resolve_checkpoint`).
+(`nowcastfoundation.forecaster.resolve_checkpoint`).
 """
 
 from __future__ import annotations

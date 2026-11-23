@@ -6,9 +6,10 @@ daily counts with baselinenowcast (`baselinenowcast.baselinenowcast`) on
 its daily triangle, reference days by delays $0, \dots, D$, from the
 task's daily releases (`ForecastTask.daily_history`), with real dates.
 The triangle holds the `round(scale_factor * D)` reference days to the
-cut-off, the rows baselinenowcast uses. $D$ is `max_delay`, capped by the
-history available so those rows hold data: days before the first onset
-in the releases are not filled in.
+cut-off, the rows baselinenowcast uses, and at least the days back to the
+oldest target's sum. $D$ is `max_delay`, capped by the history available
+so those rows hold data: days before the first onset in the releases are
+not filled in.
 
 It gives two views of one nowcast, each with its own error model, as
 baselinenowcast does with an aggregator:
@@ -168,9 +169,16 @@ class DailyWalkNowcast:
         delay = min(self.max_delay, int(have // self.scale_factor))
         if delay < 3:
             raise MissingSnapshots(f"{self.name}: {have} days of data")
-        rows = round(self.scale_factor * delay)
         ends = sorted(task.target_end_dates)
         ahead = max(0, (as_date(ends[-1]) - cutoff).days)
+        # The rows reach the oldest target's k days, even where the lag
+        # window is capped by a short history.
+        back = (cutoff - as_date(ends[0])).days + k
+        if back > have:
+            raise MissingSnapshots(
+                f"{self.name}: {have} days of data, {back} needed"
+            )
+        rows = max(round(self.scale_factor * delay), back)
         agg = identity if k == 1 else partial(rolling_sum, k=k)
         places = list(task.locations)
         keys = jax.random.split(jax.random.key(task.seed), 2 * len(places))

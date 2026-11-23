@@ -140,3 +140,38 @@ def test_the_r_live_job_installs_what_the_live_r_tests_call():
     # primarycensored's fitdistdoublecens needs fitdistrplus (a Suggests).
     for name in ("primarycensored", "flexsurv", "fitdistrplus"):
         assert name in packages
+
+
+def test_r_package_lists_hold_packages_only():
+    # pak reads every line of `packages` as a package, so a comment there
+    # breaks the install (r-live failed at setup-r-dependencies).
+    for path in WORKFLOWS.glob("*.yml"):
+        for job in (
+            yaml.safe_load(path.read_text()).get("jobs") or {}
+        ).values():
+            for step in job.get("steps", []):
+                listed = str((step.get("with") or {}).get("packages", ""))
+                bad = [
+                    ln
+                    for ln in listed.splitlines()
+                    if ln.strip().startswith("#")
+                ]
+                assert bad == [], f"{path.name}: {bad}"
+
+
+def test_pull_requests_skip_coverage_and_steal_work():
+    # Coverage tracing about doubled the PR job's test time, so pushes
+    # and the schedule measure it; workers steal the long tail.
+    job = _workflow("test.yml")["jobs"]["test"]
+    (tests,) = [s for s in job["steps"] if s.get("name") == "Tests"]
+    assert "--dist worksteal" in tests["run"]
+    assert "github.event_name != 'pull_request'" in tests["run"]
+    (upload,) = [s for s in job["steps"] if "codecov" in str(s.get("uses"))]
+    assert upload["if"] == "${{ github.event_name != 'pull_request' }}"
+
+
+def test_the_full_tier_has_the_workflow_s_tools():
+    # Slow workflow tests (the compute runs) skip without Snakemake.
+    steps = _workflow("test.yml")["jobs"]["full"]["steps"]
+    runs = " ".join(s.get("run", "") for s in steps)
+    assert "--group paper pytest -q -m slow" in runs

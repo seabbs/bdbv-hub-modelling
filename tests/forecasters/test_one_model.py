@@ -2,12 +2,13 @@
 
 The weekly and daily fine-tuned models share one adapter. The weekly one
 is a weekly-steps block of the weekly releases, as the zero-shot weekly
-model. The daily one adds, per place, a row of its weekly totals summed
-from its own daily counts, and reads the weekly forecast from that row;
+model. The daily one adds, per place, a row of its 7-day sums of its own
+daily counts, and reads the weekly forecast from that row;
 the two sources are never mixed.
 """
 
 import dataclasses
+import functools
 from pathlib import Path
 
 import numpy as np
@@ -23,7 +24,7 @@ from nowcastfoundation.forecaster import (
     FoundationModel,
     HubTriangle,
     layout_block,
-    week_rows,
+    rolling_rows,
 )
 from nowcastutils.base import ForecastTask
 
@@ -41,31 +42,9 @@ def daily_tri(lags: int = 3) -> HubTriangle:
     return HubTriangle(DAYS, final, partial, last=13)
 
 
-def test_week_rows_sum_each_whole_week_of_daily_counts_on_its_saturday():
-    tri = daily_tri()
-    rows = week_rows(tri)
-    # 2026-09-27 is a Sunday: two whole weeks, ending on these Saturdays.
-    sat = [DAYS.index("2026-10-03"), DAYS.index("2026-10-10")]
-    assert list(np.flatnonzero(rows.ends)) == sat
-    assert rows.totals.shape == (2, 14)
-    assert rows.totals[0, sat[0]] == tri.final[0, 0:7].sum()
-    assert rows.totals[1, sat[1]] == tri.final[1, 7:14].sum()
-    off = np.ones(14, dtype=bool)
-    off[sat] = False
-    assert np.isnan(rows.totals[:, off]).all()
-
-
-def test_a_week_cut_by_the_grid_has_no_total():
-    tri = daily_tri()
-    cut = HubTriangle(tri.times[2:], tri.final[:, 2:], tri.partial[:, 2:], 11)
-    rows = week_rows(cut)
-    # The first week lost two days, so only the second has a total.
-    assert list(np.flatnonzero(rows.ends)) == [cut.times.index("2026-10-10")]
-
-
 def test_a_period_block_adds_one_total_row_per_place_after_the_daily_rows():
     tri, start = daily_tri(), 10
-    rows = week_rows(tri)
+    rows = rolling_rows(tri, 7)
     group = layout_block(tri, "ragged", PLACES, start, period=rows)
     target = group["target"]
     assert target.shape == (4, start)
@@ -104,7 +83,7 @@ def test_a_total_row_joins_its_places_bias_group():
 
 def test_inference_rows_carry_the_total_rows_places():
     tri = daily_tri()
-    group = layout_block(tri, "ragged", PLACES, 10, period=week_rows(tri))
+    group = layout_block(tri, "ragged", PLACES, 10, period=rolling_rows(tri, 7))
     place, parent = chronos2._group_rows(group)
     assert list(place[:4]) == [0, 1, 0, 1]
     assert list(parent[:4]) == [-1, 0, -1, 0]
@@ -123,6 +102,17 @@ def test_the_weekly_and_daily_finetuned_models_share_one_adapter(ft):
     # data too: the layouts differ only in the lag rows.
     assert get_model("fm_chronos_daily_ragged").period == "rolling7"
     assert get_model("fm_chronos_daily_complete").period == "rolling7"
+
+
+def test_the_real_data_daily_model_has_the_rolling_rows(monkeypatch):
+    # Its checkpoint is trained on the same blocks (`PERIODS`), so it reads
+    # the hub's 7-day sums from the rolling rows as the other daily models.
+    monkeypatch.setattr(foundation, "realdata_spec", lambda: "abc123")
+    fake = functools.cache(lambda spec, *_: spec)
+    monkeypatch.setattr(foundation, "resolve_checkpoint", fake)
+    daily = foundation._real_data("fm_chronos_daily_ragged_real", "daily")
+    weekly = foundation._real_data("fm_chronos_weekly_ragged_real", "weekly")
+    assert (daily.period, weekly.period) == ("rolling7", None)
 
 
 def test_a_complete_block_has_daily_and_rolling_rows_and_no_lags():

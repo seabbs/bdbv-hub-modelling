@@ -54,6 +54,11 @@ DEFAULTS = (
     ("REMOTE_ROOT", ""),
     ("SIM_SEEDS", ""),
     ("SNAKEMAKE_PROFILE", ""),
+    # Where the dashboard (workflow/scripts/dashboard.py) listens: its
+    # host (an address of this machine; 127.0.0.1 keeps it local) and
+    # port.
+    ("DASHBOARD_HOST", "127.0.0.1"),
+    ("DASHBOARD_PORT", "8765"),
     # This machine's budget for workflow/profiles/default
     # (flowlib.machine): its cores and memory less the headroom kept free,
     # unless CORES and MEM_MB set them; simulation batches at once; and
@@ -79,6 +84,8 @@ DEFAULTS = (
     # (empty: none; flowlib.schedule), every how many minutes, and the timer
     # (cron, systemd or launchd; empty: by platform).
     ("SCHEDULE_TARGETS", ""),
+    # Where `hub_rounds` copies the hub rounds report (empty: nowhere).
+    ("REVIEW_DIR", ""),
     # The status each tick writes, every how many seconds
     # (flowlib.runstatus).
     ("STATUS_EVERY", "60"),

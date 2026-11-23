@@ -53,6 +53,8 @@ SCENARIOS=(
   # the chain moves on.
   "implausible|bvd=implausible|renewalsp||was ruled out (plausible: "
   "wild|bvd=implausible,renewalsp=implausible|main||Model: zone renewal model"
+  # wk R_t quantiles the hub would reject rule the candidate out too.
+  "badrt|bvd=badrt|renewalsp||was ruled out (rt: "
   "latestream|bvd=latestream|bvd"
   "fallback|bvd=fail|renewalsp||Model: single-patch province renewal models"
   # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are

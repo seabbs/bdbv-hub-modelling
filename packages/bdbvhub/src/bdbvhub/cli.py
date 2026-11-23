@@ -15,11 +15,13 @@ Commands:
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
 - `fit-store`: list the fitted models' fits the store lacks, make one,
-  load the stored fits into the results (`evaluation.store`), or archive
-  every candidate's forecasts for a round (`evaluation.store_archive`).
+  load the stored fits into the results (`bdbvhub.store.store`), or archive
+  every candidate's forecasts for a round (`bdbvhub.store.archive`).
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
+- `rt-check`: write the Rt sense-check page of a renewal fit directory
+  (`bdbvhub.reporting.rtcheck`).
 - `validate`: run the hub's checks on files (`submission.validate`).
 - `metadata`: write and check a model's metadata YAML.
 - `finetuned-checkpoint`: print the settings hash of the fine-tuned
@@ -70,6 +72,8 @@ from bdbvhub.submission.hub import (
     model_id,
     own_national,
     render_model_metadata,
+    rt_end_dates,
+    rt_table,
     to_hub_table,
     write_model_metadata,
     write_submission,
@@ -255,6 +259,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     now.add_argument("--out", default="output/submission")
     now.add_argument(
+        "--tasks",
+        default=None,
+        help="The hub's tasks.json, for the weeks of the wk R_t target "
+        "(default: <data>/hub-config/tasks.json).",
+    )
+    now.add_argument(
         "--forecast-date",
         default=None,
         help="The file's forecast_date. Defaults to today (UTC), the day a "
@@ -294,7 +304,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Score randomwalk and randomwalknowcast with no pairing and "
         "with their provinces paired by the rolling rho_p, from one "
         "forecast each, on the BDBV release backtest "
-        "(`evaluation.pairing`); the German study is `nowcastgermany "
+        "(`nowcasteval.pairing`); the German study is `nowcastgermany "
         "pairing-sensitivity`.",
     )
     pst.add_argument("--study", choices=["bdbv"], default="bdbv")
@@ -304,6 +314,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
     )
     pst.add_argument("--out", default="results/pairing")
+    pst.add_argument(
+        "--candidates",
+        action="store_true",
+        help="Score every copula.CANDIDATES setting instead, and print "
+        "them best first (`nowcasteval.pairing.bdbv_candidates`).",
+    )
 
     dig = sub.add_parser(
         "digest",
@@ -437,6 +453,15 @@ def build_parser() -> argparse.ArgumentParser:
     ppc.add_argument("--out", required=True)
     ppc.add_argument("--stream", default="total")
 
+    rtc = sub.add_parser(
+        "rt-check",
+        help="Write the Rt sense-check page of a renewal fit directory: "
+        "Rt by country, province and zone over their cases.",
+    )
+    rtc.add_argument("--fit", required=True, help="A fit directory.")
+    rtc.add_argument("--data", default=data_dir)
+    rtc.add_argument("--out", required=True, help="The HTML page to write.")
+
     coh = sub.add_parser(
         "coherence",
         help="Compare the national data with the sum of the provinces, and "
@@ -517,7 +542,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--models",
         nargs="*",
         default=None,
-        help="Models to run live. Defaults to the unfitted ones.",
+        help="Models to run live (none if given empty). Defaults to the "
+        "unfitted ones.",
     )
     cmp.add_argument(
         "--stored",
@@ -529,6 +555,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--fetch",
         action="store_true",
         help="Download the hub files first.",
+    )
+    cmp.add_argument(
+        "--submissions-table",
+        default=None,
+        help="Each round's submitted model per hub id "
+        "(submission_ci.submissions). Defaults to the config's.",
     )
 
     frz = sub.add_parser(
@@ -1361,7 +1393,7 @@ def _hub_forecast(
 
 
 def _fit_store_archive(args: argparse.Namespace) -> int:
-    """Run `fit-store archive` (`evaluation.store_archive`).
+    """Run `fit-store archive` (`bdbvhub.store.archive`).
 
     Returns 1 if an argument is missing, the origin is no real one, a
     policy candidate (or a model in `--models`) is missing, or any model
@@ -1437,6 +1469,33 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
     return 1 if missing or failed else 0
 
 
+def _with_rt(
+    table: pd.DataFrame,
+    fit: Path,
+    tasks: Path,
+    reference_date: str,
+    forecast_date: str,
+) -> pd.DataFrame:
+    """Add a fit's Rt quantiles as `wk R_t` rows, for the round's weeks.
+
+    A renewal fit writes `nowcastrenewal.forecaster.RT_FILE`. The rows are
+    the weeks of the hub's `wk R_t` task for this round (`rt_end_dates`);
+    with no such file, no tasks.json or no such weeks, `table` is returned
+    as it is.
+    """
+    from nowcastrenewal.forecaster import RT_FILE
+
+    rt_file = fit / RT_FILE
+    if not (rt_file.exists() and tasks.exists()):
+        return table
+    weeks = rt_end_dates(tasks, reference_date)
+    if not weeks:
+        return table
+    rt = pd.read_csv(rt_file, dtype={"target_end_date": str})
+    rows = rt_table(rt, reference_date, weeks, forecast_date)
+    return pd.concat([table, rows], ignore_index=True)
+
+
 def _nowcast(args: argparse.Namespace) -> int:
     from nowcastrenewal.forecaster import sampler_settings
 
@@ -1454,6 +1513,17 @@ def _nowcast(args: argparse.Namespace) -> int:
         )
         if zone_note:
             handled.append(zone_note)
+        if args.fit:
+            tasks = Path(
+                args.tasks or Path(args.data) / "hub-config/tasks.json"
+            )
+            table = _with_rt(
+                table,
+                Path(args.fit),
+                tasks,
+                str(task.reference_date),
+                str(table["forecast_date"].iloc[0]),
+            )
         path = write_submission(table, args.out, model_id(_abbr(args)))
     except (LookupError, ValueError, OSError) as err:
         print(f"ERROR: {err}", file=sys.stderr)
@@ -1773,13 +1843,18 @@ def _compare_hub(args: argparse.Namespace) -> int:
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
     if args.fetch:  # pragma: no cover - network
         hc.fetch_hub_submissions(hub_dir, cache, ref=cfg.ref)
-        hc.fetch_submissions_table(cfg.submissions_table)
+        if args.submissions_table is None:
+            hc.fetch_submissions_table(cfg.submissions_table)
     hub = hc.load_hub_submissions(hub_dir, cache)
     target, delays = load_target(args.data), load_delays(args.data)
     daily = load_daily(args.data)
     config = bt.load_config(args.backtest_config)
     rounds = sorted(set(hub["reference_date"]))
-    live = args.models or [s.name for s in list_models() if not s.fitted]
+    live = (
+        args.models
+        if args.models is not None
+        else [s.name for s in list_models() if not s.fitted]
+    )
     horizons = (
         pd.to_datetime(hub["target_end_date"])
         - pd.to_datetime(hub["reference_date"])
@@ -1813,7 +1888,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
-    table_file = Path(cfg.submissions_table)
+    table_file = Path(args.submissions_table or cfg.submissions_table)
     if table_file.exists():
         table = pd.read_csv(table_file, dtype=str, keep_default_na=False)
     else:
@@ -1874,7 +1949,14 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
     origins = bt.real_vintages(real)[:-1]
     if args.chunk:
         origins = chunk(origins, args.chunk)
-    scores = pairing.bdbv_sensitivity(data, config, origins)
+    if args.candidates:
+        name += "-candidates"
+        from nowcastbaselines.copula import CANDIDATES
+
+        scores = pairing.bdbv_candidates(CANDIDATES, data, config, origins)
+        print(pairing.best_candidate(scores).to_string(index=False))
+    else:
+        scores = pairing.bdbv_sensitivity(data, config, origins)
     if args.chunk:
         name += "-" + args.chunk.replace("/", "of")
     path = out / f"{name}.csv.gz"
@@ -1962,6 +2044,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _plot_submission(args)
     if args.command == "coherence":
         return _coherence(args)
+    if args.command == "rt-check":
+        from bdbvhub.reporting.rtcheck import rt_check_from_fit
+
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(rt_check_from_fit(args.fit, args.data))
+        print(f"Wrote {out}")
+        return 0
     if args.command == "plot-ppc":
         return _plot_ppc(args)
     if args.command == "backtest":

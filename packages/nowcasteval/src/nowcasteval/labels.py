@@ -35,13 +35,14 @@ __all__ = [
     "WIS_PART_FILLS",
     "WIS_PART_STACK",
     "model_label",
-    "tint",
 ]
 
 MODEL_LABELS: Final[dict[str, str]] = {
     "fm_chronos_daily_ragged_ft": "Fine-tuned (delays)",
     "fm_chronos_daily_ragged": "Zero-shot (delays)",
     "fm_chronos_daily_complete": "Zero-shot (complete data only)",
+    "fm_chronos_daily_complete_2step": "Two-step zero-shot (point nowcast)",
+    "fm_chronos_daily_complete_2step_ft": "Two-step fine-tuned (point nowcast)",
     "randomwalknowcast": "Random walk nowcast",
     "randomwalknowcast_daily": "Random walk nowcast (daily)",
     "randomwalk": "Random walk",
@@ -98,6 +99,8 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
     "fm_chronos_daily_complete": (_COMPLETE_PURPLE, "dashed"),
     "fm_chronos_daily_ragged": (_ZERO_SHOT_GREEN, "dotted"),
     "fm_chronos_daily_ragged_ft": (_SLOT_BLUE, "solid"),
+    "fm_chronos_daily_complete_2step": (_COMPLETE_PURPLE, "dotted"),
+    "fm_chronos_daily_complete_2step_ft": (_SLOT_BLUE, "dashed"),
     "fm_chronos_weekly_complete": (_SLOT_VIOLET, "dashed"),
     "fm_chronos_weekly_ragged": (_SLOT_VIOLET, "dotted"),
     "fm_chronos_weekly_ragged_ft": (_SLOT_VIOLET, "solid"),
@@ -218,10 +221,3 @@ def model_label(model: str) -> str:
     if model.endswith(_REAL) and " (" in base:
         return f"Fine-tuned on real data ({base.split(' (', 1)[1]}"
     return MODEL_LABELS.get(model, model)
-
-
-def tint(colour: str, share: float) -> str:
-    """Return `share` of a hex `colour` mixed with white, as hex."""
-    rgb = [int(colour.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4)]
-    mixed = [round(share * c + (1 - share) * 255) for c in rgb]
-    return "#" + "".join(f"{c:02x}" for c in mixed)

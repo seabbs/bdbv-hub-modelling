@@ -115,6 +115,8 @@ permissions:
   contents: read
 
 env:
+  # Chronos-2 runs on the device named here, never a detected one.
+  DEVICE: cpu
   STORE: output/fit-store
   FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
 

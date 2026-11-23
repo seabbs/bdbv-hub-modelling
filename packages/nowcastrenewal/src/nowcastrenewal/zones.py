@@ -6,7 +6,7 @@ window in one model, nested in their provinces (`model.zones`), gives
 the silent zones `randomwalknowcast`'s introduction layer, and sums the
 zones to the provinces, sample by sample. National is the sum of the
 provinces. Importing this module registers it as `renewal` and
-`renewalbvd`; `forecasters.renewal` registers only the per-province
+`renewalbvd`; `nowcastrenewal.forecaster` registers only the per-province
 `renewalsp`.
 """
 
@@ -34,6 +34,7 @@ from nowcastrenewal.forecaster import (
     _silent_walk,
     bvd_record,
     bvd_release,
+    check_national,
     delay_summary,
     engine,
     horizon_weeks,
@@ -214,8 +215,8 @@ def zone_bvd_rows(
     """BVDOutbreakSize's zone Rt of a release, as rows of the BVD term.
 
     Each zone in the release's `zone_estimates.csv` becomes a row like a
-    patch row of `data.bvd.model_rows`: its log median and the log-scale
-    SD of its 90% interval, relative to the release's national
+    patch row of `nowcastrenewal.bvd.model_rows`: its log median and the
+    log-scale SD of its 90% interval, relative to the release's national
     reference. Its group is `ZONE_PREFIX` and its hub code, and its member
     is that code. Zones are matched to hub codes by province and name
     (`health_zones.csv`); zones with no hub case yet are not matched and
@@ -236,8 +237,8 @@ def zone_bvd_rows(
     Returns
     -------
     pandas.DataFrame or None
-        Columns of `data.bvd.MODEL_ROW_COLUMNS`, or None if the release
-        has no zone estimates.
+        Columns of `nowcastrenewal.bvd.MODEL_ROW_COLUMNS`, or None if the
+        release has no zone estimates.
     """
     from nowcastrenewal import bvd
 
@@ -431,13 +432,16 @@ class ZoneRenewalModel(RenewalModel):
             f"variant={self.name} sampling done seconds={seconds:.0f} "
             f"cpu_seconds={cpu_seconds:.0f}"
         )
-        draws = pr.forecast_trajectories(
-            model,
-            data,
-            task.n_samples,
-            seed=task.seed,
-            as_of=tuple(report_cutoffs(task, data)),
-        )
+        draws = {
+            **pr.forecast_trajectories(
+                model,
+                data,
+                task.n_samples,
+                seed=task.seed,
+                as_of=tuple(report_cutoffs(task, data)),
+            ),
+            "rt": pr.weekly_rt(model, data, seed=task.seed),
+        }
         by_chain = model.mcmc.get_samples(group_by_chain=True)
         trace = {
             k: np.asarray(by_chain[k])
@@ -490,7 +494,7 @@ class ZoneRenewalModel(RenewalModel):
         The daily zone onsets of every release up to the task's vintage
         in its provinces, the zones it forecasts (`task_zones`) and, for
         a BVD variant, the zone names matched to the release's zone
-        estimates. The fit key holds it (`evaluation.store.fit_key`).
+        estimates. The fit key holds it (`bdbvhub.store.store.fit_key`).
 
         Parameters
         ----------
@@ -528,9 +532,8 @@ class ZoneRenewalModel(RenewalModel):
         introduction layer (`_silent_walk`), so a zone with no recent
         case is exactly 0 until an introduction. Each province sample is
         the sum of its zones' samples of the same id. National is the
-        sum of the provinces, with no unassigned part: the hub's
-        national target has no case without a province in any release
-        (`data/national-coherence.csv`).
+        sum of the provinces, and a task with national cases in no
+        province stops (`check_national`).
 
         Parameters
         ----------
@@ -552,6 +555,7 @@ class ZoneRenewalModel(RenewalModel):
                 f"{self.name} fits the hub's zone data, which a "
                 f"{task.kind} task does not have."
             )
+        check_national(task)
         walk, silent = _silent_walk(_zone_walk_task(task))
         fitted = tuple(z for z in task_zones(task) if z not in silent)
         zones = [walk]
@@ -568,14 +572,13 @@ class ZoneRenewalModel(RenewalModel):
         zone_samples = pd.concat(zones, ignore_index=True)
         # The samples hold the zones too, so the forecast, the store and
         # the scores read the zone fit's own zones, not a split
-        # (`forecasters.zones.with_zones` leaves them as they are).
+        # (`nowcastbaselines.zones.with_zones` leaves them as they are).
         return ZoneRenewalFit(
             runs,
             pd.concat(
                 [sum_zones(zone_samples), zone_samples[list(SAMPLE_COLUMNS)]],
                 ignore_index=True,
             ),
-            None,
             as_reported=sum_zones(pd.concat(later, ignore_index=True))
             if later
             else None,

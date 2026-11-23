@@ -119,6 +119,7 @@ def test_padded_imports_keep_their_days(kind: str) -> None:
         "rate": 0.05,
         "pulse_at": [0.2, 0.9, 1.0],
         "pulse_size": 3.0,
+        "spread": [0.5, 0.3, 0.2],
         "late": np.array([False, True, False]),
         "late_at": 0.95,
         "late_days": 14,

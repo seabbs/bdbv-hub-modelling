@@ -455,10 +455,6 @@ def test_finetuned_models_are_the_ragged_models_with_the_checkpoint(
     assert model.checkpoint.sha256[1][1] in repr(model)
 
 
-def test_the_models_take_the_latest_release_by_default() -> None:
-    assert foundation.finetuned_spec() == "latest"
-
-
 def _listing(*releases: tuple[str, str, bool]) -> list[dict]:
     return [
         {"tag_name": tag, "published_at": at, "draft": draft}
@@ -1162,11 +1158,7 @@ def test_native_quantiles_pass_chronos_only_its_keys(
 
 
 def test_rolling_rows_hold_each_days_seven_day_sum() -> None:
-    from nowcastfoundation.forecaster import (
-        HubTriangle,
-        rolling_rows,
-        week_rows,
-    )
+    from nowcastfoundation.forecaster import HubTriangle, rolling_rows
 
     times = [f"2026-09-{d:02d}" for d in range(1, 21)]
     final = np.arange(40, dtype=float).reshape(2, 20)
@@ -1176,10 +1168,10 @@ def test_rolling_rows_hold_each_days_seven_day_sum() -> None:
     assert rows.ends[6:].all()
     assert np.isnan(rows.totals[:, :6]).all()
     assert np.allclose(rows.totals[:, 10], final[:, 4:11].sum(1))
-    # On a Saturday it is the week's total, as the weekly rows give.
-    weekly = week_rows(tri)
-    sat = np.flatnonzero(weekly.ends)
-    assert np.allclose(rows.totals[:, sat], weekly.totals[:, sat])
+    # On a whole week's Saturday (09-12, 09-19) it is that week's total.
+    for sat in (11, 18):
+        week = final[:, sat - 6 : sat + 1].sum(1)
+        assert np.allclose(rows.totals[:, sat], week)
 
 
 def _segment(root: Path, settings: dict) -> Path:
@@ -1271,3 +1263,16 @@ def test_a_fine_tuned_complete_model_builds_the_complete_block(
     model = get_model("fm_chronos_daily_complete_ft")
     zero = get_model("fm_chronos_daily_complete")
     assert (model.layout, model.period) == (zero.layout, zero.period)
+
+
+def test_the_hub_models_load_the_interim_hub_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `_ft` models submitted to the hub load the interim checkpoint
+    s48100 of Run A (Sam, 2026-11-24), pinned by its settings hash, not
+    the newest release."""
+    monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
+    root = Path(__file__).resolve().parents[2]
+    spec = foundation.finetuned_spec(root / "config" / "finetune.toml")
+    assert spec == "slots-72661eb7efaa"
+    assert foundation.release_tag(spec) == "chronos-slots-72661eb7efaa"

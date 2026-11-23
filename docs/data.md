@@ -42,7 +42,7 @@ The table counts the weeks where they differ, by vintage and stream.
     --8<-- "national-coherence.md"
 
 A gap is cases counted nationally but in no province.
-The renewal model forecasts it as an unassigned component ([Forecasts](methods/model.md#forecasts)).
+The renewal fits stop on a gap and the submission's coherence check fails, since national is the sum of the provinces ([Forecasts](methods/model.md#forecasts)).
 
 ## Target by vintage
 

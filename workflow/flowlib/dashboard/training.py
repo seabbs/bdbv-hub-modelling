@@ -282,27 +282,6 @@ def views_summary(folder: Path | str) -> dict[str, int] | None:
     }
 
 
-def step_at(
-    pairs: Sequence[tuple[int, int]], n: int, spo: float = 1.0
-) -> tuple[int, bool]:
-    """Return the step at which `n` simulations are trained, from `anchors`.
-
-    With whether it is planned: a checkpoint or a planned chunk ends at
-    `n`. Otherwise past the last pair at the run's mean rate so far, or
-    `spo` steps a simulation if no pair is known past step 0.
-    """
-    pairs = list(pairs) or [(0, 0)]
-    for s, k in pairs:
-        if k == n:
-            return s, True
-    for (s0, n0), (s1, n1) in pairwise(pairs):
-        if n0 < n < n1:
-            return round(s0 + (s1 - s0) * (n - n0) / (n1 - n0)), False
-    s1, n1 = pairs[-1]
-    rate = s1 / n1 if n1 else spo
-    return round(s1 + (n - n1) * rate), False
-
-
 def sims_at(
     pairs: Sequence[tuple[int, int]], step: float, spo: float = 1.0
 ) -> float:

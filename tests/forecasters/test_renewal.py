@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -229,6 +230,18 @@ def _fake_draws(data: Any, n: int, rng: np.random.Generator) -> dict[str, Any]:
         "province": province,
         "national": province.sum(2),
         "insample": insample,
+        "rt": _fake_rt(data, 40, rng),
+    }
+
+
+def _fake_rt(data: Any, n: int, rng: np.random.Generator) -> dict[str, Any]:
+    """`weekly_rt` output on a 42-day seeding axis."""
+    weeks = 6 + data.n_weeks + data.horizon_weeks
+    shape = (n, weeks, len(data.names))
+    return {
+        "rt": rng.lognormal(0.0, 0.3, size=shape),
+        "weight": rng.gamma(2.0, 5.0, size=shape),
+        "start": data.start_date - dt.timedelta(days=42),
     }
 
 
@@ -353,6 +366,54 @@ def test_fit_renewal_writes_the_ci_contract(
     assert set(result.samples["sample"]) == set(range(1, task.n_samples + 1))
     assert set(result.samples["target_end_date"]) == set(task.target_end_dates)
     assert result.modelled is not None
+    rt = pd.read_csv(tmp_path / rn.RT_FILE, dtype={"target_end_date": str})
+    assert set(rt["location"]) == {*fitted, NATIONAL}
+
+
+def test_rt_quantiles_give_the_hub_levels_by_infection_week(
+    task: ForecastTask,
+) -> None:
+    runs = {
+        loc: _fake_run(
+            replace(task, locations=(loc,)), rn.VARIANTS["renewalsp"]
+        )
+        for loc in task.locations[:2]
+    }
+    out = rn.rt_quantiles(task, runs)
+    assert list(out.columns) == [
+        "location",
+        "target_end_date",
+        "output_type_id",
+        "value",
+    ]
+    assert set(out["location"]) == {*task.locations[:2], NATIONAL}
+    assert set(out["target_end_date"]) == set(task.target_end_dates)
+    assert tuple(sorted(set(out["output_type_id"]))) == rn.RT_QUANTILES
+    assert len(rn.RT_QUANTILES) == 23
+    assert (out["value"] >= 0).all()
+    for _, group in out.groupby(["location", "target_end_date"]):
+        assert group["value"].is_monotonic_increasing
+    # National pools the provinces' draws one by one, weighted by their
+    # infections: not a mix of their quantiles.
+    # Each fit has its own axis, so each takes its own week of the date.
+    date = task.target_end_dates[-1]
+    a, b = (
+        {
+            k: v[:, (epiweek_end(date) - r["start"]).days // 7, 0]
+            for k, v in r.items()
+            if k != "start"
+        }
+        for r in (runs[loc].draws["rt"] for loc in task.locations[:2])
+    )
+    joint = (a["weight"] * a["rt"] + b["weight"] * b["rt"]) / (
+        a["weight"] + b["weight"]
+    )
+    nat = out.loc[
+        (out["location"] == NATIONAL)
+        & (out["target_end_date"] == date)
+        & (out["output_type_id"] == 0.5)
+    ]
+    assert float(nat["value"].iloc[0]) == pytest.approx(np.median(joint))
 
 
 def test_chains_start_from_their_own_prior_draws() -> None:
@@ -362,33 +423,22 @@ def test_chains_start_from_their_own_prior_draws() -> None:
     assert kernel._init_strategy is init_to_sample
 
 
-def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["renewal"])
-    data = rn.vintage_inputs(task, config)
-    draws = _fake_draws(data, task.n_samples, np.random.default_rng(6))
-    samples = rn.samples_table(task, data, draws)
-    assert rn.data_gap(task, samples) is None
-    # Two national cases a week with no province, in the last data weeks.
+def test_renewalsp_refuses_national_cases_in_no_province(
+    task: ForecastTask,
+) -> None:
+    # National is the sum of the provinces, with no unassigned part.
+    for name in ("data_gap", "RECENT_WEEKS", "UNASSIGNED_FILE"):
+        assert not hasattr(rn, name)
+    assert "unassigned" not in {f.name for f in fields(rn.RenewalFit)}
+    # Two national cases in a week with no province: the data are not
+    # coherent, so the fit stops rather than invent where they belong.
     target = task.target.copy()
     nat = target["location"] == NATIONAL
-    weeks = sorted(set(target.loc[nat, "target_end_date"]))[-4:]
-    hit = nat & target["target_end_date"].isin(weeks)
-    target.loc[hit, "total"] += 2
-    gapped = replace(task, target=target)
-    gap = rn.data_gap(gapped, samples)
-    assert gap is not None
-    assert list(gap.columns) == ["target_end_date", "sample", "value"]
-    seen = gap.loc[gap["target_end_date"].isin(weeks)]
-    assert (seen["value"] == 2).all()
-    # Later weeks carry the recent share of the provinces forward.
-    later = [w for w in task.target_end_dates if w > max(weeks)]
-    ahead = gap.loc[gap["target_end_date"].isin(later)]
-    assert len(ahead) == len(later) * task.n_samples
-    prov = samples.loc[samples["target_end_date"].isin(later)]
-    by = prov.groupby(["target_end_date", "sample"])["value"].sum()
-    ratio = ahead.set_index(["target_end_date", "sample"])["value"] / by
-    assert ratio.dropna().between(0, 1).all()
-    assert ratio.dropna().std() < 1e-9
+    week = max(target.loc[nat, "target_end_date"])
+    target.loc[nat & (target["target_end_date"] == week), "total"] += 2
+    model = rn.RenewalModel(rn.VARIANTS["renewalsp"])
+    with pytest.raises(ValueError, match="no province"):
+        model.forecast_fit(replace(task, target=target))
 
 
 def test_bvd_variant_reads_the_release_for_its_vintage(

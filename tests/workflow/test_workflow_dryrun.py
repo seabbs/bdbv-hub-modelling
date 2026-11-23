@@ -1243,3 +1243,13 @@ def test_an_interim_checkpoint_verifies_then_releases(tmp_path):
     (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
     jobs = dry(tmp_path, f"{where}/published.json", config=FT)
     assert jobs == {"verify_checkpoint": 1, "publish_checkpoint": 1}
+
+
+def test_rt_check_is_one_job_per_model_and_origin(tmp_path):
+    out = tmp_path / "rt"
+    jobs = dry(
+        tmp_path,
+        f"{out}/renewalbvd-2026-11-22.html",
+        config={"rt_check": {"store": "s", "data": "d", "out_dir": str(out)}},
+    )
+    assert jobs == {"rt_check": 1}
