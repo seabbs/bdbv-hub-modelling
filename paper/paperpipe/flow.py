@@ -252,6 +252,11 @@ class PaperFlow:
         live = self.config.get("live_run")
         return f"--live-run {live}" if live else ""
 
+    def comparisons_arg(self) -> str:
+        """Return the comparisons' options: each name and its variant run."""
+        pairs = self.config.get("comparisons") or {}
+        return " ".join(f"--comparison {n}={r}" for n, r in pairs.items())
+
     # Further forecasts ---------------------------------------------------
 
     def provisional(self, study: str) -> str:

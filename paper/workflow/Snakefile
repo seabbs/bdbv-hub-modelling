@@ -721,6 +721,7 @@ rule evidence:
         # The live fine-tuning run, whose newest scored checkpoints are
         # shown as preliminary.
         live=FLOW.live_arg(),
+        comparisons=FLOW.comparisons_arg(),
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
@@ -729,7 +730,7 @@ rule evidence:
         "--sim-diseases {input.diseases} "
         "--si-copula {input.copula} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
-        "{params.live}"
+        "{params.live} {params.comparisons}"
 
 
 rule summary:

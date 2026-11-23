@@ -38,11 +38,13 @@ from nowcastfoundation.live_checkpoint import label as checkpoint_label
 from paperpipe.outputs import to_markdown
 
 __all__ = [
+    "COMPARISONS",
     "EVIDENCE",
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
     "comparison_figure",
+    "comparison_rows",
     "copula_figure",
     "diseases_table",
     "drop_bdbv",
@@ -52,7 +54,6 @@ __all__ = [
     "realism_numbers",
     "realism_reference",
     "rho_medians",
-    "slots_rows",
     "slots_summary",
     "waiting",
     "write_evidence",
@@ -114,22 +115,40 @@ def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
 HELDOUT_LEVELS: Final = ("national", "intermediate", "leaf")
 """Levels of the trainer's held-out loss, each reported on its own."""
 
-WITHOUT_BIASES: Final = "no-slots"
-"""The run fine-tuned without attention biases, by the scores' `run`."""
+COMPARISONS: Final = {
+    "slots": (
+        "the slots and no-slots runs' scores by checkpoint",
+        ("attention biases", "no biases"),
+    ),
+    "delays": (
+        "the full and no-delay runs' scores by checkpoint",
+        ("with delays", "without delays"),
+    ),
+    "realdata": (
+        "the real-data and synthetic fine-tunes' scores",
+        ("synthetic", "synthetic and German"),
+    ),
+}
+"""Each fine-tuning comparison of the live run with a variant: what it
+waits on until the variant is scored, and the two runs' labels. The
+variant is named by its workflow run (the paper config's `comparisons`)."""
 
 
-def slots_rows(
-    scores: pd.DataFrame, run: str = LIVE_RUN, without: str = WITHOUT_BIASES
+def comparison_rows(
+    scores: pd.DataFrame, run: str, other: str, labels: tuple[str, str]
 ) -> pd.DataFrame:
-    """Return the runs with and without attention biases, by checkpoint.
+    """Return the live run and a variant, by checkpoint.
 
     Sets are, one per level, the trainer's held-out loss and the relative
     scores of each model on the German first half,
     in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
-    `score`).
+    `score`). `labels` name `run` and `other`. Empty while `other` has no
+    scored checkpoint.
     """
     rows = tidy(scores)
-    names = {run: "attention biases", without: "no biases"}
+    names = dict(zip((run, other), labels, strict=True))
+    if not (rows["run"] == other).any():
+        return pd.DataFrame(columns=["set", "run", "outbreaks", "score"])
     rows = rows.loc[rows["run"].isin(names) & (rows["outbreaks"] > 0)]
     loss = rows.loc[
         (rows["study"] == "held_out") & rows["level"].isin(HELDOUT_LEVELS)
@@ -159,9 +178,7 @@ def slots_rows(
     return pd.concat(out, ignore_index=True).dropna(subset=["score"])
 
 
-def slots_summary(
-    scores: pd.DataFrame, run: str = LIVE_RUN, without: str = WITHOUT_BIASES
-) -> pd.DataFrame:
+def slots_summary(scores: pd.DataFrame, run: str, without: str) -> pd.DataFrame:
     """Return zero-shot and both runs at the largest size both reached.
 
     Per study, each run keeps only checkpoints up to the largest number
@@ -507,9 +524,6 @@ EVIDENCE: Final = {
     "sim_realism": "the German development half's values",
     "sim_diseases": "the published disease values",
     "checkpoint_scores": "the scores of each checkpoint of the final run",
-    "compare_slots": "the slots and no-slots runs' scores by checkpoint",
-    "compare_delays": "the full and no-delay runs' scores by checkpoint",
-    "compare_realdata": "the real-data and synthetic fine-tunes' scores",
     "compare_daily": "our models' daily and hub-target scores by checkpoint",
     "block_combinations": ("the realised shares of block layouts and options"),
 }
@@ -711,6 +725,7 @@ def write_evidence(
     fig_dir: Path,
     out_yml: Path,
     run: str = LIVE_RUN,
+    comparisons: Mapping[str, str] | None = None,
 ) -> dict:
     """Write every evidence table and figure, and the numbers they quote.
 
@@ -725,6 +740,10 @@ def write_evidence(
     run : str
         The live fine-tuning run, whose scored checkpoints the curve, the
         tables and the comparisons show as preliminary.
+    comparisons : mapping, optional
+        `COMPARISONS` name to the variant run compared with `run`; a
+        comparison not named, or whose variant has no scored checkpoint,
+        waits.
 
     Returns
     -------
@@ -738,13 +757,21 @@ def write_evidence(
         if frame is not None and name != "sim_realism":
             kept = drop_bdbv(frame)
             data[name] = None if kept.empty else kept
+    raw = data["checkpoint_scores"]
+    pairs = dict(comparisons or {})
+    for name, (_, labels) in COMPARISONS.items():
+        rows = None
+        if raw is not None and name in pairs:
+            rows = comparison_rows(raw, run, pairs[name], labels)
+        data[f"compare_{name}"] = None if rows is None or rows.empty else rows
+    waits = EVIDENCE | {f"compare_{n}": d for n, (d, _) in COMPARISONS.items()}
 
     def table(name: str, frame: pd.DataFrame | None, needs: list[str]) -> None:
         # Rows for another study only still leave this one waiting.
         text = (
             to_markdown(frame)
             if frame is not None and not frame.empty
-            else waiting(", ".join(EVIDENCE[n] for n in needs))
+            else waiting(", ".join(waits[n] for n in needs))
         )
         (si_dir / f"{name}.md").write_text(text)
 
@@ -755,7 +782,7 @@ def write_evidence(
             ax.text(
                 0.5,
                 0.5,
-                waiting(EVIDENCE[needs[0]]).strip("*\n"),
+                waiting(waits[needs[0]]).strip("*\n"),
                 ha="center",
                 va="center",
             )
@@ -774,7 +801,6 @@ def write_evidence(
         None if dis is None else diseases_table(dis),
         ["sim_diseases"],
     )
-    raw = data["checkpoint_scores"]
     ckpt = None if raw is None else checkpoint_rows(raw, run)
     figure(
         "checkpoint-curve",
@@ -793,16 +819,16 @@ def write_evidence(
     )
     table(
         "slots-summary",
-        None if raw is None else slots_summary(raw, run),
-        ["checkpoint_scores"],
+        None
+        if data["compare_slots"] is None
+        else slots_summary(raw, run, pairs["slots"]),
+        ["compare_slots"],
     )
     table(
         "block-combinations",
         data["block_combinations"],
         ["block_combinations"],
     )
-    if data["compare_slots"] is None and raw is not None:
-        data["compare_slots"] = slots_rows(raw, run)
     for name in ("slots", "delays", "realdata", "daily"):
         rows = data[f"compare_{name}"]
         figure(
@@ -831,7 +857,7 @@ def write_evidence(
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)
             ),
-            "waiting": [EVIDENCE[n] for n, d in data.items() if d is None],
+            "waiting": [waits[n] for n, d in data.items() if d is None],
         }
     }
     out_yml.write_text(yaml.safe_dump(numbers, sort_keys=False))
