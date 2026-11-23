@@ -14,7 +14,6 @@ Run as `python -m nowcastfoundation.finetune.interim TRAIN`.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import shutil
@@ -61,14 +60,28 @@ def _last_checkpoint(train: Path) -> Path:
     return max(found)[1]
 
 
+NOT_ITS_OWN = (
+    "blocks",
+    "series",
+    "level_mix",
+    "cadence_mix",
+    "tokens",
+    "seconds",
+    "held_out_loss_start",
+    "held_out_loss",
+    "held_out_loss_nowcast",
+    "held_out_loss_forecast",
+    "held_out_loss_by_level",
+    "held_out_loss_by_source",
+)
+"""The last checkpoint's counts and losses, which the interim drops."""
+
+
 def export(train: Path | str) -> Path:
     """Write the saved state's adapter as `train/interim/s<step>/`.
 
-    Its `settings.json` is the last saved checkpoint's with `interim`,
-    the state's `steps` and `n_outbreaks`, the checkpoint it follows
-    (`from_checkpoint`) and a `hash` naming the step and the adapter's
-    SHA-256, so each export is its own checkpoint. The adapter config is
-    the last checkpoint's: the same LoRA.
+    The settings are `write_settings`'s. The adapter config is the last
+    checkpoint's: the same LoRA.
 
     Returns
     -------
@@ -90,19 +103,60 @@ def export(train: Path | str) -> Path:
         last / "finetuned-ckpt" / "adapter_config.json",
         ckpt / "adapter_config.json",
     )
-    digest = hashlib.sha256(
-        (ckpt / "adapter_model.safetensors").read_bytes()
-    ).hexdigest()
-    settings = json.loads((last / "settings.json").read_text())
-    settings |= {
-        "interim": True,
-        "steps": step,
-        "n_outbreaks": int(state["done"]),
-        "from_checkpoint": last.name,
-        "hash": f"interim-s{step}-{digest[:12]}",
-    }
-    (where / "settings.json").write_text(json.dumps(settings, indent=1))
+    write_settings(where, train, step, int(state["done"]))
     return where
+
+
+def write_settings(where: Path, train: Path, step: int, done: int) -> None:
+    """Write an interim checkpoint's lists and `settings.json`.
+
+    As a saved checkpoint's (`finetune.stream`): `outbreaks.txt` holds
+    the first `done` outbreaks in the order trained (the state's
+    `trained`) and `consumed.txt` the run's first `step` steps. The
+    settings are the last saved checkpoint's, less the counts and losses
+    that are its own (`NOT_ITS_OWN`), with this one's outbreaks, steps
+    and list hashes, `interim` and the checkpoint it follows
+    (`from_checkpoint`). Its `hash` is taken from them less those
+    outside the hash (`verify.NOT_HASHED`), so it verifies
+    (`finetune-verify`) and the workflow releases it as any checkpoint.
+    """
+    from nowcastfoundation.finetune import chronos as ft
+    from nowcastfoundation.finetune import verify
+
+    last = _last_checkpoint(train)
+    trained = json.loads((train / "state" / "state.json").read_text())[
+        "trained"
+    ]
+    if len(trained) < done:
+        raise ValueError(f"the state lists {len(trained)} of {done} outbreaks")
+    (where / "outbreaks.txt").write_text("\n".join(trained[:done]) + "\n")
+    with (train / "consumed.txt").open() as f:
+        consumed = [next(f) for _ in range(step)]
+    (where / "consumed.txt").write_text("".join(consumed))
+    settings = json.loads((last / "settings.json").read_text())
+    kept = {
+        k: settings.pop(k)
+        for k in ("hash", "code_commit", "code_paths", "device")
+        if k in settings
+    }
+    for key in NOT_ITS_OWN:
+        settings.pop(key, None)
+    settings |= {
+        "n_outbreaks": done,
+        "sims_done": done,
+        "steps": step,
+        "outbreaks_sha256": ft._sha256(where / "outbreaks.txt"),
+        "consumed_sha256": ft._sha256(where / "consumed.txt"),
+        "interim": True,
+        "from_checkpoint": last.name,
+    }
+    settings["hash"] = ft._settings_hash(
+        {k: v for k, v in settings.items() if k not in verify.NOT_HASHED}
+    )
+    for key in ("code_commit", "code_paths", "device"):
+        if key in kept:
+            settings[key] = kept[key]
+    (where / "settings.json").write_text(json.dumps(settings, indent=1))
 
 
 def main() -> None:

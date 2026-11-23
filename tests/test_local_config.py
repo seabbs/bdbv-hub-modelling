@@ -23,4 +23,6 @@ def test_the_trainer_takes_its_device_from_the_machine():
     from nowcastfoundation.finetune import stream as fs
 
     assert fs.torch_device("cpu") == "cpu"
-    assert fs.torch_device("auto") in {"cuda", "mps", "cpu"}
+    # The trainer's DEVICE is set by its rule; auto is never detected.
+    with pytest.raises(ValueError, match="auto"):
+        fs.torch_device("auto")

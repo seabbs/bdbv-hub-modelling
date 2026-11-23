@@ -390,7 +390,7 @@ R_{\mathcal{G}}(t_b) = \frac{\sum_{z \in \mathcal{G}} \Omega_z\, R_z(t_b)}{\sum_
 \mathcal{G} \in \{\text{CD}, k\}.
 $$
 
-With the release's SDs inflated by a factor $\kappa = \sqrt{2} \approx 1.41$, the likelihood gains
+With the release's SDs inflated by a factor $\kappa = 1.5$, the likelihood gains
 
 $$
 \mu_{\text{CD}} \sim \mathcal{N}\big(\log R_{\text{CD}}(t_b),\, \kappa^2 \sigma_{\text{CD}}^2\big),
@@ -407,7 +407,7 @@ Leaving a province out drops the national term and the patch that holds it.
 $\kappa$ says how much we trust an external estimate built partly on the same case data as ours.
 At $\kappa = 1$ those data would count twice at full weight, so we widen the estimates and they move our Rt mainly where our own data are weak.
 $\kappa$ is set by that judgement, like a prior, and is not tuned on scores.
-$\kappa = \sqrt{2}$ halves the precision, a power prior with tempering 0.5.
+$\kappa = 1.5$ is a power prior with tempering $1/\kappa^2 \approx 0.44$.
 The term adds no parameters, and $\kappa = \infty$ gives `renewal`.
 
 ## Health zones
