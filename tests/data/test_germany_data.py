@@ -158,17 +158,17 @@ def test_a_count_corrected_to_zero_is_not_carried(
     assert late.empty
 
 
-def test_dates_move_to_the_next_saturday(tasks) -> None:
+def test_tasks_keep_real_dates(tasks) -> None:
     for task in tasks:
-        # 2021-10-20 is a Wednesday, three days before a Saturday.
-        assert task.reference_date == dt.date(2021, 10, 23)
-        assert task.reference_date.weekday() == 5
+        # 2021-10-20 is a Wednesday; nothing moves to a Saturday.
+        assert task.reference_date == dt.date(2021, 10, 20)
+        assert task.cutoff == NOWCAST
         # Every horizon's day is a target date of the one task.
         assert task.target_end_dates == tuple(
             (task.reference_date + dt.timedelta(days=h)).isoformat()
             for h in sorted(HORIZONS)
         )
-        assert task.daily_history["vintage"].max() == "2021-10-23"
+        assert task.daily_history["vintage"].max() == NOWCAST
 
 
 def test_weekly_models_forecast_the_sums_that_end_hub_weeks(tasks) -> None:
