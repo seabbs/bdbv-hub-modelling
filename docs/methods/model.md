@@ -334,7 +334,6 @@ A zone with no case in the random walks' walk window is silent and is not fitted
 It takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
 The introduction rate pools the zone with the other zones of its province, so a province with no case in any zone is forecast by its zones' introductions alone.
 These draws are independent of the fit.
-The ZoneAllocator floor of the other models does not apply.
 
 ### Provinces and the country
 
