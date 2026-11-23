@@ -149,8 +149,10 @@ evidence:
   compare_slots: null
   compare_delays: null
   compare_realdata: null
-  # Pending: daily and hub-target scores from the target column.
-  compare_daily: null
+  # Each run's checkpoints on daily counts and on the 7-day sums, relative
+  # to the German config's references (workflow rule compare_daily).
+  compare_daily:
+    file: $ROOT/runs/compare-daily.csv
   # Pending: the realised shares of each combination of block
   # layout and options.
   block_combinations: null
