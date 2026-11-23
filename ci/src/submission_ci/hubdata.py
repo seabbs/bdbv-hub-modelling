@@ -11,6 +11,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 TARGET = "wk inc confirmed cases"
+RT_TARGET = "wk R_t"
+"""The hub's optional Rt target, given as quantiles (`RT_LEVELS`)."""
+RT_LEVELS = (
+    0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5,
+    0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99,
+)  # fmt: skip
+"""The quantile levels the hub requires for `RT_TARGET`."""
 SUBMISSION_COLUMNS = frozenset(
     {
         "reference_date",
@@ -47,6 +54,12 @@ class Samples:
     )
     duplicates: int = 0
     unparsable: list[str] = field(default_factory=list)
+    # `RT_TARGET` rows, apart from the count samples above:
+    # location -> target_end_date -> output_type_id -> value.
+    rt: dict[str, dict[str, dict[str, float]]] = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(dict))
+    )
+    rt_output_types: set[str] = field(default_factory=set)
 
     @property
     def locations(self) -> list[str]:
@@ -72,6 +85,9 @@ class Samples:
 def read_samples(path: Path | str, latest: bool = True) -> Samples:
     """Read a hub-format sample CSV.
 
+    Count rows are sample trajectories (`values`); `RT_TARGET` rows are
+    kept apart in `rt`, so the count checks never see them.
+
     A resubmitted file holds several forecasts, one per `forecast_date`.
     With `latest` only the newest is read, which is the one this run adds.
     Every date is still listed in `forecast_dates`.
@@ -88,12 +104,22 @@ def read_samples(path: Path | str, latest: bool = True) -> Samples:
             out.rows += 1
             out.reference_dates.add(row.get("reference_date", ""))
             out.targets.add(row.get("target", ""))
-            out.output_types.add(row.get("output_type", ""))
             try:
                 value = float(row.get("value", ""))
             except ValueError:
                 out.unparsable.append(f"line {line}: {row.get('value')!r}")
                 value = math.nan
+            if row.get("target") == RT_TARGET:
+                out.rt_output_types.add(row.get("output_type", ""))
+                levels = out.rt[row.get("location", "")][
+                    row.get("target_end_date", "")
+                ]
+                level = row.get("output_type_id", "")
+                if level in levels:
+                    out.duplicates += 1
+                levels[level] = value
+                continue
+            out.output_types.add(row.get("output_type", ""))
             traj = out.values[row.get("location", "")][
                 row.get("output_type_id", "")
             ]

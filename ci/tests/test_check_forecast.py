@@ -34,8 +34,7 @@ def statuses(path: Path, **kwargs: Any) -> dict[str, str]:
         settings=POLICY.checks,
         observed=OBS,
         expected_locations=LOCS,
-        tasks=TASKS,
-        **{"national_sidecar": _sidecar(), **kwargs},
+        **{"national_sidecar": _sidecar(), "tasks": TASKS, **kwargs},
     )
     return {c.name: c.status for c in checks}
 
@@ -50,8 +49,9 @@ def sub(tmp_path: Path, **kwargs: Any) -> Path:
 def test_plausible_file_passes(tmp_path: Path) -> None:
     s = statuses(sub(tmp_path))
     assert s.pop("baseline") == "skip" and s.pop("previous") == "skip"
-    # Zones are required only for baseline.
+    # Zones are required only for baseline, and the file has no wk R_t.
     assert s.pop("zones") == "skip"
+    assert s.pop("rt") == "skip"
     assert set(s.values()) == {"pass"}, s
     assert "plausible" in s
 
@@ -112,8 +112,7 @@ def _checks(path: Path, **kwargs: Any) -> dict[str, Any]:
         settings=POLICY.checks,
         observed=OBS,
         expected_locations=LOCS,
-        tasks=TASKS,
-        **{"national_sidecar": _sidecar(), **kwargs},
+        **{"national_sidecar": _sidecar(), "tasks": TASKS, **kwargs},
     )
     return {c.name: c for c in checks}
 
