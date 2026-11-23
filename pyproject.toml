@@ -263,7 +263,6 @@ ignore_imports = [
   "nowcastgermany.reporting -> bdbvhub.reporting.explorer",
   "nowcastgermany.reporting -> bdbvhub.reporting.site",
   "nowcastrenewal.zones -> bdbvhub.data.tidy",
-  "nowcastrenewal.zones -> bdbvhub.data.zones",
 ]
 
 [tool.mypy]
