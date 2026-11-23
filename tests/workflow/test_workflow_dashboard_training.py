@@ -338,3 +338,28 @@ def test_an_offloaded_run_s_step_evaluations_are_its_held_out_line(tmp_path):
     assert got["held"] == [[50.0, 0.3], [100.0, 0.2]]
     assert got["held_parts"]["nowcast"] == [[50.0, 0.2], [100.0, 0.1]]
     assert got["held_parts"]["forecast"] == [[50.0, 0.1], [100.0, 0.1]]
+
+
+def test_the_recent_rate_starts_after_a_restart_s_gap():
+    # Run A stopped 10:09 to 11:10: a window spanning it gave 0.10 steps/s
+    # and an ETA of days. The rate is over the steps since the resume.
+    before = [(0.0, 0.0), (600.0, 600.0)]
+    after = [(4200.0, 600.0), (4300.0, 680.0), (4400.0, 760.0)]
+    rate, span = training.recent_rate(before + after, window=4200.0)
+    assert rate == pytest.approx(0.8)
+    assert span == pytest.approx(200.0)
+    # One point since the resume: no rate yet, not the gap's.
+    assert training.recent_rate([*before, (4200.0, 610.0)]) == (None, None)
+
+
+def test_only_checkpoint_folders_count_as_checkpoints(tmp_path):
+    # n3200.log.pin-014a2bac5 is a file: its digits made a checkpoint of
+    # 320,001,425 simulations.
+    train = tmp_path / "train"
+    for n in (100, 200):
+        (train / f"n{n}").mkdir(parents=True)
+        (train / f"n{n}" / "settings.json").write_text("{}")
+    (train / "n3200.log.pin-014a2bac5").write_text("log")
+    (train / "n3200.log").write_text("log")
+    assert [c[0] for c in logs.checkpoints(tmp_path)] == ["n100", "n200"]
+    assert logs.prefixes(tmp_path, [400]) == [100, 200, 400]
