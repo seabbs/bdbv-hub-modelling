@@ -35,8 +35,8 @@ def coherence(gaps: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         "coherent": not rows,
         "streams": streams,
         "rows": rows,
-        "handling": "The model fits the provinces and adds the gap as an "
-        "unassigned national component.",
+        "handling": "The renewal fits stop when the hub counts cases "
+        "nationally but in no province, and this check fails.",
     }
 
 

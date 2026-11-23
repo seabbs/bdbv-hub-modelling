@@ -34,6 +34,7 @@ from nowcastrenewal.forecaster import (
     _silent_walk,
     bvd_record,
     bvd_release,
+    check_national,
     delay_summary,
     engine,
     horizon_weeks,
@@ -528,9 +529,8 @@ class ZoneRenewalModel(RenewalModel):
         introduction layer (`_silent_walk`), so a zone with no recent
         case is exactly 0 until an introduction. Each province sample is
         the sum of its zones' samples of the same id. National is the
-        sum of the provinces, with no unassigned part: the hub's
-        national target has no case without a province in any release
-        (`data/national-coherence.csv`).
+        sum of the provinces, and a task with national cases in no
+        province stops (`check_national`).
 
         Parameters
         ----------
@@ -552,6 +552,7 @@ class ZoneRenewalModel(RenewalModel):
                 f"{self.name} fits the hub's zone data, which a "
                 f"{task.kind} task does not have."
             )
+        check_national(task)
         walk, silent = _silent_walk(_zone_walk_task(task))
         fitted = tuple(z for z in task_zones(task) if z not in silent)
         zones = [walk]
@@ -575,7 +576,6 @@ class ZoneRenewalModel(RenewalModel):
                 [sum_zones(zone_samples), zone_samples[list(SAMPLE_COLUMNS)]],
                 ignore_index=True,
             ),
-            None,
             as_reported=sum_zones(pd.concat(later, ignore_index=True))
             if later
             else None,

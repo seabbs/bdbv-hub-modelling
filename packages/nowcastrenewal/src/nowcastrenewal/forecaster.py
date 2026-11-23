@@ -9,8 +9,7 @@ This module owns everything around it:
 - the variants (`VARIANTS`), registered as models for the backtest;
 - `vintage_inputs`: a `ForecastTask` as the model's `Vintage`, with the
   leave-one-province-out mask;
-- `samples_table`: trajectories as the hub sample table, with the
-  unassigned national component;
+- `samples_table`: trajectories as the hub sample table;
 - `ppc_rows`, `parameter_diagnostics`, `chain_diagnostics`: the CI's
   `ppc.json` and `diagnostics.json`;
 - `delay_summary` and `fit_delays`: each fit's learnt delay, written as
@@ -80,7 +79,7 @@ __all__ = [
     "bvd_release",
     "bvd_rows",
     "chain_diagnostics",
-    "data_gap",
+    "check_national",
     "delay_summary",
     "ebfmi",
     "engine",
@@ -167,10 +166,6 @@ def province_workers(num_chains: int, n_provinces: int) -> int:
     else:
         workers = min(MAX_PROVINCE_WORKERS, usable_cpus() // max(1, num_chains))
     return max(1, min(workers, n_provinces))
-
-
-RECENT_WEEKS: Final = 4
-"""Data weeks behind the share that carries the national data gap forward."""
 
 
 def engine() -> ModuleType:
@@ -689,49 +684,38 @@ def _as_reported(task: ForecastTask, run: RenewalRun) -> list[pd.DataFrame]:
     return out
 
 
-def data_gap(task: ForecastTask, samples: pd.DataFrame) -> pd.DataFrame | None:
-    r"""National cases in the data that no province has, by week and sample.
+def check_national(task: ForecastTask) -> None:
+    """Stop if the task's national data hold cases in no province.
 
-    In weeks with data, the gap is $g(w) = \max\{0, Y_{CD}(w) - \sum_p
-    Y_p(w)\}$ from the vintage, the same in every sample. Later weeks carry
-    the recent share forward: $g_k(w) = \rho \sum_p \tilde y_{p,k}(w)$, with
-    $\rho$ the gap over the provinces' total in the last `RECENT_WEEKS`
-    data weeks and $\tilde y_{p,k}$ sample $k$ of province $p$.
+    National is the sum of the provinces, sample by sample, so cases the
+    hub counts nationally but in no province would be lost. No release
+    has had any (`data/national-coherence.csv`), so a fit stops rather
+    than guess where they belong. The submission's coherence check fails
+    on the same data (`bdbvhubrenewal coherence`).
 
     Parameters
     ----------
     task : ForecastTask
         The task.
-    samples : pandas.DataFrame
-        Province samples (`SAMPLE_COLUMNS`).
 
-    Returns
-    -------
-    pandas.DataFrame or None
-        Columns `target_end_date`, `sample` and `value`, or None if the
-        national data equal the sum of the provinces.
+    Raises
+    ------
+    ValueError
+        If national exceeds the sum of the provinces in a week.
     """
     rows = task.target.loc[task.target["vintage"] == task.vintage]
     wide = rows.pivot_table(
         index="target_end_date", columns="location", values="total"
     ).fillna(0)
     if NATIONAL not in wide:
-        return None
-    provinces = wide.drop(columns=NATIONAL).sum(axis=1)
-    gap = (wide[NATIONAL] - provinces).clip(lower=0)
-    if not (gap > 0).any():
-        return None
-    recent = gap.index[-RECENT_WEEKS:]
-    total = float(provinces.loc[recent].sum())
-    share = float(gap.loc[recent].sum()) / total if total > 0 else 0.0
-    by = samples.groupby(["target_end_date", "sample"], as_index=False).agg(
-        value=("value", "sum")
-    )
-    last = str(gap.index.max())
-    later = by["target_end_date"].astype(str) > last
-    known = by["target_end_date"].astype(str).map(gap).fillna(0.0)
-    by["value"] = np.where(later, share * by["value"], known)
-    return by.reset_index(drop=True)
+        return
+    gap = wide[NATIONAL] - wide.drop(columns=NATIONAL).sum(axis=1)
+    weeks = [str(w) for w in gap.index[gap > 0]]
+    if weeks:
+        raise ValueError(
+            f"{task.vintage}: national cases in no province in weeks "
+            f"{', '.join(weeks)}; national is the sum of the provinces."
+        )
 
 
 def ppc_rows(
@@ -1152,8 +1136,6 @@ class RenewalFit:
         one run of the provinces together, `"all"`.
     samples : pandas.DataFrame
         Province samples (`SAMPLE_COLUMNS`).
-    unassigned : pandas.DataFrame or None
-        National cases in no reported province.
     as_reported : pandas.DataFrame or None
         Samples of the counts reported by each date in `task.report_by`
         (`SAMPLE_COLUMNS` and `as_of`), for the weeks up to that date.
@@ -1161,7 +1143,6 @@ class RenewalFit:
 
     runs: Mapping[str, RenewalRun]
     samples: pd.DataFrame
-    unassigned: pd.DataFrame | None = None
     as_reported: pd.DataFrame | None = None
 
 
@@ -1301,8 +1282,7 @@ class RenewalModel:
         The provinces the random walks find silent (no case in their walk
         window) take `randomwalknowcast`'s draws: exactly 0 until an
         introduction, then its walk. National is the sum of the provinces
-        plus the unassigned part, the national cases no province has
-        (`data_gap`). The pooled variants, `renewal` and `renewalbvd`,
+        (`check_national`). The pooled variants, `renewal` and `renewalbvd`,
         fit health zones (`forecasters.zonerenewal.ZoneRenewalModel`).
 
         Parameters
@@ -1313,7 +1293,7 @@ class RenewalModel:
         Returns
         -------
         RenewalFit
-            The runs, province samples and national or unassigned parts.
+            The runs and province samples.
 
         Raises
         ------
@@ -1325,6 +1305,7 @@ class RenewalModel:
                 f"{self.name} pools provinces, so it is fitted on health "
                 "zones by ZoneRenewalModel."
             )
+        check_national(task)
         walk, silent = _silent_walk(task)
         frames = [walk]
         later = [
@@ -1344,7 +1325,6 @@ class RenewalModel:
         return RenewalFit(
             runs,
             samples,
-            data_gap(task, samples),
             as_reported=pd.concat(later, ignore_index=True) if later else None,
         )
 
@@ -1458,7 +1438,6 @@ class RenewalModel:
 
 
 SAMPLES_FILE: Final = "samples.csv.gz"
-UNASSIGNED_FILE: Final = "unassigned.csv.gz"
 TRAJECTORY_DRAW_FILE: Final = "trajectory_draw.csv"
 """The posterior draw behind each trajectory, by fit, so a later stage
 (health zones) can pair trajectories with posterior draws."""
@@ -1479,9 +1458,9 @@ def fit_renewal(
     fit health zones (`forecasters.zonerenewal`) and also write their
     zone samples.
     Trajectories are drawn here, so `forecast_renewal` only reads them.
-    Writes `samples.csv.gz`, `delay-summary.csv`, `unassigned.csv.gz`
-    (if any), `trajectories.json` and `ppc.json`. `run_fit` writes the returned
-    record to `diagnostics.json`.
+    Writes `samples.csv.gz`, `delay-summary.csv`, `trajectories.json`
+    and `ppc.json`. `run_fit` writes the returned record to
+    `diagnostics.json`.
 
     Parameters
     ----------
@@ -1532,8 +1511,8 @@ def write_fit_dir(
 ) -> dict[str, Any]:
     """Write a fit's directory, as `forecast_renewal` reads it.
 
-    Writes `samples.csv.gz`, `delay-summary.csv`, `unassigned.csv.gz`
-    (if any), `trajectory_draw.csv`, `trajectories.json` and `ppc.json`.
+    Writes `samples.csv.gz`, `delay-summary.csv`, `trajectory_draw.csv`,
+    `trajectories.json` and `ppc.json`.
     `fit_renewal` and the fit store (`RenewalModel.write_fit_dir`) both
     write a fit this way.
 
@@ -1567,8 +1546,6 @@ def write_fit_dir(
     # a forecast returns.
     write_csv(fit.samples.loc[:, list(SAMPLE_COLUMNS)], out / SAMPLES_FILE)
     write_csv(fit_delays(fit, task), out / DELAY_SUMMARY_FILE)
-    if fit.unassigned is not None:
-        write_csv(fit.unassigned, out / UNASSIGNED_FILE)
     pairs = [
         pd.DataFrame(
             {
@@ -1649,26 +1626,16 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
     Returns
     -------
     nowcastutils.forecast.Forecast
-        Province samples, the unassigned component and the reported
-        provinces.
+        Province samples and the reported provinces.
     """
     path = Path(fit_dir)
     samples = pd.read_csv(path / SAMPLES_FILE, dtype={"target_end_date": str})
     samples = samples.loc[
         samples["target_end_date"].isin(task.target_end_dates)
     ]
-    unassigned = None
-    if (path / UNASSIGNED_FILE).exists():
-        unassigned = pd.read_csv(
-            path / UNASSIGNED_FILE, dtype={"target_end_date": str}
-        )
-        unassigned = unassigned.loc[
-            unassigned["target_end_date"].isin(task.target_end_dates)
-        ].reset_index(drop=True)
     meta = json.loads((path / TRAJECTORIES_FILE).read_text())
     return Forecast(
         samples=samples.reset_index(drop=True),
-        unassigned=unassigned,
         modelled=tuple(meta["modelled"]),
     )
 
