@@ -149,7 +149,7 @@ jobs:
         include:
           # The fine-tuned models (fm_chronos_*_ragged_ft) have no cells:
           # their forecasts come from the checkpoint scorer's store
-          # (`germany-ft-load` in build).
+          # (`nowcastgermany ft-load` in build).
           # The German benchmark reads none of the hub data, so its cells
           # run without the inputs and are keyed on its own code and
           # config/germany.toml, which pins its data. A nowcast date takes
@@ -169,165 +169,165 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcastgermany/src/nowcastgermany/pairing.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
-              uv run bdbvhubrenewal pairing-sensitivity --study germany
+              uv run nowcastgermany pairing-sensitivity
               --chunk 0/4 --out output/parts/pairing
           - cell: pairing-germany-1
             model: randomwalknowcast
             germany: true
             with: >-
-              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcastgermany/src/nowcastgermany/pairing.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
-              uv run bdbvhubrenewal pairing-sensitivity --study germany
+              uv run nowcastgermany pairing-sensitivity
               --chunk 1/4 --out output/parts/pairing
           - cell: pairing-germany-2
             model: randomwalknowcast
             germany: true
             with: >-
-              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcastgermany/src/nowcastgermany/pairing.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
-              uv run bdbvhubrenewal pairing-sensitivity --study germany
+              uv run nowcastgermany pairing-sensitivity
               --chunk 2/4 --out output/parts/pairing
           - cell: pairing-germany-3
             model: randomwalknowcast
             germany: true
             with: >-
-              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcastgermany/src/nowcastgermany/pairing.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
-              uv run bdbvhubrenewal pairing-sensitivity --study germany
+              uv run nowcastgermany pairing-sensitivity
               --chunk 3/4 --out output/parts/pairing
           - cell: germany-randomwalknowcast-0
             model: randomwalknowcast
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
+              uv run nowcastgermany backtest --models randomwalknowcast
               --chunk 0/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-1
             model: randomwalknowcast
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
+              uv run nowcastgermany backtest --models randomwalknowcast
               --chunk 1/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-2
             model: randomwalknowcast
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
+              uv run nowcastgermany backtest --models randomwalknowcast
               --chunk 2/4 --out output/parts/germany
           - cell: germany-randomwalknowcast-3
             model: randomwalknowcast
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalknowcast
+              uv run nowcastgermany backtest --models randomwalknowcast
               --chunk 3/4 --out output/parts/germany
           - cell: germany-randomwalk-0
             model: randomwalk
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalk
+              uv run nowcastgermany backtest --models randomwalk
               --chunk 0/2 --out output/parts/germany
           - cell: germany-randomwalk-1
             model: randomwalk
             germany: true
             run: >-
-              uv run bdbvhubrenewal germany-backtest --models randomwalk
+              uv run nowcastgermany backtest --models randomwalk
               --chunk 1/2 --out output/parts/germany
           - cell: germany-fm_chronos_daily_complete-0
             model: fm_chronos_daily_complete
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_daily_complete --chunk 0/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_complete-1
             model: fm_chronos_daily_complete
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_daily_complete --chunk 1/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_complete-2
             model: fm_chronos_daily_complete
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_daily_complete --chunk 2/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_complete-3
             model: fm_chronos_daily_complete
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_daily_complete --chunk 3/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_complete-0
             model: fm_chronos_weekly_complete
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_weekly_complete --chunk 0/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_complete-1
             model: fm_chronos_weekly_complete
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_weekly_complete --chunk 1/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_complete-2
             model: fm_chronos_weekly_complete
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_weekly_complete --chunk 2/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_complete-3
             model: fm_chronos_weekly_complete
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_weekly_complete --chunk 3/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_ragged-0
             model: fm_chronos_daily_ragged
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_daily_ragged --chunk 0/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_ragged-1
             model: fm_chronos_daily_ragged
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_daily_ragged --chunk 1/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_ragged-2
             model: fm_chronos_daily_ragged
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_daily_ragged --chunk 2/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_ragged-3
             model: fm_chronos_daily_ragged
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_daily_ragged --chunk 3/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_ragged-0
             model: fm_chronos_weekly_ragged
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_weekly_ragged --chunk 0/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_ragged-1
             model: fm_chronos_weekly_ragged
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_weekly_ragged --chunk 1/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_ragged-2
             model: fm_chronos_weekly_ragged
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_weekly_ragged --chunk 2/4 --out output/parts/germany
           - cell: germany-fm_chronos_weekly_ragged-3
             model: fm_chronos_weekly_ragged
             germany: true
             run: >-
-              uv run --group chronos bdbvhubrenewal germany-backtest
+              uv run --group chronos nowcastgermany backtest
               --models fm_chronos_weekly_ragged --chunk 3/4 --out output/parts/germany
           - cell: recovery-randomwalknowcast-0
             model: randomwalknowcast
@@ -440,7 +440,7 @@ jobs:
           key: ${{ steps.key.outputs.key }}
       - name: Fetch the German benchmark data
         if: matrix.germany && steps.cache.outputs.cache-hit != 'true'
-        run: uv run bdbvhubrenewal germany-fetch
+        run: uv run nowcastgermany fetch
       # The Chronos-2 models need their dependency group and checkpoints,
       # as in the Fit store workflow.
       - name: Install Chronos-2
@@ -570,8 +570,8 @@ jobs:
         run: |
           groups=()
           if [ -n "$GROUP" ]; then groups=(--group "$GROUP"); fi
-          uv run bdbvhubrenewal germany-fetch
-          uv run "${groups[@]}" bdbvhubrenewal germany-backtest --held-out \
+          uv run nowcastgermany fetch
+          uv run "${groups[@]}" nowcastgermany backtest --held-out \
             --models "$MODEL" --chunk "$CHUNK" --out output/parts/germany
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -641,7 +641,7 @@ jobs:
           if git fetch -q --depth 1 origin germany-ft-forecasts; then
             git archive FETCH_HEAD | tar -x -C output/germany-ft-store
           fi
-          uv run bdbvhubrenewal germany-ft-load \
+          uv run nowcastgermany ft-load \
             --store output/germany-ft-store \
             --out output/parts/parts-germany-ft-store/germany \
             --note results/germany/ft-checkpoint.json
@@ -669,10 +669,10 @@ jobs:
             output/parts/parts-germany-*/germany
           # The hub teams' nowcasts are read, not run, so they are scored
           # here.
-          uv run bdbvhubrenewal germany-fetch
-          uv run bdbvhubrenewal germany-teams --out results/germany
-          uv run bdbvhubrenewal germany-asof --out results/germany
-          uv run bdbvhubrenewal germany-paper --results results/germany
+          uv run nowcastgermany fetch
+          uv run nowcastgermany teams --out results/germany
+          uv run nowcastgermany asof --out results/germany
+          uv run nowcastgermany paper --results results/germany
           # The pairing sensitivity's blocks, for docs/pairing.md.
           mkdir -p results/pairing
           for f in output/parts/parts-pairing-*/pairing/*.csv.gz; do
@@ -734,8 +734,8 @@ jobs:
         run: |
           uv run bdbvhubrenewal concat-results --out results/germany/held-out \
             output/heldout/heldout-*/germany/held-out
-          uv run bdbvhubrenewal germany-teams --held-out --out results/germany
-          uv run bdbvhubrenewal germany-paper --results results/germany/held-out
+          uv run nowcastgermany teams --held-out --out results/germany
+          uv run nowcastgermany paper --results results/germany/held-out
       # Quarto reads GH_TOKEN to look up the TinyTeX release, which
       # unauthenticated runners can be refused (403).
       - uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2.2.0

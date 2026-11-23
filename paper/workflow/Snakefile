@@ -175,12 +175,12 @@ rule germany_fetch:
     conda:
         TOOLS_ENV
     params:
-        bdbv=BDBV,
+        germany=GERMANY_CLI,
         germany_config=GERMANY["config"],
         germany_data=lambda w, output: Path(output[0]).parent,
     shell:
         "exec >{log} 2>&1; "
-        "{params.bdbv} germany-fetch --config {params.germany_config} "
+        "{params.germany} fetch --config {params.germany_config} "
         "--out {params.germany_data}"
 
 
@@ -199,15 +199,15 @@ rule germany_development:
         gpu=FORECAST.gpu,
     params:
         env=FORECAST.env,
-        bdbv=BDBV,
+        germany=GERMANY_CLI,
         germany_root_config=GERMANY["config"],
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         out=lambda w, output: Path(output[0]).parent,
     shell:
         "exec >{log} 2>&1; {params.env} "
-        "{params.bdbv} germany-backtest {params.args} --out {params.out} && "
-        "{params.bdbv} germany-teams {params.args} --out {params.out} && "
-        "{params.bdbv} germany-paper --config {params.germany_root_config} "
+        "{params.germany} backtest {params.args} --out {params.out} && "
+        "{params.germany} teams {params.args} --out {params.out} && "
+        "{params.germany} paper --config {params.germany_root_config} "
         "--results {params.out}"
 
 
@@ -227,17 +227,17 @@ rule germany_heldout:
         gpu=FORECAST.gpu,
     params:
         env=FORECAST.env,
-        bdbv=BDBV,
+        germany=GERMANY_CLI,
         germany_root_config=GERMANY["config"],
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         # The held-out forecasts are in the results folder's held-out/.
         out=lambda w, output: Path(output[0]).parent.parent,
     shell:
         "exec >{log} 2>&1; {params.env} "
-        "{params.bdbv} germany-backtest {params.args} --held-out "
+        "{params.germany} backtest {params.args} --held-out "
         "--out {params.out} && "
-        "{params.bdbv} germany-teams {params.args} --held-out --out {params.out} && "
-        "{params.bdbv} germany-paper --config {params.germany_root_config} "
+        "{params.germany} teams {params.args} --held-out --out {params.out} && "
+        "{params.germany} paper --config {params.germany_root_config} "
         "--results {params.out}/held-out"
 
 
@@ -627,12 +627,12 @@ if GERMANY["real"]:
             heavy=1,
         params:
             env=FORECAST.env,
-            bdbv=BDBV,
+            germany=GERMANY_CLI,
             args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
             out=lambda w, output: Path(output.scores).parent,
         shell:
             "exec >{log} 2>&1; {params.env} "
-            "{params.bdbv} pairing-sensitivity --study germany {params.args} "
+            "{params.germany} pairing-sensitivity {params.args} "
             "--out {params.out}"
 
     rule pairing_synthetic:

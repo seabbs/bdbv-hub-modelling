@@ -1181,7 +1181,7 @@ def test_sim_reports_render_each_round_and_the_rounds_together(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4, 5]}, target="sim_reports")
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
     rounds = tmp_path / "rounds"
-    assert f"germany-fetch --out {tmp_path}/germany" in text
+    assert f"nowcastgermany.cli fetch --out {tmp_path}/germany" in text
     triangle = tmp_path / "germany" / "COVID-19_hospitalizations.csv"
     assert (
         f"sim_report.py germany {triangle}"

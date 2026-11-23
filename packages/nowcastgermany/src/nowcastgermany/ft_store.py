@@ -16,7 +16,7 @@ The script keeps `fm_chronos_daily_ragged_ft` and
 writes them to `<release tag>/forecasts.csv.gz` with a `manifest.json`,
 commits that to the `germany-ft-forecasts` branch of `origin` and pushes
 it (no force). An unchanged checkpoint commits nothing. The Pages build
-reads the branch (`bdbvhubrenewal germany-ft-load`).
+reads the branch (`nowcastgermany ft-load`).
 
 Options:
   --repo DIR     the git checkout to commit from (default: the current
@@ -57,9 +57,9 @@ from nowcastgermany.store import (
 README = """# Stored German forecasts of the fine-tuned Chronos-2 model
 
 Written by `germany-ft-store` (`nowcastgermany.ft_store`) on main from
-the checkpoint scorer's cache, and read by the Pages build (`bdbvhubrenewal
-germany-ft-load`). One directory per checkpoint release tag, with
-`forecasts.csv.gz` (`germany-backtest`'s forecast columns,
+the checkpoint scorer's cache, and read by the Pages build (`nowcastgermany
+ft-load`). One directory per checkpoint release tag, with
+`forecasts.csv.gz` (`nowcastgermany backtest`'s forecast columns,
 `fm_chronos_daily_ragged_ft` and `fm_chronos_weekly_ragged_ft` only)
 and `manifest.json`. Development nowcast dates only: nothing on or after
 the split date in

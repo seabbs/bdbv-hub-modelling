@@ -5,11 +5,11 @@ The Pages build never runs `STORED_MODELS` on the German benchmark. The
 checkpoint scorer (`scripts/checkpoint_scores.py germany` on the
 `checkpoint-scoring` branch) already nowcasts every development date
 with each published checkpoint, by `germany_forecasts` and `with_truth`
-as `bdbvhubrenewal germany-backtest` does. `germany-ft-store` (`ft_store`)
+as `nowcastgermany backtest` does. `germany-ft-store` (`ft_store`)
 writes a checkpoint's forecasts from its cache to the `STORE_BRANCH`
 branch, one directory per release tag (`write_stored`), and the Pages
-build loads the one `choose_checkpoint` picks (`bdbvhubrenewal
-germany-ft-load`), so it is scored and shown like every other model.
+build loads the one `choose_checkpoint` picks (`nowcastgermany
+ft-load`), so it is scored and shown like every other model.
 
 Only development dates, nowcast dates before the split date, are ever
 stored or loaded (`development_rows`).
@@ -300,7 +300,7 @@ def load_stored(store: Path | str, tag: str, split_date: str) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        `germany-backtest`'s forecast columns, `STORED_MODELS` only.
+        `nowcastgermany backtest`'s forecast columns, `STORED_MODELS` only.
     """
     dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
     frame = pd.read_csv(Path(store) / tag / FORECASTS, dtype=dtype)
