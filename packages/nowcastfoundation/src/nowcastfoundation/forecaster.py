@@ -132,11 +132,6 @@ LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
 many before the cut-off (16 weeks, 112 days), which is also the most lags
 it reads."""
 
-FIRST_RELEASE: Final = {"weekly": 2, "daily": 7}
-"""`lag_count` reads a step only if a release falls within this many lags
-of it: a step first released later than that (before a series' first
-release) is left out, as its gap is not a reporting delay."""
-
 COUPLINGS: Final = ("online", "independent", "comonotone")
 """How a foundation model joins its cells (`FoundationModel.coupling`):
 `online` chooses and fits the coupling at each forecast
@@ -753,15 +748,15 @@ def lag_count(
     do not bias it short (right truncation). It reads no release after
     the cut-off. A lag no release fell on carries the count of the lag
     before (weekly releases of daily data). A low-count place can only
-    underestimate its delay, so it never raises the block's. A step with
-    no release within `FIRST_RELEASE[source]` lags of it was first
-    released late (before the series' first release), so it is left out;
-    if that leaves no complete step with a count but some were released
-    late, the block takes
-    `LAG_WINDOW[source][0]` lags. At most the
-    history allows, two steps of context before the longest lag; a place
-    whose share is not reached within the window takes that many, and so
-    does a block with no complete steps or no count in them. Training
+    underestimate its delay, so it never raises the block's. Only steps
+    on or after the block's first release are evidence: a first release
+    that backfills earlier onsets (BDBV's daily releases begin months
+    after its first onsets) measures when releases began, not a delay.
+    With no such complete step with a count, the block takes its release
+    history, every step from the first release to the cut-off. At most
+    the history allows, two steps of context before the longest lag; a
+    place whose share is not reached within the window takes that many,
+    and so does a block with no releases. Training
     blocks (`nowcastfoundation.finetune.training_block`) and forecasts
     (`FoundationModel`) use this one rule.
 
@@ -789,26 +784,26 @@ def lag_count(
     window, back = LAG_WINDOW[source]
     width = min(back, int(tri.partial.shape[2]))
     most = int(max(1, min(width, tri.last - 1)))
-    first = tri.last - back - window + 1
-    if first < 0:
+    # The first release: the earliest step any cell was released on.
+    _, t, d = np.nonzero(~np.isnan(tri.partial))
+    if t.size == 0:
         return most
+    released = int((t + d).min())
+    history = int(max(1, min(most, tri.last - released + 1)))
+    first = max(tri.last - back - window + 1, released)
+    if first < 0 or first > tri.last - back:
+        return history
     steps = np.arange(first, tri.last - back + 1)
-    lags, late = [], False
+    lags = []
     for p in range(tri.final.shape[0]):
-        cells = tri.partial[p, steps, :width]
-        released = ~np.isnan(cells[:, : FIRST_RELEASE[source]]).all(axis=1)
-        seen_later = ~np.isnan(cells).all(axis=1) & ~released
-        late |= bool((seen_later & (tri.final[p, steps] > 0)).any())
-        final = tri.final[p, steps[released]].sum()
+        final = tri.final[p, steps].sum()
         if final <= 0:
             continue
-        seen = pd.DataFrame(cells[released]).ffill(axis=1)
+        seen = pd.DataFrame(tri.partial[p, steps, :width]).ffill(axis=1)
         share = seen.fillna(0.0).to_numpy().sum(axis=0) / final
         reached = np.flatnonzero(share >= quantile - 1e-12)
         lags.append(int(reached[0]) + 1 if reached.size else most)
-    if not lags and late:
-        return min(window, most)
-    return min(max(lags), most) if lags else most
+    return min(max(lags), most) if lags else history
 
 
 def finetuned_adapter(checkpoint: Checkpoint) -> Path:
