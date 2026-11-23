@@ -325,8 +325,11 @@ rule hub_rounds:
         TOOLS_ENV
     params:
         review=LOCAL["REVIEW_DIR"],
+        data=lambda wc, input: Path(input[0]).with_name("hub-rounds-data"),
     shell:
         "if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
+        "rm -rf '{params.review}/hub-rounds-data' && "
+        "cp -r {params.data} '{params.review}/hub-rounds-data' && "
         "cp {input} '{params.review}/hub-rounds.html.tmp' && "
         "mv '{params.review}/hub-rounds.html.tmp' "
         "'{params.review}/hub-rounds.html'; fi > {log} 2>&1"
