@@ -103,8 +103,14 @@ ebola:
   hub: data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
   candidates: [data/candidate-forecasts.csv.gz]
-  store: .
-  store_ref: origin/fit-store
+  # Our stored forecasts made before each round closed: the fit store's
+  # history, published as a release asset (rule publish_fit_store_history)
+  # and fetched with its checksum (rule fit_store_history).
+  store_history:
+    repo: seabbs/bdbv-hub-modelling
+    branch: fit-store
+    tag: fit-store-history
+    asset: fit-store-history.csv.gz
 
 # What the nowcast panels show (`paperfigs.nowcasts`). The main panel
 # shows the national series of a case study, or one synthetic outbreak;
@@ -145,16 +151,10 @@ evidence:
   checkpoint_scores:
     branch: checkpoint-scoring
     path: evidence/checkpoint-scores.csv
-  # Pending: the scale-floor test on the final run's checkpoints.
-  scale_floor: null
   # The lag-horizon test of the ragged layout.
   lag_germany:
     ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
     path: results/germany-chronos-dev/scores.csv
-  # The walks' scores with no pairing and the rolling rho_p, by study and
-  # level, on development data (`summarise_pairing` rows). Pending:
-  # the rows on evidence/fm-copula.
-  si_copula: null
   # Each walk model's rho_p by origin, the rows of its rounds' copula.json
   # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
   copula_rho: null

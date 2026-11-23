@@ -112,6 +112,11 @@ def torch_env(
     return env
 
 
+def job_prefix(cfg: Mapping[str, str], mem_mb: float) -> str:
+    """Return the machine's command prefix for a job of `mem_mb` MB."""
+    return cfg["JOB_PREFIX"].replace("{mem}", f"{int(mem_mb)}M")
+
+
 def shell_env(env: Mapping[str, str]) -> str:
     """Return `env` as shell assignments to put before a command."""
     return " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())

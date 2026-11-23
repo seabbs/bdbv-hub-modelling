@@ -23,12 +23,22 @@ test_that("onsets are ascertained infections after the incubation delay", {
   gt <- gt_pmf(v$gt_mean, d$gt_family, v$gt_cv)
   run <- latent_onsets(grid, 100L, gt, strata_of(2), d, v)
   a <- run$values$ascertainment
-  pmfs <- lapply(run$values$incubation_mean, incubation_pmf)
+  pmfs <- lapply(run$values$incubation_mean, incubation_pmf,
+    cv = v$incubation_cv, family = d$incubation_family
+  )
   # An established window's history before the span is its level.
   before <- run$infections[1, ]
   expect_equal(
     run$onsets, sweep(convolve_rows(run$infections, pmfs, before), 2, a, `*`)
   )
+})
+
+test_that("a log-normal incubation has the mean and CV asked for", {
+  pmf <- incubation_pmf(10, cv = 1, family = "lognormal")
+  m <- sum((seq_along(pmf) - 1) * pmf)
+  # Double interval censoring moves the mean about half a day earlier.
+  expect_lt(abs(m - 10), 1)
+  expect_gt(length(pmf), length(incubation_pmf(10, cv = 1)))
 })
 
 test_that("a constant history before the span convolves to the same level", {
