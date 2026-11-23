@@ -20,5 +20,8 @@ def _untyped() -> set[str]:
 
 
 def test_the_typed_trainer_modules_are_checked():
-    typed = {"nowcastfoundation.finetune.verify"}
+    typed = {
+        "nowcastfoundation.finetune.verify",
+        "nowcastfoundation.finetune.evaluate",
+    }
     assert not typed & _untyped()
