@@ -90,10 +90,11 @@ run_scenario() {
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP=""
-  # As in production, `prepare` resolves the model from config/hub.toml
-  # (renewalbvd), so the chain starts at bvd. A scenario may choose
-  # another model with MODEL=.
-  unset MODEL
+  # The scenarios test the whole chain, so it starts at bvd whatever
+  # config/hub.toml chooses this round (`own-model` checks that `prepare`
+  # resolves it from there). A scenario may choose another model with
+  # MODEL=.
+  export MODEL=renewalbvd
   local kv
   for kv in $extra; do export "${kv?}"; done
   export GH_LOG="$WORK/gh.log"
