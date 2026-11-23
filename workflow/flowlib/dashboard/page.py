@@ -78,6 +78,8 @@ class Context:
     logs: dict[str, logs.RunLog] = field(default_factory=dict)
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
+    warm: bool = False
+    """Nowcasts are built in the background (`refresh`), not on request."""
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -121,7 +123,17 @@ class Context:
         )
 
     def nowcasts(self, key: str) -> dict[str, Any] | None:
-        """Return a dataset's nowcasts, rebuilt only when its files change."""
+        """Return a dataset's nowcasts, rebuilt only when its files change.
+
+        When `warm`, the last build (None before the first): a background
+        thread calls `refresh`, so no request waits on a build.
+        """
+        if self.warm:
+            return self.stores.get(key, {}).get("built")
+        return self.refresh(key)
+
+    def refresh(self, key: str) -> dict[str, Any] | None:
+        """Rebuild a dataset's nowcasts if its files changed; return them."""
         ds = self.dataset(key)
         days, ranges, _ = nowcasts.horizons(ds)
         return nowcasts.cached_build(

@@ -110,13 +110,20 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
 
 
 def keep_warm(ctx: page.Context, every: float) -> None:
-    """Build each dataset's nowcasts every `every` s, outside requests."""
+    """Build each dataset's nowcasts every `every` s, outside requests.
+
+    Requests then take the last build (`Context.warm`) and never wait on
+    one, even the first after a restart.
+    """
+    ctx.warm = True
 
     def loop() -> None:
         while True:
-            with LOCK:
-                for ds in ctx.datasets:
-                    ctx.nowcasts(ds["key"])
+            for ds in ctx.datasets:
+                try:
+                    ctx.refresh(ds["key"])
+                except Exception:
+                    traceback.print_exc(file=sys.stderr)
             time.sleep(every)
 
     threading.Thread(target=loop, daemon=True).start()
