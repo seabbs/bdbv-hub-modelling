@@ -72,6 +72,7 @@ rule hub_comparison:
 
 rule hub_rounds_report:
     input:
+        script="workflow/scripts/hub_rounds_report.py",
         head=f"{HUB}/head.txt",
         target=rules.hub_data.output,
         table=rules.hub_submissions_table.output,
@@ -86,7 +87,7 @@ rule hub_rounds_report:
         data=lambda wc, input: Path(input.target[0]).parent,
         rounds=config["hub_rounds"]["rounds"],
     shell:
-        "uv run python workflow/scripts/hub_rounds_report.py {output} "
+        "uv run python {input.script} {output} "
         "{params.comparison} {params.data} {input.table} {input.head} "
         "{params.rounds} > {log} 2>&1"
 

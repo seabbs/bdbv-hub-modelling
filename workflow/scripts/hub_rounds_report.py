@@ -19,10 +19,12 @@ import base64
 import datetime as dt
 import html
 import io
+import itertools
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -237,6 +239,193 @@ def fan(
     )
 
 
+def pairwise_relative_wis(
+    scores: pd.DataFrame, baseline: str, min_shared: int = 1
+) -> pd.DataFrame:
+    """Pairwise relative WIS, as in the hubs (scoringutils).
+
+    For each pair of models, the ratio of their mean WIS on the cells both
+    forecast; a model's relative skill is the geometric mean of its ratios
+    against every other model it shares cells with, divided by the
+    baseline's. The spread is the 10% and 90% quantiles of its pairwise
+    ratios, scaled the same way.
+    """
+    key = list(MATCH)
+    wide = scores.pivot_table(index=key, columns="model", values="wis")
+    models = list(wide.columns)
+    ratios: dict[str, list[float]] = {m: [] for m in models}
+    for a, b in itertools.permutations(models, 2):
+        both = wide[[a, b]].dropna()
+        if len(both) < min_shared:
+            continue
+        mb = both[b].mean()
+        if mb > 0:
+            ratios[a].append(both[a].mean() / mb)
+    theta = {
+        m: float(np.exp(np.mean(np.log(r)))) if r else np.nan
+        for m, r in ratios.items()
+    }
+    base = theta.get(baseline, np.nan)
+    if not np.isfinite(base):
+        # The baseline has no cells here: scale to the geometric mean of
+        # every model's skill instead (`scaled_to` says which).
+        finite = [t for t in theta.values() if np.isfinite(t)]
+        base = float(np.exp(np.mean(np.log(finite)))) if finite else np.nan
+        scaled_to = "geometric mean of all models"
+    else:
+        scaled_to = baseline
+    rows = []
+    for m in models:
+        r = np.array(ratios[m])
+        cov = scores.loc[scores["model"] == m]
+        rows.append(
+            {
+                "model": m,
+                "relative_skill": theta[m] / base if base else np.nan,
+                "low": (np.quantile(r, 0.1) / base) if len(r) else np.nan,
+                "high": (np.quantile(r, 0.9) / base) if len(r) else np.nan,
+                "pairs": len(r),
+                "n": len(cov),
+                "rounds": cov["reference_date"].nunique(),
+                "locations": cov["location"].nunique(),
+                "cell_share": len(cov) / len(wide),
+                "scaled_to": scaled_to,
+            }
+        )
+    return pd.DataFrame(rows).sort_values("relative_skill")
+
+
+def ranking_figure(
+    groups: Mapping[str, pd.DataFrame], ours: Sequence[str], mode: str = "light"
+) -> Any:
+    """One panel per group: relative skill with its spread, by model.
+
+    `groups` maps a panel title to a `pairwise_relative_wis` table. Our
+    hub ids are coloured; the marker size shows the share of cells.
+    """
+    import matplotlib.pyplot as plt
+
+    ink = "#1a1a1a" if mode == "light" else "#e8e8e8"
+    mut = "#888888"
+    col = {"seabbs-renewal": "#d55e00", "seabbs-rwnowcast": "#0072b2"}
+    n = max(len(groups), 1)
+    fig, axes = plt.subplots(
+        1, n, figsize=(4.2 * n, 4.6), squeeze=False, layout="constrained"
+    )
+    for ax, (title, tab) in zip(axes[0], groups.items(), strict=False):
+        t = tab.dropna(subset=["relative_skill"]).sort_values(
+            "relative_skill", ascending=False
+        )
+        y = np.arange(len(t))
+        for yi, r in zip(y, t.itertuples(), strict=True):
+            c = col.get(r.model, mut)
+            ax.hlines(yi, r.low, r.high, color=c, lw=1.5, alpha=0.7)
+            ax.plot(
+                r.relative_skill, yi, "o", color=c,
+                ms=4 + 10 * min(r.cell_share, 1.0),
+            )  # fmt: skip
+        ax.set_yticks(y, [str(m) for m in t["model"]], fontsize=8)
+        for lab in ax.get_yticklabels():
+            if lab.get_text() in ours:
+                lab.set_color(col[lab.get_text()])
+                lab.set_fontweight("bold")
+        ax.axvline(1.0, color=mut, lw=0.8, ls=":")
+        ax.set_xscale("log")
+        ax.set_title(title, fontsize=9, color=ink)
+        ax.set_xlabel("relative WIS (log scale)", color=ink, fontsize=8)
+        ax.tick_params(colors=ink, labelsize=8)
+        for s in ax.spines.values():
+            s.set_color(mut)
+        ax.set_facecolor("none")
+    fig.patch.set_alpha(0)
+    return fig
+
+
+def all_teams_fans(
+    quantiles: pd.DataFrame,
+    target: pd.DataFrame,
+    ref: str,
+    locations: Sequence[str],
+    ours: Sequence[str],
+    mode: str = "light",
+) -> Any:
+    """One panel per location: every model's median and 50% band, one round."""
+    import matplotlib.pyplot as plt
+
+    ink = "#1a1a1a" if mode == "light" else "#e8e8e8"
+    mut = "#999999"
+    col = {"seabbs-renewal": "#d55e00", "seabbs-rwnowcast": "#0072b2"}
+    q = quantiles.loc[quantiles["reference_date"].astype(str) == ref]
+    real = target.loc[target["kind"] == "real"]
+    latest = real["vintage"].max()
+    locs = [loc for loc in locations if loc in set(q["location"])]
+    fig, axes = plt.subplots(
+        1, max(len(locs), 1), figsize=(4.0 * max(len(locs), 1), 3.6),
+        squeeze=False, layout="constrained",
+    )  # fmt: skip
+    r0 = pd.Timestamp(ref)
+    for ax, loc in zip(axes[0], locs, strict=False):
+        ql = q.loc[q["location"] == loc]
+        for m, g in ql.groupby("model"):
+            g = g.sort_values("target_end_date")
+            x = pd.to_datetime(g["target_end_date"])
+            c = col.get(m, mut)
+            lw, a = (2.0, 0.25) if m in ours else (0.9, 0.08)
+            ax.fill_between(x, g["q25"], g["q75"], color=c, alpha=a, lw=0)
+            ax.plot(x, g["q50"], color=c, lw=lw, alpha=1 if m in ours else 0.7)
+            ax.annotate(
+                str(m),
+                (x.iloc[-1], g["q50"].iloc[-1]),
+                fontsize=6, color=c if m in ours else ink, alpha=0.8,
+                xytext=(2, 0), textcoords="offset points", va="center",
+            )  # fmt: skip
+        d = real.loc[(real["vintage"] == latest) & (real["location"] == loc)]
+        x = pd.to_datetime(d["target_end_date"])
+        sel = x >= r0 - pd.Timedelta(weeks=8)
+        ax.plot(x[sel], d["total"][sel], "o-", color=ink, ms=3, lw=1)
+        ax.axvline(r0, color=mut, lw=0.8, ls=":")
+        ax.set_title(loc, fontsize=9, color=ink)
+        ax.tick_params(colors=ink, labelsize=7)
+        for lab in ax.get_xticklabels():
+            lab.set_rotation(30)
+        for s in ax.spines.values():
+            s.set_color(mut)
+        ax.set_facecolor("none")
+    fig.patch.set_alpha(0)
+    return fig
+
+
+def png(fig: Any, alt: str, mode: str) -> str:
+    """Return a figure as an inline PNG for one colour scheme."""
+    import matplotlib.pyplot as plt
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=110)
+    plt.close(fig)
+    data = base64.b64encode(buf.getvalue()).decode()
+    return (
+        f"<img class=fan-{mode} alt='{html.escape(alt)}' "
+        f"src='data:image/png;base64,{data}'>"
+    )
+
+
+def pairwise_table(tab: pd.DataFrame) -> str:
+    """Return the pairwise relative WIS table, our hub ids in bold."""
+    if tab.empty:
+        return "<p class=mut>Nothing scored yet.</p>"
+    heads = ["model", "relative WIS", "spread (10%-90%)", "pairs", "cells",
+             "share of cells", "rounds", "locations"]  # fmt: skip
+    out = ["<table><tr>" + "".join(f"<th>{h}</th>" for h in heads)]
+    for r in tab.itertuples():
+        name = html.escape(str(r.model))
+        name = f"<b>{name}</b>" if r.model in OURS else name
+        cells = [name, fmt(r.relative_skill), f"{fmt(r.low)}-{fmt(r.high)}",
+                 str(r.pairs), str(r.n), fmt(r.cell_share), str(r.rounds),
+                 str(r.locations)]  # fmt: skip
+        out.append("<tr>" + "".join(f"<td>{c}</td>" for c in cells))
+    return "\n".join([*out, "</table>"])
+
+
 def by_type(scores: pd.DataFrame) -> pd.DataFrame:
     """Scores with `location_type`."""
     if scores.empty:
@@ -341,12 +530,66 @@ def build(
         parts.append(
             html_table(score_table(s, ("reference_date",)), ("reference_date",))
         )
+    parts.append("<h2>Pairwise comparison</h2>")
+    parts.append(
+        "<p class=mut>As the hubs score teams (scoringutils): for each pair "
+        "of models, the ratio of their mean WIS on the cells both "
+        "forecast; a model's relative WIS is the geometric mean of its "
+        f"ratios against every other model, divided by {BASELINE}'s "
+        "(below 1 beats it). The spread is the 10% to 90% range of its "
+        "pairwise ratios, scaled the same way. Teams with few cells "
+        "(see cells) are noisy. Where the baseline has no cells, the "
+        "level is scaled to the geometric mean of every model.</p>"
+    )
+    levels: dict[str, pd.DataFrame] = {}
+    if not comp.empty:
+        parts.append("<h3>All locations</h3>")
+        parts.append(pairwise_table(pairwise_relative_wis(comp, BASELINE)))
+        for lv in ("national", "province", "zone"):
+            sub = comp.loc[comp["location_type"] == lv]
+            if sub.empty:
+                continue
+            tab = pairwise_relative_wis(sub, BASELINE)
+            levels[f"{lv} (scaled to {tab['scaled_to'].iloc[0]})"] = tab
+            parts.append(f"<h3>{lv.capitalize()}</h3>")
+            parts.append(pairwise_table(tab))
+        weeks = {
+            "nowcast weeks (horizon below 0)": comp["horizon"] < 0,
+            "forecast weeks (horizon 0 on)": comp["horizon"] >= 0,
+        }
+        for name, sel in weeks.items():
+            if sel.any():
+                levels[name] = pairwise_relative_wis(comp.loc[sel], BASELINE)
+            else:
+                parts.append(f"<p class=mut>No {name} are complete yet.</p>")
+        parts.append("<h3>Ranking</h3>")
+        parts.append(
+            "<p class=mut>Relative WIS (point; size: share of cells "
+            "covered) and its spread, by level and by nowcast or forecast "
+            "weeks, log scale; ours in colour.</p>"
+        )
+        for mode in ("light", "dark"):
+            parts.append(
+                png(ranking_figure(levels, list(OURS), mode), "Ranking", mode)
+            )
     parts.append("<h2>Forecasts against the data</h2>")
     parts.append(
         "<p class=mut>Each model's median (point), 50% (thick) and 90% "
         "(thin) intervals by week, ours on top, the hub teams below; the "
         "line is the latest release, shaded where still incomplete.</p>"
     )
+    if rounds:
+        last = rounds[-1]
+        parts.append(f"<h3>Every team together, round {html.escape(last)}</h3>")
+        parts.append(
+            "<p class=mut>Each model's median (line) and 50% interval "
+            "(band), ours in colour; points are the latest release.</p>"
+        )
+        for mode in ("light", "dark"):
+            fig = all_teams_fans(
+                quantiles, target, last, LOCATIONS, list(OURS), mode
+            )
+            parts.append(png(fig, f"Every team, round {last}", mode))
     cut = int(meta["complete_after_weeks"])
     for ref in reversed(rounds):
         parts.append(f"<h3>Round {html.escape(ref)}</h3>")
