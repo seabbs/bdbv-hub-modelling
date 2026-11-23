@@ -70,6 +70,18 @@ def test_release_tag_maps_scorer_labels() -> None:
             release_tag(bad)
 
 
+def test_a_slots_pin_names_its_slots_release() -> None:
+    """config/finetune.toml may pin a series-bias checkpoint
+    (`slots-<hash>`), whose release is `chronos-slots-<hash>`."""
+    releases = [
+        *RELEASES,
+        _release("chronos-slots-ddd", "2026-11-17T10:00:00Z"),
+    ]
+    assert choose_checkpoint(set(), releases, "slots-ddd")[1] == (
+        "chronos-slots-ddd"
+    )
+
+
 def test_latest_pin_takes_the_newest_ft_release() -> None:
     stored = {"chronos-ft-aaa", "chronos-ft-bbb"}
     assert choose_checkpoint(stored, RELEASES, "latest") == (
@@ -226,6 +238,14 @@ def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
     assert "79 development dates missing" in run.stderr
 
 
+def _latest_pin(tmp_path: Path) -> Path:
+    """A config/finetune.toml that takes the latest release, as these
+    tests choose among fake releases whatever the committed file pins."""
+    path = tmp_path / "finetune.toml"
+    path.write_text('hash = "latest"\nrealdata = ""\n')
+    return path
+
+
 def test_the_load_command_writes_the_chosen_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -246,7 +266,7 @@ def test_the_load_command_writes_the_chosen_checkpoint(
                 "--config",
                 str(ROOT / "config" / "germany.toml"),
                 "--finetune",
-                str(ROOT / "config" / "finetune.toml"),
+                str(_latest_pin(tmp_path)),
                 "--store",
                 str(store),
                 "--out",
@@ -282,7 +302,7 @@ def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
         "--config",
         str(ROOT / "config" / "germany.toml"),
         "--finetune",
-        str(ROOT / "config" / "finetune.toml"),
+        str(_latest_pin(tmp_path)),
         "--store",
         str(tmp_path / "missing"),
         "--out",
@@ -349,7 +369,7 @@ def test_the_load_command_shows_the_live_run_with_its_label(
         "--config",
         str(ROOT / "config" / "germany.toml"),
         "--finetune",
-        str(ROOT / "config" / "finetune.toml"),
+        str(_latest_pin(tmp_path)),
         "--store",
         str(store),
         "--out",

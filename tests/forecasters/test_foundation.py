@@ -455,10 +455,6 @@ def test_finetuned_models_are_the_ragged_models_with_the_checkpoint(
     assert model.checkpoint.sha256[1][1] in repr(model)
 
 
-def test_the_models_take_the_latest_release_by_default() -> None:
-    assert foundation.finetuned_spec() == "latest"
-
-
 def _listing(*releases: tuple[str, str, bool]) -> list[dict]:
     return [
         {"tag_name": tag, "published_at": at, "draft": draft}
@@ -1267,3 +1263,16 @@ def test_a_fine_tuned_complete_model_builds_the_complete_block(
     model = get_model("fm_chronos_daily_complete_ft")
     zero = get_model("fm_chronos_daily_complete")
     assert (model.layout, model.period) == (zero.layout, zero.period)
+
+
+def test_the_hub_models_load_the_interim_hub_checkpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `_ft` models submitted to the hub load the interim checkpoint
+    s48100 of Run A (Sam, 2026-11-24), pinned by its settings hash, not
+    the newest release."""
+    monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
+    root = Path(__file__).resolve().parents[2]
+    spec = foundation.finetuned_spec(root / "config" / "finetune.toml")
+    assert spec == "slots-72661eb7efaa"
+    assert foundation.release_tag(spec) == "chronos-slots-72661eb7efaa"
