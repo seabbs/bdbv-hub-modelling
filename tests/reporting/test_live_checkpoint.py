@@ -101,8 +101,8 @@ def test_the_checkpoint_table_has_zero_shot_first_then_each_checkpoint() -> (
     assert t.iloc[1]["German WIS"] == "3.00 / 3.00"
     # A checkpoint not yet scored on a study is left blank.
     assert t.iloc[2]["German WIS"] == ""
-    assert t.iloc[2]["Held-out loss"] == "0.38"
-    assert t.iloc[0]["Held-out loss"] == "0.50"
+    assert t.iloc[2]["Validation loss"] == "0.38"
+    assert t.iloc[0]["Validation loss"] == "0.50"
 
 
 def test_the_summary_has_zero_shot_and_the_newest_checkpoint() -> None:
