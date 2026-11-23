@@ -111,7 +111,7 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
 
 
 def keep_mirrored(ctx: page.Context, every: float) -> None:
-    """Refresh copies every `every` seconds, outside requests."""
+    """Refresh copies and warm nowcasts every `every` s, outside requests."""
 
     def loop() -> None:
         while True:

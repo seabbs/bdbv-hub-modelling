@@ -1,4 +1,4 @@
-"""Where the dashboard reads scores, forecasts, truth and notes from.
+"""Where the dashboard reads scores, forecasts and notes from.
 
 Each source is a local path, read where it is, or `host:path`, copied
 read-only with rsync over ssh into the mirror folder; nothing is ever

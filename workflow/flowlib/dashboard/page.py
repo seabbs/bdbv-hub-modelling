@@ -245,11 +245,10 @@ def live_status(
 ) -> Status:
     """Return the live run's step, speed, schedule and checkpoints.
 
-    `planned` are its checkpoints unless the trainer's command line names
-    them (`logs.prefixes`). `sims` (`Context.sims`) gives the
-    simulations trained by its step, for a run that decays over
-    simulations, not steps; `steps` (`Context.steps`) the step a
-    checkpoint is saved at.
+    `planned` are its checkpoints, with those saved (`logs.prefixes`).
+    `sims` (`Context.sims`) gives the simulations trained by its step,
+    as the rate decays over simulations; `steps` (`Context.steps`) the
+    step a checkpoint is saved at.
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
