@@ -18,7 +18,7 @@ High level, one Taskfile task per target:
 | `task nowcast-foundation:publish` | `publish` | verify and release each checkpoint | GitHub releases |
 | `task nowcast-foundation:score` | `score` | score each released checkpoint | no |
 | `task nowcast-foundation:land` | `land` | commit the score tables to `evidence/` and push | git push |
-| `task paper` | `development` or `paper`, then `render` | the paper (section 6) | no |
+| `task paper` | `development` or `paper`, then `render` | the paper (section 7) | no |
 
 Pass Snakemake options after `--`: `task nowcast-foundation:score -- -n` is a dry run, and a file path builds just that output.
 Low level, any output file, for example:
@@ -93,9 +93,6 @@ It draws each outbreak's design and values in Python and runs each outbreak as o
 - `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each simulation's summaries in the round's `qc/`. It sets no thresholds and nothing is excluded or deleted.
 - `round_ready`: the seed list and `READY`, last.
 - `simulator_benchmark`: opt-in, two passes of one batch, cold then warm, as a `simulate_batch` job runs it on a given JAX device, in the rounds' `bench/`.
-- `round_summaries`: one row per outbreak of a round (`r<N>/summaries/outbreaks.csv`, `workflow/scripts/grid_summaries.py`): design, drawn values, size, dynamics, R, delays and the phase at the training cut-offs.
-- `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
-- `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
 - `release_batch`, `release`: opt-in, each batch to its round's release.
 - `push_batch`, `push`: on a helping host, its seeds (`SIM_SEEDS`), each pushed to the rounds host's round (`REMOTE`, `REMOTE_ROOT`): its files, then its manifest row (`flowlib.hosts`).
@@ -136,14 +133,22 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
   Units run torch on `EVAL_DEVICE` (the CPU by default) with `EVAL_THREADS` threads, beside the trainer: only `train_segment` takes the `gpu` resource, with the highest priority, so the next segment starts the moment the previous ends.
   BDBV is held out for the paper, so no BDBV unit runs.
 - `score_run_germany`: a run's own saved checkpoint `n<N>`, loaded from `<ROOT>/runs/<run>/train/n<N>` with no release, cached in `<ROOT>/runs/<run>/scores/`.
-- `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.
 - `run_scores`: every trained run's saved checkpoints and report; `score` includes it.
 - `coupling_germany`: a checkpoint's German forecasts' coupling scores and summary (`nowcasteval.coupling`), from its German unit, in `<SCORE_CACHE>/coupling/`.
-- `benchmarks`: opt-in, the seconds and peak memory of every forecast and score job and the seconds by model and date, as one CSV in `<SCORE_CACHE>/` (`flowlib.benchmarks`).
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
-## 5. Dashboard (`workflow/flowlib/dashboard/`)
+## 5. Report (`rules/report.smk`)
+
+Reports read the other steps' outputs back for people, each with one script.
+
+- `round_summaries`: one row per outbreak of a round (`r<N>/summaries/outbreaks.csv`, `workflow/scripts/grid_summaries.py`): design, drawn values, size, dynamics, R, delays and the phase at the training cut-offs.
+- `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
+- `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them.
+- `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.
+- `benchmarks`: opt-in, the seconds and peak memory of every forecast and score job and the seconds by model and date, as one CSV in `<SCORE_CACHE>/` (`flowlib.benchmarks`).
+
+## 6. Dashboard (`workflow/flowlib/dashboard/`)
 
 `task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
 `task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
@@ -165,7 +170,7 @@ uv run --group paper python workflow/scripts/dashboard.py --port 8765
 # open the address it prints; with the venv active, plain `python` works too
 ```
 
-## 6. Paper (`paper/workflow/Snakefile`)
+## 7. Paper (`paper/workflow/Snakefile`)
 
 A module of this workflow (`use rule * from paper_workflow`), run from the repository root; its paths are from the root and its outputs are in `paper/results/<mode>/`.
 `development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.

@@ -92,27 +92,6 @@ rule score_run_germany:
         unit_shell("germany", "{params.segment} ")
 
 
-rule german_report:
-    # The run's checkpoints on the German development half against
-    # zero-shot and randomwalknowcast (workflow/scripts/german_report.py).
-    input:
-        references(),
-        lambda wc: run_units(wc.run),
-    output:
-        f"{RUN}/reports/german/index.html",
-    log:
-        f"{RUN}/logs/german-report.log",
-    conda:
-        TOOLS_ENV
-    params:
-        units=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}",
-        out=lambda wc, output: Path(output[0]).parent,
-        names=report_names,
-    shell:
-        "uv run python workflow/scripts/german_report.py {params.units} "
-        "{params.out} {params.names} > {log} 2>&1"
-
-
 rule run_scores:
     # Each trained run's saved checkpoints, scored and reported.
     input:
@@ -209,22 +188,3 @@ rule score:
         unit_stamps,
         rules.score_table.output,
         run_scores,
-
-
-rule benchmarks:
-    # Opt-in: seconds and peak memory of every forecast and score job
-    # (`benchmark:` files), and seconds by model and date (`timings.csv`),
-    # in the score cache and the paper's results, as one CSV
-    # (flowlib.benchmarks). Rerun with --forcerun benchmarks.
-    output:
-        f"{CACHE}/benchmarks.csv",
-    log:
-        f"{CACHE}/log/benchmarks.log",
-    localrule: True
-    conda:
-        TOOLS_ENV
-    params:
-        roots=f"{CACHE} {config['results']} {RUNS_DIR}",
-    shell:
-        "uv run python workflow/scripts/benchmarks.py {output} {params.roots} "
-        "> {log} 2>&1"
