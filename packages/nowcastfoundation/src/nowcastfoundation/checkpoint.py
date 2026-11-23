@@ -412,6 +412,24 @@ def german_tasks_dir(
     return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
 
+WRITTEN_FILE: Final = "written.tsv"
+"""A unit folder's record of each date written and its task store."""
+
+
+def written(root: Path) -> dict[str, str]:
+    """Return each date a unit wrote and the task store it read."""
+    path = Path(root) / WRITTEN_FILE
+    if not path.exists():
+        return {}
+    pairs = (line.split("\t") for line in path.read_text().splitlines())
+    return {p[0]: p[1] for p in pairs if len(p) == 2}
+
+
+def _record(root: Path, date: str, tasks: str) -> None:
+    with (Path(root) / WRITTEN_FILE).open("a") as f:
+        f.write(f"{date}\t{tasks}\n")
+
+
 def _reaches(path: Path, last: int, targets: Sequence[str]) -> bool:
     """Whether a unit's date file holds `targets` up to `last` days.
 
@@ -451,10 +469,15 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     record_precision(root)
     dates = de.nowcast_dates(config, held_out=False)
     last = max(config.horizons)
+    # A date is kept only if forecast from this task store: the tasks'
+    # building code is in its name (`german_tasks_dir`).
+    tasks = tasks_dir.name
+    have = written(root)
     todo = [
         d
         for d in dates
-        if not _reaches(root / f"{d}.csv.gz", last, config.targets)
+        if have.get(d) != tasks
+        or not _reaches(root / f"{d}.csv.gz", last, config.targets)
     ]
     models = list(label_models(label, layout=segment_layout(segment)))
     # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
@@ -486,6 +509,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
         for date in chunk:
             mine = fc.loc[fc["origin"] == date].reset_index(drop=True)
             _write(mine, root / f"{date}.csv.gz")
+            _record(root, date, tasks)
         _free()
         took = time.monotonic() - start
         done = len(dates) - len(todo) + i + len(chunk)
