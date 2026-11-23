@@ -24,11 +24,12 @@ import numpy as np
 from nowcastfoundation import series_bias
 from nowcastfoundation.finetune import chronos as ft
 from nowcastfoundation.finetune import stream as fs
+from nowcastfoundation.forecaster import CHRONOS_MODEL, CHRONOS_REVISION
 
 KINDS = ("start", "monitor", "by_source", "checkpoint")
 
 
-def load_blocks(path: Path, n: int | None = None) -> list[dict]:
+def load_blocks(path: Path, n: int | None = None) -> list[dict[str, Any]]:
     """Return the trainer's held-out blocks, checking their count."""
     blocks = fs.load_blocks(Path(path))
     if n is not None and len(blocks) != n:
@@ -40,8 +41,8 @@ def load_blocks(path: Path, n: int | None = None) -> list[dict]:
 
 def evaluate(
     adapter: Path,
-    base,
-    blocks: Sequence[dict],
+    base: Any,
+    blocks: Sequence[dict[str, Any]],
     kinds: Sequence[str],
     batch_size: int,
 ) -> dict[str, Any]:
@@ -188,17 +189,22 @@ def held_out_coverage(
     return out
 
 
-def load_base(device: str):
+def load_base(device: str) -> Any:
     """Return base Chronos-2 on `device`."""
     from chronos import Chronos2Pipeline
 
     return Chronos2Pipeline.from_pretrained(
-        fs.CHRONOS_MODEL, revision=fs.CHRONOS_REVISION, device_map=device
+        CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     ).model
 
 
 def score(
-    base, adapter: Path, blocks: list[dict], kinds, batch_size: int, device: str
+    base: Any,
+    adapter: Path,
+    blocks: list[dict[str, Any]],
+    kinds: Sequence[str],
+    batch_size: int,
+    device: str,
 ) -> tuple[dict[str, Any], float]:
     """Return the losses `kinds` ask for of `adapter`, and the seconds.
 
@@ -215,7 +221,7 @@ def score(
 
 
 def snapshot_result(
-    base, snapshot: Path, blocks: list[dict], device: str
+    base: Any, snapshot: Path, blocks: list[dict[str, Any]], device: str
 ) -> dict[str, Any]:
     """Return a step snapshot's losses, as its `request.json` asks."""
     request = json.loads((snapshot / "request.json").read_text())
