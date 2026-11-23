@@ -39,7 +39,7 @@ from nowcastutils.dates import as_date
 
 __all__ = [
     "CANDIDATES",
-    "COUPLING_WEEKS",
+    "COUPLING_DAYS",
     "METHODS",
     "MIN_EARLIER",
     "choose_coupling",
@@ -497,61 +497,56 @@ def energy_score(draws: np.ndarray, observed: np.ndarray) -> float:
 
 
 CANDIDATES: Final = (
-    ("gaussian", 2),
-    ("gaussian", 4),
-    ("gaussian", 8),
+    ("gaussian", 14),
+    ("gaussian", 28),
+    ("gaussian", 56),
     ("schaake", None),
+    ("comonotone", None),
 )
 """The couplings `choose_coupling` compares by default: the gaussian
-copula fitted over the latest 2, 4 or 8 origins (two is the fewest that
-give evidence, as one origin's pairs are not independent), and the
-Schaake shuffle on the series' own history. Which one is used, and so the
-look-back window, is chosen from the data at each forecast."""
+copula fitted over the origins of the latest 14, 28 or 56 days, the
+Schaake shuffle on the series' own history, and comonotone draws. Which
+one is used, and so the look-back window, is chosen from the data at
+each forecast."""
 
 MIN_EARLIER: Final = 2
 """Earlier origins an origin needs to be scored on in `choose_coupling`:
-the fewest a gaussian fit has evidence from."""
+the fewest a gaussian fit has evidence from (one origin's pairs are not
+independent)."""
 
-
-COUPLING_WEEKS: Final = (
-    max(w for _, w in CANDIDATES if w is not None) + MIN_EARLIER
+COUPLING_DAYS: Final = (
+    max(w for _, w in CANDIDATES if w is not None) + 7 * MIN_EARLIER
 )
-"""How many weeks of earlier origins `choose_coupling` reads
-(`coupling_releases`): enough for the longest gaussian window
-(`CANDIDATES`) to be fitted at an origin with `MIN_EARLIER` before it."""
+"""How many days of earlier origins `choose_coupling` reads
+(`coupling_releases`): the longest gaussian window (`CANDIDATES`) and
+`MIN_EARLIER` weekly origins before it, so that window can be scored."""
 
 
 def coupling_releases(
-    vintages: Iterable[Any], weeks: int = COUPLING_WEEKS
+    vintages: Iterable[Any], days: int = COUPLING_DAYS
 ) -> list[str]:
     """Return the earlier origins a forecast's coupling is chosen from.
 
-    For each of 1 to `weeks` weeks, the latest release at least that long
-    before the latest of `vintages`: one a week, whether releases are
-    weekly or daily.
+    Every release before the latest of `vintages` and at most `days`
+    before it.
 
     Parameters
     ----------
     vintages : sequence of str
         The task's release dates, ISO formatted.
-    weeks : int
-        How many weeks back.
+    days : int
+        How many days back.
 
     Returns
     -------
     list of str
         The releases, oldest first, each once.
     """
-    days = sorted({as_date(str(v)) for v in vintages})
-    if not days:
+    dates = sorted({as_date(str(v)) for v in vintages})
+    if not dates:
         return []
-    picked = set()
-    for k in range(1, weeks + 1):
-        edge = days[-1] - dt.timedelta(weeks=k)
-        before = [d for d in days if d <= edge]
-        if before:
-            picked.add(before[-1])
-    return [d.isoformat() for d in sorted(picked)]
+    edge = dates[-1] - dt.timedelta(days=days)
+    return [d.isoformat() for d in dates[:-1] if d >= edge]
 
 
 def _label(method: str, window: int | None) -> str:
@@ -563,14 +558,16 @@ def _candidate_fit(
     method: str,
     window: int | None,
     scores: np.ndarray,
+    ages: np.ndarray,
     history: np.ndarray | None,
     steps: int,
     n_samples: int,
 ) -> dict[str, Any] | None:
     """Return a candidate's fit from what came before, or None if it has none.
 
-    A gaussian fit from the latest `window` origins of `scores`; Schaake
-    windows from `history` (`history_windows`), None without any.
+    A gaussian fit from the origins of `scores` at most `window` days old
+    (`ages`); Schaake windows from `history` (`history_windows`), None
+    without any.
     """
     if method == "schaake":
         if history is None:
@@ -580,9 +577,7 @@ def _candidate_fit(
             return None
         return {"method": method, "windows": windows}
     if method == "gaussian":
-        latest = scores[-window:] if window else scores
-        if len(latest) == 0:
-            latest = np.full((0, *scores.shape[1:]), np.nan)
+        latest = scores if window is None else scores[ages <= window]
         return fit_coupling(latest, method)
     return fit_coupling(scores, method)
 
@@ -591,6 +586,8 @@ def choose_coupling(
     quantiles: np.ndarray,
     levels: np.ndarray,
     observed: np.ndarray,
+    days: np.ndarray,
+    day: int,
     history: np.ndarray | None,
     starts: np.ndarray | None,
     n_samples: int,
@@ -602,7 +599,8 @@ def choose_coupling(
     Each earlier origin with at least `MIN_EARLIER` before it and a value
     reported since is scored: every candidate is fitted from what came
     before it (the gaussian from the normal scores, `pit_scores`, of the
-    latest `window` earlier origins; the Schaake shuffle from windows of
+    earlier origins at most `window` days before it; the Schaake shuffle
+    from windows of
     `history` before the origin's first step), that origin's quantiles are
     coupled (`couple`) on the steps up to its last reported one, with the
     same seed for every candidate, and the draws are scored against what
@@ -626,6 +624,11 @@ def choose_coupling(
     observed : numpy.ndarray
         What has been reported of their targets, `[origins, series,
         steps]`, NaN where not final.
+    days : numpy.ndarray
+        Each origin's day, `[origins]`, increasing (any integer count of
+        days, such as an ordinal date).
+    day : int
+        The forecast's day, on the same count.
     history : numpy.ndarray or None
         The series' reported values `[series, time]` before the forecast's
         first step, NaN where missing; None for no Schaake shuffle.
@@ -636,7 +639,7 @@ def choose_coupling(
     seed : int
         Seed for the scores' and the draws' uniforms.
     candidates : tuple of (str, int or None)
-        Each candidate's method and gaussian window in origins.
+        Each candidate's method and gaussian window in days.
 
     Returns
     -------
@@ -650,7 +653,8 @@ def choose_coupling(
     Raises
     ------
     ValueError
-        With no candidates, or a history without `starts` for each origin.
+        With no candidates, `days` not one per origin, or a history
+        without `starts` for each origin.
     """
     if not candidates:
         raise ValueError("choose_coupling needs candidates")
@@ -663,10 +667,13 @@ def choose_coupling(
         if starts is None or len(starts) != n_origins:
             raise ValueError("a history needs starts, one per origin")
     first = np.zeros(n_origins, dtype=int) if starts is None else starts
+    days = np.asarray(days, dtype=int)
+    if len(days) != n_origins:
+        raise ValueError("days needs one day per origin")
     rng = np.random.default_rng([seed, 1])
     scores = pit_scores(quantiles, levels, observed, rng)
     now = {
-        c: _candidate_fit(*c, scores, history, steps, n_samples)
+        c: _candidate_fit(*c, scores, day - days, history, steps, n_samples)
         for c in candidates
     }
     usable = [c for c in candidates if now[c] is not None]
@@ -680,7 +687,8 @@ def choose_coupling(
         past = None if history is None else history[:, : int(first[k])]
         n_eval += 1
         for c in usable:
-            fit = _candidate_fit(*c, scores[:k], past, steps, n_samples)
+            ages = days[k] - days[:k]
+            fit = _candidate_fit(*c, scores[:k], ages, past, steps, n_samples)
             if fit is None:
                 got[c].append(np.nan)
                 continue
@@ -707,7 +715,7 @@ def choose_coupling(
         else:
             chosen = (schaake or usable)[0]
     fit = now[chosen] or _candidate_fit(
-        *chosen, scores, history, steps, n_samples
+        *chosen, scores, day - days, history, steps, n_samples
     )
     assert fit is not None
     out = {

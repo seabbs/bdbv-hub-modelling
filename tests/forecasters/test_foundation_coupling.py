@@ -116,16 +116,24 @@ def test_the_coupling_is_chosen_from_the_model_s_earlier_forecasts(
     chosen = []
     real = foundation.choose_coupling
 
-    def spy(quantiles, levels, observed, history, starts, **kw):
-        chosen.append((quantiles.shape, observed.shape, history, starts, kw))
-        return real(quantiles, levels, observed, history, starts, **kw)
+    def spy(quantiles, levels, observed, days, day, history, starts, **kw):
+        chosen.append(
+            (quantiles.shape, observed.shape, days, day, history, starts, kw)
+        )
+        return real(
+            quantiles, levels, observed, days, day, history, starts, **kw
+        )
 
     monkeypatch.setattr(foundation, "choose_coupling", spy)
     model = get_model("fm_chronos_daily_ragged")
     model.forecast(task)
     # The task's block and the same block at earlier releases.
     assert pipe.groups > 1
-    ((q_shape, seen_shape, history, starts, kw),) = chosen
+    ((q_shape, seen_shape, days, day, history, starts, kw),) = chosen
+    # Each earlier release's day, before the task's own.
+    assert (np.diff(days) > 0).all()
+    assert days[-1] < day
+    assert day - days[0] <= trajectories.COUPLING_DAYS
     assert q_shape[:3] == seen_shape
     assert seen_shape[0] == pipe.groups - 1
     # The history ends before the first step drawn; each earlier block
@@ -219,7 +227,7 @@ def test_earlier_blocks_are_scored_on_what_is_final_now(
     period = model._period(tri)
     now = np.concatenate([tri.final, period.totals])
     final = []
-    for block, seen, _ in past:
+    for block, seen, _, _ in past:
         # Each block is the task's block as it stood earlier: less context.
         assert np.atleast_2d(block["target"]).shape[1] < start
         assert seen.shape == (now.shape[0], horizon)
@@ -238,27 +246,6 @@ def test_earlier_blocks_are_scored_on_what_is_final_now(
         final.append(n)
     # Later releases have fewer steps final at the task's release.
     assert final == sorted(final, reverse=True)
-
-
-def test_the_fit_takes_one_earlier_release_a_week():
-    weekly = [f"2026-{m:02d}-{d:02d}" for m, d in [(8, 1), (8, 8)]]
-    weekly += [
-        str(pd.Timestamp("2026-08-15") + pd.Timedelta(weeks=k))[:10]
-        for k in range(10)
-    ]
-    got = trajectories.coupling_releases(weekly)
-    assert got == weekly[-trajectories.COUPLING_WEEKS - 1 : -1]
-    daily = [
-        str(pd.Timestamp("2026-08-01") + pd.Timedelta(days=k))[:10]
-        for k in range(80)
-    ]
-    got = trajectories.coupling_releases(daily)
-    assert len(got) == trajectories.COUPLING_WEEKS
-    last = pd.Timestamp(daily[-1])
-    assert [(last - pd.Timestamp(d)).days for d in got] == list(
-        range(7 * trajectories.COUPLING_WEEKS, 0, -7)
-    )
-    assert trajectories.coupling_releases(daily[:1]) == []
 
 
 def test_earlier_blocks_raise_errors_other_than_no_rows(
