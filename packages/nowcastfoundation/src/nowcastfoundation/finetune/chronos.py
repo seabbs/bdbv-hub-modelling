@@ -66,7 +66,7 @@ NATIVE_CADENCE = {1: "daily", 3: "3day", 7: "weekly"}
 """The regular release cadence of each step width, in days."""
 
 
-BLOCK_DESIGN = {
+BLOCK_DESIGN: dict[str, Any] = {
     "source_shares": {
         "daily": 0.25,
         "weekly": 0.25,
@@ -333,7 +333,9 @@ QUIET_MIN_CASES: int | None = None
 keeps every block."""
 
 
-def reported_cases(block: dict, days_per_step: int, days: int) -> float:
+def reported_cases(
+    block: dict[str, Any], days_per_step: int, days: int
+) -> float:
     """Return a block's cases reported in `days` up to its cut-off.
 
     Only what is known at the cut-off counts, never the counts after it.
@@ -371,7 +373,7 @@ def reported_cases(block: dict, days_per_step: int, days: int) -> float:
     return float(max(count[levels == lv].sum() for lv in set(levels)))
 
 
-def quiet(block: dict, days_per_step: int, min_cases: int) -> bool:
+def quiet(block: dict[str, Any], days_per_step: int, min_cases: int) -> bool:
     """Return whether a block has fewer than `min_cases` reported cases.
 
     The cases are those reported across its places in the
@@ -388,7 +390,7 @@ series; or `complete`, the same blocks without their lag series
 (`complete_block`), so the context ends at the last complete step."""
 
 
-def complete_block(block: dict) -> dict:
+def complete_block(block: dict[str, Any]) -> dict[str, Any]:
     """Return a block without its lag series: the complete layout.
 
     The targets keep their counts to the last complete step (`start`) and
@@ -405,11 +407,11 @@ def complete_block(block: dict) -> dict:
 
 
 def _pad(
-    block: dict,
+    block: dict[str, Any],
     context: int,
     loss_days: int | None = None,
     days_per_step: int = 1,
-) -> dict:
+) -> dict[str, Any]:
     """Pad a block to `context` steps and its horizon in whole patches.
 
     Chronos-2 predicts in patches of `OUTPUT_PATCH` steps, so a block's
@@ -464,13 +466,13 @@ their sum, more than their sum (cases with no place), or reported through
 a later stream (`finetune.country_counts`). A block of some of the
 places is also not their sum. Parent means belongs to, not sums to."""
 
-PARENTS: dict | None = None
+PARENTS: dict[str, Any] | None = None
 """The grid's parents, from its file's `aggregation` (`grid_parents`), or
 None before `use_grid` or for a grid with no `aggregation`, whose parents
 are `PARENT_MIX` drawn evenly with `finetune.PARENT_DRAWS`."""
 
 
-def grid_parents(path: Path) -> dict | None:
+def grid_parents(path: Path) -> dict[str, Any] | None:
     """Return the grid file's parents, or None if it sets none.
 
     The share of blocks with places whose country is their exact sum,
@@ -635,8 +637,8 @@ def choose_places(
         return (str(rng.choice(provinces)),), mix
     if mix in ("leaves_national", "leaves"):
         k = min(budget, len(provinces))
-        leaves = tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
-        return ((NATIONAL,) if mix == "leaves_national" else ()) + leaves, mix
+        picked = tuple(str(p) for p in sorted(rng.choice(provinces, k, False)))
+        return ((NATIONAL,) if mix == "leaves_national" else ()) + picked, mix
     groups: dict[str, list[str]] = {}
     for p in provinces:
         groups.setdefault(p.split("-")[0], []).append(p)
@@ -673,7 +675,7 @@ AGGREGATE_END = "a random weekday, or 3-day offset, per block"
 any, as the German target is a 7-day sum ending on every day."""
 
 
-def block_options(source: str, rng: np.random.Generator) -> dict:
+def block_options(source: str, rng: np.random.Generator) -> dict[str, Any]:
     """Return a block's period end, drawn from `rng`.
 
     For a source with period totals, a random end day. Reports come in
@@ -691,7 +693,7 @@ def outbreak_blocks(
     cuts: int = CUTS,
     picks: set[tuple[str, int]] | None = None,
     empty: list[str] | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Return the training blocks of one outbreak.
 
     Each source is cut at `cuts` forecast origins spread over the
@@ -941,7 +943,7 @@ def _order(outbreak: str) -> tuple[int, int]:
     return int(seed), int(index)
 
 
-def _settings_hash(settings: dict) -> str:
+def _settings_hash(settings: dict[str, Any]) -> str:
     """Return the first 12 hex digits of the settings' SHA-256."""
     text = json.dumps(settings, sort_keys=True).encode()
     return hashlib.sha256(text).hexdigest()[:12]
