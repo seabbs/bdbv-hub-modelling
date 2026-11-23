@@ -593,7 +593,7 @@ def training_block(
             lag_source,
             places,
             end.isoformat(),
-            max_lag=forecaster.LAG_WINDOW[lag_source][1],
+            all_lags=True,
         )
         lag_steps = forecaster.lag_count(full, lag_source)
         k = BINNED.get(source, 1)

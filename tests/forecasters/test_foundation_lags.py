@@ -14,14 +14,14 @@ from nowcastbdbv.data.zones import ZoneData, hub_zones
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastfoundation.forecaster import (
     LAG_QUANTILE,
-    LAG_WINDOW,
     MAX_LAG,
     HubTriangle,
     lag_count,
 )
 from nowcastutils.base import ForecastTask
 
-D = LAG_WINDOW["daily"][1]
+D = 112
+"""The lags the test triangles hold."""
 
 
 @pytest.fixture(scope="module")
@@ -65,15 +65,14 @@ def test_the_lag_count_is_the_delay_s_99_point_in_steps():
 
 
 def test_only_steps_complete_at_the_cut_off_inform_it():
-    window, back = LAG_WINDOW["daily"]
     last = 300
 
     def share(t, d):
-        # Recent steps (and very old ones) report slowly; the window's
-        # steps, complete by the cut-off, are complete at lag 4.
-        if last - back - window < t <= last - back:
-            return min(1.0, (d + 1) / 5)
-        return min(1.0, (d + 1) / 60)
+        # Recent steps have not yet seen their delays and report slowly;
+        # steps seen for twice the delay are complete at lag 4.
+        if t > last - 10:
+            return min(1.0, (d + 1) / 60)
+        return min(1.0, (d + 1) / 5)
 
     assert lag_count(_triangle(last, share), "daily") == 5
 
@@ -97,13 +96,12 @@ def test_no_evidence_takes_as_many_lags_as_the_history_allows():
 
 
 def test_a_backfilled_first_release_is_not_delay_evidence():
-    # The first release is weeks after some of the window's steps (BDBV's
-    # first daily release, 2026-08-18, holds onsets from February): those
-    # steps' gap to it is not a reporting delay. Steps from the first
-    # release on are complete at lag 4, so 5 lags.
-    window, back = LAG_WINDOW["daily"]
+    # The first release comes long after the first onsets (BDBV's first
+    # daily release, 2026-08-18, holds onsets from February): their gap
+    # to it is not a reporting delay. Steps from the first release on are
+    # complete at lag 4, so 5 lags.
     last = 300
-    first_release = last - back - window // 2
+    first_release = 174
 
     def share(t, d):
         if t + d < first_release:
@@ -115,18 +113,17 @@ def test_a_backfilled_first_release_is_not_delay_evidence():
 
 
 def test_no_informative_step_takes_the_release_history():
-    # Every complete step is before the first release: no delay can be
-    # read, so the block takes the release history, every day from the
-    # first release to the cut-off, so each has its lags.
-    window, back = LAG_WINDOW["daily"]
+    # Releases began 20 days before the cut-off and report slowly: no step
+    # has been seen long enough to read the delay, so the block takes the
+    # release history, every day from the first release to the cut-off.
     last = 300
-    first_release = last - back + 40
+    first_release = last - 20
 
     def share(t, d):
-        return np.nan if t + d < first_release else 1.0
+        return np.nan if t + d < first_release else min(1.0, (d + 1) / 60)
 
     tri = _triangle(last, share)
-    assert lag_count(tri, "daily") == last - first_release + 1 == 73
+    assert lag_count(tri, "daily") == last - first_release + 1 == 21
 
 
 def test_releases_from_day_one_are_unchanged():
