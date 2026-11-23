@@ -11,6 +11,7 @@ from submission_ci.policy import load_policy
 from submission_ci.submissions import COLUMNS, main, rows
 
 POLICY = Path(__file__).resolve().parents[1] / "policy.toml"
+HUB = Path(__file__).resolve().parents[2] / "config" / "hub.toml"
 PR = "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/"
 
 
@@ -83,6 +84,11 @@ def ledger(tmp_path: Path) -> Path:
                 "models": {
                     "seabbs-renewal": model(
                         120, bvd, "archive/2026-11-14/manual"
+                    ),
+                    "seabbs-rwnowcast": model(
+                        121,
+                        "random walk on a nowcast",
+                        "archive/2026-11-14/manual/baseline",
                     ),
                 },
             },
@@ -168,6 +174,8 @@ def test_the_command_writes_the_table(tmp_path: Path) -> None:
             str(root),
             "--policy",
             str(POLICY),
+            "--hub-config",
+            str(HUB),
             "--out",
             str(out),
         ]
@@ -181,5 +189,23 @@ def test_the_command_writes_the_table(tmp_path: Path) -> None:
         ("2026-11-07", "seabbs-renewal"),
         ("2026-11-07", "seabbs-rwnowcast"),
         ("2026-11-14", "seabbs-renewal"),
+        ("2026-11-14", "seabbs-rwnowcast"),
         ("2026-11-21", "seabbs-renewal"),
     ]
+
+
+def test_a_hub_id_of_its_own_starts_at_its_own_model(tmp_path: Path) -> None:
+    """With no gate record, seabbs-rwnowcast's start is its own model in
+    config/hub.toml, not the renewal chain's."""
+    root = ledger(tmp_path)
+    state = json.loads((root / "state.json").read_text())
+    starts = {
+        "seabbs-renewal": "renewalbvd",
+        "seabbs-rwnowcast": "randomwalknowcast",
+    }
+    row = by_round(rows(state, root, load_policy(POLICY), starts))[
+        "2026-11-14", "seabbs-rwnowcast"
+    ]
+    assert row["model"] == "randomwalknowcast"
+    assert row["chain_start"] == "randomwalknowcast"
+    assert row["substituted"] == "false"
