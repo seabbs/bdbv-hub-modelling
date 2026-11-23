@@ -319,11 +319,14 @@ class PaperFlow:
     def example_files(self) -> dict[str, list[str]]:
         """Return the SI examples' simulation files, by kind.
 
-        The examples are picked from the development round, so the
-        held-out round is never read for them. Each pick names a
-        simulation, `<seed>-<n>`, and the files are its seed's.
+        The examples are picked from the workflow's validation round
+        (`grid_rounds.validation_round` in `rounds_dir`), which the
+        simulate rule builds, so the held-out round is never read for them.
+        Each pick names a simulation, `<seed>-<n>`, and the files are its
+        seed's.
         """
-        folder = self.synthetic["simulations"]["development"]
+        round_ = self.config["grid_rounds"]["validation_round"]
+        folder = f"{self.config['rounds_dir']}/r{round_}/sims"
         picks = self.synthetic["examples"]["picks"]
         seeds = sorted({str(sim).split("-")[0] for sim, _ in picks})
         return {
