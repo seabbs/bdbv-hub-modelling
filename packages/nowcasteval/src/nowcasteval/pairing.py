@@ -325,8 +325,9 @@ def germany_sensitivity(
 
     Each nowcast date's states tasks (with Germany their sum) and age
     groups tasks, one pair per date, are forecast as the German
-    benchmark does (`data.germany.nowcast_tasks`, `hub_forecasts`). They
-    give the 7-day sums ending every day from 0 to 28 days back. The truth
+    benchmark does (`data.germany.nowcast_tasks`, `hub_forecasts`). The
+    walks forecast hub weeks, so they give the 7-day sums ending 0, 7, 14,
+    21 and 28 days back (`weekly_task`). The truth
     is the sum reported the config's truth delay after it ends.
 
     Parameters
@@ -357,6 +358,7 @@ def germany_sensitivity(
         hub_target,
         hub_triangle,
         nowcast_tasks,
+        weekly_task,
         within_delay,
     )
 
@@ -368,11 +370,10 @@ def germany_sensitivity(
     # The models see the counts the truth holds (`within_delay`).
     seen = within_delay(triangle, cfg.truth_delay)
     for date in run:
-        for task in nowcast_tasks(
-            seen,
-            date,
-            cfg.n_samples,
-            cfg.seed,
+        # The walks forecast hub weeks, so the sums ending 0, 7, ... days
+        # back (`weekly_task`).
+        for task in map(
+            weekly_task, nowcast_tasks(seen, date, cfg.n_samples, cfg.seed)
         ):
             level = (
                 "ages" if set(task.locations) & set(AGE_GROUPS) else "states"
