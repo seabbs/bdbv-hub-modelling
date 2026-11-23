@@ -699,3 +699,12 @@ def weekly_cutoffs(first: str, last: str, weekday: int) -> list[str]:
         out.append(day.isoformat())
         day += dt.timedelta(days=7)
     return out
+
+
+def release_weekday(rng: np.random.Generator) -> int:
+    """Draw a release weekday (Monday 0), Wednesday to Saturday as the hub's.
+
+    Training blocks and the paper's synthetic releases both draw theirs
+    here.
+    """
+    return int(rng.integers(2, 6))

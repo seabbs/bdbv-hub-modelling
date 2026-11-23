@@ -8,6 +8,7 @@ import pytest
 
 from nowcastfoundation.finetune import (
     final_counts,
+    release_weekday,
     releases,
     simulations,
     training_block,
@@ -647,3 +648,9 @@ def test_unallocated_thinning_keeps_each_cumulative_within_the_country() -> (
 def test_an_outbreak_s_simulation_drops_its_draw() -> None:
     outbreaks = pd.Series(["31000-4-2", "31000-4", "7-12-1"])
     assert simulations(outbreaks).tolist() == ["31000-4", "31000-4", "7-12"]
+
+
+def test_releases_fall_wednesday_to_saturday() -> None:
+    rng = np.random.default_rng(1)
+    days = {release_weekday(rng) for _ in range(200)}
+    assert days == {2, 3, 4, 5}

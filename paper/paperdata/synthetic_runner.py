@@ -38,7 +38,12 @@ import numpy as np
 import pandas as pd
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcasteval.backtest import run_forecasts
-from nowcastfoundation.finetune import releases, simulations, weekly_cutoffs
+from nowcastfoundation.finetune import (
+    release_weekday,
+    releases,
+    simulations,
+    weekly_cutoffs,
+)
 from nowcastutils.base import NATIONAL, ForecastModel, ForecastTask, get_model
 from nowcastutils.dates import epiweek_end
 from nowcastutils.hierarchy import parent as parent_of
@@ -191,11 +196,10 @@ def release_cutoffs(counts: pd.DataFrame, outbreak: str) -> list[str]:
         The cut-offs, ISO format.
     """
     rng = np.random.default_rng(zlib.crc32(outbreak.encode()))
-    weekday = int(rng.integers(2, 6))
     return weekly_cutoffs(
         str(counts["report_date"].min()),
         str(counts["report_date"].max()),
-        weekday,
+        release_weekday(rng),
     )
 
 
