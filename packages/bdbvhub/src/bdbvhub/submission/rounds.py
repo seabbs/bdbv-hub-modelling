@@ -36,36 +36,12 @@ import pandas as pd
 __all__ = [
     "freeze_round",
     "gh_pr_state",
-    "latest_run",
     "make_round_pages",
     "round_page",
 ]
 
 FROZEN = "pages"
 """Folder on the ledger branch that holds the frozen round pages."""
-
-
-def latest_run(round_dir: Path) -> Path | None:
-    """Return the newest run folder of a round's archive.
-
-    Parameters
-    ----------
-    round_dir : pathlib.Path
-        `archive/<reference_date>/` on the ledger branch.
-
-    Returns
-    -------
-    pathlib.Path or None
-        The run folder with the largest run id, or None if there is none.
-    """
-    runs = [p for p in round_dir.iterdir() if p.is_dir()]
-    if not runs:
-        return None
-
-    def key(p: Path) -> tuple[int, str]:
-        return (int(p.name), p.name) if p.name.isdigit() else (-1, p.name)
-
-    return max(runs, key=key)
 
 
 def _national_table(csv: Path, national: str = "CD") -> str:

@@ -39,7 +39,6 @@ __all__ = [
     "max_delay_for",
     "read_grid",
     "stratum_values",
-    "system_locations",
     "triangle_cells",
 ]
 
@@ -177,24 +176,6 @@ def draw_strata(
             return places, draw_count(grid, "ages_by_places", rng)
         case other:
             raise ValueError(f"unknown strata {other}")
-
-
-def system_locations(places: int, ages: int, regions: int = 6) -> int:
-    """Return a system's locations in a whole-system training block.
-
-    The country, then for places by ages each place's and each age's
-    total, for flat places up to `regions` region totals, and every leaf.
-    """
-    leaves = places * ages
-    if leaves == 1:
-        return 1
-    if places > 1 and ages > 1:
-        totals = places + ages
-    elif places > 1:
-        totals = regions
-    else:
-        totals = 0
-    return 1 + totals + leaves
 
 
 def draw_design(

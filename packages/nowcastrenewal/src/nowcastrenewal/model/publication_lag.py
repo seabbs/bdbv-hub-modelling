@@ -70,7 +70,7 @@ def kept_share(
         $b_k$ for each pair, `(K,)`.
     pairs : dict
         `before` and `after` report ages, `(n, 7)`, and the one-hot
-        `pair` of each cell, `(n, K)` (`data.releases.release_pairs`).
+        `pair` of each cell, `(n, K)` (`nowcastutils.releases.release_pairs`).
         The ages must be concrete (`published_weights`).
 
     Returns

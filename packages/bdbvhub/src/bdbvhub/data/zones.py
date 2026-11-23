@@ -108,7 +108,7 @@ def zone_places() -> pd.DataFrame:
     Centroids and WorldPop counts of the hub's mapped health zones, from
     `zone_centres.csv` (see its header). A zone the map lacks has no
     row. The zone model places it in its province
-    (`forecasters.zonerenewal`).
+    (`nowcastrenewal.zones`).
 
     Returns
     -------

@@ -56,8 +56,8 @@ def germany_sensitivity(
 
     Each nowcast date's states tasks (with Germany their sum) and age
     groups tasks, one pair per date, are forecast as the German
-    benchmark does (`data.germany.nowcast_tasks`, `hub_forecasts`). The
-    walks have weekly steps, so they forecast the 7-day sums ending on
+    benchmark does (`nowcastgermany.data.nowcast_tasks`, `hub_forecasts`).
+    The walks have weekly steps, so they forecast the 7-day sums ending on
     Saturdays (`hub_weeks`). The truth
     is the sum reported the config's truth delay after it ends.
 

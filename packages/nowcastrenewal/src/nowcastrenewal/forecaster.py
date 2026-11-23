@@ -1228,7 +1228,7 @@ class RenewalModel:
             The fit and its draws.
         """
         # Imported from its module, not the package, so that the fit key
-        # (`evaluation.store.fit_code`) follows the builder.
+        # (`bdbvhub.store.store.fit_code`) follows the builder.
         from nowcastrenewal.model.zones import build_model
 
         pr = engine()
@@ -1303,7 +1303,7 @@ class RenewalModel:
         introduction, then its walk. National is the sum of the provinces
         plus the unassigned part, the national cases no province has
         (`data_gap`). The pooled variants, `renewal` and `renewalbvd`,
-        fit health zones (`forecasters.zonerenewal.ZoneRenewalModel`).
+        fit health zones (`nowcastrenewal.zones.ZoneRenewalModel`).
 
         Parameters
         ----------
@@ -1476,7 +1476,7 @@ def fit_renewal(
     """Fit a variant for the CI and write the fit directory.
 
     The variant is the registered model, so `renewal` and `renewalbvd`
-    fit health zones (`forecasters.zonerenewal`) and also write their
+    fit health zones (`nowcastrenewal.zones`) and also write their
     zone samples.
     Trajectories are drawn here, so `forecast_renewal` only reads them.
     Writes `samples.csv.gz`, `delay-summary.csv`, `unassigned.csv.gz`
@@ -1677,7 +1677,7 @@ def _factory(variant: Variant) -> RenewalModel:
     return RenewalModel(variant)
 
 
-# The pooled variants are registered by `forecasters.zonerenewal`.
+# The pooled variants are registered by `nowcastrenewal.zones`.
 for _variant in VARIANTS.values():
     if not _variant.per_province:
         continue

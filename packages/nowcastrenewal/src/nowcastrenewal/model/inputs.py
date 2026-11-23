@@ -282,7 +282,7 @@ class WeekTables:
 
     The grid starts one week before national weekly onsets first reach
     `START_COUNT` and ends with the week holding the vintage's cut-off,
-    its latest onset day (`data.releases.release_cutoff`).
+    its latest onset day (`nowcastutils.releases.release_cutoff`).
     """
 
     wide: pd.DataFrame
@@ -427,7 +427,7 @@ def vintage_from_tables(
     from a near-zero start with importation only. The week grid
     starts one week before national weekly onsets first reach
     `START_COUNT` and ends with the week holding the vintage's cut-off,
-    its latest onset day (`data.releases.release_cutoff`).
+    its latest onset day (`nowcastutils.releases.release_cutoff`).
 
     Parameters
     ----------
@@ -454,7 +454,7 @@ def vintage_from_tables(
         this vintage (`ForecastTask.auxiliary["bvd"]`).
     release_pairs : dict, optional
         Rows of each earlier delay file and how many the file before it
-        had (`data.releases.release_pairs`).
+        had (`nowcastutils.releases.release_pairs`).
     imputation_delay : numpy.ndarray
         The daily pmf of the delay the data provider subtracts to impute
         a missing onset (`ForecastTask.imputation_delay`).

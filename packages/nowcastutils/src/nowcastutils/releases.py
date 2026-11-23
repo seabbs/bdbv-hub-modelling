@@ -59,7 +59,8 @@ def release_cutoff(rows: pd.DataFrame, release: str) -> dt.date:
     Parameters
     ----------
     rows : pandas.DataFrame
-        Rows with `vintage` and `cutoff` columns (`data.load_target`).
+        Rows with `vintage` and `cutoff` columns
+        (`bdbvhub.data.tidy.load_target`).
     release : str
         The release label.
 

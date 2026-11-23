@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from bdbvhub.cli import main
-from bdbvhub.submission.rounds import freeze_round, latest_run, make_round_pages
+from bdbvhub.submission.rounds import freeze_round, make_round_pages
 
 REF = "2026-10-31"
 
@@ -84,13 +84,6 @@ def _ledger(root: Path) -> Path:
 
 def _state(url: str) -> str:
     return "merged" if url.endswith("90") else "open"
-
-
-def test_latest_run_is_the_largest_id(tmp_path: Path) -> None:
-    ledger = _ledger(tmp_path)
-    run = latest_run(ledger / "archive" / REF)
-    assert run is not None
-    assert run.name == "10"
 
 
 def test_round_page_has_a_tab_per_model_id(tmp_path: Path) -> None:

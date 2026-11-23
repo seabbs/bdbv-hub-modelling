@@ -15,7 +15,7 @@ from bdbvhub.reporting.hubtables import (
     hub_tables,
     write_hub_tables,
 )
-from nowcastbaselines.zones import reconcile_zones
+from nowcastbaselines.zones import ZoneAllocator
 from nowcasteval import backtest as bt
 from nowcastutils.base import NATIONAL
 from nowcastutils.hierarchy import is_zone, province_of
@@ -161,21 +161,10 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
     zones = hub_zones(DATA / "hub-config" / "tasks.json")
     mine = tuple(z for z in zones if province_of(z) in task.locations)
     provinces = walk.loc[walk["location"].isin(set(task.locations))]
-    # A model that forecasts each zone of its provinces as 1, summed to
-    # its provinces as the Chronos-2 models give them.
+    # A model with zone samples of its own that sum to its provinces.
     daily_zones = load_daily_zones(DATA)
-    ones = pd.concat(
-        provinces.loc[provinces["location"] == province_of(z)].assign(
-            location=z, value=1.0
-        )
-        for z in mine
-    )
-    split = reconcile_zones(
-        ones,
-        provinces,
-        task,
-        weekly_counts(daily_zones, task.vintage),
-        mine,
+    split = ZoneAllocator().allocate(
+        provinces, task, weekly_counts(daily_zones, task.vintage), mine
     )
     own = pd.concat(
         [walk, split.assign(**walk.iloc[0][["kind", "vintage"]].to_dict())]

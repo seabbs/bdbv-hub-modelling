@@ -198,7 +198,7 @@ def tasks_for_scoring(
     Parameters
     ----------
     tasks : sequence of ForecastTask
-        Tasks, such as `store.origin_tasks` gives.
+        Tasks, such as `bdbvhub.store.store.origin_tasks` gives.
     config : BacktestConfig
         Gives `score_samples`.
 
@@ -484,8 +484,8 @@ def vintage_task(
 ) -> tuple[ForecastTask, str]:
     """Build the task of one real vintage, as the submission fits it.
 
-    The fit store fits the same task (`store.origin_tasks`), so the
-    submission and the store give a fit the same key. The weeks run from
+    The fit store fits the same task (`bdbvhub.store.store.origin_tasks`),
+    so the submission and the store give a fit the same key. The weeks run from
     `TASK_MIN_HORIZON`. A vintage with no delays of its own uses the
     latest earlier ones (`delays_for_vintage`).
 
@@ -1270,7 +1270,7 @@ def run_scenarios(
         `truth_view` and `level` (national, province or zone). Zone
         scores split each model's province samples across zones
         (`ZoneAllocator`) and add zone random walk
-        (`evaluation.zones.scenario_zone_scores`).
+        (`bdbvhub.zones.scenario_zone_scores`).
         Then the energy scores (`energy_tasks`) of every scale, with
         `scenario` and `truth_view`. Then the final simulated counts of
         the country and provinces, `location`, `target_end_date`, `truth`,
@@ -1330,7 +1330,7 @@ def scenario_forecasts(
     -------
     tuple of pandas.DataFrame
         The province forecasts and the zone forecasts allocated from
-        them (`evaluation.zones.zone_allocations`), each with `scenario`.
+        them (`bdbvhub.zones.zone_allocations`), each with `scenario`.
     """
     # Local import: the zone backtest builds on this module.
     from bdbvhub.zones import zone_allocations

@@ -2,7 +2,7 @@
 """Host devices: the CPUs a process may use, and XLA's device count.
 
 Apart from the CLI, so the fit store can set them without the CLI being
-part of every stored fit's key (`evaluation.store.fit_code`).
+part of every stored fit's key (`bdbvhub.store.store.fit_code`).
 """
 
 from __future__ import annotations
