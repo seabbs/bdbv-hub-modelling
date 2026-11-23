@@ -8,6 +8,7 @@ log rows and checkpoint settings.
 from __future__ import annotations
 
 import csv
+import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from itertools import pairwise
@@ -15,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from ..evaluations import merged_history
-from .logs import CACHE, _size, prefixes
+from .logs import CACHE, _checkpoint_dirs, _size, prefixes
 from .runs import Run
 
 
@@ -42,13 +43,9 @@ def run_params(
         [(step, rate)]) and the checkpoint `prefixes`.
     """
     folder = Path(folder)
-    saved = sorted(
-        (
-            (_size(d.name), CACHE.get(d / "settings.json"))
-            for d in folder.glob("train/n*")
-        ),
-        key=lambda x: x[0],
-    )
+    saved = [
+        (n, CACHE.get(d / "settings.json")) for n, d in _checkpoint_dirs(folder)
+    ]
     settings = [s for _, s in saved if isinstance(s, dict)]
     last = settings[-1] if settings else {}
     lr_outbreaks = max(default, default=0)
@@ -139,17 +136,25 @@ RATE_WINDOW = 3600.0
 """Seconds of timestamped steps the speed is taken over."""
 
 
+RESTART_GAP = 1800.0
+"""Seconds between two logged points taken as a stop, not training."""
+
+
 def recent_rate(
-    points: Sequence[tuple[float, float]], window: float = RATE_WINDOW
+    points: Sequence[tuple[float, float]],
+    window: float = RATE_WINDOW,
+    since: float | None = None,
 ) -> tuple[float | None, float | None]:
     """Return the steps a second and the seconds they span, or Nones.
 
     `points` are (time, step), from every logged step and the trainer's
-    status file. The rate is over the last `window` seconds; with fewer
-    than two points there (evaluations logged only every few hundred
-    steps), over the last two points, however far apart.
+    status file. Only points from `since` on count (the trainer's last
+    resume, `resumed_at`), so a restart's idle time is left out. The
+    rate is over the last `window` seconds; with fewer than two points
+    there (evaluations logged only every few hundred steps), over the
+    last two points, however far apart.
     """
-    pts = sorted(set(points))
+    pts = sorted(p for p in set(points) if since is None or p[0] >= since)
     if len(pts) < 2:
         return None, None
     last_t, last_s = pts[-1]
@@ -159,10 +164,6 @@ def recent_rate(
     if span <= 0 or last_s <= first_s:
         return None, None
     return (last_s - first_s) / span, span
-
-
-RESTART_GAP = 1800.0
-"""Seconds between two logged points taken as a stop, not training."""
 
 
 def mean_rate(
@@ -180,6 +181,37 @@ def mean_rate(
             steps += s1 - s0
             seconds += t1 - t0
     return steps / seconds if seconds else None
+
+
+RESUMED = re.compile(
+    rb"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] resumed at step"
+)
+"""The trainer's log line on resuming a run from its saved state."""
+
+
+def resumed_at(folder: Path | str, tail: int = 2_000_000) -> float | None:
+    """Return when the trainer last resumed, from its newest log, or None.
+
+    Read from the last `tail` bytes of the newest `train/n<N>.log`.
+    """
+    logs = [
+        p
+        for p in Path(folder).glob("train/n*.log")
+        if re.fullmatch(r"n\d+\.log", p.name)
+    ]
+    if not logs:
+        return None
+    newest = max(logs, key=lambda p: p.stat().st_mtime)
+    with newest.open("rb") as f:
+        f.seek(max(0, f.seek(0, 2) - tail))
+        found = [
+            m.group(1) for m in map(RESUMED.match, f.read().splitlines()) if m
+        ]
+    if not found:
+        return None
+    return datetime.strptime(
+        found[-1].decode(), "%Y-%m-%d %H:%M:%S"
+    ).timestamp()
 
 
 def status_point(folder: Path | str) -> tuple[float, float] | None:

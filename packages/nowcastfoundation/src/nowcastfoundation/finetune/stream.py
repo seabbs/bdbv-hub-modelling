@@ -76,6 +76,10 @@ EVAL_MODES = ("local", "offload")
 """Where held-out evaluation runs (`--eval`)."""
 HELD_OUT_BLOCKS = "held-out-blocks.pkl"
 HELD_OUT_KEY = "held-out-blocks.json"
+NEXT_CHUNK_BLOCKS = "next-chunk-blocks.pkl"
+NEXT_CHUNK_KEY = "next-chunk-blocks.json"
+"""The next chunk's cut blocks and their key (`save_chunk`): a restart
+loads them rather than cutting the chunk again (about 8 minutes)."""
 """What the saved held-out blocks were cut from (`held_out_blocks`)."""
 """The held-out blocks an offloaded run saves for its evaluator."""
 
@@ -1644,6 +1648,35 @@ def save_blocks(blocks: list[dict], path: Path) -> None:
     tmp.rename(path)
 
 
+def save_chunk(
+    out: Path, key: dict[str, Any], pairs: list, empty: list[str]
+) -> None:
+    """Save a cut chunk's blocks with their key, replacing the last.
+
+    `key` holds the chunk's outbreaks and everything the cut depends on,
+    as the held-out key does (`held_out_blocks`).
+    """
+    saved = out / NEXT_CHUNK_KEY
+    saved.unlink(missing_ok=True)
+    tmp = out / (NEXT_CHUNK_BLOCKS + ".tmp")
+    with tmp.open("wb") as f:
+        pickle.dump((pairs, empty), f, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp.rename(out / NEXT_CHUNK_BLOCKS)
+    saved.write_text(json.dumps(json.loads(json.dumps(key))))
+
+
+def load_chunk(out: Path, key: dict[str, Any]) -> tuple[list, list] | None:
+    """Return a saved chunk's blocks and skipped blocks if `key` matches."""
+    path, saved = out / NEXT_CHUNK_BLOCKS, out / NEXT_CHUNK_KEY
+    if not (path.is_file() and saved.is_file()):
+        return None
+    if json.loads(saved.read_text()) != json.loads(json.dumps(key)):
+        return None
+    with path.open("rb") as f:
+        pairs, empty = pickle.load(f)
+    return pairs, empty
+
+
 def held_out_blocks(
     out: Path, key: dict[str, Any], cut: Callable[[], list[dict]]
 ) -> list[dict]:
@@ -1811,6 +1844,13 @@ def main(root: Path | None = None) -> None:
         "code_sha256": cut_code_sha256(),
     }
     val = held_out_blocks(out, key, cut_held_out)
+
+    cut_key = dict(key)
+
+    def chunk_key(ids: Sequence[str]) -> dict[str, Any]:
+        # A training chunk's blocks depend on what the held-out cut does.
+        return cut_key | {"outbreaks": list(ids)}
+
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
@@ -2012,6 +2052,8 @@ def main(root: Path | None = None) -> None:
     # The next chunk's blocks are cut in `pool` while this one trains.
     ahead: dict[tuple[str, ...], list[Future]] = {}
 
+    saved_ahead: set[tuple[str, ...]] = set()
+
     def cut_ahead(after: list[str]) -> None:
         """Start cutting the chunk after outbreaks `after` if it is ready."""
         size = min(CHUNK, args.outbreaks - len(after))
@@ -2058,14 +2100,20 @@ def main(root: Path | None = None) -> None:
             stage=f"cutting blocks of outbreaks {done + 1}-{hi}",
             waiting_since=None,
         )
-        if tuple(chunk) not in ahead:
-            ahead.clear()
-            cut_ahead(trained)
-        if tuple(chunk) not in ahead:
-            ahead[tuple(chunk)] = submit_cut(
-                pool, sim_dir, chunk, args.seed, k, args.cut_workers
-            )
-        pairs, empty = _join(ahead.pop(tuple(chunk)))
+        cached = load_chunk(out, chunk_key(chunk))
+        if cached is not None:
+            ahead.pop(tuple(chunk), None)
+            pairs, empty = cached
+            log(f"outbreaks {done + 1}-{hi}: saved blocks loaded")
+        else:
+            if tuple(chunk) not in ahead:
+                ahead.clear()
+                cut_ahead(trained)
+            if tuple(chunk) not in ahead:
+                ahead[tuple(chunk)] = submit_cut(
+                    pool, sim_dir, chunk, args.seed, k, args.cut_workers
+                )
+            pairs, empty = _join(ahead.pop(tuple(chunk)))
         log(
             f"outbreaks {done + 1}-{hi}: "
             f"{record_views(out, pairs, f'{done + 1}-{hi}')}"
@@ -2132,6 +2180,13 @@ def main(root: Path | None = None) -> None:
                 )
             if step % 10 == 0:
                 cut_ahead(trained + chunk)
+                # Save the next chunk once its cut is done, for a restart.
+                for ids, futures in ahead.items():
+                    if ids not in saved_ahead and all(
+                        f.done() for f in futures
+                    ):
+                        save_chunk(out, chunk_key(ids), *_join(futures))
+                        saved_ahead.add(ids)
                 history.append({"step": step, "loss": value})
                 report(
                     stage="training", step=step, outbreaks=done, gpu=memory()

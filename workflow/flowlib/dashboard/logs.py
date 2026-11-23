@@ -220,10 +220,28 @@ def _size(name: str) -> int:
     return int(digits) if digits else 0
 
 
+CHECKPOINT_DIR = re.compile(r"^n(\d+)$")
+"""A checkpoint's folder name: `n<simulations>`, nothing else."""
+
+
+def _checkpoint_dirs(folder: Path | str) -> list[tuple[int, Path]]:
+    """Return the run's checkpoint folders and their sizes, by size.
+
+    Only folders named `n<digits>`: logs and kept copies beside them
+    (`n3200.log.pin-014a2bac5`) are not checkpoints.
+    """
+    out = []
+    for d in Path(folder).glob("train/n*"):
+        m = CHECKPOINT_DIR.match(d.name)
+        if m and d.is_dir():
+            out.append((int(m.group(1)), d))
+    return sorted(out)
+
+
 def checkpoints(folder: Path | str) -> list[tuple[str, dict, float | None]]:
     """Return each saved checkpoint's name, settings and time, by size."""
     out = []
-    for d in sorted(Path(folder).glob("train/n*"), key=lambda p: _size(p.name)):
+    for _, d in _checkpoint_dirs(folder):
         s = CACHE.get(d / "settings.json")
         if isinstance(s, dict):
             side = CACHE.get(d / SIDECAR)
@@ -239,7 +257,7 @@ def checkpoints(folder: Path | str) -> list[tuple[str, dict, float | None]]:
 
 def prefixes(folder: Path | str, default: Sequence[int]) -> list[int]:
     """Return the run's checkpoint sizes: the saved ones with `default`."""
-    saved = {_size(d.name) for d in Path(folder).glob("train/n*")}
+    saved = {n for n, _ in _checkpoint_dirs(folder)}
     return sorted((saved - {0}) | set(default))
 
 

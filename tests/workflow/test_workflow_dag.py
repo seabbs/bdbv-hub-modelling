@@ -161,13 +161,28 @@ def test_a_build_keeps_both_graphs(tmp_path):
     assert len(got["rules"]["nodes"]) == 3
 
 
-def test_the_page_loads_viz_js_s_browser_bundle():
-    # viz-js 3.29 ships the global `Viz` as dist/viz-global.js; the
-    # lib/viz-standalone.js of older releases is a 404, so no graph drew.
+def test_the_page_loads_its_libraries_from_the_server_first():
+    # Served from the monitor, not a CDN, and loaded before the page's own
+    # script: that script checked `window.Viz` before the libraries had
+    # loaded, so every browser showed "did not load" and drew nothing.
     from flowlib import monitor_server as ms
 
-    assert ms.VIZ.endswith("@viz-js/viz@3.29.0/dist/viz-global.js")
-    assert ms.VIZ in ms.target_page(built(), [], "x")
+    page = ms.target_page(built(), [], "x")
+    own = page.index("const DATA_URL")
+    for src in (ms.VIZ, ms.PAN_ZOOM):
+        assert src.startswith("/dag/static/")
+        assert (ms.STATIC / src.rsplit("/", 1)[1]).is_file()
+        assert page.index(f'<script src="{src}"') < own
+    assert "cdn" not in page.lower()
+
+
+def test_the_vendored_libraries_are_the_pinned_versions():
+    from flowlib import monitor_server as ms
+
+    viz = (ms.STATIC / "viz-global.js").read_text()[:200]
+    pan = (ms.STATIC / "svg-pan-zoom.min.js").read_text()[:200]
+    assert "Viz.js 3.29.0" in viz
+    assert "svg-pan-zoom v3.6.2" in pan
 
 
 def test_the_page_says_when_graphviz_does_not_load():
@@ -182,8 +197,6 @@ def test_the_page_is_the_rule_graph_with_pan_zoom_and_filters():
     from flowlib import monitor_server as ms
 
     page = ms.target_page(built(), [], "toy")
-    assert ms.PAN_ZOOM.endswith("svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js")
-    assert ms.PAN_ZOOM in page
     for control in ("fit", "expand-all", "collapse-all", "running-only"):
         assert f'id="{control}"' in page
     for state in dag.STATES:
@@ -206,6 +219,9 @@ def test_the_page_data_is_served_as_json(tmp_path):
         lambda: [{"rule": "b", "wildcards": {"n": "1"}, "state": "running"}],
     )
     client = app.test_client()
+    js = client.get("/dag/static/viz-global.js")
+    assert js.status_code == 200
+    assert js.mimetype in ("text/javascript", "application/javascript")
     got = client.get("/dag/toy.json").get_json()
     assert got["totals"]["running"] == 1
     assert client.get("/dag/toy").status_code == 200
