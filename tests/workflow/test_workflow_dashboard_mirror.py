@@ -113,3 +113,22 @@ def test_notes_and_tables_may_be_remote(tmp_path):
         "h:review/notes.md",
         str(tmp_path / "m" / "extra-0-notes.md"),
     ] in src.commands()
+
+
+def test_a_dataset_reads_its_scoring_unit_s_folder(tmp_path):
+    # The German units cache their forecasts in germany-days.
+    cfg = {"REMOTE": "", "SCORE_CACHE": str(tmp_path / "s"), "MAILBOX": ""}
+    datasets = [{"key": "germany", "unit": "germany-days"}]
+    src = mirror.Source(cfg, tmp_path / "m", datasets=datasets, root=tmp_path)
+    assert src.dataset("germany") == tmp_path / "s" / "germany-days"
+
+
+def test_the_german_dataset_is_the_german_units_folder():
+    import yaml
+
+    root = Path(__file__).parents[2]
+    cfg = yaml.safe_load((root / "workflow" / "config.yaml").read_text())
+    (germany,) = [
+        d for d in cfg["dashboard"]["datasets"] if d["key"] == "germany"
+    ]
+    assert germany["unit"] == "germany-days"

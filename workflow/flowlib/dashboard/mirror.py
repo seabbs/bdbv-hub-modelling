@@ -77,7 +77,7 @@ class Source:
             key = ds["key"]
             self._add(
                 f"dataset:{key}",
-                ds.get("source") or f"{cache}/{key}",
+                ds.get("source") or f"{cache}/{ds.get('unit') or key}",
                 key,
                 folder=True,
             )

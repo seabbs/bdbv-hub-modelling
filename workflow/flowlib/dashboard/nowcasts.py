@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import json
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -283,6 +284,30 @@ def _put(d: dict, keys: Sequence[str], value: Any) -> None:
     d[keys[-1]] = value
 
 
+def folders(
+    cache: Path, run_list: Sequence[Run], unit: str | None = None
+) -> list[tuple[Path, str]]:
+    """Return each forecast folder and the checkpoint name it stands for.
+
+    The shared cache's folders by their own names, and, with `unit`, each
+    run's own scored checkpoints (`<run>/scores/<unit>/n<N>`) as
+    `<run>-<hash>`, the hash of its segment's `train/n<N>/settings.json`.
+    """
+    out = [(p, p.name) for p in sorted(cache.iterdir()) if p.is_dir()]
+    for r in run_list if unit else ():
+        if r.folder is None:
+            continue
+        for p in sorted(Path(r.folder, "scores", unit).glob("n*")):
+            settings = Path(r.folder, "train", p.name, "settings.json")
+            try:
+                key = json.loads(settings.read_text()).get("hash")
+            except (OSError, ValueError):
+                continue
+            if p.is_dir() and key:
+                out.append((p, f"{r.key}-{key}"))
+    return out
+
+
 def build(
     cache: Path | str,
     run_list: Sequence[Run],
@@ -292,6 +317,7 @@ def build(
     files: dict | None = None,
     order: Sequence[tuple[str, str]] = (),
     sources: Iterable[str] | None = None,
+    unit: str | None = None,
 ) -> dict[str, Any] | None:
     """Return every location's nowcasts by series, target, source, origin.
 
@@ -321,9 +347,10 @@ def build(
     latest: dict = {}
     origins: set[str] = set()
     targets: set[str] = set()
-    for folder in sorted(p for p in cache.iterdir() if p.is_dir()):
-        ref = is_reference(folder.name)
-        if not ref and which.run_of(folder.name) is None:
+    found = folders(cache, run_list, unit)
+    for folder, name in found:
+        ref = is_reference(name)
+        if not ref and which.run_of(name) is None:
             continue
         for path in sorted(folder.glob("*.csv.gz")):
             origin = path.name.removesuffix(".csv.gz")
@@ -335,7 +362,7 @@ def build(
                 continue
             key = (st.st_mtime_ns, st.st_size, tuple(picks))
             if str(path) not in files or files[str(path)][0] != key:
-                rows = read_file(path, folder.name, which)
+                rows = read_file(path, name, which)
                 files[str(path)] = (key, digest(rows, picks, origin))
             for loc, sid, src, tgt, entry, seen, last in files[str(path)][1]:
                 if keep is not None and src not in keep:
@@ -385,16 +412,21 @@ def build(
         "targets": sorted(targets),
         "origins": sorted(origins),
         "folders": {
-            split_label(p.name)[0]: p.name
-            for p in cache.iterdir()
-            if p.is_dir() and not is_reference(p.name)
+            split_label(name)[0]: name
+            for _, name in found
+            if not is_reference(name)
         },
     }
 
 
-def _signature(cache: Path) -> tuple:
+def _signature(
+    cache: Path, run_list: Sequence[Run], unit: str | None = None
+) -> tuple:
     out = []
-    for f in sorted(cache.glob("*/*.csv.gz")):
+    files = [
+        f for d, _ in folders(cache, run_list, unit) for f in d.glob("*.csv.gz")
+    ]
+    for f in sorted(files):
         try:
             st = f.stat()
         except OSError:
@@ -412,11 +444,16 @@ def cached_build(
     excluded: Iterable[str] = (),
     order: Sequence[tuple[str, str]] = (),
     sources: Iterable[str] | None = None,
+    unit: str | None = None,
 ) -> dict[str, Any] | None:
-    """Return `build`'s result, reused while no file of the folder changes."""
+    """Return `build`'s result, reused while no file of the folders changes."""
     cache = Path(cache)
     shown = None if sources is None else tuple(sorted(sources))
-    sig = (_signature(cache) if cache.is_dir() else None, tuple(levels), shown)
+    sig = (
+        _signature(cache, run_list, unit) if cache.is_dir() else None,
+        tuple(levels),
+        shown,
+    )
     if store.get("sig") != sig or "built" not in store:
         store["built"] = build(
             cache,
@@ -427,6 +464,7 @@ def cached_build(
             store.setdefault("files", {}),
             order,
             shown,
+            unit,
         )
         store["sig"] = sig
     return store["built"]

@@ -210,6 +210,9 @@ dashboard:
   datasets:
     - key: germany
       label: Germany (development half)
+      # The scoring units' cache folder (evaluation.checkpoint.GERMANY_UNIT),
+      # in SCORE_CACHE and in each run's own <run>/scores.
+      unit: germany-days
       metric: WIS
       truth: latest vintage of the forecast files
       # Germany is daily only (config/germany.toml): its models take the
