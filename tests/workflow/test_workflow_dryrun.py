@@ -1220,3 +1220,15 @@ def test_a_run_s_block_combinations_come_from_its_final_checkpoint(tmp_path):
     assert out.returncode == 0, out.stderr + out.stdout
     assert "rule block_combinations:" in out.stdout
     assert f"{tmp_path}/runs/runa/train/n500/settings.json" in out.stdout
+
+
+def test_the_daily_comparison_scores_every_run_s_checkpoints(tmp_path):
+    # The paper's `compare_daily`: each run's checkpoints on both German
+    # views, from the run's own German units beside the reference.
+    out = dry_run(
+        tmp_path, f"{tmp_path}/runs/compare-daily.csv", config=FT, quiet=False
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "rule compare_daily:" in out.stdout
+    assert "rule daily_table:" in out.stdout
+    assert f"{tmp_path}/runs/runa/reports/compare-daily.csv" in out.stdout

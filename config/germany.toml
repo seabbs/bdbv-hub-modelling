@@ -70,6 +70,9 @@ baseline = "randomwalknowcast"
 # The paper's relative scores divide by the hub's own baseline, as
 # Wolffram et al. (2023) compare to it.
 paper_baseline = "KIT-frozen_baseline"
+# Relative scores on daily counts divide by zero-shot Chronos-2 (ragged),
+# as `randomwalknowcast` forecasts the 7-day sums only.
+daily_baseline = "fm_chronos_daily_ragged"
 
 [page]
 # Models switched off on the page until the reader switches them on. Both
