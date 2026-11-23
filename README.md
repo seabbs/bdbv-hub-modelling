@@ -7,35 +7,34 @@
 
 **Nowcasts and forecasts for the BDBV Modeling Hub, and the models and evaluation behind them.**
 
-The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) collects weekly nowcasts and short-term forecasts of confirmed Bundibugyo virus disease cases in the 2026 outbreak in the Democratic Republic of the Congo.
+This repository holds our modelling for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
+The hub collects weekly nowcasts and short-term forecasts of confirmed Bundibugyo virus disease cases in the 2026 outbreak in the Democratic Republic of the Congo.
 Teams submit sample trajectories of cases by week of symptom onset, nationally, by province and by health zone.
-The hub is run by Insight Net centres (ACCIDDA and epiEngage), the Kinshasa School of Public Health and the Institut National de Santé Publique.
 
-This repository holds three projects.
-The fine-tuned foundation project fine-tunes the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles, and is described in a paper.
-Its reference model is `randomwalknowcast` from `nowcastbaselines`, our JAX port of baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) with a random walk on top.
-We develop the baselines as part of the paper.
-It is evaluated on held-out simulations, on the German COVID-19 hospitalisation nowcasting hub and on the BDBV hub.
-The joint-model-informed renewal project compares renewal models fitted to the hub data on their own with renewal models informed by a larger joint model, [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
-The hub submission project submits our models to the hub each week, backtests them and compares them with the other teams.
-Every model is scored against the random walk and the random walk nowcast.
+We fine-tune the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles.
+Our baselines in `nowcastbaselines` are `randomwalknowcast`, a JAX port of baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) with a random walk on top, and the random walk, `randomwalk`.
+Both belong to one paper, with `randomwalknowcast` as its reference model.
+The paper evaluates them on held-out simulations, the German COVID-19 hospitalisation nowcasting hub and the BDBV hub.
 
-We submit three models.
-`seabbs-rwnowcast` is `randomwalknowcast`, the paper's reference model.
-`seabbs-renewal` is the first renewal model in a chain that passes its checks.
-The chain starts with `renewalbvd`, the zone renewal model informed by the BVDOutbreakSize Rt estimates.
-Its ablations are the fallbacks, `renewalsp`, which fits each province on its own, and then `renewal`, the zone model without BVDOutbreakSize.
+We submit two models from this work.
+`seabbs-rwnowcast` is `randomwalknowcast`, submitted each week.
 `seabbs-nowcastfm` is the fine-tuned Chronos-2 model, submitted once it is opted in.
 
-To start, see the [documentation](https://samabbott.co.uk/bdbv-hub-modelling/).
-`task paper` runs the paper's workflow and renders the paper.
-The [workflow README](workflow/README.md) lists every step from simulation and fine-tuning to scoring.
+Our renewal models are linked to a larger joint model, [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
+`renewalbvd` is the zone renewal model informed by the BVDOutbreakSize Rt estimates.
+Its ablations are `renewalsp`, which fits each province on its own, and `renewal`, the zone model without BVDOutbreakSize.
+We submit them as `seabbs-renewal`, the first of `renewalbvd`, `renewalsp` and `renewal`, in that order, that passes its checks.
+
+We backtest every model on past hub releases, forecasting from each vintage and scoring against what later releases reported.
+The baselines and the foundation models are also run on the German nowcast benchmark.
+Every model is scored the same way, against the random walk and the random walk nowcast, and compared with the hub teams' forecasts.
+The [backtest](https://samabbott.co.uk/bdbv-hub-modelling/backtest/), [comparison with hub forecasts](https://samabbott.co.uk/bdbv-hub-modelling/comparison/) and [German nowcast benchmark](https://samabbott.co.uk/bdbv-hub-modelling/germany/) pages show the results.
 
 ## Quick links
 
 The three projects:
 
-<table><tr><td align="center" valign="top" width="33%"><a href="https://samabbott.co.uk/bdbv-hub-modelling/foundation/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/fine-tuned-foundation/logo-mark-dark.svg"><img src="assets/logos/fine-tuned-foundation/logo-mark.svg" alt="Fine-tuned foundation" width="48" height="48"></picture><br><b>Fine-tuned foundation</b></a><br>Chronos-2 fine-tuned on simulated outbreaks to nowcast from reporting triangles, with its paper and its baselines, <a href="https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/">nowcastbaselines</a>.</td><td align="center" valign="top" width="33%"><a href="https://samabbott.co.uk/bdbv-hub-modelling/renewal/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/joint-model-informed-renewal/logo-mark-dark.svg"><img src="assets/logos/joint-model-informed-renewal/logo-mark.svg" alt="Joint-model-informed renewal" width="48" height="48"></picture><br><b>Joint-model-informed renewal</b></a><br>Renewal models fitted on their own and informed by BVDOutbreakSize.</td><td align="center" valign="top" width="33%"><a href="https://samabbott.co.uk/bdbv-hub-modelling/hub/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/hub-submission/logo-mark-dark.svg"><img src="assets/logos/hub-submission/logo-mark.svg" alt="Hub submission" width="48" height="48"></picture><br><b>Hub submission</b></a><br>The weekly submission to the BDBV Modeling Hub, its backtest and the comparison with the hub teams.</td></tr></table>
+<table><tr><td align="center" valign="top" width="33%"><a href="https://samabbott.co.uk/bdbv-hub-modelling/foundation/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/fine-tuned-foundation/logo-mark-dark.svg"><img src="assets/logos/fine-tuned-foundation/logo-mark.svg" alt="Fine-tuned foundation" width="48" height="48"></picture><br><b>Fine-tuned foundation</b></a><br>Chronos-2 fine-tuned on simulated outbreaks to nowcast from reporting triangles, with its paper.</td><td align="center" valign="top" width="33%"><a href="https://samabbott.co.uk/bdbv-hub-modelling/renewal/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/joint-model-informed-renewal/logo-mark-dark.svg"><img src="assets/logos/joint-model-informed-renewal/logo-mark.svg" alt="Joint-model-informed renewal" width="48" height="48"></picture><br><b>Joint-model-informed renewal</b></a><br>Renewal models fitted on their own and informed by BVDOutbreakSize.</td><td align="center" valign="top" width="33%"><a href="https://samabbott.co.uk/bdbv-hub-modelling/hub/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/hub-submission/logo-mark-dark.svg"><img src="assets/logos/hub-submission/logo-mark.svg" alt="Hub submission" width="48" height="48"></picture><br><b>Hub submission</b></a><br>The weekly submission to the BDBV Modeling Hub, its backtest and the comparison with the hub teams.</td></tr></table>
 
 The packages they are built from:
 

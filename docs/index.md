@@ -3,27 +3,28 @@
 Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub.
 { .page-subtitle }
 
-The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) collects weekly nowcasts and short-term forecasts of confirmed Bundibugyo virus disease cases in the Democratic Republic of the Congo.
+This repository holds our modelling for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub).
+The hub collects weekly nowcasts and short-term forecasts of confirmed Bundibugyo virus disease cases in the 2026 outbreak in the Democratic Republic of the Congo.
+Teams submit sample trajectories of cases by week of symptom onset, nationally, by province and by health zone.
 
-This repository holds three projects.
-The fine-tuned foundation project fine-tunes the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles.
-Its reference model is `randomwalknowcast` from [nowcastbaselines](nowcastbaselines/), our JAX port of baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) with a random walk on top.
-We develop the baselines as part of the paper.
-The [paper](paper/main.html) and its [supporting information](paper/si.html) describe it.
-It is evaluated on held-out simulations, on the German COVID-19 hospitalisation nowcasting hub and on the BDBV hub.
-The joint-model-informed renewal project compares renewal models fitted to the hub data on their own with renewal models informed by a larger joint model, BVDOutbreakSize.
-The hub submission project submits our models to the hub each week, backtests them and compares them with the other teams.
-Every model is scored against the random walk and the random walk nowcast.
+We fine-tune the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles.
+Our baselines in [`nowcastbaselines`](nowcastbaselines/) are `randomwalknowcast`, a JAX port of baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) with a random walk on top, and the random walk, `randomwalk`.
+Both belong to one [paper](paper/main.html), with `randomwalknowcast` as its reference model.
+The paper evaluates them on held-out simulations, the German COVID-19 hospitalisation nowcasting hub and the BDBV hub.
 
-We submit three models.
-`seabbs-rwnowcast` is `randomwalknowcast`, the paper's reference model.
-`seabbs-renewal` is the first renewal model in a chain that passes its checks.
-The chain starts with `renewalbvd`, the zone renewal model informed by the BVDOutbreakSize Rt estimates.
-Its ablations are the fallbacks, `renewalsp`, which fits each province on its own, and then `renewal`, the zone model without BVDOutbreakSize.
+We submit two models from this work.
+`seabbs-rwnowcast` is `randomwalknowcast`, submitted each week.
 `seabbs-nowcastfm` is the fine-tuned Chronos-2 model, submitted once it is opted in.
 
-To run the paper's workflow and render the paper, use `task paper`.
-The [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) lists every step from simulation and fine-tuning to scoring.
+Our renewal models are linked to a larger joint model, [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize).
+`renewalbvd` is the zone renewal model informed by the BVDOutbreakSize Rt estimates.
+Its ablations are `renewalsp`, which fits each province on its own, and `renewal`, the zone model without BVDOutbreakSize.
+We submit them as `seabbs-renewal`, the first of `renewalbvd`, `renewalsp` and `renewal`, in that order, that passes its checks.
+
+We backtest every model on past hub releases, forecasting from each vintage and scoring against what later releases reported.
+The baselines and the foundation models are also run on the German nowcast benchmark.
+Every model is scored the same way, against the random walk and the random walk nowcast, and compared with the hub teams' forecasts.
+The [backtest](backtest.md), [comparison with hub forecasts](comparison.md) and [German nowcast benchmark](germany.md) pages show the results.
 
 ## Quick links
 
@@ -33,7 +34,7 @@ The three projects:
 
 -   [![](assets/logos/fine-tuned-foundation/logo-mark.svg#only-light){ width="32" height="32" }![](assets/logos/fine-tuned-foundation/logo-mark-dark.svg#only-dark){ width="32" height="32" } **Fine-tuned foundation**](foundation/index.md)
 
-    Chronos-2 fine-tuned on simulated outbreaks to nowcast from reporting triangles, with its paper and its baselines, [nowcastbaselines](nowcastbaselines/).
+    Chronos-2 fine-tuned on simulated outbreaks to nowcast from reporting triangles, with its paper.
 
 -   [![](assets/logos/joint-model-informed-renewal/logo-mark.svg#only-light){ width="32" height="32" }![](assets/logos/joint-model-informed-renewal/logo-mark-dark.svg#only-dark){ width="32" height="32" } **Joint-model-informed renewal**](renewal/index.md)
 
