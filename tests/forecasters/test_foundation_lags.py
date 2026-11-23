@@ -129,6 +129,17 @@ def test_a_window_released_only_late_takes_the_default_window():
     assert lag_count(tri, "daily") == window
 
 
+def test_the_bdbv_daily_block_is_not_read_as_four_months_late(
+    task: ForecastTask,
+):
+    # BDBV's daily releases start on 2026-08-18, after the complete
+    # window's onsets: read as delays they gave the 112-lag cap, so the
+    # context ended four months before the cut-off and the 7-day row
+    # was forecast blind (national medians near 0 against ~500 reported).
+    model = get_model("fm_chronos_daily_ragged")
+    assert model.lag_count(task) == LAG_WINDOW["daily"][0]
+
+
 def test_a_delay_not_reached_in_the_window_takes_the_history():
     tri = _triangle(200, lambda _t, d: min(0.9, (d + 1) / 10))
     assert lag_count(tri, "daily") == D
