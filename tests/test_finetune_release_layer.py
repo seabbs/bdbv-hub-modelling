@@ -107,7 +107,8 @@ def test_a_late_block_keeps_its_counts_and_loses_its_early_lag_cells():
     for b in late:
         a = off[(b["source"], b["cut"])]
         assert b["release_start_days"] == 40
-        assert b["first_release"] >= "2026-02-12"
+        # A block cut before its start day has the cut's release alone.
+        assert b["first_release"] >= "2026-02-12" or b["releases"] == 1
         targets = slice(0, b["n_targets"])
         # The counts row holds the whole history at the cut.
         np.testing.assert_array_equal(
@@ -158,3 +159,26 @@ def test_the_proposed_layer_file_is_valid():
         s for k, s in ft.SOURCE_SHARES.items() if ft.DAYS_PER_STEP[k] == 1
     )
     assert abs(daily_share * layer["cadences"]["daily"]["weekly"] - 0.15) < 0.01
+
+
+def test_each_block_s_releases_are_recorded_under_a_layer(tmp_path):
+    from nowcastfoundation.finetune import stream as fs
+
+    assert fs.release_settings(None) == {}
+    assert fs.release_settings(START_ALL) == {"release_layer": START_ALL}
+    pairs = [("1-0001-1", b) for b in _blocks(START_ALL)]
+    old = ft.RELEASE_LAYER
+    try:
+        ft.RELEASE_LAYER = None
+        assert fs.record_releases(tmp_path, pairs, "held-out") == ""
+        assert not (tmp_path / fs.RELEASES_FILE).exists()
+        ft.RELEASE_LAYER = START_ALL
+        line = fs.record_releases(tmp_path, pairs, "held-out")
+        # A resumed run records the same blocks once.
+        fs.record_releases(tmp_path, pairs, "held-out")
+    finally:
+        ft.RELEASE_LAYER = old
+    assert "100% of" in line
+    table = pd.read_csv(tmp_path / fs.RELEASES_FILE)
+    assert len(table) == len(pairs)
+    assert set(table["release_start_days"]) == {40}
