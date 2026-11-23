@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from bnc_helpers import Case, from_na, read, read_vec
+from bnc_helpers import TOY, Case, from_na, read, read_vec
 
 from nowcastbaselines.baselinenowcast import (
     apply_delay,
@@ -71,7 +71,7 @@ def test_jit_kernels_run_under_vmap_over_locations(small: Case) -> None:
 
 
 def _toy() -> tuple[np.ndarray, np.ndarray]:
-    return from_na(read("toy", "tri"))
+    return from_na(TOY)
 
 
 def _no_complete_row() -> tuple[np.ndarray, np.ndarray, int | None]:

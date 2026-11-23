@@ -17,11 +17,9 @@ MOVED = {
     "scripts/germany_ft_store.py": "germany-ft-store",
     "scripts/score_history.py": "score-history",
     "scripts/package_alone.py": "tests/packages/package_alone.py",
-    "scripts/baselinenowcast_fixtures.R": (
-        "tests/baselinenowcast/baselinenowcast_fixtures.R"
-    ),
-    "scripts/snapshot_fixtures.R": "tests/baselinenowcast/snapshot_fixtures.R",
-    "scripts/check_fixtures.py": "tests/baselinenowcast/check_fixtures.py",
+    "scripts/baselinenowcast_fixtures.R": "tests/baselinenowcast/r/cases.R",
+    "scripts/snapshot_fixtures.R": "tests/baselinenowcast/r/cases.R",
+    "scripts/check_fixtures.py": "deleted",
     "scripts/cache_bust.py": "docs/hooks/cache_bust.py",
     "scripts/build_diagrams.sh": "deleted",
     "scripts/build_zone_centres.py": (

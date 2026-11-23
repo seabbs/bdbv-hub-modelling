@@ -9,7 +9,15 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from bnc_helpers import Case, from_na, read, read_vec
+from bnc_helpers import (
+    NB_FITS,
+    TOY,
+    Case,
+    first_delays,
+    from_na,
+    read,
+    read_vec,
+)
 
 from nowcastbaselines.baselinenowcast import (
     estimate_uncertainty,
@@ -20,7 +28,7 @@ from nowcastbaselines.baselinenowcast import (
     rolling_sum,
 )
 
-NB_CASES = 7
+MODES = ["id", "agg", "week"]
 
 
 def _capture() -> tuple[dict[str, Any], Any]:
@@ -41,11 +49,22 @@ def _retro(case: Case, **kwargs: Any) -> Any:
     )
 
 
-@pytest.mark.parametrize("mode", ["id", "agg"])
+def _aggregators(case: Case, mode: str) -> dict[str, Any]:
+    """The aggregators of R's mode (`bnc_modes` in r/cases.R)."""
+    out: dict[str, Any] = {}
+    if mode in ("agg", "week"):
+        out["ref_time_aggregator"] = partial(rolling_sum, k=case.k)
+    if mode == "week":
+        out["delay_aggregator"] = first_delays
+    return out
+
+
+@pytest.mark.parametrize("mode", MODES)
 def test_retro_obs_and_pred_match_r(case: Case, mode: str) -> None:
+    # The totals the uncertainty model is fitted to, to 1e-10 relative
+    # (1e-9 for the predictions, which go through the delay estimate).
     store, model = _capture()
-    agg = {"ref_time_aggregator": partial(rolling_sum, k=case.k)}
-    _retro(case, uncertainty_model=model, **(agg if mode == "agg" else {}))
+    _retro(case, uncertainty_model=model, **_aggregators(case, mode))
     np.testing.assert_allclose(
         store["obs"],
         read(case.name, f"retro_obs_{mode}"),
@@ -60,13 +79,13 @@ def test_retro_obs_and_pred_match_r(case: Case, mode: str) -> None:
     )
 
 
-def test_sizes_match_r(case: Case) -> None:
-    got = _retro(case)
-    np.testing.assert_allclose(got, read_vec(case.name, "size_id"), rtol=1e-3)
-    agg = partial(rolling_sum, k=case.k)
-    got_agg = _retro(case, ref_time_aggregator=agg)
+@pytest.mark.parametrize("mode", MODES)
+def test_sizes_match_r(case: Case, mode: str) -> None:
+    # To 1e-3 relative: R fits each size with `optimize`, whose default
+    # tolerance is about 1e-4.
+    got = _retro(case, **_aggregators(case, mode))
     np.testing.assert_allclose(
-        got_agg, read_vec(case.name, "size_agg"), rtol=1e-3
+        got, read_vec(case.name, f"size_{mode}"), rtol=1e-3
     )
 
 
@@ -78,11 +97,12 @@ def test_fit_by_horizon_matches_per_column_fit() -> None:
     np.testing.assert_allclose(got, expected)
 
 
-@pytest.mark.parametrize("i", range(1, NB_CASES + 1))
+@pytest.mark.parametrize("i", range(1, len(NB_FITS) + 1))
 def test_fit_nb_matches_r_optimize(i: int) -> None:
-    xm = read("nb", f"fit_in_{i}")
+    # To 1e-3 relative, as the sizes above.
+    x, mu = NB_FITS[i - 1]
     expected = read("nb", f"fit_out_{i}").item()
-    got = float(fit_nb(xm[:, 0], xm[:, 1]))
+    got = float(fit_nb(x, mu))
     np.testing.assert_allclose(got, expected, rtol=1e-3)
 
 
@@ -112,7 +132,7 @@ def test_retro_aborts(small: Case) -> None:
 
 
 def test_estimate_uncertainty_skips_failed_nowcasts() -> None:
-    v, m = from_na(read("toy", "tri"))
+    v, m = from_na(TOY)
     pre = preprocess_negative_values(v, m)
     from nowcastbaselines.baselinenowcast import (
         apply_reporting_structure,
