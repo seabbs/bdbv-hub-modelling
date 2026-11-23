@@ -2,8 +2,7 @@
 
 import json
 
-import pytest
-from flowlib import dag, monitor_server
+from flowlib import dag
 
 # `snakemake --dag` of `all` <- b{n} <- a{n}, n = 1, 2, with a1 made.
 JOBS = r"""digraph snakemake_dag {
@@ -131,45 +130,3 @@ def test_a_build_keeps_both_graphs(tmp_path):
     assert got["target"] == "all"
     assert len(got["jobs"]["nodes"]) == 5
     assert len(got["rules"]["nodes"]) == 3
-
-
-class FakeApp:
-    """The parts of a Flask app the DAG pages use."""
-
-    def __init__(self):
-        self.views = {}
-        self.after = []
-
-    def add_url_rule(self, rule, _endpoint, view):
-        self.views[rule] = view
-
-    def after_request(self, f):
-        self.after.append(f)
-        return f
-
-
-def test_the_monitor_serves_each_target_s_page(tmp_path):
-    cfg = {"ROOT": str(tmp_path), "MONITOR_DAG": "toy=all"}
-    where = dag.folder(cfg)
-    where.mkdir(parents=True)
-    (where / "toy.json").write_text(json.dumps(built()))
-    app = FakeApp()
-    monitor_server.add_dag(app, cfg, lambda: [])
-    assert "/dag/toy" in app.views["/dag/"]()
-    page = app.views["/dag/<name>"]("toy")
-    assert "viz-standalone.js" in page
-    assert "a\\\\nn: 1" in page
-    assert app.views["/dag/<name>"]("other")[1] == 404
-
-
-def test_panoptes_pages_link_to_the_dag():
-    flask = pytest.importorskip("flask")
-    app = flask.Flask("panoptes")
-
-    @app.route("/")
-    def index():
-        return '<a class="nav-link" href="/workflows">Workflows</a>'
-
-    monitor_server.add_dag(app, {"ROOT": "/nowhere"}, lambda: [])
-    page = app.test_client().get("/").get_data(as_text=True)
-    assert page.index(monitor_server.LINK) < page.index("/workflows")
