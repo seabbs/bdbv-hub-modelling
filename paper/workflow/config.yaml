@@ -153,9 +153,6 @@ evidence:
   # preliminary (nowcastfoundation.live_checkpoint).
   checkpoint_scores:
     file: $ROOT/runs/comparison.csv
-  # Each walk model's rho_p by origin, the rows of its rounds' copula.json
-  # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
-  copula_rho: null
   # Pending: daily and hub-target scores from the target column.
   compare_daily: null
   # The realised shares of each combination of block layout and options

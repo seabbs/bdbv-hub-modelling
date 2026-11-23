@@ -25,6 +25,8 @@ def test_the_fast_tier_runs_no_slow_tests():
     assert "pytest" in runs
     assert "-m slow" not in runs
     assert "bdbvhubrenewal fit" not in runs
+    # Across the runner's cores (pytest-xdist).
+    assert "-n auto" in runs
 
 
 @pytest.mark.parametrize("job", ["full", "r-live", "engine", "chronos"])

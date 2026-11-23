@@ -518,7 +518,7 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 
 EVIDENCE: Final = {
     "si_copula": "the walks' scores, no pairing against rolling rho_p",
-    "copula_rho": "the walk models' rho_p by origin (copula.json rows)",
+    "copula_rho": "the walk models' German rho_p by nowcast date",
     "finetune_heldout": "the final run's held-out loss curve",
     "sim_summaries": "per-outbreak summaries of the final grid's simulations",
     "sim_realism": "the German development half's values",
@@ -576,13 +576,15 @@ on log counts of the level's places and weeks as one vector."""
 
 
 def rho_medians(rho: pd.DataFrame) -> dict:
-    """Return each walk model's median rolling rho_p over origins.
+    """Return each walk model's median rolling rho_p between German states.
 
-    `rho` has the walk models' `copula.json` rows: `model`, `origin`,
-    `n_scores`, `rho_provinces`, `n_pairs` and `fallback`. Origins that
-    fell back to the prior for want of pairs are counted, not in the
-    median.
+    `rho` has the walk models' German rows (`nowcasteval.pairing.
+    RHO_COLUMNS`): `model`, `origin`, `level`, `n_scores`,
+    `rho_provinces`, `n_pairs` and `fallback`, one per task. Only the
+    states tasks count, as rho_p pairs provinces. Tasks that fell back to
+    the prior for want of pairs are counted, not in the median.
     """
+    rho = rho.loc[rho["level"] == "states"]
     fallback = rho["fallback"].astype(str).str.lower() == "true"
     out: dict = {}
     for model, g in rho.groupby("model", sort=False):

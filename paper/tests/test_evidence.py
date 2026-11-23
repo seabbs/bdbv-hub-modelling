@@ -484,21 +484,21 @@ def test_the_copula_figure_waits_then_draws(tmp_path) -> None:
 
 
 def _copula_rho() -> pd.DataFrame:
-    """Rows of the walk models' `copula.json`, one per model and origin."""
+    """The walk models' German rho_p rows, one per model and task."""
     return pd.DataFrame(
         {
-            "model": ["randomwalknowcast"] * 3 + ["randomwalk"] * 2,
-            "origin": ["2026-10-04", "2026-10-11", "2026-10-18"] * 1
-            + ["2026-10-04", "2026-10-11"],
-            "n_scores": [40, 44, 0, 40, 44],
-            "rho_provinces": [0.5, 0.7, 0.7, 0.3, 0.4],
-            "n_pairs": [120, 130, 0, 120, 130],
-            "fallback": [False, False, True, False, False],
+            "model": ["randomwalknowcast"] * 4 + ["randomwalk"] * 2,
+            "origin": ["2026-10-04", "2026-10-11", "2026-10-18"] * 2,
+            "level": ["states"] * 3 + ["ages"] + ["states"] * 2,
+            "n_scores": [40, 44, 0, 40, 40, 44],
+            "rho_provinces": [0.5, 0.7, 0.7, 0.1, 0.3, 0.4],
+            "n_pairs": [120, 130, 0, 120, 120, 130],
+            "fallback": [False, False, True, False, False, False],
         }
     )
 
 
-def test_rho_medians_give_rho_p_only_without_fallbacks() -> None:
+def test_rho_medians_give_states_rho_p_only_without_fallbacks() -> None:
     from paperpipe.evidence import rho_medians
 
     out = rho_medians(_copula_rho())

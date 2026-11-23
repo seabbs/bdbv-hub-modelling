@@ -162,6 +162,44 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     assert set(written["location"]) == set(zones["location"])
 
 
+@pytest.mark.usefixtures("quiet_zones")
+def test_fitted_zones_are_at_least_their_published_counts(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A zone's final count is at least what its release already holds,
+    # sample by sample, as a split of the provinces kept it: the fake
+    # run's Poisson(5) draws sit below the busy zones' published counts.
+    monkeypatch.setattr(
+        zr.ZoneRenewalModel,
+        "run",
+        lambda self, t: _fake_run(t, self.variant),
+    )
+    model = get_model("renewalbvd")
+    assert isinstance(model, zr.ZoneRenewalModel)
+    samples = model.forecast(task)
+    published = zr.zone_target(task).set_index(["location", "target_end_date"])[
+        "total"
+    ]
+    zones = model.zone_samples
+    assert zones is not None
+    keys = ["location", "target_end_date"]
+    got = zones.join(published, on=keys).dropna(subset=["total"])
+    assert len(got) > 0
+    assert (got["value"] >= got["total"]).all()
+    # Provinces stay the sums of their zones, so they hold the floor too.
+    own = samples["location"].map(is_zone)
+    summed = (
+        zones.assign(location=zones["location"].map(province_of))
+        .groupby([*keys, "sample"])["value"]
+        .sum()
+    )
+    pd.testing.assert_series_equal(
+        samples.loc[~own].set_index([*keys, "sample"])["value"].sort_index(),
+        summed.sort_index(),
+        check_names=False,
+    )
+
+
 def test_fit_renewal_fits_zones_and_writes_their_samples(
     task: ForecastTask,
     monkeypatch: pytest.MonkeyPatch,
