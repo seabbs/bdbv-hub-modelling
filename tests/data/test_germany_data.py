@@ -148,35 +148,34 @@ def test_a_count_corrected_to_zero_is_not_carried(
     )
     both = pd.concat([triangle.loc[keep], zero], ignore_index=True)
     daily = nowcast_tasks(both, NOWCAST, n_samples=20, seed=1)[0].daily_history
-    shift = dt.date(2021, 10, 23) - dt.date.fromisoformat(NOWCAST)
-    onset = (dt.date(2021, 9, 1) + shift).isoformat()
     late = daily.loc[
         (daily["location"] == NATIONAL)
-        & (daily["onset_date"] == onset)
-        & (daily["vintage"] >= (dt.date(2021, 10, 1) + shift).isoformat())
+        & (daily["onset_date"] == "2021-09-01")
+        & (daily["vintage"] >= "2021-10-01")
     ]
     assert late.empty
 
 
-def test_dates_move_to_the_next_saturday(tasks) -> None:
+def test_tasks_keep_real_dates(tasks) -> None:
     for task in tasks:
-        # 2021-10-20 is a Wednesday, three days before a Saturday.
-        assert task.reference_date == dt.date(2021, 10, 23)
-        assert task.reference_date.weekday() == 5
+        # 2021-10-20 is a Wednesday; nothing moves to a Saturday.
+        assert task.reference_date == dt.date(2021, 10, 20)
+        assert task.cutoff == NOWCAST
         # Every horizon's day is a target date of the one task.
         assert task.target_end_dates == tuple(
             (task.reference_date + dt.timedelta(days=h)).isoformat()
             for h in sorted(HORIZONS)
         )
-        assert task.daily_history["vintage"].max() == "2021-10-23"
+        assert task.daily_history["vintage"].max() == NOWCAST
 
 
 def test_weekly_models_forecast_the_sums_that_end_hub_weeks(tasks) -> None:
     for task in tasks:
         weekly = weekly_task(task)
+        # The Saturdays of the hub's days back from Wednesday 2021-10-20.
         assert weekly.target_end_dates == tuple(
             (task.reference_date + dt.timedelta(days=h)).isoformat()
-            for h in (-28, -21, -14, -7, 0)
+            for h in (-25, -18, -11, -4)
         )
         assert weekly.daily_history is task.daily_history
 
@@ -197,7 +196,7 @@ def test_releases_are_the_counts_reported_by_each_report_date(
     daily = states.daily_history.set_index(
         ["vintage", "location", "onset_date"]
     )
-    # Meldedatum 2021-09-01 as reported by 2021-09-10, moved three days.
+    # Meldedatum 2021-09-01 as reported by 2021-09-10.
     want = triangle.loc[
         (triangle["location"] == "DE-BY")
         & (triangle["age_group"] == "00+")
@@ -205,10 +204,10 @@ def test_releases_are_the_counts_reported_by_each_report_date(
         & (triangle["report_date"] == "2021-09-10"),
         "confirm",
     ].item()
-    got = daily.loc[("2021-09-13", place_code("DE-BY"), "2021-09-04")]
+    got = daily.loc[("2021-09-10", place_code("DE-BY"), "2021-09-01")]
     assert got["observed"] == want
     assert got["imputed"] == 0
-    assert got["cutoff"] == "2021-09-13"
+    assert got["cutoff"] == "2021-09-10"
 
 
 def test_weekly_target_sums_each_release_to_hub_weeks(tasks) -> None:
@@ -234,7 +233,7 @@ def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
         hub_forecasts(run_forecasts([model], [w]), w, NOWCAST)
         for w in map(weekly_task, tasks)
     )
-    assert set(out["horizon"]) == {0, -7, -14, -21, -28}
+    assert set(out["horizon"]) == {-4, -11, -18, -25}
     assert set(out["forecast_date"]) == {NOWCAST}
     assert (
         pd.to_datetime(out["target_end_date"])

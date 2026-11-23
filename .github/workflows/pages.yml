@@ -197,42 +197,30 @@ jobs:
             run: >-
               uv run nowcastgermany pairing-sensitivity
               --chunk 3/4 --out output/parts/pairing
-          - cell: germany-randomwalknowcast-0
-            model: randomwalknowcast
+          - cell: germany-randomwalknowcast_daily-0
+            model: randomwalknowcast_daily
             germany: true
             run: >-
-              uv run nowcastgermany backtest --models randomwalknowcast
-              --chunk 0/4 --out output/parts/germany
-          - cell: germany-randomwalknowcast-1
-            model: randomwalknowcast
+              uv run nowcastgermany backtest
+              --models randomwalknowcast_daily --chunk 0/4 --out output/parts/germany
+          - cell: germany-randomwalknowcast_daily-1
+            model: randomwalknowcast_daily
             germany: true
             run: >-
-              uv run nowcastgermany backtest --models randomwalknowcast
-              --chunk 1/4 --out output/parts/germany
-          - cell: germany-randomwalknowcast-2
-            model: randomwalknowcast
+              uv run nowcastgermany backtest
+              --models randomwalknowcast_daily --chunk 1/4 --out output/parts/germany
+          - cell: germany-randomwalknowcast_daily-2
+            model: randomwalknowcast_daily
             germany: true
             run: >-
-              uv run nowcastgermany backtest --models randomwalknowcast
-              --chunk 2/4 --out output/parts/germany
-          - cell: germany-randomwalknowcast-3
-            model: randomwalknowcast
+              uv run nowcastgermany backtest
+              --models randomwalknowcast_daily --chunk 2/4 --out output/parts/germany
+          - cell: germany-randomwalknowcast_daily-3
+            model: randomwalknowcast_daily
             germany: true
             run: >-
-              uv run nowcastgermany backtest --models randomwalknowcast
-              --chunk 3/4 --out output/parts/germany
-          - cell: germany-randomwalk-0
-            model: randomwalk
-            germany: true
-            run: >-
-              uv run nowcastgermany backtest --models randomwalk
-              --chunk 0/2 --out output/parts/germany
-          - cell: germany-randomwalk-1
-            model: randomwalk
-            germany: true
-            run: >-
-              uv run nowcastgermany backtest --models randomwalk
-              --chunk 1/2 --out output/parts/germany
+              uv run nowcastgermany backtest
+              --models randomwalknowcast_daily --chunk 3/4 --out output/parts/germany
           - cell: germany-fm_chronos_daily_complete-0
             model: fm_chronos_daily_complete
             germany: true
@@ -504,12 +492,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {model: randomwalknowcast, chunk: 0/4}
-          - {model: randomwalknowcast, chunk: 1/4}
-          - {model: randomwalknowcast, chunk: 2/4}
-          - {model: randomwalknowcast, chunk: 3/4}
-          - {model: randomwalk, chunk: 0/2}
-          - {model: randomwalk, chunk: 1/2}
+          - {model: randomwalknowcast_daily, chunk: 0/4}
+          - {model: randomwalknowcast_daily, chunk: 1/4}
+          - {model: randomwalknowcast_daily, chunk: 2/4}
+          - {model: randomwalknowcast_daily, chunk: 3/4}
           - {model: fm_chronos_daily_complete, chunk: 0/4, group: chronos}
           - {model: fm_chronos_daily_complete, chunk: 1/4, group: chronos}
           - {model: fm_chronos_daily_complete, chunk: 2/4, group: chronos}

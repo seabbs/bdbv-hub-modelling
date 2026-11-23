@@ -196,7 +196,7 @@ dashboard:
     # (nowcasteval.labels: MODEL_LABELS, MODEL_STYLES).
     - key: zero
       paper_model: fm_chronos_daily_ragged
-      model: "^(?!randomwalknowcast$)(?!.*_complete$)"
+      model: "^(?!randomwalknowcast)(?!.*_complete$)"
       checkpoint: zero-shot
       role: start
     - key: complete
@@ -205,7 +205,7 @@ dashboard:
       checkpoint: zero-shot
     - key: rw
       paper_model: randomwalknowcast
-      model: "^randomwalknowcast$"
+      model: "^randomwalknowcast(_daily)?$"
       role: baseline
   # Score studies in selector order with their labels, the order of their
   # levels, and the target, score, source and level shown first.

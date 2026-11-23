@@ -2,7 +2,8 @@
 """The model registry, with every built-in model registered.
 
 The models live in their own packages: the random walks in
-`nowcastbaselines.randomwalk`, Chronos-2 in `nowcastfoundation.forecaster`,
+`nowcastbaselines.randomwalk` and `nowcastbaselines.daily`, Chronos-2 in
+`nowcastfoundation.forecaster`,
 and the renewal variants in `nowcastrenewal.forecaster` and
 `nowcastrenewal.zones`. The registry itself is `nowcastutils.base`.
 
@@ -12,6 +13,7 @@ To add a variant, write a class with `name` and `forecast(task)`, call
 `register_model` in its module, then import that module here.
 """
 
+from nowcastbaselines.daily import DailyWalkNowcast
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcastfoundation.forecaster import FoundationModel
 from nowcastrenewal.forecaster import VARIANTS, RenewalModel
@@ -34,6 +36,7 @@ __all__ = [
     "NATIONAL",
     "SAMPLE_COLUMNS",
     "VARIANTS",
+    "DailyWalkNowcast",
     "ForecastModel",
     "ForecastTask",
     "FoundationModel",
