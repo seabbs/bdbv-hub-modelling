@@ -343,3 +343,15 @@ def test_no_rsync_on_the_path_is_named(tmp_path, monkeypatch):
 
 def test_gnu_rsync_takes_the_flags_the_copies_use():
     assert compute.rsync_problem() is None
+
+
+def test_newer_segments_beside_the_trainer_come_first():
+    priority = compute.newest_first(10)
+
+    class W:
+        n = "200"
+
+    class V:
+        n = "100"
+
+    assert priority(W) > priority(V) >= 10

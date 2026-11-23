@@ -1,13 +1,19 @@
 """Checkpoint scoring units' commands and the German report's arguments.
 
 A unit is one `nowcastfoundation.checkpoint` study for one checkpoint
-label, cached under its study folder (rules/score.smk).
+label, cached under its study folder (rules/score.smk). `Scoring` holds
+what `score.smk`, `evaluate.smk` and the report rules ask of the units;
+`common.smk` builds one and binds its methods.
 """
 
 from __future__ import annotations
 
 import shlex
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any
+
+from flowlib import machine, notify, releases
+from flowlib.training import Training
 
 EVALUATE = "uv run --group chronos python -m nowcastfoundation.checkpoint"
 """The scoring CLI."""
@@ -45,3 +51,148 @@ def report_args(
     args = [shlex.quote(f"{k}={v}") for k, v in names.items()]
     args += [f"--from {lb}={unit_dir}/{lb}" for lb in references]
     return " ".join(args)
+
+
+GERMANY_UNIT = "germany-days"
+"""The German units' cache folder, as `evaluation.checkpoint.GERMANY_UNIT`."""
+
+
+class Scoring:
+    """The checkpoint scoring units of a workflow config on this machine.
+
+    Parameters
+    ----------
+    config : mapping
+        The workflow config (`score`).
+    local : mapping
+        This machine's settings (`localconfig.read`): SCORE_CACHE, the
+        room to wait for, EVAL_DEVICE and EVAL_THREADS.
+    training : Training
+        The fine-tuning runs whose checkpoints are scored.
+    checkpoints : object
+        Snakemake's `checkpoints`, whose `release_list` lists the
+        releases to score.
+    """
+
+    def __init__(
+        self,
+        config: Mapping[str, Any],
+        local: Mapping[str, str],
+        training: Training,
+        checkpoints: Any,
+    ) -> None:
+        self.sc: Mapping[str, Any] = config["score"]
+        self.local = local
+        self.training = training
+        self.checkpoints = checkpoints
+        self.cache = local["SCORE_CACHE"]
+        self.room = (
+            f"workflow/scripts/wait_for_room.sh {local['MIN_FREE_GB']} "
+            f"{local['MIN_DISK_GB']} {self.cache} {local['MAX_LOAD']} && "
+        )
+        # The CPU threads of a job beside the trainer (EVAL_THREADS,
+        # default 2): a few, so simulations keep the rest of the cores.
+        self.unit_threads = int(local.get("EVAL_THREADS") or 2)
+        # The device evaluation and scoring run torch on, the CPU by
+        # default: the GPU is the trainer's.
+        self.eval_device = machine.side_device(local)
+
+    def checkpoint_labels(self, wc: Any = None) -> list[str]:  # noqa: ARG002
+        """Return the checkpoints to score, less `score.skip`."""
+        if self.sc["labels"] is not None:
+            return list(self.sc["labels"])
+        listing = self.checkpoints.release_list.get().output[0]
+        return releases.chosen(listing, self.sc)
+
+    def score_order(self) -> list[str]:
+        """Return the labels, oldest published first (none before listed)."""
+        return releases.oldest_first(f"{self.cache}/releases.json", self.sc)
+
+    def unit_priority(self, base: float) -> Callable[[Any], float]:
+        """Return a unit's priority: `base`, newer checkpoints higher."""
+        return lambda wc: releases.priority(self.score_order(), wc.label, base)
+
+    def unit_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
+        """Return the unit's torch device, threads and Chronos-2 batch."""
+        env = machine.torch_env(self.local, threads, self.eval_device)
+        return machine.shell_env(env)
+
+    def unit_rows(self, study: str) -> Callable[[Any], str]:
+        """Return the unit's rows folder, which a worker brings back."""
+        return lambda wc: f"{self.cache}/{study}/{wc.label}/"
+
+    def unit_shell(self, study: str, segment: str = "") -> str:
+        """Return a unit's shell command (`unit_shell`)."""
+        return unit_shell(study, self.room, segment)
+
+    def run_scores_dir(self, run: str) -> str:
+        """Return the run's score cache: its own checkpoints' units."""
+        return f"{self.training.dir}/{run}/scores"
+
+    def _saved(self, run: str) -> list[int]:
+        """Return the run's saved checkpoint prefixes."""
+        prefixes = self.training.runs[run].ft["prefixes"]
+        return [n for n in prefixes if self.training.saved(run, n)]
+
+    def run_units(self, run: str) -> list[str]:
+        """Return the German units of the run's saved checkpoints."""
+        unit = f"{self.run_scores_dir(run)}/{GERMANY_UNIT}"
+        return [f"{unit}/n{n}.done" for n in self._saved(run)]
+
+    def references(self) -> list[str]:
+        """Return the reference labels' German units, shared by every run."""
+        unit = f"{self.cache}/{GERMANY_UNIT}"
+        return [f"{unit}/{label}.done" for label in self.sc["reference"]]
+
+    def report_names(self, wc: Any) -> str:
+        """Return the German report's LABEL=NAME arguments and folders."""
+        return report_args(
+            wc.run,
+            self._saved(wc.run),
+            self.sc["reference"],
+            f"{self.cache}/{GERMANY_UNIT}",
+        )
+
+    def run_scores(self, wc: Any = None) -> list[str]:  # noqa: ARG002
+        """Return each trained run's German report."""
+        return [
+            f"{self.training.dir}/{run}/reports/german/index.html"
+            for run in self.training.trained_runs()
+        ]
+
+    def table_inputs(self, wc: Any) -> dict[str, list[str]]:  # noqa: ARG002
+        """Return the units the score tables read, by study."""
+        labels = self.checkpoint_labels()
+        every = [*self.sc["reference"], *labels]
+        return {
+            "germany": [
+                f"{self.cache}/{GERMANY_UNIT}/{label}.done" for label in every
+            ],
+            "release": [
+                f"{self.cache}/heldout/{label}.done" for label in labels
+            ],
+        }
+
+    def unit_stamps(self, wc: Any = None) -> list[str]:
+        """Return every unit the tables read, as one list.
+
+        `rule score` asks for them itself, so a new label's units run
+        under tables already built.
+        """
+        return [f for files in self.table_inputs(wc).values() for f in files]
+
+    def land_tables(
+        self,
+        input: Any,
+        output: Any,  # noqa: ARG002
+        params: Any,
+        wildcards: Any,  # noqa: ARG002
+    ) -> None:
+        """Commit the score tables on the evidence branch and push them."""
+        head = notify.land(
+            input, params.evidence, params.checkpoints, params.branch
+        )
+        notify.post(
+            f"checkpoint scores landed at {head[:9]} on origin/{params.branch}",
+            self.local,
+        )

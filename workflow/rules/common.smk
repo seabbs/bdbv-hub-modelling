@@ -12,6 +12,7 @@ from flowlib import (
     runs,
     hosts,
     localconfig,
+    machine,
     manifest,
     notify,
     releases,
@@ -28,16 +29,9 @@ LOCAL = localconfig.read()
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"
-
-
-def say(message):
-    """A mailbox line, when NOTIFY is set in config/local.env."""
-    notify.post(message, LOCAL)
-
-
-def job_prefix(mem_mb):
-    """The machine's command prefix for a job capped at `mem_mb` MB."""
-    return LOCAL["JOB_PREFIX"].replace("{mem}", f"{int(mem_mb)}M")
+# A mailbox line, when NOTIFY is set; a job's command prefix by memory.
+say = functools.partial(notify.post, cfg=LOCAL)
+job_prefix = functools.partial(machine.job_prefix, LOCAL)
 
 
 # From simulate.smk (flowlib.rounds).
@@ -105,122 +99,26 @@ wildcard_constraints:
     run="[^/]+",
 
 
-# From score.smk.
+# From score.smk (flowlib.scoring).
 
-SC = config["score"]
-CACHE = LOCAL["SCORE_CACHE"]
-
-
-def checkpoint_labels(wc=None):
-    """The checkpoints to score, less `score.skip`."""
-    if SC["labels"] is not None:
-        return list(SC["labels"])
-    return releases.chosen(checkpoints.release_list.get().output[0], SC)
-
-
-ROOM = (
-    f"workflow/scripts/wait_for_room.sh {LOCAL['MIN_FREE_GB']} "
-    f"{LOCAL['MIN_DISK_GB']} {CACHE} {LOCAL['MAX_LOAD']} && "
-)
-
-
-# The CPU threads of a job beside the trainer (EVAL_THREADS, default 2):
-# a few, so simulations keep the rest of the machine's cores.
-UNIT_THREADS = int(LOCAL.get("EVAL_THREADS") or 2)
-
-
-def score_order():
-    """The checkpoint labels, oldest published first (none before listed)."""
-    return releases.oldest_first(f"{CACHE}/releases.json", SC)
-
-
-def unit_priority(base):
-    """A unit's priority: `base`, newer checkpoints a fraction higher."""
-    return lambda wc: releases.priority(score_order(), wc.label, base)
-
-
-EVAL_DEVICE = machine.side_device(LOCAL)
-"""The device evaluation and scoring run torch on (EVAL_DEVICE in
-local.env), the CPU by default: the GPU is the trainer's."""
-
-
-def newest_first(base):
-    """A job's priority beside the trainer: `base`, newer segments higher."""
-    return lambda wc: compute.side_priority(base, int(wc.n))
-
-
-def unit_env(wc, threads):
-    """The unit's torch device, threads and Chronos-2 batch."""
-    return machine.shell_env(machine.torch_env(LOCAL, threads, EVAL_DEVICE))
-
-
-GERMANY_UNIT = "germany-days"
-"""The German units' cache folder, as `evaluation.checkpoint.GERMANY_UNIT`."""
-
+SCORING = scoring.Scoring(config, LOCAL, TRAINING, checkpoints)
+SC = SCORING.sc
+CACHE = SCORING.cache
+UNIT_THREADS = SCORING.unit_threads
+EVAL_DEVICE = SCORING.eval_device
+GERMANY_UNIT = scoring.GERMANY_UNIT
 EVALUATE = scoring.EVALUATE
-
-
-def unit_rows(study):
-    """The unit's rows folder, which a worker brings back with its output."""
-    return lambda wc: f"{CACHE}/{study}/{wc.label}/"
-
-
-def unit_shell(study, segment=""):
-    """A unit's shell command (flowlib.scoring.unit_shell)."""
-    return scoring.unit_shell(study, ROOM, segment)
-
-
-def run_scores_dir(run):
-    """The run's score cache: its own checkpoints' units."""
-    return f"{RUNS_DIR}/{run}/scores"
-
-
-def run_units(run):
-    """The German units of the run's saved checkpoints."""
-    return [
-        f"{run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done"
-        for n in RUNS[run].ft["prefixes"]
-        if saved(run, n)
-    ]
-
-
-def references():
-    """The reference labels' German units, shared by every run."""
-    return expand(f"{CACHE}/{GERMANY_UNIT}/{{label}}.done", label=SC["reference"])
-
-
-def report_names(wc):
-    """The German report's LABEL=NAME arguments and reference folders."""
-    saved_ns = [n for n in RUNS[wc.run].ft["prefixes"] if saved(wc.run, n)]
-    return scoring.report_args(
-        wc.run, saved_ns, SC["reference"], f"{CACHE}/{GERMANY_UNIT}"
-    )
-
-
-def run_scores(wc=None):
-    """Each trained run's German report, over its saved checkpoints."""
-    return [f"{RUNS_DIR}/{run}/reports/german/index.html" for run in trained_runs()]
-
-
-def table_inputs(wc):
-    labels = checkpoint_labels()
-    every = [*SC["reference"], *labels]
-    return {
-        "germany": expand(f"{CACHE}/{GERMANY_UNIT}/{{label}}.done", label=every),
-        "release": expand(f"{CACHE}/heldout/{{label}}.done", label=labels),
-    }
-
-
-def unit_stamps(wc=None):
-    """Every unit the tables read, as one list (`rule score` asks for them
-    itself, so a new label's units run under tables already built)."""
-    return [f for files in table_inputs(wc).values() for f in files]
-
-
-# The longer run directives' steps.
-
-
-def land_tables(input, output, params, wildcards):
-    """Commit the score tables on the evidence branch and push them."""
-    head = notify.land(input, params.evidence, params.checkpoints, params.branch)
-    say(f"checkpoint scores landed at {head[:9]} on origin/{params.branch}")
+newest_first = compute.newest_first
+checkpoint_labels = SCORING.checkpoint_labels
+unit_priority = SCORING.unit_priority
+unit_env = SCORING.unit_env
+unit_rows = SCORING.unit_rows
+unit_shell = SCORING.unit_shell
+run_scores_dir = SCORING.run_scores_dir
+run_units = SCORING.run_units
+references = SCORING.references
+report_names = SCORING.report_names
+run_scores = SCORING.run_scores
+table_inputs = SCORING.table_inputs
+unit_stamps = SCORING.unit_stamps
+land_tables = SCORING.land_tables
