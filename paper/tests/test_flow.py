@@ -254,3 +254,31 @@ def test_ebola_reads_the_fit_store_history_release() -> None:
     assert history in flow.source_files(_w("paper", "ebola"))
     assert f"--store-history {history}" in flow.sources(_w("paper", "ebola"))
     assert _flow(ebola__store_history=None).store_history() is None
+
+
+def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
+    runs = yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    )["runs"]
+    # The live run is the final run, by its workflow run name.
+    assert CONFIG["live_run"] == Path(CONFIG["final_run"]).name
+    assert CONFIG["evidence"]["checkpoint_scores"] == {
+        "file": "$ROOT/runs/comparison.csv"
+    }
+    # Run A's trainer predates the joint tally; no-slots cuts the same
+    # blocks, so its tally is Run A's design.
+    assert CONFIG["evidence"]["block_combinations"] == {
+        "file": "$ROOT/runs/noslots/train/block-combinations.csv"
+    }
+    assert set(CONFIG["comparisons"]) == {"slots", "delays", "realdata"}
+    assert CONFIG["comparisons"]["slots"] in runs
+    for name in CONFIG["comparisons"]:
+        assert f"compare_{name}" not in CONFIG["evidence"]
+
+
+def test_the_comparisons_are_passed_by_run_name() -> None:
+    flow = _flow()
+    assert flow.comparisons_arg() == (
+        "--comparison slots=noslots --comparison delays=nodelays "
+        "--comparison realdata=realdata"
+    )
