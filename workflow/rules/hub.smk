@@ -20,8 +20,7 @@ rule hub_data:
     params:
         out=lambda wc, output: Path(output[0]).parent,
     shell:
-        "uv run bdbvhub data --raw {params.out}/raw --out {params.out} "
-        "> {log} 2>&1"
+        "uv run bdbvhub data --raw {params.out}/raw --out {params.out} " "> {log} 2>&1"
 
 
 rule hub_submissions_table:
