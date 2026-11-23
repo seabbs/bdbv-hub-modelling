@@ -93,7 +93,8 @@ def test_schaake_orders_draws_as_matured_windows(scores):
     assert shuffled["n_windows"].iloc[0] == 0
     assert shuffled["n_windows"].iloc[-1] > 0
     assert (shuffled["n_windows"] <= N_SAMPLES).all()
-    assert scores.loc[scores["coupling"] != "schaake", "n_windows"].isna().all()
+    fixed = ~scores["coupling"].isin(["schaake", "online"])
+    assert scores.loc[fixed, "n_windows"].isna().all()
     table = coupling.summary(scores, n_boot=200)
     sums = table.loc[table["score"] == "sum_crps"].set_index("coupling")
     # Past windows move together over steps, as the truth does.
@@ -209,3 +210,31 @@ def test_the_command_scores_the_7day_sums_only(tmp_path, monkeypatch):
     monkeypatch.setattr(coupling, "coupling_scores", scores)
     coupling.main([str(unit), str(tmp_path / "s.csv"), str(tmp_path / "t.csv")])
     assert seen == [{"7day"}]
+
+
+def test_the_online_step_is_scored_as_the_foundation_model_uses_it(scores):
+    online = scores.loc[scores["coupling"] == "online"].sort_values("origin")
+    assert len(online) == 14
+    # The first origin has nothing earlier: the gaussian with no evidence.
+    assert online["chose"].iloc[0] == "gaussian-56"
+    assert (online["rho"].iloc[0], online["s"].iloc[0]) == (0.0, 0.0)
+    # Later ones choose among the gaussian windows, the shuffle and
+    # comonotone draws.
+    assert set(online["chose"]) <= {
+        "gaussian-14",
+        "gaussian-28",
+        "gaussian-56",
+        "schaake",
+        "comonotone",
+    }
+    assert (scores.loc[scores["coupling"] != "online", "chose"] == "").all()
+    table = coupling.summary(scores, n_boot=200)
+    sums = table.loc[table["score"] == "sum_crps"].set_index("coupling")
+    assert sums.loc["online", "ratio"] < 0.95
+
+
+def test_the_online_step_reads_only_truth_reported_by_the_origin():
+    got = coupling.coupling_scores(_rows(lag=100), ["online"], n_samples=50)
+    assert (got["rho"].fillna(0.0) == 0.0).all()
+    assert (got["s"].fillna(0.0) == 0.0).all()
+    assert got["n_windows"].isna().all()
