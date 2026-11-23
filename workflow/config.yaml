@@ -234,7 +234,8 @@ dashboard:
   # value and truth, from the per-checkpoint forecast folders in
   # SCORE_CACHE/<unit>. sources: the model inputs shown (daily, weekly),
   # or all.
-  # target: a line under the panels saying what every model forecasts.
+  # target: a line under the panels saying what every model forecasts,
+  # a string or one per target (7day, daily).
   # truth: the truth line's caption.
   datasets:
     - key: germany
@@ -243,7 +244,9 @@ dashboard:
       # in SCORE_CACHE and in each run's own <run>/scores.
       unit: germany-days
       metric: WIS
-      truth: latest vintage of the forecast files
+      truth: >-
+        black, each day's value as reported 40 days after it (the truth
+        scored); over time, the latest release
       # Germany is daily only (config/germany.toml): its models take the
       # daily releases and forecast the hub's 7-day rolling sums.
       sources: [daily]
@@ -261,9 +264,13 @@ dashboard:
           week 1 ahead: [1, 7]
           weeks 2-4 ahead: [8, null]
         default: all
-      target: >-
-        the hub's 7-day rolling sums of hospitalisations by date of
-        report to the health office, truth as reported 40 days later
+      target:
+        7day: >-
+          the hub's 7-day rolling sums of hospitalisations by date of
+          report to the health office
+        daily: >-
+          each day's hospitalisations by date of report to the health
+          office, the daily counts the 7-day sums add up
       groups:
         - {name: national, match: "^DE$"}
         - {name: states, match: "^DE-"}
