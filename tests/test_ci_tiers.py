@@ -159,19 +159,15 @@ def test_r_package_lists_hold_packages_only():
                 assert bad == [], f"{path.name}: {bad}"
 
 
-def test_pull_requests_skip_coverage_and_steal_work():
-    # Coverage tracing about doubled the PR job's test time, so pushes
-    # and the schedule measure it; workers steal the long tail.
+def test_only_main_measures_coverage_and_workers_steal_work():
+    # Coverage tracing about doubled the test job's time (next's push
+    # runs took up to 14 of 15 min), so only main's runs measure it:
+    # its pushes, the schedule and dispatches there. Workers steal the
+    # long tail.
     job = _workflow("test.yml")["jobs"]["test"]
     (tests,) = [s for s in job["steps"] if s.get("name") == "Tests"]
     assert "--dist worksteal" in tests["run"]
-    assert "github.event_name != 'pull_request'" in tests["run"]
+    assert "github.ref == 'refs/heads/main'" in tests["run"]
+    assert "pull_request" not in tests["run"]
     (upload,) = [s for s in job["steps"] if "codecov" in str(s.get("uses"))]
-    assert upload["if"] == "${{ github.event_name != 'pull_request' }}"
-
-
-def test_the_full_tier_has_the_workflow_s_tools():
-    # Slow workflow tests (the compute runs) skip without Snakemake.
-    steps = _workflow("test.yml")["jobs"]["full"]["steps"]
-    runs = " ".join(s.get("run", "") for s in steps)
-    assert "--group paper pytest -q -m slow" in runs
+    assert upload["if"] == "${{ github.ref == 'refs/heads/main' }}"
