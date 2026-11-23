@@ -1456,8 +1456,8 @@ def _hub_forecast(
     tuple
         The hub table, the forecast, the zone samples (or None), why
         there are no zones ("" if there are), the fine-tuned checkpoint
-        the model loaded (or None) and the copula a walk model paired its
-        draws by (`copula_fit`, or None).
+        the model loaded (or None) and the copula a walk or foundation
+        model joined its draws by (`copula_fit`, or None).
     """
     checkpoint, copula = None, None
     own = None
@@ -1601,7 +1601,8 @@ def _nowcast(args: argparse.Namespace) -> int:
     n_zones = 0 if zones is None else int(zones["location"].nunique())
     zone_record = {"zones": n_zones > 0, "n_zones": n_zones, "note": zone_note}
     (Path(args.out) / "zones.json").write_text(json.dumps(zone_record) + "\n")
-    # The copula a walk model paired its draws by, for the PR body.
+    # The copula a walk or foundation model joined its draws by, for the
+    # PR body.
     if copula is not None:
         (Path(args.out) / "copula.json").write_text(
             json.dumps(copula, default=str) + "\n"

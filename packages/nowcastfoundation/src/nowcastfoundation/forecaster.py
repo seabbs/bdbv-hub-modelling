@@ -61,8 +61,12 @@ from nowcastutils.base import (
 )
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.hierarchy import province_of
-from nowcastutils.trajectories import METHODS as COUPLINGS
-from nowcastutils.trajectories import couple, fit_coupling, pit_scores
+from nowcastutils.trajectories import (
+    choose_coupling,
+    couple,
+    coupling_releases,
+    fit_coupling,
+)
 
 __all__ = [
     "ADAPTER_FILES",
@@ -128,10 +132,11 @@ LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
 many before the cut-off (16 weeks, 112 days), which is also the most lags
 it reads."""
 
-COUPLING_WEEKS: Final = 8
-"""How many earlier releases the gaussian coupling is fitted from: the
-latest at least 1, 2, ..., 8 weeks before the task's, so one a week (as
-the random walks' copula window, `copula.WINDOW_WEEKS`)."""
+COUPLINGS: Final = ("online", "independent", "comonotone")
+"""How a foundation model joins its cells (`FoundationModel.coupling`):
+`online` chooses and fits the coupling at each forecast
+(`nowcastutils.trajectories.choose_coupling`); the other two need no fit
+and are the supplement's comparisons."""
 
 PERIODS: Final = {"daily": "rolling7"}
 """The aggregate row each place has in a ragged block, by source
@@ -1171,10 +1176,15 @@ class FoundationModel:
         (`lag_count`).
     coupling : str
         How Chronos-2's cells are joined into trajectories, one of
-        `nowcastutils.trajectories.METHODS`. `gaussian` (the default) is
-        fitted per task from the model's own forecasts of the same block
-        at the task's earlier releases (`_coupling_fit`); `independent`
-        and `comonotone` need no fit and are the SI's comparisons.
+        `COUPLINGS`. `online` (the default) chooses the coupling and its
+        look-back window per task from the model's own forecasts of the
+        same block at the task's earlier releases and the series' own
+        history, and fits it (`_coupling_fit`); `independent` and
+        `comonotone` need no fit and are the SI's comparisons.
+    copula_fit : dict or None
+        The coupling the latest forecast drew by (`_coupling_fit`'s
+        record, without the Schaake windows themselves), or None before
+        one; the submission writes it beside the forecast.
     collect : list or None
         Private to `prefetch`: the groups a forecast would predict are
         added to it, and the forecast stops.
@@ -1189,7 +1199,10 @@ class FoundationModel:
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
     lags: int | None = None
-    coupling: str = "gaussian"
+    coupling: str = "online"
+    copula_fit: dict[str, Any] | None = field(
+        default=None, repr=False, compare=False
+    )
     collect: list[tuple[Series, int]] | None = field(
         default=None, repr=False, compare=False
     )
@@ -1282,19 +1295,25 @@ class FoundationModel:
             if sample is None:
                 past = (
                     self._past_blocks(rows, places, tri, start, horizon)
-                    if self.coupling == "gaussian"
+                    if self.coupling == "online"
                     else []
                 )
                 if self.collect is not None:
                     self.collect.extend(
-                        (g, horizon) for g in [group, *(b for b, _ in past)]
+                        (g, horizon) for g in [group, *(b for b, _, _ in past)]
                     )
                     raise _CollectedError
                 sample = partial(
                     chronos_sampler,
                     checkpoint=self.checkpoint,
                     known=self.known,
-                    coupling=self._coupling_fit(past, horizon, seed),
+                    coupling=self._coupling_fit(
+                        past,
+                        horizon,
+                        seed,
+                        self._history(tri, start),
+                        task.n_samples,
+                    ),
                 )
             draws = sample([group], horizon, task.n_samples, seed)[0]
             # Counts are not negative; Chronos-2's output is otherwise kept
@@ -1398,19 +1417,17 @@ class FoundationModel:
         tri: HubTriangle,
         start: int,
         horizon: int,
-    ) -> list[tuple[Series, np.ndarray]]:
+    ) -> list[tuple[Series, np.ndarray, int]]:
         """Return the block at each earlier release, with what matured.
 
         Each block (at `coupling_releases`) is built as the task's is,
         from releases up to its own. It comes with its targets' values at
-        the task's release, NaN where not yet final (`n_context`).
+        the task's release, NaN where not yet final (`n_context`), and its
+        first target step's index in the task's steps.
         """
         offset = tri.last - start
         lags = int(tri.partial.shape[2])
-        period = self._period(tri)
-        now = tri.final
-        if period is not None:
-            now = np.concatenate([now, period.totals])
+        now = self._values(tri)
         index = {t: i for i, t in enumerate(tri.times)}
         width = 7 if self.source == "weekly" else 1
         ahead = start + horizon - 1 - tri.last
@@ -1440,34 +1457,69 @@ class FoundationModel:
             block = layout_block(
                 earlier, self.layout, places, first, self._period(earlier)
             )
-            out.append((block, seen))
+            out.append((block, seen, at))
         return out
+
+    def _values(self, tri: HubTriangle) -> np.ndarray:
+        """Return the block's target rows' values at the task's release.
+
+        The count rows (`final`) and then the aggregate rows, `[rows,
+        steps]`; steps from `n_context` on are not final.
+        """
+        period = self._period(tri)
+        if period is None:
+            return tri.final
+        return np.concatenate([tri.final, period.totals])
+
+    def _history(self, tri: HubTriangle, start: int) -> np.ndarray:
+        """Return the target rows' final values before the first step drawn.
+
+        The Schaake shuffle's history (`choose_coupling`).
+        """
+        return self._values(tri)[:, : min(start, tri.n_context)]
 
     def _coupling_fit(
         self,
-        past: Sequence[tuple[Series, np.ndarray]],
+        past: Sequence[tuple[Series, np.ndarray, int]],
         horizon: int,
         seed: int,
+        history: np.ndarray,
+        n_samples: int,
     ) -> dict[str, Any]:
-        """Return the coupling's fit for one task.
+        """Return the coupling's fit for one task, and keep its record.
 
-        For `gaussian`, from normal scores (`pit_scores`) of what matured
-        in the model's own forecasts at the earlier releases (`past`);
-        with none, the fit gives independence.
+        For `online`, `choose_coupling` picks and fits the coupling from
+        Chronos-2's quantiles of the earlier blocks (`past`), what matured
+        of them, and the target rows' `history`, with draws seeded from the
+        task's own seed. The record, without the Schaake windows, is kept
+        as `copula_fit`.
         """
-        if self.coupling != "gaussian":
-            return fit_coupling(np.empty((0, 0, 0)), self.coupling)
-        if not past:
-            return fit_coupling(np.full((0, 1, horizon), np.nan), "gaussian")
+        if self.coupling != "online":
+            fit = fit_coupling(np.empty((0, 0, 0)), self.coupling)
+            self.copula_fit = fit
+            return fit
         pipeline = _chronos(self.checkpoint)
         levels = np.asarray(pipeline.quantiles, dtype=float)
-        native = _native(pipeline, [b for b, _ in past], horizon, self.known)
-        rng = np.random.default_rng([seed, 1])
-        scores = [
-            pit_scores(q, levels, seen, rng)
-            for q, (_, seen) in zip(native, past, strict=True)
-        ]
-        return fit_coupling(np.stack(scores), "gaussian")
+        native = _native(pipeline, [b for b, _, _ in past], horizon, self.known)
+        rows = history.shape[0]
+        quantiles = np.zeros((len(past), rows, horizon, len(levels)))
+        for k, q in enumerate(native):
+            quantiles[k] = q[:rows]
+        observed = np.full((len(past), rows, horizon), np.nan)
+        for k, (_, seen, _) in enumerate(past):
+            observed[k] = seen
+        starts = np.array([at for _, _, at in past], dtype=int)
+        fit = choose_coupling(
+            quantiles,
+            levels,
+            observed,
+            history,
+            starts,
+            n_samples=n_samples,
+            seed=seed,
+        )
+        self.copula_fit = {k: v for k, v in fit.items() if k != "windows"}
+        return fit
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return trajectories of every hub target in the task.
@@ -1588,39 +1640,6 @@ def native_sampler(
         return out
 
     return sample
-
-
-def coupling_releases(
-    vintages: Sequence[str] | pd.Series, weeks: int = COUPLING_WEEKS
-) -> list[str]:
-    """Return the earlier releases a task's coupling is fitted from.
-
-    For each of 1 to `weeks` weeks, the latest release at least that long
-    before the latest of `vintages`: one a week, whether releases are
-    weekly or daily.
-
-    Parameters
-    ----------
-    vintages : sequence of str
-        The task's release dates, ISO formatted.
-    weeks : int
-        How many weeks back.
-
-    Returns
-    -------
-    list of str
-        The releases, oldest first, each once.
-    """
-    days = sorted({as_date(str(v)) for v in vintages})
-    if not days:
-        return []
-    picked = set()
-    for k in range(1, weeks + 1):
-        edge = days[-1] - dt.timedelta(weeks=k)
-        before = [d for d in days if d <= edge]
-        if before:
-            picked.add(before[-1])
-    return [d.isoformat() for d in sorted(picked)]
 
 
 class _CollectedError(Exception):
