@@ -1,11 +1,12 @@
 """Serve the fine-tuning dashboard, or write it once as a static page.
 
-    dashboard.py [--port 8765] [--run NAME ...] [--ref SPEC ...]
+    dashboard.py [--run NAME ...] [--ref SPEC ...]
     dashboard.py --once FILE [--run NAME ...]
 
 The runs are the workflow's (`runs` in workflow/config.yaml), or those
 `--run` names; references come from its `dashboard` section and `--ref`
-(see `flowlib.dashboard.context`). Serves on 127.0.0.1 only.
+(see `flowlib.dashboard.context`). It listens on the machine settings'
+`DASHBOARD_HOST` and `DASHBOARD_PORT` (config/local.env.example).
 """
 
 from __future__ import annotations
@@ -29,12 +30,13 @@ from flowlib.dashboard import context, nowcasts, page
 
 CONFIG = Path(__file__).parents[1] / "config.yaml"
 LOCK = threading.Lock()
+CLIENT_GONE = (ConnectionError, TimeoutError)
+"""How a client that left shows up: a closed tab, a reset, a timeout."""
 
 
 def parser() -> argparse.ArgumentParser:
     """Return the command line's parser."""
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--port", type=int, default=8765)
     p.add_argument("--once", type=Path, metavar="FILE")
     p.add_argument("--run", action="append", default=[], metavar="NAME")
     p.add_argument("--ref", action="append", default=[], metavar="SPEC")
@@ -126,13 +128,18 @@ def handler(
                     self._send(200, body, "text/html; charset=utf-8")
                 else:
                     self._send(404, b"not found", "text/plain")
-            except (BrokenPipeError, ConnectionResetError):
-                # The client left (a closed tab, a proxy timeout).
+            except CLIENT_GONE:
+                # The client left (a closed tab, a timeout).
                 return
             except Exception:
                 # The detail goes to the server's log, not the browser.
                 traceback.print_exc(file=sys.stderr)
-                self._send(500, b"error: see the server's log", "text/plain")
+                try:
+                    self._send(
+                        500, b"error: see the server's log", "text/plain"
+                    )
+                except CLIENT_GONE:
+                    return
 
         def _sections(self, have: str) -> None:
             # Each part's hash, with its html only where `have` (key:hash,
@@ -170,6 +177,11 @@ def handler(
     return Handler
 
 
+def address(local: dict[str, str]) -> tuple[str, int]:
+    """Return the host and port the machine settings serve the page on."""
+    return local["DASHBOARD_HOST"], int(local["DASHBOARD_PORT"])
+
+
 def write_once(ctx: page.Context, out: Path) -> None:
     """Write the page to `out`."""
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -181,8 +193,10 @@ def main() -> None:
     """Serve the dashboard or write it once."""
     a = parser().parse_args()
     config = yaml.safe_load(a.config.read_text())
+    localconfig.check()
+    local = localconfig.read()
     ctx = context.build(
-        config, localconfig.read(), runs=a.run, refs=a.ref, once=bool(a.once)
+        config, local, runs=a.run, refs=a.ref, once=bool(a.once)
     )
     if a.once:
         write_once(ctx, a.once)
@@ -191,8 +205,9 @@ def main() -> None:
     # waits on a build.
     pages = Pages(ctx)
     pages.start(float(config["dashboard"]["refresh_every"]))
-    server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx, pages))
-    print(f"http://127.0.0.1:{a.port}/")
+    host, port = address(local)
+    server = ThreadingHTTPServer((host, port), handler(ctx, pages))
+    print(f"http://{host}:{port}/", flush=True)
     server.serve_forever()
 
 
