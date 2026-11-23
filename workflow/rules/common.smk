@@ -25,6 +25,7 @@ from flowlib import (
 
 from nowcastfoundation.sidecar import HELD_OUT_BLOCKS, SIDECAR
 
+localconfig.check()
 LOCAL = localconfig.read()
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
