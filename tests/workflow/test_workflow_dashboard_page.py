@@ -539,3 +539,12 @@ def test_checkpoint_tables_show_the_rolling_row_check(tmp_path):
     out = page.build(ctx)
     assert "<th>7-day row gap<th>7-day row roughness" in out
     assert "<td>0.050<td>4.00" in out
+
+
+def test_the_trainer_s_losses_are_labelled_validation(tmp_path):
+    # The trainer scores the grid's validation round; the held-out (test)
+    # set is the paper's alone (lead 15:20), so no panel says held-out.
+    out = page.build(_machine(tmp_path))
+    text = re.sub(r"<script.*?</script>", "", out, flags=re.S)
+    assert "Validation loss" in out
+    assert "held-out loss" not in text.lower()
