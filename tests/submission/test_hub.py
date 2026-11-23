@@ -330,3 +330,20 @@ def test_nowcast_adds_a_fits_rt_for_the_rounds_weeks(tmp_path: Path) -> None:
     assert len(_with_rt(counts, fit, tasks, "2026-10-31", FORECAST_DATE)) == (
         len(counts)
     )
+
+
+def test_the_submission_plot_reads_the_count_samples_only(
+    tmp_path: Path,
+) -> None:
+    """The PR's plot draws the count samples; `wk R_t` quantile rows in the
+    same file are left out."""
+    from bdbvhub.submission.hub import rt_table
+    from nowcasteval.plots import read_submission
+
+    counts = _table(_samples(), "2026-11-28")
+    rt = rt_table(_rt(("2026-11-28",)), "2026-11-28", ("2026-11-28",),
+                  FORECAST_DATE)  # fmt: skip
+    path = write_submission(pd.concat([counts, rt]), tmp_path, MID)
+    fc = read_submission(path, "2026-11-22")
+    assert len(fc) == len(counts)
+    assert fc["sample"].dtype == "int64"
