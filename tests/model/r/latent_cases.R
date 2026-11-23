@@ -186,11 +186,13 @@ latent_runs <- function() {
     "control_days", "r_drift", "population", "seed", "level", "trickle",
     "shift_at", "shift_size", "shift_days", "shift_reactive", "shift_up",
     "variant_at", "variant_escape", "variant_r", "variant_days",
-    "quiet_places", "late_places", "ascertainment", "incubation_mean"
+    "quiet_places", "late_places", "ascertainment", "incubation_mean",
+    "incubation_cv"
   )
   design_keys <- c(
     "window", "mixing", "imports", "seeding", "place_rt", "spread",
-    "gt_family", "n_places", "n_ages", "trajectory", "strata_link"
+    "gt_family", "n_places", "n_ages", "trajectory", "strata_link",
+    "incubation_family"
   )
   want <- list(
     mixing = c("none", "symmetric", "asymmetric", "distance", "time_varying"),

@@ -115,6 +115,19 @@ def test_store_keeps_first_prospective_fit(store):
     assert (s["value"] == 5).all()
 
 
+def test_the_store_history_file_holds_the_first_prospective_fits(
+    store, hub, tmp_path
+):
+    path = tmp_path / "fit-store-history.csv.gz"
+    ebola.write_store_history(store, "fit-store", path)
+    history = ebola.history_samples(path)
+    pd.testing.assert_frame_equal(
+        history, ebola.store_samples(store, "fit-store")
+    )
+    table = ebola.load(hub, history=path)
+    assert set(table.loc[table["model"] == "renewal", "value"]) == {5}
+
+
 def test_round_close_is_tuesday_before():
     close = ebola.round_close(pd.Timestamp("2026-11-14"))
     assert close == pd.Timestamp("2026-11-10 22:59", tz="UTC")

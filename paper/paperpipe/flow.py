@@ -349,11 +349,17 @@ class PaperFlow:
             if ebola["candidates"]:
                 files = " ".join(shlex.quote(c) for c in ebola["candidates"])
                 args.append(f"--candidates {files}")
-            if ebola["store"]:
-                args.append(f"--store {shlex.quote(ebola['store'])}")
-                args.append(f"--store-ref {ebola['store_ref']}")
+            history = self.store_history()
+            if history:
+                args.append(f"--store-history {history}")
             return " ".join(args)
         return ""
+
+    def store_history(self) -> str | None:
+        """Return the fit store's history file, fetched from its release."""
+        if not self.ebola.get("store_history"):
+            return None
+        return f"{self.results}/evidence/fit-store-history.csv.gz"
 
     def source_files(self, w: Wildcards) -> list[str]:
         """Files a study's real data come from, built by other rules."""
@@ -365,7 +371,16 @@ class PaperFlow:
             hub = f"{ebola['hub']}/target-data/time-series.csv"
             target = f"{ebola['data']}/target.csv"
             draws = [self.ebola_draws] if ebola.get("n_samples") else []
-            return [hub, target, ebola["backtest"], *self.ebola_extra(), *draws]
+            history = self.store_history()
+            stored = [history] if history else []
+            return [
+                hub,
+                target,
+                ebola["backtest"],
+                *self.ebola_extra(),
+                *draws,
+                *stored,
+            ]
         if w.study == "synthetic" and self.synthetic_simulations(w.mode):
             return [self.synthetic["forecasts"][w.mode]]
         return []

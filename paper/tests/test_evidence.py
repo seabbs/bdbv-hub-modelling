@@ -228,23 +228,17 @@ def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
     }
 
 
-def test_scale_floor_numbers_by_model_and_size() -> None:
-    from paperpipe.evidence import scale_floor_numbers
+def test_the_paper_has_no_scale_floor_test() -> None:
+    # Inference applies no scale floor and the code has no switch for
+    # one, so there is no test with and without it to quote.
 
-    rows = pd.DataFrame(
-        {
-            "floor": [0, 1],
-            "model": "n4000",
-            "size": ["small (<=5)", "small (<=5)"],
-            "median_loss": [3.311, 4.814],
-            "share_q99_over_100x": [0.1067, 0.2845],
-        }
+    config = yaml.safe_load(
+        (Path(__file__).parents[1] / "workflow" / "config.yaml").read_text()
     )
-    out = scale_floor_numbers(rows)
-    small = out["sims"]["n4000"]["small"]
-    assert small["median_loss"] == {"none": 3.3, "floor": 4.8}
-    assert small["q99_over_100x"] == {"none": 11, "floor": 28}
-    assert set(out) == {"sims"}
+    assert "scale_floor" not in EVIDENCE
+    assert "scale_floor" not in config["evidence"]
+    si = (Path(__file__).parents[1] / "si.qmd").read_text()
+    assert "evidence.scale_floor" not in si
 
 
 def test_pair_is_blank_when_either_value_is_missing() -> None:
@@ -612,8 +606,8 @@ def test_the_copula_figure_has_national_and_provinces_per_study() -> None:
     assert titles == {
         "Germany, national",
         "Germany, states",
-        "Held-out synthetic, national",
-        "Held-out synthetic, provinces",
+        "Synthetic, national",
+        "Synthetic, provinces",
     }
     labels = {t.get_text() for t in drawn[0].get_xticklabels()}
     assert labels == {"CRPS", "90% coverage", "ES (log)"}
@@ -726,3 +720,33 @@ def test_a_reference_row_counts_once_per_target() -> None:
     assert aggregation_numbers(rows)["germany"]["national"]["fm"] == {
         "joint": 0.5
     }
+
+
+def test_the_pairing_step_summarises_both_studies(tmp_path) -> None:
+    from paperpipe.__main__ import main
+
+    base = {
+        "level": "national",
+        "model": "randomwalk",
+        "target": "sum",
+        "metric": "crps",
+        "n": 1,
+    }
+    paths = []
+    for study in ("germany", "synthetic"):
+        rows = pd.DataFrame(
+            [
+                {**base, "study": study, "variant": v, "origin": o, "value": x}
+                for v, x in (("off", 2.0), ("rolling", 1.0))
+                for o in ("a", "b")
+            ]
+        )
+        path = tmp_path / f"{study}.csv.gz"
+        rows.to_csv(path, index=False)
+        paths.append(str(path))
+    out = tmp_path / "si-copula.csv"
+    main(["pairing", *paths, "--out", str(out)])
+    got = pd.read_csv(out)
+    assert sorted(got["study"].unique()) == ["germany", "synthetic"]
+    rolling = got.loc[got["variant"] == "rolling", "relative"]
+    assert (rolling == 0.5).all()

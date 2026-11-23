@@ -314,7 +314,6 @@ def _run_joint(batch: _Batch, jobs: Sequence[_Job]) -> list[_Outcome]:
                 j.vals,
                 batch.draws,
                 kinds=tuple(grid["factors"]["trajectory"]),
-                incubation_cv=float(grid["constants"]["incubation_cv"]),
             )
         except Exception as e:  # any error is the draw's: drawn again
             msg = (
