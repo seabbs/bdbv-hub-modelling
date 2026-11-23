@@ -6,12 +6,15 @@ import gzip
 import json
 from pathlib import Path
 
+import pytest
+
 from nowcastfoundation.simulator import bench
 
 ROOT = Path(__file__).parents[2]
 GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
 
 
+@pytest.mark.slow
 def test_a_benchmark_times_a_seeded_batch_twice(tmp_path):
     out = tmp_path / "bench.json"
     bench.main([str(GRID_FILE), "2", "9191", str(out), "--weeks", "8"])

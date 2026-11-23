@@ -451,6 +451,7 @@ def test_rolling_truth_is_the_first_release_d_days_after_each_week() -> None:
     assert "2026-10-03" not in truth.index
 
 
+@pytest.mark.slow
 def test_complete_target_can_take_the_rolling_truth(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:

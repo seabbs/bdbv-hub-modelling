@@ -242,6 +242,7 @@ def test_diagnostics_name_the_sources(
     assert info.loc["CD-IT", "n_err"] == 1
 
 
+@pytest.mark.slow
 def test_models_raise_without_snapshots_or_a_delay_pair(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
