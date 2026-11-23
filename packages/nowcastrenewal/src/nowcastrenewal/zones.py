@@ -81,11 +81,20 @@ def _daily_zones() -> pd.DataFrame:
     return load_daily_zones(_data_dir())
 
 
+def _zones_of(task: ForecastTask) -> tuple[str, ...]:
+    """Return the task's zone codes in its provinces, sorted."""
+    from nowcastutils.hierarchy import province_of
+
+    return tuple(
+        sorted(z for z in task.zone_codes if province_of(z) in task.locations)
+    )
+
+
 def task_zones(task: ForecastTask) -> tuple[str, ...]:
     """Return the health zones of a task's provinces.
 
-    The hub's zone codes (`hub-config/tasks.json` in the data directory),
-    or the zones in the daily zone table if there is no hub config.
+    The task's zone codes (`ForecastTask.zone_codes`, the hub's codes),
+    which its forecast is checked against.
 
     Parameters
     ----------
@@ -96,16 +105,18 @@ def task_zones(task: ForecastTask) -> tuple[str, ...]:
     -------
     tuple of str
         Zone codes, sorted.
-    """
-    from bdbvhub.data.zones import hub_zones
-    from nowcastutils.hierarchy import province_of
 
-    tasks_json = _data_dir() / "hub-config" / "tasks.json"
-    if tasks_json.exists():
-        codes = hub_zones(tasks_json)
-    else:
-        codes = tuple(sorted(set(_daily_zones()["location"])))
-    return tuple(z for z in codes if province_of(z) in task.locations)
+    Raises
+    ------
+    ModelUnavailableError
+        If the task holds no zone codes (a task built without zone data).
+    """
+    if not task.zone_codes:
+        raise ModelUnavailableError(
+            "A zone fit needs the task's zone codes; build the task with "
+            "the zone data (`load_zone_data`)."
+        )
+    return _zones_of(task)
 
 
 def zone_target(task: ForecastTask) -> pd.DataFrame:
@@ -534,7 +545,7 @@ class ZoneRenewalModel(RenewalModel):
             & daily["location"].map(province_of).isin(task.locations)
         ]
         digest = hashlib.sha256(mine.to_csv(index=False).encode())
-        digest.update(repr(task_zones(task)).encode())
+        digest.update(repr(_zones_of(task)).encode())
         if model_config(self.variant).bvd:
             from bdbvhub.data.tidy import load_health_zones
 
