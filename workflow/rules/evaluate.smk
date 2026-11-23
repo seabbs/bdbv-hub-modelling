@@ -1,7 +1,7 @@
 # Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
 # score step 0, each segment's step snapshots and its checkpoint, in
-# the `evaluate` group (WORKER_GROUPS places it), on EVAL_DEVICE (the
-# CPU by default) beside the trainer, newest segment first. Files and
+# the `evaluate` group (WORKER_GROUPS places it), on the forecasting
+# device (`forecast` in the config, flowlib.forecast) beside the trainer, newest segment first. Files and
 # readers: workflow/flowlib/evaluations.py.
 
 
@@ -22,11 +22,13 @@ rule evaluate_steps:
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
+    resources:
+        gpu=FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
         prev=lambda wc, input: runs.option("--prev", evaluate_prev_dir(input)),
         env=unit_env,
-        device=EVAL_DEVICE,
+        device=FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=evaluate_copy_in,
         copy_back=lambda wc: [f"{train_dir(wc.run)}/evals/"],
@@ -56,10 +58,12 @@ rule evaluate_base:
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
+    resources:
+        gpu=FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
         env=unit_env,
-        device=EVAL_DEVICE,
+        device=FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [
             f"{train_dir(wc.run)}/evals/step-0000000/",
@@ -91,10 +95,12 @@ rule evaluate_checkpoint:
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
+    resources:
+        gpu=FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
         env=unit_env,
-        device=EVAL_DEVICE,
+        device=FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=evaluate_inputs_from,
     shell:

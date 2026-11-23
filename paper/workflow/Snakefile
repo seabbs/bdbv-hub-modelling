@@ -121,6 +121,7 @@ for _mode in MODES:
             TOOLS_ENV
         resources:
             heavy=1,
+            gpu=FORECAST.gpu,
         params:
             python=PYTHON,
             sims=SYNTHETIC["simulations"][_mode],
@@ -128,11 +129,14 @@ for _mode in MODES:
             # The fine-tuned models wait for the final run's checkpoint.
             models=FLOW.synthetic_models_arg(),
             samples=config["synthetic"]["samples"],
+            device=FORECAST.device,
+            threads=FORECAST.threads,
+            env=FORECAST.env,
         shell:
-            "exec >{log} 2>&1; "
+            "exec >{log} 2>&1; {params.env} "
             "{params.python} paper/scripts/run_synthetic.py {params.sims} "
-            "{output} --seeds {params.seeds} --samples {params.samples} --device cpu "
-            "--threads 1 {params.models}"
+            "{output} --seeds {params.seeds} --samples {params.samples} "
+            "--device {params.device} --threads {params.threads} {params.models}"
 
 
 rule development:
@@ -191,13 +195,16 @@ rule germany_development:
         f"{R}/benchmarks/germany_development/germany_development.tsv"
     conda:
         TOOLS_ENV
+    resources:
+        gpu=FORECAST.gpu,
     params:
+        env=FORECAST.env,
         germany=GERMANY_CLI,
         germany_root_config=GERMANY["config"],
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         out=lambda w, output: Path(output[0]).parent,
     shell:
-        "exec >{log} 2>&1; "
+        "exec >{log} 2>&1; {params.env} "
         "{params.germany} backtest {params.args} --out {params.out} && "
         "{params.germany} teams {params.args} --out {params.out} && "
         "{params.germany} paper --config {params.germany_root_config} "
@@ -216,14 +223,17 @@ rule germany_heldout:
         f"{R}/benchmarks/germany_heldout/germany_heldout.tsv"
     conda:
         TOOLS_ENV
+    resources:
+        gpu=FORECAST.gpu,
     params:
+        env=FORECAST.env,
         germany=GERMANY_CLI,
         germany_root_config=GERMANY["config"],
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         # The held-out forecasts are in the results folder's held-out/.
         out=lambda w, output: Path(output[0]).parent.parent,
     shell:
-        "exec >{log} 2>&1; "
+        "exec >{log} 2>&1; {params.env} "
         "{params.germany} backtest {params.args} --held-out "
         "--out {params.out} && "
         "{params.germany} teams {params.args} --held-out --out {params.out} && "
@@ -317,15 +327,17 @@ rule ebola_backtest_draws:
     conda:
         TOOLS_ENV
     resources:
+        gpu=FORECAST.gpu,
         heavy=1,
     params:
+        env=FORECAST.env,
         bdbv=BDBV,
         models=" ".join(EBOLA["backtest_models"]),
         n=EBOLA["n_samples"],
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
     shell:
-        "exec >{log} 2>&1; "
+        "exec >{log} 2>&1; {params.env} "
         "mkdir -p {params.folder} && "
         "{params.bdbv} backtest --config {params.config} --samples {params.n} "
         "--models {params.models} --no-recovery "
@@ -342,11 +354,14 @@ rule ebola_backtest:
         f"{R}/benchmarks/ebola_backtest/ebola_backtest.tsv"
     conda:
         TOOLS_ENV
+    resources:
+        gpu=FORECAST.gpu,
     params:
+        env=FORECAST.env,
         bdbv=BDBV,
         models=" ".join(EBOLA["backtest_models"]),
     shell:
-        "exec >{log} 2>&1; "
+        "exec >{log} 2>&1; {params.env} "
         "{params.bdbv} data && "
         "{params.bdbv} backtest --models {params.models} --no-recovery"
 
@@ -389,13 +404,16 @@ rule forecasts:
         f"{R}/{{mode}}/logs/forecasts-{{study}}.log",
     conda:
         TOOLS_ENV
+    resources:
+        gpu=FORECAST.gpu,
     params:
+        env=FORECAST.env,
         python=PYTHON,
         limits=FLOW.limits,
         sources=FLOW.sources,
         n_samples=config["n_samples"],
     shell:
-        "exec >{log} 2>&1; "
+        "exec >{log} 2>&1; {params.env} "
         "{params.python} -m paperpipe forecasts {wildcards.study} {params.limits} "
         "{params.sources} --meta {input.meta} "
         "--n-samples {params.n_samples} --out {output}"
@@ -605,13 +623,15 @@ if GERMANY["real"]:
         conda:
             TOOLS_ENV
         resources:
+            gpu=FORECAST.gpu,
             heavy=1,
         params:
+            env=FORECAST.env,
             germany=GERMANY_CLI,
             args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
             out=lambda w, output: Path(output.scores).parent,
         shell:
-            "exec >{log} 2>&1; "
+            "exec >{log} 2>&1; {params.env} "
             "{params.germany} pairing-sensitivity {params.args} "
             "--out {params.out}"
 
@@ -625,14 +645,16 @@ if GERMANY["real"]:
         conda:
             TOOLS_ENV
         resources:
+            gpu=FORECAST.gpu,
             heavy=1,
         params:
+            env=FORECAST.env,
             python=PYTHON,
             sims=SYNTHETIC["simulations"]["development"],
             seeds=FLOW.seeds("development"),
             samples=config["synthetic"]["samples"],
         shell:
-            "exec >{log} 2>&1; "
+            "exec >{log} 2>&1; {params.env} "
             "{params.python} paper/scripts/pairing_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples {params.samples}"
 

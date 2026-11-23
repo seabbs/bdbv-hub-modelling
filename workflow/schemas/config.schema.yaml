@@ -82,6 +82,7 @@ required:
   - finetune
   - runs
   - train_runs
+  - forecast
   - score
   - dashboard
 properties:
@@ -162,6 +163,22 @@ properties:
 
   train_runs:
     oneOf: [{type: "null"}, {$ref: "#/$defs/labels"}]
+
+  forecast:
+    description: >-
+      The device and CPU threads of every forecasting job (flowlib.forecast);
+      FORECAST_DEVICE and FORECAST_THREADS in config/local.env override them.
+    type: object
+    additionalProperties: false
+    required: [device, threads, gpu]
+    properties:
+      device: {enum: [cpu, cuda, mps]}
+      threads: {type: integer, minimum: 1}
+      gpu:
+        description: >-
+          With device cuda, exclusive takes the trainer's gpu resource (the
+          job waits for the GPU); share runs beside the trainer on it.
+        enum: [exclusive, share]
 
   score:
     type: object

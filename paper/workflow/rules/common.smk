@@ -13,7 +13,7 @@ sys.path.insert(0, str(PAPER))
 sys.path.append(str(PAPER.parent / "workflow"))
 
 
-from flowlib import localconfig  # noqa: E402
+from flowlib import forecast, localconfig  # noqa: E402
 
 
 from paperpipe.config import MODES  # noqa: E402
@@ -32,6 +32,9 @@ EVIDENCE = {
 
 
 FLOW = PaperFlow.load(config, EVIDENCE, PAPER.parent, localconfig.expand)
+# Every forecasting rule's device and threads (`forecast` in the workflow
+# config, overridden by this machine's FORECAST_DEVICE/FORECAST_THREADS).
+FORECAST = forecast.settings(config, localconfig.read())
 
 
 R = FLOW.results
