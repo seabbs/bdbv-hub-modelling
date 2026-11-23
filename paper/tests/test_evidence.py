@@ -773,3 +773,16 @@ def test_a_reference_row_counts_once_per_target() -> None:
     assert aggregation_numbers(rows)["germany"]["national"]["fm"] == {
         "joint": 0.5
     }
+
+
+def test_no_aggregation_evidence_is_read_or_written(tmp_path) -> None:
+    assert "aggregation_scores" not in EVIDENCE
+    write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "f",
+        tmp_path / "e.yml",
+    )
+    numbers = yaml.safe_load((tmp_path / "e.yml").read_text())["evidence"]
+    assert "aggregation" not in numbers
+    assert not (tmp_path / "f" / "aggregation.png").exists()
