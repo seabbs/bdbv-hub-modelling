@@ -138,3 +138,16 @@ def test_each_view_fits_its_errors_on_its_own_sums(task, model, monkeypatch):
     seen.clear()
     model.daily_quantiles(task, LEVELS)
     assert set(seen) == {1}
+
+
+def test_a_short_history_still_gives_every_target_day():
+    # At the first development date the releases start 35 days back, as
+    # the oldest target's 7-day sum does: the triangle must reach it even
+    # though the lag window is capped by the history.
+    from bdbvhub.models import get_model
+
+    short = nowcast_tasks(_triangle(days=35), NOWCAST, 50, 7, horizons=HORIZONS)
+    model = get_model("randomwalknowcast_daily")
+    for task in short:
+        out = model.forecast(task)
+        assert set(out["target_end_date"]) == set(task.target_end_dates)
