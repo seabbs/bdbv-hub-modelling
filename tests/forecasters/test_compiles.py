@@ -21,9 +21,11 @@ from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastutils.base import ForecastTask
 
+# The walks' draws on a fixed task; #808 (no reported-count floor) moved
+# both.
 PINNED = {
-    "randomwalk": "fe2c1691ad12ac90",
-    "randomwalknowcast": "aa3db24d7309d6bd",
+    "randomwalk": "49fe7b5a3615646b",
+    "randomwalknowcast": "ba70c606c431d147",
 }
 
 _COMPILES: list[float] = []
