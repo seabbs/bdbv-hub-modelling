@@ -322,3 +322,105 @@ def test_a_german_unit_scores_a_run_s_own_segment(
     assert forecaster.finetuned_spec() == str(tmp_path / "n100")
     ck._pin("abc")
     assert forecaster.finetuned_spec() == "abc"
+
+
+def test_the_german_config_scores_four_weeks_ahead_too() -> None:
+    from nowcastgermany.evaluation import load_germany_config
+
+    config = load_germany_config("config/germany.toml")
+    assert config.horizons == tuple(range(28, -29, -1))
+
+
+def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
+    from nowcastgermany import data as dg
+    from nowcastgermany import evaluation as de
+
+    def forecasts(_models, _triangle, dates, *_args, horizons, **_kwargs):
+        seen.append((list(dates), tuple(horizons)))
+        return pd.DataFrame(
+            [{"origin": d, "horizon": h} for d in dates for h in horizons]
+        )
+
+    monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(de, "germany_forecasts", forecasts)
+    monkeypatch.setattr(de, "with_truth", lambda fc, *_a: fc)
+    monkeypatch.setattr(ck, "record_precision", lambda _root: None)
+    monkeypatch.setattr(ck, "_free", lambda: None)
+    monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: None)
+    monkeypatch.setattr(ck, "score_dates", lambda: 100)
+
+
+def test_a_german_unit_forecasts_the_config_s_horizons(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Every label, the zero-shot reference and each checkpoint, takes the
+    # German config's horizons, forecast days included.
+    from nowcastgermany.evaluation import load_germany_config
+
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    ck.germany_unit(tmp_path, "reference")
+    want = load_germany_config("config/germany.toml").horizons
+    assert {h for _, h in seen} == {want}
+    out = pd.read_csv(
+        tmp_path / ck.GERMANY_UNIT / "reference" / f"{seen[0][0][0]}.csv.gz"
+    )
+    assert out["horizon"].max() == max(want)
+
+
+def test_a_german_unit_redoes_dates_without_the_forecast_days(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A file written before forecast days were scored is forecast again;
+    # one that reaches the last horizon is kept.
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config("config/germany.toml")
+    first, second, *_ = de.nowcast_dates(config, held_out=False)
+    root = tmp_path / ck.GERMANY_UNIT / "n100"
+    root.mkdir(parents=True)
+    pd.DataFrame({"origin": [first], "horizon": [0]}).to_csv(
+        root / f"{first}.csv.gz", index=False
+    )
+    pd.DataFrame(
+        {"origin": [second], "horizon": [max(config.horizons)]}
+    ).to_csv(root / f"{second}.csv.gz", index=False)
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    ck.germany_unit(tmp_path, "n100")
+    done = seen[0][0]
+    assert first in done
+    assert second not in done
+
+
+def test_the_evidence_table_scores_the_hub_s_horizons_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Forecast days are for the page; the table stays on the hub's 0 to
+    # 28 days back, as the paper scores the teams.
+    from nowcastgermany import evaluation as de
+
+    root = tmp_path / ck.GERMANY_UNIT / "reference"
+    root.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "model": "m",
+            "origin": "2021-11-22",
+            "target_end_date": ["2021-11-22", "2021-11-29"],
+            "horizon": [0, 7],
+            "value": 1.0,
+            "truth": 1.0,
+        }
+    ).to_csv(root / "2021-11-22.csv.gz", index=False)
+    seen: list = []
+
+    def score(fc, _delay):
+        seen.append(set(fc["horizon"]))
+        return pd.DataFrame(columns=["model", *ck.GERMANY_CELL, "wis"])
+
+    monkeypatch.setattr(de, "score_germany", score)
+    monkeypatch.setattr(ck, "relative", lambda sc, *_a: sc)
+    monkeypatch.setattr(ck, "matched", lambda sc, _cell: sc)
+    ck.germany_rows(tmp_path, ["reference"])
+    assert seen
+    assert all(s == {0} for s in seen)
