@@ -20,8 +20,8 @@ from nowcastgermany.data import (
     nowcast_tasks,
     place_code,
     read_triangle,
-    weekly_task,
 )
+from nowcastgermany.pairing import hub_weeks
 from nowcastutils.base import NATIONAL
 
 FIXTURE = (
@@ -171,7 +171,7 @@ def test_tasks_keep_real_dates(tasks) -> None:
 
 def test_weekly_models_forecast_the_sums_that_end_hub_weeks(tasks) -> None:
     for task in tasks:
-        weekly = weekly_task(task)
+        weekly = hub_weeks(task)
         # The Saturdays of the hub's days back from Wednesday 2021-10-20.
         assert weekly.target_end_dates == tuple(
             (task.reference_date + dt.timedelta(days=h)).isoformat()
@@ -231,7 +231,7 @@ def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
     model = get_model("randomwalk")
     out = pd.concat(
         hub_forecasts(run_forecasts([model], [w]), w, NOWCAST)
-        for w in map(weekly_task, tasks)
+        for w in map(hub_weeks, tasks)
     )
     assert set(out["horizon"]) == {-4, -11, -18, -25}
     assert set(out["forecast_date"]) == {NOWCAST}
