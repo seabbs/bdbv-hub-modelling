@@ -89,7 +89,7 @@ tasks:
 
 
   paper:
-    desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (scripts/paper.sh), niced on this machine's cores less its headroom, with start, done or FAILED lines; TARGET=paper waits for the held-out inputs and pins the newest checkpoint first
+    desc: Run the paper workflow (TARGET=development by default, or paper) and render the paper into docs/paper/, as CI does (paper_run.py --render), niced on this machine's cores less its headroom, with start, done or FAILED lines; TARGET=paper waits for the held-out inputs and pins the newest checkpoint first
     cmds:
       - uv run --group paper python workflow/scripts/paper_run.py {{.TARGET | default "development"}}
 

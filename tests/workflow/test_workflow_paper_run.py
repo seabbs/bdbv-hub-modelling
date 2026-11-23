@@ -36,7 +36,12 @@ def test_development_runs_the_paper_niced_on_the_machine_s_cores(run):
     assert paper_run.main(["development"]) == 0
     (cmd,) = calls
     assert cmd[:3] == ["nice", "-n", "19"]
-    assert cmd[3:] == ["scripts/paper.sh", "development"]
+    assert cmd[3:] == [
+        sys.executable,
+        str(Path(paper_run.__file__).resolve()),
+        "--render",
+        "development",
+    ]
     assert lines[0].startswith("started")
     assert lines[-1].startswith("done")
 

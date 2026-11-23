@@ -19,8 +19,6 @@ on:
       - 'data/**'
       - 'config/**'
       - 'results/**'
-      - 'scripts/fit-store.sh'
-      - 'scripts/results-release.sh'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -37,8 +35,6 @@ on:
       - 'data/**'
       - 'config/**'
       - 'results/**'
-      - 'scripts/fit-store.sh'
-      - 'scripts/results-release.sh'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -108,11 +104,11 @@ jobs:
           # The fine-tuned models list the releases for their checkpoint.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          scripts/fit-store.sh fetch output/fit-store
+          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
           # Stopgap until #192 merges: the Chronos-2 fits its pull request
           # stored on a scratch store join main's (#231).
           FIT_STORE_BRANCH=fit-store-scratch-fm-chronos \
-            scripts/fit-store.sh fetch output/fit-store-chronos
+            python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store-chronos
           cp -R output/fit-store-chronos/fm_chronos_* output/fit-store/
           uv run bdbvhubrenewal fit-store load --store output/fit-store
       # The store too, as the Getting started notebook reads a stored fit.
@@ -756,8 +752,8 @@ jobs:
       - name: Run the paper workflow and render the paper
         env:
           TARGET: ${{ inputs.paper_target || 'development' }}
-        # The same command as `task paper` (scripts/paper.sh).
-        run: scripts/paper.sh "$TARGET"
+        # The same steps as `task paper` (workflow/scripts/paper_run.py).
+        run: python3 workflow/scripts/paper_run.py --render "$TARGET"
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       # Each package's own docs site, at <site>/<package>/ (as
@@ -846,7 +842,7 @@ jobs:
           umbrella-dir: pr-preview
 
   # Attaches every model's results to the round releases that used this
-  # build's hub release (scripts/results-release.sh). Apart from the
+  # build's hub release (bdbvhub.submission.release). Apart from the
   # deploy, so a failure here never holds the site back. Runs no project
   # code. Adding files to an existing release needs no tag, so the
   # workflow token can do it.
@@ -872,4 +868,4 @@ jobs:
           path: _site
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: scripts/results-release.sh attach build _site
+        run: python3 -I packages/bdbvhub/src/bdbvhub/submission/release.py attach build _site
