@@ -102,6 +102,11 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - A system too large for one block is cut into views, in training and at forecast time alike.
 - Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces (SI).
+- For the Ebola case study, the fine-tuned model makes two forecasts at each nowcast date.
+- One is a joint block of the country, all provinces and the active health zones.
+- A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.
+- The other is one block per province, of the province and all its zones, cut into views as in training when over the block limit.
+- The country, provinces and active zones take their forecast from the joint block, and every other zone from its province's block (SI).
 - The number of lag series, in training and at prediction alike, is the largest over the block's places of each place's reporting delay 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
 - We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.
 - We plot each checkpoint's scores, with both as reference lines (SI).
@@ -392,8 +397,8 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
   - We cut systems too large for one block into views (Methods).
   - Zones in different subtrees then inform each other only through the aggregated totals.
+  - For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.
   - Forecasts at different levels are not constrained to sum.
-  - This applies to the BDBV zone-level forecasts.
   - Fine-tuning used a GPU, which made it several times faster than a CPU.
   - On a CPU alone it would run in hours.
   - Key references: [@Kalahasti2026; @Meyer2025].
