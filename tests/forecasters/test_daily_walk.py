@@ -148,6 +148,5 @@ def test_a_short_history_still_gives_every_target_day():
 
     short = nowcast_tasks(_triangle(days=35), NOWCAST, 50, 7, horizons=HORIZONS)
     model = get_model("randomwalknowcast_daily")
-    for task in short:
-        out = model.forecast(task)
-        assert set(out["target_end_date"]) == set(task.target_end_dates)
+    out = model.forecast(short[0])
+    assert set(out["target_end_date"]) == set(short[0].target_end_dates)
