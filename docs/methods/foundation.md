@@ -59,13 +59,16 @@ Chronos-2 standardises each series and takes its arcsinh, so counts go in as the
 
 Chronos-2 gives 21 quantiles, from 1% to 99%, of each series at each step ahead.
 Each of the 100 trajectories reads each series and step's quantile function at a uniform level: linear between the quantiles and flat beyond them.
-The levels are coupled by a Gaussian copula (`nowcastutils.trajectories.couple`), with correlation `rho` between consecutive steps of a series and `s` between series.
-`rho` and `s` are fitted for each task (`fit_coupling`) from the model's own forecasts of the same block at earlier releases: the latest release at least 1, 2, ..., 8 weeks before the task's, so one a week.
-Each of those forecasts is scored at the steps that are final by the task's release, as normal scores of its randomised PIT (`pit_scores`).
-With no earlier release the fit is independence.
-The 8 weeks are fixed for now; `choose_window` can instead pick the window online, as the one whose couplings had the lowest energy score on the latest matured releases, but the foundation model does not use it yet.
+The levels are coupled at each forecast by one step, `nowcastutils.trajectories.choose_coupling`, which chooses the coupling from the data.
+Its candidates are a Gaussian copula (`couple`), with correlation `rho` between consecutive steps of a series and `s` between series, fitted (`fit_coupling`) over the latest 2, 4 or 8 earlier releases, and the Schaake shuffle, each sample ordered as one past window of the series' own reported values (`history_windows`).
+The earlier releases are the latest at least 1, 2, ..., 10 weeks before the task's, so one a week, and the model forecasts the same block at each.
+Each of those forecasts is scored at the steps that are final by the task's release, as normal scores of its randomised PIT (`pit_scores`), which the Gaussian fit reads.
+Each release with at least two before it is a test: every candidate is fitted from what came before it, its draws are scored against what has been reported since (energy score), and the candidate with the lowest mean score is fitted from everything before the task and used.
+A candidate that cannot be fitted at one of the tests (the Schaake shuffle with too little history) drops out.
+With nothing to compare on, the Gaussian over the longest window is used when there are two releases to fit it from, else the Schaake shuffle, else independence.
+The chosen coupling, its fit and each candidate's score are written beside a submission (`copula.json`).
+The candidate windows are the only settings; which is used is chosen at each forecast.
 Independent and comonotone draws remain as named options (`coupling`) for the supplement.
-`couple` also has the Schaake shuffle (each sample ordered as one past window of observed or simulated values, `history_windows`); the foundation model does not use it yet.
 
 ## Counts
 

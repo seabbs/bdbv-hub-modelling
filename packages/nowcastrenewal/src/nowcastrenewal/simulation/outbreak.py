@@ -11,7 +11,9 @@ so the model is sampled forward under one seed and could be conditioned
 on reported counts (`"draw_{k}::reports::counts"`). The latent arrays
 run over the frame's days rounded up to a multiple of `BUCKET`, so
 simulations of near lengths share compiled shapes; the latent run is
-cropped to the frame and is the same as without the padding.
+cropped to the frame and is the same as without the padding. The
+triangle's count and revision draws are made on flat arrays of a few
+sizes (`components.draws.padded_draws`).
 
 `simulate_outbreak` samples it and returns the latent run, the counts in
 the simulator's long format and the values the reporting adds.
@@ -27,6 +29,7 @@ import numpy as np
 import pandas as pd
 from numpyro import handlers
 
+from ..components.draws import padded_draws
 from ..components.pmfs import Delay, generation_time_pmf
 from ..latent.rt import KINDS
 from ..latent.simulate import Latent, round_up, simulate_latent
@@ -105,7 +108,8 @@ def outbreak_model(
         list(strata["age"]),
         days=round_up(n_days, BUCKET),
     )
-    reporting_model(frame, design, values, latent.onsets, draws)
+    with padded_draws(min_ndim=3):
+        reporting_model(frame, design, values, latent.onsets, draws)
     return latent
 
 

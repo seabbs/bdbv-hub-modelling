@@ -3,48 +3,57 @@
 Nowcasts and forecasts of confirmed Bundibugyo virus disease cases for the BDBV Modeling Hub.
 { .page-subtitle }
 
-The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) collects weekly nowcasts and forecasts of confirmed Bundibugyo virus disease cases in the Democratic Republic of the Congo.
-This repository holds the models we submit to it, experimental models related to it, their backtests, and their evaluation on other case studies.
-The random walk and the random walk nowcast are the baselines we evaluate every other model against, and give the hub a principled baseline.
+The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) collects weekly nowcasts and short-term forecasts of confirmed Bundibugyo virus disease cases in the Democratic Republic of the Congo.
 
+This repository holds three projects.
 The fine-tuned foundation project fine-tunes the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles.
 The [paper](paper/main.html) and its [supporting information](paper/si.html) describe it.
+It is evaluated on held-out simulations, on the German COVID-19 hospitalisation nowcasting hub and on the BDBV hub.
+The joint-model-informed renewal project compares renewal models fitted to the hub data on their own with renewal models informed by a larger joint model, BVDOutbreakSize.
+The hub submission project submits our models to the hub each week, backtests them and compares them with the other teams.
+Every model is scored against the random walk and the random walk nowcast.
 
-The joint-model-informed renewal project compares renewal models fitted on their own with renewal models informed by a larger joint model, BVDOutbreakSize, through approximate Markov melding.
+We submit three models.
+`seabbs-rwnowcast` is the random walk nowcast.
+`seabbs-renewal` is the first renewal model in a chain that passes its checks.
+The chain starts with `renewalbvd`, the zone renewal model informed by the BVDOutbreakSize Rt estimates.
+Its ablations are the fallbacks, `renewalsp`, which fits each province on its own, and then `renewal`, the zone model without BVDOutbreakSize.
+`seabbs-nowcastfm` is the fine-tuned Chronos-2 model, submitted once it is opted in.
+
+To run the paper's workflow and render the paper, use `task paper`.
+The [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) lists every step from simulation and fine-tuning to scoring.
 
 ## Quick links
 
-<div class="quick-links" markdown>
-[![](assets/logos/fine-tuned-foundation/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/fine-tuned-foundation/logo-mark-dark.svg#only-dark){ width="48" height="48" } Fine-tuned foundation](foundation/index.md){ .quick-link }
-[![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastfoundation](packages/index.md#nowcastfoundation){ .quick-link }
-
-[![](assets/logos/joint-model-informed-renewal/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/joint-model-informed-renewal/logo-mark-dark.svg#only-dark){ width="48" height="48" } Joint-model-informed renewal](renewal/index.md){ .quick-link }
-[![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastrenewal](packages/index.md#nowcastrenewal){ .quick-link }
-
-[![](assets/logos/hub-submission/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/hub-submission/logo-mark-dark.svg#only-dark){ width="48" height="48" } Hub submission](hub/index.md){ .quick-link }
-[![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="48" height="48" } bdbvhub](packages/index.md#bdbvhub){ .quick-link }
-
-[![](assets/logos/nowcastutils/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastutils/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastutils](nowcastutils/){ .quick-link }
-[![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcasteval](nowcasteval/){ .quick-link }
-[![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastbaselines](nowcastbaselines/){ .quick-link }
-[![](assets/logos/nowcastworkflow/logo-mark.svg#only-light){ width="48" height="48" }![](assets/logos/nowcastworkflow/logo-mark-dark.svg#only-dark){ width="48" height="48" } nowcastworkflow](packages/index.md#nowcastworkflow){ .quick-link }
-</div>
+The three projects:
 
 <div class="grid cards" markdown>
 
--   [![](assets/logos/fine-tuned-foundation/logo-mark.svg){ width="32" height="32" } **Fine-tuned foundation**](foundation/index.md)
+-   [![](assets/logos/fine-tuned-foundation/logo-mark.svg#only-light){ width="32" height="32" }![](assets/logos/fine-tuned-foundation/logo-mark-dark.svg#only-dark){ width="32" height="32" } **Fine-tuned foundation**](foundation/index.md)
 
-    Chronos-2 fine-tuned on simulated outbreaks, the paper, its baselines and the German benchmark.
+    Chronos-2 fine-tuned on simulated outbreaks to nowcast from reporting triangles, with its paper.
 
--   [![](assets/logos/joint-model-informed-renewal/logo-mark.svg){ width="32" height="32" } **Joint-model-informed renewal**](renewal/index.md)
+-   [![](assets/logos/joint-model-informed-renewal/logo-mark.svg#only-light){ width="32" height="32" }![](assets/logos/joint-model-informed-renewal/logo-mark-dark.svg#only-dark){ width="32" height="32" } **Joint-model-informed renewal**](renewal/index.md)
 
-    Renewal models on their own and informed by BVDOutbreakSize.
+    Renewal models fitted on their own and informed by BVDOutbreakSize.
 
--   [![](assets/logos/hub-submission/logo-mark.svg){ width="32" height="32" } **Hub submission**](hub/index.md)
+-   [![](assets/logos/hub-submission/logo-mark.svg#only-light){ width="32" height="32" }![](assets/logos/hub-submission/logo-mark-dark.svg#only-dark){ width="32" height="32" } **Hub submission**](hub/index.md)
 
-    The current nowcast, the backtest, the comparison with the hub and the submission pipeline.
+    The weekly submission to the BDBV Modeling Hub, its backtest and the comparison with the hub teams.
 
 </div>
+
+The packages they are built from:
+
+| Group | Package | What it is |
+|---|---|---|
+| Shared | [![](assets/logos/nowcastutils/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastutils/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastutils**](nowcastutils/) | Releases, snapshots, location hierarchies, the forecast task and sample trajectories. |
+|  | [![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcasteval**](nowcasteval/) | Scores, backtests and trajectory pairing. |
+| Models | [![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastbaselines**](nowcastbaselines/) | The random walk and the random walk nowcast, the baselines. |
+|  | [![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastfoundation**](packages/index.md#nowcastfoundation) | Chronos-2 forecasts, the simulation grid and fine-tuning on simulated outbreaks. |
+|  | [![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastrenewal**](packages/index.md#nowcastrenewal) | The renewal models and the joint model that simulates outbreaks. |
+| Studies | [![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="24" height="24" } **bdbvhub**](packages/index.md#bdbvhub) | The BDBV hub's data, the fit store, the hub file and the submission. |
+|  | [![](assets/logos/nowcastgermany/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastgermany/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastgermany**](packages/index.md#nowcastgermany) | The German COVID-19 hospitalisation nowcasting hub as a case study. |
 
 ## Data credit
 

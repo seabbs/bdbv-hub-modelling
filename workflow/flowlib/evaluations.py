@@ -19,7 +19,12 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from nowcastfoundation.sidecar import RESULT_ONLY, SIDECAR, with_sidecar
+from nowcastfoundation.sidecar import (
+    RESULT_ONLY,
+    SIDECAR,
+    start_loss,
+    with_sidecar,
+)
 
 __all__ = [
     "checkpoint_settings",
@@ -153,22 +158,6 @@ def pending(
         and not d.with_name(d.name + ".json").exists()
         and after < step_of(d) <= (upto if upto is not None else step_of(d))
     ]
-
-
-def start_loss(train: Path | str) -> float | None:
-    """Return base Chronos-2's held-out loss, step 0's or a checkpoint's."""
-    train = Path(train)
-    got = _read(train / "evals" / "step-0000000.json")
-    if isinstance(got, dict) and "held_out_loss" in got:
-        return float(got["held_out_loss"])
-    # A checkpoint evaluated in the trainer, or an earlier sidecar.
-    for path in sorted(
-        [*train.glob("n*/settings.json"), *train.glob(f"n*/{SIDECAR}")]
-    ):
-        s = _read(path)
-        if isinstance(s, dict) and s.get("held_out_loss_start") is not None:
-            return float(s["held_out_loss_start"])
-    return None
 
 
 def check_report(

@@ -397,12 +397,15 @@ def test_nowcast_records_the_checkpoint_it_loaded(
         ]
 
     monkeypatch.setattr(foundation, "chronos_sampler", zeros)
-    # The Gaussian coupling's fit runs Chronos-2 on earlier releases;
+
+    # The online coupling's choice runs Chronos-2 on earlier releases;
     # independence keeps the test off the model and its adapter.
+    def independent(self, *_):  # type: ignore[no-untyped-def]
+        self.copula_fit = {"method": "independent", "chosen_by": "test"}
+        return foundation.fit_coupling(np.empty((0, 0, 0)), "independent")
+
     monkeypatch.setattr(
-        foundation.FoundationModel,
-        "_coupling_fit",
-        lambda *_: foundation.fit_coupling(np.empty((0, 0, 0)), "independent"),
+        foundation.FoundationModel, "_coupling_fit", independent
     )
     out = tmp_path / "ft"
     args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
@@ -410,6 +413,9 @@ def test_nowcast_records_the_checkpoint_it_loaded(
     record = json.loads((out / "checkpoint.json").read_text())
     assert record["tag"] == f"chronos-ft-{fake_checkpoint}"
     assert set(record["sha256"]) == set(foundation.ADAPTER_FILES)
+    # The coupling the draws were joined by is written beside them.
+    copula = json.loads((out / "copula.json").read_text())
+    assert copula == {"method": "independent", "chosen_by": "test"}
     # Zones split from the provinces, and the national sidecar.
     assert json.loads((out / "zones.json").read_text())["zones"]
     assert (out / "national.json").exists()

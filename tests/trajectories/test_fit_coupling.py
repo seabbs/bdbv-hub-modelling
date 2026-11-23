@@ -1,5 +1,7 @@
 """The coupling fit from a model's own matured forecasts (trajectories)."""
 
+import time
+
 import numpy as np
 import pytest
 from scipy.special import ndtri
@@ -114,3 +116,49 @@ def test_s_stays_below_one_as_rho_does():
     one = _scores(0.0, 0.0, series=1)
     fit = fit_coupling(np.repeat(one, 3, axis=1), "gaussian")
     assert 0.99 < fit["s"] < 1.0
+
+
+def _pairwise_fit(z: np.ndarray) -> tuple[float, ...]:
+    """The fit over every pair listed out, as `fit_coupling` first did."""
+
+    def shrunk(a, b, origin):
+        origins = np.unique(origin)
+        if len(a) < 2 or len(origins) < 2:
+            return 0.0, 1.0, len(a)
+        prod = (a - a.mean()) * (b - b.mean()) / (a.std() * b.std())
+        r = prod.mean()
+        sums = np.bincount(np.searchsorted(origins, origin), prod - r)
+        shrink = min(1.0, (sums**2).sum() / len(a) ** 2 / r**2)
+        return (1 - shrink) * r, shrink, len(a)
+
+    at = np.broadcast_to(np.arange(len(z))[:, None, None], z.shape)
+    a, b = z[:, :, :-1], z[:, :, 1:]
+    ok = np.isfinite(a) & np.isfinite(b)
+    rho = shrunk(a[ok], b[ok], at[:, :, :-1][ok])
+    i, j = np.triu_indices(z.shape[1], k=1)
+    a, b = z[:, i, :], z[:, j, :]
+    ok = np.isfinite(a) & np.isfinite(b)
+    s = shrunk(a[ok], b[ok], np.broadcast_to(at[:, :1], a.shape)[ok])
+    return (*rho, *s)
+
+
+def test_the_fit_equals_the_fit_over_every_pair_listed_out():
+    rng = np.random.default_rng(5)
+    z = _scores(0.6, 0.3, origins=7, series=9, steps=11)
+    z = z + rng.normal(0, 0.3, z.shape) + np.arange(9)[None, :, None] * 0.1
+    z[rng.random(z.shape) < 0.2] = np.nan
+    z[2, :, 4:] = np.nan
+    fit = fit_coupling(z, "gaussian")
+    rho, shrink_rho, n_steps, s, shrink_s, n_series = _pairwise_fit(z)
+    got = [fit[k] for k in ("rho", "shrinkage_rho", "s", "shrinkage_s")]
+    np.testing.assert_allclose(got, [rho, shrink_rho, s, shrink_s], rtol=1e-10)
+    assert (fit["n_step_pairs"], fit["n_series_pairs"]) == (n_steps, n_series)
+
+
+def test_the_fit_is_linear_in_the_series():
+    # The daily source's block: 1,092 series, 140 steps, 5 releases. Listing
+    # every pair of series took a minute; sums over the series take less.
+    z = np.random.default_rng(1).standard_normal((5, 1092, 140))
+    start = time.perf_counter()
+    fit_coupling(z, "gaussian")
+    assert time.perf_counter() - start < 5
