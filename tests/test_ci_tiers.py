@@ -94,14 +94,13 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     assert group["cancel-in-progress"].strip() == keep
 
 
-def test_a_pull_request_runs_one_test_job_of_at_most_20_minutes():
+def test_a_pull_request_runs_one_test_job_of_at_most_15_minutes():
     # The workflow and paper tests run inside the fast tier, with
     # Snakemake (the paper group), rather than in jobs of their own.
     assert not (WORKFLOWS / "workflow.yml").exists()
     assert not (WORKFLOWS / "paper-tests.yml").exists()
     job = _workflow("test.yml")["jobs"]["test"]
-    # 15 minutes is the target; the cap is 20 while the tests are slimmed.
-    assert job["timeout-minutes"] <= 20
+    assert job["timeout-minutes"] <= 15
     runs = " ".join(s.get("run", "") for s in job["steps"])
     assert "--group paper pytest" in runs
     paper = [s for s in job["steps"] if s.get("working-directory") == "paper"]
@@ -158,3 +157,14 @@ def test_r_package_lists_hold_packages_only():
                     if ln.strip().startswith("#")
                 ]
                 assert bad == [], f"{path.name}: {bad}"
+
+
+def test_pull_requests_skip_coverage_and_steal_work():
+    # Coverage tracing about doubled the PR job's test time, so pushes
+    # and the schedule measure it; workers steal the long tail.
+    job = _workflow("test.yml")["jobs"]["test"]
+    (tests,) = [s for s in job["steps"] if s.get("name") == "Tests"]
+    assert "--dist worksteal" in tests["run"]
+    assert "github.event_name != 'pull_request'" in tests["run"]
+    (upload,) = [s for s in job["steps"] if "codecov" in str(s.get("uses"))]
+    assert upload["if"] == "${{ github.event_name != 'pull_request' }}"
