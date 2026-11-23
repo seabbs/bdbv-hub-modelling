@@ -15,7 +15,7 @@ TWO = {
 
 def test_the_committed_runs_are_run_a_and_its_variants():
     cfg = runs.load_config()
-    assert list(cfg["runs"]) == ["runa", "noslots", "nodelays"]
+    assert list(cfg["runs"]) == ["runa", "noslots", "nodelays", "realdata"]
 
 
 def test_only_run_a_trains_until_the_variants_are_due():
@@ -92,6 +92,7 @@ def _run(**ft):
         "series_bias": False,
         "bias_lr": 0.001,
         "layout": "ragged",
+        "real_training": None,
     }
     return runs.Run("r", base | ft, "/x/r")
 
