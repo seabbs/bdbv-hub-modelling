@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -362,33 +362,22 @@ def test_chains_start_from_their_own_prior_draws() -> None:
     assert kernel._init_strategy is init_to_sample
 
 
-def test_unassigned_adds_the_national_data_gap(task: ForecastTask) -> None:
-    config = rn.model_config(rn.VARIANTS["renewal"])
-    data = rn.vintage_inputs(task, config)
-    draws = _fake_draws(data, task.n_samples, np.random.default_rng(6))
-    samples = rn.samples_table(task, data, draws)
-    assert rn.data_gap(task, samples) is None
-    # Two national cases a week with no province, in the last data weeks.
+def test_renewalsp_refuses_national_cases_in_no_province(
+    task: ForecastTask,
+) -> None:
+    # National is the sum of the provinces, with no unassigned part.
+    for name in ("data_gap", "RECENT_WEEKS", "UNASSIGNED_FILE"):
+        assert not hasattr(rn, name)
+    assert "unassigned" not in {f.name for f in fields(rn.RenewalFit)}
+    # Two national cases in a week with no province: the data are not
+    # coherent, so the fit stops rather than invent where they belong.
     target = task.target.copy()
     nat = target["location"] == NATIONAL
-    weeks = sorted(set(target.loc[nat, "target_end_date"]))[-4:]
-    hit = nat & target["target_end_date"].isin(weeks)
-    target.loc[hit, "total"] += 2
-    gapped = replace(task, target=target)
-    gap = rn.data_gap(gapped, samples)
-    assert gap is not None
-    assert list(gap.columns) == ["target_end_date", "sample", "value"]
-    seen = gap.loc[gap["target_end_date"].isin(weeks)]
-    assert (seen["value"] == 2).all()
-    # Later weeks carry the recent share of the provinces forward.
-    later = [w for w in task.target_end_dates if w > max(weeks)]
-    ahead = gap.loc[gap["target_end_date"].isin(later)]
-    assert len(ahead) == len(later) * task.n_samples
-    prov = samples.loc[samples["target_end_date"].isin(later)]
-    by = prov.groupby(["target_end_date", "sample"])["value"].sum()
-    ratio = ahead.set_index(["target_end_date", "sample"])["value"] / by
-    assert ratio.dropna().between(0, 1).all()
-    assert ratio.dropna().std() < 1e-9
+    week = max(target.loc[nat, "target_end_date"])
+    target.loc[nat & (target["target_end_date"] == week), "total"] += 2
+    model = rn.RenewalModel(rn.VARIANTS["renewalsp"])
+    with pytest.raises(ValueError, match="no province"):
+        model.forecast_fit(replace(task, target=target))
 
 
 def test_bvd_variant_reads_the_release_for_its_vintage(

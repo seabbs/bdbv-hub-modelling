@@ -55,13 +55,14 @@ def test_coherent_data_pass() -> None:
     assert "every week" in c.summary
 
 
-def test_gap_is_handled_and_noted() -> None:
+def test_gap_fails() -> None:
+    # The renewal fits refuse national cases in no province, so a gap
+    # fails loudly rather than being noted as handled.
     c = assess(coherence([GAP]))
-    assert c.status == "pass"
+    assert c.status == "fail"
     assert c.gap
     assert "1 week" in c.summary and "largest gap 2" in c.summary
-    assert c.handled().endswith("modelled as an unassigned national component")
-    assert not assess(coherence([])).handled()
+    assert not hasattr(c, "handled")
 
 
 def test_missing_file_is_na(tmp_path: Path) -> None:
@@ -80,12 +81,12 @@ def test_cli_writes_report_with_gap_table(tmp_path: Path) -> None:
     out = tmp_path / "o"
     assert main(["--coherence", str(src), "--out", str(out)]) == 0
     data = read_json(out / "coherence-summary.json")
-    assert data["status"] == "pass"
+    assert data["status"] == "fail"
     assert data["gap"] is True
     md = (out / "coherence-summary.md").read_text()
-    assert "## Data coherence: PASS" in md
+    assert "## Data coherence: FAIL" in md
     assert "<details>" in md and "| 2026-10-24 | total | 50 | 48 | 2 |" in md
-    assert "unassigned national component" in md
+    assert "unassigned" not in md
 
 
 def test_unreadable_file_warns(tmp_path: Path) -> None:
