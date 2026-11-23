@@ -1040,3 +1040,27 @@ def test_a_stored_forecast_takes_the_zones_of_its_fit_directory(
             fit=tmp_path,
         )
     pd.testing.assert_frame_equal(seen["own"], zones)  # type: ignore[arg-type]
+
+
+def test_compare_hub_takes_no_live_model_and_a_provisional_truth() -> None:
+    """The hub rounds report scores the hub's files only (`--models` with
+    nothing), on the latest truth (`--complete-after-weeks 0`), with the
+    ledger's table it made itself."""
+    from bdbvhub.cli import build_parser
+
+    args = build_parser().parse_args(
+        [
+            "compare-hub",
+            "--models",
+            "--complete-after-weeks",
+            "0",
+            "--submissions-table",
+            "t.csv",
+        ]
+    )
+    assert args.models == []
+    assert args.complete_after_weeks == 0
+    assert args.submissions_table == "t.csv"
+    default = build_parser().parse_args(["compare-hub"])
+    assert default.models is None
+    assert default.complete_after_weeks is None
