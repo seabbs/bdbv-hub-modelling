@@ -111,6 +111,8 @@ rule heldout_curve:
         heldout_curve_inputs,
     output:
         f"{RUN}/heldout-curve.csv",
+    log:
+        f"{RUN}/logs/heldout-curve.log",
     localrule: True
     params:
         train=lambda wc: train_dir(wc.run),
