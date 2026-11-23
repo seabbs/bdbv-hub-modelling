@@ -52,6 +52,10 @@ class Imports(RandomVariable):
     trickle : float
         A constant daily import into every stratum with cases that is not
         late.
+    horizon : int, optional
+        Days `late_at` and `pulse_at` refer to, the series' length; the
+        sampled `n` if None. Days past it pad the arrays to a shared
+        shape.
 
     Raises
     ------
@@ -70,6 +74,7 @@ class Imports(RandomVariable):
         late_at: float = 0.0,
         late_days: int = 1,
         trickle: float = 0.0,
+        horizon: int | None = None,
     ) -> None:
         if kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}")
@@ -82,6 +87,7 @@ class Imports(RandomVariable):
         self.late_at = late_at
         self.late_days = int(late_days)
         self.trickle = trickle
+        self.horizon = horizon
 
     def sample(self, n: int, unit: ArrayLike, **kwargs: object) -> Array:
         """Return the imports.
@@ -105,16 +111,17 @@ class Imports(RandomVariable):
         k = unit.shape[0]
         out = np.zeros((n, k))
         late = np.zeros(k, dtype=bool) if self.late is None else self.late
+        h = n if self.horizon is None else self.horizon
         if late.any():
-            first = max(1, int(np.round(self.late_at * n)))
-            last = min(n, first + self.late_days - 1)
+            first = max(1, int(np.round(self.late_at * h)))
+            last = min(h, first + self.late_days - 1)
             days = np.arange(first, last + 1) - 1
             out[np.ix_(days, np.flatnonzero(late))] = unit[late] / len(days)
         on = ~late & (unit > 0)
         if self.kind == "constant":
             out[:, on] = self.rate * unit[on]
         elif self.kind == "pulses":
-            at = np.maximum(1, np.round(self.pulse_at * n)).astype(int)
+            at = np.maximum(1, np.round(self.pulse_at * h)).astype(int)
             days = np.unique(at) - 1
             out[np.ix_(days, np.flatnonzero(on))] += self.pulse_size * unit[on]
         out[:, on] += self.trickle
