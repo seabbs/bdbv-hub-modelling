@@ -891,6 +891,12 @@ Known = Mapping[str, np.ndarray]
 """Chronos-2's native quantiles of groups, `[V, horizon, Q]`, by
 `group_key`, predicted ahead (`prefetch`)."""
 
+BlockViews = tuple[
+    Sequence[tuple[tuple[str, ...], tuple[str, ...]]], Sequence[str], bool
+]
+"""A block cut into views: the views (`block_views`), the block's places,
+and whether its places have aggregate rows (`_owned`)."""
+
 
 def group_key(
     group: Series,
@@ -958,13 +964,17 @@ def chronos_sampler(
     checkpoint: Checkpoint | None = None,
     known: Known | None = None,
     coupling: Mapping[str, Any] | None = None,
+    views: BlockViews | None = None,
 ) -> list[np.ndarray]:
     """Draw trajectories from Chronos-2's quantiles.
 
     Each cell follows its quantiles, and `coupling` (a
     `nowcastutils.trajectories.fit_coupling` record) joins the cells
-    (`couple`); with none, every cell draws its own level. Runs on a CUDA
-    or Apple GPU when torch sees one.
+    (`couple`); with none, every cell draws its own level. With `views`,
+    the groups are a block's views: each place's quantiles are taken from
+    the view that forecasts it (`_owned`) and the block is coupled once,
+    so one fit joins every place. Runs on a CUDA or Apple GPU when torch
+    sees one.
 
     Parameters
     ----------
@@ -984,11 +994,15 @@ def chronos_sampler(
         group.
     coupling : mapping, optional
         The coupling's fit, with its `method`; `independent` by default.
+    views : BlockViews, optional
+        The block's views, its places and whether it has aggregate rows,
+        when `groups` are the views of one block.
 
     Returns
     -------
     list of numpy.ndarray
-        Draws, `[n_samples, V, horizon]` per group.
+        Draws, `[n_samples, V, horizon]` per group, or the block's one
+        with `views`.
 
     Raises
     ------
@@ -1005,8 +1019,12 @@ def chronos_sampler(
     levels = np.asarray(pipeline.quantiles, dtype=float)
     fit = dict(coupling) if coupling else {"method": "independent"}
     rng = np.random.default_rng(seed)
+    native = _native(pipeline, groups, horizon, known)  # [V, horizon, Q]
+    if views is not None:
+        parts = [np.moveaxis(q, -1, 0) for q in native]  # [Q, V, horizon]
+        native = [np.moveaxis(_owned(parts, *views), 0, -1)]
     out = []
-    for q in _native(pipeline, groups, horizon, known):  # [V, horizon, Q]
+    for q in native:
         own = int(rng.integers(0, 2**31 - 1))
         out.append(couple(q, levels, fit["method"], fit, n_samples, own))
     return out
@@ -1460,6 +1478,9 @@ class FoundationModel:
                     chronos_sampler,
                     checkpoint=self.checkpoint,
                     known=self.known,
+                    views=None
+                    if whole
+                    else (views, places, period is not None),
                     coupling=self._coupling_fit(
                         past,
                         horizon,
@@ -1470,9 +1491,11 @@ class FoundationModel:
                     ),
                 )
             parts = sample(groups, horizon, task.n_samples, seed)
+            # Chronos-2's sampler puts the views back together itself; a
+            # model's own sampler draws each view.
             draws = (
                 parts[0]
-                if whole
+                if whole or self.sample is None
                 else _owned(parts, views, places, period is not None)
             )
             # Counts are not negative; Chronos-2's output is otherwise kept
