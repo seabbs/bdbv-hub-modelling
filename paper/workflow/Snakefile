@@ -535,6 +535,27 @@ rule sim_examples:
         "--picks {params.picks} --out {output}"
 
 
+# The grid's training rounds against the German development half, for
+# the SI's realism figure and numbers (`paperpipe realism`).
+rule sim_realism:
+    input:
+        **FLOW.realism_inputs(),
+    output:
+        sims=f"{R}/evidence/sim-summaries.csv",
+        reference=f"{R}/evidence/sim-realism.csv",
+    log:
+        f"{R}/logs/sim_realism.log",
+    conda:
+        TOOLS_ENV
+    params:
+        python=PYTHON,
+    shell:
+        "exec >{log} 2>&1; "
+        "{params.python} -m paperpipe realism {input.rounds} "
+        "--germany {input.germany} --out-sims {output.sims} "
+        "--out-reference {output.reference}"
+
+
 # The grid tables and SI notes, read from the grid config
 # (`papertables.synthetic_grid`).
 rule grid_tables:
@@ -565,6 +586,7 @@ rule grid_tables:
 rule evidence:
     input:
         **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+        realism=rules.sim_realism.output,
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -582,6 +604,7 @@ rule evidence:
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "--sim-summaries {input.realism[0]} --sim-realism {input.realism[1]} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 
