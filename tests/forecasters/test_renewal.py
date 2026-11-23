@@ -106,13 +106,27 @@ def test_renewal_model_fits_provinces_only_on_their_own(
         rn.RenewalModel(rn.VARIANTS[name]).forecast_fit(task)
 
 
-def test_model_config_applies_overrides() -> None:
-    # renewalsp fits one province's series, so the share at risk is fixed
-    # and its Rt walk is centred.
-    single = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert single == replace(
-        rn.engine().MAIN, national=True, depletion=False, centred_rt=True
-    )
+def test_the_variants_are_ablations_of_renewalbvd() -> None:
+    # renewal drops the BVD Rt term. renewalsp also drops pooling and
+    # importation by fitting each province alone (`national`), with its
+    # walk centred where the data pin it (sampler geometry only).
+    # Depletion and the Rt process are the same in all three.
+    import dataclasses
+
+    full = rn.model_config(rn.VARIANTS["renewalbvd"])
+
+    def dropped(name: str) -> set[str]:
+        config = rn.model_config(rn.VARIANTS[name])
+        return {
+            f.name
+            for f in dataclasses.fields(config)
+            if getattr(config, f.name) != getattr(full, f.name)
+        }
+
+    assert full == rn.engine().BVD
+    assert full.depletion
+    assert dropped("renewal") == {"bvd"}
+    assert dropped("renewalsp") == {"bvd", "national", "centred_rt"}
     assert rn.VARIANTS["renewalsp"].per_province
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
@@ -647,12 +661,12 @@ def test_province_workers_fill_the_cores_with_chains(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(rn.PROVINCE_WORKERS_ENV, raising=False)
-    monkeypatch.setattr(rn, "_cores", lambda: 4)
+    monkeypatch.setattr(rn, "usable_cpus", lambda: 4)
     assert rn.province_workers(2, 5) == 2
     assert rn.province_workers(4, 5) == 1
     # No more workers than provinces, and a cap on a large host.
     assert rn.province_workers(2, 1) == 1
-    monkeypatch.setattr(rn, "_cores", lambda: 64)
+    monkeypatch.setattr(rn, "usable_cpus", lambda: 64)
     assert rn.province_workers(2, 20) == rn.MAX_PROVINCE_WORKERS
     monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "1")
     assert rn.province_workers(2, 5) == 1

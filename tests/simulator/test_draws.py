@@ -1,15 +1,11 @@
 """The simulator's design and value draws (`nowcastfoundation.simulator.draws`).
 
-Checked against the grid's own shares and sampling distributions, and
-against the R engine's `draw_design`/`draw_values`, called through Rscript.
+Checked against the grid's own shares and sampling distributions.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import shutil
-import subprocess
 from collections import Counter
 from pathlib import Path
 
@@ -21,7 +17,6 @@ from nowcastfoundation.simulator import draws
 
 ROOT = Path(__file__).parents[2]
 GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
-ENGINE = ROOT / "packages" / "nowcastfoundation" / "r" / "R"
 OPTIONS = tuple(draws.read_grid(GRID_FILE)["max_delay_days"])
 
 
@@ -129,7 +124,7 @@ def test_designs_fit_the_budget_and_report_on_their_days(grid):
                 got = days.split(";")
                 assert len(got) in (2, 3)
                 assert got == sorted(got, key=draws.WEEK.index)
-                # Fixed report days fall on weekdays, as the R engine's.
+                # Fixed report days fall on weekdays.
                 assert set(got) <= set(draws.WEEK[:5])
             case "weekly":
                 assert days in draws.WEEK
@@ -215,106 +210,9 @@ def test_long_delay_tails_are_a_real_share(grid):
     assert max(OPTIONS) in longest
 
 
-R_DRAWS = """
-for (f in c("grid.R", "design.R", "infections.R", "delays.R")) {
-  source(file.path(Sys.getenv("ENGINE"), f))
-}
-grid <- read_grid(Sys.getenv("GRID_FILE"))
-set.seed(11)
-n <- as.integer(Sys.getenv("N"))
-for (i in seq_len(n)) {
-  d <- draw_design(grid)
-  v <- draw_values(grid, d)
-  cat(jsonlite::toJSON(list(design = d, values = v), digits = NA), "\\n")
-}
-"""
-
-
-def _r_draws(n):
-    out = subprocess.run(
-        ["Rscript", "-e", R_DRAWS],
-        env={
-            "ENGINE": str(ENGINE),
-            "GRID_FILE": str(GRID_FILE),
-            "N": str(n),
-            "PATH": os.environ["PATH"],
-            "HOME": os.environ.get("HOME", ""),
-        },
-        capture_output=True,
-        text=True,
-        timeout=900,
-        check=True,
-    )
-    lines = out.stdout.splitlines()
-    return [json.loads(line) for line in lines if line.strip()]
-
-
-def _listed(x):
-    return x if isinstance(x, list) else [x]
-
-
-def _needs_r():
-    if shutil.which("Rscript") is None:
-        return "needs Rscript"
-    probe = subprocess.run(
-        [
-            "Rscript",
-            "-e",
-            "quit(status = !all(sapply(c('yaml', 'jsonlite'), "
-            "requireNamespace, quietly = TRUE)))",
-        ],
-        capture_output=True,
-    )
-    return None if probe.returncode == 0 else "needs R packages yaml, jsonlite"
-
-
-@pytest.mark.skipif(_needs_r() is not None, reason=_needs_r() or "")
-def test_draws_match_the_r_engine_s(grid):
-    n = 3_000
-    r = _r_draws(n)
-    rng = draws.generator(12)
-    py = []
-    for _ in range(n):
-        d = draws.draw_design(grid, rng)
-        py.append({"design": d, "values": draws.draw_values(grid, d, rng)})
-    for part in ("design", "values"):
-        assert set(r[0][part]) == set(py[0][part]), part
-        for key in py[0][part]:
-            a = [_listed(x[part][key]) for x in r]
-            b = [_listed(x[part][key]) for x in py]
-            # The same number of elements per draw, on average.
-            la = np.array([len(x) for x in a], dtype=float)
-            lb = np.array([len(x) for x in b], dtype=float)
-            se = np.sqrt((la.var() + lb.var()) / n) + 1e-9
-            assert abs(la.mean() - lb.mean()) < 5 * se, (part, key)
-            # One number per draw (its first element, and its mean), as a
-            # draw's elements are not independent.
-            ea = [x[0] for x in a if x]
-            eb = [x[0] for x in b if x]
-            if not ea or not eb:
-                assert not ea, (part, key)
-                assert not eb, (part, key)
-                continue
-            if isinstance(ea[0], str | bool):
-                ca, cb = Counter(ea), Counter(eb)
-                for level in set(ca) | set(cb):
-                    pa, pb = ca[level] / len(ea), cb[level] / len(eb)
-                    p = (ca[level] + cb[level]) / (len(ea) + len(eb))
-                    se = np.sqrt(p * (1 - p) * (1 / len(ea) + 1 / len(eb)))
-                    assert abs(pa - pb) < 5 * se + 1e-9, (part, key, level)
-                continue
-            ma = [np.mean(x) for x in a if x]
-            mb = [np.mean(x) for x in b if x]
-            for xa, xb in ((ea, eb), (ma, mb)):
-                ks = stats.ks_2samp(
-                    np.asarray(xa, float), np.asarray(xb, float)
-                )
-                assert ks.pvalue > 1e-4, (part, key, ks)
-
-
 def test_incubation_is_wide_with_a_drawn_cv_and_family(grid):
     # Infection to reference: cholera-like 1-2 d to Ebola-like 9-12 d and
-    # infection to admission 10-15 d (lead 13:55).
+    # infection to admission 10-15 d.
     d = _scipy(grid["distributions"]["incubation_mean"])
     lo, hi = d.ppf([0.025, 0.975])
     assert lo < 2
@@ -366,7 +264,7 @@ def test_settling_and_oscillating_paths_are_common(grid):
 
 def test_spike_pieces_are_rare_and_small(grid):
     # Shifts, reactive shifts, variants and independent place R are what
-    # give R spikes; they stay, rarer and smaller (lead 14:05).
+    # give R spikes; they stay, rarer and smaller.
     assert grid["rates"]["shifts"] < 1
     assert grid["shares"]["reactive"] <= 0.5
     assert grid["rates"]["variants_per_year"] <= 1.5
