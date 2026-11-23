@@ -6,7 +6,9 @@ daily counts with baselinenowcast (`baselinenowcast.baselinenowcast`) on
 its daily triangle, reference days by delays $0, \dots, D$, from the
 task's daily releases (`ForecastTask.daily_history`), with real dates.
 The triangle holds the `round(scale_factor * D)` reference days to the
-cut-off, the rows baselinenowcast uses.
+cut-off, the rows baselinenowcast uses. $D$ is `max_delay`, capped by the
+history available so those rows hold data: days before the first onset
+in the releases are not filled in.
 
 It gives two views of one nowcast, each with its own error model, as
 baselinenowcast does with an aggregator:
@@ -124,9 +126,12 @@ class DailyWalkNowcast:
         Reference days per delay day (baselinenowcast's).
     walk_days : int
         Days of point nowcast the walk spread is estimated on.
+    source : str
+        "daily": it forecasts every day, not hub weeks.
     """
 
     name: str = "randomwalknowcast_daily"
+    source: str = "daily"
     max_delay: int = 40
     scale_factor: float = 3
     walk_days: int = 56
@@ -158,7 +163,12 @@ class DailyWalkNowcast:
         if task.daily_history is None:
             raise MissingSnapshots(f"{self.name} needs daily releases")
         cutoff = as_date(task.cutoff)
-        rows = round(self.scale_factor * self.max_delay)
+        first = as_date(str(task.daily_history["onset_date"].min()))
+        have = (cutoff - first).days + 1
+        delay = min(self.max_delay, int(have // self.scale_factor))
+        if delay < 3:
+            raise MissingSnapshots(f"{self.name}: {have} days of data")
+        rows = round(self.scale_factor * delay)
         ends = sorted(task.target_end_dates)
         ahead = max(0, (as_date(ends[-1]) - cutoff).days)
         agg = identity if k == 1 else partial(rolling_sum, k=k)
@@ -167,7 +177,7 @@ class DailyWalkNowcast:
         nowcast, sigma = [], []
         for i, place in enumerate(places):
             tri, mask = daily_triangle(
-                task.daily_history, place, cutoff, rows, self.max_delay
+                task.daily_history, place, cutoff, rows, delay
             )
             draws = baselinenowcast(
                 tri,

@@ -22,10 +22,9 @@ with the count reported by then, the layout of epinowcast's
   nowcast date to 28 days before it, and the days after it to forecast
   (`HORIZONS`). A nowcast date gives one pair of tasks whose target dates
   are all of them, so every sum comes from one forecast with one context
-  end. Dates move forward by the days from the nowcast date to the next
-  Saturday, so the nowcast date ends a hub week for models of weekly
-  steps; they forecast the sums ending 0, 7, 14, ... days before it
-  (`weekly_task`). The data still stop at the nowcast date.
+  end. Dates are real: the nowcast date is the cut-off, whatever its
+  weekday. A model of weekly steps forecasts the sums ending on Saturdays
+  (`weekly_task`).
 
 `hub_forecasts` moves the forecasts back and names the places as the hub
 does, and `hub_target` gives the 7-day sums as each report date gives
@@ -274,19 +273,6 @@ def read_triangle(path: Path | str) -> pd.DataFrame:
     )
 
 
-def _shift(nowcast_date: str) -> dt.timedelta:
-    """Return the days from the nowcast date to a Saturday."""
-    anchor = as_date(nowcast_date)
-    return epiweek_end(anchor) - anchor
-
-
-def _moved(dates: pd.Series, shift: dt.timedelta) -> pd.Series:
-    """Move ISO dates by `shift`, each distinct date once."""
-    codes, unique = pd.factorize(dates)
-    moved = (pd.to_datetime(unique) + shift).strftime("%Y-%m-%d")
-    return pd.Series(np.asarray(moved)[codes], index=dates.index)
-
-
 def nowcast_tasks(
     triangle: pd.DataFrame,
     nowcast_date: str,
@@ -314,9 +300,8 @@ def nowcast_tasks(
     -------
     list of ForecastTask
         The task of the states in the triangle, then that of the age
-        groups, each with Germany as the country. Dates move so the
-        nowcast date is a Saturday (`_shift`). The reference date and
-        cut-off are the nowcast date moved, and the target dates are every
+        groups, each with Germany as the country. The reference date and
+        cut-off are the nowcast date, and the target dates are every
         horizon's day, so one forecast gives every 7-day sum.
     """
     # The hub has age groups for every state, but only Germany's are
@@ -330,14 +315,13 @@ def nowcast_tasks(
     ]
     rows = _carried(rows)
     rows = rows.loc[rows["confirm"] != 0]
-    shift = _shift(nowcast_date)
-    ref = as_date(nowcast_date) + shift
-    vintage = _moved(rows["report_date"], shift)
+    ref = as_date(nowcast_date)
+    vintage = rows["report_date"]
     daily = pd.DataFrame(
         {
             "vintage": vintage,
             "location": _place_codes(rows["location"], rows["age_group"]),
-            "onset_date": _moved(rows["reference_date"], shift),
+            "onset_date": rows["reference_date"],
             "observed": rows["confirm"],
             "imputed": 0,
             "cutoff": vintage,
@@ -386,8 +370,7 @@ def weekly_task(task: ForecastTask) -> ForecastTask:
     """Return the task with only the target dates that end hub weeks.
 
     Models of weekly steps forecast hub weeks, so of a `nowcast_tasks`
-    task they forecast the 7-day sums ending 0, 7, 14, ... days from the
-    nowcast date, which `_shift` makes Saturdays.
+    task they forecast the 7-day sums ending on Saturdays.
     """
     weeks = tuple(
         d for d in task.target_end_dates if epiweek_end(d) == as_date(d)

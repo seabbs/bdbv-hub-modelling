@@ -44,7 +44,7 @@ def triangle() -> pd.DataFrame:
 @pytest.fixture(scope="module")
 def forecasts(triangle: pd.DataFrame) -> pd.DataFrame:
     drawn = germany_forecasts(
-        ["randomwalk", "randomwalknowcast"],
+        ["randomwalknowcast_daily"],
         triangle,
         ["2021-10-04", "2021-10-05"],
         n_samples=30,
@@ -70,15 +70,14 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
     )
     # Germany is daily only: no weekly model.
     assert config.models == (
-        "randomwalk",
-        "randomwalknowcast",
+        "randomwalknowcast_daily",
         "fm_chronos_daily_complete",
         "fm_chronos_daily_ragged",
         "fm_chronos_daily_ragged_ft",
     )
     assert config.truth_delay == 40
     assert config.submissions
-    assert config.baseline == "randomwalknowcast"
+    assert config.baseline == "randomwalknowcast_daily"
     assert config.paper_baseline == "KIT-frozen_baseline"
 
 
@@ -144,7 +143,7 @@ def test_sums_with_no_release_d_days_on_are_not_scored(
 def test_relative_scores_are_against_the_baseline_given(
     scores: pd.DataFrame,
 ) -> None:
-    for base in ("randomwalknowcast", "randomwalk"):
+    for base in ("randomwalknowcast_daily",):
         rel = relative_scores(scores, ("pool",), base)
         rel = rel.set_index(["pool", "model"])
         assert rel.loc[("national", base), "rel_wis"] == pytest.approx(1)
