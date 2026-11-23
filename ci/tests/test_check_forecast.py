@@ -652,5 +652,5 @@ def test_bad_rt_quantiles_fail(tmp_path: Path, rows: list[list[Any]]) -> None:
 
 
 def test_rt_week_the_round_does_not_take_fails(tmp_path: Path) -> None:
-    rows = [[*r[:2], "2026-10-24", *r[3:]] for r in _rt_rows()]
+    rows = [[*r[:2], "2026-10-17", *r[3:]] for r in _rt_rows()]
     assert statuses(_rt_sub(tmp_path, rows), tasks=_rt_tasks())["rt"] == "fail"
