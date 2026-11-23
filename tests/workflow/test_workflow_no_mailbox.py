@@ -102,11 +102,10 @@ pytest.importorskip("snakemake")
 
 
 def test_a_rule_that_notifies_runs_with_no_mailbox(tmp_path):
-    n800 = tmp_path / "checkpoints" / "slots" / "train" / "n800"
+    n800 = tmp_path / "runs" / "runa" / "train" / "n800"
     n800.mkdir(parents=True)
     (n800 / "settings.json").write_text(
-        '{"held_out_loss": 0.4, "held_out_loss_start": 0.5,'
-        ' "real_validation_loss": 3.0}'
+        '{"held_out_loss": 0.4, "held_out_loss_start": 0.5}'
     )
     # Evaluated in the trainer, so the report needs only the checkpoint.
     overlay = tmp_path / "overlay.yaml"
@@ -116,7 +115,7 @@ def test_a_rule_that_notifies_runs_with_no_mailbox(tmp_path):
     out = subprocess.run(
         [
             str(SNAKEMAKE),
-            str(tmp_path / "checkpoints/slots/reports/n800-check.txt"),
+            str(tmp_path / "runs/runa/reports/n800-check.txt"),
             "--cores",
             "1",
             "--workflow-profile",
@@ -145,7 +144,7 @@ def test_the_paper_targets_build_with_no_mailbox(tmp_path):
             "--cores",
             "1",
         ],
-        cwd=ROOT / "paper",
+        cwd=ROOT,
         env=_bare_env(tmp_path),
         capture_output=True,
         text=True,

@@ -10,9 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.cli import main
-from bdbvhubrenewal.data import coherence_summary, national_coherence
-from bdbvhubrenewal.submission.fitting import (
+from bdbvhub.cli import main
+from bdbvhub.data.tidy import coherence_summary, national_coherence
+from bdbvhub.submission.fitting import (
     list_configs,
     randomwalk_config,
     register_config,
@@ -28,7 +28,7 @@ def in_root(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The vintages used here are in the past, and a forecast date cannot
     # follow its reference date.
     monkeypatch.setattr(
-        "bdbvhubrenewal.submission.hub.run_date",
+        "bdbvhub.submission.hub.run_date",
         lambda *_: dt.date(2026, 8, 1),
     )
     old = Path.cwd()
@@ -43,7 +43,7 @@ def plain(tmp_path_factory: pytest.TempPathFactory) -> Path:
     out = tmp_path_factory.mktemp("plain")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
-            "bdbvhubrenewal.submission.hub.run_date",
+            "bdbvhub.submission.hub.run_date",
             lambda *_: dt.date(2026, 8, 1),
         )
         mp.chdir(ROOT)
@@ -63,6 +63,7 @@ def test_register_config_refuses_a_taken_name() -> None:
         register_config(randomwalk_config("main"))
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_fit_then_nowcast_from_the_fit(tmp_path: Path, plain: Path) -> None:
     fit = tmp_path / "fit"
@@ -125,6 +126,7 @@ def test_fit_fails_on_unknown_config_or_vintage(tmp_path: Path) -> None:
     assert main([*bad, "--out", out]) == 1
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_plot_submission_and_validate(tmp_path: Path) -> None:
     out = tmp_path / "sub"
@@ -209,7 +211,7 @@ def test_cli_plot_ppc(tmp_path: Path) -> None:
 def test_delays_for_vintage_uses_the_latest_available(
     delays: pd.DataFrame,
 ) -> None:
-    from bdbvhubrenewal.data import delays_for_vintage
+    from bdbvhub.data.tidy import delays_for_vintage
 
     have = str(delays["vintage"].max())
     same, note = delays_for_vintage(delays, have)
@@ -234,7 +236,7 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path, plain: Path) -> None:
 
 @pytest.mark.usefixtures("in_root")
 def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
-    from bdbvhubrenewal.submission.hub import model_abbr_for
+    from bdbvhub.submission.hub import model_abbr_for
 
     hub_toml = ROOT / "config" / "hub.toml"
     assert model_abbr_for("renewalbvd", hub_toml) == "renewal"
@@ -270,7 +272,7 @@ def test_randomwalknowcast_has_its_own_hub_id(
 ) -> None:
     # A second hub model, submitted under its own id every round. The
     # hub's abbreviations allow no hyphen and fewer than 16 characters.
-    from bdbvhubrenewal.submission.hub import model_abbr_for
+    from bdbvhub.submission.hub import model_abbr_for
 
     abbr = model_abbr_for("randomwalknowcast", ROOT / "config" / "hub.toml")
     assert abbr == "rwnowcast"
@@ -293,6 +295,7 @@ def test_randomwalknowcast_has_its_own_hub_id(
     assert "language model" not in text
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_randomwalknowcast_config_runs_the_nowcast_model(
     tmp_path: Path, plain: Path
@@ -340,7 +343,7 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
 ) -> None:
     # seabbs-renewal.yml is the metadata of the variant chosen for
     # submission. After a choice, regenerate it (see
-    # bdbvhubrenewal.submission.metadata).
+    # bdbvhub.submission.metadata).
     path = ROOT / "hub" / "model-metadata" / "seabbs-renewal.yml"
     rendered = {}
     for variant in ("renewal", "renewalsp", "renewalbvd"):
@@ -379,13 +382,14 @@ def test_chronos_track_metadata_is_the_committed_file(
         assert "chronos-ft-" in text
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_nowcast_records_the_checkpoint_it_loaded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_checkpoint: str
 ) -> None:
     from nowcastfoundation import forecaster as foundation
 
-    def zeros(groups, horizon, n, _seed, checkpoint=None):  # type: ignore[no-untyped-def]
+    def zeros(groups, horizon, n, _seed, checkpoint=None, **_):  # type: ignore[no-untyped-def]
         assert checkpoint.hash == fake_checkpoint
         return [
             np.zeros((n, np.atleast_2d(g["target"]).shape[0], horizon))
@@ -393,6 +397,13 @@ def test_nowcast_records_the_checkpoint_it_loaded(
         ]
 
     monkeypatch.setattr(foundation, "chronos_sampler", zeros)
+    # The Gaussian coupling's fit runs Chronos-2 on earlier releases;
+    # independence keeps the test off the model and its adapter.
+    monkeypatch.setattr(
+        foundation.FoundationModel,
+        "_coupling_fit",
+        lambda *_: foundation.fit_coupling(np.empty((0, 0, 0)), "independent"),
+    )
     out = tmp_path / "ft"
     args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
     assert main(["nowcast", *args]) == 0
@@ -453,7 +464,7 @@ def test_cli_prints_the_checkpoint_a_run_resolves(
 def test_zone_coherence(
     target: pd.DataFrame, health_zones: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.data import zone_coherence
+    from bdbvhub.data.tidy import zone_coherence
 
     table = zone_coherence(target, health_zones)
     assert set(table["level"]) == {"province", "national"}
@@ -466,7 +477,7 @@ def test_zone_coherence(
 def test_zone_coherence_reports_cases_in_no_zone(
     target: pd.DataFrame, health_zones: pd.DataFrame
 ) -> None:
-    from bdbvhubrenewal.data import zone_coherence
+    from bdbvhub.data.tidy import zone_coherence
 
     zones = health_zones.copy()
     row = zones.index[

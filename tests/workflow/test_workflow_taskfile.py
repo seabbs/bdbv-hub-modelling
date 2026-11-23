@@ -20,6 +20,7 @@ MOVED = {
     "lint": "lint",
     "format": "format",
     "docs": "docs",
+    "package-docs": "package-docs",
     "serve": "serve",
     "getting-started": "getting-started",
     "paper": "paper",

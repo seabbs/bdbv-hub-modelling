@@ -125,3 +125,20 @@ def test_timing_writes_the_gnu_time_line_on_any_os():
     assert int(last[1]) > 0
     assert last[2] == "wall_s"
     float(last[3])
+
+
+def test_a_mirrored_round_counts_once_its_qc_ran(tmp_path):
+    there, here = tmp_path / "there", tmp_path / "here"
+    there.mkdir()
+    (there / "manifest.csv").write_text("round,seed\n9,901\n9,902\n")
+    assert hosts.mirrored_seeds("", there, here) == set()
+    assert (here / "manifest.csv").exists()
+    (there / "qc").mkdir()
+    (there / "qc" / "summary.txt").write_text("ok\n")
+    assert hosts.mirrored_seeds("", there, here) == {901, 902}
+
+
+def test_an_unreachable_round_is_said_and_has_no_batches(tmp_path, capsys):
+    got = hosts.mirrored_seeds("", tmp_path / "none", tmp_path / "here")
+    assert got == set()
+    assert "could not copy" in capsys.readouterr().err

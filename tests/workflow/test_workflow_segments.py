@@ -35,11 +35,11 @@ def test_a_round_is_its_batches_seeds():
     assert seeds == list(range(30400, 30440))
 
 
-def test_seeds_for_counts_kept_outbreaks_in_list_order():
+def test_seeds_for_counts_outbreaks_in_list_order():
     kept = {30101: 25, 30100: 20, 30103: 25, 30102: 25}
     order = [30101, 30100, 30103, 30102]
     assert segments.seeds_for(45, order, kept.__getitem__) == [30101, 30100]
-    # An exclusion pushes the prefix into the next batch.
+    # A short batch pushes the prefix into the next batch.
     assert segments.seeds_for(46, order, kept.__getitem__) == [
         30101,
         30100,
@@ -63,23 +63,12 @@ def test_seeds_for_fails_when_the_list_is_too_short():
         segments.seeds_for(60, [1, 2], lambda _s: 25)
 
 
-def test_kept_outbreaks_leave_out_exclusions(tmp_path):
+def test_batch_outbreaks_counts_the_settings_rows(tmp_path):
     settings = tmp_path / "settings-30101.csv"
     settings.write_text(
         "outbreak,r0\n30101-0001,1\n30101-0002,1\n30101-0003,1\n"
     )
-    assert segments.kept_outbreaks(settings, {"30101-0002"}) == 2
-    assert segments.kept_outbreaks(settings, set()) == 3
-
-
-def test_excluded_reads_a_list_or_a_csv(tmp_path):
-    plain = tmp_path / "plain.txt"
-    plain.write_text("30101-0002\n\n30101-0003\n")
-    table = tmp_path / "table.csv"
-    table.write_text("simulation,reason\n30101-0004,flat\n")
-    assert segments.excluded(plain) == {"30101-0002", "30101-0003"}
-    assert segments.excluded(table) == {"30101-0004"}
-    assert segments.excluded(tmp_path / "none.txt") == set()
+    assert segments.batch_outbreaks(settings) == 3
 
 
 def _state(path, done):
@@ -137,16 +126,6 @@ def test_reachable_prefixes_fit_the_seed_list():
     assert not segments.reachable(2000, [1] * 21, lambda _s: 25)
 
 
-def test_exclusions_are_gathered_into_one_file(tmp_path):
-    a = tmp_path / "a.csv"
-    a.write_text("simulation,reason,evidence\n30101-0002,flat,x\n")
-    b = tmp_path / "b.csv"
-    b.write_text("simulation,reason,evidence\n")
-    out = tmp_path / "excluded.csv"
-    segments.gather_exclusions([a, b, tmp_path / "none.csv"], out)
-    assert segments.excluded(out) == {"30101-0002"}
-
-
 def test_batches_run_in_seed_order():
     # Training reads the batches in seed order, so a run over several
     # rounds finishes the first round's batches before the next's.
@@ -168,3 +147,57 @@ def test_check_eval_accepts_local_and_offload_only():
     segments.check_eval("offload")
     with pytest.raises(ValueError, match="elsewhere"):
         segments.check_eval("elsewhere")
+
+
+def test_training_seeds_are_the_seed_file_s_else_the_rounds(tmp_path):
+    def of(r):
+        return [r * 10, r * 10 + 1]
+
+    assert segments.training_seeds(None, [2, 1], of) == [20, 21, 10, 11]
+    (tmp_path / "s.txt").write_text("5\n3\n")
+    assert segments.training_seeds(tmp_path / "s.txt", [2], of) == [5, 3]
+
+
+def test_available_seeds_stop_at_the_first_unlisted_batch():
+    order, held = [1, 2, 3, 4], [9]
+    assert segments.available_seeds(order, held, None) == order
+    assert segments.available_seeds(order, held, {1, 2, 4}) == []
+    assert segments.available_seeds(order, held, {1, 2, 4, 9}) == [1, 2]
+    assert segments.available_seeds(order, held, {1, 2, 3, 4, 9}) == order
+
+
+def test_outbreaks_come_from_the_first_settings_found(tmp_path):
+    settings = tmp_path / "b.csv"
+    assert segments.outbreaks_or_full([tmp_path / "a.csv", settings], 20) == 20
+    settings.write_text("outbreak\n1-1\n1-1\n1-2\n")
+    assert segments.outbreaks_or_full([tmp_path / "a.csv", settings], 20) == 2
+
+
+def test_a_segment_takes_its_seeds_one_spare_and_the_held_out():
+    got = segments.segment_seeds(40, [1, 2, 3, 4], [9], lambda _: 20)
+    assert got == [1, 2, 3, 9]
+
+
+def test_prefixes_need_a_spare_batch_but_the_last():
+    def kept(_):
+        return 20
+
+    def none(_):
+        return False
+
+    order = [1, 2, 3]
+    # 40 needs 60 (a spare batch); 60, the run's last, needs 60.
+    got = segments.trainable([20, 40, 60], 60, 20, order, none, kept)
+    assert got == [20, 40, 60]
+    got = segments.trainable([20, 40, 60], 80, 20, order, none, kept)
+    assert got == [20, 40]
+    got = segments.trainable([80], 80, 20, order, lambda n: n == 80, kept)
+    assert got == [80]
+
+
+def test_next_segment_only_asks_for_the_saved_and_the_next():
+    def saved(n):
+        return n == 100
+
+    assert segments.to_train([100, 200, 400], saved, False) == [100, 200, 400]
+    assert segments.to_train([100, 200, 400], saved, True) == [100, 200]

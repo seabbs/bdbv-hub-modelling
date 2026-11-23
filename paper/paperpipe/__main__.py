@@ -11,6 +11,8 @@ Steps, in workflow order:
 - `joint-scores`: sample trajectories scored jointly (energy score);
 - `figures` and `score-tables`: main-text and SI outputs;
 - `evidence`: SI tables, figures and numbers from evidence branches;
+- `realism`: the grid's simulations against the German development half;
+- `pairing`: the walks' scores with and without pairing, summarised;
 - `ebola-extra`: further Ebola samples, kept to some models;
 - `germany-extra`: further German forecasts as a paper table;
 - `summary`: the numbers the paper quotes, as Quarto metadata.
@@ -38,7 +40,7 @@ from paperpipe.config import (
     keep_finetuned,
     run_settings,
 )
-from paperpipe.evidence import EVIDENCE, write_evidence
+from paperpipe.evidence import EVIDENCE, realism_reference, write_evidence
 from paperpipe.meta import baseline_of, read_meta, write_meta
 from paperpipe.outputs import (
     joint_table,
@@ -98,8 +100,7 @@ def _sources(a: argparse.Namespace) -> Sources:
         ebola_draws=a.ebola_draws,
         ebola_draws_models=tuple(a.ebola_draws_models),
         candidates=tuple(a.candidates),
-        store=a.store,
-        store_ref=a.store_ref,
+        store_history=a.store_history,
     )
 
 
@@ -198,7 +199,10 @@ def _joint(a: argparse.Namespace) -> None:
 
 def _evidence(a: argparse.Namespace) -> None:
     paths = {name: getattr(a, name) for name in EVIDENCE}
-    numbers = write_evidence(paths, a.si_dir, a.fig_dir, a.out, run=a.live_run)
+    pairs = dict(c.split("=", 1) for c in a.comparison)
+    numbers = write_evidence(
+        paths, a.si_dir, a.fig_dir, a.out, run=a.live_run, comparisons=pairs
+    )
     if a.mode == "paper" and numbers["evidence"]["waiting"]:
         raise ValueError(
             "The paper run cannot leave SI results out; it waits on "
@@ -207,9 +211,28 @@ def _evidence(a: argparse.Namespace) -> None:
         )
 
 
+def _realism(a: argparse.Namespace) -> None:
+    sims = pd.concat([pd.read_csv(p) for p in a.summaries], ignore_index=True)
+    sims.to_csv(a.out_sims, index=False)
+    realism_reference(pd.read_csv(a.germany), sims).to_csv(a.out_reference)
+
+
+def _pairing(a: argparse.Namespace) -> None:
+    from nowcasteval.pairing import summarise_pairing
+
+    rows = pd.concat([pd.read_csv(p) for p in a.scores], ignore_index=True)
+    summarise_pairing(rows).to_csv(a.out, index=False)
+
+
 def _ebola_extra(a: argparse.Namespace) -> None:
     raw = pd.read_csv(a.input)
     _write(raw.loc[raw["model"].str.match(a.models)], a.out)
+
+
+def _fit_store_history(a: argparse.Namespace) -> None:
+    from paperdata import ebola
+
+    ebola.write_store_history(a.repo, a.ref, a.out)
 
 
 def _germany_extra(a: argparse.Namespace) -> None:
@@ -273,8 +296,7 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--ebola-draws", type=Path, default=None)
     p.add_argument("--ebola-draws-models", nargs="*", default=[])
     p.add_argument("--candidates", type=Path, nargs="*", default=[])
-    p.add_argument("--store", type=Path, default=None)
-    p.add_argument("--store-ref", default="origin/fit-store")
+    p.add_argument("--store-history", type=Path, default=None)
 
 
 def _outputs(p: argparse.ArgumentParser) -> None:
@@ -369,13 +391,37 @@ def build_parser() -> argparse.ArgumentParser:
         default=LIVE_RUN,
         help="The live fine-tuning run, by the checkpoint scores' `run`.",
     )
+    p.add_argument(
+        "--comparison",
+        action="append",
+        default=[],
+        help="NAME=RUN: a COMPARISONS name and the variant run it compares.",
+    )
     p.set_defaults(run=_evidence)
+
+    p = sub.add_parser("realism")
+    p.add_argument("summaries", type=Path, nargs="+")
+    p.add_argument("--germany", type=Path, required=True)
+    p.add_argument("--out-sims", type=Path, required=True)
+    p.add_argument("--out-reference", type=Path, required=True)
+    p.set_defaults(run=_realism)
+
+    p = sub.add_parser("pairing")
+    p.add_argument("scores", type=Path, nargs="+")
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_pairing)
 
     p = sub.add_parser("ebola-extra")
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--models", default=".")
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(run=_ebola_extra)
+
+    p = sub.add_parser("fit-store-history")
+    p.add_argument("--repo", type=Path, default=Path())
+    p.add_argument("--ref", default="origin/fit-store")
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_fit_store_history)
 
     p = sub.add_parser("germany-extra")
     p.add_argument("--input", type=Path, required=True)

@@ -17,10 +17,13 @@ SAY_PREFIX="paper: $name"
 # shellcheck source=workflow/scripts/notify.sh
 source "$paper/../workflow/scripts/notify.sh"
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
-cd "$paper"
+# The paper is a target of the project workflow, run from the root.
+cd "$paper/.."
 say "started at $(git rev-parse --short=9 HEAD) (log $log)"
-if nice -n 19 "$paper/../.venv/bin/python" -m snakemake -s workflow/Snakefile \
-    "$@" --cores 1 --resources heavy=1 --rerun-triggers mtime > "$log" 2>&1; then
+read -ra monitor <<< "$(.venv/bin/python workflow/flowlib/monitor.py)"
+if nice -n 19 .venv/bin/python -m snakemake -s workflow/Snakefile \
+    "$@" --cores 1 --resources heavy=1 --rerun-triggers mtime \
+    "${monitor[@]}" > "$log" 2>&1; then
   say "done"
 else
   rc=$?

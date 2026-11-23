@@ -14,11 +14,12 @@ from paperpipe.config import last_release, run_studies
 pytest.importorskip("snakemake")
 
 PAPER = Path(__file__).parents[1]
-SNAKEFILE = PAPER / "workflow" / "Snakefile"
+# The paper is a module of the project workflow, run from the root.
+SNAKEFILE = PAPER.parent / "workflow" / "Snakefile"
 CONFIG = yaml.safe_load((PAPER / "workflow" / "config.yaml").read_text())
 RULES = (
     "data",
-    "publish",
+    "publish_paper",
     "summary",
     "forecasts",
     "table",
@@ -37,6 +38,10 @@ def _offline(tmp: Path, **extra) -> Path:
         "build": str(tmp / "build"),
         "germany": {"real": False},
         "ebola": {"hub": None},
+        # The workflow's runs and rounds are left out, as each is pending.
+        "final_run": None,
+        "rounds_dir": None,
+        "evidence": None,
         **extra,
     }
     path.write_text(yaml.safe_dump(cfg))
@@ -46,7 +51,7 @@ def _offline(tmp: Path, **extra) -> Path:
 def _snakemake(*args: str) -> subprocess.CompletedProcess:
     cmd = [sys.executable, "-m", "snakemake", "-s", str(SNAKEFILE), *args]
     return subprocess.run(
-        cmd, cwd=PAPER, capture_output=True, text=True, check=False
+        cmd, cwd=PAPER.parent, capture_output=True, text=True, check=False
     )
 
 
@@ -99,7 +104,7 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
     joint = development / "tables" / "main" / "synthetic-joint.md"
     assert "rel_energy_log" in joint.read_text()
     design = development / "tables" / "si" / "grid-epidemic.md"
-    assert "Generative process" in design.read_text()
+    assert "Infections" in design.read_text()
     assert (development / "figures" / "si" / "sim-examples.png").is_file()
 
 
@@ -203,7 +208,7 @@ def test_benchmark_commands_run_from_the_repository_root(
     tmp_path: Path,
 ) -> None:
     # The models read config/ relative to the working directory
-    # (config/finetune.toml), so a local run from paper/ must cd first.
+    # (config/finetune.toml); the workflow runs from the root.
     cfg = tmp_path / "real.yaml"
     cfg.write_text(yaml.safe_dump({"results": str(tmp_path / "results")}))
     base = str(PAPER / "workflow" / "config.yaml")
@@ -220,7 +225,7 @@ def test_benchmark_commands_run_from_the_repository_root(
     for line in commands:
         # After the redirect into the rule's log.
         line = re.sub(r"^exec >\S+ 2>&1; ", "", line)
-        assert line.startswith("cd .. && ")
+        assert not line.startswith("cd ")
         assert "--config config/germany.toml" in line
         assert "--data data/raw/germany" in line
 
@@ -289,7 +294,7 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
     assert "rule ebola_backtest_draws" in log
     # The draws of the models the backtest runs itself, `[samples]
     # backtest`; the stored fits keep `[forecast] n_samples`.
-    assert f"backtest = {CONFIG['ebola']['n_samples']}" in log
+    assert f"--samples {CONFIG['ebola']['n_samples']}" in log
     assert CONFIG["ebola"]["n_samples"] == 1000
 
 
@@ -310,16 +315,19 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
             "paper": str(tmp_path / "out" / "synthetic.csv.gz"),
         },
     }
-    # Until the final run publishes a checkpoint, the fine-tuned models
-    # are pending: not run, and no checkpoint recorded.
-    assert CONFIG["finetuned"] is None
+    # Until the final run saves a checkpoint, the fine-tuned models are
+    # pending: not run, and no checkpoint recorded.
+    run = tmp_path / "run"
+    # A run outside the workflow's runs folder has no rule for its curve.
+    run.mkdir()
+    (run / "heldout-curve.csv").write_text("")
     pending = _snakemake(
         "development",
         "-n",
         "-p",
         "--configfile",
         base,
-        str(_offline(tmp_path, synthetic=synthetic)),
+        str(_offline(tmp_path, synthetic=synthetic, final_run=str(run))),
     )
     assert pending.returncode == 0, pending.stderr
     log = pending.stdout + pending.stderr
@@ -327,13 +335,19 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     runner = [line for line in log.splitlines() if "run_synthetic.py" in line]
     assert runner
     assert all("_ft" not in line for line in runner)
+    # Then they load its newest saved checkpoint.
+    segment = run / "train" / "n800"
+    (segment / "finetuned-ckpt").mkdir(parents=True)
+    (segment / "settings.json").write_text('{"hash": "abcdef123456"}')
+    for name in ("adapter_config.json", "adapter_model.safetensors"):
+        (segment / "finetuned-ckpt" / name).write_text("")
     pinned = _snakemake(
         "development",
         "-n",
         "-p",
         "--configfile",
         base,
-        str(_offline(tmp_path, synthetic=synthetic, finetuned="abcdef123456")),
+        str(_offline(tmp_path, synthetic=synthetic, final_run=str(run))),
     )
     assert pinned.returncode == 0, pinned.stderr
     assert "--finetuned abcdef123456" in pinned.stdout + pinned.stderr

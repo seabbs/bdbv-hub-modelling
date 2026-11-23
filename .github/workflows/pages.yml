@@ -15,7 +15,6 @@ on:
       - 'paper/**'
       - 'evidence/**'
       - 'assets/**'
-      - 'src/**'
       - 'packages/**'
       - 'data/**'
       - 'config/**'
@@ -29,12 +28,13 @@ on:
       - '.github/workflows/pages.yml'
       - '.github/actions/setup-forecast-env/**'
   pull_request:
+    # Opt-in on pull requests: the `full-tests` label.
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
       - 'paper/**'
       - 'assets/**'
-      - 'src/**'
       - 'packages/**'
       - 'data/**'
       - 'config/**'
@@ -76,14 +76,18 @@ permissions:
 
 concurrency:
   group: pages-${{ github.ref }}
-  # Cancel superseded pull request builds; let deploys from main finish.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Off main, a newer push cancels the running run. On main the running
+  # run finishes and only the newest queued run waits.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   # The latest hub releases and the stored fits, once, so every job below
   # reads the same data even if a release lands while they run.
   prep:
     name: Hub data and stored fits
+    if: >-
+      ${{ github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'full-tests') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -165,7 +169,7 @@ jobs:
             with: >-
               packages/nowcasteval/src/nowcasteval/pairing.py
               packages/nowcasteval/src/nowcasteval/scoring.py
-              src/bdbvhubrenewal/evaluation/store.py
+              packages/bdbvhub/src/bdbvhub/store/store.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study bdbv
               --out output/parts/pairing
@@ -173,7 +177,7 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study germany
               --chunk 0/4 --out output/parts/pairing
@@ -181,7 +185,7 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study germany
               --chunk 1/4 --out output/parts/pairing
@@ -189,7 +193,7 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study germany
               --chunk 2/4 --out output/parts/pairing
@@ -197,7 +201,7 @@ jobs:
             model: randomwalknowcast
             germany: true
             with: >-
-              src/bdbvhubrenewal/data/germany.py src/bdbvhubrenewal/evaluation/germany.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcastgermany/src/nowcastgermany/data.py packages/nowcastgermany/src/nowcastgermany/evaluation.py packages/nowcasteval/src/nowcasteval/scoring.py packages/nowcasteval/src/nowcasteval/pairing.py
             run: >-
               uv run bdbvhubrenewal pairing-sensitivity --study germany
               --chunk 3/4 --out output/parts/pairing
@@ -418,12 +422,12 @@ jobs:
           MODEL: ${{ matrix.model }}
           RUN: ${{ matrix.run }}
           WITH: >-
-            ${{ matrix.with || matrix.germany && 'src/bdbvhubrenewal/data/germany.py
-            src/bdbvhubrenewal/evaluation/germany.py
+            ${{ matrix.with || matrix.germany && 'packages/nowcastgermany/src/nowcastgermany/data.py
+            packages/nowcastgermany/src/nowcastgermany/evaluation.py
             packages/nowcasteval/src/nowcasteval/backtest.py
             packages/nowcasteval/src/nowcasteval/nowcast.py
             packages/nowcasteval/src/nowcasteval/scoring.py
-            src/bdbvhubrenewal/reporting/hubtables.py' || '' }}
+            packages/bdbvhub/src/bdbvhub/reporting/hubtables.py' || '' }}
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086

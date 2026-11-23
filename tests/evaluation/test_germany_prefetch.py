@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.germany import read_triangle
-from bdbvhubrenewal.evaluation.germany import germany_forecasts
 from nowcastfoundation import forecaster as foundation
+from nowcastgermany.data import read_triangle
+from nowcastgermany.evaluation import germany_forecasts
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("torch") is None, reason="needs torch"
@@ -72,10 +72,10 @@ def test_dates_share_chronos_passes(monkeypatch: pytest.MonkeyPatch) -> None:
         .sort_values([*together.columns[:5], "quantile"], kind="stable")
         .reset_index(drop=True),
     )
-    # The dates' tasks share their horizons, so all of them take the
-    # passes of one: a pass for each model, schema and horizon.
-    assert len(set(calls)) == 1
-    assert pipe.calls == calls[0]
+    # Dates whose tasks share a schema share passes. Each date's lags
+    # come from its own reporting delay (#548), so the schemas, and so
+    # the passes, need not be the same for every date.
+    assert max(calls) <= pipe.calls < sum(calls)
 
 
 def test_tasks_are_built_once_and_reused(
@@ -83,7 +83,7 @@ def test_tasks_are_built_once_and_reused(
 ) -> None:
     # Every checkpoint scores the same German tasks: built once into
     # `tasks_dir`, then read back, with the same forecasts.
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     triangle = read_triangle(FIXTURE)
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
@@ -143,3 +143,29 @@ def test_the_task_store_key_covers_the_code_the_tasks_depend_on(
 
     monkeypatch.setattr(base, "ForecastTask", Wider)
     assert ck.german_tasks_dir(tmp_path, data, 1000, 1) != one
+
+
+def test_forecasts_read_every_quantile_from_the_prefetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The prefetch covers the levels the forecasts are read at, so no
+    # task calls Chronos-2 again.
+    from nowcastgermany import evaluation as de
+
+    triangle = read_triangle(FIXTURE)
+    pipe = _Pipeline()
+    monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
+    done = []
+    fetch = de.prefetch
+
+    def prefetch_then_count(*args, **kwargs):
+        out = fetch(*args, **kwargs)
+        pipe.calls = 0
+        done.append(True)
+        return out
+
+    monkeypatch.setattr(de, "prefetch", prefetch_then_count)
+    forecasts = germany_forecasts(MODELS, triangle, DATES[:1], 30, 1)
+    assert done
+    assert set(forecasts["quantile"].round(6)) == set(de.FORECAST_LEVELS)
+    assert pipe.calls == 0

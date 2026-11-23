@@ -31,18 +31,42 @@ def test_a_unit_records_the_precision_it_forecast_in(tmp_path, monkeypatch):
     assert "precision" in ck.COLUMNS
 
 
-def test_each_label_runs_its_models():
-    assert ck.label_models("reference") == (
+def test_each_label_runs_the_german_config_s_models(tmp_path):
+    # Germany is daily only: the units run the models the German config
+    # lists, the reference its zero-shot ones, a checkpoint its `_ft` ones.
+    config = tmp_path / "germany.toml"
+    config.write_text(
+        "[nowcast]\n"
+        'models = ["randomwalk", "randomwalknowcast",'
+        ' "fm_chronos_daily_complete", "fm_chronos_daily_ragged",'
+        ' "fm_chronos_daily_ragged_ft"]\n'
+    )
+    assert ck.label_models("reference", config) == (
         "randomwalknowcast",
-        "fm_chronos_daily_ragged",
-        "fm_chronos_weekly_ragged",
         "fm_chronos_daily_complete",
-        "fm_chronos_weekly_complete",
+        "fm_chronos_daily_ragged",
     )
-    assert ck.label_models("abc123") == (
-        "fm_chronos_daily_ragged_ft",
-        "fm_chronos_weekly_ragged_ft",
+    assert ck.label_models("abc123", config) == ("fm_chronos_daily_ragged_ft",)
+    # A checkpoint trained on complete counts runs the complete `_ft` model.
+    assert ck.label_models("abc123", config, "complete") == (
+        "fm_chronos_daily_complete_ft",
     )
+
+
+def test_a_segment_s_layout_is_read_from_its_settings(tmp_path):
+    import json
+
+    (tmp_path / "settings.json").write_text(json.dumps({"note": "x"}))
+    assert ck.segment_layout(tmp_path) == "ragged"
+    assert ck.segment_layout(None) == "ragged"
+    (tmp_path / "settings.json").write_text(json.dumps({"layout": "complete"}))
+    assert ck.segment_layout(tmp_path) == "complete"
+
+
+def test_the_german_config_has_no_weekly_models():
+    models = ck.german_models()
+    assert models
+    assert not [m for m in models if "weekly" in m]
 
 
 @pytest.mark.parametrize(
@@ -143,38 +167,20 @@ def test_merge_keeps_other_checkpoints_rule_rows():
     assert sorted(got["checkpoint"]) == ["abc", "old"]
 
 
-def test_merge_keeps_other_rules_rows_and_replaces_the_rules():
+def test_merge_keeps_only_the_rules_rows():
     old = pd.DataFrame(
         [
-            {
-                "study": "ebola",
-                "rule": ck.RULE,
-                "checkpoint": "abc",
-                "level": "x",
-            },
-            {
-                "study": "ebola",
-                "rule": "other",
-                "checkpoint": "abc",
-                "level": "x",
-            },
+            {"study": "ebola", "rule": ck.RULE, "checkpoint": "abc"},
+            {"study": "ebola", "rule": "other", "checkpoint": "old"},
+            {"study": "ebola", "rule": None, "checkpoint": "old"},
         ]
-    )
+    ).assign(level="x")
     new = pd.DataFrame(
         [{"study": "ebola", "rule": ck.RULE, "checkpoint": "abc", "level": "y"}]
     )
     got = ck.merge_evidence(old, new)
-    assert sorted(got["level"]) == ["x", "y"]
-    assert set(got.loc[got["rule"] == ck.RULE, "level"]) == {"y"}
-
-
-def test_a_unit_is_done_when_every_origin_is_cached(tmp_path):
-    root = tmp_path / "bdbv" / "abc"
-    root.mkdir(parents=True)
-    (root / "2026-10-01.csv.gz").write_text("x")
-    assert not ck.unit_done(root, ["2026-10-01", "2026-10-08"])
-    (root / "2026-10-08.csv.gz").write_text("x")
-    assert ck.unit_done(root, ["2026-10-01", "2026-10-08"])
+    assert got["level"].tolist() == ["y"]
+    assert set(got["rule"]) == {ck.RULE}
 
 
 def test_held_out_rows_from_settings():
@@ -308,3 +314,308 @@ def test_tables_score_no_bdbv_held_out_for_the_paper(
     ck.table(tmp_path, evidence, tmp_path / "checkpoints.csv", [])
     kept = pd.read_csv(evidence)
     assert kept["study"].tolist() == ["ebola"]
+
+
+def test_a_german_unit_scores_a_run_s_own_segment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A run scores each segment from its folder, before any release, under
+    # the label the rule gives it.
+    from nowcastfoundation import forecaster
+
+    seen = []
+    monkeypatch.setattr(
+        ck,
+        "germany_unit",
+        lambda cache, label, segment=None: seen.append((cache, label, segment)),
+    )
+    ck.main(["germany", str(tmp_path), "n100", str(tmp_path / "n100")])
+    assert seen == [(tmp_path, "n100", tmp_path / "n100")]
+    monkeypatch.delenv(forecaster.FINETUNED_ENV, raising=False)
+    ck._pin("n100", tmp_path / "n100")
+    assert forecaster.finetuned_spec() == str(tmp_path / "n100")
+    ck._pin("abc")
+    assert forecaster.finetuned_spec() == "abc"
+
+
+def _saved(train: Path, n: int, **settings) -> Path:
+    where = train / f"n{n}"
+    where.mkdir(parents=True)
+    (where / "settings.json").write_text(
+        json.dumps({"hash": f"h{n}", "n_outbreaks": n, **settings})
+    )
+    return where
+
+
+def test_a_run_s_table_scores_its_own_saved_checkpoints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A run's checkpoints are scored from its own folder, under the run's
+    # name, beside the shared zero-shot reference.
+    train, scores, ref = tmp_path / "train", tmp_path / "s", tmp_path / "r"
+    _saved(train, 100, held_out_loss=0.5, held_out_loss_start=0.7)
+    offloaded = _saved(train, 200)
+    (offloaded / "held-out.json").write_text(
+        json.dumps({"held_out_loss": 0.4, "held_out_loss_start": 0.7})
+    )
+    (train / "n400").mkdir()  # still training: no settings yet
+    (scores / "n100").mkdir(parents=True)
+    seen = {}
+
+    def germany(folders):
+        seen.update(folders)
+        return pd.DataFrame(
+            [{"study": "germany", "checkpoint": c, "level": "national"}
+             for c in ("zero-shot", "n100")]
+        ).reindex(columns=ck.COLUMNS)  # fmt: skip
+
+    monkeypatch.setattr(ck, "germany_rows", germany)
+    got = ck.run_table(train, scores, ref, "runa")
+    assert seen == {ck.REFERENCE: ref, "n100": scores / "n100"}
+    held = got.loc[got["study"] == "held_out"].set_index("checkpoint")
+    assert held.loc["n200", "loss"] == 0.4
+    assert held.loc["n100", "loss"] == 0.5
+    by = got.drop_duplicates("checkpoint").set_index("checkpoint")
+    assert by.loc["n200", "outbreaks"] == 200
+    assert by.loc["n100", "run"] == "runa"
+    assert by.loc["zero-shot", "run"] == "zero-shot"
+
+
+def test_the_comparison_holds_each_run_and_one_zero_shot() -> None:
+    def rows(run: str) -> pd.DataFrame:
+        return pd.DataFrame(
+            [{"study": "germany", "level": "national", "checkpoint": c,
+              "run": r, "model": "m"}
+             for c, r in (("zero-shot", "zero-shot"), ("n100", run))]
+        ).reindex(columns=ck.COLUMNS)  # fmt: skip
+
+    got = ck.comparison([rows("runa"), rows("noslots")])
+    assert sorted(got["run"]) == ["noslots", "runa", "zero-shot"]
+
+
+def test_the_german_config_scores_four_weeks_ahead_too() -> None:
+    from nowcastgermany.evaluation import load_germany_config
+
+    config = load_germany_config("config/germany.toml")
+    assert config.horizons == tuple(range(28, -29, -1))
+
+
+def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
+    from nowcastgermany import data as dg
+    from nowcastgermany import evaluation as de
+
+    def forecasts(
+        _models, _triangle, dates, *_args, horizons, targets, **_kwargs
+    ):
+        seen.append((list(dates), tuple(horizons), tuple(targets)))
+        return pd.DataFrame(
+            [
+                {"origin": d, "horizon": h, "target": t}
+                for d in dates
+                for h in horizons
+                for t in targets
+            ]
+        )
+
+    monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
+    monkeypatch.setattr(de, "germany_forecasts", forecasts)
+    monkeypatch.setattr(de, "with_truth", lambda fc, *_a: fc)
+    monkeypatch.setattr(ck, "record_precision", lambda _root: None)
+    monkeypatch.setattr(ck, "_free", lambda: None)
+    monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: None)
+    monkeypatch.setattr(ck, "score_dates", lambda: 100)
+
+
+def test_a_german_unit_forecasts_the_config_s_horizons(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Every label, the zero-shot reference and each checkpoint, takes the
+    # German config's horizons, forecast days included.
+    from nowcastgermany.evaluation import load_germany_config
+
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    ck.germany_unit(tmp_path, "reference")
+    want = load_germany_config("config/germany.toml").horizons
+    assert {h for _, h, _ in seen} == {want}
+    out = pd.read_csv(
+        tmp_path / ck.GERMANY_UNIT / "reference" / f"{seen[0][0][0]}.csv.gz"
+    )
+    assert out["horizon"].max() == max(want)
+
+
+def test_a_german_unit_redoes_dates_without_the_forecast_days(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A file written before forecast days were scored is forecast again;
+    # one that reaches the last horizon is kept.
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config("config/germany.toml")
+    first, second, *_ = de.nowcast_dates(config, held_out=False)
+    root = tmp_path / ck.GERMANY_UNIT / "n100"
+    root.mkdir(parents=True)
+    pd.DataFrame({"origin": [first], "horizon": [0]}).to_csv(
+        root / f"{first}.csv.gz", index=False
+    )
+    pd.DataFrame(
+        {
+            "origin": second,
+            "horizon": max(config.horizons),
+            "target": list(config.targets),
+        }
+    ).to_csv(root / f"{second}.csv.gz", index=False)
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    ck.germany_unit(tmp_path, "n100")
+    done = seen[0][0]
+    assert first in done
+    assert second not in done
+
+
+def test_the_evidence_table_scores_the_hub_s_horizons_only(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Forecast days are for the page; the table stays on the hub's 0 to
+    # 28 days back, as the paper scores the teams.
+    from nowcastgermany import evaluation as de
+
+    root = tmp_path / ck.GERMANY_UNIT / "reference"
+    root.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "model": "m",
+            "origin": "2021-11-22",
+            "target_end_date": ["2021-11-22", "2021-11-29"],
+            "horizon": [0, 7],
+            "value": 1.0,
+            "truth": 1.0,
+        }
+    ).to_csv(root / "2021-11-22.csv.gz", index=False)
+    seen: list = []
+
+    def score(fc, _delay):
+        seen.append(set(fc["horizon"]))
+        return pd.DataFrame(columns=["model", *ck.GERMANY_CELL, "wis"])
+
+    monkeypatch.setattr(de, "score_germany", score)
+    monkeypatch.setattr(ck, "relative", lambda sc, *_a: sc)
+    monkeypatch.setattr(ck, "matched", lambda sc, _cell: sc)
+    ck.germany_rows({"reference": root})
+    assert seen
+    assert all(s == {0} for s in seen)
+
+
+def test_the_german_config_gives_both_daily_views() -> None:
+    # Germany is shown as daily counts and as the hub's 7-day sums.
+    from nowcastgermany.evaluation import load_germany_config
+
+    config = load_germany_config("config/germany.toml")
+    assert config.targets == ("7day", "daily")
+
+
+def test_a_german_unit_forecasts_the_config_s_targets_and_redoes_others(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A date file with the 7-day sums alone, to the last horizon, is
+    # forecast again for its daily counts.
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config("config/germany.toml")
+    first = de.nowcast_dates(config, held_out=False)[0]
+    root = tmp_path / ck.GERMANY_UNIT / "n100"
+    root.mkdir(parents=True)
+    pd.DataFrame(
+        {"origin": [first], "horizon": [max(config.horizons)],
+         "target": ["7day"]}
+    ).to_csv(root / f"{first}.csv.gz", index=False)  # fmt: skip
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    ck.germany_unit(tmp_path, "n100")
+    assert first in seen[0][0]
+    assert {t for *_, t in seen} == {config.targets}
+
+
+def _daily_unit(folder: Path, model: str, spread: float) -> None:
+    # One origin's daily rows of `model` at DE: quantiles `spread` either
+    # side of a truth of 100, so the WIS grows with `spread`.
+    levels = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
+    folder.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        [
+            {
+                "model": model,
+                "target": target,
+                "origin": "2021-11-22",
+                "location": "DE",
+                "target_end_date": "2021-11-20",
+                "horizon": -2,
+                "quantile": q,
+                "value": 100 + spread * (q - 0.5) * 4,
+                "truth": 130.0,
+                "truth_vintage": "2021-12-30",
+            }
+            for target in ("7day", "daily")
+            for q in levels
+        ]
+    ).to_csv(folder / "2021-11-22.csv.gz", index=False)
+
+
+def test_daily_rows_are_relative_to_the_config_s_daily_reference(
+    tmp_path: Path,
+) -> None:
+    from nowcastgermany.evaluation import load_germany_config
+
+    config = load_germany_config("config/germany.toml")
+    assert config.daily_baseline == "fm_chronos_daily_ragged"
+    ref, n100 = tmp_path / "reference", tmp_path / "n100"
+    _daily_unit(ref, "fm_chronos_daily_ragged", 10.0)
+    _daily_unit(n100, "fm_chronos_daily_ragged_ft", 40.0)
+    rows = ck.germany_rows(
+        {ck.REFERENCE: ref, "n100": n100},
+        target="daily",
+        baseline=config.daily_baseline,
+    )
+    assert set(rows["target"]) == {"daily"}
+    one = rows.set_index("checkpoint")["rel_wis"]
+    assert one["zero-shot"] == pytest.approx(1.0)
+    # Wider quantiles reach the truth of 130: a lower WIS than zero-shot.
+    assert one["n100"] < 1.0
+
+
+def test_a_run_s_daily_table_holds_both_views_by_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The SI's daily comparison: each checkpoint's relative WIS on daily
+    # counts and on the 7-day sums, by level, in the comparison layout.
+    train = tmp_path / "train"
+    _saved(train, 100)
+    _saved(train, 200)
+    scores = tmp_path / "s"
+    for n in (100, 200):
+        (scores / f"n{n}").mkdir(parents=True)
+    seen = []
+
+    def germany(folders, target="7day", baseline=ck.BASELINE):
+        seen.append((target, baseline, sorted(folders)))
+        return pd.DataFrame(
+            [{"checkpoint": c, "level": "national", "target": target,
+              "model": "fm_chronos_daily_ragged",
+              "rel_wis": {"zero-shot": 1.0, "n100": 0.8, "n200": 0.6}[c]}
+             for c in ("zero-shot", "n100", "n200")]
+        ).reindex(columns=ck.COLUMNS)  # fmt: skip
+
+    monkeypatch.setattr(ck, "germany_rows", germany)
+    got = ck.daily_table(train, scores, tmp_path / "r", "runa")
+    assert {(t, b) for t, b, _ in seen} == {
+        ("7day", "randomwalknowcast"),
+        ("daily", "fm_chronos_daily_ragged"),
+    }
+    assert list(got.columns) == ["set", "run", "outbreaks", "score"]
+    assert sorted(got["set"].unique()) == [
+        "Germany, 7-day sums, national",
+        "Germany, daily counts, national",
+    ]
+    assert set(got["run"]) == {"runa"}
+    by = got.set_index(["set", "outbreaks"])["score"]
+    assert by[("Germany, daily counts, national", 200)] == 0.6

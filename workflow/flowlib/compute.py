@@ -10,7 +10,7 @@
   lists them as `name=host:ROOT:CHECKOUT` (`host` as ssh names it, or
   `local`, which may leave out ROOT and CHECKOUT for this machine's).
   `WORKER_GROUPS` maps rule groups to a worker
-  (`train=laptop score=server`); a group left out, or mapped to `any`,
+  (`train=workstation score=server`); a group left out, or mapped to `any`,
   runs on the first worker with room. The pool is the sum of the
   workers' budgets, each read from the worker itself at launch.
 - any other name: its profile, `workflow/profiles/<name>`, alone (a
@@ -39,11 +39,12 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from flowlib import localconfig, machine
+from flowlib import localconfig, machine, monitor
 
 MODES = ("single", "ssh")
 """The modes this module sets the pool of; any other `COMPUTE` names a
@@ -54,34 +55,48 @@ GROUPS = ("simulate", "train", "evaluate", "publish", "score", "any")
 
 RULE_GROUPS = {
     "simulate_batch": "simulate",
-    "epinowcast_lib": "simulate",
     "train_segment": "train",
     "evaluate_steps": "evaluate",
+    "evaluate_base": "evaluate",
     "evaluate_checkpoint": "evaluate",
     "verify_checkpoint": "publish",
     "publish_checkpoint": "publish",
     "score_germany": "score",
-    "slots_check_shard": "score",
-    "agg_sanity": "score",
-    "agg_fit": "score",
-    "agg_rows": "score",
 }
 """Each placed rule's group; any other rule is in `any`."""
 
-GPU_RULES = frozenset(
-    {"train_segment", "evaluate_steps", "evaluate_checkpoint", "score_germany"}
-)
-"""The rules taking the `gpu` resource. Placed on a worker by their
-group, each also takes that worker's own `gpu_<worker>`, so the pooled
+GPU_RULES = frozenset({"train_segment"})
+"""The rules taking the `gpu` resource: the trainer only, so the GPU is
+the run's for every segment. Evaluation, scoring and figures run beside
+it on the CPU (`machine.side_device`). Placed on a worker by its group,
+a GPU rule also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""
+
+TRAIN_PRIORITY = 100
+"""The trainer's job priority, above every other job's, so the next
+segment starts the moment the previous ends."""
+
+
+def newest_first(base: float) -> Callable[[Any], float]:
+    """Return a job's priority beside the trainer: newer segments higher."""
+    return lambda wc: side_priority(base, int(wc.n))
+
+
+def side_priority(base: float, n: int) -> float:
+    """Return a job's priority beside the trainer, newest segment first.
+
+    `base`, with segment `n`'s a fraction higher.
+    """
+    return base + n / 10**6
+
 
 MACHINE_KEYS = frozenset(
     {
         "HOST_NAME",
         "MAILBOX",
-        "INBOX",
         "NOTIFY",
         "JOB_PREFIX",
+        "SIM_PREFIX",
         "SNAKEMAKE_PROFILE",
         "HEADROOM_CORES",
         "HEADROOM_GB",
@@ -99,7 +114,10 @@ MACHINE_KEYS = frozenset(
         "STATUS_EVERY",
         "MONITOR_HOST",
         "MONITOR_PORT",
-        "MONITOR_REFRESH",
+        "MONITOR_URL",
+        "MONITOR_DAG",
+        "MONITOR_DAG_OPTIONS",
+        "MONITOR_DAG_EVERY",
         "DASHBOARD_RUNS",
         "MIN_FREE_GB",
         "MIN_DISK_GB",
@@ -115,7 +133,7 @@ MACHINE_KEYS = frozenset(
 `localconfig.DEFAULTS` from the coordinator."""
 
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
-# A job's ssh gives up after 10 minutes without an answer (a laptop
+# A job's ssh gives up after 10 minutes without an answer (a worker
 # asleep), so the job fails and its retry resumes it. Its terminal (-tt)
 # makes the worker hang up the job when the session drops.
 SSH_JOB = [
@@ -303,7 +321,7 @@ def job_command(
     a second (exit 75); the pid file names this run's Snakemake. Its
     stdin is /dev/null: under `ssh -tt` it would be the session's
     terminal, and a shell the job starts would then be interactive (an
-    rc file may attach tmux and wait there for ever).
+    rc file may start a terminal multiplexer and wait there for ever).
     """
     q = shlex.quote
     pid = q(remote_pid_file(worker, job))
@@ -395,6 +413,19 @@ def args(
     path: str | None = None,
     budgets: Mapping[str, Mapping[str, int]] | None = None,
     checkout: str | Path = localconfig.ROOT,
+) -> list[str]:
+    """Return the Snakemake options of the profile, its pool and monitor.
+
+    The monitor's options (`flowlib.monitor`) come last.
+    """
+    return [*_profile_args(cfg, path, budgets, checkout), *monitor.args(cfg)]
+
+
+def _profile_args(
+    cfg: Mapping[str, str],
+    path: str | None,
+    budgets: Mapping[str, Mapping[str, int]] | None,
+    checkout: str | Path,
 ) -> list[str]:
     """Return the Snakemake options of the profile and its pool.
 

@@ -62,6 +62,15 @@ def device(
 _device = device
 
 
+def side_device(cfg: Mapping[str, str]) -> str:
+    """Return the device of the jobs beside the trainer.
+
+    `EVAL_DEVICE`, else the CPU, so they never wait on or take the
+    trainer's GPU.
+    """
+    return cfg.get("EVAL_DEVICE") or "cpu"
+
+
 THREAD_VARS = (
     "TORCH_THREADS",
     "OMP_NUM_THREADS",
@@ -101,6 +110,11 @@ def torch_env(
             env[key] = str(cfg[key])
     env["PRECISION"] = str(cfg.get("PRECISION") or "auto")
     return env
+
+
+def job_prefix(cfg: Mapping[str, str], mem_mb: float) -> str:
+    """Return the machine's command prefix for a job of `mem_mb` MB."""
+    return cfg["JOB_PREFIX"].replace("{mem}", f"{int(mem_mb)}M")
 
 
 def shell_env(env: Mapping[str, str]) -> str:

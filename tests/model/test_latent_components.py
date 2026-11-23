@@ -1,46 +1,44 @@
 """The simulator's renewal-step components against the R engine.
 
-The fixtures come from `scripts/latent_fixtures.R`, which runs the R
-functions in `packages/nowcastfoundation/r/R/infections.R` and
-`observation.R`.
+The cases come live from `r/latent_cases.R`, which runs the R functions
+in `packages/nowcastfoundation/r/R/infections.R` and `observation.R`.
 """
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import pytest
 from numpyro import handlers
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
-from pyrenew.latent.infection_functions import (
-    logistic_susceptibility_adjustment,
-)
 
+from nowcastrenewal.components.mixing import mixing_matrix
+from nowcastrenewal.components.pmfs import (
+    Delay,
+    delay_pmf,
+    generation_time_pmf,
+)
+from nowcastrenewal.components.reference import ReferenceEvents
+from nowcastrenewal.components.renewal import Shifts, Variants, run_renewal
 from nowcastrenewal.latent.imports import Imports
-from nowcastrenewal.latent.mixing import PlaceMixing, count_mixing
-from nowcastrenewal.latent.pmfs import gt_pmf, incubation_pmf
-from nowcastrenewal.latent.reference import ReferenceEvents
-from nowcastrenewal.latent.strata import (
-    ExponentialDepletion,
-    LinearDepletion,
-    Shifts,
-    Variants,
-    strata_renewal,
-)
+from nowcastrenewal.latent.mixing import PlaceMixing
 
-FIXTURES = Path(__file__).parent / "fixtures" / "latent"
+from .latent_r import load
 
 
-def load(name: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / f"{name}.json").read_text())
+def gt_pmf(mean: float, family: str, cv: float) -> np.ndarray:
+    """The grid's generation time, from the shared pmfs."""
+    return generation_time_pmf(Delay.from_mean_cv(family, mean, cv))
+
+
+def incubation_pmf(mean: float, cv: float = 0.5) -> np.ndarray:
+    """The grid's infection-to-reference delay, from the shared pmfs."""
+    return delay_pmf(Delay.from_mean_cv("gamma", mean, cv))
 
 
 def matrix(x: Any) -> np.ndarray:
@@ -54,14 +52,19 @@ def run(fn: Any, *args: Any, **kwargs: Any) -> Any:
 
 
 def test_pmfs_match_the_r_engine() -> None:
+    # Both are primarycensored's double censored pmf: the engine's from
+    # `dpcens`, ours closed form (`test_pmfs.py`), to 1e-8.
     f = load("pmfs")
     for g in f["gt"]:
         np.testing.assert_allclose(
-            gt_pmf(g["mean"], g["family"], g["cv"]), g["pmf"], rtol=1e-10
+            gt_pmf(g["mean"], g["family"], g["cv"]),
+            g["pmf"],
+            rtol=1e-8,
+            atol=1e-12,
         )
     for g in f["incubation"]:
         np.testing.assert_allclose(
-            incubation_pmf(g["mean"], g["cv"]), g["pmf"], rtol=1e-10
+            incubation_pmf(g["mean"], g["cv"]), g["pmf"], rtol=1e-8, atol=1e-12
         )
 
 
@@ -85,7 +88,7 @@ def test_reference_events_match_the_r_engine(history: bool) -> None:
 
 def test_an_established_stratum_opens_at_its_ascertained_level() -> None:
     # A stratum at a constant level before and during the span has
-    # constant expected reference events from day 1 (#511).
+    # constant expected reference events from day 1.
     pmf = incubation_pmf(9.0)
     events = ReferenceEvents(
         "ref",
@@ -130,17 +133,6 @@ def test_place_mixing_matches_the_r_engine() -> None:
         )
 
 
-def test_count_mixing_moves_infections_between_strata() -> None:
-    # A row's giving share is eps times its row sum, as r7: a row whose
-    # kernel row sums to a half gives away half as much.
-    K = jnp.array([[0.0, 0.5], [1.0, 0.0]])
-    force = jnp.array([10.0, 4.0])
-    W = count_mixing(K, jnp.array([0.2]))[0]
-    np.testing.assert_allclose(
-        W @ force, force + 0.2 * (K @ force - K.sum(axis=1) * force)
-    )
-
-
 def test_imports_match_the_r_engine() -> None:
     f = load("imports")
     strata = pd.DataFrame(f["strata"])
@@ -183,8 +175,12 @@ def _renewal(f: dict[str, Any], which: str) -> Any:
     kwargs: dict[str, Any] = {}
     if which == "full":
         s, v = f["shifts"], f["variants"]
+        with jax.enable_x64(True):
+            mixing = mixing_matrix(
+                matrix(f["K"]), np.array(f["eps"])[:, None], "received"
+            )
         kwargs = {
-            "mixing": (matrix(f["K"]), np.array(f["eps"])),
+            "mixing": mixing,
             "imports": matrix(f["imports"]),
             "shifts": Shifts(
                 at=s["at"],
@@ -203,7 +199,7 @@ def _renewal(f: dict[str, Any], which: str) -> Any:
     if which == "exhaust":
         start, log_r = start * 50, log_r + 1.5
     with jax.enable_x64(True):
-        return strata_renewal(
+        return run_renewal(
             start,
             np.array(f["gt"]),
             np.exp(log_r),
@@ -213,7 +209,7 @@ def _renewal(f: dict[str, Any], which: str) -> Any:
 
 
 @pytest.mark.parametrize("which", ["plain", "full", "exhaust"])
-def test_the_strata_renewal_matches_the_r_engine(which: str) -> None:
+def test_the_renewal_step_matches_the_r_engine(which: str) -> None:
     f = load("renewal")
     out = _renewal(f, which)
     want = f["runs"][which]
@@ -235,51 +231,12 @@ def test_the_exhausted_renewal_never_infects_more_than_its_population() -> None:
     assert (np.asarray(out.susceptible) >= 0).all()
 
 
-def test_exponential_depletion_is_pyrenews_logistic_adjustment() -> None:
-    # S (1 - e^{-R F / N}) is PyRenew's logistic susceptibility adjustment
-    # with the raw incidence R F, written with expm1.
-    with jax.enable_x64(True):
-        r = jnp.array([1.3, 0.8, 2.0])
-        force = jnp.array([50.0, 3.0, 400.0])
-        s = jnp.array([9000.0, 4000.0, 15000.0])
-        pop = jnp.array([1e4, 5e3, 2e4])
-        new = ExponentialDepletion()(r, force, s, pop, jnp.zeros(3))
-        want = logistic_susceptibility_adjustment(r * force, s / pop, pop)
-    np.testing.assert_allclose(new, want, rtol=1e-9)
-
-
-def test_exponential_depletion_is_linear_while_few_are_infected() -> None:
-    with jax.enable_x64(True):
-        r, force = jnp.array([1.5]), jnp.array([2.0])
-        s, pop, im = jnp.array([1e6]), jnp.array([1e6]), jnp.array([0.5])
-        lin = LinearDepletion()(r, force, s, pop, im)
-        exp = ExponentialDepletion()(r, force, s, pop, im)
-    np.testing.assert_allclose(exp, lin, rtol=1e-5)
-
-
-def test_both_depletions_stop_at_the_susceptibles() -> None:
-    with jax.enable_x64(True):
-        r, force = jnp.array([5.0]), jnp.array([1e5])
-        s, pop, im = jnp.array([10.0]), jnp.array([1e3]), jnp.array([20.0])
-        for depletion in (LinearDepletion(), ExponentialDepletion()):
-            assert float(depletion(r, force, s, pop, im)[0]) == 10.0
-
-
-def test_a_variant_raises_r_and_returns_immune_people_once() -> None:
-    v = Variants(at=[10.0], escape=[0.5], multiplier=[2.0], days=[4.0])
-    with jax.enable_x64(True):
-        m = np.asarray(v.multiplier_on(jnp.arange(1.0, 31.0)))
-    assert m[0] == pytest.approx(1.0, abs=1e-4)
-    assert m[-1] == pytest.approx(2.0, abs=1e-4)
-    assert m[9] == pytest.approx(1.5)
-
-
 def test_the_fitted_models_do_not_import_the_simulator_components() -> None:
     # The fit keys hash the forecasters' import closure, so the simulator's
     # components stay out of it and adding them refits nothing.
     code = (
         "import sys, nowcastrenewal.forecaster, nowcastrenewal.zones;"
-        "mods = ('imports', 'mixing', 'pmfs', 'reference', 'strata');"
+        "mods = ('imports', 'mixing');"
         "print([m for m in mods"
         " if f'nowcastrenewal.latent.{m}' in sys.modules])"
     )
@@ -290,3 +247,30 @@ def test_the_fitted_models_do_not_import_the_simulator_components() -> None:
         check=True,
     )
     assert out.stdout.strip() == "[]"
+
+
+def test_latent_onsets_use_the_drawn_incubation_family_and_cv() -> None:
+    from nowcastfoundation.simulator import draws
+    from nowcastrenewal.latent.simulate import simulate_latent
+
+    grid = draws.read_grid(
+        __import__("pathlib").Path(__file__).parents[2]
+        / "config"
+        / "finetune"
+        / "grid.yaml"
+    )
+    rng = draws.generator(5)
+    while True:
+        d = draws.draw_design(grid, rng, weeks=8)
+        if d["window"] == "early" and d["n_places"] * d["n_ages"] == 1:
+            break
+    d["incubation_family"] = "lognormal"
+    v = draws.draw_values(grid, d, rng)
+    v["incubation_mean"], v["incubation_cv"] = [6.0], 1.0
+    gt = gt_pmf(v["gt_mean"], d["gt_family"], v["gt_cv"])
+    strata = pd.DataFrame({"place": ["P01"], "age": ["A1"], ".group": [1]})
+    run_ = run(simulate_latent, 70, gt, strata, d, v)
+    pmf = delay_pmf(Delay.from_mean_cv("lognormal", 6.0, 1.0))
+    inf = run_.infections[:, 0]
+    want = v["ascertainment"][0] * np.convolve(inf, pmf)[: len(inf)]
+    np.testing.assert_allclose(run_.onsets[:, 0], want, rtol=1e-6, atol=1e-9)

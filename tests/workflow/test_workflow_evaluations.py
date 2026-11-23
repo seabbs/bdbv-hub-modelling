@@ -101,15 +101,71 @@ def test_start_loss_falls_back_to_an_earlier_sidecar(tmp_path):
 
 
 def test_the_blocks_file_is_the_trainer_s():
-    import sys
-    from pathlib import Path
 
     pytest.importorskip("torch")
-    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
-    import finetune_stream as fs
     from flowlib import segments
 
     from nowcastfoundation import sidecar
+    from nowcastfoundation.finetune import stream as fs
 
     assert sidecar.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS
     assert segments.EVAL_MODES == fs.EVAL_MODES
+
+
+def test_the_check_alerts_only_when_zero_shot_is_not_beaten(tmp_path):
+    where = tmp_path / "n800"
+    write(where / "settings.json", {})
+    losses = {"held_out_loss": 0.3, "held_out_loss_start": 0.4}
+    write(where / "held-out.json", losses)
+    text, line = evaluations.check_report(where, "runa", 800, [100, 800, 1600])
+    assert text == "runa n800 beats zero-shot: held-out 0.3000 vs 0.4000"
+    assert line == text
+    losses = {"held_out_loss": 0.5, "held_out_loss_start": 0.4}
+    write(where / "held-out.json", losses)
+    text, line = evaluations.check_report(where, "runa", 800, [1600, 100])
+    assert "does NOT beat" in text
+    assert line == f"ALERT {text}; training goes on, check before n1600"
+
+
+def test_the_held_out_curve_is_the_loss_by_level_at_each_checkpoint(tmp_path):
+    train = tmp_path / "train"
+    write(train / "evals" / "step-0000000.json", {"by_level": {"leaf": 0.4}})
+    write(train / "n250" / "settings.json", {"n_outbreaks": 250})
+    write(
+        train / "n250" / "held-out.json",
+        {"held_out_loss_by_level": {"leaf": 0.3}},
+    )
+    write(
+        train / "n500" / "settings.json",
+        {"n_outbreaks": 500, "held_out_loss_by_level": {"leaf": 0.2}},
+    )
+    got = evaluations.heldout_curve(train, "runa", [250, 500])
+    assert got == [
+        {
+            "run": "runa",
+            "blocks": "leaf",
+            "outbreaks_seen": 0,
+            "heldout_loss": 0.4,
+        },
+        {
+            "run": "runa",
+            "blocks": "leaf",
+            "outbreaks_seen": 250,
+            "heldout_loss": 0.3,
+        },
+        {
+            "run": "runa",
+            "blocks": "leaf",
+            "outbreaks_seen": 500,
+            "heldout_loss": 0.2,
+        },
+    ]
+
+
+def test_a_run_with_no_start_loss_has_no_held_out_curve(tmp_path):
+    train = tmp_path / "train"
+    write(
+        train / "n250" / "settings.json",
+        {"n_outbreaks": 250, "held_out_loss_by_level": {"leaf": 0.3}},
+    )
+    assert evaluations.heldout_curve(train, "runa", [250]) == []

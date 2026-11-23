@@ -1,13 +1,13 @@
-#' The most strata of places by ages in a run of `weeks`
+#' A simulation's reporting-triangle cells
 #'
-#' `max_strata` up to 28 weeks, then fewer, so the reporting triangle
-#' (strata by days by delays) and the batch's memory stay about as at 28
-#' weeks.
-#' @param grid A grid (`read_grid`).
+#' Strata by longest delay by days, the days being the series, the longest
+#' delay and a four-week horizon. The grid's `max_triangle_cells` bounds it.
+#' @param strata Strata (places by ages).
 #' @param weeks Weeks in the series.
+#' @param max_delay The longest delay in days.
 #' @export
-max_strata <- function(grid, weeks) {
-  min(grid$max_strata, as.integer(grid$max_strata * 28 / weeks))
+triangle_cells <- function(strata, weeks, max_delay) {
+  strata * max_delay * 7 * (weeks + max_delay %/% 7 + 4)
 }
 
 #' Draw a system's places and ages from the grid's counts
@@ -74,8 +74,8 @@ draw_design <- function(grid, weeks = NULL) {
   # memory and the trainer's block.
   for (try in 1:1000) {
     n <- draw_strata(grid, cell)
-    fits <- n[1] * n[2] <= max_strata(grid, weeks) &&
-      system_locations(n[1], n[2], grid$regions) <= grid$max_locations
+    fits <- triangle_cells(n[1] * n[2], weeks, min(grid$max_delay_days)) <=
+      grid$max_triangle_cells
     if (fits) break
   }
   if (!fits) stop("no strata draw fits the budget")
@@ -103,13 +103,11 @@ draw_design <- function(grid, weeks = NULL) {
       weeks = weeks,
       n_places = n_places,
       n_ages = n_ages,
-      # The weekdays reports are made on: every day, Monday to Friday, two
-      # or three drawn days, or one drawn day.
       report_weekdays = switch(cell$report_days,
         daily = "all",
         weekdays = paste(week[1:5], collapse = ";"),
         fixed_days = paste(
-          week[sort(sample.int(7L, sample(2:3, 1L)))], collapse = ";"
+          week[sort(sample.int(5L, sample(2:3, 1L)))], collapse = ";"
         ),
         weekly = week[sample.int(7L, 1L)]
       )
@@ -118,13 +116,13 @@ draw_design <- function(grid, weeks = NULL) {
 }
 
 # The rising shape an early outbreak not brought under control follows:
-# its drawn trajectory if it rises, else that trajectory's rising
-# counterpart.
+# its drawn trajectory if it rises or oscillates around R = 1, else
+# that trajectory's rising counterpart.
 rising_path <- c(
-  growth = "growth", decline = "growth", flat = "rise_fall_gradual",
+  controlled = "growth", growth = "growth", decline = "growth", flat = "rise_fall_gradual",
   rise_fall_sharp = "rise_fall_sharp",
   rise_fall_gradual = "rise_fall_gradual", fall_rise = "rise_fall_sharp",
-  oscillating = "multi_wave", multi_wave = "multi_wave"
+  oscillating = "oscillating", multi_wave = "multi_wave"
 )
 
 #' The continuous settings of a simulation, by layer
@@ -158,6 +156,13 @@ draw_values <- function(grid, design) {
   v$place_rho <- ds("place_rho")
   v$place_sd <- ds("place_sd")
   v$place_lags <- c(0L, draw_count(grid, "place_lag_days", n_p - 1L))
+  # Places within 2 to 6 regions (four or more places), each region
+  # sharing an R deviation under `nested` place R.
+  k <- if (n_p >= 4) 1L + sample.int(min(6L, n_p %/% 2L) - 1L, 1L) else 1L
+  region <- integer(n_p)
+  region[sample.int(n_p)] <- 1L + (seq_len(n_p) - 1L) %% k
+  v$n_regions <- k
+  v$place_region <- region
   v$late_at <- ds("late_at")
   v$late_days <- draw_count(grid, "late_days")
   v$mixing_eps <- ds("mixing_eps")
@@ -177,13 +182,17 @@ draw_values <- function(grid, design) {
   v$path <- if (early) {
     if (draw_share(grid, "controlled")) "controlled" else rising_path[[design$trajectory]]
   } else if (endemic) {
-    "endemic"
+    # An endemic outbreak walks around R = 1 or oscillates around it.
+    if (design$trajectory == "oscillating") "oscillating" else "endemic"
   } else {
     design$trajectory
   }
   v$gt_mean <- ds("gt_mean")
   v$gt_cv <- ds("gt_cv")
   v$amplitude <- ds("amplitude")
+  # A controlled path starts at its own R and settles towards 1.
+  v$control_r <- ds("control_r")
+  if (v$path == "controlled") v$amplitude <- log(v$control_r)
   v$flat <- ds("flat")
   v$peak <- ds("peak")
   v$period <- max(grid$floors$period_days, ds("period"))
@@ -191,8 +200,9 @@ draw_values <- function(grid, design) {
   v$waves <- 2L + rpois(1, grid$rates$extra_waves)
   v$wave_scale <- ds("wave_scale", v$waves + 1L)
   v$flip_days <- ds("flip_days")
-  # Weeks of the series, the longest delay (12 weeks) and the horizon.
-  v$walk_r <- log_r_walk(grid, weeks + 18L)
+  # Weeks of the series, the longest delay possible and the horizon.
+  span <- weeks + max(grid$max_delay_days) %/% 7L + 6L
+  v$walk_r <- log_r_walk(grid, span)
   v$control_days <- ds("control_days")
   v$r_drift <- if (!endemic && draw_share(grid, "drift")) ds("r_drift") else 1
   v$population <- ds(if (endemic) "endemic_population" else "population", n_p)
@@ -228,9 +238,15 @@ draw_values <- function(grid, design) {
   v$ascertainment <- stratum_values(
     grid, design$observation_strata, n_s, "ascertainment", probability = TRUE
   )
-  v$incubation_mean <- stratum_values(
-    grid, design$observation_strata, n_s, "incubation_mean"
-  )
+  # Infection to reference: a shared mean times a place effect and an age
+  # effect (strata are places, then ages), constant over time.
+  v$incubation_cv <- ds("incubation_cv")
+  v$incubation_place_sd <- ds("incubation_place_sd")
+  v$incubation_age_sd <- ds("incubation_age_sd")
+  place <- v$incubation_place_sd * ds("pool_z", n_p)
+  age <- v$incubation_age_sd * ds("pool_z", design$n_ages)
+  v$incubation_mean <- ds("incubation_mean") *
+    exp(as.vector(t(outer(place, age, `+`))))
   v$sqrt_phi <- ds("sqrt_phi")
   v$obs_phi_sd <- ds("obs_phi_sd")
   v$obs_sqrt_phi <- if (design$obs_strata == "shared") {
@@ -255,7 +271,7 @@ draw_values <- function(grid, design) {
   v$periodic <- ds("periodic")
   v$periodic_weeks <- ds("periodic_weeks")
   v$walk_sd <- ds("walk_sd")
-  v$delay_walk <- v$walk_sd * cumsum(c(0, ds("walk_step", weeks + 17L)))
+  v$delay_walk <- v$walk_sd * cumsum(c(0, ds("walk_step", span - 1L)))
   v$smooth_amp <- ds("smooth_amp")
   v$smooth_period <- max(grid$floors$period_days, ds("smooth_period"))
   v$smooth_phase <- ds("phase")
@@ -264,7 +280,13 @@ draw_values <- function(grid, design) {
   v$slow_mult <- ds("slow_mult")
   family <- if (design$delay_form == "non_parametric") "none" else design$delay_family
   v$delay_dow_sd <- ds("delay_dow_sd")
-  v$max_delay <- max_delay_for(delay_parameters(family, v)$q99)
+  # The longest delay its 99th centile asks for, else the longest that
+  # keeps the triangle within the simulator's memory.
+  options <- as.integer(grid$max_delay_days)
+  wanted <- max_delay_for(delay_parameters(family, v)$q99, options)
+  fit <- options[options <= wanted &
+    triangle_cells(n_s, weeks, options) <= grid$max_triangle_cells]
+  v$max_delay <- if (length(fit)) max(fit) else min(options)
 
   # Layer 4: the reporting system.
   v$reference_dow_sd <- ds("reference_dow_sd")

@@ -1,23 +1,35 @@
 # Settings of the paper's evaluation workflow (`workflow/Snakefile`).
-# Paths are relative to `paper/`.
-results: results
+# Paths are relative to the repository root.
+results: paper/results
 # Where `publish` copies a run's outputs for main.qmd and si.qmd.
-build: build
+build: paper/build
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]
-# The final fine-tuning run (with series slots) writes each checkpoint to
-# `finetune_run`/n<outbreaks>/ and publishes it as `chronos-ft-<hash>`.
-# `finetuned` is the checkpoint every `_ft` model of the workflow loads;
-# null leaves the fine-tuned forecasts pending. scripts/follow_checkpoint.py
-# sets it.
-finetune_run: ../output/checkpoints/slots
-finetuned: null
-final_checkpoints: []
-# The live fine-tuning run (the checkpoint scores' `run`) whose newest
-# scored checkpoints the SI curve, comparisons and tables show as
-# preliminary, from `evidence.checkpoint_scores` at its branch head.
-live_run: one-model
+# The paper's final fine-tuning run: its folder, a `runs` entry of the
+# workflow (workflow/config.yaml), under the machine's ROOT. Its held-out
+# loss curve is the SI's (rule heldout_curve), and every `_ft` model
+# loads its newest saved checkpoint, train/n<N>
+# (nowcastfoundation.forecaster.newest_segment); before it has one the
+# fine-tuned forecasts are pending. Null leaves the run out.
+final_run: $ROOT/runs/runa
+# The simulation rounds' folder under the machine's ROOT (the workflow's
+# rounds): the SI's realism reads the grid's training rounds
+# (`grid_rounds.rounds`) and the German development half's statistics.
+# Null leaves the rounds out, and what reads them pending.
+rounds_dir: $ROOT/rounds
+# The live fine-tuning run (the checkpoint scores' `run`, its workflow
+# run name) whose newest scored checkpoints the SI curve, comparisons and
+# tables show as preliminary.
+live_run: runa
+# The fine-tuning comparisons (`paperpipe.evidence.COMPARISONS`): each
+# compares the live run with the workflow run named here (the workflow
+# config's `runs`), from `evidence.checkpoint_scores`. A comparison waits
+# until its run has a scored checkpoint.
+comparisons:
+  slots: noslots
+  delays: nodelays
+  realdata: realdata
 # Samples per forecast for the studies scored on samples.
 n_samples: 100
 
@@ -27,45 +39,43 @@ n_samples: 100
 synthetic:
   # The grid config the grid tables and SI notes are read from (the
   # main workflow's `simulate.grid_file`), and the held-out set's design.
-  grid_file: ../config/finetune/grid.yaml
+  grid_file: config/finetune/grid.yaml
   grid: r7
   simulations_per_seed: 20
-  draw: 1
-  # The synthetic runner's protocol, quoted in the SI note.
-  protocol: {min_releases: 6, horizon_weeks: 5, horizons: [-4, 3]}
-  # Example simulations for the SI figure (`paperfigs.sim_examples`): pilot
-  # simulations of the grid on an evidence branch, each with its label.
+  # Draws per forecast of each model on the held-out simulations.
+  samples: 1000
+  # Example simulations for the SI figure (`paperfigs.sim_examples`),
+  # from the workflow's validation round (`rounds_dir`), each `<seed>-<n>`
+  # with its label.
   examples:
-    ref: 5e99233c5ca4eed4de3dcf26139d26f676a79e5d
-    path: pilot/sims
     picks:
-      - [90004-0001, Multi-wave over 52 weeks]
-      - [90003-0002, Concentrated spread]
-      - [90002-0002, Bunched reports]
-      - [90002-0003, Delay slowdown]
-      - [90001-0001, Places by age groups]
-      - [90003-0003, Poisson observations]
+      - [33325-0008, Multi-wave over 53 weeks]
+      - [33300-0001, Concentrated spread]
+      - [33300-0014, Bunched reports]
+      - [33300-0010, Delay slowdown]
+      - [33300-0002, Places by age groups]
+      - [33300-0003, Poisson observations]
   # The simulations of each run's seeds, whose settings give the grid's
   # realised values.
   simulations:
-    development: ../output/finetune/development
+    development: $ROOT/rounds/r33/sims
     # The run's test round's folder under the rounds folder (ROOT in
     # config/local.env), held out whole (workflow config `grid_rounds`).
     paper: $ROOT/rounds/r38/sims
   # The synthetic runner's forecasts of them, with its
   # observations and factors beside them.
   forecasts:
-    development: ../output/paper/synthetic-dev.csv.gz
-    paper: ../output/paper/synthetic.csv.gz
+    development: output/paper/synthetic-dev.csv.gz
+    paper: output/paper/synthetic.csv.gz
 
 # The German benchmark, run with the `bdbvhubrenewal` command line
 # (config/germany.toml). Its models are the config's `models`.
 # `real: false` runs the study on dummy data.
 germany:
   real: true
-  config: ../config/germany.toml
-  data: ../data/raw/germany
-  results: ../results/germany
+  config: config/germany.toml
+  data: data/raw/germany
+  results: results/germany
   # Further forecasts of the benchmark from evidence rows (`evidence`
   # below), such as models run outside config/germany.toml: `models`
   # keeps the models matching a regular expression, `suffix` renames
@@ -82,11 +92,11 @@ germany:
 # forecasts, our stored forecasts and the fit store. `hub: null` runs the
 # study on dummy data.
 ebola:
-  backtest: ../results/forecasts.csv.gz
+  backtest: results/forecasts.csv.gz
   # Main's data, whose releases give the observations and truth, and the
   # backtest config, which sets D, as the release backtest takes them.
-  data: ../data
-  config: ../config/backtest.toml
+  data: data
+  config: config/backtest.toml
   # Further models' release-backtest samples from evidence rows
   # (`evidence` below), in the backtest's layout, kept to `models`.
   extra: []
@@ -95,11 +105,17 @@ ebola:
   # the backtest's seed shared by every model (common random numbers).
   # Their rows replace the site backtest's, which keeps its own number.
   n_samples: 1000
-  hub: ../data/raw/bdbv-hub
+  hub: data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
-  candidates: [../data/candidate-forecasts.csv.gz]
-  store: ..
-  store_ref: origin/fit-store
+  candidates: [data/candidate-forecasts.csv.gz]
+  # Our stored forecasts made before each round closed: the fit store's
+  # history, published as a release asset (rule publish_fit_store_history)
+  # and fetched with its checksum (rule fit_store_history).
+  store_history:
+    repo: seabbs/bdbv-hub-modelling
+    branch: fit-store
+    tag: fit-store-history
+    asset: fit-store-history.csv.gz
 
 # What the nowcast panels show (`paperfigs.nowcasts`). The main panel
 # shows the national series of a case study, or one synthetic outbreak;
@@ -133,58 +149,32 @@ nowcasts:
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
-  # Scores of the final run's checkpoints on the case studies (ckpt-scores).
-  # Followed at the branch head, never pinned: each run shows the live
-  # run's newest scored checkpoints (bdbvhubrenewal.reporting.
-  # live_checkpoint), as preliminary.
+  # Scores of every run's checkpoints on the German development half and
+  # the trainer's held-out loss, the workflow's comparison (rule
+  # comparison). The live run's newest scored checkpoints are shown as
+  # preliminary (nowcastfoundation.live_checkpoint).
   checkpoint_scores:
-    branch: checkpoint-scoring
-    path: evidence/checkpoint-scores.csv
-  # Pending: the scale-floor test on the final run's checkpoints.
-  scale_floor: null
-  # The lag-horizon test of the ragged layout (germany-chronos2).
-  lag_germany:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: results/germany-chronos-dev/scores.csv
-  lag_bdbv_before:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: evidence/bdbv-lagfix/fm-summary-before.csv
-  lag_bdbv_after:
-    ref: e4f4d7a49773a3050a9529df5c70d7cc8504dafc
-    path: evidence/bdbv-lagfix/fm-summary-after.csv
-  # The walks' scores with no pairing and the rolling rho_p, by study and
-  # level, on development data (`summarise_pairing` rows). Pending:
-  # the rows on evidence/fm-copula.
-  si_copula: null
-  # Each walk model's rho_p by origin, the rows of its rounds' copula.json
-  # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
-  copula_rho: null
-  aggregation_scores:
-    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
-    path: results/agg/aggregation-scores.csv.gz
-  # Each fine-tuning comparison's scores by checkpoint (paperpipe.evidence:
-  # set, run, outbreaks, score). Pending: the runs' checkpoints.
-  compare_slots: null
-  compare_delays: null
-  compare_realdata: null
-  # Pending: daily and hub-target scores from the target column.
-  compare_daily: null
-  # Pending: fm-finetune3's realised shares of each combination of block
-  # layout and options.
-  block_combinations: null
-  # Pending: the final run's held-out loss curve.
-  finetune_heldout: null
-  # Pending: summaries of the final grid's simulations.
-  sim_summaries: null
-  # Pending: the final grid's realism comparison.
-  sim_realism: null
-  # Pending: the final grid's ranges against published values.
-  sim_diseases: null
+    file: $ROOT/runs/comparison.csv
+  # Each run's checkpoints on daily counts and on the 7-day sums, relative
+  # to the German config's references (workflow rule compare_daily).
+  compare_daily:
+    file: $ROOT/runs/compare-daily.csv
+  # The realised shares of each combination of block layout and options
+  # (rule block_combinations). From the no-slots run: Run A's trainer
+  # predates the joint tally, and no-slots cuts the same blocks.
+  block_combinations:
+    file: $ROOT/runs/noslots/train/block-combinations.csv
 
 # Data the development runs use.
 development:
-  # The r3 pilot's outbreaks, for checking the setup.
-  synthetic_seeds: [9501, 9502, 9503, 9504]
+  # The run's validation round 33, 40 batches of 20 (seeds 33300 to
+  # 33339), for checking the setup.
+  synthetic_seeds: [
+    33300, 33301, 33302, 33303, 33304, 33305, 33306, 33307, 33308, 33309,
+    33310, 33311, 33312, 33313, 33314, 33315, 33316, 33317, 33318, 33319,
+    33320, 33321, 33322, 33323, 33324, 33325, 33326, 33327, 33328, 33329,
+    33330, 33331, 33332, 33333, 33334, 33335, 33336, 33337, 33338, 33339,
+  ]
 
 # Data kept out of every development run.
 # Only the `paper` target reads them.

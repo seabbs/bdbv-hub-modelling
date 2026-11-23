@@ -12,7 +12,7 @@ if(!(S.nd>=2))S.nd=4;
 function cur(){return DSS.find(function(d){return d.key==S.ds})||DSS[0]}
 // A dataset with no nowcasts yet (held-out simulations until they are scored) shows why.
 function empty(){$("gdate").textContent="";$("gck").innerHTML="";$("glocs").innerHTML="";$("gsum").textContent="Locations";
- $("gplot").innerHTML='<p class=mut>No nowcasts for '+C.label+' yet'+(C.missing?': '+C.missing:'')+'.</p>';$("gwis").innerHTML='';save()}
+ $("gplot").innerHTML='<p class=mut>No nowcasts for '+C.label+' yet.</p>';$("gwis").innerHTML='';save()}
 var C=cur();S.ds=C.key;
 function ofRun(k){return C.meta.filter(function(m){return m.run==k}).sort(function(a,b){return a.n-b.n})}
 function refs(){return C.meta.filter(function(m){return m.run=="ref"})}
@@ -132,7 +132,7 @@ function plots(){
  Promise.all(S.locs.map(load)).then(function(all){
   var miss={},h='<div class=panels style="grid-template-columns:repeat('+(small?"auto-fit,minmax(260px,1fr)":"1,1fr")+')">';
   all.forEach(function(d,i){h+='<div>'+(small?'<h4>'+S.locs[i]+'</h4>':"")+'<div class=gp></div></div>'});
-  h+='</div>'+legend(eff,ds)+'<p class=mut>Truth: '+C.truth+'.</p>';
+  h+='</div>'+legend(eff,ds)+(C.target?'<p class=mut>Target: '+C.target+'.</p>':'')+'<p class=mut>Truth: '+C.truth+'.</p>';
   $("gplot").innerHTML=h;
   // draw each panel at its rendered width so the SVG maps 1:1 to pixels
   // Full screen (expand.js): the panels share the view's height.
@@ -180,8 +180,9 @@ function wisChart(d,eff,ds){
  // Each row's swatch is its plot line (colour and dash); the text stays in text colour.
  var rk={};eff.forEach(function(e){rk[e.id]=e.run=="ref"?0:e.rank});
  function lab(id,y){return '<line x1="0" x2="22" y1="'+(y+5)+'" y2="'+(y+5)+'" stroke="'+colour(id)+'" stroke-width="2.2"'+lineDash(id,rk[id]||0)+' /><text x="28" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text>'}
- var W=Math.max(200,$("gwis").clientWidth),RH=30;
- function rows(title,body,H,k){return '<h3>'+title+ftInfo(k)+'</h3><svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">'+body+'</svg>'}
+ // Two panels a row (.gscores), one on a narrow card: each takes its share.
+ var CW=$("gwis").clientWidth,W=Math.max(200,CW<520?CW:Math.floor((CW-8)/2)),RH=30;
+ function rows(title,body,H,k,after){return '<div class=gsc><h3>'+title+ftInfo(k)+'</h3><svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">'+body+'</svg>'+(after||'')+'</div>'}
  // mean WIS
  var mx=Math.max.apply(null,wis)*1.05,h1='';
  sel.forEach(function(id,i){var y=2+i*RH,w=wis[i]/mx*(W-48);
@@ -227,8 +228,8 @@ function wisChart(d,eff,ds){
  // One legend on top: the three parts' fills, labelled, in stack order;
  // its hidden defs hold every bar's pattern once.
  var top=(any?'<div style="font-size:11px">'+key()+'</div>':'<svg width=0 height=0 style="position:absolute">'+defs()+'</svg>');
- $("gwis").innerHTML=top+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
-  +rows(C.metric+" by part of the horizon, nowcast date(s) shown",h5,H2,"wissplit")+'<div style="font-size:11px">'+hzKey+'</div>'+hzNote
+ $("gwis").innerHTML=top+'<div class=gscores>'+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
+  +rows(C.metric+" by part of the horizon, nowcast date(s) shown",h5,H2,"wissplit",'<div style="font-size:11px">'+hzKey+'</div>'+hzNote)+'</div>'
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
 function chips(){var h='';

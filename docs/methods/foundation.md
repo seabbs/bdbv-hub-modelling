@@ -58,8 +58,14 @@ Chronos-2 standardises each series and takes its arcsinh, so counts go in as the
 ## Trajectories
 
 Chronos-2 gives 21 quantiles, from 1% to 99%, of each series at each step ahead.
-Each of the 100 trajectories draws its own uniform level for every series and step, and reads the quantile function there: linear between the quantiles and flat beyond them.
-Draws are independent across steps and series.
+Each of the 100 trajectories reads each series and step's quantile function at a uniform level: linear between the quantiles and flat beyond them.
+The levels are coupled by a Gaussian copula (`nowcastutils.trajectories.couple`), with correlation `rho` between consecutive steps of a series and `s` between series.
+`rho` and `s` are fitted for each task (`fit_coupling`) from the model's own forecasts of the same block at earlier releases: the latest release at least 1, 2, ..., 8 weeks before the task's, so one a week.
+Each of those forecasts is scored at the steps that are final by the task's release, as normal scores of its randomised PIT (`pit_scores`).
+With no earlier release the fit is independence.
+The 8 weeks are fixed for now; `choose_window` can instead pick the window online, as the one whose couplings had the lowest energy score on the latest matured releases, but the foundation model does not use it yet.
+Independent and comonotone draws remain as named options (`coupling`) for the supplement.
+`couple` also has the Schaake shuffle (each sample ordered as one past window of observed or simulated values, `history_windows`); the foundation model does not use it yet.
 
 ## Counts
 
@@ -90,9 +96,9 @@ The other fitted models split their provinces across the zones instead ([Health 
 
 ## Fine-tuning
 
-The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on outbreaks simulated with epinowcast's generative model.
+The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
 The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
-The simulator is the R package `packages/nowcastfoundation/r`, run on the grid config `config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `scripts/finetune_chronos.py` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
+The simulator is `nowcastfoundation.simulator` (the design and value draws, then each simulation as the joint PyRenew model in `nowcastrenewal.simulation.outbreak`), run on the grid config `config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `nowcastfoundation.finetune.chronos` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
 The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.

@@ -32,9 +32,25 @@ tasks:
 
 
   monitor:
-    desc: Serve the workflow monitor, each machine's running and recent jobs from the status the ticks write (MONITOR_HOST, MONITOR_PORT, MONITOR_REFRESH in config/local.env)
+    desc: Serve the workflow monitor (Panoptes), every Snakemake run's jobs as they run, and at /dag/ the MONITOR_DAG targets' rule graphs and job DAGs, on MONITOR_HOST and MONITOR_PORT (config/local.env); runs report to MONITOR_URL
+    vars:
+      HOST:
+        sh: python3 workflow/flowlib/localconfig.py MONITOR_HOST
+      PORT:
+        sh: python3 workflow/flowlib/localconfig.py MONITOR_PORT
+      ROOT:
+        sh: python3 workflow/flowlib/localconfig.py ROOT
     cmds:
-      - python3 workflow/scripts/monitor.py
+      - mkdir -p "{{.ROOT}}/monitor"
+      - >-
+        PANOPTES_DB_URL="sqlite:///{{.ROOT}}/monitor/panoptes.db"
+        uv run --group paper python workflow/flowlib/monitor_server.py
+
+
+  dag:
+    desc: "Build a target's rule graph and job DAG for the monitor's /dag/ page (task nowcast-workflow:dag -- NAME=TARGET [snakemake options])"
+    cmds:
+      - uv run --group paper python workflow/flowlib/dag.py {{.CLI_ARGS}}
 
 
   tick:

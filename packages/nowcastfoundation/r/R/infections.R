@@ -74,20 +74,21 @@ stratum_imports <- function(n, share, strata, design, v) {
 }
 
 # A generation time on 1, ..., n days, n its 99.9% quantile, from its
-# family (gamma or lognormal), mean and CV.
+# family (gamma or lognormal), mean and CV: double interval censored
+# (primarycensored, a uniform primary day), left truncated at a day.
 gt_pmf <- function(mean, family, cv) {
   if (family == "gamma") {
     k <- 1 / cv^2
-    cdf <- function(d) pgamma(d, k, k / mean)
+    args <- list(pdist = pgamma, shape = k, rate = k / mean)
     q <- qgamma(0.999, k, k / mean)
   } else {
     sdlog <- sqrt(log(1 + cv^2))
     meanlog <- log(mean) - sdlog^2 / 2
-    cdf <- function(d) plnorm(d, meanlog, sdlog)
+    args <- list(pdist = plnorm, meanlog = meanlog, sdlog = sdlog)
     q <- qlnorm(0.999, meanlog, sdlog)
   }
-  pmf <- diff(cdf(0:max(2L, as.integer(ceiling(q)))))
-  pmf / sum(pmf)
+  n <- max(2L, as.integer(ceiling(q)))
+  do.call(primarycensored::dpcens, c(list(1:n, L = 1, D = n + 1), args))
 }
 
 # `n` weeks of an AR(1) walk on log R around 0 (R = 1).
@@ -159,7 +160,7 @@ strata_log_r <- function(grid, n, strata, design, v) {
   scale <- v$gt_mean
   shared <- path_log_r(n, v$path, v)
   own_path <- function() {
-    if (v$path %in% c("endemic", "controlled")) {
+    if (v$path %in% c("endemic", "controlled", "oscillating")) {
       v$path
     } else {
       sample(names(grid$factors$trajectory), 1)
@@ -180,7 +181,17 @@ strata_log_r <- function(grid, n, strata, design, v) {
     lagged = lapply(seq_along(places), function(i) {
       k <- v$place_lags[i]
       c(rep(shared[1], k), shared)[seq_len(n)]
-    })
+    }),
+    nested = {
+      region <- v$place_region[seq_along(places)]
+      common <- lapply(seq_len(max(region)), function(r) {
+        weekly_noise(n, scale * v$place_sd)
+      })
+      lapply(seq_along(places), function(i) {
+        shared + sqrt(v$place_rho) * common[[region[i]]] +
+          sqrt(1 - v$place_rho) * weekly_noise(n, scale * v$place_sd)
+      })
+    }
   )
   path <- paths[match(strata$place, places)]
   drift <- log(v$r_drift) * (seq_len(n) - 1) / n
@@ -258,7 +269,7 @@ renewal_infections <- function(start, gt, log_r, population, mixing = NULL,
 }
 
 # Expected onsets (ascertained infections) on the generation time's
-# span plus `n` days, for `simulate_outbreak`. Strata weights are
+# span plus `n` days. Strata weights are
 # drawn (`stratum_sd`, quiet places none). Each place's population is split over
 # its ages by their weights. An early window starts each stratum with
 # cases from a seed on the last day before it (at least 1); an endemic or
@@ -291,7 +302,10 @@ latent_onsets <- function(grid, n, gt, strata, design, v) {
   } else {
     start[, on] <- rep(v$level * rel[on], each = n_gt)
   }
-  if (any(colSums(start) > population)) {
+  # An established epidemic ran at its level before the span too: its
+  # onsets take that history, about the level over the mean incubation.
+  history <- if (early) 0 else start[1L, ] * v$incubation_mean[strata$.group]
+  if (any(colSums(start) + history > population)) {
     stop("an established epidemic larger than its population")
   }
   unit <- (if (early) v$seed else v$level) * rel
@@ -322,7 +336,9 @@ latent_onsets <- function(grid, n, gt, strata, design, v) {
   pad <- rep(NA_real_, n_gt)
   asc <- v$ascertainment[strata$.group]
   pmfs <- lapply(v$incubation_mean[strata$.group], incubation_pmf,
-    cv = grid$constants$incubation_cv
+    cv = if (is.null(v$incubation_cv)) 0.5 else v$incubation_cv,
+    family = if (is.null(design$incubation_family)) "gamma" else
+      design$incubation_family
   )
   # An established or endemic stratum ran at its level before the span
   # too, so its onsets open at that level rather than ramping up from zero

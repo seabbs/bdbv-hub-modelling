@@ -13,6 +13,9 @@ from pathlib import Path
 
 import pytest
 
+# The jobs run `python -m snakemake`, which the `paper` group installs.
+pytest.importorskip("snakemake")
+
 REPO = Path(__file__).parents[2]
 SCRIPTS = REPO / "workflow" / "scripts" / "remote"
 

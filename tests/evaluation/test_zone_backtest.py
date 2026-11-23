@@ -5,13 +5,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily, load_daily_zones
-from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.evaluation.zones import (
-    ZONE_BASELINE,
-    zone_backtest,
-    zone_relative_skill,
-)
+from bdbvhub.data.tidy import load_daily, load_daily_zones
+from bdbvhub.data.zones import hub_zones
+from bdbvhub.zones import ZONE_BASELINE, zone_backtest, zone_relative_skill
 
 DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 
@@ -36,6 +32,7 @@ def scores(
     return result[0]
 
 
+@pytest.mark.slow
 def test_energy_scores_every_zone_and_week_as_one_vector(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
@@ -49,6 +46,7 @@ def test_energy_scores_every_zone_and_week_as_one_vector(
     assert got["max"].equals(cells.rename("max"))
 
 
+@pytest.mark.slow
 def test_both_baselines_are_scored_at_zone_level(
     scores: pd.DataFrame, vintages: list[str]
 ) -> None:
@@ -77,6 +75,7 @@ def test_both_baselines_are_scored_at_zone_level(
     assert per.between(20, 300).all()
 
 
+@pytest.mark.slow
 def test_every_model_scores_the_same_zones_and_weeks(
     scores: pd.DataFrame,
 ) -> None:
@@ -87,6 +86,7 @@ def test_every_model_scores_the_same_zones_and_weeks(
     assert (keys == keys.iloc[0]).all()
 
 
+@pytest.mark.slow
 def test_relative_skill_is_against_the_zone_randomwalk(
     scores: pd.DataFrame,
 ) -> None:
@@ -99,6 +99,7 @@ def test_relative_skill_is_against_the_zone_randomwalk(
     assert mine.index.min() == -4
 
 
+@pytest.mark.slow
 def test_zone_forecasts_are_the_scored_forms_by_origin(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
 ) -> None:
@@ -109,13 +110,14 @@ def test_zone_forecasts_are_the_scored_forms_by_origin(
     assert set(forecasts["location"]) == set(scores["location"])
 
 
+@pytest.mark.slow
 def test_zone_backtest_by_origin_chunk_matches_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
     vintages: list[str],
 ) -> None:
-    from bdbvhubrenewal.cli import chunk
+    from bdbvhub.cli import chunk
 
     origins = vintages[:-1]
     parts = [
@@ -150,17 +152,14 @@ def test_zone_backtest_of_no_origin_is_empty(
     assert all(t.empty for t in out)
 
 
+@pytest.mark.slow
 def test_zone_forecasts_made_apart_by_model_score_as_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
     tmp_path: Path,
 ) -> None:
-    from bdbvhubrenewal.evaluation.zones import (
-        ZoneForecasts,
-        score_zones,
-        zone_forecasts,
-    )
+    from bdbvhub.zones import ZoneForecasts, score_zones, zone_forecasts
 
     args = (
         target,
@@ -180,7 +179,7 @@ def test_zone_forecasts_made_apart_by_model_score_as_one_run(
 
 
 def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
-    from bdbvhubrenewal.evaluation.zones import ZoneForecasts
+    from bdbvhub.zones import ZoneForecasts
 
     empty = pd.DataFrame(columns=["origin", "model"])
     ZoneForecasts(empty, empty, empty).write(tmp_path / "a")
@@ -194,6 +193,19 @@ def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
     assert len(run.runs) == 1
 
 
+def test_zone_forecasts_read_keeps_text_that_looks_missing(
+    tmp_path: Path,
+) -> None:
+    from bdbvhub.zones import ZoneForecasts
+
+    empty = pd.DataFrame(columns=["origin", "model"])
+    runs = pd.DataFrame({"origin": ["2026-10-24"], "model": ["NA"]})
+    ZoneForecasts(runs, empty, empty).write(tmp_path / "a")
+    run = ZoneForecasts.read([tmp_path / "a"])
+    assert run.runs["model"].tolist() == ["NA"]
+
+
+@pytest.mark.slow
 def test_zone_relative_skill_scores_crps(scores: pd.DataFrame) -> None:
     rel = zone_relative_skill(scores).set_index("model")
     assert rel.loc[ZONE_BASELINE, "relative_crps"] == pytest.approx(1.0)

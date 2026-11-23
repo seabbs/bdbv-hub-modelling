@@ -5,7 +5,7 @@ The held-out outbreaks are simulations of the paper's synthetic grid
 (`synthetic.grid`) with seeds the fine-tune never saw. Each outbreak is
 released weekly, on one weekday from Wednesday to Saturday drawn by the
 outbreak, as for the training
-blocks (`scripts/finetune_chronos.py`). A release's vintage is its
+blocks (`nowcastfoundation.finetune.chronos`). A release's vintage is its
 cut-off.
 
 `origin_cutoffs` picks `n` origins per outbreak, spread evenly over the
@@ -38,7 +38,13 @@ import numpy as np
 import pandas as pd
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcasteval.backtest import run_forecasts
-from nowcastfoundation.finetune import releases, weekly_cutoffs
+from nowcastfoundation.finetune import delay_quantile as share_delay
+from nowcastfoundation.finetune import (
+    release_weekday,
+    releases,
+    simulations,
+    weekly_cutoffs,
+)
 from nowcastutils.base import NATIONAL, ForecastModel, ForecastTask, get_model
 from nowcastutils.dates import epiweek_end
 from nowcastutils.hierarchy import parent as parent_of
@@ -65,7 +71,6 @@ __all__ = [
     "release_cutoffs",
     "sample_table",
     "series_label",
-    "simulation_id",
     "truth_table",
 ]
 
@@ -93,12 +98,14 @@ HORIZON_WEEKS: Final = 5
 cut-off's week and three more, with a week to spare. An origin is at
 least this plus the outbreak's longest delay before its last report."""
 
-MIN_DELAY_WEEKS: Final = 3
-"""The grid's shortest longest delay; r3 outbreaks have 3, 4, 6, 8 or 12
-weeks."""
-
 HORIZONS: Final = tuple(range(-4, 4))
 """Forecast weeks from the reference date."""
+
+ORIGINS: Final = 4
+"""Origins per outbreak, spread evenly over its releases."""
+
+DRAW: Final = 1
+"""The observation draw of each simulation scored."""
 
 COLUMNS: Final = (
     "study",
@@ -117,6 +124,7 @@ COLUMNS: Final = (
 FACTORS: Final = (
     "window",
     "gt_family",
+    "incubation_family",
     "trajectory",
     "delay_family",
     "delay_form",
@@ -190,11 +198,10 @@ def release_cutoffs(counts: pd.DataFrame, outbreak: str) -> list[str]:
         The cut-offs, ISO format.
     """
     rng = np.random.default_rng(zlib.crc32(outbreak.encode()))
-    weekday = int(rng.integers(2, 6))
     return weekly_cutoffs(
         str(counts["report_date"].min()),
         str(counts["report_date"].max()),
-        weekday,
+        release_weekday(rng),
     )
 
 
@@ -551,7 +558,7 @@ def factor_table(counts: pd.DataFrame, settings: pd.DataFrame) -> pd.DataFrame:
     outbreak = str(counts["outbreak"].iloc[0])
     places = sorted(set(truth_table(counts)["location"]))
     factors = [f for f in FACTORS if f in settings]
-    mine = settings["outbreak"] == simulation_id(outbreak)
+    mine = settings["outbreak"] == simulations(counts["outbreak"]).iloc[0]
     row = settings.loc[mine, factors].iloc[0]
     out = pd.DataFrame(
         {"location": [series_label(outbreak, p) for p in places]}
@@ -586,38 +593,26 @@ def delay_quantile(counts: pd.DataFrame, q: float) -> int:
     longest = pd.Timedelta(weeks=longest_delay_weeks(counts))
     seen = ref <= rep.max() - longest
     delay = (rep - ref).dt.days[seen]
-    by = counts.loc[seen, "count"].groupby(delay).sum().sort_index()
-    share = by.cumsum() / by.sum()
-    return int(share.index[np.argmax(share.to_numpy() >= q - 1e-12)])
+    return int(share_delay(counts.loc[seen, "count"].groupby(delay).sum(), q))
 
 
 def longest_delay_weeks(counts: pd.DataFrame) -> int:
     """Return an outbreak's longest reporting delay in whole weeks.
 
-    The longest delay seen, rounded up to weeks, and at least
-    `MIN_DELAY_WEEKS`, so an outbreak whose cases all come early keeps
-    the grid's shortest.
+    The longest delay seen, rounded up to weeks, within the grid's delay
+    range.
     """
     delay = (
         pd.to_datetime(counts["report_date"])
         - pd.to_datetime(counts["reference_date"])
     ).dt.days.max()
-    return max(MIN_DELAY_WEEKS, -(-int(delay) // 7))
-
-
-def simulation_id(outbreak: str) -> str:
-    """Return the simulation of an r3 outbreak, `<seed>-<index>-<draw>`.
-
-    The settings have one row per simulation, `<seed>-<index>`.
-    """
-    parts = outbreak.split("-")
-    return "-".join(parts[:2])
+    return -(-int(delay) // 7)
 
 
 def first_draws(counts: pd.DataFrame, draw: int = 1) -> pd.DataFrame:
     """Return one draw of each simulation, so outbreaks are independent.
 
-    The draws of an r3 simulation share its parameters and differ only in
+    The draws of a simulation share its parameters and differ only in
     their observations.
 
     Parameters

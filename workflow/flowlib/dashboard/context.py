@@ -28,6 +28,47 @@ RUN_MODEL = "fm_chronos_daily_ragged_ft"
 """The model a run's checkpoints are, for their display name and colour."""
 
 
+def references(
+    entries: Sequence[Mapping[str, Any]], cli: Sequence[str] = ()
+) -> list[spec.Reference]:
+    """Return the configured references, then `--ref` ones.
+
+    A reference with `paper_model` takes that model's name, colour and
+    line style from the paper (`paperstyle`) unless it sets its own.
+    """
+    resolved = [
+        {
+            **e,
+            "label": e.get("label") or paperstyle.model_label(e["paper_model"]),
+            "colour": e.get("colour")
+            or paperstyle.model_colour(e["paper_model"]),
+            "dash": e.get("dash") or paperstyle.model_dash(e["paper_model"]),
+        }
+        if e.get("paper_model")
+        else e
+        for e in entries
+    ]
+    return spec.load_references(resolved, cli)
+
+
+def workflow_runs(
+    config: Mapping[str, Any], local: Mapping[str, str]
+) -> list[dict[str, str]]:
+    """Return the workflow's runs (`runs`) as dashboard runs.
+
+    Each from its folder, `<ROOT>/runs/<name>` (flowlib.runs), so the
+    dashboard shows them with no other setting; `dashboard.runs`, the
+    machine's and the command line's runs come after and may replace one.
+    """
+    if not local.get("ROOT"):
+        return []
+    root = Path(local["ROOT"]).expanduser()
+    return [
+        {"key": name, "source": str(root / "runs" / name)}
+        for name in config.get("runs") or {}
+    ]
+
+
 def build(
     config: Mapping[str, Any],
     local: Mapping[str, str],
@@ -72,7 +113,11 @@ def build(
         if k not in hidden_studies
     }
     run_list = spec.load_runs(
-        [*(dash.get("runs") or []), *(extra.get("runs") or [])],
+        [
+            *workflow_runs(config, local),
+            *(dash.get("runs") or []),
+            *(extra.get("runs") or []),
+        ],
         local.get("DASHBOARD_RUNS", ""),
         runs,
     )
@@ -82,19 +127,6 @@ def build(
             "config/local.env, or --run name=<folder|prefix>"
         )
     run_list = named_runs(run_list)
-    # A reference may take its name and colour from the paper's model.
-    references = [
-        {
-            **e,
-            "label": e.get("label") or paperstyle.model_label(e["paper_model"]),
-            "colour": e.get("colour")
-            or paperstyle.model_colour(e["paper_model"]),
-            "dash": e.get("dash") or paperstyle.model_dash(e["paper_model"]),
-        }
-        if e.get("paper_model")
-        else e
-        for e in dash.get("references") or []
-    ]
     source = Source(
         local,
         root / dash["mirror"],
@@ -113,7 +145,7 @@ def build(
     )
     return Context(
         runs=run_list,
-        references=spec.load_references(references, refs),
+        references=references(dash.get("references") or [], refs),
         source=source,
         rule=dash["rule"],
         outbreaks=int(ft["outbreaks"]),

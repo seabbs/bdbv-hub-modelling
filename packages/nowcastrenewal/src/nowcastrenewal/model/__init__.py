@@ -1,11 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """The province renewal model, built on PyRenew (JAX, NumPyro).
 
-- `temporal`: a non-centred random walk or AR(1) temporal process.
 - `pooled`: pooled group values and sum-to-zero group deviations.
-- `renewal`: the coupled renewal with importation (`Importation`),
-  seeding and depletion.
-- `censored`: double interval censored daily pmfs of continuous delays.
+- `renewal`: the coupled renewal with importation, seeding and
+  depletion.
 - `hazard_delay`: a delay pmf that varies with the reference day.
 - `delays`: a fixed time-varying delay.
 - `observation`: the known and imputed onset streams, the missing-onset
@@ -23,11 +21,11 @@
 The package imports without JAX until this subpackage is imported.
 """
 
-from .censored import CensoredPMF, censored_pmf
+from ..components.walks import NonCentredRandomWalk
 from .delays import (
     FixedTimeVarying,
 )
-from .hazard_delay import HazardDelay, hazard_to_pmf
+from .hazard_delay import HazardDelay
 from .model import (
     BVD,
     MAIN,
@@ -45,23 +43,15 @@ from .observation import (
     onset_expectations,
 )
 from .pooled import PooledInitialValue, pooled_walk
-from .renewal import (
-    Importation,
-    MetapopulationInfections,
-    coupled_renewal,
-    mixing_matrix,
-)
+from .renewal import MetapopulationInfections
 from .rt_observation import RtPseudoObservation
-from .temporal import NonCentredRandomWalk
 from .zones import build_model
 
 __all__ = [
     "BVD",
     "MAIN",
-    "CensoredPMF",
     "FixedTimeVarying",
     "HazardDelay",
-    "Importation",
     "MetapopulationInfections",
     "MissingOnsetFraction",
     "ModelConfig",
@@ -71,14 +61,10 @@ __all__ = [
     "RtPseudoObservation",
     "Vintage",
     "build_model",
-    "censored_pmf",
-    "coupled_renewal",
     "fit",
     "forecast_trajectories",
     "generation_interval",
-    "hazard_to_pmf",
     "incubation_period",
-    "mixing_matrix",
     "model_args",
     "onset_expectations",
     "pooled_walk",

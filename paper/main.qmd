@@ -26,7 +26,6 @@ metadata-files:
 ---
 
 <!--
-Plan from #206.
 Each top-level bullet is one paragraph, with 2–3 supporting points.
 -->
 
@@ -95,7 +94,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - We report the final checkpoint, where the learning rate reaches zero, and select no checkpoint on real data.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - We compare the joint block with forecasting each level alone and with summing the lowest level (SI).
-- The number of lag series, in training and at prediction alike, is the pooled reporting delay's 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
+- The number of lag series, in training and at prediction alike, is the largest over the block's places of each place's reporting delay 99% point, estimated at the nowcast date from complete steps only, or as many as the history allows if that is fewer (SI).
 - We compare the model with attention biases with one fine-tuned without them (SI).
 - We fine-tune Chronos-2 on complete counts only, without delay series, and compare it with the ragged model (SI).
 - We fine-tune Chronos-2 on real data and compare it with the model fine-tuned on simulations (SI).
@@ -107,12 +106,12 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 :::
 
 ![The fine-tuning pipeline.
-(A) The assumptions in the epinowcast simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle.
+(A) The assumptions in the simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle.
 (B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs.
 Group attention has learned biases for a series attending to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai's any-variate attention [@Woo2024], while every place's series sit in one group.
 The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation (same place: a place's count series and its lag series).
 Beside it, one place's daily rows carry a weekly total row, missing until the last day of each week.
-(C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained.
+(C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final simulated counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained.
 (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.](figures/fig1-pipeline.svg){#fig-pipeline}
 
 ### Synthetic data generation
@@ -122,7 +121,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
   - We simulate outbreaks in five layers, each described with its figure and sampling distributions in the SI.
   - In layer 1 we simulate infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
   - In layer 2 we observe infections as reference events after a delay such as incubation, ascertain a share of them and add NB1 or Poisson noise.
-  - In layer 3 we report them after a reporting delay that is static or changes over time, through epinowcast's observation model.
+  - In layer 3 we report them after a reporting delay that is static or changes over time, as epinowcast's observation model does.
   - In layer 4 we add the reporting system: report days and weekday effects, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
   - In layer 5 we set the strata and aggregation: places and age groups and how they nest, how places interact, how settings vary across strata, and aggregates that are exact sums of their strata or do not add up.
   - Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.
@@ -160,6 +159,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ::: {.callout-note title="Plan"}
 - We compare with the hub's models, relative to the hub's baseline, and evaluate as the hub did.
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, against the data as reported 40 days later [@Wolffram2023].
+- Our models see only reports made within 40 days of each reference date, so they forecast the count the truth holds.
 - We score the hub's target, 7-day sums, ending on each day from the nowcast date to 28 days before it.
 - We score only the hub's targets, and the SI adds our models' forecasts up to 4 weeks after the nowcast date.
 - Our models forecast weeks ending on Saturdays, so each nowcast date gives seven sets of forecasts, one for each weekday offset $k$ from 0 to 6.
@@ -187,6 +187,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - $D$ is part of the scoring rule, not a choice tuned on the data.
 - The SI compares the samples directly with the fair CRPS.
 - We score Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
+- Quantiles from 100 draws are noisier than those from 1,000, so WIS is biased against the hub teams, and the fair CRPS in the SI checks this.
 - Chronos-2's submitted trajectories come from its quantiles through a copula, and the SI scores them with and without it (Correlated trajectories).
 - The fine-tuned models use the final run's last checkpoint, at 3,200 simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
 - Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
@@ -195,7 +196,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.
+- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, PyRenew and numpyro for simulation, and scoringrules for scoring, checked against scoringutils.
 - A Snakemake workflow runs the evaluation from the raw data to every figure and table.
 :::
 
@@ -296,7 +297,6 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {.callout-note title="Plan"}
 - We show national nowcasts against the other submissions.
 - We summarise the scores.
-- The SI compares the joint block with each level alone and with the lowest level summed (Joint block or aggregation).
 - The SI compares the walks with the rolling copula and with no pairing (Impact of correlated trajectories).
 :::
 
@@ -364,7 +364,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Key references: [@Dudley2026; @Dudley2025; @Dooley2023; @Hollmann2025; @Ansari2025].
 - **Against the literature.**
   - Other uses of foundation models in infectious disease modelling.
-    Key references: [@Kalahasti2026; @Cai2026; @Wang2025; @Jafari2026; @Du2025; @Li2025; @Aygun2025; @Martinson2026].
+    Key references: [@Kalahasti2026; @Cai2026; @Wang2025; @Jafari2026; @Du2025; @Li2025; @Aygun2025; @Martinson2026; @Koucha2026].
   - Fine-tuning in other domains.
     Key references: [@Laglil2026; @Das2024b; @Hu2021].
   - Other nowcasting approaches.

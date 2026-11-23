@@ -1,6 +1,6 @@
 """The simulator's latent process against the R engine, run by run.
 
-Each `latent-*.json` fixture (from `scripts/latent_fixtures.R`) holds a
+Each case, run live by the R engine (`r/latent_cases.R`), holds a
 drawn design and values and every random draw R made for it, in order:
 standard normals and the path kinds of independent places. The run is
 replayed by substituting those draws at the model's sample sites, in the
@@ -9,10 +9,8 @@ order the model makes them, and must use all of them.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 import jax
@@ -22,8 +20,14 @@ import pandas as pd
 import pytest
 from numpyro import handlers
 
-from nowcastrenewal.latent.pmfs import gt_pmf
-from nowcastrenewal.latent.rt import PlaceRt, RtPath, WeeklyNoise, daily_walk
+from nowcastrenewal.components.pmfs import Delay, generation_time_pmf
+from nowcastrenewal.latent.rt import (
+    KINDS,
+    PlaceRt,
+    RtPath,
+    WeeklyNoise,
+    daily_walk,
+)
 from nowcastrenewal.latent.simulate import (
     COLUMNS,
     simulate_latent,
@@ -31,24 +35,12 @@ from nowcastrenewal.latent.simulate import (
 )
 from nowcastrenewal.latent.start import InitializeStrata
 
-FIXTURES = Path(__file__).parent / "fixtures" / "latent"
-LATENT = sorted(FIXTURES.glob("latent-*.json"))
-KINDS = [
-    "endemic",
-    "controlled",
-    "growth",
-    "decline",
-    "flat",
-    "rise_fall_gradual",
-    "fall_rise",
-    "rise_fall_sharp",
-    "oscillating",
-    "multi_wave",
-]
+from .latent_r import load
 
 
-def load(name: str) -> dict[str, Any]:
-    return json.loads((FIXTURES / f"{name}.json").read_text())
+def gt_pmf(mean: float, family: str, cv: float) -> np.ndarray:
+    """The grid's generation time, from the shared pmfs."""
+    return generation_time_pmf(Delay.from_mean_cv(family, mean, cv))
 
 
 def matrix(x: Any) -> np.ndarray:
@@ -118,6 +110,17 @@ def test_weekly_noise_is_an_ar1_held_for_a_week_from_zero() -> None:
     np.testing.assert_allclose(out, np.repeat(e, 7)[:30], rtol=1e-15)
 
 
+def test_weekly_noise_is_pyrenews_weekly_process_over_the_shared_walk() -> None:
+    from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
+
+    from nowcastrenewal.components.walks import NonCentredRandomWalk
+
+    noise = WeeklyNoise("w")
+    process = noise.process(0.2)
+    assert isinstance(process, WeeklyTemporalProcess)
+    assert isinstance(process.inner, NonCentredRandomWalk)
+
+
 def test_a_shared_relation_draws_only_the_strata_noise() -> None:
     path = RtPath("growth", amplitude=0.2)
     rt = PlaceRt("rt", path, "shared", noise_scale=5.0, coupling=1.0)
@@ -126,7 +129,40 @@ def test_a_shared_relation_draws_only_the_strata_noise() -> None:
             n=21, place=np.array([0, 0, 1])
         )
     sites = [k for k, s in trace.items() if s["type"] == "sample"]
-    assert sites == [f"rt_stratum_{j}_decentered" for j in range(3)]
+    assert sites == [f"rt_stratum_{j}_z" for j in range(3)]
+
+
+def test_nested_places_share_their_regions_deviation() -> None:
+    # All the places' noise from their region (rho 1): places in one
+    # region have one path, regions differ.
+    path = RtPath("flat", amplitude=0.2)
+    rt = PlaceRt(
+        "rt",
+        path,
+        "nested",
+        noise_scale=5.0,
+        place_sd=0.2,
+        place_rho=1.0,
+        place_region=[1, 2, 1, 2],
+        coupling=1.0,
+    )
+    with jax.enable_x64(True):
+        trace = handlers.trace(handlers.seed(rt, 0)).get_trace(
+            n=28, place=np.array([0, 1, 2, 3])
+        )
+    sites = [k for k, s in trace.items() if s["type"] == "sample"]
+    assert sites[:2] == ["rt_region_1_z", "rt_region_2_z"]
+    assert sites[2:6] == [f"rt_place_{i}_z" for i in range(4)]
+    log_r = np.asarray(trace["rt::log_r"]["value"])
+    np.testing.assert_allclose(log_r[:, 0], log_r[:, 2])
+    np.testing.assert_allclose(log_r[:, 1], log_r[:, 3])
+    assert not np.allclose(log_r[:, 0], log_r[:, 1])
+
+
+def test_nested_places_need_a_region_each() -> None:
+    rt = PlaceRt("rt", RtPath("flat"), "nested", place_region=[1])
+    with pytest.raises(ValueError, match="region for each of 2"):
+        handlers.seed(rt, 0)(n=7, place=np.array([0, 1]))
 
 
 @pytest.mark.parametrize("early", [True, False])
@@ -141,9 +177,21 @@ def test_the_start_is_a_seed_on_the_last_day_or_a_level(early: bool) -> None:
     np.testing.assert_array_equal(out, want)
 
 
-@pytest.mark.parametrize("path", LATENT, ids=lambda p: p.stem)
-def test_latent_runs_replay_the_r_engine(path: Path) -> None:
-    case = json.loads(path.read_text())
+def runs() -> list[dict[str, Any]]:
+    return list(load("runs"))
+
+
+def test_latent_runs_replay_the_r_engine() -> None:
+    cases = runs()
+    assert len(cases) >= 12
+    for case in cases:
+        try:
+            _replay_case(case)
+        except AssertionError as e:
+            raise AssertionError(f"R seed {case['seed']}: {e}") from e
+
+
+def _replay_case(case: dict[str, Any]) -> None:
     design, values = case["design"], case["values"]
     gt = gt_pmf(values["gt_mean"], design["gt_family"], values["gt_cv"])
     strata = pd.DataFrame(case["strata"])
@@ -178,15 +226,12 @@ def test_latent_runs_replay_the_r_engine(path: Path) -> None:
 
 
 def test_the_latent_cases_cover_every_design_level() -> None:
-    ran = [
-        c["design"]
-        for c in (json.loads(p.read_text()) for p in LATENT)
-        if "error" not in c
-    ]
+    ran = [c["design"] for c in runs() if "error" not in c]
     for factor, levels in {
         "mixing": {"none", "symmetric", "asymmetric", "distance"}
         | {"time_varying"},
-        "place_rt": {"shared", "independent", "correlated", "lagged"},
+        "place_rt": {"shared", "independent", "correlated", "lagged"}
+        | {"nested"},
         "window": {"early", "established", "endemic"},
         "imports": {"none", "constant", "pulses"},
         "seeding": {"start", "mid"},
@@ -195,7 +240,7 @@ def test_the_latent_cases_cover_every_design_level() -> None:
 
 
 def _simulations() -> list[dict[str, Any]]:
-    case = json.loads(LATENT[-1].read_text())
+    case = runs()[-1]
     sims = [
         {
             "id": f"s{i}",
@@ -267,7 +312,7 @@ def test_any_error_in_one_simulation_is_recorded_and_the_batch_goes_on() -> (
 
 
 def test_a_single_draw_of_a_vector_value_may_be_a_scalar() -> None:
-    case = json.loads(LATENT[0].read_text())
+    case = runs()[0]
     values = {
         k: (v[0] if isinstance(v, list) and len(v) == 1 else v)
         for k, v in case["values"].items()
@@ -308,3 +353,20 @@ def test_the_fitted_models_do_not_import_the_latent_process() -> None:
         check=True,
     )
     assert out.stdout.strip() == "[]"
+
+
+def test_ci_runs_the_live_latent_checks() -> None:
+    import yaml
+
+    from .r_live import ROOT
+
+    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    job = workflow["jobs"]["r-live"]
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    packages = " ".join(
+        s.get("with", {}).get("packages", "") for s in job["steps"]
+    )
+    for test in ("test_latent_components.py", "test_latent_process.py"):
+        assert f"tests/model/{test}" in runs, test
+    for pkg in ("pkgload", "yaml", "data.table"):
+        assert pkg in packages, pkg

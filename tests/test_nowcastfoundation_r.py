@@ -1,4 +1,4 @@
-"""The simulator engine's own tests (packages/nowcastfoundation/r)."""
+"""The former R engine's own tests (packages/nowcastfoundation/r)."""
 
 import shutil
 import subprocess
@@ -38,3 +38,12 @@ def test_ci_runs_the_engine_s_testthat_suite():
     assert "r-lib/actions/setup-r-dependencies@" in uses
     assert 'test_local("packages/nowcastfoundation/r"' in runs
     assert "stop_on_failure = TRUE" in runs
+
+
+def test_the_engine_no_longer_needs_epinowcast():
+    """The simulator runs no R; the engine is a test reference only."""
+    description = (
+        ROOT / "packages/nowcastfoundation/r/DESCRIPTION"
+    ).read_text()
+    assert "epinowcast" not in description
+    assert "cmdstanr" not in description

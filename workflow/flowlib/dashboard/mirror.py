@@ -1,10 +1,10 @@
-"""Where the dashboard reads scores, forecasts, truth and notes from.
+"""Where the dashboard reads scores, forecasts and notes from.
 
 Each source is a local path, read where it is, or `host:path`, copied
 read-only with rsync over ssh into the mirror folder; nothing is ever
 written back. The sources are the score table (`scores`), each dataset's
-per-checkpoint forecast folders (`datasets[].source`) and truth table
-(`datasets[].truth_source`), and an optional notes file (`mailbox`).
+per-checkpoint forecast folders (`datasets[].source`), and an optional
+notes file (`mailbox`).
 Unset, the score table and forecasts are this machine's scoring cache
 (`SCORE_CACHE`, or `REMOTE:REMOTE_ROOT/scores` when `REMOTE` is set) and
 the notes file is `MAILBOX` (or `REMOTE:REMOTE_MAILBOX`).
@@ -75,24 +75,12 @@ class Source:
         )
         for ds in datasets:
             key = ds["key"]
-            # A samples dataset's copy is kept apart from its summaries.
-            local = f"{key}-samples" if ds.get("format") == "samples" else key
-            # A dataset that says why it may have no nowcasts (`missing`)
-            # does not fail the mirror while it has none.
             self._add(
                 f"dataset:{key}",
-                ds.get("source") or f"{cache}/{key}",
-                local,
+                ds.get("source") or f"{cache}/{ds.get('unit') or key}",
+                key,
                 folder=True,
-                required=not ds.get("missing"),
             )
-            if ds.get("truth_source"):
-                self._add(
-                    f"truth:{key}",
-                    ds["truth_source"],
-                    f"{key}-truth.csv",
-                    folder=False,
-                )
         box = (mailbox or {}).get("source") or (
             f"{remote}:{cfg['REMOTE_MAILBOX']}"
             if remote and cfg.get("REMOTE_MAILBOX")
@@ -150,10 +138,6 @@ class Source:
             )
         return self._items[f"dataset:{key}"][1]
 
-    def truth(self, key: str) -> Path | None:
-        """Return a dataset's truth table, if it has one."""
-        return self._path(f"truth:{key}")
-
     def extra(self, i: int) -> Path | None:
         """Return the `i`th extra file (a table or note)."""
         return self._path(f"extra:{i}")
@@ -178,7 +162,7 @@ class Source:
         """Copy each remote source; return what happened, for the page.
 
         The status starts `mirror failed` if a required source (scores,
-        forecasts, truth) could not be copied; a failed notes file is
+        forecasts) could not be copied; a failed notes file is
         reported but optional.
         """
         self.failed = []

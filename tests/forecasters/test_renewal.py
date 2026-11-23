@@ -10,17 +10,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import (
+from bdbvhub.models import get_model, list_models
+from bdbvhub.submission.hub import model_abbr_for
+from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastrenewal import forecaster as rn
+from nowcastutils.base import (
     NATIONAL,
     ForecastModel,
     ForecastTask,
     check_samples,
-    get_model,
-    list_models,
 )
-from bdbvhubrenewal.submission.hub import model_abbr_for
-from nowcasteval.backtest import BacktestConfig, make_tasks
-from nowcastrenewal import forecaster as rn
+from nowcastutils.dates import epiweek_end
 from nowcastutils.forecast import Forecast
 
 pytest.importorskip("pyrenew")
@@ -68,8 +68,8 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 
 def test_only_renewalsp_centres_its_rt_walk() -> None:
-    # One place's data pin its Rt walk, so its levels are sampled (#330).
-    # Pooled, the walk's step SD mixes badly centred (#320).
+    # One place's data pin its Rt walk, so its levels are sampled.
+    # Pooled, the walk's step SD mixes badly centred.
     centred = {
         name: rn.model_config(v).centred_rt for name, v in rn.VARIANTS.items()
     }
@@ -77,7 +77,7 @@ def test_only_renewalsp_centres_its_rt_walk() -> None:
 
 
 def test_renewalsp_centres_only_where_the_data_pin_the_walk() -> None:
-    # Centred, a province with few cases funnels (#330).
+    # Centred, a province with few cases funnels.
     def data(cases: float) -> SimpleNamespace:
         known = np.array([[cases - 1.0], [np.nan]])
         return SimpleNamespace(known=known, imputed=np.array([[1.0], [0.0]]))
@@ -599,7 +599,7 @@ def test_the_model_cut_off_is_the_release_s_latest_onset_day(
         cut = data.start_date + dt.timedelta(days=data.cutoff)
         end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
         assert cut.isoformat() == last
-        assert end == rn._saturday(last)
+        assert end == epiweek_end(last)
 
 
 def test_single_patch_fits_each_province_on_its_own(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import urllib.error
 from dataclasses import replace
+from email.message import Message
 from pathlib import Path
 from typing import Any
 
@@ -8,21 +10,25 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.data.zones import load_zone_data
+from bdbvhub.models import get_model
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastrenewal import forecaster as rn
 from nowcastrenewal import zones as zr
+from nowcastutils.base import ForecastTask, ModelUnavailableError
 from nowcastutils.hierarchy import is_zone, province_of
 
 pytest.importorskip("pyrenew")
 
 ROOT = Path(__file__).resolve().parents[2]
+DATA = ROOT / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture
 def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
     rows = target.loc[target["vintage"] == "2026-10-17"]
-    return make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
+    config = BacktestConfig(n_samples=20, seed=3)
+    return make_tasks(rows, delays, config, zones=load_zone_data(DATA))[0]
 
 
 @pytest.fixture
@@ -99,6 +105,27 @@ def test_renewal_and_renewalbvd_fit_zones() -> None:
     assert repr(model) != repr(rn.RenewalModel(rn.VARIANTS["renewalbvd"]))
 
 
+def test_a_zone_fit_forecasts_the_zones_its_task_holds(
+    task: ForecastTask,
+) -> None:
+    # The task's zone codes are what the forecast is checked against
+    # (`nowcastutils.base._check_block`), so the fit takes its zones
+    # from them, not from the data directory.
+    mine = [z for z in task.zone_codes if province_of(z) in task.locations]
+    fewer = replace(task, zone_codes=tuple(mine[::2]))
+    assert zr.task_zones(fewer) == tuple(sorted(mine[::2]))
+
+
+def test_a_real_task_with_no_zone_codes_has_no_zone_fit(
+    task: ForecastTask,
+) -> None:
+    bare = replace(task, zone_codes=())
+    with pytest.raises(ModelUnavailableError, match="zone codes"):
+        zr.task_zones(bare)
+    with pytest.raises(ModelUnavailableError, match="zone codes"):
+        get_model("renewal").forecast(bare)
+
+
 def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     task: ForecastTask,
     monkeypatch: pytest.MonkeyPatch,
@@ -157,6 +184,44 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     model.write_fit_dir(task, tmp_path, "main")
     written = pd.read_csv(tmp_path / zr.ZONES_FILE)
     assert set(written["location"]) == set(zones["location"])
+
+
+@pytest.mark.usefixtures("quiet_zones")
+def test_fitted_zones_are_at_least_their_published_counts(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A zone's final count is at least what its release already holds,
+    # sample by sample, as a split of the provinces kept it: the fake
+    # run's Poisson(5) draws sit below the busy zones' published counts.
+    monkeypatch.setattr(
+        zr.ZoneRenewalModel,
+        "run",
+        lambda self, t: _fake_run(t, self.variant),
+    )
+    model = get_model("renewalbvd")
+    assert isinstance(model, zr.ZoneRenewalModel)
+    samples = model.forecast(task)
+    published = zr.zone_target(task).set_index(["location", "target_end_date"])[
+        "total"
+    ]
+    zones = model.zone_samples
+    assert zones is not None
+    keys = ["location", "target_end_date"]
+    got = zones.join(published, on=keys).dropna(subset=["total"])
+    assert len(got) > 0
+    assert (got["value"] >= got["total"]).all()
+    # Provinces stay the sums of their zones, so they hold the floor too.
+    own = samples["location"].map(is_zone)
+    summed = (
+        zones.assign(location=zones["location"].map(province_of))
+        .groupby([*keys, "sample"])["value"]
+        .sum()
+    )
+    pd.testing.assert_series_equal(
+        samples.loc[~own].set_index([*keys, "sample"])["value"].sort_index(),
+        summed.sort_index(),
+        check_names=False,
+    )
 
 
 def test_fit_renewal_fits_zones_and_writes_their_samples(
@@ -236,11 +301,11 @@ def test_zone_code_keys_the_models_that_run_it(
 ) -> None:
     import shutil
 
-    from bdbvhubrenewal.evaluation import store
+    from bdbvhub.store import store
 
     for name in ("pyproject.toml", "uv.lock"):
         shutil.copy(ROOT / name, tmp_path / name)
-    for folder in ("src", "packages"):
+    for folder in ("packages",):
         shutil.copytree(
             ROOT / folder,
             tmp_path / folder,
@@ -299,11 +364,18 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
     assert groups[-1] == [False, True, False]
     assert out["kinds"][-1] == 1
 
-    # No file and no download: no zone terms.
-    def fail(_: str) -> bytes:
+    # A release with no zone file (404): no zone terms.
+    def missing(url: str) -> bytes:
+        raise urllib.error.HTTPError(url, 404, "Not Found", Message(), None)
+
+    assert zr.zone_bvd_rows(release, tmp_path / "none", names, missing) is None
+
+    # Any other failure is an error, not a release without zones.
+    def offline(_: str) -> bytes:
         raise OSError("offline")
 
-    assert zr.zone_bvd_rows(release, tmp_path / "none", names, fail) is None
+    with pytest.raises(OSError, match="offline"):
+        zr.zone_bvd_rows(release, tmp_path / "none", names, offline)
 
 
 @pytest.mark.usefixtures("quiet_zones")

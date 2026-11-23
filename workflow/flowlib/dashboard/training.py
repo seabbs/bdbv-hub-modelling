@@ -1,15 +1,13 @@
 """A training run's schedule and losses, for the status and loss plots.
 
-The schedule comes from the trainer's command line (`--learning-rate`,
-`--outbreaks`, `--<group>-lr`, `--prefixes`, or `--lr-steps` of runs
-that decayed over steps), its saved settings and the
-learning rates its history logs; the losses from its history
-(`train/history.json`), log rows and checkpoint settings.
+The schedule comes from the run's saved settings and the learning rates
+its history logs; the losses from its history (`train/history.json`),
+log rows and checkpoint settings.
 """
 
 from __future__ import annotations
 
-import re
+import csv
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from itertools import pairwise
@@ -17,51 +15,28 @@ from pathlib import Path
 from typing import Any
 
 from ..evaluations import merged_history
-from .logs import CACHE, prefixes
+from .logs import CACHE, _size, prefixes
 from .runs import Run
-
-
-def _size(name: str) -> int:
-    digits = re.sub(r"\D", "", name)
-    return int(digits) if digits else 0
-
-
-def _falls(hist: Any) -> bool:
-    """Return whether any optimiser group's logged rate fell over steps."""
-    seen: dict[str, float] = {}
-    for h in hist if isinstance(hist, list) else []:
-        v = h.get("lr") if isinstance(h, dict) else None
-        if isinstance(v, list):
-            v = {str(i): x for i, x in enumerate(v)}
-        elif not isinstance(v, dict):
-            v = {"lr": v} if v is not None else {}
-        for g, x in v.items():
-            if g in seen and float(x) < seen[g]:
-                return True
-            seen[g] = float(x)
-    return False
 
 
 def run_params(
     folder: Path | str,
     hist: Any,
     step: int | None,
-    args: str,
     default: Sequence[int],
     sims: float | None = None,
 ) -> dict[str, Any]:
     """Return a run's schedule.
 
-    `default` are the run's checkpoint sizes, the last its simulations,
-    unless the trainer's command line `args` names them; `sims` is the
-    simulations trained by `step`, for the current rate of a run that
-    decays over simulations.
+    `default` are the run's checkpoint sizes, the last its simulations;
+    `sims` is the simulations trained by `step`, for the current rate,
+    which falls linearly to zero over the run's simulations (the
+    trainer's `lr_decay`).
 
     Returns
     -------
     dict
-        `lr_steps` (runs that decayed over steps), `lr_outbreaks` (the
-        simulations the rate falls to zero over, otherwise), the
+        `lr_outbreaks` (the simulations the rate falls to zero over), the
         optimiser `groups` (name -> base rate), each
         group's `current` rate, the rates its history `logged` (name ->
         [(step, rate)]) and the checkpoint `prefixes`.
@@ -76,36 +51,13 @@ def run_params(
     )
     settings = [s for _, s in saved if isinstance(s, dict)]
     last = settings[-1] if settings else {}
-    m = re.search(r"--lr-steps\s+(\d+)", args)
-    lr_steps = int(m.group(1)) if m else int(last.get("lr_steps") or 0)
-    # Runs without a step count decay over `--outbreaks`, as their
-    # settings record (`lr_decay`); older runs with settings but no
-    # `lr_decay` kept a constant rate.
-    # A trainer the workflow starts leaves no command line: its run's
-    # simulations are the last of `default`.
-    m = re.search(r"--outbreaks\s+(\d+)", args)
-    # A rate the history logs falling is a decay whatever the settings say.
-    decays = last.get("lr_decay") or not settings or _falls(hist)
-    total = int(m.group(1)) if m else max(default, default=0)
-    lr_outbreaks = total if decays and not lr_steps else 0
+    lr_outbreaks = max(default, default=0)
     groups: dict[str, float] = {}
-    base_name = (
-        "LoRA" if last.get("lora") or "--series-bias" in args else "adapter"
-    )
-    m = re.search(r"--learning-rate\s+(\S+)", args)
-    if m:
-        groups[base_name] = float(m.group(1))
-    elif last.get("learning_rate"):
+    base_name = "LoRA" if last.get("lora") else "adapter"
+    if last.get("learning_rate"):
         groups[base_name] = float(last["learning_rate"])
-    for m in re.finditer(r"--([a-z][a-z-]*)-lr\s+(\S+)", args):
-        groups[m.group(1)] = float(m.group(2))
     for k, v in last.items():
-        named = any(
-            re.fullmatch(r"\w*" + k.split("_")[-1] + r"\w*", g)
-            for g in groups
-            if g != base_name
-        )
-        if isinstance(v, dict) and v.get("learning_rate") and not named:
+        if isinstance(v, dict) and v.get("learning_rate"):
             groups.setdefault(
                 k.replace("series_", ""), float(v["learning_rate"])
             )
@@ -135,34 +87,26 @@ def run_params(
     for g, base in groups.items():
         if g in logged:
             current[g] = logged[g][-1][1]
-        elif lr_steps and step is not None:
-            current[g] = base * max(0.0, 1 - step / lr_steps)
         elif lr_outbreaks and sims is not None:
             current[g] = base * max(0.0, 1 - sims / lr_outbreaks)
         elif step is not None:
             current[g] = base
     return {
-        "lr_steps": lr_steps,
         "lr_outbreaks": lr_outbreaks,
         "groups": groups,
         "current": current,
         "logged": logged,
-        "prefixes": prefixes(folder, args, default),
+        "prefixes": prefixes(folder, default),
     }
 
 
 def steps_per_simulation(
-    lr_steps: int,
-    sizes: Sequence[int],
     checkpoints: Sequence[tuple[str, Mapping, Any]],
 ) -> float:
     """Return the trainer's steps per simulated outbreak.
 
-    The learning-rate schedule spans the final prefix; without one, the
-    last checkpoint's own ratio, else 1.
+    The last checkpoint's own ratio, else 1.
     """
-    if lr_steps and sizes:
-        return lr_steps / max(sizes)
     for _, s, _ in reversed(checkpoints):
         if s.get("steps") and s.get("n_outbreaks"):
             return s["steps"] / s["n_outbreaks"]
@@ -217,6 +161,27 @@ def recent_rate(
     return (last_s - first_s) / span, span
 
 
+RESTART_GAP = 1800.0
+"""Seconds between two logged points taken as a stop, not training."""
+
+
+def mean_rate(
+    points: Sequence[tuple[float, float]], gap: float = RESTART_GAP
+) -> float | None:
+    """Return the steps a second over the whole run, or None.
+
+    Over each pair of consecutive points (time, step) at most `gap`
+    seconds apart, so the time a run was stopped is left out.
+    """
+    pts = sorted(set(points))
+    steps = seconds = 0.0
+    for (t0, s0), (t1, s1) in pairwise(pts):
+        if 0 < t1 - t0 <= gap and s1 > s0:
+            steps += s1 - s0
+            seconds += t1 - t0
+    return steps / seconds if seconds else None
+
+
 def status_point(folder: Path | str) -> tuple[float, float] | None:
     """Return the trainer's status time and step while it trains, or None.
 
@@ -231,6 +196,34 @@ def status_point(folder: Path | str) -> tuple[float, float] | None:
         return t, float(s["step"])
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def views_summary(folder: Path | str) -> dict[str, int] | None:
+    """Return the run's block views, or None if it has none.
+
+    From `train/views.csv`, which the trainer writes for each system over
+    the block limit (`finetune.stream.record_views`): how many systems
+    were cut, how many of them are held out, the blocks they became and
+    the largest series counts before and after.
+    """
+    path = Path(folder) / "train" / "views.csv"
+    if not path.is_file():
+        return None
+    with path.open(newline="") as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return None
+    systems = {(r["part"], r["outbreak"], r["source"], r["cut"]) for r in rows}
+    held = sum(1 for s in systems if s[0] == "held-out")
+    before = max(int(r["series_before"]) for r in rows)
+    after = max(int(r["series_after"]) for r in rows)
+    return {
+        "systems_over_limit": len(systems),
+        "held_out": held,
+        "blocks": len(rows),
+        "largest_series_before": before,
+        "largest_series_after": after,
+    }
 
 
 def step_at(
@@ -348,6 +341,18 @@ def loss_run(
         and isinstance(h.get("by_source"), dict)
     ] or [(r["step"], r["src"]) for r in rows if r.get("src")]
 
+    # The subset held-out loss by step: the offloaded evaluations' (the
+    # merged history), else the trainer's log lines.
+    held = [
+        (h["step"], h["eval_loss"], _parts(h, "eval_loss"))
+        for h in hist
+        if isinstance(h, dict) and h.get("eval_loss") is not None
+    ] or [
+        (r["step"], r["held"], r.get("parts") or {})
+        for r in rows
+        if r["held"] is not None
+    ]
+
     def x(step: float) -> float:
         return round(sims(step), 2)
 
@@ -389,14 +394,14 @@ def loss_run(
         "tr0": sum(v for _, v in train[:20]) / len(train[:20])
         if train
         else None,
-        "held": [[x(r["step"]), r["held"]] for r in rows],
+        "held": [[x(st), round(v, 5)] for st, v, _ in held],
         "ck": [
             [at(nm, s), s["held_out_loss"]]
             for nm, s, _ in checkpoints
             if s.get("held_out_loss")
         ],
         "held_parts": {
-            p: [[x(r["step"]), r["parts"][p]] for r in rows if r.get("parts")]
+            p: [[x(st), round(parts[p], 5)] for st, _, parts in held if parts]
             for p in PARTS
         },
         "ck_parts": {

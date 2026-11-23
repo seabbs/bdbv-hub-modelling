@@ -20,40 +20,28 @@ def test_the_log_reads_any_source_names(tmp_path):
     }
 
 
-def test_run_params_from_the_command_line_settings_and_history(tmp_path):
+def test_run_params_from_the_settings_and_history(tmp_path):
     n = tmp_path / "train" / "n250"
     n.mkdir(parents=True)
-    (n / "settings.json").write_text(json.dumps({"lr_steps": 999}))
-    args = (
-        "python scripts/finetune_stream.py --learning-rate 1e-5 "
-        "--lr-steps 36500 --bias-lr 1e-3 --prefixes 250 500 8000"
-    )
+    settings = {
+        "learning_rate": 1e-5,
+        "lora": {"r": 8},
+        "series_bias": {"learning_rate": 1e-3},
+        "lr_decay": "linear to zero over the outbreaks",
+    }
+    (n / "settings.json").write_text(json.dumps(settings))
     hist = [{"step": 100, "lr": {"LoRA": 9e-6, "bias": 9e-4}}]
-    got = training.run_params(tmp_path, hist, 100, args, (250,))
-    assert got["lr_steps"] == 36500
-    assert got["groups"] == {"adapter": 1e-5, "bias": 1e-3, "LoRA": 9e-6}
+    got = training.run_params(tmp_path, hist, 100, (250, 500))
+    assert got["groups"] == {"LoRA": 1e-5, "bias": 1e-3}
     assert got["current"]["bias"] == 9e-4
-    assert got["prefixes"] == [250, 500, 8000]
+    assert got["lr_outbreaks"] == 500
+    assert got["prefixes"] == [250, 500]
 
 
-def test_run_params_decay_linearly_without_history(tmp_path):
-    args = "x --learning-rate 1e-5 --lr-steps 1000 --prefixes 250"
-    got = training.run_params(tmp_path, [], 250, args, (250,))
-    assert got["current"]["adapter"] == 1e-5 * 0.75
-
-
-def test_run_params_decay_over_the_outbreaks_without_a_step_count(tmp_path):
-    args = "x --learning-rate 1e-5 --outbreaks 8400 --prefixes 250 8400"
-    got = training.run_params(tmp_path, [], 0, args, (250,))
-    assert got["lr_steps"] == 0
-    assert got["lr_outbreaks"] == 8400
-
-
-def test_steps_per_simulation_follow_the_schedule_or_the_last_checkpoint():
-    assert training.steps_per_simulation(36500, [250, 8000], []) == 4.5625
+def test_steps_per_simulation_follow_the_last_checkpoint():
     cks = [("n500", {"steps": 2000, "n_outbreaks": 500}, None)]
-    assert training.steps_per_simulation(0, [250, 500], cks) == 4.0
-    assert training.steps_per_simulation(0, [250], []) == 1.0
+    assert training.steps_per_simulation(cks) == 4.0
+    assert training.steps_per_simulation([]) == 1.0
 
 
 def test_loss_runs_take_held_out_by_source_from_history(tmp_path):
@@ -171,8 +159,8 @@ def test_with_nothing_known_steps_map_at_the_given_rate():
 
 
 def test_a_run_from_the_workflow_decays_over_its_simulations(tmp_path):
-    # Snakemake starts the trainer: no pid file, so no command line. The
-    # settings say the rate falls over the run's simulations (`default`).
+    # The settings say the rate falls over the run's simulations
+    # (`default`).
     n = tmp_path / "train" / "n250"
     n.mkdir(parents=True)
     (n / "settings.json").write_text(
@@ -183,7 +171,7 @@ def test_a_run_from_the_workflow_decays_over_its_simulations(tmp_path):
             }
         )
     )
-    got = training.run_params(tmp_path, [], 3000, "", (250, 8400), sims=2100)
+    got = training.run_params(tmp_path, [], 3000, (250, 8400), sims=2100)
     assert got["lr_outbreaks"] == 8400
     assert got["current"]["adapter"] == pytest.approx(1e-5 * 0.75)
 
@@ -212,18 +200,6 @@ def test_the_rate_uses_logged_steps_and_the_status_over_a_long_enough_window():
     # One point, or none: no rate.
     assert training.recent_rate([(t0, 5)]) == (None, None)
     assert training.recent_rate([]) == (None, None)
-
-
-def test_a_falling_logged_rate_is_a_decay_even_without_lr_decay(tmp_path):
-    n = tmp_path / "train" / "n250"
-    n.mkdir(parents=True)
-    (n / "settings.json").write_text(json.dumps({"learning_rate": 1e-5}))
-    hist = [
-        {"step": 400, "lr": {"lora": 9.9e-6}},
-        {"step": 800, "lr": {"lora": 9.7e-6}},
-    ]
-    got = training.run_params(tmp_path, hist, 800, "", (250, 8400), sims=160)
-    assert got["lr_outbreaks"] == 8400
 
 
 def test_loss_runs_carry_checkpoint_losses_by_layout_and_level(tmp_path):
@@ -293,3 +269,72 @@ def test_an_offloaded_run_s_losses_reach_the_loss_plot(tmp_path):
     assert got["full0"] == 0.5
     assert got["bysrc"] == {"weekly": [[50, 0.25]]}
     assert got["train"] == [[50, 0.45]]
+
+
+def test_block_views_are_summarised_from_the_run_s_record(tmp_path):
+    train = tmp_path / "train"
+    train.mkdir()
+    # No record: no system was over the block limit.
+    assert training.views_summary(tmp_path) is None
+    (train / "views.csv").write_text(
+        "part,outbreak,source,cut,kind,places_before,places_after,"
+        "series_before,series_after,collapsed\n"
+        "held-out,1-0001,daily,3,top,40,6,3990,300,strata\n"
+        "held-out,1-0001,daily,3,subtree,40,12,3990,900,\n"
+        "1-100,2-0001,weekly,0,top,30,1,2000,40,strata+places\n"
+        "1-100,2-0001,weekly,0,subtree,30,9,2000,800,\n"
+        "1-100,2-0001,weekly,0,subtree,30,9,2000,820,\n"
+    )
+    assert training.views_summary(tmp_path) == {
+        "systems_over_limit": 2,
+        "held_out": 1,
+        "blocks": 5,
+        "largest_series_before": 3990,
+        "largest_series_after": 900,
+    }
+
+
+def test_an_offloaded_run_s_steps_are_read_without_a_held_out_loss(tmp_path):
+    path = tmp_path / "n100.log"
+    path.write_text(
+        "2026-11-22 12:22:31 [train] step 200: loss 0.0792, held-out "
+        "(monitor, by_source) left to the evaluator, 1078 s\n"
+    )
+    row = logs.Log(path).rows()[0]
+    assert row["step"] == 200
+    assert row["loss"] == 0.0792
+    assert row["held"] is None
+
+
+def test_the_mean_rate_leaves_out_the_gaps_of_restarts():
+    t0 = 1_000_000.0
+    # 100 steps in 100 s, a stop of two hours, then 100 steps in 50 s.
+    points = [(t0, 0), (t0 + 100, 100), (t0 + 7300, 100), (t0 + 7350, 200)]
+    assert training.mean_rate(points) == pytest.approx(200 / 150)
+    assert training.mean_rate([(t0, 5)]) is None
+
+
+def test_an_offloaded_run_s_step_evaluations_are_its_held_out_line(tmp_path):
+    # The trainer logs no held-out loss when it offloads evaluation; each
+    # step's subset loss and its parts come from train/evals.
+    folder = tmp_path / "run"
+    train = folder / "train"
+    (train / "evals").mkdir(parents=True)
+    (train / "history.json").write_text(json.dumps([{"step": 0}]))
+    for step, loss in ((200, 0.3), (400, 0.2)):
+        (train / "evals" / f"step-{step:07d}.json").write_text(
+            json.dumps(
+                {
+                    "step": step,
+                    "eval_loss": loss,
+                    "eval_loss_nowcast": loss - 0.1,
+                    "eval_loss_forecast": 0.1,
+                }
+            )
+        )
+    run = runs.make_run("r", str(folder), live=True)
+    rows = [{"step": 200, "loss": 0.4, "held": None}]
+    got = training.loss_run(run, rows, [], lambda s: s / 4, None, "#111")
+    assert got["held"] == [[50.0, 0.3], [100.0, 0.2]]
+    assert got["held_parts"]["nowcast"] == [[50.0, 0.2], [100.0, 0.1]]
+    assert got["held_parts"]["forecast"] == [[50.0, 0.1], [100.0, 0.1]]

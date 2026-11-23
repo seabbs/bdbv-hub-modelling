@@ -11,8 +11,10 @@ import pandas as pd
 import pytest
 from scipy.stats import norm
 
-from bdbvhubrenewal.data.germany import HORIZONS, hub_target, read_triangle
-from bdbvhubrenewal.evaluation.germany import (
+from bdbvhub.models import list_models
+from nowcasteval.nowcast import rolling_truth
+from nowcastgermany.data import HORIZONS, hub_target, read_triangle
+from nowcastgermany.evaluation import (
     PAPER_COLUMNS,
     QUANTILE_LEVELS,
     SCORE_COLUMNS,
@@ -27,8 +29,6 @@ from bdbvhubrenewal.evaluation.germany import (
     team_forecasts,
     with_truth,
 )
-from bdbvhubrenewal.forecasters import list_models
-from nowcasteval.nowcast import rolling_truth
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = (
@@ -68,16 +68,13 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "2022-04-29",
         159,
     )
+    # Germany is daily only: no weekly model.
     assert config.models == (
         "randomwalk",
         "randomwalknowcast",
-        *(
-            f"fm_chronos_{source}_{layout}"
-            for layout in ("complete", "ragged")
-            for source in ("daily", "weekly")
-        ),
+        "fm_chronos_daily_complete",
+        "fm_chronos_daily_ragged",
         "fm_chronos_daily_ragged_ft",
-        "fm_chronos_weekly_ragged_ft",
     )
     assert config.truth_delay == 40
     assert config.submissions
@@ -87,7 +84,7 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
 
 def test_german_trained_models_run_on_the_held_out_half_only() -> None:
     config = load_germany_config(ROOT / "config" / "germany.toml")
-    german = ("fm_chronos_daily_ragged_real", "fm_chronos_weekly_ragged_real")
+    german = ("fm_chronos_daily_ragged_real",)
     assert config.held_out_models == german
     # They were fine-tuned on the development half, so never score on it.
     assert not set(german) & set(run_models(config, held_out=False))
@@ -106,14 +103,18 @@ def test_the_later_half_of_the_dates_is_held_out() -> None:
     assert len(development) - len(held) in (0, 1)
 
 
+@pytest.mark.slow
 def test_our_quantiles_are_the_samples_quantiles_at_the_hub_s_levels(
     forecasts: pd.DataFrame,
 ) -> None:
+    from nowcastgermany.evaluation import FORECAST_LEVELS
+
     per = forecasts.groupby(["model", "origin", "location", "horizon"])
-    assert (per["quantile"].apply(tuple) == QUANTILE_LEVELS).all()
+    assert (per["quantile"].apply(tuple) == FORECAST_LEVELS).all()
     assert per["value"].is_monotonic_increasing.all()
 
 
+@pytest.mark.slow
 def test_scores_are_quantile_scores_on_the_d_day_truth(
     triangle: pd.DataFrame, scores: pd.DataFrame
 ) -> None:
@@ -130,6 +131,7 @@ def test_scores_are_quantile_scores_on_the_d_day_truth(
     assert (both["truth_vintage_x"] == both["truth_vintage_y"]).all()
 
 
+@pytest.mark.slow
 def test_sums_with_no_release_d_days_on_are_not_scored(
     scores: pd.DataFrame,
 ) -> None:
@@ -138,6 +140,7 @@ def test_sums_with_no_release_d_days_on_are_not_scored(
     assert scores["target_end_date"].max() <= "2021-10-10"
 
 
+@pytest.mark.slow
 def test_relative_scores_are_against_the_baseline_given(
     scores: pd.DataFrame,
 ) -> None:
@@ -253,6 +256,7 @@ def test_team_forecasts_replace_rki_errors_by_the_minus_one_day_nowcast(
     assert got.loc[("RKI", 0.25), "value"] == pytest.approx(300)
 
 
+@pytest.mark.slow
 def test_teams_are_scored_as_our_models(
     triangle: pd.DataFrame,
     submissions: pd.DataFrame,
@@ -276,6 +280,7 @@ def test_team_forecasts_keep_the_dates_given(
     assert team_forecasts(submissions, ["2021-10-05"]).empty
 
 
+@pytest.mark.slow
 def test_paper_table_follows_the_paper_schema(
     forecasts: pd.DataFrame,
 ) -> None:
@@ -292,7 +297,8 @@ def test_paper_table_follows_the_paper_schema(
         paper["origin_date"]
     )
     assert (days.dt.days == paper["horizon"]).all()
-    assert len(paper) == len(forecasts)
+    hub = forecasts["quantile"].round(6).isin(QUANTILE_LEVELS)
+    assert len(paper) == hub.sum()
 
 
 def test_asof_sums_are_the_data_each_nowcast_date_saw(
@@ -385,7 +391,8 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     # Counts rise by a known step a day and are reported in full three
     # days on, so the last three days are forecast and a sum one day out
     # of place is off by seven steps. The weeks cross ISO 2020's week 53.
-    first, last = pd.Timestamp("2020-10-01"), pd.Timestamp("2021-01-20")
+    # Long enough for the lag rule to read complete steps (`lag_count`).
+    first, last = pd.Timestamp("2020-06-01"), pd.Timestamp("2021-01-20")
     days = pd.date_range(first, last)
     i = np.arange(len(days))
     places = {
@@ -447,6 +454,7 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     np.testing.assert_array_equal(scores["wis"], 0)
 
 
+@pytest.mark.slow
 def test_a_sample_model_s_german_quantiles_use_the_draws_given(
     triangle: pd.DataFrame,
 ) -> None:
@@ -478,7 +486,7 @@ def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
 def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     # Each German task holds its own copy of the release history, so a
     # model that is not predicted ahead builds and forecasts one date's
@@ -501,10 +509,78 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     assert events == [e for d in dates for e in (("build", d), ("forecast", d))]
 
 
+def test_chronos_is_prefetched_at_the_levels_it_forecasts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nowcastgermany import evaluation as de
+
+    # Prefetched quantiles are keyed by their levels, so only those at the
+    # levels forecast are ever read.
+    class Chronos:
+        pass
+
+    seen: dict[str, tuple[float, ...]] = {}
+
+    def prefetch(model, _tasks, levels):
+        seen["prefetch"] = tuple(levels)
+        return model
+
+    def quantiles(_model, _task, levels, *_a, **_k):
+        seen["forecast"] = tuple(levels)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(de, "FoundationModel", Chronos)
+    monkeypatch.setattr(de, "get_model", lambda _name: Chronos())
+    monkeypatch.setattr(de, "prefetch", prefetch)
+    monkeypatch.setattr(de, "_tasks", lambda *_a: ["task"])
+    monkeypatch.setattr(de, "forecast_quantiles", quantiles)
+    de.germany_forecasts(["chronos2"], pd.DataFrame(), ["2021-10-04"], 10, 1)
+    assert seen["prefetch"] == seen["forecast"]
+
+
+@pytest.mark.slow
+def test_forecasts_carry_the_90_interval_beside_the_hub_levels(
+    forecasts: pd.DataFrame,
+) -> None:
+    from nowcastgermany.evaluation import (
+        FORECAST_LEVELS,
+        QUANTILE_LEVELS,
+        paper_forecasts,
+    )
+
+    assert set(FORECAST_LEVELS) == {*QUANTILE_LEVELS, 0.05, 0.95}
+    assert set(forecasts["quantile"].round(6)) == set(FORECAST_LEVELS)
+    # The paper's table keeps the hub's levels, which it scores.
+    paper = paper_forecasts(forecasts)
+    assert set(paper["quantile_level"].round(6)) == set(QUANTILE_LEVELS)
+
+
+@pytest.mark.slow
+def test_scores_add_90_coverage_and_keep_wis_on_the_hub_levels(
+    forecasts: pd.DataFrame, scores: pd.DataFrame
+) -> None:
+    from nowcastgermany.evaluation import QUANTILE_LEVELS
+
+    hub = forecasts[forecasts["quantile"].round(6).isin(QUANTILE_LEVELS)]
+    on_hub = score_germany(hub, truth_delay=10)
+    keys = ["model", "origin", "location", "target_end_date"]
+    both = scores.merge(on_hub, on=keys, suffixes=("", "_hub"))
+    assert len(both) == len(scores)
+    np.testing.assert_allclose(both["wis"], both["wis_hub"])
+    # The 90% interval is the 5% and 95% quantiles.
+    wide = forecasts.pivot_table(
+        index=keys, columns="quantile", values="value"
+    ).reset_index()
+    got = scores.merge(wide, on=keys)
+    inside = (got[0.05] <= got["truth"]) & (got["truth"] <= got[0.95])
+    np.testing.assert_array_equal(got["coverage_90"], inside.astype(float))
+    assert on_hub["coverage_90"].isna().all()
+
+
 def test_forecasts_pass_their_horizons_and_store_them_apart(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    from bdbvhubrenewal.evaluation import germany as de
+    from nowcastgermany import evaluation as de
 
     seen: list[tuple[int, ...]] = []
 
@@ -523,3 +599,161 @@ def test_forecasts_pass_their_horizons_and_store_them_apart(
     assert seen == [wide, tuple(HORIZONS)]
     # Each set of horizons has its own stored tasks.
     assert len(list(tmp_path.rglob("*.pkl.gz"))) == 2
+
+
+def test_models_see_only_the_counts_the_truth_holds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nowcastgermany import evaluation as de
+
+    # The truth is the data reported within `max_delay` days, so the
+    # models forecast that count: what is reported later is not theirs.
+    seen: list[pd.DataFrame] = []
+
+    def tasks(triangle, _date, _n, _seed, _root, _horizons):
+        seen.append(triangle)
+        return []
+
+    monkeypatch.setattr(de, "_tasks", tasks)
+    monkeypatch.setattr(de, "get_model", lambda name: name)
+    tri = pd.DataFrame(
+        {
+            "reference_date": ["2021-01-01"] * 2,
+            "location": ["DE"] * 2,
+            "age_group": ["00+"] * 2,
+            "confirm": [8, 10],
+            "report_date": ["2021-02-10", "2021-02-11"],
+        }
+    )
+    de.germany_forecasts(
+        ["randomwalknowcast"], tri, ["2021-03-01"], 10, 1, max_delay=40
+    )
+    assert seen[0]["confirm"].tolist() == [8]
+
+
+@pytest.mark.slow
+def test_each_model_and_date_records_its_seconds(
+    triangle: pd.DataFrame,
+) -> None:
+    # Backtest time by model and date, so slow cells can be found.
+    timings: list[dict[str, object]] = []
+    dates = ["2021-10-04", "2021-10-05"]
+    germany_forecasts(
+        ["randomwalk", "randomwalknowcast"],
+        triangle,
+        dates,
+        n_samples=30,
+        seed=1,
+        timings=timings,
+    )
+    got = pd.DataFrame(timings)
+    assert sorted(zip(got["model"], got["origin"], strict=True)) == sorted(
+        (m, d) for m in ("randomwalk", "randomwalknowcast") for d in dates
+    )
+    assert (got["seconds"] >= 0).all()
+    assert set(got["stage"]) == {"forecast"}
+
+
+def test_daily_rows_are_the_offset_0_tasks_own_daily_quantiles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The daily view: each real day once, from the offset-0 tasks (states,
+    # then ages), as the model's own quantiles of its daily count rows. A
+    # model without them gives no daily rows.
+    from nowcastgermany import evaluation as de
+
+    tasks = ["s0", "a0", "s1", "a1"]
+    seen: list[str] = []
+
+    class Own:
+        def daily_quantiles(self, task, levels):
+            seen.append(task)
+            return pd.DataFrame(
+                {
+                    "location": "DE",
+                    "date": "2021-10-04",
+                    "quantile": list(levels),
+                    "value": 1.0,
+                }
+            )
+
+    def moved(rows, _task, date):
+        return pd.DataFrame(
+            {
+                "model": rows["model"].to_numpy(),
+                "location": rows["location"].to_numpy(),
+                "forecast_date": date,
+                "target_end_date": rows["target_end_date"].to_numpy(),
+                "horizon": 0,
+                "sample": rows["sample"].to_numpy(),
+                "value": rows["value"].to_numpy(),
+            }
+        )
+
+    monkeypatch.setattr(de, "_tasks", lambda *_a, **_k: list(tasks))
+    monkeypatch.setattr(
+        de, "get_model", lambda name: Own() if name == "own" else object()
+    )
+    monkeypatch.setattr(
+        de, "forecast_quantiles", lambda *_a, **_k: pd.DataFrame()
+    )
+    monkeypatch.setattr(de, "hub_forecasts", moved)
+    out = de.germany_forecasts(
+        ["own", "none"], pd.DataFrame(), ["2021-10-04"], 10, 1,
+        targets=("7day", "daily"),
+    )  # fmt: skip
+    assert seen == ["s0", "a0"]
+    assert set(out["target"]) == {"daily"}
+    assert set(out["model"]) == {"own"}
+    assert sorted(out["quantile"].unique()) == sorted(de.FORECAST_LEVELS)
+
+
+def test_daily_rows_take_the_day_s_truth_and_7day_rows_the_sum_s(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nowcastgermany import evaluation as de
+
+    calls: dict[str, list[str]] = {}
+
+    def daily(_triangle, days, _delay):
+        calls["daily"] = list(days)
+        return pd.DataFrame(
+            {
+                "location": "DE",
+                "target_end_date": list(days),
+                "truth": 5.0,
+                "truth_vintage": "2021-11-13",
+            }
+        )
+
+    def sums(_target, _delay):
+        return pd.DataFrame(
+            {
+                "location": ["DE"],
+                "target_end_date": ["2021-10-04"],
+                "truth": [70.0],
+                "truth_vintage": ["2021-11-13"],
+            }
+        )
+
+    monkeypatch.setattr(de, "daily_truth", daily)
+    monkeypatch.setattr(de, "hub_target", lambda _t, ends: list(ends))
+    monkeypatch.setattr(de, "rolling_truth", sums)
+    fc = pd.DataFrame(
+        {
+            "model": "m",
+            "target": ["7day", "daily"],
+            "origin": "2021-10-04",
+            "location": "DE",
+            "target_end_date": "2021-10-04",
+            "horizon": 0,
+            "quantile": 0.5,
+            "value": 1.0,
+        }
+    )
+    out = de.with_truth(fc, pd.DataFrame(), 40)
+    assert out.set_index("target")["truth"].to_dict() == {
+        "7day": 70.0,
+        "daily": 5.0,
+    }
+    assert calls["daily"] == ["2021-10-04"]

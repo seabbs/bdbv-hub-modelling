@@ -8,9 +8,12 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data.germany import (
+from bdbvhub.models import get_model
+from nowcasteval.backtest import run_forecasts
+from nowcastgermany.data import (
     HORIZONS,
     OFFSETS,
+    hub_changes,
     hub_forecasts,
     hub_target,
     hub_triangle,
@@ -19,8 +22,7 @@ from bdbvhubrenewal.data.germany import (
     place_code,
     read_triangle,
 )
-from bdbvhubrenewal.forecasters import NATIONAL, get_model
-from nowcasteval.backtest import run_forecasts
+from nowcastutils.base import NATIONAL
 
 FIXTURE = (
     Path(__file__).resolve().parents[1]
@@ -193,6 +195,7 @@ def test_each_offset_ends_its_weeks_k_days_earlier_on_the_same_data(
         assert back == [k + 7 * j for j in range(5) if k + 7 * j <= 28]
 
 
+@pytest.mark.slow
 def test_every_target_day_is_forecast_once(every_day) -> None:
     model = get_model("randomwalk")
     out = pd.concat(
@@ -243,6 +246,7 @@ def test_weekly_target_sums_each_release_to_hub_weeks(tasks) -> None:
     assert set(states.target_history["vintage"]) == set(daily["vintage"])
 
 
+@pytest.mark.slow
 def test_models_forecast_the_tasks_and_map_back(tasks) -> None:
     model = get_model("randomwalk")
     out = pd.concat(
@@ -321,3 +325,69 @@ def test_tasks_take_the_horizons_asked_for(triangle: pd.DataFrame) -> None:
         for w in t.target_end_dates
     }
     assert max(ahead) == 28
+
+
+def test_within_delay_keeps_the_counts_reported_by_that_delay() -> None:
+    from nowcastgermany.data import within_delay
+
+    # One day's count, reported 5 by day 0, 8 by day 40 and 10 by day 41.
+    tri = pd.DataFrame(
+        {
+            "reference_date": ["2021-01-01"] * 3,
+            "location": ["DE"] * 3,
+            "age_group": ["00+"] * 3,
+            "confirm": [5, 8, 10],
+            "report_date": ["2021-01-01", "2021-02-10", "2021-02-11"],
+        }
+    )
+    cut = within_delay(tri, 40)
+    assert cut["confirm"].tolist() == [5, 8]
+    assert within_delay(tri, 41).equals(tri)
+
+
+def test_hub_changes_put_the_tail_at_81_days_and_drop_unreported() -> None:
+    wide = pd.DataFrame(
+        {
+            "date": ["2021-05-01"],
+            "location": ["DE"],
+            "age_group": ["00+"],
+            **{f"value_{d}d": [1.0] for d in range(81)},
+            "value_>80d": [2.0],
+        }
+    )
+    wide.loc[0, "value_80d"] = None
+    long = hub_changes(wide).set_index("delay")["change"]
+    assert long.loc[81] == 2.0
+    assert 80 not in long.index
+    assert len(long) == 81
+
+
+def test_daily_truth_is_each_day_s_count_reported_by_the_delay(
+    triangle: pd.DataFrame,
+) -> None:
+    # The daily view's truth: a day's count as reported `delay` days after
+    # it, straight from the triangle's rows; none where that report is not
+    # in the data yet.
+    from nowcastgermany.evaluation import daily_truth
+
+    days = ["2021-09-01", "2021-09-20", "2021-10-15"]
+    got = daily_truth(triangle, days, 10)
+    for place, age in [("DE", "00+"), ("DE-BY", "00+"), ("DE", "80+")]:
+        name = age if age != "00+" else place
+        for day in days[:2]:
+            by = (
+                dt.date.fromisoformat(day) + dt.timedelta(days=10)
+            ).isoformat()
+            raw = triangle.loc[
+                (triangle["location"] == place)
+                & (triangle["age_group"] == age)
+                & (triangle["reference_date"] == day)
+                & (triangle["report_date"] <= by)
+            ].sort_values("report_date")
+            row = got.loc[
+                (got["location"] == name) & (got["target_end_date"] == day)
+            ]
+            assert row["truth"].tolist() == [float(raw["confirm"].iloc[-1])]
+            assert row["truth_vintage"].tolist() == [by]
+    # 2021-10-15 + 10 days is after the last report date.
+    assert got.loc[got["target_end_date"] == days[2], "truth"].isna().all()

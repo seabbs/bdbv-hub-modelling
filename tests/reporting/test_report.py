@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.reporting import report
+from bdbvhub.reporting import report
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -19,10 +19,11 @@ FIXTURES = Path(__file__).parent / "fixtures"
 read it only as page input."""
 
 
+@pytest.mark.slow
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     from evaluation.test_hubcompare import _write_hub
 
-    from bdbvhubrenewal.cli import main
+    from bdbvhub.cli import main
 
     gen, fig = tmp_path / "gen", tmp_path / "fig"
     report._comparison_page(fig, gen, tmp_path / "missing", target)
@@ -112,40 +113,6 @@ def test_lopo_section_hidden_without_results(tmp_path: Path) -> None:
     assert text.startswith("## Leave one province out")
     assert "renewal" in text
     assert "CD-IT" in text
-
-
-def test_ladder_page(tmp_path: Path) -> None:
-    # No progress wording.
-    ladder = pd.DataFrame(
-        {
-            "step": [0, 1],
-            "rung": ["randomwalk", "S0 national renewal"],
-            "description": ["The baseline.", "One national renewal."],
-            "decision": ["Reference.", "Kept as the starting point."],
-            "real_max_rhat": [None, 1.01],
-            "real_min_ess": [None, 400.0],
-            "real_divergent": [None, 0],
-            "sim_rt_mae": [None, 0.12],
-            "real_crps_national": [30.0, 25.0],
-            "real_cov90_national_ahead": [0.5, 0.8],
-        }
-    )
-    path = tmp_path / "ladder.csv"
-    ladder.to_csv(path, index=False)
-    text = report._ladder_page(path)
-    for heading in ("## Rungs", "## Sampler", "## Recovery", "## Scores"):
-        assert heading in text
-    assert "S0 national renewal" in text
-    assert "Kept as the starting point." in text
-    # Rows run in build order.
-    assert text.index("randomwalk") < text.index("S0 national renewal")
-    # Headers are labels, missing cells are blank, and random walk has no
-    # sampler row.
-    assert "nan" not in text
-    assert "real_max_rhat" not in text
-    assert "Max R-hat" in text
-    sampler = text.split("## Sampler")[1].split("## Recovery")[0]
-    assert "randomwalk" not in sampler
 
 
 def _scores() -> pd.DataFrame:

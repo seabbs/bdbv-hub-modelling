@@ -6,7 +6,7 @@ simulation's design and values (layers 1 and 2 of the grid) and samples
 them: strata weights, R by stratum (`rt.PlaceRt`), the start
 (`start.InitializeStrata`), mixing, imports, the renewal
 (`infections.StratifiedInfections`) and the expected reference events
-(`reference.ReferenceEvents`). It is a numpyro model: run it under
+(`components.reference.ReferenceEvents`). It is a numpyro model: run it under
 `numpyro.handlers.seed` for a draw, or `numpyro.handlers.substitute` to
 replay given draws. `simulate_latent_batch` runs a batch, one key each.
 """
@@ -26,16 +26,22 @@ from numpyro import handlers
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent import InfectionInitializationProcess
 
+from ..components.pmfs import Delay, delay_pmf, generation_time_pmf
+from ..components.reference import ReferenceEvents
+from ..components.renewal import DEPLETIONS, Shifts, Variants
 from .imports import Imports
 from .infections import StratifiedInfections
 from .mixing import PlaceMixing
-from .pmfs import gt_pmf, incubation_pmf
-from .reference import ReferenceEvents
-from .rt import KINDS, PlaceRt, RtPath
+from .rt import KINDS, PlaceRt, RtPath, vector
 from .start import InitializeStrata
-from .strata import DEPLETIONS, Shifts, Variants
 
-__all__ = ["COLUMNS", "Latent", "simulate_latent", "simulate_latent_batch"]
+__all__ = [
+    "COLUMNS",
+    "Latent",
+    "round_up",
+    "simulate_latent",
+    "simulate_latent_batch",
+]
 
 COLUMNS = ("id", "day", "group", "infections", "onsets", "r", "reff")
 """The batch's long columns; group 0 is the whole outbreak, 1 to S the
@@ -43,8 +49,7 @@ strata in order."""
 
 
 def _vector(values: Mapping[str, Any], name: str) -> np.ndarray:
-    x = values.get(name)
-    return np.atleast_1d(np.asarray([] if x is None else x, dtype=float))
+    return vector(values.get(name))
 
 
 @dataclass
@@ -91,6 +96,8 @@ def simulate_latent(
     kinds: Sequence[str] = KINDS,
     incubation_cv: float = 0.5,
     depletion: str = "linear",
+    days: int | None = None,
+    lag_bucket: int = 1,
 ) -> Latent:
     """Sample a simulation's latent run (a numpyro model).
 
@@ -104,7 +111,7 @@ def simulate_latent(
     n : int
         Days after the generation time's span.
     gt : numpy.ndarray
-        Generation time pmf (`pmfs.gt_pmf`).
+        Generation time pmf (`components.pmfs.generation_time_pmf`).
     strata : pandas.DataFrame
         The strata, with `place` (`P01`, ...), `age` (`A1`, ...) and
         `.group` (1-based), in epinowcast's group order.
@@ -116,25 +123,42 @@ def simulate_latent(
         The path kinds an independent place draws from (the grid's
         trajectory levels).
     incubation_cv : float
-        The infection-to-reference delay's coefficient of variation.
+        The infection-to-reference delay's coefficient of variation when
+        `values` has no `incubation_cv` (with a gamma when `design` has no
+        `incubation_family`).
     depletion : str
-        `"linear"` or `"exponential"` (`strata.DEPLETIONS`).
+        `"linear"` or `"exponential"` (`components.renewal.DEPLETIONS`).
+    days : int, optional
+        Days after the generation time's span that the arrays run over,
+        at least `n`; `n` if None. Series of near lengths padded to the
+        same days share compiled shapes. Timings refer to `n`, the run is
+        causal and its days-first draws keep their values, so the run
+        cropped to `n` days is the same.
+    lag_bucket : int
+        The generation time and the incubation pmfs are padded with zeros
+        to a multiple of this many days, and the generation time's span
+        with days before it that have no infections. The run cropped to
+        the span is the same.
 
     Returns
     -------
     Latent
-        The run.
+        The run over `n` days.
 
     Raises
     ------
     ValueError
-        If the generation time is longer than the series, an established
-        epidemic is larger than its population, or `depletion` is unknown.
+        If the generation time is longer than the series, `days` is less
+        than `n`, an established epidemic is larger than its population,
+        or `depletion` is unknown.
     """
     if depletion not in DEPLETIONS:
         raise ValueError(f"depletion must be one of {tuple(DEPLETIONS)}")
     if n < 1:
         raise ValueError("the generation time is longer than the series")
+    days = n if days is None else int(days)
+    if days < n:
+        raise ValueError("days must be at least n")
     v = values
     n_places, n_ages = int(design["n_places"]), int(design["n_ages"])
     place_ids = [f"P{i:02d}" for i in range(1, n_places + 1)]
@@ -164,21 +188,30 @@ def simulate_latent(
     )
     on = active & ~late
     n_gt = len(gt)
+    extra = round_up(n_gt, lag_bucket) - n_gt
     early = design["window"] == "early"
     unit = (v["seed"] if early else v["level"]) * rel
     start = InfectionInitializationProcess(
         "start",
         DeterministicVariable("start_unit", np.where(on, unit, 0.0)),
-        InitializeStrata(n_gt, early),
+        InitializeStrata(n_gt + extra, early, active=n_gt),
     )
-    if (np.asarray(start()).sum(axis=0) > population).any():
+    # An established epidemic ran at its level before the span too: its
+    # onsets take that history, about the level over the mean incubation.
+    group = strata[".group"].to_numpy().astype(int) - 1
+    history = (
+        0.0
+        if early
+        else np.where(on, unit, 0.0) * _vector(v, "incubation_mean")[group]
+    )
+    if (np.asarray(start()).sum(axis=0) + history > population).any():
         raise ValueError("an established epidemic larger than its population")
     places = sorted(strata["place"].unique())
     place = strata["place"].map(places.index).to_numpy()
     age = strata["age"].to_numpy()
     process = StratifiedInfections(
         name="latent",
-        gen_int_rv=DeterministicPMF("gt", gt),
+        gen_int_rv=DeterministicPMF("gt", np.pad(gt, (0, extra))),
         start_rv=start,
         log_rt_rv=PlaceRt(
             "rt",
@@ -189,9 +222,11 @@ def simulate_latent(
             noise_scale=float(v["gt_mean"]),
             place_sd=float(v.get("place_sd") or 0.0),
             place_rho=float(v.get("place_rho") or 0.0),
+            place_region=_vector(v, "place_region").astype(int).tolist(),
             place_lags=_vector(v, "place_lags").astype(int).tolist(),
             drift=float(v["r_drift"]),
             coupling=float(v["coupling"]),
+            horizon=n,
         ),
         population=population,
         place=place,
@@ -207,6 +242,7 @@ def simulate_latent(
             switch=str(v.get("mixing_switch") or "on"),
             switch_at=float(v.get("mixing_switch_at") or 0.0),
             switch_days=float(v.get("mixing_switch_days") or 1.0),
+            horizon=n,
         ),
         imports_rv=Imports(
             "imports",
@@ -218,6 +254,7 @@ def simulate_latent(
             late_at=float(v.get("late_at") or 0.0),
             late_days=int(v.get("late_days") or 1),
             trickle=float(v["trickle"]),
+            horizon=n,
         ),
         unit=unit,
         shifts=Shifts(
@@ -236,28 +273,65 @@ def simulate_latent(
         depletion=DEPLETIONS[depletion],
     )
     with handlers.trace() as tr:
-        sample = process(n_days_post_init=n)
+        sample = process(n_days_post_init=days)
     infections = np.asarray(sample.all_subpops)
-    r = np.asarray(tr["latent::r"]["value"])
-    reff = np.asarray(tr["latent::reff"]["value"])
-    group = strata[".group"].to_numpy().astype(int) - 1
+    r = np.asarray(tr["latent::r"]["value"])[:n]
+    reff = np.asarray(tr["latent::reff"]["value"])[:n]
+    # The drawn infection-to-reference family and CV; a design that does
+    # not draw them takes a gamma with `incubation_cv`.
+    family = design.get("incubation_family", "gamma")
+    cv = float(values.get("incubation_cv", incubation_cv))
+    incubation = [
+        delay_pmf(Delay.from_mean_cv(family, m, cv))
+        for m in _vector(v, "incubation_mean")[group]
+    ]
+    width = round_up(max(len(p) for p in incubation), lag_bucket)
     events = ReferenceEvents(
         "reference",
         delay_rvs=[
-            DeterministicPMF(
-                f"incubation_{j}", incubation_pmf(m, incubation_cv)
-            )
-            for j, m in enumerate(_vector(v, "incubation_mean")[group])
+            DeterministicPMF(f"incubation_{j}", np.pad(p, (0, width - len(p))))
+            for j, p in enumerate(incubation)
         ],
         ascertainment_rv=DeterministicVariable(
             "ascertainment", _vector(v, "ascertainment")[group]
         ),
     )
     # An established or endemic stratum ran at its level before the span
-    # too; an outbreak that starts in it had no infections before.
-    before = None if early else np.asarray(start())[0]
-    onsets = np.asarray(events(infections=infections, before=before))
-    return _latent(infections, onsets, r, reff, population, active, n_gt)
+    # too, the span's padding included; an outbreak that starts in it had
+    # no infections before.
+    before = None if early else np.asarray(start())[-1]
+    history = infections.copy()
+    if before is not None:
+        history[:extra] = before
+    onsets = np.asarray(events(infections=history, before=before))
+    keep = slice(extra, extra + n_gt + n)
+    return _latent(
+        infections[keep],
+        onsets[keep],
+        r,
+        reff,
+        population,
+        active,
+        n_gt,
+    )
+
+
+def round_up(n: int, bucket: int) -> int:
+    """Return `n` rounded up to a multiple of `bucket`.
+
+    Parameters
+    ----------
+    n : int
+        A length.
+    bucket : int
+        The multiple.
+
+    Returns
+    -------
+    int
+        The padded length.
+    """
+    return -(-int(n) // bucket) * bucket
 
 
 def _xy(v: Mapping[str, Any]) -> np.ndarray | None:
@@ -359,7 +433,11 @@ def simulate_latent_batch(
         sim_id = str(sim["id"])
         design, values = sim["design"], sim["values"]
         try:
-            gt = gt_pmf(values["gt_mean"], design["gt_family"], values["gt_cv"])
+            gt = generation_time_pmf(
+                Delay.from_mean_cv(
+                    design["gt_family"], values["gt_mean"], values["gt_cv"]
+                )
+            )
             with jax.enable_x64(True):
                 latent = handlers.seed(
                     simulate_latent, jax.random.key(int(sim["key"]))

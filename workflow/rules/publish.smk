@@ -28,7 +28,7 @@ rule publish_checkpoint:
     input:
         rules.verify_checkpoint.output,
         # An offloaded checkpoint is released with its held-out losses.
-        lambda wc: offloaded(wc.n),
+        lambda wc: offloaded(wc.run, wc.n),
     output:
         f"{TRAIN}/n{{n}}/published.json",
     log:
@@ -52,8 +52,4 @@ rule publish:
     # The checkpoints saved so far, so it never schedules training and can
     # run beside a training run.
     input:
-        lambda wc: [
-            f"{TRAIN}/n{n}/published.json"
-            for n in FT["prefixes"]
-            if Path(f"{TRAIN}/n{n}/settings.json").exists()
-        ],
+        published_checkpoints,

@@ -15,8 +15,8 @@ def test_with_no_file_everything_is_on_this_machine(tmp_path):
     cfg = localconfig.read(tmp_path / "none.env", env)
     assert cfg["ROOT"] == f"{tmp_path}/bdbv-rounds"
     assert cfg["MAILBOX"] == ""
-    assert cfg["INBOX"] == ""
     assert cfg["JOB_PREFIX"] == ""
+    assert cfg["SIM_PREFIX"] == ""
     assert cfg["HOST_NAME"]
 
 
@@ -57,11 +57,9 @@ def test_a_line_may_use_a_later_one(tmp_path):
 
 def test_a_line_may_use_a_default(tmp_path):
     path = tmp_path / "local.env"
-    path.write_text("SCORE_CACHE=$RUN/cache\n")
+    path.write_text("SCORE_CACHE=$ROOT/cache\n")
     cfg = localconfig.read(path, {"HOME": str(tmp_path)})
-    assert (
-        cfg["SCORE_CACHE"] == f"{tmp_path}/bdbv-rounds/checkpoints/slots/cache"
-    )
+    assert cfg["SCORE_CACHE"] == f"{tmp_path}/bdbv-rounds/cache"
 
 
 def test_a_setting_in_the_environment_is_seen_by_the_file(tmp_path):
@@ -94,10 +92,7 @@ def test_workflow_paths_default_under_the_rounds_folder(tmp_path):
     path = tmp_path / "local.env"
     path.write_text("ROOT=/data/rounds\n")
     cfg = localconfig.read(path, {"HOME": str(tmp_path)})
-    assert cfg["RUN"] == "/data/rounds/checkpoints/slots"
     assert cfg["SCORE_CACHE"] == "/data/rounds/scores"
-    assert cfg["NOSLOTS_RUN"] == "/data/rounds/checkpoints"
-    assert cfg["GERMANY_BLOCKS"] == "/data/rounds/germany/germany.pkl"
 
 
 def test_the_path_comes_from_local_config_when_set(tmp_path):
@@ -141,8 +136,11 @@ def test_the_command_line_prints_one_setting(tmp_path):
 
 
 def test_paper_cores_come_from_the_local_config():
+    # The paper's tasks run its targets through paper_run.py, which takes
+    # this machine's budget (flowlib.machine).
     taskfile = (ROOT / "paper" / "Taskfile.yml").read_text()
-    assert "localconfig.py CORES" in taskfile
+    assert "--cores {{.CORES" not in taskfile
+    assert "paper_run.py --targets development" in taskfile
     script = (ROOT / "scripts" / "paper.sh").read_text()
     assert "localconfig.py CORES" in script
 

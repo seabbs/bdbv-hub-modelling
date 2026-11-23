@@ -1,0 +1,79 @@
+name: Packages
+
+# Each workspace package built and installed on its own, with only the
+# dependencies its pyproject.toml declares (at the locked versions), and
+# every module imported in a new interpreter (scripts/package_alone.py).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'scripts/package_alone.py'
+      - '.github/workflows/packages.yml'
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'scripts/package_alone.py'
+      - '.github/workflows/packages.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Off main, a newer push cancels the running run. On main the running
+  # run finishes and only the newest queued run waits.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  alone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - nowcastutils
+          - nowcasteval
+          - nowcastbaselines
+          - nowcastrenewal
+          - nowcastfoundation
+          - nowcastgermany
+          - bdbvhub
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - name: Build the wheels
+        run: uv build --all-packages --out-dir dist
+      - name: Install the package alone
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          uv venv alone
+          uv export --frozen --package "$PACKAGE" --no-dev --all-extras \
+            --no-hashes --no-header --no-annotate > requirements.txt
+          # The locked third-party dependencies, then the workspace
+          # packages this one depends on, from their wheels.
+          grep -v '^-e ' requirements.txt > third-party.txt
+          uv pip install --python alone -r third-party.txt
+          wheels=()
+          while read -r name; do
+            wheels+=(dist/"$name"-*.whl)
+          done < <(sed -n 's#^-e \./packages/##p' requirements.txt)
+          uv pip install --python alone --no-deps "${wheels[@]}"
+      - name: Import every module
+        env:
+          PACKAGE: ${{ matrix.package }}
+        # Outside the checkout, so the modules come from the wheels.
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$GITHUB_WORKSPACE/alone/bin/python" -I \
+            "$GITHUB_WORKSPACE/scripts/package_alone.py" "$PACKAGE" \
+            "$GITHUB_WORKSPACE/packages/$PACKAGE/src/$PACKAGE"

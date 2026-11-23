@@ -60,9 +60,12 @@ display:flex;align-items:center}details.sec>summary::-webkit-details-marker{disp
 details.sec>summary::before{content:"▸";margin-right:6px;color:var(--mut)}
 details.sec[open]>summary::before{content:"▾"}
 details.sec{scroll-margin-top:92px}details.sec h2{margin:10px 0 6px}
-.gwrap{display:grid;grid-template-columns:minmax(0,720px) 260px;gap:8px;align-items:start}
-.gwrap.wide{grid-template-columns:minmax(0,1fr) 260px}
-@media(max-width:900px){.gwrap{grid-template-columns:1fr}}
+.gwrap{display:grid;grid-template-columns:minmax(0,720px) 540px;gap:8px;align-items:start}
+.gwrap.wide{grid-template-columns:minmax(0,1fr) 540px}
+.gscores{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:start}
+.gsc svg{max-width:100%;height:auto}
+@media(max-width:1100px){.gwrap,.gwrap.wide{grid-template-columns:1fr}}
+@media(max-width:560px){.gscores{grid-template-columns:1fr}}
 @media(max-width:1250px){.tiles4{flex-wrap:wrap;width:292px}#biasdyn>div:not(.card):not(.biastabs){max-width:292px}}
 .biasrow .card{padding:4px;line-height:0}
 .biasline{flex:1 1 300px;max-width:480px}.biasline svg{width:100%;height:auto}.tiles4{display:flex;gap:6px}
@@ -78,3 +81,7 @@ font-size:12px;margin:4px 0}.wrap{overflow-x:auto}
 .fs{position:fixed;inset:0;z-index:50;margin:0;max-width:none;border-radius:0;overflow:auto;background:var(--bg);padding:16px}
 .fs svg[width="100%"]{max-height:85vh}body.fsopen{overflow:hidden}
 .lab{fill:var(--fg);font-size:11px}
+.kv{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.kvi{background:var(--bg);border:1px solid var(--line);border-radius:6px;
+padding:2px 6px;font-size:12px;display:flex;gap:4px;align-items:baseline;
+flex-wrap:wrap}.kvi .kv{margin-top:0}.kvk{color:var(--mut);font-size:11px}

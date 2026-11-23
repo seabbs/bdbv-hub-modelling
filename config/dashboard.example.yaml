@@ -10,7 +10,7 @@
 mirror: output/finetune/dashboard-cache
 
 # Runs shown, in plot order. Each run's source is its training output folder
-# (train.log, train/n<N>/settings.json, trainer.pid) or a release prefix
+# (train/n<N>.log, train/n<N>/settings.json) or a release prefix
 # ending in "-". hue shades its checkpoints light (early) to dark (late);
 # colour fixes one colour instead. live: the run the status follows. base:
 # the run whose step-0 losses are the base model's. hashes and n name
@@ -61,4 +61,4 @@ notes:
 
 # A notes file shown under Recent activity ("host:path" or a local path);
 # leave it out to hide the section.
-mailbox: {source: "rounds-host:bdbv-mailbox.md", lines: 30}
+mailbox: {source: "rounds-host:notes.md", lines: 30}

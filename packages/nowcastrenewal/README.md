@@ -1,11 +1,28 @@
 # nowcastrenewal
 
-Renewal-model nowcasts and forecasts.
+Renewal models of an outbreak, built on [PyRenew](https://github.com/CDCgov/PyRenew) (JAX, NumPyro).
+It holds the renewal models fitted to the hub's data and the joint model that simulates outbreaks for fine-tuning. The two share one set of components.
 
-- `model`: the PyRenew renewal model (JAX, NumPyro), with provinces or health zones as patches.
-- `forecaster`: the renewal variants as forecasters, their fitting, forecasts and diagnostics.
-- `zones`: the renewal variants fitted on health zones.
-- `bvd`: the BVDOutbreakSize releases the `bvd` variants read.
+## Start here
+
+- To fit or forecast with a renewal model, read [`forecaster`](src/nowcastrenewal/forecaster.py), then [`model`](src/nowcastrenewal/model/) for the model itself.
+- To see how a simulated outbreak is made, read [`simulation.outbreak`](src/nowcastrenewal/simulation/outbreak.py) (`simulate_outbreak`).
+
+## Modules
+
+- [`components`](src/nowcastrenewal/components/): pieces shared by the fitted models and the simulator: pmfs, the renewal, mixing, walks, noise and reference events.
+- [`model`](src/nowcastrenewal/model/): the fitted renewal model, with provinces or health zones as patches.
+- [`forecaster`](src/nowcastrenewal/forecaster.py): the renewal variants as forecasters, with their fitting, forecasts and diagnostics.
+- [`zones`](src/nowcastrenewal/zones.py): the renewal variants fitted on health zones.
+- [`bvd`](src/nowcastrenewal/bvd.py): the BVDOutbreakSize reproduction number estimates that the `bvd` variants read.
+- [`latent`](src/nowcastrenewal/latent/): the simulator's latent side: R paths, imports, mixing, starting infections and infections.
+- [`reporting`](src/nowcastrenewal/reporting/): the simulator's reporting side: delays, effects, the expected triangle, observation noise and revisions.
+- [`simulation`](src/nowcastrenewal/simulation/): the simulator's joint model, from latent infections to reported counts.
+
+## Next
+
+- How the fitted models work: [Methods](https://samabbott.co.uk/bdbv-hub-modelling/renewal/methods/) and the [renewal model reference](https://samabbott.co.uk/bdbv-hub-modelling/methods/model/).
+- The simulator's place in the workflow: [simulate](../../workflow/README.md#1-simulate-rulessimulatesmk), with draws from `nowcastfoundation.simulator`.
 
 ```sh
 uv add "nowcastrenewal[model]"

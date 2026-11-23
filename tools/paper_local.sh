@@ -41,7 +41,7 @@ sys.path.append("workflow")
 from flowlib import localconfig
 from paperpipe.config import run_settings
 config = yaml.safe_load(Path("paper/workflow/config.yaml").read_text())
-sims = Path("paper") / localconfig.expand(config["synthetic"]["simulations"]["paper"])
+sims = Path(localconfig.expand(config["synthetic"]["simulations"]["paper"]))
 seeds = run_settings(config, "paper").synthetic_seeds
 # The simulation set writes READY beside sims/ once every batch is
 # simulated, recorded and reviewed.
@@ -60,10 +60,7 @@ for _ in $(seq 1 144); do
   sleep 600
 done
 ready > /dev/null || { say "FAILED: still waiting after 24 h"; exit 1; }
-# The fine-tuned models load the final run's newest checkpoint.
-run=$(python -c "import yaml; print(yaml.safe_load(open('paper/workflow/config.yaml'))['finetune_run'])")
-pin=$(cd paper && python scripts/follow_checkpoint.py "$run" --write workflow/config.yaml)
-say "started at $(git rev-parse --short=9 HEAD), fine-tuned checkpoint ${pin:-pending} (log $log)"
+say "started at $(git rev-parse --short=9 HEAD) (log $log)"
 if nice -n 19 scripts/paper.sh "$target" > "$log" 2>&1; then
   say "done: docs/paper/main.html and si.html in $root"
 else

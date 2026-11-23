@@ -38,10 +38,12 @@ git fetch -q --no-tags origin \
   +refs/heads/fit-store:refs/remotes/origin/fit-store
 
 cores=${CORES:-$(python3 workflow/flowlib/localconfig.py CORES)}
-cd paper
+read -ra monitor <<< "$(python3 workflow/flowlib/monitor.py)"
 uv run --group paper --group chronos snakemake -s workflow/Snakefile render \
   --config render="$target" --cores "${cores:-4}" --resources heavy=1 \
-  --rerun-triggers mtime
+  --rerun-triggers mtime "${monitor[@]}"
+
+cd paper
 
 mkdir -p ../docs/paper/figures ../docs/paper/build
 cp -R main.html main.pdf main_files si.html si.pdf si_files ../docs/paper/

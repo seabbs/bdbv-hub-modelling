@@ -7,18 +7,30 @@ from pathlib import Path
 
 import pytest
 
-DOCS = Path(__file__).resolve().parents[1] / "docs"
-PR_REF = re.compile(r"(?<![\w/])#\d{2,}\b|/issues/\d+|/pull/\d+")
-
-
-@pytest.mark.parametrize(
-    "page",
-    ["renewal/methods.md", "paper.md", "index.md", "methods/foundation.md"],
+ROOT = Path(__file__).resolve().parents[1]
+DOCS = ROOT / "docs"
+# This repo's own issues and PRs; links to other projects' issues are sources.
+PR_REF = re.compile(
+    r"(?<![\w/])#\d{2,}\b|bdbv-hub-modelling/(?:issues|pull)/\d+"
 )
+PROSE = sorted(
+    str(path.relative_to(ROOT))
+    for pattern in (
+        "docs/**/*.md",
+        "README.md",
+        "packages/*/README.md",
+        "paper/*.md",
+        "paper/*.qmd",
+    )
+    for path in ROOT.glob(pattern)
+)
+
+
+@pytest.mark.parametrize("page", PROSE)
 def test_pages_carry_no_pr_or_issue_numbers(page: str) -> None:
     hits = [
         line
-        for line in (DOCS / page).read_text().splitlines()
+        for line in (ROOT / page).read_text().splitlines()
         if PR_REF.search(line)
     ]
     assert not hits, hits

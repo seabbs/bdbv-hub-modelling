@@ -2,8 +2,9 @@
 r"""Reproduction number paths for simulated outbreaks, by place and stratum.
 
 - `RtPath`: a deterministic log R path of one of `KINDS`.
-- `WeeklyNoise`: an AR(1) on the weekly scale, held for 7 days, from
-  PyRenew's `ARProcess`, starting at 0 in the first week.
+- `WeeklyNoise`: an AR(1) on the weekly scale, held for 7 days, starting
+  at 0 in the first week: PyRenew's `WeeklyTemporalProcess` over the
+  shared `NonCentredRandomWalk`.
 - `PlaceRt`: each stratum's log R. Places share a path, follow their own,
   add correlated weekly noise to it or lag it. A slow drift and weekly
   noise scaled by `1 - coupling` are added to every stratum.
@@ -27,8 +28,11 @@ import numpyro
 import numpyro.distributions as dist
 from jax import Array
 from jax.typing import ArrayLike
+from pyrenew.deterministic import DeterministicVariable
+from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.metaclass import RandomVariable
-from pyrenew.process import ARProcess
+
+from ..components.walks import NonCentredRandomWalk
 
 __all__ = [
     "KINDS",
@@ -37,6 +41,7 @@ __all__ = [
     "RtPath",
     "WeeklyNoise",
     "daily_walk",
+    "vector",
 ]
 
 KINDS = (
@@ -54,11 +59,11 @@ KINDS = (
 """Path kinds: a weekly walk around R = 1 (`endemic`), a start at the
 amplitude decaying onto that walk (`controlled`), and shapes on log R."""
 
-RELATIONS = ("shared", "independent", "correlated", "lagged")
+RELATIONS = ("shared", "independent", "correlated", "lagged", "nested")
 """How places' paths relate."""
 
-# The weekly noise's autocorrelation.
-_AUTOREG = 0.8
+# The weekly noise's half-life in weeks, for an autocorrelation of 0.8.
+_HALF_LIFE = math.log(0.5) / math.log(0.8)
 
 
 def daily_walk(
@@ -91,7 +96,8 @@ def _plogis(x: np.ndarray) -> np.ndarray:
     return np.asarray(1 / (1 + np.exp(-x)))
 
 
-def _vector(x: Any) -> np.ndarray:
+def vector(x: Any) -> np.ndarray:
+    """Return a drawn value as a float vector, empty for None."""
     return np.atleast_1d(np.asarray([] if x is None else x, dtype=float))
 
 
@@ -153,18 +159,22 @@ class RtPath:
         kw = {k: float(values[k]) for k in names if values.get(k) is not None}
         return cls(
             kind=kind,
-            wave_scale=tuple(_vector(values.get("wave_scale", [1.0]))),
-            walk=tuple(_vector(values.get("walk_r", [0.0]))),
+            wave_scale=tuple(vector(values.get("wave_scale", [1.0]))),
+            walk=tuple(vector(values.get("walk_r", [0.0]))),
             **kw,
         )
 
-    def log_r(self, n: int) -> np.ndarray:
+    def log_r(self, n: int, horizon: int | None = None) -> np.ndarray:
         """Return log R on `n` days.
 
         Parameters
         ----------
         n : int
             Days.
+        horizon : int, optional
+            Days the shares of the way through refer to, the series'
+            length; `n` if None. Days past it pad the arrays to a shared
+            shape.
 
         Returns
         -------
@@ -176,8 +186,9 @@ class RtPath:
         ValueError
             If the kind is unknown.
         """
+        h = n if horizon is None else horizon
         t = np.arange(n, dtype=float)
-        u = t / n
+        u = t / h
         a, peak = self.amplitude, self.peak
         tilt = max(peak, 1 - peak)
         match self.kind:
@@ -199,7 +210,7 @@ class RtPath:
                 out = -a * (peak - u) / tilt
             case "rise_fall_sharp":
                 out = a * (
-                    1 - 2 * _plogis((t - peak * n) / (self.flip_days / 4.4))
+                    1 - 2 * _plogis((t - peak * h) / (self.flip_days / 4.4))
                 )
             case "oscillating":
                 out = a * np.sin(2 * np.pi * t / self.period + self.phase)
@@ -223,9 +234,10 @@ class RtPath:
 class WeeklyNoise(RandomVariable):
     r"""An AR(1) on the weekly scale, 0 in the first week, held for 7 days.
 
-    $e_0 = 0$ and $e_w = 0.8 e_{w-1} + \sigma z_w$, from PyRenew's
-    `ARProcess`. The standard normals $z$ are the sample site
-    `"{noise_name}_decentered"`.
+    $e_0 = 0$ and $e_w = 0.8 e_{w-1} + \sigma z_w$: PyRenew's
+    `WeeklyTemporalProcess` over the shared `NonCentredRandomWalk`, with
+    the weeks starting on the first day. The standard normals $z$ are the
+    sample site `"{noise_name}_z"`.
 
     Parameters
     ----------
@@ -233,9 +245,26 @@ class WeeklyNoise(RandomVariable):
         Name of the component.
     """
 
-    def __init__(self, name: str) -> None:
-        super().__init__(name=name)
-        self.ar = ARProcess(name=f"{name}_ar")
+    def process(self, sd: float) -> WeeklyTemporalProcess:
+        r"""Return the weekly process with innovation sd $\sigma$.
+
+        Parameters
+        ----------
+        sd : float
+            The innovations' sd, $\sigma$.
+
+        Returns
+        -------
+        pyrenew.latent.temporal_processes.WeeklyTemporalProcess
+            The AR(1), its weeks starting on day 0.
+        """
+        walk = NonCentredRandomWalk(
+            DeterministicVariable(f"{self.name}_sd", sd),
+            half_life_rv=DeterministicVariable(
+                f"{self.name}_half_life", _HALF_LIFE
+            ),
+        )
+        return WeeklyTemporalProcess(walk, start_dow=0)
 
     def sample(
         self, n: int, sd: float, noise_name: str, **kwargs: object
@@ -249,7 +278,7 @@ class WeeklyNoise(RandomVariable):
         sd : float
             The innovations' sd, $\sigma$.
         noise_name : str
-            The innovations' sample site.
+            Prefix of the innovations' sample site.
         **kwargs
             Ignored, for the PyRenew interface.
 
@@ -258,15 +287,10 @@ class WeeklyNoise(RandomVariable):
         Array
             Shape `(n,)`, constant within each week.
         """
-        weeks = math.ceil(n / 7)
-        e = self.ar(
-            noise_name=noise_name,
-            n=weeks,
-            autoreg=jnp.array([_AUTOREG]),
-            init_vals=jnp.array([0.0]),
-            noise_sd=sd,
+        e = self.process(sd).sample(
+            n_timepoints=n, name_prefix=noise_name, first_day_dow=0
         )
-        return jnp.repeat(jnp.asarray(e), 7)[:n]
+        return jnp.asarray(e)[:, 0]
 
 
 class PlaceRt(RandomVariable):
@@ -282,8 +306,8 @@ class PlaceRt(RandomVariable):
         One of `RELATIONS`.
     kinds : sequence of str
         The kinds an independent place draws its own path from, each
-        equally likely (an `endemic` or `controlled` outbreak keeps its
-        kind in every place).
+        equally likely (an `endemic`, `controlled` or `oscillating`
+        outbreak keeps its kind in every place, as R stays about 1).
     values : mapping
         The values each own path takes its settings from.
     noise_scale : float
@@ -293,13 +317,21 @@ class PlaceRt(RandomVariable):
         For `correlated`, the places' noise sd as a share of the scale.
     place_rho : float
         For `correlated`, the share of the places' noise variance that
-        they have in common.
+        they have in common; for `nested`, the share their region has in
+        common.
+    place_region : sequence of int
+        For `nested`, each place's region (1-based).
     place_lags : sequence of int
         For `lagged`, each place's lag in days.
     drift : float
-        R's multiplicative drift over the series, $e^{\log(d) t / n}$.
+        R's multiplicative drift over the series, $e^{\log(d) t / h}$ with
+        $h$ the horizon.
     coupling : float
         Strata's own noise is scaled by `1 - coupling`.
+    horizon : int, optional
+        Days the path's shares of the way through and the drift refer
+        to, the series' length; the sampled `n` if None. Days past it pad
+        the arrays to a shared shape.
 
     Raises
     ------
@@ -317,9 +349,11 @@ class PlaceRt(RandomVariable):
         noise_scale: float = 1.0,
         place_sd: float = 0.0,
         place_rho: float = 0.0,
+        place_region: Sequence[int] = (),
         place_lags: Sequence[int] = (),
         drift: float = 1.0,
         coupling: float = 1.0,
+        horizon: int | None = None,
     ) -> None:
         if relation not in RELATIONS:
             raise ValueError(f"relation must be one of {RELATIONS}")
@@ -331,13 +365,15 @@ class PlaceRt(RandomVariable):
         self.noise_scale = noise_scale
         self.place_sd = place_sd
         self.place_rho = place_rho
+        self.place_region = [int(x) for x in place_region]
         self.place_lags = [int(x) for x in place_lags]
         self.drift = drift
         self.coupling = coupling
+        self.horizon = horizon
         self.noise = WeeklyNoise(f"{name}_noise")
 
     def _own_kind(self, i: int) -> str:
-        if self.path.kind in ("endemic", "controlled"):
+        if self.path.kind in ("endemic", "controlled", "oscillating"):
             return self.path.kind
         j = numpyro.sample(
             f"{self.name}_path_{i}",
@@ -346,13 +382,15 @@ class PlaceRt(RandomVariable):
         return self.kinds[int(j)]
 
     def _place_paths(self, n: int, n_places: int) -> list[Array]:
-        shared = jnp.asarray(self.path.log_r(n))
+        shared = jnp.asarray(self.path.log_r(n, self.horizon))
         if self.relation == "shared":
             return [shared] * n_places
         if self.relation == "independent":
             own = [
                 jnp.asarray(
-                    RtPath.from_values(self._own_kind(i), self.values).log_r(n)
+                    RtPath.from_values(self._own_kind(i), self.values).log_r(
+                        n, self.horizon
+                    )
                 )
                 for i in range(1, n_places)
             ]
@@ -368,9 +406,40 @@ class PlaceRt(RandomVariable):
                 * self.noise(n=n, sd=sd, noise_name=f"{self.name}_place_{i}")
                 for i in range(n_places)
             ]
+        if self.relation == "nested":
+            return self._nested_paths(shared, n, n_places)
         lags = self.place_lags
+        if len(lags) < n_places:
+            raise ValueError(
+                f"lagged R paths need a lag for each of {n_places} places, "
+                f"got {len(lags)}"
+            )
         return [
             jnp.concatenate([jnp.full(lags[i], shared[0]), shared])[:n]
+            for i in range(n_places)
+        ]
+
+    def _nested_paths(
+        self, shared: Array, n: int, n_places: int
+    ) -> list[Array]:
+        """Places within regions: each region's noise, then each place's."""
+        region = self.place_region
+        if len(region) < n_places:
+            raise ValueError(
+                f"nested R paths need a region for each of {n_places} "
+                f"places, got {len(region)}"
+            )
+        sd = self.noise_scale * self.place_sd
+        common = [
+            self.noise(n=n, sd=sd, noise_name=f"{self.name}_region_{r}")
+            for r in range(1, max(region[:n_places]) + 1)
+        ]
+        rho = self.place_rho
+        return [
+            shared
+            + math.sqrt(rho) * common[region[i] - 1]
+            + math.sqrt(1 - rho)
+            * self.noise(n=n, sd=sd, noise_name=f"{self.name}_place_{i}")
             for i in range(n_places)
         ]
 
@@ -393,7 +462,8 @@ class PlaceRt(RandomVariable):
         """
         idx = np.asarray(place, dtype=int)
         paths = self._place_paths(n, int(idx.max()) + 1)
-        drift = math.log(self.drift) * jnp.arange(n) / n
+        h = n if self.horizon is None else self.horizon
+        drift = math.log(self.drift) * jnp.arange(n) / h
         sd = 0.01 * self.noise_scale
         cols = [
             paths[p]

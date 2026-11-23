@@ -303,10 +303,10 @@ def test_observations_have_zero_weeks_so_every_target_has_truth() -> None:
 
 
 def test_a_longer_delay_moves_the_last_origin_back() -> None:
-    # The r2-real grid has 12-week delays in some outbreaks, so the last
-    # origin must leave its forecast weeks that long to complete.
+    # Some outbreaks have 12-week delays, so the last origin must leave
+    # its forecast weeks that long to complete.
     counts = _counts(("P01",), weeks=40)
-    assert synthetic.longest_delay_weeks(counts) == 3
+    assert synthetic.longest_delay_weeks(counts) < 12
     late = counts.iloc[:1].assign(
         report_date=(
             pd.Timestamp(counts["reference_date"].iloc[0])
@@ -358,7 +358,7 @@ CONFIG = Path(__file__).parents[1] / "workflow" / "config.yaml"
 
 def test_factors_include_every_factor_of_the_held_out_grid() -> None:
     cfg = yaml.safe_load(CONFIG.read_text())["synthetic"]
-    grid = yaml.safe_load((CONFIG.parents[1] / cfg["grid_file"]).read_text())
+    grid = yaml.safe_load((CONFIG.parents[2] / cfg["grid_file"]).read_text())
     assert set(synthetic.FACTORS) >= set(grid["factors"])
 
 
@@ -395,9 +395,14 @@ def test_settings_match_an_r3_outbreak_by_its_simulation() -> None:
 
 
 def test_short_delays_keep_their_own_longest_delay() -> None:
-    # r3's longest delay is 3, 4, 6, 8 or 12 weeks.
+    # The outbreak's own longest delay, rounded up to weeks, with no floor.
     counts = _counts(("P01",))
-    assert synthetic.longest_delay_weeks(counts) == 3
+    days = (
+        pd.to_datetime(counts["report_date"])
+        - pd.to_datetime(counts["reference_date"])
+    ).dt.days.max()
+    assert synthetic.longest_delay_weeks(counts) == -(-int(days) // 7)
+    assert not hasattr(synthetic, "MIN_DELAY_WEEKS")
 
 
 def test_a_model_that_cannot_load_stops_the_run() -> None:

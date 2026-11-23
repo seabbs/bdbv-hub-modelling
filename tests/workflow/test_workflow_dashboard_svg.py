@@ -33,8 +33,7 @@ def test_a_log2_axis_takes_the_given_ticks():
     assert "zero-shot" in out
 
 
-def test_rolling_means_and_nice_ticks():
-    assert svg.rolling([(0, 1), (1, 3), (2, 5)], 2) == [(0, 1), (1, 2), (2, 4)]
+def test_nice_ticks():
     assert svg.nice(0, 1)[:3] == [0, 0.2, 0.4]
 
 

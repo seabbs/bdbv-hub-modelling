@@ -7,9 +7,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily, load_delays, load_target, tidy
-from bdbvhubrenewal.forecasters import ForecastTask
+from bdbvhub.data import tidy
+from bdbvhub.data.tidy import load_daily, load_delays, load_target
 from nowcasteval.backtest import BacktestConfig
+from nowcastutils.base import ForecastTask
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "tests" / "fixtures" / "data"
@@ -103,6 +104,24 @@ def _fake_checkpoint_releases(
     foundation.resolve_checkpoint.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _keep_the_checkpoint_pin():  # type: ignore[no-untyped-def]
+    """Restore `BDBV_CHRONOS_FT` after each test.
+
+    `nowcastfoundation.checkpoint._pin` writes it to `os.environ` for the
+    rest of a scoring process, which a monkeypatch would not undo when it
+    was unset before.
+    """
+    from nowcastfoundation.forecaster import FINETUNED_ENV
+
+    before = os.environ.get(FINETUNED_ENV)
+    yield
+    if before is None:
+        os.environ.pop(FINETUNED_ENV, None)
+    else:
+        os.environ[FINETUNED_ENV] = before
+
+
 @pytest.fixture
 def write_release():  # type: ignore[no-untyped-def]
     """Write a fake checkpoint release (`_write_checkpoint_release`)."""
@@ -166,14 +185,14 @@ def config() -> BacktestConfig:
 
 @pytest.fixture(scope="session")
 def health_zones() -> pd.DataFrame:
-    from bdbvhubrenewal.data import load_health_zones
+    from bdbvhub.data.tidy import load_health_zones
 
     return load_health_zones(DATA)
 
 
 @pytest.fixture(scope="session")
 def daily_zones() -> pd.DataFrame:
-    from bdbvhubrenewal.data import load_daily_zones
+    from bdbvhub.data.tidy import load_daily_zones
 
     return load_daily_zones(DATA)
 

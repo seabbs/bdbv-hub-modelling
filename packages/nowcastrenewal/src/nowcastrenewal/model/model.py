@@ -8,7 +8,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
@@ -27,10 +26,10 @@ from pyrenew.model import MultiSignalModel
 from pyrenew.observation import NegativeBinomialNoise
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
-from .censored import censored_pmf
+from ..components.pmfs import Delay, delay_pmf, generation_time_pmf
+from ..components.walks import NonCentredRandomWalk
 from .composition_noise import DirichletMultinomialNoise
 from .pooled import PooledInitialValue
-from .temporal import NonCentredRandomWalk
 
 SUNDAY = 6
 """Weekday number of Sunday (Monday is 0), the first day of a hub week."""
@@ -71,7 +70,7 @@ def generation_interval(
 ) -> np.ndarray:
     r"""Double interval censored Gamma generation interval on lags 1..length.
 
-    The daily pmf on $0..L$ from `censored_pmf`, truncated at $L$. The
+    The daily pmf on $0..L$ from `components.pmfs`, truncated at $L$. The
     renewal uses lags 1 to $L$, so lag 0 (about 0.05% of the mass) is
     dropped and the rest renormalised, as BVDOutbreakSize left-truncates
     its generation interval at one day. Computed once, in float64.
@@ -89,9 +88,9 @@ def generation_interval(
     numpy.ndarray
         Pmf on lags 1..length (PyRenew order, element 0 at lag 1).
     """
-    with jax.enable_x64():
-        pmf = np.asarray(censored_pmf("gamma", mean, sd / mean, length))[1:]
-    return np.asarray(pmf / pmf.sum(), dtype=float)
+    return generation_time_pmf(
+        Delay.from_mean_cv("gamma", mean, sd / mean), length
+    )
 
 
 def incubation_period(
@@ -101,7 +100,7 @@ def incubation_period(
 ) -> np.ndarray:
     r"""Double interval censored log-normal incubation period on 0..length.
 
-    The daily pmf from infection to onset, from `censored_pmf`, truncated
+    The daily pmf from infection to onset, from `components.pmfs`, truncated
     at $L$ and renormalised. Computed once, in float64.
     Matches `primarycensored::dpcens(0:L, plnorm, D = L + 1)`.
 
@@ -118,9 +117,7 @@ def incubation_period(
     numpy.ndarray
         Pmf on lags 0..length.
     """
-    with jax.enable_x64():
-        pmf = np.asarray(censored_pmf("lognormal", mean, sd / mean, length))
-    return np.asarray(pmf, dtype=float)
+    return delay_pmf(Delay.from_mean_cv("lognormal", mean, sd / mean), length)
 
 
 def seed_lead(incubation: np.ndarray) -> int:
@@ -192,7 +189,7 @@ class ModelConfig:
     centred_rt : bool
         Sample the levels of the shared log Rt walk (`log_rt_baseline_x`)
         rather than its standardised steps (`NonCentredRandomWalk`), for
-        a fit where the data pin that walk (one place, #330).
+        a fit where the data pin that walk (one place).
     """
 
     national: bool = False
@@ -214,25 +211,6 @@ MAIN = ModelConfig()
 """The main model configuration, with every default of `ModelConfig`."""
 BVD = ModelConfig(bvd=True)
 """Main model informed by BVDOutbreakSize Rt (`hubrenewalbvd`)."""
-_SIMPLE: dict[str, Any] = {
-    "streams": "total",
-    "truncation": False,
-    "coupling": "none",
-    "depletion": False,
-}
-LADDER: dict[str, ModelConfig] = {
-    "S0 national renewal": ModelConfig(national=True, **_SIMPLE),
-    "S1 + provinces (pooled Rt)": ModelConfig(**_SIMPLE),
-    "S2 + truncation (hub delay)": ModelConfig(
-        **_SIMPLE | {"truncation": True}
-    ),
-    "S3 + delays, missingness, imputation": ModelConfig(
-        coupling="none", depletion=False
-    ),
-    "S4 + coupling and importation": ModelConfig(depletion=False),
-    "S5 + depletion (main)": MAIN,
-}
-"""Configurations of the step-by-step build, in order."""
 
 
 @dataclass
@@ -255,7 +233,8 @@ class Vintage:
     populations : numpy.ndarray
         Province populations, `(P,)`.
     kernel : numpy.ndarray or None
-        Row-normalised importation kernel between modelled provinces.
+        Importation kernel between modelled provinces, rows receive,
+        normalised per origin (`inputs.gravity_kernel`).
     horizon_weeks : int
         Forecast horizon in weeks.
     names : list of str

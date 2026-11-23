@@ -1,11 +1,5 @@
 version: "3"
 
-# Machine settings, such as CORES (config/local.env), read as the
-# workflow reads them (flowlib.localconfig).
-vars:
-  CORES:
-    sh: python3 ../workflow/flowlib/localconfig.py CORES
-
 tasks:
   test:
     desc: Run the paper tests
@@ -17,19 +11,29 @@ tasks:
       - uv run ruff check .
       - uv run ruff format --check .
   pipeline:dev:
-    desc: Run the evaluation workflow without the held-out data, to results/development/
+    desc: Run the evaluation workflow without the held-out data, to paper/results/development/
+    # The paper is a target of the project workflow, run from the root, as
+    # `task paper` runs it (workflow/scripts/paper_run.py: this machine's
+    # cores, niced, logged to PAPER_LOGS).
+    dir: ..
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile development --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
+      - uv run --group paper python workflow/scripts/paper_run.py --targets development {{.CLI_ARGS}}
   pipeline:paper:
-    desc: Run the evaluation workflow with the held-out data, to results/paper/
+    desc: Run the evaluation workflow with the held-out data, to paper/results/paper/
+    # The paper is a target of the project workflow, run from the root.
+    dir: ..
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile paper --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
+      - uv run --group paper python workflow/scripts/paper_run.py --targets paper {{.CLI_ARGS}}
   render:
     desc: Run the development target and render the paper (HTML and PDF) from it
+    # The paper is a target of the project workflow, run from the root.
+    dir: ..
     cmds:
-      - uv run --group paper snakemake -s workflow/Snakefile render --cores {{.CORES | default 4}} --resources heavy=1 {{.CLI_ARGS}}
+      - uv run --group paper python workflow/scripts/paper_run.py --targets render {{.CLI_ARGS}}
   pipeline:dry:
     desc: Dry-run both workflow targets to check the DAG
+    # The paper is a target of the project workflow, run from the root.
+    dir: ..
     cmds:
       - uv run --group paper snakemake -s workflow/Snakefile development paper -n --cores 1
   targets:

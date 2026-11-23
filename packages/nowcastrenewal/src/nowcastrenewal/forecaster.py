@@ -17,7 +17,7 @@ This module owns everything around it:
   `delay-summary.csv` beside its forecasts;
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
   `main` and `bvd` fit configurations
-  (`bdbvhubrenewal.submission.fitting`).
+  (`bdbvhub.submission.fitting`).
 
 This module reads only `ModelConfig`, `MAIN`, `BVD`, `zones.build_model`,
 `model_args`, `model.EXTRA_FIELDS`, `forecast_trajectories` and
@@ -54,6 +54,7 @@ from nowcastutils.base import (
     get_model,
     register_model,
 )
+from nowcastutils.dates import epiweek_end
 from nowcastutils.files import write_csv
 from nowcastutils.forecast import Forecast
 from nowcastutils.hierarchy import is_zone
@@ -232,7 +233,7 @@ VARIANTS: Final[dict[str, Variant]] = {
             "Single patch: renewal fitted to each province's series on its "
             "own, with no pooling or coupling; national is their sum.",
             # One series cannot inform the share at risk, and pins its Rt
-            # walk, whose levels are then sampled (#330).
+            # walk, whose levels are then sampled.
             overrides={
                 "national": True,
                 "depletion": False,
@@ -255,8 +256,7 @@ CENTRED_RT_MIN_CASES: Final = 250
 its log Rt walk to be centred (`ModelConfig.centred_rt`). At the
 2026-11-15 release, centred walks diverged in provinces of 2 to 13 cases
 (40 to 148 of 1500 draws) and did no better at 120 cases, while at 527
-cases and above they had a step size about 5 times the non-centred one
-(#330)."""
+cases and above they had a step size about 5 times the non-centred one."""
 
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",
@@ -408,11 +408,6 @@ def run_nuts(model: Any, data: Any, sampler: Mapping[str, Any]) -> Any:
     return model
 
 
-def _saturday(day: str | dt.date) -> dt.date:
-    d = pd.Timestamp(day).date()
-    return d + dt.timedelta(days=(5 - d.weekday()) % 7)
-
-
 def horizon_weeks(task: ForecastTask) -> int:
     """Weeks the model must run past the week holding the vintage.
 
@@ -426,8 +421,8 @@ def horizon_weeks(task: ForecastTask) -> int:
     int
         At least one.
     """
-    last = max(_saturday(d) for d in task.target_end_dates)
-    return max(1, (last - _saturday(task.cutoff)).days // 7)
+    last = max(epiweek_end(d) for d in task.target_end_dates)
+    return max(1, (last - epiweek_end(task.cutoff)).days // 7)
 
 
 def _weeks(first: dt.date, n: int) -> list[str]:
@@ -629,7 +624,7 @@ def samples_table(
     n = task.n_samples
     out: list[pd.DataFrame] = []
     for date in task.target_end_dates:
-        i = (_saturday(date) - first).days // 7
+        i = (epiweek_end(date) - first).days // 7
         for j, loc in enumerate(data.names):
             if i < 0:  # before the model grid: the data
                 value = observed[loc].get(date, 0) if loc in observed else 0
@@ -835,9 +830,9 @@ def delay_summary(
 ) -> pd.DataFrame:
     r"""Summarise a fit's onset-to-report delay over posterior draws.
 
-    The delay pmf of onset day $s$ is `hazard_to_pmf` of
-    $\beta(d) + \gamma(s)$, as in `HazardDelay`, from the recorded
-    `delay_beta` and `delay_shift` draws.
+    The delay pmf of onset day $s$ follows from the hazards
+    $\beta(d) + \gamma(s)$ (`components.hazards.log_hazard_probs`), as in
+    `HazardDelay`, from the recorded `delay_beta` and `delay_shift` draws.
 
     Parameters
     ----------
@@ -863,7 +858,7 @@ def delay_summary(
     """
     import jax.numpy as jnp
 
-    from nowcastrenewal.model.hazard_delay import hazard_to_pmf
+    from nowcastrenewal.components.hazards import log_hazard_probs
 
     days = pd.date_range(first_day, periods=last_day + 1, freq="D")
     # The last day of each onset week (to Saturday) up to the vintage.
@@ -872,7 +867,8 @@ def delay_summary(
         pd.Series(np.arange(len(days)), index=week_end).groupby(level=0).max()
     )
     logit = beta[:, None, :] + shift[:, last.to_numpy()][:, :, None]
-    cdf = np.cumsum(np.asarray(hazard_to_pmf(jnp.asarray(logit))), axis=-1)
+    pmf = jnp.exp(log_hazard_probs(jnp.asarray(logit), close=True))
+    cdf = np.cumsum(np.asarray(pmf), axis=-1)
     qs = list(_DELAY_QUANTILES)
 
     def rows(
@@ -1413,7 +1409,7 @@ class RenewalModel:
         --------
         Fitting takes minutes per task on a CPU.
 
-        >>> from bdbvhubrenewal.forecasters import get_model
+        >>> from bdbvhub.models import get_model
         >>> model = get_model("renewal")
         >>> samples = model.forecast(task)
         >>> model.fit_diagnostics  # divergences and R-hat of the fit

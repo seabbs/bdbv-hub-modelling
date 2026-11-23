@@ -8,24 +8,22 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import (
-    ForecastTask,
-    ModelUnavailableError,
-    RandomWalk,
-    RandomWalkNowcast,
-    add_national,
-    check_samples,
-    get_model,
-    list_models,
-)
+from bdbvhub.models import get_model, list_models
 from nowcastbaselines.chain import (
     NoCompleteWeek,
     NoDelayPair,
     NoWalkSpread,
     Settings,
 )
+from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
-from nowcastutils.base import MissingSnapshots
+from nowcastutils.base import (
+    ForecastTask,
+    MissingSnapshots,
+    ModelUnavailableError,
+    add_national,
+    check_samples,
+)
 
 
 def _task(
@@ -165,6 +163,7 @@ def test_the_partial_week_adds_walk_draws_to_its_nowcast(
     assert mine.nunique() > 10
 
 
+@pytest.mark.slow
 def test_the_walk_goes_on_from_the_completed_cut_off_week(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
@@ -186,6 +185,7 @@ def test_the_walk_goes_on_from_the_completed_cut_off_week(
     assert np.corrcoef(week, after)[0, 1] > 0.9
 
 
+@pytest.mark.slow
 def test_the_missing_days_step_from_the_week_before(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
@@ -205,6 +205,7 @@ def test_the_missing_days_step_from_the_week_before(
     assert values[:, i, cw].mean() == pytest.approx(want, rel=0.03)
 
 
+@pytest.mark.slow
 def test_a_full_cut_off_week_is_the_walks_base(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
@@ -241,6 +242,7 @@ def test_diagnostics_name_the_sources(
     assert info.loc["CD-IT", "n_err"] == 1
 
 
+@pytest.mark.slow
 def test_models_raise_without_snapshots_or_a_delay_pair(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:
@@ -356,7 +358,7 @@ def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
         "The copula pairs each week's province draws on its own (#310), so "
         "a sample's nowcast week and the week after are not one trajectory: "
         "the correlation is about 0 paired and 0.9 unpaired. Whether to keep "
-        "trajectories is Sam's decision."
+        "trajectories is an open decision."
     ),
 )
 def test_the_walk_forecasts_on_from_each_samples_nowcast(

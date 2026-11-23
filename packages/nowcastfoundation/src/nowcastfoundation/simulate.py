@@ -4,7 +4,7 @@ r"""Simulate province outbreaks and publish them as hub-style vintages.
 The simulator draws from the model's own components with known
 parameters, so recovery can be checked and there is one implementation
 of the maths. Expected daily infections come from the model's renewal
-(`nowcastrenewal.model.renewal.coupled_renewal`), with its generation
+(`nowcastrenewal.components.renewal.run_renewal`), with its generation
 interval, gravity kernel, importation and depletion of the effective
 population, for $\log R_p(t) = \log R(t) + \delta_p$ with a national
 $R(t)$ that turns and fixed province offsets $\delta_p$.
@@ -12,14 +12,14 @@ Expected onsets are infections convolved with the model's incubation
 period (`nowcastrenewal.model.model.incubation_period`).
 Confirmed cases are Poisson with mean $\alpha(t)$ times expected onsets.
 Each is reported after a double censored Gamma delay
-(`nowcastrenewal.model.censored.censored_pmf`) whose mean $\mu(t)$
+(`nowcastrenewal.components.pmfs.censored_pmf`) whose mean $\mu(t)$
 changes over time, has no onset with probability $\pi$ at its report
 day, and is published after a lag of 0 to 3 days.
 
 `SimulatedOutbreak.vintage` publishes what the hub would show at a date:
 known onsets by onset week, missing onsets given an onset by subtracting
 a delay drawn from the hub's imputation delay at that date
-(`bdbvhubrenewal.data.delays.hub_delay_pmf`), their total, and the
+(`bdbvhub.data.delays.hub_delay_pmf`), their total, and the
 delay line data.
 `SimulatedOutbreak.truth` is the final total once every case is reported.
 """
@@ -37,10 +37,11 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from bdbvhubrenewal.data import PROVINCE_POPULATIONS
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.tidy import province_places
-from nowcastrenewal.model.censored import censored_pmf
+from bdbvhub.data.delays import hub_delay_pmf
+from bdbvhub.data.tidy import PROVINCE_POPULATIONS, province_places
+from nowcastrenewal.components.mixing import mixing_matrix
+from nowcastrenewal.components.pmfs import Delay, censored_pmf
+from nowcastrenewal.components.renewal import ExponentialDepletion, run_renewal
 from nowcastrenewal.model.inputs import gravity_kernel as model_gravity_kernel
 from nowcastrenewal.model.model import (
     GI_MEAN,
@@ -49,7 +50,6 @@ from nowcastrenewal.model.model import (
     generation_interval,
     incubation_period,
 )
-from nowcastrenewal.model.renewal import coupled_renewal, mixing_matrix
 from nowcastutils.base import NATIONAL
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.releases import release_cutoff
@@ -255,7 +255,7 @@ class SimulatedOutbreak:
         Returns
         -------
         tuple of pandas.DataFrame
-            The target rows (as `bdbvhubrenewal.data.load_target`, with
+            The target rows (as `bdbvhub.data.tidy.load_target`, with
             `kind = "simulated"`) and the delay line data, each with
             `cutoff`, the release less `cutoff_lag`.
         """
@@ -366,7 +366,7 @@ class SimulatedOutbreak:
         Returns
         -------
         pandas.DataFrame
-            Rows as `bdbvhubrenewal.data.load_health_zones`: `vintage`,
+            Rows as `bdbvhub.data.tidy.load_health_zones`: `vintage`,
             `location`, `location_name`, `province`, `target_end_date`,
             with `observed` (known onsets) and `imputed` beside `total`,
             and `cutoff`.
@@ -593,17 +593,23 @@ def simulate_outbreak(
     mixing = mixing_matrix(
         jnp.asarray(model_gravity_kernel(s.locations, table)),
         s.importation,
+        "sent",
         jnp.asarray(pop / pop.sum()),
     )
     nu = s.effective_fraction
-    x, r_eff, _ = coupled_renewal(
+    run = run_renewal(
         jnp.zeros((gi.size, n_loc)),
-        jnp.asarray(rt.T),
         jnp.asarray(gi),
-        mixing,
-        pool=nu,
+        jnp.asarray(rt.T),
+        nu,
+        mixing=mixing,
         seeding=jnp.asarray(seeding),
+        depletion=ExponentialDepletion(),
     )
+    x = run.infections[gi.size :]
+    # R S / nu on each day before its infections.
+    s_before = np.vstack([np.full((1, n_loc), nu), run.susceptible[:-1]])
+    r_eff = rt.T * s_before / nu
     # Onsets follow infections after the incubation period, as in the model.
     eta = incubation_period()
     infections = np.asarray(x, float)
@@ -629,12 +635,15 @@ def simulate_outbreak(
         path = np.asarray(s.missing_path, dtype=float)
         miss = path[np.minimum(np.arange(n_days), path.size - 1)]
     mu = s.delay_mean[0] + (s.delay_mean[1] - s.delay_mean[0]) * t / n_days
-    # Daily double censored Gamma delays, as the model's `censored_pmf`,
-    # long enough that truncation is negligible.
+    # Daily double censored Gamma delays (`components.pmfs`), long enough
+    # that truncation is negligible.
     delay_cdf = np.cumsum(
         np.asarray(
             jax.vmap(
-                lambda m: censored_pmf("gamma", m, s.delay_cv, MAX_SIM_DELAY)
+                lambda m: censored_pmf(
+                    Delay.from_mean_cv("gamma", m, s.delay_cv),
+                    MAX_SIM_DELAY + 1,
+                )
             )(jnp.asarray(mu))
         ),
         axis=1,

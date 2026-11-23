@@ -227,15 +227,12 @@ def test_zero_shots_meet_the_palette_validator_against_the_main_models():
 
 
 def test_dashboard_colour_maps_are_shared_and_distinct() -> None:
-    import sys
-    from pathlib import Path
 
     from nowcasteval import labels
 
     # Every relation a run may train; layouts as the trainer's block design.
     assert list(labels.RELATION_COLOURS) == ["same", "up", "down"]
-    sys.path.insert(0, str(Path(__file__).parents[2] / "scripts"))
-    import finetune_chronos as ft
+    from nowcastfoundation.finetune import chronos as ft
 
     assert set(labels.LAYOUT_COLOURS) == set(ft.BLOCK_DESIGN["source_shares"])
     for colours in (

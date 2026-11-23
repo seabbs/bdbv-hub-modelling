@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import time
+import urllib.error
 from dataclasses import dataclass, field, replace
 from functools import partial
 from pathlib import Path
@@ -56,6 +57,7 @@ __all__ = [
     "ZONE_VARIANTS",
     "ZoneRenewalFit",
     "ZoneRenewalModel",
+    "at_least_published",
     "sum_zones",
     "task_zones",
     "zone_target",
@@ -74,16 +76,25 @@ def _data_dir() -> Path:
 
 
 def _daily_zones() -> pd.DataFrame:
-    from bdbvhubrenewal.data import load_daily_zones
+    from bdbvhub.data.tidy import load_daily_zones
 
     return load_daily_zones(_data_dir())
+
+
+def _zones_of(task: ForecastTask) -> tuple[str, ...]:
+    """Return the task's zone codes in its provinces, sorted."""
+    from nowcastutils.hierarchy import province_of
+
+    return tuple(
+        sorted(z for z in task.zone_codes if province_of(z) in task.locations)
+    )
 
 
 def task_zones(task: ForecastTask) -> tuple[str, ...]:
     """Return the health zones of a task's provinces.
 
-    The hub's zone codes (`hub-config/tasks.json` in the data directory),
-    or the zones in the daily zone table if there is no hub config.
+    The task's zone codes (`ForecastTask.zone_codes`, the hub's codes),
+    which its forecast is checked against.
 
     Parameters
     ----------
@@ -94,16 +105,18 @@ def task_zones(task: ForecastTask) -> tuple[str, ...]:
     -------
     tuple of str
         Zone codes, sorted.
-    """
-    from bdbvhubrenewal.data.zones import hub_zones
-    from nowcastutils.hierarchy import province_of
 
-    tasks_json = _data_dir() / "hub-config" / "tasks.json"
-    if tasks_json.exists():
-        codes = hub_zones(tasks_json)
-    else:
-        codes = tuple(sorted(set(_daily_zones()["location"])))
-    return tuple(z for z in codes if province_of(z) in task.locations)
+    Raises
+    ------
+    ModelUnavailableError
+        If the task holds no zone codes (a task built without zone data).
+    """
+    if not task.zone_codes:
+        raise ModelUnavailableError(
+            "A zone fit needs the task's zone codes; build the task with "
+            "the zone data (`load_zone_data`)."
+        )
+    return _zones_of(task)
 
 
 def zone_target(task: ForecastTask) -> pd.DataFrame:
@@ -153,6 +166,38 @@ def _zone_walk_task(task: ForecastTask) -> ForecastTask:
         else pd.concat([task.daily_history, daily], ignore_index=True)
     )
     return zone_task(task, counts, task_zones(task), history)
+
+
+def at_least_published(
+    samples: pd.DataFrame, target: pd.DataFrame
+) -> pd.DataFrame:
+    """Raise each zone sample to the count its release already holds.
+
+    A week's final count can only add to what is published, so a sample
+    below it, which the imputed stream's draw can give in a zone with
+    few cases, takes the published count. Province samples summed from
+    the zones then hold the floor too, as a split of the provinces did.
+
+    Parameters
+    ----------
+    samples : pandas.DataFrame
+        Zone samples with `location`, `target_end_date` and `value`.
+    target : pandas.DataFrame
+        The zones' published weekly counts (`zone_target`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        `samples` with each value at least its published `total`.
+    """
+    keys = ["location", "target_end_date"]
+    published = (
+        target.set_index(keys)["total"]
+        .reindex(pd.MultiIndex.from_frame(samples[keys].astype(str)))
+        .fillna(0)
+        .to_numpy()
+    )
+    return samples.assign(value=np.maximum(samples["value"], published))
 
 
 def sum_zones(samples: pd.DataFrame) -> pd.DataFrame:
@@ -238,13 +283,15 @@ def zone_bvd_rows(
         )
         try:
             body = (download or bvd._download)(url)
-        except Exception:
+        except urllib.error.HTTPError as err:
+            if err.code != 404:
+                raise
             return None
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(body)
     est = pd.read_csv(path)
     if names is None:
-        from bdbvhubrenewal.data import load_health_zones
+        from bdbvhub.data.tidy import load_health_zones
 
         names = load_health_zones(_data_dir())
     hub = names.drop_duplicates("location")
@@ -498,9 +545,9 @@ class ZoneRenewalModel(RenewalModel):
             & daily["location"].map(province_of).isin(task.locations)
         ]
         digest = hashlib.sha256(mine.to_csv(index=False).encode())
-        digest.update(repr(task_zones(task)).encode())
+        digest.update(repr(_zones_of(task)).encode())
         if model_config(self.variant).bvd:
-            from bdbvhubrenewal.data import load_health_zones
+            from bdbvhub.data.tidy import load_health_zones
 
             names = load_health_zones(_data_dir())
             digest.update(names.to_csv(index=False).encode())
@@ -551,7 +598,9 @@ class ZoneRenewalModel(RenewalModel):
             runs = self._run_all({"all": zt})
             zones.append(samples_table(zt, runs["all"].data, runs["all"].draws))
             later.extend(_as_reported(zt, runs["all"]))
-        zone_samples = pd.concat(zones, ignore_index=True)
+        zone_samples = at_least_published(
+            pd.concat(zones, ignore_index=True), zone_target(task)
+        )
         # The samples hold the zones too, so the forecast, the store and
         # the scores read the zone fit's own zones, not a split
         # (`forecasters.zones.with_zones` leaves them as they are).

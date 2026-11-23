@@ -210,8 +210,8 @@ flowchart TD
     DV["Province deviations δ<sub>p</sub>(t)<br/>sum-to-zero AR(1)"]
     ZV["Zone deviations ε<sub>z</sub>(t)<br/>sum-to-zero AR(1)<br/>within each province"]
     RP["log R<sub>z</sub>(t) = log R(t) + δ<sub>p(z)</sub>(t) + ε<sub>z</sub>(t)"]
-    K["Gravity kernel<br/>K<sub>qz</sub> ∝ N<sub>z</sub> exp(−D<sub>qz</sub> / 300 km)"]
-    W["Importation<br/>W = (1 − ε) I + ε diag(1/N) K<sup>T</sup> diag(N)"]
+    K["Gravity kernel, rows receive<br/>K<sub>zq</sub> ∝ N<sub>z</sub> exp(−D<sub>zq</sub> / 300 km)"]
+    W["Importation<br/>W = (1 − ε) I + ε diag(1/N) K diag(N)"]
     CORE["<b>Renewal core</b><br/>see above<br/>with a share at risk ν"]
     SUM["Province = sum of its zones<br/>country = provinces + unassigned"]
 
@@ -276,9 +276,9 @@ x_z(t) = S_z(t)\big\{1 - e^{-\Phi_z(t)/\nu}\big\},
 S_z(t + 1) = S_z(t)\, e^{-\Phi_z(t)/\nu}.
 $$
 
-- $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K^\top \mathrm{diag}(N)$ mixes transmission between zones, with $\varepsilon \sim \text{Beta}(1, 100)$.
-- $K$ is a row-normalised gravity kernel, $K_{qz} \propto N_z e^{-D_{qz}/300\,\text{km}}$ for $q \ne z$, with $D$ the great-circle distance between zone centroids.
-- $N_z$ is the zone's WorldPop 2025 count and its centroid is that of its largest polygon, both from the map behind the province centres ([`zone_centres.csv`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/src/bdbvhubrenewal/data/zone_centres.csv)).
+- $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K \mathrm{diag}(N)$ mixes transmission between zones, with $\varepsilon \sim \text{Beta}(1, 100)$.
+- $K$ is a gravity kernel with rows that receive, normalised per origin, $K_{zq} \propto N_z e^{-D_{zq}/300\,\text{km}}$ for $q \ne z$, with $D$ the great-circle distance between zone centroids.
+- $N_z$ is the zone's WorldPop 2025 count and its centroid is that of its largest polygon, both from the map behind the province centres ([`zone_centres.csv`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/bdbvhub/src/bdbvhub/data/zone_centres.csv)).
   The 19 hub zones the map lacks, none with a case, take their province's centre and mean zone population.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share at risk.
   $S_z$ starts at $\nu$ less the seed, so infections never exceed $\nu N_z$.

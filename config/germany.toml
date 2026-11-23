@@ -1,6 +1,6 @@
 # German COVID-19 hospitalisation nowcast benchmark (Wolffram et al. 2023,
 # PLOS Comp Biol, doi:10.1371/journal.pcbi.1011394). Read by
-# `bdbvhubrenewal.evaluation.germany.load_germany_config`.
+# `nowcastgermany.evaluation.load_germany_config`.
 # `bdbvhubrenewal germany-fetch` downloads the files below at these commits
 # into data/raw/germany/, which is not committed. The data come from the
 # Robert Koch Institute (CC BY 4.0) through the hub.
@@ -29,15 +29,26 @@ last_date = "2022-04-29"
 # 2021-11-22 to 2022-02-09 (80 dates) are for development, 2022-02-10 to
 # 2022-04-29 (79 dates) are held out for the paper and not scored here.
 split_date = "2022-02-10"
+# Days ahead of each nowcast date the checkpoint units also forecast, the
+# zero-shot reference and every checkpoint alike: 7-day sums ending up to
+# 28 days after it (4 weeks), as the held-out loss splits them. The hub's
+# horizons, 0 to 28 days back, stay the scored nowcast.
+forecast_days = 28
+# The views the checkpoint units forecast and the page shows, both on daily
+# data: the hub's 7-day rolling sums (`7day`) and each day's count
+# (`daily`), each scored on its truth as reported 40 days after it ends.
+# Daily counts come from the models with their own quantiles of them (the
+# ragged Chronos-2 models).
+targets = ["7day", "daily"]
+# Germany is scored and shown on daily data only: every model takes the
+# daily releases (no weekly source) and forecasts the hub's 7-day rolling
+# sums. The checkpoint units run the Chronos-2 models listed here.
 models = [
   "randomwalk",
   "randomwalknowcast",
   "fm_chronos_daily_complete",
-  "fm_chronos_weekly_complete",
   "fm_chronos_daily_ragged",
-  "fm_chronos_weekly_ragged",
   "fm_chronos_daily_ragged_ft",
-  "fm_chronos_weekly_ragged_ft",
 ]
 # Chronos-2 fine-tuned on real data alone, the German development half and
 # BDBV to date (scripts/finetune_realdata.py on the germany-ft branch), run
@@ -45,11 +56,10 @@ models = [
 # fine-tuned on simulations.
 held_out_models = [
   "fm_chronos_daily_ragged_real",
-  "fm_chronos_weekly_ragged_real",
 ]
 # Draws per forecast and their seed, the same for every model. A model's own
 # quantiles at the hub's seven levels are scored where it gives them (the
-# weekly Chronos-2 models); every other forecast is scored from the
+# ragged Chronos-2 models); every other forecast is scored from the
 # quantiles of its draws.
 n_samples = 1000
 seed = 20261027
@@ -60,6 +70,9 @@ baseline = "randomwalknowcast"
 # The paper's relative scores divide by the hub's own baseline, as
 # Wolffram et al. (2023) compare to it.
 paper_baseline = "KIT-frozen_baseline"
+# Relative scores on daily counts divide by zero-shot Chronos-2 (ragged),
+# as `randomwalknowcast` forecasts the 7-day sums only.
+daily_baseline = "fm_chronos_daily_ragged"
 
 [page]
 # Models switched off on the page until the reader switches them on. Both

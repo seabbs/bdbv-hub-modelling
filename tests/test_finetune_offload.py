@@ -1,4 +1,4 @@
-"""Evaluation offloaded from the trainer (`finetune_stream --eval offload`)."""
+"""Evaluation offloaded from the trainer (`finetune.stream --eval offload`)."""
 
 import json
 import sys
@@ -12,12 +12,11 @@ pytest.importorskip("chronos")
 pytest.importorskip("peft")
 
 sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-import finetune_evaluate as fe  # noqa: E402
-import finetune_stream as fs  # noqa: E402
 from chronos_toy import tiny_model, toy_block  # noqa: E402
 
 from nowcastfoundation import series_bias  # noqa: E402
+from nowcastfoundation.finetune import evaluate as fe  # noqa: E402
+from nowcastfoundation.finetune import stream as fs  # noqa: E402
 
 
 @pytest.fixture
@@ -93,7 +92,6 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
         val,
         ["monitor", "by_source", "checkpoint"],
         batch_size=100,
-        real=val[:2],
     )
     assert got["eval_loss"] == fs.held_out_loss(
         model, val[: fs.ft.EVAL_BLOCKS], 100
@@ -102,7 +100,6 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
         model, val, 100, fs.ft.EVAL_BLOCKS
     )
     assert got["held_out_loss"] == fs.held_out_loss(model, val, 100)
-    assert got["real_validation_loss"] == fs.held_out_loss(model, val[:2], 100)
     assert got["held_out_loss_by_level"] == fs.held_out_by_level(
         model, val, fs.LEVEL_BLOCKS
     )
@@ -111,7 +108,7 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
     )
     assert np.isfinite(got["eval_loss"])
     # Each total comes with its nowcast and forecast parts.
-    for name in ("eval_loss", "held_out_loss", "real_validation_loss"):
+    for name in ("eval_loss", "held_out_loss"):
         assert got[f"{name}_nowcast"] + got[f"{name}_forecast"] == (
             pytest.approx(got[name], rel=1e-6)
         )
@@ -150,31 +147,18 @@ def _snapshot_run(tmp_path, monkeypatch, n_validation: int) -> Path:
 
 
 @pytest.mark.usefixtures("short_context")
-def test_main_scores_a_snapshot_as_its_request_asks(tmp_path, monkeypatch):
+def test_a_snapshot_is_scored_as_its_request_asks(tmp_path, monkeypatch):
     where = _snapshot_run(tmp_path, monkeypatch, n_validation=4)
-    out = tmp_path / "result.json"
-    fe.main([str(where), "--train", str(tmp_path / "train"), "--out", str(out)])
-    got = json.loads(out.read_text())
+    blocks = fe.load_blocks(tmp_path / "train" / fs.HELD_OUT_BLOCKS, 4)
+    got = fe.snapshot_result(fe.load_base("cpu"), where, blocks, "cpu")
     assert got["step"] == 100
     assert got["kinds"] == ["monitor", "by_source"]
     assert {"eval_loss", "eval_loss_nowcast", "by_source"} <= set(got)
     assert "held_out_loss" not in got
+    out = tmp_path / "result.json"
+    fe.write_json(out, got)
+    assert json.loads(out.read_text())["step"] == 100
     assert not out.with_name(out.name + ".tmp").exists()
-
-
-@pytest.mark.usefixtures("short_context")
-def test_main_refuses_blocks_that_are_not_the_runs(tmp_path, monkeypatch):
-    where = _snapshot_run(tmp_path, monkeypatch, n_validation=5)
-    with pytest.raises(ValueError, match="4 held-out blocks"):
-        fe.main(
-            [
-                str(where),
-                "--train",
-                str(tmp_path / "train"),
-                "--out",
-                str(tmp_path / "result.json"),
-            ]
-        )
 
 
 @pytest.mark.usefixtures("short_context")
@@ -215,7 +199,7 @@ def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
     (where / "settings.json").write_text(
         json.dumps({"n_validation": len(val), "batch_size": 100, "steps": 200})
     )
-    runner.main(["steps", str(where), "--device", "cpu"])
+    runner.main(["steps", str(where), "--device", "cpu", "--eval-every", "200"])
     runner.main(["checkpoint", str(where), "--device", "cpu"])
     step = json.loads((train / "evals" / "step-0000200.json").read_text())
     assert step["eval_loss"] == fs.held_out_loss(
@@ -228,3 +212,20 @@ def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
     )
     start = json.loads((train / "evals" / "step-0000000.json").read_text())
     assert sidecar["held_out_loss_start"] == start["held_out_loss"]
+
+
+@pytest.mark.usefixtures("short_context")
+@pytest.mark.parametrize("kind", ["start", "checkpoint"])
+def test_checkpoints_and_the_start_get_interval_coverage(tmp_path, kind):
+    model = trained()
+    where = tmp_path / "step-0000100"
+    fs.save_snapshot(model, where, {"step": 100})
+    base = tiny_model()
+    series_bias.attach(base)
+    got = fe.evaluate(where / "adapter", base, blocks(), [kind], 100)
+    cover = got["held_out_coverage"]
+    for prefix in ("", "nowcast_", "forecast_", "source_daily_", "level_leaf_"):
+        assert 0 <= cover[f"{prefix}cover50"] <= cover[f"{prefix}cover90"] <= 1
+    # Every scored step is a nowcast step or a forecast step.
+    assert cover["nowcast_n"] + cover["forecast_n"] == cover["n"] > 0
+    assert cover["source_daily_n"] + cover["source_weekly_n"] == cover["n"]

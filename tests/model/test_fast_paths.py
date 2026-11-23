@@ -1,6 +1,6 @@
 """The fast weekly-delay and release-pair paths give the same density.
 
-Each fast path is checked against the code it replaces, in float64, for
+Each fast path is checked against a plain reference version, in float64, for
 the values and for the gradient.
 """
 
@@ -135,6 +135,7 @@ def test_kept_share_matches_the_direct_lookup():
             np.testing.assert_allclose(a, b, rtol=1e-10)
 
 
+@pytest.mark.slow
 def test_full_model_density_and_gradient_are_unchanged(
     sim_vintage, monkeypatch
 ):

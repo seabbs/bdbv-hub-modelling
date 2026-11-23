@@ -153,3 +153,13 @@ def test_a_value_with_a_space_stays_one_assignment(monkeypatch):
     env = machine.torch_env({}, threads=2, device="cpu")
     words = shlex.split(machine.shell_env(env))
     assert dict(w.split("=", 1) for w in words)["XLA_FLAGS"] == env["XLA_FLAGS"]
+
+
+def test_jobs_beside_the_trainer_run_on_the_cpu_unless_set():
+    assert machine.side_device({"DEVICE": "cuda"}) == "cpu"
+    assert machine.side_device({"EVAL_DEVICE": "cuda"}) == "cuda"
+
+
+def test_a_job_prefix_names_its_memory():
+    cfg = {"JOB_PREFIX": "cap.sh {mem}"}
+    assert machine.job_prefix(cfg, 2048.0) == "cap.sh 2048M"

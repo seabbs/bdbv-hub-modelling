@@ -10,8 +10,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.evaluation.germany import load_germany_config
-from bdbvhubrenewal.evaluation.germany_store import (
+from nowcastfoundation.checkpoint import GERMANY_UNIT
+from nowcastgermany.evaluation import load_germany_config
+from nowcastgermany.store import (
     STORED_MODELS,
     choose_checkpoint,
     development_rows,
@@ -19,7 +20,6 @@ from bdbvhubrenewal.evaluation.germany_store import (
     release_tag,
     write_stored,
 )
-from nowcastfoundation.checkpoint import GERMANY_UNIT
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
@@ -126,7 +126,7 @@ def test_development_rows_keep_the_model_before_the_split() -> None:
         ]
     )
     out = development_rows(frame, SPLIT)
-    assert set(out["model"]) == {DAILY, WEEKLY}
+    assert set(out["model"]) == {DAILY}
     assert out["origin"].max() == "2022-02-09"
     assert (out["target_end_date"] < SPLIT).all()
 
@@ -197,7 +197,7 @@ def test_the_store_script_writes_a_label_from_the_cache(
         check=True,
     )
     stored = load_stored(out, "chronos-ft-abcdef123456", SPLIT)
-    assert set(stored["model"]) == {DAILY, WEEKLY}
+    assert set(stored["model"]) == {DAILY}
     assert sorted(set(stored["origin"])) == ["2021-11-22", "2021-11-23"]
 
 
@@ -227,7 +227,7 @@ def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
 def test_the_load_command_writes_the_chosen_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     store = tmp_path / "store"
@@ -268,7 +268,7 @@ def test_the_load_command_writes_the_chosen_checkpoint(
 def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: RELEASES)
@@ -293,8 +293,9 @@ def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
     assert json.loads(note.read_text())["tag"] is None
 
 
-def test_both_fine_tuned_models_are_stored() -> None:
-    assert STORED_MODELS == (DAILY, WEEKLY)
+def test_the_daily_fine_tuned_model_is_stored() -> None:
+    # Germany is daily only: no weekly model is stored.
+    assert STORED_MODELS == (DAILY,)
 
 
 def test_only_the_live_run_s_checkpoints_are_shown() -> None:
@@ -319,7 +320,7 @@ def test_only_the_live_run_s_checkpoints_are_shown() -> None:
 def test_the_load_command_shows_the_live_run_with_its_label(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from bdbvhubrenewal import cli
+    from bdbvhub import cli
     from nowcastfoundation import forecaster as foundation
 
     releases = [

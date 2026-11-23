@@ -26,7 +26,18 @@ from typing import Any
 
 from nowcasteval import labels
 
-from . import bias, learning, logs, nowcasts, paperstyle, scores, svg, training
+from . import (
+    bias,
+    kv,
+    level_loss_lora,
+    logs,
+    nowcasts,
+    paperstyle,
+    scores,
+    svg,
+    training,
+)
+from .logs import _size
 from .mirror import Source
 from .runs import Reference, Run, split_label
 
@@ -71,8 +82,6 @@ class Context:
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
     mirror_status: str = ""
-    delays: dict[str, int | None] = field(default_factory=dict)
-    summarised: dict[str, tuple] = field(default_factory=dict)
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -106,63 +115,28 @@ class Context:
         cks = _checkpoints(run)
         chunks = self._runlog(run).chunks() if run.folder else {}
         pairs = training.anchors(cks, chunks)
-        return pairs, training.steps_per_simulation(0, [], cks)
+        return pairs, training.steps_per_simulation(cks)
 
     def dataset(self, key: str) -> Mapping[str, Any]:
-        """Return a configured dataset by key (a quantiles one if unknown)."""
+        """Return a configured dataset by key (an empty one if unknown)."""
         return next(
             (d for d in self.datasets if d["key"] == key),
-            {"key": key, "label": key, "format": "quantiles", "groups": []},
+            {"key": key, "label": key, "groups": []},
         )
-
-    def forecasts(self, key: str) -> Path:
-        """Return the quantile files a dataset's panels read.
-
-        A samples dataset's are its summaries (`summarise`), never made
-        while a page is built.
-        """
-        if self.dataset(key).get("format") != "samples":
-            return self.source.dataset(key)
-        return self.source.root / f"{key}-quantiles"
-
-    def summarise(self) -> None:
-        """Summarise each samples dataset whose truth or files changed.
-
-        Run at start, before a static render and in the background loop.
-        """
-        for ds in self.datasets:
-            if ds.get("format") != "samples":
-                continue
-            key = ds["key"]
-            folder = self.source.dataset(key)
-            truth = self.source.truth(key)
-            if truth is None or not truth.is_file() or not folder.is_dir():
-                continue
-            sig = (
-                truth.stat().st_mtime_ns,
-                tuple(
-                    (str(f), f.stat().st_mtime_ns)
-                    for f in sorted(folder.glob("*/*.csv.gz"))
-                ),
-            )
-            if self.summarised.get(key) == sig:
-                continue
-            self.delays[key] = nowcasts.summarise_samples(
-                folder, self.forecasts(key), truth, ds
-            )
-            self.summarised[key] = sig
 
     def nowcasts(self, key: str) -> dict[str, Any] | None:
         """Return a dataset's nowcasts, rebuilt only when its files change."""
         ds = self.dataset(key)
         return nowcasts.cached_build(
-            self.forecasts(key),
+            self.source.dataset(key),
             self.runs,
             self.references,
             self.stores.setdefault(key, {}),
             levels=nowcasts.LEVELS,
             excluded=self.excluded,
             order=[(g["name"], g["match"]) for g in ds.get("groups") or ()],
+            sources=ds.get("sources"),
+            unit=ds.get("unit") or key,
         )
 
 
@@ -198,13 +172,7 @@ def _fmt(v: Any, n: int = 4) -> str:
 def _dur(s: float | None) -> str:
     if s is None or s != s or s < 0:
         return "n/a"
-    s = int(s)
-    return f"{s // 3600}h {s % 3600 // 60:02d}m"
-
-
-def _size(name: str) -> int:
-    digits = re.sub(r"\D", "", name)
-    return int(digits) if digits else 0
+    return kv.duration(s)
 
 
 def _checkpoints(run: Run) -> list[tuple[str, dict, float | None]]:
@@ -227,6 +195,7 @@ class Status:
     steps: Callable[[int], tuple[int, bool]] | None = None
     sims_rate: float | None = None
     span: float | None = None
+    mean_rate: float | None = None
 
     @property
     def target(self) -> int:
@@ -277,11 +246,10 @@ def live_status(
 ) -> Status:
     """Return the live run's step, speed, schedule and checkpoints.
 
-    `planned` are its checkpoints unless the trainer's command line names
-    them (`logs.prefixes`). `sims` (`Context.sims`) gives the
-    simulations trained by its step, for a run that decays over
-    simulations, not steps; `steps` (`Context.steps`) the step a
-    checkpoint is saved at.
+    `planned` are its checkpoints, with those saved (`logs.prefixes`).
+    `sims` (`Context.sims`) gives the simulations trained by its step,
+    as the rate decays over simulations; `steps` (`Context.steps`) the
+    step a checkpoint is saved at.
     """
     step = rows[-1]["step"] if rows else None
     last_t = rows[-1]["t"] if rows else None
@@ -302,15 +270,13 @@ def live_status(
         first_s = newest[1] - rate * span
         done = sims(newest[1]) - sims(first_s)
         sims_rate = done / span if done > 0 else None
-    args = logs.trainer_args(folder) if folder else ""
     trained = sims(step) if sims and step is not None else None
     params = (
         training.run_params(
-            folder, training.history(live), step, args, planned, trained
+            folder, training.history(live), step, planned, trained
         )
         if folder
         else {
-            "lr_steps": 0,
             "lr_outbreaks": 0,
             "groups": {},
             "current": {},
@@ -319,10 +285,8 @@ def live_status(
         }
     )
     sizes = params["prefixes"]
-    spo = training.steps_per_simulation(
-        params["lr_steps"], sizes, _checkpoints(live)
-    )
-    if trained and step and not params["lr_steps"]:
+    spo = training.steps_per_simulation(_checkpoints(live))
+    if trained and step:
         spo = step / trained
     saved = {
         n
@@ -351,9 +315,10 @@ def live_status(
         pending,
         nxt,
         trained,
-        None if params["lr_steps"] else steps,
+        steps,
         sims_rate,
         span,
+        training.mean_rate(points),
     )
 
 
@@ -363,6 +328,13 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     folder = live.folder
     trained = st.trained
     trainer, alive = logs.trainer_state(folder) if folder else ("n/a", None)
+    # A stopped run's next segment may wait on batches it lacks (failed or
+    # still being simulated): name them.
+    missing: list[int] = []
+    if folder and not alive and st.nxt and not st.pending:
+        missing = logs.waiting_batches(folder, st.nxt)
+        if missing:
+            alive = False
     # The running segment's last line of any kind, not only a step.
     last = logs.RunLog(folder).last_line() if folder else None
     last_t, last_text = last or (st.last_t, "")
@@ -373,27 +345,24 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     # A written checkpoint still being scored is named as itself.
     next_v = f"n{st.nxt}" if st.nxt else "none"
     eta = f"ETA {st.eta(st.nxt)}" if st.nxt else ""
-    next_s = ""
+    next_s: dict[str, Any] = {}
     if st.nxt:
-        done = (
-            f"{min(trained, st.nxt):.0f} of {st.nxt} simulations; "
+        next_s = {
+            "simulations": f"{min(trained, st.nxt):.0f}/{st.nxt}"
             if trained is not None
-            else ""
-        )
-        kind = "planned" if st.planned(st.nxt) else "estimated"
-        next_s = f"{done}step {st.at(st.nxt)} ({kind}), {eta}"
+            else None,
+            "step": st.at(st.nxt),
+            "step_is": "planned" if st.planned(st.nxt) else "estimated",
+            "ETA": st.eta(st.nxt),
+        }
     if st.pending:
-        since = datetime.fromtimestamp(
+        next_s["scoring"] = f"n{st.pending[0]}"
+        next_s["since"] = datetime.fromtimestamp(
             (folder / f"train/n{st.pending[0]}/{ADAPTER}").stat().st_mtime
         ).strftime("%H:%M")
-        next_s = "; ".join(
-            x for x in (next_s, f"n{st.pending[0]} scoring since {since}") if x
-        )
     p = st.params
     rates = "\n".join(f"{g} {v:.2e}" for g, v in p["current"].items()) or "n/a"
-    if p["lr_steps"]:
-        decay = f"linear decay to 0 at step {p['lr_steps']}"
-    elif p["lr_outbreaks"]:
+    if p["lr_outbreaks"]:
         decay = f"linear decay to 0 at {p['lr_outbreaks']} simulations"
     else:
         decay = "constant"
@@ -403,41 +372,54 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             "Step",
             "t_step",
             "n/a" if st.step is None else str(st.step),
-            f"n{trained:.0f} of {st.target} simulations trained"
-            if trained is not None
-            else "",
+            {
+                "final_step": st.at(st.target)
+                if st.target and st.step is not None
+                else None,
+                "simulations_trained": f"{trained:.0f}/{st.target}"
+                if trained is not None
+                else None,
+            },
             "",
         ),
         (
             "Steps / s",
             "t_rate",
             f"{st.rate:.3f}" if st.rate else "n/a",
-            "; ".join(
-                x
-                for x in (
-                    f"{st.sims_rate * 60:.2f} simulations/min"
-                    if st.sims_rate
-                    else "",
-                    f"over the last {_dur(st.span)}" if st.span else "",
-                )
-                if x
-            ),
+            {
+                "mean": st.mean_rate,
+                "simulations_per_min": st.sims_rate * 60
+                if st.sims_rate
+                else None,
+                "window_s": st.span,
+            },
             "",
         ),
         ("Next checkpoint", "t_next", next_v, next_s, ""),
         (
+            "Segments",
+            "t_segments",
+            next_v,
+            {
+                f"n{n}": st.eta(n)
+                for n in st.params["prefixes"]
+                if n not in st.saved and n not in st.pending
+            },
+            "",
+        ),
+        (
             f"ETA n{st.target}",
             "t_eta",
             st.eta(st.target),
-            f"step {st.at(st.target)}",
+            {"step": st.at(st.target)},
             "",
         ),
-        ("Learning rates", "t_lr", rates, decay, ""),
+        ("Learning rates", "t_lr", rates, {"schedule": decay}, ""),
         (
             "Trainer",
             "t_trainer",
             trainer,
-            "",
+            {"waiting_for_batches": missing},
             "" if alive is None else " ok" if alive else " bad",
         ),
         (
@@ -446,9 +428,11 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
             datetime.fromtimestamp(last_t).strftime("%H:%M:%S")
             if last_t
             else "n/a",
-            ("STALE " if stale else "")
-            + (_dur(age) + " ago" if age else "")
-            + (f": {last_text[:80]}" if last_text else ""),
+            {
+                "stale": stale or None,
+                "age_s": age,
+                "line": last_text[:80],
+            },
             " bad" if stale else "",
         ),
     ]
@@ -456,7 +440,7 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
         f'<div class="tile{cls}"><div class=k>{k}{tip(key)}</div>'
         f'<div class="v{" vl" if chr(10) in v else ""}">'
         f"{html.escape(v).replace(chr(10), '<br>')}</div>"
-        f"<div class=s>{html.escape(s)}</div></div>"
+        f"<div class=s>{kv.box(s)}</div></div>"
         for k, key, v, s, cls in tiles
     )
     done = f"n{trained:.0f} / " if trained is not None and st.nxt else ""
@@ -486,7 +470,7 @@ def lr_card(
     by_sims = bool(params["lr_outbreaks"] and sims)
     width, height = 190, 150
     left, right, top, bottom = 34, 6, 6, 18
-    decays = params["lr_steps"] or (params["lr_outbreaks"] if by_sims else 0)
+    decays = params["lr_outbreaks"] if by_sims else 0
 
     def x_of(s: float) -> float:
         return sims(s) if by_sims and sims else s
@@ -739,10 +723,8 @@ def checkpoint_sizes(
     return sizes
 
 
-def _caption(ctx: Context, ds: Mapping[str, Any]) -> str:
-    text = ds.get("truth", "")
-    delay = ctx.delays.get(ds["key"])
-    return text.replace("{delay}", "" if delay is None else str(delay))
+INPUT_LABELS = {"daily": "daily counts", "weekly": "weekly totals"}
+"""The nowcast panels' model inputs, as the control names them."""
 
 
 def nowcasts_section(
@@ -750,9 +732,8 @@ def nowcasts_section(
 ) -> str:
     """Return the nowcast panels of every dataset, behind a selector.
 
-    Every configured dataset is listed (Germany's development half and
-    the held-out simulations; BDBV is held out). One with no
-    nowcasts yet is listed as empty, with why (its `missing`), so the
+    Every configured dataset is listed (Germany's development half; BDBV
+    is held out). One with no nowcasts yet is listed as empty, so the
     selector always offers it.
     """
     datasets, sources = [], set()
@@ -765,7 +746,6 @@ def nowcasts_section(
                     "label": ds.get("label", ds["key"]),
                     "metric": ds.get("metric", ""),
                     "empty": True,
-                    "missing": ds.get("missing", ""),
                     "truth": "",
                     "meta": [],
                     "locs": [],
@@ -798,7 +778,8 @@ def nowcasts_section(
                 "key": ds["key"],
                 "label": ds.get("label", ds["key"]),
                 "metric": ds.get("metric", ""),
-                "truth": _caption(ctx, ds),
+                "truth": ds.get("truth", ""),
+                "target": ds.get("target", ""),
                 "meta": meta,
                 "locs": built["locs"],
                 "origins": built["origins"],
@@ -847,7 +828,8 @@ def nowcasts_section(
     first = defaults.get("source")
     options = "".join(
         f'<option value="{html.escape(s, quote=True)}"'
-        f"{' selected' if s == first else ''}>{html.escape(s)}</option>"
+        f"{' selected' if s == first else ''}>"
+        f"{html.escape(INPUT_LABELS.get(s, s))}</option>"
         for s in sorted(sources)
     )
     controls = _asset("nowcasts.html").replace("{sources}", options)
@@ -994,12 +976,6 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         if live.folder
         else {}
     )
-    sub = (
-        f"stage: {html.escape(str(status.get('stage')))}; stream status "
-        f"{html.escape(str(status.get('time', '')))}"
-        if status
-        else ""
-    )
     info = {
         r.key: training.loss_run(
             r, ctx.log(r), _checkpoints(r), ctx.sims(r), None, r.colour
@@ -1018,26 +994,30 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     sizes = checkpoint_sizes(ctx, info, score_rows)
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
-    live_note = "" if ctx.once else "updates in place every 60 s; "
-    mirror = (
-        f"scores {html.escape(ctx.mirror_status)}; "
-        if ctx.mirror_status
-        else ""
-    )
+    views = training.views_summary(live.folder) if live.folder else None
+    about = {
+        "trainer_status": status,
+        "block_views": views,
+        "scores": ctx.mirror_status,
+        "updates_every_s": None if ctx.once else 60,
+    }
     parts = [
         (
             "status",
             "Status",
-            f"<div class=tiles>{tiles}</div>"
-            f"<div class=mut>{live_note}{mirror}{sub}</div>",
+            # The trainer's status, views and sources: folded, as the tiles
+            # say where the run is.
+            f"<div class=tiles>{tiles}</div><details class=about>"
+            f"<summary class=mut>Trainer status</summary>{kv.box(about)}"
+            "</details>",
             True,
         ),
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (
-            "learning",
-            "What fine-tuning learns",
-            learning.section(ctx.runs, tip),
+            "levels",
+            "Held-out loss by level and LoRA size",
+            level_loss_lora.section(ctx.runs, tip),
             True,
         ),
         ("nowcasts", "Nowcasts", nowcasts_section(ctx, sizes, builts), True),
@@ -1053,7 +1033,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
 NAV = {
     "status": "Status",
     "mailbox": "Activity",
-    "learning": "Learning",
+    "levels": "By level",
 }
 """Short names in the top bar, where they differ from the section titles."""
 

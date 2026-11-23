@@ -11,7 +11,7 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhub.data.delays import hub_delay_pmf
 from nowcastrenewal.model import MAIN, build_model, model_args
 from nowcastrenewal.model.model import (
     MAX_PUBLICATION_LAG,
@@ -31,6 +31,7 @@ def prior_latent(model, data, n=20):
     return {k: v for k, v in prior.items() if not k.endswith("_obs")}
 
 
+@pytest.mark.slow
 def test_nowcast_keeps_known_and_recentres_imputed(sim_vintage, config):
     model = build_model(sim_vintage, config)
     draws = forecast_trajectories(
@@ -52,6 +53,7 @@ def test_nowcast_keeps_known_and_recentres_imputed(sim_vintage, config):
     assert 0.5 < np.median(centre) < 2.0
 
 
+@pytest.mark.slow
 def test_masked_provinces_do_not_see_their_counts(sim_vintage, config):
     mask = np.ones(len(sim_vintage.names), dtype=bool)
     mask[0] = False
@@ -279,6 +281,7 @@ def test_negative_and_long_delays_are_clipped_not_dropped(
     assert extra[..., -1].sum() == 1
 
 
+@pytest.mark.slow
 def test_trajectories_name_their_posterior_draws(sim_vintage):
     model = build_model(sim_vintage, MAIN)
     latent = prior_latent(model, sim_vintage, n=8)

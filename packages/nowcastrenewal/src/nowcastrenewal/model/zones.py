@@ -19,7 +19,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
-from typing import Any, cast
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -37,18 +37,18 @@ from pyrenew.metaclass import RandomVariable
 from pyrenew.model import MultiSignalModel, PyrenewBuilder
 from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
-from nowcastutils.releases import release_cutoff
-
-from .censored import CensoredPMF
+from ..components.mixing import Mixing
+from ..components.pmfs import CensoredPMF
+from ..components.walks import NonCentredRandomWalk
 from .composition_noise import MultinomialNoise
 from .delays import FixedTimeVarying
 from .hazard_delay import HazardDelay
 from .inputs import (
     NATIONAL,
-    START_COUNT,
-    _saturday,
+    WeekTables,
     _seed_days,
     bvd_inputs,
+    gravity_kernel,
     imputation_pmf,
 )
 from .model import (
@@ -81,12 +81,8 @@ from .pooled import (
     sum_to_zero_basis,
 )
 from .publication_lag import ReleasePairLikelihood
-from .renewal import Importation, MetapopulationInfections
+from .renewal import MetapopulationInfections
 from .rt_observation import RtPseudoObservation
-from .temporal import NonCentredRandomWalk
-
-DECAY_KM = 300.0
-"""Distance scale of the zone gravity kernel."""
 
 MIN_OWN_CASES = 30
 """Cases a zone needs by the cut-off for an Rt deviation of its own, as
@@ -252,62 +248,14 @@ class MeanAnchoredWalk(NonCentredRandomWalk):
     The walk's fitted part is shifted so its mean is the starting value.
     The data fix a walk's level, so with the start at the first knot the
     start and the steps trade off along a ridge that NUTS crosses only
-    with very long trajectories (renewal-speed's Laplace analysis of
-    `renewal` at 2026-11-01: condition number 1.9e7, about 4300
-    leapfrog steps). Anchoring at the mean removes that ridge.
+    with very long trajectories (in `renewal`, a posterior condition
+    number of 1.9e7 and about 4300 leapfrog steps). Anchoring at the mean
+    removes that ridge.
     """
 
-    def sample(
-        self,
-        n_timepoints: int,
-        initial_value: float | ArrayLike | None = None,
-        n_processes: int = 1,
-        name_prefix: str = "rw",
-        *,
-        first_day_dow: int | None = None,
-    ) -> Array:
-        """Sample trajectories, as `NonCentredRandomWalk.sample`."""
-        from .temporal import _damped_sum
-
-        n_past = (
-            n_timepoints
-            if self.n_fit is None
-            else min(self.n_fit, n_timepoints)
-        )
-        x0 = jnp.broadcast_to(
-            jnp.asarray(0.0 if initial_value is None else initial_value),
-            (n_processes,),
-        )
-        frozen = min(self.frozen, n_past - 1)
-        n_free = n_past - 1 - frozen
-        sd = self.innovation_sd_rv()
-        phi = (
-            1.0
-            if self.half_life_rv is None
-            else 0.5 ** (1.0 / self.half_life_rv())
-        )
-        z = numpyro.sample(
-            f"{name_prefix}_z",
-            dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
-        )
-        free = _damped_sum(phi, sd * z)
-        decay = phi ** jnp.arange(1, n_free + 1)[:, None]
-        past = jnp.vstack(
-            [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
-        )
-        past = past - past.mean(axis=0) + x0
-        n_future = n_timepoints - n_past
-        if n_future == 0:
-            return past
-        z_future = numpyro.sample(
-            f"{name_prefix}_z_future",
-            dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
-        )
-        if self.forecast_half_life is not None:
-            phi = 0.5 ** (1.0 / self.forecast_half_life)
-        decay = phi ** jnp.arange(1, n_future + 1)[:, None]
-        future = decay * past[-1] + _damped_sum(phi, sd * z_future)
-        return jnp.vstack([past, future])
+    def _anchor(self, past: Array, x0: Array) -> Array:
+        """Shift the fitted part so its mean is the start."""
+        return past - past.mean(axis=0) + x0
 
 
 def _zone_walk(
@@ -627,37 +575,6 @@ class ZoneOnsetStreams(OnsetStreams):
         super()._score_delays(by_province, counts)
 
 
-def place_distances(centres: pd.DataFrame) -> np.ndarray:
-    """Great-circle distances in km between place centres.
-
-    Parameters
-    ----------
-    centres : pandas.DataFrame
-        Columns `latitude` and `longitude`, one row per place.
-
-    Returns
-    -------
-    numpy.ndarray
-        Symmetric, zero diagonal.
-
-    Raises
-    ------
-    ValueError
-        If a place has no centre.
-    """
-    if centres[["latitude", "longitude"]].isna().any().any():
-        raise ValueError("Missing place centre.")
-    lat = np.radians(centres["latitude"].to_numpy(float))
-    lon = np.radians(centres["longitude"].to_numpy(float))
-    a = (
-        np.sin((lat[:, None] - lat[None, :]) / 2) ** 2
-        + np.cos(lat[:, None])
-        * np.cos(lat[None, :])
-        * np.sin((lon[:, None] - lon[None, :]) / 2) ** 2
-    )
-    return np.asarray(2 * 6371 * np.arcsin(np.sqrt(a)), dtype=float)
-
-
 def zone_bvd_inputs(
     rows: pd.DataFrame,
     names: list[str],
@@ -696,33 +613,6 @@ def zone_bvd_inputs(
     return out
 
 
-def zone_kernel(
-    zones: tuple[str, ...], table: pd.DataFrame, decay_km: float = DECAY_KM
-) -> np.ndarray:
-    r"""Row-normalised gravity kernel between zones.
-
-    $K_{qz} \propto N_z \exp(-D_{qz} / \text{decay})$ for $q \ne z$, with
-    WorldPop counts $N$ from `table` and great-circle distances $D$
-    between zone centroids (`ForecastTask.places`).
-
-    Returns
-    -------
-    numpy.ndarray
-        Rows sum to one, zero diagonal.
-    """
-    rows = table.set_index("location").reindex(list(zones))
-    pops = rows["population"]
-    if pops.isna().any():
-        raise ValueError("Missing zone population.")
-    dist_km = place_distances(rows)
-    k = pops.to_numpy(float)[None, :] * np.exp(-dist_km / decay_km)
-    np.fill_diagonal(k, 0.0)
-    k = k / k.sum(axis=1, keepdims=True)
-    if not np.all(np.isfinite(k)):
-        raise ValueError("Importation kernel is not finite.")
-    return np.asarray(k, dtype=float)
-
-
 def zone_vintage_from_tables(
     target: pd.DataFrame,
     delays: pd.DataFrame | None,
@@ -748,7 +638,7 @@ def zone_vintage_from_tables(
     Parameters
     ----------
     target : pandas.DataFrame
-        Rows as in `bdbvhubrenewal.data.load_target`, with `cutoff`.
+        Rows as in `bdbvhub.data.tidy.load_target`, with `cutoff`.
     delays : pandas.DataFrame or None
         Delay rows (`location`, `onset_week`, `delay`) at this vintage.
     vintage : str
@@ -783,89 +673,26 @@ def zone_vintage_from_tables(
     ZoneVintage
         Model inputs.
     """
-    rows = target.loc[
-        (target["vintage"] == vintage) & target["location"].isin(locations)
-    ]
-    wide = rows.pivot_table(
-        index="target_end_date",
-        columns="location",
-        values=["observed", "imputed", "total"],
-        aggfunc="sum",
-    ).fillna(0)
-    totals_wide = cast(pd.DataFrame, wide["total"])
     active = tuple(locations)
-    national = totals_wide.reindex(columns=list(active)).fillna(0).sum(axis=1)
-    counts_by_week = national.to_numpy()
-    threshold = min(START_COUNT, counts_by_week.max())
-    big = int(np.argmax(counts_by_week >= threshold))
-    first = _saturday(str(national.index[max(0, big - 1)]))
-    start = first - dt.timedelta(days=6)
-    cutoff = (release_cutoff(target, vintage) - start).days
-    n_weeks = cutoff // 7 + 1
-    weeks = [
-        (first + dt.timedelta(weeks=i)).isoformat() for i in range(n_weeks)
-    ]
-
-    def grid(column: str, locs: tuple[str, ...]) -> np.ndarray:
-        out = cast(pd.DataFrame, wide[column]).reindex(
-            index=weeks, columns=list(locs)
-        )
-        return out.fillna(0).to_numpy(dtype=float)
-
-    # The province of each place, and the delay tables: one per modelled
-    # province, one per province of the zones, or one for a national fit.
+    grid = WeekTables.from_target(target, vintage, active)
+    start = grid.start
+    # The province of each zone; the delay tables are by province.
     parent_of = {z: z[:5] for z in active} if parents is None else dict(parents)
     parent_names = list(dict.fromkeys(parent_of[p] for p in active))
-    delay_places = parent_names
-    n_places = 1 if config.national else len(delay_places)
-    counts = np.zeros((n_weeks, n_places, config.dmax + 1))
-    if delays is not None and len(delays):
-        # Known onsets count every case, so negative delays go to 0 and
-        # delays past dmax to dmax, the last cell of the hazard pmf,
-        # rather than leaving the delay counts short of the known stream.
-        keep = delays.loc[
-            (
-                delays["location"].isin(delay_places)
-                if active != (NATIONAL,)
-                else delays["location"].ne("")
-            )
-            & ~delays["location"].isin(masked)
-        ]
-        week = np.array(
-            [
-                (pd.Timestamp(w).date() - first).days // 7
-                for w in keep["onset_week"]
-            ],
-            dtype=int,
-        )
-        ok = (week >= 0) & (week < n_weeks)
-        delay = np.clip(keep["delay"].to_numpy(), 0, config.dmax)
-        place = (
-            np.zeros(len(keep), dtype=int)
-            if config.national
-            else keep["location"].map(delay_places.index).to_numpy(dtype=int)
-        )
-        np.add.at(counts, (week[ok], place[ok], delay[ok]), 1)
-
-    known, imputed = grid("observed", active), grid("imputed", active)
-    totals = known + imputed
-    pops = table.set_index("location").loc[list(active), "population"]
-    names = list(active)
-    if config.national:
-        known = known.sum(axis=1, keepdims=True)
-        imputed = imputed.sum(axis=1, keepdims=True)
-        pops = pd.Series([pops.sum()])
-        names = [active[0] if len(active) == 1 else NATIONAL]
-    kernel = None if len(names) == 1 else zone_kernel(active, table)
+    counts = grid.delay_counts(
+        delays, parent_names, config, masked, every=active == (NATIONAL,)
+    )
+    known, imputed, totals, pops, names = grid.onsets(active, table, config)
+    kernel = None if len(names) == 1 else gravity_kernel(active, table)
     off = [p in masked or parent_of.get(p, p) in masked for p in names]
     return ZoneVintage(
         start_date=start,
-        cutoff=cutoff,
+        cutoff=grid.cutoff,
         known=known,
         imputed=imputed,
         delay_counts=counts,
         hub_delay_pmf=imputation_pmf(imputation_delay, config.dmax),
-        populations=pops.to_numpy(dtype=float),
+        populations=pops,
         kernel=kernel,
         horizon_weeks=horizon_weeks,
         names=names,
@@ -984,10 +811,11 @@ def build_zone_model(
 
     mixing = None
     if config.coupling == "gravity" and data.kernel is not None:
-        mixing = Importation(
+        mixing = Mixing(
             "mixing",
             DeterministicVariable("kernel", data.kernel),
             DistributionalVariable("importation", dist.Beta(1, 100)),
+            outflow="sent",
         )
 
     effective_population = None
@@ -1138,20 +966,20 @@ def build_zone_model(
             temporal_pmf_rv=CensoredPMF(
                 "infection_to_onset",
                 "lognormal",
+                INCUBATION_LENGTH,
                 # BVDOutbreakSize's priors (onset_incidence_model).
-                DistributionalVariable(
+                mean_rv=DistributionalVariable(
                     "incubation_mean",
                     dist.TruncatedNormal(
                         INCUBATION_MEAN, INCUBATION_MEAN_SD, low=1.0
                     ),
                 ),
-                DistributionalVariable(
+                sd_rv=DistributionalVariable(
                     "incubation_sd",
                     dist.TruncatedNormal(
                         INCUBATION_SD, INCUBATION_SD_SD, low=1.0
                     ),
                 ),
-                INCUBATION_LENGTH,
             ),
             ascertainment_rate_rv=ascertainment.for_signal("onsets"),
             missing_fraction_rv=None

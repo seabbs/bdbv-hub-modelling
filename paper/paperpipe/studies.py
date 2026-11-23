@@ -36,7 +36,6 @@ may then use dummy data; a paper run fails.
 from __future__ import annotations
 
 import logging
-import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
@@ -94,10 +93,8 @@ class Sources:
         The models of `ebola_draws`.
     candidates : tuple of pathlib.Path
         Files of our stored Ebola forecasts.
-    store : pathlib.Path, optional
-        A clone holding the fit store branch `store_ref`.
-    store_ref : str
-        The fit store branch.
+    store_history : pathlib.Path, optional
+        The fit store's history (`ebola.history_samples`).
     """
 
     synthetic_forecasts: Path | None = None
@@ -111,23 +108,13 @@ class Sources:
     ebola_draws: Path | None = None
     ebola_draws_models: tuple[str, ...] = ()
     candidates: tuple[Path, ...] = ()
-    store: Path | None = None
-    store_ref: str = "origin/fit-store"
+    store_history: Path | None = None
 
 
 log = logging.getLogger(__name__)
 
 NO_SOURCES: Final = Sources()
 """No real data: every study runs on dummy data."""
-
-
-def _has_ref(repo: Path, ref: str) -> bool:
-    done = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", ref],
-        capture_output=True,
-        check=False,
-    )
-    return done.returncode == 0
 
 
 @cache
@@ -335,19 +322,10 @@ def _ebola_forecasts(
     parts += [ebola.backtest_samples(p) for p in sources.ebola_extra]
     parts = [_by_round(p, before, split) for p in parts]
     if (with_hub or split is not None) and sources.hub is not None:
-        store = sources.store
-        if store is not None and not _has_ref(store, sources.store_ref):
-            log.warning(
-                "%s has no %s; the Ebola study reads no stored fits.",
-                store,
-                sources.store_ref,
-            )
-            store = None
         rounds = ebola.load(
             sources.hub,
             candidates=sources.candidates,
-            store=store,
-            store_ref=sources.store_ref,
+            history=sources.store_history,
         )
         rounds = _before(rounds, "origin_date", before)
         if not with_hub:

@@ -1,9 +1,10 @@
 """Pairing sensitivity of the walk models on simulated outbreaks.
 
-The workflow's `pairing_synthetic_<mode>` rule runs it from `paper/` on
-the run's seeds, as the synthetic runner (`scripts/run_synthetic.py`):
+The paper's `pairing_synthetic` rule runs it on the development seeds, as
+the synthetic runner (`scripts/run_synthetic.py`):
 
-    PYTHONPATH=. python scripts/pairing_synthetic.py SIM_DIR OUT --seeds S...
+    PYTHONPATH=paper python paper/scripts/pairing_synthetic.py SIM_DIR OUT \
+        --seeds S...
 
 Each outbreak's tasks are the synthetic runner's (`outbreak_tasks`, the
 same origins and horizons), with the strata in the hub's codes, so the
@@ -21,7 +22,7 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhub.models import get_model
 from nowcasteval.pairing import (
     MODELS,
     SCORE_COLUMNS,
@@ -70,7 +71,8 @@ def main() -> None:
             for name in MODELS:
                 # As the synthetic runner gives each model its task.
                 mine = model_task(get_model(name), task)
-                for label, drawn in variant_forecasts(name, mine).items():
+                variants, _ = variant_forecasts(name, mine)
+                for label, drawn in variants.items():
                     frames.append(
                         variant_scores(
                             drawn,

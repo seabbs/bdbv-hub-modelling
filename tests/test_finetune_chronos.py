@@ -8,9 +8,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-import finetune_chronos as ft
-from finetune_chronos import (
+from nowcastfoundation.finetune import chronos as ft
+from nowcastfoundation.finetune.chronos import (
     choose_places,
     plan_batches,
     size_class,
@@ -21,7 +20,7 @@ STRATA = [f"P{p}-A{a}" for p in range(1, 5) for a in range(1, 4)]
 
 
 def test_univariate_blocks_are_about_their_share():
-    import finetune_chronos
+    from nowcastfoundation.finetune import chronos as finetune_chronos
 
     rng = np.random.default_rng(0)
     mixes = []
@@ -75,7 +74,8 @@ def test_batches_use_every_block_once_and_pack_by_size():
 
 def test_a_mixed_batch_is_moved_aside_to_run_again(tmp_path):
     import pandas as pd
-    from finetune_stream import seed_done
+
+    from nowcastfoundation.finetune.stream import seed_done
 
     pd.DataFrame({"outbreak": ["5001-0001", "5001-0002"]}).to_csv(
         tmp_path / "settings-5001.csv", index=False
@@ -98,7 +98,7 @@ def test_a_non_finite_loss_or_gradient_leaves_the_weights():
     import pytest
 
     torch = pytest.importorskip("torch")
-    from finetune_stream import finite_step
+    from nowcastfoundation.finetune.stream import finite_step
 
     layer = torch.nn.Linear(2, 1)
     params = list(layer.parameters())
@@ -116,28 +116,11 @@ def test_a_non_finite_loss_or_gradient_leaves_the_weights():
     assert not torch.equal(before[0], params[0])
 
 
-def test_memory_budget_sets_checkpointing_and_block_size():
-    from finetune_chronos import checkpoint_above, max_series, memory_gb
+def test_the_trainer_has_no_way_to_skip_a_block():
+    from nowcastfoundation.finetune import stream as finetune_stream
 
-    # Measured: 800 series without checkpointing about 43 GB; 1,000, 1,500
-    # and 2,000 with it about 9.6, 17.3 and 25.9 GB.
-    assert abs(memory_gb(800, checkpointed=False) - 43) < 2
-    for series, gb in ((1000, 9.6), (1500, 17.3), (2000, 25.9)):
-        assert abs(memory_gb(series, checkpointed=True) - gb) < 1
-    budget = 36
-    above = checkpoint_above(budget)
-    assert memory_gb(above, False) <= budget < memory_gb(above + 1, False)
-    most = max_series(budget)
-    assert memory_gb(most, True) <= budget < memory_gb(most + 1, True)
-
-
-def test_skipped_blocks_are_listed_for_the_release():
-    from finetune_stream import skipped_lines
-
-    skipped = [{"outbreak": "5043-0013", "step": 3700, "series": 897}]
-    assert skipped_lines(skipped) == [
-        "# skipped 5043-0013 at step 3700, 897 series"
-    ]
+    # Skipping blocks biases training: none is ever left out.
+    assert not hasattr(finetune_stream, "skipped_lines")
 
 
 def test_no_batch_holds_more_series_than_the_budget_allows():
@@ -149,7 +132,8 @@ def test_no_batch_holds_more_series_than_the_budget_allows():
 
 def test_flat_places_can_nest_in_regions_with_levels_recorded():
     import pandas as pd
-    from finetune_chronos import regions, target_levels
+
+    from nowcastfoundation.finetune.chronos import regions, target_levels
 
     rng = np.random.default_rng(4)
     places = [f"P{i:02d}" for i in range(1, 9)]
@@ -169,7 +153,8 @@ def test_flat_places_can_nest_in_regions_with_levels_recorded():
 
 def test_ages_are_not_grouped_into_regions():
     import pandas as pd
-    from finetune_chronos import outbreak_blocks
+
+    from nowcastfoundation.finetune.chronos import outbreak_blocks
 
     days = pd.date_range("2026-01-01", periods=140)
     rows = [
@@ -189,7 +174,8 @@ def test_ages_are_not_grouped_into_regions():
 
 def test_an_empty_batch_is_done_with_no_simulations(tmp_path):
     import pandas as pd
-    from finetune_stream import ready_outbreaks
+
+    from nowcastfoundation.finetune.stream import ready_outbreaks
 
     (tmp_path / "settings-5001.csv").write_text("")
     (tmp_path / "counts-5001.csv.gz").write_text("")
@@ -202,7 +188,7 @@ def test_an_empty_batch_is_done_with_no_simulations(tmp_path):
 
 
 def test_stop_rule_needs_two_checkpoints():
-    from finetune_stream import should_stop
+    from nowcastfoundation.finetune.stream import should_stop
 
     assert not should_stop([0.2], 8000, 8000, 0.01)
     assert should_stop([0.2, 0.199], 16000, 8000, 0.01)
@@ -211,16 +197,13 @@ def test_stop_rule_needs_two_checkpoints():
 
 
 def test_a_split_batch_starts_from_clear_gradients():
-    from finetune_stream import accumulate
+    from nowcastfoundation.finetune.stream import accumulate
 
     grads: list[int] = []
-    skipped: list[int] = []
 
     def backward(part, _share):
         if len(part) > 2:
             grads.append(-1)  # a partial backward before running out
-            raise RuntimeError("MPS backend out of memory")
-        if 9 in part:
             raise RuntimeError("MPS backend out of memory")
         grads.extend(part)
         return 0.5
@@ -228,20 +211,29 @@ def test_a_split_batch_starts_from_clear_gradients():
     def zero():
         grads.clear()
 
-    value = accumulate([1, 2, 3, 4, 9], backward, zero, skipped.append)
-    # The partial backward is cleared; every block but the one too large
-    # for memory is used once.
-    assert sorted(grads) == [1, 2, 3, 4]
-    assert skipped == [9]
+    value = accumulate([1, 2, 3, 4, 9], backward, zero)
+    # The partial backward is cleared; every block is used once.
+    assert sorted(grads) == [1, 2, 3, 4, 9]
     assert value == 0.5
 
 
-def test_a_block_that_runs_out_once_is_retried_before_it_is_skipped():
-    from finetune_stream import accumulate
+def test_a_block_too_large_for_memory_stops_the_run():
+    from nowcastfoundation.finetune.stream import accumulate
+
+    def backward(part, _share):
+        if 9 in part:
+            raise RuntimeError("CUDA out of memory")
+        return 0.5
+
+    with pytest.raises(RuntimeError, match="too large for memory"):
+        accumulate([1, 9], backward, lambda: None)
+
+
+def test_a_block_that_runs_out_once_is_retried():
+    from nowcastfoundation.finetune.stream import accumulate
 
     calls: list[list[int]] = []
     zeroed: list[int] = []
-    skipped: list[int] = []
 
     def backward(part, _share):
         calls.append(list(part))
@@ -251,46 +243,11 @@ def test_a_block_that_runs_out_once_is_retried_before_it_is_skipped():
             raise RuntimeError("CUDA out of memory")
         return 0.5
 
-    value = accumulate([7], backward, lambda: zeroed.append(1), skipped.append)
+    value = accumulate([7], backward, lambda: zeroed.append(1))
     assert value == 0.5
-    assert skipped == []
     # Memory is freed (`zero`) before the retry.
     assert calls == [[7], [7]]
     assert zeroed == [1]
-
-
-def test_a_block_that_never_fits_is_skipped_after_one_retry():
-    from finetune_stream import accumulate
-
-    calls: list[list[int]] = []
-    skipped: list[int] = []
-
-    def backward(part, _share):
-        calls.append(list(part))
-        raise RuntimeError("CUDA out of memory")
-
-    value = accumulate([7], backward, lambda: None, skipped.append)
-    assert np.isnan(value)
-    assert skipped == [7]
-    assert calls == [[7], [7]]
-
-
-def test_blocks_left_after_a_skip_share_the_whole_gradient():
-    from finetune_stream import accumulate
-
-    shares: dict[int, float] = {}
-
-    def backward(part, share):
-        if 9 in part:
-            raise RuntimeError("CUDA out of memory")
-        for i in part:
-            shares[i] = share / len(part)
-        return 0.5
-
-    accumulate([1, 2, 3, 9], backward, shares.clear, print)
-    # The three blocks used weigh a third each, as a batch of three would.
-    assert sorted(shares) == [1, 2, 3]
-    assert sum(shares.values()) == pytest.approx(1.0)
 
 
 def _checkpoint(tmp_path):
@@ -334,7 +291,7 @@ class _Gh:
 
 
 def test_publish_is_done_when_the_release_matches(tmp_path):
-    from finetune_stream import publish
+    from nowcastfoundation.finetune.stream import publish
 
     where = _checkpoint(tmp_path)
     gh = _Gh()
@@ -347,7 +304,7 @@ def test_publish_is_done_when_the_release_matches(tmp_path):
 
 
 def test_publish_releases_slots_checkpoints_apart(tmp_path):
-    from finetune_stream import publish
+    from nowcastfoundation.finetune.stream import publish
 
     where = _checkpoint(tmp_path)
     commands = []
@@ -363,7 +320,7 @@ def test_publish_releases_slots_checkpoints_apart(tmp_path):
 
 
 def test_publish_uploads_only_missing_assets(tmp_path):
-    from finetune_stream import publish
+    from nowcastfoundation.finetune.stream import publish
 
     where = _checkpoint(tmp_path)
     gh = _Gh()
@@ -377,7 +334,8 @@ def test_publish_uploads_only_missing_assets(tmp_path):
 
 def test_publish_refuses_a_release_with_other_sums(tmp_path):
     import pytest
-    from finetune_stream import publish
+
+    from nowcastfoundation.finetune.stream import publish
 
     where = _checkpoint(tmp_path)
     gh = _Gh({"sha256sums.txt": "0  adapter_model.safetensors\n"})
@@ -387,8 +345,9 @@ def test_publish_refuses_a_release_with_other_sums(tmp_path):
 
 
 def test_a_finished_batch_is_read_once(tmp_path, monkeypatch):
-    import finetune_stream
     import pandas as pd
+
+    from nowcastfoundation.finetune import stream as finetune_stream
 
     (tmp_path / "settings-5003.csv").write_text("outbreak\n5003-0001\n")
     pd.DataFrame({"outbreak": ["5003-0001-1"]}).to_csv(
@@ -404,9 +363,11 @@ def test_a_finished_batch_is_read_once(tmp_path, monkeypatch):
     assert reads == []
 
 
+@pytest.mark.slow
 def test_strata_with_no_cases_give_no_empty_blocks():
     import pandas as pd
-    from finetune_chronos import outbreak_blocks
+
+    from nowcastfoundation.finetune.chronos import outbreak_blocks
 
     rows = [
         ("P01", onset, onset + pd.Timedelta(days=d), 5)
@@ -469,7 +430,7 @@ def _sim_dir(tmp_path):
 
 
 def test_blocks_cut_in_workers_match_blocks_cut_here(tmp_path):
-    from finetune_stream import cut, cut_in_workers
+    from nowcastfoundation.finetune.stream import cut, cut_in_workers
 
     ids = _sim_dir(tmp_path)
     here = cut(tmp_path, ids, 1, 6)
@@ -486,8 +447,12 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
     import multiprocessing
     from concurrent.futures import ProcessPoolExecutor
 
-    import finetune_chronos
-    from finetune_stream import cut, cut_in_workers, init_worker
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune.stream import (
+        cut,
+        cut_in_workers,
+        init_worker,
+    )
 
     ids = _sim_dir(tmp_path)
     here = cut(tmp_path, ids, 1, 6)
@@ -497,7 +462,6 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
         initializer=init_worker,
         initargs=(
             finetune_chronos.MAX_SERIES,
-            finetune_chronos.MAX_LAGS,
             finetune_chronos.SOURCES,
         ),
     ) as pool:
@@ -506,7 +470,7 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
 
 
 def test_a_chunk_waits_for_a_missing_batch_in_seed_order(tmp_path):
-    from finetune_stream import next_chunk
+    from nowcastfoundation.finetune.stream import next_chunk
 
     ids = _sim_dir(tmp_path)  # seeds 6001 and 6002, two simulations each
     # Seed 6002 finished; 6001 has not.
@@ -534,7 +498,7 @@ def test_blocks_are_cut_without_torch(tmp_path):
         "        raise ModuleNotFoundError(name)\n"
         "    return real(name, *args, **kwargs)\n"
         "builtins.__import__ = no_torch\n"
-        "sys.path.insert(0, 'scripts'); import finetune_stream as fs\n"
+        "from nowcastfoundation.finetune import stream as fs\n"
         f"pairs = fs.cut(__import__('pathlib').Path({str(tmp_path)!r}), "
         f"{ids!r}, 1, 6)\nprint(len(pairs))"
     )
@@ -549,7 +513,7 @@ def test_blocks_are_cut_without_torch(tmp_path):
 
 
 def test_learning_rate_decays_linearly_to_zero_over_the_simulations():
-    from finetune_stream import learning_rate
+    from nowcastfoundation.finetune.stream import learning_rate
 
     # Linear decay to zero over the run's simulations.
     assert learning_rate(0, 1e-5, 1000) == 1e-5
@@ -558,90 +522,43 @@ def test_learning_rate_decays_linearly_to_zero_over_the_simulations():
     assert learning_rate(1500, 1e-5, 1000) == 0.0
 
 
-def _line_list():
-    import pandas as pd
-
-    rows = []
-    for week in pd.date_range("2026-05-02", "2026-09-26", freq="7D"):
-        for place, n in (("CD-A", 6), ("CD-B", 3)):
-            for k in range(n):
-                rows.append((place, week.date().isoformat(), 2 + 3 * k))
-    return pd.DataFrame(rows, columns=["location", "onset_week", "delay"])
-
-
-def test_real_validation_blocks_stop_before_the_scored_weeks():
-    import pytest
-    from finetune_chronos import real_blocks
-
-    cuts = ["2026-07-25", "2026-08-01", "2026-08-08"]
-    blocks = real_blocks(_line_list(), cuts, last_week="2026-09-05", lag=4)
-    assert len(blocks) == 3
-    assert all(b["context"].shape[0] > 0 for b in blocks)
-    # A cut whose forecast weeks reach past the last week is refused.
-    with pytest.raises(ValueError, match="past"):
-        real_blocks(_line_list(), ["2026-08-15"], "2026-09-05", 4)
-
-
-def test_real_validation_context_holds_only_reports_by_the_cut():
-    from finetune_chronos import CONTEXT, real_blocks
-
-    late = _line_list()
-    late.loc[len(late)] = ("CD-A", "2026-07-25", 30)  # reported 08-24
-    a = real_blocks(_line_list(), ["2026-07-25"], "2026-09-05", 4)[0]
-    b = real_blocks(late, ["2026-07-25"], "2026-09-05", 4)[0]
-    start = CONTEXT
-    # The late report changes the final count ahead, not the context.
-    assert np.array_equal(
-        a["context"][:, :start], b["context"][:, :start], equal_nan=True
-    )
-    assert not np.array_equal(a["context"], b["context"], equal_nan=True)
-
-
 def _d(block) -> int:
     return block["n_covariates"] // block["n_targets"]
 
 
 def test_one_source_cuts_only_that_source(tmp_path, monkeypatch):
-    import finetune_chronos
-    from finetune_stream import cut
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune.stream import cut
 
     ids = _sim_dir(tmp_path)
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("weekly",))
     blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
     assert blocks
-    assert all(_d(b) <= 7 for b in blocks)
+    assert all(b["source"] == "weekly" and _d(b) >= 1 for b in blocks)
 
 
 def test_workers_take_the_trainer_block_settings():
-    import finetune_chronos
-    from finetune_stream import init_worker
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune.stream import init_worker
 
-    saved = (
-        finetune_chronos.MAX_SERIES,
-        finetune_chronos.MAX_LAGS,
-        finetune_chronos.SOURCES,
-    )
+    saved = (finetune_chronos.MAX_SERIES, finetune_chronos.SOURCES)
     try:
-        lags = {"daily": (28,)}
-        init_worker(100, lags, ("daily",), loss_days=7)
+        init_worker(100, ("daily",), loss_days=7)
         assert finetune_chronos.PARENTS is not None
         assert finetune_chronos.LOSS_HORIZON_DAYS == 7
         assert finetune_chronos.MAX_SERIES == 100
-        assert lags == finetune_chronos.MAX_LAGS
         assert finetune_chronos.SOURCES == ("daily",)
     finally:
-        (
-            finetune_chronos.MAX_SERIES,
-            finetune_chronos.MAX_LAGS,
-            finetune_chronos.SOURCES,
-        ) = saved
+        finetune_chronos.MAX_SERIES, finetune_chronos.SOURCES = saved
         finetune_chronos.PARENTS = None
         finetune_chronos.LOSS_HORIZON_DAYS = None
 
 
+@pytest.mark.slow
 def test_blocks_reach_deployed_sizes_on_many_places():
     import pandas as pd
-    from finetune_chronos import outbreak_blocks
+
+    from nowcastfoundation.finetune.chronos import outbreak_blocks
 
     places = [f"P{i:02d}" for i in range(1, 27)]
     rows = [
@@ -655,19 +572,18 @@ def test_blocks_reach_deployed_sizes_on_many_places():
     )
     for col in ("reference_date", "report_date"):
         counts[col] = counts[col].dt.date.astype(str)
-    big = []
-    for seed in range(30):
-        for b in outbreak_blocks(
-            counts, places, np.random.default_rng(seed), 3
-        ):
-            big.append((b["n_targets"], b["context"].shape[0]))
-    # BDBV's daily block: 27 targets and 783 series.
-    assert any(t >= 27 and s >= 700 for t, s in big)
+    # BDBV's daily block: 27 targets and 783 series. The search stops at
+    # the first block that size (seed 0 gives one), not after every seed.
+    assert any(
+        b["n_targets"] >= 27 and b["context"].shape[0] >= 700
+        for seed in range(30)
+        for b in outbreak_blocks(counts, places, np.random.default_rng(seed), 3)
+    )
 
 
 def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
-    import finetune_chronos
-    from finetune_stream import cut
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune.stream import cut
 
     ids = _sim_dir(tmp_path)
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("3day",))
@@ -675,15 +591,14 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
     assert blocks
     for b in blocks:
         assert b["source"] == "3day"
-        # D is drawn from 5-16 steps of 3 days, capped at the history
-        # before an early cut-off.
-        assert 1 <= _d(b) <= 16
+        # D follows the lag rule in 3-day steps, at most the history.
+        assert _d(b) >= 1
     assert max(_d(b) for b in blocks) >= 5
 
 
 def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
-    from finetune_chronos import CONTEXT, OUTPUT_PATCH
-    from finetune_stream import cut
+    from nowcastfoundation.finetune.chronos import CONTEXT, OUTPUT_PATCH
+    from nowcastfoundation.finetune.stream import cut
 
     ids = _sim_dir(tmp_path)
     for _, b in cut(tmp_path, ids, 1, 32):
@@ -695,12 +610,17 @@ def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
         assert b["context"].shape[1] == CONTEXT + length
 
 
+@pytest.mark.slow
 def test_a_loss_horizon_stops_blocks_days_after_the_cut_off(
     tmp_path, monkeypatch
 ):
-    import finetune_chronos
-    from finetune_chronos import CONTEXT, DAYS_PER_STEP, OUTPUT_PATCH
-    from finetune_stream import cut
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune.chronos import (
+        CONTEXT,
+        DAYS_PER_STEP,
+        OUTPUT_PATCH,
+    )
+    from nowcastfoundation.finetune.stream import cut
 
     ids = _sim_dir(tmp_path)
     full = [b for _, b in cut(tmp_path, ids, 1, 32)]
@@ -746,7 +666,7 @@ def _raw(target_past, target_after, lags, places=("P01",)):
 
 
 def test_reported_cases_count_what_is_known_at_the_cut_off():
-    from finetune_chronos import reported_cases
+    from nowcastfoundation.finetune.chronos import reported_cases
 
     nan = np.nan
     # Daily steps; the cut-off is step 4 (start 3 + nowcast 2 - 1). The
@@ -766,7 +686,7 @@ def test_reported_cases_count_what_is_known_at_the_cut_off():
 
 
 def test_reported_cases_count_each_case_once_at_the_busiest_level():
-    from finetune_chronos import NATIONAL, reported_cases
+    from nowcastfoundation.finetune.chronos import NATIONAL, reported_cases
 
     zeros = [[0] * 7] * 6
     # The country and its two places: the places' cases, not the country's
@@ -793,7 +713,7 @@ def test_reported_cases_count_each_case_once_at_the_busiest_level():
 
 
 def test_reported_cases_refuse_a_block_whose_lags_do_not_fit():
-    from finetune_chronos import NATIONAL, reported_cases
+    from nowcastfoundation.finetune.chronos import NATIONAL, reported_cases
 
     block = _raw([0, 0, 0], [0, 0, 0, 0], [[0] * 7] * 2)
     # Lag series that do not divide over the places would be read across
@@ -809,7 +729,7 @@ def test_reported_cases_refuse_a_block_whose_lags_do_not_fit():
 
 
 def test_a_block_is_quiet_below_the_threshold_whatever_follows():
-    from finetune_chronos import quiet
+    from nowcastfoundation.finetune.chronos import quiet
 
     nan = np.nan
     lags = [[0, 0, 0, 2, 3, nan, nan], [0, 0, 0, 4, nan, nan, nan]]
@@ -819,9 +739,10 @@ def test_a_block_is_quiet_below_the_threshold_whatever_follows():
     assert quiet(_raw([0, 0, 0], [9, 9, 9, 9], [[0] * 7] * 2), 1, 1)
 
 
+@pytest.mark.slow
 def test_quiet_cut_offs_are_not_cut_when_set(tmp_path, monkeypatch):
-    import finetune_chronos
-    from finetune_stream import cut
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune.stream import cut
 
     ids = _sim_dir(tmp_path)
     full = [b for _, b in cut(tmp_path, ids, 1, 32)]
@@ -876,7 +797,7 @@ def test_padding_puts_each_step_at_its_place_after_the_context(start):
 
 
 def test_batches_share_one_prediction_length():
-    from finetune_chronos import plan_by_length
+    from nowcastfoundation.finetune.chronos import plan_by_length
 
     rng = np.random.default_rng(1)
     lengths = np.array([16] * 30 + [64] * 30 + [80] * 10)
@@ -890,7 +811,7 @@ def test_batches_share_one_prediction_length():
 
 
 def test_a_seed_list_gives_the_training_seeds_in_its_order(tmp_path):
-    from finetune_stream import read_seed_list
+    from nowcastfoundation.finetune.stream import read_seed_list
 
     path = tmp_path / "seeds.txt"
     path.write_text("10005\n10001\n\n10003\n")
@@ -902,8 +823,9 @@ def test_a_round_continues_from_the_previous_adapter(tmp_path):
 
     torch = pytest.importorskip("torch")
     pytest.importorskip("peft")
-    from finetune_stream import lora_model
     from peft import LoraConfig
+
+    from nowcastfoundation.finetune.stream import lora_model
 
     class Attention(torch.nn.Module):
         def __init__(self):
@@ -934,7 +856,7 @@ def test_a_round_continues_from_the_previous_adapter(tmp_path):
 
 
 def test_real_training_blocks_spread_evenly_over_the_chunks():
-    from finetune_stream import real_share
+    from nowcastfoundation.finetune.stream import real_share
 
     real = list(range(10))
     parts = [real_share(real, chunk, 4) for chunk in range(4)]
@@ -943,8 +865,8 @@ def test_real_training_blocks_spread_evenly_over_the_chunks():
 
 
 def test_each_draw_is_cut_at_every_snapshot_once():
-    from finetune_chronos import CUTS, SOURCES
-    from finetune_stream import snapshots
+    from nowcastfoundation.finetune.chronos import CUTS, SOURCES
+    from nowcastfoundation.finetune.stream import snapshots
 
     draws = [f"9001-0001-{d}" for d in range(1, 11)]
     picks = snapshots(draws, np.random.default_rng(0))
@@ -963,24 +885,21 @@ def test_level_mix_includes_single_series():
     assert all(len(places) == 1 and places[0] in STRATA for places in single)
 
 
-def test_excluded_simulations_are_not_read(tmp_path, monkeypatch):
-    import finetune_stream
+def test_a_finished_batch_reads_every_outbreak(tmp_path, monkeypatch):
+    from nowcastfoundation.finetune import stream as finetune_stream
 
     sims = tmp_path / "sims"
     sims.mkdir()
     _sim_dir(sims)
-    exclude = tmp_path / "excluded.txt"
     monkeypatch.setattr(finetune_stream, "_READY", {})
-    monkeypatch.setattr(finetune_stream, "EXCLUDE_FILE", exclude)
-    exclude.write_text("6001-0001\n")
-    assert finetune_stream.batch_outbreaks(sims, 6001) == ["6001-0002"]
-    # Exclusions that arrive later apply to batches read later.
-    exclude.write_text("simulation,reason\n6001-0001,r\n6002-0002,r\n")
-    assert finetune_stream.batch_outbreaks(sims, 6002) == ["6002-0001"]
+    assert finetune_stream.batch_outbreaks(sims, 6001) == [
+        "6001-0001",
+        "6001-0002",
+    ]
 
 
 def test_a_pass_samples_draws_across_every_snapshot():
-    from finetune_stream import snapshots
+    from nowcastfoundation.finetune.stream import snapshots
 
     draws = [f"9001-0001-{d}" for d in range(1, 11)]
     a = snapshots(draws, np.random.default_rng(0), n_draws=2, subset_seed=7)
@@ -1000,7 +919,8 @@ def test_stale_block_files_fail_when_loaded(tmp_path):
     import pickle
 
     import pytest
-    from finetune_stream import load_blocks
+
+    from nowcastfoundation.finetune.stream import load_blocks
 
     good = {
         "context": np.zeros((1, 4)),
@@ -1062,7 +982,7 @@ class _Optimiser:
 
 
 def test_a_crash_while_saving_state_keeps_the_last_state(tmp_path, monkeypatch):
-    from finetune_stream import load_state, save_state
+    from nowcastfoundation.finetune.stream import load_state, save_state
 
     _fake_torch(monkeypatch)
     where = tmp_path / "state"
@@ -1089,8 +1009,8 @@ def test_a_crash_while_saving_state_keeps_the_last_state(tmp_path, monkeypatch):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["state"]
 
 
-def test_the_code_commit_is_the_scripts_repository(tmp_path, monkeypatch):
-    from finetune_stream import code_commit
+def test_the_code_commit_is_the_trainers_repository(tmp_path, monkeypatch):
+    from nowcastfoundation.finetune.stream import code_commit
 
     here = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -1105,9 +1025,11 @@ def test_the_code_commit_is_the_scripts_repository(tmp_path, monkeypatch):
     assert code_commit() == here
 
 
+@pytest.mark.slow
 def test_mixed_blocks_keep_each_target_rows_place_and_level(monkeypatch):
-    import finetune_chronos as ft
     import pandas as pd
+
+    from nowcastfoundation.finetune import chronos as ft
 
     rows = [
         (place, onset, onset + pd.Timedelta(days=d), n)
@@ -1134,8 +1056,8 @@ def test_mixed_blocks_keep_each_target_rows_place_and_level(monkeypatch):
 
 
 def test_block_options_vary_the_period_end_and_never_batch_reports():
-    import finetune_chronos
-    from finetune_chronos import block_options
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune.chronos import block_options
 
     rng = np.random.default_rng(0)
     weekly = [block_options("daily+weekly", rng) for _ in range(3000)]
@@ -1150,8 +1072,8 @@ def test_block_options_vary_the_period_end_and_never_batch_reports():
 
 
 def test_one_draw_of_a_simulation_gives_32_blocks_of_a_year_s_context():
-    from finetune_chronos import CONTEXT, CUTS
-    from finetune_stream import snapshots
+    from nowcastfoundation.finetune.chronos import CONTEXT, CUTS
+    from nowcastfoundation.finetune.stream import snapshots
 
     picks = snapshots(["9001-0001-1"], np.random.default_rng(0))
     assert CONTEXT == 364
@@ -1160,7 +1082,7 @@ def test_one_draw_of_a_simulation_gives_32_blocks_of_a_year_s_context():
 
 
 def test_a_batch_that_fits_is_not_cleared_first():
-    from finetune_stream import accumulate
+    from nowcastfoundation.finetune.stream import accumulate
 
     zeroed: list[int] = []
 
@@ -1170,16 +1092,16 @@ def test_a_batch_that_fits_is_not_cleared_first():
         return 0.5
 
     # The step before cleared the gradients and freed memory.
-    assert accumulate([1, 2], backward, lambda: zeroed.append(1), print) == 0.5
+    assert accumulate([1, 2], backward, lambda: zeroed.append(1)) == 0.5
     assert zeroed == []
     # Each retry after running out of memory starts from clear gradients.
-    assert accumulate([1, 2, 3], backward, lambda: zeroed.append(1), print)
+    assert accumulate([1, 2, 3], backward, lambda: zeroed.append(1))
     assert zeroed == [1]
 
 
 def test_one_non_finite_gradient_skips_the_step():
     torch = pytest.importorskip("torch")
-    from finetune_stream import finite_step
+    from nowcastfoundation.finetune.stream import finite_step
 
     layer = torch.nn.Linear(2, 1)
     params = list(layer.parameters())
@@ -1196,7 +1118,7 @@ def test_settled_objects_are_skipped_by_collections_until_the_next():
     import gc
     import weakref
 
-    from finetune_stream import settle_heap
+    from nowcastfoundation.finetune.stream import settle_heap
 
     class Node:
         pass
@@ -1230,7 +1152,7 @@ def test_settled_objects_are_skipped_by_collections_until_the_next():
 
 def test_steps_in_a_row_do_not_sum_gradients():
     torch = pytest.importorskip("torch")
-    from finetune_stream import accumulate, finite_step
+    from nowcastfoundation.finetune.stream import accumulate, finite_step
 
     def run(clear_between: bool) -> list:
         torch.manual_seed(0)
@@ -1246,7 +1168,7 @@ def test_steps_in_a_row_do_not_sum_gradients():
         for _ in range(2):
             if clear_between:
                 optimiser.zero_grad()
-            value = accumulate([1, 2], backward, optimiser.zero_grad, print)
+            value = accumulate([1, 2], backward, optimiser.zero_grad)
             finite_step(params, optimiser, value)
         return [p.detach().clone() for p in params]
 
@@ -1282,11 +1204,12 @@ def _lag_fill(b) -> float:
     return float(np.isfinite(ctx[n:, seen]).mean())
 
 
+@pytest.mark.slow
 def test_blocks_record_their_cadence_and_daily_releases_fill_lags(
     tmp_path, monkeypatch
 ):
-    import finetune_chronos
-    from finetune_stream import cut
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune.stream import cut
 
     ids = _sim_dir(tmp_path)
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("daily",))
@@ -1302,7 +1225,7 @@ def test_blocks_record_their_cadence_and_daily_releases_fill_lags(
 
 
 def test_evaluation_cadence_defaults_to_the_recipe_s():
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(
         ["sims", "out", "--held-out-seeds", "1", "2"]
@@ -1318,15 +1241,15 @@ def test_evaluation_cadence_defaults_to_the_recipe_s():
 
 
 def test_a_missing_grid_file_is_refused(tmp_path):
-    import finetune_chronos
+    from nowcastfoundation.finetune import chronos as finetune_chronos
 
     with pytest.raises(FileNotFoundError, match=r"nowhere\.yaml"):
         finetune_chronos.use_grid(tmp_path / "nowhere.yaml")
 
 
 def test_the_trainer_takes_its_design_from_the_grid():
-    import finetune_chronos
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import chronos as finetune_chronos
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(
         ["sims", "out", "--held-out-seeds", "1", "2"]
@@ -1348,7 +1271,7 @@ def test_the_trainer_takes_its_design_from_the_grid():
 
 
 def test_a_whole_system_block_holds_every_stratum_and_its_totals(monkeypatch):
-    from finetune_chronos import NATIONAL, whole_system
+    from nowcastfoundation.finetune.chronos import NATIONAL, whole_system
 
     monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.0)
     rng = np.random.default_rng(0)
@@ -1395,8 +1318,9 @@ def _counts_of(places, days=140):
     return counts
 
 
+@pytest.mark.slow
 def test_blocks_are_whole_systems_never_cut(monkeypatch):
-    from finetune_chronos import NATIONAL, outbreak_blocks
+    from nowcastfoundation.finetune.chronos import NATIONAL, outbreak_blocks
 
     ft.use_grid()
     try:
@@ -1413,21 +1337,24 @@ def test_blocks_are_whole_systems_never_cut(monkeypatch):
         assert got
         # The whole system, or the country alone; never a subset.
         assert set(got) == {whole, (NATIONAL,)}
-        # A system over the series cap is skipped and said, not cut.
+        # A system over the series cap is still cut whole: no block is
+        # ever skipped for its size.
         monkeypatch.setattr(ft, "MAX_SERIES", 10)
         empty: list[str] = []
         blocks = outbreak_blocks(
             counts, places, np.random.default_rng(0), 3, empty=empty
         )
-        assert all(b["places"] == (NATIONAL,) for b in blocks)
-        assert any("over the series cap" in e for e in empty)
+        assert any(b["places"] == whole for b in blocks)
+        assert not any("series cap" in e for e in empty)
     finally:
         ft.PARENTS = None
 
 
+@pytest.mark.slow
 def test_parents_come_from_the_grid_file(monkeypatch):
     import yaml
-    from finetune_chronos import NATIONAL, outbreak_blocks
+
+    from nowcastfoundation.finetune.chronos import NATIONAL, outbreak_blocks
 
     grid = yaml.safe_load(
         (Path(__file__).parents[1] / "config/finetune/grid.yaml").read_text()
@@ -1467,12 +1394,12 @@ def test_parents_come_from_the_grid_file(monkeypatch):
 
 
 def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
-    # A lag longer than the history before a cut-off is capped to it, so
-    # an early cut-off is kept, not skipped.
-    from finetune_chronos import NATIONAL, outbreak_blocks
+    # Early cut-offs have no complete steps to read a delay from, so the
+    # shared rule takes as many lags as the history allows: they are kept,
+    # not skipped.
+    from nowcastfoundation.finetune.chronos import NATIONAL, outbreak_blocks
 
     monkeypatch.setattr(ft, "SOURCES", ("daily",))
-    monkeypatch.setattr(ft, "MAX_LAGS", {**ft.MAX_LAGS, "daily": (49,)})
     monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 1.0)
     counts = _counts_of(["P1", "P2"], days=63)
     blocks = outbreak_blocks(
@@ -1483,5 +1410,159 @@ def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
         assert b["places"] == (NATIONAL,)
         lag = b["n_covariates"] // len(b["places"])
         # Every lag series and two steps of context fit in the history.
-        assert 1 <= lag < 49
+        assert 1 <= lag < 63
         assert b["nowcast"] == lag
+
+
+def test_views_of_a_system_over_capacity_cover_every_leaf():
+    from nowcastfoundation.finetune.chronos import NATIONAL, system_views
+
+    nested = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
+    whole = (NATIONAL, "P1", "P2", "P3", "A1", "A2", *nested)
+    # Within capacity: the whole system.
+    assert system_views(whole, len(whole)) == [("whole", whole, [])]
+    # Over it: the top levels aggregated up, and each place with its ages
+    # and its own total.
+    assert system_views(whole, 5) == [
+        ("top", (NATIONAL, "P1", "P2", "P3"), ["strata"]),
+        ("subtree", ("P1", "P1-A1", "P1-A2"), []),
+        ("subtree", ("P2", "P2-A1", "P2-A2"), []),
+        ("subtree", ("P3", "P3-A1", "P3-A2"), []),
+    ]
+    # A subtree over capacity is its total with as many leaves as fit.
+    assert system_views(whole, 2)[1:] == [
+        ("subtree", (f"P{p}", f"P{p}-A{a}"), [])
+        for p in range(1, 4)
+        for a in range(1, 3)
+    ]
+    # The top collapses further until it fits.
+    assert system_views(whole, 2)[0] == (
+        "top",
+        (NATIONAL,),
+        ["strata", "places"],
+    )
+    # Room for one place: the country, and each leaf alone.
+    assert system_views(whole, 1) == [
+        ("top", (NATIONAL,), ["strata", "places"]),
+        *[("subtree", (p,), []) for p in nested],
+    ]
+    # Flat places: the country, and its places in groups with it.
+    flat = (NATIONAL, "P01", "P02", "P03")
+    assert system_views(flat, 3) == [
+        ("top", (NATIONAL,), ["places"]),
+        ("subtree", (NATIONAL, "P01", "P02"), []),
+        ("subtree", (NATIONAL, "P03"), []),
+    ]
+
+
+@pytest.mark.slow
+def test_a_system_over_capacity_is_cut_into_views_with_exact_totals(
+    monkeypatch,
+):
+    from nowcastfoundation.finetune.chronos import NATIONAL, outbreak_blocks
+
+    ft.use_grid()
+    try:
+        monkeypatch.setattr(ft, "UNIVARIATE_SHARE", 0.0)
+        monkeypatch.setitem(
+            ft.PARENTS,
+            "shares",
+            {"exact": 1.0, "unallocated": 0.0, "late_parent": 0.0},
+        )
+        places = [f"P{p}-A{a}" for p in range(1, 4) for a in range(1, 3)]
+        counts = _counts_of(places)
+        whole = (NATIONAL, "P1", "P2", "P3", "A1", "A2", *places)
+        monkeypatch.setattr(ft, "BLOCK_LIMIT", None)
+        full = outbreak_blocks(counts, places, np.random.default_rng(0), 3)
+        assert full
+        assert all(b["places"] == whole for b in full)
+        assert all(b["view"] == {"kind": "whole"} for b in full)
+        series = [b["context"].shape[0] for b in full]
+        # Room for the country and its places in the largest blocks, not
+        # for their whole system.
+        limit = -(-max(series) * 5 // len(whole))
+        over = [n > limit for n in series]
+        assert any(over)
+        monkeypatch.setattr(ft, "BLOCK_LIMIT", limit)
+        cut = outbreak_blocks(counts, places, np.random.default_rng(0), 3)
+        assert len(cut) == len(full) + 3 * sum(over)
+        at = 0
+        for k, before in enumerate(full):
+            if not over[k]:
+                # A system within the limit stays whole.
+                assert cut[at]["places"] == whole
+                assert cut[at]["view"] == {"kind": "whole"}
+                at += 1
+                continue
+            views = cut[at : at + 4]
+            at += 4
+            kinds = [v["view"]["kind"] for v in views]
+            assert kinds == ["top", "subtree", "subtree", "subtree"]
+            assert views[0]["view"]["collapsed"] == ["strata"]
+            # Every leaf is in a block.
+            assert {p for v in views for p in v["places"] if "-" in p} == set(
+                places
+            )
+            for after in views:
+                n = after["context"].shape[0]
+                assert n <= limit
+                assert after["cut"] == before["cut"]
+                assert after["view"]["series_before"] == series[k]
+                assert after["view"]["series_after"] == n
+                assert after["view"]["places_before"] == len(whole)
+                assert after["view"]["places_after"] == len(after["places"])
+                # Totals stay exact: each place's series is the whole
+                # system's.
+                for i, place in enumerate(after["places"]):
+                    row = after["target_places"].index(i)
+                    was = before["target_places"].index(whole.index(place))
+                    np.testing.assert_array_equal(
+                        after["context"][row], before["context"][was]
+                    )
+    finally:
+        ft.PARENTS = None
+
+
+def test_the_grid_file_has_a_default_outside_a_checkout(monkeypatch, tmp_path):
+    # Installed alone, the package has no workflow/config.yaml to read.
+    monkeypatch.setattr(ft, "ROOT", tmp_path)
+    assert ft.workflow_grid_file() == ft.DEFAULT_GRID_FILE
+
+
+def test_a_complete_block_is_the_ragged_block_without_its_lag_series():
+    from nowcastfoundation.finetune.chronos import complete_block
+
+    nan = np.nan
+    lags = [[0, 0, 0, 2, 3, nan, nan], [0, 0, 0, 4, nan, nan, nan]]
+    raw = _raw([5, 0, 1], [6, 7, 8, 9], lags)
+    out = complete_block(raw)
+    # The counts to the last complete step, then the truth: no lag series,
+    # so the context ends at `start`.
+    np.testing.assert_array_equal(out["context"], raw["context"][:1])
+    assert (out["n_covariates"], out["n_future_covariates"]) == (0, 0)
+    assert (out["start"], out["nowcast"]) == (3, 2)
+
+
+@pytest.mark.slow
+def test_the_complete_layout_cuts_the_ragged_blocks_without_lag_series(
+    monkeypatch,
+):
+    from nowcastfoundation.finetune.chronos import outbreak_blocks
+
+    ft.use_grid()
+    counts = _counts_of(["P01", "P02"])
+    ragged = outbreak_blocks(counts, ["P01", "P02"], np.random.default_rng(3))
+    monkeypatch.setattr(ft, "LAYOUT", "complete")
+    complete = outbreak_blocks(counts, ["P01", "P02"], np.random.default_rng(3))
+    # The same blocks in the same order, so both runs see the same data.
+    assert len(complete) == len(ragged) > 0
+    for r, c in zip(ragged, complete, strict=True):
+        assert (c["source"], c["cut"], c["places"]) == (
+            r["source"],
+            r["cut"],
+            r["places"],
+        )
+        np.testing.assert_array_equal(
+            c["context"], r["context"][: r["n_targets"]]
+        )
+        assert c["n_covariates"] == c["n_future_covariates"] == 0

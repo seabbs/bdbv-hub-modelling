@@ -76,16 +76,9 @@ def _trainer_args(tmp_path, finetune=None, machine=""):
     snakemake = Path(sys.executable).parent / "snakemake"
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n{machine}")
-    target = tmp_path / "checkpoints" / "slots" / "train" / "n100"
-    # The real validation blocks are made from data a test run lacks.
-    real = tmp_path / "real-validation.pkl"
-    real.write_text("")
+    target = tmp_path / "runs" / "runa" / "train" / "n100"
     overlay = tmp_path / "overlay.yaml"
-    overlay.write_text(
-        yaml.safe_dump(
-            {"finetune": {"real_validation": str(real), **(finetune or {})}}
-        )
-    )
+    overlay.write_text(yaml.safe_dump({"finetune": finetune or {}}))
     out = subprocess.run(
         [
             str(snakemake),
@@ -123,8 +116,7 @@ def _trainer_args(tmp_path, finetune=None, machine=""):
 
 def test_the_trainer_gets_the_agreed_design(tmp_path):
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
     assert args.until == 100
@@ -156,8 +148,7 @@ def test_the_trainer_gets_the_agreed_design(tmp_path):
 
 def test_the_loss_horizon_comes_from_the_config(tmp_path):
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(
         _trainer_args(tmp_path, {"loss_horizon_days": None})
@@ -171,8 +162,7 @@ def test_the_loss_horizon_comes_from_the_config(tmp_path):
 
 def test_quiet_cut_offs_come_from_the_config(tmp_path):
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(
         _trainer_args(tmp_path, {"quiet_min_cases": 10})
@@ -181,32 +171,31 @@ def test_quiet_cut_offs_come_from_the_config(tmp_path):
 
 
 def test_the_grid_s_sources_are_the_block_design():
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_chronos as ft
+    from nowcastfoundation.finetune import chronos as ft
 
     sources = CONFIG["grid_rounds"]["sources"]
     assert sources == list(ft.BLOCK_DESIGN["source_shares"])
 
 
 def test_development_scores_no_bdbv_blocks(tmp_path):
-    # BDBV is held out for the paper: the shipped config gives the
-    # trainer no real validation blocks and the check no BDBV loss.
+    # BDBV is held out for the paper: the trainer scores no real
+    # validation blocks and the check no BDBV loss.
     config = yaml.safe_load(
         (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
     )["finetune"]
-    assert config["real_validation"] is None
+    assert "real_validation" not in config
     assert "zero_shot_real" not in config
-    args = _trainer_args(tmp_path, {"real_validation": None})
+    args = _trainer_args(tmp_path)
     assert "--real-validation" not in args
 
 
 def test_a_machine_sets_the_checkpoint_threshold(tmp_path):
     pytest.importorskip("pandas")
-    sys.path.insert(0, str(ROOT / "scripts"))
-    import finetune_stream as fs
+    from nowcastfoundation.finetune import stream as fs
 
     args = fs.build_parser().parse_args(_trainer_args(tmp_path))
-    assert args.checkpoint_above is None
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    assert args.checkpoint_above == config["finetune"]["checkpoint_above"]
     args = fs.build_parser().parse_args(
         _trainer_args(tmp_path, machine="CHECKPOINT_ABOVE=0\n")
     )

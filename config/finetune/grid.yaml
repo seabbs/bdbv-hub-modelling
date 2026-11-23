@@ -1,5 +1,5 @@
-# The grid of the fine-tuning simulations: the simulator engine
-# (packages/nowcastfoundation/r) reads every factor, sampling distribution,
+# The grid of the fine-tuning simulations: the simulator
+# (nowcastfoundation.simulator) reads every factor, sampling distribution,
 # share and floor from here, and the paper's grid tables and figures read
 # the same file. Five layers: infections; strata (places, ages and how they
 # relate); observation (infection to reference event, ascertainment, count
@@ -17,44 +17,41 @@
 #   definition, base plus a Poisson with `mean`; `rates`: Poisson means.
 # - `floors`: the only floors on drawn values, and the fewest reported
 #   cases a simulation may have before it is drawn again.
-epinowcast_sha: e084b080
-# The simulator's memory: at most `max_strata` strata (places by ages) up to
-# 28 weeks, fewer in longer series. Independent strata are each a
-# simulation of their own, so at most `max_independent` of them.
-max_strata: 60
+# The simulator's memory: a simulation's reporting triangle has at most
+# `max_triangle_cells` cells (strata x longest delay x days, the days being
+# 7 x (weeks + longest delay in weeks + 4)), which bounds a simulation's
+# memory and time. A design's strata must fit at the shortest delay; a
+# delay whose longest delay does not fit takes the longest that does. Independent strata are each a simulation of their
+# own, so at most `max_independent` of them.
+max_triangle_cells: 1600000
 max_independent: 8
+# The longest delay a simulation reports, in days: the first of these at
+# or above its delay's 99th centile, else the last. The R(t) and delay
+# walks run over the series, the last of these and the horizon.
+max_delay_days: [21, 28, 42, 56, 84, 126]
 # Tries of a design's values before a new design, and designs before a
 # simulation fails.
 tries: 5
 designs: 20
-# The trainer's block budget: a block is a whole simulated system (the
-# country, group totals and every leaf), so a system has at most this many
-# locations. A location takes its counts, up to 49 lags and a period total
-# (51 rows) in a block of at most 2,000 series (finetune_chronos
-# MAX_SERIES, MAX_LAGS): 2,000 / 51 = 39, with 6 kept for the regions the
-# trainer may group flat places into.
-max_locations: 39
+# Region totals the trainer may group four or more flat places into.
 regions: 6
 floors:
   seed: 1
   weeks: 4
   period_days: 30
-  # A draw reporting fewer cases than this (over its draws' mean) is drawn
-  # again, as are draws that error.
-  min_cases: 10
 # No sim QC thresholds: a draw is drawn again only if it
-# errors or reports fewer than `floors$min_cases` cases. That cases never
+# errors or reports no cases. That cases never
 # exceed a stratum's population (without variants) is a simulator test.
 shares:
   controlled: 0.5      # early outbreaks brought towards R = 1
   drift: 0.3           # non-endemic settings with a slow drift in R
-  reactive: 0.8        # shifts that react to effective R
+  reactive: 0.4        # shifts that react to effective R (fewer spikes)
   shift_up: 0.5        # non-reactive shifts that raise R
   mixing_switch_on: 0.5
 rates:
-  shifts: 2            # shifts in R per simulation
+  shifts: 0.7          # shifts in R per simulation (half have none)
   extra_waves: 0.5     # multi-wave: waves beyond 2
-  variants_per_year: 4 # immune-escape variants (none in early outbreaks)
+  variants_per_year: 1.5 # immune-escape variants (none in early outbreaks)
 counts:
   late_days: {base: 7, mean: 3}
   place_lag_days: {base: 0, mean: 10}
@@ -67,7 +64,7 @@ counts:
   active_places: {base: 1, mean: 1}
   late_places: {base: 1, mean: 0.5}
   # Strata: places and ages, drawn again until the system fits the
-  # simulator's memory (max_strata) and the trainer's block (max_locations).
+  # simulator's memory (max_triangle_cells).
   places_even: {base: 2, mean: 6}
   places_concentrated: {base: 15, mean: 5}
   places_by_ages: {base: 4, mean: 2}
@@ -88,6 +85,7 @@ factor_layers:
   window: infections
   trajectory: infections
   gt_family: infections
+  incubation_family: observation
   strata: strata
   spread: strata
   place_rt: strata
@@ -111,25 +109,33 @@ factor_layers:
   revisions: reporting
 constants:
   walk_ar: 0.7         # pull of the weekly log R walk back to R = 1
-  incubation_cv: 0.5   # infection-to-reference delay, gamma CV
   expected_scale: 1000
 factors:
   gt_family:
     gamma: 1
     lognormal: 1
+  incubation_family:
+    gamma: 1
+    lognormal: 1
+  # Common shapes first: R settling slowly from 1.3-2.5 to
+  # about 1 over weeks to months (controlled) in a quarter, and R
+  # oscillating around 1 in a sixth.
   trajectory:
+    controlled: 3
+    oscillating: 2
     growth: 1
     decline: 1
     flat: 1
     rise_fall_sharp: 1
     rise_fall_gradual: 1
     fall_rise: 1
-    oscillating: 1
     multi_wave: 1
+  # Heavy-tailed families first: a short median with a long tail, as
+  # Germany's 3 d median and 69 d 99th centile; exponential tails are thin.
   delay_family:
-    lognormal: 1
-    gamma: 1
-    exponential: 1
+    lognormal: 2
+    gamma: 1.5
+    exponential: 0.5
   delay_form:
     parametric: 1
     non_parametric: 1
@@ -157,11 +163,16 @@ factors:
   spread:
     even: 1
     concentrated: 1
+  # Places mostly deviate moderately around a shared path (correlated),
+  # or within regions that share a deviation (nested, four or more
+  # places; with fewer it is one region, as correlated); an independent
+  # path in each place is the rarest.
   place_rt:
     shared: 1
-    independent: 1
-    correlated: 1
+    independent: 0.5
+    correlated: 2
     lagged: 1
+    nested: 2
   seeding:
     start: 1
     mid: 1
@@ -186,8 +197,10 @@ factors:
   obs_strata:
     shared: 1
     dispersion: 1
+  # Strata mostly deviate moderately within one outbreak (linked); each
+  # stratum an outbreak of its own in a quarter.
   strata_link:
-    linked: 1
+    linked: 3
     independent: 1
   window:
     early: 5
@@ -203,8 +216,8 @@ factors:
     slowdown: 1
   # Report days: every day in half (with a report-date weekday
   # effect in half of these, `report_dow`), Monday to Friday in a quarter,
-  # two or three fixed days a week in 15% and one day a week in 10% (days
-  # drawn).
+  # two or three fixed days a week in 15% (drawn from Monday to Friday) and
+  # one day a week in 10% (any day).
   report_days:
     daily: 10
     weekdays: 5
@@ -332,12 +345,19 @@ distributions:
     sdlog: 0.5
     layer: infections
     why: waves of a fifth of the amplitude to above it
+  control_r:
+    dist: lognormal
+    median: 1.8
+    sdlog: 0.15
+    layer: infections
+    why: a controlled outbreak starts at R about 1.3 to 2.4 and settles
+      towards 1
   control_days:
     dist: lognormal
     median: 42.0
     sdlog: 0.5
     layer: infections
-    why: control brings an early outbreak's R to 1 over 2 to 16 weeks
+    why: control or immunity brings R to about 1 over 2 to 16 weeks
   r_drift:
     dist: lognormal
     median: 0.8
@@ -354,10 +374,10 @@ distributions:
     why: shifts in R away from the ends of the series
   shift_size:
     dist: lognormal
-    median: 0.35
+    median: 0.22
     sdlog: 0.4
     layer: infections
-    why: shifts of R by about x1.2 to x2
+    why: shifts of R by about x1.1 to x1.6
   shift_days:
     dist: lognormal
     median: 14.0
@@ -382,10 +402,10 @@ distributions:
     why: a variant returns about a tenth to a half of the immune
   variant_r:
     dist: lognormal
-    median: 1.3
-    sdlog: 0.15
+    median: 1.2
+    sdlog: 0.1
     layer: infections
-    why: a variant raises R by about x1.1 to x1.7
+    why: a variant raises R by about x1 to x1.5
   population:
     dist: lognormal
     median: 200000.0
@@ -487,10 +507,36 @@ distributions:
     why: strata's dispersion within about x2 to x3 of the outbreak's
   incubation_mean:
     dist: lognormal
-    median: 5.0
-    sdlog: 0.5
+    median: 6.0
+    sdlog: 0.65
     layer: observation
-    why: infection to onset, test or admission in about 2 to 13 days
+    why: infection to onset, test or admission, a mean of about 1.7 to 21
+      days. The reference values span it - cholera (median 1.4, Azman 2013)
+      and influenza A (median 1.4, Lessler 2009), COVID-19 (means 3.5 to
+      6.5, Xu 2023), dengue (5.9, Chan 2012), Bundibugyo (6.3, MacNeil
+      2010), mpox (7.6 to 9.9), Ebola (9.1 to 11.4, WHO 2014), measles
+      (median 12.5, Lessler 2009; mean 13.5) - and infection to admission
+      of 10 to 15 days
+  incubation_cv:
+    dist: lognormal
+    median: 0.5
+    sdlog: 0.35
+    layer: observation
+    why: infection-to-reference CV of about 0.25 to 1, from narrow
+      incubation periods to wide ones and delays to admission
+  incubation_place_sd:
+    dist: lognormal
+    median: 0.28
+    sdlog: 0.45
+    layer: strata
+    why: places' infection-to-reference delays differ by up to about x2,
+      as their reporting delays (delay_place_sd) do
+  incubation_age_sd:
+    dist: halfnormal
+    scale: 0.13
+    layer: strata
+    why: ages' infection-to-reference delays differ little, as their
+      reporting delays (delay_age_sd) do
   pool_z:
     dist: normal
     mean: 0.0
@@ -570,30 +616,33 @@ distributions:
     why: endemic log R moves by about 0.1 a week around R = 1
   delay_mean:
     dist: lognormal
-    median: 5.0
-    sdlog: 0.6
+    median: 7.0
+    sdlog: 0.8
     layer: delays
-    why: mean delays of about 1.5 to 16 days
+    why: mean delays from about a day and a half to several weeks (1.5 to
+      34 days)
   delay_median:
     dist: lognormal
-    median: 3.2
-    sdlog: 0.5
+    median: 2.0
+    sdlog: 0.8
     layer: delays
-    why: lognormal delays with medians of about 1 to 9 days
+    why: lognormal delays with medians of about half a day to 10 days
   delay_sdlog:
     dist: lognormal
-    median: 0.9
-    sdlog: 0.3
+    median: 1.5
+    sdlog: 0.25
     layer: delays
-    why: right-skewed delays, no longer-tailed than real ones
+    why: from moderate to heavy tails (0.9 to 2.4); with a short median, a
+      fast head and a long tail, as Germany's 22-26% on day 0 and 99%
+      delay of 61-81 days
   delay_shape:
-    dist: beta
-    a: 4.0
-    b: 2.0
-    lower: 0.0
-    upper: 2.0
+    dist: lognormal
+    median: 0.5
+    sdlog: 0.7
     layer: delays
-    why: gamma delays need a shape below 2 in the simulate branch
+    why: gamma shapes from 0.13 (CV 2.8, a heavy head at 0 and a long
+      tail) to about 2 (CV 0.7); no cap, as the joint model reports any
+      shape
   delay_place_sd:
     dist: lognormal
     median: 0.28

@@ -3,14 +3,16 @@
 import csv
 import gzip
 import json
+import os
 import re
+import time
 from datetime import datetime, timedelta
 
 import pytest
 
 pytest.importorskip("matplotlib")
 
-from flowlib.dashboard import logs, mirror, page, runs
+from flowlib.dashboard import mirror, page, runs
 
 LINE = "2026-11-16 16:{m:02d}:00 [train] step {s}: loss {l}, held-out (x) {h}"
 
@@ -40,7 +42,7 @@ def _machine(tmp_path):
             [{"step": 0, "held_out_loss": 0.47, "by_source": {"weekly": 0.25}}]
         )
     )
-    (run / "train.log").write_text(
+    (run / "train" / "n250.log").write_text(
         "\n".join(
             LINE.format(m=i, s=10 * i, l=0.5 - i / 100, h=0.45)
             for i in range(30)
@@ -173,7 +175,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
         "Status",
         "Loss",
         "Attention bias",
-        "What fine-tuning learns",
+        "Held-out loss by level and LoRA size",
         "Nowcasts",
         "Recent activity",
         "Tables",
@@ -184,7 +186,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
         "status",
         "loss",
         "bias",
-        "learning",
+        "levels",
         "nowcasts",
         "mailbox",
         "tables",
@@ -194,7 +196,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
     assert (
         "n250 of 8000" not in out
     )  # the live step is 290, n is steps / 4.5625
-    assert "of 8000 simulations trained" in out
+    assert re.search(r"Simulations trained</span> <b>\d+/8000</b>", out)
     assert "slots n250 published" in out
     assert "other" not in out.split("Recent activity")[1]
     assert "id=gdata" in out
@@ -202,10 +204,9 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
     assert "id=ldata" in out
     assert "id=bdata" in out
     assert "id=seldata" in out
-    assert '<option value="daily" selected>daily</option>' in out
-    # No hard-coded runs or hosts.
+    assert '<option value="daily" selected>daily counts</option>' in out
+    # No hard-coded runs.
     assert "no slots" not in out
-    assert "archie" not in out
 
 
 def test_the_page_never_reloads_and_a_served_one_updates_in_place(tmp_path):
@@ -246,27 +247,6 @@ def test_the_mailbox_section_is_hidden_without_a_mailbox(tmp_path):
     assert "Recent activity" not in page.build(ctx)
 
 
-def test_samples_are_summarised_outside_page_builds(tmp_path, monkeypatch):
-    from flowlib.dashboard import nowcasts
-
-    ctx = _machine(tmp_path)
-    ctx.datasets = [{"key": "b", "format": "samples", "groups": []}]
-    calls = []
-    monkeypatch.setattr(
-        nowcasts, "summarise_samples", lambda *a, **_k: calls.append(a) or 14
-    )
-    truth = tmp_path / "truth.csv"
-    truth.write_text("kind\n")
-    (tmp_path / "scores" / "b").mkdir(parents=True)
-    monkeypatch.setattr(ctx.source, "truth", lambda _key: truth)
-    page.build(ctx)
-    assert calls == []
-    ctx.summarise()
-    ctx.summarise()  # nothing changed: the summaries are not redone
-    assert len(calls) == 1
-    assert ctx.delays["b"] == 14
-
-
 def test_checkpoint_tables_have_a_column_per_source(tmp_path):
     ctx = _machine(tmp_path)
     out = page.build(ctx)
@@ -282,12 +262,10 @@ def test_run_sizes_drop_prefixes_past_the_run_and_end_at_it():
 
 def test_the_run_size_comes_from_the_config_without_a_trainer(tmp_path):
     ctx = _machine(tmp_path)
-    # The fixture's run has no trainer command line to name its prefixes.
-    assert logs.trainer_args(ctx.runs[0].folder) == ""
     ctx.outbreaks = 8400
     ctx.prefixes = (250, 500, 1000, 2000, 4000, 8000)
     out = page.build(ctx)
-    assert "of 8400 simulations trained" in out
+    assert re.search(r"Simulations trained</span> <b>\d+/8400</b>", out)
     assert "of 8000" not in out
     planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
     st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
@@ -318,7 +296,7 @@ def test_a_segment_s_empty_folder_is_not_a_checkpoint_being_scored(tmp_path):
     # Snakemake makes the next segment's output folders when it starts.
     (folder / "train" / "n500" / "finetuned-ckpt").mkdir(parents=True)
     out = page.build(ctx)
-    assert "scoring since" not in out
+    assert "<span class=kvk>Scoring</span>" not in out
     bar = out.split("id=livebar>", 1)[1].split("</span></span>", 1)[0]
     # Simulations done of the next prefix, and when it is due.
     assert re.search(r"n\d+ / n500", bar)
@@ -331,7 +309,9 @@ def test_a_written_checkpoint_is_scored_as_itself_not_as_the_next(tmp_path):
     ckpt.mkdir(parents=True)
     (ckpt / "adapter_model.safetensors").write_bytes(b"")
     out = page.build(ctx)
-    assert re.search(r"n500 scoring since \d\d:\d\d", out)
+    assert re.search(
+        r"Scoring</span> <b>n500</b>.*?Since</span> <b>\d\d:\d\d</b>", out
+    )
     assert re.search(r"n\d+ / n750", out)
 
 
@@ -380,12 +360,12 @@ def test_the_next_checkpoint_names_its_simulations_and_planned_step(tmp_path):
         "99 series, 1000 steps\n"
     )
     out = page.build(ctx)
-    tile = out.split("Next checkpoint", 1)[1].split("</div></div>", 1)[0]
+    tile = out.split("Next checkpoint", 1)[1].split("Segments", 1)[0]
     assert ">n500<" in tile
     # 250 checkpointed at step 1140; n500's chunk planned as 1000 steps.
-    assert "of 500 simulations" in tile
-    assert "step 2140" in tile
-    assert "planned" in tile
+    assert "/500</b>" in tile
+    assert "Step</span> <b>2140</b>" in tile
+    assert "<b>planned</b>" in tile
 
 
 def test_every_configured_dataset_is_in_the_selector(tmp_path):
@@ -394,13 +374,7 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
     ctx = _machine(tmp_path)
     ctx.datasets = [
         *ctx.datasets,
-        {"key": "other", "label": "Other", "format": "samples"},
-        {
-            "key": "held_out",
-            "label": "Held-out simulations",
-            "format": "quantiles",
-            "missing": "the scoring workflow writes none yet",
-        },
+        {"key": "other", "label": "Other"},
     ]
     sel = page.sections(ctx)["nowcasts"]
     data = _gdata(sel)
@@ -408,9 +382,6 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
         (d["key"], d["label"], bool(d.get("empty"))) for d in data["datasets"]
     ]
     assert ("other", "Other", True) in got
-    assert ("held_out", "Held-out simulations", True) in got
-    held = next(d for d in data["datasets"] if d["key"] == "held_out")
-    assert "the scoring workflow writes none yet" in held["missing"]
 
 
 def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
@@ -421,7 +392,7 @@ def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
     ctx = _machine(tmp_path)
     folder = ctx.runs[0].folder
     now = datetime.now().replace(microsecond=0)
-    (folder / "train.log").write_text(
+    (folder / "train" / "n250.log").write_text(
         LINE.format(m=0, s=800, l=0.5, h=0.45).replace(
             "2026-11-16 16:00:00",
             f"{now - timedelta(minutes=40):%Y-%m-%d %H:%M:%S}",
@@ -441,7 +412,7 @@ def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(
     out = page.build(ctx)
     tile = out.split("Steps / s", 1)[1].split("</div></div>", 1)[0]
     assert "n/a" not in tile
-    assert "simulations/min" in tile
+    assert "Simulations per min" in tile
     eta = out.split("ETA n8000", 1)[1].split("</div></div>", 1)[0]
     assert "n/a" not in eta
 
@@ -489,3 +460,69 @@ def test_the_score_card_has_the_horizon_parts(tmp_path):
     data = _gdata(page.sections(_machine(tmp_path))["nowcasts"])
     assert [h[0] for h in data["horizon"]] == list(labels.HORIZON_PARTS)
     assert {h[0]: h[2] for h in data["horizon"]} == labels.HORIZON_FILLS
+
+
+OFFLOADED = (
+    "2026-11-16 16:{m:02d}:00 [train] step {s}: loss 0.5, held-out "
+    "(monitor, by_source) left to the evaluator, 10 s"
+)
+
+
+def test_an_offloaded_run_shows_its_speed_steps_and_segment_etas(tmp_path):
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    # An offloaded run logs steps with no held-out loss.
+    (folder / "train" / "n250.log").write_text(
+        "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
+    )
+    ctx.outbreaks = 1000
+    ctx.prefixes = (250, 500, 1000)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    assert st.rate == pytest.approx(1.0)
+    assert st.mean_rate == pytest.approx(1.0)
+    tiles, _ = page.status_tiles(st, ctx.runs[0])
+    speed = tiles.split("Steps / s")[1].split("Next checkpoint")[0]
+    assert "n/a" not in speed
+    assert "Mean</span> <b>1</b>" in tiles
+    assert f"Final step</span> <b>{st.at(1000)}</b>" in tiles
+    # Each segment still to come, with its ETA.
+    for n in (500, 1000):
+        assert f"n{n}</span> <b>{st.eta(n)}</b>" in tiles
+
+
+def test_a_stopped_run_names_the_batches_its_next_segment_waits_on(tmp_path):
+    ctx = _machine(tmp_path)
+    folder = ctx.runs[0].folder
+    (folder / "train" / "n250.log").write_text(
+        "\n".join(OFFLOADED.format(m=i, s=60 * i) for i in range(30)) + "\n"
+    )
+    status = folder / "train" / "stream-status.json"
+    status.parent.mkdir(parents=True, exist_ok=True)
+    status.write_text(json.dumps({"stage": "stopped at n250"}))
+    old = time.time() - 3600
+    os.utime(status, (old, old))
+    (folder / "seeds.txt").write_text("".join(f"{s}\n" for s in range(50)))
+    (folder / "sims").mkdir(exist_ok=True)
+    for s in (0, 1, 2, 4, 5, 6, 7):
+        (folder / "sims" / f"settings-{s}.csv").write_text(
+            "outbreak\n" + "".join(f"{s}-{i}\n" for i in range(50))
+        )
+    ctx.outbreaks = 1000
+    ctx.prefixes = (250, 500, 1000)
+    planned = page.run_sizes(ctx.prefixes, ctx.outbreaks)
+    st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
+    tiles, _ = page.status_tiles(st, ctx.runs[0])
+    trainer = tiles.split("Trainer")[1].split("Last log line")[0]
+    assert "Waiting for batches" in trainer
+    assert all(f"<b>{s}</b>" in trainer for s in (3, 8, 9, 10))
+
+
+def test_the_trainer_status_is_folded_and_the_loss_open(tmp_path):
+    ctx = _machine(tmp_path)
+    page_html = page.build(ctx)
+    status = page.sections(ctx)["status"]
+    fold = re.search(r"<details class=about>(.*?)</details>", status, re.S)
+    assert fold
+    assert "Trainer status" in fold[1]
+    assert "<details class=sec id=loss open>" in page_html

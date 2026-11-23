@@ -39,6 +39,7 @@ from pyrenew.observation.noise import CountNoise
 from pyrenew.observation.types import ObservationSample
 from pyrenew.time import daily_to_weekly
 
+from ..components.reference import delayed_events
 from .composition_noise import CompositionNoise, MultinomialNoise
 from .pooled import pooled_groups, pooled_walk
 from .publication_lag import ReleasePairLikelihood
@@ -53,29 +54,6 @@ Every report is published on its report day. A NumPy array, so that
 importing the package does not start JAX before the host device count
 is set (`devices.host_devices`).
 """
-
-
-def backsample(missing: Array, pmf: Array) -> Array:
-    r"""Spread missing-onset cases back from report day with a delay pmf.
-
-    $a(s) = \sum_d m(s + d) \hat f(d)$, the hub's back-sampling in
-    expectation (`bdbvhubrenewal.data.delays.expected_imputed_onsets`).
-    Mass that would fall before day 0 is lost.
-
-    Parameters
-    ----------
-    missing : Array
-        Missing-onset cases by report day, shape `(n,)`.
-    pmf : Array
-        Delay pmf on 0..D.
-
-    Returns
-    -------
-    Array
-        Expected cases by onset day, shape `(n,)`.
-    """
-    n = missing.shape[0]
-    return jnp.convolve(missing[::-1], pmf, mode="full")[:n][::-1]
 
 
 def _nowcast(draws: Array, vintage: Array | None) -> Array:
@@ -770,8 +748,9 @@ class OnsetStreams(BaseObservationProcess):
     def _predicted_obs(self, infections: Array) -> Array:
         """Convolve infections with the infection-to-onset pmf.
 
-        Column by column, aligned so day $t$ of the output is day $t$ of
-        the input, with no infections before the axis. The seeding days
+        The shared `components.reference.delayed_events`: column by
+        column, aligned so day $t$ of the output is day $t$ of the input,
+        with no infections before the axis. The seeding days
         feed the weekly sums, so they are partial sums rather than NaN.
 
         Parameters
@@ -784,13 +763,7 @@ class OnsetStreams(BaseObservationProcess):
         Array
             Expected infections by onset day, the shape of `infections`.
         """
-        pmf = jnp.asarray(self.temporal_pmf_rv())
-        n = infections.shape[0]
-        return jax.vmap(
-            lambda col: jnp.convolve(col, pmf, mode="full")[:n],
-            in_axes=1,
-            out_axes=1,
-        )(infections)
+        return delayed_events(infections, jnp.asarray(self.temporal_pmf_rv()))
 
     def validate_data(
         self,

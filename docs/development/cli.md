@@ -48,7 +48,7 @@ task serve                           # serve the site (run task nowcast-eval:res
 ```
 
 `--models` runs some models and keeps the others' rows in `results/`.
-The files in `results/` are not committed, apart from `development-log.csv`, `ladder.csv` and `model-choice.yml`.
+The files in `results/` are not committed, apart from `development-log.csv` and `model-choice.yml`.
 The Pages build makes the rest with the steps of `task nowcast-eval:results`, from the code, the data and the fit store.
 
 ## Fit store
@@ -64,7 +64,7 @@ The key hashes:
 - the code the model's fit can run (its import closure with `evaluation/store.py` and `nowcasteval/backtest.py`), without docstrings or comments;
   the zone split (`nowcastbaselines/zones.py`, `evaluation/zones.py`) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;
   so are the key's own helper (`evaluation/digest.py`) and the plots (`nowcasteval/plots.py`), which a fit does not run;
-- the package's data files (`src/bdbvhubrenewal/data/*.csv`), such as the province centres of the gravity kernel;
+- the package's data files (`packages/bdbvhub/src/bdbvhub/data/*.csv`), such as the province centres of the gravity kernel;
 - the runtime dependencies in `uv.lock`.
 
 The renewal variants use the sampler table of the submission candidate that runs them, in `ci/policy.toml`.

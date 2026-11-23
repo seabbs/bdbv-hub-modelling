@@ -2,16 +2,17 @@
 
 import inspect
 import json
-import sys
+import os
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
-
-from finetune_verify import function_source, problems, settings_problems
-
 from nowcastfoundation import forecaster as foundation
+from nowcastfoundation.finetune.verify import (
+    function_source,
+    problems,
+    settings_problems,
+)
 
 FOUNDATION = Path(foundation.__file__)
 
@@ -110,34 +111,26 @@ def test_released_checkpoints_give_their_hash(name):
     assert settings_problems(settings) == []
 
 
-def test_the_code_names_are_the_paths_first_hashed():
-    import finetune_chronos as ft
+def test_the_code_names_are_the_files_paths():
+    from nowcastfoundation.finetune import chronos as ft
 
     assert set(ft.CODE) == {
-        ft.GRID_NAME,
-        *ft.SIMULATOR[1:],
-        "scripts/finetune_chronos.py",
-        "src/bdbvhubrenewal/forecasters/finetune.py",
+        *ft.SIMULATOR,
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/chronos.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
     }
+    assert all(name == path for name, path in ft.CODE.items())
     root = Path(__file__).parents[1]
-    for path in (*ft.CODE.values(), ft.FOUNDATION_PATH):
+    for path in (*ft.CODE.values(), ft.FOUNDATION_PATH, ft.TRAINER):
         assert (root / path).exists(), path
 
 
-def test_every_engine_file_is_hashed_by_glob(tmp_path, monkeypatch):
-    import finetune_chronos as ft
+def test_the_trainer_is_hashed_under_its_own_path():
+    from nowcastfoundation.finetune import chronos as ft
+    from nowcastfoundation.finetune import stream as fs
 
-    engine = Path(__file__).parents[1] / ft.ENGINE / "R"
-    hashed = {p for p in ft.SIMULATOR if p.startswith(ft.ENGINE + "/R/")}
-    assert hashed == {f"{ft.ENGINE}/R/{p.name}" for p in engine.glob("*.R")}
-    # A new engine file is hashed without listing it.
-    (tmp_path / ft.ENGINE / "R").mkdir(parents=True)
-    for name in ("a.R", "new.R"):
-        (tmp_path / ft.ENGINE / "R" / name).write_text("")
-    monkeypatch.setattr(ft, "ROOT", tmp_path)
-    files = ft.simulator_files("g.yaml")
-    assert files[0] == "g.yaml"
-    assert f"{ft.ENGINE}/R/new.R" in files
+    assert fs.code_paths(bias=False)[ft.TRAINER] == ft.TRAINER
+    assert Path(fs.__file__).resolve() == (ft.ROOT / ft.TRAINER).resolve()
 
 
 def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
@@ -145,52 +138,100 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
 ):
     import shutil
 
-    import finetune_chronos as ft
+    from nowcastfoundation.finetune import chronos as ft
 
-    assert ft.SIMULATOR[0] == ft.workflow_grid_file() == ft.GRID_FILE_PATH
+    grid = "config/finetune/grid.yaml"
+    assert ft.SIMULATOR[0] == ft.workflow_grid_file() == grid
     monkeypatch.setattr(ft, "SIMULATOR", ft.SIMULATOR)
     monkeypatch.setattr(ft, "CODE", ft.CODE)
     # use_grid sets the run's parents globally: put them back after.
     monkeypatch.setattr(ft, "PARENTS", ft.PARENTS)
     ft.use_grid(ft.GRID_FILE)
-    assert ft.SIMULATOR[0] == ft.GRID_FILE_PATH
-    assert ft.CODE[ft.GRID_NAME] == ft.GRID_FILE_PATH
-    # Another grid file is hashed under its own path.
+    assert ft.SIMULATOR[0] == grid
+    assert ft.CODE[grid] == grid
+    # Another grid file is hashed under its path from the repository.
     other = tmp_path / "other.yaml"
     shutil.copy(ft.GRID_FILE, other)
     ft.use_grid(other)
-    assert ft.SIMULATOR[0] == str(other)
-    assert ft.CODE[str(other)] == str(other)
-    assert ft.GRID_NAME not in ft.CODE
+    name = os.path.relpath(other.resolve(), ft.ROOT.resolve())
+    assert ft.SIMULATOR[0] == name
+    assert ft.CODE[name] == name
+    assert grid not in ft.CODE
 
 
-def test_the_grid_hashes_the_names_it_was_first_hashed_with():
-    """The glob and the frozen grid name give the names checkpoints hashed."""
-    import finetune_chronos as ft
+def test_the_simulator_hashes_its_grid_and_python():
+    """The globs give the simulator's files, each named by its path."""
+    from nowcastfoundation.finetune import chronos as ft
 
-    engine = "packages/nowcastfoundation/r"
-    first = {
-        "config/finetune/grids/r7.yaml",
-        "workflow/scripts/simulate.R",
-        f"{engine}/DESCRIPTION",
-        *(
-            f"{engine}/R/{name}.R"
-            for name in (
-                "delays",
-                "design",
-                "grid",
-                "infections",
-                "nowcastfoundation-package",
-                "observation",
-                "reporting",
-                "simulate",
-                "utils",
-            )
-        ),
+    python = {
+        f"{folder}/{name}.py"
+        for folder, names in (
+            (
+                "packages/nowcastfoundation/src/nowcastfoundation/simulator",
+                ("__init__", "__main__", "batch", "bench", "draws"),
+            ),
+            (
+                "packages/nowcastrenewal/src/nowcastrenewal/latent",
+                (
+                    "__init__",
+                    "imports",
+                    "infections",
+                    "mixing",
+                    "rt",
+                    "simulate",
+                    "start",
+                ),
+            ),
+            (
+                "packages/nowcastrenewal/src/nowcastrenewal/components",
+                (
+                    "__init__",
+                    "draws",
+                    "hazards",
+                    "mixing",
+                    "noise",
+                    "pmfs",
+                    "reference",
+                    "renewal",
+                    "walks",
+                ),
+            ),
+            (
+                "packages/nowcastrenewal/src/nowcastrenewal/reporting",
+                (
+                    "__init__",
+                    "delays",
+                    "effects",
+                    "expectation",
+                    "observation",
+                    "revisions",
+                    "simulate",
+                    "triangle",
+                ),
+            ),
+            (
+                "packages/nowcastrenewal/src/nowcastrenewal/simulation",
+                ("__init__", "outbreak"),
+            ),
+        )
+        for name in names
     }
-    names = set(ft.code_files(ft.simulator_files(ft.GRID_FILE_PATH)))
+    first = {
+        "config/finetune/grid.yaml",
+        *python,
+    }
+    names = set(ft.code_files(ft.simulator_files("config/finetune/grid.yaml")))
     trainer = {
-        "scripts/finetune_chronos.py",
-        "src/bdbvhubrenewal/forecasters/finetune.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/chronos.py",
+        "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
     }
     assert names - trainer == first
+
+
+def test_code_files_hash_the_same_from_any_directory(tmp_path, monkeypatch):
+    from nowcastfoundation.finetune import chronos as ft
+
+    name = next(iter(ft.CODE))
+    here = ft.code_sha256(ft.CODE[name])
+    monkeypatch.chdir(tmp_path)
+    assert ft.code_sha256(ft.CODE[name]) == here

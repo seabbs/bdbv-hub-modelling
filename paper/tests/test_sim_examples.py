@@ -59,3 +59,17 @@ def test_the_figure_has_a_panel_per_example_with_its_releases() -> None:
     assert drawn[1].get_title().startswith("Multi-wave")
     # The final counts and three releases.
     assert len(drawn[0].get_lines()) == 4
+
+
+def test_with_no_simulations_the_figure_says_what_it_waits_on(
+    tmp_path, monkeypatch
+) -> None:
+    import sys
+
+    from paperfigs import sim_examples
+
+    out = tmp_path / "sim-examples.png"
+    argv = ["sim_examples", "--counts", "--settings", "--picks", "[]"]
+    monkeypatch.setattr(sys, "argv", [*argv, "--out", str(out)])
+    sim_examples.main()
+    assert out.is_file()

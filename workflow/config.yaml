@@ -33,8 +33,8 @@ next_segment_only: false
 
 simulate:
   # The grid the simulator runs: its factors, sampling distributions,
-  # shares, floors and sim QC thresholds (the engine is
-  # packages/nowcastfoundation/r).
+  # shares, floors and sim QC thresholds (nowcastfoundation.simulator
+  # reads it).
   grid_file: config/finetune/grid.yaml
   # Round r is `batches` batches from seed `seed_base` + 100 r, each
   # `batch` outbreaks with exactly `draws` observation draws, each drawn
@@ -44,9 +44,6 @@ simulate:
   batches: 40
   batch: 20
   draws: 1
-  # A batch's memory, and its one retry's (MB).
-  mem_mb: 16384
-  retry_mem_mb: 20480
   # GitHub repository of the `sims-r<N>` releases.
   repo: seabbs/bdbv-hub-modelling
 
@@ -60,7 +57,7 @@ finetune:
   outbreaks: 3200
   # Training seeds: the rounds' batches in seed order, or a fixed list
   # from `seed_file` (one seed a line, in order). The validation round is
-  # one whole grid block, and the ten rounds after it the ten blocks
+  # one whole grid block, and the grid's training rounds the blocks
   # trained on. The trainer monitors the first `holdout` simulations of
   # the validation round; the scoring workflow scores it whole. Unset
   # (null), the rounds, validation round and sources are `grid_rounds`.
@@ -80,6 +77,21 @@ finetune:
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
+  # Series a training step packs blocks up to; part of the recipe and
+  # the settings hash.
+  batch_size: 256
+  # Series above which a training step recomputes activations in
+  # backward. Memory and speed only: the steps and the hash stay. A
+  # machine with less GPU memory sets it lower (CHECKPOINT_ABOVE in
+  # config/local.env, or --config finetune.checkpoint_above=N).
+  checkpoint_above: 733
+  # Most series in a training or held-out block: the block capacity of
+  # the smallest GPU that trains, measured with every block checkpointed,
+  # with a margin. A whole system over it is cut into views that each fit
+  # (finetune.chronos.system_views). Part of the recipe and the settings
+  # hash. A machine with more GPU memory may set it higher (BLOCK_LIMIT
+  # in config/local.env), which changes its checkpoints' hash.
+  block_limit: 1000
   sources: null
   univariate_share: 0.2
   # Days after the cut-off a training block's horizon, and so the loss,
@@ -103,21 +115,47 @@ finetune:
   # same either way.
   eval: offload
   series_bias: true
+  # The training blocks' layout: ragged (each place's counts to the last
+  # complete step and its lag series) or complete (the same blocks
+  # without their lag series, so the context ends at the last complete
+  # step). Ragged adds nothing to the settings hash.
+  layout: ragged
+  # Real-data blocks mixed into the training stream, spread over its
+  # chunks (null: none). `germany`: the German triangle's reports before
+  # the first scored German date (config/germany.toml), so no scored
+  # target is trained on (rule real_training_blocks). Unset adds nothing
+  # to the settings hash.
+  real_training: null
   # Part of the settings hash: changing it changes every checkpoint's hash.
   note: 3,200 simulations
-  # Real validation blocks the trainer scores each checkpoint on, or null.
-  # Null: BDBV is held out for the paper, so no BDBV blocks are scored in
-  # development, and there is no other real-data set yet.
-  real_validation: null
   # The checkpoint checked against zero-shot on the held-out simulations.
   check_at: 800
+
+# The fine-tuning runs, by name: each takes `finetune` with its entry's
+# keys on top (rounds, seed_file, prefixes, outbreaks, cuts, the recipe),
+# and keeps its files in <ROOT>/runs/<name>/ (flowlib.runs). Every run
+# takes the same rules through the {run} wildcard.
+runs:
+  runa: {}
+  # Run A without the attention biases (the paper's slots comparison,
+  # paper/workflow/config.yaml `comparisons`).
+  noslots: {series_bias: false}
+  # Run A on complete counts, without lag series (the paper's delays
+  # comparison).
+  nodelays: {layout: complete}
+  # Run A with the German real-data blocks mixed in (the paper's
+  # real-data comparison).
+  realdata: {real_training: germany}
+
+# The runs `finetune` trains (null: every run in `runs`). The variants
+# train after Run A, so they never take its GPU.
+train_runs: [runa]
 
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).
-  # The earlier run's last checkpoint was released at 14:12 on 19 Nov, so
-  # only the current run's are scored. Earlier checkpoints' cached rows
-  # stay in the tables.
+  # Only checkpoints of the current run, released after this time, are
+  # scored. Earlier checkpoints' cached rows stay in the tables.
   labels: null
   published_from: "2026-11-19T15:00:00Z"
   # Checkpoints left out, by label.
@@ -132,31 +170,6 @@ score:
   checkpoints: evidence/checkpoints.csv
   # The only branch `land` commits and pushes the tables on.
   branch: checkpoint-scoring
-
-slots_check:
-  # Each slots checkpoint against zero-shot Chronos-2 and the no-slots
-  # checkpoint of its size (scripts/slots_check.py), in `shards` parts.
-  # Off: the script is not on main, and the run trains no no-slots arm.
-  run: false
-  shards: 2
-  mem_mb: 6144
-
-agg:
-  # The aggregation arms of each slots checkpoint (scripts/agg/): data
-  # pinned to the hub at
-  # `hub_ref`, the models' fits at the BDBV origins and every German
-  # development date (`dates: []`), the paired arm, scores and rows.
-  # Off: the scripts/agg/ scripts are not on main.
-  run: false
-  hub_ref: ad1bb4af13bf
-  models: [fm_chronos_daily_ragged_ft, fm_chronos_weekly_ragged_ft]
-  origins: ["2026-10-09", "2026-10-17", "2026-10-24", "2026-11-01"]
-  dates: []
-  # The zero-shot rows the sanity check reproduces, and the table the
-  # checkpoint's rows join.
-  zero_shot: origin/evidence/fm-agg:results/agg/aggregation-scores.csv.gz
-  existing: origin/agg-slots:results/agg/aggregation-scores.csv.gz
-  mem_mb: 6144
 
 dashboard:
   # The fine-tuning dashboard (task nowcast-foundation:dashboard; workflow/flowlib/dashboard).
@@ -205,37 +218,31 @@ dashboard:
     studies: [ebola]
     mail: "\\bebola\\b|\\bBDBV\\b(?![-_])"
   # Mailbox lines shown (a regular expression).
-  mail_filter: "slots|ckpt-scores|agg-slots|slots-check|fm-finetune|sim round|workflow:"
+  mail_filter: "slots|ckpt-scores|fm-finetune|sim round|workflow:"
   # Where scores are mirrored to when REMOTE is set, and how often (s).
   mirror: output/dashboard/mirror
   mirror_every: 300
-  # The nowcast panels' datasets, in selector order. format: quantiles
-  # (rows carry quantile, value and truth) or samples (rows carry sample and
-  # value; quantiles, truth and the sample CRPS come from truth_source, the
-  # release table, with the scorer's truth rule: each week's count in the
-  # first release D days or more after it, D the age by which truth_level
-  # of the national count is reported, leaving out truth_skip releases).
-  # source: the per-checkpoint forecast folders (default: SCORE_CACHE/<key>;
-  # a local file can name a "host:path"). targets: those shown, or all.
-  # truth: the truth line's caption ({delay} is D for samples datasets).
+  # The nowcast panels' datasets, in selector order. Rows carry quantile,
+  # value and truth. source: the per-checkpoint forecast folders (default:
+  # SCORE_CACHE/<key>; a local file can name a "host:path"). sources: the
+  # model inputs shown (daily, weekly), or all.
+  # target: a line under the panels saying what every model forecasts.
+  # truth: the truth line's caption.
   datasets:
     - key: germany
       label: Germany (development half)
-      format: quantiles
+      # The scoring units' cache folder (evaluation.checkpoint.GERMANY_UNIT),
+      # in SCORE_CACHE and in each run's own <run>/scores.
+      unit: germany-days
       metric: WIS
       truth: latest vintage of the forecast files
+      # Germany is daily only (config/germany.toml): its models take the
+      # daily releases and forecast the hub's 7-day rolling sums.
+      sources: [daily]
+      target: >-
+        the hub's 7-day rolling sums of hospitalisations by date of
+        report to the health office, truth as reported 40 days later
       groups:
         - {name: national, match: "^DE$"}
         - {name: states, match: "^DE-"}
         - {name: ages, match: "^(\\d\\d-\\d\\d|80\\+)$"}
-    # The held-out simulations. No scoring unit writes their
-    # nowcasts per checkpoint yet, so the selector lists them as empty
-    # until one fills <SCORE_CACHE>/held_out.
-    - key: held_out
-      label: Held-out simulations
-      format: quantiles
-      metric: WIS
-      truth: the simulation's final counts
-      missing: >-
-        the scoring workflow scores the trainer's held-out loss only, and
-        writes no per-checkpoint nowcasts for these simulations yet

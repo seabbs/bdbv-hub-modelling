@@ -8,12 +8,13 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_daily_zones
-from bdbvhubrenewal.data.zones import hub_zones, load_zone_data
-from bdbvhubrenewal.forecasters import ForecastTask, get_model
+from bdbvhub.data.tidy import load_daily_zones
+from bdbvhub.data.zones import hub_zones, load_zone_data
+from bdbvhub.models import get_model
 from nowcastbaselines.zones import ZoneAllocator, with_zones
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastrenewal import forecaster as rn
+from nowcastutils.base import ForecastTask
 from nowcastutils.hierarchy import is_zone, province_of
 from nowcastutils.snapshots import weekly_counts
 
@@ -110,6 +111,7 @@ def _fake_renewal(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+@pytest.mark.slow
 def test_renewal_forecast_and_fit_dir_carry_the_submitted_zones(
     zone_task: ForecastTask,
     tmp_path: Path,
@@ -136,14 +138,15 @@ def test_renewal_forecast_and_fit_dir_carry_the_submitted_zones(
     pd.testing.assert_frame_equal(_sorted(read), _sorted(out))
 
 
+@pytest.mark.slow
 def test_the_submitted_file_is_unchanged(
     zone_task: ForecastTask,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from bdbvhubrenewal.cli import _hub_forecast
-    from bdbvhubrenewal.submission.fitting import get_config, run_fit
-    from bdbvhubrenewal.submission.hub import to_hub_table
+    from bdbvhub.cli import _hub_forecast
+    from bdbvhub.submission.fitting import get_config, run_fit
+    from bdbvhub.submission.hub import to_hub_table
 
     _fake_renewal(monkeypatch)
     # The CI's sampler seed is not the task's, as here.

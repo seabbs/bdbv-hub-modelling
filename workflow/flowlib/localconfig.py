@@ -32,14 +32,17 @@ DEFAULTS = (
     ("ROOT", "$HOME/bdbv-rounds"),
     # An optional local file of one-line notes (off unless NOTIFY is set).
     ("MAILBOX", ""),
-    ("INBOX", ""),
     # The workflow's own settings.
-    ("RUN", "$ROOT/checkpoints/slots"),
     ("SCORE_CACHE", "$ROOT/scores"),
-    # The slots check's no-slots run and German blocks.
-    ("NOSLOTS_RUN", "$ROOT/checkpoints"),
-    ("GERMANY_BLOCKS", "$ROOT/germany/germany.pkl"),
     ("JOB_PREFIX", ""),
+    # The prefix every simulation batch runs under, with no cap of its
+    # own (such as one systemd slice they all share; empty: none).
+    ("SIM_PREFIX", ""),
+    # The folder simulation batches share their JAX compiles in (empty:
+    # none) and the size in GB past which a batch empties it
+    # (flowlib.simulator.jax_cache_env).
+    ("JAX_CACHE", "$ROOT/jax-cache"),
+    ("JAX_CACHE_GB", "2"),
     # The rounds host, as ssh names it (empty: this machine), and its
     # rounds folder (empty: ROOT), where a helping host pushes its
     # batches; the seeds this host simulates (flowlib.hosts; empty: all);
@@ -74,13 +77,20 @@ DEFAULTS = (
     # (empty: none; flowlib.schedule), every how many minutes, and the timer
     # (cron, systemd or launchd; empty: by platform).
     ("SCHEDULE_TARGETS", ""),
-    # The status each tick writes for the monitor, every how many seconds
-    # (flowlib.runstatus), and where the monitor page is served
-    # (workflow/scripts/monitor.py) and how often it refreshes (seconds).
+    # The status each tick writes, every how many seconds
+    # (flowlib.runstatus).
     ("STATUS_EVERY", "60"),
+    # The workflow monitor (flowlib.monitor): the Panoptes server every
+    # Snakemake run reports to (empty: off), and where
+    # `task nowcast-workflow:monitor` serves it; the targets whose rule
+    # graph and job DAG it draws (flowlib.dag, NAME=TARGET), the Snakemake
+    # options they are built with, and every how many seconds.
+    ("MONITOR_URL", "http://$MONITOR_HOST:$MONITOR_PORT"),
     ("MONITOR_HOST", "127.0.0.1"),
-    ("MONITOR_PORT", "8766"),
-    ("MONITOR_REFRESH", "30"),
+    ("MONITOR_PORT", "8795"),
+    ("MONITOR_DAG", ""),
+    ("MONITOR_DAG_OPTIONS", ""),
+    ("MONITOR_DAG_EVERY", "900"),
     ("SCHEDULE_EVERY", "60"),
     # The coordinator run's pause between ticks, and after a failed one
     # (seconds; workflow/scripts/coordinate.py).

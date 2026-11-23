@@ -50,7 +50,6 @@ from nowcastfoundation.backends.chronos2 import (
     CHRONOS_REVISION,
     _predict,
     apply_threads,
-    inference_precision,
     torch_device,
 )
 from nowcastutils.base import (
@@ -62,6 +61,8 @@ from nowcastutils.base import (
 )
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.hierarchy import province_of
+from nowcastutils.trajectories import METHODS as COUPLINGS
+from nowcastutils.trajectories import couple, fit_coupling, pit_scores
 
 __all__ = [
     "ADAPTER_FILES",
@@ -80,6 +81,7 @@ __all__ = [
     "PERIODS",
     "REALDATA_PREFIX",
     "SLOTS_PREFIX",
+    "SLOTS_RELEASE_PREFIX",
     "SOURCES",
     "SUMS_FILE",
     "Checkpoint",
@@ -87,24 +89,23 @@ __all__ = [
     "HubTriangle",
     "Known",
     "Sampler",
+    "checkpoint_spec",
     "chronos_sampler",
     "finetuned_adapter",
     "finetuned_releases",
     "finetuned_spec",
     "group_key",
     "hub_triangle",
-    "inference_precision",
     "lag_count",
     "layout_block",
+    "local_checkpoint",
     "native_sampler",
     "prefetch",
-    "quantile_draws",
     "realdata_pinned",
     "realdata_spec",
     "register_realdata_models",
     "release_tag",
     "resolve_checkpoint",
-    "torch_device",
 ]
 
 SOURCES: Final = ("weekly", "daily")
@@ -123,8 +124,14 @@ LAG_QUANTILE: Final = 0.99
 """The share of a count reported by the lag `lag_count` takes as $D$."""
 
 LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
-"""The steps before the cut-off whose counts `lag_count` takes as complete
-(4 to 16 weeks, 28 to 112 days), and the most lags it gives."""
+"""`lag_count`'s complete steps: this many (4 weeks, 28 days), ending this
+many before the cut-off (16 weeks, 112 days), which is also the most lags
+it reads."""
+
+COUPLING_WEEKS: Final = 8
+"""How many earlier releases the gaussian coupling is fitted from: the
+latest at least 1, 2, ..., 8 weeks before the task's, so one a week (as
+the random walks' copula window, `copula.WINDOW_WEEKS`)."""
 
 PERIODS: Final = {"daily": "rolling7"}
 """The aggregate row each place has in a ragged block, by source
@@ -177,6 +184,9 @@ SLOTS_PREFIX: Final = "slots-"
 lookup, which takes only `chronos-ft-*` releases, never gives it to code
 without the bias."""
 
+SLOTS_RELEASE_PREFIX: Final = "chronos-slots"
+"""Tag prefix of the releases of checkpoints with the series bias."""
+
 
 def release_tag(spec: str) -> str:
     """Return the release tag of a checkpoint.
@@ -184,8 +194,8 @@ def release_tag(spec: str) -> str:
     `chronos-ft-<hash>`, or `chronos-slots-<hash>` for `slots-<hash>`.
     """
     if spec.startswith(SLOTS_PREFIX):
-        return f"chronos-{spec}"
-    return f"chronos-ft-{spec}"
+        return f"{SLOTS_RELEASE_PREFIX}-{spec.removeprefix(SLOTS_PREFIX)}"
+    return f"{FINETUNED_PREFIX}-{spec}"
 
 
 @dataclass(frozen=True)
@@ -195,7 +205,7 @@ class Checkpoint:
     Attributes
     ----------
     hash : str
-        Settings hash from `scripts/finetune_stream.py`. The release
+        Settings hash from `nowcastfoundation.finetune.stream`. The release
         is `tag`: `release_tag(hash)` for a simulation checkpoint, else
         `<prefix>-<hash>`.
     sha256 : tuple of (str, str)
@@ -204,11 +214,16 @@ class Checkpoint:
         The release's tag prefix, `FINETUNED_PREFIX` or `REALDATA_PREFIX`.
         Left out of the repr, which keys stored fits; the hash tells the
         checkpoints apart.
+    path : str or None
+        A run's own adapter folder (`local_checkpoint`), read in place
+        instead of the release. Left out of the repr and of equality, so
+        it is the same checkpoint as its release.
     """
 
     hash: str
     sha256: tuple[tuple[str, str], ...]
     prefix: str = field(default=FINETUNED_PREFIX, repr=False)
+    path: str | None = field(default=None, repr=False, compare=False)
 
     @property
     def tag(self) -> str:
@@ -426,18 +441,81 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     )
 
 
-def _finetuned(name: str, source: str) -> FoundationModel:
+def checkpoint_spec(settings: Mapping[str, Any]) -> str:
+    """Return a checkpoint's spec from its training settings.
+
+    `slots-<hash>` for a checkpoint with the series bias, else the hash.
+    """
+    key = str(settings["hash"])
+    return f"{SLOTS_PREFIX}{key}" if settings.get("series_bias") else key
+
+
+def newest_segment(train: Path | str) -> Path | None:
+    """Return a run's newest saved segment folder, or None before any.
+
+    The largest `n<N>` under the run's `train` folder whose settings and
+    adapter files (`ADAPTER_FILES`) are saved; a segment still training
+    has neither. The paper's `_ft` models load it (`paperpipe.flow`).
+    """
+    saved = [
+        d
+        for d in Path(train).glob("n*")
+        if d.name[1:].isdigit()
+        and (d / "settings.json").is_file()
+        and all((d / "finetuned-ckpt" / f).is_file() for f in ADAPTER_FILES)
+    ]
+    return max(saved, key=lambda d: int(d.name[1:]), default=None)
+
+
+def local_checkpoint(segment: Path | str) -> Checkpoint:
+    """Return a training segment's checkpoint, read from its folder.
+
+    The segment folder holds `settings.json` and its adapter in
+    `finetuned-ckpt/`. The checkpoint is the one its release would give
+    (`checkpoint_spec`, the SHA-256 of `ADAPTER_FILES`), so a run scores
+    its segments before, or without, publishing them.
+
+    Parameters
+    ----------
+    segment : pathlib.Path or str
+        The segment folder, `<run>/train/n<N>`.
+
+    Returns
+    -------
+    Checkpoint
+    """
+    segment = Path(segment)
+    settings = json.loads((segment / "settings.json").read_text())
+    adapter = segment / "finetuned-ckpt"
+    sums = tuple(
+        (name, hashlib.sha256((adapter / name).read_bytes()).hexdigest())
+        for name in ADAPTER_FILES
+    )
+    return Checkpoint(checkpoint_spec(settings), sums, path=str(adapter))
+
+
+def _finetuned(
+    name: str, source: str, layout: str = "ragged"
+) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
 
+    A spec that is a folder is a run's own segment (`local_checkpoint`).
     The weekly and daily models share the checkpoint. Each builds the
-    block its zero-shot model builds (`PERIODS`); only the weights differ.
+    block its zero-shot model of `layout` builds (`PERIODS` for ragged);
+    only the weights differ. The complete layout is for checkpoints
+    trained on complete counts (the no-delays run).
     """
+    spec = finetuned_spec()
     return FoundationModel(
         name,
         source,
-        "ragged",
-        resolve_checkpoint(finetuned_spec()),
-        period=PERIODS.get(source),
+        layout,
+        (
+            local_checkpoint(spec)
+            if Path(spec).is_dir()
+            else resolve_checkpoint(spec)
+        ),
+        period=PERIODS.get(source) if layout == "ragged" else None,
     )
 
 
@@ -640,15 +718,24 @@ def hub_triangle(
 def lag_count(
     tri: HubTriangle, source: str, quantile: float = LAG_QUANTILE
 ) -> int:
-    """Return the lag count $D$ from the data's reporting delay.
+    """Return the block's lag count $D$ from the data's reporting delay.
 
-    The delay's `quantile` point: the first lag at which the steps
-    `LAG_WINDOW` before the cut-off, taken as complete, had that share of
-    their counts reported, pooled over places and over the releases there
-    are (weekly releases of daily data see each step at every 7th lag).
-    It reads no release after the cut-off. At most the history allows,
-    with two steps of context before the longest lag; with no counts in
-    the window, or the share not reached within it, that many.
+    One count for the block: the largest over its places of each place's
+    delay, one more than the first lag at which that place's complete
+    steps had `quantile` of their counts reported, so lag $D - 1$, where
+    the share is reached, is in the block. A place's complete steps are
+    the `LAG_WINDOW[source][0]` steps ending `LAG_WINDOW[source][1]`
+    steps before the cut-off: every lag below that is reported by the
+    cut-off, so recent steps, which have not yet seen their long delays,
+    do not bias it short (right truncation). It reads no release after
+    the cut-off. A lag no release fell on carries the count of the lag
+    before (weekly releases of daily data). A low-count place can only
+    underestimate its delay, so it never raises the block's. At most the
+    history allows, two steps of context before the longest lag; a place
+    whose share is not reached within the window takes that many, and so
+    does a block with no complete steps or no count in them. Training
+    blocks (`nowcastfoundation.finetune.training_block`) and forecasts
+    (`FoundationModel`) use this one rule.
 
     Parameters
     ----------
@@ -657,58 +744,37 @@ def lag_count(
     source : str
         One of `SOURCES`.
     quantile : float
-        The share of a count reported.
+        The share of a count reported, in (0, 1].
 
     Returns
     -------
     int
         $D$, at least 1.
+
+    Raises
+    ------
+    ValueError
+        If `quantile` is not in (0, 1].
     """
-    lo, hi = LAG_WINDOW[source]
-    width = min(hi, int(tri.partial.shape[2]))
+    if not 0 < quantile <= 1:
+        raise ValueError(f"lag quantile {quantile} is not in (0, 1]")
+    window, back = LAG_WINDOW[source]
+    width = min(back, int(tri.partial.shape[2]))
     most = int(max(1, min(width, tri.last - 1)))
-    steps = np.arange(max(tri.last - hi, 0), tri.last - lo + 1)
-    if steps.size == 0:
+    first = tri.last - back - window + 1
+    if first < 0:
         return most
-    final = tri.final[:, steps]
-    for d in range(width):
-        part = tri.partial[:, steps, d]
-        seen = ~np.isnan(part)
-        total = final[seen].sum()
-        if total > 0 and part[seen].sum() / total >= quantile:
-            return max(1, min(d, most))
-    return most
-
-
-def quantile_draws(
-    levels: np.ndarray, values: np.ndarray, u: np.ndarray
-) -> np.ndarray:
-    """Read quantile functions at uniform draws.
-
-    Linear between the levels and flat beyond them.
-
-    Parameters
-    ----------
-    levels : numpy.ndarray
-        Increasing quantile levels, `[Q]`.
-    values : numpy.ndarray
-        Quantiles at those levels, `[..., Q]`. They are sorted first, so
-        crossed quantiles give a valid function.
-    u : numpy.ndarray
-        Uniform draws, the shape of `values` less its last axis.
-
-    Returns
-    -------
-    numpy.ndarray
-        The draws, the shape of `u`.
-    """
-    values = np.sort(values, axis=-1)
-    hi = np.clip(np.searchsorted(levels, u), 1, len(levels) - 1)
-    lo = hi - 1
-    weight = np.clip((u - levels[lo]) / (levels[hi] - levels[lo]), 0.0, 1.0)
-    at_lo = np.take_along_axis(values, lo[..., None], axis=-1)[..., 0]
-    at_hi = np.take_along_axis(values, hi[..., None], axis=-1)[..., 0]
-    return np.asarray(at_lo + weight * (at_hi - at_lo))
+    steps = list(range(first, tri.last - back + 1))
+    lags = []
+    for p in range(tri.final.shape[0]):
+        final = tri.final[p, steps].sum()
+        if final <= 0:
+            continue
+        seen = pd.DataFrame(tri.partial[p, steps, :width]).ffill(axis=1)
+        share = seen.fillna(0.0).to_numpy().sum(axis=0) / final
+        reached = np.flatnonzero(share >= quantile - 1e-12)
+        lags.append(int(reached[0]) + 1 if reached.size else most)
+    return min(max(lags), most) if lags else most
 
 
 def finetuned_adapter(checkpoint: Checkpoint) -> Path:
@@ -718,7 +784,8 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     `ADAPTER_FILES` and `settings.json`. They are kept in
     `FINETUNED_CACHE` only once all are downloaded, the settings hash
     matches and each adapter file has its SHA-256. A cached copy is
-    checked against the SHA-256 again on each use.
+    checked against the SHA-256 again on each use. A run's own
+    checkpoint (`local_checkpoint`) is its folder, checked the same way.
 
     Parameters
     ----------
@@ -740,6 +807,15 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
     """
+    if checkpoint.path is not None:
+        local = Path(checkpoint.path)
+        for name, expected in checkpoint.sha256:
+            sha = hashlib.sha256((local / name).read_bytes()).hexdigest()
+            if sha != expected:
+                raise ValueError(
+                    f"{name} in {local} has SHA-256 {sha}, not {expected}."
+                )
+        return local
     tag = checkpoint.tag
     cache = Path(FINETUNED_CACHE).expanduser()
     out = cache / tag
@@ -812,13 +888,20 @@ Known = Mapping[str, np.ndarray]
 `group_key`, predicted ahead (`prefetch`)."""
 
 
-def group_key(group: Series, horizon: int) -> str:
+def group_key(
+    group: Series,
+    horizon: int,
+    levels: Sequence[float] | np.ndarray | None = None,
+) -> str:
     """Return a key of what Chronos-2 sees of a group, and the horizon.
 
     The rows' places are in it too: with the series bias, the same numbers
-    at other places forecast differently.
+    at other places forecast differently. Quantiles at `levels` other than
+    Chronos-2's own are keyed apart.
     """
     h = hashlib.sha256(str(horizon).encode())
+    if levels is not None:
+        h.update(f"levels={[float(x) for x in levels]!r}".encode())
     for name in ("places", "target_places"):
         h.update(f"{name}={list(group.get(name) or [])!r}".encode())
     for name in CHRONOS_KEYS:
@@ -840,19 +923,24 @@ def _native(
     groups: Sequence[Series],
     horizon: int,
     known: Known | None = None,
+    levels: Sequence[float] | np.ndarray | None = None,
 ) -> list[np.ndarray]:
-    """Return each group's native quantiles, `[V, horizon, Q]`.
+    """Return each group's quantiles, `[V, horizon, Q]`.
 
-    Groups in `known` are read from it; the rest are predicted together.
+    At Chronos-2's own levels by default, or at `levels`, which the
+    pipeline interpolates between its own (`predict_quantiles`). Groups in
+    `known` are read from it; the rest are predicted together.
     """
-    levels = np.asarray(pipeline.quantiles, dtype=float)
-    keys = [group_key(g, horizon) for g in groups]
+    keys = [group_key(g, horizon, levels) for g in groups]
+    at = np.asarray(
+        pipeline.quantiles if levels is None else levels, dtype=float
+    )
     out: list[np.ndarray | None] = [
         None if known is None else known.get(k) for k in keys
     ]
     todo = [i for i, q in enumerate(out) if q is None]
     if todo:
-        got = _predict(pipeline, [groups[i] for i in todo], horizon, levels)
+        got = _predict(pipeline, [groups[i] for i in todo], horizon, at)
         for i, q in zip(todo, got, strict=True):
             out[i] = q.float().cpu().numpy()
     return [np.asarray(q) for q in out]
@@ -865,12 +953,14 @@ def chronos_sampler(
     seed: int,
     checkpoint: Checkpoint | None = None,
     known: Known | None = None,
+    coupling: Mapping[str, Any] | None = None,
 ) -> list[np.ndarray]:
     """Draw trajectories from Chronos-2's quantiles.
 
-    Every series and step draws its own uniform level, so draws are
-    independent across series and steps. Runs on a CUDA or Apple GPU when
-    torch sees one.
+    Each cell follows its quantiles, and `coupling` (a
+    `nowcastutils.trajectories.fit_coupling` record) joins the cells
+    (`couple`); with none, every cell draws its own level. Runs on a CUDA
+    or Apple GPU when torch sees one.
 
     Parameters
     ----------
@@ -888,6 +978,8 @@ def chronos_sampler(
     known : mapping, optional
         Quantiles predicted ahead (`prefetch`), used where they hold a
         group.
+    coupling : mapping, optional
+        The coupling's fit, with its `method`; `independent` by default.
 
     Returns
     -------
@@ -907,13 +999,12 @@ def chronos_sampler(
     """
     pipeline = _chronos(checkpoint)
     levels = np.asarray(pipeline.quantiles, dtype=float)
+    fit = dict(coupling) if coupling else {"method": "independent"}
     rng = np.random.default_rng(seed)
     out = []
     for q in _native(pipeline, groups, horizon, known):  # [V, horizon, Q]
-        u = rng.uniform(size=(n_samples, *q.shape[:2]))
-        out.append(
-            quantile_draws(levels, np.broadcast_to(q, (n_samples, *q.shape)), u)
-        )
+        own = int(rng.integers(0, 2**31 - 1))
+        out.append(couple(q, levels, fit["method"], fit, n_samples, own))
     return out
 
 
@@ -988,8 +1079,7 @@ def _weekly_from_totals(
     """Return weekly draws `[S, L, W]` read from the total rows.
 
     A week whose end is past the context takes its total row's draw
-    there, no lower than the sum of its days' counts reported; an earlier
-    week takes its total summed from the daily counts.
+    there; an earlier week takes its total summed from the daily counts.
     `drawn` is `[S, 2L, horizon]`, the count rows then the total rows.
     """
     n_places = period.totals.shape[0]
@@ -997,13 +1087,10 @@ def _weekly_from_totals(
     for week in weeks:
         t = tri.times.index(week)
         if t >= start:
-            # No lower than the days' counts reported, as the daily rows'
-            # draws are floored (`_daily_frame`).
-            reported = tri.final[:, max(t - 6, 0) : t + 1].sum(axis=1)
-            out.append(np.maximum(drawn[:, n_places:, t - start], reported))
+            out.append(drawn[:, n_places:, t - start])
         else:
             total = np.nan_to_num(period.totals[:, t])
-            out.append(np.broadcast_to(total, drawn[:, :n_places, 0].shape))
+            out.append(np.broadcast_to(total, (drawn.shape[0], n_places)))
     return np.stack(out, axis=2)
 
 
@@ -1020,8 +1107,8 @@ def _daily_frame(
 ) -> pd.DataFrame:
     """Return each day of the target weeks from the daily count rows.
 
-    A day past the context takes its count row's draw, no lower than the
-    count reported; an earlier day the count reported. `drawn` is
+    A day past the context takes its count row's draw; an earlier day the
+    count reported. `drawn` is
     `[S, V, horizon]`, the count rows first.
     """
     first = as_date(weeks[0]) - dt.timedelta(days=6)
@@ -1031,11 +1118,7 @@ def _daily_frame(
     for day in days:
         t = tri.times.index(day)
         final = np.broadcast_to(tri.final[:, t], (n, n_loc))
-        cols.append(
-            np.maximum(drawn[:, :n_loc, t - start], final)
-            if t >= start
-            else final
-        )
+        cols.append(drawn[:, :n_loc, t - start] if t >= start else final)
     values = np.stack(cols, axis=2)  # [S, L, D]
     return pd.DataFrame(
         {
@@ -1045,11 +1128,6 @@ def _daily_frame(
             "value": values.transpose(1, 0, 2).reshape(-1),
         }
     )[list(DAILY_COLUMNS)]
-
-
-def _at(rows: pd.DataFrame | None, vintage: str) -> pd.DataFrame | None:
-    """Return the rows of one release, or None."""
-    return None if rows is None else rows.loc[rows["vintage"] == vintage]
 
 
 def _rows(*tables: pd.DataFrame | None) -> pd.DataFrame | None:
@@ -1091,6 +1169,15 @@ class FoundationModel:
     lags : int or None
         A fixed lag count $D$; None estimates it from each task's data
         (`lag_count`).
+    coupling : str
+        How Chronos-2's cells are joined into trajectories, one of
+        `nowcastutils.trajectories.METHODS`. `gaussian` (the default) is
+        fitted per task from the model's own forecasts of the same block
+        at the task's earlier releases (`_coupling_fit`); `independent`
+        and `comonotone` need no fit and are the SI's comparisons.
+    collect : list or None
+        Private to `prefetch`: the groups a forecast would predict are
+        added to it, and the forecast stops.
     """
 
     name: str
@@ -1102,7 +1189,18 @@ class FoundationModel:
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
     lags: int | None = None
+    coupling: str = "gaussian"
+    collect: list[tuple[Series, int]] | None = field(
+        default=None, repr=False, compare=False
+    )
     reads_zones: ClassVar[bool] = True
+
+    def __post_init__(self) -> None:
+        """Check the coupling is one of `COUPLINGS`."""
+        if self.coupling not in COUPLINGS:
+            raise ValueError(
+                f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
+            )
 
     @property
     def needs_snapshots(self) -> bool:
@@ -1169,21 +1267,39 @@ class FoundationModel:
             )
         horizon = len(tri.times) - start
         seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
-        period = None
-        if self.period == "rolling7":
-            period = rolling_rows(tri, 7)
-        elif self.period == "week":
-            period = week_rows(tri)
-        elif self.period is not None:
-            raise ValueError(f"unknown period rows {self.period!r}")
-        # Zero-shot and fine-tuned models build the same block, the
-        # zero-case places' lag rows included; only the weights differ.
-        group = layout_block(tri, self.layout, places, start, period)
-        sample = self.sample or partial(
-            chronos_sampler, checkpoint=self.checkpoint, known=self.known
-        )
-        draws = sample([group], horizon, task.n_samples, seed)[0]
-        drawn = np.maximum(np.round(draws), 0.0)
+        period = self._period(tri)
+        if horizon <= 0:
+            # Every step of the target weeks is complete at the latest
+            # release (the target ends at least the lag count before the
+            # cut-off): the counts reported, with no forecast.
+            start = len(tri.times)
+            drawn = np.zeros((task.n_samples, len(places), 0))
+        else:
+            # Zero-shot and fine-tuned models build the same block, the
+            # zero-case places' lag rows included; only the weights differ.
+            group = layout_block(tri, self.layout, places, start, period)
+            sample = self.sample
+            if sample is None:
+                past = (
+                    self._past_blocks(rows, places, tri, start, horizon)
+                    if self.coupling == "gaussian"
+                    else []
+                )
+                if self.collect is not None:
+                    self.collect.extend(
+                        (g, horizon) for g in [group, *(b for b, _ in past)]
+                    )
+                    raise _CollectedError
+                sample = partial(
+                    chronos_sampler,
+                    checkpoint=self.checkpoint,
+                    known=self.known,
+                    coupling=self._coupling_fit(past, horizon, seed),
+                )
+            draws = sample([group], horizon, task.n_samples, seed)[0]
+            # Counts are not negative; Chronos-2's output is otherwise kept
+            # as it is: not rounded and not floored at the counts reported.
+            drawn = np.maximum(draws, 0.0)
         if period is not None:
             values = _weekly_from_totals(drawn, period, tri, start, weeks)
         else:
@@ -1191,9 +1307,7 @@ class FoundationModel:
             steps = np.broadcast_to(
                 final, (task.n_samples, *final.shape)
             ).copy()
-            steps[:, :, start:] = np.maximum(
-                drawn[:, : len(places)], final[:, start:]
-            )
+            steps[:, :, start:] = drawn[:, : len(places)]
             # The hub's target is weekly: the daily source is summed to it.
             week_of = np.array(
                 [_step("weekly", t).isoformat() for t in tri.times]
@@ -1201,20 +1315,6 @@ class FoundationModel:
             values = np.stack(
                 [steps[:, :, week_of == w].sum(axis=2) for w in weeks], axis=2
             )
-        latest = _rows(task.target, _at(task.zone_history, task.vintage))
-        assert latest is not None
-        reported = (
-            latest.pivot_table(
-                index="location",
-                columns="target_end_date",
-                values="total",
-                aggfunc="sum",
-            )
-            .reindex(index=list(places), columns=weeks)
-            .fillna(0.0)
-            .to_numpy()
-        )
-        values = np.maximum(values, reported)  # [S, L, W]
         n, n_loc = task.n_samples, len(places)
         weekly_out = pd.DataFrame(
             {
@@ -1268,13 +1368,106 @@ class FoundationModel:
         full = hub_triangle(
             rows, self.source, places, last_time, LAG_WINDOW[self.source][1]
         )
-        lags = self.lags or lag_count(full, self.source)
+        # A fixed count is still no more than the history allows.
+        lags = (
+            min(self.lags, max(1, full.last - 1))
+            if self.lags
+            else lag_count(full, self.source)
+        )
         return replace(full, partial=full.partial[:, :, :lags])
 
     def lag_count(self, task: ForecastTask) -> int:
         """Return the lag count the model gives `task`'s block."""
         rows, places, weeks = self._rows(task)
         return int(self._triangle(rows, places, weeks[-1]).partial.shape[2])
+
+    def _period(self, tri: HubTriangle) -> PeriodRows | None:
+        """Return the block's aggregate rows on `tri`, or None."""
+        if self.period == "rolling7":
+            return rolling_rows(tri, 7)
+        if self.period == "week":
+            return week_rows(tri)
+        if self.period is not None:
+            raise ValueError(f"unknown period rows {self.period!r}")
+        return None
+
+    def _past_blocks(
+        self,
+        rows: pd.DataFrame,
+        places: Sequence[str],
+        tri: HubTriangle,
+        start: int,
+        horizon: int,
+    ) -> list[tuple[Series, np.ndarray]]:
+        """Return the block at each earlier release, with what matured.
+
+        Each block (at `coupling_releases`) is built as the task's is,
+        from releases up to its own. It comes with its targets' values at
+        the task's release, NaN where not yet final (`n_context`).
+        """
+        offset = tri.last - start
+        lags = int(tri.partial.shape[2])
+        period = self._period(tri)
+        now = tri.final
+        if period is not None:
+            now = np.concatenate([now, period.totals])
+        index = {t: i for i, t in enumerate(tri.times)}
+        width = 7 if self.source == "weekly" else 1
+        ahead = start + horizon - 1 - tri.last
+        out = []
+        for v in coupling_releases(rows["vintage"]):
+            sub = rows.loc[rows["vintage"].astype(str).str[:10] <= v]
+            cut = _step(self.source, str(sub["cutoff"].max()))
+            end = cut + dt.timedelta(days=width * max(ahead, 0))
+            # A release before any of the places reported has no block.
+            if not sub["location"].isin(places).any():
+                continue
+            earlier = hub_triangle(
+                sub, self.source, places, end.isoformat(), lags
+            )
+            first = earlier.last - offset
+            if first < 2 or first + horizon != len(earlier.times):
+                continue
+            at = index.get(earlier.times[first])
+            if at is None:
+                continue
+            steps = at + np.arange(horizon)
+            ok = steps < tri.n_context
+            if not ok.any():
+                continue
+            seen = np.full((now.shape[0], horizon), np.nan)
+            seen[:, ok] = now[:, steps[ok]]
+            block = layout_block(
+                earlier, self.layout, places, first, self._period(earlier)
+            )
+            out.append((block, seen))
+        return out
+
+    def _coupling_fit(
+        self,
+        past: Sequence[tuple[Series, np.ndarray]],
+        horizon: int,
+        seed: int,
+    ) -> dict[str, Any]:
+        """Return the coupling's fit for one task.
+
+        For `gaussian`, from normal scores (`pit_scores`) of what matured
+        in the model's own forecasts at the earlier releases (`past`);
+        with none, the fit gives independence.
+        """
+        if self.coupling != "gaussian":
+            return fit_coupling(np.empty((0, 0, 0)), self.coupling)
+        if not past:
+            return fit_coupling(np.full((0, 1, horizon), np.nan), "gaussian")
+        pipeline = _chronos(self.checkpoint)
+        levels = np.asarray(pipeline.quantiles, dtype=float)
+        native = _native(pipeline, [b for b, _ in past], horizon, self.known)
+        rng = np.random.default_rng([seed, 1])
+        scores = [
+            pit_scores(q, levels, seen, rng)
+            for q, (_, seen) in zip(native, past, strict=True)
+        ]
+        return fit_coupling(np.stack(scores), "gaussian")
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return trajectories of every hub target in the task.
@@ -1289,13 +1482,14 @@ class FoundationModel:
         """Return Chronos-2's own quantiles where each target is one step.
 
         Each week of the weekly source is one of Chronos-2's steps, so its
-        quantiles are Chronos-2's native quantiles read at `levels` by
-        linear interpolation between the native levels (`native_sampler`).
-        They pass through `forecast` as one trajectory per level; every
-        step after the draws (rounding, the floors at the reported counts)
-        is monotone, so trajectory `k` is the quantile at level `k`.
-        A week of the daily source is a sum of steps, which has no native
-        quantile.
+        quantiles are Chronos-2's own at `levels`, which its pipeline
+        interpolates between its training levels (`native_sampler`).
+        They pass through `forecast` as one trajectory per level; the only
+        step after the draws, the floor at zero, is monotone, so
+        trajectory `k` is the quantile at level `k`.
+        A week of the daily source read from each place's aggregate row is
+        one step of that row, so it has a native quantile too; summed from
+        daily steps it has none.
 
         Parameters
         ----------
@@ -1310,7 +1504,7 @@ class FoundationModel:
             Columns `location`, `target_end_date`, `quantile` and `value`,
             or None for the daily source.
         """
-        if self.source != "weekly":
+        if self.source != "weekly" and self.period is None:
             return None
         at = np.asarray(levels, dtype=float)
         run = replace(
@@ -1319,6 +1513,41 @@ class FoundationModel:
         out = run.forecast(replace(task, n_samples=len(at)))
         out["quantile"] = at[out["sample"].to_numpy() - 1]
         return out[["location", "target_end_date", "quantile", "value"]]
+
+    def daily_quantiles(
+        self, task: ForecastTask, levels: Sequence[float]
+    ) -> pd.DataFrame | None:
+        """Return Chronos-2's own quantiles of each day's count.
+
+        The daily count rows of the block `quantiles` reads its aggregate
+        rows from: each day is one step, so it has a native quantile, from
+        the same prediction (`known`). As in `forecast_both` each day is
+        floored at the count reported, which is monotone, so path `k` is
+        still the quantile at level `k`.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The data and weeks to forecast.
+        levels : sequence of float
+            Increasing quantile levels.
+
+        Returns
+        -------
+        pandas.DataFrame or None
+            Columns `location`, `date`, `quantile` and `value`, or None
+            where the model has no aggregate rows (the weekly source, or no
+            period).
+        """
+        if self.source != "daily" or self.period is None:
+            return None
+        at = np.asarray(levels, dtype=float)
+        run = replace(
+            self, sample=native_sampler(at, self.checkpoint, self.known)
+        )
+        _, out = run.forecast_both(replace(task, n_samples=len(at)))
+        out["quantile"] = at[out["sample"].to_numpy() - 1]
+        return out[["location", "date", "quantile", "value"]]
 
 
 def native_sampler(
@@ -1341,8 +1570,8 @@ def native_sampler(
     -------
     Sampler
         Gives `[K, V, horizon]` per group: path `k` is each series and
-        step's quantile at `levels[k]`, linear between Chronos-2's native
-        levels and flat beyond them. It draws no random numbers.
+        step's quantile at `levels[k]`, as Chronos-2's pipeline gives it
+        (interpolated between its own levels). It draws no random numbers.
     """
 
     def sample(
@@ -1352,17 +1581,46 @@ def native_sampler(
         seed: int,  # noqa: ARG001
     ) -> list[np.ndarray]:
         pipeline = _chronos(checkpoint)
-        native = np.asarray(pipeline.quantiles, dtype=float)
         out = []
-        for q in _native(pipeline, groups, horizon, known):
-            q = np.sort(q, axis=-1)  # [V, H, Q]
-            at = np.apply_along_axis(
-                lambda v: np.interp(levels, native, v), -1, q
-            )  # [V, H, K]
-            out.append(np.moveaxis(at, -1, 0))  # [K, V, H]
+        for q in _native(pipeline, groups, horizon, known, levels):
+            q = np.sort(q, axis=-1)  # [V, H, K], monotone in the level
+            out.append(np.moveaxis(q, -1, 0))  # [K, V, H]
         return out
 
     return sample
+
+
+def coupling_releases(
+    vintages: Sequence[str] | pd.Series, weeks: int = COUPLING_WEEKS
+) -> list[str]:
+    """Return the earlier releases a task's coupling is fitted from.
+
+    For each of 1 to `weeks` weeks, the latest release at least that long
+    before the latest of `vintages`: one a week, whether releases are
+    weekly or daily.
+
+    Parameters
+    ----------
+    vintages : sequence of str
+        The task's release dates, ISO formatted.
+    weeks : int
+        How many weeks back.
+
+    Returns
+    -------
+    list of str
+        The releases, oldest first, each once.
+    """
+    days = sorted({as_date(str(v)) for v in vintages})
+    if not days:
+        return []
+    picked = set()
+    for k in range(1, weeks + 1):
+        edge = days[-1] - dt.timedelta(weeks=k)
+        before = [d for d in days if d <= edge]
+        if before:
+            picked.add(before[-1])
+    return [d.isoformat() for d in sorted(picked)]
 
 
 class _CollectedError(Exception):
@@ -1370,7 +1628,9 @@ class _CollectedError(Exception):
 
 
 def prefetch(
-    model: FoundationModel, tasks: Sequence[ForecastTask]
+    model: FoundationModel,
+    tasks: Sequence[ForecastTask],
+    levels: Sequence[float] | None = None,
 ) -> FoundationModel:
     """Return the model with Chronos-2's quantiles of `tasks` predicted.
 
@@ -1387,6 +1647,10 @@ def prefetch(
         The model.
     tasks : sequence of ForecastTask
         The tasks it will forecast, with their `n_samples` and seeds.
+    levels : sequence of float, optional
+        Quantile levels its own quantiles will be read at
+        (`FoundationModel.quantiles`); Chronos-2's own, for draws, by
+        default.
 
     Returns
     -------
@@ -1396,17 +1660,13 @@ def prefetch(
     if model.sample is not None:
         return model
     seen: list[tuple[Series, int]] = []
-
-    def collect(
-        groups: Sequence[Series],
-        horizon: int,
-        n: int,  # noqa: ARG001
-        seed: int,  # noqa: ARG001
-    ) -> list[np.ndarray]:
-        seen.extend((g, horizon) for g in groups)
-        raise _CollectedError
-
-    probe = replace(model, sample=collect)
+    # Each task's block and, for draws with the gaussian coupling, its
+    # earlier releases' blocks; quantiles at `levels` have no coupling.
+    probe = replace(
+        model,
+        collect=seen,
+        coupling=model.coupling if levels is None else "independent",
+    )
     for task in tasks:
         try:
             probe.forecast_both(task)
@@ -1416,10 +1676,10 @@ def prefetch(
     pipeline = _chronos(model.checkpoint)
     for horizon in sorted({h for _, h in seen}):
         groups = [g for g, h in seen if h == horizon]
-        quantiles = _native(pipeline, groups, horizon, known)
+        quantiles = _native(pipeline, groups, horizon, known, levels)
         for g, q in zip(groups, quantiles, strict=True):
-            known[group_key(g, horizon)] = q
-    return replace(model, known=known)
+            known[group_key(g, horizon, levels)] = q
+    return replace(model, known=known, collect=None)
 
 
 for _source in SOURCES:
@@ -1438,13 +1698,15 @@ for _source in SOURCES:
             "layout, every target in one block.",
             fitted=True,
         )
-    register_model(
-        f"fm_chronos_{_source}_ragged_ft",
-        partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
-        "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
-        f"{_source} releases, ragged layout.",
-        fitted=True,
-    )
+    for _layout in LAYOUTS:
+        _name = f"fm_chronos_{_source}_{_layout}_ft"
+        register_model(
+            _name,
+            partial(_finetuned, _name, _source, _layout),
+            "Chronos-2 fine-tuned on simulated outbreaks, on the hub "
+            f"target's {_source} releases, {_layout} layout.",
+            fitted=True,
+        )
 
 
 def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:

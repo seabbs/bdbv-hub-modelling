@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 from numpyro.infer import init_to_median
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
-from bdbvhubrenewal.data.zones import zone_places
+from bdbvhub.data.delays import hub_delay_pmf
+from bdbvhub.data.zones import zone_places
 from nowcastrenewal.model import MAIN, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
 from nowcastrenewal.model.zones import (
@@ -151,6 +151,7 @@ def test_one_zone_per_province_is_the_province_model(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("places", [SIM_LOCATIONS[:1], SIM_LOCATIONS])
 def test_the_province_model_is_the_zone_model_one_place_a_patch(
     outbreak, sim_tables, table, places
@@ -203,11 +204,12 @@ def test_zone_vintage_scores_delays_by_province(zone_vintage):
     assert v.parents.tolist() == [i // 2 for i in range(12)]
     assert v.delay_counts.shape == (v.n_weeks, 6, 61)
     assert v.kernel.shape == (12, 12)
-    np.testing.assert_allclose(v.kernel.sum(axis=1), 1.0)
+    np.testing.assert_allclose(v.kernel.sum(axis=0), 1.0)
     pops = zone_places().set_index("location")["population"]
     np.testing.assert_allclose(v.populations, pops[v.names].to_numpy())
 
 
+@pytest.mark.slow
 def test_zone_model_shares_province_parts(zone_vintage):
     v = zone_vintage
     model = build_zone_model(v)

@@ -8,8 +8,8 @@ as Pages CI does) at nice 19 with this machine's cores less its headroom
 (`flowlib.machine.budget`). For `paper` it first checks the held-out
 inputs (the paper run's simulations with their READY file, and the German
 held-out forecasts): while any is missing it says what it waits for and
-exits 0, so a scheduled run tries again later; then it pins the final
-fine-tuning run's newest checkpoint (`paper/scripts/follow_checkpoint.py`).
+exits 0, so a scheduled run tries again later. The paper workflow loads
+the final fine-tuning run's newest checkpoint itself (`paperpipe.flow`).
 The second form runs those targets of the paper workflow alone. Each run
 logs to PAPER_LOGS and posts start, done or FAILED with the log's first
 error line (mailbox lines when NOTIFY is set, `flowlib.notify`).
@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "workflow"))
 
-from flowlib import localconfig, machine, notify  # noqa: E402
+from flowlib import localconfig, machine, monitor, notify  # noqa: E402
 
 RENDERS = ("development", "paper")
 
@@ -46,7 +46,7 @@ def missing() -> list[str]:
 
     paper = ROOT / "paper"
     config = yaml.safe_load((paper / "workflow" / "config.yaml").read_text())
-    sims = paper / localconfig.expand(
+    sims = ROOT / localconfig.expand(
         config["synthetic"]["simulations"]["paper"]
     )
     seeds = run_settings(config, "paper").synthetic_seeds
@@ -60,28 +60,6 @@ def missing() -> list[str]:
     ]
     need.append(ROOT / "results/germany/held-out/paper-forecasts.csv.gz")
     return [str(p.relative_to(ROOT)) for p in need if not p.exists()]
-
-
-def pin() -> str:
-    """Pin the final run's newest checkpoint; return it (empty: pending)."""
-    import yaml
-
-    paper = ROOT / "paper"
-    config = yaml.safe_load((paper / "workflow" / "config.yaml").read_text())
-    got = subprocess.run(
-        [
-            sys.executable,
-            "scripts/follow_checkpoint.py",
-            config["finetune_run"],
-            "--write",
-            "workflow/config.yaml",
-        ],
-        cwd=paper,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return got.stdout.strip()
 
 
 def first_error(log: Path) -> str:
@@ -115,8 +93,9 @@ def main(argv: list[str]) -> int:
             "heavy=1",
             "--rerun-triggers",
             "mtime",
+            *monitor.args(cfg),
         ]
-        where = ROOT / "paper"
+        where = ROOT
     else:
         name = argv[0] if argv else "development"
         if name not in RENDERS:
@@ -130,14 +109,7 @@ def main(argv: list[str]) -> int:
     logs = Path(cfg["PAPER_LOGS"]).expanduser()
     logs.mkdir(parents=True, exist_ok=True)
     log = logs / f"paper-{name}.log"
-    pinned = ""
-    if name == "paper":
-        try:
-            pinned = f", fine-tuned checkpoint {pin() or 'pending'}"
-        except subprocess.CalledProcessError as err:
-            say(f"FAILED pin: {(err.stderr or '').strip()[:250]}", cfg)
-            return err.returncode
-    say(f"started {name}{pinned} (log {log})", cfg)
+    say(f"started {name} (log {log})", cfg)
     with log.open("w") as out:
         rc = subprocess.run(
             ["nice", "-n", "19", *cmd],

@@ -7,16 +7,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.data import load_health_zones
-from bdbvhubrenewal.data.zones import hub_zones
-from bdbvhubrenewal.forecasters import (
-    NATIONAL,
-    ForecastTask,
-    RandomWalk,
-    RandomWalkNowcast,
-)
-from bdbvhubrenewal.submission.hub import to_hub_table, write_submission
-from bdbvhubrenewal.submission.validate import Hub, validate_submission
+from bdbvhub.data.tidy import load_health_zones
+from bdbvhub.data.zones import hub_zones
+from bdbvhub.submission.hub import to_hub_table, write_submission
+from bdbvhub.submission.validate import Hub, validate_submission
+from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcastbaselines.zones import (
     ZoneAllocator,
     _apportion,
@@ -28,6 +23,7 @@ from nowcastbaselines.zones import (
     zones_for_model,
 )
 from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastutils.base import NATIONAL, ForecastTask
 from nowcastutils.hierarchy import province_of
 from nowcastutils.snapshots import weekly_counts
 
@@ -357,6 +353,7 @@ def test_zone_task_is_a_zero_filled_randomwalk_task(
     assert zone_task(task, counts, zones).daily_history is None
 
 
+@pytest.mark.slow
 def test_hub_table_with_zones_validates(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
@@ -456,6 +453,7 @@ def test_zone_values_follow_the_zone_model_not_the_shares(
     assert not np.allclose(mine, theirs.reindex(mine.index))
 
 
+@pytest.mark.slow
 def test_zone_hub_table_validates_with_the_zone_models_own_draws(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
@@ -510,7 +508,7 @@ def test_hub_table_checks_zone_sums_unless_told_not_to(
 
 
 def test_zones_need_not_sum_for_the_walks_and_the_foundation_model() -> None:
-    from bdbvhubrenewal.submission.hub import zones_need_not_sum
+    from bdbvhub.submission.hub import zones_need_not_sum
 
     # The walks run each zone on its own data; the foundation model takes
     # its zones straight from its block. Neither sums them to provinces.
@@ -534,6 +532,7 @@ def test_only_the_random_walks_forecast_their_own_zones() -> None:
     assert not walks_own_zones("not-a-model")
 
 
+@pytest.mark.slow
 def test_walk_models_take_their_zone_draws_and_others_the_split(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
@@ -551,6 +550,7 @@ def test_walk_models_take_their_zone_draws_and_others_the_split(
     )
 
 
+@pytest.mark.slow
 def test_reconcile_keeps_each_zones_published_count(
     task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:
@@ -597,6 +597,7 @@ def test_reconcile_keeps_each_zones_published_count(
     assert floored.any()
 
 
+@pytest.mark.slow
 def test_reconcile_works_draw_by_draw(
     task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
 ) -> None:

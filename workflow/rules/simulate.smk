@@ -1,17 +1,21 @@
 # Simulation rounds.
 #
 # Round r is the batches of `flowlib.segments.round_seeds`, each
-# `batch` simulations of the grid (`simulate.grid_file`, engine
-# packages/nowcastfoundation/r) with exactly `draws` observation draws.
+# `batch` simulations of the grid (`simulate.grid_file`; each simulation
+# the joint PyRenew model, nowcastrenewal.simulation) with exactly
+# `draws` observation draws.
 # Into
 # <ROOT>/rounds/r<r>/sims/. Each batch gets a manifest row, the round's
 # manifest joins them, the sim QC (scripts/sim_qc.py) checks the round
 # against the grid's thresholds (its `qc`),
 # and `round_ready` writes the seed lists and READY last. Every
-# simulation is kept: QC exclusions are a list (qc/excluded.csv).
+# simulation is kept: the QC only records summaries (qc/).
 #
 # Targets: `simulate` (the rounds in `rounds`), and the opt-in `release`,
-# which uploads each batch to the release sims-r<r>.
+# which uploads each batch to the release sims-r<r>. Opt-in too:
+# <ROOT>/rounds/bench/simulator-<cpu|cuda>-n<n>-s<seed>.json, the
+# simulator's benchmark on one seeded batch of the grid
+# (nowcastfoundation.simulator.bench).
 #
 # Two hosts can share the rounds (flowlib.hosts): each lists the seeds
 # it takes in its local config (SIM_SEEDS; empty: all). A helping
@@ -24,45 +28,10 @@ wildcard_constraints:
     round=r"\d+",
     seed=r"\d+",
     n=r"\d+",
-
-
-rule epinowcast_lib:
-    output:
-        f"{ENW_LIB}/.installed",
-    log:
-        f"{ENW_LIB}.log",
-    conda:
-        TOOLS_ENV
-    threads: 1
-    resources:
-        mem_mb=4096,
-    params:
-        lib=lambda wc, output: str(Path(output[0]).parent),
-        sha=ENW_SHA,
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
-    shell:
-        # R CMD INSTALL of the archive GitHub serves for the commit, at nice
-        # 19 under the job's memory cap as a batch runs, with the system's
-        # tools first for the whole command. Its dependencies must already
-        # be in R's libraries.
-        """
-        exec >{log} 2>&1
-        r=$(dirname "$(command -v Rscript)")
-        src=$(mktemp -d)
-        trap 'rm -rf "$src"' EXIT
-        curl -fsSL \
-            https://github.com/epinowcast/epinowcast/archive/{params.sha}.tar.gz \
-            | tar -xz -C "$src" --strip-components 1
-        mkdir -p {params.lib}
-        PATH="$(getconf PATH):$PATH" {params.prefix} nice -n 19 \
-            "$r/R" CMD INSTALL --library={params.lib} "$src"
-        touch {output}
-        """
+    device=r"cpu|cuda",
 
 
 rule simulate_batch:
-    input:
-        lib=batch_lib,
     output:
         counts=f"{ROUNDS_DIR}/r{{round}}/sims/counts-{{seed}}.csv.gz",
         settings=f"{ROUNDS_DIR}/r{{round}}/sims/settings-{{seed}}.csv",
@@ -78,34 +47,33 @@ rule simulate_batch:
     conda:
         TOOLS_ENV
     threads: 1
+    # Batches are run by count, not by memory: at most
+    # `--resources sim_slots=N` at once (SIM_SLOTS, 2 by default). A batch
+    # claims no memory and has no cap of its own; SIM_PREFIX (such as one
+    # systemd slice all batches share) guards the rest of the machine.
     resources:
-        mem_mb=lambda wc, attempt: (
-            SIM["mem_mb"] if attempt == 1 else SIM["retry_mem_mb"]
-        ),
-        # At most `--resources sim_slots=N` batches at once (2 by default).
+        mem_mb=0,
         sim_slots=1,
     params:
         sims=lambda wc, output: Path(output.counts).parent,
         batch=SIM["batch"],
         draws=SIM["draws"],
-        lib=ENW_LIB,
         grid=GRID_FILE,
         engine=" ".join(simulator.ENGINE),
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
+        prefix=LOCAL["SIM_PREFIX"],
+        jax_cache=LOCAL["JAX_CACHE"],
+        jax_cache_gb=LOCAL["JAX_CACHE_GB"],
+        jax_env=simulator.jax_cache_env(LOCAL["JAX_CACHE"]),
         min_free=LOCAL["MIN_FREE_GB"],
         min_disk=LOCAL["MIN_DISK_GB"],
         max_load=LOCAL["MAX_LOAD"],
     shell:
-        # The simulator (engine, wrapper and grid) must be the committed one,
-        # as the manifest records
-        # the commit. A retry keeps the first attempt's log. R and Stan
-        # write temporary files to a folder of the batch's own, removed
-        # however the batch ends. Rscript is the one on PATH; the whole job
-        # command after it (the memory cap, timed.sh, nice and the tools R
-        # starts, such as make and bash) takes the system's tools first: R
-        # puts the system libraries on LD_LIBRARY_PATH, under which a bash
-        # from another prefix (such as linuxbrew) fails. Under a conda
-        # env's R this also puts the system compilers first.
+        # The simulator (its code and the grid) must be the committed one,
+        # as the manifest records the commit. A retry keeps the first
+        # attempt's log. The simulator writes temporary files to a folder of
+        # the batch's own, removed however the batch ends. JAX runs on one
+        # thread, as the job has one, and shares its compiles with the
+        # host's other batches (flowlib.simulator.jax_cache_env).
         """
         if ! git diff --quiet HEAD -- {params.engine} {params.grid}; then
             echo "the simulator or its grid differs from HEAD" >{log}
@@ -117,13 +85,45 @@ rule simulate_batch:
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
         trap 'rm -rf "$tmp"' EXIT
-        rscript=$(command -v Rscript)
-        TMPDIR="$tmp" ENW_DRAWS={params.draws} ENW_LIB={params.lib} \
-            PATH="$(getconf PATH):$PATH" {params.prefix} \
-            workflow/scripts/timed.sh \
-            nice -n 19 "$rscript" workflow/scripts/simulate.R {params.grid} \
-            {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
+        workflow/scripts/trim_jax_cache.sh "{params.jax_cache}" {params.jax_cache_gb}
+        uv=$(command -v uv)
+        TMPDIR="$tmp" ENW_DRAWS={params.draws} JAX_PLATFORMS=cpu {params.jax_env} \
+            XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
+            {params.prefix} workflow/scripts/timed.sh \
+            nice -n 19 "$uv" run --frozen python -m nowcastfoundation.simulator \
+            {params.grid} {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
+        """
+
+
+rule simulator_benchmark:
+    # Two passes of one batch, first then again, as a simulate_batch job
+    # runs (one thread, the round's draws) on the given JAX device. The
+    # benchmarks of one simulator code share a compile cache of their own,
+    # kept between runs: the first pass is cold on an empty cache and,
+    # after another seed's benchmark, times what a batch on a host with a
+    # warm cache sees. Each code has its own folder, so two versions
+    # benchmarked from one ROOT never read each other's compiles.
+    output:
+        f"{ROUNDS_DIR}/bench/simulator-{{device}}-n{{n}}-s{{seed}}.json",
+    log:
+        f"{ROUNDS_DIR}/bench/logs/simulator-{{device}}-n{{n}}-s{{seed}}.log",
+    conda:
+        TOOLS_ENV
+    threads: 1
+    params:
+        draws=SIM["draws"],
+        grid=GRID_FILE,
+        jax_env=lambda wc: simulator.jax_cache_env(
+            f"{ROUNDS_DIR}/bench/jax-cache-{wc.device}-{simulator.engine_id()}"
+        ),
+    shell:
+        """
+        ENW_DRAWS={params.draws} JAX_PLATFORMS={wildcards.device} \
+            {params.jax_env} \
+            XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
+            uv run --frozen python -m nowcastfoundation.simulator.bench \
+            {params.grid} {wildcards.n} {wildcards.seed} {output} >{log} 2>&1
         """
 
 
@@ -171,10 +171,7 @@ rule batch_record:
 
 rule round_manifest:
     input:
-        lambda wc: expand(
-            f"{ROUNDS_DIR}/r{wc.round}/records/record-{{seed}}.csv",
-            seed=seeds_of(wc.round),
-        ),
+        round_records,
     output:
         f"{ROUNDS_DIR}/r{{round}}/manifest.csv",
     log:
@@ -188,7 +185,6 @@ rule sim_qc:
     input:
         rules.round_manifest.output,
     output:
-        excluded=f"{ROUNDS_DIR}/r{{round}}/qc/excluded.csv",
         summary=f"{ROUNDS_DIR}/r{{round}}/qc/summary.txt",
     log:
         f"{ROUNDS_DIR}/r{{round}}/qc/run.log",
@@ -196,12 +192,8 @@ rule sim_qc:
         TOOLS_ENV
     params:
         round_dir=lambda wc, input: Path(input[0]).parent,
-        # The grid's thresholds (its `qc`). The profiles rerun on mtime only,
-        # so a round already checked keeps its exclusions.
-        limits=SIM_QC_ARGS,
     shell:
-        "uv run python scripts/sim_qc.py {params.round_dir} {params.limits} "
-        "> {log} 2>&1"
+        "uv run python scripts/sim_qc.py {params.round_dir} > {log} 2>&1"
 
 
 rule round_ready:
@@ -243,9 +235,7 @@ rule release_batch:
     params:
         repo=SIM["repo"],
         tag="sims-r{round}",
-        owner=lambda wc: grids.owner(
-            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
-        ),
+        owner=release_owner,
         counts=rules.simulate_batch.output.counts,
         settings=rules.simulate_batch.output.settings,
     shell:
@@ -262,36 +252,6 @@ rule release_batch:
             || gh release view {params.tag} -R {params.repo} >/dev/null
         gh release upload {params.tag} -R {params.repo} --clobber \
             {params.counts} {params.settings} {input.record}
-        """
-
-
-rule release_qc:
-    # Opt-in (target `release`): the round's QC exclusions, so a machine
-    # training from the releases skips them too.
-    input:
-        rules.sim_qc.output.excluded,
-    output:
-        touch(f"{ROUNDS_DIR}/r{{round}}/released/qc.done"),
-    log:
-        f"{ROUNDS_DIR}/r{{round}}/logs/release-qc.log",
-    localrule: True
-    conda:
-        TOOLS_ENV
-    params:
-        repo=SIM["repo"],
-        tag="sims-r{round}",
-        named=f"{ROUNDS_DIR}/r{{round}}/qc/excluded-r{{round}}.csv",
-        owner=lambda wc: grids.owner(
-            int(wc.round), config["grid_rounds"], config.get("retired_rounds")
-        ),
-    shell:
-        """
-        exec >{log} 2>&1
-        """
-        + GRID_GUARD
-        + """
-        cp {input} {params.named}
-        gh release upload {params.tag} -R {params.repo} --clobber {params.named}
         """
 
 
@@ -335,13 +295,9 @@ rule release:
     input:
         # Never an earlier grid's round: its release holds that grid's
         # batches.
-        lambda wc: grids.check_release(
-            config["rounds"], config["grid_rounds"], config.get("retired_rounds")
-        )
-        or [],
+        release_check,
         [
             f"{ROUNDS_DIR}/r{r}/released/{s}.done"
             for r in config["rounds"]
             for s in seeds_of(r)
         ],
-        expand(f"{ROUNDS_DIR}/r{{r}}/released/qc.done", r=config["rounds"]),

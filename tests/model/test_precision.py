@@ -13,7 +13,7 @@ import numpyro
 import pytest
 from jax import enable_x64
 
-from bdbvhubrenewal.data.delays import hub_delay_pmf
+from bdbvhub.data.delays import hub_delay_pmf
 from nowcastrenewal.model import MAIN, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
 
@@ -21,7 +21,7 @@ from .conftest import MAIN_REPO_DATA
 
 
 def real_vintage(table, config):
-    from bdbvhubrenewal.data import load_delays, load_target
+    from bdbvhub.data.tidy import load_delays, load_target
 
     target, delays = load_target(MAIN_REPO_DATA), load_delays(MAIN_REPO_DATA)
     vintage = target["vintage"].max()
@@ -64,6 +64,7 @@ def real_fit_point(table):
     return data, model, params
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not MAIN_REPO_DATA.exists(), reason="main repo data absent")
 @pytest.mark.parametrize("inv_sqrt_phi", [None, 3e-2, 3e-4])
 def test_float32_log_density_matches_float64(real_fit_point, inv_sqrt_phi):

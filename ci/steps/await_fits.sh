@@ -52,13 +52,16 @@ print(len(json.load(open(sys.argv[1]))["include"]))' "$out/missing.json"
 }
 
 # True once a Fit store run created at or after $1 has finished and none
-# is queued or running on the branch.
+# is queued or running on the branch. Pull request runs only plan, and
+# on `next` they are many: counting them pushed the run this step started
+# out of the list, so a fit still running was ruled out.
 fit_store_done() {
   local runs
   runs=$(gh run list -R "${GITHUB_REPOSITORY:?}" -w fit-store.yml -b "$ref" \
-    -L 10 --json status,createdAt) || return 1
+    -L 100 --json status,createdAt,event) || return 1
   python3 -c 'import json, sys
 runs, since = json.loads(sys.argv[1]), sys.argv[2]
+runs = [r for r in runs if r["event"] != "pull_request"]
 busy = any(r["status"] != "completed" for r in runs)
 done = any(r["status"] == "completed" and r["createdAt"] >= since
            for r in runs)

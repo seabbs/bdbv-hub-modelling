@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhubrenewal.forecasters import get_model
+from bdbvhub.models import get_model
 from nowcastbaselines.chain import delay_summary
 from nowcastbaselines.randomwalk import RandomWalkNowcast
 from nowcasteval.backtest import (
@@ -42,6 +42,7 @@ def result(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):  # 
     return release_backtest(tasks, daily, target)
 
 
+@pytest.mark.slow
 def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -59,6 +60,7 @@ def test_a_model_that_cannot_forecast_is_listed_with_no_forecasts(
         assert (ran["n_reported"] > 0).all()
 
 
+@pytest.mark.slow
 def test_every_model_is_scored_on_each_later_release(
     result,  # type: ignore[no-untyped-def]
     vintages: list[str],
@@ -78,6 +80,7 @@ def test_every_model_is_scored_on_each_later_release(
     assert (rep["weeks_back"] < 0).any()
 
 
+@pytest.mark.slow
 def test_randomwalk_is_scored_on_its_samples_as_they_are(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -91,6 +94,7 @@ def test_randomwalk_is_scored_on_its_samples_as_they_are(
     pd.testing.assert_frame_equal(by_release[0], by_release[1])
 
 
+@pytest.mark.slow
 def test_energy_scores_each_scale_on_the_same_samples(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -128,6 +132,7 @@ def test_complete_weeks_come_from_later_releases_only(
         complete_weeks(target, daily, "2026-11-01", rule="pi")
 
 
+@pytest.mark.slow
 def test_complete_target_only_has_complete_weeks(
     result,  # type: ignore[no-untyped-def]
     target: pd.DataFrame,
@@ -156,6 +161,7 @@ def test_weeks_back_count_from_the_cutoff_week(
     assert got.tolist() == [0, 1, -1]
 
 
+@pytest.mark.slow
 def test_relative_crps_is_against_randomwalk(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -254,6 +260,7 @@ def test_a_stored_model_is_mapped_by_its_own_delay_or_scored_complete(
     assert set(flat["target"]) == {"complete"}
 
 
+@pytest.mark.slow
 def test_quantiles_carry_the_reported_count_and_truth(
     result,  # type: ignore[no-untyped-def]
 ) -> None:
@@ -389,6 +396,7 @@ def test_a_models_reported_scores_do_not_depend_on_other_models(
     pd.testing.assert_frame_equal(reported(alone.scores), reported(both.scores))
 
 
+@pytest.mark.slow
 def test_release_forecasts_made_apart_by_model_score_as_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
@@ -443,6 +451,7 @@ def test_rolling_truth_is_the_first_release_d_days_after_each_week() -> None:
     assert "2026-10-03" not in truth.index
 
 
+@pytest.mark.slow
 def test_complete_target_can_take_the_rolling_truth(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:

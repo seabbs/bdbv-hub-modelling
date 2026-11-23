@@ -13,7 +13,7 @@ test_that("categorical settings are drawn at the grid's shares", {
   expect_equal(share("revisions", "yes"), 0.3, tolerance = 0.03)
   expect_equal(share("observation", "poisson"), 0.2, tolerance = 0.03)
   expect_false(any(c("process", "gt_shape") %in% names(grid$factors)))
-  # One report-days factor (lead 13:25): no separate reporting or bunching.
+  # One report-days factor: no separate reporting or bunching.
   expect_false(any(c("reporting", "bunching") %in% names(grid$factors)))
   expect_false(any(grepl("^bunch", c(names(grid$distributions), names(grid$counts)))))
 })
@@ -48,13 +48,13 @@ test_that("series run a median 30 weeks and at least 4", {
   expect_true(any(w > 52))
 })
 
-test_that("values keep the gamma shape below 2 and periods a month", {
+test_that("values keep a positive gamma shape and periods a month", {
   grid <- test_grid()
   set.seed(3)
   for (g in 0:400) {
     d <- draw_design(grid)
     v <- draw_values(grid, d)
-    expect_true(1 / v$delay_cv^2 < 2)
+    expect_gt(v$delay_cv, 0)
     expect_gte(v$period, 30)
     expect_gte(v$smooth_period, 30)
     expect_gte(v$waves, 2)
@@ -75,25 +75,26 @@ test_that("late places are among the places with cases", {
   }
 })
 
-test_that("a draw is redrawn if it reports fewer than the grid's minimum", {
+test_that("a draw is redrawn only if it reports no cases", {
   grid <- test_grid()
-  expect_equal(grid$floors$min_cases, 10)
-  expect_equal(redraw_reason(9.5, grid), "fewer than 10 cases")
-  expect_equal(redraw_reason(0, grid), "fewer than 10 cases")
-  expect_true(is.na(redraw_reason(10, grid)))
+  expect_null(grid$floors$min_cases)
 })
 
-test_that("every simulated system fits the trainer's block budget whole", {
+test_that("every simulation's triangle fits the simulator's memory", {
   grid <- test_grid()
   set.seed(11)
-  locs <- leaves <- numeric(0)
-  for (i in 1:5000) {
+  leaves <- numeric(0)
+  for (i in 1:2000) {
     d <- draw_design(grid)
-    locs <- c(locs, system_locations(d$n_places, d$n_ages))
+    v <- draw_values(grid, d)
     leaves <- c(leaves, d$n_places * d$n_ages)
-    expect_lte(d$n_places * d$n_ages, max_strata(grid, d$weeks))
+    if (d$strata_link != "independent") {
+      expect_lte(
+        triangle_cells(d$n_places * d$n_ages, d$weeks, v$max_delay),
+        grid$max_triangle_cells
+      )
+    }
   }
-  expect_lte(max(locs), grid$max_locations)
   # Sizes still vary: single series, small systems and large ones.
   expect_true(any(leaves == 1) && any(leaves >= 20))
 })
@@ -116,14 +117,12 @@ test_that("every factor has a layer and aggregates are drawn from the grid", {
   expect_equal(grid$distributions[[a$parent_lag_days]]$dist, "lognormal")
 })
 
-test_that("a draw is redrawn only when it fails or reports too few cases", {
+test_that("a draw is redrawn only when it fails or reports no cases", {
   grid <- test_grid()
-  # No sim QC thresholds (Sam, lead 13:25): size, weekly rises and mean
+  # No sim QC thresholds: size, weekly rises and mean
   # delays are left as drawn.
   expect_null(grid$qc)
   expect_false(exists("qc_reason", envir = asNamespace("nowcastfoundation")))
-  expect_true(is.na(redraw_reason(grid$floors$min_cases, grid)))
-  expect_match(redraw_reason(grid$floors$min_cases - 1, grid), "fewer than")
 })
 
 test_that("strata of one outbreak can share its length and calendar offset", {
@@ -147,7 +146,7 @@ test_that("the reporting delay may vary by reference weekday", {
   expect_gt(v$delay_dow_sd, 0)
 })
 
-test_that("weekday effects are rare and mostly small (lead 13:24)", {
+test_that("weekday effects are rare and mostly small", {
   grid <- test_grid()
   share <- function(f) {
     w <- unlist(grid$factors[[f]])
@@ -177,6 +176,7 @@ test_that("each report-days level reports on its weekdays", {
     seen[[d$report_days]] <- c(seen[[d$report_days]], length(on))
     if (d$report_days == "daily") expect_equal(on, "all")
     if (d$report_days == "weekdays") expect_equal(on, week[1:5])
+    if (d$report_days == "fixed_days") expect_true(all(on %in% week[1:5]))
     if (d$report_days != "daily") expect_true(all(on %in% week))
   }
   expect_setequal(unique(seen$fixed_days), 2:3)

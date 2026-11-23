@@ -4,8 +4,9 @@ r"""The simulator's latent infection process, a PyRenew latent process.
 `StratifiedInfections` subclasses PyRenew's `BaseLatentInfectionProcess`:
 the generation time is its `gen_int_rv`, the start a PyRenew
 `InfectionInitializationProcess` (with `start.InitializeStrata`), and R a
-component such as `rt.PlaceRt`. Infections come from `strata.strata_renewal`
-with mixing, imports, shifts, variants and a choice of depletion.
+component such as `rt.PlaceRt`. Infections come from the shared
+`components.renewal.run_renewal` with mixing, imports, shifts, variants
+and a choice of depletion.
 
 It is not a `BaseSubpopulationInfections`: that class sets each place's R
 as sum-to-zero deviations around a baseline and seeds by exponential
@@ -23,7 +24,8 @@ from jax.typing import ArrayLike
 from pyrenew.latent.base import BaseLatentInfectionProcess, LatentSample
 from pyrenew.metaclass import RandomVariable
 
-from .strata import Depletion, Shifts, Variants, strata_renewal
+from ..components.mixing import mixing_matrix
+from ..components.renewal import Depletion, Shifts, Variants, run_renewal
 
 __all__ = ["StratifiedInfections"]
 
@@ -66,7 +68,8 @@ class StratifiedInfections(BaseLatentInfectionProcess):
     variants : Variants, optional
         Variants.
     depletion : Depletion, optional
-        `strata.LinearDepletion` (default) or `strata.ExponentialDepletion`.
+        `components.renewal.LinearDepletion` (default) or
+        `components.renewal.ExponentialDepletion`.
     """
 
     def __init__(
@@ -127,17 +130,16 @@ class StratifiedInfections(BaseLatentInfectionProcess):
         """
         n = n_days_post_init
         log_rt = self.log_rt_rv(n=n, place=self.place)
-        mixing = (
-            None
-            if self.mixing_rv is None
-            else self.mixing_rv(n=n, place=self.place, age=self.age)
-        )
+        mixing = None
+        if self.mixing_rv is not None:
+            kernel, share = self.mixing_rv(n=n, place=self.place, age=self.age)
+            mixing = mixing_matrix(kernel, share[:, None], "received")
         imports = (
             None
             if self.imports_rv is None
             else self.imports_rv(n=n, unit=self.unit)
         )
-        run = strata_renewal(
+        run = run_renewal(
             self.start_rv(),
             self.gen_int_rv(),
             jnp.exp(log_rt),

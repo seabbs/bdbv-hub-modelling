@@ -1,11 +1,13 @@
 """The paper's evaluation, from each study's data to the rendered paper.
 
-Run from `paper/` with `task pipeline:dev`, `task pipeline:paper` or
-`task paper`. Every step is `python -m paperpipe <step>` or the
-`bdbvhubrenewal` command line, run with the Python that runs the
-workflow. Outputs go to `<results>/<mode>/`, so development and paper
-runs never share a file, and `publish` copies a run's figures, tables and
-numbers to `build/`, which `main.qmd` and `si.qmd` read.
+A module of the project workflow (`workflow/Snakefile`), run from the
+repository root with `task paper` or `snakemake <target>`; its settings
+are `paper/workflow/config.yaml`, with paths from the root. Every step is
+`python -m paperpipe <step>` or the `bdbvhubrenewal` command line, run
+with the Python that runs the workflow. Outputs go to
+`<results>/<mode>/`, so development and paper runs never share a file,
+and `publish_paper` copies a run's figures, tables and numbers to
+`paper/build/`, which `main.qmd` and `si.qmd` read.
 
 Targets:
 
@@ -29,111 +31,19 @@ import json
 import os
 import shlex
 import sys
-import tomllib
 from pathlib import Path
 
-from snakemake.exceptions import WorkflowError
 
-PAPER = Path(workflow.basedir).parent
-sys.path.insert(0, str(PAPER))
-sys.path.append(str(PAPER.parent / "workflow"))
-
-from flowlib import localconfig  # noqa: E402
-
-from paperdata.synthetic_runner import (  # noqa: E402
-    MODELS as SYNTHETIC_MODELS,
-)
-from paperpipe.config import MODES, run_settings, run_studies  # noqa: E402
-from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
-from paperpipe.evidence import branch_head  # noqa: E402
-from paperpipe.outputs import (  # noqa: E402
-    JOINT_STUDIES,
-    MAIN_TABLES,
-    SI_TABLES,
-    STUDY_SI_TABLES,
-    figure_names,
-)
+include: "rules/common.smk"
 
 
-configfile: str(PAPER / "workflow" / "config.yaml")
-
-
-workdir: str(PAPER)
-
-
-R = config["results"]
-BUILD = config["build"]
-STUDIES = config["studies"]
-# Run each step with the Python running the workflow.
-PYTHON = shlex.quote(sys.executable)
-BDBV = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
-GERMANY = config["germany"]
-# The tools the shell rules call, as the project workflow's.
-TOOLS_ENV = "../../workflow/envs/tools.yaml"
-
-# The last BDBV release the SI's real-data models trained on
-# (config/finetune.toml); their BDBV comparison scores later rounds only.
-with open("../config/finetune.toml", "rb") as f:
-    REALDATA_AFTER = tomllib.load(f)["realdata_bdbv"]["release"]
-EBOLA = config["ebola"]
-# The fine-tuned checkpoint every `_ft` model the workflow runs loads, so
-# each study uses the same one; recorded in results.yml.
-# Set here, not read: so not an `envvars` requirement of the workflow.
-if config.get("finetuned"):
-    os.environ.update(BDBV_CHRONOS_FT=str(config["finetuned"]))
-SYNTHETIC = config["synthetic"]
-# Simulation folders may name machine settings, such as $ROOT.
-SYNTHETIC["simulations"] = {
-    mode: localconfig.expand(folder)
-    for mode, folder in SYNTHETIC["simulations"].items()
-}
-TRIANGLE = f"{GERMANY['data']}/COVID-19_hospitalizations.csv"
-
-
-def at_root(path):
-    """Return a path from paper/ as one from the repository root."""
-    return os.path.relpath(PAPER / path, PAPER.parent)
-
-
-# The benchmark's commands run from the repository root, as the models
-# read config/ (config/finetune.toml) relative to the working directory.
-GERMANY_ROOT = {k: at_root(GERMANY[k]) for k in ("config", "data", "results")}
-
-# The benchmark's command line holds out the dates from its own split.
-with open(GERMANY["config"], "rb") as f:
-    _split = tomllib.load(f)["nowcast"]["split_date"]
-if str(_split) != str(config["heldout"]["germany_from"]):
-    raise WorkflowError(
-        f"{GERMANY['config']} splits at {_split} but `heldout.germany_from` "
-        f"is {config['heldout']['germany_from']}."
-    )
-
-
-# Rows from evidence branches, pinned by commit in `evidence` (config),
-# or followed: an entry naming a `branch` reads its head, resolved here so
-# a new commit there extracts the file anew.
-EVIDENCE = {
-    name: entry for name, entry in (config.get("evidence") or {}).items() if entry
-}
-for _entry in EVIDENCE.values():
-    if "branch" in _entry:
-        _entry["ref"] = branch_head(_entry["branch"], PAPER.parent)
-
-
-def evidence_file(name):
-    """The extracted file, named by its commit so a new pin extracts anew."""
-    entry = EVIDENCE[name]
-    suffix = "".join(Path(entry["path"]).suffixes)
-    return f"{R}/evidence/{name}-{entry['ref'][:12]}{suffix}"
-
-
-for name, entry in EVIDENCE.items():
+for name, entry in FLOW.pinned().items():
 
     rule:
         name:
             f"evidence_{name}"
         output:
-            evidence_file(name),
+            FLOW.evidence_file(name),
         log:
             f"{R}/logs/evidence_{name}.log",
         conda:
@@ -148,33 +58,6 @@ for name, entry in EVIDENCE.items():
             "git show {params.ref}:{params.path} > {output}"
 
 
-def provisional(study):
-    """What is provisional in a study's further forecasts, if anything."""
-    block = {"germany": GERMANY, "ebola": EBOLA}.get(study, {})
-    notes = [e.get("provisional") for e in block.get("extra") or []]
-    return " ".join(dict.fromkeys(n for n in notes if n))
-
-
-def ebola_extra(mode):
-    """Further Ebola samples, each kept to its models."""
-    return [
-        f"{R}/evidence/ebola-extra-{i}.csv.gz"
-        for i in range(len(EBOLA.get("extra") or []))
-    ]
-
-
-def extra_args(entry):
-    """The `germany-extra` options of a `germany.extra` entry."""
-    args = []
-    if entry.get("models"):
-        args.append(f"--models {shlex.quote(entry['models'])}")
-    if entry.get("suffix"):
-        args.append(f"--suffix {shlex.quote(entry['suffix'])}")
-    if entry.get("backtest"):
-        args.append("--backtest")
-    return " ".join(args)
-
-
 # Further Ebola samples from evidence rows, kept to their models.
 for i, entry in enumerate(EBOLA.get("extra") or []):
 
@@ -182,7 +65,7 @@ for i, entry in enumerate(EBOLA.get("extra") or []):
         name:
             f"ebola_extra_{i}"
         input:
-            evidence_file(entry["evidence"]),
+            FLOW.evidence_file(entry["evidence"]),
         output:
             f"{R}/evidence/ebola-extra-{i}.csv.gz",
         log:
@@ -205,7 +88,7 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
         name:
             f"germany_extra_{i}"
         input:
-            evidence_file(entry["evidence"]),
+            FLOW.evidence_file(entry["evidence"]),
         output:
             f"{R}/evidence/germany-extra-{i}.csv.gz",
         log:
@@ -214,104 +97,22 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
             TOOLS_ENV
         params:
             python=PYTHON,
-            args=extra_args(entry),
+            args=FLOW.extra_args(entry),
         shell:
             "exec >{log} 2>&1; "
             "{params.python} -m paperpipe germany-extra --input {input} "
             "{params.args} --out {output}"
 
 
-wildcard_constraints:
-    mode="|".join(MODES),
-    study="|".join(STUDIES),
-
-
-def settings(w):
-    return run_settings(config, w.mode)
-
-
-def germany_tables(mode):
-    """The German benchmark's paper tables a run reads."""
-    if not GERMANY["real"]:
-        return []
-    halves = [""] if mode == "development" else ["", "held-out/"]
-    tables = [f"{GERMANY['results']}/{h}paper-forecasts.csv.gz" for h in halves]
-    extra = [
-        f"{R}/evidence/germany-extra-{i}.csv.gz"
-        for i in range(len(GERMANY.get("extra") or []))
-    ]
-    return tables + extra
-
-
-def sources(w):
-    """A study's real data, as command line arguments."""
-    if w.study == "synthetic":
-        fc = SYNTHETIC["forecasts"][w.mode]
-        return f"--synthetic-forecasts {shlex.quote(fc)}" if fc else ""
-    if w.study == "germany" and GERMANY["real"]:
-        tables = " ".join(germany_tables(w.mode))
-        return f"--germany-forecasts {tables} --germany-triangle {TRIANGLE}"
-    if w.study == "ebola" and EBOLA["hub"]:
-        args = [
-            f"--hub {shlex.quote(EBOLA['hub'])}",
-            f"--ebola-data {shlex.quote(EBOLA['data'])}",
-            f"--ebola-config {shlex.quote(EBOLA['config'])}",
-            f"--ebola-backtest {shlex.quote(EBOLA['backtest'])}",
-        ]
-        if EBOLA.get("extra"):
-            files = " ".join(ebola_extra(w.mode))
-            args.append(f"--ebola-extra {files}")
-        if EBOLA.get("n_samples"):
-            models = " ".join(EBOLA["backtest_models"])
-            args.append(f"--ebola-draws {EBOLA_DRAWS}")
-            args.append(f"--ebola-draws-models {models}")
-        if EBOLA["candidates"]:
-            files = " ".join(shlex.quote(c) for c in EBOLA["candidates"])
-            args.append(f"--candidates {files}")
-        if EBOLA["store"]:
-            args.append(f"--store {shlex.quote(EBOLA['store'])}")
-            args.append(f"--store-ref {EBOLA['store_ref']}")
-        return " ".join(args)
-    return ""
-
-
-def source_files(w):
-    """Files a study's real data come from, built by the rules below."""
-    if w.study == "germany":
-        triangle = [TRIANGLE] if GERMANY["real"] else []
-        return [*germany_tables(w.mode), *triangle]
-    if w.study == "ebola" and EBOLA["hub"]:
-        hub = f"{EBOLA['hub']}/target-data/time-series.csv"
-        extra = ebola_extra(w.mode)
-        target = f"{EBOLA['data']}/target.csv"
-        draws = [EBOLA_DRAWS] if EBOLA.get("n_samples") else []
-        return [hub, target, EBOLA["backtest"], *extra, *draws]
-    if w.study == "synthetic" and synthetic_simulations(w.mode):
-        return [SYNTHETIC["forecasts"][w.mode]]
-    return []
-
-
-def synthetic_simulations(mode):
-    """The simulator's files of a run's seeds, or [] if any is missing."""
-    folder = SYNTHETIC["simulations"][mode]
-    seeds = run_settings(config, mode).synthetic_seeds
-    files = [
-        f"{folder}/{kind}-{seed}.{ext}"
-        for seed in seeds
-        for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
-    ]
-    return files if all(Path(f).exists() for f in files) else []
-
-
 # The synthetic runner forecasts each run's simulated outbreaks once they
-# exist (`scripts/run_synthetic.py`), with 1,000 draws per forecast.
+# exist (`scripts/run_synthetic.py`), at `synthetic.samples` draws per forecast.
 for _mode in MODES:
 
     rule:
         name:
             f"synthetic_forecasts_{_mode}"
         input:
-            synthetic_simulations(_mode),
+            FLOW.synthetic_simulations(_mode),
         output:
             SYNTHETIC["forecasts"][_mode],
         log:
@@ -322,95 +123,16 @@ for _mode in MODES:
             heavy=1,
         params:
             python=PYTHON,
-            sims=lambda w, mode=_mode: SYNTHETIC["simulations"][mode],
-            seeds=" ".join(str(s) for s in run_settings(config, _mode).synthetic_seeds),
+            sims=SYNTHETIC["simulations"][_mode],
+            seeds=FLOW.seeds(_mode),
             # The fine-tuned models wait for the final run's checkpoint.
-            models=(
-                ""
-                if config.get("finetuned")
-                else "--models "
-                + " ".join(m for m in SYNTHETIC_MODELS if "_ft" not in m)
-            ),
+            models=FLOW.synthetic_models_arg(),
+            samples=config["synthetic"]["samples"],
         shell:
             "exec >{log} 2>&1; "
-            "PYTHONPATH=. {params.python} scripts/run_synthetic.py {params.sims} "
-            "{output} --seeds {params.seeds} --samples 1000 --device cpu "
+            "{params.python} paper/scripts/run_synthetic.py {params.sims} "
+            "{output} --seeds {params.seeds} --samples {params.samples} --device cpu "
             "--threads 1 {params.models}"
-
-
-def limits(w):
-    """Data limits of a study's loader, as command line arguments."""
-    s = settings(w)
-    if w.study == "synthetic":
-        return "--seeds " + " ".join(str(x) for x in s.synthetic_seeds)
-    if w.study == "germany" and s.germany_before is not None:
-        return f"--before {s.germany_before:%Y-%m-%d}"
-    if w.study == "ebola" and s.ebola_before is not None:
-        return f"--before {s.ebola_before:%Y-%m-%d}"
-    return study_split(w.mode, w.study)
-
-
-def figures(mode, study):
-    return [
-        f"{R}/{mode}/figures/{part}/{study}-{name}.png"
-        for part in ("main", "si")
-        for name in figure_names(study, part)
-    ]
-
-
-def tables(mode, study):
-    main = [*MAIN_TABLES, *(["grid"] if study == "synthetic" else [])]
-    return [f"{R}/{mode}/tables/main/{study}-{n}.csv" for n in main] + [
-        f"{R}/{mode}/tables/si/{study}-{n}.csv"
-        for n in (*SI_TABLES, *STUDY_SI_TABLES.get(study, ()))
-    ]
-
-
-HELD_OUT_INCLUDES = (
-    ("main", "scores"),
-    ("main", "joint"),
-    ("si", "scores-by-horizon"),
-    ("si", "scores-by-location"),
-)
-"""The tables main.qmd and si.qmd include for every case study."""
-
-
-def studies(mode):
-    """The studies a run has: development leaves out the held-out ones."""
-    return run_studies(STUDIES, mode)
-
-
-def outputs(mode):
-    design = [f"{R}/{mode}/figures/si/sim-examples.png"] + [
-        f"{R}/{mode}/tables/si/{n}.md"
-        for n in (
-            "grid-epidemic",
-            "grid-reporting",
-            "grid-distributions",
-            "epinowcast-model",
-            "heldout-set",
-        )
-    ]
-    evidence = [f"{R}/{mode}/evidence.yml"]
-    joint = [
-        f"{R}/{mode}/tables/main/{study}-joint.md"
-        for study in studies(mode)
-        if study in JOINT_STUDIES
-    ]
-    real = (
-        [f"{R}/{mode}/tables/si/real-finetune.md"] if "germany" in studies(mode) else []
-    )
-    return (
-        evidence
-        + design
-        + joint
-        + real
-        + [
-            path
-            for study in studies(mode)
-            for path in [*figures(mode, study), *tables(mode, study)]
-        ]
-    )
 
 
 rule development:
@@ -426,19 +148,19 @@ rule paper:
 rule render:
     input:
         f"{R}/{config['render']}/published",
-        "main.qmd",
-        "si.qmd",
+        "paper/main.qmd",
+        "paper/si.qmd",
     output:
-        "main.html",
-        "main.pdf",
-        "si.html",
-        "si.pdf",
+        "paper/main.html",
+        "paper/main.pdf",
+        "paper/si.html",
+        "paper/si.pdf",
     log:
         f"{R}/logs/render.log",
     conda:
         TOOLS_ENV
     shell:
-        "exec >{log} 2>&1; quarto render main.qmd && quarto render si.qmd"
+        "exec >{log} 2>&1; cd paper && quarto render main.qmd && quarto render si.qmd"
 
 
 rule germany_fetch:
@@ -465,16 +187,17 @@ rule germany_development:
         f"{GERMANY['results']}/paper-forecasts.csv.gz",
     log:
         f"{R}/logs/germany_development.log",
+    benchmark:
+        f"{R}/benchmarks/germany_development/germany_development.tsv"
     conda:
         TOOLS_ENV
     params:
         bdbv=BDBV,
-        germany_root_config=GERMANY_ROOT["config"],
-        args=f"--config {GERMANY_ROOT['config']} --data {GERMANY_ROOT['data']}",
-        out=GERMANY_ROOT["results"],
+        germany_root_config=GERMANY["config"],
+        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+        out=lambda w, output: Path(output[0]).parent,
     shell:
         "exec >{log} 2>&1; "
-        "cd .. && "
         "{params.bdbv} germany-backtest {params.args} --out {params.out} && "
         "{params.bdbv} germany-teams {params.args} --out {params.out} && "
         "{params.bdbv} germany-paper --config {params.germany_root_config} "
@@ -489,16 +212,18 @@ rule germany_heldout:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
     log:
         f"{R}/logs/germany_heldout.log",
+    benchmark:
+        f"{R}/benchmarks/germany_heldout/germany_heldout.tsv"
     conda:
         TOOLS_ENV
     params:
         bdbv=BDBV,
-        germany_root_config=GERMANY_ROOT["config"],
-        args=f"--config {GERMANY_ROOT['config']} --data {GERMANY_ROOT['data']}",
-        out=GERMANY_ROOT["results"],
+        germany_root_config=GERMANY["config"],
+        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+        # The held-out forecasts are in the results folder's held-out/.
+        out=lambda w, output: Path(output[0]).parent.parent,
     shell:
         "exec >{log} 2>&1; "
-        "cd .. && "
         "{params.bdbv} germany-backtest {params.args} --held-out "
         "--out {params.out} && "
         "{params.bdbv} germany-teams {params.args} --held-out --out {params.out} && "
@@ -524,13 +249,60 @@ rule ebola_hub:
         "rm -rf {params.hub} && mv {params.hub}.clone {params.hub}"
 
 
-# The release backtest of the models on main, from every past release. CI
-# has run it by the paper step, so this rule then has nothing to do.
-# The paper's own release backtest of `backtest_models` at its number of
-# draws, from a copy of the backtest config with only `[samples] backtest`
-# changed: the draws of the models the backtest runs itself. The stored
-# fits keep `[forecast] n_samples`.
-EBOLA_DRAWS = f"{R}/ebola-backtest/forecasts.csv.gz"
+if FLOW.store_history():
+
+    # Our stored forecasts made before each round closed, from the fit
+    # store's history release, checked against its checksum.
+    rule fit_store_history:
+        output:
+            FLOW.store_history(),
+        log:
+            f"{R}/logs/fit_store_history.log",
+        conda:
+            TOOLS_ENV
+        params:
+            repo=EBOLA["store_history"]["repo"],
+            tag=EBOLA["store_history"]["tag"],
+            asset=EBOLA["store_history"]["asset"],
+            tmp=f"{R}/evidence/fit-store-history.tmp",
+        shell:
+            "exec >{log} 2>&1; "
+            "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+            "gh release download {params.tag} -R {params.repo} "
+            "-p {params.asset} -p {params.asset}.sha256 -D {params.tmp} && "
+            "(cd {params.tmp} && sha256sum -c {params.asset}.sha256) && "
+            "mv {params.tmp}/{params.asset} {output} && rm -rf {params.tmp}"
+
+    # Opt-in: publish the fit store's history (`paperpipe fit-store-history`)
+    # with its checksum, replacing the release's assets.
+    rule publish_fit_store_history:
+        output:
+            touch(f"{R}/evidence/fit-store-history.published"),
+        log:
+            f"{R}/logs/publish_fit_store_history.log",
+        localrule: True
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+            repo=EBOLA["store_history"]["repo"],
+            branch=EBOLA["store_history"]["branch"],
+            tag=EBOLA["store_history"]["tag"],
+            asset=EBOLA["store_history"]["asset"],
+            tmp=f"{R}/evidence/history-upload",
+        shell:
+            "exec >{log} 2>&1; "
+            "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+            "git fetch -q origin {params.branch} && "
+            "{params.python} -m paperpipe fit-store-history "
+            "--ref origin/{params.branch} --out {params.tmp}/{params.asset} && "
+            "(cd {params.tmp} && sha256sum {params.asset} > {params.asset}.sha256) && "
+            "(gh release view {params.tag} -R {params.repo} > /dev/null || "
+            "gh release create {params.tag} -R {params.repo} --prerelease "
+            "--title 'Fit store history' "
+            "--notes 'The first fit of each model and origin, made before its round closed.') && "
+            "gh release upload {params.tag} -R {params.repo} --clobber "
+            "{params.tmp}/{params.asset} {params.tmp}/{params.asset}.sha256"
 
 
 rule ebola_backtest_draws:
@@ -540,6 +312,8 @@ rule ebola_backtest_draws:
         EBOLA_DRAWS,
     log:
         f"{R}/logs/ebola_backtest_draws.log",
+    benchmark:
+        f"{R}/benchmarks/ebola_backtest_draws/ebola_backtest_draws.tsv"
     conda:
         TOOLS_ENV
     resources:
@@ -547,16 +321,13 @@ rule ebola_backtest_draws:
     params:
         bdbv=BDBV,
         models=" ".join(EBOLA["backtest_models"]),
-        n=EBOLA.get("n_samples", 100),
+        n=EBOLA["n_samples"],
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
     shell:
         "exec >{log} 2>&1; "
         "mkdir -p {params.folder} && "
-        "sed 's/^backtest = .*/backtest = {params.n}/' {params.config} "
-        "> {params.folder}/backtest.toml && "
-        "grep -q '^backtest = {params.n}$' {params.folder}/backtest.toml && "
-        "cd .. && {params.bdbv} backtest --config {params.folder}/backtest.toml "
+        "{params.bdbv} backtest --config {params.config} --samples {params.n} "
         "--models {params.models} --no-recovery "
         "--results {params.folder}/results --output {params.folder}"
 
@@ -567,6 +338,8 @@ rule ebola_backtest:
         f"{EBOLA['data']}/target.csv",
     log:
         f"{R}/logs/ebola_backtest.log",
+    benchmark:
+        f"{R}/benchmarks/ebola_backtest/ebola_backtest.tsv"
     conda:
         TOOLS_ENV
     params:
@@ -574,13 +347,13 @@ rule ebola_backtest:
         models=" ".join(EBOLA["backtest_models"]),
     shell:
         "exec >{log} 2>&1; "
-        "cd .. && {params.bdbv} data && "
+        "{params.bdbv} data && "
         "{params.bdbv} backtest --models {params.models} --no-recovery"
 
 
 rule data:
     input:
-        source_files,
+        FLOW.source_files,
     output:
         observations=f"{R}/{{mode}}/data/{{study}}-observations.csv.gz",
         locations=f"{R}/{{mode}}/data/{{study}}-locations.csv",
@@ -591,18 +364,10 @@ rule data:
         TOOLS_ENV
     params:
         python=PYTHON,
-        limits=limits,
-        sources=sources,
-        delay=lambda w: (
-            f"--delay {config['truth_delay'][w.study]}"
-            if w.study in config.get("truth_delay", {})
-            else ""
-        ),
-        note=lambda w: (
-            f"--note {shlex.quote(provisional(w.study))}"
-            if provisional(w.study)
-            else ""
-        ),
+        limits=FLOW.limits,
+        sources=FLOW.sources,
+        delay=FLOW.delay_arg,
+        note=FLOW.note_arg,
         config=shlex.quote(json.dumps(config)),
     shell:
         "exec >{log} 2>&1; "
@@ -626,8 +391,8 @@ rule forecasts:
         TOOLS_ENV
     params:
         python=PYTHON,
-        limits=limits,
-        sources=sources,
+        limits=FLOW.limits,
+        sources=FLOW.sources,
         n_samples=config["n_samples"],
     shell:
         "exec >{log} 2>&1; "
@@ -666,9 +431,7 @@ rule truth:
         TOOLS_ENV
     params:
         python=PYTHON,
-        rule=lambda w: (
-            "--first-after" if w.study in config.get("truth_first_after", []) else ""
-        ),
+        rule=FLOW.truth_rule_arg,
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe truth {params.rule} "
@@ -727,11 +490,7 @@ rule real_finetune:
     input:
         germany=f"{R}/{{mode}}/tables/si/germany-real-finetune.csv",
         # Development runs have no Ebola study, so Germany only.
-        ebola=lambda w: [
-            f"{R}/{w.mode}/tables/si/ebola-real-finetune.csv"
-            for s in studies(w.mode)
-            if s == "ebola"
-        ],
+        ebola=FLOW.ebola_real_finetune,
     output:
         f"{R}/{{mode}}/tables/si/real-finetune.md",
     log:
@@ -747,28 +506,6 @@ rule real_finetune:
         "{params.ebola} --out {output}"
 
 
-def study_split(mode, study):
-    s = run_settings(config, mode)
-    if study == "germany" and s.germany_split is not None:
-        return f"--split {s.germany_split:%Y-%m-%d}"
-    if study == "ebola" and s.ebola_split is not None:
-        return f"--split {s.ebola_split:%Y-%m-%d}"
-    return ""
-
-
-def study_files(study):
-    """A study's data, forecasts and scores, with `{mode}` left open."""
-    return {
-        "forecasts": f"{R}/{{mode}}/forecasts/{study}.csv.gz",
-        "observations": f"{R}/{{mode}}/data/{study}-observations.csv.gz",
-        "locations": f"{R}/{{mode}}/data/{study}-locations.csv",
-        "meta": f"{R}/{{mode}}/data/{study}-meta.json",
-        "scores": f"{R}/{{mode}}/scores/{study}.csv.gz",
-        "crps_scores": f"{R}/{{mode}}/scores-crps/{study}.csv.gz",
-        "truth": f"{R}/{{mode}}/truth/{study}.csv.gz",
-    }
-
-
 # Each study has its own figures and tables, so each gets its own rules.
 for study in STUDIES:
 
@@ -776,9 +513,9 @@ for study in STUDIES:
         name:
             f"figures_{study}"
         input:
-            **study_files(study),
+            **FLOW.study_files(study),
         output:
-            figures("{mode}", study),
+            FLOW.figures("{mode}", study),
         log:
             f"{R}/{{mode}}/logs/figures_{study}.log",
         conda:
@@ -786,7 +523,7 @@ for study in STUDIES:
         params:
             python=PYTHON,
             study=study,
-            split=lambda w, study=study: study_split(w.mode, study),
+            split=lambda w, study=study: FLOW.study_split(w.mode, study),
             config=shlex.quote(json.dumps(config)),
             main=f"{R}/{{mode}}/figures/main",
             si=f"{R}/{{mode}}/figures/si",
@@ -805,11 +542,11 @@ for study in STUDIES:
         name:
             f"score_tables_{study}"
         input:
-            locations=study_files(study)["locations"],
-            scores=study_files(study)["scores"],
-            meta=study_files(study)["meta"],
+            locations=FLOW.study_files(study)["locations"],
+            scores=FLOW.study_files(study)["scores"],
+            meta=FLOW.study_files(study)["meta"],
         output:
-            tables("{mode}", study),
+            FLOW.tables("{mode}", study),
         log:
             f"{R}/{{mode}}/logs/score_tables_{study}.log",
         conda:
@@ -817,7 +554,7 @@ for study in STUDIES:
         params:
             python=PYTHON,
             study=study,
-            split=lambda w, study=study: study_split(w.mode, study),
+            split=lambda w, study=study: FLOW.study_split(w.mode, study),
             main=f"{R}/{{mode}}/tables/main",
             si=f"{R}/{{mode}}/tables/si",
         shell:
@@ -826,23 +563,14 @@ for study in STUDIES:
             "--scores {input.scores} --locations {input.locations} "
             "--meta {input.meta} "
             "--main-dir {params.main} --si-dir {params.si} {params.split} "
-            f"--realdata-after {REALDATA_AFTER}"
+            f"--realdata-after {FLOW.realdata_after}"
 
 
-def grid_config(mode):
-    """The `synthetic` block with the run's seeds, for the SI notes."""
-    s = run_settings(config, "paper")
-    d = run_settings(config, "development")
-    return {
-        **SYNTHETIC,
-        "heldout_seeds": list(s.synthetic_seeds),
-        "development_seeds": list(d.synthetic_seeds),
-    }
-
-
-# Example simulations of the grid, from pilot simulations on an evidence
-# branch (`paperfigs.sim_examples`).
+# Example simulations of the grid, from the development round
+# (`paperfigs.sim_examples`), or a note of what they wait on.
 rule sim_examples:
+    input:
+        **FLOW.example_files(),
     output:
         f"{R}/{{mode}}/figures/si/sim-examples.png",
     log:
@@ -851,18 +579,101 @@ rule sim_examples:
         TOOLS_ENV
     params:
         python=PYTHON,
-        ref=SYNTHETIC["examples"]["ref"],
-        path=SYNTHETIC["examples"]["path"],
         picks=shlex.quote(json.dumps(SYNTHETIC["examples"]["picks"])),
-        tmp=f"{R}/{{mode}}/sim-examples",
     shell:
         "exec >{log} 2>&1; "
-        "(git -C .. cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
-        "git -C .. fetch -q origin {params.ref}) && "
-        "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-        "git -C .. archive {params.ref} {params.path} | tar -x -C {params.tmp} "
-        "&& {params.python} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
-        "--picks {params.picks} --out {output}"
+        "{params.python} -m paperfigs.sim_examples --counts {input.counts} "
+        "--settings {input.settings} --picks {params.picks} --out {output}"
+
+
+# The walk models' scores with no pairing and with the rolling rho_p, on
+# development data only (`nowcasteval.pairing`): the German development
+# half, and the development seeds' outbreaks as the synthetic runner
+# forecasts them. `si_copula` summarises both for the SI's copula figure.
+# A dummy German benchmark leaves them out.
+if GERMANY["real"]:
+
+    rule pairing_germany:
+        input:
+            TRIANGLE,
+        output:
+            scores=f"{R}/evidence/pairing/pairing-germany.csv.gz",
+            # Each walk model's rolling rho_p by nowcast date and level.
+            rho=FLOW.workflow_evidence()["copula_rho"],
+        log:
+            f"{R}/logs/pairing_germany.log",
+        conda:
+            TOOLS_ENV
+        resources:
+            heavy=1,
+        params:
+            bdbv=BDBV,
+            args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+            out=lambda w, output: Path(output.scores).parent,
+        shell:
+            "exec >{log} 2>&1; "
+            "{params.bdbv} pairing-sensitivity --study germany {params.args} "
+            "--out {params.out}"
+
+    rule pairing_synthetic:
+        input:
+            FLOW.synthetic_simulations("development"),
+        output:
+            f"{R}/evidence/pairing/pairing-synthetic.csv.gz",
+        log:
+            f"{R}/logs/pairing_synthetic.log",
+        conda:
+            TOOLS_ENV
+        resources:
+            heavy=1,
+        params:
+            python=PYTHON,
+            sims=SYNTHETIC["simulations"]["development"],
+            seeds=FLOW.seeds("development"),
+            samples=config["synthetic"]["samples"],
+        shell:
+            "exec >{log} 2>&1; "
+            "{params.python} paper/scripts/pairing_synthetic.py {params.sims} "
+            "{output} --seeds {params.seeds} --samples {params.samples}"
+
+    rule si_copula:
+        input:
+            rules.pairing_germany.output.scores,
+            rules.pairing_synthetic.output,
+        output:
+            FLOW.workflow_evidence()["si_copula"],
+        log:
+            f"{R}/logs/si_copula.log",
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+        shell:
+            "exec >{log} 2>&1; "
+            "{params.python} -m paperpipe pairing {input} --out {output}"
+
+
+# The grid's training rounds against the German development half, for
+# the SI's realism figure and numbers (`paperpipe realism`).
+if FLOW.rounds_dir:
+
+    rule sim_realism:
+        input:
+            **FLOW.realism_inputs(),
+        output:
+            sims=FLOW.workflow_evidence()["sim_summaries"],
+            reference=FLOW.workflow_evidence()["sim_realism"],
+        log:
+            f"{R}/logs/sim_realism.log",
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+        shell:
+            "exec >{log} 2>&1; "
+            "{params.python} -m paperpipe realism {input.rounds} "
+            "--germany {input.germany} --out-sims {output.sims} "
+            "--out-reference {output.reference}"
 
 
 # The grid tables and SI notes, read from the grid config
@@ -882,9 +693,9 @@ rule grid_tables:
         TOOLS_ENV
     params:
         python=PYTHON,
-        config=lambda w: shlex.quote(json.dumps(grid_config(w.mode))),
+        config=shlex.quote(json.dumps(FLOW.grid_config())),
         si=f"{R}/{{mode}}/tables/si",
-        grid_name=at_root(SYNTHETIC["grid_file"]),
+        grid_name=lambda w, input: input.grid,
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m papertables.synthetic_grid --grid {input.grid} "
@@ -894,7 +705,10 @@ rule grid_tables:
 
 rule evidence:
     input:
-        **{n: evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+        **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+        # The held-out loss curve, the published-range rows, the realism
+        # step's outputs and the pairing scores, from workflow rules.
+        **FLOW.workflow_evidence(),
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -903,31 +717,26 @@ rule evidence:
         TOOLS_ENV
     params:
         python=PYTHON,
-        args=" ".join(
-            f"--{n.replace('_', '-')} {evidence_file(n)}"
-            for n in EVIDENCE
-            if n in EVIDENCE_NAMES
-        ),
+        args=FLOW.evidence_args(EVIDENCE_NAMES),
+        workflow=FLOW.options(FLOW.workflow_evidence()),
         si=f"{R}/{{mode}}/tables/si",
         fig=f"{R}/{{mode}}/figures/si",
         # The live fine-tuning run, whose newest scored checkpoints are
         # shown as preliminary.
-        live=(f"--live-run {config['live_run']}" if config.get("live_run") else ""),
+        live=FLOW.live_arg(),
+        comparisons=FLOW.comparisons_arg(),
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "{params.workflow} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
-        "{params.live}"
+        "{params.live} {params.comparisons}"
 
 
 rule summary:
     input:
-        meta=lambda w: [
-            study_files(s)["meta"].format(mode=w.mode) for s in studies(w.mode)
-        ],
-        scores=lambda w: [
-            f"{R}/{w.mode}/tables/main/{s}-scores.csv" for s in studies(w.mode)
-        ],
+        meta=FLOW.summary_meta,
+        scores=FLOW.summary_scores,
     output:
         f"{R}/{{mode}}/results.yml",
     log:
@@ -936,18 +745,18 @@ rule summary:
         TOOLS_ENV
     params:
         python=PYTHON,
+        args=FLOW.summary_args(),
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe summary --mode {wildcards.mode} "
         "--meta {input.meta} --scores {input.scores} --out {output} "
-        + (f"--finetuned {config['finetuned']}" if config.get("finetuned") else "")
-        + f" --realdata-after {REALDATA_AFTER}"
+        "{params.args}"
 
 
 # The paper reads `build`, so it shows the last run published.
-rule publish:
+rule publish_paper:
     input:
-        outputs=lambda w: outputs(w.mode),
+        outputs=FLOW.outputs,
         summary=rules.summary.output,
     output:
         # Outside `build`, which each publish replaces.
@@ -961,12 +770,7 @@ rule publish:
         build=BUILD,
         # The tables the paper includes from studies a development run
         # leaves out: placeholders, inside sections it does not show.
-        held=lambda w: " ".join(
-            f"{BUILD}/tables/{part}/{study}-{name}.md"
-            for study in STUDIES
-            if study not in studies(w.mode)
-            for part, name in HELD_OUT_INCLUDES
-        ),
+        held=FLOW.held_out_placeholders,
     shell:
         "exec >{log} 2>&1; "
         "rm -rf {params.build} && mkdir -p {params.build} && "

@@ -34,9 +34,13 @@ def fake(monkeypatch):
     mod = runner()
     calls = {"loads": 0, "evals": []}
 
+    class Base:
+        def to(self, _device):
+            return self
+
     def load_base(_device):
         calls["loads"] += 1
-        return object()
+        return Base()
 
     def evaluate(adapter, _base, _blocks, kinds, _batch, real=()):
         calls["evals"].append((Path(adapter), list(kinds), len(real)))
@@ -49,8 +53,7 @@ def fake(monkeypatch):
     monkeypatch.setattr(mod.fe, "load_base", load_base)
     monkeypatch.setattr(mod.fe, "evaluate", evaluate)
     monkeypatch.setattr(mod.fe, "load_blocks", lambda *_a, **_k: [{}, {}])
-    monkeypatch.setattr(mod, "fresh", lambda base, _device: base)
-    monkeypatch.setattr(mod.series_bias, "attach_for", lambda *_a: None)
+    monkeypatch.setattr(mod.fe.series_bias, "attach_for", lambda *_a: None)
     return mod, calls
 
 
@@ -70,16 +73,39 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
         snapshot(train, step, kinds)
     first = checkpoint_at(train, 250, 200)
     second = checkpoint_at(train, 500, 400)
-    mod.main(["steps", str(first), "--device", "cpu"])
+    mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
     assert calls["loads"] == 1
-    assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]
+    # Newest first.
+    assert [c[1] for c in calls["evals"]] == [["monitor"], ["start"]]
     got = json.loads((train / "evals" / "step-0000200.json").read_text())
     assert got["step"] == 200
     assert got["eval_loss"] == 0.3
     assert not (train / "evals" / "step-0000400.json").exists()
-    mod.main(["steps", str(second), "--prev", str(first), "--device", "cpu"])
+    mod.main(
+        [
+            "steps",
+            str(second),
+            "--prev",
+            str(first),
+            "--device",
+            "cpu",
+            "--eval-every",
+            "200",
+        ]
+    )
     assert len(calls["evals"]) == 3
-    mod.main(["steps", str(second), "--prev", str(first), "--device", "cpu"])
+    mod.main(
+        [
+            "steps",
+            str(second),
+            "--prev",
+            str(first),
+            "--device",
+            "cpu",
+            "--eval-every",
+            "200",
+        ]
+    )
     assert len(calls["evals"]) == 3
 
 
@@ -152,3 +178,34 @@ def test_steps_passes_a_segment_with_no_due_step(tmp_path, fake):
         ]
     )
     assert [c[1] for c in calls["evals"]] == [["start"]]
+
+
+def test_base_scores_only_step_0_and_once(tmp_path, fake):
+    mod, calls = fake
+    train = tmp_path / "train"
+    for step, kinds in ((0, ["start"]), (200, ["monitor"])):
+        snapshot(train, step, kinds)
+    first = checkpoint_at(train, 250, 200)
+    mod.main(["base", str(first), "--device", "cpu"])
+    assert [c[1] for c in calls["evals"]] == [["start"]]
+    assert (train / "evals" / "step-0000000.json").exists()
+    assert not (train / "evals" / "step-0000200.json").exists()
+    mod.main(["base", str(first), "--device", "cpu"])
+    assert len(calls["evals"]) == 1
+    # The segment's step evaluation then skips step 0.
+    mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
+    assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]
+
+
+def test_steps_scores_the_newest_snapshot_first(tmp_path, fake):
+    mod, calls = fake
+    train = tmp_path / "train"
+    for step in (200, 400, 600):
+        snapshot(train, step, ["monitor"])
+    where = checkpoint_at(train, 250, 600)
+    (train / "evals" / "step-0000000.json").write_text("{}")
+    mod.main(["steps", str(where), "--device", "cpu", "--eval-every", "200"])
+    steps = [
+        int(c[0].parent.name.removeprefix("step-")) for c in calls["evals"]
+    ]
+    assert steps == [600, 400, 200]
