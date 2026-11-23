@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -229,6 +230,18 @@ def _fake_draws(data: Any, n: int, rng: np.random.Generator) -> dict[str, Any]:
         "province": province,
         "national": province.sum(2),
         "insample": insample,
+        "rt": _fake_rt(data, 40, rng),
+    }
+
+
+def _fake_rt(data: Any, n: int, rng: np.random.Generator) -> dict[str, Any]:
+    """`weekly_rt` output on a 42-day seeding axis."""
+    weeks = 6 + data.n_weeks + data.horizon_weeks
+    shape = (n, weeks, len(data.names))
+    return {
+        "rt": rng.lognormal(0.0, 0.3, size=shape),
+        "weight": rng.gamma(2.0, 5.0, size=shape),
+        "start": data.start_date - dt.timedelta(days=42),
     }
 
 
@@ -353,6 +366,46 @@ def test_fit_renewal_writes_the_ci_contract(
     assert set(result.samples["sample"]) == set(range(1, task.n_samples + 1))
     assert set(result.samples["target_end_date"]) == set(task.target_end_dates)
     assert result.modelled is not None
+    rt = pd.read_csv(tmp_path / rn.RT_FILE, dtype={"target_end_date": str})
+    assert set(rt["location"]) == {*fitted, NATIONAL}
+
+
+def test_rt_quantiles_give_the_hub_levels_by_infection_week(
+    task: ForecastTask,
+) -> None:
+    runs = {
+        loc: _fake_run(
+            replace(task, locations=(loc,)), rn.VARIANTS["renewalsp"]
+        )
+        for loc in task.locations[:2]
+    }
+    out = rn.rt_quantiles(task, runs)
+    assert list(out.columns) == [
+        "location",
+        "target_end_date",
+        "output_type_id",
+        "value",
+    ]
+    assert set(out["location"]) == {*task.locations[:2], NATIONAL}
+    assert set(out["target_end_date"]) == set(task.target_end_dates)
+    assert tuple(sorted(set(out["output_type_id"]))) == rn.RT_QUANTILES
+    assert len(rn.RT_QUANTILES) == 23
+    assert (out["value"] >= 0).all()
+    for _, group in out.groupby(["location", "target_end_date"]):
+        assert group["value"].is_monotonic_increasing
+    # National pools the provinces' draws one by one, weighted by their
+    # infections: not a mix of their quantiles.
+    date = task.target_end_dates[0]
+    a, b = (runs[loc].draws["rt"] for loc in task.locations[:2])
+    i = (epiweek_end(date) - (a["start"] + dt.timedelta(days=6))).days // 7
+    wa, wb = a["weight"][:, i, 0], b["weight"][:, i, 0]
+    joint = (wa * a["rt"][:, i, 0] + wb * b["rt"][:, i, 0]) / (wa + wb)
+    nat = out.loc[
+        (out["location"] == NATIONAL)
+        & (out["target_end_date"] == date)
+        & (out["output_type_id"] == 0.5)
+    ]
+    assert float(nat["value"].iloc[0]) == pytest.approx(np.median(joint))
 
 
 def test_chains_start_from_their_own_prior_draws() -> None:
