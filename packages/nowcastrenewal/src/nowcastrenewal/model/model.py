@@ -190,7 +190,12 @@ class ModelConfig:
         $\sqrt{2}$ halves the precision, the power prior with tempering
         0.5. `math.inf` gives the model without the term, exactly.
     dmax : int
-        Maximum onset-to-report delay in days.
+        Maximum onset-to-report delay in days. Longer delays of known
+        onsets are counted at `dmax`, the last cell of the hazard pmf,
+        so the delay counts keep every case. At 60 days this lumps few
+        cases: in the 2026-11-15 release 0.47% of known-onset delays
+        exceed 60 days (99% are within 37). A longer axis would add
+        hazard cells that those few cases barely inform.
     delay_counts : {"multinomial", "dirichlet-multinomial"}
         Likelihood of the delay file's counts given the weekly totals.
         The Dirichlet-multinomial (default) has $1/\sqrt{\psi} \sim
