@@ -28,7 +28,7 @@ Schaake shuffle by the energy score of each one's draws on the model's
 forecasts at the earlier origins (`coupling_releases`), on
 the truth reported by the origin, aligned by horizon.
 
-Input rows are a German unit's cache (`nowcastfoundation.checkpoint`):
+Input rows are a German unit's cache (`nowcastgermany.checkpoint`):
 `model`, `origin`, `location`, `target_end_date`, `horizon`, `quantile`,
 `value`, `truth` and `truth_vintage`.
 """

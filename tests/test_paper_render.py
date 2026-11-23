@@ -1,19 +1,20 @@
-"""`scripts/paper.sh`: the one command that runs and renders the paper."""
+"""`paper_run.py --render`: the one command that runs and renders the paper."""
 
 from __future__ import annotations
 
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts" / "paper.sh"
-# The machine settings' loader the script reads CORES from.
-LOADER = ROOT / "workflow" / "flowlib" / "localconfig.py"
+RUNNER = ROOT / "workflow" / "scripts" / "paper_run.py"
+# The workflow helpers it imports, CORES among the machine's settings.
+FLOWLIB = ROOT / "workflow" / "flowlib"
 
 # Stand-ins that log each call to $CALLS.
 STUB = """#!/bin/sh
@@ -37,11 +38,14 @@ OUTPUTS = (
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    """A tree with the script, stand-in tools and rendered outputs."""
-    (tmp_path / "scripts").mkdir()
-    shutil.copy(SCRIPT, tmp_path / "scripts" / "paper.sh")
-    (tmp_path / "workflow" / "flowlib").mkdir(parents=True)
-    shutil.copy(LOADER, tmp_path / "workflow" / "flowlib" / "localconfig.py")
+    """A tree with the runner, stand-in tools and rendered outputs."""
+    (tmp_path / "workflow" / "scripts").mkdir(parents=True)
+    shutil.copy(RUNNER, tmp_path / "workflow" / "scripts" / "paper_run.py")
+    shutil.copytree(
+        FLOWLIB,
+        tmp_path / "workflow" / "flowlib",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
     for name in OUTPUTS:
         path = tmp_path / "paper" / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,13 +71,21 @@ def _run(
         **os.environ,
         "PATH": f"{repo / 'bin'}:{os.environ['PATH']}",
         "CALLS": str(repo / "calls.log"),
+        # A machine with the monitor off, whatever this one's config.
+        "LOCAL_CONFIG": str(repo / "local.env"),
+        "MONITOR_URL": "",
     }
     for name in ("CORES", "GITHUB_TOKEN", "GH_TOKEN"):
         env.pop(name, None)
     if cores is not None:
         env["CORES"] = cores
     return subprocess.run(
-        ["bash", str(repo / "scripts" / "paper.sh"), *args],
+        [
+            sys.executable,
+            str(repo / "workflow" / "scripts" / "paper_run.py"),
+            "--render",
+            *args,
+        ],
         cwd=repo,
         env=env,
         capture_output=True,
@@ -133,7 +145,7 @@ def test_pages_and_the_taskfile_run_the_script() -> None:
         for s in steps
         if s.get("name") == "Run the paper workflow and render the paper"
     ]
-    assert 'scripts/paper.sh "$TARGET"' in paper["run"]
+    assert 'paper_run.py --render "$TARGET"' in paper["run"]
     # The script path is from the repository root.
     assert "working-directory" not in paper
     assert "snakemake" not in paper["run"]
@@ -143,7 +155,7 @@ def test_pages_and_the_taskfile_run_the_script() -> None:
     cmds = [str(c) for c in tasks["paper"]["cmds"]]
     assert any("workflow/scripts/paper_run.py" in c for c in cmds)
     runner = (ROOT / "workflow" / "scripts" / "paper_run.py").read_text()
-    assert '"scripts/paper.sh"' in runner
+    assert '"--render"' in runner
 
 
 def test_the_steps_get_a_github_token(repo: Path) -> None:

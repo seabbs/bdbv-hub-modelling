@@ -40,7 +40,6 @@ def test_workflow_tasks_and_ticks_report_to_it():
 @pytest.mark.parametrize(
     "rel",
     [
-        "scripts/paper.sh",
         "workflow/scripts/paper_run.py",
     ],
 )

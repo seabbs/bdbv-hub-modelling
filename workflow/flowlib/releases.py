@@ -3,7 +3,7 @@
 `labels`: checkpoint labels of releases published from a cut-off, the
 final run's `chronos-slots-<hash>` first as `slots-<hash>`, then
 `chronos-ft-<hash>` as `<hash>`, each group oldest first. Other releases
-are left out. The labels must be the ones `nowcastfoundation.checkpoint`
+are left out. The labels must be the ones `nowcastgermany.checkpoint`
 takes.
 
 `by_time` orders the same labels oldest first across both kinds, and

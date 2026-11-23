@@ -1,8 +1,8 @@
 # Gate: validate a submission and its model metadata with hubValidations.
 #
-# Usage: Rscript scripts/validate-hub.R <hub_path> <submission.csv> <metadata.yml>
+# Usage: Rscript tests/submission/hub_validation/validate_hub.R <hub_path> <submission.csv> <metadata.yml>
 #
-# Runs scripts/validate_with_hubvalidations.R, which copies the hub's
+# Runs validate_with_hubvalidations.R (beside this file), which copies the hub's
 # `hub-config/` into a temporary hub, places each file there and runs
 # `validate_submission` and `validate_model_metadata`. The hub checkout is
 # never modified. The submission must sit in a directory named after its
@@ -15,7 +15,7 @@
 # branch for a resubmission. Exits 1 if any check fails.
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) != 3) {
-  stop("Usage: validate-hub.R <hub_path> <submission.csv> <metadata.yml>")
+  stop("Usage: validate_hub.R <hub_path> <submission.csv> <metadata.yml>")
 }
 script_dir <- dirname(normalizePath(sub(
   "^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1]

@@ -111,3 +111,15 @@ def test_the_horizon_control_filters_bands_and_scores():
     assert "d.ranges" in js
     assert "d.byday" in js
     assert "by day of the horizon" in js
+
+
+def test_the_horizon_split_pools_the_common_nowcast_dates():
+    # The split was pooled over the plot's date, the newest by default,
+    # which a checkpoint still being scored lacks: its bars were empty and
+    # it was named as having no forecast days.
+    js = (PAGE / "nowcasts.js").read_text()
+    pool = js[js.index("function pool(") :]
+    pool = pool[: pool.index("return out}")]
+    assert "(com||[]).forEach" in pool
+    assert "(ds||[])" not in pool
+    assert "nowcast date(s) shown" not in js
