@@ -226,11 +226,12 @@ function wisChart(d,eff,ds){
   var out=[];if(now[1])out.push(["nowcast","now",now[0]/now[1]]);
   Object.keys(ahead).sort(function(a,b){return a-b}).forEach(function(k){out.push(["forecast","wk "+k,ahead[k][0]/ahead[k][1]])});return out}
  var hz=sel.map(pool),hmax=Math.max.apply(null,hz.reduce(function(a,r){return a.concat(r.map(function(x){return x[2]}))},[0]))*1.05||1,h5='';
- var anyFc=hz.some(function(r){return r.some(function(x){return x[0]=="forecast"})});
  sel.forEach(function(id,i){var y=2+i*RH,bars=hz[i],bw2=(W-60)/Math.max(1,bars.length);
   h5+=lab(id,y);bars.forEach(function(b,j){var w=Math.max(0,b[2]/hmax*(bw2-34)),x=j*bw2;
    h5+='<rect x="'+x+'" y="'+(y+12)+'" width="'+w+'" height="12" fill="'+fillKind(colour(id),HF[b[0]]||"solid")+'" stroke="'+colour(id)+'" stroke-width=".8"><title>'+(b[0]=="nowcast"?"nowcast part":"forecast, week "+b[1].slice(3)+" ahead")+': '+C.metric+' '+fmt(b[2])+'</title></rect><text x="'+(x+w+2)+'" y="'+(y+22)+'" class=ax>'+b[1]+'</text>'})});
- var hzNote=anyFc?'':'<div class=mut style="font-size:11px">No forecast dates in '+C.label+': its targets end at the nowcast date, so all of its '+C.metric+' is the nowcast part.</div>';
+ // Models whose files hold no forecast days are named, not left to look like zero.
+ var noFc=sel.filter(function(id,i){return !hz[i].some(function(x){return x[0]=="forecast"})}).map(shortLab);
+ var hzNote=noFc.length&&(!HR||HR[2]===null||HR[2]>0)?'<div class=mut style="font-size:11px">No forecast days for the date(s) shown: '+noFc.join(", ")+'.</div>':'';
  var hzKey=HZ.map(function(h){return '<span class=lg><svg width=16 height=12 viewBox="0 0 16 12"><rect x=".5" y=".5" width="15" height="11" fill="'+fillKind("var(--fg)",h[2])+'" stroke="var(--fg)" stroke-width=".8" /></svg>'+h[1]+'</span>'}).join("");
  // WIS by day of the horizon: one line a model, the mean over the
  // common nowcast dates of each day's WIS (d.byday), days in the horizon shown.
