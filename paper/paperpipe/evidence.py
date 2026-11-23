@@ -692,7 +692,7 @@ QUOTED: Final = {
 
 COPULA_STUDIES: Final = {
     "germany": "Germany",
-    "synthetic": "Held-out synthetic",
+    "synthetic": "Synthetic",
 }
 """The copula figure's studies, in its row order, all on development data."""
 

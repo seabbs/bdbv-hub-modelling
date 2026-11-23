@@ -653,8 +653,8 @@ def test_the_copula_figure_has_national_and_provinces_per_study() -> None:
     assert titles == {
         "Germany, national",
         "Germany, states",
-        "Held-out synthetic, national",
-        "Held-out synthetic, provinces",
+        "Synthetic, national",
+        "Synthetic, provinces",
     }
     labels = {t.get_text() for t in drawn[0].get_xticklabels()}
     assert labels == {"CRPS", "90% coverage", "ES (log)"}
@@ -767,3 +767,33 @@ def test_a_reference_row_counts_once_per_target() -> None:
     assert aggregation_numbers(rows)["germany"]["national"]["fm"] == {
         "joint": 0.5
     }
+
+
+def test_the_pairing_step_summarises_both_studies(tmp_path) -> None:
+    from paperpipe.__main__ import main
+
+    base = {
+        "level": "national",
+        "model": "randomwalk",
+        "target": "sum",
+        "metric": "crps",
+        "n": 1,
+    }
+    paths = []
+    for study in ("germany", "synthetic"):
+        rows = pd.DataFrame(
+            [
+                {**base, "study": study, "variant": v, "origin": o, "value": x}
+                for v, x in (("off", 2.0), ("rolling", 1.0))
+                for o in ("a", "b")
+            ]
+        )
+        path = tmp_path / f"{study}.csv.gz"
+        rows.to_csv(path, index=False)
+        paths.append(str(path))
+    out = tmp_path / "si-copula.csv"
+    main(["pairing", *paths, "--out", str(out)])
+    got = pd.read_csv(out)
+    assert sorted(got["study"].unique()) == ["germany", "synthetic"]
+    rolling = got.loc[got["variant"] == "rolling", "relative"]
+    assert (rolling == 0.5).all()
