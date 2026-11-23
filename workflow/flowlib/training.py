@@ -261,6 +261,8 @@ class Training:
             ],
             "seeds": f"{there.dir}/seeds.txt",
         }
+        if there.ft["real_training"]:
+            out["real"] = runs.real_training_blocks(there)
         if there.prev[n] is not None:
             out["prev"] = f"{train}/n{there.prev[n]}/settings.json"
         elif run not in self.trained_runs():

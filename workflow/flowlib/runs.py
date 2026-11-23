@@ -115,11 +115,16 @@ def resume_options(run: Run, n: int) -> str:
     return f"--prev {run.train}/n{prev}/state --prev-n {prev}"
 
 
+def real_training_blocks(run: Run) -> str:
+    """Return the run's real-data blocks (rule real_training_blocks)."""
+    return f"{run.dir}/real-training.pkl"
+
+
 def trainer_options(run: Run) -> str:
     """Return the run's optional trainer arguments, each only when set.
 
     The series bias and its rate, the loss horizon, the quiet-block
-    floor and a layout other than ragged.
+    floor, a layout other than ragged and the real-data blocks.
     """
     f = run.ft
     bias = f"--series-bias --bias-lr {f['bias_lr']}" if f["series_bias"] else ""
@@ -130,6 +135,10 @@ def trainer_options(run: Run) -> str:
             option("--quiet-min-cases", f.get("quiet_min_cases")),
             bias,
             "" if f["layout"] == "ragged" else f"--layout {f['layout']}",
+            option(
+                "--real-training",
+                real_training_blocks(run) if f["real_training"] else None,
+            ),
         )
         if a
     )

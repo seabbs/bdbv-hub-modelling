@@ -120,6 +120,12 @@ finetune:
   # without their lag series, so the context ends at the last complete
   # step). Ragged adds nothing to the settings hash.
   layout: ragged
+  # Real-data blocks mixed into the training stream, spread over its
+  # chunks (null: none). `germany`: the German triangle's reports before
+  # the first scored German date (config/germany.toml), so no scored
+  # target is trained on (rule real_training_blocks). Unset adds nothing
+  # to the settings hash.
+  real_training: null
   # Part of the settings hash: changing it changes every checkpoint's hash.
   note: 3,200 simulations
   # The checkpoint checked against zero-shot on the held-out simulations.
@@ -137,6 +143,9 @@ runs:
   # Run A on complete counts, without lag series (the paper's delays
   # comparison).
   nodelays: {layout: complete}
+  # Run A with the German real-data blocks mixed in (the paper's
+  # real-data comparison).
+  realdata: {real_training: germany}
 
 # The runs `finetune` trains (null: every run in `runs`). The variants
 # train after Run A, so they never take its GPU.

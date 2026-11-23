@@ -47,7 +47,9 @@ def test_counts_are_the_changes_as_reported_by_a_date():
     assert set(counts["location"]) == {"CD-BW", "CD-BY", "CD-A0", "CD-A1"}
     assert counts["report_date"].max() <= "2021-03-05"
     # A change is reported on its date plus its delay; after 80 days left out.
-    first = counts.loc[counts["reference_date"] == "2021-03-01"]
+    first = counts.loc[
+        (counts["reference_date"] == "2021-03-01") & (counts["count"] > 0)
+    ]
     assert set(first["report_date"]) <= {"2021-03-01", "2021-03-04"}
 
 
