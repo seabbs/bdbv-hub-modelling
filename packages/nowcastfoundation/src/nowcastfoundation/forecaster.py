@@ -79,7 +79,6 @@ __all__ = [
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
     "LAG_QUANTILE",
-    "LAG_WINDOW",
     "LAYOUTS",
     "MAX_LAG",
     "PERIODS",
@@ -126,16 +125,6 @@ triangle's default width."""
 
 LAG_QUANTILE: Final = 0.99
 """The share of a count reported by the lag `lag_count` takes as $D$."""
-
-LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
-"""`lag_count`'s complete steps: this many (4 weeks, 28 days), ending this
-many before the cut-off (16 weeks, 112 days), which is also the most lags
-it reads."""
-
-FIRST_RELEASE: Final = {"weekly": 2, "daily": 7}
-"""`lag_count` reads a step only if a release falls within this many lags
-of it: a step first released later than that (before a series' first
-release) is left out, as its gap is not a reporting delay."""
 
 COUPLINGS: Final = ("online", "independent", "comonotone")
 """How a foundation model joins its cells (`FoundationModel.coupling`):
@@ -666,6 +655,8 @@ def hub_triangle(
     places: Sequence[str],
     last_time: str,
     max_lag: int | None = None,
+    *,
+    all_lags: bool = False,
 ) -> HubTriangle:
     """Lay out the hub target of every release by place, step and lag.
 
@@ -684,6 +675,9 @@ def hub_triangle(
         Last step of the grid.
     max_lag : int, optional
         Release lag $D$, `MAX_LAG` of the source by default.
+    all_lags : bool
+        Every lag the grid holds, its whole release history, in place of
+        `max_lag` (what `lag_count` reads).
 
     Returns
     -------
@@ -719,7 +713,9 @@ def hub_triangle(
     order = np.argsort(release_of, kind="stable")
     bounds = np.searchsorted(release_of[order], np.arange(len(releases) + 1))
     cutoffs = rows["cutoff"].to_numpy()
-    lags = MAX_LAG[source] if max_lag is None else max_lag
+    lags = (
+        n_times if all_lags else MAX_LAG[source] if max_lag is None else max_lag
+    )
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
     last = 0
@@ -730,9 +726,9 @@ def hub_triangle(
         counts = np.zeros((len(places), n_times))
         keep = mine[(step[mine] >= 0) & (step[mine] < n_times)]
         np.add.at(counts, (place[keep], step[keep]), value[keep])
-        for d in range(lags):
-            if 0 <= at - d < n_times:
-                partial[:, at - d, d] = counts[:, at - d]
+        d = np.arange(lags)
+        d = d[(at - d >= 0) & (at - d < n_times)]
+        partial[:, at - d, d] = counts[:, at - d]
         # Sorted, so the last release's counts and cut-off are the latest.
         final, last = counts, at
     return HubTriangle(times, final, partial, last)
@@ -743,36 +739,36 @@ def lag_count(
 ) -> int:
     """Return the block's lag count $D$ from the data's reporting delay.
 
-    One count for the block: the largest over its places of each place's
-    delay, one more than the first lag at which that place's complete
-    steps had `quantile` of their counts reported, so lag $D - 1$, where
-    the share is reached, is in the block. A place's complete steps are
-    the `LAG_WINDOW[source][0]` steps ending `LAG_WINDOW[source][1]`
-    steps before the cut-off: every lag below that is reported by the
-    cut-off, so recent steps, which have not yet seen their long delays,
-    do not bias it short (right truncation). It reads no release after
-    the cut-off. A lag no release fell on carries the count of the lag
-    before (weekly releases of daily data). A low-count place can only
-    underestimate its delay, so it never raises the block's. A step with
-    no release within `FIRST_RELEASE[source]` lags of it was first
-    released late (before the series' first release), so it is left out;
-    if that leaves no complete step with a count but some were released
-    late, the block takes
-    `LAG_WINDOW[source][0]` lags. At most the
-    history allows, two steps of context before the longest lag; a place
-    whose share is not reached within the window takes that many, and so
-    does a block with no complete steps or no count in them. Training
-    blocks (`nowcastfoundation.finetune.training_block`) and forecasts
-    (`FoundationModel`) use this one rule.
+    Looking back from the cut-off over every release, each step first
+    published after releases began (not backfilled by the first release)
+    settles at the first lag at which its reported count reaches
+    `quantile` of its latest count. $D - 1$ is the `quantile` (99th
+    percentile) of the settling lags over steps and places with a count,
+    using only steps old enough to have settled within the release
+    history: seen for at least $2D$ lags, so their latest count stands
+    for their final one and recent steps, which have not yet seen their
+    long delays, do not bias it short (right truncation). $D$ is the
+    smallest count that meets this. A lag no release fell on carries the
+    count of the lag before (weekly releases of daily data). Steps before
+    the first release are not evidence: a first release that backfills
+    earlier onsets (BDBV's daily releases begin months after its first
+    onsets) measures when releases began, not a delay. With no such
+    step, the block takes its release history, every step from the
+    first release to the cut-off. $D$ is capped only by the history: two
+    steps of context before the longest lag, and the lags `tri` holds.
+    Training blocks (`nowcastfoundation.finetune.training_block`) and
+    forecasts (`FoundationModel`) use this one rule.
 
     Parameters
     ----------
     tri : HubTriangle
-        The triangle, at least `LAG_WINDOW[source][1]` lags wide.
+        The triangle, with every lag of its history (`hub_triangle` with
+        `all_lags`).
     source : str
-        One of `SOURCES`.
+        One of `SOURCES`; the rule is the same in either's steps.
     quantile : float
-        The share of a count reported, in (0, 1].
+        The share of its latest count at which a step settles, and the
+        percentile of the settling lags, in (0, 1].
 
     Returns
     -------
@@ -786,29 +782,36 @@ def lag_count(
     """
     if not 0 < quantile <= 1:
         raise ValueError(f"lag quantile {quantile} is not in (0, 1]")
-    window, back = LAG_WINDOW[source]
-    width = min(back, int(tri.partial.shape[2]))
+    del source
+    width = int(tri.partial.shape[2])
     most = int(max(1, min(width, tri.last - 1)))
-    first = tri.last - back - window + 1
-    if first < 0:
+    # The first release: the earliest step any cell was released on.
+    _, t, d = np.nonzero(~np.isnan(tri.partial))
+    if t.size == 0:
         return most
-    steps = np.arange(first, tri.last - back + 1)
-    lags, late = [], False
-    for p in range(tri.final.shape[0]):
-        cells = tri.partial[p, steps, :width]
-        released = ~np.isnan(cells[:, : FIRST_RELEASE[source]]).all(axis=1)
-        seen_later = ~np.isnan(cells).all(axis=1) & ~released
-        late |= bool((seen_later & (tri.final[p, steps] > 0)).any())
-        final = tri.final[p, steps[released]].sum()
-        if final <= 0:
-            continue
-        seen = pd.DataFrame(cells[released]).ffill(axis=1)
-        share = seen.fillna(0.0).to_numpy().sum(axis=0) / final
-        reached = np.flatnonzero(share >= quantile - 1e-12)
-        lags.append(int(reached[0]) + 1 if reached.size else most)
-    if not lags and late:
-        return min(window, most)
-    return min(max(lags), most) if lags else most
+    released = int((t + d).min())
+    history = int(max(1, min(most, tri.last - released + 1)))
+    steps = np.arange(released, tri.last + 1)
+    final = tri.final[:, steps]
+    seen = np.nan_to_num(
+        pd.DataFrame(tri.partial[:, steps, :width].reshape(-1, width))
+        .ffill(axis=1)
+        .to_numpy()
+    ).reshape(final.shape[0], len(steps), width)
+    # Each step's settling lag: the first at which it reaches `quantile`
+    # of its latest count (its age, past the lags it was seen at, if not).
+    age = tri.last - steps
+    settled = seen >= quantile * final[:, :, None] - 1e-9
+    first = np.where(settled.any(axis=2), settled.argmax(axis=2), width)
+    first = np.minimum(first, age[None, :])
+    counted = final > 0
+    for lags in range(1, history + 1):
+        use = counted & (age >= 2 * lags)[None, :]
+        if not use.any():
+            break
+        if np.quantile(first[use], quantile, method="higher") + 1 <= lags:
+            return lags
+    return history
 
 
 def finetuned_adapter(checkpoint: Checkpoint) -> Path:
@@ -1677,9 +1680,7 @@ class FoundationModel:
         self, rows: pd.DataFrame, places: Sequence[str], last_time: str
     ) -> HubTriangle:
         """Return the task's triangle, `lags` or `lag_count` lags wide."""
-        full = hub_triangle(
-            rows, self.source, places, last_time, LAG_WINDOW[self.source][1]
-        )
+        full = hub_triangle(rows, self.source, places, last_time, all_lags=True)
         # A fixed count is still no more than the history allows.
         lags = (
             min(self.lags, max(1, full.last - 1))
