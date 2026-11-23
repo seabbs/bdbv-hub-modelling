@@ -494,24 +494,28 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
     return Checkpoint(checkpoint_spec(settings), sums, path=str(adapter))
 
 
-def _finetuned(name: str, source: str) -> FoundationModel:
+def _finetuned(
+    name: str, source: str, layout: str = "ragged"
+) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
 
     A spec that is a folder is a run's own segment (`local_checkpoint`).
     The weekly and daily models share the checkpoint. Each builds the
-    block its zero-shot model builds (`PERIODS`); only the weights differ.
+    block its zero-shot model of `layout` builds (`PERIODS` for ragged);
+    only the weights differ. The complete layout is for checkpoints
+    trained on complete counts (the no-delays run).
     """
     spec = finetuned_spec()
     return FoundationModel(
         name,
         source,
-        "ragged",
+        layout,
         (
             local_checkpoint(spec)
             if Path(spec).is_dir()
             else resolve_checkpoint(spec)
         ),
-        period=PERIODS.get(source),
+        period=PERIODS.get(source) if layout == "ragged" else None,
     )
 
 
@@ -1694,13 +1698,15 @@ for _source in SOURCES:
             "layout, every target in one block.",
             fitted=True,
         )
-    register_model(
-        f"fm_chronos_{_source}_ragged_ft",
-        partial(_finetuned, f"fm_chronos_{_source}_ragged_ft", _source),
-        "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
-        f"{_source} releases, ragged layout.",
-        fitted=True,
-    )
+    for _layout in LAYOUTS:
+        _name = f"fm_chronos_{_source}_{_layout}_ft"
+        register_model(
+            _name,
+            partial(_finetuned, _name, _source, _layout),
+            "Chronos-2 fine-tuned on simulated outbreaks, on the hub "
+            f"target's {_source} releases, {_layout} layout.",
+            fitted=True,
+        )
 
 
 def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:

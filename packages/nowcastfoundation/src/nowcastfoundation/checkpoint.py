@@ -135,11 +135,14 @@ def german_models(config: Path = GERMANY_CONFIG) -> tuple[str, ...]:
     return tuple(tomllib.loads(Path(config).read_text())["nowcast"]["models"])
 
 
-def label_models(label: str, config: Path = GERMANY_CONFIG) -> tuple[str, ...]:
+def label_models(
+    label: str, config: Path = GERMANY_CONFIG, layout: str = "ragged"
+) -> tuple[str, ...]:
     """Return the models a label runs, of those the German config lists.
 
     The reference runs the baseline and the zero-shot Chronos-2 models
-    (ragged and complete); a checkpoint runs the fine-tuned (`_ft`) ones.
+    (ragged and complete); a checkpoint runs the fine-tuned (`_ft`) ones,
+    in the `layout` it was trained on (`segment_layout`).
     """
     models = german_models(config)
     if label == REFERENCE:
@@ -149,7 +152,23 @@ def label_models(label: str, config: Path = GERMANY_CONFIG) -> tuple[str, ...]:
             if m.startswith("fm_chronos_") and not m.endswith(("_ft", "_real"))
         ]
         return (BASELINE, *zero)
-    return tuple(m for m in models if m.endswith("_ft"))
+    return tuple(
+        m.replace("_ragged_ft", f"_{layout}_ft")
+        for m in models
+        if m.endswith("_ft")
+    )
+
+
+def segment_layout(segment: Path | None) -> str:
+    """Return the block layout a run's segment trained on.
+
+    From its settings (`layout`, set only when not ragged); a release
+    label, with no segment, is ragged.
+    """
+    if segment is None:
+        return "ragged"
+    settings = json.loads((Path(segment) / "settings.json").read_text())
+    return str(settings.get("layout", "ragged"))
 
 
 def run_of(settings: Mapping[str, Any]) -> str:
@@ -432,7 +451,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
         for d in dates
         if not _reaches(root / f"{d}.csv.gz", last, config.targets)
     ]
-    models = list(label_models(label))
+    models = list(label_models(label, layout=segment_layout(segment)))
     # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
     # a stopped run resumes.

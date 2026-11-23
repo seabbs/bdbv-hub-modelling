@@ -149,6 +149,8 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "fm_chronos_daily_ragged": (6, "dashdot"),
     "fm_chronos_weekly_ragged_ft": (6, "longdash"),
     "fm_chronos_daily_ragged_ft": (6, "dashdotdot"),
+    "fm_chronos_weekly_complete_ft": (5, "longdash"),
+    "fm_chronos_daily_complete_ft": (5, "dashdotdot"),
     "fm_chronos_weekly_ragged_real": (6, "shortdash"),
     "fm_chronos_daily_ragged_real": (6, "longdashdot"),
 }
