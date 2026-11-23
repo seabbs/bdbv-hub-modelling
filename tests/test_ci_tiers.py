@@ -75,3 +75,31 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     assert group["cancel-in-progress"] == (
         "${{ github.ref != 'refs/heads/main' }}"
     )
+
+
+def test_a_pull_request_runs_one_test_job_of_at_most_15_minutes():
+    # The workflow and paper tests run inside the fast tier, with
+    # Snakemake (the paper group), rather than in jobs of their own.
+    assert not (WORKFLOWS / "workflow.yml").exists()
+    assert not (WORKFLOWS / "paper-tests.yml").exists()
+    job = _workflow("test.yml")["jobs"]["test"]
+    assert job["timeout-minutes"] <= 15
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    assert "--group paper pytest" in runs
+    paper = [s for s in job["steps"] if s.get("working-directory") == "paper"]
+    assert paper
+    assert "pytest" in paper[0]["run"]
+    assert "--durations" in runs
+
+
+def test_no_test_runs_in_both_the_full_and_the_chronos_job():
+    steps = _workflow("test.yml")["jobs"]["full"]["steps"]
+    full = " ".join(s.get("run", "") for s in steps)
+    chronos = " ".join(
+        s.get("run", "")
+        for s in _workflow("test.yml")["jobs"]["chronos"]["steps"]
+    )
+    grep = "(importorskip|find_spec)"
+    assert grep in full
+    assert grep in chronos
+    assert "--ignore=" in full
