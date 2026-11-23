@@ -89,3 +89,14 @@ def test_the_page_writes_its_accents_from_the_shared_map():
     for name, (light, dark) in labels.UI_COLOURS.items():
         assert f"--{name}:{light}" in css
         assert f"--{name}:{dark}" in css
+
+
+def test_the_score_panels_sit_in_two_columns():
+    # Five score panels one under another ran far below the plot.
+    js = (PAGE / "nowcasts.js").read_text()
+    css = (PAGE / "style.css").read_text()
+    assert "<div class=gscores>" in js
+    assert "<div class=gsc>" in js
+    rule = re.search(r"\.gscores\{([^}]*)\}", css)
+    assert rule
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in rule[1]
