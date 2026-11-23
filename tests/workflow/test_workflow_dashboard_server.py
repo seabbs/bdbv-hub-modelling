@@ -97,3 +97,59 @@ def test_sections_send_only_what_changed(server):
     # Unchanged parts come back as their hash alone; the clock moves on.
     for key in ("loss", "nowcasts", "tables"):
         assert second[key] == {"hash": first[key]["hash"]}
+
+
+def test_the_page_never_waits_on_a_build(tmp_path):
+    # Sam's page hung for minutes: the nowcasts rebuild (~450 s) held the
+    # lock the page request waited on. A request serves the last page
+    # built, while another build holds the lock.
+    ctx = _machine(tmp_path)
+    ctx.once = False
+    pages = dashboard.Pages(ctx)
+    pages.refresh()
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx, pages))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        with dashboard.LOCK:
+            status, body = get(url + "/")
+            assert status == 200
+            assert "<h2>Nowcasts</h2>" in body
+            status, body = get(url + "/data/germany/DE.json")
+            assert status == 200
+    finally:
+        srv.shutdown()
+
+
+def test_before_the_first_build_the_page_says_it_is_building(tmp_path):
+    ctx = _machine(tmp_path)
+    ctx.once = False
+    pages = dashboard.Pages(ctx)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx, pages))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        status, body = get(url + "/")
+        assert status == 200
+        assert "building" in body.lower()
+        assert 'http-equiv="refresh"' in body
+    finally:
+        srv.shutdown()
+
+
+def test_a_client_that_leaves_is_dropped_quietly(tmp_path, capsys):
+    # A browser that gives up mid-answer is not a server error.
+    class Gone:
+        def write(self, _b):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            pass
+
+    cls = dashboard.handler(_machine(tmp_path))
+    h = cls.__new__(cls)
+    h.path, h.command, h.request_version = "/favicon.ico", "GET", "HTTP/1.1"
+    h.requestline, h.client_address = "GET /favicon.ico HTTP/1.1", ("x", 0)
+    h.wfile = Gone()
+    h.do_GET()
+    assert "Traceback" not in capsys.readouterr().err

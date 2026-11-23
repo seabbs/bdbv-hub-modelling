@@ -3,7 +3,7 @@
 One guard for the whole repository: home folders, host names, IP
 addresses and host:port literals. Tests are not scanned, as they name
 hosts to check their absence; the local config example is where machine
-values are shown.
+values are shown; vendored libraries are left as they come.
 """
 
 import subprocess
@@ -37,7 +37,15 @@ HOSTS = _local_hosts()
 EXAMPLE_HOSTS = ("examplehost",)
 """A host name for the checks of what the guard finds."""
 
-SKIP = ("tests/", "config/local.env.example", "uv.lock", "ci/uv.lock")
+SKIP = (
+    "tests/",
+    "config/local.env.example",
+    "uv.lock",
+    "ci/uv.lock",
+    # Vendored browser libraries, kept byte for byte (static/README.md):
+    # Emscripten's virtual /home/web_user in viz-global.js is no machine's.
+    "workflow/flowlib/static/",
+)
 
 
 def _tracked() -> list[str]:

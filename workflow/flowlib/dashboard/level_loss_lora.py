@@ -19,6 +19,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from flowlib import evaluations
 from flowlib.dashboard import logs, svg, training
 from flowlib.dashboard.runs import Run
@@ -97,17 +99,14 @@ def _matrices(path: Path) -> dict[str, tuple[list[int], array]]:
     return out
 
 
-def _gram(shape: list[int], values: array, rows: bool) -> list[list[float]]:
-    """Return `M M^T` (`rows`) or `M^T M` of a rank-r LoRA matrix."""
-    n, m = shape
-    if rows:  # A is r x in: A A^T is r x r.
-        vec = [values[i * m : (i + 1) * m] for i in range(n)]
-    else:  # B is out x r: B^T B is r x r.
-        vec = [values[j::m] for j in range(m)]
-    return [
-        [sum(x * y for x, y in zip(u, v, strict=True)) for v in vec]
-        for u in vec
-    ]
+def _gram(shape: list[int], values: array, rows: bool) -> np.ndarray:
+    """Return `M M^T` (`rows`) or `M^T M` of a rank-r LoRA matrix.
+
+    A is r x in, so A A^T is r x r; B is out x r, so B^T B is r x r.
+    """
+    mat = np.frombuffer(values, dtype=np.float32).reshape(shape)
+    mat = mat.astype(np.float64)
+    return mat @ mat.T if rows else mat.T @ mat
 
 
 _SEEN: dict[tuple[str, float], dict[str, float]] = {}
@@ -133,11 +132,7 @@ def norms(ckpt: Path | str) -> dict[str, float]:
             continue
         gram_a = _gram(shape, values, rows=True)
         gram_b = _gram(other[0], other[1], rows=False)
-        norm2 = sum(
-            x * y
-            for ra, rb in zip(gram_a, gram_b, strict=True)
-            for x, y in zip(ra, rb, strict=True)
-        )
+        norm2 = float((gram_a * gram_b).sum())
         out[name.replace(".lora_A.weight", "")] = scale**2 * max(norm2, 0.0)
     _SEEN[key] = out
     return out
