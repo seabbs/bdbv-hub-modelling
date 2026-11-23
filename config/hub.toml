@@ -8,7 +8,7 @@
 model_abbr = "renewal"
 # Where the chain in ci/policy.toml starts: renewalbvd, then renewalsp,
 # then renewal, then the random walks.
-model = "renewalbvd"
+model = "renewalsp"
 # Opt in: `true` submits this model each round (DRY_RUN still applies).
 submit = true
 

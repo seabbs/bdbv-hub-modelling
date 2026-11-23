@@ -31,11 +31,11 @@ def test_repository_config_names_both_hub_models() -> None:
     assert base.model_id == "seabbs-rwnowcast"
     assert base.model == "randomwalknowcast"
     # Both hub models are opted in, and seabbs-renewal's chain starts at
-    # renewalbvd. DRY_RUN still applies.
+    # renewalsp. DRY_RUN still applies.
     assert base.submit
     assert base.runs
     assert tracks["renewal"].submit
-    assert tracks["renewal"].model == "renewalbvd"
+    assert tracks["renewal"].model == "renewalsp"
 
 
 def test_opted_in_baseline_runs_alone(tmp_path: Path) -> None:
