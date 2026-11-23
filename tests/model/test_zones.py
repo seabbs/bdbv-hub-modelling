@@ -20,16 +20,16 @@ from nowcastrenewal.model.zones import (
     zone_vintage_from_tables,
 )
 
-from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
+from .conftest import PLACES, VINTAGES
 
-# Two real zone codes per simulated province, so the zone table has them.
+# Two real zone codes per province, so the zone table has them.
 ZONES = {
     "CD-IT": ("CD-IT-10", "CD-IT-35"),
     "CD-NK": ("CD-NK-03", "CD-NK-14"),
     "CD-HU": ("CD-HU-12", "CD-HU-02"),
     "CD-TO": ("CD-TO-06", "CD-TO-16"),
-    "CD-BU": ("CD-BU-05", "CD-BU-01"),
-    "CD-SK": ("CD-SK-01", "CD-SK-02"),
+    "CD-KE": ("CD-KE-01", "CD-KE-02"),
+    "CD-KN": ("CD-KN-01", "CD-KN-02"),
 }
 
 
@@ -122,17 +122,15 @@ def test_nested_basis_leaves_out_inactive_places():
 
 
 @pytest.mark.slow
-def test_one_zone_per_province_is_the_province_model(
-    outbreak, sim_tables, table
-):
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
-    vintage = vintage_date(outbreak, day)
+def test_one_zone_per_province_is_the_province_model(tables, table):
+    day = VINTAGES[-1]
+    target, delays = tables[day]
+    vintage = day
     province = vintage_from_tables(
         target,
         delays,
         vintage,
-        SIM_LOCATIONS,
+        PLACES,
         table,
         imputation_delay=hub_delay_pmf(vintage),
     )
@@ -140,12 +138,12 @@ def test_one_zone_per_province_is_the_province_model(
         target,
         delays,
         vintage,
-        SIM_LOCATIONS,
+        PLACES,
         table,
-        parents={p: p for p in SIM_LOCATIONS},
+        parents={p: p for p in PLACES},
         imputation_delay=hub_delay_pmf(vintage),
     )
-    assert zoned.parent_names == list(SIM_LOCATIONS)
+    assert zoned.parent_names == list(PLACES)
     p_model = build_model(province)
     z_model = build_zone_model(zoned, anchor=False)
     _, params = _params(p_model, province)
@@ -155,21 +153,21 @@ def test_one_zone_per_province_is_the_province_model(
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("places", [SIM_LOCATIONS[:1], SIM_LOCATIONS])
+@pytest.mark.parametrize("places", [PLACES[:1], PLACES])
 def test_the_province_model_is_the_zone_model_one_place_a_patch(
-    outbreak, sim_tables, table, places
+    tables, table, places
 ):
     # renewalsp fits one place at a time: the zone model with that place
     # as its only patch.
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
+    day = VINTAGES[-1]
+    target, delays = tables[day]
     province = vintage_from_tables(
         target,
         delays,
-        vintage_date(outbreak, day),
+        day,
         places,
         table,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
+        imputation_delay=hub_delay_pmf(day),
     )
     patched = single_patch(province)
     assert patched.parents.tolist() == list(range(len(places)))
@@ -185,25 +183,25 @@ def test_the_province_model_is_the_zone_model_one_place_a_patch(
 
 
 @pytest.fixture(scope="module")
-def zone_vintage(outbreak, sim_tables):
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
-    zones = tuple(z for p in SIM_LOCATIONS for z in ZONES[p])
+def zone_vintage(tables):
+    day = VINTAGES[-1]
+    target, delays = tables[day]
+    zones = tuple(z for p in PLACES for z in ZONES[p])
     return zone_vintage_from_tables(
         _split(target),
         delays,
-        vintage_date(outbreak, day),
+        day,
         zones,
         zone_places(),
         parents={z: z[:5] for z in zones},
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
+        imputation_delay=hub_delay_pmf(day),
     )
 
 
 def test_zone_vintage_scores_delays_by_province(zone_vintage):
     v = zone_vintage
     assert v.n_provinces == 12
-    assert v.parent_names == list(SIM_LOCATIONS)
+    assert v.parent_names == list(PLACES)
     assert v.parents.tolist() == [i // 2 for i in range(12)]
     assert v.delay_counts.shape == (v.n_weeks, 6, 61)
     assert v.kernel.shape == (12, 12)
@@ -230,7 +228,7 @@ def test_zone_model_shares_province_parts(zone_vintage):
     assert np.isfinite(_density(model, v, params))
 
 
-def test_zone_bvd_groups_map_by_province(outbreak, sim_tables):
+def test_zone_bvd_groups_map_by_province(tables):
     from nowcastrenewal.model.inputs import bvd_inputs
 
     rows = pd.DataFrame(
@@ -285,7 +283,7 @@ def test_anchored_starts_are_non_centred(zone_vintage):
 
 
 def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
-    zone_vintage, outbreak, sim_tables, table
+    zone_vintage, tables, table
 ):
     # Option (a), #736: the pooled log Rt walk and the province and zone
     # deviations are AR(1) with a fitted half-life, and the forecast
@@ -293,14 +291,14 @@ def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
     import nowcastrenewal.model.model as module
 
     assert not hasattr(module, "FORECAST_RT_HALF_LIFE")
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
-    vintage = vintage_date(outbreak, day)
+    day = VINTAGES[-1]
+    target, delays = tables[day]
+    vintage = day
     province = vintage_from_tables(
         target,
         delays,
         vintage,
-        SIM_LOCATIONS[:1],
+        PLACES[:1],
         table,
         imputation_delay=hub_delay_pmf(vintage),
     )

@@ -1,5 +1,6 @@
 """The BVDOutbreakSize-informed variant (Rt pseudo-observation)."""
 
+import datetime as dt
 import math
 from dataclasses import replace
 from pathlib import Path
@@ -20,10 +21,14 @@ from nowcastrenewal.model.inputs import (
 )
 from nowcastrenewal.model.rt_observation import RtPseudoObservation
 
-from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
+from .conftest import PLACES, VINTAGES
 from .test_model import trace
 
 DATA = Path(__file__).parent / "data"
+
+
+def _shift(day: str, days: int) -> str:
+    return (dt.date.fromisoformat(day) + dt.timedelta(days=days)).isoformat()
 
 
 @pytest.fixture(scope="module")
@@ -84,28 +89,26 @@ def test_pseudo_observation_density_is_analytic():
     assert float(got) == pytest.approx(float(expect), rel=1e-5)
 
 
-def sim_with_bvd(outbreak, sim_tables, table, release, config):
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
+def with_bvd(tables, table, release, config):
+    day = VINTAGES[-1]
+    target, delays = tables[day]
     rows = release.copy()
-    rows["as_of"] = vintage_date(outbreak, day - 4)
+    rows["as_of"] = _shift(day, -4)
     return vintage_from_tables(
         target,
         delays,
-        vintage_date(outbreak, day),
-        SIM_LOCATIONS,
+        day,
+        PLACES,
         table,
         config,
         bvd=rows,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
+        imputation_delay=hub_delay_pmf(day),
     )
 
 
-def test_an_infinite_sd_inflation_reproduces_main(
-    outbreak, sim_tables, table, release
-):
+def test_an_infinite_sd_inflation_reproduces_main(tables, table, release):
     off = replace(BVD, bvd_sd_inflation=math.inf)
-    data = sim_with_bvd(outbreak, sim_tables, table, release, off)
+    data = with_bvd(tables, table, release, off)
     assert data.bvd is not None
     plain = build_model(data, MAIN)
     zero = build_model(data, off)
@@ -140,18 +143,18 @@ def test_group_rt_weights_by_counts_not_per_resident():
     assert float(national) == pytest.approx(float(expect), rel=1e-6)
 
 
-def test_fit_axis_reaches_the_bvd_day(outbreak, sim_tables, table, release):
+def test_fit_axis_reaches_the_bvd_day(tables, table, release):
     from nowcastrenewal.model.model import fit_weeks
 
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
+    day = VINTAGES[-1]
+    target, delays = tables[day]
     rows = release.copy()
     # BVD's as_of a week after ours puts s_b in a later week.
-    rows["as_of"] = vintage_date(outbreak, day + 7)
+    rows["as_of"] = _shift(day, 7)
     data = vintage_from_tables(
-        target, delays, vintage_date(outbreak, day), SIM_LOCATIONS, table,
+        target, delays, day, PLACES, table,
         BVD, bvd=rows,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
+        imputation_delay=hub_delay_pmf(day),
     )  # fmt: skip
     assert data.bvd["day"] // 7 + 1 > data.n_weeks
     assert fit_weeks(data, BVD) == data.bvd["day"] // 7 + 1
