@@ -95,11 +95,11 @@ function draw(){
   +(mode=="base"&&runs.some(function(r){return r.held.length})?'<span class=mut>subset: no base Chronos-2 value</span>':"")
   +(mode=="start"&&has(function(h){return h.sub})?'<span class=mut>subset: relative to its first evaluation</span>':"");
  var trLeg=(runs.some(function(r){return r.live})?'<span><svg width=12 height=10><circle cx=6 cy=5 r=1.8 fill="var(--fg)" opacity=".35"/></svg> logged values (live run)</span>':"")+'<span>'+sw("var(--fg)","")+' rolling mean of 20</span>';
- var ttl="Held-out loss, "+{total:"all steps",nowcast:"nowcast steps",forecast:"forecast steps",layout:"by layout",level:"by level"}[LT]+", subset and full set";
+ var ttl="Validation loss, "+{total:"all steps",nowcast:"nowcast steps",forecast:"forecast steps",layout:"by layout",level:"by level"}[LT]+", subset and full set";
  cards([{title:"Training loss"+suf,info:"train",series:tr,xmax:xmax,hl:hl,leg:trLeg},{title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl,leg:heldLeg}]);
  [].forEach.call(document.querySelectorAll("[data-lt]"),function(b){b.classList.toggle("on",b.dataset.lt==LT)});
  var refs=ftSel.refsOn();
- $("lossrefs").innerHTML=refs.map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no training or held-out loss">'+r.label+'</span>'}).join("");
+ $("lossrefs").innerHTML=refs.map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no training or validation loss">'+r.label+'</span>'}).join("");
 }
 window.addEventListener("ftsel",draw);
 // Full screen and window size changes redraw at the new size, same state.

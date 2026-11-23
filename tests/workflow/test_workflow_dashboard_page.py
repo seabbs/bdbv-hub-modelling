@@ -172,7 +172,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
         "Status",
         "Loss",
         "Attention bias",
-        "Held-out loss by level and LoRA size",
+        "Validation loss by level and LoRA size",
         "Nowcasts",
         "Recent activity",
         "Tables",
