@@ -3,8 +3,9 @@
 The German hub triangle cut into training blocks as the German tasks lay
 it out, from reports before the first scored German date only
 (`window`), so the real-data run is never scored on what it trained on.
-Run as `python -m nowcastgermany.finetune_blocks TRIANGLE OUT`, the
-window read from `config/germany.toml`.
+Run as `python -m nowcastgermany.finetune_blocks TRIANGLE OUT
+--first-date D --truth-delay N`, the window's two settings from
+`config/germany.toml` (rule real_training_blocks).
 """
 
 from __future__ import annotations
@@ -21,7 +22,6 @@ import pandas as pd
 from nowcastfoundation.finetune import AHEAD_WEEKS, training_block
 from nowcastfoundation.finetune import chronos as ft
 from nowcastgermany import data as de
-from nowcastgermany.evaluation import load_germany_config
 from nowcastutils.base import NATIONAL
 from nowcastutils.dates import epiweek_end
 
@@ -211,19 +211,21 @@ def make_blocks(
 
 
 def main() -> None:
-    """Cut the German blocks, the window from the German config."""
+    """Cut the German blocks of the window the options give."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("triangle", type=Path)
     parser.add_argument("out", type=Path)
-    parser.add_argument("--config", default="config/germany.toml")
+    # The first scored German nowcast date and the benchmark's truth
+    # delay (`config/germany.toml` `nowcast.first_date`, `truth.delay`).
+    parser.add_argument("--first-date", required=True)
+    parser.add_argument("--truth-delay", type=int, required=True)
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
-    config = load_germany_config(args.config)
     make_blocks(
         args.triangle,
         args.out,
-        str(config.first_date),
-        int(config.truth_delay),
+        args.first_date,
+        args.truth_delay,
         args.workers,
     )
 

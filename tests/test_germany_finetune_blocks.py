@@ -71,3 +71,19 @@ def test_german_blocks_are_training_blocks_the_trainer_reads():
         assert np.isfinite(b["context"]).any()
     with pytest.raises(ValueError, match="truth"):
         fg.german_blocks(counts, ["2021-07-20"], "2021-07-31")
+
+
+def test_the_cutter_imports_without_the_evaluation_module():
+    # The package-alone job imports it with only nowcastgermany's own
+    # dependencies; the evaluation module reaches bdbvhub.
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, nowcastgermany.finetune_blocks; "
+        "print('nowcastgermany.evaluation' in sys.modules)"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "False"
