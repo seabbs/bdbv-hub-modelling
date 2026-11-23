@@ -1,17 +1,15 @@
-"""A training run's state: its log, checkpoints and trainer process.
+"""A training run's state: its log, checkpoints and trainer status.
 
 A run's folder is `scripts/finetune_stream.py`'s output folder: its logs,
-`train/n<N>.log` per segment or an older run's `train.log` (a line per
-logged step), `train/n<N>/settings.json` per checkpoint and `trainer.pid`.
-Everything here only reads.
+`train/n<N>.log` per segment (a line per logged step),
+`train/n<N>/settings.json` per checkpoint and the stream status
+(`train/stream-status.json`). Everything here only reads.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
 import time
 from collections.abc import Sequence
 from datetime import datetime
@@ -48,10 +46,6 @@ CHUNK = re.compile(
     r"\d+ blocks, \d+ series, (\d+) steps"
 )
 """A chunk the trainer plans: its first and last simulation and steps."""
-
-OLD_LOGS = ("train.log", "train-launcher.log")
-"""An older run's single log, as written and as renamed beside its
-segment logs."""
 
 
 def _float(x: str | None) -> float | None:
@@ -128,8 +122,7 @@ class Log:
 class RunLog:
     """A run's logged steps from every log it writes, each read as a `Log`.
 
-    A run writes `train/n<N>.log`, one per segment, and an older run
-    `train.log` (`train-launcher.log` once renamed). New segment logs are
+    A run writes `train/n<N>.log`, one per segment. New segment logs are
     found on each read, a file reached by two names (a link) is read
     once, and a step logged twice keeps its newest row.
     """
@@ -139,11 +132,9 @@ class RunLog:
         self._logs: dict[Path, Log] = {}
 
     def _paths(self) -> list[Path]:
-        found = sorted(
+        return sorted(
             self.folder.glob("train/n*.log"), key=lambda p: _size(p.name)
         )
-        old = [self.folder / n for n in OLD_LOGS]
-        return [p for p in old if p.exists()] + found
 
     def _each(self) -> list[Log]:
         out = []
@@ -246,32 +237,8 @@ def checkpoints(folder: Path | str) -> list[tuple[str, dict, float | None]]:
     return out
 
 
-def trainer_args(folder: Path | str) -> str:
-    """Return the running trainer's command line, or an empty string."""
-    try:
-        pid = int((Path(folder) / "trainer.pid").read_text().split()[0])
-        out = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "args="],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
-        return ""
-    return out.stdout
-
-
-def prefixes(
-    folder: Path | str, args: str, default: Sequence[int]
-) -> list[int]:
-    """Return the run's checkpoint sizes.
-
-    The trainer's `--prefixes` if its command line is given, else the
-    saved checkpoints with `default`.
-    """
-    m = re.search(r"--prefixes((?:\s+\d+)+)", args)
-    if m:
-        return sorted(int(x) for x in m.group(1).split())
+def prefixes(folder: Path | str, default: Sequence[int]) -> list[int]:
+    """Return the run's checkpoint sizes: the saved ones with `default`."""
     saved = {_size(d.name) for d in Path(folder).glob("train/n*")}
     return sorted((saved - {0}) | set(default))
 
@@ -281,33 +248,13 @@ FRESH_S = 600
 written every 10 steps, and the log tile turns red after 10 minutes."""
 
 
-def _pid_state(folder: Path | str) -> tuple[int | None, bool | None]:
-    """Return `trainer.pid`'s pid and whether it runs (None if unknown)."""
-    try:
-        pid = int((Path(folder) / "trainer.pid").read_text().split()[0])
-    except (OSError, ValueError, IndexError):
-        return None, None
-    try:
-        os.kill(pid, 0)
-    except PermissionError:
-        return pid, True
-    except OSError:
-        return pid, False
-    return pid, True
-
-
 def trainer_state(folder: Path | str) -> tuple[str, bool | None]:
     """Return a description of the trainer process and whether it runs.
 
-    It runs if `trainer.pid`'s process does, or if the stream status
-    (`train/stream-status.json`) was written in the last `FRESH_S`
-    seconds: a trainer started by Snakemake writes no pid file, so one
-    left by an old launcher says nothing. A finished or stopped segment
+    It runs if the stream status (`train/stream-status.json`) was
+    written in the last `FRESH_S` seconds. A finished or stopped segment
     is neither running nor dead.
     """
-    pid, running = _pid_state(folder)
-    if running:
-        return f"alive (pid {pid})", True
     path = Path(folder) / "train" / "stream-status.json"
     try:
         age = time.time() - path.stat().st_mtime
@@ -318,9 +265,9 @@ def trainer_state(folder: Path | str) -> tuple[str, bool | None]:
     stage = str((CACHE.get(path) or {}).get("stage", ""))
     if stage == "finished" or stage.startswith("stopped at"):
         return stage, None
-    if pid is None and age is None:
+    if age is None:
         return "unknown", None
-    return f"DEAD (pid {pid})" if pid else "DEAD (no recent status)", False
+    return "DEAD (no recent status)", False
 
 
 def waiting_batches(folder: Path | str, n: int) -> list[int]:

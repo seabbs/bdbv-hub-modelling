@@ -37,6 +37,7 @@ from . import (
     svg,
     training,
 )
+from .logs import _size
 from .mirror import Source
 from .runs import Reference, Run, split_label
 
@@ -114,7 +115,7 @@ class Context:
         cks = _checkpoints(run)
         chunks = self._runlog(run).chunks() if run.folder else {}
         pairs = training.anchors(cks, chunks)
-        return pairs, training.steps_per_simulation(0, [], cks)
+        return pairs, training.steps_per_simulation(cks)
 
     def dataset(self, key: str) -> Mapping[str, Any]:
         """Return a configured dataset by key (an empty one if unknown)."""
@@ -171,11 +172,6 @@ def _dur(s: float | None) -> str:
     if s is None or s != s or s < 0:
         return "n/a"
     return kv.duration(s)
-
-
-def _size(name: str) -> int:
-    digits = re.sub(r"\D", "", name)
-    return int(digits) if digits else 0
 
 
 def _checkpoints(run: Run) -> list[tuple[str, dict, float | None]]:
@@ -274,15 +270,13 @@ def live_status(
         first_s = newest[1] - rate * span
         done = sims(newest[1]) - sims(first_s)
         sims_rate = done / span if done > 0 else None
-    args = logs.trainer_args(folder) if folder else ""
     trained = sims(step) if sims and step is not None else None
     params = (
         training.run_params(
-            folder, training.history(live), step, args, planned, trained
+            folder, training.history(live), step, planned, trained
         )
         if folder
         else {
-            "lr_steps": 0,
             "lr_outbreaks": 0,
             "groups": {},
             "current": {},
@@ -291,10 +285,8 @@ def live_status(
         }
     )
     sizes = params["prefixes"]
-    spo = training.steps_per_simulation(
-        params["lr_steps"], sizes, _checkpoints(live)
-    )
-    if trained and step and not params["lr_steps"]:
+    spo = training.steps_per_simulation(_checkpoints(live))
+    if trained and step:
         spo = step / trained
     saved = {
         n
@@ -323,7 +315,7 @@ def live_status(
         pending,
         nxt,
         trained,
-        None if params["lr_steps"] else steps,
+        steps,
         sims_rate,
         span,
         training.mean_rate(points),
@@ -370,9 +362,7 @@ def status_tiles(st: Status, live: Run) -> tuple[str, str]:
         ).strftime("%H:%M")
     p = st.params
     rates = "\n".join(f"{g} {v:.2e}" for g, v in p["current"].items()) or "n/a"
-    if p["lr_steps"]:
-        decay = f"linear decay to 0 at step {p['lr_steps']}"
-    elif p["lr_outbreaks"]:
+    if p["lr_outbreaks"]:
         decay = f"linear decay to 0 at {p['lr_outbreaks']} simulations"
     else:
         decay = "constant"
@@ -480,7 +470,7 @@ def lr_card(
     by_sims = bool(params["lr_outbreaks"] and sims)
     width, height = 190, 150
     left, right, top, bottom = 34, 6, 6, 18
-    decays = params["lr_steps"] or (params["lr_outbreaks"] if by_sims else 0)
+    decays = params["lr_outbreaks"] if by_sims else 0
 
     def x_of(s: float) -> float:
         return sims(s) if by_sims and sims else s

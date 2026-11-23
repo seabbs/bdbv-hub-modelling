@@ -131,12 +131,12 @@ CHUNK = (
 
 
 def _logged_run(folder, launcher, segment, steps_a_sim):
-    """A run with an old launcher log and a segment log, as r5 has."""
+    """A run with two segment logs."""
     (folder / "train").mkdir(parents=True)
     text = CHUNK.format(a=1, b=100, n=100 * steps_a_sim)
     for step, m in launcher:
         text += LINE.format(step=step, m=m, lo=m - 0.1, hi=m + 0.1)
-    (folder / "train-launcher.log").write_text(text)
+    (folder / "train" / "n100.log").write_text(text)
     text = CHUNK.format(a=101, b=200, n=100 * steps_a_sim)
     for step, m in segment:
         text += LINE.format(step=step, m=m, lo=m - 0.1, hi=m + 0.1)

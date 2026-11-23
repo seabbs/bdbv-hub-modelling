@@ -10,7 +10,7 @@
 mirror: output/finetune/dashboard-cache
 
 # Runs shown, in plot order. Each run's source is its training output folder
-# (train.log, train/n<N>/settings.json, trainer.pid) or a release prefix
+# (train/n<N>.log, train/n<N>/settings.json) or a release prefix
 # ending in "-". hue shades its checkpoints light (early) to dark (late);
 # colour fixes one colour instead. live: the run the status follows. base:
 # the run whose step-0 losses are the base model's. hashes and n name
