@@ -165,4 +165,6 @@ def test_the_real_data_run_cuts_its_german_blocks_before_training(tmp_path):
     out = dry_run(tmp_path, target, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
     assert "nowcastgermany.finetune_blocks" in out.stdout
+    # The window comes from the German config, as the rule reads it.
+    assert "--first-date 2021-11-22 --truth-delay 40" in out.stdout
     assert "germany_triangle" in out.stdout
