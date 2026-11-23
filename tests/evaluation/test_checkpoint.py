@@ -83,17 +83,13 @@ def test_run_of_a_checkpoint(settings, run):
     assert ck.run_of(settings) == run
 
 
-def test_outbreaks_and_grid_from_settings_or_release_text():
-    assert ck.outbreaks_and_grid({"n_outbreaks": 500, "grid": "r5"}, {}) == (
+def test_outbreaks_and_grid_come_from_settings_only():
+    # A checkpoint's settings.json holds both; release text is not read.
+    assert ck.outbreaks_and_grid({"n_outbreaks": 500, "grid": "r5"}) == (
         500,
         "r5",
     )
-    release = {
-        "name": "x",
-        "body": "trained on 2,000 simulated outbreaks, round 4",
-    }
-    assert ck.outbreaks_and_grid({}, release) == (2000, "r4")
-    assert ck.outbreaks_and_grid({}, {}) == (0, "unknown")
+    assert ck.outbreaks_and_grid({}) == (0, "unknown")
 
 
 def _scores(models, checkpoints, levels, base=1.0):
