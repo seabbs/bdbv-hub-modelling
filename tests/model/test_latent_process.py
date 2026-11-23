@@ -207,14 +207,18 @@ def test_nested_places_need_a_region_each() -> None:
 
 
 @pytest.mark.parametrize("early", [True, False])
-def test_the_start_is_a_seed_on_the_last_day_or_a_level(early: bool) -> None:
+def test_the_start_is_a_seed_grown_into_the_last_day_or_a_level(
+    early: bool,
+) -> None:
+    # A seed of at least 1 on the last day, halving each day before at a
+    # growth of 2, over the 3 active days; the padding day is 0.
     with jax.enable_x64(True):
-        out = np.asarray(InitializeStrata(4, early)(np.array([0.4, 3.0, 0.0])))
+        start = InitializeStrata(4, early, active=3, growth=2.0)
+        out = np.asarray(start(np.array([0.4, 3.0, 0.0])))
     if early:
-        want = np.zeros((4, 3))
-        want[-1] = [1.0, 3.0, 0.0]
+        want = np.outer([0.0, 0.25, 0.5, 1.0], [1.0, 3.0, 0.0])
     else:
-        want = np.tile([0.4, 3.0, 0.0], (4, 1))
+        want = np.outer([0.0, 1.0, 1.0, 1.0], [0.4, 3.0, 0.0])
     np.testing.assert_array_equal(out, want)
 
 
@@ -241,6 +245,53 @@ def _simulations() -> list[dict[str, Any]]:
         for k in range(2)
     ]
     return [*sims, {**sims[0], "id": "short", "n_days": 3}]
+
+
+def _one_day_spikes(x: np.ndarray) -> np.ndarray:
+    """Days more than 3 times both neighbours and more than 1 above them."""
+    beside = np.maximum(x[:-2], x[2:])
+    return np.flatnonzero((x[1:-1] > 3 * beside) & (x[1:-1] - beside > 1)) + 1
+
+
+@pytest.mark.parametrize(
+    ("window", "imports"), [("early", "none"), ("established", "pulses")]
+)
+def test_seeds_and_import_pulses_make_no_one_day_spike(
+    window: str, imports: str
+) -> None:
+    # A seed put on one day, or a pulse of imports on one day, entered the
+    # renewal as a spike that fell straight back (the next day is the
+    # seed or pulse times R times the generation time's first lag).
+    grid = draws.read_grid(ROOT / "config" / "finetune" / "grid.yaml")
+    sims = []
+    for i in range(2000):
+        design = draws.draw_design(grid, draws.generator(81, i, 1), weeks=12)
+        if (design["window"], design["imports"]) != (window, imports):
+            continue
+        if design["strata_link"] != "linked":
+            continue
+        values = draws.draw_values(grid, design, draws.generator(81, i, 2))
+        if imports == "pulses" and not np.size(values["import_at"]):
+            continue
+        sims.append(
+            {
+                "id": f"s{i}",
+                "key": i,
+                "n_days": sb._n_days(values),
+                "design": design,
+                "values": values,
+                "strata": sb._strata(design),
+            }
+        )
+        if len(sims) == 6:
+            break
+    long, values = simulate_latent_batch(sims, KINDS)
+    assert {v["error"] for v in values.values()} == {None}
+    spikes = {
+        (k, int(g)): _one_day_spikes(run["infections"].to_numpy())
+        for (k, g), run in long[long["group"] > 0].groupby(["id", "group"])
+    }
+    assert not any(len(d) for d in spikes.values()), spikes
 
 
 def test_a_batch_runs_each_simulation_and_records_its_errors() -> None:
