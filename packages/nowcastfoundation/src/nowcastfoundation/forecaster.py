@@ -500,7 +500,7 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
 
 
 def _finetuned(
-    name: str, source: str, layout: str = "ragged"
+    name: str, source: str, layout: str = "ragged", two_step: bool = False
 ) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
 
@@ -520,6 +520,7 @@ def _finetuned(
             if Path(spec).is_dir()
             else resolve_checkpoint(spec)
         ),
+        two_step=two_step,
     )
 
 
@@ -1118,6 +1119,41 @@ def _owned(
     return out
 
 
+TWO_STEP_DELAY: Final = 40
+"""The two-step model's longest delay $D$ in days, capped by the history."""
+
+
+def point_nowcast(
+    tri: HubTriangle, places: Sequence[str], task: ForecastTask
+) -> HubTriangle:
+    """Return `tri` with each place's days to the cut-off nowcast.
+
+    Each place's daily triangle at the cut-off (`round(3 * D)` days,
+    $D$ = `TWO_STEP_DELAY` capped by the history, as
+    `randomwalknowcast_daily`) is filled by baselinenowcast's point
+    nowcast, and those days of the place's counts are replaced by it.
+    """
+    from nowcastbaselines.baselinenowcast import baselinenowcast
+    from nowcastbaselines.daily import daily_triangle
+
+    history = task.daily_history
+    if history is None or history.empty:
+        raise ModelUnavailableError("the two-step model needs daily releases")
+    cutoff = as_date(str(task.cutoff)[:10])
+    at = tri.times.index(cutoff.isoformat())
+    have = (cutoff - as_date(str(history["onset_date"].min()))).days + 1
+    delay = min(TWO_STEP_DELAY, have // 3)
+    if delay < 3:
+        raise ModelUnavailableError(f"{have} days of releases are too few")
+    rows = min(3 * delay, at + 1)
+    final = tri.final.copy()
+    for i, place in enumerate(places):
+        cells, mask = daily_triangle(history, place, cutoff, rows, delay)
+        point = baselinenowcast(cells, mask, output_type="point")
+        final[i, at - rows + 1 : at + 1] = np.asarray(point, np.float64)
+    return replace(tri, final=final)
+
+
 def _walk_start(task: ForecastTask) -> str:
     """Return the earliest week `randomwalk` starts its walk from.
 
@@ -1237,6 +1273,13 @@ class FoundationModel:
     collect : list or None
         Private to `prefetch`: the groups a forecast would predict are
         added to it, and the forecast stops.
+    two_step : bool
+        The two-step model (#538's sensitivity analysis): each place's
+        daily counts to the cut-off are first replaced by baselinenowcast's
+        point nowcast (`point_nowcast`), and Chronos-2 forecasts from the
+        day after the cut-off on those corrected counts. The nowcast days
+        are the point nowcast, with no uncertainty. Complete layout, daily
+        source only.
     block_limit : int or None
         Most series in one block Chronos-2 predicts, the machine's block
         capacity; a task's block over it is cut into views
@@ -1261,6 +1304,7 @@ class FoundationModel:
         default=None, repr=False, compare=False
     )
     block_limit: int | None = None
+    two_step: bool = False
     reads_zones: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
@@ -1269,6 +1313,11 @@ class FoundationModel:
             raise ValueError(
                 f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
             )
+        if self.two_step and (self.layout, self.source) != (
+            "complete",
+            "daily",
+        ):
+            raise ValueError("two_step needs the complete layout, daily")
         if self.block_limit is None and os.environ.get(BLOCK_LIMIT_ENV):
             self.block_limit = int(os.environ[BLOCK_LIMIT_ENV])
 
@@ -1331,7 +1380,12 @@ class FoundationModel:
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
-        if self.layout == "complete":
+        if self.two_step:
+            # Chronos-2 forecasts from the day after the cut-off, on the
+            # counts baselinenowcast's point nowcast corrects.
+            tri = point_nowcast(tri, places, task)
+            start = tri.times.index(str(task.cutoff)[:10]) + 1
+        elif self.layout == "complete":
             walk = _walk_start(task)
             if walk not in tri.times:
                 raise ModelUnavailableError(
@@ -1817,6 +1871,35 @@ for _source in SOURCES:
             f"target's {_source} releases, {_layout} layout.",
             fitted=True,
         )
+
+# The two-step sensitivity analysis (#538): baselinenowcast's point
+# nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
+register_model(
+    "fm_chronos_daily_complete_2step",
+    partial(
+        FoundationModel,
+        "fm_chronos_daily_complete_2step",
+        "daily",
+        "complete",
+        two_step=True,
+    ),
+    "baselinenowcast's point nowcast, then Chronos-2 on the corrected "
+    "daily counts, complete layout.",
+    fitted=True,
+)
+register_model(
+    "fm_chronos_daily_complete_2step_ft",
+    partial(
+        _finetuned,
+        "fm_chronos_daily_complete_2step_ft",
+        "daily",
+        "complete",
+        two_step=True,
+    ),
+    "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
+    "corrected daily counts, complete layout.",
+    fitted=True,
+)
 
 
 def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:

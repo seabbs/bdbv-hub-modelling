@@ -76,6 +76,8 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "fm_chronos_daily_complete",
         "fm_chronos_daily_ragged",
         "fm_chronos_daily_ragged_ft",
+        "fm_chronos_daily_complete_2step",
+        "fm_chronos_daily_complete_2step_ft",
     )
     assert config.truth_delay == 40
     assert config.submissions
