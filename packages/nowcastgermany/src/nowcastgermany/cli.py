@@ -149,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="evidence/checkpoint-scores.csv from the checkpoint-scoring "
         "branch: only the live run's checkpoints are shown, labelled "
-        "preliminary (`reporting.live_checkpoint`).",
+        "preliminary (`nowcastfoundation.live_checkpoint`).",
     )
     gft.add_argument(
         "--note",

@@ -184,7 +184,7 @@ FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
 
 SLOTS_PREFIX: Final = "slots-"
 """Prefix of the spec of a checkpoint with the series bias
-(`forecasters.series_bias`). Such a checkpoint is released as
+(`nowcastfoundation.series_bias`). Such a checkpoint is released as
 `chronos-slots-<hash>`, the paper's name for the run, so the `latest`
 lookup, which takes only `chronos-ft-*` releases, never gives it to code
 without the bias."""

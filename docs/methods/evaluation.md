@@ -140,7 +140,7 @@ The run stops if an origin has no release snapshots or two models run here give 
 ## Correlated trajectories
 
 `randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the sum of the provinces, would be too narrow.
-Each pairs its province draws inside its own forecast (`forecasters.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
+Each pairs its province draws inside its own forecast (`nowcastbaselines.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
 The renewal models' draws are already joint trajectories, so they are left as they are: reordering would break their real dependence.
 `renewal` and `renewalbvd` fit their zones jointly and sum them to provinces, and `renewalsp` splits each province draw across its zones.
 

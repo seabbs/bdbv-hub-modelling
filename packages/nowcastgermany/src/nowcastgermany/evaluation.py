@@ -533,10 +533,10 @@ def germany_forecasts(
     horizons : sequence of int
         Days from each nowcast date to the end of each 7-day sum, the
         hub's 0 to -28 (`HORIZONS`) by default; days after it are
-        forecasts (`data.germany.nowcast_tasks`).
+        forecasts (`nowcastgermany.data.nowcast_tasks`).
     max_delay : int, optional
         The truth's delay (`GermanyConfig.truth_delay`): the models see
-        only the counts reported within it (`data.germany.within_delay`),
+        only the counts reported within it (`nowcastgermany.data.within_delay`),
         so they forecast the count the truth holds, not the eventual one.
         A `tasks_dir` must then be keyed on it.
     timings : list, optional
