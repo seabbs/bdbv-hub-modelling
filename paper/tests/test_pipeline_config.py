@@ -223,3 +223,15 @@ def test_development_synthetic_set_is_the_validation_round() -> None:
     assert cfg["synthetic"]["simulations"]["development"].endswith(
         f"rounds/r{r}/sims"
     )
+
+
+def test_the_daily_reference_is_the_german_configs_daily_baseline(
+    tmp_path,
+) -> None:
+    from paperpipe.config import daily_baseline
+
+    toml = tmp_path / "germany.toml"
+    toml.write_text('[scoring]\ndaily_baseline = "fm_chronos_daily_ragged"\n')
+    assert daily_baseline({"germany": {"config": str(toml)}}) == (
+        "fm_chronos_daily_ragged"
+    )

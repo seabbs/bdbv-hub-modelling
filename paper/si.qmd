@@ -470,6 +470,18 @@ The Ebola case study is held out from model development but not blind.
 We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
 A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
 
+### Ebola forecast layout
+
+::: {.callout-note title="Plan"}
+- For the Ebola case study the fine-tuned model makes an active forecast and a by-province forecast at each nowcast date.
+- The active forecast is one joint block of the country, all provinces and the active zones.
+- A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.
+- The threshold and both windows are set in the workflow configuration.
+- The by-province forecast is one block per province, of the province and all its zones, cut into views as in training when over the block limit.
+- The country, provinces and active zones take their forecast from the active block, and every other zone from its province's block.
+- We report for each round the number of active zones, the block sizes, their memory and their run times.
+:::
+
 ### Correlated trajectories
 
 - `randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the per-sample sum of the provinces, is too narrow if the draws are paired at random.
@@ -761,6 +773,12 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 :::
 
 ### Ebola hub submissions
+
+::: {.callout-note title="Plan"}
+- Active zones have forecasts from both the active and the by-province blocks.
+- We compare their scores pairwise on the same zones and weeks, as WIS on natural and log scales by horizon.
+- This shows what the active block adds for a zone over its province's block.
+:::
 
 ::::: {.content-visible when-meta="results.ebola.shown"}
 

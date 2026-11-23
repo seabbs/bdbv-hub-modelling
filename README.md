@@ -26,6 +26,11 @@ Our main renewal model takes its estimates of how fast the outbreak spreads from
 Two simpler versions, one without those estimates and one that fits each province on its own, show what each part adds.
 Each week we submit the first of the three that passes our checks, trying the main model first.
 
+We also submit weekly estimates of the reproduction number, Rt, from the renewal model we submit that week, by week of infection.
+We do not recommend using them.
+They are estimated from cases by date of symptom onset, including the onsets the hub imputes, so they are likely to react late and be out of step with transmission.
+For Rt, we recommend our [BVDOutbreakSize estimates](https://epiforecasts.io/BVDOutbreakSize/stable/) instead.
+
 We check every model by backtesting.
 We rerun each model on the data as they stood at past dates and score its forecasts against what was reported later.
 Every model is scored the same way, against the two random walk baselines, and compared with the other teams' forecasts.

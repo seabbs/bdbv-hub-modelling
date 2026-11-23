@@ -17,8 +17,10 @@ rows.
 from __future__ import annotations
 
 import re
+import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Final
 
 import pandas as pd
@@ -29,6 +31,7 @@ __all__ = [
     "RunSettings",
     "check_no_heldout",
     "check_no_heldout_releases",
+    "daily_baseline",
     "keep_finetuned",
     "last_release",
     "run_settings",
@@ -288,3 +291,13 @@ def keep_finetuned(
         return forecasts
     fine = forecasts["model"].astype(str).str.contains(_FINETUNED)
     return forecasts.loc[~fine].reset_index(drop=True)
+
+
+def daily_baseline(config: Mapping[str, Any]) -> str:
+    """Return the model the German daily scores are relative to.
+
+    It is `scoring.daily_baseline` of the German config the workflow
+    config names (`germany.config`).
+    """
+    with Path(config["germany"]["config"]).open("rb") as f:
+        return str(tomllib.load(f)["scoring"]["daily_baseline"])

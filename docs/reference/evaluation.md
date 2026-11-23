@@ -5,6 +5,6 @@ Score forecasts, run the backtest and compare models with each other and with th
 
 ::: bdbvhub.compare
 
-::: bdbvhub.zones
+::: nowcastbdbv.zones
 
 ::: nowcastgermany.evaluation

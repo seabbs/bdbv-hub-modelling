@@ -125,9 +125,9 @@ def test_model_code_covers_what_its_forecasts_run(
 ) -> None:
     from bdbvhub.models import get_model
     from bdbvhub.store.digest import model_code
-    from bdbvhub.zones import zone_forecasts
     from nowcastbdbv.data.tidy import load_daily_zones, load_health_zones
     from nowcastbdbv.data.zones import hub_zones
+    from nowcastbdbv.zones import zone_forecasts
     from nowcasteval import backtest as bt
     from nowcasteval.nowcast import forecast_releases
 

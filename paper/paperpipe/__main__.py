@@ -37,6 +37,7 @@ from paperfigs.truth import attach_truth, rolling_truth
 from paperpipe.config import (
     check_no_heldout,
     check_no_heldout_releases,
+    daily_baseline,
     keep_finetuned,
     run_settings,
 )
@@ -173,6 +174,7 @@ def _scores(a: argparse.Namespace) -> None:
 
 
 def _figures(a: argparse.Namespace) -> None:
+    config = json.loads(a.config)
     write_figures(
         a.study,
         validate_forecasts(_read(a.forecasts)),
@@ -185,8 +187,9 @@ def _figures(a: argparse.Namespace) -> None:
         crps_scores=None if a.crps_scores is None else _read(a.crps_scores),
         dummy=read_meta(a.meta)["source"] == "dummy",
         truth=_read(a.truth),
-        nowcasts=json.loads(a.config)["nowcasts"],
+        nowcasts=config["nowcasts"],
         baseline=baseline_of(read_meta(a.meta)),
+        daily_baseline=daily_baseline(config) if a.study == "germany" else None,
     )
 
 
