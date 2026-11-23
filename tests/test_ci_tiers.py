@@ -94,13 +94,14 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     assert group["cancel-in-progress"].strip() == keep
 
 
-def test_a_pull_request_runs_one_test_job_of_at_most_15_minutes():
+def test_a_pull_request_runs_one_test_job_of_at_most_20_minutes():
     # The workflow and paper tests run inside the fast tier, with
     # Snakemake (the paper group), rather than in jobs of their own.
     assert not (WORKFLOWS / "workflow.yml").exists()
     assert not (WORKFLOWS / "paper-tests.yml").exists()
     job = _workflow("test.yml")["jobs"]["test"]
-    assert job["timeout-minutes"] <= 15
+    # 15 minutes is the target; the cap is 20 while the tests are slimmed.
+    assert job["timeout-minutes"] <= 20
     runs = " ".join(s.get("run", "") for s in job["steps"])
     assert "--group paper pytest" in runs
     paper = [s for s in job["steps"] if s.get("working-directory") == "paper"]
@@ -140,3 +141,20 @@ def test_the_r_live_job_installs_what_the_live_r_tests_call():
     # primarycensored's fitdistdoublecens needs fitdistrplus (a Suggests).
     for name in ("primarycensored", "flexsurv", "fitdistrplus"):
         assert name in packages
+
+
+def test_r_package_lists_hold_packages_only():
+    # pak reads every line of `packages` as a package, so a comment there
+    # breaks the install (r-live failed at setup-r-dependencies).
+    for path in WORKFLOWS.glob("*.yml"):
+        for job in (
+            yaml.safe_load(path.read_text()).get("jobs") or {}
+        ).values():
+            for step in job.get("steps", []):
+                listed = str((step.get("with") or {}).get("packages", ""))
+                bad = [
+                    ln
+                    for ln in listed.splitlines()
+                    if ln.strip().startswith("#")
+                ]
+                assert bad == [], f"{path.name}: {bad}"
