@@ -110,8 +110,9 @@ def test_mixing_kernels_receive_from_the_other_places_in_age() -> None:
 
 def test_imports_fall_on_their_days() -> None:
     # Constant: `rate` times the unit each day. Pulses: `pulse_size`
-    # times the unit on day round(at * n), once per day however many
-    # land on it. A late stratum gets its unit spread over `late_days`
+    # times the unit from day round(at * n), spread over that day and the
+    # next along `spread`, once per day however many land on it. A late
+    # stratum gets its unit spread over `late_days`
     # from day round(late_at * n), and nothing else.
     n, unit = 50, np.array([2.0, 1.0, 0.0])
     late = np.array([False, True, False])
@@ -126,6 +127,7 @@ def test_imports_fall_on_their_days() -> None:
                 kind="pulses",
                 pulse_at=[0.2, 0.5, 0.5001],
                 pulse_size=4.0,
+                spread=[0.5, 0.3, 0.2],
                 late=late,
                 late_at=0.4,
                 late_days=5,
@@ -135,9 +137,14 @@ def test_imports_fall_on_their_days() -> None:
         )
     )
     want = np.zeros((n, 3))
-    want[[9, 24], 0] = 8.0
+    want[[9, 10, 11], 0] = want[[24, 25, 26], 0] = [4.0, 2.4, 1.6]
     want[19:24, 1] = 0.2
     np.testing.assert_allclose(pulses, want, rtol=1e-12)
+
+
+def test_pulses_need_a_spread() -> None:
+    with pytest.raises(ValueError, match="spread"):
+        Imports("i", kind="pulses", pulse_at=[0.5], pulse_size=1.0)
 
 
 def test_the_trickle_reaches_every_stratum_with_cases_but_late_ones() -> None:
