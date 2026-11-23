@@ -39,6 +39,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
@@ -74,6 +75,11 @@ GPUs are not shared across workers."""
 TRAIN_PRIORITY = 100
 """The trainer's job priority, above every other job's, so the next
 segment starts the moment the previous ends."""
+
+
+def newest_first(base: float) -> Callable[[Any], float]:
+    """Return a job's priority beside the trainer: newer segments higher."""
+    return lambda wc: side_priority(base, int(wc.n))
 
 
 def side_priority(base: float, n: int) -> float:

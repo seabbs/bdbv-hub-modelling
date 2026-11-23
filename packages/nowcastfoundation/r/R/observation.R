@@ -1,8 +1,15 @@
 # The infection-to-reference-event delay (incubation, or infection to
-# test or admission) on 0, 1, ... days: a gamma with CV `cv` and mean
-# `mean`, double interval censored (primarycensored), to its 99.9%
-# quantile.
-incubation_pmf <- function(mean, cv = 0.5) {
+# test or admission) on 0, 1, ... days: a gamma or log-normal with CV `cv`
+# and mean `mean`, double interval censored (primarycensored), to its
+# 99.9% quantile.
+incubation_pmf <- function(mean, cv = 0.5, family = "gamma") {
+  if (identical(family, "lognormal")) {
+    sdlog <- sqrt(log1p(cv^2))
+    meanlog <- log(mean) - sdlog^2 / 2
+    n <- max(1L, as.integer(ceiling(qlnorm(0.999, meanlog, sdlog))))
+    return(primarycensored::dpcens(0:n, plnorm, D = n + 1,
+      meanlog = meanlog, sdlog = sdlog))
+  }
   shape <- 1 / cv^2
   n <- max(1L, as.integer(ceiling(qgamma(0.999, shape, shape / mean))))
   primarycensored::dpcens(0:n, pgamma, D = n + 1, shape = shape,

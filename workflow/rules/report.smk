@@ -142,6 +142,27 @@ rule sim_report_run:
         "> {log} 2>&1"
 
 
+rule sim_diseases:
+    # The grid's training rounds' ranges against published values by
+    # disease, for the SI's disease table (the paper's `evidence` rule).
+    input:
+        summaries=expand(
+            f"{ROUNDS_DIR}/r{{round}}/summaries/outbreaks.csv",
+            round=config["grid_rounds"]["rounds"],
+        ),
+        refs=REFERENCE_VALUES,
+    output:
+        f"{ROUNDS_DIR}/report/sim-diseases.csv",
+    log:
+        f"{ROUNDS_DIR}/report/sim-diseases.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    shell:
+        "uv run python workflow/scripts/sim_report.py diseases {output} "
+        "{input.refs} {input.summaries} > {log} 2>&1"
+
+
 rule sim_reports:
     input:
         expand(

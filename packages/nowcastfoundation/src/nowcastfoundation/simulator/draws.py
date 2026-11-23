@@ -58,6 +58,7 @@ WEEK = (
 """The weekdays, in the order of `report_weekdays`."""
 
 RISING_PATH = {
+    "controlled": "growth",
     "growth": "growth",
     "decline": "growth",
     "flat": "rise_fall_gradual",
@@ -444,6 +445,10 @@ def draw_values(
     v["gt_mean"] = ds("gt_mean")
     v["gt_cv"] = ds("gt_cv")
     v["amplitude"] = ds("amplitude")
+    # A controlled path starts at its own R and settles towards 1.
+    v["control_r"] = ds("control_r")
+    if v["path"] == "controlled":
+        v["amplitude"] = float(np.log(v["control_r"]))
     v["flat"] = ds("flat")
     v["peak"] = ds("peak")
     v["period"] = float(max(floors["period_days"], ds("period")))
@@ -492,8 +497,16 @@ def draw_values(
     v["ascertainment"] = stratum_values(
         grid, obs, n_s, "ascertainment", rng, probability=True
     )
-    v["incubation_mean"] = stratum_values(
-        grid, obs, n_s, "incubation_mean", rng
+    # Infection to reference: a shared mean times a place effect and an
+    # age effect (strata are places, then ages), constant over time.
+    n_a = int(design["n_ages"])
+    v["incubation_cv"] = ds("incubation_cv")
+    v["incubation_place_sd"] = ds("incubation_place_sd")
+    v["incubation_age_sd"] = ds("incubation_age_sd")
+    place = v["incubation_place_sd"] * ds("pool_z", n_p)
+    age = v["incubation_age_sd"] * ds("pool_z", n_a)
+    v["incubation_mean"] = vec(
+        ds("incubation_mean") * np.exp(np.add.outer(place, age).ravel())
     )
     v["sqrt_phi"] = ds("sqrt_phi")
     v["obs_phi_sd"] = ds("obs_phi_sd")

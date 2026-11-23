@@ -116,7 +116,9 @@ def simulate_latent(
         The path kinds an independent place draws from (the grid's
         trajectory levels).
     incubation_cv : float
-        The infection-to-reference delay's coefficient of variation.
+        The infection-to-reference delay's coefficient of variation when
+        `values` has no `incubation_cv` (with a gamma when `design` has no
+        `incubation_family`).
     depletion : str
         `"linear"` or `"exponential"` (`components.renewal.DEPLETIONS`).
 
@@ -241,12 +243,16 @@ def simulate_latent(
     r = np.asarray(tr["latent::r"]["value"])
     reff = np.asarray(tr["latent::reff"]["value"])
     group = strata[".group"].to_numpy().astype(int) - 1
+    # The drawn infection-to-reference family and CV; grids before they
+    # were drawn used a gamma with `incubation_cv`.
+    family = design.get("incubation_family", "gamma")
+    cv = float(values.get("incubation_cv", incubation_cv))
     events = ReferenceEvents(
         "reference",
         delay_rvs=[
             DeterministicPMF(
                 f"incubation_{j}",
-                delay_pmf(Delay.from_mean_cv("gamma", m, incubation_cv)),
+                delay_pmf(Delay.from_mean_cv(family, m, cv)),
             )
             for j, m in enumerate(_vector(v, "incubation_mean")[group])
         ],

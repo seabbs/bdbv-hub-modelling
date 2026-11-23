@@ -324,6 +324,61 @@ def test_a_german_unit_scores_a_run_s_own_segment(
     assert forecaster.finetuned_spec() == "abc"
 
 
+def _saved(train: Path, n: int, **settings) -> Path:
+    where = train / f"n{n}"
+    where.mkdir(parents=True)
+    (where / "settings.json").write_text(
+        json.dumps({"hash": f"h{n}", "n_outbreaks": n, **settings})
+    )
+    return where
+
+
+def test_a_run_s_table_scores_its_own_saved_checkpoints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A run's checkpoints are scored from its own folder, under the run's
+    # name, beside the shared zero-shot reference.
+    train, scores, ref = tmp_path / "train", tmp_path / "s", tmp_path / "r"
+    _saved(train, 100, held_out_loss=0.5, held_out_loss_start=0.7)
+    offloaded = _saved(train, 200)
+    (offloaded / "held-out.json").write_text(
+        json.dumps({"held_out_loss": 0.4, "held_out_loss_start": 0.7})
+    )
+    (train / "n400").mkdir()  # still training: no settings yet
+    (scores / "n100").mkdir(parents=True)
+    seen = {}
+
+    def germany(folders):
+        seen.update(folders)
+        return pd.DataFrame(
+            [{"study": "germany", "checkpoint": c, "level": "national"}
+             for c in ("zero-shot", "n100")]
+        ).reindex(columns=ck.COLUMNS)  # fmt: skip
+
+    monkeypatch.setattr(ck, "germany_rows", germany)
+    got = ck.run_table(train, scores, ref, "runa")
+    assert seen == {ck.REFERENCE: ref, "n100": scores / "n100"}
+    held = got.loc[got["study"] == "held_out"].set_index("checkpoint")
+    assert held.loc["n200", "loss"] == 0.4
+    assert held.loc["n100", "loss"] == 0.5
+    by = got.drop_duplicates("checkpoint").set_index("checkpoint")
+    assert by.loc["n200", "outbreaks"] == 200
+    assert by.loc["n100", "run"] == "runa"
+    assert by.loc["zero-shot", "run"] == "zero-shot"
+
+
+def test_the_comparison_holds_each_run_and_one_zero_shot() -> None:
+    def rows(run: str) -> pd.DataFrame:
+        return pd.DataFrame(
+            [{"study": "germany", "level": "national", "checkpoint": c,
+              "run": r, "model": "m"}
+             for c, r in (("zero-shot", "zero-shot"), ("n100", run))]
+        ).reindex(columns=ck.COLUMNS)  # fmt: skip
+
+    got = ck.comparison([rows("runa"), rows("noslots")])
+    assert sorted(got["run"]) == ["noslots", "runa", "zero-shot"]
+
+
 def test_the_german_config_scores_four_weeks_ahead_too() -> None:
     from nowcastgermany.evaluation import load_germany_config
 
@@ -421,6 +476,6 @@ def test_the_evidence_table_scores_the_hub_s_horizons_only(
     monkeypatch.setattr(de, "score_germany", score)
     monkeypatch.setattr(ck, "relative", lambda sc, *_a: sc)
     monkeypatch.setattr(ck, "matched", lambda sc, _cell: sc)
-    ck.germany_rows(tmp_path, ["reference"])
+    ck.germany_rows({"reference": root})
     assert seen
     assert all(s == {0} for s in seen)

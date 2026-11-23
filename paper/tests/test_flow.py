@@ -147,7 +147,7 @@ def test_ebola_sources_name_every_input() -> None:
         "--ebola-draws",
         "--ebola-draws-models randomwalk randomwalknowcast",
         "--candidates",
-        "--store-ref origin/fit-store",
+        "--store-history",
     ):
         assert option in args
     assert _flow(ebola__hub=None).sources(_w("paper", "ebola")) == ""
@@ -219,3 +219,12 @@ def test_examples_are_read_from_the_development_round() -> None:
             f"{folder}/settings-33307.csv",
         ],
     }
+
+
+def test_ebola_reads_the_fit_store_history_release() -> None:
+    flow = _flow()
+    history = flow.store_history()
+    assert history.endswith("evidence/fit-store-history.csv.gz")
+    assert history in flow.source_files(_w("paper", "ebola"))
+    assert f"--store-history {history}" in flow.sources(_w("paper", "ebola"))
+    assert _flow(ebola__store_history=None).store_history() is None
