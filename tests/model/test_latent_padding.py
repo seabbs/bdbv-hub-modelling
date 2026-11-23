@@ -31,15 +31,26 @@ from nowcastfoundation.simulator.draws import (
 from nowcastrenewal.components.pmfs import Delay, generation_time_pmf
 from nowcastrenewal.latent import imports as im
 from nowcastrenewal.latent import mixing as mx
-from nowcastrenewal.latent.rt import RELATIONS, PlaceRt, RtPath
+from nowcastrenewal.latent.rt import KINDS, RELATIONS, PlaceRt, RtPath
 from nowcastrenewal.latent.simulate import simulate_latent
 from nowcastrenewal.simulation import outbreak
-
-from .latent_r import load
 
 GRID = read_grid(Path(__file__).parents[2] / "config/finetune/grid.yaml")
 PAD = 37
 RTOL = 1e-12
+N = 150
+VALUES: dict[str, Any] = {
+    "amplitude": 0.3,
+    "peak": 0.4,
+    "flip_days": 10.0,
+    "period": 40.0,
+    "phase": 1.0,
+    "waves": 3,
+    "wave_scale": [1.0, 0.8, 0.6, 0.5],
+    "walk_r": [0.0, 0.1, -0.05, 0.2],
+    "control_days": 20.0,
+    "flat": 0.05,
+}
 
 
 def run(fn: Any, *args: Any, **kwargs: Any) -> Any:
@@ -49,10 +60,9 @@ def run(fn: Any, *args: Any, **kwargs: Any) -> Any:
 
 
 def test_padded_paths_keep_their_days() -> None:
-    f = load("paths")
-    n = f["n"]
-    for kind in f["paths"]:
-        path = RtPath.from_values(kind, f["values"])
+    n = N
+    for kind in KINDS:
+        path = RtPath.from_values(kind, VALUES)
         np.testing.assert_array_equal(
             path.log_r(n + PAD, horizon=n)[:n], path.log_r(n), err_msg=kind
         )
@@ -60,9 +70,8 @@ def test_padded_paths_keep_their_days() -> None:
 
 @pytest.mark.parametrize("relation", RELATIONS)
 def test_padded_r_keeps_its_days(relation: str) -> None:
-    f = load("paths")
-    n = f["n"]
-    values = {**f["values"], "amplitude": 0.4, "peak": 0.3}
+    n = N
+    values = {**VALUES, "amplitude": 0.4, "peak": 0.3}
 
     def place_rt(horizon: int | None) -> PlaceRt:
         return PlaceRt(
@@ -160,6 +169,7 @@ def _latent(sim: tuple, key: int, pad: int, lag_bucket: int = 1) -> Any:
         )
 
 
+@pytest.mark.slow
 def test_padded_latent_runs_are_the_runs_without_padding() -> None:
     ran = 0
     for i, sim in enumerate(_sims(4242, 12)):
@@ -217,6 +227,7 @@ def _revised(seed: int) -> tuple:
     raise RuntimeError("no simulation with revisions ran")
 
 
+@pytest.mark.slow
 def test_bucketed_outbreaks_expect_the_same_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -262,6 +273,7 @@ def _totals(sim: tuple, keys: range) -> np.ndarray:
     return np.asarray(out, dtype=float)
 
 
+@pytest.mark.slow
 def test_bucketed_counts_match_in_distribution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

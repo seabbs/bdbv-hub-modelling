@@ -12,7 +12,7 @@ task paper                 # the development run, without the held-out data
 task paper TARGET=paper    # the paper run, with the held-out data
 ```
 
-This is the command CI runs ([`scripts/paper.sh`](../scripts/paper.sh)).
+CI runs the same steps (`python3 workflow/scripts/paper_run.py --render`, [`paper_run.py`](../workflow/scripts/paper_run.py)).
 It fetches the fit store, runs the target's missing steps, renders the paper as HTML and PDF and copies it into `docs/paper/`.
 `CORES=8 task paper`, or `CORES` in `config/local.env`, sets Snakemake's cores (4 by default).
 From `paper/`, `task pipeline:dev`, `task pipeline:paper` and `task render` run the steps one at a time.

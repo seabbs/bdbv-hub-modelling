@@ -24,8 +24,8 @@ _RENEWAL_OBSERVATION = (
     "with no onset date, back-sampled from report day with the hub's delay. "
     "Weekly known and imputed counts are negative binomial, and the delays "
     "of known onsets are Dirichlet-multinomial. "
-    "Over the forecast weeks log Rt reverts towards Rt = 1 with a "
-    "half-life of 2 weeks. "
+    "Log Rt reverts towards Rt = 1 with a fitted half-life, in the fit "
+    "and the forecast weeks alike. "
     "The model is fitted by NUTS (NumPyro) to each data release, and each "
     "sample is one joint posterior trajectory. "
     "See https://samabbott.co.uk/bdbv-hub-modelling/methods/model/."
@@ -96,7 +96,7 @@ MODEL_METADATA = {
         "methods_long": (
             "We model infections in each health zone with recent cases with "
             "a renewal process in PyRenew. "
-            "Log Rt is a national weekly random walk plus partially pooled "
+            "Log Rt is a national weekly AR(1) plus partially pooled "
             "province and zone deviations. "
             "Infections move between zones through a gravity kernel, and "
             "susceptibles are depleted. "
@@ -116,8 +116,8 @@ MODEL_METADATA = {
         "methods_long": (
             "We fit a renewal process in PyRenew to each province's series "
             "on its own. "
-            "Each has its own weekly random walk on log Rt, with no pooling, "
-            "importation or depletion. "
+            "Each has its own weekly AR(1) on log Rt and susceptible "
+            "depletion, with no pooling or importation. "
             "A province with no case in the last nine weeks is zero until an "
             "introduction, then a random walk. "
             + _ZONE_SPLIT
@@ -137,7 +137,7 @@ MODEL_METADATA = {
         "methods_long": (
             "We model infections in each health zone with recent cases with "
             "a renewal process in PyRenew. "
-            "Log Rt is a national weekly random walk plus partially pooled "
+            "Log Rt is a national weekly AR(1) plus partially pooled "
             "province and zone deviations. "
             "Infections move between zones through a gravity kernel, and "
             "susceptibles are depleted. "

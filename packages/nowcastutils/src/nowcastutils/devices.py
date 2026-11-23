@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Host devices for XLA, so NumPyro can run chains in parallel.
+"""Host devices: the CPUs a process may use, and XLA's device count.
 
 Apart from the CLI, so the fit store can set them without the CLI being
 part of every stored fit's key (`evaluation.store.fit_code`).
@@ -9,7 +9,25 @@ from __future__ import annotations
 
 import os
 
-__all__ = ["host_devices"]
+__all__ = ["host_devices", "usable_cpus"]
+
+
+def usable_cpus() -> int:
+    """Return the number of CPUs this process may run on.
+
+    The process's CPU affinity where the platform has it (Linux), so a
+    `taskset` or a container's CPU set is respected. Elsewhere (macOS,
+    Windows) every CPU the host reports, and at least 1.
+
+    Returns
+    -------
+    int
+        The number of usable CPUs.
+    """
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:
+        return os.cpu_count() or 1
 
 
 def host_devices(n: int) -> None:

@@ -706,7 +706,7 @@ rule grid_tables:
 rule evidence:
     input:
         **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
-        # The held-out loss curve, the published-range rows, the realism
+        # The validation loss curve, the published-range rows, the realism
         # step's outputs and the pairing scores, from workflow rules.
         **FLOW.workflow_evidence(),
     output:

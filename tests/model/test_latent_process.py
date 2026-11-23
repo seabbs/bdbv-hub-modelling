@@ -1,10 +1,8 @@
-"""The simulator's latent process against the R engine, run by run.
+"""The simulator's latent process: R paths, noise, the start and batches.
 
-Each case, run live by the R engine (`r/latent_cases.R`), holds a
-drawn design and values and every random draw R made for it, in order:
-standard normals and the path kinds of independent places. The run is
-replayed by substituting those draws at the model's sample sites, in the
-order the model makes them, and must use all of them.
+No external tool computes these grid constructs, so the paths are checked
+against their closed forms on inline values; the renewal and reference
+events are checked live against epinowcast in `test_latent_epinowcast.py`.
 """
 
 from __future__ import annotations
@@ -16,10 +14,11 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pandas as pd
 import pytest
 from numpyro import handlers
 
+from nowcastfoundation.simulator import batch as sb
+from nowcastfoundation.simulator import draws
 from nowcastrenewal.components.pmfs import Delay, generation_time_pmf
 from nowcastrenewal.latent.rt import (
     KINDS,
@@ -30,12 +29,11 @@ from nowcastrenewal.latent.rt import (
 )
 from nowcastrenewal.latent.simulate import (
     COLUMNS,
-    simulate_latent,
     simulate_latent_batch,
 )
 from nowcastrenewal.latent.start import InitializeStrata
 
-from .latent_r import load
+from .r_live import ROOT
 
 
 def gt_pmf(mean: float, family: str, cv: float) -> np.ndarray:
@@ -50,7 +48,7 @@ def matrix(x: Any) -> np.ndarray:
 def replay(
     model: Any, normal: Any, choice: Any, *args: Any, **kwargs: Any
 ) -> Any:
-    """Run `model` with R's draws at its sample sites, in order."""
+    """Run `model` with the given draws at its sample sites, in order."""
     z = np.atleast_1d(np.asarray(normal, dtype=float))
     choices = [choice] if isinstance(choice, str) else list(choice or [])
     with jax.enable_x64(True):
@@ -70,28 +68,71 @@ def replay(
             size = int(value.size)
             data[name] = jnp.asarray(z[i : i + size]).reshape(value.shape)
             i += size
-        assert i == len(z), "R's normal draws were not all used"
-        assert j == len(choices), "R's path draws were not all used"
+        assert i == len(z), "the normal draws were not all used"
+        assert j == len(choices), "the path draws were not all used"
         return handlers.substitute(handlers.seed(model, 0), data=data)(
             *args, **kwargs
         )
 
 
-def test_paths_match_the_r_engine() -> None:
-    f = load("paths")
-    for kind, path in f["paths"].items():
+PATH_VALUES: dict[str, Any] = {
+    "amplitude": 0.3,
+    "peak": 0.4,
+    "flip_days": 10.0,
+    "period": 40.0,
+    "phase": 1.0,
+    "waves": 3,
+    "wave_scale": [1.0, 0.8, 0.6, 0.5],
+    "walk_r": [0.0, 0.1, -0.05, 0.2],
+    "control_days": 20.0,
+    "flat": 0.05,
+}
+
+
+def test_paths_take_their_closed_forms() -> None:
+    # Each kind on 150 days, u = t / 150, against its formula, to 1e-12.
+    n, v = 150, PATH_VALUES
+    t = np.arange(n, dtype=float)
+    u, a, peak = t / n, v["amplitude"], v["peak"]
+    walk = daily_walk(t, v["walk_r"])
+    want = {
+        "endemic": walk,
+        "controlled": a * np.exp(-t / v["control_days"]) + walk,
+        "growth": np.full(n, a),
+        "decline": np.full(n, -a),
+        "flat": np.full(n, v["flat"]),
+        "rise_fall_gradual": a * (peak - u) / 0.6,
+        "fall_rise": -a * (peak - u) / 0.6,
+        "rise_fall_sharp": a
+        * (1 - 2 / (1 + np.exp(-(t - peak * n) / (v["flip_days"] / 4.4)))),
+        "oscillating": a * np.sin(2 * np.pi * t / v["period"] + v["phase"]),
+    }
+    for kind, path in want.items():
         np.testing.assert_allclose(
-            RtPath.from_values(kind, f["values"]).log_r(f["n"]),
+            RtPath.from_values(kind, v).log_r(n),
             path,
             rtol=1e-12,
             atol=1e-15,
             err_msg=kind,
         )
-    w = f["daily_walk"]
+    # Multi-wave: wave k (from 1) of `waves` has amplitude 2 a scale[k].
+    wave = np.minimum(4, np.floor(3 * u + 1 / (2 * np.pi)) + 1).astype(int)
     np.testing.assert_allclose(
-        daily_walk(np.array(w["days"]), np.array(w["walk"])),
-        w["out"],
+        RtPath.from_values("multi_wave", v).log_r(n),
+        2
+        * a
+        * np.asarray(v["wave_scale"])[wave - 1]
+        * np.sin(2 * np.pi * 3 * u + 1),
         rtol=1e-12,
+        atol=1e-15,
+    )
+
+
+def test_the_daily_walk_is_linear_between_weeks() -> None:
+    walk = [0.0, 0.7, -0.7]
+    days = np.array([0, 7, 10.5, 14, 30])
+    np.testing.assert_allclose(
+        daily_walk(days, walk), [0.0, 0.7, 0.0, -0.7, -0.7], atol=1e-12
     )
 
 
@@ -177,80 +218,27 @@ def test_the_start_is_a_seed_on_the_last_day_or_a_level(early: bool) -> None:
     np.testing.assert_array_equal(out, want)
 
 
-def runs() -> list[dict[str, Any]]:
-    return list(load("runs"))
-
-
-def test_latent_runs_replay_the_r_engine() -> None:
-    cases = runs()
-    assert len(cases) >= 12
-    for case in cases:
-        try:
-            _replay_case(case)
-        except AssertionError as e:
-            raise AssertionError(f"R seed {case['seed']}: {e}") from e
-
-
-def _replay_case(case: dict[str, Any]) -> None:
-    design, values = case["design"], case["values"]
-    gt = gt_pmf(values["gt_mean"], design["gt_family"], values["gt_cv"])
-    strata = pd.DataFrame(case["strata"])
-    n = case["n_days"] - len(gt)
-    args = (n, gt, strata, design, values, KINDS, 0.5)
-    tape = case["tape"]
-    if "error" in case:
-        with pytest.raises(ValueError, match=case["error"]):
-            replay(simulate_latent, tape["normal"], tape["choice"], *args)
-        return
-    run = replay(simulate_latent, tape["normal"], tape["choice"], *args)
-    assert run.n_gt == case["n_gt"]
-    np.testing.assert_allclose(
-        run.infections, matrix(case["infections"]), rtol=1e-9, atol=1e-9
-    )
-    np.testing.assert_allclose(
-        run.onsets, matrix(case["onsets"]), rtol=1e-9, atol=1e-9
-    )
-    np.testing.assert_allclose(
-        run.stratum_population, case["stratum_population"], rtol=1e-12
-    )
-    assert run.attack == pytest.approx(case["attack"], rel=1e-9)
-    want = pd.DataFrame(case["latent"]).astype(float)
-    for col in ("infections", "onsets", "r", "reff"):
-        np.testing.assert_allclose(
-            run.path[col].to_numpy(),
-            want[col].to_numpy(),
-            rtol=1e-9,
-            atol=1e-9,
-            err_msg=col,
-        )
-
-
-def test_the_latent_cases_cover_every_design_level() -> None:
-    ran = [c["design"] for c in runs() if "error" not in c]
-    for factor, levels in {
-        "mixing": {"none", "symmetric", "asymmetric", "distance"}
-        | {"time_varying"},
-        "place_rt": {"shared", "independent", "correlated", "lagged"}
-        | {"nested"},
-        "window": {"early", "established", "endemic"},
-        "imports": {"none", "constant", "pulses"},
-        "seeding": {"start", "mid"},
-    }.items():
-        assert {d[factor] for d in ran} == levels, factor
-
-
 def _simulations() -> list[dict[str, Any]]:
-    case = runs()[-1]
+    """Two runs of one established multi-stratum grid draw, and a short one."""
+    grid = draws.read_grid(ROOT / "config" / "finetune" / "grid.yaml")
+    for i in range(500):
+        design = draws.draw_design(grid, draws.generator(77, i, 1), weeks=8)
+        if (
+            design["window"] == "established"
+            and 2 <= int(design["n_places"]) * int(design["n_ages"]) <= 6
+        ):
+            break
+    values = draws.draw_values(grid, design, draws.generator(77, i, 2))
     sims = [
         {
-            "id": f"s{i}",
-            "key": i,
-            "n_days": case["n_days"],
-            "design": case["design"],
-            "values": case["values"],
-            "strata": case["strata"],
+            "id": f"s{k}",
+            "key": k,
+            "n_days": sb._n_days(values),
+            "design": design,
+            "values": values,
+            "strata": sb._strata(design),
         }
-        for i in range(2)
+        for k in range(2)
     ]
     return [*sims, {**sims[0], "id": "short", "n_days": 3}]
 
@@ -299,7 +287,7 @@ def test_a_key_gives_the_same_run_and_another_key_another() -> None:
 def test_any_error_in_one_simulation_is_recorded_and_the_batch_goes_on() -> (
     None
 ):
-    # As the R batch's tryCatch, which redraws a simulation on any error.
+    # The batch redraws a simulation on any error.
     sims = _simulations()[:2]
     broken = sims[1]
     broken["values"] = {
@@ -312,13 +300,11 @@ def test_any_error_in_one_simulation_is_recorded_and_the_batch_goes_on() -> (
 
 
 def test_a_single_draw_of_a_vector_value_may_be_a_scalar() -> None:
-    case = runs()[0]
-    values = {
+    sim = _simulations()[0]
+    sim["values"] = {
         k: (v[0] if isinstance(v, list) and len(v) == 1 else v)
-        for k, v in case["values"].items()
+        for k, v in sim["values"].items()
     }
-    sim = {**_simulations()[0], "values": values, "design": case["design"]}
-    sim["strata"], sim["n_days"] = case["strata"], case["n_days"]
     long, out = simulate_latent_batch([sim], KINDS)
     assert out["s0"]["error"] is None
     assert np.isfinite(long["onsets"]).all()
@@ -358,15 +344,15 @@ def test_the_fitted_models_do_not_import_the_latent_process() -> None:
 def test_ci_runs_the_live_latent_checks() -> None:
     import yaml
 
-    from .r_live import ROOT
-
     workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
     job = workflow["jobs"]["r-live"]
     runs = " ".join(s.get("run", "") for s in job["steps"])
     packages = " ".join(
         s.get("with", {}).get("packages", "") for s in job["steps"]
     )
-    for test in ("test_latent_components.py", "test_latent_process.py"):
-        assert f"tests/model/{test}" in runs, test
-    for pkg in ("pkgload", "yaml", "data.table"):
+    assert "tests/model/test_latent_epinowcast.py" in runs
+    for pkg in ("epinowcast", "cmdstanr"):
         assert pkg in packages, pkg
+    # The real tools only: no package of our own R code.
+    assert "pkgload" not in packages
+    assert "engine" not in workflow["jobs"]

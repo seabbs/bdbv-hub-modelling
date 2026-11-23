@@ -265,12 +265,12 @@ def section(
         run_list,
     )
     level_card = svg.chart(
-        "Held-out loss by level at each checkpoint, relative to the start",
+        "Validation loss by level at each checkpoint, relative to the start",
         levels,
         hlines=[1.0],
         xlabel="simulations trained",
         info=tip("lossbylevel"),
-        note="All held-out blocks, each level scored with the others masked.",
+        note="All validation blocks, each level scored with the others masked.",
         legend=legend,
     )
     # Each run's last checkpoint, in the run's colour.

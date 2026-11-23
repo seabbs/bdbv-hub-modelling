@@ -35,7 +35,7 @@ def docs_page(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> str:
         f"fine-tuning run (`{run}`) on development data only: national WIS "
         "on the German first half and CRPS on the BDBV release backtest, "
         "relative to `randomwalknowcast` (daily / weekly model), and the "
-        "trainer's held-out loss. Brackets give each cell's simulations.\n\n"
+        "trainer's validation loss. Brackets give each cell's simulations.\n\n"
         + markdown_table(summary_table(scores, run))
         + "\n"
     )

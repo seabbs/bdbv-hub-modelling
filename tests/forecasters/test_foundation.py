@@ -273,14 +273,16 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
         groups, horizon = store[0]
         assert len(groups) == 1
         seen[layout] = (groups[0], horizon)
+    # The targets are the hub-target series and, for the daily source,
+    # each place's 7-day rolling sums, in both layouts; the complete block
+    # has no lag series.
+    rows = 2 if source == "daily" else 1
     complete, _ = seen["complete"]
-    assert complete["target"].shape[0] == n_places
+    assert complete["target"].shape[0] == rows * n_places
     assert "future_covariates" not in complete
     ragged, horizon = seen["ragged"]
-    # The targets are the hub-target series and, for the daily source,
-    # each place's 7-day rolling sums; the lag series are covariates of
-    # every place, those with no cases too, as the fine-tuned model has.
-    rows = 2 if source == "daily" else 1
+    # The lag series are covariates of every place, those with no cases
+    # too, as the fine-tuned model has.
     assert ragged["target"].shape[0] == rows * n_places
     future = ragged["future_covariates"]
     assert ragged["past_covariates"].keys() == future.keys()

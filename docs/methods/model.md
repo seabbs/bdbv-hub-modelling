@@ -24,7 +24,7 @@ flowchart TD
     PM["<b>Place model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
     RN["<b>renewal</b><br/>zones with recent cases<br/>fitted together<br/>+ pooled log R walk<br/>+ province and zone<br/>sum-to-zero AR(1) deviations<br/>+ importation between zones<br/>+ share at risk<br/>+ delay pooled by province<br/>+ silent zones by introductions<br/>provinces are zone sums"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
-    SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>no share at risk"]
+    SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>+ share at risk"]
 
     PM -- "nest zones in provinces" --> RN
     RN -- "add external Rt" --> BV
@@ -38,7 +38,7 @@ Each place $p$ has the model below: a province in `renewalsp`, a health zone in 
 ```mermaid
 flowchart TD
     subgraph TR["Transmission"]
-        RT["log R<sub>p</sub>(t)<br/>weekly random walk"]
+        RT["log R<sub>p</sub>(t)<br/>weekly AR(1)"]
         GI["Generation interval g"]
         INF["Infections per resident x<sub>p</sub>(t)"]
     end
@@ -82,12 +82,17 @@ The fit axis is the data weeks, extended for `renewalbvd` as [below](#bvdoutbrea
 ### Reproduction number
 
 $$
-\log R_p(t) = \log R_p(t - 1) + \sigma_R z(t),
+\log R_p(t) = \phi_R \log R_p(t - 1) + \sigma_R z(t),
+\qquad
+\phi_R = 2^{-1/h_R},
+\qquad
+h_R \sim \text{LogNormal}(\log 6, 0.6^2)\ \text{weeks},
 \qquad
 \sigma_R \sim \mathcal{N}^+(0, 0.2^2),
 $$
 
 with standard normal steps $z(t)$, sampled non-centred, and a start $\mathcal{N}(0, 0.5^2)$.
+So log R reverts towards 0 (R of 1) with a fitted half-life, the prior of BVDOutbreakSize's deviations.
 
 ### Renewal
 
@@ -182,9 +187,7 @@ The hub fits the delays as exact for releases up to 2026-10-24 and as double int
 ### Forecasts
 
 The random walks carry $\alpha$ and $f$ to the forecast horizon, $m$ keeps its last value, and each of 100 trajectories is one posterior draw.
-Past the fit axis the walk of $\log R$ reverts towards 0 with a fixed half-life of 2 weeks, $\log R(t) = 2^{-1/2} \log R(t - 1) + \sigma_R z(t)$, so it does not compound growth over the horizon.
-In `renewal` this is the pooled trend, and the province and zone deviations keep their AR(1) ([below](#pooled-reproduction-number)).
-The reversion leaves the fit unchanged.
+Past the fit axis $\log R$ continues the AR(1) it was fitted with, with the same half-life and step SD, as do the province and zone deviations in `renewal` ([below](#pooled-reproduction-number)).
 A trajectory is the final known plus final imputed counts.
 Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
 Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.
@@ -206,7 +209,7 @@ Leaving a province out removes the known and imputed counts of its zones and its
 
 ```mermaid
 flowchart TD
-    LR["Pooled log R(t)<br/>weekly random walk"]
+    LR["Pooled log R(t)<br/>weekly AR(1)"]
     DV["Province deviations δ<sub>p</sub>(t)<br/>sum-to-zero AR(1)"]
     ZV["Zone deviations ε<sub>z</sub>(t)<br/>sum-to-zero AR(1)<br/>within each province"]
     RP["log R<sub>z</sub>(t) = log R(t) + δ<sub>p(z)</sub>(t) + ε<sub>z</sub>(t)"]
@@ -330,7 +333,8 @@ The national trajectory is the sum of the provinces, with no unassigned componen
 
 `renewalsp` fits the [place model](#province-model) to each province's series on its own, one fit after another with the same code.
 Nothing is pooled or shared between provinces: each has its own Rt walk, delay, missing-onset share and ascertainment.
-One series cannot inform the share at risk, so there is no depletion.
+It keeps the share at risk and depletion of the zone models, so the three models differ only in what each removes.
+One series barely informs $\nu$, so it stays close to its prior.
 Every province with a case in the random walks' walk window is fitted, however few its cases.
 A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
 National is the sum of the provinces plus the data's national gap.

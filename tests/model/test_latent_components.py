@@ -1,7 +1,8 @@
-"""The simulator's renewal-step components against the R engine.
+"""The simulator's renewal-step components, on closed-form cases.
 
-The cases come live from `r/latent_cases.R`, which runs the R functions
-in `packages/nowcastfoundation/r/R/infections.R` and `observation.R`.
+The renewal without depletion and the reference events are also checked
+live against epinowcast (`test_latent_epinowcast.py`), and the pmfs
+against primarycensored (`test_pmfs.py`).
 """
 
 from __future__ import annotations
@@ -17,18 +18,15 @@ import pytest
 from numpyro import handlers
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 
-from nowcastrenewal.components.mixing import mixing_matrix
 from nowcastrenewal.components.pmfs import (
     Delay,
     delay_pmf,
     generation_time_pmf,
 )
 from nowcastrenewal.components.reference import ReferenceEvents
-from nowcastrenewal.components.renewal import Shifts, Variants, run_renewal
+from nowcastrenewal.components.renewal import run_renewal
 from nowcastrenewal.latent.imports import Imports
 from nowcastrenewal.latent.mixing import PlaceMixing
-
-from .latent_r import load
 
 
 def gt_pmf(mean: float, family: str, cv: float) -> np.ndarray:
@@ -51,41 +49,6 @@ def run(fn: Any, *args: Any, **kwargs: Any) -> Any:
         return handlers.seed(fn, 0)(*args, **kwargs)
 
 
-def test_pmfs_match_the_r_engine() -> None:
-    # Both are primarycensored's double censored pmf: the engine's from
-    # `dpcens`, ours closed form (`test_pmfs.py`), to 1e-8.
-    f = load("pmfs")
-    for g in f["gt"]:
-        np.testing.assert_allclose(
-            gt_pmf(g["mean"], g["family"], g["cv"]),
-            g["pmf"],
-            rtol=1e-8,
-            atol=1e-12,
-        )
-    for g in f["incubation"]:
-        np.testing.assert_allclose(
-            incubation_pmf(g["mean"], g["cv"]), g["pmf"], rtol=1e-8, atol=1e-12
-        )
-
-
-@pytest.mark.parametrize("history", [False, True])
-def test_reference_events_match_the_r_engine(history: bool) -> None:
-    c = load("pmfs")["convolve"]
-    pmfs = [np.array(p) for p in c["pmfs"]]
-    asc = np.array([0.5, 1.0, 0.2])
-    events = ReferenceEvents(
-        "ref",
-        delay_rvs=[
-            DeterministicPMF(f"delay_{i}", p) for i, p in enumerate(pmfs)
-        ],
-        ascertainment_rv=DeterministicVariable("asc", asc),
-    )
-    before = np.array(c["before"]) if history else None
-    out = run(events.sample, matrix(c["x"]), before=before)
-    want = matrix(c["out_before"] if history else c["out"]) * asc
-    np.testing.assert_allclose(out, want, rtol=1e-12)
-
-
 def test_an_established_stratum_opens_at_its_ascertained_level() -> None:
     # A stratum at a constant level before and during the span has
     # constant expected reference events from day 1.
@@ -101,63 +64,80 @@ def test_an_established_stratum_opens_at_its_ascertained_level() -> None:
     np.testing.assert_allclose(out, 1503.0 * 0.17, rtol=1e-12)
 
 
-def _mixing(f: dict[str, Any], case: dict[str, Any]) -> PlaceMixing:
-    v = f["values"]
-    return PlaceMixing(
-        "mixing",
-        kind=case["mixing"],
-        share=v["mixing_eps"],
-        order=[i - 1 for i in v["mixing_order"]],
-        xy=np.stack([v["mixing_x"], v["mixing_y"]], axis=1),
-        distance_range=v["mixing_range"],
-        quiet=[v["quiet_places"] - 1],
-        switch=case["switch"],
-        switch_at=v["mixing_switch_at"],
-        switch_days=v["mixing_switch_days"],
+def test_mixing_shares_ramp_over_the_switch_days() -> None:
+    # A time-varying share rises (or falls) linearly from day
+    # round(switch_at * n) over `switch_days`; the others are constant.
+    n, share, at, days = 60, 0.2, 0.3, 9.0
+    ramp = np.clip((np.arange(1, n + 1) - round(at * n)) / days, 0, 1)
+    for switch, want in (("on", share * ramp), ("off", share * (1 - ramp))):
+        m = PlaceMixing(
+            "mixing",
+            "time_varying",
+            share=share,
+            xy=np.zeros((2, 2)),
+            distance_range=1.0,
+            switch=switch,
+            switch_at=at,
+            switch_days=days,
+        )
+        np.testing.assert_allclose(m.shares(n), want, rtol=1e-12)
+    flat = PlaceMixing("mixing", "symmetric", share=share)
+    np.testing.assert_allclose(flat.shares(n), share, rtol=1e-12)
+    np.testing.assert_allclose(PlaceMixing("m", "none").shares(n), 0.0)
+
+
+def test_mixing_kernels_receive_from_the_other_places_in_age() -> None:
+    # Rows receive and sum to 1 over the other places, within an age
+    # group; a quiet place neither sends nor receives; `asymmetric`
+    # receives only from places earlier in `order`.
+    place = np.array([0, 0, 1, 1, 2, 2])
+    age = np.array([1, 2, 1, 2, 1, 2])
+    sym, _ = run(
+        PlaceMixing("m", "symmetric", share=0.2, quiet=[2]).sample,
+        10,
+        place=place,
+        age=age,
+    )
+    want = np.zeros((6, 6))
+    want[0, 2] = want[2, 0] = want[1, 3] = want[3, 1] = 1.0
+    np.testing.assert_allclose(sym, want, rtol=1e-12)
+    asym = PlaceMixing("m", "asymmetric", share=0.2, order=[2, 0, 1])
+    kernel = asym.place_kernel(3)
+    np.testing.assert_allclose(
+        kernel, [[0, 0, 1], [0.5, 0, 0.5], [0, 0, 0]], rtol=1e-12
     )
 
 
-def test_place_mixing_matches_the_r_engine() -> None:
-    f = load("mixing")
-    strata = pd.DataFrame(f["strata"])
-    places = sorted(strata["place"].unique())
-    place = strata["place"].map(places.index).to_numpy()
-    age = strata["age"].to_numpy()
-    for case in f["cases"]:
-        K, eps = run(_mixing(f, case).sample, f["n"], place=place, age=age)
-        np.testing.assert_allclose(
-            K, matrix(case["K"]), rtol=1e-12, err_msg=case["mixing"]
+def test_imports_fall_on_their_days() -> None:
+    # Constant: `rate` times the unit each day. Pulses: `pulse_size`
+    # times the unit on day round(at * n), once per day however many
+    # land on it. A late stratum gets its unit spread over `late_days`
+    # from day round(late_at * n), and nothing else.
+    n, unit = 50, np.array([2.0, 1.0, 0.0])
+    late = np.array([False, True, False])
+    const = np.asarray(
+        run(Imports("i", kind="constant", rate=0.01).sample, n, unit=unit)
+    )
+    np.testing.assert_allclose(const, np.tile([0.02, 0.01, 0.0], (n, 1)))
+    pulses = np.asarray(
+        run(
+            Imports(
+                "i",
+                kind="pulses",
+                pulse_at=[0.2, 0.5, 0.5001],
+                pulse_size=4.0,
+                late=late,
+                late_at=0.4,
+                late_days=5,
+            ).sample,
+            n,
+            unit=unit,
         )
-        np.testing.assert_allclose(
-            eps, case["eps"], rtol=1e-12, err_msg=case["mixing"]
-        )
-
-
-def test_imports_match_the_r_engine() -> None:
-    f = load("imports")
-    strata = pd.DataFrame(f["strata"])
-    v = f["values"]
-    for case in f["cases"]:
-        late = (
-            strata["place"].isin([f"P{i:02d}" for i in [v["late_places"]]])
-            & (case["seeding"] == "mid")
-        ).to_numpy()
-        imports = Imports(
-            "imports",
-            kind=case["imports"],
-            rate=v["import_rate"],
-            pulse_at=v["import_at"],
-            pulse_size=v["import_size"],
-            late=late,
-            late_at=v["late_at"],
-            late_days=v["late_days"],
-        )
-        np.testing.assert_allclose(
-            run(imports.sample, f["n"], unit=np.array(f["share"])),
-            matrix(case["out"]),
-            rtol=1e-12,
-            err_msg=f"{case['imports']} {case['seeding']}",
-        )
+    )
+    want = np.zeros((n, 3))
+    want[[9, 24], 0] = 8.0
+    want[19:24, 1] = 0.2
+    np.testing.assert_allclose(pulses, want, rtol=1e-12)
 
 
 def test_the_trickle_reaches_every_stratum_with_cases_but_late_ones() -> None:
@@ -170,63 +150,16 @@ def test_the_trickle_reaches_every_stratum_with_cases_but_late_ones() -> None:
     assert out[:, 1].sum() == pytest.approx(1.0)
 
 
-def _renewal(f: dict[str, Any], which: str) -> Any:
-    start, log_r = matrix(f["start"]), matrix(f["log_r"])
-    kwargs: dict[str, Any] = {}
-    if which == "full":
-        s, v = f["shifts"], f["variants"]
-        with jax.enable_x64(True):
-            mixing = mixing_matrix(
-                matrix(f["K"]), np.array(f["eps"])[:, None], "received"
-            )
-        kwargs = {
-            "mixing": mixing,
-            "imports": matrix(f["imports"]),
-            "shifts": Shifts(
-                at=s["at"],
-                size=s["size"],
-                days=s["days"],
-                reactive=s["reactive"],
-                up=s["up"],
-            ),
-            "variants": Variants(
-                at=[v["at"]],
-                escape=[v["escape"]],
-                multiplier=[v["mult"]],
-                days=[v["days"]],
-            ),
-        }
-    if which == "exhaust":
-        start, log_r = start * 50, log_r + 1.5
-    with jax.enable_x64(True):
-        return run_renewal(
-            start,
-            np.array(f["gt"]),
-            np.exp(log_r),
-            np.array(f["population"]),
-            **kwargs,
-        )
-
-
-@pytest.mark.parametrize("which", ["plain", "full", "exhaust"])
-def test_the_renewal_step_matches_the_r_engine(which: str) -> None:
-    f = load("renewal")
-    out = _renewal(f, which)
-    want = f["runs"][which]
-    for key in ("infections", "r", "reff", "susceptible"):
-        np.testing.assert_allclose(
-            np.asarray(getattr(out, key)),
-            matrix(want[key]),
-            rtol=1e-9,
-            atol=1e-9,
-            err_msg=key,
-        )
-
-
 def test_the_exhausted_renewal_never_infects_more_than_its_population() -> None:
-    f = load("renewal")
-    out = _renewal(f, "exhaust")
-    pop = np.array(f["population"])
+    # R far above 1 from a large start: infections stop at the population
+    # and the susceptibles never go below 0.
+    gt = gt_pmf(5.0, "gamma", 0.5)
+    start = np.zeros((len(gt), 3))
+    start[-1] = [250.0, 100.0, 50.0]
+    rt = np.exp(np.full((120, 3), 2.0))
+    pop = np.array([1e4, 5e3, 2e4])
+    with jax.enable_x64(True):
+        out = run_renewal(start, gt, rt, pop)
     assert (np.asarray(out.infections).sum(axis=0) <= pop + 1e-6).all()
     assert (np.asarray(out.susceptible) >= 0).all()
 

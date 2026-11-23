@@ -1,6 +1,6 @@
 # Checkpoint scoring.
 #
-# Each checkpoint label gets the units of nowcastfoundation.checkpoint:
+# Each checkpoint label gets the units of nowcastgermany.checkpoint:
 # `germany` (WIS on the German development half) and `release` (the
 # release's settings, with the trainer's held-out loss).
 # BDBV is held out for the paper, so no BDBV unit runs

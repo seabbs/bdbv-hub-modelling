@@ -102,6 +102,7 @@ def _prepared(case: Case) -> tuple[jax.Array, jax.Array]:
 
 
 @pytest.mark.parametrize("mode", ["id", "agg"])
+@pytest.mark.slow
 def test_sample_nowcasts_match_r_in_distribution(case: Case, mode: str) -> None:
     n_r = read_ints(case.name, "draws")[0]
     r = read(case.name, f"samples_{mode}")

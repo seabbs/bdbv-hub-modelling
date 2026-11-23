@@ -66,7 +66,7 @@ LATENT = (
 `all`), or each independent stratum's."""
 
 START = dt.date(2026, 1, 3)
-"""A series' first day with offset 0 (the R engine's)."""
+"""A series' first day with offset 0."""
 
 # Generator tags, so no two kinds of draw share a key.
 DESIGN, VALUES, SHARED, STRATUM, LATENT_KEY = range(1, 6)
@@ -250,7 +250,7 @@ def _text(e: Any) -> str:
 
 
 def flat(x: Mapping[str, Any]) -> dict[str, Any]:
-    """Flatten values for a settings row, as the R engine's `flat_values`.
+    """Flatten values for a settings row.
 
     A one-element vector is its element, others are joined by ";".
     """

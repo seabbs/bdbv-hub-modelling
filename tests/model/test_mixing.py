@@ -1,6 +1,6 @@
 """The shared mixing component: kernels and mixing matrices.
 
-The simulator's form is also checked live against its R engine in
+The simulator's place mixing is checked on closed-form cases in
 `test_latent_components.py`.
 """
 

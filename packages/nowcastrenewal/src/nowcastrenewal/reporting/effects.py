@@ -282,15 +282,14 @@ class ReferenceEffects(RandomVariable):
     per delay), and `"{name}::hazard_{effect}"` for the hazard's random
     effects when there is no parametric part.
 
-    Two differences from the R engine, which cannot run them as meant:
+    Two choices where epinowcast's formula interface differs:
 
     - the weekday effect within place (`delay_places = "independent"`
       with `delay_dow = "yes"` and several places) is one effect per
-      weekday and place; the engine's `(1 | day_of_week:place)` fails at
-      the epinowcast pin (its fixed design drops a weekday while its
-      random design keeps all), so those draws never ran;
-    - the scale has no random effects: the engine sets them to 0
-      (`refp_sd_beta`), so the scale is its intercept, as here.
+      weekday and place, as epinowcast's `(1 | day_of_week:place)` fails
+      at the pin (its fixed design drops a weekday while its random
+      design keeps all);
+    - the scale has no random effects, so the scale is its intercept.
 
     Parameters
     ----------

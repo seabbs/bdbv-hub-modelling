@@ -1,4 +1,4 @@
-"""Held-out loss by level and LoRA size."""
+"""Validation loss by level and LoRA size."""
 
 import json
 import math
