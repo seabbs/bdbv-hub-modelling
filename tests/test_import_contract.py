@@ -51,3 +51,26 @@ def test_ci_installs_and_imports_every_package_alone() -> None:
     matrix = workflow["jobs"]["alone"]["strategy"]["matrix"]["package"]
     packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
     assert set(matrix) == packages
+
+
+STUDIES = ("nowcastgermany",)
+"""Study packages, which build on the generic ones and never the reverse
+(Sam, 2026-11-23)."""
+
+STUDY_FREE = ("nowcastfoundation",)
+"""Packages whose modules import no study yet, function-level imports
+included; the rest follow one PR at a time, then an import-linter
+contract replaces this list."""
+
+
+def test_these_packages_import_no_study() -> None:
+    found = []
+    for package in STUDY_FREE:
+        for path in sorted((ROOT / "packages" / package / "src").rglob("*.py")):
+            for n, line in enumerate(path.read_text().splitlines(), 1):
+                words = line.split()
+                if words[:1] in (["import"], ["from"]) and any(
+                    words[1].split(".")[0] == s for s in STUDIES
+                ):
+                    found.append(f"{path.relative_to(ROOT)}:{n}")
+    assert found == []
