@@ -374,3 +374,26 @@ def test_spike_pieces_are_rare_and_small(grid):
     assert place["correlated"] == max(place.values())
     size = _scipy(grid["distributions"]["shift_size"])
     assert size.ppf(0.975) < np.log(1.7)
+
+
+def test_controlled_paths_start_near_r_1_8(grid):
+    # Lead 01:20: slow declines from about R = 1.8 to 1.
+    rng = draws.generator(32)
+    starts = []
+    for _ in range(3_000):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        if v["path"] == "controlled":
+            starts.append(np.exp(v["amplitude"]))
+    assert len(starts) > 200
+    assert 1.65 < np.median(starts) < 1.95
+    assert np.quantile(starts, 0.025) > 1.2
+    assert np.quantile(starts, 0.975) < 2.8
+
+
+def test_reporting_delay_shapes_are_not_capped_at_2(grid):
+    # The joint model reports any gamma shape (#614), so the shape below
+    # 2 that epinowcast's simulate branch needed is gone.
+    shape = _scipy(grid["distributions"]["delay_shape"])
+    assert shape.ppf(0.975) > 3
+    assert shape.ppf(0.025) < 0.3
