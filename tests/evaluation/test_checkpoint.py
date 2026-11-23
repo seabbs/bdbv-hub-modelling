@@ -400,6 +400,10 @@ def test_the_german_config_scores_four_weeks_ahead_too() -> None:
     assert config.horizons == tuple(range(28, -29, -1))
 
 
+TASKS = "tasks-0123456789ab"
+"""The stubbed task store's name (`_unit_stubs`)."""
+
+
 def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
     from nowcastgermany import data as dg
     from nowcastgermany import evaluation as de
@@ -422,7 +426,7 @@ def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
     monkeypatch.setattr(de, "with_truth", lambda fc, *_a: fc)
     monkeypatch.setattr(ck, "record_precision", lambda _root: None)
     monkeypatch.setattr(ck, "_free", lambda: None)
-    monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: None)
+    monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: Path(TASKS))
     monkeypatch.setattr(ck, "score_dates", lambda: 100)
 
 
@@ -465,6 +469,7 @@ def test_a_german_unit_redoes_dates_without_the_forecast_days(
             "target": list(config.targets),
         }
     ).to_csv(root / f"{second}.csv.gz", index=False)
+    (root / ck.WRITTEN_FILE).write_text(f"{second}\t{TASKS}\n")
     seen: list = []
     _unit_stubs(monkeypatch, seen)
     ck.germany_unit(tmp_path, "n100")
@@ -619,3 +624,36 @@ def test_a_run_s_daily_table_holds_both_views_by_checkpoint(
     assert set(got["run"]) == {"runa"}
     by = got.set_index(["set", "outbreaks"])["score"]
     assert by[("Germany, daily counts, national", 200)] == 0.6
+
+
+def test_a_german_unit_redoes_dates_forecast_from_other_tasks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A complete date file is kept only if it was forecast from the
+    # current task store: files from other task-building code, or with no
+    # record, are forecast again, and each date written is recorded.
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config("config/germany.toml")
+    old, unrecorded, current, *_ = de.nowcast_dates(config, held_out=False)
+    root = tmp_path / ck.GERMANY_UNIT / "n100"
+    root.mkdir(parents=True)
+    for date in (old, unrecorded, current):
+        pd.DataFrame(
+            {
+                "origin": date,
+                "horizon": max(config.horizons),
+                "target": list(config.targets),
+            }
+        ).to_csv(root / f"{date}.csv.gz", index=False)
+    (root / ck.WRITTEN_FILE).write_text(
+        f"{old}\ttasks-ffffffffffff\n{current}\t{TASKS}\n"
+    )
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    ck.germany_unit(tmp_path, "n100")
+    done = seen[0][0]
+    assert old in done
+    assert unrecorded in done
+    assert current not in done
+    assert ck.written(root)[old] == TASKS

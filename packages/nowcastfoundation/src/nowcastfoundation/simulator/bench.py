@@ -35,6 +35,8 @@ from typing import Any
 import jax
 import pandas as pd
 
+from nowcastutils.devices import usable_cpus
+
 from .batch import simulate_batch
 
 COMPILE_EVENT = "/jax/core/compile/backend_compile_duration"
@@ -132,7 +134,7 @@ def benchmark(
         "warm": warm,
         "peak_rss_mb": peak,
         "load_1min": os.getloadavg()[0],
-        "cpus": len(os.sched_getaffinity(0)),
+        "cpus": usable_cpus(),
         **{
             f"{name}_version": metadata.version(name)
             for name in ("nowcastrenewal", "jax", "numpyro", "pyrenew")

@@ -10,9 +10,12 @@ on:
     paths:
       - 'packages/**'
       - 'tests/**'
+      - 'workflow/**'
+      - 'paper/**'
       - 'config/**'
       - 'results/**'
       - 'hub/**'
+      - 'Taskfile.yml'
       - 'pyproject.toml'
       - 'uv.lock'
       - 'codecov.yml'
@@ -24,9 +27,12 @@ on:
     paths:
       - 'packages/**'
       - 'tests/**'
+      - 'workflow/**'
+      - 'paper/**'
       - 'config/**'
       - 'results/**'
       - 'hub/**'
+      - 'Taskfile.yml'
       - 'pyproject.toml'
       - 'uv.lock'
       - 'codecov.yml'
@@ -45,10 +51,12 @@ concurrency:
 
 jobs:
   # The fast tier, on every push and pull request: every test not marked
-  # slow, with no model fits.
+  # slow, with no model fits. The one test job a pull request runs: the
+  # package, workflow (with Snakemake's dry runs) and paper tests, under
+  # xdist, in at most 15 minutes.
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     # The tests read the frozen data in tests/fixtures/data, never the
     # live hub data.
     env:
@@ -61,9 +69,22 @@ jobs:
           jax-scope: test
       - name: Tests
         run: >-
-          uv run pytest -q -n auto --durations=50 --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub
+          uv run --group paper pytest -q -n auto --durations=30
+          --junitxml=pytest-durations.xml --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub
           --cov-report=term-missing
           --cov-report=xml
+      - name: Paper tests
+        working-directory: paper
+        run: uv run --group paper pytest -q -n auto --durations=10 tests
+      # Every test's time, to find the slow ones (`--durations` prints the
+      # slowest only).
+      - name: Keep the test durations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pytest-durations
+          path: pytest-durations.xml
+          if-no-files-found: ignore
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
@@ -92,8 +113,15 @@ jobs:
       - uses: ./.github/actions/setup-forecast-env
         with:
           jax-scope: test
+      # The torch-gated files run in the chronos job, slow tests and all,
+      # so they are left out here and no test runs twice.
       - name: Model fits and other slow tests
-        run: uv run pytest -q -m slow --durations=50
+        run: |
+          mapfile -t gated < <(grep -rlE \
+            '(importorskip|find_spec)\("(torch|chronos|peft|transformers)"' \
+            tests | sort)
+          uv run pytest -q -m slow -n 2 --durations=30 \
+            "${gated[@]/#/--ignore=}"
       - name: Backtest and nowcast smoke test
         timeout-minutes: 15
         # The backtest never fits the fitted models (their forecasts come
@@ -152,8 +180,8 @@ jobs:
 
   # Live checks of the simulator's PyRenew components against the R
   # packages they stand in for (tests/model/r_live.py): epinowcast's own
-  # Stan functions, primarycensored and the R engine. R_LIVE_REQUIRED
-  # makes a missing package fail rather than skip.
+  # Stan functions and primarycensored. R_LIVE_REQUIRED makes a missing
+  # package fail rather than skip.
   r-live:
     runs-on: ubuntu-latest
     if: >-
@@ -171,7 +199,7 @@ jobs:
         with:
           use-public-rspm: true
           extra-repositories: https://stan-dev.r-universe.dev
-      # epinowcast at the engine's pin (packages/nowcastfoundation/r).
+      # epinowcast at the commit the simulator's reporting ports.
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           packages: |
@@ -179,8 +207,6 @@ jobs:
             primarycensored@1.6.0
             any::cmdstanr
             any::jsonlite
-            any::pkgload
-            any::yaml
             any::data.table
             any::flexsurv
             any::posterior
@@ -190,35 +216,9 @@ jobs:
       - name: Live R checks
         run: >-
           uv run pytest -q tests/model/test_pmfs.py
-          tests/model/test_latent_components.py
-          tests/model/test_latent_process.py
+          tests/model/test_latent_epinowcast.py
           tests/model/test_reporting_delays.py
           tests/model/test_hub_imputation_delays.py
           tests/model/test_reporting_triangle.py
           tests/model/test_reporting_effects.py
           tests/model/test_reporting_expectation.py
-          tests/model/test_revisions.py
-
-  # The former R engine's testthat suite (packages/nowcastfoundation/r),
-  # the reference the simulator's draws and latent step are tested
-  # against. Its hard dependencies only.
-  engine:
-    runs-on: ubuntu-latest
-    if: >-
-      ${{ github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'full-tests') }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        with:
-          use-public-rspm: true
-      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        with:
-          working-directory: packages/nowcastfoundation/r
-          dependencies: '"hard"'
-          extra-packages: any::testthat any::withr any::pkgload
-      - name: Engine tests
-        run: >-
-          Rscript -e 'testthat::test_local("packages/nowcastfoundation/r",
-          reporter = "summary", stop_on_failure = TRUE)'

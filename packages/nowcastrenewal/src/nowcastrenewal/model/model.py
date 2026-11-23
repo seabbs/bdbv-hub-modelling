@@ -60,9 +60,6 @@ PHI_FLOOR = 1e-3
 """Added to $1/\\phi$ so the concentration stays at or below 1000."""
 ALPHA0 = 0.6
 """Ascertainment that turns the seed's expected onsets into infections."""
-FORECAST_RT_HALF_LIFE = 2.0
-"""Half-life in weeks with which the pooled log Rt reverts towards 0
-(Rt of 1) past the data weeks."""
 
 
 def generation_interval(
@@ -316,17 +313,15 @@ def _named_walk(
     sd: float,
     n_weeks: int,
     ar: bool = False,
-    forecast_half_life: float | None = None,
     centred: bool = False,
 ) -> TemporalProcess:
     """Weekly walk frozen over the seeding period, fitted on the data weeks.
 
     `n_weeks` data weeks set the fit axis; later steps are drawn in the
     forecast pass. With `ar`, the walk is AR(1) with a half-life of
-    LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days).
-    With `forecast_half_life`, the forecast steps revert towards 0
-    (`NonCentredRandomWalk`). With `centred`, the fitted levels are
-    sampled rather than the standardised steps.
+    LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days),
+    in the fit and the forecast alike. With `centred`, the fitted levels
+    are sampled rather than the standardised steps.
     """
     sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
     frozen = GEN_INT_LENGTH // 7
@@ -340,7 +335,6 @@ def _named_walk(
         frozen=frozen,
         n_fit=frozen + n_weeks,
         half_life_rv=half_life,
-        forecast_half_life=forecast_half_life,
         centred=centred,
     )
     return WeeklyTemporalProcess(inner, start_dow=SUNDAY)
