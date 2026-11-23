@@ -164,13 +164,17 @@ class RtPath:
             **kw,
         )
 
-    def log_r(self, n: int) -> np.ndarray:
+    def log_r(self, n: int, horizon: int | None = None) -> np.ndarray:
         """Return log R on `n` days.
 
         Parameters
         ----------
         n : int
             Days.
+        horizon : int, optional
+            Days the shares of the way through refer to, the series'
+            length; `n` if None. Days past it pad the arrays to a shared
+            shape.
 
         Returns
         -------
@@ -182,8 +186,9 @@ class RtPath:
         ValueError
             If the kind is unknown.
         """
+        h = n if horizon is None else horizon
         t = np.arange(n, dtype=float)
-        u = t / n
+        u = t / h
         a, peak = self.amplitude, self.peak
         tilt = max(peak, 1 - peak)
         match self.kind:
@@ -205,7 +210,7 @@ class RtPath:
                 out = -a * (peak - u) / tilt
             case "rise_fall_sharp":
                 out = a * (
-                    1 - 2 * _plogis((t - peak * n) / (self.flip_days / 4.4))
+                    1 - 2 * _plogis((t - peak * h) / (self.flip_days / 4.4))
                 )
             case "oscillating":
                 out = a * np.sin(2 * np.pi * t / self.period + self.phase)
@@ -316,9 +321,14 @@ class PlaceRt(RandomVariable):
     place_lags : sequence of int
         For `lagged`, each place's lag in days.
     drift : float
-        R's multiplicative drift over the series, $e^{\log(d) t / n}$.
+        R's multiplicative drift over the series, $e^{\log(d) t / h}$ with
+        $h$ the horizon.
     coupling : float
         Strata's own noise is scaled by `1 - coupling`.
+    horizon : int, optional
+        Days the path's shares of the way through and the drift refer
+        to, the series' length; the sampled `n` if None. Days past it pad
+        the arrays to a shared shape.
 
     Raises
     ------
@@ -339,6 +349,7 @@ class PlaceRt(RandomVariable):
         place_lags: Sequence[int] = (),
         drift: float = 1.0,
         coupling: float = 1.0,
+        horizon: int | None = None,
     ) -> None:
         if relation not in RELATIONS:
             raise ValueError(f"relation must be one of {RELATIONS}")
@@ -353,6 +364,7 @@ class PlaceRt(RandomVariable):
         self.place_lags = [int(x) for x in place_lags]
         self.drift = drift
         self.coupling = coupling
+        self.horizon = horizon
         self.noise = WeeklyNoise(f"{name}_noise")
 
     def _own_kind(self, i: int) -> str:
@@ -365,13 +377,15 @@ class PlaceRt(RandomVariable):
         return self.kinds[int(j)]
 
     def _place_paths(self, n: int, n_places: int) -> list[Array]:
-        shared = jnp.asarray(self.path.log_r(n))
+        shared = jnp.asarray(self.path.log_r(n, self.horizon))
         if self.relation == "shared":
             return [shared] * n_places
         if self.relation == "independent":
             own = [
                 jnp.asarray(
-                    RtPath.from_values(self._own_kind(i), self.values).log_r(n)
+                    RtPath.from_values(self._own_kind(i), self.values).log_r(
+                        n, self.horizon
+                    )
                 )
                 for i in range(1, n_places)
             ]
@@ -417,7 +431,8 @@ class PlaceRt(RandomVariable):
         """
         idx = np.asarray(place, dtype=int)
         paths = self._place_paths(n, int(idx.max()) + 1)
-        drift = math.log(self.drift) * jnp.arange(n) / n
+        h = n if self.horizon is None else self.horizon
+        drift = math.log(self.drift) * jnp.arange(n) / h
         sd = 0.01 * self.noise_scale
         cols = [
             paths[p]

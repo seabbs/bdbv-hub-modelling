@@ -90,6 +90,7 @@ def simulate_latent(
     kinds: Sequence[str] = KINDS,
     incubation_cv: float = 0.5,
     depletion: str = "linear",
+    days: int | None = None,
 ) -> Latent:
     """Sample a simulation's latent run (a numpyro model).
 
@@ -120,22 +121,32 @@ def simulate_latent(
         `incubation_family`).
     depletion : str
         `"linear"` or `"exponential"` (`components.renewal.DEPLETIONS`).
+    days : int, optional
+        Days after the generation time's span that the arrays run over,
+        at least `n`; `n` if None. Series of near lengths padded to the
+        same days share compiled shapes. Timings refer to `n`, the run is
+        causal and its days-first draws keep their values, so the run
+        cropped to `n` days is the same.
 
     Returns
     -------
     Latent
-        The run.
+        The run over `n` days.
 
     Raises
     ------
     ValueError
-        If the generation time is longer than the series, an established
-        epidemic is larger than its population, or `depletion` is unknown.
+        If the generation time is longer than the series, `days` is less
+        than `n`, an established epidemic is larger than its population,
+        or `depletion` is unknown.
     """
     if depletion not in DEPLETIONS:
         raise ValueError(f"depletion must be one of {tuple(DEPLETIONS)}")
     if n < 1:
         raise ValueError("the generation time is longer than the series")
+    days = n if days is None else int(days)
+    if days < n:
+        raise ValueError("days must be at least n")
     v = values
     n_places, n_ages = int(design["n_places"]), int(design["n_ages"])
     place_ids = [f"P{i:02d}" for i in range(1, n_places + 1)]
@@ -193,6 +204,7 @@ def simulate_latent(
             place_lags=_vector(v, "place_lags").astype(int).tolist(),
             drift=float(v["r_drift"]),
             coupling=float(v["coupling"]),
+            horizon=n,
         ),
         population=population,
         place=place,
@@ -208,6 +220,7 @@ def simulate_latent(
             switch=str(v.get("mixing_switch") or "on"),
             switch_at=float(v.get("mixing_switch_at") or 0.0),
             switch_days=float(v.get("mixing_switch_days") or 1.0),
+            horizon=n,
         ),
         imports_rv=Imports(
             "imports",
@@ -219,6 +232,7 @@ def simulate_latent(
             late_at=float(v.get("late_at") or 0.0),
             late_days=int(v.get("late_days") or 1),
             trickle=float(v["trickle"]),
+            horizon=n,
         ),
         unit=unit,
         shifts=Shifts(
@@ -237,10 +251,10 @@ def simulate_latent(
         depletion=DEPLETIONS[depletion],
     )
     with handlers.trace() as tr:
-        sample = process(n_days_post_init=n)
+        sample = process(n_days_post_init=days)
     infections = np.asarray(sample.all_subpops)
-    r = np.asarray(tr["latent::r"]["value"])
-    reff = np.asarray(tr["latent::reff"]["value"])
+    r = np.asarray(tr["latent::r"]["value"])[:n]
+    reff = np.asarray(tr["latent::reff"]["value"])[:n]
     group = strata[".group"].to_numpy().astype(int) - 1
     # The drawn infection-to-reference family and CV; a design that does
     # not draw them takes a gamma with `incubation_cv`.
@@ -263,7 +277,15 @@ def simulate_latent(
     # too; an outbreak that starts in it had no infections before.
     before = None if early else np.asarray(start())[0]
     onsets = np.asarray(events(infections=infections, before=before))
-    return _latent(infections, onsets, r, reff, population, active, n_gt)
+    return _latent(
+        infections[: n_gt + n],
+        onsets[: n_gt + n],
+        r,
+        reff,
+        population,
+        active,
+        n_gt,
+    )
 
 
 def _xy(v: Mapping[str, Any]) -> np.ndarray | None:

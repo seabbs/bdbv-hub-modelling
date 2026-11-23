@@ -8,7 +8,10 @@ effects, the report days, the observation noise and the revisions
 (`reporting.simulate.reporting_model`). The grid's draws (design and
 values) enter as fixed values; every random quantity is a numpyro site,
 so the model is sampled forward under one seed and could be conditioned
-on reported counts (`"draw_{k}::reports::counts"`).
+on reported counts (`"draw_{k}::reports::counts"`). The latent arrays
+run over the frame's days rounded up to a multiple of `BUCKET`, so
+simulations of near lengths share compiled shapes; the latent run is
+cropped to the frame and is the same as without the padding.
 
 `simulate_outbreak` samples it and returns the latent run, the counts in
 the simulator's long format and the values the reporting adds.
@@ -29,7 +32,26 @@ from ..latent.rt import KINDS
 from ..latent.simulate import Latent, simulate_latent
 from ..reporting.simulate import reporting_frame, reporting_model, tabulate
 
-__all__ = ["outbreak_model", "simulate_outbreak"]
+__all__ = ["BUCKET", "bucket_days", "outbreak_model", "simulate_outbreak"]
+
+BUCKET = 56
+"""Days the latent arrays' length is rounded up to a multiple of."""
+
+
+def bucket_days(n_days: int) -> int:
+    """Return `n_days` rounded up to a multiple of `BUCKET`.
+
+    Parameters
+    ----------
+    n_days : int
+        Days of the reporting frame.
+
+    Returns
+    -------
+    int
+        The days the latent arrays run over.
+    """
+    return -(-int(n_days) // BUCKET) * BUCKET
 
 
 def outbreak_model(
@@ -76,6 +98,7 @@ def outbreak_model(
         kinds,
         incubation_cv,
         depletion,
+        days=bucket_days(n_days) - len(gt),
     )
     frame = reporting_frame(
         values, n_days, list(strata["place"]), list(strata["age"])
