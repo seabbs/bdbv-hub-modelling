@@ -590,6 +590,39 @@ def test_one_file_s_wis_is_scored_in_one_pass_whatever_its_dates(
     assert passes[0] == passes[1]
 
 
+def test_a_run_s_interim_checkpoint_is_shown_labelled_interim(tmp_path):
+    # An interim checkpoint exported mid-segment, <run>/train/interim/s<step>,
+    # scored into <run>/scores/<unit>/interim/s<step>, is one of the run's
+    # checkpoints, labelled interim with its outbreaks.
+    cache = tmp_path / "cache" / "germany-days"
+    _quantiles(cache / "reference" / "2022-02-09.csv.gz", "randomwalknowcast")
+    run = tmp_path / "run"
+    (run / "train" / "interim" / "s4810").mkdir(parents=True)
+    (run / "train" / "interim" / "s4810" / "settings.json").write_text(
+        '{"hash": "interim-s4810-abc123def456", "n_outbreaks": 2000,'
+        ' "interim": true}'
+    )
+    _quantiles(
+        run
+        / "scores"
+        / "germany-days"
+        / "interim"
+        / "s4810"
+        / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged_ft",
+    )
+    _, refs = _setup()
+    rs = [runs.make_run("runa", str(run), live=True)]
+    built = nowcasts.build(cache, rs, refs, levels=PAGE, unit="germany-days")
+    assert "abc123def456" in built["sets"]
+    sizes = {"abc123def456": 2000}
+    shown = nowcasts.meta(built, rs, refs, sizes)
+    one = next(m for m in shown if m["id"] == "abc123def456")
+    assert one["run"] == "runa"
+    assert one["n"] == 2000
+    assert "interim" in one["label"]
+
+
 def test_a_unit_with_forecast_days_has_its_split_on_every_date(tmp_path):
     # The horizon split panel reads `split` by date: a unit with forecast
     # days has its nowcast part and weeks ahead on each date it scored.

@@ -37,7 +37,7 @@ from . import (
     training,
 )
 from .logs import _size
-from .runs import Reference, Run, split_label
+from .runs import Reference, Run, checkpoint_settings, split_label
 from .sources import Sources
 
 ASSETS = Path(__file__).with_name("page")
@@ -719,6 +719,15 @@ def checkpoint_sizes(
         for _, s, _ in info[r.key]["ck"]:
             if s.get("n_outbreaks"):
                 sizes[str(s.get("hash"))] = int(s["n_outbreaks"])
+        # Interim checkpoints, exported mid-segment, by their own hash.
+        for path in checkpoint_settings(r.folder) if r.folder else ():
+            try:
+                s = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if s.get("interim") and s.get("n_outbreaks"):
+                key = split_label(str(s.get("hash")))[0]
+                sizes[key] = int(s["n_outbreaks"])
     return sizes
 
 
