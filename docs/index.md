@@ -7,6 +7,8 @@ The [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub) coll
 
 This repository holds three projects.
 The fine-tuned foundation project fine-tunes the Chronos-2 forecasting model on simulated outbreaks so that it can nowcast from reporting triangles.
+Its reference model is `randomwalknowcast` from [nowcastbaselines](nowcastbaselines/), our JAX port of baselinenowcast ([Johnson et al. 2025](https://doi.org/10.12688/wellcomeopenres.25027.2)) with a random walk on top.
+We develop the baselines as part of the paper.
 The [paper](paper/main.html) and its [supporting information](paper/si.html) describe it.
 It is evaluated on held-out simulations, on the German COVID-19 hospitalisation nowcasting hub and on the BDBV hub.
 The joint-model-informed renewal project compares renewal models fitted to the hub data on their own with renewal models informed by a larger joint model, BVDOutbreakSize.
@@ -14,7 +16,7 @@ The hub submission project submits our models to the hub each week, backtests th
 Every model is scored against the random walk and the random walk nowcast.
 
 We submit three models.
-`seabbs-rwnowcast` is the random walk nowcast.
+`seabbs-rwnowcast` is `randomwalknowcast`, the paper's reference model.
 `seabbs-renewal` is the first renewal model in a chain that passes its checks.
 The chain starts with `renewalbvd`, the zone renewal model informed by the BVDOutbreakSize Rt estimates.
 Its ablations are the fallbacks, `renewalsp`, which fits each province on its own, and then `renewal`, the zone model without BVDOutbreakSize.
@@ -31,7 +33,7 @@ The three projects:
 
 -   [![](assets/logos/fine-tuned-foundation/logo-mark.svg#only-light){ width="32" height="32" }![](assets/logos/fine-tuned-foundation/logo-mark-dark.svg#only-dark){ width="32" height="32" } **Fine-tuned foundation**](foundation/index.md)
 
-    Chronos-2 fine-tuned on simulated outbreaks to nowcast from reporting triangles, with its paper.
+    Chronos-2 fine-tuned on simulated outbreaks to nowcast from reporting triangles, with its paper and its baselines, [nowcastbaselines](nowcastbaselines/).
 
 -   [![](assets/logos/joint-model-informed-renewal/logo-mark.svg#only-light){ width="32" height="32" }![](assets/logos/joint-model-informed-renewal/logo-mark-dark.svg#only-dark){ width="32" height="32" } **Joint-model-informed renewal**](renewal/index.md)
 
