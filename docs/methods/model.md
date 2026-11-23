@@ -194,9 +194,8 @@ A trajectory is the final known plus final imputed counts.
 Final known counts are those reported by the cut-off plus a negative binomial draw of those reported later, as in epinowcast.
 Final imputed counts are a negative binomial draw centred on the current imputed count plus those expected later, since the hub re-imputes each vintage.
 In `renewal` a province's trajectory is the sum of its zones' trajectories of the same draw ([below](#provinces-and-the-country)).
-The national trajectory is the sum of the provinces plus an unassigned component.
-The component is $\max\{0, Y_{CD}(w) - \sum_p Y_p(w)\}$ in data weeks and $\rho \sum_p \tilde y_{p,i}(w)$ after, with $\tilde y_{p,i}$ trajectory $i$ of province $p$.
-$\rho$ is the component's share of the provinces' total over the last 4 data weeks.
+The national trajectory is the sum of the provinces.
+A release with national cases in no province stops the fit (`check_national`), since no release has had any (`data/national-coherence.csv`).
 
 ### Weekly Rt { #weekly-rt }
 
@@ -230,7 +229,7 @@ flowchart TD
     K["Gravity kernel, rows receive<br/>K<sub>zq</sub> ∝ N<sub>z</sub> exp(−D<sub>zq</sub> / 300 km)"]
     W["Importation<br/>W = (1 − ε) I + ε diag(1/N) K diag(N)"]
     CORE["<b>Renewal core</b><br/>see above<br/>with a share at risk ν"]
-    SUM["Province = sum of its zones<br/>country = provinces + unassigned"]
+    SUM["Province = sum of its zones<br/>country = sum of provinces"]
 
     LR --> RP
     DV --> RP
@@ -335,13 +334,12 @@ A zone with no case in the random walks' walk window is silent and is not fitted
 It takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
 The introduction rate pools the zone with the other zones of its province, so a province with no case in any zone is forecast by its zones' introductions alone.
 These draws are independent of the fit.
-The ZoneAllocator floor of the other models does not apply.
 
 ### Provinces and the country
 
 A province's trajectory is the sum of the trajectories of all its zones, fitted and silent, draw by draw and week by week.
 So zones sum to their province exactly, and the hub file takes the zone trajectories as they are.
-The national trajectory is the sum of the provinces, with no unassigned component: the hub's national target has had no case without a province in any release (`data/national-coherence.csv`).
+The national trajectory is the sum of the provinces ([Forecasts](#forecasts)).
 
 ## Single patch (`renewalsp`) { #single-patch }
 

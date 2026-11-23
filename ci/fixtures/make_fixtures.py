@@ -72,6 +72,12 @@ def time_series() -> None:
             )
 
 
+RT_LEVELS = (
+    0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5,
+    0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99,
+)  # fmt: skip
+
+
 def tasks() -> None:
     ends = [
         (dt.date(2026, 2, 14) + dt.timedelta(days=7 * k)).isoformat()
@@ -126,7 +132,40 @@ def tasks() -> None:
                                 "is_required": True,
                             }
                         },
-                    }
+                    },
+                    # The optional wk R_t target: quantiles of the
+                    # reference week and the week before.
+                    {
+                        "task_ids": {
+                            "reference_date": {
+                                "required": None,
+                                "optional": ["2026-10-31", "2026-11-07"],
+                            },
+                            "location": {
+                                "required": None,
+                                "optional": sorted(NAMES),
+                            },
+                            "target": {
+                                "required": None,
+                                "optional": ["wk R_t"],
+                            },
+                            "target_end_date": {
+                                "required": None,
+                                "optional": [
+                                    "2026-10-24",
+                                    "2026-10-31",
+                                    "2026-11-07",
+                                ],
+                            },
+                        },
+                        "output_type": {
+                            "quantile": {
+                                "output_type_id": {"required": list(RT_LEVELS)},
+                                "value": {"type": "double", "minimum": 0},
+                                "is_required": False,
+                            }
+                        },
+                    },
                 ],
                 "submissions_due": {
                     "relative_to": "reference_date",

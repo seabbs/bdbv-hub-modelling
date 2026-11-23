@@ -57,11 +57,19 @@ models = [
   "fm_chronos_daily_complete",
   "fm_chronos_daily_ragged",
   "fm_chronos_daily_ragged_ft",
+  # The two-step sensitivity analysis (#538): baselinenowcast's point
+  # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
+  "fm_chronos_daily_complete_2step",
+  "fm_chronos_daily_complete_2step_ft",
 ]
-# Chronos-2 fine-tuned on real data alone, the German development half and
-# BDBV to date (scripts/finetune_realdata.py on the germany-ft branch), run
-# on the held-out half only, for the SI's comparison with the models
-# fine-tuned on simulations.
+# Chronos-2 fine-tuned on real data alone (the German development half and
+# BDBV to date), run on the held-out half only, for the SI's comparison
+# with the models fine-tuned on simulations. Its checkpoint is released as
+# realdata-ft-<hash> and pinned by `realdata` in config/finetune.toml; the
+# model is registered only once that pin is set (it is empty now), and its
+# training is not a workflow rule. The workflow's real-data run is
+# different: `runs.realdata` in workflow/config.yaml mixes German real-data
+# blocks into Run A's simulations.
 held_out_models = [
   "fm_chronos_daily_ragged_real",
 ]

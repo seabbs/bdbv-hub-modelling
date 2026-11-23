@@ -132,6 +132,11 @@ LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
 many before the cut-off (16 weeks, 112 days), which is also the most lags
 it reads."""
 
+FIRST_RELEASE: Final = {"weekly": 2, "daily": 7}
+"""`lag_count` reads a step only if a release falls within this many lags
+of it: a step first released later than that (before a series' first
+release) is left out, as its gap is not a reporting delay."""
+
 COUPLINGS: Final = ("online", "independent", "comonotone")
 """How a foundation model joins its cells (`FoundationModel.coupling`):
 `online` chooses and fits the coupling at each forecast
@@ -500,7 +505,7 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
 
 
 def _finetuned(
-    name: str, source: str, layout: str = "ragged"
+    name: str, source: str, layout: str = "ragged", two_step: bool = False
 ) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
 
@@ -520,6 +525,7 @@ def _finetuned(
             if Path(spec).is_dir()
             else resolve_checkpoint(spec)
         ),
+        two_step=two_step,
     )
 
 
@@ -717,7 +723,12 @@ def lag_count(
     do not bias it short (right truncation). It reads no release after
     the cut-off. A lag no release fell on carries the count of the lag
     before (weekly releases of daily data). A low-count place can only
-    underestimate its delay, so it never raises the block's. At most the
+    underestimate its delay, so it never raises the block's. A step with
+    no release within `FIRST_RELEASE[source]` lags of it was first
+    released late (before the series' first release), so it is left out;
+    if that leaves no complete step with a count but some were released
+    late, the block takes
+    `LAG_WINDOW[source][0]` lags. At most the
     history allows, two steps of context before the longest lag; a place
     whose share is not reached within the window takes that many, and so
     does a block with no complete steps or no count in them. Training
@@ -751,16 +762,22 @@ def lag_count(
     first = tri.last - back - window + 1
     if first < 0:
         return most
-    steps = list(range(first, tri.last - back + 1))
-    lags = []
+    steps = np.arange(first, tri.last - back + 1)
+    lags, late = [], False
     for p in range(tri.final.shape[0]):
-        final = tri.final[p, steps].sum()
+        cells = tri.partial[p, steps, :width]
+        released = ~np.isnan(cells[:, : FIRST_RELEASE[source]]).all(axis=1)
+        seen_later = ~np.isnan(cells).all(axis=1) & ~released
+        late |= bool((seen_later & (tri.final[p, steps] > 0)).any())
+        final = tri.final[p, steps[released]].sum()
         if final <= 0:
             continue
-        seen = pd.DataFrame(tri.partial[p, steps, :width]).ffill(axis=1)
+        seen = pd.DataFrame(cells[released]).ffill(axis=1)
         share = seen.fillna(0.0).to_numpy().sum(axis=0) / final
         reached = np.flatnonzero(share >= quantile - 1e-12)
         lags.append(int(reached[0]) + 1 if reached.size else most)
+    if not lags and late:
+        return min(window, most)
     return min(max(lags), most) if lags else most
 
 
@@ -1118,6 +1135,41 @@ def _owned(
     return out
 
 
+TWO_STEP_DELAY: Final = 40
+"""The two-step model's longest delay $D$ in days, capped by the history."""
+
+
+def point_nowcast(
+    tri: HubTriangle, places: Sequence[str], task: ForecastTask
+) -> HubTriangle:
+    """Return `tri` with each place's days to the cut-off nowcast.
+
+    Each place's daily triangle at the cut-off (`round(3 * D)` days,
+    $D$ = `TWO_STEP_DELAY` capped by the history, as
+    `randomwalknowcast_daily`) is filled by baselinenowcast's point
+    nowcast, and those days of the place's counts are replaced by it.
+    """
+    from nowcastbaselines.baselinenowcast import baselinenowcast
+    from nowcastbaselines.daily import daily_triangle
+
+    history = task.daily_history
+    if history is None or history.empty:
+        raise ModelUnavailableError("the two-step model needs daily releases")
+    cutoff = as_date(str(task.cutoff)[:10])
+    at = tri.times.index(cutoff.isoformat())
+    have = (cutoff - as_date(str(history["onset_date"].min()))).days + 1
+    delay = min(TWO_STEP_DELAY, have // 3)
+    if delay < 3:
+        raise ModelUnavailableError(f"{have} days of releases are too few")
+    rows = min(3 * delay, at + 1)
+    final = tri.final.copy()
+    for i, place in enumerate(places):
+        cells, mask = daily_triangle(history, place, cutoff, rows, delay)
+        point = baselinenowcast(cells, mask, output_type="point")
+        final[i, at - rows + 1 : at + 1] = np.asarray(point, np.float64)
+    return replace(tri, final=final)
+
+
 def _walk_start(task: ForecastTask) -> str:
     """Return the earliest week `randomwalk` starts its walk from.
 
@@ -1237,6 +1289,13 @@ class FoundationModel:
     collect : list or None
         Private to `prefetch`: the groups a forecast would predict are
         added to it, and the forecast stops.
+    two_step : bool
+        The two-step model (#538's sensitivity analysis): each place's
+        daily counts to the cut-off are first replaced by baselinenowcast's
+        point nowcast (`point_nowcast`), and Chronos-2 forecasts from the
+        day after the cut-off on those corrected counts. The nowcast days
+        are the point nowcast, with no uncertainty. Complete layout, daily
+        source only.
     block_limit : int or None
         Most series in one block Chronos-2 predicts, the machine's block
         capacity; a task's block over it is cut into views
@@ -1261,6 +1320,7 @@ class FoundationModel:
         default=None, repr=False, compare=False
     )
     block_limit: int | None = None
+    two_step: bool = False
     reads_zones: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
@@ -1269,6 +1329,11 @@ class FoundationModel:
             raise ValueError(
                 f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
             )
+        if self.two_step and (self.layout, self.source) != (
+            "complete",
+            "daily",
+        ):
+            raise ValueError("two_step needs the complete layout, daily")
         if self.block_limit is None and os.environ.get(BLOCK_LIMIT_ENV):
             self.block_limit = int(os.environ[BLOCK_LIMIT_ENV])
 
@@ -1331,7 +1396,12 @@ class FoundationModel:
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
-        if self.layout == "complete":
+        if self.two_step:
+            # Chronos-2 forecasts from the day after the cut-off, on the
+            # counts baselinenowcast's point nowcast corrects.
+            tri = point_nowcast(tri, places, task)
+            start = tri.times.index(str(task.cutoff)[:10]) + 1
+        elif self.layout == "complete":
             walk = _walk_start(task)
             if walk not in tri.times:
                 raise ModelUnavailableError(
@@ -1817,6 +1887,35 @@ for _source in SOURCES:
             f"target's {_source} releases, {_layout} layout.",
             fitted=True,
         )
+
+# The two-step sensitivity analysis (#538): baselinenowcast's point
+# nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
+register_model(
+    "fm_chronos_daily_complete_2step",
+    partial(
+        FoundationModel,
+        "fm_chronos_daily_complete_2step",
+        "daily",
+        "complete",
+        two_step=True,
+    ),
+    "baselinenowcast's point nowcast, then Chronos-2 on the corrected "
+    "daily counts, complete layout.",
+    fitted=True,
+)
+register_model(
+    "fm_chronos_daily_complete_2step_ft",
+    partial(
+        _finetuned,
+        "fm_chronos_daily_complete_2step_ft",
+        "daily",
+        "complete",
+        two_step=True,
+    ),
+    "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
+    "corrected daily counts, complete layout.",
+    fitted=True,
+)
 
 
 def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:

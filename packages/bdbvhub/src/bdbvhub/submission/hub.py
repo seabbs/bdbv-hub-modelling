@@ -4,7 +4,9 @@
 A submission is a CSV with columns `reference_date`, `forecast_date`,
 `target`, `target_end_date`, `location`, `output_type`, `output_type_id`
 and `value`.
-Every row is one week of one sample trajectory.
+Every count row (`wk inc confirmed cases`) is one week of one sample
+trajectory. A renewal model also gives the optional `wk R_t` target as
+quantiles (`rt_table`) for the weeks the round takes (`rt_end_dates`).
 `forecast_date` is the day the PR is opened.
 A resubmission in the same week keeps the file on the hub's main branch
 unchanged and appends rows with one new `forecast_date`.
@@ -19,6 +21,7 @@ The authoritative check is still `hubValidations` (`task hub:validate`).
 from __future__ import annotations
 
 import datetime as dt
+import json
 import re
 import tomllib
 from collections.abc import Mapping
@@ -36,12 +39,15 @@ __all__ = [
     "METADATA_DEFAULTS",
     "OUTPUT_TYPE",
     "ROUND_NAME",
+    "RT_TARGET",
     "SUBMISSION_CONFIG",
     "TEAM_ABBR",
     "model_abbr_for",
     "model_id",
     "own_national",
     "render_model_metadata",
+    "rt_end_dates",
+    "rt_table",
     "run_date",
     "submission_path",
     "to_hub_table",
@@ -66,7 +72,13 @@ ROUND_NAME: Final = "BDBV 2026 nowcasting and forecasting"
 """The round this repository submits to."""
 
 OUTPUT_TYPE: Final = "sample"
-"""The only output type the round accepts."""
+"""The output type of the count target."""
+
+RT_TARGET: Final = "wk R_t"
+"""The hub's optional weekly effective reproduction number target."""
+
+RT_OUTPUT_TYPE: Final = "quantile"
+"""The output type of `RT_TARGET`, the only one the hub takes for it."""
 
 TEAM_ABBR: Final = "seabbs"
 """Team abbreviation, of our hub models."""
@@ -404,6 +416,97 @@ def run_date(now: dt.datetime | None = None) -> dt.date:
     """
     moment = now or dt.datetime.now(dt.UTC)
     return moment.astimezone(dt.UTC).date()
+
+
+def rt_end_dates(
+    tasks_json: Path | str, reference_date: str
+) -> tuple[str, ...]:
+    """Return the weeks the round takes `RT_TARGET` for.
+
+    Parameters
+    ----------
+    tasks_json : pathlib.Path or str
+        The hub's `hub-config/tasks.json`.
+    reference_date : str
+        The round.
+
+    Returns
+    -------
+    tuple of str
+        The target end dates of the `wk R_t` task open to this reference
+        date, from the week before it to the reference week (the target
+        takes no horizon after 0); empty if the round has none.
+    """
+    config = json.loads(Path(tasks_json).read_text())
+    ref = as_date(reference_date)
+    out: set[str] = set()
+    for rnd in config["rounds"]:
+        for task in rnd["model_tasks"]:
+            ids = task["task_ids"]
+            targets = _options(ids.get("target", {}))
+            refs = _options(ids.get("reference_date", {}))
+            if RT_TARGET not in targets or reference_date not in refs:
+                continue
+            for end in _options(ids.get("target_end_date", {})):
+                if 0 <= (ref - as_date(end)).days <= 7:
+                    out.add(end)
+    return tuple(sorted(out))
+
+
+def _options(spec: Mapping[str, Any]) -> list[str]:
+    """Return a task id's required and optional values."""
+    return [*(spec.get("required") or []), *(spec.get("optional") or [])]
+
+
+def rt_table(
+    rt: pd.DataFrame,
+    reference_date: str,
+    end_dates: tuple[str, ...],
+    forecast_date: str | dt.date | None = None,
+) -> pd.DataFrame:
+    """Return a fit's Rt quantiles as `RT_TARGET` rows of the submission.
+
+    Parameters
+    ----------
+    rt : pandas.DataFrame
+        A renewal fit's `nowcastrenewal.forecaster.RT_FILE`: `location`,
+        `target_end_date`, `output_type_id` (the quantile level) and
+        `value`.
+    reference_date : str
+        The round.
+    end_dates : tuple of str
+        The weeks the round takes (`rt_end_dates`); other weeks are left
+        out.
+    forecast_date : str or datetime.date, optional
+        As in `to_hub_table`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Rows with `HUB_COLUMNS`, `output_type` `quantile`. Its
+        `output_type_id` is of object dtype, so joined to the count rows
+        their sample ids stay integers.
+    """
+    fd = as_date(forecast_date) if forecast_date else run_date()
+    keep = rt.loc[rt["target_end_date"].astype(str).isin(end_dates)]
+    out = pd.DataFrame(
+        {
+            "reference_date": str(reference_date),
+            "forecast_date": str(fd),
+            "target": RT_TARGET,
+            "target_end_date": keep["target_end_date"].astype(str),
+            "location": keep["location"],
+            "output_type": RT_OUTPUT_TYPE,
+            # Object, so a file with integer sample ids keeps them.
+            "output_type_id": keep["output_type_id"]
+            .astype(float)
+            .astype(object),
+            "value": keep["value"].astype(float),
+        }
+    )
+    return out.sort_values(
+        ["location", "target_end_date", "output_type_id"]
+    ).reset_index(drop=True)[list(HUB_COLUMNS)]
 
 
 def write_submission(
