@@ -53,16 +53,54 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     )
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
-    config["finetuned"] = "abc123"
+    # The final run's newest saved checkpoint, from its own folder.
+    root = tmp_path / "root"
+    segment = root / "runs" / "runa" / "train" / "n800"
+    (segment / "finetuned-ckpt").mkdir(parents=True)
+    (segment / "settings.json").write_text('{"hash": "abc123"}')
+    for name in ("adapter_config.json", "adapter_model.safetensors"):
+        (segment / "finetuned-ckpt" / name).write_text("")
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
     flow = PaperFlow.load(
-        config, {}, tmp_path, lambda f: f.replace("$ROOT", "/r")
+        config, {}, tmp_path, lambda f: f.replace("$ROOT", str(root))
     )
-    assert flow.synthetic["simulations"]["paper"] == "/r/rounds/r38/sims"
-    # Steps passed the config read the same folders.
-    assert config["synthetic"]["simulations"]["paper"] == "/r/rounds/r38/sims"
-    assert os.environ["BDBV_CHRONOS_FT"] == "abc123"
+    sims = f"{root}/rounds/r38/sims"
+    assert flow.synthetic["simulations"]["paper"] == sims
+    # Steps passed the config read the same folders and checkpoint.
+    assert config["synthetic"]["simulations"]["paper"] == sims
+    # Outputs record the checkpoint's spec; only the models read the folder.
+    assert config["finetuned"] == "abc123"
+    assert os.environ["BDBV_CHRONOS_FT"] == str(segment)
     assert flow.realdata_after == "2026-08-01"
+
+
+def test_with_no_saved_checkpoint_the_fine_tuned_models_are_pending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    germany = tmp_path / "germany.toml"
+    split = CONFIG["heldout"]["germany_from"]
+    germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "finetune.toml").write_text(
+        '[realdata_bdbv]\nrelease = "2026-08-01"\n'
+    )
+    config = copy.deepcopy(CONFIG)
+    config["germany"]["config"] = str(germany)
+    monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+    PaperFlow.load(
+        config, {}, tmp_path, lambda f: f.replace("$ROOT", str(tmp_path))
+    )
+    assert config["finetuned"] is None
+    assert "BDBV_CHRONOS_FT" not in os.environ
+
+
+def test_no_script_pins_the_checkpoint() -> None:
+    paper = Path(__file__).parents[1]
+    assert not (paper / "scripts" / "follow_checkpoint.py").exists()
+    assert "finetuned" not in CONFIG
+    assert "finetune_run" not in CONFIG
+    assert "final_checkpoints" not in CONFIG
+    assert CONFIG["final_run"] == "$ROOT/runs/runa"
 
 
 def test_extra_args_name_only_what_the_entry_sets() -> None:
@@ -158,11 +196,11 @@ def test_grid_config_has_both_runs_seeds() -> None:
 
 def test_evidence_files_are_named_by_their_commit() -> None:
     entry = {"ref": "0123456789abcdef", "path": "evidence/x.csv.gz"}
-    flow = PaperFlow(CONFIG, {"lag_germany": entry}, "2026-08-01")
-    path = flow.evidence_file("lag_germany")
-    assert path.endswith("evidence/lag_germany-0123456789ab.csv.gz")
-    names = {"lag_germany": "waiting note"}
-    assert flow.evidence_args(names) == f"--lag-germany {path}"
+    flow = PaperFlow(CONFIG, {"scale_floor": entry}, "2026-08-01")
+    path = flow.evidence_file("scale_floor")
+    assert path.endswith("evidence/scale_floor-0123456789ab.csv.gz")
+    names = {"scale_floor": "waiting note"}
+    assert flow.evidence_args(names) == f"--scale-floor {path}"
     assert flow.evidence_args({}) == ""
 
 

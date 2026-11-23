@@ -68,8 +68,7 @@ LATENT = (
 START = dt.date(2026, 1, 3)
 """A series' first day with offset 0 (the R engine's)."""
 
-# Generator tags, so no two kinds of draw share a key (6 was the old
-# reporting step's).
+# Generator tags, so no two kinds of draw share a key.
 DESIGN, VALUES, SHARED, STRATUM, LATENT_KEY = range(1, 6)
 
 

@@ -117,7 +117,7 @@ factors:
   incubation_family:
     gamma: 1
     lognormal: 1
-  # Common shapes first (lead 14:05): R settling slowly from 1.3-2.5 to
+  # Common shapes first: R settling slowly from 1.3-2.5 to
   # about 1 over weeks to months (controlled) in a quarter, and R
   # oscillating around 1 in a sixth.
   trajectory:

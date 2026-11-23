@@ -320,7 +320,7 @@ def record_precision(root: Path) -> None:
 
 
 def unit_precision(root: Path) -> str:
-    """Return the precision a unit forecast in: fp32 before it was kept."""
+    """Return the precision a unit forecast in, fp32 if it records none."""
     path = Path(root) / PRECISION_FILE
     return path.read_text().strip() if path.exists() else "fp32"
 
@@ -391,8 +391,8 @@ def german_tasks_dir(
 def _reaches(path: Path, last: int) -> bool:
     """Whether a unit's date file holds horizons up to `last` days.
 
-    Files written before the forecast days were added end at the
-    nowcast date, so their dates are forecast again.
+    A file that ends before `last`, such as at the nowcast date, has
+    its dates forecast again.
     """
     if not path.exists():
         return False
