@@ -1,4 +1,4 @@
-"""The simulator's code files and its grid file's identifier."""
+"""The simulator's code files, their identifier and its grid file's."""
 
 from __future__ import annotations
 
@@ -39,6 +39,20 @@ def jax_cache_env(folder: str) -> str:
             "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=0",
         ]
     )
+
+
+def engine_id() -> str:
+    """Return the simulator code's identifier, as it is on disk.
+
+    The first 12 hex digits of the SHA-256 of each Python file under
+    `ENGINE`, with its path, in path order.
+    """
+    h = hashlib.sha256()
+    for folder in ENGINE:
+        for path in sorted((ROOT / folder).rglob("*.py")):
+            h.update(str(path.relative_to(ROOT)).encode())
+            h.update(path.read_bytes())
+    return h.hexdigest()[:12]
 
 
 def grid_id(grid_file: Path | str) -> str:

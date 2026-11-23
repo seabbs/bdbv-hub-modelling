@@ -104,3 +104,24 @@ def test_a_cache_under_its_size_is_kept(tmp_path):
     # No folder yet, or none set: nothing to do.
     _trim(tmp_path / "missing", "1")
     _trim("", "1")
+
+
+def test_benchmarks_share_a_compile_cache_of_their_own(tmp_path):
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
+    )
+    bench = tmp_path / "rounds" / "bench" / "simulator-cpu-n4-s1.json"
+    out = dry_run(tmp_path, str(bench), extra=["-p", "--quiet", "host"])
+    assert out.returncode == 0, out.stderr
+    command = " ".join(
+        out.stdout.split("rule simulator_benchmark", 1)[1].split()
+    )
+    folder = f"jax-cache-cpu-{simulator.engine_id()}"
+    cache = tmp_path / "rounds" / "bench" / folder
+    assert f"JAX_COMPILATION_CACHE_DIR={cache}" in command
+    assert f"{tmp_path}/jax-cache " not in command
+
+
+def test_the_engine_identifier_is_read_from_the_code():
+    assert re.fullmatch(r"[0-9a-f]{12}", simulator.engine_id())
+    assert simulator.engine_id() == simulator.engine_id()
