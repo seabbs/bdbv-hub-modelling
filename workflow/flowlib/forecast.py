@@ -28,10 +28,13 @@ DEVICES = ("cpu", "cuda", "mps")
 GPU_MODES = ("exclusive", "share")
 """How a CUDA forecasting job meets the trainer's GPU."""
 
-JAX_PLATFORM = {"cpu": "cpu", "cuda": "cuda,cpu", "mps": "cpu"}
-"""JAX's platforms for each device, in order: with cuda, JAX models run on
-CUDA where jaxlib has it and on the CPU where it has not (archie's
-jaxlib), while torch (Chronos-2) takes CUDA; JAX has no MPS backend."""
+JAX_PLATFORM = {"cpu": "cpu", "cuda": "", "mps": "cpu"}
+"""JAX's platforms for each device. With cuda it is empty, so JAX takes
+CUDA where jaxlib has it and the CPU where it has not (archie's jaxlib),
+while torch (Chronos-2) takes CUDA: `cuda,cpu` would fail on a jaxlib
+without CUDA, as JAX starts every platform listed. JAX has no MPS backend.
+"""
+
 
 THREAD_VARS = (
     "TORCH_THREADS",
@@ -75,9 +78,9 @@ class Forecast:
         """Return the environment a forecasting job runs with.
 
         `DEVICE` for torch (Chronos-2), `JAX_PLATFORMS` for JAX (the
-        renewal and walk models; CUDA then the CPU for cuda), the thread counts torch and BLAS read,
-        and a single-threaded XLA Eigen pool, kept beside flags already
-        set.
+        renewal and walk models; for cuda, JAX's own choice), the thread
+        counts torch and BLAS read, and a single-threaded XLA Eigen pool,
+        kept beside flags already set.
         """
         env = {
             "DEVICE": self.device,
@@ -94,7 +97,7 @@ class Forecast:
     def env(self) -> str:
         """Return `variables` as a shell prefix (`KEY=value ...`)."""
         return " ".join(
-            f"{k}='{v}'" if " " in v else f"{k}={v}"
+            f"{k}='{v}'" if " " in v or not v else f"{k}={v}"
             for k, v in self.variables().items()
         )
 
