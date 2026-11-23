@@ -204,6 +204,32 @@ def test_evidence_files_are_named_by_their_commit() -> None:
     assert flow.evidence_args({}) == ""
 
 
+def test_evidence_from_a_workflow_output_is_read_where_it_is_written(
+    tmp_path: Path,
+) -> None:
+    germany = tmp_path / "germany.toml"
+    split = CONFIG["heldout"]["germany_from"]
+    germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "finetune.toml").write_text(
+        '[realdata_bdbv]\nrelease = "2026-08-01"\n'
+    )
+    config = copy.deepcopy(CONFIG)
+    config["germany"]["config"] = str(germany)
+    entry = {"file": "$SCORE_CACHE/tables/checkpoint-scores.csv"}
+    flow = PaperFlow.load(
+        config,
+        {"checkpoint_scores": entry},
+        tmp_path,
+        lambda f: f.replace("$SCORE_CACHE", "/s"),
+    )
+    path = "/s/tables/checkpoint-scores.csv"
+    assert flow.evidence_file("checkpoint_scores") == path
+    names = {"checkpoint_scores": "scores"}
+    assert flow.evidence_args(names) == f"--checkpoint-scores {path}"
+    assert flow.pinned() == {}
+
+
 def test_examples_are_read_from_the_development_round() -> None:
     picks = [["33307-0006", "Multi-wave"], ["33300-0001", "Spread"]]
     flow = _flow(synthetic__examples={"picks": picks})

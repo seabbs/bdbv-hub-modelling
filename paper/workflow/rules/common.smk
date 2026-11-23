@@ -22,22 +22,13 @@ from paperpipe.config import MODES  # noqa: E402
 from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
 
 
-from paperpipe.evidence import branch_head  # noqa: E402
-
-
 from paperpipe.flow import BDBV, PYTHON, PaperFlow  # noqa: E402
 
-# Rows from evidence branches, pinned by commit in `evidence` (config),
-# or followed: an entry naming a `branch` reads its head, resolved here so
-# a new commit there extracts the file anew.
+# Evidence rows (`evidence` in the config): a file the workflow writes,
+# or rows pinned by commit.
 EVIDENCE = {
     name: entry for name, entry in (config.get("evidence") or {}).items() if entry
 }
-
-
-for _entry in EVIDENCE.values():
-    if "branch" in _entry:
-        _entry["ref"] = branch_head(_entry["branch"], PAPER.parent)
 
 
 FLOW = PaperFlow.load(config, EVIDENCE, PAPER.parent, localconfig.expand)
