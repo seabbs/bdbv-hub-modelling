@@ -520,7 +520,6 @@ def _finetuned(
             if Path(spec).is_dir()
             else resolve_checkpoint(spec)
         ),
-        period=PERIODS.get(source),
     )
 
 
@@ -590,23 +589,6 @@ class PeriodRows:
     totals: np.ndarray
 
 
-def week_rows(tri: HubTriangle) -> PeriodRows:
-    """Return each place's weekly totals of a daily triangle's counts.
-
-    Each week (Sunday to Saturday) whose seven days are all on the grid is
-    summed from the daily counts at the latest release and put on its
-    Saturday; a week the grid cuts has no total.
-    """
-    days = [as_date(t) for t in tri.times]
-    ends = np.array(
-        [epiweek_end(d.isoformat()) == d and i >= 6 for i, d in enumerate(days)]
-    )
-    totals = np.full(tri.final.shape, np.nan)
-    for t in np.flatnonzero(ends):
-        totals[:, t] = tri.final[:, t - 6 : t + 1].sum(axis=1)
-    return PeriodRows(ends, totals)
-
-
 def rolling_totals(days: np.ndarray, k: int) -> np.ndarray:
     """Return each place's `k`-day sums ending on each day.
 
@@ -635,8 +617,8 @@ def rolling_rows(tri: HubTriangle, k: int = 7) -> PeriodRows:
 
     Every day from the grid's `k`-th holds the sum of its `k` days at the
     latest release (`rolling_totals`), so a Saturday holds its week's
-    total, as `week_rows` gives, and every other day its own 7-day sum, as
-    the `daily+rolling7` training blocks have.
+    total and every other day its own 7-day sum, as the `daily+rolling7`
+    training blocks have.
     """
     ends = np.arange(len(tri.times)) >= k - 1
     return PeriodRows(ends, rolling_totals(tri.final, k))
@@ -1156,12 +1138,6 @@ class FoundationModel:
     checkpoint : Checkpoint or None
         The fine-tuned checkpoint Chronos-2 loads, or None for the
         pretrained model.
-    period : str or None
-        For the daily source, each place's aggregate row after its count
-        rows: `rolling7`, each day's 7-day sum (`rolling_rows`, as the
-        daily+rolling7 training blocks), or `week`, each week's total on
-        its Saturday (`week_rows`, as daily+weekly). The hub's 7-day sums
-        are read from it. None for no such row.
     sample : Sampler or None
         Draws the trajectories, Chronos-2 with `checkpoint` by default.
     stream : str or None
@@ -1194,7 +1170,6 @@ class FoundationModel:
     source: str
     layout: str
     checkpoint: Checkpoint | None = None
-    period: str | None = None
     sample: Sampler | None = field(default=None, repr=False)
     stream: str | None = field(default=None, repr=False)
     known: Known | None = field(default=None, repr=False, compare=False)
@@ -1214,6 +1189,16 @@ class FoundationModel:
             raise ValueError(
                 f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
             )
+
+    @property
+    def period(self) -> str | None:
+        """The aggregate row each place has, by source (`PERIODS`).
+
+        The daily source's 7-day rolling sums (`rolling_rows`, as the
+        daily+rolling7 training blocks), from which the hub's 7-day sums
+        are read; None for the weekly source.
+        """
+        return PERIODS.get(self.source)
 
     @property
     def needs_snapshots(self) -> bool:
@@ -1328,26 +1313,13 @@ class FoundationModel:
                 final, (task.n_samples, *final.shape)
             ).copy()
             steps[:, :, start:] = drawn[:, : len(places)]
-            # The hub's target is weekly: the daily source is summed to
-            # it, the 7 days ending on each target date (its epiweek where
-            # the date is a Saturday).
-            if self.source == "daily":
-                ends = [tri.times.index(w) for w in weeks]
-                values = np.stack(
-                    [
-                        steps[:, :, max(0, e - 6) : e + 1].sum(axis=2)
-                        for e in ends
-                    ],
-                    axis=2,
-                )
-            else:
-                week_of = np.array(
-                    [_step("weekly", t).isoformat() for t in tri.times]
-                )
-                values = np.stack(
-                    [steps[:, :, week_of == w].sum(axis=2) for w in weeks],
-                    axis=2,
-                )
+            week_of = np.array(
+                [_step("weekly", t).isoformat() for t in tri.times]
+            )
+            values = np.stack(
+                [steps[:, :, week_of == w].sum(axis=2) for w in weeks],
+                axis=2,
+            )
         n, n_loc = task.n_samples, len(places)
         weekly_out = pd.DataFrame(
             {
@@ -1416,13 +1388,7 @@ class FoundationModel:
 
     def _period(self, tri: HubTriangle) -> PeriodRows | None:
         """Return the block's aggregate rows on `tri`, or None."""
-        if self.period == "rolling7":
-            return rolling_rows(tri, 7)
-        if self.period == "week":
-            return week_rows(tri)
-        if self.period is not None:
-            raise ValueError(f"unknown period rows {self.period!r}")
-        return None
+        return rolling_rows(tri, 7) if self.period == "rolling7" else None
 
     def _past_blocks(
         self,
@@ -1548,7 +1514,7 @@ class FoundationModel:
 
     def quantiles(
         self, task: ForecastTask, levels: Sequence[float]
-    ) -> pd.DataFrame | None:
+    ) -> pd.DataFrame:
         """Return Chronos-2's own quantiles where each target is one step.
 
         Each week of the weekly source is one of Chronos-2's steps, so its
@@ -1558,8 +1524,7 @@ class FoundationModel:
         step after the draws, the floor at zero, is monotone, so
         trajectory `k` is the quantile at level `k`.
         A week of the daily source read from each place's aggregate row is
-        one step of that row, so it has a native quantile too; summed from
-        daily steps it has none.
+        one step of that row, so it has a native quantile too.
 
         Parameters
         ----------
@@ -1570,12 +1535,9 @@ class FoundationModel:
 
         Returns
         -------
-        pandas.DataFrame or None
-            Columns `location`, `target_end_date`, `quantile` and `value`,
-            or None for the daily source.
+        pandas.DataFrame
+            Columns `location`, `target_end_date`, `quantile` and `value`.
         """
-        if self.source != "weekly" and self.period is None:
-            return None
         at = np.asarray(levels, dtype=float)
         run = replace(
             self, sample=native_sampler(at, self.checkpoint, self.known)
@@ -1727,7 +1689,6 @@ for _source in SOURCES:
                 _name,
                 _source,
                 _layout,
-                period=PERIODS.get(_source),
             ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, every target in one block.",
