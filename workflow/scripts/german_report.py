@@ -47,10 +47,7 @@ CELL = ["origin", "location", "target_end_date", "horizon"]
 PARTS = ("dispersion", "overprediction", "underprediction")
 ZERO_SHOT = "reference"
 BASELINE = "randomwalknowcast"
-FAMILIES = {
-    "fm_chronos_weekly_ragged": "Weekly ragged",
-    "fm_chronos_daily_ragged": "Daily ragged",
-}
+FAMILIES = {"fm_chronos_daily_ragged": "Daily ragged"}
 """Model families, each with its zero-shot and fine-tuned models."""
 FORECAST_WEEKS = (7, 14, 21, 28)
 """Horizons of the forecast weeks: the 7-day sums ending 7 to 28 days
