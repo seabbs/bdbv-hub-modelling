@@ -362,3 +362,13 @@ def test_daily_truth_is_each_day_s_count_reported_by_the_delay(
             assert row["truth_vintage"].tolist() == [by]
     # 2021-10-15 + 10 days is after the last report date.
     assert got.loc[got["target_end_date"] == days[2], "truth"].isna().all()
+
+
+def test_german_scoring_has_no_weekly_step_special_case() -> None:
+    # Every German model forecasts every day of the one task; only the
+    # pairing evidence, whose walks have weekly steps, keeps hub weeks.
+    from nowcastgermany import data, evaluation, pairing
+
+    assert not hasattr(data, "weekly_task")
+    assert not hasattr(evaluation, "_own")
+    assert callable(pairing.hub_weeks)
