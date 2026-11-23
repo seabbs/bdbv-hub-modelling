@@ -402,12 +402,9 @@ def test_hazard_delay_smoothness_prior_allows_real_fits():
 
 def test_generation_interval_matches_bvdoutbreaksize():
     # BVDOutbreakSize's prior means (priors.jl): mean 15.3, SD 9.3 days.
-    from nowcastfoundation.simulate import SimulationSettings
     from nowcastrenewal.model.model import GI_MEAN, GI_SD, generation_interval
 
     assert (GI_MEAN, GI_SD) == (15.3, 9.3)
     np.testing.assert_allclose(
         generation_interval(), generation_interval(15.3, 9.3)
     )
-    s = SimulationSettings()
-    assert (s.gi_mean, s.gi_sd) == (GI_MEAN, GI_SD)

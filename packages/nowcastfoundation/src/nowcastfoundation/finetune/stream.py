@@ -286,6 +286,63 @@ def record_views(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
     )
 
 
+def release_settings(layer: dict | None) -> dict:
+    """Return the release layer's entry of a checkpoint's settings.
+
+    No layer, the default, adds nothing, so its hash is as before.
+    """
+    return {} if layer is None else {"release_layer": layer}
+
+
+RELEASES_FILE = "releases.csv"
+"""Each block's releases under the release layer (`ft.RELEASE_LAYER`), by
+outbreak, in the run's train folder (`record_releases`)."""
+
+
+def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
+    """Add each block's releases to `RELEASES_FILE`, under a release layer.
+
+    One row a block: the outbreak, the part of the run, source, cut,
+    cadence, the drawn release-start delay in days, the first kept
+    release and the number of releases. Returns a line for the log, empty
+    without a layer.
+    """
+    if ft.RELEASE_LAYER is None or not pairs:
+        return ""
+    cols = ("source", "cut", "cadence", "release_start_days")
+    frame = pd.DataFrame(
+        [
+            {
+                "part": part,
+                "outbreak": outbreak,
+                **{c: block[c] for c in cols},
+                "first_release": block["first_release"],
+                "releases": block["releases"],
+            }
+            for outbreak, block in pairs
+        ]
+    )
+    path = out / RELEASES_FILE
+    # A resumed run cuts its held-out blocks and its chunk again.
+    kept = (
+        pd.read_csv(path, dtype=str, keep_default_na=False)
+        if path.exists()
+        else frame.iloc[:0]
+    )
+    pd.concat([kept, frame]).astype(str).drop_duplicates().to_csv(
+        path, index=False
+    )
+    late = frame["release_start_days"] > 0
+    weekly = (frame["cadence"] == "weekly").mean()
+    median = (
+        int(frame.loc[late, "release_start_days"].median()) if late.any() else 0
+    )
+    return (
+        f"{late.mean():.0%} of {len(frame)} blocks start their releases "
+        f"late (median {median} days), {weekly:.0%} released weekly"
+    )
+
+
 def layout_settings(layout: str) -> dict:
     """Return the block layout's entry of a checkpoint's settings.
 
@@ -661,6 +718,7 @@ def init_worker(
     quiet_min_cases: int | None = None,
     block_limit: int | None = None,
     layout: str = "ragged",
+    release_layer: dict | None = None,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
@@ -671,6 +729,7 @@ def init_worker(
     ft.QUIET_MIN_CASES = quiet_min_cases
     ft.BLOCK_LIMIT = block_limit
     ft.LAYOUT = layout
+    ft.RELEASE_LAYER = release_layer
     DRAWS_PER_PASS, SUBSET_SEED = draws, subset_seed
 
 
@@ -1591,6 +1650,9 @@ def build_parser() -> argparse.ArgumentParser:
     # The training blocks' layout: ragged (counts and lag series) or
     # complete (the same blocks without their lag series).
     parser.add_argument("--layout", choices=LAYOUTS, default="ragged")
+    # The release layer's YAML file (ft.check_release_layer): late
+    # release starts and cadences drawn per block; none by default.
+    parser.add_argument("--release-layer", type=Path)
     # Draws of each simulation this pass trains on, all 16 snapshots
     # each, picked by --subset-seed; all draws if not given.
     parser.add_argument("--draws-per-simulation", type=int)
@@ -1779,6 +1841,11 @@ def main(root: Path | None = None) -> None:
     ft.QUIET_MIN_CASES = args.quiet_min_cases
     ft.BLOCK_LIMIT = args.block_limit
     ft.LAYOUT = args.layout
+    ft.RELEASE_LAYER = (
+        ft.read_release_layer(args.release_layer)
+        if args.release_layer
+        else None
+    )
     global DRAWS_PER_PASS, SUBSET_SEED
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
@@ -1850,6 +1917,7 @@ def main(root: Path | None = None) -> None:
             ft.QUIET_MIN_CASES,
             ft.BLOCK_LIMIT,
             ft.LAYOUT,
+            ft.RELEASE_LAYER,
         ),
     )
 
@@ -1859,6 +1927,8 @@ def main(root: Path | None = None) -> None:
             pool, sim_dir, held, args.seed, k, args.cut_workers
         )
         log(f"held-out: {record_views(out, held_pairs, 'held-out')}")
+        if line := record_releases(out, held_pairs, "held-out"):
+            log(f"held-out: {line}")
         log(f"held-out: {len(empty)} skipped with no rows")
         return [b for _, b in held_pairs]
 
@@ -1877,6 +1947,7 @@ def main(root: Path | None = None) -> None:
         "quiet_min_cases": ft.QUIET_MIN_CASES,
         "block_limit": ft.BLOCK_LIMIT,
         **layout_settings(ft.LAYOUT),
+        **release_settings(ft.RELEASE_LAYER),
         "code_sha256": cut_code_sha256(),
         "sims_sha256": sims_sha256(sim_dir, held),
     }
@@ -1988,6 +2059,7 @@ def main(root: Path | None = None) -> None:
         **quiet_settings(ft.QUIET_MIN_CASES),
         **view_settings(ft.BLOCK_LIMIT),
         **layout_settings(ft.LAYOUT),
+        **release_settings(ft.RELEASE_LAYER),
         "seed": args.seed,
         "note": args.note,
     }
@@ -2158,6 +2230,8 @@ def main(root: Path | None = None) -> None:
             f"outbreaks {done + 1}-{hi}: "
             f"{record_views(out, pairs, f'{done + 1}-{hi}')}"
         )
+        if line := record_releases(out, pairs, f"{done + 1}-{hi}"):
+            log(f"outbreaks {done + 1}-{hi}: {line}")
         pairs += [
             (f"real-{i}", b)
             for i, b in real_share(

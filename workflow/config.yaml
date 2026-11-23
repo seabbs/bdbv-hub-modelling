@@ -120,6 +120,11 @@ finetune:
   # without their lag series, so the context ends at the last complete
   # step). Ragged adds nothing to the settings hash.
   layout: ragged
+  # The release layer's file (null: none): late release starts and the
+  # release cadences, drawn per block at fine-tune time from the
+  # simulations already made (config/finetune/release-layer.yaml, a
+  # proposal). Unset adds nothing to the settings hash.
+  release_layer: null
   # Real-data blocks mixed into the training stream, spread over its
   # chunks (null: none). `germany`: the German triangle's reports before
   # the first scored German date (config/germany.toml), so no scored

@@ -928,7 +928,7 @@ def _score(args: argparse.Namespace) -> int:
     Writes the files the backtest, recovery check, scenarios and zone
     backtest write when they run every model at once.
     """
-    from bdbvhub.zones import ZoneForecasts, score_zones
+    from nowcastbdbv.zones import ZoneForecasts, score_zones
 
     parts = [Path(p) for p in args.parts]
     results, output = Path(args.results), Path(args.output)
@@ -1591,7 +1591,7 @@ def _zone_origins(args: argparse.Namespace) -> list[str] | None:
 
 
 def _zone_backtest(args: argparse.Namespace) -> int:
-    from bdbvhub.zones import zone_backtest
+    from nowcastbdbv.zones import zone_backtest
 
     hub_config = Path(args.data) / "hub-config" / "tasks.json"
     # The zone backtest keeps its own default horizons and seed, with
@@ -1599,7 +1599,7 @@ def _zone_backtest(args: argparse.Namespace) -> int:
     draws = bt.load_config(args.backtest_config).score_samples
     config = dataclasses.replace(bt.BacktestConfig(), n_samples=draws)
     if args.forecast_only:
-        from bdbvhub.zones import zone_forecasts
+        from nowcastbdbv.zones import zone_forecasts
 
         zone_forecasts(
             load_target(args.data),
@@ -1647,7 +1647,7 @@ def _write_zone_results(
     """Write the zone backtest's tables."""
     from bdbvhub.compare import forecast_quantiles
     from bdbvhub.reporting.explorer import draw_subset
-    from bdbvhub.zones import zone_relative_skill
+    from nowcastbdbv.zones import zone_relative_skill
 
     out.parent.mkdir(parents=True, exist_ok=True)
     write_csv(scores, out)

@@ -270,7 +270,7 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
 
     before = digests()
     own = store.code_digest("fm_chronos_weekly_ragged", root)
-    edit("packages/bdbvhub/src/bdbvhub/zones.py")
+    edit("packages/nowcastbdbv/src/nowcastbdbv/zones.py")
     assert digests() == before
     assert store.code_digest("fm_chronos_weekly_ragged", root) == own
     edit("packages/nowcastbaselines/src/nowcastbaselines/zones.py")
