@@ -238,11 +238,22 @@ def workflow_finetune(key: str) -> Any:
     return config["finetune"][key]
 
 
+DEFAULT_GRID_FILE = "config/finetune/grid.yaml"
+"""The grid file when there is no workflow config: the package alone."""
+
+
 def workflow_grid_file() -> str:
-    """Return the workflow's grid file (`simulate.grid_file`)."""
+    """Return the workflow's grid file (`simulate.grid_file`).
+
+    `DEFAULT_GRID_FILE` outside a checkout, where the package is
+    installed alone and has no workflow config to read.
+    """
     import yaml
 
-    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    path = ROOT / "workflow" / "config.yaml"
+    if not path.is_file():
+        return DEFAULT_GRID_FILE
+    config = yaml.safe_load(path.read_text())
     return str(config["simulate"]["grid_file"])
 
 
