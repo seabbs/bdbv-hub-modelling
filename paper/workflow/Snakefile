@@ -195,7 +195,7 @@ rule germany_development:
         bdbv=BDBV,
         germany_root_config=GERMANY["config"],
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-        out=lambda w, output: Path(output.scores).parent,
+        out=lambda w, output: Path(output[0]).parent,
     shell:
         "exec >{log} 2>&1; "
         "{params.bdbv} germany-backtest {params.args} --out {params.out} && "
