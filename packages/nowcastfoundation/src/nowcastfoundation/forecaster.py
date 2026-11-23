@@ -714,9 +714,7 @@ def hub_triangle(
     bounds = np.searchsorted(release_of[order], np.arange(len(releases) + 1))
     cutoffs = rows["cutoff"].to_numpy()
     lags = (
-        n_times
-        if all_lags
-        else MAX_LAG[source] if max_lag is None else max_lag
+        n_times if all_lags else MAX_LAG[source] if max_lag is None else max_lag
     )
     partial = np.full((len(places), n_times, lags), np.nan)
     final = np.zeros((len(places), n_times))
@@ -1682,9 +1680,7 @@ class FoundationModel:
         self, rows: pd.DataFrame, places: Sequence[str], last_time: str
     ) -> HubTriangle:
         """Return the task's triangle, `lags` or `lag_count` lags wide."""
-        full = hub_triangle(
-            rows, self.source, places, last_time, all_lags=True
-        )
+        full = hub_triangle(rows, self.source, places, last_time, all_lags=True)
         # A fixed count is still no more than the history allows.
         lags = (
             min(self.lags, max(1, full.last - 1))

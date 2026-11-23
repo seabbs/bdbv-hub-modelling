@@ -49,9 +49,7 @@ def _releases(
 
 def delay_lags(rows, source, places, last, quantile=LAG_QUANTILE):
     """The lag count of releases `rows`, as a forecast reads them."""
-    tri = forecaster.hub_triangle(
-        rows, source, places, last, all_lags=True
-    )
+    tri = forecaster.hub_triangle(rows, source, places, last, all_lags=True)
     return lag_count(tri, source, quantile)
 
 
