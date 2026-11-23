@@ -29,13 +29,20 @@ GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
 class OnTheDay:
     """A stand-in for the joint model (`simulate_outbreak`).
 
-    Each stratum reports one case on each of its first `cases` days, on
-    the day; the first `fail` calls raise and the next `empty` report
-    nothing. Records each call's design.
+    Each stratum (or only the first `reporting`) reports one case on each
+    of its first `cases` days, on the day; the first `fail` calls raise
+    and the next `empty` report nothing. Records each call's design.
     """
 
-    def __init__(self, fail: int = 0, empty: int = 0, cases: int = 3):
+    def __init__(
+        self,
+        fail: int = 0,
+        empty: int = 0,
+        cases: int = 3,
+        reporting: int | None = None,
+    ):
         self.fail, self.empty, self.cases = fail, empty, cases
+        self.reporting = reporting
         self.calls: list[dict] = []
 
     def __call__(self, _key, n_days, strata, design, values, draws=1, **_kw):
@@ -69,7 +76,7 @@ class OnTheDay:
                 "count": 1,
             }
             for d in range(1, draws + 1)
-            for s in range(k)
+            for s in range(min(k, self.reporting or k))
             for t in dates
         ]
         counts = pd.DataFrame(rows, columns=list(COUNT_COLUMNS))
@@ -176,7 +183,8 @@ def test_a_simulation_with_no_design_stops_the_batch(tmp_path, stand_in):
 
 @pytest.mark.slow
 def test_only_empty_draws_are_drawn_again(tmp_path, stand_in):
-    stand_in(empty=2, cases=1)
+    # One case in all, whatever the drawn design's strata.
+    stand_in(empty=2, cases=1, reporting=1)
     files = simulate_batch(GRID_FILE, 6060, 1, tmp_path, weeks=8)
     failures = pd.read_csv(files["failures"])
     assert len(failures) >= 2
