@@ -1226,8 +1226,8 @@ class FoundationModel:
         """Return the weekly and the daily trajectories of one draw.
 
         The weekly ones are `forecast`'s. The daily ones are the daily
-        source's count rows, each day of the target weeks, floored at the
-        counts reported; empty for the weekly source.
+        source's count rows, each day of the target weeks; empty for the
+        weekly source.
 
         Parameters
         ----------
@@ -1318,7 +1318,7 @@ class FoundationModel:
                 )
             draws = sample([group], horizon, task.n_samples, seed)[0]
             # Counts are not negative; Chronos-2's output is otherwise kept
-            # as it is: not rounded and not floored at the counts reported.
+            # as it is, not rounded.
             drawn = np.maximum(draws, 0.0)
         if period is not None:
             values = _weekly_from_totals(drawn, period, tri, start, weeks)
@@ -1592,9 +1592,7 @@ class FoundationModel:
         The daily source's count rows: each day is one step, so it has a
         native quantile, from the same prediction (`known`) as the 7-day
         sums (the aggregate rows where the block has them, else the summed
-        draws). As in `forecast_both` each day is floored at the count
-        reported, which is monotone, so path `k` is still the quantile at
-        level `k`.
+        draws).
 
         Parameters
         ----------

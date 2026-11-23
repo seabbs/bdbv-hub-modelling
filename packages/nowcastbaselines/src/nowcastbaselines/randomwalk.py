@@ -14,7 +14,7 @@ $$
 is the share of the week's final count reported, under the delay
 estimate of `chain`.
 Weeks up to the start are returned as reported.
-Later weeks are walk draws, floored at the count reported.
+Later weeks are walk draws.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
 negative binomial new reports on the remaining count (`obs`).
@@ -43,7 +43,6 @@ In `randomwalknowcast` a place with no week to start from is quiet
 (`_quiet`): it starts at its latest complete week. A silent quiet place
 draws introductions from there. One with recent cases walks from its mean
 reported count over the `start_window` weeks to that week (`_level`).
-Both are floored at the counts reported.
 National is the sum of provinces by sample.
 Each model raises if the task has no snapshots or no pair of releases
 within the delay window.
@@ -487,7 +486,7 @@ class RandomWalk:
         """
         origin = self.origin_at(task, errors=False)
         weeks = _timeline(origin, task)
-        n_data, n_all, n = origin.snap.n_weeks, len(weeks), task.n_samples
+        n_all, n = len(weeks), task.n_samples
         n_loc = len(origin.snap.locations)
         good = origin.complete >= origin.settings.completeness
         if not good.any(axis=1).all():
@@ -518,9 +517,7 @@ class RandomWalk:
                 if u <= start[loc]:
                     values[:, loc, u] = origin.reported[loc, u]
                 else:
-                    draw = y[loc, :, u - start[loc] - 1]
-                    floor = origin.reported[loc, u] if u < n_data else 0.0
-                    values[:, loc, u] = np.maximum(draw, floor)
+                    values[:, loc, u] = y[loc, :, u - start[loc] - 1]
         values = self.pair(origin, task, values)
         self._diagnostics(origin, task, start)
         self._kept_frame = (weeks, self.rows(origin, task), task)
@@ -666,12 +663,9 @@ class RandomWalkNowcast(RandomWalk):
             s = int(w0[loc])
             if quiet[loc]:
                 # A quiet place is its reported counts, then its walk or
-                # introductions, floored at the counts reported.
+                # introductions.
                 values[:, loc, : s + 1] = origin.reported[loc, : s + 1]
                 values[:, loc, s + 1 :] = y[loc, :, : n_all - s - 1]
-                values[:, loc, :n_data] = np.maximum(
-                    values[:, loc, :n_data], origin.reported[loc]
-                )
                 continue
             values[:, loc, :cw] = nowcast[:, loc, :cw]
             values[:, loc, cw] = done[loc]

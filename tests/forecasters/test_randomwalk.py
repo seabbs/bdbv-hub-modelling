@@ -278,17 +278,6 @@ def test_randomwalk_raises_when_no_week_is_complete_and_the_backtest_skips(
     assert out.empty
 
 
-def test_no_nowcast_draw_is_below_the_count_reported(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
-) -> None:
-    task = _task(target, delays, daily, "2026-11-01")
-    model = RandomWalkNowcast()
-    origin = model.origin_at(task, errors=True)
-    values, _ = model.trajectories(origin, task, origin.point)
-    n_data = origin.reported.shape[1]
-    assert (values[:, :, :n_data] >= origin.reported[None] - 1e-9).all()
-
-
 def test_a_silent_place_waits_for_its_first_introduction() -> None:
     import jax
 
@@ -347,9 +336,6 @@ def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
     su = values[:, i, :]
     assert su.max() < 10_000
     assert np.median(su[:, -1]) < 5
-    # Weeks with data keep at least the count reported.
-    n_data = origin.reported.shape[1]
-    assert (su[:, :n_data] >= origin.reported[i]).all()
 
 
 @pytest.mark.xfail(
@@ -444,8 +430,6 @@ def test_a_quiet_place_with_recent_cases_walks_from_its_level(
     # No week with 5 cases to start from, but cases in the window.
     assert _quiet(origin)[i]
     assert not origin.silent[i]
-    # Weeks with data keep at least what is reported.
-    assert (x[:, : cw + 1] >= origin.reported[i, : cw + 1] - 1e-9).all()
     # The first week ahead is a Poisson draw at about its mean count.
     level = float(_level(origin)[i])
     assert x[:, cw + 1].mean() == pytest.approx(level, rel=0.3)
