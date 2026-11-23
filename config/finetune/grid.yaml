@@ -130,10 +130,12 @@ factors:
     rise_fall_gradual: 1
     fall_rise: 1
     multi_wave: 1
+  # Heavy-tailed families first: a short median with a long tail, as
+  # Germany's 3 d median and 69 d 99th centile; exponential tails are thin.
   delay_family:
-    lognormal: 1
-    gamma: 1
-    exponential: 1
+    lognormal: 2
+    gamma: 1.5
+    exponential: 0.5
   delay_form:
     parametric: 1
     non_parametric: 1
@@ -161,13 +163,16 @@ factors:
   spread:
     even: 1
     concentrated: 1
-  # Places mostly deviate moderately around a shared path (correlated);
-  # an independent path in each place is the rarest.
+  # Places mostly deviate moderately around a shared path (correlated),
+  # or within regions that share a deviation (nested, four or more
+  # places; with fewer it is one region, as correlated); an independent
+  # path in each place is the rarest.
   place_rt:
     shared: 1
     independent: 0.5
     correlated: 2
     lagged: 1
+    nested: 2
   seeding:
     start: 1
     mid: 1
@@ -611,32 +616,33 @@ distributions:
     why: endemic log R moves by about 0.1 a week around R = 1
   delay_mean:
     dist: lognormal
-    median: 5.0
-    sdlog: 0.9
-    layer: delays
-    why: mean delays from about a day to several weeks (1.1 to 22 days)
-  delay_median:
-    dist: lognormal
-    median: 2.5
+    median: 7.0
     sdlog: 0.8
     layer: delays
-    why: lognormal delays with medians of about half a day to 9 days
+    why: mean delays from about a day and a half to several weeks (1.5 to
+      34 days)
+  delay_median:
+    dist: lognormal
+    median: 2.0
+    sdlog: 0.8
+    layer: delays
+    why: lognormal delays with medians of about half a day to 10 days
   delay_sdlog:
     dist: lognormal
-    median: 1.2
-    sdlog: 0.35
+    median: 1.5
+    sdlog: 0.25
     layer: delays
-    why: from tight to heavy tails (0.7 to 2.1); with a short median, a
+    why: from moderate to heavy tails (0.9 to 2.4); with a short median, a
       fast head and a long tail, as Germany's 22-26% on day 0 and 99%
       delay of 61-81 days
   delay_shape:
     dist: lognormal
-    median: 0.9
-    sdlog: 0.8
+    median: 0.5
+    sdlog: 0.7
     layer: delays
-    why: gamma shapes from 0.2 (CV 2.2, a heavy head at 0 and a long tail)
-      to about 4 (CV 0.5, a tight delay); no cap, as the joint model
-      reports any shape
+    why: gamma shapes from 0.13 (CV 2.8, a heavy head at 0 and a long
+      tail) to about 2 (CV 0.7); no cap, as the joint model reports any
+      shape
   delay_place_sd:
     dist: lognormal
     median: 0.28

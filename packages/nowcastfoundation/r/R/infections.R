@@ -181,7 +181,17 @@ strata_log_r <- function(grid, n, strata, design, v) {
     lagged = lapply(seq_along(places), function(i) {
       k <- v$place_lags[i]
       c(rep(shared[1], k), shared)[seq_len(n)]
-    })
+    }),
+    nested = {
+      region <- v$place_region[seq_along(places)]
+      common <- lapply(seq_len(max(region)), function(r) {
+        weekly_noise(n, scale * v$place_sd)
+      })
+      lapply(seq_along(places), function(i) {
+        shared + sqrt(v$place_rho) * common[[region[i]]] +
+          sqrt(1 - v$place_rho) * weekly_noise(n, scale * v$place_sd)
+      })
+    }
   )
   path <- paths[match(strata$place, places)]
   drift <- log(v$r_drift) * (seq_len(n) - 1) / n

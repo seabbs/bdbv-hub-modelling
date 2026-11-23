@@ -187,7 +187,7 @@ latent_runs <- function() {
     "shift_at", "shift_size", "shift_days", "shift_reactive", "shift_up",
     "variant_at", "variant_escape", "variant_r", "variant_days",
     "quiet_places", "late_places", "ascertainment", "incubation_mean",
-    "incubation_cv"
+    "incubation_cv", "n_regions", "place_region"
   )
   design_keys <- c(
     "window", "mixing", "imports", "seeding", "place_rt", "spread",
@@ -196,7 +196,7 @@ latent_runs <- function() {
   )
   want <- list(
     mixing = c("none", "symmetric", "asymmetric", "distance", "time_varying"),
-    place_rt = c("shared", "independent", "correlated", "lagged"),
+    place_rt = c("shared", "independent", "correlated", "lagged", "nested"),
     window = c("early", "established", "endemic"),
     imports = c("none", "constant", "pulses"),
     seeding = c("start", "mid")
@@ -244,7 +244,8 @@ latent_runs <- function() {
     list(window = "established", mixing = "time_varying", place_rt = "lagged", imports = "none", seeding = "mid"),
     list(window = "established", mixing = "distance", place_rt = "correlated", imports = "pulses", seeding = "start"),
     list(window = "endemic", mixing = "symmetric", place_rt = "independent", imports = "constant", seeding = "mid"),
-    list(window = "endemic", mixing = "time_varying", place_rt = "shared", imports = "pulses", seeding = "start")
+    list(window = "endemic", mixing = "time_varying", place_rt = "shared", imports = "pulses", seeding = "start"),
+    list(window = "established", mixing = "symmetric", place_rt = "nested", imports = "none", seeding = "start")
   )
   for (i in seq_along(forced)) {
     set.seed(5000 + i)
@@ -254,6 +255,12 @@ latent_runs <- function() {
     d$strata_link <- "linked"
     d$n_places <- 3L
     d$n_ages <- 2L
+    # Nested place R needs four places for two regions.
+    if (d$place_rt == "nested") {
+      d$strata <- "places"
+      d$n_places <- 4L
+      d$n_ages <- 1L
+    }
     v <- draw_values(grid, d)
     # Shifts and a variant, so the renewal's events are replayed too.
     v$shift_at <- c(0.3, 0.6)

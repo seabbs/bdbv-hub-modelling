@@ -190,6 +190,7 @@ def simulate_latent(
             noise_scale=float(v["gt_mean"]),
             place_sd=float(v.get("place_sd") or 0.0),
             place_rho=float(v.get("place_rho") or 0.0),
+            place_region=_vector(v, "place_region").astype(int).tolist(),
             place_lags=_vector(v, "place_lags").astype(int).tolist(),
             drift=float(v["r_drift"]),
             coupling=float(v["coupling"]),

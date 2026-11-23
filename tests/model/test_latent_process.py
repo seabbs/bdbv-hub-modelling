@@ -132,6 +132,39 @@ def test_a_shared_relation_draws_only_the_strata_noise() -> None:
     assert sites == [f"rt_stratum_{j}_z" for j in range(3)]
 
 
+def test_nested_places_share_their_regions_deviation() -> None:
+    # All the places' noise from their region (rho 1): places in one
+    # region have one path, regions differ.
+    path = RtPath("flat", amplitude=0.2)
+    rt = PlaceRt(
+        "rt",
+        path,
+        "nested",
+        noise_scale=5.0,
+        place_sd=0.2,
+        place_rho=1.0,
+        place_region=[1, 2, 1, 2],
+        coupling=1.0,
+    )
+    with jax.enable_x64(True):
+        trace = handlers.trace(handlers.seed(rt, 0)).get_trace(
+            n=28, place=np.array([0, 1, 2, 3])
+        )
+    sites = [k for k, s in trace.items() if s["type"] == "sample"]
+    assert sites[:2] == ["rt_region_1_z", "rt_region_2_z"]
+    assert sites[2:6] == [f"rt_place_{i}_z" for i in range(4)]
+    log_r = np.asarray(trace["rt::log_r"]["value"])
+    np.testing.assert_allclose(log_r[:, 0], log_r[:, 2])
+    np.testing.assert_allclose(log_r[:, 1], log_r[:, 3])
+    assert not np.allclose(log_r[:, 0], log_r[:, 1])
+
+
+def test_nested_places_need_a_region_each() -> None:
+    rt = PlaceRt("rt", RtPath("flat"), "nested", place_region=[1])
+    with pytest.raises(ValueError, match="region for each of 2"):
+        handlers.seed(rt, 0)(n=7, place=np.array([0, 1]))
+
+
 @pytest.mark.parametrize("early", [True, False])
 def test_the_start_is_a_seed_on_the_last_day_or_a_level(early: bool) -> None:
     with jax.enable_x64(True):
@@ -197,7 +230,8 @@ def test_the_latent_cases_cover_every_design_level() -> None:
     for factor, levels in {
         "mixing": {"none", "symmetric", "asymmetric", "distance"}
         | {"time_varying"},
-        "place_rt": {"shared", "independent", "correlated", "lagged"},
+        "place_rt": {"shared", "independent", "correlated", "lagged"}
+        | {"nested"},
         "window": {"early", "established", "endemic"},
         "imports": {"none", "constant", "pulses"},
         "seeding": {"start", "mid"},

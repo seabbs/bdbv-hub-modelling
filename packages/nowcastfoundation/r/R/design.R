@@ -116,13 +116,13 @@ draw_design <- function(grid, weeks = NULL) {
 }
 
 # The rising shape an early outbreak not brought under control follows:
-# its drawn trajectory if it rises, else that trajectory's rising
-# counterpart.
+# its drawn trajectory if it rises or oscillates around R = 1, else
+# that trajectory's rising counterpart.
 rising_path <- c(
   controlled = "growth", growth = "growth", decline = "growth", flat = "rise_fall_gradual",
   rise_fall_sharp = "rise_fall_sharp",
   rise_fall_gradual = "rise_fall_gradual", fall_rise = "rise_fall_sharp",
-  oscillating = "multi_wave", multi_wave = "multi_wave"
+  oscillating = "oscillating", multi_wave = "multi_wave"
 )
 
 #' The continuous settings of a simulation, by layer
@@ -156,6 +156,13 @@ draw_values <- function(grid, design) {
   v$place_rho <- ds("place_rho")
   v$place_sd <- ds("place_sd")
   v$place_lags <- c(0L, draw_count(grid, "place_lag_days", n_p - 1L))
+  # Places within 2 to 6 regions (four or more places), each region
+  # sharing an R deviation under `nested` place R.
+  k <- if (n_p >= 4) 1L + sample.int(min(6L, n_p %/% 2L) - 1L, 1L) else 1L
+  region <- integer(n_p)
+  region[sample.int(n_p)] <- 1L + (seq_len(n_p) - 1L) %% k
+  v$n_regions <- k
+  v$place_region <- region
   v$late_at <- ds("late_at")
   v$late_days <- draw_count(grid, "late_days")
   v$mixing_eps <- ds("mixing_eps")
@@ -175,7 +182,8 @@ draw_values <- function(grid, design) {
   v$path <- if (early) {
     if (draw_share(grid, "controlled")) "controlled" else rising_path[[design$trajectory]]
   } else if (endemic) {
-    "endemic"
+    # An endemic outbreak walks around R = 1 or oscillates around it.
+    if (design$trajectory == "oscillating") "oscillating" else "endemic"
   } else {
     design$trajectory
   }
