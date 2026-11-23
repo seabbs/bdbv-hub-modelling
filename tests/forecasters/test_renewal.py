@@ -106,13 +106,27 @@ def test_renewal_model_fits_provinces_only_on_their_own(
         rn.RenewalModel(rn.VARIANTS[name]).forecast_fit(task)
 
 
-def test_model_config_applies_overrides() -> None:
-    # renewalsp fits one province's series, so the share at risk is fixed
-    # and its Rt walk is centred.
-    single = rn.model_config(rn.VARIANTS["renewalsp"])
-    assert single == replace(
-        rn.engine().MAIN, national=True, depletion=False, centred_rt=True
-    )
+def test_the_variants_are_ablations_of_renewalbvd() -> None:
+    # renewal drops the BVD Rt term. renewalsp also drops pooling and
+    # importation by fitting each province alone (`national`), with its
+    # walk centred where the data pin it (sampler geometry only).
+    # Depletion and the Rt process are the same in all three.
+    import dataclasses
+
+    full = rn.model_config(rn.VARIANTS["renewalbvd"])
+
+    def dropped(name: str) -> set[str]:
+        config = rn.model_config(rn.VARIANTS[name])
+        return {
+            f.name
+            for f in dataclasses.fields(config)
+            if getattr(config, f.name) != getattr(full, f.name)
+        }
+
+    assert full == rn.engine().BVD
+    assert full.depletion
+    assert dropped("renewal") == {"bvd"}
+    assert dropped("renewalsp") == {"bvd", "national", "centred_rt"}
     assert rn.VARIANTS["renewalsp"].per_province
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
