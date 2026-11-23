@@ -668,6 +668,16 @@ def training_block(
     }
 
 
+def simulations(outbreaks: pd.Series) -> pd.Series:
+    """Return the simulation `<seed>-<index>` of each outbreak.
+
+    The simulator names outbreaks `<seed>-<index>-<draw>`; the settings
+    have one row per simulation.
+    """
+    parts = outbreaks.astype(str).str.split("-")
+    return parts.str[0] + "-" + parts.str[1]
+
+
 def weekly_cutoffs(first: str, last: str, weekday: int) -> list[str]:
     """Return weekly cut-offs on a weekday (Monday 0) from `first` to `last`.
 
