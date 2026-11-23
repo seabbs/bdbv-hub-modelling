@@ -67,6 +67,9 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
                     self._send(200, body, "text/html; charset=utf-8")
                 else:
                     self._send(404, b"not found", "text/plain")
+            except (BrokenPipeError, ConnectionResetError):
+                # The client left (a closed tab, a proxy timeout).
+                return
             except Exception:
                 # The detail goes to the server's log, not the browser.
                 traceback.print_exc(file=sys.stderr)
