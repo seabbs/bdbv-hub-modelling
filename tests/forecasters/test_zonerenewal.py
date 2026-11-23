@@ -36,21 +36,12 @@ def task(target: pd.DataFrame, delays: pd.DataFrame) -> ForecastTask:
 def quiet_zones(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> set[str]:
-    """Make every zone silent but the four with most cases, with 0 draws."""
+    """Make every zone silent but the four with most cases."""
     zones = zr.task_zones(task)
     counts = zr.zone_target(task).groupby("location")["total"].sum()
     busy = set(counts.sort_values().index[-4:])
     silent = {z for z in zones if z not in busy}
-    rows = pd.DataFrame(
-        [
-            (z, date, k, 0)
-            for z in sorted(silent)
-            for date in task.target_end_dates
-            for k in range(1, task.n_samples + 1)
-        ],
-        columns=["location", "target_end_date", "sample", "value"],
-    )
-    monkeypatch.setattr(zr, "_silent_walk", lambda _: (rows, silent))
+    monkeypatch.setattr(zr, "silent_zones", lambda _: silent)
     return silent
 
 
@@ -152,14 +143,16 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     model = get_model("renewal")
     assert isinstance(model, zr.ZoneRenewalModel)
     samples = model.forecast(task)
-    # One joint fit of the zones the random walks do not find silent.
-    (fitted,) = seen
-    assert len(fitted) == 4
-    assert all(len(z.split("-")) == 3 for z in fitted)
-    assert not set(fitted) & quiet_zones
+    # #768 item 8: no random-walk layer. The run takes every zone of the
+    # task: it fits the zones with a recent case and draws the silent
+    # ones from the fitted importation, in one forecast pass.
+    assert not hasattr(zr, "_silent_walk")
+    (given,) = seen
+    assert set(given) == set(zr.task_zones(task))
     zones = model.zone_samples
     assert zones is not None
-    assert set(zones["location"]) == set(fitted) | quiet_zones
+    assert set(zones["location"]) == set(given)
+    assert quiet_zones < set(zones["location"])
     # The forecast carries the zone fit's own zones, so the store and the
     # scores read them rather than a split of the provinces.
     own = samples["location"].map(is_zone)
@@ -426,3 +419,74 @@ def test_bvd_zone_fit_records_the_release_and_its_rhat(
         config_name="main",
     )
     assert "bvd" not in plain
+
+
+def test_silent_zones_follow_the_fit_through_its_importation(
+    task: ForecastTask,
+) -> None:
+    import jax
+    import numpyro
+    from numpyro.infer import Predictive
+
+    from nowcastrenewal.model import model_args
+    from nowcastrenewal.model.zones import build_zone_model, extend_vintage
+
+    config = rn.model_config(rn.VARIANTS["renewalbvd"])
+    silent = zr.silent_zones(task)
+    zt = replace(task, target=zr.zone_target(task))
+    fitted = tuple(z for z in zr.task_zones(task) if z not in silent)
+    quiet = tuple(z for z in zr.task_zones(task) if z in silent)
+    # A quiet zone with old cases, and a province with no fitted zone.
+    old = set(zt.target["location"]) & set(quiet)
+    assert old
+    assert {province_of(z) for z in quiet} - {province_of(z) for z in fitted}
+    data = zr.zone_vintage_inputs(
+        replace(zt, locations=fitted), config, receivers=quiet
+    )
+    ext = extend_vintage(data, quiet, rn.task_places(task))
+    p = len(fitted)
+    assert ext.names == [*data.names, *quiet]
+    assert ext.start_date == data.start_date
+    assert ext.known.shape == (data.n_weeks, len(fitted) + len(quiet))
+    # The fit's kernel is the fitted block; silent zones only receive.
+    np.testing.assert_allclose(ext.kernel[:p, :p], data.kernel)
+    np.testing.assert_allclose(ext.kernel[:, p:], 0.0)
+    assert np.all(ext.kernel[p:, :p].sum(axis=0) > 0)
+    assert np.all(np.isinf(ext.seed_days[p:]))
+    # The same sampled sites, so the fit's posterior drives the extension.
+    fit_model = build_zone_model(data, config)
+    ext_model = build_zone_model(ext, config)
+
+    def sites(model, d):
+        tr = numpyro.handlers.trace(
+            numpyro.handlers.seed(model.sample, rng_seed=0)
+        ).get_trace(**model_args(model, d))
+        return {
+            k: np.shape(v["value"])
+            for k, v in tr.items()
+            if v["type"] == "sample" and not v["is_observed"]
+        }
+
+    fit_sites = sites(fit_model, data)
+    assert sites(ext_model, ext) == fit_sites
+    prior = Predictive(
+        fit_model.sample, num_samples=3, return_sites=list(fit_sites)
+    )(jax.random.key(1), **model_args(fit_model, data))
+
+    def counts(model, d):
+        out = Predictive(
+            model.sample,
+            posterior_samples=prior,
+            return_sites=["latent_infections_by_subpop"],
+        )(jax.random.key(2), **model_args(model, d))
+        x = np.asarray(out["latent_infections_by_subpop"])
+        return x * np.asarray(d.populations)
+
+    # On the fit axis the fitted zones are unchanged, and the silent
+    # zones take infections only by importation.
+    full = counts(ext_model, ext)
+    np.testing.assert_allclose(
+        full[..., :p], counts(fit_model, data), rtol=1e-5
+    )
+    assert np.all(full[..., p:] >= 0)
+    assert full[..., p:].sum() > 0
