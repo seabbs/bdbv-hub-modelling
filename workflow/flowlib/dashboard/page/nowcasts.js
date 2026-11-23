@@ -133,18 +133,27 @@ function plots(){
  Promise.all(S.locs.map(load)).then(function(all){
   var miss={},h='<div class=panels style="grid-template-columns:repeat('+(small?"auto-fit,minmax(260px,1fr)":"1,1fr")+')">';
   all.forEach(function(d,i){h+='<div>'+(small?'<h4>'+S.locs[i]+'</h4>':"")+'<div class=gp></div></div>'});
-  h+='</div>'+legend(eff,ds)+(C.target?'<p class=mut>Target: '+C.target+'.</p>':'')+'<p class=mut>Truth: '+C.truth+'.</p>';
+  // The target's own caption where the dataset gives one per target.
+  var tg=C.target&&typeof C.target=="object"?C.target[TGT()]:C.target;
+  h+='</div><div id=gleg></div>'+(tg?'<p class=mut>Target: '+tg+'.</p>':'')+'<p class=mut>Truth: '+C.truth+'.</p>';
   $("gplot").innerHTML=h;
   // draw each panel at its rendered width so the SVG maps 1:1 to pixels
   // Full screen (expand.js): the panels share the view's height.
   var fs=window.ftFull&&window.ftFull($("gplot")),rows=small?Math.ceil(S.locs.length/Math.max(1,Math.floor($("gplot").clientWidth/260))):1;
   var FH=fs?Math.max(small?170:260,(fs.clientHeight-320)/rows):0;
   [].forEach.call($("gplot").querySelectorAll(".gp"),function(el,i){
-   var p=panel(all[i],S.locs[i],ds,eff,small,Math.max(240,el.clientWidth),FH);p.miss.forEach(function(m){miss[m]=1});el.innerHTML=p.svg});
+   var p=panel(all[i],S.locs[i],ds,eff,small,Math.max(240,el.clientWidth),FH);p.miss.forEach(function(m){miss[m]=(miss[m]||0)+1});el.innerHTML=p.svg});
+  // The legend names only the models drawn in some panel.
+  $("gleg").innerHTML=legend(eff.filter(function(e){return (miss[id2lab(e.id)]||0)<all.length}),ds);
   var ms_=Object.keys(miss);
   if(ms_.length)$("gplot").insertAdjacentHTML("beforeend",'<p class=mut>No forecast in the horizon shown'+(HZR()?' ('+HZR()[0]+')':'')+' for some nowcast dates: '+ms_.join(", ")+'</p>');
   // The score card compares every ticked model, in either view.
   wisChart(all[0],ticked(),ds)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
+// Round axis ticks from 0 to `top`: steps of 1, 2, 2.5 or 5 times a
+// power of ten, about `n` of them.
+function niceTicks(top,n){n=n||3;var raw=top/n,p=Math.pow(10,Math.floor(Math.log10(raw||1))),
+ step=[1,2,2.5,5,10].map(function(k){return k*p}).find(function(s){return s>=raw}),out=[];
+ for(var v=0;v<=top+1e-9;v+=step)out.push(v);return out}
 function wisChart(d,eff,ds){
  // The scores of the horizon shown (d.ranges), else of every day.
  var HR=HZR(),R=(HR&&d.ranges&&d.ranges[HR[0]])||{score:d.score,stats:d.stats,parts:d.parts};
@@ -247,7 +256,7 @@ function wisChart(d,eff,ds){
  var allp=lines.reduce(function(a,l){return a.concat(l)},[]),h6='',H6=Math.max(H2,150);
  if(allp.length){var kx0=Math.min.apply(null,allp.map(function(p){return p[0]})),kx1=Math.max.apply(null,allp.map(function(p){return p[0]})),wy=Math.max.apply(null,allp.map(function(p){return p[1]}))*1.05||1;
   var L6=40,B6=18,sxk=function(k){return L6+(kx1==kx0?0.5:(k-kx0)/(kx1-kx0))*(W-L6-6)},syw=function(v){return 4+(1-v/wy)*(H6-B6-4)};
-  [0,0.5,1].forEach(function(f){var v=wy*f;h6+='<line x1="'+L6+'" x2="'+(W-6)+'" y1="'+syw(v)+'" y2="'+syw(v)+'" class=grid /><text x="'+(L6-4)+'" y="'+(syw(v)+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
+  niceTicks(wy).forEach(function(v){h6+='<line x1="'+L6+'" x2="'+(W-6)+'" y1="'+syw(v)+'" y2="'+syw(v)+'" class=grid /><text x="'+(L6-4)+'" y="'+(syw(v)+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
   if(kx0<=0&&kx1>=0)h6+='<line x1="'+sxk(0)+'" x2="'+sxk(0)+'" y1="4" y2="'+(H6-B6)+'" class=mark />';
   [kx0,0,kx1].filter(function(k,i,a){return k>=kx0&&k<=kx1&&a.indexOf(k)==i}).forEach(function(k){h6+='<text x="'+sxk(k)+'" y="'+(H6-4)+'" text-anchor=middle class=ax>'+k+'</text>'});
   lines.forEach(function(l,i){if(!l.length)return;var id=sel[i];
@@ -263,7 +272,7 @@ function wisChart(d,eff,ds){
 }
 function chips(){var h='';
  RUNS.forEach(function(r){if(!isOn(r.key))return;var all=ofRun(r.key),ch=chosen(r.key);
-  h+='<span class=lg><b style="color:'+r.color+'">'+r.label+'</b> '+(all.length?all.map(function(m){var on=ch.indexOf(m.id)>=0;return '<button class="tog'+(on?' on':'')+'" data-chip="'+r.key+'|'+m.id+'" title="'+m.id+' ('+m.count+' dates)" style="'+(on?'background:'+r.color+';border-color:'+r.color:'')+'">n'+m.n+'</button>'}).join(""):'<span class=mut>no checkpoints scored yet</span>')+'</span>'});
+  h+='<span class=lg><b style="color:'+r.color+'">'+r.label+'</b> '+(all.length?all.map(function(m){var on=ch.indexOf(m.id)>=0;return '<button class="tog'+(on?' on':'')+'" data-chip="'+r.key+'|'+m.id+'" title="'+m.id+' ('+m.count+' dates)" style="'+(on?'background:'+r.color+';border-color:'+r.color:'')+'">n'+m.n+(/ interim /.test(m.label)?' interim':'')+'</button>'}).join(""):'<span class=mut>no checkpoints scored yet</span>')+'</span>'});
  $("gck").innerHTML=h}
 function locBtns(){
  $("glocs").innerHTML=C.groups.filter(function(g){return g.locs.length}).map(function(g){return '<div><span class=mut>'+g.name+'</span> '+g.locs.map(function(l){return '<button class="tog'+(S.locs.indexOf(l)>=0?' on':'')+'" data-loc="'+l+'">'+l+'</button>'}).join("")+'</div>'}).join("");
