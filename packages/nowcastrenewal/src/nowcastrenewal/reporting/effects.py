@@ -74,11 +74,25 @@ class ReferenceFrame:
         Reference dates, `datetime64[D]`, consecutive, `(T,)`.
     place, age : numpy.ndarray
         Each stratum's place and age group, 0-based, `(G,)`.
+    n_days : int, optional
+        The triangle's reference days, the first `n_days` dates; all of
+        them if None. Later dates pad the arrays to a shared shape: the
+        covariates and the centring use the triangle's days only.
     """
 
     dates: np.ndarray
     place: np.ndarray
     age: np.ndarray
+    n_days: int | None = None
+
+    @property
+    def observed(self) -> int:
+        """The triangle's reference days."""
+        return len(self.dates) if self.n_days is None else int(self.n_days)
+
+    def cropped(self) -> ReferenceFrame:
+        """Return the frame over the triangle's days only."""
+        return ReferenceFrame(self.dates[: self.observed], self.place, self.age)
 
     @property
     def day(self) -> np.ndarray:
@@ -134,8 +148,15 @@ def change_covariates(
     Returns
     -------
     dict
-        Each covariate by stratum and reference day, `(G, T)`.
+        Each covariate by stratum and reference day, `(G, T)`; on padded
+        days, the last day's.
     """
+    pad = len(frame.dates) - frame.observed
+    if pad:
+        own = change_covariates(frame.cropped(), design, v)
+        return {
+            k: np.pad(x, ((0, 0), (0, pad)), "edge") for k, x in own.items()
+        }
     G, T = len(frame.place), len(frame.dates)
     week, day = frame.week, frame.day
     n_weeks = week.max()
@@ -316,7 +337,7 @@ class ReferenceEffects(RandomVariable):
                 dist.Normal(0.0, 1.0).expand([n]),
             )
             x = sd * z[idx]
-            total = total + x - x.mean()
+            total = total + x - x[:, : self.frame.observed].mean()
         return total
 
     def _fixed(self, sign: float, centre: bool) -> Array:
@@ -325,7 +346,7 @@ class ReferenceEffects(RandomVariable):
         G, T = len(self.frame.place), len(self.frame.dates)
         total = jnp.zeros((G, T))
         for term, x in self.covariates.items():
-            xc = x - x.mean() if centre else x
+            xc = x - x[:, : self.frame.observed].mean() if centre else x
             total = total + betas[term] * jnp.asarray(xc)
         return total
 

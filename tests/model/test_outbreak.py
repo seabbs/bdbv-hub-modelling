@@ -80,7 +80,8 @@ def test_one_trace_holds_the_latent_step_and_the_reporting(sim) -> None:
         again = handlers.substitute(model, data=sites)(log_lambda=log_lambda)
     np.testing.assert_allclose(
         np.asarray(again),
-        np.asarray(tr["expected::log_expected"]["value"]),
+        # The model's frame is padded past the triangle's days.
+        np.asarray(tr["expected::log_expected"]["value"])[:, :n_days],
         rtol=1e-12,
     )
 

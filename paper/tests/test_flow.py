@@ -232,9 +232,12 @@ def test_evidence_from_a_workflow_output_is_read_where_it_is_written(
 
 def test_examples_are_read_from_the_development_round() -> None:
     picks = [["33307-0006", "Multi-wave"], ["33300-0001", "Spread"]]
-    flow = _flow(synthetic__examples={"picks": picks})
+    flow = _flow(
+        synthetic__examples={"picks": picks},
+        grid_rounds={"validation_round": 33},
+    )
     files = flow.example_files()
-    folder = CONFIG["synthetic"]["simulations"]["development"]
+    folder = f"{CONFIG['rounds_dir']}/r33/sims"
     assert files == {
         "counts": [
             f"{folder}/counts-33300.csv.gz",

@@ -11,6 +11,7 @@ from __future__ import annotations
 import jax
 import numpy as np
 import pandas as pd
+import pytest
 from numpyro import handlers
 
 from nowcastrenewal.reporting.simulate import (
@@ -44,6 +45,7 @@ VALS = {
 ONSETS = np.stack([np.linspace(1, 30, T), np.linspace(5, 15, T)], axis=1)
 
 
+@pytest.mark.slow
 def test_counts_average_to_the_expected_reports() -> None:
     from nowcastrenewal.reporting.simulate import reporting_frame
 

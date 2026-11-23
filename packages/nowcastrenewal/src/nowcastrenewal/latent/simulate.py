@@ -90,6 +90,8 @@ def simulate_latent(
     kinds: Sequence[str] = KINDS,
     incubation_cv: float = 0.5,
     depletion: str = "linear",
+    days: int | None = None,
+    lag_bucket: int = 1,
 ) -> Latent:
     """Sample a simulation's latent run (a numpyro model).
 
@@ -120,22 +122,37 @@ def simulate_latent(
         `incubation_family`).
     depletion : str
         `"linear"` or `"exponential"` (`components.renewal.DEPLETIONS`).
+    days : int, optional
+        Days after the generation time's span that the arrays run over,
+        at least `n`; `n` if None. Series of near lengths padded to the
+        same days share compiled shapes. Timings refer to `n`, the run is
+        causal and its days-first draws keep their values, so the run
+        cropped to `n` days is the same.
+    lag_bucket : int
+        The generation time and the incubation pmfs are padded with zeros
+        to a multiple of this many days, and the generation time's span
+        with days before it that have no infections. The run cropped to
+        the span is the same.
 
     Returns
     -------
     Latent
-        The run.
+        The run over `n` days.
 
     Raises
     ------
     ValueError
-        If the generation time is longer than the series, an established
-        epidemic is larger than its population, or `depletion` is unknown.
+        If the generation time is longer than the series, `days` is less
+        than `n`, an established epidemic is larger than its population,
+        or `depletion` is unknown.
     """
     if depletion not in DEPLETIONS:
         raise ValueError(f"depletion must be one of {tuple(DEPLETIONS)}")
     if n < 1:
         raise ValueError("the generation time is longer than the series")
+    days = n if days is None else int(days)
+    if days < n:
+        raise ValueError("days must be at least n")
     v = values
     n_places, n_ages = int(design["n_places"]), int(design["n_ages"])
     place_ids = [f"P{i:02d}" for i in range(1, n_places + 1)]
@@ -165,12 +182,13 @@ def simulate_latent(
     )
     on = active & ~late
     n_gt = len(gt)
+    extra = _padded(n_gt, lag_bucket) - n_gt
     early = design["window"] == "early"
     unit = (v["seed"] if early else v["level"]) * rel
     start = InfectionInitializationProcess(
         "start",
         DeterministicVariable("start_unit", np.where(on, unit, 0.0)),
-        InitializeStrata(n_gt, early),
+        InitializeStrata(n_gt + extra, early, active=n_gt),
     )
     # An established epidemic ran at its level before the span too: its
     # onsets take that history, about the level over the mean incubation.
@@ -187,7 +205,7 @@ def simulate_latent(
     age = strata["age"].to_numpy()
     process = StratifiedInfections(
         name="latent",
-        gen_int_rv=DeterministicPMF("gt", gt),
+        gen_int_rv=DeterministicPMF("gt", np.pad(gt, (0, extra))),
         start_rv=start,
         log_rt_rv=PlaceRt(
             "rt",
@@ -202,6 +220,7 @@ def simulate_latent(
             place_lags=_vector(v, "place_lags").astype(int).tolist(),
             drift=float(v["r_drift"]),
             coupling=float(v["coupling"]),
+            horizon=n,
         ),
         population=population,
         place=place,
@@ -217,6 +236,7 @@ def simulate_latent(
             switch=str(v.get("mixing_switch") or "on"),
             switch_at=float(v.get("mixing_switch_at") or 0.0),
             switch_days=float(v.get("mixing_switch_days") or 1.0),
+            horizon=n,
         ),
         imports_rv=Imports(
             "imports",
@@ -228,6 +248,7 @@ def simulate_latent(
             late_at=float(v.get("late_at") or 0.0),
             late_days=int(v.get("late_days") or 1),
             trickle=float(v["trickle"]),
+            horizon=n,
         ),
         unit=unit,
         shifts=Shifts(
@@ -246,32 +267,51 @@ def simulate_latent(
         depletion=DEPLETIONS[depletion],
     )
     with handlers.trace() as tr:
-        sample = process(n_days_post_init=n)
+        sample = process(n_days_post_init=days)
     infections = np.asarray(sample.all_subpops)
-    r = np.asarray(tr["latent::r"]["value"])
-    reff = np.asarray(tr["latent::reff"]["value"])
+    r = np.asarray(tr["latent::r"]["value"])[:n]
+    reff = np.asarray(tr["latent::reff"]["value"])[:n]
     # The drawn infection-to-reference family and CV; a design that does
     # not draw them takes a gamma with `incubation_cv`.
     family = design.get("incubation_family", "gamma")
     cv = float(values.get("incubation_cv", incubation_cv))
+    incubation = [
+        delay_pmf(Delay.from_mean_cv(family, m, cv))
+        for m in _vector(v, "incubation_mean")[group]
+    ]
+    width = _padded(max(len(p) for p in incubation), lag_bucket)
     events = ReferenceEvents(
         "reference",
         delay_rvs=[
-            DeterministicPMF(
-                f"incubation_{j}",
-                delay_pmf(Delay.from_mean_cv(family, m, cv)),
-            )
-            for j, m in enumerate(_vector(v, "incubation_mean")[group])
+            DeterministicPMF(f"incubation_{j}", np.pad(p, (0, width - len(p))))
+            for j, p in enumerate(incubation)
         ],
         ascertainment_rv=DeterministicVariable(
             "ascertainment", _vector(v, "ascertainment")[group]
         ),
     )
     # An established or endemic stratum ran at its level before the span
-    # too; an outbreak that starts in it had no infections before.
-    before = None if early else np.asarray(start())[0]
-    onsets = np.asarray(events(infections=infections, before=before))
-    return _latent(infections, onsets, r, reff, population, active, n_gt)
+    # too, the span's padding included; an outbreak that starts in it had
+    # no infections before.
+    before = None if early else np.asarray(start())[-1]
+    history = infections.copy()
+    if before is not None:
+        history[:extra] = before
+    onsets = np.asarray(events(infections=history, before=before))
+    keep = slice(extra, extra + n_gt + n)
+    return _latent(
+        infections[keep],
+        onsets[keep],
+        r,
+        reff,
+        population,
+        active,
+        n_gt,
+    )
+
+
+def _padded(n: int, bucket: int) -> int:
+    return -(-n // bucket) * bucket
 
 
 def _xy(v: Mapping[str, Any]) -> np.ndarray | None:

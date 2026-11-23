@@ -63,6 +63,9 @@ class PlaceMixing(RandomVariable):
         switch starts (rounded to a day).
     switch_days : float
         For `time_varying`, the days the switch takes.
+    horizon : int, optional
+        Days `switch_at` refers to, the series' length; the sampled `n`
+        if None. Days past it pad the arrays to a shared shape.
 
     Raises
     ------
@@ -82,6 +85,7 @@ class PlaceMixing(RandomVariable):
         switch: str = "on",
         switch_at: float = 0.0,
         switch_days: float = 1.0,
+        horizon: int | None = None,
     ) -> None:
         if kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}")
@@ -95,6 +99,7 @@ class PlaceMixing(RandomVariable):
         self.switch = switch
         self.switch_at = switch_at
         self.switch_days = switch_days
+        self.horizon = horizon
 
     def place_kernel(self, n_places: int) -> np.ndarray:
         """Return the kernel between places, rows receive.
@@ -146,7 +151,8 @@ class PlaceMixing(RandomVariable):
             return np.zeros(n)
         if self.kind != "time_varying":
             return np.full(n, float(self.share))
-        start = int(np.round(self.switch_at * n))
+        h = n if self.horizon is None else self.horizon
+        start = int(np.round(self.switch_at * h))
         ramp = np.clip((np.arange(1, n + 1) - start) / self.switch_days, 0, 1)
         return self.share * (ramp if self.switch == "on" else 1 - ramp)
 

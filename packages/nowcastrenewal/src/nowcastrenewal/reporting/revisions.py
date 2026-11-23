@@ -39,6 +39,7 @@ def revise(
     moved: ArrayLike,
     shift: ArrayLike,
     keep: ArrayLike,
+    n_days: int | None = None,
 ) -> Array:
     """Return the revised counts by reference and report day.
 
@@ -53,6 +54,9 @@ def revise(
         Each cell's move in days, nonzero, `(G, T, D)`.
     keep : array_like
         Days until a correction, by stratum, `(G,)` (rounded, at least 1).
+    n_days : int, optional
+        The triangle's days, the first `n_days` of `T`; all of them if
+        None. Later days pad the arrays to a shared shape and hold none.
 
     Returns
     -------
@@ -61,14 +65,15 @@ def revise(
     """
     y = jnp.asarray(counts)
     G, T, D = y.shape
+    last = (T if n_days is None else int(n_days)) - 1
     g = jnp.broadcast_to(jnp.arange(G)[:, None, None], (G, T, D))
     t = jnp.broadcast_to(jnp.arange(T)[None, :, None], (G, T, D))
     r = t + jnp.arange(D)[None, None, :]
-    inside = r <= T - 1
+    inside = r <= last
     k = jnp.maximum(1, jnp.round(jnp.asarray(keep))).astype(int)
-    later = jnp.minimum(r + k[:, None, None], T - 1)
+    later = jnp.minimum(r + k[:, None, None], last)
     to = jnp.clip(t + jnp.asarray(shift).astype(int), 0, r)
-    rr = jnp.minimum(r, T - 1)
+    rr = jnp.minimum(r, last)
 
     def on(x: ArrayLike) -> Array:
         return jnp.where(inside, jnp.asarray(x), 0)
@@ -99,12 +104,20 @@ class Revisions(RandomVariable):
         By stratum: the error rate $o$, the share moved $m$ and the days
         until a correction $k$ (`revise_over`, `revise_move`,
         `revise_keep`).
+    n_days : int, optional
+        The triangle's days (`revise`).
     """
 
     def __init__(
-        self, name: str, over: ArrayLike, move: ArrayLike, keep: ArrayLike
+        self,
+        name: str,
+        over: ArrayLike,
+        move: ArrayLike,
+        keep: ArrayLike,
+        n_days: int | None = None,
     ) -> None:
         super().__init__(name=name)
+        self.n_days = n_days
         self.over = np.atleast_1d(np.asarray(over, dtype=float))
         self.move = np.atleast_1d(np.asarray(move, dtype=float))
         self.keep = np.atleast_1d(np.asarray(keep, dtype=float))
@@ -142,6 +155,6 @@ class Revisions(RandomVariable):
         )
         shift = (2 * direction - 1) * (1 + extra)
         keep = jnp.broadcast_to(jnp.asarray(self.keep), (G,))
-        out = revise(y, errors, moved, shift, keep)
+        out = revise(y, errors, moved, shift, keep, self.n_days)
         numpyro.deterministic(f"{self.name}::counts", out)
         return out

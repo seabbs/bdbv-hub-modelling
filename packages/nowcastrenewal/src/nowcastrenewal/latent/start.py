@@ -31,11 +31,18 @@ class InitializeStrata(InfectionInitializationMethod):
         Whether the outbreak starts in the series (a seed of at least 1
         on the last day, in strata with a positive value) or runs at its
         level before it.
+    active : int, optional
+        The span's last days that hold the seed or level, the generation
+        time's own span; all of them if None. Earlier days are 0, padding
+        the span to a shared shape.
     """
 
-    def __init__(self, n_timepoints: int, early: bool) -> None:
+    def __init__(
+        self, n_timepoints: int, early: bool, active: int | None = None
+    ) -> None:
         super().__init__(n_timepoints)
         self.early = early
+        self.active = n_timepoints if active is None else int(active)
 
     def initialize_infections(self, I_pre_init: ArrayLike) -> Array:
         """Return the starting infections.
@@ -53,6 +60,8 @@ class InitializeStrata(InfectionInitializationMethod):
         """
         x = jnp.atleast_1d(jnp.asarray(I_pre_init, dtype=float))
         if not self.early:
-            return jnp.broadcast_to(x, (self.n_timepoints, x.shape[0]))
+            first = self.n_timepoints - self.active
+            on = jnp.arange(self.n_timepoints) >= first
+            return jnp.where(on[:, None], x[None, :], 0.0)
         seed = jnp.where(x > 0, jnp.maximum(1.0, x), 0.0)
         return jnp.zeros((self.n_timepoints, x.shape[0])).at[-1].set(seed)
