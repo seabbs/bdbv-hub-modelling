@@ -537,13 +537,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Each round's submitted model per hub id "
         "(submission_ci.submissions). Defaults to the config's.",
     )
-    cmp.add_argument(
-        "--complete-after-weeks",
-        type=int,
-        default=None,
-        help="Score weeks this many weeks old on the latest truth (0: every "
-        "reported week, provisional). Defaults to the backtest config's.",
-    )
 
     frz = sub.add_parser(
         "freeze-round",
@@ -1793,10 +1786,6 @@ def _compare_hub(args: argparse.Namespace) -> int:
     target, delays = load_target(args.data), load_delays(args.data)
     daily = load_daily(args.data)
     config = bt.load_config(args.backtest_config)
-    if args.complete_after_weeks is not None:
-        config = dataclasses.replace(
-            config, complete_after_weeks=args.complete_after_weeks
-        )
     rounds = sorted(set(hub["reference_date"]))
     live = (
         args.models
