@@ -15,16 +15,21 @@ import copy
 import inspect
 import json
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from nowcastfoundation import series_bias, sidecar
+from nowcastfoundation.finetune import ROLLING
 from nowcastfoundation.finetune import chronos as ft
 from nowcastfoundation.finetune import stream as fs
-from nowcastfoundation.forecaster import CHRONOS_MODEL, CHRONOS_REVISION
+from nowcastfoundation.forecaster import (
+    CHRONOS_MODEL,
+    CHRONOS_REVISION,
+    rolling_totals,
+)
 
 KINDS = ("start", "monitor", "by_source", "checkpoint")
 
@@ -66,6 +71,7 @@ def evaluate(
         out |= fs.loss_parts("held_out_loss", parts)
     if "start" in kinds or "checkpoint" in kinds:
         out["held_out_coverage"] = held_out_coverage(model, val, batch_size)
+        out["held_out_rolling"] = held_out_rolling(model, val, batch_size)
     if "start" in kinds:
         out["by_level"] = fs.held_out_by_level(model, val, fs.LEVEL_BLOCKS)
         out["by_source"] = fs.held_out_by_source(
@@ -102,18 +108,6 @@ def _covered(
     A step is a nowcast step up to its block's cut-off
     (`finetune.stream.nowcast_steps`), as the loss's parts split them.
     """
-    import torch
-    from chronos.chronos2.dataset import DatasetMode
-    from chronos.chronos2.model import Chronos2Model
-
-    blocks = list(blocks)
-    data = fs.ByLength(
-        blocks,
-        batch_size,
-        DatasetMode.VALIDATION,
-        series_bias.has_bias(model),
-    )
-    accepted = inspect.signature(Chronos2Model.forward).parameters
     levels = np.asarray(model.chronos_config.quantiles, dtype=float)
     # Each interval end is the model's quantile at that level, linear
     # between its two nearest levels where it has none.
@@ -127,35 +121,56 @@ def _covered(
         1.0,
     )[None, :, None]
     rows: list[dict[str, Any]] = []
+    for block, raw, target in _predictions(model, blocks, batch_size):
+        preds = (1 - weight) * raw[:, upper - 1] + weight * raw[:, upper]
+        n_steps = int(block["prediction_length"])
+        d = fs.nowcast_steps(block)
+        names = block.get("levels", ())
+        for r in range(len(raw)):
+            y = target[r, :n_steps]
+            q = preds[r, :, :n_steps]
+            ok = ~np.isnan(y)
+            rows.append(
+                {
+                    "source": block.get("source", ""),
+                    "level": names[r] if r < len(names) else "",
+                    "nowcast": np.arange(n_steps)[ok] < d,
+                    "in50": ((y >= q[1]) & (y <= q[2]))[ok],
+                    "in90": ((y >= q[0]) & (y <= q[3]))[ok],
+                }
+            )
+    return rows
+
+
+def _predictions(
+    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+) -> Iterator[tuple[dict[str, Any], np.ndarray, np.ndarray]]:
+    """Yield each held-out block, its quantiles and its future targets.
+
+    The quantiles are the model's own levels, `[rows, Q, steps]`, and
+    the targets `[rows, steps]`, for the block's target rows.
+    """
+    import torch
+    from chronos.chronos2.dataset import DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    blocks = list(blocks)
+    data = fs.ByLength(
+        blocks,
+        batch_size,
+        DatasetMode.VALIDATION,
+        series_bias.has_bias(model),
+    )
+    accepted = inspect.signature(Chronos2Model.forward).parameters
     with torch.no_grad():
         for indices in data.indices():  # type: ignore[no-untyped-call]
             batch = data._build_batch(indices)
             out = fs.forward(model, batch, accepted)
             raw = out.quantile_preds.float().cpu().numpy()
-            preds = (1 - weight) * raw[:, upper - 1] + weight * raw[:, upper]
             target = batch["future_target"].float().cpu().numpy()
             ranges = batch["target_idx_ranges"]
             for i, (lo, hi) in zip(indices, ranges, strict=True):
-                block = blocks[i]
-                n_steps = int(block["prediction_length"])
-                d = fs.nowcast_steps(block)
-                names = block.get("levels", ())
-                for r in range(lo, hi):
-                    y = target[r, :n_steps]
-                    q = preds[r, :, :n_steps]
-                    ok = ~np.isnan(y)
-                    rows.append(
-                        {
-                            "source": block.get("source", ""),
-                            "level": names[r - lo]
-                            if r - lo < len(names)
-                            else "",
-                            "nowcast": np.arange(n_steps)[ok] < d,
-                            "in50": ((y >= q[1]) & (y <= q[2]))[ok],
-                            "in90": ((y >= q[0]) & (y <= q[3]))[ok],
-                        }
-                    )
-    return rows
+                yield blocks[i], raw[lo:hi], target[lo:hi]
 
 
 def held_out_coverage(
@@ -187,6 +202,113 @@ def held_out_coverage(
         out[f"{prefix}cover50"] = float(in50.mean()) if len(in50) else np.nan
         out[f"{prefix}cover90"] = float(in90.mean()) if len(in90) else np.nan
     return out
+
+
+ROLLING_PARTS = ("gap", "scale", "rough", "rough_daily_sum", "rough_truth")
+"""What `rolling_consistency` sums over a block's places and steps."""
+
+
+def rolling_consistency(
+    block: dict[str, Any], median: np.ndarray
+) -> dict[str, float] | None:
+    """Return how far a block's rolling-sum rows are from its daily rows.
+
+    A `ROLLING` source's block has each place's daily row, then its
+    rolling-sum row. The rolling row's median should be the rolling sum
+    of the daily row's medians, the context's last days included. The
+    sums over places and steps: `gap`, the absolute difference between
+    the two; `scale`, the sum of the daily rows' rolling sums; and the
+    roughness (absolute second differences) of the rolling row's median
+    (`rough`), of the daily medians' rolling sum (`rough_daily_sum`) and
+    of the true rolling sums (`rough_truth`). A rolling row much rougher
+    than its daily sum copies the daily row's day-of-week cycle.
+
+    Parameters
+    ----------
+    block : dict
+        A held-out block, its target rows first.
+    median : numpy.ndarray
+        The model's median of each target row's future steps,
+        `[targets, steps]`.
+
+    Returns
+    -------
+    dict or None
+        The sums (`ROLLING_PARTS`) and `n`, the steps compared, or None
+        for a block of a source without rolling sums.
+    """
+    window = ROLLING.get(str(block.get("source", "")))
+    if window is None:
+        return None
+    n = int(block["n_targets"]) // 2
+    h = int(block["prediction_length"])
+    context = np.asarray(block["context"], dtype=float)
+    future = context.shape[1] - h
+    past = np.nan_to_num(context[:n, future - (window - 1) : future])
+    daily = np.concatenate([past, median[:n, :h]], axis=1)
+    own = rolling_totals(daily, window)[:, window - 1 :]
+    row = median[n : 2 * n, :h]
+    truth = context[n : 2 * n, future:]
+
+    def rough(x: np.ndarray) -> float:
+        return float(np.nansum(np.abs(np.diff(x, 2, axis=1))))
+
+    return {
+        "gap": float(np.abs(row - own).sum()),
+        "scale": float(np.abs(own).sum()),
+        "rough": rough(row),
+        "rough_daily_sum": rough(own),
+        "rough_truth": rough(truth),
+        "n": float(n * h),
+    }
+
+
+def summarise_rolling(
+    parts: Sequence[tuple[str, dict[str, float] | None]],
+) -> dict[str, float]:
+    """Return each source's rolling check over its blocks' sums.
+
+    `<source>_gap` is the summed gap over the summed scale; each
+    roughness is per unit of that scale, so the three compare;
+    `<source>_n` counts the steps.
+    """
+    by: dict[str, dict[str, float]] = {}
+    for source, part in parts:
+        if part is None:
+            continue
+        total = by.setdefault(source, dict.fromkeys([*ROLLING_PARTS, "n"], 0.0))
+        for key, value in part.items():
+            total[key] += value
+    out: dict[str, float] = {}
+    for source, total in sorted(by.items()):
+        scale = total["scale"] or np.nan
+        out[f"{source}_n"] = int(total["n"])
+        for key in ("gap", "rough", "rough_daily_sum", "rough_truth"):
+            out[f"{source}_{key}"] = float(total[key] / scale)
+    return out
+
+
+def held_out_rolling(
+    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+) -> dict[str, float]:
+    """Return the rolling check (`rolling_consistency`) by source.
+
+    Only the blocks of sources with rolling sums (`ROLLING`) are
+    predicted; the median is the model's 0.5 level.
+    """
+    rolling = [b for b in blocks if b.get("source") in ROLLING]
+    if not rolling:
+        return {}
+    levels = list(model.chronos_config.quantiles)
+    mid = min(range(len(levels)), key=lambda i: abs(levels[i] - 0.5))
+    if abs(levels[mid] - 0.5) > 1e-9:
+        raise ValueError(f"the model has no 0.5 quantile: {levels}")
+    return summarise_rolling(
+        [
+            (str(block["source"]), rolling_consistency(block, raw[:, mid]))
+            for block, raw, _ in _predictions(model, rolling, batch_size)
+        ]
+    )
 
 
 def load_base(device: str) -> Any:
