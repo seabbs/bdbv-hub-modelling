@@ -627,6 +627,27 @@ def bias_section(ctx: Context, live: Run, st: Status) -> str:
     )
 
 
+ROLLING_CHECK = "daily+rolling7"
+"""The held-out source whose rolling-sum rows the checkpoint tables check
+against its daily rows (`finetune.evaluate.rolling_consistency`)."""
+
+
+def rolling_check(s: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """Return a checkpoint's 7-day row gap and relative roughness.
+
+    The gap is the 7-day row's median off the 7-day sums of the daily
+    rows' medians, per unit of those sums; the roughness is the 7-day
+    row's over those sums', so 1 is as smooth as the daily rows' sums
+    and more copies their day-of-week cycle. None where not scored.
+    """
+    check = s.get("held_out_rolling") or {}
+    gap = check.get(f"{ROLLING_CHECK}_gap")
+    rough = check.get(f"{ROLLING_CHECK}_rough")
+    base = check.get(f"{ROLLING_CHECK}_rough_daily_sum")
+    ratio = rough / base if rough is not None and base else None
+    return gap, ratio
+
+
 def checkpoint_table(
     run: Run, info: Mapping[str, Any], mode: str, sources: Sequence[str] = ()
 ) -> str:
@@ -647,11 +668,13 @@ def checkpoint_table(
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>nowcast part"
-        f"<th>forecast part<th>held-out start{by_head}<th>saved</tr>"
+        f"<th>forecast part<th>7-day row gap<th>7-day row roughness"
+        f"<th>held-out start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
         ho = s.get("held_out_loss")
+        gap, rough = rolling_check(s)
         cells = [
             html.escape(run.label),
             name,
@@ -666,6 +689,8 @@ def checkpoint_table(
                     s.get("held_out_loss_forecast"),
                 )
             ),
+            _fmt(gap, 3) or "n/a",
+            _fmt(rough, 2) or "n/a",
             _fmt(s.get("held_out_loss_start")),
             *(_fmt(by.get(src)) or "n/a" for src in sources),
             datetime.fromtimestamp(mtime).strftime("%m-%d %H:%M")
