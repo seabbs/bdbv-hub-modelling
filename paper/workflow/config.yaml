@@ -132,13 +132,11 @@ nowcasts:
 # null leaves a note of what it waits on in a development run and fails a
 # paper run.
 evidence:
-  # Scores of the final run's checkpoints on the case studies (ckpt-scores).
-  # Followed at the branch head, never pinned: each run shows the live
-  # run's newest scored checkpoints (nowcastfoundation.live_checkpoint),
-  # as preliminary.
+  # Scores of the runs' checkpoints on the case studies, the workflow's
+  # score table (rule score_table). The live run's newest scored
+  # checkpoints are shown as preliminary (nowcastfoundation.live_checkpoint).
   checkpoint_scores:
-    branch: checkpoint-scoring
-    path: evidence/checkpoint-scores.csv
+    file: $SCORE_CACHE/tables/checkpoint-scores.csv
   # Pending: the scale-floor test on the final run's checkpoints.
   scale_floor: null
   # The lag-horizon test of the ragged layout.

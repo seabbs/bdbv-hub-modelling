@@ -37,7 +37,7 @@ from pathlib import Path
 include: "rules/common.smk"
 
 
-for name, entry in EVIDENCE.items():
+for name, entry in FLOW.pinned().items():
 
     rule:
         name:

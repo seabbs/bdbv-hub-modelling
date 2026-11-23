@@ -71,7 +71,8 @@ class PaperFlow:
         The workflow config (`paper/workflow/config.yaml`), as `load`
         leaves it.
     evidence : mapping
-        Each evidence entry that is set, with the `ref` it is read at.
+        Each evidence entry that is set: a `ref` and `path` it is read
+        at, or a `file` the workflow writes.
     realdata_after : str
         The last BDBV release the real-data models trained on.
     """
@@ -92,7 +93,8 @@ class PaperFlow:
 
         The simulation folders are expanded in `config` itself (`expand`,
         `flowlib.localconfig.expand`), so each step that is passed the
-        config reads the same folders. A set `finetuned` checkpoint is
+        config reads the same folders, as are evidence `file`s. A set
+        `finetuned` checkpoint is
         put in the environment as `BDBV_CHRONOS_FT`, which every `_ft`
         model loads.
 
@@ -101,7 +103,7 @@ class PaperFlow:
         config : dict
             The workflow config.
         evidence : mapping
-            Each evidence entry that is set, with its `ref`.
+            Each evidence entry that is set, with its `ref` or `file`.
         root : pathlib.Path
             The repository root, holding `config/finetune.toml`.
         expand : callable
@@ -135,6 +137,12 @@ class PaperFlow:
             os.environ.update(BDBV_CHRONOS_FT=str(config["finetuned"]))
         with (root / "config" / "finetune.toml").open("rb") as f:
             after = tomllib.load(f)["realdata_bdbv"]["release"]
+        evidence = {
+            name: {**entry, "file": expand(entry["file"])}
+            if "file" in entry
+            else entry
+            for name, entry in evidence.items()
+        }
         return cls(config, evidence, str(after))
 
     # Settings ------------------------------------------------------------
@@ -185,9 +193,15 @@ class PaperFlow:
 
     # Evidence ------------------------------------------------------------
 
+    def pinned(self) -> dict[str, Mapping[str, str]]:
+        """Return the evidence entries read from a git commit."""
+        return {n: e for n, e in self.evidence.items() if "file" not in e}
+
     def evidence_file(self, name: str) -> str:
-        """Return an evidence file, named by its commit."""
+        """Return an evidence file: the workflow's, or named by its commit."""
         entry = self.evidence[name]
+        if "file" in entry:
+            return entry["file"]
         suffix = "".join(Path(entry["path"]).suffixes)
         return f"{self.results}/evidence/{name}-{entry['ref'][:12]}{suffix}"
 
