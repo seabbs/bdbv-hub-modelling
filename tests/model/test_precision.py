@@ -64,6 +64,7 @@ def real_fit_point(table):
     return data, model, params
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not MAIN_REPO_DATA.exists(), reason="main repo data absent")
 @pytest.mark.parametrize("inv_sqrt_phi", [None, 3e-2, 3e-4])
 def test_float32_log_density_matches_float64(real_fit_point, inv_sqrt_phi):

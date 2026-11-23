@@ -151,6 +151,7 @@ def test_one_zone_per_province_is_the_province_model(
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("places", [SIM_LOCATIONS[:1], SIM_LOCATIONS])
 def test_the_province_model_is_the_zone_model_one_place_a_patch(
     outbreak, sim_tables, table, places
@@ -208,6 +209,7 @@ def test_zone_vintage_scores_delays_by_province(zone_vintage):
     np.testing.assert_allclose(v.populations, pops[v.names].to_numpy())
 
 
+@pytest.mark.slow
 def test_zone_model_shares_province_parts(zone_vintage):
     v = zone_vintage
     model = build_zone_model(v)
