@@ -1433,6 +1433,26 @@ def pending_checkpoints(train: Path, prefixes: Sequence[int]) -> list[Path]:
     return out
 
 
+def resume_progress(where: Path, until: int | None, outbreaks: int) -> dict:
+    """Return the step and outbreaks a run resumes from, and its segment.
+
+    Read from the saved state (`save_state`) without loading it, so the
+    status names them from the start, through the cuts before the first
+    step. The segment and its target are `until`, else `outbreaks`.
+    """
+    target = outbreaks if until is None else until
+    found = where / "state.json"
+    if not found.exists():
+        found = where.with_suffix(".old") / "state.json"
+    state = json.loads(found.read_text()) if found.exists() else {}
+    return {
+        "step": int(state.get("step", 0)),
+        "outbreaks": int(state.get("done", 0)),
+        "segment": f"n{target}",
+        "target": target,
+    }
+
+
 def load_state(where: Path, model, optimiser) -> dict | None:
     """Load the trainer's saved state into the model and optimiser.
 
@@ -1673,7 +1693,10 @@ def main(root: Path | None = None) -> None:
     out.mkdir(parents=True, exist_ok=True)
     pause = out.parent / "PAUSE"
     status_file = out / "stream-status.json"
-    status = {"stage": "starting", "step": 0, "outbreaks": 0}
+    status = {
+        "stage": "starting",
+        **resume_progress(out / "state", args.until, args.outbreaks),
+    }
 
     def report(**kwargs) -> None:
         status.update(kwargs, time=time.strftime("%Y-%m-%d %H:%M:%S"))
