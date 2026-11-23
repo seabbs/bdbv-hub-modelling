@@ -105,6 +105,7 @@ __all__ = [
     "realdata_spec",
     "register_realdata_models",
     "release_tag",
+    "reported_block",
     "resolve_checkpoint",
 ]
 
@@ -112,8 +113,10 @@ SOURCES: Final = ("weekly", "daily")
 """The hub target's releases by onset week (`target.csv`) or onset day
 (`daily.csv`)."""
 
-LAYOUTS: Final = ("complete", "ragged")
-"""The ways the releases are given to Chronos-2."""
+LAYOUTS: Final = ("complete", "ragged", "reported")
+"""The ways the releases are given to Chronos-2. `reported` is `ragged`
+with each place's counts reported by the cut-off as one more row
+(`reported_block`)."""
 
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
 """A fixed release lag $D$ in the source's steps, 4 weeks or 28 days: the
@@ -1037,6 +1040,60 @@ def layout_block(
     }
 
 
+def reported_block(
+    tri: HubTriangle,
+    places: Sequence[str],
+    start: int,
+    period: PeriodRows | None = None,
+) -> Series:
+    """Return the `ragged` block with each place's counts to date.
+
+    Each place gains one covariate row, `<place>_lag_reported`: its count
+    of each step as reported by the cut-off (`tri.final`), known over the
+    context and every step up to the cut-off, NaN after it. The target
+    still ends at `start`, so the steps not yet complete are forecast with
+    what has been reported of them in view.
+
+    Parameters
+    ----------
+    tri, places, start, period
+        As `layout_block`.
+
+    Returns
+    -------
+    Series
+        `layout_block`'s `ragged` block with the reported rows added.
+    """
+    block = layout_block(tri, "ragged", places, start, period)
+    reported = np.full(tri.final.shape, np.nan)
+    reported[:, : tri.last + 1] = tri.final[:, : tri.last + 1]
+    names = [f"{p}_lag_reported" for p in places]
+    return {
+        **block,
+        "past_covariates": {
+            **block["past_covariates"],
+            **dict(zip(names, reported[:, :start], strict=True)),
+        },
+        "future_covariates": {
+            **block["future_covariates"],
+            **dict(zip(names, reported[:, start:], strict=True)),
+        },
+    }
+
+
+def _block(
+    tri: HubTriangle,
+    layout: str,
+    places: Sequence[str],
+    start: int,
+    period: PeriodRows | None = None,
+) -> Series:
+    """Return the block of `layout` (`layout_block` or `reported_block`)."""
+    if layout == "reported":
+        return reported_block(tri, places, start, period)
+    return layout_block(tri, layout, places, start, period)
+
+
 def _walk_start(task: ForecastTask) -> str:
     """Return the earliest week `randomwalk` starts its walk from.
 
@@ -1256,7 +1313,7 @@ class FoundationModel:
         else:
             # Zero-shot and fine-tuned models build the same block, the
             # zero-case places' lag rows included; only the weights differ.
-            group = layout_block(tri, self.layout, places, start, period)
+            group = _block(tri, self.layout, places, start, period)
             sample = self.sample
             if sample is None:
                 past = (
@@ -1416,7 +1473,7 @@ class FoundationModel:
                 continue
             seen = np.full((now.shape[0], horizon), np.nan)
             seen[:, ok] = now[:, steps[ok]]
-            block = layout_block(
+            block = _block(
                 earlier, self.layout, places, first, self._period(earlier)
             )
             out.append((block, seen))
@@ -1636,7 +1693,9 @@ for _source in SOURCES:
                 _name,
                 _source,
                 _layout,
-                period=PERIODS.get(_source) if _layout == "ragged" else None,
+                period=(
+                    PERIODS.get(_source) if _layout != "complete" else None
+                ),
             ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, every target in one block.",
