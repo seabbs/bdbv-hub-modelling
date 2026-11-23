@@ -51,6 +51,13 @@ def test_a_run_takes_finetune_s_settings_and_no_others():
         check(config)
 
 
+def test_rounds_given_on_the_command_line_are_valid():
+    # Snakemake reads `--config rounds=[4,5]` as text.
+    check({**CONFIG, "rounds": ["4", "5"]})
+    with pytest.raises(Exception, match=r"(?i)validat"):
+        check({**CONFIG, "rounds": ["four"]})
+
+
 def test_a_missing_section_is_an_error():
     config = copy.deepcopy(CONFIG)
     del config["grid_rounds"]

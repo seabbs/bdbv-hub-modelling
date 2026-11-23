@@ -29,6 +29,9 @@ uv run --group paper snakemake <ROOT>/runs/runa/train/n800/settings.json  # one 
 uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    # one checkpoint's German scores
 ```
 
+The settings in `workflow/config.yaml`, with any `--configfile` or `--config` on top, are checked against `workflow/schemas/config.schema.yaml` when the workflow loads, so a misspelt or unknown setting is an error before any job runs.
+A run in `runs` takes any `finetune` setting and no other.
+
 Helpers: `task nowcast-workflow:dag` draws the rule graph, `task nowcast-workflow:progress` lists what exists and what would run, `task nowcast-workflow:report` writes Snakemake's HTML report, and `task nowcast-workflow:check` runs the tests and dry runs CI runs.
 
 ## Machine settings

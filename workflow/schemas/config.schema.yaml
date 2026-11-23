@@ -1,0 +1,240 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+description: >-
+  The workflow's settings (workflow/config.yaml), checked when the workflow
+  loads (Snakefile). Each section names every key it takes, so a misspelt
+  or unknown setting is an error. The paper's settings
+  (paper/workflow/config.yaml) load beside these, so other top-level keys
+  are left to them.
+
+$defs:
+  count:
+    type: integer
+    minimum: 0
+  positive:
+    type: integer
+    minimum: 1
+  # A round number; `--config rounds=[4]` gives it as text.
+  round:
+    oneOf:
+      - {type: integer, minimum: 0}
+      - {type: string, pattern: "^[0-9]+$"}
+  rounds:
+    type: array
+    items: {$ref: "#/$defs/round"}
+  sources:
+    type: array
+    items: {type: string}
+    minItems: 1
+  labels:
+    type: array
+    items: {type: string}
+
+  # The fine-tuning settings: `finetune`, and each run's entry in `runs`,
+  # which takes any of them on top (flowlib.runs.resolve).
+  finetune_settings:
+    type: object
+    additionalProperties: false
+    properties:
+      prefixes:
+        type: array
+        items: {$ref: "#/$defs/positive"}
+        minItems: 1
+      outbreaks: {$ref: "#/$defs/positive"}
+      rounds:
+        oneOf: [{type: "null"}, {$ref: "#/$defs/rounds"}]
+      seed_file: {type: ["null", string]}
+      validation_round:
+        oneOf: [{type: "null"}, {$ref: "#/$defs/round"}]
+      holdout: {$ref: "#/$defs/positive"}
+      sims_from: {enum: [local, remote, release]}
+      draws: {$ref: "#/$defs/positive"}
+      cuts: {$ref: "#/$defs/positive"}
+      subset_seed: {type: integer}
+      learning_rate: {type: number, exclusiveMinimum: 0}
+      bias_lr: {type: number, exclusiveMinimum: 0}
+      batch_size: {$ref: "#/$defs/positive"}
+      checkpoint_above: {$ref: "#/$defs/count"}
+      block_limit: {$ref: "#/$defs/positive"}
+      sources:
+        oneOf: [{type: "null"}, {$ref: "#/$defs/sources"}]
+      univariate_share: {type: number, minimum: 0, maximum: 1}
+      loss_horizon_days:
+        oneOf: [{type: "null"}, {$ref: "#/$defs/positive"}]
+      quiet_min_cases:
+        oneOf: [{type: "null"}, {$ref: "#/$defs/count"}]
+      chunk: {$ref: "#/$defs/positive"}
+      eval_every: {$ref: "#/$defs/positive"}
+      by_source_every: {$ref: "#/$defs/positive"}
+      eval: {enum: [local, offload]}
+      series_bias: {type: boolean}
+      note: {type: string}
+      check_at: {$ref: "#/$defs/positive"}
+
+type: object
+required:
+  - rounds
+  - grid_rounds
+  - retired_rounds
+  - next_segment_only
+  - simulate
+  - finetune
+  - runs
+  - train_runs
+  - score
+  - dashboard
+properties:
+  rounds: {$ref: "#/$defs/rounds"}
+
+  grid_rounds:
+    type: object
+    additionalProperties: false
+    required: [rounds, validation_round, test_round, topup_round, sources]
+    properties:
+      rounds: {$ref: "#/$defs/rounds"}
+      validation_round: {$ref: "#/$defs/round"}
+      test_round: {$ref: "#/$defs/round"}
+      topup_round:
+        oneOf: [{type: "null"}, {$ref: "#/$defs/round"}]
+      sources: {$ref: "#/$defs/sources"}
+
+  retired_rounds:
+    type: object
+    additionalProperties: false
+    required: [first, last]
+    properties:
+      first: {$ref: "#/$defs/round"}
+      last: {$ref: "#/$defs/round"}
+
+  next_segment_only: {type: boolean}
+
+  simulate:
+    type: object
+    additionalProperties: false
+    required: [grid_file, seed_base, batches, batch, draws, repo]
+    properties:
+      grid_file: {type: string}
+      seed_base: {$ref: "#/$defs/count"}
+      batches: {$ref: "#/$defs/positive"}
+      batch: {$ref: "#/$defs/positive"}
+      draws: {$ref: "#/$defs/positive"}
+      repo: {type: string, pattern: "^[\\w.-]+/[\\w.-]+$"}
+
+  finetune:
+    allOf:
+      - $ref: "#/$defs/finetune_settings"
+      - required:
+          - prefixes
+          - outbreaks
+          - rounds
+          - seed_file
+          - validation_round
+          - holdout
+          - sims_from
+          - draws
+          - cuts
+          - subset_seed
+          - learning_rate
+          - bias_lr
+          - batch_size
+          - checkpoint_above
+          - block_limit
+          - sources
+          - univariate_share
+          - loss_horizon_days
+          - quiet_min_cases
+          - chunk
+          - eval_every
+          - by_source_every
+          - eval
+          - series_bias
+          - note
+          - check_at
+
+  runs:
+    type: object
+    propertyNames: {pattern: "^[a-z][a-z0-9_-]*$"}
+    additionalProperties:
+      oneOf: [{type: "null"}, {$ref: "#/$defs/finetune_settings"}]
+
+  train_runs:
+    oneOf: [{type: "null"}, {$ref: "#/$defs/labels"}]
+
+  score:
+    type: object
+    additionalProperties: false
+    required:
+      - labels
+      - published_from
+      - skip
+      - reference
+      - mem_mb
+      - evidence
+      - checkpoints
+      - branch
+    properties:
+      labels:
+        oneOf: [{type: "null"}, {$ref: "#/$defs/labels"}]
+      published_from: {type: string}
+      skip: {$ref: "#/$defs/labels"}
+      reference: {$ref: "#/$defs/labels"}
+      mem_mb: {$ref: "#/$defs/positive"}
+      evidence: {type: string}
+      checkpoints: {type: string}
+      branch: {type: string}
+
+  dashboard:
+    type: object
+    additionalProperties: false
+    required:
+      - runs
+      - references
+      - studies
+      - levels
+      - score_defaults
+      - exclude
+      - rule
+      - held_out
+      - mail_filter
+      - mirror
+      - mirror_every
+      - datasets
+    properties:
+      runs: {type: array}
+      references:
+        type: array
+        items:
+          type: object
+          required: [key]
+          properties:
+            key: {type: string}
+            paper_model: {type: string}
+            model: {type: string}
+            checkpoint: {type: string}
+            role: {enum: [baseline, start, other]}
+      studies:
+        type: object
+        additionalProperties: {type: string}
+      levels: {$ref: "#/$defs/labels"}
+      score_defaults: {type: object}
+      exclude: {type: object}
+      rule: {type: string}
+      held_out:
+        type: object
+        additionalProperties: false
+        required: [datasets, studies, mail]
+        properties:
+          datasets: {$ref: "#/$defs/labels"}
+          studies: {$ref: "#/$defs/labels"}
+          mail: {type: string}
+      mail_filter: {type: string}
+      mirror: {type: string}
+      mirror_every: {$ref: "#/$defs/positive"}
+      datasets:
+        type: array
+        items:
+          type: object
+          required: [key, label, format]
+          properties:
+            key: {type: string}
+            label: {type: string}
+            format: {enum: [quantiles, samples]}

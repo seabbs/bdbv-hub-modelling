@@ -16,11 +16,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(workflow.basedir)))
 
 from flowlib import machine  # noqa: E402
+from snakemake.utils import validate  # noqa: E402
 
 
 configfile: str(Path(workflow.basedir) / "config.yaml")
 # The paper's settings (paper/workflow/config.yaml), beside the workflow's.
 configfile: str(Path(workflow.basedir).parent / "paper" / "workflow" / "config.yaml")
+
+
+# Every setting checked against its schema: a misspelt or unknown key is
+# an error before any job runs (workflow/schemas/config.schema.yaml).
+validate(config, "schemas/config.schema.yaml")
 
 
 include: "rules/common.smk"
