@@ -6,11 +6,8 @@ simulation's count family (`components.noise`), its $\phi$ by stratum
 ($\phi = 1 / \sqrt{\phi}^2$ from `obs_sqrt_phi`). For NB1 the simulator
 scales $\sqrt{\phi}$ by $\sqrt{\hat\lambda \sum_d p_d^2}$, with
 $\hat\lambda$ the median expected onset among those of at least 1 and
-$p$ the reporting delay's pmf (`nb1_scale`), as the R engine does.
-
-The R engine draws each cell's mean as Poisson($1000 \mu$) / 1000 before
-the noise (`expected_scale`); that adds $\mu / 1000$ to a variance of at
-least $\mu$, under 0.1%, so here the noise is on $\mu$ itself.
+$p$ the reporting delay's pmf (`nb1_scale`).
+The noise is on the expected count $\mu$ itself.
 
 The counts are one numpyro site, `"{name}::counts"`, which takes observed
 counts to condition on, so the same model could be fitted.
