@@ -233,3 +233,76 @@ def test_committed_metadata_passes_the_hub_schema() -> None:
     for path in sorted(METADATA.glob("*.yml")):
         report = validate_metadata(path, HUB)
         assert report.valid, (path.name, report)
+
+
+RT_HUB = Hub.load(FIXTURES / "hub-snapshot-rt")
+"""The hub config with the optional `wk R_t` target (hub tasks.json at
+b7e6842f5, 2026-11-23): quantiles of the reference week and the week
+before."""
+
+RT_LEVELS = (0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4,
+             0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95,
+             0.975, 0.99)  # fmt: skip
+
+
+def _rt(weeks: tuple[str, ...]) -> pd.DataFrame:
+    """A fit's `rt.csv.gz`: increasing quantiles per location and week."""
+    return pd.DataFrame(
+        [
+            {"location": loc, "target_end_date": w, "output_type_id": q,
+             "value": 0.5 + q}
+            for loc in ("CD", "CD-IT")
+            for w in weeks
+            for q in RT_LEVELS
+        ]
+    )  # fmt: skip
+
+
+def test_rt_end_dates_are_the_rounds_wk_rt_weeks() -> None:
+    from bdbvhub.submission.hub import rt_end_dates
+
+    tasks = FIXTURES / "hub-snapshot-rt" / "hub-config" / "tasks.json"
+    assert rt_end_dates(tasks, "2026-11-28") == ("2026-11-21", "2026-11-28")
+    # A round the target is not open for has none.
+    assert rt_end_dates(tasks, "2026-10-31") == ()
+
+
+def test_rt_rows_keep_the_rounds_weeks_as_quantiles() -> None:
+    from bdbvhub.submission.hub import RT_TARGET, rt_table
+
+    rt = _rt(("2026-11-14", "2026-11-21", "2026-11-28"))
+    out = rt_table(
+        rt, "2026-11-28", ("2026-11-21", "2026-11-28"), FORECAST_DATE
+    )
+    assert tuple(out.columns) == HUB_COLUMNS
+    assert set(out["target"]) == {RT_TARGET}
+    assert set(out["output_type"]) == {"quantile"}
+    assert sorted(set(out["target_end_date"])) == ["2026-11-21", "2026-11-28"]
+    assert len(out) == 2 * 2 * 23
+
+
+def test_counts_and_rt_together_pass_the_hub_checks(tmp_path: Path) -> None:
+    from bdbvhub.submission.hub import rt_table
+
+    weeks = ["2026-11-21", "2026-11-28", "2026-12-05"]
+    samples = pd.DataFrame(
+        [
+            {"location": loc, "target_end_date": w, "sample": s,
+             "value": 10.0}
+            for loc in ("CD-IT", "CD")
+            for s in range(1, 101)
+            for w in weeks
+        ]
+    )  # fmt: skip
+    counts = _table(samples, "2026-11-28")
+    rt = rt_table(
+        _rt(("2026-11-21", "2026-11-28")),
+        "2026-11-28",
+        ("2026-11-21", "2026-11-28"),
+        FORECAST_DATE,
+    )
+    path = write_submission(pd.concat([counts, rt]), tmp_path, MID)
+    rep = validate_submission(
+        path, RT_HUB, metadata_dirs=[METADATA], skip_window=True
+    )
+    assert [c.check for c in rep.failed] == []
