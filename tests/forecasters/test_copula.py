@@ -175,6 +175,15 @@ def test_estimate_is_floored_at_zero_and_capped() -> None:
     assert estimate_rho(scores, weight=0.0)["rho_provinces"] == 0.0
     same = scores.assign(z=lambda d: d["origin"].astype(float))
     assert estimate_rho(same, weight=0.0)["rho_provinces"] == MAX_RHO
+    capped = estimate_rho(same, weight=0.0, max_rho=0.5)
+    assert capped["rho_provinces"] == 0.5
+
+
+def test_the_candidates_cover_the_defaults_and_have_unique_labels() -> None:
+    from nowcastbaselines.copula import CANDIDATES, CopulaSettings
+
+    assert CopulaSettings() in CANDIDATES
+    assert len({c.label for c in CANDIDATES}) == len(CANDIDATES)
 
 
 def test_with_no_pairs_or_no_variation_rho_p_is_the_prior() -> None:

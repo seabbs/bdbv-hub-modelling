@@ -25,6 +25,7 @@ import pandas as pd
 from numpyro import handlers
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent import InfectionInitializationProcess
+from pyrenew.math import get_asymptotic_growth_rate
 
 from ..components.pmfs import Delay, delay_pmf, generation_time_pmf
 from ..components.reference import ReferenceEvents
@@ -191,10 +192,18 @@ def simulate_latent(
     extra = round_up(n_gt, lag_bucket) - n_gt
     early = design["window"] == "early"
     unit = (v["seed"] if early else v["level"]) * rel
+    path = RtPath.from_values(v["path"], v)
+    # An outbreak that starts in the series grows into day 1 at the
+    # growth of its R path's first day, so the renewal carries it on.
+    growth = (
+        float(get_asymptotic_growth_rate(np.exp(path.log_r(1, n)[0]), gt))
+        if early
+        else 1.0
+    )
     start = InfectionInitializationProcess(
         "start",
         DeterministicVariable("start_unit", np.where(on, unit, 0.0)),
-        InitializeStrata(n_gt + extra, early, active=n_gt),
+        InitializeStrata(n_gt + extra, early, active=n_gt, growth=growth),
     )
     # An established epidemic ran at its level before the span too: its
     # onsets take that history, about the level over the mean incubation.
@@ -215,7 +224,7 @@ def simulate_latent(
         start_rv=start,
         log_rt_rv=PlaceRt(
             "rt",
-            path=RtPath.from_values(v["path"], v),
+            path=path,
             relation=design["place_rt"],
             kinds=kinds,
             values=v,
@@ -250,6 +259,7 @@ def simulate_latent(
             rate=float(v.get("import_rate") or 0.0),
             pulse_at=_vector(v, "import_at"),
             pulse_size=float(v.get("import_size") or 0.0),
+            spread=gt,
             late=late,
             late_at=float(v.get("late_at") or 0.0),
             late_days=int(v.get("late_days") or 1),

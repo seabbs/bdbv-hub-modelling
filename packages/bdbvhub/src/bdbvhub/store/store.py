@@ -853,9 +853,8 @@ def fit_files(
     """Return a submission candidate's fit directory, after its forecast.
 
     The directory `bdbvhubrenewal fit --config` would write: the model's
-    `write_fit_dir` (samples, the unassigned national part,
-    `ppc.json`), with `diagnostics.json` and `fit.json`
-    (`write_records`). A model that is no candidate's
+    `write_fit_dir` (samples and `ppc.json`), with `diagnostics.json`
+    and `fit.json` (`write_records`). A model that is no candidate's
     (`renewal.FIT_VARIANTS`) has none.
 
     Parameters

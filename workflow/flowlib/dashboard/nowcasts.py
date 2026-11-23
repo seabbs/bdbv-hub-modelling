@@ -51,6 +51,9 @@ PAGE_LEVELS = (0.025, 0.25, 0.5, 0.75, 0.975)
 REFERENCE = "reference"
 """Reference folders start with this (`reference`, `reference-complete`)."""
 
+TRUTH_FILE = "truth.csv.gz"
+"""A dataset's truth context file (`nowcastgermany.checkpoint.TRUTH_FILE`)."""
+
 TARGET = "7day"
 """The target of rows that name none (files scored before the column)."""
 
@@ -531,6 +534,16 @@ def build(
                     for span, part in entry.get("ranges", {}).items():
                         for k, v in part.items():
                             _put(by_range, [loc, span, k, *keys[1:]], v)
+
+    # A dataset's truth context (the German plots' truth before the first
+    # nowcast date) adds days no forecast file has; a file's own truth
+    # wins.
+    context = cache / TRUTH_FILE
+    if context.is_file():
+        for r in pd.read_csv(context, dtype=str).itertuples(index=False):
+            known = truth.setdefault(r.location, {}).setdefault(r.target, {})
+            if r.target_end_date not in known:
+                known[r.target_end_date] = (r.truth_vintage, float(r.truth))
 
     def rank(loc: str) -> tuple[int, str]:
         hit = (i for i, (_, rx) in enumerate(order) if re.match(rx, loc))

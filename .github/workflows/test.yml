@@ -61,7 +61,9 @@ jobs:
   # The fast tier, on every push and pull request: every test not marked
   # slow, with no model fits. The one test job a pull request runs: the
   # package, workflow (with Snakemake's dry runs) and paper tests, under
-  # xdist, in at most 15 minutes.
+  # xdist, in at most 15 minutes. Workers steal queued tests, so a slow one
+  # does not hold up the end. Coverage, which about doubled the tests'
+  # time, is measured on pushes and the schedule, not on pull requests.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -77,13 +79,12 @@ jobs:
           jax-scope: test
       - name: Tests
         run: >-
-          uv run --group paper pytest -q -n auto --durations=30
-          --junitxml=pytest-durations.xml --cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub
-          --cov-report=term-missing
-          --cov-report=xml
+          uv run --group paper pytest -q -n auto --dist worksteal --durations=30
+          --junitxml=pytest-durations.xml
+          ${{ github.event_name != 'pull_request' && '--cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub --cov-report=term-missing --cov-report=xml' || '' }}
       - name: Paper tests
         working-directory: paper
-        run: uv run --group paper pytest -q -n auto --durations=10 tests
+        run: uv run --group paper pytest -q -n auto --dist worksteal --durations=10 tests
       # Every test's time, to find the slow ones (`--durations` prints the
       # slowest only).
       - name: Keep the test durations
@@ -95,6 +96,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload coverage to Codecov
+        if: ${{ github.event_name != 'pull_request' }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.xml
@@ -129,7 +131,7 @@ jobs:
           mapfile -t gated < <(grep -rlE \
             '(importorskip|find_spec)\("(torch|chronos|peft|transformers)"' \
             tests | sort)
-          uv run pytest -q -m slow -n 2 --durations=30 \
+          uv run --group paper pytest -q -m slow -n 2 --durations=30 \
             "${gated[@]/#/--ignore=}"
       - name: Backtest and nowcast smoke test
         timeout-minutes: 15
@@ -211,6 +213,9 @@ jobs:
           extra-repositories: https://stan-dev.r-universe.dev
       # epinowcast at the commit the simulator's reporting ports, and
       # baselinenowcast 0.2.2 (not on CRAN yet: the commit that set it).
+      # fitdistrplus: primarycensored's fitdistdoublecens needs it (a
+      # Suggests), for tests/model/test_hub_imputation_delays.py. No
+      # comments inside `packages`: pak reads every line as a package.
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           packages: |
@@ -222,8 +227,6 @@ jobs:
             any::jsonlite
             any::data.table
             any::flexsurv
-            # primarycensored's fitdistdoublecens, a Suggests, which
-            # tests/model/test_hub_imputation_delays.py calls.
             any::fitdistrplus
             any::posterior
           dependencies: '"hard"'

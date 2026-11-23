@@ -51,7 +51,8 @@ within the delay window.
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass, field, replace
 from typing import ClassVar, Final
 
 import jax
@@ -67,7 +68,12 @@ from nowcastbaselines.chain import (
     build_origin,
     delay_summary,
 )
-from nowcastbaselines.copula import error_scores, estimate_rho, pair_walks
+from nowcastbaselines.copula import (
+    CopulaSettings,
+    error_scores,
+    estimate_rho,
+    pair_walks,
+)
 from nowcastbaselines.introductions import silent_trajectories
 from nowcastbaselines.obs import sample_count
 from nowcastbaselines.walk import random_walks
@@ -81,6 +87,8 @@ from nowcastutils.dates import as_date
 from nowcastutils.snapshots import SnapshotArrays, snapshot_arrays
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
+
+logger = logging.getLogger(__name__)
 
 
 _KEPT_ORIGINS: Final = 4
@@ -279,6 +287,8 @@ class RandomWalk:
         Model name.
     settings : Settings
         Delay window, thresholds and the walk's window.
+    copula : CopulaSettings
+        How rho_p is estimated (`copula.estimate_rho`).
     fit_diagnostics : list of dict
         One row per place from the last forecast: the start week, the
         errors behind the spread and the source of the delay, spread and
@@ -288,11 +298,13 @@ class RandomWalk:
     copula_fit : dict or None
         The copula of the last forecast: `model`, `origin`, `n_scores` and
         `copula.estimate_rho`'s `rho_provinces`, `n_pairs` and `fallback`,
-        or None where there are no provinces to pair (a zone task).
+        with `reason` where it fell back, or None where there are no
+        provinces to pair (a zone task).
     """
 
     name: str = "randomwalk"
     settings: Settings = field(default_factory=Settings)
+    copula: CopulaSettings = field(default_factory=CopulaSettings)
     fit_diagnostics: list[dict[str, object]] = field(default_factory=list)
     keep_variants: bool = field(default=False, repr=False)
     copula_fit: dict[str, object] | None = field(
@@ -315,18 +327,30 @@ class RandomWalk:
         """
         if self.keep_variants:
             self._unpaired = values
+            self._kept_origin = origin
         locations = tuple(origin.snap.locations)
         if all(c.count("-") >= 2 for c in task.locations):
             self.copula_fit = None
             return values
-        scores = self._error_scores(origin, task)
-        fit = estimate_rho(scores)
+        scores, reason = self._error_scores(origin, task)
+        c = self.copula
+        fit = estimate_rho(scores, c.prior, c.weight, max_rho=c.max_rho)
         self.copula_fit = {
             "model": self.name,
             "origin": task.vintage,
             "n_scores": len(scores),
             **fit,
         }
+        if fit["fallback"]:
+            reason = reason or "no two provinces scored in the same week"
+            self.copula_fit["reason"] = reason
+            logger.warning(
+                "%s at %s: rho_p falls back to the prior %g (%s).",
+                self.name,
+                task.vintage,
+                c.prior,
+                reason,
+            )
         rng = task.rng(self.name, "copula")
         rho = float(fit["rho_provinces"])
         return pair_walks(values, locations, rho, rng)
@@ -340,22 +364,53 @@ class RandomWalk:
         weeks, rows, task = self._kept_frame
         return frame(task, weeks, self._unpaired, rows)
 
-    def _error_scores(self, origin: Origin, task: ForecastTask) -> pd.DataFrame:
-        """Return the normal scores of the model's own earlier nowcasts."""
+    def paired_with(
+        self, copula: CopulaSettings
+    ) -> tuple[pd.DataFrame, dict[str, object] | None]:
+        """Return the last forecast's draws paired under other settings.
+
+        Needs `keep_variants`. The draws are the forecast's own, so only
+        their pairing differs, as the release backtest compares them
+        (`nowcasteval.pairing.bdbv_candidates`).
+
+        Parameters
+        ----------
+        copula : CopulaSettings
+            The settings to pair by.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The samples.
+        dict or None
+            The copula record, as `copula_fit`.
+        """
+        weeks, rows, task = self._kept_frame
+        other = replace(self, copula=copula, keep_variants=False)
+        values = other.pair(self._kept_origin, task, self._unpaired)
+        return frame(task, weeks, values, rows), other.copula_fit
+
+    def _error_scores(
+        self, origin: Origin, task: ForecastTask
+    ) -> tuple[pd.DataFrame, str | None]:
+        """Return the normal scores of the model's own earlier nowcasts.
+
+        With the reason there are none, if so.
+        """
         if origin.errors is None:
             try:
                 _add_spread(origin)
-            except (ValueError, FloatingPointError, np.linalg.LinAlgError):
-                return pd.DataFrame()
+            except (ValueError, FloatingPointError, np.linalg.LinAlgError) as e:
+                return pd.DataFrame(), f"the earlier nowcasts failed: {e}"
         errors, size = origin.errors, origin.size
         if errors is None or size is None or not errors.releases:
-            return pd.DataFrame()
+            return pd.DataFrame(), "no earlier release to score"
         snap = origin.snap
         at = {r: i for i, r in enumerate(snap.releases)}
         ages = np.array(
             [snap.cut[origin.o] - snap.cut[at[r]] for r in errors.releases]
         )
-        return error_scores(
+        scores = error_scores(
             errors.added,
             errors.remaining,
             errors.valid,
@@ -365,7 +420,9 @@ class RandomWalk:
             tuple(snap.locations),
             self.name,
             task.seed,
+            self.copula.window_weeks,
         )
+        return scores, None
 
     def snapshots(self, task: ForecastTask) -> SnapshotArrays:
         """Return the task's release snapshots as arrays.

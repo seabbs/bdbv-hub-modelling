@@ -19,6 +19,12 @@ candidate id the step script exports as `CAND_ID`. Scenarios:
   missing      the fit store has no fit at the current key (unpack
                exits 3)
   storefailed  the fit store holds a failed fit (unpack exits 4)
+  badrt        the fit's wk R_t quantiles decrease with the level (rt
+               check)
+
+A nowcast from a fit (`--fit`, the renewal candidates) also writes wk R_t
+quantiles for the reference week and the week before, as the real CLI
+does from the fit's rt.csv.gz.
 
 `fit-store unpack` writes what `fit` would, as the stored fit's
 directory, with `store.json`. `fit-store plan` lists nothing to fit.
@@ -51,6 +57,10 @@ OBSERVED = Path(
     os.environ.get("FAKE_OBSERVED", HERE / "hub" / "time-series.csv")
 )
 TARGET = "wk inc confirmed cases"
+RT_LEVELS = (
+    0.01, 0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5,
+    0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.975, 0.99,
+)  # fmt: skip
 BACK_WEEKS = 7  # weeks submitted before the reference date
 HORIZON = 3
 
@@ -395,6 +405,17 @@ def cmd_nowcast(args: argparse.Namespace) -> int:
             w.writerow(
                 [ref.isoformat(), fdate, TARGET, week, loc, "sample", s, v]
             )
+        if getattr(args, "fit", None):
+            sign = -1 if sc == "badrt" else 1
+            for loc in ["CD", *provinces]:
+                for k in (-1, 0):
+                    week = (ref + dt.timedelta(days=7 * k)).isoformat()
+                    for q in RT_LEVELS:
+                        rt = round(1.0 + sign * (q - 0.5), 4)
+                        w.writerow(
+                            [ref.isoformat(), fdate, "wk R_t", week, loc,
+                             "quantile", q, rt]
+                        )  # fmt: skip
     sidecar = {
         "schema_version": 1,
         "national": "CD",
@@ -466,8 +487,8 @@ def cmd_coherence(args: argparse.Namespace) -> int:
         "coherent": not rows,
         "streams": streams,
         "rows": rows,
-        "handling": "The fixture model fits the provinces and adds the gap "
-        "as an unassigned national component.",
+        "handling": "The fixture fits stop when the hub counts cases "
+        "nationally but in no province, and this check fails.",
     }
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(data, indent=2))

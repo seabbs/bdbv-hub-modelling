@@ -132,6 +132,11 @@ LAG_WINDOW: Final = {"weekly": (4, 16), "daily": (28, 112)}
 many before the cut-off (16 weeks, 112 days), which is also the most lags
 it reads."""
 
+FIRST_RELEASE: Final = {"weekly": 2, "daily": 7}
+"""`lag_count` reads a step only if a release falls within this many lags
+of it: a step first released later than that (before a series' first
+release) is left out, as its gap is not a reporting delay."""
+
 COUPLINGS: Final = ("online", "independent", "comonotone")
 """How a foundation model joins its cells (`FoundationModel.coupling`):
 `online` chooses and fits the coupling at each forecast
@@ -500,7 +505,7 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
 
 
 def _finetuned(
-    name: str, source: str, layout: str = "ragged"
+    name: str, source: str, layout: str = "ragged", two_step: bool = False
 ) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
 
@@ -520,6 +525,7 @@ def _finetuned(
             if Path(spec).is_dir()
             else resolve_checkpoint(spec)
         ),
+        two_step=two_step,
     )
 
 
@@ -717,7 +723,12 @@ def lag_count(
     do not bias it short (right truncation). It reads no release after
     the cut-off. A lag no release fell on carries the count of the lag
     before (weekly releases of daily data). A low-count place can only
-    underestimate its delay, so it never raises the block's. At most the
+    underestimate its delay, so it never raises the block's. A step with
+    no release within `FIRST_RELEASE[source]` lags of it was first
+    released late (before the series' first release), so it is left out;
+    if that leaves no complete step with a count but some were released
+    late, the block takes
+    `LAG_WINDOW[source][0]` lags. At most the
     history allows, two steps of context before the longest lag; a place
     whose share is not reached within the window takes that many, and so
     does a block with no complete steps or no count in them. Training
@@ -751,16 +762,22 @@ def lag_count(
     first = tri.last - back - window + 1
     if first < 0:
         return most
-    steps = list(range(first, tri.last - back + 1))
-    lags = []
+    steps = np.arange(first, tri.last - back + 1)
+    lags, late = [], False
     for p in range(tri.final.shape[0]):
-        final = tri.final[p, steps].sum()
+        cells = tri.partial[p, steps, :width]
+        released = ~np.isnan(cells[:, : FIRST_RELEASE[source]]).all(axis=1)
+        seen_later = ~np.isnan(cells).all(axis=1) & ~released
+        late |= bool((seen_later & (tri.final[p, steps] > 0)).any())
+        final = tri.final[p, steps[released]].sum()
         if final <= 0:
             continue
-        seen = pd.DataFrame(tri.partial[p, steps, :width]).ffill(axis=1)
+        seen = pd.DataFrame(cells[released]).ffill(axis=1)
         share = seen.fillna(0.0).to_numpy().sum(axis=0) / final
         reached = np.flatnonzero(share >= quantile - 1e-12)
         lags.append(int(reached[0]) + 1 if reached.size else most)
+    if not lags and late:
+        return min(window, most)
     return min(max(lags), most) if lags else most
 
 
@@ -1045,6 +1062,114 @@ def layout_block(
     }
 
 
+BLOCK_LIMIT_ENV: Final = "CHRONOS_BLOCK_LIMIT"
+"""The environment variable of `FoundationModel.block_limit`."""
+
+
+def block_views(
+    places: Sequence[str], cap: int
+) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    """Return the views of a block's places, at most `cap` places each.
+
+    Each view is its places and the places it forecasts; every place is
+    forecast by exactly one view. Within `cap`, the whole block. Over it,
+    as training's `system_views`: the country with its provinces (or, if
+    they do not fit, chunks of provinces under the country, the first
+    forecasting the country) forecasts them, and each province with as
+    many of its zones as fit forecasts those zones. Every place is its own
+    series of the task; nothing is summed. `cap` is at least 2.
+    """
+    places = tuple(places)
+    if len(places) <= cap:
+        return [(places, places)]
+    step = max(1, cap - 1)
+    zones = [
+        p for p in places if p.count("-") >= 2 and province_of(p) in places
+    ]
+    tops = [p for p in places if p not in zones]
+    country, provinces = tops[0], tops[1:]
+    out: list[tuple[tuple[str, ...], tuple[str, ...]]] = []
+    if len(tops) <= cap:
+        out.append((tuple(tops), tuple(tops)))
+    else:
+        for i in range(0, len(provinces), step):
+            chunk = tuple(provinces[i : i + step])
+            mine = (country, *chunk) if i == 0 else chunk
+            out.append(((country, *chunk), mine))
+    for province in provinces:
+        own = [z for z in zones if province_of(z) == province]
+        for i in range(0, len(own), step):
+            chunk = tuple(own[i : i + step])
+            out.append(((province, *chunk), chunk))
+    return out
+
+
+def _sub(
+    tri: HubTriangle, places: Sequence[str], view: Sequence[str]
+) -> HubTriangle:
+    """Return `tri`'s rows of the places of `view`."""
+    at = [list(places).index(p) for p in view]
+    return replace(tri, final=tri.final[at], partial=tri.partial[at])
+
+
+def _owned(
+    parts: Sequence[np.ndarray],
+    views: Sequence[tuple[tuple[str, ...], tuple[str, ...]]],
+    places: Sequence[str],
+    period: bool,
+) -> np.ndarray:
+    """Return each place's draws from the view that forecasts it.
+
+    Rows as one block of `places`: the count rows, then (with `period`)
+    the aggregate rows.
+    """
+    n, _, h = parts[0].shape
+    k = len(places)
+    out = np.zeros((n, k * (1 + period), h))
+    for (view, mine), draws in zip(views, parts, strict=True):
+        for p in mine:
+            i, j = list(places).index(p), view.index(p)
+            out[:, i] = draws[:, j]
+            if period:
+                out[:, k + i] = draws[:, len(view) + j]
+    return out
+
+
+TWO_STEP_DELAY: Final = 40
+"""The two-step model's longest delay $D$ in days, capped by the history."""
+
+
+def point_nowcast(
+    tri: HubTriangle, places: Sequence[str], task: ForecastTask
+) -> HubTriangle:
+    """Return `tri` with each place's days to the cut-off nowcast.
+
+    Each place's daily triangle at the cut-off (`round(3 * D)` days,
+    $D$ = `TWO_STEP_DELAY` capped by the history, as
+    `randomwalknowcast_daily`) is filled by baselinenowcast's point
+    nowcast, and those days of the place's counts are replaced by it.
+    """
+    from nowcastbaselines.baselinenowcast import baselinenowcast
+    from nowcastbaselines.daily import daily_triangle
+
+    history = task.daily_history
+    if history is None or history.empty:
+        raise ModelUnavailableError("the two-step model needs daily releases")
+    cutoff = as_date(str(task.cutoff)[:10])
+    at = tri.times.index(cutoff.isoformat())
+    have = (cutoff - as_date(str(history["onset_date"].min()))).days + 1
+    delay = min(TWO_STEP_DELAY, have // 3)
+    if delay < 3:
+        raise ModelUnavailableError(f"{have} days of releases are too few")
+    rows = min(3 * delay, at + 1)
+    final = tri.final.copy()
+    for i, place in enumerate(places):
+        cells, mask = daily_triangle(history, place, cutoff, rows, delay)
+        point = baselinenowcast(cells, mask, output_type="point")
+        final[i, at - rows + 1 : at + 1] = np.asarray(point, np.float64)
+    return replace(tri, final=final)
+
+
 def _walk_start(task: ForecastTask) -> str:
     """Return the earliest week `randomwalk` starts its walk from.
 
@@ -1164,6 +1289,19 @@ class FoundationModel:
     collect : list or None
         Private to `prefetch`: the groups a forecast would predict are
         added to it, and the forecast stops.
+    two_step : bool
+        The two-step model (#538's sensitivity analysis): each place's
+        daily counts to the cut-off are first replaced by baselinenowcast's
+        point nowcast (`point_nowcast`), and Chronos-2 forecasts from the
+        day after the cut-off on those corrected counts. The nowcast days
+        are the point nowcast, with no uncertainty. Complete layout, daily
+        source only.
+    block_limit : int or None
+        Most series in one block Chronos-2 predicts, the machine's block
+        capacity; a task's block over it is cut into views
+        (`block_views`), as training cuts a system over its limit. None
+        (the default) reads `CHRONOS_BLOCK_LIMIT` from the environment,
+        else no limit.
     """
 
     name: str
@@ -1181,14 +1319,23 @@ class FoundationModel:
     collect: list[tuple[Series, int]] | None = field(
         default=None, repr=False, compare=False
     )
+    block_limit: int | None = None
+    two_step: bool = False
     reads_zones: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
-        """Check the coupling is one of `COUPLINGS`."""
+        """Check the coupling; read the block limit from the environment."""
         if self.coupling not in COUPLINGS:
             raise ValueError(
                 f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
             )
+        if self.two_step and (self.layout, self.source) != (
+            "complete",
+            "daily",
+        ):
+            raise ValueError("two_step needs the complete layout, daily")
+        if self.block_limit is None and os.environ.get(BLOCK_LIMIT_ENV):
+            self.block_limit = int(os.environ[BLOCK_LIMIT_ENV])
 
     @property
     def period(self) -> str | None:
@@ -1249,7 +1396,12 @@ class FoundationModel:
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
-        if self.layout == "complete":
+        if self.two_step:
+            # Chronos-2 forecasts from the day after the cut-off, on the
+            # counts baselinenowcast's point nowcast corrects.
+            tri = point_nowcast(tri, places, task)
+            start = tri.times.index(str(task.cutoff)[:10]) + 1
+        elif self.layout == "complete":
             walk = _walk_start(task)
             if walk not in tri.times:
                 raise ModelUnavailableError(
@@ -1275,17 +1427,29 @@ class FoundationModel:
         else:
             # Zero-shot and fine-tuned models build the same block, the
             # zero-case places' lag rows included; only the weights differ.
-            group = layout_block(tri, self.layout, places, start, period)
+            # A block over the block limit is cut into views.
+            views = self._views(places, tri)
+            groups = [
+                layout_block(
+                    _sub(tri, places, view),
+                    self.layout,
+                    view,
+                    start,
+                    self._period(_sub(tri, places, view)),
+                )
+                for view, _ in views
+            ]
+            whole = len(views) == 1
             sample = self.sample
             if sample is None:
                 past = (
                     self._past_blocks(rows, places, tri, start, horizon)
-                    if self.coupling == "online"
+                    if self.coupling == "online" and whole
                     else []
                 )
                 if self.collect is not None:
                     self.collect.extend(
-                        (g, horizon) for g in [group, *(p[0] for p in past)]
+                        (g, horizon) for g in [*groups, *(p[0] for p in past)]
                     )
                     raise _CollectedError
                 sample = partial(
@@ -1301,7 +1465,12 @@ class FoundationModel:
                         as_date(str(task.vintage)[:10]).toordinal(),
                     ),
                 )
-            draws = sample([group], horizon, task.n_samples, seed)[0]
+            parts = sample(groups, horizon, task.n_samples, seed)
+            draws = (
+                parts[0]
+                if whole
+                else _owned(parts, views, places, period is not None)
+            )
             # Counts are not negative; Chronos-2's output is otherwise kept
             # as it is, not rounded.
             drawn = np.maximum(draws, 0.0)
@@ -1380,6 +1549,21 @@ class FoundationModel:
             else lag_count(full, self.source)
         )
         return replace(full, partial=full.partial[:, :, :lags])
+
+    def _views(
+        self, places: Sequence[str], tri: HubTriangle
+    ) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+        """Return the block's views under `block_limit` (`block_views`).
+
+        A place's series are its count row, its aggregate row (`period`)
+        and, for `ragged`, its lag series.
+        """
+        if not self.block_limit:
+            return [(tuple(places), tuple(places))]
+        per = 1 + (self.period is not None)
+        if self.layout == "ragged":
+            per += int(tri.partial.shape[2])
+        return block_views(places, max(2, self.block_limit // per))
 
     def lag_count(self, task: ForecastTask) -> int:
         """Return the lag count the model gives `task`'s block."""
@@ -1703,6 +1887,35 @@ for _source in SOURCES:
             f"target's {_source} releases, {_layout} layout.",
             fitted=True,
         )
+
+# The two-step sensitivity analysis (#538): baselinenowcast's point
+# nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
+register_model(
+    "fm_chronos_daily_complete_2step",
+    partial(
+        FoundationModel,
+        "fm_chronos_daily_complete_2step",
+        "daily",
+        "complete",
+        two_step=True,
+    ),
+    "baselinenowcast's point nowcast, then Chronos-2 on the corrected "
+    "daily counts, complete layout.",
+    fitted=True,
+)
+register_model(
+    "fm_chronos_daily_complete_2step_ft",
+    partial(
+        _finetuned,
+        "fm_chronos_daily_complete_2step_ft",
+        "daily",
+        "complete",
+        two_step=True,
+    ),
+    "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
+    "corrected daily counts, complete layout.",
+    fitted=True,
+)
 
 
 def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:

@@ -152,6 +152,8 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "fm_chronos_daily_ragged_ft": (6, "dashdotdot"),
     "fm_chronos_weekly_complete_ft": (5, "longdash"),
     "fm_chronos_daily_complete_ft": (5, "dashdotdot"),
+    "fm_chronos_daily_complete_2step": (5, "dotted"),
+    "fm_chronos_daily_complete_2step_ft": (5, "solid"),
     "fm_chronos_weekly_ragged_real": (6, "shortdash"),
     "fm_chronos_daily_ragged_real": (6, "longdashdot"),
 }
@@ -1919,7 +1921,8 @@ def read_submission(path: Path | str, vintage: str) -> pd.DataFrame:
     Parameters
     ----------
     path : pathlib.Path or str
-        A hub file with sample output.
+        A hub file with sample output. Rows of other output types, such
+        as the quantiles of the `wk R_t` target, are left out.
     vintage : str
         The data vintage it was made from.
 
@@ -1929,7 +1932,8 @@ def read_submission(path: Path | str, vintage: str) -> pd.DataFrame:
         Columns `model` (`"submission"`), `vintage`, `reference_date`,
         `location`, `target_end_date`, `sample` and `value`.
     """
-    table = pd.read_csv(path)
+    table = pd.read_csv(path, dtype={"output_type_id": str})
+    table = table.loc[table["output_type"] == "sample"]
     return pd.DataFrame(
         {
             "model": "submission",

@@ -76,6 +76,8 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "fm_chronos_daily_complete",
         "fm_chronos_daily_ragged",
         "fm_chronos_daily_ragged_ft",
+        "fm_chronos_daily_complete_2step",
+        "fm_chronos_daily_complete_2step_ft",
     )
     assert config.truth_delay == 40
     assert config.submissions
@@ -417,8 +419,9 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
         for (loc, age), counts in places.items()
     ).reset_index(drop=True)
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Extrapolate())
+    # Germany is daily only: every model forecasts every target day.
     drawn = germany_forecasts(
-        ["fm_chronos_daily_ragged", "fm_chronos_weekly_ragged"],
+        ["fm_chronos_daily_ragged"],
         triangle,
         ["2021-01-06"],
         n_samples=10,
@@ -440,10 +443,7 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
         count[p].loc[e - pd.Timedelta(days=6) : e].sum()
         for p, e in zip(scores["location"], end, strict=True)
     ]
-    assert set(scores["model"]) == {
-        "fm_chronos_daily_ragged",
-        "fm_chronos_weekly_ragged",
-    }
+    assert set(scores["model"]) == {"fm_chronos_daily_ragged"}
     assert set(scores["horizon"]) == set(HORIZONS)
     assert (
         end
@@ -759,3 +759,25 @@ def test_daily_rows_take_the_day_s_truth_and_7day_rows_the_sum_s(
         "daily": 5.0,
     }
     assert calls["daily"] == ["2021-10-04"]
+
+
+def test_the_truth_context_runs_from_plot_start_for_both_views(
+    triangle: pd.DataFrame,
+) -> None:
+    # The plots' truth before the first nowcast date: daily counts and
+    # 7-day sums, as reported the truth delay after each day.
+    import dataclasses
+
+    from nowcastgermany import evaluation as de
+
+    config = dataclasses.replace(
+        load_germany_config(ROOT / "config" / "germany.toml"),
+        plot_start="2021-09-01",
+        first_date="2021-10-04",
+        truth_delay=10,
+    )
+    out = de.truth_context(triangle, config)
+    assert set(out["target"]) == {"7day", "daily"}
+    assert out["target_end_date"].min() == "2021-09-01"
+    assert out["target_end_date"].max() <= "2021-10-10"
+    assert {"location", "truth", "truth_vintage"} <= set(out.columns)

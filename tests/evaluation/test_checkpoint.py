@@ -83,17 +83,13 @@ def test_run_of_a_checkpoint(settings, run):
     assert ck.run_of(settings) == run
 
 
-def test_outbreaks_and_grid_from_settings_or_release_text():
-    assert ck.outbreaks_and_grid({"n_outbreaks": 500, "grid": "r5"}, {}) == (
+def test_outbreaks_and_grid_come_from_settings_only():
+    # A checkpoint's settings.json holds both; release text is not read.
+    assert ck.outbreaks_and_grid({"n_outbreaks": 500, "grid": "r5"}) == (
         500,
         "r5",
     )
-    release = {
-        "name": "x",
-        "body": "trained on 2,000 simulated outbreaks, round 4",
-    }
-    assert ck.outbreaks_and_grid({}, release) == (2000, "r4")
-    assert ck.outbreaks_and_grid({}, {}) == (0, "unknown")
+    assert ck.outbreaks_and_grid({}) == (0, "unknown")
 
 
 def _scores(models, checkpoints, levels, base=1.0):
@@ -212,7 +208,7 @@ def test_the_cli_names_its_units():
         ck.main(["nope", "cache"])
 
 
-def test_release_unit_writes_settings_and_release(tmp_path, monkeypatch):
+def test_release_unit_writes_settings_only(tmp_path, monkeypatch):
     def fake(cmd, **_kw):
         class Out:
             stdout = json.dumps({"name": "n", "body": "b"})
@@ -228,7 +224,8 @@ def test_release_unit_writes_settings_and_release(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "heldout" / "abc.json").read_text()) == {
         "grid": "r5"
     }
-    assert (tmp_path / "heldout" / "abc-release.json").exists()
+    # Release text is not read: settings.json holds what the tables use.
+    assert not (tmp_path / "heldout" / "abc-release.json").exists()
 
 
 def test_release_unit_merges_an_offloaded_release_s_held_out_losses(
@@ -260,10 +257,6 @@ def test_release_unit_merges_an_offloaded_release_s_held_out_losses(
     ck.release_unit(tmp_path, "abc")
     got = json.loads((tmp_path / "heldout" / "abc.json").read_text())
     assert got == {"grid": "r6", "held_out_loss": 0.2}
-    release = json.loads(
-        (tmp_path / "heldout" / "abc-release.json").read_text()
-    )
-    assert release == {"name": "n", "body": "b"}
 
 
 def test_cached_draws_keep_the_7day_target(tmp_path):
@@ -424,6 +417,7 @@ def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
     monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
     monkeypatch.setattr(de, "germany_forecasts", forecasts)
     monkeypatch.setattr(de, "with_truth", lambda fc, *_a: fc)
+    monkeypatch.setattr(de, "truth_context", lambda *_a: pd.DataFrame())
     monkeypatch.setattr(ck, "record_precision", lambda _root: None)
     monkeypatch.setattr(ck, "_free", lambda: None)
     monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: Path(TASKS))
@@ -713,22 +707,19 @@ def test_a_checkpoint_unit_keys_its_dates_on_the_task_store_alone(
     assert seen == []
 
 
-def test_development_starts_at_the_first_date_with_every_hub_target() -> None:
-    # The triangle starts 2021-04-06; 2021-05-10 is the first nowcast date
-    # whose oldest 7-day sum (28 days back) starts on a data day. Hub teams
-    # stay compared from the first hub date only.
+def test_scores_are_the_hub_window_and_plots_start_earlier() -> None:
+    # German nowcast dates are the hub's submission window in the
+    # development half; the plots' truth starts at plot_start as context.
     from nowcastgermany import evaluation as de
 
     config = de.load_germany_config("config/germany.toml")
-    assert config.development_start == "2021-05-10"
-    dates = de.development_dates(config)
-    assert dates[0] == "2021-05-10"
-    assert dates[-1] < config.split_date
-    assert len(dates) == 196 + len(de.nowcast_dates(config))
-    assert de.nowcast_dates(config)[0] == config.first_date == "2021-11-22"
+    assert config.plot_start == "2021-05-10"
+    assert not hasattr(de, "development_dates")
+    dates = de.nowcast_dates(config)
+    assert (dates[0], dates[-1]) == ("2021-11-22", "2022-02-09")
 
 
-def test_a_german_unit_forecasts_the_earlier_development_dates(
+def test_a_german_unit_forecasts_only_the_hub_window(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from nowcastgermany import evaluation as de
@@ -738,4 +729,4 @@ def test_a_german_unit_forecasts_the_earlier_development_dates(
     ck.germany_unit(tmp_path, "n100")
     config = de.load_germany_config("config/germany.toml")
     done = [d for dates, *_ in seen for d in dates]
-    assert done == de.development_dates(config)
+    assert done == de.nowcast_dates(config)

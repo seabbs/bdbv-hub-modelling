@@ -165,3 +165,22 @@ def test_the_horizon_split_draws_a_visible_bar_for_every_value():
     assert min(wk4) > max(now)
     js = (PAGE / "nowcasts.js").read_text()
     assert "groupedBars(" in js
+
+
+def test_the_audit_s_panel_fixes_are_in_place():
+    # dash-audit rows 2, 3, 4, 6 and 7: a caption per target, one truth
+    # caption, the legend only of models drawn, interim checkpoints marked
+    # on their chips, and round tick steps on the WIS-by-day axis.
+    import yaml
+
+    config = yaml.safe_load((PAGE.parents[2] / "config.yaml").read_text())
+    germany = next(
+        d for d in config["dashboard"]["datasets"] if d["key"] == "germany"
+    )
+    assert set(germany["target"]) == {"7day", "daily"}
+    assert "daily" in germany["target"]["daily"]
+    assert "latest vintage" not in germany["truth"]
+    js = (PAGE / "nowcasts.js").read_text()
+    assert "id=gleg" in js
+    assert "interim" in js
+    assert "function niceTicks(" in js

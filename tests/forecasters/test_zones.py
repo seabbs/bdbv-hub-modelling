@@ -437,6 +437,7 @@ def test_zone_walk_models_are_their_own_zone_draws(
     }
 
 
+@pytest.mark.slow
 def test_zone_values_follow_the_zone_model_not_the_shares(
     task: ForecastTask,
     counts: pd.DataFrame,

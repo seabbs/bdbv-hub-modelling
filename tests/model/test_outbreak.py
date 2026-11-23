@@ -54,6 +54,7 @@ def sim() -> tuple[pd.DataFrame, dict, dict, int]:
     return _sim(818)
 
 
+@pytest.mark.slow
 def test_one_trace_holds_the_latent_step_and_the_reporting(sim) -> None:
     strata, design, values, n_days = sim
     with (
