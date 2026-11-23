@@ -5,8 +5,9 @@ rounded up to `BUCKET`, so that series of near lengths share compiled
 shapes. Timings refer to the series' own length (`horizon`), the run is
 causal and its draws are days first, so cropped to the series it is the
 run without padding: each timed component bitwise, whole latent runs to
-1e-12 (XLA may round a longer array's ops differently in the last bit)
-and the counts of whole simulations exactly.
+1e-12 (XLA may round a longer array's ops differently in the last bit),
+whole simulations' expected reports to 1e-12, and their counts in
+distribution (the padded triangle moves which draw lands in which cell).
 """
 
 from __future__ import annotations
