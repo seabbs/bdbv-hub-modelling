@@ -209,6 +209,8 @@ dashboard:
   # of the national count is reported, leaving out truth_skip releases).
   # source: the per-checkpoint forecast folders (default: SCORE_CACHE/<key>;
   # a local file can name a "host:path"). targets: those shown, or all.
+  # sources: the model inputs shown (daily, weekly), or all. target: a
+  # line under the panels saying what every model forecasts.
   # truth: the truth line's caption ({delay} is D for samples datasets).
   datasets:
     - key: germany
@@ -216,6 +218,12 @@ dashboard:
       format: quantiles
       metric: WIS
       truth: latest vintage of the forecast files
+      # Germany is daily only (config/germany.toml): its models take the
+      # daily releases and forecast the hub's 7-day rolling sums.
+      sources: [daily]
+      target: >-
+        the hub's 7-day rolling sums of hospitalisations by date of
+        report to the health office, truth as reported 40 days later
       groups:
         - {name: national, match: "^DE$"}
         - {name: states, match: "^DE-"}

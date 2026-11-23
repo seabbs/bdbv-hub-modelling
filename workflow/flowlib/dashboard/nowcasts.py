@@ -300,8 +300,12 @@ def build(
     excluded: Iterable[str] = (),
     files: dict | None = None,
     order: Sequence[tuple[str, str]] = (),
+    sources: Iterable[str] | None = None,
 ) -> dict[str, Any] | None:
     """Return every location's nowcasts by series, target, source, origin.
+
+    `sources` are the model inputs shown (a dataset's `sources`, such as
+    Germany's daily only); None shows every input.
 
     `files` keeps each file's computed rows (`digest`) by its time and
     size, so a rebuild reads and computes only new or changed files.
@@ -315,6 +319,7 @@ def build(
         return None
     files = {} if files is None else files
     which = Classifier(run_list, references, excluded)
+    keep = None if sources is None else set(sources)
     picks = [SEVEN.index(f"{lv:g}") for lv in levels]
     series: dict = {}
     score: dict = {}
@@ -342,6 +347,8 @@ def build(
                 rows = read_file(path, folder.name, which)
                 files[str(path)] = (key, digest(rows, picks, origin))
             for loc, sid, src, tgt, entry, seen, last in files[str(path)][1]:
+                if keep is not None and src not in keep:
+                    continue
                 targets.add(tgt)
                 for day, (vintage, y) in seen.items():
                     known = truth.setdefault(loc, {}).setdefault(tgt, {})
@@ -413,10 +420,12 @@ def cached_build(
     levels: Sequence[float] = PAGE_LEVELS,
     excluded: Iterable[str] = (),
     order: Sequence[tuple[str, str]] = (),
+    sources: Iterable[str] | None = None,
 ) -> dict[str, Any] | None:
     """Return `build`'s result, reused while no file of the folder changes."""
     cache = Path(cache)
-    sig = (_signature(cache) if cache.is_dir() else None, tuple(levels))
+    shown = None if sources is None else tuple(sorted(sources))
+    sig = (_signature(cache) if cache.is_dir() else None, tuple(levels), shown)
     if store.get("sig") != sig or "built" not in store:
         store["built"] = build(
             cache,
@@ -426,6 +435,7 @@ def cached_build(
             excluded,
             store.setdefault("files", {}),
             order,
+            shown,
         )
         store["sig"] = sig
     return store["built"]

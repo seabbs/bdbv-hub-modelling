@@ -204,7 +204,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
     assert "id=ldata" in out
     assert "id=bdata" in out
     assert "id=seldata" in out
-    assert '<option value="daily" selected>daily</option>' in out
+    assert '<option value="daily" selected>daily counts</option>' in out
     # No hard-coded runs.
     assert "no slots" not in out
 

@@ -132,7 +132,7 @@ function plots(){
  Promise.all(S.locs.map(load)).then(function(all){
   var miss={},h='<div class=panels style="grid-template-columns:repeat('+(small?"auto-fit,minmax(260px,1fr)":"1,1fr")+')">';
   all.forEach(function(d,i){h+='<div>'+(small?'<h4>'+S.locs[i]+'</h4>':"")+'<div class=gp></div></div>'});
-  h+='</div>'+legend(eff,ds)+'<p class=mut>Truth: '+C.truth+'.</p>';
+  h+='</div>'+legend(eff,ds)+(C.target?'<p class=mut>Target: '+C.target+'.</p>':'')+'<p class=mut>Truth: '+C.truth+'.</p>';
   $("gplot").innerHTML=h;
   // draw each panel at its rendered width so the SVG maps 1:1 to pixels
   // Full screen (expand.js): the panels share the view's height.
