@@ -395,11 +395,19 @@ def test_rt_quantiles_give_the_hub_levels_by_infection_week(
         assert group["value"].is_monotonic_increasing
     # National pools the provinces' draws one by one, weighted by their
     # infections: not a mix of their quantiles.
-    date = task.target_end_dates[0]
-    a, b = (runs[loc].draws["rt"] for loc in task.locations[:2])
-    i = (epiweek_end(date) - (a["start"] + dt.timedelta(days=6))).days // 7
-    wa, wb = a["weight"][:, i, 0], b["weight"][:, i, 0]
-    joint = (wa * a["rt"][:, i, 0] + wb * b["rt"][:, i, 0]) / (wa + wb)
+    # Each fit has its own axis, so each takes its own week of the date.
+    date = task.target_end_dates[-1]
+    a, b = (
+        {
+            k: v[:, (epiweek_end(date) - r["start"]).days // 7, 0]
+            for k, v in r.items()
+            if k != "start"
+        }
+        for r in (runs[loc].draws["rt"] for loc in task.locations[:2])
+    )
+    joint = (a["weight"] * a["rt"] + b["weight"] * b["rt"]) / (
+        a["weight"] + b["weight"]
+    )
     nat = out.loc[
         (out["location"] == NATIONAL)
         & (out["target_end_date"] == date)
