@@ -184,7 +184,7 @@ score:
   branch: checkpoint-scoring
 
 hub_rounds:
-  # The hub rounds report (rules/hub.smk): our last this many submitted
+  # The hub rounds report (rules/report.smk): our last this many submitted
   # rounds against every hub team.
   rounds: 4
 

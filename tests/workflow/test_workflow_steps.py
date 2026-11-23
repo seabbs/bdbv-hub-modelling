@@ -26,6 +26,11 @@ REPORTS = {
     "sim_reports",
     "german_report",
     "benchmarks",
+    "hub_data",
+    "hub_submissions_table",
+    "hub_comparison",
+    "hub_rounds_report",
+    "hub_rounds",
 }
 
 

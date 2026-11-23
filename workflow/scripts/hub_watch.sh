@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuild the hub rounds report (`hub_rounds`, rules/hub.smk) when the
+# Rebuild the hub rounds report (`hub_rounds`, rules/report.smk) when the
 # hub's data change. Checks the hub's target-data/time-series.csv commit
 # every POLL seconds (default 600); when it differs from
 # <ROOT>/hub/head.txt it writes it there, which reruns the report's
