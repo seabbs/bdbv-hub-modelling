@@ -158,6 +158,10 @@ _SUBMISSION: Final = (
 _RKI_ERROR: Final = 1e6
 """RKI quantiles above this are errors, which the paper replaced."""
 
+TARGETS: Final = ("7day", "daily")
+"""The German views: the hub's 7-day rolling sums, and each day's count,
+each scored on its truth as reported $D$ days after it ends."""
+
 _KEYS = ("model", "target", "origin", "truth_vintage", "location")
 """Columns that, with the week, identify a scored forecast."""
 
@@ -196,6 +200,9 @@ class GermanyConfig:
         Models switched off on the page until the reader switches them on.
     plot_every : int
         The nowcast plots show every this many development dates.
+    targets : tuple of str
+        The views the checkpoint units forecast: `7day`, the hub's 7-day
+        rolling sums, and `daily`, each day's count (`TARGETS`).
     horizons : tuple of int
         Days from the nowcast date to the end of each 7-day sum the
         checkpoint units forecast: `forecast_days` ahead down to the hub's
@@ -221,6 +228,7 @@ class GermanyConfig:
     plot_every: int
     held_out_models: tuple[str, ...] = ()
     horizons: tuple[int, ...] = HORIZONS
+    targets: tuple[str, ...] = ("7day",)
 
 
 def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
@@ -292,6 +300,7 @@ def load_germany_config(
         horizons=tuple(
             range(int(now.get("forecast_days", 0)), min(HORIZONS) - 1, -1)
         ),
+        targets=tuple(now.get("targets", ("7day",))),
     )
 
 
@@ -455,6 +464,7 @@ def germany_forecasts(
     horizons: Sequence[int] = HORIZONS,
     max_delay: int | None = None,
     timings: list[dict[str, Any]] | None = None,
+    targets: Sequence[str] = ("7day",),
 ) -> pd.DataFrame:
     """Nowcast each date with each model, as quantiles at the hub's levels.
 
@@ -489,11 +499,17 @@ def germany_forecasts(
         `origin`, `stage` (`forecast`) and `seconds`; and one for each
         Chronos-2 model's batched pass over every date (`stage`
         `prefetch`, `origin` empty).
+    targets : sequence of str
+        Views of `TARGETS` to forecast. `daily` rows are each day's count,
+        from the offset-0 tasks only so each day is forecast once, as a
+        model's own quantiles of its daily count rows
+        (`FoundationModel.daily_quantiles`); a model without them gives
+        none.
 
     Returns
     -------
     pandas.DataFrame
-        One row per quantile: `model`, `origin` (the nowcast date),
+        One row per quantile: `model`, `target`, `origin` (the nowcast date),
         `location` (the place), `target_end_date`, `horizon` (days),
         `quantile` and `value`, at `FORECAST_LEVELS`
         (`nowcasteval.marginals.forecast_quantiles`).
@@ -520,7 +536,10 @@ def germany_forecasts(
         # The loop pops each date's tasks, which frees them only once this
         # list no longer holds them.
         del every
-    keys = ["model", "origin", "location", "target_end_date", "horizon"]
+    keys = [
+        "model", "target", "origin", "location", "target_end_date", "horizon"
+    ]  # fmt: skip
+    daily = "daily" in targets
     frames = []
     for date in dates:
         mine = tasks.pop(date, None)
@@ -547,8 +566,11 @@ def germany_forecasts(
                             "forecast_date": "origin",
                             "sample": "quantile",
                         }
-                    )
+                    ).assign(target="7day")
                 )
+        if daily:
+            # The first two tasks are offset 0's (states, then ages).
+            frames += _daily_rows(models, built, mine[:2], date)
         if timings is not None:
             timings += [
                 {"model": m, "origin": date, "stage": "forecast", "seconds": t}
@@ -560,6 +582,97 @@ def germany_forecasts(
     return out.sort_values([*keys, "quantile"], kind="stable")[
         [*keys, "quantile", "value"]
     ].reset_index(drop=True)
+
+
+def _daily_rows(
+    models: Sequence[str],
+    built: Sequence[Any],
+    tasks: Sequence[ForecastTask],
+    date: str,
+) -> list[pd.DataFrame]:
+    """Return each model's own daily count quantiles of `tasks`."""
+    out = []
+    for name, model in zip(models, built, strict=True):
+        own = getattr(model, "daily_quantiles", None)
+        if own is None:
+            continue
+        for task in tasks:
+            at = own(task, FORECAST_LEVELS)
+            if at is None or at.empty:
+                continue
+            rows = at.rename(
+                columns={"date": "target_end_date", "quantile": "sample"}
+            ).assign(model=name, as_of=np.nan)
+            moved = hub_forecasts(rows, task, date)
+            out.append(
+                moved.rename(
+                    columns={"forecast_date": "origin", "sample": "quantile"}
+                ).assign(target="daily")
+            )
+    return out
+
+
+def daily_truth(
+    triangle: pd.DataFrame, days: Sequence[str], truth_delay: int
+) -> pd.DataFrame:
+    """Return each place's count of each day as reported $D$ days later.
+
+    Parameters
+    ----------
+    triangle : pandas.DataFrame
+        Counts by Meldedatum and report date.
+    days : sequence of str
+        The days.
+    truth_delay : int
+        $D$.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `location` (each place of `PLACE_NAMES`), `target_end_date` (the
+        day), `truth` and `truth_vintage` (the day plus $D$); `truth` is
+        missing where the data hold no report that late.
+    """
+    places = triangle["location"].where(
+        triangle["age_group"] == ALL_AGES, triangle["age_group"]
+    )
+    keep = places.isin(set(PLACE_NAMES)) & (
+        (triangle["age_group"] == ALL_AGES) | (triangle["location"] == GERMANY)
+    )
+    rows = within_delay(
+        triangle.loc[keep & triangle["reference_date"].isin(set(days))],
+        truth_delay,
+    )
+    last = rows.sort_values("report_date").drop_duplicates(
+        ["location", "age_group", "reference_date"], keep="last"
+    )
+    owner = last["location"].where(
+        last["age_group"] == ALL_AGES, last["age_group"]
+    )
+    counts = dict(
+        zip(
+            zip(owner, last["reference_date"], strict=True),
+            last["confirm"].astype(float),
+            strict=True,
+        )
+    )
+    final = str(triangle["report_date"].max())
+    out = []
+    for place in sorted(set(places.loc[keep])):
+        for day in days:
+            by = dt.date.fromisoformat(day) + dt.timedelta(days=truth_delay)
+            seen = by.isoformat() <= final
+            out.append(
+                (
+                    place,
+                    day,
+                    counts.get((place, day), 0.0) if seen else np.nan,
+                    by.isoformat(),
+                )
+            )
+    return pd.DataFrame(
+        out, columns=["location", "target_end_date", "truth", "truth_vintage"]
+    )
 
 
 def with_truth(
@@ -582,13 +695,27 @@ def with_truth(
         `forecasts` with `truth` and `truth_vintage` (the report date of
         the truth), missing for sums with no data $D$ days after them.
     """
-    ends = sorted(set(forecasts["target_end_date"]))
-    if not ends:
-        return forecasts.assign(truth=np.nan, truth_vintage=None)
-    truth = rolling_truth(hub_target(triangle, ends), truth_delay)
-    return forecasts.merge(
-        truth, on=["location", "target_end_date"], how="left"
+    on = ["location", "target_end_date"]
+    daily = (
+        forecasts["target"] == "daily"
+        if "target" in forecasts
+        else pd.Series(False, index=forecasts.index)
     )
+    parts = []
+    sums = forecasts.loc[~daily]
+    ends = sorted(set(sums["target_end_date"]))
+    if ends:
+        truth = rolling_truth(hub_target(triangle, ends), truth_delay)
+        parts.append(sums.merge(truth, on=on, how="left"))
+    days = forecasts.loc[daily]
+    if not days.empty:
+        truth = daily_truth(
+            triangle, sorted(set(days["target_end_date"])), truth_delay
+        )
+        parts.append(days.merge(truth, on=on, how="left"))
+    if not parts:
+        return forecasts.assign(truth=np.nan, truth_vintage=None)
+    return pd.concat(parts, ignore_index=True)
 
 
 def score_germany(forecasts: pd.DataFrame, truth_delay: int) -> pd.DataFrame:

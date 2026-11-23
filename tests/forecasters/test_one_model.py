@@ -341,3 +341,44 @@ def test_the_pipeline_interpolates_to_the_hub_levels_itself(monkeypatch):
         out[:, 0, :], np.arange(3)[None, :] + np.array(hub)[:, None]
     )
     assert "np.interp" not in Path(foundation.__file__).read_text()
+
+
+def test_daily_counts_are_the_count_rows_native_quantiles(
+    ft: FoundationModel, task: ForecastTask, monkeypatch
+) -> None:
+    # Path k of the native sampler is the quantile at level k: each day
+    # past the context takes its count row's own quantile, from the same
+    # block as the 7-day sums.
+    store: list = []
+
+    def native(levels, _checkpoint=None, _known=None):
+        def sample(groups, horizon, n, _seed):
+            assert n == len(levels)
+            out = []
+            for g in groups:
+                store.append(g)
+                v = np.atleast_2d(g["target"]).shape[0]
+                paths = np.arange(1, n + 1, dtype=float)[:, None, None]
+                out.append(np.broadcast_to(paths, (n, v, horizon)).copy())
+            return out
+
+        return sample
+
+    monkeypatch.setattr(foundation, "native_sampler", native)
+    levels = [0.1, 0.5, 0.9]
+    out = ft.daily_quantiles(task, levels)
+    assert out is not None
+    assert list(out.columns) == ["location", "date", "quantile", "value"]
+    group = store[0]
+    tri = foundation.hub_triangle(
+        task.daily_history, "daily", group["places"], task.target_end_dates[-1]
+    )
+    late = out.loc[out["date"].isin(set(tri.times[tri.n_context :]))]
+    assert not late.empty
+    want = late["quantile"].map({q: k + 1.0 for k, q in enumerate(levels)})
+    np.testing.assert_array_equal(late["value"], want)
+    # A model with no aggregate rows has no own daily quantiles.
+    assert (
+        get_model("fm_chronos_daily_complete").daily_quantiles(task, levels)
+        is None
+    )

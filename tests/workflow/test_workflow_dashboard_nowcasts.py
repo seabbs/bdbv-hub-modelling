@@ -332,3 +332,71 @@ def test_a_run_s_own_score_folders_are_its_checkpoints(tmp_path):
     assert "abc123def456" in built["sets"]
     assert "rw" in built["sets"]
     assert built["folders"]["abc123def456"] == "runa-abc123def456"
+
+
+def test_plotted_truth_is_the_raw_count_in_both_german_views(tmp_path):
+    # The page's truth for the 7-day sums and for the daily counts, from a
+    # unit file, equals what the hub triangle's rows give directly: each
+    # day's count as reported `delay` days after the view's end day.
+    import datetime as dt
+    from pathlib import Path
+
+    import pandas as pd
+
+    from nowcastgermany.data import read_triangle
+    from nowcastgermany.evaluation import with_truth
+
+    fixture = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "germany"
+        / "germany_covid19_hosp.csv.gz"
+    )
+    triangle = read_triangle(fixture)
+    delay, ends = 10, ["2021-09-20", "2021-09-27"]
+    fc = pd.DataFrame(
+        [
+            {
+                "model": "fm_chronos_daily_ragged",
+                "target": target,
+                "origin": "2021-10-01",
+                "location": "DE",
+                "target_end_date": end,
+                "horizon": 0,
+                "quantile": float(q),
+                "value": 1.0,
+            }
+            for target in ("7day", "daily")
+            for end in ends
+            for q in SEVEN
+        ]
+    )
+    unit = tmp_path / "reference" / "2021-10-01.csv.gz"
+    unit.parent.mkdir(parents=True)
+    with_truth(fc, triangle, delay).to_csv(unit, index=False)
+
+    def raw(day: str, by: str) -> float:
+        rows = triangle.loc[
+            (triangle["location"] == "DE")
+            & (triangle["age_group"] == "00+")
+            & (triangle["reference_date"] == day)
+            & (triangle["report_date"] <= by)
+        ]
+        return float(rows.sort_values("report_date")["confirm"].iloc[-1])
+
+    def back(end: str, k: int) -> str:
+        return (dt.date.fromisoformat(end) - dt.timedelta(days=k)).isoformat()
+
+    def by(end: str) -> str:
+        return (
+            dt.date.fromisoformat(end) + dt.timedelta(days=delay)
+        ).isoformat()
+
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
+    truth = nowcasts.location(built, "DE")["truth"]
+    assert truth["daily"] == {"t": ends, "y": [raw(e, by(e)) for e in ends]}
+    assert truth["7day"] == {
+        "t": ends,
+        "y": [sum(raw(back(e, k), by(e)) for k in range(7)) for e in ends],
+    }

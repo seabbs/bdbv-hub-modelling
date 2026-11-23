@@ -351,7 +351,12 @@ def main(argv: Sequence[str]) -> None:
     if not files:
         raise SystemExit(f"no cached rows in {unit}")
     rows = pd.concat([pd.read_csv(f, dtype=dtype) for f in files])
-    rows = rows.dropna(subset=["truth"])
+    # The unit's forecast days (horizon > 0) are for the page: the
+    # coupling is scored on the hub's nowcast cells.
+    rows = rows.loc[rows["horizon"] <= 0].dropna(subset=["truth"])
+    # The daily counts are another view: the coupling is on the 7-day sums.
+    if "target" in rows:
+        rows = rows.loc[rows["target"].fillna("7day") == "7day"]
     scores = coupling_scores(rows)
     scores_out.parent.mkdir(parents=True, exist_ok=True)
     scores.round(6).to_csv(scores_out, index=False)
