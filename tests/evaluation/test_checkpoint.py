@@ -424,6 +424,7 @@ def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
     monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
     monkeypatch.setattr(de, "germany_forecasts", forecasts)
     monkeypatch.setattr(de, "with_truth", lambda fc, *_a: fc)
+    monkeypatch.setattr(de, "truth_context", lambda *_a: pd.DataFrame())
     monkeypatch.setattr(ck, "record_precision", lambda _root: None)
     monkeypatch.setattr(ck, "_free", lambda: None)
     monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: Path(TASKS))

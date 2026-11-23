@@ -412,6 +412,9 @@ def german_tasks_dir(
     return Path(cache) / GERMANY_UNIT / f"tasks-{h.hexdigest()[:12]}"
 
 
+TRUTH_FILE: Final = "truth.csv.gz"
+"""The German truth the plots show (`evaluation.truth_context`)."""
+
 WRITTEN_FILE: Final = "written.tsv"
 """A unit folder's record of each date and model written, with its key."""
 
@@ -507,7 +510,12 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     root = cache / GERMANY_UNIT / label
     root.mkdir(parents=True, exist_ok=True)
     record_precision(root)
-    dates = de.development_dates(config)
+    dates = de.nowcast_dates(config, held_out=False)
+    # The plots' truth from `plot_start`, shared by every unit.
+    _write(
+        de.truth_context(triangle, config),
+        cache / GERMANY_UNIT / TRUTH_FILE,
+    )
     last = max(config.horizons)
     models = list(label_models(label, layout=segment_layout(segment)))
     # A date's rows are kept only if forecast from this task store: the
