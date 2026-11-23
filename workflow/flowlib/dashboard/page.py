@@ -262,7 +262,8 @@ def live_status(
         points.append(status)
         if step is None or status[1] > step:
             step = int(status[1])
-    rate, span = training.recent_rate(points)
+    since = training.resumed_at(folder) if folder else None
+    rate, span = training.recent_rate(points, since=since)
     sims_rate = None
     if rate and span and sims:
         newest = max(points)
