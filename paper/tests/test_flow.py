@@ -313,14 +313,14 @@ def test_the_evidence_reads_the_workflow_rules_outputs() -> None:
     flow = _flow()
     files = flow.workflow_evidence()
     rounds = CONFIG["rounds_dir"]
-    assert files["finetune_heldout"] == (
-        f"{CONFIG['final_run']}/heldout-curve.csv"
+    assert files["finetune_validation"] == (
+        f"{CONFIG['final_run']}/validation-curve.csv"
     )
     assert files["sim_diseases"] == f"{rounds}/report/sim-diseases.csv"
     assert files["sim_summaries"].endswith("evidence/sim-summaries.csv")
     assert files["sim_realism"].endswith("evidence/sim-realism.csv")
     args = flow.options(files)
-    assert f"--finetune-heldout {files['finetune_heldout']}" in args
+    assert f"--finetune-validation {files['finetune_validation']}" in args
     assert _flow(final_run=None).workflow_evidence().keys() == {
         "si_copula",
         "copula_rho",

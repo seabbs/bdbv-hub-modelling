@@ -518,6 +518,7 @@ def test_reporting_delay_is_the_first_age_with_the_level_reported() -> None:
     )
 
 
+@pytest.mark.slow
 def test_complete_target_has_no_week_before_a_release_d_days_on(
     target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
 ) -> None:

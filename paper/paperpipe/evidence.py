@@ -10,7 +10,7 @@ waits on in place of its table, and `None` in place of its numbers.
 - `copula_figure`: the rolling copula against no pairing, by study and
   level.
 - `rho_medians`: the median rolling rho_p of each walk model.
-- `heldout_figure` and `realism_figure`: the fine-tune's held-out loss
+- `validation_figure` and `realism_figure`: the fine-tune's validation loss
   and the simulated outbreaks against the data and published values.
 """
 
@@ -48,13 +48,13 @@ __all__ = [
     "copula_figure",
     "diseases_table",
     "drop_bdbv",
-    "heldout_figure",
     "live_numbers",
     "realism_figure",
     "realism_numbers",
     "realism_reference",
     "rho_medians",
     "slots_summary",
+    "validation_figure",
     "waiting",
     "write_evidence",
 ]
@@ -112,8 +112,9 @@ def checkpoint_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
     return out.loc[keep].reset_index(drop=True)
 
 
-HELDOUT_LEVELS: Final = ("national", "intermediate", "leaf")
-"""Levels of the trainer's held-out loss, each reported on its own."""
+VALIDATION_LEVELS: Final = ("national", "intermediate", "leaf")
+"""Levels of the trainer's validation loss (study `held_out` in the score
+tables), each reported on its own."""
 
 COMPARISONS: Final = {
     "slots": (
@@ -139,7 +140,7 @@ def comparison_rows(
 ) -> pd.DataFrame:
     """Return the live run and a variant, by checkpoint.
 
-    Sets are, one per level, the trainer's held-out loss and the relative
+    Sets are, one per level, the trainer's validation loss and the relative
     scores of each model on the German first half,
     in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
     `score`). `labels` name `run` and `other`. Empty while `other` has no
@@ -151,12 +152,12 @@ def comparison_rows(
         return pd.DataFrame(columns=["set", "run", "outbreaks", "score"])
     rows = rows.loc[rows["run"].isin(names) & (rows["outbreaks"] > 0)]
     loss = rows.loc[
-        (rows["study"] == "held_out") & rows["level"].isin(HELDOUT_LEVELS)
+        (rows["study"] == "held_out") & rows["level"].isin(VALIDATION_LEVELS)
     ]
     out = [
         pd.DataFrame(
             {
-                "set": "Held-out loss, " + loss["level"],
+                "set": "Validation loss, " + loss["level"],
                 "run": loss["run"].map(names),
                 "outbreaks": loss["outbreaks"],
                 "score": loss["loss"],
@@ -359,10 +360,10 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     return fig
 
 
-def heldout_figure(curve: pd.DataFrame) -> Figure:
-    """Plot held-out loss against the outbreaks seen.
+def validation_figure(curve: pd.DataFrame) -> Figure:
+    """Plot validation loss against the outbreaks seen.
 
-    One line per run and set of held-out blocks (`blocks`), as losses on
+    One line per run and set of validation blocks (`blocks`), as losses on
     different blocks do not compare.
     """
     fig, ax = plt.subplots(figsize=(6, 3.6), layout="constrained")
@@ -370,13 +371,13 @@ def heldout_figure(curve: pd.DataFrame) -> Figure:
         g = g.sort_values("outbreaks_seen")
         ax.plot(
             g["outbreaks_seen"],
-            g["heldout_loss"],
+            g["validation_loss"],
             marker="o",
             ms=3,
             label=f"{run}, {blocks}",
         )
     ax.set_xlabel("Simulated outbreaks seen")
-    ax.set_ylabel("Held-out loss")
+    ax.set_ylabel("Validation loss")
     ax.legend(frameon=False, fontsize=8)
     return fig
 
@@ -519,7 +520,7 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 EVIDENCE: Final = {
     "si_copula": "the walks' scores, no pairing against rolling rho_p",
     "copula_rho": "the walk models' German rho_p by nowcast date",
-    "finetune_heldout": "the final run's held-out loss curve",
+    "finetune_validation": "the final run's validation loss curve",
     "sim_summaries": "per-outbreak summaries of the final grid's simulations",
     "sim_realism": "the German development half's values",
     "sim_diseases": "the published disease values",
@@ -529,9 +530,9 @@ EVIDENCE: Final = {
 }
 """Each evidence input and what it waits on until set.
 
-The `compare_*` files share one layout: `set` (a held-out source, or a
+The `compare_*` files share one layout: `set` (a validation source, or a
 case study and level), `run`, `outbreaks` (the run's checkpoint) and
-`score` (held-out loss, or relative WIS or CRPS against
+`score` (validation loss, or relative WIS or CRPS against
 `randomwalknowcast`)."""
 
 
@@ -838,11 +839,11 @@ def write_evidence(
             None if rows is None else comparison_figure(rows),
             [f"compare_{name}"],
         )
-    curve = data["finetune_heldout"]
+    curve = data["finetune_validation"]
     figure(
-        "finetune-heldout",
-        None if curve is None or curve.empty else heldout_figure(curve),
-        ["finetune_heldout"],
+        "finetune-validation",
+        None if curve is None or curve.empty else validation_figure(curve),
+        ["finetune_validation"],
     )
     sims, ref = data["sim_summaries"], data["sim_realism"]
     figure(

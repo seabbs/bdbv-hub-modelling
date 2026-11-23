@@ -53,7 +53,6 @@ from .inputs import (
 )
 from .model import (
     ALPHA0,
-    FORECAST_RT_HALF_LIFE,
     GEN_INT_LENGTH,
     INCUBATION_LENGTH,
     INCUBATION_MEAN,
@@ -263,7 +262,6 @@ def _zone_walk(
     sd: float,
     n_weeks: int,
     ar: bool = False,
-    forecast_half_life: float | None = None,
     anchor: bool = True,
     centred: bool = False,
 ) -> TemporalProcess:
@@ -279,7 +277,7 @@ def _zone_walk(
     anchored_walk = anchor and name in ANCHORED
     if centred and anchored_walk:
         raise ValueError(f"{name} is anchored, so it cannot be centred.")
-    process = _named_walk(name, sd, n_weeks, ar, forecast_half_life, centred)
+    process = _named_walk(name, sd, n_weeks, ar, centred)
     if not anchored_walk:
         return process
     inner = process.inner
@@ -288,7 +286,6 @@ def _zone_walk(
         frozen=inner.frozen,
         n_fit=inner.n_fit,
         half_life_rv=inner.half_life_rv,
-        forecast_half_life=inner.forecast_half_life,
     )
     return WeeklyTemporalProcess(anchored, start_dow=SUNDAY)
 
@@ -793,12 +790,9 @@ def build_zone_model(
         sd: float,
         n_weeks: int,
         ar: bool = False,
-        forecast_half_life: float | None = None,
         centred: bool = False,
     ) -> TemporalProcess:
-        return _zone_walk(
-            name, sd, n_weeks, ar, forecast_half_life, anchor, centred
-        )
+        return _zone_walk(name, sd, n_weeks, ar, anchor, centred)
 
     if data.parents is None:
         raise ValueError("A zone model needs each zone's province.")
@@ -866,7 +860,7 @@ def build_zone_model(
             "rt_sd",
             0.2,
             fit_weeks(data, config),
-            forecast_half_life=FORECAST_RT_HALF_LIFE,
+            ar=True,
             centred=config.centred_rt,
         ),
         subpop_rt_deviation_process=_zone_walk_a(
@@ -882,7 +876,7 @@ def build_zone_model(
         ),
         own=data.own,
         rt_observation=RtPseudoObservation(
-            "bvd", alpha=config.bvd_alpha, **data.bvd
+            "bvd", sd_inflation=config.bvd_sd_inflation, **data.bvd
         )
         if config.bvd and data.bvd is not None
         else None,

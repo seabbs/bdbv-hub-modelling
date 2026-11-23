@@ -46,7 +46,7 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
-      - 'scripts/fit-store.sh'
+      - 'packages/bdbvhub/src/bdbvhub/store/branch.py'
       - '.github/workflows/fit-store.yml'
   # A pull request only plans, so its summary says how many fits the
   # change will cost on main.
@@ -77,7 +77,7 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
-      - 'scripts/fit-store.sh'
+      - 'packages/bdbvhub/src/bdbvhub/store/branch.py'
       - '.github/workflows/fit-store.yml'
   # New hub releases: a check with nothing new ends after `plan`.
   schedule:
@@ -144,7 +144,7 @@ jobs:
           REF: ${{ github.ref }}
           SCRATCH: ${{ inputs.store_branch }}
         run: |
-          write=$(scripts/fit-store.sh guard "$EVENT" "$REF" "$SCRATCH")
+          write=$(python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py guard "$EVENT" "$REF" "$SCRATCH")
           echo "write=$write" >> "$GITHUB_OUTPUT"
           echo "Writes $FIT_STORE_BRANCH: $write" >> "$GITHUB_STEP_SUMMARY"
       # Restores only: plan compiles nothing, so saving here would take
@@ -161,7 +161,7 @@ jobs:
           uv run bdbvhubrenewal data
           uv run bdbvhubrenewal bvd
       - name: Fetch the store
-        run: scripts/fit-store.sh fetch "$STORE"
+        run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
       # The fine-tuned models' checkpoint, resolved once for the run so
       # every fit job keys and loads the same one without listing the
       # releases again.
@@ -319,7 +319,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      - run: scripts/fit-store.sh push new keys.json current.json
+      - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json current.json
 
   # With the longest fits first, 8 runners finish a full refit as soon
   # as 12 (the longest fit, about 4 h). The rest of the 20 are left for
@@ -358,7 +358,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      - run: scripts/fit-store.sh push new keys.json rest.json
+      - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json rest.json
 
   pages:
     name: Rebuild the docs from the store

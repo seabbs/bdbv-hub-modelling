@@ -15,7 +15,7 @@ In brief, each model:
 1. lays out the hub target of every release by place, step and release lag ([Releases](#releases));
 2. puts every hub target, the country, the provinces and their health zones, each as its own series, in one block that Chronos-2 forecasts jointly ([Layouts](#layouts));
 3. draws 100 trajectories from Chronos-2's quantiles ([Trajectories](#trajectories));
-4. rounds the draws to counts no lower than the count already reported ([Counts](#counts)).
+4. rounds the draws to counts ([Counts](#counts)).
 
 ## Releases
 
@@ -74,10 +74,9 @@ Independent and comonotone draws remain as named options (`coupling`) for the su
 ## Counts
 
 A draw is rounded to the nearest count and floored at zero.
-A step's draw is no lower than its count at the vintage, and steps up to $t^*$ are their count at the vintage.
+Steps up to $t^*$ are their count at the vintage.
 The hub's target is weekly.
 A daily ragged model reads each week from its place's rolling 7-day series on the week's last day, and a daily complete model sums its seven daily draws.
-Each week is no lower than its reported count.
 
 ## Patches and context
 

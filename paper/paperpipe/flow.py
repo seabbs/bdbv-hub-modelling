@@ -242,7 +242,7 @@ class PaperFlow:
     def workflow_evidence(self) -> dict[str, str]:
         """Return the evidence step's inputs from workflow rules.
 
-        The final run's held-out loss curve (rule heldout_curve), the
+        The final run's validation loss curve (rule validation_curve), the
         published-range table's rows (rule sim_diseases) and the realism
         step's outputs (rule sim_realism), and the walk models' pairing
         scores and rho_p (rules si_copula and pairing_germany). Each is
@@ -258,7 +258,7 @@ class PaperFlow:
                 f"{evidence}/pairing/pairing-germany-rho.csv.gz"
             )
         if final := self.config.get("final_run"):
-            files["finetune_heldout"] = f"{final}/heldout-curve.csv"
+            files["finetune_validation"] = f"{final}/validation-curve.csv"
         if where := self.rounds_dir:
             files["sim_diseases"] = f"{where}/report/sim-diseases.csv"
             files["sim_summaries"] = f"{evidence}/sim-summaries.csv"
@@ -581,3 +581,8 @@ PYTHON: Final = f"PYTHONPATH=paper {shlex.quote(sys.executable)}"
 
 BDBV: Final = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
 """The project's command line, beside that Python."""
+
+GERMANY_CLI: Final = shlex.quote(
+    str(Path(sys.executable).parent / "nowcastgermany")
+)
+"""The German benchmark's command line (`nowcastgermany.cli`)."""

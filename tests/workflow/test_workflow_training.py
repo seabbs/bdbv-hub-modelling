@@ -55,16 +55,16 @@ def test_a_segment_resumes_from_the_checkpoint_before(tmp_path: Path) -> None:
     assert t.evaluate_prev_dir(SimpleNamespace(prev=[])) is None
 
 
-def test_held_out_losses_are_asked_for_only_when_offloaded(
+def test_validation_losses_are_asked_for_only_when_offloaded(
     tmp_path: Path,
 ) -> None:
     off = _training(tmp_path, eval="offload")
     train = off.train_dir("x")
     assert off.offloaded("x", 100)[1] == f"{train}/evals/n100.done"
-    assert len(off.heldout_curve_inputs(_wc())) == 6
+    assert len(off.validation_curve_inputs(_wc())) == 6
     local = _training(tmp_path, eval="local")
     assert local.offloaded("x", 100) == []
-    assert len(local.heldout_curve_inputs(_wc())) == 2
+    assert len(local.validation_curve_inputs(_wc())) == 2
 
 
 def test_a_worker_copies_back_what_publishing_reads(tmp_path: Path) -> None:

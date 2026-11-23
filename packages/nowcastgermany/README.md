@@ -5,14 +5,17 @@ It turns the hub's reporting triangles into forecast tasks, scores our models be
 
 ## Start here
 
-- To run the benchmark: `uv run bdbvhub germany-fetch`, then `uv run bdbvhub germany-backtest --help`.
+- To run the benchmark: `uv run nowcastgermany fetch`, then `uv run nowcastgermany backtest --help`.
 - To read how a task is built and scored, start with [`data`](src/nowcastgermany/data.py), then [`evaluation`](src/nowcastgermany/evaluation.py).
 
 ## Modules
 
+- [`cli`](src/nowcastgermany/cli.py): the `nowcastgermany` command (fetch, backtest, teams, asof, paper, ft-load, pairing-sensitivity).
 - [`data`](src/nowcastgermany/data.py): the hub's reporting triangles and forecasts as tasks.
 - [`evaluation`](src/nowcastgermany/evaluation.py): the benchmark, our models scored beside the hub's teams.
 - [`store`](src/nowcastgermany/store.py): the benchmark's stored forecasts and scores.
+- [`checkpoint`](src/nowcastgermany/checkpoint.py): scoring each published fine-tuned checkpoint on the benchmark (and its held-out loss) against the references.
+- [`pairing`](src/nowcastgermany/pairing.py): the walk models' pairing sensitivity on the benchmark.
 - [`finetune_blocks`](src/nowcastgermany/finetune_blocks.py): German real-data training blocks, for the real-data ablation.
 - [`reporting`](src/nowcastgermany/reporting.py): the benchmark's docs page.
 

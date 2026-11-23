@@ -11,8 +11,6 @@ Commands:
 - `zone-backtest`: score the random walk models run at zone level.
 - `digest`: hash what a backtest reads, to key its cached outputs.
 - `concat-results`: stack the results files of runs made apart.
-- `germany-ft-load`: write the stored German forecasts of the fine-tuned
-  model's checkpoint, for the Pages build.
 - `score`: score the forecasts of `--forecast-only` runs together.
 - `fit`: fit a configuration and write the fit directory and its
   `diagnostics.json`, for the submission CI.
@@ -107,6 +105,7 @@ from nowcastutils.base import (
     get_model,
     list_models,
 )
+from nowcastutils.chunks import CHUNK_HELP, chunk
 from nowcastutils.dates import as_date
 from nowcastutils.devices import host_devices
 from nowcastutils.files import write_csv
@@ -123,44 +122,7 @@ _ABBR_HELP = (
 )
 
 
-_CHUNK_HELP = (
-    "Run only block K of N (`K/N`, from 0) of the {what}, in order, so the "
-    "blocks can run apart and their results be stacked (`concat-results`)."
-)
-
-
-def chunk(items: Sequence[str], spec: str) -> list[str]:
-    """Return block K of N of `items`, with `spec` as `K/N` (K from 0).
-
-    The blocks are contiguous and in order, sizes differing by at most
-    one, so stacking blocks 0 to N - 1 gives `items` again.
-
-    Parameters
-    ----------
-    items : sequence of str
-        Such as forecast dates or origins.
-    spec : str
-        `K/N`.
-
-    Returns
-    -------
-    list of str
-        The block, empty if N exceeds the number of items.
-
-    Raises
-    ------
-    ValueError
-        If `spec` is not `K/N` with 0 <= K < N.
-    """
-    try:
-        k, n = (int(x) for x in spec.split("/"))
-    except ValueError:
-        raise ValueError(f"chunk must be K/N, got {spec!r}") from None
-    if not 0 <= k < n:
-        raise ValueError(f"chunk {spec!r} needs 0 <= K < N")
-    size, extra = divmod(len(items), n)
-    start = k * size + min(k, extra)
-    return list(items[start : start + size + (k < extra)])
+_CHUNK_HELP = CHUNK_HELP
 
 
 def _abbr(args: argparse.Namespace) -> str:
@@ -327,117 +289,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Gives `[samples] backtest`, the draws per zone forecast.",
     )
 
-    gfe = sub.add_parser(
-        "germany-fetch",
-        help="Download the German hospitalisation benchmark's data.",
-    )
-    gfe.add_argument("--config", default="config/germany.toml")
-    gfe.add_argument("--out", default=f"{data_dir}/raw/germany")
-
-    gbt = sub.add_parser(
-        "germany-backtest",
-        help="Nowcast and score the German hospitalisation benchmark.",
-    )
-    gbt.add_argument("--config", default="config/germany.toml")
-    gbt.add_argument("--data", default=f"{data_dir}/raw/germany")
-    gbt.add_argument(
-        "--models",
-        nargs="*",
-        default=None,
-        help=(
-            "Defaults to the benchmark's models in the config, with its "
-            "held_out_models on the held-out half."
-        ),
-    )
-    gbt.add_argument(
-        "--chunk", default=None, help=_CHUNK_HELP.format(what="nowcast dates")
-    )
-    gbt.add_argument("--out", default="results/germany")
-    gbt.add_argument(
-        "--held-out",
-        action="store_true",
-        help="Run the held-out half of the dates, for the paper, into "
-        "OUT/held-out.",
-    )
-
     pst = sub.add_parser(
         "pairing-sensitivity",
         help="Score randomwalk and randomwalknowcast with no pairing and "
         "with their provinces paired by the rolling rho_p, from one "
-        "forecast each, on the BDBV release backtest or the German "
-        "development half (`evaluation.pairing`), with the German "
-        "rho_p of each task.",
+        "forecast each, on the BDBV release backtest "
+        "(`evaluation.pairing`); the German study is `nowcastgermany "
+        "pairing-sensitivity`.",
     )
-    pst.add_argument("--study", choices=["bdbv", "germany"], required=True)
-    pst.add_argument(
-        "--data",
-        default=None,
-        help="The data directory; for germany, its raw/germany.",
-    )
-    pst.add_argument(
-        "--config",
-        default=None,
-        help="config/backtest.toml (bdbv) or config/germany.toml.",
-    )
+    pst.add_argument("--study", choices=["bdbv"], default="bdbv")
+    pst.add_argument("--data", default=None, help="The data directory.")
+    pst.add_argument("--config", default=None, help="config/backtest.toml.")
     pst.add_argument(
         "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
     )
     pst.add_argument("--out", default="results/pairing")
-
-    gtm = sub.add_parser(
-        "germany-teams",
-        help="Score the German hospitalisation hub teams' nowcasts.",
-    )
-    gtm.add_argument("--config", default="config/germany.toml")
-    gtm.add_argument("--data", default=f"{data_dir}/raw/germany")
-    gtm.add_argument("--out", default="results/germany")
-    gtm.add_argument(
-        "--held-out",
-        action="store_true",
-        help="Score the held-out half of the dates, for the paper, into "
-        "OUT/held-out.",
-    )
-
-    gas = sub.add_parser(
-        "germany-asof",
-        help="Write the German 7-day sums as each development date saw them.",
-    )
-    gas.add_argument("--config", default="config/germany.toml")
-    gas.add_argument("--data", default=f"{data_dir}/raw/germany")
-    gas.add_argument("--out", default="results/germany")
-
-    gpp = sub.add_parser(
-        "germany-paper",
-        help="Write the German benchmark's forecasts as the paper's table.",
-    )
-    gpp.add_argument("--config", default="config/germany.toml")
-    gpp.add_argument("--results", default="results/germany")
-
-    gft = sub.add_parser(
-        "germany-ft-load",
-        help="Write the stored German forecasts of the fine-tuned model's "
-        "checkpoint, for the Pages build (`evaluation.germany_store`).",
-    )
-    gft.add_argument("--config", default="config/germany.toml")
-    gft.add_argument("--finetune", default="config/finetune.toml")
-    gft.add_argument(
-        "--store", required=True, help="The germany-ft-forecasts tree."
-    )
-    gft.add_argument(
-        "--out", required=True, help="A germany-backtest results directory."
-    )
-    gft.add_argument(
-        "--checkpoint-scores",
-        default=None,
-        help="evidence/checkpoint-scores.csv from the checkpoint-scoring "
-        "branch: only the live run's checkpoints are shown, labelled "
-        "preliminary (`reporting.live_checkpoint`).",
-    )
-    gft.add_argument(
-        "--note",
-        required=True,
-        help="JSON naming the checkpoint shown, which the page reads.",
-    )
 
     dig = sub.add_parser(
         "digest",
@@ -1987,200 +1853,24 @@ def _compare_hub(args: argparse.Namespace) -> int:
     return 0
 
 
-def _germany_backtest(args: argparse.Namespace) -> int:
-    from nowcastgermany import evaluation as de
-    from nowcastgermany.data import hub_triangle
-
-    config = de.load_germany_config(args.config)
-    dates = de.nowcast_dates(config, held_out=args.held_out)
-    if args.chunk:
-        dates = chunk(dates, args.chunk)
-    models = (
-        de.run_models(config, args.held_out)
-        if args.models is None
-        else args.models
-    )
-    triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
-    timings: list[dict[str, Any]] = []
-    forecasts = de.with_truth(
-        de.germany_forecasts(
-            models,
-            triangle,
-            dates,
-            config.n_samples,
-            config.seed,
-            max_delay=config.truth_delay,
-            timings=timings,
-        ),
-        triangle,
-        config.truth_delay,
-    )
-    scores = de.score_germany(forecasts, config.truth_delay)
-    out = Path(args.out) / ("held-out" if args.held_out else "")
-    out.mkdir(parents=True, exist_ok=True)
-    write_csv(forecasts, out / "forecasts.csv.gz")
-    write_csv(scores, out / "scores.csv.gz")
-    # Seconds by model and date (`germany_forecasts`), for the
-    # `benchmarks` workflow target.
-    pd.DataFrame(timings).to_csv(out / "timings.csv", index=False)
-    print(f"German benchmark: {len(scores)} scored nowcasts in {out}.")
-    return 0
-
-
 def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
     from nowcasteval import pairing
-    from nowcastgermany import evaluation as de
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     name = f"pairing-{args.study}"
-    if args.study == "bdbv":
-        config = args.config or "config/backtest.toml"
-        data = args.data or data_dir
-        real = load_target(data).query("kind == 'real'")
-        origins = bt.real_vintages(real)[:-1]
-        if args.chunk:
-            origins = chunk(origins, args.chunk)
-        scores = pairing.bdbv_sensitivity(data, config, origins)
-    else:
-        config = args.config or "config/germany.toml"
-        data = args.data or f"{data_dir}/raw/germany"
-        dates = de.nowcast_dates(de.load_germany_config(config))
-        if args.chunk:
-            dates = chunk(dates, args.chunk)
-        # Each date's scores and rho_p are kept as it is scored, so a
-        # rerun resumes.
-        done = out / "germany-dates"
-        done.mkdir(exist_ok=True)
-        for date in dates:
-            path, rho_path = (
-                done / f"{date}.csv.gz",
-                done / f"{date}-rho.csv.gz",
-            )
-            if not (path.exists() and rho_path.exists()):
-                scored, rho = pairing.germany_sensitivity(data, config, [date])
-                write_csv(scored, path)
-                write_csv(rho, rho_path)
-        scores = pd.concat(
-            [_read_or_empty(done / f"{d}.csv.gz") for d in dates],
-            ignore_index=True,
-        )
-        rho = pd.concat(
-            [_read_or_empty(done / f"{d}-rho.csv.gz") for d in dates],
-            ignore_index=True,
-        )
+    config = args.config or "config/backtest.toml"
+    data = args.data or data_dir
+    real = load_target(data).query("kind == 'real'")
+    origins = bt.real_vintages(real)[:-1]
+    if args.chunk:
+        origins = chunk(origins, args.chunk)
+    scores = pairing.bdbv_sensitivity(data, config, origins)
     if args.chunk:
         name += "-" + args.chunk.replace("/", "of")
     path = out / f"{name}.csv.gz"
     write_csv(scores, path)
-    if args.study == "germany":
-        write_csv(rho, out / f"{name}-rho.csv.gz")
     print(f"Pairing sensitivity ({args.study}): {len(scores)} rows in {path}.")
-    return 0
-
-
-def _germany_teams(args: argparse.Namespace) -> int:
-    from nowcastgermany import evaluation as de
-    from nowcastgermany.data import hub_triangle
-
-    config = de.load_germany_config(args.config)
-    data = Path(args.data)
-    submissions = de.read_submissions(
-        [data / Path(p).name for p in config.submissions]
-    )
-    dates = de.nowcast_dates(config, held_out=args.held_out)
-    forecasts = de.with_truth(
-        de.team_forecasts(submissions, dates),
-        hub_triangle(data / Path(config.triangle).name),
-        config.truth_delay,
-    )
-    scores = de.score_germany(forecasts, config.truth_delay)
-    out = Path(args.out) / ("held-out" if args.held_out else "")
-    out.mkdir(parents=True, exist_ok=True)
-    write_csv(forecasts, out / "teams-forecasts.csv.gz")
-    write_csv(scores, out / "teams.csv.gz")
-    print(f"German hub teams: {len(scores)} scored nowcasts in {out}.")
-    return 0
-
-
-def _germany_asof(args: argparse.Namespace) -> int:
-    from nowcastgermany import evaluation as de
-    from nowcastgermany.data import hub_triangle
-
-    config = de.load_germany_config(args.config)
-    triangle = hub_triangle(Path(args.data) / Path(config.triangle).name)
-    asof = de.asof_sums(triangle, de.nowcast_dates(config))
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    write_csv(asof, out / "asof.csv.gz")
-    print(f"German data as of each date: {len(asof)} sums in {out}.")
-    return 0
-
-
-def _germany_paper(args: argparse.Namespace) -> int:
-    from nowcastgermany import evaluation as de
-
-    config = de.load_germany_config(args.config)
-    res = Path(args.results)
-    parts = [
-        pd.read_csv(path, dtype={"origin": str, "target_end_date": str})
-        for name in ("forecasts.csv.gz", "teams-forecasts.csv.gz")
-        if (path := res / name).exists()
-    ]
-    paper = de.paper_forecasts(pd.concat(parts, ignore_index=True))
-    write_csv(paper, res / "paper-forecasts.csv.gz")
-    meta = {
-        "study": "germany",
-        "split_date": config.split_date,
-        "baseline": config.paper_baseline,
-        "truth_delay": config.truth_delay,
-        "quantile_levels": list(de.QUANTILE_LEVELS),
-    }
-    (res / "paper-forecasts.json").write_text(json.dumps(meta, indent=2) + "\n")
-    print(f"Paper table: {len(paper)} rows in {res}.")
-    return 0
-
-
-def _germany_ft_load(args: argparse.Namespace) -> int:
-    from nowcastfoundation import forecaster as foundation
-    from nowcastfoundation import live_checkpoint as lc
-    from nowcastgermany import evaluation as de
-    from nowcastgermany import store as gs
-
-    config = de.load_germany_config(args.config)
-    spec = foundation.finetuned_spec(args.finetune)
-    stored = gs.stored_tags(args.store)
-    live = None
-    path = Path(args.checkpoint_scores) if args.checkpoint_scores else None
-    if path is not None and path.is_file() and path.stat().st_size > 0:
-        live = lc.live_tags(pd.read_csv(path))
-    tag, pinned = gs.choose_checkpoint(
-        stored, foundation.finetuned_releases(), spec, live
-    )
-    note = Path(args.note)
-    note.parent.mkdir(parents=True, exist_ok=True)
-    meta = {"tag": tag, "pinned": pinned, "models": list(gs.STORED_MODELS)}
-    if live is not None:
-        meta["live_run"] = lc.LIVE_RUN
-        if tag in live:
-            meta["label"] = lc.label(live[tag])
-    note.write_text(json.dumps(meta, indent=2) + "\n")
-    if tag is None:
-        print(
-            f"No stored German forecasts of the _ft models for {pinned} "
-            f"or any other checkpoint ({len(stored)} stored)."
-        )
-        return 0
-    forecasts = gs.load_stored(args.store, tag, config.split_date)
-    scores = de.score_germany(forecasts, config.truth_delay)
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    write_csv(forecasts, out / "forecasts.csv.gz")
-    write_csv(scores, out / "scores.csv.gz")
-    print(
-        f"The _ft models at {tag} (pinned {pinned}): {len(scores)} "
-        f"scored nowcasts in {out}."
-    )
     return 0
 
 
@@ -2271,29 +1961,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _nowcast(args)
     if args.command == "zone-backtest":
         return _zone_backtest(args)
-    if args.command == "germany-fetch":  # pragma: no cover - network
-        from nowcastgermany.evaluation import (
-            fetch_germany,
-            load_germany_config,
-        )
-
-        fetch_germany(load_germany_config(args.config), args.out)
-        print(f"German benchmark data written to {args.out}.")
-        return 0
-    if args.command == "germany-backtest":
-        return _germany_backtest(args)
     if args.command == "pairing-sensitivity":
         return _pairing_sensitivity(args, str(_data_root()))
-    if args.command == "germany-teams":
-        return _germany_teams(args)
-    if args.command == "germany-asof":
-        return _germany_asof(args)
     if args.command == "live-checkpoint":
         return _live_checkpoint(args)
-    if args.command == "germany-paper":
-        return _germany_paper(args)
-    if args.command == "germany-ft-load":
-        return _germany_ft_load(args)
     if args.command == "digest":
         from bdbvhub.store.digest import backtest_digest, model_digest
 

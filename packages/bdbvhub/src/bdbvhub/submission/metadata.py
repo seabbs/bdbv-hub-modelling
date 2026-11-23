@@ -24,8 +24,8 @@ _RENEWAL_OBSERVATION = (
     "with no onset date, back-sampled from report day with the hub's delay. "
     "Weekly known and imputed counts are negative binomial, and the delays "
     "of known onsets are Dirichlet-multinomial. "
-    "Over the forecast weeks log Rt reverts towards Rt = 1 with a "
-    "half-life of 2 weeks. "
+    "Log Rt reverts towards Rt = 1 with a fitted half-life, in the fit "
+    "and the forecast weeks alike. "
     "The model is fitted by NUTS (NumPyro) to each data release, and each "
     "sample is one joint posterior trajectory. "
     "See https://samabbott.co.uk/bdbv-hub-modelling/methods/model/."
@@ -66,9 +66,9 @@ MODEL_METADATA = {
             "comes from a baselinenowcast chain ladder on the daily release "
             "snapshots. Later weeks are drawn on the log scale as a random "
             "walk whose weekly SD is the SD of the last 8 weekly changes of "
-            "log(1 + cases), with Poisson noise and a floor at the count "
-            "already reported. A place uses its own delay factor at an age "
-            "if that factor rests on at least 10 cases, and otherwise its "
+            "log(1 + cases), with Poisson noise. A place uses its own delay "
+            "factor at an age if that factor rests on at least 10 cases, and "
+            "otherwise its "
             "parent's (zone, then province, then national). A place under "
             "10 cases a week uses the walk spread of its parent. Each sample "
             "is a joint trajectory and the national value is the sum of "
@@ -96,7 +96,7 @@ MODEL_METADATA = {
         "methods_long": (
             "We model infections in each health zone with recent cases with "
             "a renewal process in PyRenew. "
-            "Log Rt is a national weekly random walk plus partially pooled "
+            "Log Rt is a national weekly AR(1) plus partially pooled "
             "province and zone deviations. "
             "Infections move between zones through a gravity kernel, and "
             "susceptibles are depleted. "
@@ -116,8 +116,8 @@ MODEL_METADATA = {
         "methods_long": (
             "We fit a renewal process in PyRenew to each province's series "
             "on its own. "
-            "Each has its own weekly random walk on log Rt, with no pooling, "
-            "importation or depletion. "
+            "Each has its own weekly AR(1) on log Rt and susceptible "
+            "depletion, with no pooling or importation. "
             "A province with no case in the last nine weeks is zero until an "
             "introduction, then a random walk. "
             + _ZONE_SPLIT
@@ -132,20 +132,20 @@ MODEL_METADATA = {
         "methods": (
             "A renewal model per health zone with pooled Rt, importation and "
             "depletion, with Rt tied to the newest BVDOutbreakSize estimates "
-            "by a tempered likelihood. Provinces are zone sums."
+            "with their SDs inflated. Provinces are zone sums."
         ),
         "methods_long": (
             "We model infections in each health zone with recent cases with "
             "a renewal process in PyRenew. "
-            "Log Rt is a national weekly random walk plus partially pooled "
+            "Log Rt is a national weekly AR(1) plus partially pooled "
             "province and zone deviations. "
             "Infections move between zones through a gravity kernel, and "
             "susceptibles are depleted. "
             "Zones with no recent case take a random walk introduction layer. "
             "The model's national, province and zone Rt in the week of the "
             "newest BVDOutbreakSize release published by the cut-off are tied "
-            "to that release's Rt estimates by a likelihood term tempered by "
-            "0.5. " + _ZONE_SUMS + _RENEWAL_OBSERVATION
+            "to that release's Rt estimates by a likelihood term with their "
+            "SDs inflated by 1.41. " + _ZONE_SUMS + _RENEWAL_OBSERVATION
         ),
         "data_inputs": (
             _RENEWAL_INPUTS + " The newest BVDOutbreakSize release published "
@@ -218,8 +218,7 @@ MODEL_METADATA = {
             "Each place with cases has its counts at release lags under "
             "28 days as covariates. "
             "Each of 100 samples draws its own uniform level per series and "
-            "day from Chronos-2's 21 quantiles, rounded to counts no lower "
-            "than those reported. "
+            "day from Chronos-2's 21 quantiles, rounded to counts. "
             "The model is not fitted to these data. "
             "The country, provinces and health zones are each the model's "
             "own forecast of that series: nothing is summed or split. "
@@ -253,8 +252,7 @@ MODEL_METADATA = {
             "Each place with cases has its counts at release lags under "
             "4 weeks as covariates. "
             "Each of 100 samples draws its own uniform level per series and "
-            "week from Chronos-2's 21 quantiles, rounded to counts no lower "
-            "than those reported. "
+            "week from Chronos-2's 21 quantiles, rounded to counts. "
             "The model is not fitted to these data. "
             "The country, provinces and health zones are each the model's "
             "own forecast of that series: nothing is summed or split. "

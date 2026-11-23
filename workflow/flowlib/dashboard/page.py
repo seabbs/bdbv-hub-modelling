@@ -37,7 +37,7 @@ from . import (
     training,
 )
 from .logs import _size
-from .runs import Reference, Run, split_label
+from .runs import Reference, Run, checkpoint_settings, split_label
 from .sources import Sources
 
 ASSETS = Path(__file__).with_name("page")
@@ -547,7 +547,7 @@ LOSS_TYPES = {
     "layout": "by layout",
     "level": "by level",
 }
-"""The held-out loss types the Loss panel offers."""
+"""The validation loss types the Loss panel offers."""
 
 
 def loss_section(ctx: Context, live: Run, st: Status) -> str:
@@ -661,16 +661,16 @@ def checkpoint_table(
         label = html.escape(run.label)
         return f"<p class=mut>no checkpoints yet for {label}</p>"
     head = {
-        "raw": "held-out",
-        "start": "held-out / start",
-        "base": "held-out / base",
+        "raw": "validation",
+        "start": "validation / start",
+        "base": "validation / base",
     }[mode]
     den = {"raw": 1, "start": info["full0"], "base": info["bfull"]}[mode]
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>nowcast part"
         f"<th>forecast part<th>7-day row gap<th>7-day row roughness"
-        f"<th>held-out start{by_head}<th>saved</tr>"
+        f"<th>validation start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
@@ -719,6 +719,15 @@ def checkpoint_sizes(
         for _, s, _ in info[r.key]["ck"]:
             if s.get("n_outbreaks"):
                 sizes[str(s.get("hash"))] = int(s["n_outbreaks"])
+        # Interim checkpoints, exported mid-segment, by their own hash.
+        for path in checkpoint_settings(r.folder) if r.folder else ():
+            try:
+                s = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            if s.get("interim") and s.get("n_outbreaks"):
+                key = split_label(str(s.get("hash")))[0]
+                sizes[key] = int(s["n_outbreaks"])
     return sizes
 
 
@@ -997,7 +1006,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (
             "levels",
-            "Held-out loss by level and LoRA size",
+            "Validation loss by level and LoRA size",
             level_loss_lora.section(ctx.runs, tip),
             True,
         ),

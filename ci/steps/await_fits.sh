@@ -42,7 +42,7 @@ started=$(date -u +%s)
 missing() {
   if [ "${SKIP_FETCH:-false}" != true ]; then
     rm -rf "$store"
-    FIT_STORE_BRANCH=$branch "$CI_DIR/../scripts/fit-store.sh" fetch "$store"
+    FIT_STORE_BRANCH=$branch store_branch fetch "$store"
   fi
   # shellcheck disable=SC2086  # MODELS is a list
   cli fit-store plan --store "$store" --models $MODELS --origins "$AS_OF" \

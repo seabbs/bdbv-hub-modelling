@@ -46,7 +46,9 @@ def forecasts(triangle: pd.DataFrame) -> pd.DataFrame:
     drawn = germany_forecasts(
         ["randomwalknowcast_daily"],
         triangle,
-        ["2021-10-04", "2021-10-05"],
+        # One date: each date is 7 offsets' tasks per model, and every
+        # test here holds for one as for many.
+        ["2021-10-04"],
         n_samples=30,
         seed=1,
     )
@@ -119,7 +121,7 @@ def test_scores_are_quantile_scores_on_the_d_day_truth(
 ) -> None:
     assert set(SCORE_COLUMNS) <= set(scores.columns)
     assert "log_wis" not in scores.columns
-    assert set(scores["origin"]) == {"2021-10-04", "2021-10-05"}
+    assert set(scores["origin"]) == {"2021-10-04"}
     assert set(scores["horizon"]) <= set(HORIZONS)
     assert set(scores["pool"]) == {"national", "states", "age"}
     ends = sorted(set(scores["target_end_date"]))

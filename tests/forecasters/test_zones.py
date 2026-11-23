@@ -410,6 +410,7 @@ def _zone_model_inputs(
 
 
 @pytest.mark.parametrize("model", [RandomWalk(), RandomWalkNowcast()])
+@pytest.mark.slow
 def test_zone_walk_models_are_their_own_zone_draws(
     task: ForecastTask,
     counts: pd.DataFrame,

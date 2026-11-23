@@ -119,10 +119,20 @@ def test_the_weekly_and_daily_finetuned_models_share_one_adapter(ft):
     assert weekly.checkpoint == ft.checkpoint
     assert (weekly.source, weekly.period) == ("weekly", None)
     assert (ft.source, ft.period) == ("daily", "rolling7")
-    # The zero-shot daily model has the same rolling rows; complete data
-    # alone has none.
+    # The zero-shot daily models have the same rolling rows, complete
+    # data too: the layouts differ only in the lag rows.
     assert get_model("fm_chronos_daily_ragged").period == "rolling7"
-    assert get_model("fm_chronos_daily_complete").period is None
+    assert get_model("fm_chronos_daily_complete").period == "rolling7"
+
+
+def test_a_complete_block_has_daily_and_rolling_rows_and_no_lags():
+    tri, start = daily_tri(), 10
+    rows = foundation.rolling_rows(tri, 7)
+    group = layout_block(tri, "complete", PLACES, start, period=rows)
+    np.testing.assert_array_equal(group["target"][:2], tri.final[:, :start])
+    np.testing.assert_array_equal(group["target"][2:], rows.totals[:, :start])
+    assert list(group["target_places"]) == [0, 1, 0, 1]
+    assert "past_covariates" not in group
 
 
 def _aggregate_sampler(store: list):
@@ -217,7 +227,7 @@ def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
     late = daily.loc[daily["date"].isin(future)]
     assert not late.empty
     # The count rows drew 1, the total rows 1000 and up: daily values come
-    # from the count rows as drawn, not floored at the counts reported.
+    # from the count rows as drawn.
     assert (late["value"] == 1.0).all()
     # Every day of the target weeks is there, for every place and sample.
     first = pd.Timestamp(task.target_end_dates[0]) - pd.Timedelta(days=6)
@@ -300,7 +310,7 @@ def _spy_triangle(monkeypatch) -> list:
 def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
     ft: FoundationModel, task: ForecastTask, monkeypatch
 ) -> None:
-    # No draws, no rounding, no floor at the reported count: the 7-day
+    # No draws and no rounding: the 7-day
     # sum of a week past the context is its aggregate row's own quantile.
     pytest.importorskip("torch")
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())

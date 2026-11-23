@@ -210,7 +210,7 @@ def forecast_triangle(
         when the labels are dates or numbers), `step` (rows after the
         last; 0 is the last, below 0 the rows still being reported),
         `quantile_level` and `value`, the quantile of the row's final
-        count, at least its count reported so far.
+        count.
 
     Raises
     ------
@@ -255,7 +255,7 @@ def forecast_triangle(
         [dict(group)], prediction_length=length, quantile_levels=levels
     )
     q = q.float().cpu().numpy() if hasattr(q, "cpu") else np.asarray(q)
-    q = np.maximum(np.sort(q, axis=-1), tri.final[:, start:, None])
+    q = np.sort(q, axis=-1)
     n_rows = len(index)
     refs = _references(index, horizon)[start:]
     steps = np.arange(start, len(tri.times)) - (n_rows - 1)

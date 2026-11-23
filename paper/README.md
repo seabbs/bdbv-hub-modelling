@@ -12,7 +12,7 @@ task paper                 # the development run, without the held-out data
 task paper TARGET=paper    # the paper run, with the held-out data
 ```
 
-This is the command CI runs ([`scripts/paper.sh`](../scripts/paper.sh)).
+CI runs the same steps (`python3 workflow/scripts/paper_run.py --render`, [`paper_run.py`](../workflow/scripts/paper_run.py)).
 It fetches the fit store, runs the target's missing steps, renders the paper as HTML and PDF and copies it into `docs/paper/`.
 `CORES=8 task paper`, or `CORES` in `config/local.env`, sets Snakemake's cores (4 by default).
 From `paper/`, `task pipeline:dev`, `task pipeline:paper` and `task render` run the steps one at a time.
@@ -31,7 +31,7 @@ Everything from forecasting on runs in this workflow, locally or on CI.
 
 - **Held-out synthetic outbreaks**: the simulations of each run's seeds ([`paperdata/synthetic.py`](paperdata/synthetic.py)) and the models' forecasts of them, which the synthetic runner writes.
   Sample forecasts are scored by CRPS relative to `randomwalknowcast`, with D each outbreak's 98% delay.
-- **German nowcast hub**: the benchmark of Wolffram et al. (2023), run with `bdbvhubrenewal germany-backtest`, `germany-teams` and `germany-paper` ([`config/germany.toml`](../config/germany.toml), [German benchmark page](../docs/germany.md)).
+- **German nowcast hub**: the benchmark of Wolffram et al. (2023), run with `nowcastgermany backtest`, `nowcastgermany teams` and `nowcastgermany paper` ([`config/germany.toml`](../config/germany.toml), [German benchmark page](../docs/germany.md)).
   Quantiles are scored by WIS relative to `KIT-frozen_baseline` and to `randomwalknowcast`, with D 40 days.
 - **Ebola**: the release backtest's samples from every past release, with the stored fits' ([`paperdata/ebola.py`](paperdata/ebola.py)).
   The truth and D are the backtest's (`config/backtest.toml`).

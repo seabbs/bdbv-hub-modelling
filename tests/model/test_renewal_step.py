@@ -1,7 +1,7 @@
 """The shared renewal step (`components.renewal`).
 
-The simulator's use is also replayed live against its R engine in
-`test_latent_components.py`; the fitted models' against the NumPy
+The renewal without depletion is also checked live against epinowcast
+in `test_latent_epinowcast.py`; the fitted models' use against the NumPy
 reference in `test_components.py`.
 """
 

@@ -1,10 +1,12 @@
 """Run R code on JSON inputs and read its JSON output, for live checks.
 
-Tests compare our components with R packages (epinowcast, primarycensored,
-EpiNow2, the simulator's R engine) by calling them, not through committed
-fixtures. A test skips, with the reason, only where R or a package is
-missing; CI installs them (`.github/workflows/test.yml`, job `r-live`)
-and fails there instead of skipping.
+Tests compare our components with R packages (epinowcast,
+primarycensored and baselinenowcast) by calling them, not through
+committed fixtures. Numbers cross as JSON with 17 significant digits,
+so doubles arrive exactly. A
+test skips, with the reason, only where R or a package is missing; CI
+installs them (`.github/workflows/test.yml`, job `r-live`) and fails
+there instead of skipping.
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ input <- jsonlite::read_json(args[1], simplifyVector = TRUE)
 out <- local({
 %s
 })
-jsonlite::write_json(out, args[2], digits = NA, auto_unbox = TRUE,
+jsonlite::write_json(out, args[2], digits = I(17), auto_unbox = TRUE,
   matrix = "rowmajor"%s)
 """
 

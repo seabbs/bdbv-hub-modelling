@@ -108,7 +108,7 @@ def _fake_checkpoint_releases(
 def _keep_the_checkpoint_pin():  # type: ignore[no-untyped-def]
     """Restore `BDBV_CHRONOS_FT` after each test.
 
-    `nowcastfoundation.checkpoint._pin` writes it to `os.environ` for the
+    `nowcastgermany.checkpoint._pin` writes it to `os.environ` for the
     rest of a scoring process, which a monkeypatch would not undo when it
     was unset before.
     """
