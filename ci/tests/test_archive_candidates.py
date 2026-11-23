@@ -73,7 +73,7 @@ def test_a_partial_archive_does_not_say_every_candidate_was(
     )  # fmt: skip
     assert run.returncode == 1, run.stdout + run.stderr
     assert "Ledger: every candidate" not in run.stdout
-    assert "not every candidate" in run.stdout
+    assert "not every model" in run.stdout
     ledger = tmp_path / "check"
     _git("clone", "-q", "-b", "submission-ledger", str(origin), str(ledger),
          cwd=tmp_path)  # fmt: skip

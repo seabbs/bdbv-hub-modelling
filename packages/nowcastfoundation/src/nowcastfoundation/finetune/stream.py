@@ -47,7 +47,7 @@ import pandas as pd
 
 from nowcastfoundation import series_bias
 from nowcastfoundation.finetune import chronos as ft
-from nowcastfoundation.finetune import verify
+from nowcastfoundation.finetune import simulations, verify
 from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
@@ -404,12 +404,6 @@ def should_stop(
     return losses[-2] - losses[-1] < min_gain * losses[-2]
 
 
-def simulation_ids(outbreaks: pd.Series) -> set[str]:
-    """Return the simulations of outbreak draws `<seed>-<index>[-<draw>]`."""
-    parts = outbreaks.astype(str).str.split("-")
-    return set(parts.str[0] + "-" + parts.str[1])
-
-
 def quarantine(sim_dir: Path, seed: int, reason: str) -> None:
     """Move a bad batch's files aside, so the driver runs it again."""
     where = sim_dir / "bad" / f"{seed}-{int(time.time())}"
@@ -449,8 +443,8 @@ def seed_done(sim_dir: Path, seed: int) -> bool:
         if log_file.exists() and "Execution halted" in log_file.read_text():
             raise RuntimeError(f"simulation batch {seed} failed: {log_file}")
         return False
-    a = simulation_ids(read_ids(settings))
-    b = simulation_ids(read_ids(counts))
+    a = set(simulations(read_ids(settings)))
+    b = set(simulations(read_ids(counts)))
     if a != b:
         quarantine(sim_dir, seed, "has counts and settings that disagree")
         return False
@@ -565,8 +559,7 @@ def cut(
     counts = pd.concat(
         [pd.read_csv(sim_dir / f"counts-{s}.csv.gz") for s in seeds]
     )
-    parts = counts["outbreak"].str.split("-")
-    counts["simulation"] = parts.str[0] + "-" + parts.str[1]
+    counts["simulation"] = simulations(counts["outbreak"])
     settings = pd.concat(
         [pd.read_csv(sim_dir / f"settings-{s}.csv") for s in seeds]
     ).set_index("outbreak")
@@ -1631,6 +1624,7 @@ def main(root: Path | None = None) -> None:
         time.sleep(POLL)
     held = held[: args.holdout]
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
+    report(stage=f"cutting held-out blocks of {len(held)} outbreaks")
     # Checkpointing follows from the memory budget; the blocks and steps
     # do not, so every machine trains on the same ones.
     checkpoint_large_batches(args.checkpoint_above)

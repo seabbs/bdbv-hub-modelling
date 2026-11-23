@@ -7,8 +7,11 @@ import pandas as pd
 import pytest
 
 from nowcastfoundation.finetune import (
+    delay_quantile,
     final_counts,
+    release_weekday,
     releases,
+    simulations,
     training_block,
     weekly_cutoffs,
 )
@@ -641,3 +644,23 @@ def test_unallocated_thinning_keeps_each_cumulative_within_the_country() -> (
     full = counts.sort_values("report_date").groupby(keys)["count"].cumsum()
     assert (kept >= 0).all()
     assert (kept <= full.loc[kept.index]).all()
+
+
+def test_an_outbreak_s_simulation_drops_its_draw() -> None:
+    outbreaks = pd.Series(["31000-4-2", "31000-4", "7-12-1"])
+    assert simulations(outbreaks).tolist() == ["31000-4", "31000-4", "7-12"]
+
+
+def test_releases_fall_wednesday_to_saturday() -> None:
+    rng = np.random.default_rng(1)
+    days = {release_weekday(rng) for _ in range(200)}
+    assert days == {2, 3, 4, 5}
+
+
+def test_a_delay_quantile_is_the_first_delay_reaching_the_share() -> None:
+    by_delay = pd.Series([50.0, 30.0, 20.0], index=[3, 0, 9])
+    assert delay_quantile(by_delay, 0.3) == 0
+    assert delay_quantile(by_delay, 0.5) == 3
+    assert delay_quantile(by_delay, 0.8) == 3
+    assert delay_quantile(by_delay, 0.99) == 9
+    assert np.isnan(delay_quantile(by_delay * 0, 0.5))

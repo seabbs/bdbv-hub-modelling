@@ -162,16 +162,16 @@ def level(place: str) -> str:
     return "age" if place in AGE_GROUPS else "states"
 
 
-def hub_triangle(path: Path | str) -> pd.DataFrame:
-    """Read the hub's reporting triangle as counts by report date.
+def hub_changes(wide: pd.DataFrame) -> pd.DataFrame:
+    """Return the hub's wide triangle as one change per reported delay.
 
-    The changes after 80 days are put at 81 days, as epinowcast's
-    `germany_covid19_hosp` does. A missing change is a report date after
-    the file was made, so it has no row.
+    The changes after 80 days are at 81 days, as epinowcast's
+    `germany_covid19_hosp` puts them. A missing change is a report date
+    after the file was made, so it has no row.
 
     Parameters
     ----------
-    path : pathlib.Path or str
+    wide : pandas.DataFrame
         The hub's `COVID-19_hospitalizations.csv`: columns `date`,
         `location`, `age_group`, `value_0d` to `value_80d` and
         `value_>80d`.
@@ -179,9 +179,8 @@ def hub_triangle(path: Path | str) -> pd.DataFrame:
     Returns
     -------
     pandas.DataFrame
-        As `read_triangle`.
+        `date`, `location`, `age_group`, `delay` (days) and `change`.
     """
-    wide = pd.read_csv(path)
     changes = [c for c in wide.columns if c.startswith("value_")]
     long = wide.melt(
         id_vars=["date", "location", "age_group"],
@@ -190,7 +189,27 @@ def hub_triangle(path: Path | str) -> pd.DataFrame:
         value_name="change",
     ).dropna(subset=["change"])
     long["delay"] = long["delay"].map({c: i for i, c in enumerate(changes)})
-    long = long.sort_values(["location", "age_group", "date", "delay"])
+    return long
+
+
+def hub_triangle(path: Path | str) -> pd.DataFrame:
+    """Read the hub's reporting triangle as counts by report date.
+
+    The changes, cumulated, of `hub_changes`.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        The hub's `COVID-19_hospitalizations.csv`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        As `read_triangle`.
+    """
+    long = hub_changes(pd.read_csv(path)).sort_values(
+        ["location", "age_group", "date", "delay"]
+    )
     long["confirm"] = (
         long.groupby(["location", "age_group", "date"])["change"]
         .cumsum()

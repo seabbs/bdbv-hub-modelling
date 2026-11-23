@@ -19,6 +19,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nowcastfoundation.finetune import delay_quantile, simulations
+
 CELL = [
     "strata",
     "n_places",
@@ -48,7 +50,7 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
     rows = []
     for path in sorted(sim_dir.glob("counts-*.csv.gz")):
         counts = pd.read_csv(path)
-        counts["simulation"] = counts["outbreak"].str.rsplit("-", n=1).str[0]
+        counts["simulation"] = simulations(counts["outbreak"])
         for simulation, c in counts.groupby("simulation"):
             ref = pd.to_datetime(c["reference_date"])
             delay = (pd.to_datetime(c["report_date"]) - ref).dt.days
@@ -60,8 +62,6 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
             )
             first = weekly.loc[per_draw.index[0]]
             growth = np.diff(np.log(first.to_numpy(float) + 1))
-            order = np.argsort(delay.to_numpy())
-            cdf = np.cumsum(w[order]) / w.sum()
             s = settings.loc[simulation] if simulation in settings.index else {}
             rows.append(
                 {
@@ -80,8 +80,8 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
                     if growth.size
                     else np.nan,
                     "delay_mean_days": float((delay * w).sum() / w.sum()),
-                    "delay_q99_days": float(
-                        delay.to_numpy()[order][np.searchsorted(cdf, 0.99)]
+                    "delay_q99_days": delay_quantile(
+                        c["count"].groupby(delay).sum(), 0.99
                     ),
                     "reported_within_7d": float(
                         w[delay.to_numpy() <= 7].sum() / w.sum()

@@ -7,8 +7,6 @@ The PyRenew renewal model the renewal forecasters fit and sample from. See [Gett
     options:
       members: false
 
-::: nowcastrenewal.model.temporal
-
 ::: nowcastrenewal.model.pooled
 
 ::: nowcastrenewal.model.renewal
@@ -26,6 +24,8 @@ The PyRenew renewal model the renewal forecasters fit and sample from. See [Gett
 ::: nowcastrenewal.components.reference
 
 ::: nowcastrenewal.components.noise
+
+::: nowcastrenewal.components.walks
 
 ::: nowcastrenewal.model.delays
 

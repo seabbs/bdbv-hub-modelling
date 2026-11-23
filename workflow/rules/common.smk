@@ -193,10 +193,9 @@ def evaluate_prev(wc):
     return f"{train_dir(wc.run)}/n{prev}/settings.json" if prev else []
 
 
-def evaluate_before(wc):
-    """The previous segment's steps stamp, so step 0 is scored first."""
-    prev = run_of(wc).prev[int(wc.n)]
-    return f"{train_dir(wc.run)}/evals/n{prev}.done" if prev else []
+def first_prefix(run):
+    """The run's first checkpoint: the one with no previous."""
+    return next(n for n, p in RUNS[run].prev.items() if p is None)
 
 
 def evaluate_prev_dir(input):
@@ -221,16 +220,17 @@ def evaluate_inputs_from(wc):
     return [
         f"{train}/n{n}/finetuned-ckpt/",
         f"{train}/{HELD_OUT_BLOCKS}",
-        f"{train}/evals/step-0000000.json",
         *(f"{train}/n{p}/{SIDECAR}" for p in r.ft["prefixes"] if p < n),
     ]
 
 
 def offloaded(run, n):
-    """Checkpoint n's held-out sidecar when the run offloads evaluation."""
+    """Checkpoint n's held-out sidecar and its segment's step evaluations,
+    when the run offloads evaluation."""
     if RUNS[run].ft["eval"] != "offload":
         return []
-    return f"{train_dir(run)}/n{n}/{SIDECAR}"
+    train = train_dir(run)
+    return [f"{train}/n{n}/{SIDECAR}", f"{train}/evals/n{n}.done"]
 
 
 def round_of(seed):
@@ -340,7 +340,7 @@ def finetune_inputs(wc):
         there, train, ns = RUNS[run], train_dir(run), to_train(run)
         out += [f"{train}/n{n}/settings.json" for n in ns]
         # An offloaded run's held-out losses, scored after each segment.
-        out += [offloaded(run, n) for n in ns if offloaded(run, n)]
+        out += [f for n in ns for f in offloaded(run, n)]
         # A machine that publishes as it trains (PUBLISH in local.env).
         if LOCAL["PUBLISH"]:
             out += [f"{train}/n{n}/published.json" for n in ns]

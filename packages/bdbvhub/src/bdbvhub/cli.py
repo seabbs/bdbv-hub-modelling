@@ -200,6 +200,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     back = sub.add_parser("backtest", help="Run the backtest.")
     back.add_argument("--config", default="config/backtest.toml")
+    back.add_argument(
+        "--samples",
+        type=int,
+        help="draws per forecast scored, in place of the config's "
+        "[samples] backtest",
+    )
     back.add_argument("--data", default=data_dir)
     back.add_argument("--models", nargs="*", default=None)
     back.add_argument("--results", default="results")
@@ -817,6 +823,8 @@ def _backtest(args: argparse.Namespace) -> int:
     from nowcastrenewal.forecaster import sampler_settings
 
     config = bt.load_config(args.config)
+    if args.samples is not None:
+        config = dataclasses.replace(config, score_samples=args.samples)
     bt.apply_sampler(config)
     host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
@@ -1488,9 +1496,9 @@ def _hub_forecast(
 def _fit_store_archive(args: argparse.Namespace) -> int:
     """Run `fit-store archive` (`evaluation.store_archive`).
 
-    Returns 1 if an argument is missing, the origin is no real one, or a
-    policy candidate (or a model in `--models`) is not archived; the
-    others are written all the same.
+    Returns 1 if an argument is missing, the origin is no real one, a
+    policy candidate (or a model in `--models`) is missing, or any model
+    fails to archive. The others are written all the same.
     """
     if not (args.out and args.origin):
         print("ERROR: archive needs --out and --origin.", file=sys.stderr)
@@ -1535,14 +1543,18 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
     if args.models:
         models = {m: models.get(m) for m in args.models}
         required = set(args.models)
-    table = store_archive.archive(
-        args.store,
-        task,
-        stored_task,
-        models,
-        store.samplers(args.policy),
-        hub,
-    )
+    try:
+        table = store_archive.archive(
+            args.store,
+            task,
+            stored_task,
+            models,
+            store.samplers(args.policy),
+            hub,
+        )
+        failed: list[str] = []
+    except store_archive.ArchiveError as err:
+        table, failed = err.table, sorted(err.failed)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     write_csv(table, out)
@@ -1550,11 +1562,12 @@ def _fit_store_archive(args: argparse.Namespace) -> int:
         print(f"{row.model}: key {row.key}, made {row.fitted_at}.")
     n = table["model"].nunique()
     print(f"Archived {n} of {len(models)} models' forecasts in {out}.")
-    missing = sorted(required - set(table["model"]))
+    missing = sorted(required - set(table["model"]) - set(failed))
     if missing:
         print(f"ERROR: candidates not archived: {missing}.", file=sys.stderr)
-        return 1
-    return 0
+    if failed:
+        print(f"ERROR: models not archived: {failed}.", file=sys.stderr)
+    return 1 if missing or failed else 0
 
 
 def _nowcast(args: argparse.Namespace) -> int:

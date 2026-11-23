@@ -39,6 +39,7 @@ from pyrenew.randomvariable import DistributionalVariable, TransformedVariable
 
 from ..components.mixing import Mixing
 from ..components.pmfs import CensoredPMF
+from ..components.walks import NonCentredRandomWalk
 from .composition_noise import MultinomialNoise
 from .delays import FixedTimeVarying
 from .hazard_delay import HazardDelay
@@ -82,7 +83,6 @@ from .pooled import (
 from .publication_lag import ReleasePairLikelihood
 from .renewal import MetapopulationInfections
 from .rt_observation import RtPseudoObservation
-from .temporal import NonCentredRandomWalk
 
 MIN_OWN_CASES = 30
 """Cases a zone needs by the cut-off for an Rt deviation of its own, as
