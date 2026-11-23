@@ -35,7 +35,13 @@ from .mixing import PlaceMixing
 from .rt import KINDS, PlaceRt, RtPath, vector
 from .start import InitializeStrata
 
-__all__ = ["COLUMNS", "Latent", "simulate_latent", "simulate_latent_batch"]
+__all__ = [
+    "COLUMNS",
+    "Latent",
+    "round_up",
+    "simulate_latent",
+    "simulate_latent_batch",
+]
 
 COLUMNS = ("id", "day", "group", "infections", "onsets", "r", "reff")
 """The batch's long columns; group 0 is the whole outbreak, 1 to S the
@@ -182,7 +188,7 @@ def simulate_latent(
     )
     on = active & ~late
     n_gt = len(gt)
-    extra = _padded(n_gt, lag_bucket) - n_gt
+    extra = round_up(n_gt, lag_bucket) - n_gt
     early = design["window"] == "early"
     unit = (v["seed"] if early else v["level"]) * rel
     start = InfectionInitializationProcess(
@@ -271,7 +277,7 @@ def simulate_latent(
         delay_pmf(Delay.from_mean_cv(family, m, cv))
         for m in _vector(v, "incubation_mean")[group]
     ]
-    width = _padded(max(len(p) for p in incubation), lag_bucket)
+    width = round_up(max(len(p) for p in incubation), lag_bucket)
     events = ReferenceEvents(
         "reference",
         delay_rvs=[
@@ -302,8 +308,22 @@ def simulate_latent(
     )
 
 
-def _padded(n: int, bucket: int) -> int:
-    return -(-n // bucket) * bucket
+def round_up(n: int, bucket: int) -> int:
+    """Return `n` rounded up to a multiple of `bucket`.
+
+    Parameters
+    ----------
+    n : int
+        A length.
+    bucket : int
+        The multiple.
+
+    Returns
+    -------
+    int
+        The padded length.
+    """
+    return -(-int(n) // bucket) * bucket
 
 
 def _xy(v: Mapping[str, Any]) -> np.ndarray | None:

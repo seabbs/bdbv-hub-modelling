@@ -29,39 +29,26 @@ from numpyro import handlers
 
 from ..components.pmfs import Delay, generation_time_pmf
 from ..latent.rt import KINDS
-from ..latent.simulate import Latent, simulate_latent
+from ..latent.simulate import Latent, round_up, simulate_latent
 from ..reporting.simulate import reporting_frame, reporting_model, tabulate
 
 __all__ = [
     "BUCKET",
     "LAG_BUCKET",
-    "bucket_days",
     "outbreak_model",
     "simulate_outbreak",
 ]
 
 BUCKET = 56
-"""Days the latent arrays' length is rounded up to a multiple of."""
+"""Days the latent and reporting arrays' lengths are rounded up to a
+multiple of. Frames are whole weeks (161 to 546 days), so 8 weeks pads a
+series by 3.5 weeks on average while one round's 52 frame lengths share 8
+shapes."""
 
 LAG_BUCKET = 16
 """Days the generation time and incubation pmfs are padded to a multiple
-of."""
-
-
-def bucket_days(n_days: int) -> int:
-    """Return `n_days` rounded up to a multiple of `BUCKET`.
-
-    Parameters
-    ----------
-    n_days : int
-        Days of the reporting frame.
-
-    Returns
-    -------
-    int
-        The days the latent arrays run over.
-    """
-    return -(-int(n_days) // BUCKET) * BUCKET
+of. Their lengths run from about 12 to 55 days, so this leaves at most 4
+lengths and pads a pmf by at most 15 zero lags."""
 
 
 def outbreak_model(
@@ -108,7 +95,7 @@ def outbreak_model(
         kinds,
         incubation_cv,
         depletion,
-        days=bucket_days(n_days - len(gt)),
+        days=round_up(n_days - len(gt), BUCKET),
         lag_bucket=LAG_BUCKET,
     )
     frame = reporting_frame(
@@ -116,7 +103,7 @@ def outbreak_model(
         n_days,
         list(strata["place"]),
         list(strata["age"]),
-        days=bucket_days(n_days),
+        days=round_up(n_days, BUCKET),
     )
     reporting_model(frame, design, values, latent.onsets, draws)
     return latent
