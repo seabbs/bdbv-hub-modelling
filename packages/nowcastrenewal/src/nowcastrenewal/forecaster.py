@@ -225,13 +225,10 @@ VARIANTS: Final[dict[str, Variant]] = {
             "renewalsp",
             "Single patch: renewal fitted to each province's series on its "
             "own, with no pooling or coupling; national is their sum.",
-            # One series cannot inform the share at risk, and pins its Rt
-            # walk, whose levels are then sampled.
-            overrides={
-                "national": True,
-                "depletion": False,
-                "centred_rt": True,
-            },
+            # Each province alone drops pooling and importation; depletion
+            # and the Rt process are those of the zone models. One series
+            # pins its Rt walk, whose levels are then sampled.
+            overrides={"national": True, "centred_rt": True},
             per_province=True,
         ),
         Variant(

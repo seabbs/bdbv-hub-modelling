@@ -74,7 +74,7 @@ To see what the joint fit adds, we also fit the same model to one place at a tim
 The place is the only patch in its fit.
 So it has no shared trend with other places, no deviations, no transmission from other places and no BVDOutbreakSize term.
 Its delay and missing-onset share are its own, and its log Rt is a single weekly AR(1) process.
-One place's series cannot inform the share at risk, so this model has no depletion.
+It keeps the share at risk and its depletion, though one place's series barely informs it.
 Its other parts and priors are those of `renewal`.
 In code it is the same model builder as the zone fits, with each place as its own patch.
 We fit it to each province with a case, and split each province's forecast into its zones by their recent share of cases ([Renewal models](../methods/model.md#health-zones)).
