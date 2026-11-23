@@ -42,6 +42,10 @@ checkpoint release_list:
 
 
 rule score_germany:
+    input:
+        # The reference reruns when its models' code changes; it redoes
+        # only the rows of the models whose key moved.
+        code=lambda wc: scoring.reference_code(wc.label),
     output:
         f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",
     log:

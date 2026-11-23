@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import shlex
 from collections.abc import Callable, Iterable, Mapping
+from pathlib import Path
 from typing import Any
 
 from flowlib import forecast, machine, notify, releases
@@ -23,6 +24,35 @@ REFERENCE_NAMES = {
     "randomwalknowcast": "Random walk nowcast",
 }
 """The German report's names of the reference unit's models."""
+
+REFERENCE = "reference"
+"""The label of the unit of the models no checkpoint changes."""
+
+REFERENCE_CODE = (
+    "packages/nowcastbaselines/src",
+    "packages/nowcastfoundation/src",
+    "packages/nowcastgermany/src/nowcastgermany/evaluation.py",
+    "config/germany.toml",
+)
+"""What the reference's forecasts depend on, past their tasks: its models'
+packages, the German forecasting code and config (as
+`nowcastgermany.checkpoint.model_key`)."""
+
+
+def reference_code(label: str, root: Path | str = ".") -> list[str]:
+    """Return the reference unit's code inputs; none for a checkpoint.
+
+    The rule reruns the unit when one changes, and the unit redoes only
+    the rows of the models whose key moved.
+    """
+    if label != REFERENCE:
+        return []
+    out = []
+    for part in REFERENCE_CODE:
+        path = Path(root) / part
+        files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
+        out += [str(f.relative_to(root)) for f in files]
+    return out
 
 
 def unit_shell(study: str, room: str, segment: str = "") -> str:
