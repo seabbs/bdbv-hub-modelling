@@ -38,6 +38,7 @@ import numpy as np
 import pandas as pd
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcasteval.backtest import run_forecasts
+from nowcastfoundation.finetune import delay_quantile as share_delay
 from nowcastfoundation.finetune import (
     release_weekday,
     releases,
@@ -591,9 +592,7 @@ def delay_quantile(counts: pd.DataFrame, q: float) -> int:
     longest = pd.Timedelta(weeks=longest_delay_weeks(counts))
     seen = ref <= rep.max() - longest
     delay = (rep - ref).dt.days[seen]
-    by = counts.loc[seen, "count"].groupby(delay).sum().sort_index()
-    share = by.cumsum() / by.sum()
-    return int(share.index[np.argmax(share.to_numpy() >= q - 1e-12)])
+    return int(share_delay(counts.loc[seen, "count"].groupby(delay).sum(), q))
 
 
 def longest_delay_weeks(counts: pd.DataFrame) -> int:

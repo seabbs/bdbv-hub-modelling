@@ -599,7 +599,7 @@ def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # trainer (the run's critical path) goes first, then the simulations
     # it trains on, then checkpoint scoring (score.smk, 10 and below).
     got = priorities(tmp_path, "finetune", config=FT)
-    assert got["train_segment"] == 20
+    assert got["train_segment"] == 100
     assert 15 <= got["simulate_batch"] < 16
 
 
@@ -1016,16 +1016,16 @@ def score_jobs(tmp_path, config, local_extra="", target="score"):
     return re.split(r"\n(?=(?:local)?rule \w+:)", out.stdout)
 
 
-def test_score_units_run_torch_on_the_machine_device(tmp_path):
+def test_score_units_run_torch_beside_the_trainer_on_the_cpu(tmp_path):
     config = {"score": {"labels": ["aaa", "bbb"]}}
     blocks = score_jobs(tmp_path, config)
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert len(units) == 3
     for block in units:
-        assert "DEVICE=cuda" in block
+        assert "DEVICE=cpu" in block
         assert "OMP_NUM_THREADS=1 " not in block
         assert "CUDA_VISIBLE_DEVICES" not in block
-        assert re.search(r"resources: .*gpu=1", block)
+        assert not re.search(r"resources: .*gpu=1", block)
         # A few threads, not the machine: simulations keep their cores.
         assert re.search(r"threads: 2\b", block)
         assert "--xla_cpu_multi_thread_eigen=false" in block
