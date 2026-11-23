@@ -445,11 +445,12 @@ def _tasks(
 def _own(model: Any, task: ForecastTask) -> ForecastTask:
     """Return the task as `model` forecasts it.
 
-    A model of daily steps forecasts every target date of a
+    A model of daily steps (`source` "daily": the daily Chronos-2 models
+    and `randomwalknowcast_daily`) forecasts every target date of a
     `nowcast_tasks` task; a model of weekly steps, the hub weeks only
     (`weekly_task`).
     """
-    daily = isinstance(model, FoundationModel) and model.source == "daily"
+    daily = getattr(model, "source", None) == "daily"
     return task if daily else weekly_task(task)
 
 

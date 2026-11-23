@@ -54,7 +54,7 @@ from nowcastfoundation.sidecar import SIDECAR, with_sidecar
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule: WIS and CRPS on each model's own quantiles, from
 1000 draws on the common random stream (`nowcasteval.marginals`)."""
-BASELINE: Final = "randomwalknowcast"
+BASELINE: Final = "randomwalknowcast_daily"
 REFERENCE: Final = "reference"
 REFERENCE_PIN: Final = "e8a1f5ae338b"
 """The checkpoint the reference pins, which its models never load."""
