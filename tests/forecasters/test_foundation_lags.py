@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 
 import numpy as np
 import pandas as pd
@@ -95,12 +96,11 @@ def test_no_evidence_takes_as_many_lags_as_the_history_allows():
     assert lag_count(short, "daily") == 29
 
 
-def test_steps_released_late_are_skipped_not_read_as_delayed():
-    # The first release is weeks after the window's steps (BDBV's first
-    # daily release, 2026-08-18): they are first seen at lag 60, so the
-    # gap before the first release is not a reporting delay. Steps from
-    # the first release on are complete at lag 4; those in the week
-    # before it wait up to 6 days for it, as weekly releases do, so 7.
+def test_a_backfilled_first_release_is_not_delay_evidence():
+    # The first release is weeks after some of the window's steps (BDBV's
+    # first daily release, 2026-08-18, holds onsets from February): those
+    # steps' gap to it is not a reporting delay. Steps from the first
+    # release on are complete at lag 4, so 5 lags.
     window, back = LAG_WINDOW["daily"]
     last = 300
     first_release = last - back - window // 2
@@ -111,13 +111,13 @@ def test_steps_released_late_are_skipped_not_read_as_delayed():
         return min(1.0, (d + 1) / 5)
 
     tri = _triangle(last, share)
-    assert lag_count(tri, "daily") == 7
+    assert lag_count(tri, "daily") == 5
 
 
-def test_a_window_released_only_late_takes_the_default_window():
-    # Every complete step was first released long after its onset: no
-    # delay can be read, so the block takes LAG_WINDOW's 28 days, not the
-    # 112 the history allows.
+def test_no_informative_step_takes_the_release_history():
+    # Every complete step is before the first release: no delay can be
+    # read, so the block takes the release history, every day from the
+    # first release to the cut-off, so each has its lags.
     window, back = LAG_WINDOW["daily"]
     last = 300
     first_release = last - back + 40
@@ -126,18 +126,26 @@ def test_a_window_released_only_late_takes_the_default_window():
         return np.nan if t + d < first_release else 1.0
 
     tri = _triangle(last, share)
-    assert lag_count(tri, "daily") == window
+    assert lag_count(tri, "daily") == last - first_release + 1 == 73
 
 
-def test_the_bdbv_daily_block_is_not_read_as_four_months_late(
-    task: ForecastTask,
-):
+def test_releases_from_day_one_are_unchanged():
+    # Germany and the simulated systems release from the first onset day:
+    # every complete step is evidence, as before.
+    tri = _triangle(200, lambda _t, d: min(1.0, (d + 1) / 10))
+    assert lag_count(tri, "daily") == 10
+
+
+def test_the_bdbv_daily_block_takes_its_release_history(task: ForecastTask):
     # BDBV's daily releases start on 2026-08-18, after the complete
-    # window's onsets: read as delays they gave the 112-lag cap, so the
-    # context ended four months before the cut-off and the 7-day row
-    # was forecast blind (national medians near 0 against ~500 reported).
+    # window's onsets, so the block takes every day from the first
+    # release to the cut-off: neither the 112-lag cap (the context then
+    # ended four months back) nor a fixed 28.
     model = get_model("fm_chronos_daily_ragged")
-    assert model.lag_count(task) == LAG_WINDOW["daily"][0]
+    rows, places, weeks = model._rows(task)
+    tri = model._triangle(rows, places, weeks[-1])
+    cut = dt.date.fromisoformat(tri.times[tri.last])
+    assert model.lag_count(task) == (cut - dt.date(2026, 8, 18)).days + 1
 
 
 def test_a_delay_not_reached_in_the_window_takes_the_history():
