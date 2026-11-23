@@ -298,7 +298,6 @@ Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quanti
 - The lag count is the smaller of this estimate and the history available, keeping two steps of context before the longest lag.
 - With no complete steps, no counts in them, or a 99% point not reached within 112 days, we use as many lags as the history allows.
 - A user can set a fixed count or another quantile instead.
-- We compare this lag count with a fixed cap of 4 weeks or 28 days on the German development half.
 :::
 
 To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real`).
