@@ -30,6 +30,7 @@ from nowcastfoundation.finetune import (
     BINNED,
     MIXED,
     ROLLING,
+    draw_named,
     release_days,
     release_weekday,
     training_block,
@@ -153,9 +154,99 @@ def native_cadence(source: str) -> str:
 
 
 def draw_cadence(source: str, rng: np.random.Generator) -> str:
-    """Draw a block's release cadence at its source's shares (`CADENCES`)."""
-    mix = CADENCES[native_cadence(source)]
+    """Draw a block's release cadence at its source's shares.
+
+    The shares are the block design's (`CADENCES`), or the release
+    layer's where it sets them (`RELEASE_LAYER`).
+    """
+    width = native_cadence(source)
+    mix = (RELEASE_LAYER or {}).get("cadences", {}).get(width, CADENCES[width])
     return str(rng.choice(list(mix), p=list(mix.values())))
+
+
+RELEASE_LAYER: dict[str, Any] | None = None
+"""The release layer (`finetune.release_layer`, `check_release_layer`),
+drawn per block at fine-tune time from the simulations already made: a
+late start to a share of blocks' releases (`release_start`) and the
+release cadences of each step width (`draw_cadence`). None leaves each
+block's releases as the block design draws them."""
+
+NAMED_PARAMETERS: Final = {
+    "uniform": ("lower", "upper"),
+    "beta": ("a", "b"),
+    "lognormal": ("median", "sdlog"),
+}
+"""The parameters each named distribution needs (`finetune.draw_named`)."""
+
+
+def read_release_layer(path: Path | str) -> dict[str, Any]:
+    """Return the release layer in a YAML file, checked."""
+    import yaml
+
+    layer = yaml.safe_load(Path(path).read_text()) or {}
+    check_release_layer(layer)
+    return layer
+
+
+def check_release_layer(layer: dict[str, Any]) -> None:
+    """Raise unless every part of the release layer can be drawn.
+
+    `start` needs a `share` from 0 to 1 and a named `delay_days`
+    distribution. Each step width of `cadences` (`NATIVE_CADENCE`) needs
+    shares of that width's cadences (`CADENCES`) summing to one.
+
+    Raises
+    ------
+    ValueError
+        Naming the part that cannot be drawn.
+    """
+    extra = set(layer) - {"start", "cadences"}
+    if extra:
+        raise ValueError(f"release layer: no part {sorted(extra)}")
+    if "start" in layer:
+        start = layer["start"]
+        share = start.get("share")
+        if not isinstance(share, (int, float)) or not 0 <= share <= 1:
+            raise ValueError(f"release layer: start share {share!r}")
+        spec = start.get("delay_days", {})
+        needs = NAMED_PARAMETERS.get(spec.get("dist"))
+        if needs is None or any(k not in spec for k in needs):
+            raise ValueError(f"release layer: start delay_days {spec!r}")
+    for width, mix in layer.get("cadences", {}).items():
+        if width not in CADENCES:
+            raise ValueError(f"release layer: no step width {width!r}")
+        unknown = set(mix) - set(CADENCES[width])
+        if unknown:
+            raise ValueError(
+                f"release layer: {width} has no cadence {sorted(unknown)}"
+            )
+        shares = list(mix.values())
+        if min(shares) < 0 or abs(sum(shares) - 1) > 1e-9:
+            raise ValueError(f"release layer: {width} shares {mix}")
+
+
+def release_start(
+    days: list[str],
+    first: str,
+    spec: dict[str, Any],
+    rng: np.random.Generator,
+) -> tuple[list[str], int]:
+    """Return a block's releases from a drawn start day, and its delay.
+
+    With chance `spec["share"]`, a delay in whole days is drawn from
+    `spec["delay_days"]` (`finetune.draw_named`), and every release
+    before `first` plus the delay is dropped; the cut's is always kept.
+    The first kept release then holds every onset reported before it, as
+    the BDBV hub's first release held onsets from months before. A block
+    whose delay reaches its cut has the cut's release alone. Otherwise
+    the releases are as given and the delay is 0.
+    """
+    if rng.random() >= spec["share"]:
+        return list(days), 0
+    delay = max(0, int(draw_named(spec["delay_days"], rng)))
+    start = dt.date.fromisoformat(first[:10]) + dt.timedelta(days=delay)
+    kept = [d for d in days[:-1] if dt.date.fromisoformat(d) >= start]
+    return kept + list(days[-1:]), delay
 
 
 def check_sources(sources: tuple[str, ...]) -> None:
@@ -773,6 +864,13 @@ def outbreak_blocks(
             # the slot's cut.
             cadence = draw_cadence(source, option_rng)
             days = release_days(first, cutoffs[cut], cadence, option_rng)
+            # A late start to the releases (`RELEASE_LAYER`), from a child
+            # generator, so the other draws are as without it.
+            start_days = 0
+            if RELEASE_LAYER is not None and "start" in RELEASE_LAYER:
+                days, start_days = release_start(
+                    days, first, RELEASE_LAYER["start"], option_rng.spawn(1)[0]
+                )
             totals = any("-" in p for p in provinces)
             # A view with the country draws its cases as the whole did.
             country_rng = copy.deepcopy(parent_rng)
@@ -870,6 +968,9 @@ def outbreak_blocks(
                 padded["mix"] = view_mix
                 padded["source"] = source
                 padded["cadence"] = cadence
+                padded["release_start_days"] = start_days
+                padded["first_release"] = days[0]
+                padded["releases"] = len(days)
                 padded["cut"] = j
                 padded["view"] = record
                 out.append(padded)
