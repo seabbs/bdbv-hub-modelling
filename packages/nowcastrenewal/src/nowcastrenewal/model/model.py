@@ -262,7 +262,7 @@ class Vintage:
         day), `groups` `(G, P)`, `values`, `scales` and `kinds` `(G,)`.
     release_pairs : dict or None
         Rows of each earlier delay file and how many the file before it
-        had (`data.releases.release_pairs`), or None.
+        had (`nowcastutils.releases.release_pairs`), or None.
     """
 
     start_date: dt.date

@@ -7,7 +7,7 @@ Run from the repo root.
 CACHE is the checkpoint scorer's cache (`scripts/checkpoint_scores.py
 germany CACHE LABEL` on the checkpoint-scoring branch), with one file
 per development date in CACHE/germany-days/LABEL/
-(`evaluation.checkpoint.GERMANY_UNIT`). LABEL is a settings hash
+(`nowcastgermany.checkpoint.GERMANY_UNIT`). LABEL is a settings hash
 (release `chronos-ft-<hash>`) or `slots-<hash>` (`chronos-slots-<hash>`).
 
 The script keeps `fm_chronos_daily_ragged_ft` and

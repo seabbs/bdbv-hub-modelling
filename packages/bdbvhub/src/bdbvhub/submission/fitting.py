@@ -309,8 +309,8 @@ def write_records(
 ) -> dict[str, Any]:
     """Write a fit's `diagnostics.json` and `fit.json`.
 
-    `run_fit` and the fit store (`store.fit_files`) both record a fit
-    this way, so `run_forecast` reads either.
+    `run_fit` and the fit store (`bdbvhub.store.store.fit_files`) both
+    record a fit this way, so `run_forecast` reads either.
 
     Parameters
     ----------

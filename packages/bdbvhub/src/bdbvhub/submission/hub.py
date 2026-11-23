@@ -175,7 +175,7 @@ def to_hub_table(
         It is added to the national sum. Missing rows count as zero.
     zones : pandas.DataFrame, optional
         Health-zone samples (columns as `samples`), such as from
-        `forecasters.zones.zones_for_model`. They are not added to the
+        `nowcastbaselines.zones.zones_for_model`. They are not added to the
         national value.
     n_samples : int
         Number of samples each location must have.
@@ -337,7 +337,7 @@ def zones_need_not_sum(name: str | None) -> bool:
     """Return whether model `name`'s zones need not sum to its provinces.
 
     The random walks forecast each zone from its own data
-    (`forecasters.zones.walks_own_zones`), and the foundation models take
+    (`nowcastbaselines.zones.walks_own_zones`), and the foundation models take
     their zones straight from their block, as they do the provinces and
     the country (`own_national`). Every other model splits its provinces
     across the zones, so its zones must sum to them.
