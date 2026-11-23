@@ -131,8 +131,8 @@ finetune:
 # takes the same rules through the {run} wildcard.
 runs:
   runa: {}
-  # Run A without the attention biases (the paper's no-slots comparison,
-  # paperpipe.evidence.WITHOUT_BIASES).
+  # Run A without the attention biases (the paper's slots comparison,
+  # paper/workflow/config.yaml `comparisons`).
   noslots: {series_bias: false}
   # Run A on complete counts, without lag series (the paper's delays
   # comparison).

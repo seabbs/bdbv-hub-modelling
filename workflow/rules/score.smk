@@ -166,7 +166,7 @@ rule compare_daily:
 
 rule comparison:
     # Every run's checkpoints in one table, for the fine-tuning
-    # comparisons (paperpipe.evidence `compare_*`).
+    # comparisons (paperpipe.evidence.COMPARISONS).
     input:
         expand(f"{RUN}/reports/checkpoint-scores.csv", run=list(RUNS)),
     output:

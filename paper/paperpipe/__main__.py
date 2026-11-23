@@ -199,7 +199,10 @@ def _joint(a: argparse.Namespace) -> None:
 
 def _evidence(a: argparse.Namespace) -> None:
     paths = {name: getattr(a, name) for name in EVIDENCE}
-    numbers = write_evidence(paths, a.si_dir, a.fig_dir, a.out, run=a.live_run)
+    pairs = dict(c.split("=", 1) for c in a.comparison)
+    numbers = write_evidence(
+        paths, a.si_dir, a.fig_dir, a.out, run=a.live_run, comparisons=pairs
+    )
     if a.mode == "paper" and numbers["evidence"]["waiting"]:
         raise ValueError(
             "The paper run cannot leave SI results out; it waits on "
@@ -387,6 +390,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--live-run",
         default=LIVE_RUN,
         help="The live fine-tuning run, by the checkpoint scores' `run`.",
+    )
+    p.add_argument(
+        "--comparison",
+        action="append",
+        default=[],
+        help="NAME=RUN: a COMPARISONS name and the variant run it compares.",
     )
     p.set_defaults(run=_evidence)
 

@@ -92,7 +92,10 @@ def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
         "sim_q95": "(not yet available)",
         "Germany_states": "(not yet available)",
     }
-    assert len(out["evidence"]["waiting"]) == len(EVIDENCE)
+    from paperpipe.evidence import COMPARISONS
+
+    waiting = out["evidence"]["waiting"]
+    assert len(waiting) == len(EVIDENCE) + len(COMPARISONS)
 
 
 def test_a_paper_run_fails_while_evidence_is_missing(tmp_path) -> None:

@@ -80,9 +80,10 @@ def test_the_curve_keeps_zero_shot_and_the_live_run_by_level() -> None:
 
 
 def test_the_attention_bias_comparison_comes_from_checkpoint_scores() -> None:
-    from paperpipe.evidence import slots_rows
+    from paperpipe.evidence import COMPARISONS, comparison_rows
 
-    out = slots_rows(_scores(), "one-model")
+    labels = COMPARISONS["slots"][1]
+    out = comparison_rows(_scores(), "one-model", "no-slots", labels)
     assert set(out["run"]) == {"attention biases", "no biases"}
     # One set per study and level, not pooled.
     assert {"German national, daily", "German states, daily"} <= set(out["set"])
@@ -95,7 +96,14 @@ def test_the_evidence_has_the_compact_tables_and_labels(tmp_path) -> None:
     rows = tmp_path / "scores.csv"
     _scores().to_csv(rows, index=False)
     paths = dict.fromkeys(EVIDENCE) | {"checkpoint_scores": rows}
-    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
+    write_evidence(
+        paths,
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+        run="one-model",
+        comparisons={"slots": "no-slots"},
+    )
     table = (tmp_path / "si" / "checkpoint-table.md").read_text()
     assert "Zero-shot" in table
     assert "slots-z" not in table
@@ -118,7 +126,7 @@ def test_the_runs_are_compared_at_matched_sizes() -> None:
     extra = extra.loc[extra["run"] == "no-slots"].assign(
         checkpoint="plain2", outbreaks=2000, rel_crps=0.1, loss=0.01
     )
-    out = slots_summary(pd.concat([_scores(), extra]), "one-model")
+    out = slots_summary(pd.concat([_scores(), extra]), "one-model", "no-slots")
     # Both runs reached 1,000, so both rows give 1,000, not 2,000.
     assert out.iloc[2]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
     assert out.iloc[1]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
@@ -132,3 +140,36 @@ def test_the_curve_keeps_the_hub_target_only() -> None:
     out = checkpoint_rows(pd.concat([rows, daily]), "one-model")
     assert (out["rel_wis"].dropna() < 9).all()
     assert not out.duplicated(["study", "level", "model", "checkpoint"]).any()
+
+
+def test_each_comparison_pairs_the_live_run_with_its_variant() -> None:
+    from paperpipe.evidence import comparison_rows
+
+    labels = ("with delays", "without delays")
+    out = comparison_rows(_scores(), "one-model", "no-slots", labels)
+    assert set(out["run"]) == set(labels)
+    assert {"German national, daily", "German states, daily"} <= set(out["set"])
+    # A variant with no scored checkpoint gives no rows.
+    assert comparison_rows(_scores(), "one-model", "nodelays", labels).empty
+
+
+def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
+    rows = tmp_path / "scores.csv"
+    _scores().to_csv(rows, index=False)
+    paths = dict.fromkeys(EVIDENCE) | {"checkpoint_scores": rows}
+    pairs = {"slots": "no-slots", "delays": "nodelays"}
+    numbers = write_evidence(
+        paths,
+        tmp_path / "si",
+        tmp_path / "fig",
+        tmp_path / "e.yml",
+        run="one-model",
+        comparisons=pairs,
+    )
+    from paperpipe.evidence import COMPARISONS
+
+    waiting = numbers["evidence"]["waiting"]
+    assert COMPARISONS["slots"][0] not in waiting
+    assert COMPARISONS["delays"][0] in waiting
+    assert COMPARISONS["realdata"][0] in waiting
+    assert (tmp_path / "fig" / "compare-delays.png").is_file()
