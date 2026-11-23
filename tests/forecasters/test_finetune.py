@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from nowcastfoundation.finetune import (
+    delay_quantile,
     final_counts,
     release_weekday,
     releases,
@@ -654,3 +655,12 @@ def test_releases_fall_wednesday_to_saturday() -> None:
     rng = np.random.default_rng(1)
     days = {release_weekday(rng) for _ in range(200)}
     assert days == {2, 3, 4, 5}
+
+
+def test_a_delay_quantile_is_the_first_delay_reaching_the_share() -> None:
+    by_delay = pd.Series([50.0, 30.0, 20.0], index=[3, 0, 9])
+    assert delay_quantile(by_delay, 0.3) == 0
+    assert delay_quantile(by_delay, 0.5) == 3
+    assert delay_quantile(by_delay, 0.8) == 3
+    assert delay_quantile(by_delay, 0.99) == 9
+    assert np.isnan(delay_quantile(by_delay * 0, 0.5))

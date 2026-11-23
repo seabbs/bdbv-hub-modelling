@@ -678,6 +678,28 @@ def simulations(outbreaks: pd.Series) -> pd.Series:
     return parts.str[0] + "-" + parts.str[1]
 
 
+def delay_quantile(by_delay: pd.Series, q: float) -> float:
+    """Return the first delay by which a share `q` of the count is reported.
+
+    Parameters
+    ----------
+    by_delay : pandas.Series
+        The count reported at each delay, indexed by delay.
+    q : float
+        The share, in (0, 1].
+
+    Returns
+    -------
+    float
+        The delay, or NaN when nothing is reported.
+    """
+    total = by_delay.sum()
+    if total <= 0:
+        return np.nan
+    share = by_delay.sort_index().cumsum() / total
+    return float(share.index[int(np.argmax(share.to_numpy() >= q - 1e-9))])
+
+
 def weekly_cutoffs(first: str, last: str, weekday: int) -> list[str]:
     """Return weekly cut-offs on a weekday (Monday 0) from `first` to `last`.
 
