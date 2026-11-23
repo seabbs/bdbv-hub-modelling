@@ -135,11 +135,17 @@ class PaperFlow:
             mode: expand(folder)
             for mode, folder in synthetic["simulations"].items()
         }
-        config["final_run"] = expand(config["final_run"])
-        config["rounds_dir"] = expand(config["rounds_dir"])
+        # Null leaves the run or rounds out, and what reads them pending.
+        for key in ("final_run", "rounds_dir"):
+            if config.get(key):
+                config[key] = expand(config[key])
         # The `_ft` models load the final run's newest saved checkpoint,
         # pending until it has one. Outputs record its spec, not its folder.
-        segment = newest_segment(Path(config["final_run"]) / "train")
+        segment = (
+            newest_segment(Path(config["final_run"]) / "train")
+            if config.get("final_run")
+            else None
+        )
         config["finetuned"] = (
             None if segment is None else local_checkpoint(segment).hash
         )
@@ -215,17 +221,49 @@ class PaperFlow:
         suffix = "".join(Path(entry["path"]).suffixes)
         return f"{self.results}/evidence/{name}-{entry['ref'][:12]}{suffix}"
 
-    def evidence_args(self, names: Mapping[str, object]) -> str:
-        """Return the `paperpipe evidence` options of the entries in `names`."""
+    @staticmethod
+    def options(files: Mapping[str, str]) -> str:
+        """Return `paperpipe evidence` options naming each file."""
         return " ".join(
-            f"--{n.replace('_', '-')} {self.evidence_file(n)}"
-            for n in self.evidence
-            if n in names
+            f"--{n.replace('_', '-')} {f}" for n, f in files.items()
         )
 
-    def heldout_curve(self) -> str:
-        """Return the final run's held-out loss curve (rule heldout_curve)."""
-        return f"{self.config['final_run']}/heldout-curve.csv"
+    def evidence_args(self, names: Mapping[str, object]) -> str:
+        """Return the `paperpipe evidence` options of the entries in `names`."""
+        return self.options(
+            {n: self.evidence_file(n) for n in self.evidence if n in names}
+        )
+
+    @property
+    def rounds_dir(self) -> str | None:
+        """The simulation rounds' folder, or None to leave them out."""
+        return self.config.get("rounds_dir")
+
+    def workflow_evidence(self) -> dict[str, str]:
+        """Return the evidence step's inputs from workflow rules.
+
+        The final run's held-out loss curve (rule heldout_curve), the
+        published-range table's rows (rule sim_diseases) and the realism
+        step's outputs (rule sim_realism), and the walk models' pairing
+        scores and rho_p (rules si_copula and pairing_germany). Each is
+        left out, and its SI result pending, while its run or rounds folder
+        is null, or for the pairing scores while the German benchmark runs
+        on dummy data.
+        """
+        files = {}
+        evidence = f"{self.results}/evidence"
+        if self.germany["real"]:
+            files["si_copula"] = f"{evidence}/si-copula.csv"
+            files["copula_rho"] = (
+                f"{evidence}/pairing/pairing-germany-rho.csv.gz"
+            )
+        if final := self.config.get("final_run"):
+            files["finetune_heldout"] = f"{final}/heldout-curve.csv"
+        if where := self.rounds_dir:
+            files["sim_diseases"] = f"{where}/report/sim-diseases.csv"
+            files["sim_summaries"] = f"{evidence}/sim-summaries.csv"
+            files["sim_realism"] = f"{evidence}/sim-realism.csv"
+        return files
 
     def realism_inputs(self) -> dict[str, Any]:
         """Return the realism step's inputs.
@@ -234,7 +272,7 @@ class PaperFlow:
         half's statistics (workflow rules round_summaries and
         germany_dev_stats).
         """
-        where = self.config["rounds_dir"]
+        where = self.rounds_dir
         return {
             "germany": f"{where}/report/germany-dev.csv",
             "rounds": [
@@ -242,10 +280,6 @@ class PaperFlow:
                 for r in self.config["grid_rounds"]["rounds"]
             ],
         }
-
-    def sim_diseases(self) -> str:
-        """Return the disease table's rows (workflow rule sim_diseases)."""
-        return f"{self.config['rounds_dir']}/report/sim-diseases.csv"
 
     def live_arg(self) -> str:
         """Return the live run option, whose newest checkpoints are shown."""
@@ -323,10 +357,13 @@ class PaperFlow:
         (`grid_rounds.validation_round` in `rounds_dir`), which the
         simulate rule builds, so the held-out round is never read for them.
         Each pick names a simulation, `<seed>-<n>`, and the files are its
-        seed's.
+        seed's. With no rounds folder there are none, and the figure says
+        what it waits on.
         """
+        if self.rounds_dir is None:
+            return {"counts": [], "settings": []}
         round_ = self.config["grid_rounds"]["validation_round"]
-        folder = f"{self.config['rounds_dir']}/r{round_}/sims"
+        folder = f"{self.rounds_dir}/r{round_}/sims"
         picks = self.synthetic["examples"]["picks"]
         seeds = sorted({str(sim).split("-")[0] for sim, _ in picks})
         return {

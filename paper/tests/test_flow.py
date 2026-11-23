@@ -285,3 +285,55 @@ def test_the_comparisons_are_passed_by_run_name() -> None:
         "--comparison slots=noslots --comparison delays=nodelays "
         "--comparison realdata=realdata"
     )
+
+
+def test_an_offline_config_leaves_the_workflow_inputs_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    germany = tmp_path / "germany.toml"
+    split = CONFIG["heldout"]["germany_from"]
+    germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "finetune.toml").write_text(
+        '[realdata_bdbv]\nrelease = "2026-08-01"\n'
+    )
+    config = copy.deepcopy(CONFIG)
+    config["germany"]["config"] = str(germany)
+    config["germany"]["real"] = False
+    config["final_run"] = None
+    config["rounds_dir"] = None
+    monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+    flow = PaperFlow.load(config, {}, tmp_path, lambda f: f)
+    assert config["finetuned"] is None
+    assert flow.workflow_evidence() == {}
+    assert flow.example_files() == {"counts": [], "settings": []}
+
+
+def test_the_evidence_reads_the_workflow_rules_outputs() -> None:
+    flow = _flow()
+    files = flow.workflow_evidence()
+    rounds = CONFIG["rounds_dir"]
+    assert files["finetune_heldout"] == (
+        f"{CONFIG['final_run']}/heldout-curve.csv"
+    )
+    assert files["sim_diseases"] == f"{rounds}/report/sim-diseases.csv"
+    assert files["sim_summaries"].endswith("evidence/sim-summaries.csv")
+    assert files["sim_realism"].endswith("evidence/sim-realism.csv")
+    args = flow.options(files)
+    assert f"--finetune-heldout {files['finetune_heldout']}" in args
+    assert _flow(final_run=None).workflow_evidence().keys() == {
+        "si_copula",
+        "copula_rho",
+        "sim_diseases",
+        "sim_summaries",
+        "sim_realism",
+    }
+
+
+def test_the_copula_evidence_reads_real_german_data_only() -> None:
+    files = _flow().workflow_evidence()
+    assert files["si_copula"].endswith("evidence/si-copula.csv")
+    assert files["copula_rho"].endswith("pairing-germany-rho.csv.gz")
+    dummy = _flow(germany__real=False).workflow_evidence()
+    assert "si_copula" not in dummy
+    assert "copula_rho" not in dummy

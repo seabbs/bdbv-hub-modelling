@@ -11,11 +11,12 @@ studies: [synthetic, germany, ebola]
 # loss curve is the SI's (rule heldout_curve), and every `_ft` model
 # loads its newest saved checkpoint, train/n<N>
 # (nowcastfoundation.forecaster.newest_segment); before it has one the
-# fine-tuned forecasts are pending.
+# fine-tuned forecasts are pending. Null leaves the run out.
 final_run: $ROOT/runs/runa
 # The simulation rounds' folder under the machine's ROOT (the workflow's
 # rounds): the SI's realism reads the grid's training rounds
 # (`grid_rounds.rounds`) and the German development half's statistics.
+# Null leaves the rounds out, and what reads them pending.
 rounds_dir: $ROOT/rounds
 # The live fine-tuning run (the checkpoint scores' `run`, its workflow
 # run name) whose newest scored checkpoints the SI curve, comparisons and
