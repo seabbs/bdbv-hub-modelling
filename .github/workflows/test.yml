@@ -81,7 +81,7 @@ jobs:
         run: >-
           uv run --group paper pytest -q -n auto --dist worksteal --durations=30
           --junitxml=pytest-durations.xml
-          ${{ github.event_name != 'pull_request' && '--cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub --cov-report=term-missing --cov-report=xml' || '' }}
+          ${{ github.ref == 'refs/heads/main' && '--cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub --cov-report=term-missing --cov-report=xml' || '' }}
       - name: Paper tests
         working-directory: paper
         run: uv run --group paper pytest -q -n auto --dist worksteal --durations=10 tests
@@ -96,7 +96,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload coverage to Codecov
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.xml
