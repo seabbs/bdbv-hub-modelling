@@ -7,7 +7,7 @@
 # 2026-11-01 it is double interval censored with primarycensored.
 # Run from the repo root:
 #
-#   Rscript scripts/hub_imputation_fit.R
+#   Rscript packages/bdbvhub/data-raw/hub_imputation_fit.R
 
 suppressPackageStartupMessages({
   library(flexsurv)

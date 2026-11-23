@@ -3,7 +3,7 @@
 # The JAX port (packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/) is checked against
 # these fixtures. Run from the repo root:
 #
-#   Rscript scripts/baselinenowcast_fixtures.R
+#   Rscript tests/baselinenowcast/baselinenowcast_fixtures.R
 #
 # Outputs go to tests/baselinenowcast/fixtures/<case>/ as plain CSV
 # matrices without a header. NA marks an unobserved cell.

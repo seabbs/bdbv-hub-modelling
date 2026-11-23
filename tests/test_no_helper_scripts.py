@@ -23,7 +23,7 @@ MOVED = {
     "scripts/snapshot_fixtures.R": "tests/baselinenowcast/snapshot_fixtures.R",
     "scripts/check_fixtures.py": "tests/baselinenowcast/check_fixtures.py",
     "scripts/cache_bust.py": "docs/hooks/cache_bust.py",
-    "scripts/build_diagrams.sh": "task docs:diagrams",
+    "scripts/build_diagrams.sh": "deleted",
     "scripts/build_zone_centres.py": (
         "packages/bdbvhub/data-raw/build_zone_centres.py"
     ),
@@ -51,7 +51,7 @@ def test_commands_are_console_scripts() -> None:
     text = "\n".join(
         p.read_text() for p in (ROOT / "packages").glob("*/pyproject.toml")
     )
-    names = [n for n in MOVED.values() if "/" not in n and " " not in n]
+    names = [n for n in MOVED.values() if "/" not in n and n != "deleted"]
     assert [n for n in names if f"\n{n} = " not in text] == []
 
 

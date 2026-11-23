@@ -4,7 +4,7 @@ name: baselinenowcast fixtures
 # package baselinenowcast (tests/baselinenowcast/fixtures). This
 # job regenerates them with the pinned package version and fails if
 # they differ from the committed files beyond the tests' tolerance
-# (scripts/check_fixtures.py), so the fixtures cannot drift
+# (tests/baselinenowcast/check_fixtures.py), so the fixtures cannot drift
 # from the reference implementation.
 
 on:
@@ -13,9 +13,8 @@ on:
     paths:
       - 'packages/nowcastbaselines/src/nowcastbaselines/randomwalk.py'
       - 'packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/**'
-      - 'scripts/baselinenowcast_fixtures.R'
-      - 'scripts/snapshot_fixtures.R'
-      - 'scripts/check_fixtures.py'
+      - 'tests/baselinenowcast/*.R'
+      - 'tests/baselinenowcast/check_fixtures.py'
       - 'tests/baselinenowcast/fixtures/**'
       - '.github/workflows/baselinenowcast.yml'
   pull_request:
@@ -24,9 +23,8 @@ on:
     paths:
       - 'packages/nowcastbaselines/src/nowcastbaselines/randomwalk.py'
       - 'packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/**'
-      - 'scripts/baselinenowcast_fixtures.R'
-      - 'scripts/snapshot_fixtures.R'
-      - 'scripts/check_fixtures.py'
+      - 'tests/baselinenowcast/*.R'
+      - 'tests/baselinenowcast/check_fixtures.py'
       - 'tests/baselinenowcast/fixtures/**'
       - '.github/workflows/baselinenowcast.yml'
   workflow_dispatch:
@@ -63,7 +61,7 @@ jobs:
           GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       - name: Regenerate fixtures
         run: |
-          Rscript scripts/baselinenowcast_fixtures.R
-          Rscript scripts/snapshot_fixtures.R
+          Rscript tests/baselinenowcast/baselinenowcast_fixtures.R
+          Rscript tests/baselinenowcast/snapshot_fixtures.R
       - name: Fail if the fixtures changed
-        run: python3 scripts/check_fixtures.py tests/baselinenowcast/fixtures
+        run: python3 tests/baselinenowcast/check_fixtures.py tests/baselinenowcast/fixtures
