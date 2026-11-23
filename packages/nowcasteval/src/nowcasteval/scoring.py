@@ -326,7 +326,8 @@ def energy_scores(
         y = grp.drop_duplicates(cell).set_index(cell)["truth"]
         for model, own in grp.groupby("model"):
             x = own.pivot(index="sample", columns=cell, values="value")
-            obs = y.reindex(x.columns).to_numpy()
+            x = x.astype(float)
+            obs = y.reindex(x.columns).to_numpy(dtype=float)
             out.append(
                 {
                     **dict(zip([*unit, "scale"], key, strict=True)),
