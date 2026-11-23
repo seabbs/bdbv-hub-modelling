@@ -284,26 +284,83 @@ def pit_scores(
     return np.where(np.isnan(y), np.nan, z)
 
 
-def _shrunk_correlation(
-    a: np.ndarray, b: np.ndarray, origin: np.ndarray
-) -> tuple[float, float, int]:
+def _pair_sums(
+    a: np.ndarray, b: np.ndarray, weight_a: np.ndarray, weight_b: np.ndarray
+) -> np.ndarray:
+    """Return each origin's sums over pairs: n, a, a^2, b, b^2.
+
+    `a` and `b` are `[origins, ...]` with NaN filled by 0; each value
+    enters as many pairs as its weight.
+    """
+    axes = tuple(range(1, a.ndim))
+    return np.stack(
+        [
+            weight_a.sum(axis=axes),
+            (weight_a * a).sum(axis=axes),
+            (weight_a * a**2).sum(axis=axes),
+            (weight_b * b).sum(axis=axes),
+            (weight_b * b**2).sum(axis=axes),
+        ],
+        axis=1,
+    )
+
+
+def _step_sums(z: np.ndarray) -> np.ndarray:
+    """Return each origin's sums over pairs of consecutive steps.
+
+    `[origins, 6]`: n, a, a^2, b, b^2 and ab, with a a series' score at a
+    step and b at the next, over pairs with both scores.
+    """
+    a, b = z[:, :, :-1], z[:, :, 1:]
+    ok = (np.isfinite(a) & np.isfinite(b)).astype(float)
+    a, b = np.where(ok > 0, a, 0.0), np.where(ok > 0, b, 0.0)
+    ab = (ok * a * b).sum(axis=(1, 2))
+    return np.column_stack([_pair_sums(a, b, ok, ok), ab])
+
+
+def _series_sums(z: np.ndarray) -> np.ndarray:
+    """Return each origin's sums over pairs of series at one step.
+
+    As `_step_sums`, with a series i's score and b a later series j's, over
+    every pair i < j with both scores. Sums over the series give them
+    without listing the pairs: a value of series i enters a pair with each
+    later series that has a score (`after`), one of series j with each
+    earlier one (`before`), and the products sum to half the square of
+    the step's sum less its sum of squares.
+    """
+    ok = np.isfinite(z)
+    x = np.where(ok, z, 0.0)
+    seen = np.cumsum(ok, axis=1)
+    after = ok * (seen[:, -1:] - seen)
+    before = ok * (seen - ok)
+    total = x.sum(axis=1)
+    ab = 0.5 * (total**2 - (x**2).sum(axis=1)).sum(axis=1)
+    return np.column_stack([_pair_sums(x, x, after, before), ab])
+
+
+def _shrunk_correlation(sums: np.ndarray) -> tuple[float, float, int]:
     """Return the pairs' correlation shrunk to zero, its shrinkage and n.
 
+    From each origin's sums over its pairs (`_step_sums`, `_series_sums`).
     The Ledoit-Wolf intensity for a target of zero, var(r) / r^2 capped at
     1, with var(r) from the pairs clustered by origin (pairs of one
     forecast are not independent). Fewer than two origins give no evidence:
     zero, shrinkage 1.
     """
-    n = len(a)
-    origins = np.unique(origin)
-    if n < 2 or len(origins) < 2 or a.std() == 0 or b.std() == 0:
-        return 0.0, 1.0, n
-    prod = (a - a.mean()) * (b - b.mean()) / (a.std() * b.std())
-    r = float(prod.mean())
-    sums = np.bincount(np.searchsorted(origins, origin), weights=prod - r)
-    var = float((sums**2).sum() / n**2)
+    n_o, sa, saa, sb, sbb, sab = sums.T
+    n = float(n_o.sum())
+    if n < 2 or (n_o > 0).sum() < 2:
+        return 0.0, 1.0, int(n)
+    ma, mb = sa.sum() / n, sb.sum() / n
+    va, vb = saa.sum() / n - ma**2, sbb.sum() / n - mb**2
+    if va <= 0 or vb <= 0:
+        return 0.0, 1.0, int(n)
+    scale = np.sqrt(va * vb)
+    r = float((sab.sum() / n - ma * mb) / scale)
+    own = (sab - mb * sa - ma * sb + n_o * ma * mb) / scale - r * n_o
+    var = float((own**2).sum() / n**2)
     shrink = 1.0 if r == 0 else min(1.0, var / r**2)
-    return (1 - shrink) * r, shrink, n
+    return (1 - shrink) * r, shrink, int(n)
 
 
 def fit_coupling(scores: np.ndarray, method: str) -> dict[str, Any]:
@@ -348,18 +405,9 @@ def fit_coupling(scores: np.ndarray, method: str) -> dict[str, Any]:
     if method != "gaussian":
         return {"method": method}
     z = np.asarray(scores, dtype=float)
-    n_origins, series = z.shape[:2]
-    at = np.broadcast_to(np.arange(n_origins)[:, None, None], z.shape)
-    a, b = z[:, :, :-1], z[:, :, 1:]
-    ok = np.isfinite(a) & np.isfinite(b)
-    rho, shrink_rho, n_steps = _shrunk_correlation(
-        a[ok], b[ok], at[:, :, :-1][ok]
-    )
-    i, j = np.triu_indices(series, k=1)
-    a, b = z[:, i, :], z[:, j, :]
-    ok = np.isfinite(a) & np.isfinite(b)
-    where = np.broadcast_to(np.arange(n_origins)[:, None, None], a.shape)
-    s, shrink_s, n_series = _shrunk_correlation(a[ok], b[ok], where[ok])
+    n_origins = z.shape[0]
+    rho, shrink_rho, n_steps = _shrunk_correlation(_step_sums(z))
+    s, shrink_s, n_series = _shrunk_correlation(_series_sums(z))
     bound = np.nextafter(1.0, 0.0)
     return {
         "method": method,
