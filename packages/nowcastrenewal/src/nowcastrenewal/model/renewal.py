@@ -16,7 +16,6 @@ from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.latent import BaseSubpopulationInfections
 from pyrenew.latent.base import LatentSample, PopulationStructure
-from pyrenew.math import r_approx_from_R
 from pyrenew.metaclass import RandomVariable
 
 from ..components.renewal import (
@@ -34,9 +33,9 @@ class MetapopulationInfections(BaseSubpopulationInfections):
     plus sum-to-zero province deviations,
     $\log R_p(t) = \log R(t) + \delta_p(t)$, here sampled on the
     sum-to-zero basis (`pooled_walk`).
-    Seeding is PyRenew's exponential seeding at the initial growth rate,
-    but anchored so that `I0_rv` is the level on the first data day
-    rather than the first seeding day.
+    Seeding is exponential at the growth rate of `seed_growth_rv`, anchored
+    so that `I0_rv` is the level on the first data day rather than the
+    first seeding day.
     The renewal is `components.renewal.run_renewal`, which sends a share
     $\varepsilon$ of transmission to other provinces through the mixing
     matrix of `mixing_rv` and depletes each province's effective
@@ -57,6 +56,7 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         mixing_rv: RandomVariable | None = None,
         effective_population_rv: RandomVariable | None = None,
         rt_observation: RandomVariable | None = None,
+        seed_growth_rv: RandomVariable | None = None,
         seed_days: ArrayLike | None = None,
         seeded: ArrayLike | None = None,
         **kwargs: object,
@@ -74,6 +74,10 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             Called with Rt, infections, the seeding length and the
             fractions, to add an observation of Rt
             (`RtPseudoObservation`). `None` adds none.
+        seed_growth_rv
+            Daily growth rate of the seed over the seeding period, before
+            the data, shared by every place. `None` holds the seed flat
+            (rate 0).
         seed_days
             Day (from the first data day) each province's seeding starts.
             Provinces with a day after 0 start (almost) empty and get
@@ -93,20 +97,24 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         self.mixing_rv = mixing_rv
         self.effective_population_rv = effective_population_rv
         self.rt_observation = rt_observation
+        self.seed_growth_rv = seed_growth_rv
         self.seed_days = None if seed_days is None else np.asarray(seed_days)
         self.seeded = None if seeded is None else np.asarray(seeded)
 
     def _initial_infections(
-        self, I0: Array, rt0: Array, gen_int: Array, n_days: int
+        self, I0: Array, n_days: int
     ) -> tuple[Array, Array | None]:
         """Seed infections, and the later seeding input of late provinces.
 
         The seed `I0` is set on the first data day and projected back
-        over the seeding period at the initial growth rate. The rate is
-        clipped so a steep early decline cannot project a seed larger
-        than the pool. Late provinces start from 1e-6 of their seed
-        level (PyRenew needs a positive start) and take the seed over
-        the 7 days from their seed day.
+        over the seeding period at the seed growth rate
+        (`seed_growth_rv`). That rate is its own parameter rather than
+        the growth implied by the first Rt, which the data pin as the
+        level of the fitted walk. A positive rate, as its prior gives,
+        means the seed only falls going back, so it never exceeds its
+        level on the first data day. Late provinces start from 1e-6 of
+        their seed level (PyRenew needs a positive start) and take the
+        seed over the 7 days from their seed day.
 
         Returns
         -------
@@ -116,10 +124,9 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             or None.
         """
         n_init = self.n_initialization_points
-        r0 = r_approx_from_R(R=rt0, g=gen_int, n_newton_steps=4)
-        r_seed = jnp.clip(r0, -0.05, 0.3)
+        r_seed = 0.0 if self.seed_growth_rv is None else self.seed_growth_rv()
         I0_all = I0[None, :] * jnp.exp(
-            r_seed[None, :] * (jnp.arange(n_init) - n_init)[:, None]
+            r_seed * (jnp.arange(n_init) - n_init)[:, None]
         )
         if self.seed_days is None:
             return I0_all, None
@@ -221,9 +228,7 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()
         I0 = self._validate_and_prepare_I0(jnp.asarray(self.I0_rv()), pop)
-        I0_all, seeding = self._initial_infections(
-            I0, rt[0], gen_int, n_days_post_init
-        )
+        I0_all, seeding = self._initial_infections(I0, n_days_post_init)
         post, r_eff = self._infections_from_rt(
             rt[n_init:], I0_all, gen_int, pop, seeding
         )

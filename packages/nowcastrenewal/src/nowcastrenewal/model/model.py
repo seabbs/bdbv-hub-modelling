@@ -58,6 +58,12 @@ INCUBATION_LENGTH = 28
 rounded up."""
 PHI_FLOOR = 1e-3
 """Added to $1/\\phi$ so the concentration stays at or below 1000."""
+SEED_DOUBLING_DAYS = 11.7
+"""Median doubling time in days of the seed's growth before the data,
+BVDOutbreakSize's cryptic growth prior (`M_PRIOR_DOUBLING_DAYS`, from the
+BEAST X exponential growth estimate, 95% HPD 6.8 to 17.5 days)."""
+SEED_GROWTH_LOG_SD = 0.30
+"""Log-scale SD of the seed growth rate prior, BVDOutbreakSize's."""
 ALPHA0 = 0.6
 """Ascertainment that turns the seed's expected onsets into infections."""
 

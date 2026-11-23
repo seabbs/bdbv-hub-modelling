@@ -99,6 +99,7 @@ The main priors are below, and the rest are on the [Renewal models](../methods/m
 | Share at risk | $\text{LogNormal}(\log 0.05, 0.75^2)$ | weakly informative |
 | Incubation period mean and SD | $\mathcal{N}(6.3, 0.54^2)$ and $\mathcal{N}(3.5, 0.8^2)$ days | BVDOutbreakSize, MacNeil et al.[^macneil] |
 | Seed infections per day | $\text{LogNormal}(0, 1.5^2)$ | weakly informative |
+| Seed growth rate before the data | $\text{LogNormal}(\log(\log 2 / 11.7), 0.30^2)$ per day | BVDOutbreakSize |
 | Negative binomial overdispersion | $1/\sqrt{\phi} \sim \text{HalfNormal}(0.25)$ | weakly informative |
 | Province delay offsets | $\mathcal{N}^+(0, 0.5^2)$ spread | weakly informative |
 

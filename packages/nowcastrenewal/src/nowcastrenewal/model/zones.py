@@ -61,6 +61,8 @@ from .model import (
     INCUBATION_SD_SD,
     MAIN,
     MAX_PUBLICATION_LAG,
+    SEED_DOUBLING_DAYS,
+    SEED_GROWTH_LOG_SD,
     SUNDAY,
     ModelConfig,
     Vintage,
@@ -519,9 +521,7 @@ class ZoneInfections(MetapopulationInfections):
         rt = jnp.exp(log_rt)
         gen_int = self.gen_int_rv()
         I0 = self._validate_and_prepare_I0(jnp.asarray(self.I0_rv()), pop)
-        I0_all, seeding = self._initial_infections(
-            I0, rt[0], gen_int, n_days_post_init
-        )
+        I0_all, seeding = self._initial_infections(I0, n_days_post_init)
         post, r_eff = self._infections_from_rt(
             rt[n_init:], I0_all, gen_int, pop, seeding
         )
@@ -875,6 +875,14 @@ def build_zone_model(
             "rt_zone_dev_sd", 0.1, fit_weeks(data, config), ar=True
         ),
         own=data.own,
+        # One growth rate for every place's seed before the data, with
+        # BVDOutbreakSize's prior on the outbreak's cryptic growth.
+        seed_growth_rv=DistributionalVariable(
+            "seed_growth",
+            dist.LogNormal(
+                np.log(np.log(2.0) / SEED_DOUBLING_DAYS), SEED_GROWTH_LOG_SD
+            ),
+        ),
         rt_observation=RtPseudoObservation(
             "bvd", sd_inflation=config.bvd_sd_inflation, **data.bvd
         )

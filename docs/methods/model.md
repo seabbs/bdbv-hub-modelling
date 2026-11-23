@@ -104,7 +104,9 @@ $$
 
 $g$ is BVDOutbreakSize's Gamma generation interval (mean 15.3, SD 9.3 days), double interval censored as $G(d + 1) - 2G(d) + G(d - 1)$ with $G$ the integrated cdf, on lags 1 to 42 and renormalised (mean 14.8, SD 8.4 days), as in primarycensored[^pcens][^park].
 Seeds are $e_p \sim \text{LogNormal}(0, 1.5^2)$ infections per day that will be confirmed, or $I_{0,p} = e_p / (\alpha_0 N_p)$ infections per resident, on the first data day.
-The seed is projected back over the seeding weeks at the growth rate implied by $R_p$ and $g$, clipped to $[-0.05, 0.3]$ per day.
+The seed is projected back over the seeding weeks at a daily growth rate $r_s$ shared by all places, $r_s \sim \text{LogNormal}(\log(\log 2 / 11.7), 0.30^2)$.
+This is BVDOutbreakSize's prior on the outbreak's cryptic growth, a median doubling time of 11.7 days from the BEAST X analysis.
+A growing seed only falls going back, so it never exceeds its level on the first data day.
 
 ### Ascertainment
 

@@ -327,7 +327,8 @@ def test_the_seed_grows_at_bvdoutbreaksizes_cryptic_growth_prior(
     tr, params = _params(model, zone_vintage)
     assert np.shape(params["seed_growth"]) == ()
     prior = tr["seed_growth"]["fn"]
-    assert float(prior.median) == pytest.approx(np.log(2) / 11.7, rel=1e-6)
+    median = float(np.exp(prior.base_dist.loc))
+    assert median == pytest.approx(np.log(2) / 11.7, rel=1e-6)
 
 
 def test_seeding_stays_within_the_pool_under_the_prior(zone_vintage):
@@ -335,13 +336,12 @@ def test_seeding_stays_within_the_pool_under_the_prior(zone_vintage):
 
     model = build_zone_model(zone_vintage)
     latent = model.latent
-    gen_int = latent.gen_int_rv()
 
     def draw(key):
         with numpyro.handlers.seed(rng_seed=key):
-            seed_total = latent._initial_infections(
-                latent.I0_rv(), gen_int, 10
-            )[0].sum(axis=0)
+            seed_total = latent._initial_infections(latent.I0_rv(), 10)[0].sum(
+                axis=0
+            )
             return seed_total, latent.effective_population_rv()
 
     seeded, pool = jax.vmap(draw)(jax.random.split(jax.random.key(0), 4000))
