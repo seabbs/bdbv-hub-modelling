@@ -203,6 +203,15 @@ properties:
       checkpoints: {type: string}
       branch: {type: string}
 
+  rt_check:
+    type: object
+    additionalProperties: false
+    required: [store, data, out_dir]
+    properties:
+      store: {type: string}
+      data: {type: string}
+      out_dir: {type: string}
+
   dashboard:
     type: object
     additionalProperties: false

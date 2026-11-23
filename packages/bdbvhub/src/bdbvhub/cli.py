@@ -20,6 +20,8 @@ Commands:
 - `plot-submission`: plot a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
+- `rt-check`: write the Rt sense-check page of a renewal fit directory
+  (`bdbvhub.reporting.rtcheck`).
 - `validate`: run the hub's checks on files (`submission.validate`).
 - `metadata`: write and check a model's metadata YAML.
 - `finetuned-checkpoint`: print the settings hash of the fine-tuned
@@ -436,6 +438,15 @@ def build_parser() -> argparse.ArgumentParser:
     ppc.add_argument("--ppc", required=True, help="A ppc.json file.")
     ppc.add_argument("--out", required=True)
     ppc.add_argument("--stream", default="total")
+
+    rtc = sub.add_parser(
+        "rt-check",
+        help="Write the Rt sense-check page of a renewal fit directory: "
+        "Rt by country, province and zone over their cases.",
+    )
+    rtc.add_argument("--fit", required=True, help="A fit directory.")
+    rtc.add_argument("--data", default=data_dir)
+    rtc.add_argument("--out", required=True, help="The HTML page to write.")
 
     coh = sub.add_parser(
         "coherence",
@@ -1962,6 +1973,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _plot_submission(args)
     if args.command == "coherence":
         return _coherence(args)
+    if args.command == "rt-check":
+        from bdbvhub.reporting.rtcheck import rt_check_from_fit
+
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(rt_check_from_fit(args.fit, args.data))
+        print(f"Wrote {out}")
+        return 0
     if args.command == "plot-ppc":
         return _plot_ppc(args)
     if args.command == "backtest":

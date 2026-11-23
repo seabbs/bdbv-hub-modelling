@@ -210,3 +210,33 @@ rule benchmarks:
     shell:
         "uv run python workflow/scripts/benchmarks.py {output} {params.roots} "
         "> {log} 2>&1"
+
+
+rule rt_check:
+    # The Rt sense check of a stored renewal fit before its wk R_t is
+    # submitted: Rt by country, province and zone over their cases, with
+    # BVDOutbreakSize's Rt (bdbvhub.reporting.rtcheck). It reads the fit
+    # the store holds for the current code (`fit-store unpack`), so the fit
+    # that would be submitted.
+    output:
+        f"{config['rt_check']['out_dir']}/{{model}}-{{origin}}.html",
+    log:
+        f"{config['rt_check']['out_dir']}/{{model}}-{{origin}}.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        store=config["rt_check"]["store"],
+        data=config["rt_check"]["data"],
+    shell:
+        """
+        exec >{log} 2>&1
+        fit=$(mktemp -d)
+        trap 'rm -rf "$fit"' EXIT
+        export BDBV_DATA_DIR={params.data}
+        uv run bdbvhubrenewal fit-store unpack --store {params.store} \
+            --data {params.data} --model {wildcards.model} \
+            --origin {wildcards.origin} --out "$fit"
+        uv run bdbvhubrenewal rt-check --fit "$fit" --data {params.data} \
+            --out {output}
+        """

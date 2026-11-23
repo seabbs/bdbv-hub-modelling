@@ -1232,3 +1232,13 @@ def test_the_daily_comparison_scores_every_run_s_checkpoints(tmp_path):
     assert "rule compare_daily:" in out.stdout
     assert "rule daily_table:" in out.stdout
     assert f"{tmp_path}/runs/runa/reports/compare-daily.csv" in out.stdout
+
+
+def test_rt_check_is_one_job_per_model_and_origin(tmp_path):
+    out = tmp_path / "rt"
+    jobs = dry(
+        tmp_path,
+        f"{out}/renewalbvd-2026-11-22.html",
+        config={"rt_check": {"store": "s", "data": "d", "out_dir": str(out)}},
+    )
+    assert jobs == {"rt_check": 1}

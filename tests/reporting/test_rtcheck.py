@@ -166,3 +166,13 @@ def test_a_fit_without_rt_is_refused(tmp_path: Path) -> None:
     fit, _ = _fit_dir(tmp_path, with_rt=False)
     with pytest.raises(FileNotFoundError, match=r"rt\.csv\.gz"):
         rtcheck.rt_check_from_fit(fit, DATA)
+
+
+def test_cli_writes_the_page(tmp_path: Path) -> None:
+    from bdbvhub.cli import main
+
+    fit, _ = _fit_dir(tmp_path)
+    out = tmp_path / "review" / "rt-check.html"
+    assert main(["rt-check", "--fit", str(fit), "--data", str(DATA),
+                 "--out", str(out)]) == 0  # fmt: skip
+    assert out.read_text().startswith("<!doctype html>")
