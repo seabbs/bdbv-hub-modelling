@@ -1519,11 +1519,12 @@ class FoundationModel:
     ) -> pd.DataFrame | None:
         """Return Chronos-2's own quantiles of each day's count.
 
-        The daily count rows of the block `quantiles` reads its aggregate
-        rows from: each day is one step, so it has a native quantile, from
-        the same prediction (`known`). As in `forecast_both` each day is
-        floored at the count reported, which is monotone, so path `k` is
-        still the quantile at level `k`.
+        The daily source's count rows: each day is one step, so it has a
+        native quantile, from the same prediction (`known`) as the 7-day
+        sums (the aggregate rows where the block has them, else the summed
+        draws). As in `forecast_both` each day is floored at the count
+        reported, which is monotone, so path `k` is still the quantile at
+        level `k`.
 
         Parameters
         ----------
@@ -1536,10 +1537,9 @@ class FoundationModel:
         -------
         pandas.DataFrame or None
             Columns `location`, `date`, `quantile` and `value`, or None
-            where the model has no aggregate rows (the weekly source, or no
-            period).
+            for the weekly source, which has no daily counts.
         """
-        if self.source != "daily" or self.period is None:
+        if self.source != "daily":
             return None
         at = np.asarray(levels, dtype=float)
         run = replace(
