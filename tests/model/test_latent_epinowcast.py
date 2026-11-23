@@ -3,8 +3,8 @@
 epinowcast's own Stan functions (exposed with `enw_stan_to_r`) compute
 the same two quantities as our latent step where both models have them:
 the renewal from R and a generation time with no depletion
-(`log_expected_latent_from_r`), and expected reference events from
-infections through a delay and an ascertainment
+(`log_expected_latent_from_r` with `use_pop = 0`), and expected reference
+events from infections through a delay and an ascertainment
 (`log_expected_obs_from_latent`, with epinowcast's `convolution_matrix`
 and `extract_sparse_matrix`). The tests skip only where R or a package is
 missing; CI's `r-live` job fails instead.
@@ -66,7 +66,8 @@ def epinowcast() -> dict[str, Any]:
     latent <- log_expected_latent_from_r(
       log(input$start), as.vector(input$log_r), (0:(G - 1)) * nrow(input$log_r),
       nrow(input$log_r), nrow(input$start), length(input$rev_gt),
-      log(input$rev_gt), nrow(input$start) + nrow(input$log_r), G
+      log(input$rev_gt), nrow(input$start) + nrow(input$log_r), G,
+      rep(1, G), 0L, 1
     )
     events <- lapply(seq_len(ncol(input$x)), function(k) {
       pmf <- input$delays[[k]]
