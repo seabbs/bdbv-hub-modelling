@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from flowlib import evaluations
 from flowlib.dashboard import logs, svg, training
 from flowlib.dashboard.runs import Run
 from nowcasteval import labels
@@ -61,10 +62,6 @@ def _relative(
     return out
 
 
-def _start(history: Sequence[Mapping[str, Any]]) -> Mapping[str, Any] | None:
-    return next((h for h in history if h.get("step") == 0), None)
-
-
 def by_level(
     history: Sequence[Mapping[str, Any]],
     checkpoints: Sequence[tuple[str, Mapping[str, Any]]],
@@ -73,17 +70,13 @@ def by_level(
 
     Against each checkpoint's simulations trained.
     """
-    start = _start(history)
-    if start is None or not start.get("by_level"):
-        return {}
-    points = [(0, start["by_level"])] + [
-        (
-            int(s.get("n_outbreaks") or logs._size(name)),
-            s["held_out_loss_by_level"],
-        )
-        for name, s in checkpoints
-        if s.get("held_out_loss_by_level")
-    ]
+    points = evaluations.level_points(
+        history,
+        [
+            (int(s.get("n_outbreaks") or logs._size(name)), s)
+            for name, s in checkpoints
+        ],
+    )
     return _relative(points)
 
 

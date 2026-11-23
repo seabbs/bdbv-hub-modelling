@@ -53,7 +53,6 @@ __all__ = [
     "drop_bdbv",
     "drop_finetuned",
     "heldout_figure",
-    "heldout_rows",
     "lag_numbers",
     "live_numbers",
     "realism_figure",
@@ -327,28 +326,6 @@ def slots_summary(
     out = out.rename(columns={"Simulations": "Run"})
     out["Run"] = ["Zero-shot", "attention biases", "no biases"]
     return out
-
-
-def heldout_rows(scores: pd.DataFrame, run: str = LIVE_RUN) -> pd.DataFrame:
-    """Return the trainer's held-out loss of the live run by checkpoint.
-
-    In the layout of `heldout_figure`, on the trainer's held-out set, one
-    line per level (`HELDOUT_LEVELS`).
-    """
-    rows = tidy(scores)
-    rows = rows.loc[
-        (rows["study"] == "held_out")
-        & rows["level"].isin(HELDOUT_LEVELS)
-        & (rows["run"] == run)
-    ]
-    return pd.DataFrame(
-        {
-            "run": run,
-            "blocks": rows["level"],
-            "outbreaks_seen": rows["outbreaks"],
-            "heldout_loss": rows["loss"],
-        }
-    )
 
 
 def live_numbers(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> dict:
@@ -1042,8 +1019,6 @@ def write_evidence(
             [f"compare_{name}"],
         )
     curve = data["finetune_heldout"]
-    if curve is None and raw is not None:
-        curve = heldout_rows(raw, run)
     figure(
         "finetune-heldout",
         None if curve is None or curve.empty else heldout_figure(curve),

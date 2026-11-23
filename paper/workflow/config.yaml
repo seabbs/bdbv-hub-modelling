@@ -14,6 +14,10 @@ studies: [synthetic, germany, ebola]
 finetune_run: output/checkpoints/slots
 finetuned: null
 final_checkpoints: []
+# The paper's final fine-tuning run: its folder, a `runs` entry of the
+# workflow (workflow/config.yaml), under the machine's ROOT. Its held-out
+# loss curve is the SI's (rule heldout_curve).
+final_run: $ROOT/runs/runa
 # The simulation rounds' folder under the machine's ROOT (the workflow's
 # rounds): the SI's realism reads the grid's training rounds
 # (`grid_rounds.rounds`) and the German development half's statistics.
@@ -36,18 +40,16 @@ synthetic:
   simulations_per_seed: 20
   # Draws per forecast of each model on the held-out simulations.
   samples: 1000
-  # Example simulations for the SI figure (`paperfigs.sim_examples`): pilot
-  # simulations of the grid on an evidence branch, each with its label.
+  # Example simulations for the SI figure (`paperfigs.sim_examples`),
+  # from the development round, each `<seed>-<n>` with its label.
   examples:
-    ref: 5e99233c5ca4eed4de3dcf26139d26f676a79e5d
-    path: pilot/sims
     picks:
-      - [90004-0001, Multi-wave over 52 weeks]
-      - [90003-0002, Concentrated spread]
-      - [90002-0002, Bunched reports]
-      - [90002-0003, Delay slowdown]
-      - [90001-0001, Places by age groups]
-      - [90003-0003, Poisson observations]
+      - [33325-0008, Multi-wave over 53 weeks]
+      - [33300-0001, Concentrated spread]
+      - [33300-0014, Bunched reports]
+      - [33300-0010, Delay slowdown]
+      - [33300-0002, Places by age groups]
+      - [33300-0003, Poisson observations]
   # The simulations of each run's seeds, whose settings give the grid's
   # realised values.
   simulations:
@@ -169,8 +171,6 @@ evidence:
   # Pending: the realised shares of each combination of block
   # layout and options.
   block_combinations: null
-  # Pending: the final run's held-out loss curve.
-  finetune_heldout: null
   # Pending: the final grid's ranges against published values.
   sim_diseases: null
 
