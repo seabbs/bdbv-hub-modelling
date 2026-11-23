@@ -312,3 +312,40 @@ def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
     for config in (MAIN, centred):
         _, params = _params(build_model(province, config), province)
         assert "rt_sd_half_life" in params
+
+
+def test_the_seed_grows_at_bvdoutbreaksizes_cryptic_growth_prior(
+    zone_vintage,
+):
+    # #768 item 6: one shared seed growth rate with BVDOutbreakSize's
+    # prior on cryptic growth, in place of a clip on the growth implied
+    # by the first Rt.
+    from nowcastrenewal.model.model import SEED_DOUBLING_DAYS
+
+    assert SEED_DOUBLING_DAYS == 11.7
+    model = build_zone_model(zone_vintage)
+    tr, params = _params(model, zone_vintage)
+    assert np.shape(params["seed_growth"]) == ()
+    prior = tr["seed_growth"]["fn"]
+    assert float(prior.median) == pytest.approx(np.log(2) / 11.7, rel=1e-6)
+
+
+def test_seeding_stays_within_the_pool_under_the_prior(zone_vintage):
+    import jax
+
+    model = build_zone_model(zone_vintage)
+    latent = model.latent
+    gen_int = latent.gen_int_rv()
+
+    def draw(key):
+        with numpyro.handlers.seed(rng_seed=key):
+            seed_total = latent._initial_infections(
+                latent.I0_rv(), gen_int, 10
+            )[0].sum(axis=0)
+            return seed_total, latent.effective_population_rv()
+
+    seeded, pool = jax.vmap(draw)(jax.random.split(jax.random.key(0), 4000))
+    within = np.mean(np.asarray(seeded) < np.asarray(pool)[:, None], axis=0)
+    # Every zone, the smallest included, keeps its seed within its
+    # at-risk pool in at least 99.9% of prior draws.
+    assert within.min() >= 0.999, within.min()
