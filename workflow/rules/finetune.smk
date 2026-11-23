@@ -191,6 +191,11 @@ rule block_combinations:
         "$(dirname {input}) {output} > {log} 2>&1"
 
 
+# The German benchmark's settings: the real-data window's first scored
+# date and truth delay.
+GERMANY_CONFIG = tomllib.loads(Path("config/germany.toml").read_text())
+
+
 rule real_training_blocks:
     # A run's real-data training blocks (`finetune.real_training`): the
     # German triangle's reports before the first scored German date, cut
@@ -204,8 +209,12 @@ rule real_training_blocks:
     conda:
         TOOLS_ENV
     threads: 4
+    params:
+        first=GERMANY_CONFIG["nowcast"]["first_date"],
+        delay=GERMANY_CONFIG["truth"]["delay"],
     shell:
         "uv run python -m nowcastgermany.finetune_blocks {input} {output} "
+        "--first-date {params.first} --truth-delay {params.delay} "
         "--workers {threads} > {log} 2>&1"
 
 
