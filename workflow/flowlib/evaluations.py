@@ -28,14 +28,14 @@ from nowcastfoundation.sidecar import (
 
 __all__ = [
     "checkpoint_settings",
-    "heldout_curve",
     "level_points",
     "merged_history",
     "pending",
     "start_loss",
     "step_of",
     "step_results",
-    "write_heldout_curve",
+    "validation_curve",
+    "write_validation_curve",
 ]
 
 
@@ -88,7 +88,7 @@ def level_points(
     history: Sequence[Mapping[str, Any]],
     checkpoints: Sequence[tuple[int, Mapping[str, Any]]],
 ) -> list[tuple[int, Mapping[str, float]]]:
-    """Return held-out loss by level at the start and at each checkpoint.
+    """Return validation loss by level at the start and at each checkpoint.
 
     Against simulations trained: 0 for step 0's `by_level` in the
     history, and each checkpoint's simulations, from `(n, settings)` with
@@ -104,10 +104,10 @@ def level_points(
     ]
 
 
-def heldout_curve(
+def validation_curve(
     train: Path | str, run: str, prefixes: Iterable[int]
 ) -> list[dict[str, Any]]:
-    """Return a run's held-out loss by level as rows, start and checkpoints.
+    """Return a run's validation loss by level as rows, start and checkpoints.
 
     One row per point and level (`blocks`), against simulations trained
     (`outbreaks_seen`): the paper's fine-tune curve.
@@ -117,18 +117,23 @@ def heldout_curve(
     hist = merged_history(got if isinstance(got, list) else [], train)
     cks = [(n, checkpoint_settings(train / f"n{n}")) for n in sorted(prefixes)]
     return [
-        {"run": run, "blocks": k, "outbreaks_seen": n, "heldout_loss": float(v)}
+        {
+            "run": run,
+            "blocks": k,
+            "outbreaks_seen": n,
+            "validation_loss": float(v),
+        }
         for n, by in level_points(hist, cks)
         for k, v in by.items()
     ]
 
 
-def write_heldout_curve(
+def write_validation_curve(
     train: Path | str, run: str, prefixes: Iterable[int], out: Path | str
 ) -> None:
-    """Write `heldout_curve` as a CSV."""
-    rows = heldout_curve(train, run, prefixes)
-    names = ["run", "blocks", "outbreaks_seen", "heldout_loss"]
+    """Write `validation_curve` as a CSV."""
+    rows = validation_curve(train, run, prefixes)
+    names = ["run", "blocks", "outbreaks_seen", "validation_loss"]
     with Path(out).open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=names)
         writer.writeheader()

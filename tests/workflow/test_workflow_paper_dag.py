@@ -29,7 +29,7 @@ def test_the_paper_targets_resolve_in_the_one_workflow(tmp_path, target):
         "publish_paper",
         "summary",
         "evidence",
-        "heldout_curve",
+        "validation_curve",
     ):
         assert f"rule {rule}:" in out.stdout
     lines = _job_lines(out.stdout)

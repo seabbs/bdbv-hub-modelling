@@ -547,7 +547,7 @@ LOSS_TYPES = {
     "layout": "by layout",
     "level": "by level",
 }
-"""The held-out loss types the Loss panel offers."""
+"""The validation loss types the Loss panel offers."""
 
 
 def loss_section(ctx: Context, live: Run, st: Status) -> str:
@@ -661,16 +661,16 @@ def checkpoint_table(
         label = html.escape(run.label)
         return f"<p class=mut>no checkpoints yet for {label}</p>"
     head = {
-        "raw": "held-out",
-        "start": "held-out / start",
-        "base": "held-out / base",
+        "raw": "validation",
+        "start": "validation / start",
+        "base": "validation / base",
     }[mode]
     den = {"raw": 1, "start": info["full0"], "base": info["bfull"]}[mode]
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>nowcast part"
         f"<th>forecast part<th>7-day row gap<th>7-day row roughness"
-        f"<th>held-out start{by_head}<th>saved</tr>"
+        f"<th>validation start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
@@ -997,7 +997,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (
             "levels",
-            "Held-out loss by level and LoRA size",
+            "Validation loss by level and LoRA size",
             level_loss_lora.section(ctx.runs, tip),
             True,
         ),
