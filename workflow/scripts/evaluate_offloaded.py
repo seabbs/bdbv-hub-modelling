@@ -108,33 +108,21 @@ def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
 
 def checkpoint(where: Path, device: str) -> None:
     """Score a checkpoint's adapter and write its held-out sidecar."""
-    train = where.parent
     settings = json.loads((where / "settings.json").read_text())
     blocks = fe.load_blocks(
-        train / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
+        where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
     )
-    losses, seconds = fe.score(
-        fe.load_base("cpu"),
-        where / "finetuned-ckpt",
-        blocks,
-        ["checkpoint"],
-        settings.get("batch_size", 256),
-        device,
-    )
-    start = evaluations.start_loss(train)
-    if start is None:
-        raise SystemExit(
-            f"{where}: no base Chronos-2 loss: neither evals/step-0000000.json "
-            "nor a locally evaluated checkpoint's held_out_loss_start"
+    try:
+        got = fe.write_checkpoint_sidecar(
+            where,
+            fe.load_base("cpu"),
+            blocks,
+            device,
+            settings.get("batch_size", 256),
         )
-    sidecar = {
-        "held_out_loss_start": start,
-        **losses,
-        "device": device,
-        "seconds": seconds,
-    }
-    fe.write_json(where / evaluations.SIDECAR, sidecar)
-    fs.log(f"{where.name}: held-out loss {losses['held_out_loss']:.4f}")
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    fs.log(f"{where.name}: held-out loss {got['held_out_loss']:.4f}")
 
 
 def main(argv: Sequence[str] | None = None) -> None:

@@ -127,6 +127,7 @@ class Context:
     def nowcasts(self, key: str) -> dict[str, Any] | None:
         """Return a dataset's nowcasts, rebuilt only when its files change."""
         ds = self.dataset(key)
+        days, ranges, _ = nowcasts.horizons(ds)
         return nowcasts.cached_build(
             self.source.dataset(key),
             self.runs,
@@ -137,6 +138,8 @@ class Context:
             order=[(g["name"], g["match"]) for g in ds.get("groups") or ()],
             sources=ds.get("sources"),
             unit=ds.get("unit") or key,
+            days=days,
+            ranges=ranges,
         )
 
 
@@ -759,6 +762,7 @@ def nowcasts_section(
         meta = nowcasts.meta(
             built, ctx.runs, ctx.references, sizes, ctx.excluded
         )
+        days, ranges, default = nowcasts.horizons(ds)
         first = built["series"][built["locs"][0]]
         for m in meta:
             m["count"] = max(
@@ -780,6 +784,11 @@ def nowcasts_section(
                 "metric": ds.get("metric", ""),
                 "truth": ds.get("truth", ""),
                 "target": ds.get("target", ""),
+                # The horizon control: every model is shown over `days`;
+                # each choice is [name, first day, last day].
+                "days": list(days) if days else None,
+                "ranges": [[k, lo, hi] for k, (lo, hi) in ranges.items()],
+                "range": default,
                 "meta": meta,
                 "locs": built["locs"],
                 "origins": built["origins"],

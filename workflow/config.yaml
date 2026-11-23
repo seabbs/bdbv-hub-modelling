@@ -239,6 +239,20 @@ dashboard:
       # Germany is daily only (config/germany.toml): its models take the
       # daily releases and forecast the hub's 7-day rolling sums.
       sources: [daily]
+      # The horizon control. days: every model is drawn and scored over
+      # the German config's horizons (the nowcast to forecast_days ahead),
+      # so no model shows a different span. ranges: the control's choices,
+      # [first, last] day from the nowcast date (null: the end of days),
+      # applied to the bands, the scores and the WIS by horizon.
+      horizons:
+        days: config/germany.toml
+        ranges:
+          all: [null, null]
+          nowcast: [null, 0]
+          forecast: [1, null]
+          week 1 ahead: [1, 7]
+          weeks 2-4 ahead: [8, null]
+        default: all
       target: >-
         the hub's 7-day rolling sums of hospitalisations by date of
         report to the health office, truth as reported 40 days later

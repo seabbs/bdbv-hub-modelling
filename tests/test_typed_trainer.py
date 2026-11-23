@@ -23,5 +23,6 @@ def test_the_typed_trainer_modules_are_checked():
     typed = {
         "nowcastfoundation.finetune.verify",
         "nowcastfoundation.finetune.evaluate",
+        "nowcastfoundation.finetune.chronos",
     }
     assert not typed & _untyped()

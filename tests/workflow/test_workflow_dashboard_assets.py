@@ -100,3 +100,14 @@ def test_the_score_panels_sit_in_two_columns():
     rule = re.search(r"\.gscores\{([^}]*)\}", css)
     assert rule
     assert "grid-template-columns:repeat(2,minmax(0,1fr))" in rule[1]
+
+
+def test_the_horizon_control_filters_bands_and_scores():
+    html = (PAGE / "nowcasts.html").read_text()
+    js = (PAGE / "nowcasts.js").read_text()
+    assert "id=ghz" in html
+    # Bands, score panels and the WIS-by-horizon plot all read the choice.
+    assert "inRange(" in js
+    assert "d.ranges" in js
+    assert "d.byday" in js
+    assert "by day of the horizon" in js
