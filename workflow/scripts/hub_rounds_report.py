@@ -7,7 +7,9 @@ is run) and writes one page with the docs site's interactive charts
 coverage), and the forecast explorer (`explorer.js`) with its location,
 round and model controls. A plain summary comes first and one small table
 last: each model's pairwise relative WIS on the cells it shares with
-every other model, scaled to `seabbs-rwnowcast`.
+every other model, scaled to `seabbs-rwnowcast`. Models `compare-hub`
+reran on current code for each round (`--models`) are shown beside our
+submissions as `<model> (current code)`.
 
 The page reads its data from the folder `<OUT stem>-data/` beside it.
 
@@ -116,11 +118,22 @@ def as_submitted(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.assign(source=np.where(ours, "submitted", frame["source"]))
 
 
+def label(model: str, source: str) -> str:
+    """Return a row's model name on the page.
+
+    A hub team's id; `<hub id> (submitted)`; or `<model> (current code)`
+    for a model rerun on current code for the round.
+    """
+    if source in ("hub", "submitted"):
+        return comparison_label(model, source)
+    return f"{model} (current code)"
+
+
 def labelled(frame: pd.DataFrame) -> pd.DataFrame:
-    """Each row's model named as the comparison shows it."""
+    """Each row's model named as the page shows it."""
     return frame.assign(
         model=[
-            comparison_label(m, s)
+            label(m, s)
             for m, s in zip(frame["model"], frame["source"], strict=True)
         ]
     )
@@ -173,7 +186,7 @@ def small_table(tab: pd.DataFrame) -> str:
     out = ["<table><tr>" + "".join(f"<th>{h}</th>" for h in heads)]
     for r in tab.itertuples():
         name = html.escape(str(r.model))
-        if str(r.model).split(" ")[0] in OURS:
+        if str(r.model).split(" ")[0] in OURS or "(current code)" in r.model:
             name = f"<b>{name}</b>"
         cells = [name, fmt(r.relative_wis), str(r.cells), str(r.rounds),
                  fmt(r.coverage_50), fmt(r.coverage_90)]  # fmt: skip
@@ -218,6 +231,13 @@ def summary_text(
                 f"intervals and {fmt(r.coverage_90)} in its 90%, most of "
                 "them zone-weeks with no cases."
             )
+        now = ranked.loc[ranked["model"] == "randomwalknowcast (current code)"]
+        if len(now):
+            parts.append(
+                "randomwalknowcast on current code, rerun on each round's "
+                f"data, scores {fmt(now.iloc[0].relative_wis)} against the "
+                "seabbs-rwnowcast we submitted."
+            )
         parts.append(
             "Teams that forecast few cells (the table at the end) have "
             "noisy scores. Only past weeks are complete so far, so these "
@@ -253,13 +273,18 @@ def build(
 
     quantiles = window(quantiles)
     scores, energy = window(scores), window(energy)
-    teams = sorted(set(quantiles.loc[quantiles["source"] == "hub", "model"]))
+    source = quantiles["source"]
+    teams = sorted(set(quantiles.loc[source == "hub", "model"]))
+    rerun = sorted(
+        set(quantiles.loc[~source.isin(["hub", "submitted"]), "model"])
+    )
     ours = [f"{h} (submitted)" for h in OURS]
+    current = {label(m, "real"): m for m in rerun}
     colours = comparison_colours(
-        {}, {f"{h} (submitted)": m for h, m in OURS.items()}, teams
+        current, {f"{h} (submitted)": m for h, m in OURS.items()}, teams
     )
     reference = f"{REFERENCE} (submitted)"
-    models = [*ours, *teams]
+    models = [*ours, *current, *teams]
 
     data = out.with_name(out.stem + "-data")
     if data.exists():
