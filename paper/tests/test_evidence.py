@@ -228,23 +228,17 @@ def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
     }
 
 
-def test_scale_floor_numbers_by_model_and_size() -> None:
-    from paperpipe.evidence import scale_floor_numbers
+def test_the_paper_has_no_scale_floor_test() -> None:
+    # Inference applies no scale floor and the code has no switch for
+    # one, so there is no test with and without it to quote.
 
-    rows = pd.DataFrame(
-        {
-            "floor": [0, 1],
-            "model": "n4000",
-            "size": ["small (<=5)", "small (<=5)"],
-            "median_loss": [3.311, 4.814],
-            "share_q99_over_100x": [0.1067, 0.2845],
-        }
+    config = yaml.safe_load(
+        (Path(__file__).parents[1] / "workflow" / "config.yaml").read_text()
     )
-    out = scale_floor_numbers(rows)
-    small = out["sims"]["n4000"]["small"]
-    assert small["median_loss"] == {"none": 3.3, "floor": 4.8}
-    assert small["q99_over_100x"] == {"none": 11, "floor": 28}
-    assert set(out) == {"sims"}
+    assert "scale_floor" not in EVIDENCE
+    assert "scale_floor" not in config["evidence"]
+    si = (Path(__file__).parents[1] / "si.qmd").read_text()
+    assert "evidence.scale_floor" not in si
 
 
 def test_pair_is_blank_when_either_value_is_missing() -> None:
