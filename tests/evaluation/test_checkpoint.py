@@ -427,7 +427,7 @@ def _unit_stubs(monkeypatch: pytest.MonkeyPatch, seen: list) -> None:
     monkeypatch.setattr(ck, "record_precision", lambda _root: None)
     monkeypatch.setattr(ck, "_free", lambda: None)
     monkeypatch.setattr(ck, "german_tasks_dir", lambda *_a: Path(TASKS))
-    monkeypatch.setattr(ck, "score_dates", lambda: 100)
+    monkeypatch.setattr(ck, "score_dates", lambda: 1000)
 
 
 def test_a_german_unit_forecasts_the_config_s_horizons(
@@ -657,3 +657,31 @@ def test_a_german_unit_redoes_dates_forecast_from_other_tasks(
     assert unrecorded in done
     assert current not in done
     assert ck.written(root)[old] == TASKS
+
+
+def test_development_starts_at_the_first_date_with_every_hub_target() -> None:
+    # The triangle starts 2021-04-06; 2021-05-10 is the first nowcast date
+    # whose oldest 7-day sum (28 days back) starts on a data day. Hub teams
+    # stay compared from the first hub date only.
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config("config/germany.toml")
+    assert config.development_start == "2021-05-10"
+    dates = de.development_dates(config)
+    assert dates[0] == "2021-05-10"
+    assert dates[-1] < config.split_date
+    assert len(dates) == 196 + len(de.nowcast_dates(config))
+    assert de.nowcast_dates(config)[0] == config.first_date == "2021-11-22"
+
+
+def test_a_german_unit_forecasts_the_earlier_development_dates(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from nowcastgermany import evaluation as de
+
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    ck.germany_unit(tmp_path, "n100")
+    config = de.load_germany_config("config/germany.toml")
+    done = [d for dates, *_ in seen for d in dates]
+    assert done == de.development_dates(config)
