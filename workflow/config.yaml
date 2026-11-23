@@ -126,9 +126,13 @@ finetune:
 # takes the same rules through the {run} wildcard.
 runs:
   runa: {}
+  # Run A without the attention biases (the paper's no-slots comparison,
+  # paperpipe.evidence.WITHOUT_BIASES).
+  noslots: {series_bias: false}
 
-# The runs `finetune` trains (null: every run in `runs`).
-train_runs: null
+# The runs `finetune` trains (null: every run in `runs`). The variants
+# train after Run A, so they never take its GPU.
+train_runs: [runa]
 
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes

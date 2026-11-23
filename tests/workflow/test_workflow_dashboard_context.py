@@ -201,3 +201,24 @@ def test_references_take_their_line_style_from_the_shared_map():
     assert paperstyle.model_dash("fm_chronos_daily_ragged") == "dotted"
     assert paperstyle.model_dash("fm_chronos_daily_complete") == "dashed"
     assert paperstyle.model_dash("fm_chronos_daily_ragged_ft") == "solid"
+
+
+def test_the_workflow_s_runs_show_with_no_other_setting(tmp_path):
+    # Each run in workflow/config.yaml's `runs` is shown from its folder,
+    # <ROOT>/runs/<name>, with nothing on the command line.
+    (tmp_path / "runs" / "runa").mkdir(parents=True)
+    cfg = {
+        **CONFIG,
+        "runs": {"runa": {}},
+        "dashboard": {**CONFIG["dashboard"], "runs": []},
+    }
+    local = {
+        "ROOT": str(tmp_path),
+        "DASHBOARD_RUNS": "",
+        "REMOTE": "",
+        "SCORE_CACHE": "/x",
+        "MAILBOX": "",
+    }
+    ctx = context.build(cfg, local, runs=[], refs=[])
+    assert [r.key for r in ctx.runs] == ["runa"]
+    assert ctx.runs[0].folder == tmp_path / "runs" / "runa"

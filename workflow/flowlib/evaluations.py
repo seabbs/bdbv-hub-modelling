@@ -13,6 +13,7 @@ and `merged_history`, so a run evaluated either way reads the same.
 
 from __future__ import annotations
 
+import csv
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
@@ -22,11 +23,14 @@ from nowcastfoundation.sidecar import RESULT_ONLY, SIDECAR, with_sidecar
 
 __all__ = [
     "checkpoint_settings",
+    "heldout_curve",
+    "level_points",
     "merged_history",
     "pending",
     "start_loss",
     "step_of",
     "step_results",
+    "write_heldout_curve",
 ]
 
 
@@ -73,6 +77,57 @@ def merged_history(
         out.append(entry)
     out += [{**v, "step": k} for k, v in results.items()]
     return sorted(out, key=lambda h: h.get("step", 0))
+
+
+def level_points(
+    history: Sequence[Mapping[str, Any]],
+    checkpoints: Sequence[tuple[int, Mapping[str, Any]]],
+) -> list[tuple[int, Mapping[str, float]]]:
+    """Return held-out loss by level at the start and at each checkpoint.
+
+    Against simulations trained: 0 for step 0's `by_level` in the
+    history, and each checkpoint's simulations, from `(n, settings)` with
+    its sidecar's losses. Empty with no start.
+    """
+    start = next((h for h in history if h.get("step") == 0), None)
+    if start is None or not start.get("by_level"):
+        return []
+    return [(0, start["by_level"])] + [
+        (n, s["held_out_loss_by_level"])
+        for n, s in checkpoints
+        if s.get("held_out_loss_by_level")
+    ]
+
+
+def heldout_curve(
+    train: Path | str, run: str, prefixes: Iterable[int]
+) -> list[dict[str, Any]]:
+    """Return a run's held-out loss by level as rows, start and checkpoints.
+
+    One row per point and level (`blocks`), against simulations trained
+    (`outbreaks_seen`): the paper's fine-tune curve.
+    """
+    train = Path(train)
+    got = _read(train / "history.json")
+    hist = merged_history(got if isinstance(got, list) else [], train)
+    cks = [(n, checkpoint_settings(train / f"n{n}")) for n in sorted(prefixes)]
+    return [
+        {"run": run, "blocks": k, "outbreaks_seen": n, "heldout_loss": float(v)}
+        for n, by in level_points(hist, cks)
+        for k, v in by.items()
+    ]
+
+
+def write_heldout_curve(
+    train: Path | str, run: str, prefixes: Iterable[int], out: Path | str
+) -> None:
+    """Write `heldout_curve` as a CSV."""
+    rows = heldout_curve(train, run, prefixes)
+    names = ["run", "blocks", "outbreaks_seen", "heldout_loss"]
+    with Path(out).open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=names)
+        writer.writeheader()
+        writer.writerows(rows)
 
 
 def step_of(snapshot: Path) -> int:

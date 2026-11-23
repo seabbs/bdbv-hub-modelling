@@ -173,6 +173,22 @@ rule checkpoint_check:
         check_report(input, output, params, wildcards)
 
 
+rule block_combinations:
+    # The realised share of each combination of block layout and options
+    # over the run's training (the SI table), from its final checkpoint.
+    input:
+        lambda wc: f"{train_dir(wc.run)}/n{run_of(wc).ft['prefixes'][-1]}"
+        "/settings.json",
+    output:
+        f"{TRAIN}/block-combinations.csv",
+    log:
+        f"{RUN}/logs/block-combinations.log",
+    localrule: True
+    shell:
+        "uv run python workflow/scripts/block_combinations.py "
+        "$(dirname {input}) {output} > {log} 2>&1"
+
+
 rule finetune:
     input:
         finetune_inputs,

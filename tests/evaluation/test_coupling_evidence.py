@@ -7,6 +7,8 @@ from scipy.special import ndtri
 
 from nowcasteval import coupling
 
+N_SAMPLES = 300
+
 LEVELS = np.array([0.025, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.975])
 
 
@@ -43,7 +45,7 @@ def _rows(n_origins=14, places=3, steps=6, rho=0.95, seed=0, lag=7):
 
 @pytest.fixture(scope="module")
 def scores():
-    return coupling.coupling_scores(_rows(), n_samples=300, seed=2)
+    return coupling.coupling_scores(_rows(), n_samples=N_SAMPLES, seed=2)
 
 
 def test_every_origin_is_scored_by_every_coupling(scores):
@@ -85,17 +87,73 @@ def test_the_fit_reads_only_truth_reported_by_the_origin():
 
 
 def test_schaake_orders_draws_as_matured_windows(scores):
-    shuffled = scores.loc[scores["coupling"] == "schaake"]
+    shuffled = scores.loc[scores["coupling"] == "schaake"].sort_values("origin")
     # The first origin has no matured window: independence. Later ones
     # take windows of the truth reported by then, up to one per draw.
     assert shuffled["n_windows"].iloc[0] == 0
     assert shuffled["n_windows"].iloc[-1] > 0
-    assert (shuffled["n_windows"] <= 300).all()
+    assert (shuffled["n_windows"] <= N_SAMPLES).all()
     assert scores.loc[scores["coupling"] != "schaake", "n_windows"].isna().all()
     table = coupling.summary(scores, n_boot=200)
     sums = table.loc[table["score"] == "sum_crps"].set_index("coupling")
     # Past windows move together over steps, as the truth does.
     assert sums.loc["schaake", "ratio"] < 0.95
+
+
+def _history(n_days=30, places=2, reported=10):
+    """Truth rising on every day and place, reported `reported` days on."""
+    days = np.arange(n_days, dtype=float)
+    truth = np.tile(days, (places, 1)) + np.arange(places)[:, None]
+    return truth, np.tile(days + reported, (places, 1))
+
+
+def test_schaake_draws_follow_the_windows_order():
+    truth, day = _history()
+    # Every window rises with its end day, in every cell, so the draws
+    # of any two cells are ordered alike.
+    q = np.broadcast_to(100 + 10 * ndtri(LEVELS), (2, 5, len(LEVELS)))
+    ok = np.ones((2, 5), dtype=bool)
+    draws, n = coupling._schaake(
+        q, ok, 100, LEVELS, (truth, day, np.arange(5)), 200, seed=1
+    )
+    assert n == 26
+    a, b = draws[:, 0, 0], draws[:, 1, 4]
+    assert (
+        np.corrcoef(np.argsort(np.argsort(a)), np.argsort(np.argsort(b)))[0, 1]
+        > 0.95
+    )
+
+
+def test_schaake_windows_use_only_truth_reported_by_the_origin():
+    truth, day = _history(reported=10)
+    q = np.broadcast_to(100 + 10 * ndtri(LEVELS), (2, 5, len(LEVELS)))
+    ok = np.ones((2, 5), dtype=bool)
+    # At day 24, truth up to day 14 is reported: 15 days, 11 windows.
+    _, n = coupling._schaake(
+        q, ok, 24, LEVELS, (truth, day, np.arange(5)), 200, seed=1
+    )
+    assert n == 11
+
+
+def test_an_origin_on_days_that_are_not_consecutive_is_an_error():
+    truth, day = _history()
+    q = np.broadcast_to(100 + 10 * ndtri(LEVELS), (2, 3, len(LEVELS)))
+    ok = np.ones((2, 3), dtype=bool)
+    with pytest.raises(ValueError, match="consecutive"):
+        coupling._schaake(
+            q, ok, 100, LEVELS, (truth, day, np.array([0, 1, 3])), 50, seed=1
+        )
+
+
+def test_schaake_windows_span_calendar_days_not_grid_columns():
+    # Weekly origins of 6 days leave a day between spans: no window of 6
+    # grid columns may join two spans.
+    rows = _rows(n_origins=14, lag=7)
+    got = coupling.coupling_scores(rows, ["schaake"], n_samples=50)
+    got = got.sort_values("origin")
+    # Each matured span is one window; spans are 6 of every 7 days.
+    late = got["n_windows"].iloc[-1]
+    assert 0 < late <= 13
 
 
 def test_the_command_writes_scores_and_summary(tmp_path):

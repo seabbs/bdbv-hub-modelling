@@ -190,3 +190,20 @@ def test_evidence_from_a_workflow_output_is_read_where_it_is_written(
     names = {"checkpoint_scores": "scores"}
     assert flow.evidence_args(names) == f"--checkpoint-scores {path}"
     assert flow.pinned() == {}
+
+
+def test_examples_are_read_from_the_development_round() -> None:
+    picks = [["33307-0006", "Multi-wave"], ["33300-0001", "Spread"]]
+    flow = _flow(synthetic__examples={"picks": picks})
+    files = flow.example_files()
+    folder = CONFIG["synthetic"]["simulations"]["development"]
+    assert files == {
+        "counts": [
+            f"{folder}/counts-33300.csv.gz",
+            f"{folder}/counts-33307.csv.gz",
+        ],
+        "settings": [
+            f"{folder}/settings-33300.csv",
+            f"{folder}/settings-33307.csv",
+        ],
+    }
