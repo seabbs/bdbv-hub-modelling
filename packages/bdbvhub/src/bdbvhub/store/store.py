@@ -135,6 +135,11 @@ run, left out of its key with what only they import (unless the model's
 own module imports them). The store's and backtest's functions a fit runs
 are keyed by source instead (`FIT_FUNCTIONS`)."""
 
+RECORD_CODE: Final = "packages/bdbvhub/src/bdbvhub/submission/fitting.py"
+"""The fit configurations and `write_records`, which write a candidate's
+fit records (`fit_files`). The models with a fit directory
+(`renewal.FIT_VARIANTS`) hold the whole file in their keys."""
+
 STORE_DATA: Final = "packages/bdbvhub/src/bdbvhub/data/*.csv"
 """The package's data files, which a fit may read (the province centres
 of the renewal models' gravity kernel). Every stored fit's key holds
@@ -370,8 +375,10 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     The import closure of the model's module, with any other model's
     module it builds on (`evaluation.digest.model_code`), and the
     package's data files (`STORE_DATA`), without the loader, IO and report
-    modules in `KEY_SKIP`. The store's and the backtest's own code is
-    keyed by function (`FIT_FUNCTIONS`), not by file.
+    modules in `KEY_SKIP`. A model with a fit directory also holds the
+    code that writes its fit records (`RECORD_CODE`). The store's and the
+    backtest's own code is keyed by function (`FIT_FUNCTIONS`), not by
+    file.
 
     Parameters
     ----------
@@ -386,8 +393,11 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
         Paths relative to `root`, sorted.
     """
     from bdbvhub.store.digest import model_code
+    from nowcastrenewal.forecaster import FIT_VARIANTS
 
     code = model_code(model, root, (), cli=False, skip=KEY_SKIP)
+    if model in FIT_VARIANTS.values():
+        code = sorted({*code, RECORD_CODE})
     data = [p.relative_to(root).as_posix() for p in Path(root).glob(STORE_DATA)]
     return sorted([*code, *data])
 
