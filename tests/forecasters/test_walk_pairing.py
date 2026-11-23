@@ -102,6 +102,7 @@ def test_the_copula_record_is_rho_p_with_its_pairs(task) -> None:
 
 
 @pytest.mark.parametrize("name", MODELS)
+@pytest.mark.slow
 def test_zones_are_their_own_forecasts_and_not_paired(
     name: str, task, daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
