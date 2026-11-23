@@ -39,6 +39,52 @@ CONFIG = {
 }
 
 
+def _workflow(tmp_path):
+    """A config with two workflow runs and this machine's settings."""
+    cfg = {**CONFIG, "runs": {"runa": {}, "noslots": {}}}
+    cfg["dashboard"] = {
+        k: v
+        for k, v in CONFIG["dashboard"].items()
+        if k not in ("runs", "mirror")
+    }
+    local = {"ROOT": str(tmp_path), "SCORE_CACHE": "/x", "MAILBOX": ""}
+    return cfg, local
+
+
+def test_runs_come_from_the_workflow_runs(tmp_path):
+    cfg, local = _workflow(tmp_path)
+    ctx = context.build(cfg, local)
+    assert [r.key for r in ctx.runs] == ["runa", "noslots"]
+    assert ctx.runs[0].folder == tmp_path / "runs" / "runa"
+    assert next(r for r in ctx.runs if r.live).key == "runa"
+
+
+def test_a_run_is_picked_by_name(tmp_path):
+    cfg, local = _workflow(tmp_path)
+    ctx = context.build(cfg, local, runs=["noslots"])
+    assert [r.key for r in ctx.runs] == ["noslots"]
+    assert ctx.runs[0].live
+
+
+def test_an_unknown_run_name_is_an_error(tmp_path):
+    cfg, local = _workflow(tmp_path)
+    with pytest.raises(SystemExit, match="runa, noslots"):
+        context.build(cfg, local, runs=["other"])
+
+
+def test_no_local_file_changes_the_dashboard(tmp_path):
+    cfg, local = _workflow(tmp_path)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "dashboard.local.yaml").write_text(
+        "rule: other\nruns: [{key: x, source: x-ft-}]\n"
+    )
+    ctx = context.build(
+        {**cfg}, {**local, "DASHBOARD_CONFIG": ""}, root=tmp_path
+    )
+    assert ctx.rule == "R"
+    assert [r.key for r in ctx.runs] == ["runa", "noslots"]
+
+
 def test_runs_come_from_all_three_layers(tmp_path):
     local = {
         "DASHBOARD_RUNS": f"slots={tmp_path},live",
