@@ -47,7 +47,7 @@ def _write_checkpoint_release(
     """Write a fake release `<prefix>-<tag_hash>` under `root`.
 
     Its assets are the adapter files, `settings.json` and their
-    `sha256sums.txt`, as `scripts/finetune_stream.py` writes them.
+    `sha256sums.txt`, as `finetune-stream` writes them.
     """
     import hashlib
     import json

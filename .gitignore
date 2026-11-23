@@ -53,3 +53,6 @@ config/dashboard.local.yaml
 
 # Snakemake run state (the workflow tests make it).
 .snakemake/
+
+# Panoptes (workflow/flowlib/monitor.py) keeps its run database here.
+.panoptes.db

@@ -1,7 +1,7 @@
 // Checks chart: the backtest scores by place type or flag (the report's
 // checks JSON), drawn with scorechart.js, with a target (data-targets), a
 // scale, a split and a baseline picker. The JSON has a set per baseline,
-// scale and split. The score history (scripts/score_history.py) reuses it
+// scale and split. The score history (nowcasteval.score_history) reuses it
 // with `kind`, `x_label`, `split_label` and `split` (the split's name and
 // the one shown first), `marks` (the x positions scorechart.js draws a
 // vertical line at) and `common`, which adds a tick box, ticked at first,

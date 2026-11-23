@@ -6,15 +6,16 @@ reference date and the reporting delay. The grid sets no thresholds, so
 no simulation is excluded.
 
 Records the table and a one-line summary in `ROUND_DIR/qc/`.
-Simulations are never deleted. Run from the repo root:
+Simulations are never deleted. The workflow's `sim_qc` rule runs it:
 
-    uv run python scripts/sim_qc.py ROUND_DIR
+    uv run sim-qc ROUND_DIR
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -62,7 +63,9 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
             )
             first = weekly.loc[per_draw.index[0]]
             growth = np.diff(np.log(first.to_numpy(float) + 1))
-            s = settings.loc[simulation] if simulation in settings.index else {}
+            s: Any = (
+                settings.loc[simulation] if simulation in settings.index else {}
+            )
             rows.append(
                 {
                     "simulation": simulation,

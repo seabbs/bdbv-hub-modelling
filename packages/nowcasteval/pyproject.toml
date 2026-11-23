@@ -16,6 +16,9 @@ dependencies = [
   "nowcastutils",
 ]
 
+[project.scripts]
+score-history = "nowcasteval.score_history:main"
+
 [tool.uv.sources]
 nowcastutils = { workspace = true }
 

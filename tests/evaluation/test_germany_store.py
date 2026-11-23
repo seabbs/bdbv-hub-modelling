@@ -184,7 +184,8 @@ def test_the_store_script_writes_a_label_from_the_cache(
     subprocess.run(
         [
             sys.executable,
-            str(ROOT / "scripts" / "germany_ft_store.py"),
+            "-m",
+            "nowcastgermany.ft_store",
             str(cache),
             "abcdef123456",
             "--no-push",
@@ -208,7 +209,8 @@ def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
     run = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "scripts" / "germany_ft_store.py"),
+            "-m",
+            "nowcastgermany.ft_store",
             str(tmp_path / "cache"),
             "abcdef123456",
             "--no-push",

@@ -1,6 +1,6 @@
 """A training run's state: its log, checkpoints and trainer status.
 
-A run's folder is `scripts/finetune_stream.py`'s output folder: its logs,
+A run's folder is `finetune-stream`'s output folder: its logs,
 `train/n<N>.log` per segment (a line per logged step),
 `train/n<N>/settings.json` per checkpoint and the stream status
 (`train/stream-status.json`). Everything here only reads.

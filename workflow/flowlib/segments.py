@@ -1,6 +1,6 @@
 """Training segments: one per checkpoint prefix, resumed in turn.
 
-The continuous run (`scripts/finetune_stream.py`) checkpoints after the
+The continuous run (`finetune-stream`) checkpoints after the
 first N outbreaks of its seed list, for each prefix N. The workflow runs
 it once per prefix: segment N resumes from the trainer's state after the
 prefix before and stops (`--until N`) once prefix N is saved. The

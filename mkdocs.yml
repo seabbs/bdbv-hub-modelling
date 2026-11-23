@@ -13,9 +13,10 @@ copyright: Copyright &copy; 2026 Sam Abbott. MIT licence.
 docs_dir: docs
 site_dir: _site
 hooks:
-  - scripts/cache_bust.py
+  - docs/hooks/cache_bust.py
 
 exclude_docs: |
+  hooks/*
   generated/*
   examples/*
 

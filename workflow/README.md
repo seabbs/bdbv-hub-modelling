@@ -90,7 +90,7 @@ It draws each outbreak's design and values in Python and runs each outbreak as o
 - `simulate_batch`: one batch of the simulator, under `SIM_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). Batches run by count (`sim_slots`), with no memory claim or cap of their own. A batch that fails is retried once. The simulator must be the committed one, and it runs with JAX on one thread.
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
-- `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each simulation's summaries in the round's `qc/`. It sets no thresholds and nothing is excluded or deleted.
+- `sim_qc`: the sim QC (`sim-qc`, `nowcastfoundation.finetune.qc`), a record of each simulation's summaries in the round's `qc/`. It sets no thresholds and nothing is excluded or deleted.
 - `round_ready`: the seed list and `READY`, last.
 - `simulator_benchmark`: opt-in, two passes of one batch, cold then warm, as a `simulate_batch` job runs it on a given JAX device, in the rounds' `bench/`.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
@@ -107,7 +107,7 @@ Every run takes the same rules through the `{run}` wildcard and keeps its files 
 `finetune` trains the runs in `train_runs` (every run when unset).
 A run outside `train_runs` that another target asks for starts only after their final checkpoints.
 
-One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (`finetune.prefixes`).
+One continuous run of `finetune-stream` (`nowcastfoundation.finetune.stream`) from base Chronos-2, cut into one segment per checkpoint prefix (`finetune.prefixes`).
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 
@@ -126,7 +126,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 ## 3. Publish (`rules/publish.smk`)
 
-- `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`scripts/finetune_verify.py`).
+- `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`).
 - `publish`: every checkpoint.
 

@@ -218,7 +218,7 @@ def test_a_small_trial_is_a_config_override(tmp_path):
     out = dry_run(tmp_path, "finetune", config=SMALL, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
     trains = [
-        line for line in out.stdout.splitlines() if "finetune_stream.py" in line
+        line for line in out.stdout.splitlines() if "finetune-stream" in line
     ]
     assert trains
     for line in trains:
@@ -1074,7 +1074,7 @@ def test_the_grid_simulates_its_held_out_round_33(tmp_path):
 def test_the_sim_qc_runs_with_no_thresholds(tmp_path):
     blocks = score_jobs(tmp_path, {"rounds": [4]}, target="simulate")
     qc = next(b for b in blocks if re.match(r"(local)?rule sim_qc:", b))
-    assert "scripts/sim_qc.py" in qc
+    assert "uv run sim-qc" in qc
     assert "--max-" not in qc
 
 

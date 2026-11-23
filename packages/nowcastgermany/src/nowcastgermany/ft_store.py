@@ -1,6 +1,8 @@
 """Store a checkpoint's German forecasts for the site's Germany page.
 
-    uv run python scripts/germany_ft_store.py CACHE LABEL
+    uv run germany-ft-store CACHE LABEL
+
+Run from the repo root.
 
 CACHE is the checkpoint scorer's cache (`scripts/checkpoint_scores.py
 germany CACHE LABEL` on the checkpoint-scoring branch), with one file
@@ -17,7 +19,8 @@ it (no force). An unchanged checkpoint commits nothing. The Pages build
 reads the branch (`bdbvhubrenewal germany-ft-load`).
 
 Options:
-  --repo DIR     the git checkout to commit from (default: this one).
+  --repo DIR     the git checkout to commit from (default: the current
+                 directory).
   --no-push      write the files only, to --out, and commit nothing.
   --out DIR      where --no-push writes (default: a temporary directory).
   --partial      store a label that lacks some development dates.
@@ -51,11 +54,10 @@ from nowcastgermany.store import (
     write_stored,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
 README = """# Stored German forecasts of the fine-tuned Chronos-2 model
 
-Written by `scripts/germany_ft_store.py` on main from the checkpoint
-scorer's cache, and read by the Pages build (`bdbvhubrenewal
+Written by `germany-ft-store` (`nowcastgermany.ft_store`) on main from
+the checkpoint scorer's cache, and read by the Pages build (`bdbvhubrenewal
 germany-ft-load`). One directory per checkpoint release tag, with
 `forecasts.csv.gz` (`germany-backtest`'s forecast columns,
 `fm_chronos_daily_ragged_ft` and `fm_chronos_weekly_ragged_ft` only)
@@ -170,13 +172,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("cache", type=Path)
     parser.add_argument("label")
-    parser.add_argument("--repo", type=Path, default=ROOT)
+    parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--no-push", action="store_true")
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--partial", action="store_true")
     parser.add_argument("--dispatch", action="store_true")
     parser.add_argument(
-        "--config", type=Path, default=ROOT / "config" / "germany.toml"
+        "--config", type=Path, default=Path("config/germany.toml")
     )
     args = parser.parse_args(argv)
     config = load_germany_config(args.config)
