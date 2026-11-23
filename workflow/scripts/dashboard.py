@@ -42,8 +42,64 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
-def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
-    """Return the request handler: the page, its parts and location data."""
+BUILDING = (
+    b"<!doctype html><html><head><meta charset=utf-8>"
+    b'<meta http-equiv="refresh" content="10">'
+    b"<title>Fine-tuning dashboard</title></head><body>"
+    b"<p>Building the dashboard for the first time; this page reloads "
+    b"itself.</p></body></html>"
+)
+"""The page served before the first build has finished."""
+
+
+class Pages:
+    """The last page built, its parts and nowcasts, rebuilt in the background.
+
+    Requests read the last finished build and never wait on one: a build
+    (the nowcasts' rebuild can take minutes) holds `LOCK`, a request does
+    not.
+    """
+
+    def __init__(self, ctx: page.Context) -> None:
+        self.ctx = ctx
+        self.html: bytes | None = None
+        self.parts: dict[str, str] = {}
+        self.builts: dict[str, object] = {}
+
+    def refresh(self) -> None:
+        """Build the page once and swap it in."""
+        with LOCK:
+            html, parts = page.render(self.ctx)
+            builts = {
+                d["key"]: self.ctx.nowcasts(d["key"]) for d in self.ctx.datasets
+            }
+        self.html, self.parts, self.builts = html.encode(), parts, builts
+
+    def start(self, every: float) -> None:
+        """Rebuild every `every` seconds in a background thread."""
+
+        def loop() -> None:
+            while True:
+                try:
+                    self.refresh()
+                except Exception:
+                    # The last good page stays; the detail goes to the log.
+                    traceback.print_exc(file=sys.stderr)
+                time.sleep(every)
+
+        threading.Thread(target=loop, daemon=True).start()
+
+
+def handler(
+    ctx: page.Context, pages: Pages | None = None
+) -> type[BaseHTTPRequestHandler]:
+    """Return the request handler: the page, its parts and location data.
+
+    They come from `pages`' last build; without `pages`, one is built now.
+    """
+    if pages is None:
+        pages = Pages(ctx)
+        pages.refresh()
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, body: bytes, kind: str) -> None:
@@ -62,8 +118,7 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
                 elif path.startswith("/data/"):
                     self._data(path.removeprefix("/data/"))
                 elif path in ("/", "/index.html"):
-                    with LOCK:
-                        body = page.build(ctx).encode()
+                    body = pages.html or BUILDING
                     self._send(200, body, "text/html; charset=utf-8")
                 else:
                     self._send(404, b"not found", "text/plain")
@@ -78,8 +133,7 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
             known = dict(
                 item.split(":", 1) for item in have.split(",") if ":" in item
             )
-            with LOCK:
-                parts = page.sections(ctx)
+            parts = pages.parts
             out = {}
             for key, content in parts.items():
                 digest = hashlib.sha1(content.encode()).hexdigest()[:12]
@@ -96,8 +150,8 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
             if key not in {d["key"] for d in ctx.datasets} or not loc:
                 self._send(404, b"{}", "application/json")
                 return
-            with LOCK:
-                found = nowcasts.location(ctx.nowcasts(key), loc)
+            built = pages.builts.get(key)
+            found = nowcasts.location(built, loc) if built else None
             if not found:
                 self._send(404, b"{}", "application/json")
                 return
@@ -107,19 +161,6 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
             pass
 
     return Handler
-
-
-def keep_warm(ctx: page.Context, every: float) -> None:
-    """Build each dataset's nowcasts every `every` s, outside requests."""
-
-    def loop() -> None:
-        while True:
-            with LOCK:
-                for ds in ctx.datasets:
-                    ctx.nowcasts(ds["key"])
-            time.sleep(every)
-
-    threading.Thread(target=loop, daemon=True).start()
 
 
 def write_once(ctx: page.Context, out: Path) -> None:
@@ -139,9 +180,11 @@ def main() -> None:
     if a.once:
         write_once(ctx, a.once)
         return
-    # Nowcasts are kept fresh in the background, so no page waits.
-    keep_warm(ctx, float(config["dashboard"]["refresh_every"]))
-    server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx))
+    # The page and nowcasts are rebuilt in the background, so no request
+    # waits on a build.
+    pages = Pages(ctx)
+    pages.start(float(config["dashboard"]["refresh_every"]))
+    server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx, pages))
     print(f"http://127.0.0.1:{a.port}/")
     server.serve_forever()
 

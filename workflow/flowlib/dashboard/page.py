@@ -1024,8 +1024,7 @@ def sections(ctx: Context) -> dict[str, str]:
     `bar` is the top bar's status; the rest are each section's content
     (`<details id=...>` without its summary).
     """
-    _, bar, _, parts = _parts(ctx)
-    return {"bar": bar} | {key: content for key, _, content, _ in parts}
+    return render(ctx)[1]
 
 
 def build(ctx: Context) -> str:
@@ -1036,7 +1035,16 @@ def build(ctx: Context) -> str:
     ValueError
         If no run is configured.
     """
+    return render(ctx)[0]
+
+
+def render(ctx: Context) -> tuple[str, dict[str, str]]:
+    """Return the dashboard page and its in-place parts, from one build.
+
+    The parts are `sections`'; the page is `build`'s.
+    """
     live, bar, seldata, parts = _parts(ctx)
+    updates = {"bar": bar} | {key: content for key, _, content, _ in parts}
     nav = "".join(
         f'<a href="#{key}">{NAV.get(key, title)}</a>'
         for key, title, _, _ in parts
@@ -1060,7 +1068,7 @@ def build(ctx: Context) -> str:
         "t=window.ftExplain[k];return t?'<span class=info tabindex=0 "
         'data-tip="\'+t.replace(/"/g,"&quot;")+\'">\\u24d8</span>\':""};'
     )
-    return (
+    page = (
         "<!doctype html><html><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
         "<title>Fine-tuning dashboard</title>"
@@ -1071,3 +1079,4 @@ def build(ctx: Context) -> str:
         f"{_asset('expand.js')}\n{'' if ctx.once else _asset('live.js')}"
         "</script></body></html>"
     )
+    return page, updates

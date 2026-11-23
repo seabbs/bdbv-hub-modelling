@@ -97,3 +97,41 @@ def test_sections_send_only_what_changed(server):
     # Unchanged parts come back as their hash alone; the clock moves on.
     for key in ("loss", "nowcasts", "tables"):
         assert second[key] == {"hash": first[key]["hash"]}
+
+
+def test_the_page_never_waits_on_a_build(tmp_path):
+    # Sam's page hung for minutes: the nowcasts rebuild (~450 s) held the
+    # lock the page request waited on. A request serves the last page
+    # built, while another build holds the lock.
+    ctx = _machine(tmp_path)
+    ctx.once = False
+    pages = dashboard.Pages(ctx)
+    pages.refresh()
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx, pages))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        with dashboard.LOCK:
+            status, body = get(url + "/")
+            assert status == 200
+            assert "<h2>Nowcasts</h2>" in body
+            status, body = get(url + "/data/germany/DE.json")
+            assert status == 200
+    finally:
+        srv.shutdown()
+
+
+def test_before_the_first_build_the_page_says_it_is_building(tmp_path):
+    ctx = _machine(tmp_path)
+    ctx.once = False
+    pages = dashboard.Pages(ctx)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx, pages))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        status, body = get(url + "/")
+        assert status == 200
+        assert "building" in body.lower()
+        assert 'http-equiv="refresh"' in body
+    finally:
+        srv.shutdown()
