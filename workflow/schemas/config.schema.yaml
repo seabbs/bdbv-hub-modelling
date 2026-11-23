@@ -84,6 +84,7 @@ required:
   - train_runs
   - forecast
   - score
+  - hub_rounds
   - dashboard
 properties:
   rounds: {$ref: "#/$defs/rounds"}
@@ -203,6 +204,14 @@ properties:
       checkpoints: {type: string}
       branch: {type: string}
 
+  hub_rounds:
+    type: object
+    additionalProperties: false
+    required:
+      - rounds
+    properties:
+      rounds:
+        $ref: "#/$defs/positive"
   dashboard:
     type: object
     additionalProperties: false

@@ -517,7 +517,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--models",
         nargs="*",
         default=None,
-        help="Models to run live. Defaults to the unfitted ones.",
+        help="Models to run live (none if given empty). Defaults to the "
+        "unfitted ones.",
     )
     cmp.add_argument(
         "--stored",
@@ -529,6 +530,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--fetch",
         action="store_true",
         help="Download the hub files first.",
+    )
+    cmp.add_argument(
+        "--submissions-table",
+        default=None,
+        help="Each round's submitted model per hub id "
+        "(submission_ci.submissions). Defaults to the config's.",
     )
 
     frz = sub.add_parser(
@@ -1773,13 +1780,18 @@ def _compare_hub(args: argparse.Namespace) -> int:
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
     if args.fetch:  # pragma: no cover - network
         hc.fetch_hub_submissions(hub_dir, cache, ref=cfg.ref)
-        hc.fetch_submissions_table(cfg.submissions_table)
+        if args.submissions_table is None:
+            hc.fetch_submissions_table(cfg.submissions_table)
     hub = hc.load_hub_submissions(hub_dir, cache)
     target, delays = load_target(args.data), load_delays(args.data)
     daily = load_daily(args.data)
     config = bt.load_config(args.backtest_config)
     rounds = sorted(set(hub["reference_date"]))
-    live = args.models or [s.name for s in list_models() if not s.fitted]
+    live = (
+        args.models
+        if args.models is not None
+        else [s.name for s in list_models() if not s.fitted]
+    )
     horizons = (
         pd.to_datetime(hub["target_end_date"])
         - pd.to_datetime(hub["reference_date"])
@@ -1813,7 +1825,7 @@ def _compare_hub(args: argparse.Namespace) -> int:
         hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
-    table_file = Path(cfg.submissions_table)
+    table_file = Path(args.submissions_table or cfg.submissions_table)
     if table_file.exists():
         table = pd.read_csv(table_file, dtype=str, keep_default_na=False)
     else:
