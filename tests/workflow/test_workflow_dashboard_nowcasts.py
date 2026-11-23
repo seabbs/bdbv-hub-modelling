@@ -621,3 +621,22 @@ def test_a_run_s_interim_checkpoint_is_shown_labelled_interim(tmp_path):
     assert one["run"] == "runa"
     assert one["n"] == 2000
     assert "interim" in one["label"]
+
+
+def test_a_unit_with_forecast_days_has_its_split_on_every_date(tmp_path):
+    # The horizon split panel reads `split` by date: a unit with forecast
+    # days has its nowcast part and weeks ahead on each date it scored.
+    for origin in ("2022-02-08", "2022-02-09"):
+        _days(
+            tmp_path / "reference" / f"{origin}.csv.gz",
+            "fm_chronos_daily_ragged",
+            origin,
+            [-3, 0, 2, 9],
+        )
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=nowcasts.LEVELS)
+    split = nowcasts.location(built, "DE")["split"]["zero"]["7day"]["daily"]
+    assert set(split) == {"2022-02-08", "2022-02-09"}
+    for part in split.values():
+        assert part["nowcast"][1] == 2
+        assert set(part["forecast"]) == {"1", "2"}

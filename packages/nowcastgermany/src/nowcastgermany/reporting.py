@@ -2,12 +2,12 @@
 """The German nowcast benchmark page.
 
 `germany_page` writes the page's table and score summaries from the
-scores of `bdbvhubrenewal germany-backtest` (our models) and
-`bdbvhubrenewal germany-teams` (the hub teams): `relative_scores` by level
+scores of `nowcastgermany backtest` (our models) and
+`nowcastgermany teams` (the hub teams): `relative_scores` by level
 and the `scoresummary` views, relative to the configured baseline.
 `germany_explorer` draws the nowcasts at every `plot_every`-th
 development date in the forecast explorer, against the 40-day truth and
-the data each date saw (`bdbvhubrenewal germany-asof`).
+the data each date saw (`nowcastgermany asof`).
 Only the development half, nowcast dates before the split date, is shown:
 the results are filtered to it, and the page refuses to write a nowcast
 date on or after it (`held_out_leaks`), which CI checks again on the built
@@ -286,9 +286,10 @@ def germany_explorer(
     Parameters
     ----------
     forecasts : pandas.DataFrame
-        `germany-backtest` and `germany-teams` forecasts, with truth.
+        `nowcastgermany backtest` and `nowcastgermany teams` forecasts,
+        with truth.
     asof : pandas.DataFrame, optional
-        `germany-asof` output.
+        `nowcastgermany asof` output.
     config : GermanyConfig
         Gives the dates, the plot spacing and the hidden models.
     models : list of str
@@ -361,9 +362,9 @@ def germany_page(
     gen : pathlib.Path
         Where the Markdown snippets go.
     results : pathlib.Path
-        `germany-backtest` output (`scores.csv.gz`, `forecasts.csv.gz`),
-        and if they have been run `germany-teams` output (`teams.csv.gz`,
-        `teams-forecasts.csv.gz`) and `germany-asof` output
+        `nowcastgermany backtest` output (`scores.csv.gz`, `forecasts.csv.gz`),
+        and if they have been run `nowcastgermany teams` output (`teams.csv.gz`,
+        `teams-forecasts.csv.gz`) and `nowcastgermany asof` output
         (`asof.csv.gz`). If the scores are missing, the page says the
         benchmark has not been run.
     config : GermanyConfig

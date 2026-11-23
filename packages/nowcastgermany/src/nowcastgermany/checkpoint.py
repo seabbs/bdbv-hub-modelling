@@ -22,13 +22,13 @@ keyed by checkpoint hash and run, with the checkpoint's outbreaks and
 grid.
 
 Usage:
-  python -m nowcastfoundation.checkpoint germany CACHE LABEL [SEGMENT]
-  python -m nowcastfoundation.checkpoint release CACHE HASH
-  python -m nowcastfoundation.checkpoint table CACHE EVIDENCE \\
+  python -m nowcastgermany.checkpoint germany CACHE LABEL [SEGMENT]
+  python -m nowcastgermany.checkpoint release CACHE HASH
+  python -m nowcastgermany.checkpoint table CACHE EVIDENCE \\
     CHECKPOINTS HASH...
-  python -m nowcastfoundation.checkpoint run TRAIN SCORES REFERENCE RUN OUT
-  python -m nowcastfoundation.checkpoint daily TRAIN SCORES REFERENCE RUN OUT
-  python -m nowcastfoundation.checkpoint compare OUT TABLE...
+  python -m nowcastgermany.checkpoint run TRAIN SCORES REFERENCE RUN OUT
+  python -m nowcastgermany.checkpoint daily TRAIN SCORES REFERENCE RUN OUT
+  python -m nowcastgermany.checkpoint compare OUT TABLE...
 """
 
 from __future__ import annotations

@@ -3,16 +3,21 @@ from __future__ import annotations
 import gzip
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "fit-store.sh"
+MODULE = (
+    Path(__file__).resolve().parents[1]
+    / "packages/bdbvhub/src/bdbvhub/store/branch.py"
+)
+"""Run by path with `-I`, as the CI jobs with no forecast environment do."""
 
 
 def _run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
-        ["bash", str(SCRIPT), *args],
+        [sys.executable, "-I", str(MODULE), *args],
         cwd=cwd,
         capture_output=True,
         text=True,

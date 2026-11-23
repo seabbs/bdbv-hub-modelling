@@ -1,6 +1,6 @@
 # Checkpoint scoring.
 #
-# Each checkpoint label gets the units of nowcastfoundation.checkpoint:
+# Each checkpoint label gets the units of nowcastgermany.checkpoint:
 # `germany` (WIS on the German development half) and `release` (the
 # release's settings, with the trainer's held-out loss).
 # BDBV is held out for the paper, so no BDBV unit runs
@@ -9,8 +9,9 @@
 # <label>/ and resumes from it; its done stamp is written when it exits
 # cleanly. `score_table` merges every label's rows into the evidence
 # tables in <SCORE_CACHE>/tables/, newest checkpoint first. A unit runs
-# torch on EVAL_DEVICE (the CPU by default; flowlib.machine.side_device)
-# with EVAL_THREADS threads, beside the trainer, which keeps the GPU.
+# on the forecasting device with its threads (`forecast` in the config,
+# flowlib.forecast), beside the trainer; on CUDA, `forecast.gpu` says
+# whether a unit waits for the trainer's GPU or shares it.
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany-days/<label>.done
 # (`GERMANY_UNIT`); `germany` is the unit's study name.
@@ -53,6 +54,7 @@ rule score_germany:
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
+        gpu=FORECAST.gpu,
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
@@ -81,6 +83,7 @@ rule score_run_germany:
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
+        gpu=FORECAST.gpu,
     params:
         prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,

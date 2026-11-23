@@ -76,7 +76,7 @@ rule germany_triangle:
     params:
         out=lambda wc, output: Path(output[0]).parent,
     shell:
-        "uv run python -m bdbvhub.cli germany-fetch --out {params.out} " "> {log} 2>&1"
+        "uv run python -m nowcastgermany.cli fetch --out {params.out} " "> {log} 2>&1"
 
 
 rule germany_dev_stats:

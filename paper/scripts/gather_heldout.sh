@@ -17,6 +17,7 @@ SAY_PREFIX="paper: CI gather (run $run)"
 source "$root/workflow/scripts/notify.sh"
 repo=seabbs/bdbv-hub-modelling
 bdbv="$root/.venv/bin/bdbvhubrenewal"
+germany="$root/.venv/bin/nowcastgermany"
 cd "$root"
 jobs() {
   gh run view "$run" -R "$repo" --json jobs --jq "[.jobs[] | select(.name | test(\"^(Held-out German|Forecast)\")) | $1] | $2"
@@ -45,13 +46,13 @@ if "$bdbv" score \
      "$p"-scenario-{randomwalk,randomwalknowcast}-{falling,flat,rising} &&
    "$bdbv" concat-results --out results/germany \
      output/parts/parts-germany-*/germany &&
-   "$bdbv" germany-fetch &&
-   "$bdbv" germany-teams --out results/germany &&
-   "$bdbv" germany-paper --results results/germany &&
+   "$germany" fetch &&
+   "$germany" teams --out results/germany &&
+   "$germany" paper --results results/germany &&
    "$bdbv" concat-results --out results/germany/held-out \
      output/ci/dl/heldout-*/germany/held-out &&
-   "$bdbv" germany-teams --held-out --out results/germany &&
-   "$bdbv" germany-paper --results results/germany/held-out; then
+   "$germany" teams --held-out --out results/germany &&
+   "$germany" paper --results results/germany/held-out; then
   say "done: results/forecasts.csv.gz, results/germany and results/germany/held-out in $root"
 else
   say "FAILED: gathering (log $(setting PAPER_LOGS)/gather-heldout.log)"; exit 1

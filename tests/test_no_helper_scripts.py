@@ -28,11 +28,25 @@ MOVED = {
         "packages/bdbvhub/data-raw/build_zone_centres.py"
     ),
     "scripts/hub_imputation_fit.R": "tests/model/test_hub_imputation_delays.py",
+    "scripts/fit-store.sh": "packages/bdbvhub/src/bdbvhub/store/branch.py",
+    "scripts/results-release.sh": (
+        "packages/bdbvhub/src/bdbvhub/submission/release.py"
+    ),
+    "scripts/paper.sh": "workflow/scripts/paper_run.py",
+    "scripts/validate-hub.R": "tests/submission/hub_validation/validate_hub.R",
+    "scripts/validate_with_hubvalidations.R": (
+        "tests/submission/hub_validation/validate_with_hubvalidations.R"
+    ),
     "tools/README.md": "deleted",
     "tools/paper_local.sh": "deleted",
     "tools/run_target.sh": "deleted",
 }
 """Each former helper and where it went."""
+
+
+def test_scripts_and_tools_are_gone() -> None:
+    assert not (ROOT / "scripts").exists()
+    assert not (ROOT / "tools").exists()
 
 
 def test_moved_helpers_are_gone() -> None:
@@ -59,6 +73,7 @@ def test_no_path_names_a_moved_helper() -> None:
         *ROOT.glob(".github/workflows/*.yml"),
         *ROOT.glob("workflow/rules/*.smk"),
         *ROOT.glob("taskfiles/*.yml"),
+        *ROOT.glob("ci/steps/*.sh"),
         ROOT / "Taskfile.yml",
         ROOT / "mkdocs.yml",
     ]:

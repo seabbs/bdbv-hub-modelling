@@ -62,15 +62,6 @@ def device(
 _device = device
 
 
-def side_device(cfg: Mapping[str, str]) -> str:
-    """Return the device of the jobs beside the trainer.
-
-    `EVAL_DEVICE`, else the CPU, so they never wait on or take the
-    trainer's GPU.
-    """
-    return cfg.get("EVAL_DEVICE") or "cpu"
-
-
 THREAD_VARS = (
     "TORCH_THREADS",
     "OMP_NUM_THREADS",

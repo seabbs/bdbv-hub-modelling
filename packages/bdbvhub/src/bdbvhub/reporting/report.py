@@ -205,7 +205,7 @@ def make_report(
     hub_comparison : pathlib.Path or str
         Output of `bdbvhubrenewal compare-hub`, if it has been run.
     germany : pathlib.Path or str
-        Output of `bdbvhubrenewal germany-backtest`, if it has been run.
+        Output of `nowcastgermany backtest`, if it has been run.
     germany_config : pathlib.Path or str
         The German benchmark's settings.
     """

@@ -75,13 +75,14 @@ evals (the default of `--by-source-every`)."""
 EVAL_MODES = ("local", "offload")
 """Where held-out evaluation runs (`--eval`)."""
 HELD_OUT_BLOCKS = "held-out-blocks.pkl"
-HELD_OUT_KEY = "held-out-blocks.json"
-NEXT_CHUNK_BLOCKS = "next-chunk-blocks.pkl"
-NEXT_CHUNK_KEY = "next-chunk-blocks.json"
-"""The next chunk's cut blocks and their key (`save_chunk`): a restart
-loads them rather than cutting the chunk again (about 8 minutes)."""
-"""What the saved held-out blocks were cut from (`held_out_blocks`)."""
 """The held-out blocks an offloaded run saves for its evaluator."""
+HELD_OUT_KEY = "held-out-blocks.json"
+"""What the saved held-out blocks were cut from (`held_out_blocks`)."""
+NEXT_CHUNK_BLOCKS = "next-chunk-blocks.pkl"
+"""The next chunk's cut blocks (`save_chunk`): a restart loads them
+rather than cutting the chunk again (about 8 minutes)."""
+NEXT_CHUNK_KEY = "next-chunk-blocks.json"
+"""What the saved next chunk's blocks were cut from (`load_chunk`)."""
 
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
