@@ -21,7 +21,6 @@ on:
       - 'results/**'
       - 'scripts/fit-store.sh'
       - 'scripts/results-release.sh'
-      - 'scripts/score_history.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -40,7 +39,6 @@ on:
       - 'results/**'
       - 'scripts/fit-store.sh'
       - 'scripts/results-release.sh'
-      - 'scripts/score_history.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/pages.yml'
@@ -706,7 +704,7 @@ jobs:
           git fetch -q --filter=blob:none --no-tags origin \
             +gh-pages:refs/remotes/origin/gh-pages \
             || echo "::warning::gh-pages could not be fetched"
-          uv run python scripts/score_history.py --ref origin/gh-pages \
+          uv run score-history --ref origin/gh-pages \
             --docs docs/generated --figures docs/figures \
             --current docs/figures --current-sha "$SHA" \
             --out output/score-history.csv
