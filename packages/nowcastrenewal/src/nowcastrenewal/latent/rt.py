@@ -301,8 +301,8 @@ class PlaceRt(RandomVariable):
         One of `RELATIONS`.
     kinds : sequence of str
         The kinds an independent place draws its own path from, each
-        equally likely (an `endemic` or `controlled` outbreak keeps its
-        kind in every place).
+        equally likely (an `endemic`, `controlled` or `oscillating`
+        outbreak keeps its kind in every place, as R stays about 1).
     values : mapping
         The values each own path takes its settings from.
     noise_scale : float
@@ -361,7 +361,7 @@ class PlaceRt(RandomVariable):
         self.noise = WeeklyNoise(f"{name}_noise")
 
     def _own_kind(self, i: int) -> str:
-        if self.path.kind in ("endemic", "controlled"):
+        if self.path.kind in ("endemic", "controlled", "oscillating"):
             return self.path.kind
         j = numpyro.sample(
             f"{self.name}_path_{i}",

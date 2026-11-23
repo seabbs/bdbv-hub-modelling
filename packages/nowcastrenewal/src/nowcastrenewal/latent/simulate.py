@@ -172,7 +172,13 @@ def simulate_latent(
         DeterministicVariable("start_unit", np.where(on, unit, 0.0)),
         InitializeStrata(n_gt, early),
     )
-    if (np.asarray(start()).sum(axis=0) > population).any():
+    # An established epidemic ran at its level before the span too: its
+    # onsets take that history, about the level over the mean incubation.
+    group = strata[".group"].to_numpy().astype(int) - 1
+    history = 0.0 if early else np.where(on, unit, 0.0) * _vector(
+        v, "incubation_mean"
+    )[group]
+    if (np.asarray(start()).sum(axis=0) + history > population).any():
         raise ValueError("an established epidemic larger than its population")
     places = sorted(strata["place"].unique())
     place = strata["place"].map(places.index).to_numpy()
@@ -242,7 +248,6 @@ def simulate_latent(
     infections = np.asarray(sample.all_subpops)
     r = np.asarray(tr["latent::r"]["value"])
     reff = np.asarray(tr["latent::reff"]["value"])
-    group = strata[".group"].to_numpy().astype(int) - 1
     # The drawn infection-to-reference family and CV; a design that does
     # not draw them takes a gamma with `incubation_cv`.
     family = design.get("incubation_family", "gamma")
