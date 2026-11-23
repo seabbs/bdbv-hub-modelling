@@ -29,7 +29,12 @@ from nowcastfoundation.simulator.draws import (
     generator,
     read_grid,
 )
-from nowcastrenewal.components.draws import MIN_SIZE, PaddedDraws, padded_draws
+from nowcastrenewal.components.draws import (
+    MIN_SIZE,
+    PaddedDraws,
+    flat_size,
+    padded_draws,
+)
 from nowcastrenewal.simulation import outbreak
 
 GRID = read_grid(Path(__file__).parents[2] / "config/finetune/grid.yaml")
@@ -61,6 +66,16 @@ def test_flat_draws_keep_each_cells_distribution(i: int) -> None:
         mean = np.asarray(base.mean)
         se = np.sqrt(np.asarray(base.variance) / len(keys))
     assert (np.abs(x.mean(axis=0) - mean) < 4.5 * se).all()
+
+
+def test_flat_sizes_are_few_and_mostly_cells() -> None:
+    n = np.arange(1, 4_000_001)
+    sizes = np.array([flat_size(int(k)) for k in n])
+    assert (sizes >= n).all()
+    big = n > MIN_SIZE
+    assert ((sizes[big] - n[big]) / sizes[big]).max() < 0.25
+    # Four lengths a doubling: 1024 up to 4M cells is 12 doublings.
+    assert len(set(sizes.tolist())) <= 1 + 4 * 12
 
 
 def test_only_large_unobserved_sites_are_drawn_flat() -> None:

@@ -5,10 +5,11 @@ JAX compiles a sampler once per shape, and the count samplers (Poisson,
 gamma-Poisson, binomial, Bernoulli) take seconds each. A simulation's
 reporting triangle is strata by days by delays, so nearly every
 simulation drew them at a shape of its own. `padded_draws` is a numpyro
-handler that draws such a site on one flat array, its length rounded up
-to a power of two (at least `MIN_SIZE`), and keeps the first cells in the
-site's shape: the parameters are padded with their last value, so each
-cell has its own distribution, and only which draw lands in which cell
+handler that draws such a site on one flat array of a few lengths
+(`flat_size`: four a doubling, so at most a quarter of the cells are
+padding), and keeps the first cells in the site's shape: the
+parameters are padded with their last value, so each cell has its own
+distribution, and only which draw lands in which cell
 changes. The site's shape, `log_prob` and any observed value are as
 before, so a model under it can still be conditioned.
 """
@@ -23,10 +24,34 @@ import numpyro.distributions as dist
 from jax import Array
 from numpyro.primitives import Messenger
 
-__all__ = ["MIN_SIZE", "PaddedDraws", "padded_draws"]
+__all__ = ["MIN_SIZE", "PaddedDraws", "flat_size", "padded_draws"]
 
 MIN_SIZE = 1024
 """The smallest flat length a draw is made on."""
+
+
+def flat_size(n: int) -> int:
+    """Return the flat length `n` cells are drawn on.
+
+    `MIN_SIZE` for at most that many; otherwise `n` rounded up to a
+    multiple of an eighth of the next power of two, so 5, 6, 7 or 8
+    eighths of it: four lengths a doubling, at most a quarter padding.
+
+    Parameters
+    ----------
+    n : int
+        The site's cells.
+
+    Returns
+    -------
+    int
+        The flat length, at least `n`.
+    """
+    if n <= MIN_SIZE:
+        return MIN_SIZE
+    step = 1 << ((n - 1).bit_length() - 3)
+    return -(-n // step) * step
+
 
 _PARAMETERS: tuple[tuple[type, tuple[str, ...]], ...] = (
     (dist.GammaPoisson, ("concentration", "rate")),
@@ -45,7 +70,7 @@ def _family(d: dist.Distribution) -> tuple[type, tuple[str, ...]] | None:
 
 
 class PaddedDraws(dist.Distribution):
-    """A distribution sampled on a flat array of a power-of-two length.
+    """A distribution sampled on a flat array of a `flat_size` length.
 
     Parameters
     ----------
@@ -84,7 +109,7 @@ class PaddedDraws(dist.Distribution):
         """
         shape = tuple(sample_shape) + tuple(self.batch_shape)
         n = math.prod(shape)
-        size = max(MIN_SIZE, 1 << max(n - 1, 0).bit_length())
+        size = flat_size(n)
         params = {
             name: jnp.pad(
                 jnp.broadcast_to(getattr(self.base, name), shape).ravel(),
