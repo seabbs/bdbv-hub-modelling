@@ -304,6 +304,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
     )
     pst.add_argument("--out", default="results/pairing")
+    pst.add_argument(
+        "--candidates",
+        action="store_true",
+        help="Score every copula.CANDIDATES setting instead, and print "
+        "them best first (`nowcasteval.pairing.bdbv_candidates`).",
+    )
 
     dig = sub.add_parser(
         "digest",
@@ -1874,7 +1880,12 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
     origins = bt.real_vintages(real)[:-1]
     if args.chunk:
         origins = chunk(origins, args.chunk)
-    scores = pairing.bdbv_sensitivity(data, config, origins)
+    if args.candidates:
+        name += "-candidates"
+        scores = pairing.bdbv_candidates(data, config, origins)
+        print(pairing.best_candidate(scores).to_string(index=False))
+    else:
+        scores = pairing.bdbv_sensitivity(data, config, origins)
     if args.chunk:
         name += "-" + args.chunk.replace("/", "of")
     path = out / f"{name}.csv.gz"

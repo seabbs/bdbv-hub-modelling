@@ -37,10 +37,13 @@ from nowcastutils.base import (
 )
 
 __all__ = [
+    "CANDIDATE_COLUMNS",
     "MODELS",
     "RHO_COLUMNS",
     "SCORE_COLUMNS",
     "VARIANTS",
+    "bdbv_candidates",
+    "best_candidate",
     "summarise_pairing",
     "variant_forecasts",
     "variant_scores",
@@ -75,6 +78,9 @@ RHO_COLUMNS: Final = (
     "fallback",
 )
 """Columns of the rho_p rows (`nowcastgermany.pairing.germany_sensitivity`)."""
+
+CANDIDATE_COLUMNS: Final = (*SCORE_COLUMNS, "rho_provinces", "fallback")
+"""Columns of `bdbv_candidates`: `variant` is the candidate's label."""
 
 _CELL = ["location", "target_end_date"]
 
@@ -314,3 +320,116 @@ def bdbv_sensitivity(
     if not frames:
         return pd.DataFrame(columns=list(SCORE_COLUMNS))
     return pd.concat(frames, ignore_index=True)
+
+
+def bdbv_candidates(
+    data: str,
+    config_path: str = "config/backtest.toml",
+    origins: list[str] | None = None,
+) -> pd.DataFrame:
+    """Score each candidate copula setting on the BDBV release backtest.
+
+    As `bdbv_sensitivity`, with each origin's draws paired under every
+    `copula.CANDIDATES` setting (`RandomWalk.paired_with`). The draws are
+    the forecast's own, so only their pairing differs.
+
+    Parameters
+    ----------
+    data : str
+        The data directory.
+    config_path : str
+        The backtest config.
+    origins : list of str, optional
+        Only these origins (a block of a chunked run).
+
+    Returns
+    -------
+    pandas.DataFrame
+        `variant_scores` rows by candidate (`variant`, its label), with
+        the candidate's `rho_provinces` and `fallback` at that origin.
+    """
+    from bdbvhub.data.tidy import load_daily, load_delays, load_target
+    from bdbvhub.store.store import origin_tasks
+    from nowcastbaselines.copula import CANDIDATES
+    from nowcasteval.backtest import load_config, real_vintages
+    from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
+
+    config = load_config(config_path)
+    target, delays = load_target(data), load_delays(data)
+    real = target.loc[target["kind"] == "real"]
+    truth = rolling_truth(real, resolve_truth_delay(config, target))
+    tasks = origin_tasks(target, delays, config, load_daily(data))
+    frames = []
+    for origin in real_vintages(real)[:-1]:
+        if origin in config.skip_origins or origin not in tasks:
+            continue
+        if origins is not None and origin not in origins:
+            continue
+        for name in MODELS:
+            model: RandomWalk = dataclasses.replace(
+                cast("RandomWalk", get_model(name)), keep_variants=True
+            )
+            try:
+                model.forecast(tasks[origin])
+            except ModelUnavailableError:
+                continue
+            for candidate in CANDIDATES:
+                drawn, fit = model.paired_with(candidate)
+                scores = variant_scores(
+                    add_national(drawn),
+                    truth,
+                    study="bdbv",
+                    model=name,
+                    variant=candidate.label,
+                    origin=origin,
+                )
+                fit = fit or {"rho_provinces": np.nan, "fallback": False}
+                frames.append(
+                    scores.assign(
+                        rho_provinces=float(cast(float, fit["rho_provinces"])),
+                        fallback=bool(fit["fallback"]),
+                    )
+                )
+    if not frames:
+        return pd.DataFrame(columns=list(CANDIDATE_COLUMNS))
+    return pd.concat(frames, ignore_index=True)
+
+
+def best_candidate(scores: pd.DataFrame) -> pd.DataFrame:
+    """Rank the candidates by their mean provinces energy score.
+
+    The energy score of each origin's provinces and weeks as one vector is
+    the joint score the pairing is for. Each model's scores are divided by
+    its own mean over candidates, so both models count alike.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        `bdbv_candidates`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per candidate (`variant`): `energy` (the mean relative
+        energy score), `national_crps` (the same for the country, the sum
+        of the provinces), and `fallback` (the share of origins that fell
+        back to the prior), best first.
+    """
+    out = {}
+    for metric, level, target in (
+        ("energy", "provinces", "joint"),
+        ("crps", "national", "cell"),
+    ):
+        rows = scores.loc[
+            (scores["metric"] == metric)
+            & (scores["level"] == level)
+            & (scores["target"] == target)
+        ]
+        by = rows.groupby(["model", "variant", "origin"])["value"].mean()
+        rel = by / by.groupby(["model", "origin"]).transform("mean")
+        out[f"{'energy' if metric == 'energy' else 'national_crps'}"] = (
+            rel.groupby("variant").mean()
+        )
+    table = pd.DataFrame(out)
+    table["fallback"] = scores.groupby("variant")["fallback"].mean()
+    return table.sort_values("energy").reset_index()

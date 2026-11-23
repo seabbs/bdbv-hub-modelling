@@ -19,7 +19,9 @@ thin windows.
 
 from __future__ import annotations
 
+import itertools
 import zlib
+from dataclasses import dataclass
 from typing import Final
 
 import numpy as np
@@ -29,10 +31,12 @@ from scipy.special import ndtri
 from nowcastutils.base import NATIONAL
 
 __all__ = [
+    "CANDIDATES",
     "MAX_RHO",
     "PRIOR",
     "PRIOR_WEIGHT",
     "WINDOW_WEEKS",
+    "CopulaSettings",
     "error_scores",
     "estimate_rho",
     "pair_walks",
@@ -54,6 +58,46 @@ WINDOW_WEEKS: Final = 8
 """The latest weeks of releases whose errors are used (`error_scores`)."""
 
 
+@dataclass(frozen=True)
+class CopulaSettings:
+    r"""How a walk model estimates its $\rho_p$ (`estimate_rho`).
+
+    Attributes
+    ----------
+    prior : float
+        $\rho_0$, the value the estimate is shrunk towards.
+    weight : float
+        $w$, the pairs the prior counts as.
+    max_rho : float
+        The largest estimate.
+    window_weeks : int
+        The latest weeks of releases whose errors are used.
+    """
+
+    prior: float = PRIOR
+    weight: float = PRIOR_WEIGHT
+    max_rho: float = MAX_RHO
+    window_weeks: int = WINDOW_WEEKS
+
+    @property
+    def label(self) -> str:
+        """A short label, as the release backtest's scores name it."""
+        return (
+            f"prior{self.prior:g}-w{self.weight:g}-cap{self.max_rho:g}-"
+            f"{self.window_weeks}wk"
+        )
+
+
+CANDIDATES: Final = tuple(
+    CopulaSettings(prior, PRIOR_WEIGHT, cap, window)
+    for prior, cap, window in itertools.product(
+        (0.3, 0.5, 0.7, 0.9), (0.9, 0.95, 0.99), (4, 8, 12, 16)
+    )
+)
+"""The settings scored on the release backtest
+(`nowcasteval.pairing.bdbv_candidates`); the defaults are the best."""
+
+
 def _provinces(
     locations: pd.Series | tuple[str, ...], national: str
 ) -> np.ndarray:
@@ -67,6 +111,7 @@ def estimate_rho(
     prior: float = PRIOR,
     weight: float = PRIOR_WEIGHT,
     national: str = NATIONAL,
+    max_rho: float = MAX_RHO,
 ) -> dict[str, float | int | bool]:
     r"""Estimate $\rho_p$ from normal scores, with its record.
 
@@ -74,7 +119,7 @@ def estimate_rho(
     provinces in the same week of one forecast; the country and zones are
     left out. With $n$ pairs and the prior $\rho_0$ the estimate is
     $(n r + w \rho_0) / (n + w)$, the prior's where the pairs give no $r$,
-    then floored at zero and capped at `MAX_RHO`.
+    then floored at zero and capped at `max_rho`.
 
     Parameters
     ----------
@@ -87,6 +132,8 @@ def estimate_rho(
         $w$, the pairs the prior counts as.
     national : str
         The country's location code.
+    max_rho : float
+        The largest estimate.
 
     Returns
     -------
@@ -114,7 +161,7 @@ def estimate_rho(
     if r is None:
         return fallback
     n = len(pairs)
-    rho = float(np.clip((n * r + weight * prior) / (n + weight), 0, MAX_RHO))
+    rho = float(np.clip((n * r + weight * prior) / (n + weight), 0, max_rho))
     return {"rho_provinces": rho, "n_pairs": int(n), "fallback": False}
 
 
