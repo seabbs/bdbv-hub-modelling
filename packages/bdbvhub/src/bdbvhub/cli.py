@@ -1894,7 +1894,9 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
         origins = chunk(origins, args.chunk)
     if args.candidates:
         name += "-candidates"
-        scores = pairing.bdbv_candidates(data, config, origins)
+        from nowcastbaselines.copula import CANDIDATES
+
+        scores = pairing.bdbv_candidates(CANDIDATES, data, config, origins)
         print(pairing.best_candidate(scores).to_string(index=False))
     else:
         scores = pairing.bdbv_sensitivity(data, config, origins)

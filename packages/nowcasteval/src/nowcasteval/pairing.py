@@ -21,7 +21,8 @@ mean of each score by study, level, model, variant and target.
 from __future__ import annotations
 
 import dataclasses
-from typing import Final, cast
+from collections.abc import Sequence
+from typing import Any, Final, cast
 
 import numpy as np
 import pandas as pd
@@ -323,6 +324,7 @@ def bdbv_sensitivity(
 
 
 def bdbv_candidates(
+    candidates: Sequence[Any],
     data: str,
     config_path: str = "config/backtest.toml",
     origins: list[str] | None = None,
@@ -330,11 +332,13 @@ def bdbv_candidates(
     """Score each candidate copula setting on the BDBV release backtest.
 
     As `bdbv_sensitivity`, with each origin's draws paired under every
-    `copula.CANDIDATES` setting (`RandomWalk.paired_with`). The draws are
-    the forecast's own, so only their pairing differs.
+    candidate setting (`RandomWalk.paired_with`). The draws are the
+    forecast's own, so only their pairing differs.
 
     Parameters
     ----------
+    candidates : sequence of CopulaSettings
+        The settings, `nowcastbaselines.copula.CANDIDATES`.
     data : str
         The data directory.
     config_path : str
@@ -350,7 +354,6 @@ def bdbv_candidates(
     """
     from bdbvhub.data.tidy import load_daily, load_delays, load_target
     from bdbvhub.store.store import origin_tasks
-    from nowcastbaselines.copula import CANDIDATES
     from nowcasteval.backtest import load_config, real_vintages
     from nowcasteval.nowcast import resolve_truth_delay, rolling_truth
 
@@ -373,7 +376,7 @@ def bdbv_candidates(
                 model.forecast(tasks[origin])
             except ModelUnavailableError:
                 continue
-            for candidate in CANDIDATES:
+            for candidate in candidates:
                 drawn, fit = model.paired_with(candidate)
                 scores = variant_scores(
                     add_national(drawn),
