@@ -109,3 +109,24 @@ def test_the_command_writes_scores_and_summary(tmp_path):
     assert set(pd.read_csv(tmp_path / "t.csv")["coupling"]) == set(
         coupling.COUPLINGS
     )
+
+
+def test_the_command_scores_the_hub_s_horizons_only(tmp_path, monkeypatch):
+    # A unit's forecast days (horizon > 0) are for the page; the coupling
+    # evidence stays on the hub's nowcast cells.
+    unit = tmp_path / "unit"
+    unit.mkdir()
+    rows = _rows(n_origins=2)
+    ahead = rows.assign(horizon=rows["horizon"] + 7)
+    for o, g in pd.concat([rows, ahead]).groupby("origin"):
+        g.to_csv(unit / f"{o}.csv.gz", index=False, compression="gzip")
+    seen = []
+    real = coupling.coupling_scores
+
+    def scores(rows):
+        seen.append(set(rows["horizon"]))
+        return real(rows, n_samples=50, seed=1)
+
+    monkeypatch.setattr(coupling, "coupling_scores", scores)
+    coupling.main([str(unit), str(tmp_path / "s.csv"), str(tmp_path / "t.csv")])
+    assert max(seen[0]) <= 0
