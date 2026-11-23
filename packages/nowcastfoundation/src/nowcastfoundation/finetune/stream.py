@@ -1624,6 +1624,7 @@ def main(root: Path | None = None) -> None:
         time.sleep(POLL)
     held = held[: args.holdout]
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
+    report(stage=f"cutting held-out blocks of {len(held)} outbreaks")
     # Checkpointing follows from the memory budget; the blocks and steps
     # do not, so every machine trains on the same ones.
     checkpoint_large_batches(args.checkpoint_above)
