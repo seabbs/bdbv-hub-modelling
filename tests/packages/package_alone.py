@@ -7,7 +7,7 @@ package above them or an undeclared dependency at import time; the job
 fails if one of them starts to import (remove it from `KNOWN`) or if any
 other module fails.
 
-Usage: python scripts/package_alone.py <package> <src folder>
+Usage: python tests/packages/package_alone.py <package> <src folder>
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ KNOWN: dict[str, set[str]] = {
     "nowcastfoundation": {"nowcastfoundation.simulate"},
     "nowcastgermany": {
         "nowcastgermany.evaluation",
+        "nowcastgermany.ft_store",
         "nowcastgermany.reporting",
     },
     # scoringrules, through nowcasteval.scoring.

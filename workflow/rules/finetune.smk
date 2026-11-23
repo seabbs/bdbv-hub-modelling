@@ -1,6 +1,7 @@
 # Fine-tuning.
 #
-# One continuous run of scripts/finetune_stream.py from base Chronos-2,
+# One continuous run of `finetune-stream`
+# (nowcastfoundation.finetune.stream) from base Chronos-2,
 # cut into one segment per checkpoint prefix: segment N resumes from the
 # state kept with the prefix before and stops once n<N> is saved
 # (`--until N`). Its inputs are the batches that hold the first N
@@ -130,7 +131,7 @@ rule train_segment:
         DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 \
             PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
             PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
-            uv run --group chronos python scripts/finetune_stream.py \
+            uv run --group chronos finetune-stream \
             {params.run}/sims {params.train} --grid-file {params.grid_file} \
             --seed-list {input.seeds} --held-out-seeds {params.held} \
             --holdout {params.holdout} --outbreaks {params.outbreaks} \

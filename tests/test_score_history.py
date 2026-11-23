@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -8,18 +7,12 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "score_history.py"
-
 
 @pytest.fixture(scope="module")
 def sh():
-    spec = importlib.util.spec_from_file_location("score_history", SCRIPT)
-    assert spec is not None
-    assert spec.loader is not None
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["score_history"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    from nowcasteval import score_history
+
+    return score_history
 
 
 def test_source_sha_is_read_from_main_deploys_only(sh) -> None:
@@ -284,12 +277,12 @@ def test_current_build_is_read_from_its_figures(sh, tmp_path: Path) -> None:
     assert [(d[0], d[2], d[3]) for d in out] == [("c" * 40, "", "complete")]
 
 
-def test_script_does_not_import_the_package() -> None:
+def test_score_history_imports_pandas_only() -> None:
     code = (
-        "import importlib.util, sys\n"
-        f"spec = importlib.util.spec_from_file_location('s', {str(SCRIPT)!r})\n"
-        "spec.loader.exec_module(importlib.util.module_from_spec(spec))\n"
-        "print('bdbvhubrenewal' in sys.modules, 'jax' in sys.modules)\n"
+        "import sys\n"
+        "import nowcasteval.score_history\n"
+        "print(any(m.startswith(('bdbvhub', 'nowcastrenewal')) "
+        "for m in sys.modules), 'jax' in sys.modules)\n"
     )
     out = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True, check=True

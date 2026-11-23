@@ -90,7 +90,7 @@ It draws each outbreak's design and values in Python and runs each outbreak as o
 - `simulate_batch`: one batch of the simulator, under `SIM_PREFIX` at nice 19, once there is memory, disk and load to spare (`workflow/scripts/wait_for_room.sh`). Batches run by count (`sim_slots`), with no memory claim or cap of their own. A batch that fails is retried once. The simulator must be the committed one, and it runs with JAX on one thread.
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
-- `sim_qc`: the sim QC (`scripts/sim_qc.py`), a record of each simulation's summaries in the round's `qc/`. It sets no thresholds and nothing is excluded or deleted.
+- `sim_qc`: the sim QC (`sim-qc`, `nowcastfoundation.finetune.qc`), a record of each simulation's summaries in the round's `qc/`. It sets no thresholds and nothing is excluded or deleted.
 - `round_ready`: the seed list and `READY`, last.
 - `simulator_benchmark`: opt-in, two passes of one batch, cold then warm, as a `simulate_batch` job runs it on a given JAX device, in the rounds' `bench/`.
 - `simulate`: the rounds in `rounds`. At most `sim_slots` batches run at once (2 by default).
@@ -107,7 +107,7 @@ Every run takes the same rules through the `{run}` wildcard and keeps its files 
 `finetune` trains the runs in `train_runs` (every run when unset).
 A run outside `train_runs` that another target asks for starts only after their final checkpoints.
 
-One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (`finetune.prefixes`).
+One continuous run of `finetune-stream` (`nowcastfoundation.finetune.stream`) from base Chronos-2, cut into one segment per checkpoint prefix (`finetune.prefixes`).
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
 The state carries the learning-rate schedule, the step, the batch position and torch's random state, so the segments in turn are the run that never stopped.
 
@@ -126,7 +126,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 ## 3. Publish (`rules/publish.smk`)
 
-- `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`scripts/finetune_verify.py`).
+- `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`).
 - `publish`: every checkpoint.
 
@@ -142,7 +142,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `comparison`: every run's `run_table` in one table (`<ROOT>/runs/comparison.csv`), for the paper's fine-tuning comparisons.
 - `daily_table`: a run's saved checkpoints on both German views, daily counts and 7-day sums, relative to the German config's references (`<run>/reports/compare-daily.csv`).
 - `compare_daily`: every run's `daily_table` in one table (`<ROOT>/runs/compare-daily.csv`), the paper's `compare_daily`.
-- `coupling_germany`: a checkpoint's German forecasts' coupling scores and summary (`nowcasteval.coupling`), from its German unit, in `<SCORE_CACHE>/coupling/`.
+- `coupling_germany`: a checkpoint's German forecasts' coupling scores and summary (`nowcasteval.coupling`), from its German unit, in `<SCORE_CACHE>/coupling/`: each coupling against independent draws, the foundation model's online step (`online`) among them.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
 
@@ -161,22 +161,19 @@ Reports read the other steps' outputs back for people, each with one script.
 `task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
 `task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
-The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a notes file) and Tables. Every chart has an info marker (`page/explain.json`).
+The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a mailbox) and Tables. Every chart has an info marker (`page/explain.json`).
 
 Settings:
 
 - `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), the notes filter.
-- `config/dashboard.local.yaml` (git ignores it; `config/dashboard.example.yaml` is committed; `DASHBOARD_CONFIG` in `config/local.env` names another file): this machine's runs (training output folders with a hue, the live run, a base run, or release prefixes), exclusions, the mirror folder, and where the score table, each dataset, extra tables, notes and the notes file come from. A `host:path` source is copied read-only with rsync over ssh; nothing is written back.
-- `workflow/config.yaml`'s `runs`: each run, from `<ROOT>/runs/<name>`, shown with no other setting, so `task nowcast-foundation:dashboard` alone shows the workflow's runs.
-- `DASHBOARD_RUNS` and `--run`, `--ref`: more runs and references on top.
-
-On a machine that trains while another scores:
+- `workflow/config.yaml`'s `runs`: the runs shown, each from `<ROOT>/runs/<name>`, the first live. `--run NAME` shows only the named runs, the first live.
+- `config/local.env`: `ROOT`, the scoring cache (`SCORE_CACHE`) the score table and each dataset's forecasts are read from, and the mailbox (`MAILBOX`).
+- `--ref`: more references, or ones replacing the configured.
 
 ```sh
 uv sync --group paper                                          # once
-cp config/dashboard.example.yaml config/dashboard.local.yaml   # then edit paths
-uv run --group paper python workflow/scripts/dashboard.py --port 8765
-# open the address it prints; with the venv active, plain `python` works too
+uv run --group paper python workflow/scripts/dashboard.py --port 8765 --run runa
+# open the address it prints
 ```
 
 ## 7. Paper (`rules/paper.smk`, `paper/workflow/Snakefile`)

@@ -22,6 +22,12 @@ The Schaake shuffle at an origin orders the draws as windows of the
 truth reported by then (`history_windows`), consecutive days of all
 places, newest first, up to one per draw; with none it is independence.
 
+`online` is the foundation model's step (`_online`): at each origin
+`choose_coupling` picks the gaussian over a look-back window or the
+Schaake shuffle by the energy score of each one's draws on the model's
+forecasts at the earlier origins (`coupling_releases`), on
+the truth reported by the origin, aligned by horizon.
+
 Input rows are a German unit's cache (`nowcastfoundation.checkpoint`):
 `model`, `origin`, `location`, `target_end_date`, `horizon`, `quantile`,
 `value`, `truth` and `truth_vintage`.
@@ -39,14 +45,24 @@ import pandas as pd
 
 from nowcasteval.scoring import coverage_sample, crps_sample, energy_sample
 from nowcastutils.trajectories import (
+    choose_coupling,
     couple,
+    coupling_releases,
     fit_coupling,
     history_windows,
     pit_scores,
 )
 
-COUPLINGS: Final = ("independent", "comonotone", "gaussian", "schaake")
-"""The couplings compared, `independent` first as the reference."""
+COUPLINGS: Final = (
+    "independent",
+    "comonotone",
+    "gaussian",
+    "schaake",
+    "online",
+)
+"""The couplings compared, `independent` first as the reference. `online`
+is what the foundation model submits: the coupling `choose_coupling`
+picks and fits at each origin."""
 
 FIT_DAYS: Final = 56
 """Days of earlier origins the gaussian coupling is fitted from: 8 weeks,
@@ -189,6 +205,77 @@ def _schaake(
     return draws, len(windows)
 
 
+def _by_horizon(
+    a: np.ndarray, columns: np.ndarray, fill: float = np.nan
+) -> np.ndarray:
+    """Return a grid's columns at each horizon, `fill` where it has none."""
+    out = np.asarray(np.take(a, np.maximum(columns, 0), axis=1), dtype=float)
+    out[:, columns < 0] = fill
+    return out
+
+
+def _online(
+    day: int,
+    a: dict[str, np.ndarray],
+    earlier: list[tuple[int, dict[str, np.ndarray]]],
+    column: dict[int, int],
+    horizons: np.ndarray,
+    levels: np.ndarray,
+    history: tuple[np.ndarray, np.ndarray, np.ndarray],
+    n_samples: int,
+    seed: int,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Return the online coupling's draws at an origin and its record.
+
+    Each origin's cells are aligned by horizon, `[places, horizons]`:
+    the earlier origins' quantiles and their truth reported by `day`, and
+    the truth reported by then on the calendar days before this origin's
+    first horizon as the Schaake shuffle's history. `choose_coupling`
+    picks and fits the coupling; the draws are put back on the grid of
+    end dates, zero where the origin has no cell.
+    """
+
+    def columns(at: int) -> np.ndarray:
+        return np.array([column.get(at + int(h), -1) for h in horizons])
+
+    def aligned(b: dict[str, np.ndarray], at: int) -> tuple[np.ndarray, ...]:
+        cols = columns(at)
+        ok = _by_horizon(_cells(b).astype(float), cols, 0.0) > 0
+        q = _by_horizon(b["quantiles"], cols, 0.0)
+        q = np.where(ok[..., None], q, 0.0)
+        seen = np.where(b["vintage"] <= day, b["truth"], np.nan)
+        return q, np.where(ok, _by_horizon(seen, cols), np.nan), ok
+
+    truth, vintage, _ = history
+    first_day = min(column)
+    seen = np.where(vintage <= day, truth, np.nan)
+    past_q, past_y, starts = [], [], []
+    days = [at for at, _ in earlier]
+    for at, b in earlier:
+        q, y, _ = aligned(b, at)
+        past_q.append(q)
+        past_y.append(y)
+        starts.append(max(0, at + int(horizons[0]) - first_day))
+    q, _, ok = aligned(a, day)
+    shape = (len(earlier), *q.shape)
+    fit = choose_coupling(
+        np.asarray(past_q).reshape(shape),
+        levels,
+        np.asarray(past_y).reshape(shape[:-1]),
+        np.asarray(days, dtype=int),
+        day,
+        seen[:, : max(0, day + int(horizons[0]) - first_day)],
+        np.asarray(starts, dtype=int),
+        n_samples=n_samples,
+        seed=seed,
+    )
+    drawn = couple(q, levels, fit["method"], fit, n_samples, seed)
+    cols = columns(day)
+    draws = np.zeros((n_samples, *a["truth"].shape))
+    draws[:, :, cols[cols >= 0]] = np.where(ok, drawn, 0.0)[:, :, cols >= 0]
+    return draws, {k: v for k, v in fit.items() if k != "windows"}
+
+
 def _scores(draws: np.ndarray, a: dict[str, np.ndarray]) -> dict[str, float]:
     """Return the joint scores of one origin's trajectories."""
     truth, ok = a["truth"], _cells(a) & np.isfinite(a["truth"])
@@ -239,8 +326,8 @@ def coupling_scores(
     pandas.DataFrame
         One row per `model`, `origin` and `coupling`: `n_cells`, `energy`,
         `log_energy`, `sum_crps`, `sum_cover90`, the gaussian fit's `rho`
-        and `s`, and the Schaake windows used, `n_windows` (NaN for the
-        other couplings).
+        and `s`, the Schaake windows used, `n_windows` (NaN for the
+        other couplings), and for `online` the coupling it `chose`.
     """
     out = []
     for model, own in rows.groupby("model", sort=True):
@@ -254,13 +341,34 @@ def coupling_scores(
             for o, g in own.groupby("origin", sort=True)
         ]
         names = sorted(own["origin"].unique())
+        column = {int(_days(pd.Timestamp(d))): i for i, d in enumerate(dates)}
+        h = own["horizon"].astype(int)
+        horizons = np.arange(h.min(), h.max() + 1)
+        by_name = dict(zip(names, origins, strict=True))
         for (day, a), name in zip(origins, names, strict=True):
             ok = _cells(a)
             q = np.where(ok[..., None], a["quantiles"], 0.0)
             for method in couplings:
-                n_windows = np.nan
-                if method == "schaake":
-                    fit: dict[str, Any] = {}
+                n_windows, chose = np.nan, ""
+                fit: dict[str, Any] = {}
+                if method == "online":
+                    earlier = coupling_releases([n for n in names if n <= name])
+                    draws, fit = _online(
+                        day,
+                        a,
+                        [by_name[n] for n in earlier if n in by_name],
+                        column,
+                        horizons,
+                        levels,
+                        history,
+                        n_samples,
+                        seed + day,
+                    )
+                    n_windows = fit.get("n_windows", np.nan)
+                    chose = str(fit["method"])
+                    if fit.get("window") is not None:
+                        chose += f"-{fit['window']}"
+                elif method == "schaake":
                     draws, n_windows = _schaake(
                         q, ok, day, levels, history, n_samples, seed + day
                     )
@@ -279,6 +387,7 @@ def coupling_scores(
                         "rho": fit.get("rho", np.nan),
                         "s": fit.get("s", np.nan),
                         "n_windows": n_windows,
+                        "chose": chose,
                     }
                 )
     return pd.DataFrame(out)

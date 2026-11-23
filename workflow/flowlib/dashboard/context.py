@@ -1,10 +1,11 @@
-"""Assemble a dashboard from workflow config, the machine and the CLI.
+"""Assemble a dashboard from the workflow config, the machine and the CLI.
 
-`workflow/config.yaml`'s `dashboard` section holds what is the same on
-every machine (references, release-prefix runs, the scoring rule, the
-mailbox filter, the datasets); `config/local.env` holds this machine's
-runs (`DASHBOARD_RUNS`), score source (`REMOTE`, `SCORE_CACHE`) and
-mailbox; `--run` and `--ref` add or replace runs and references.
+The runs are the workflow's (`runs` in workflow/config.yaml), each in
+`<ROOT>/runs/<name>`; `--run NAME` picks some of them by name.
+`workflow/config.yaml`'s `dashboard` section holds the rest (references,
+the scoring rule, the mailbox filter, the datasets); `config/local.env`
+holds this machine's `ROOT`, scoring cache (`SCORE_CACHE`) and mailbox;
+`--ref` adds or replaces references.
 """
 
 from __future__ import annotations
@@ -14,16 +15,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from nowcasteval import labels
 
 from . import logs, paperstyle
 from . import runs as spec
-from .mirror import Source
 from .page import Context
+from .sources import Sources
 
-ROOT = Path(__file__).parents[3]
 RUN_MODEL = "fm_chronos_daily_ragged_ft"
 """The model a run's checkpoints are, for their display name and colour."""
 
@@ -52,21 +50,33 @@ def references(
 
 
 def workflow_runs(
-    config: Mapping[str, Any], local: Mapping[str, str]
-) -> list[dict[str, str]]:
-    """Return the workflow's runs (`runs`) as dashboard runs.
+    config: Mapping[str, Any], local: Mapping[str, str], names: Sequence[str]
+) -> list[spec.Run]:
+    """Return the workflow's runs (`runs`), or those `names` picks.
 
-    Each from its folder, `<ROOT>/runs/<name>` (flowlib.runs), so the
-    dashboard shows them with no other setting; `dashboard.runs`, the
-    machine's and the command line's runs come after and may replace one.
+    Each run is its folder, `<ROOT>/runs/<name>` (flowlib.runs). The
+    first is live: the first named, else the first in the config.
+
+    Raises
+    ------
+    SystemExit
+        If a name is not one of the workflow's runs, or there are none.
     """
-    if not local.get("ROOT"):
-        return []
+    known = list(config.get("runs") or {})
+    unknown = [n for n in names if n not in known]
+    if unknown:
+        raise SystemExit(
+            f"no run {', '.join(unknown)}: the workflow's runs are "
+            f"{', '.join(known)}"
+        )
+    chosen = list(names) or known
+    if not chosen or not local.get("ROOT"):
+        raise SystemExit(
+            "no runs to show: the dashboard shows the workflow's runs "
+            "(runs in workflow/config.yaml) under ROOT in config/local.env"
+        )
     root = Path(local["ROOT"]).expanduser()
-    return [
-        {"key": name, "source": str(root / "runs" / name)}
-        for name in config.get("runs") or {}
-    ]
+    return spec.load_runs([(n, root / "runs" / n) for n in chosen])
 
 
 def build(
@@ -74,7 +84,6 @@ def build(
     local: Mapping[str, str],
     runs: Sequence[str] = (),
     refs: Sequence[str] = (),
-    root: Path = ROOT,
     once: bool = False,
 ) -> Context:
     """Return the dashboard's context.
@@ -82,67 +91,22 @@ def build(
     Raises
     ------
     SystemExit
-        If no layer names a run.
+        If `runs` names no run of the workflow's, or it has none.
     """
     ft = config["finetune"]
-    extra = local_settings(local, root)
-    dash = {
-        **config["dashboard"],
-        **{
-            k: v
-            for k, v in extra.items()
-            if k not in ("runs", "exclude", "datasets")
-        },
-    }
-    # Held out of model development (BDBV): never shown, even
-    # if a machine's local file adds it back.
-    held = dict(config["dashboard"].get("held_out") or {})
+    dash = dict(config["dashboard"])
+    # Held out of model development (BDBV): never shown.
+    held = dict(dash.get("held_out") or {})
     hidden = set(held.get("datasets") or ())
-    dash["datasets"] = [
-        d
-        for d in merge_datasets(
-            config["dashboard"].get("datasets") or [],
-            extra.get("datasets") or [],
-        )
-        if d["key"] not in hidden
-    ]
+    datasets = [d for d in dash.get("datasets") or [] if d["key"] not in hidden]
     hidden_studies = set(held.get("studies") or ())
-    dash["studies"] = {
+    studies = {
         k: v
         for k, v in (dash.get("studies") or {}).items()
         if k not in hidden_studies
     }
-    run_list = spec.load_runs(
-        [
-            *workflow_runs(config, local),
-            *(dash.get("runs") or []),
-            *(extra.get("runs") or []),
-        ],
-        local.get("DASHBOARD_RUNS", ""),
-        runs,
-    )
-    if not run_list:
-        raise SystemExit(
-            "no runs to show: set dashboard.runs, DASHBOARD_RUNS in "
-            "config/local.env, or --run name=<folder|prefix>"
-        )
-    run_list = named_runs(run_list)
-    source = Source(
-        local,
-        root / dash["mirror"],
-        datasets=dash.get("datasets") or [],
-        scores=dash.get("scores"),
-        mailbox=dash.get("mailbox"),
-        root=root,
-        extras=[
-            e["path"]
-            for e in [*(dash.get("tables") or []), *(dash.get("notes") or [])]
-        ],
-    )
-    excluded = exclusions(
-        [config["dashboard"].get("exclude") or {}, extra.get("exclude") or {}],
-        root,
-    )
+    run_list = named_runs(workflow_runs(config, local, runs))
+    source = Sources(local, datasets)
     return Context(
         runs=run_list,
         references=references(dash.get("references") or [], refs),
@@ -151,27 +115,20 @@ def build(
         outbreaks=int(ft["outbreaks"]),
         prefixes=tuple(int(p) for p in ft["prefixes"]),
         learning_rate=float(ft["learning_rate"]),
-        datasets=dash.get("datasets") or [],
+        datasets=datasets,
         mailbox=source.mailbox,
         mail_filter=dash.get("mail_filter", ""),
         mail_hide=held.get("mail", ""),
         hidden_studies=hidden_studies,
-        mail_lines=source.mailbox_lines,
         once=once,
         view={
-            "studies": dash.get("studies") or {},
+            "studies": studies,
             "levels": dash.get("levels") or [],
             "defaults": dash.get("score_defaults") or {},
         },
-        tables=[
-            {**t, "path": str(source.extra(i))}
-            for i, t in enumerate(dash.get("tables") or [])
-        ],
-        notes=[
-            {**t, "path": str(source.extra(len(dash.get("tables") or []) + i))}
-            for i, t in enumerate(dash.get("notes") or [])
-        ],
-        excluded=excluded,
+        excluded={
+            str(h) for h in (dash.get("exclude") or {}).get("hashes") or ()
+        },
     )
 
 
@@ -215,46 +172,4 @@ def named_runs(run_list: Sequence[spec.Run]) -> list[spec.Run]:
                 r, label=f"{name} - {suffix}", colour=next(shade)
             )
         out.append(r)
-    return out
-
-
-def merge_datasets(
-    committed: Sequence[Mapping[str, Any]], local: Sequence[Mapping[str, Any]]
-) -> list[dict[str, Any]]:
-    """Return the datasets, local entries updating committed ones by key."""
-    out = {d["key"]: dict(d) for d in committed}
-    for d in local:
-        out.setdefault(d["key"], {}).update(d)
-    return list(out.values())
-
-
-def local_settings(local: Mapping[str, str], root: Path) -> dict[str, Any]:
-    """Return the uncommitted dashboard settings, if any.
-
-    `DASHBOARD_CONFIG` in config/local.env names the file; by default it
-    is config/dashboard.local.yaml (git ignores it; see
-    config/dashboard.example.yaml). Its keys replace those of the
-    committed `dashboard` config, except `runs` (added after the
-    committed ones) and `exclude` (joined with the committed one).
-    """
-    path = Path(
-        local.get("DASHBOARD_CONFIG")
-        or root / "config" / "dashboard.local.yaml"
-    ).expanduser()
-    if not path.is_file():
-        return {}
-    return yaml.safe_load(path.read_text()) or {}
-
-
-def exclusions(parts: Sequence[Mapping[str, Any]], root: Path) -> set[str]:
-    """Return the checkpoint hashes no panel shows.
-
-    Each part lists `hashes`, and `dirs`, training output folders whose
-    saved checkpoints are all excluded (relative to the repository).
-    """
-    out: set[str] = set()
-    for part in parts:
-        out |= {str(h) for h in part.get("hashes") or ()}
-        for d in part.get("dirs") or ():
-            out |= spec.folder_hashes(root / Path(d).expanduser())
     return out

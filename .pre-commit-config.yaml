@@ -7,7 +7,7 @@ repos:
     hooks:
       # Downloaded, generated and fixture files are left as they are.
       - id: end-of-file-fixer
-        exclude: &generated ^(data|results|docs/(generated|figures|examples)|tests/submission/hub_validation/fixtures|ci/fixtures)/
+        exclude: &generated ^(data|results|docs/(generated|figures|examples)|tests/submission/hub_validation/fixtures|ci/fixtures|workflow/flowlib/static)/
       - id: trailing-whitespace
         exclude: *generated
       # mkdocs.yml uses !!python/name tags for pymdownx.
@@ -21,13 +21,13 @@ repos:
         entry: uv run ruff check --fix
         language: system
         types: [python]
-        files: ^(packages|tests|workflow|scripts)/
+        files: ^(packages|tests|workflow|docs/hooks)/
       - id: ruff-format
         name: ruff format
         entry: uv run ruff format
         language: system
         types: [python]
-        files: ^(packages|tests|workflow|scripts)/
+        files: ^(packages|tests|workflow|docs/hooks)/
       - id: mypy
         name: mypy
         entry: uv run mypy packages/nowcastutils/src packages/nowcasteval/src packages/nowcastbaselines/src packages/nowcastfoundation/src packages/nowcastrenewal/src packages/nowcastgermany/src packages/bdbvhub/src

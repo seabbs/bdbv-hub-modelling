@@ -377,8 +377,18 @@ def test_daily_counts_are_the_count_rows_native_quantiles(
     assert not late.empty
     want = late["quantile"].map({q: k + 1.0 for k, q in enumerate(levels)})
     np.testing.assert_array_equal(late["value"], want)
-    # A model with no aggregate rows has no own daily quantiles.
+    # The complete layout's count rows are the daily counts themselves:
+    # its daily quantiles are their own too, from the same prediction.
+    store.clear()
+    whole = get_model("fm_chronos_daily_complete").daily_quantiles(task, levels)
+    assert whole is not None
+    last = sorted(whole["date"].unique())[-7:]
+    tail = whole.loc[whole["date"].isin(last)]
+    assert not tail.empty
+    want = tail["quantile"].map({q: k + 1.0 for k, q in enumerate(levels)})
+    np.testing.assert_array_equal(tail["value"], want)
+    # The weekly source has no daily counts.
     assert (
-        get_model("fm_chronos_daily_complete").daily_quantiles(task, levels)
+        get_model("fm_chronos_weekly_complete").daily_quantiles(task, levels)
         is None
     )

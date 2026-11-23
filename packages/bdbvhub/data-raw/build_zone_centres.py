@@ -7,7 +7,10 @@ row per hub zone: its centroid and WorldPop 2025 count. The centroid is
 the area-weighted centroid of the zone's largest ring, as
 BVDOutbreakSize computes it.
 
-Usage: uv run python scripts/build_zone_centres.py GEOJSON MAPPING
+Usage (from the repo root)::
+
+    uv run python packages/bdbvhub/data-raw/build_zone_centres.py \
+        GEOJSON MAPPING
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ HEADER = (
     "build/drc_health_zones.geojson (MoH DRC_Health_zones via HDX, ODbL "
     "1.0; WorldPop 2025, CC BY 4.0), joined to hub codes on DHIS2 code "
     "(auxiliary-data/health-zone-code-mapping.csv). Built by "
-    "scripts/build_zone_centres.py.\n"
+    "packages/bdbvhub/data-raw/build_zone_centres.py.\n"
 )
 
 

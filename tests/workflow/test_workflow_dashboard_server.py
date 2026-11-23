@@ -50,6 +50,8 @@ def test_one_location_s_data_is_served(server):
         "score",
         "parts",
         "split",
+        "ranges",
+        "byday",
         "stats",
         "truth",
         "latest",
@@ -76,25 +78,11 @@ def test_a_failing_data_request_is_a_server_error(server, monkeypatch):
     assert status_of(server + "/data/germany/DE.json") == 500
 
 
-def test_once_shows_and_reports_a_failed_mirror(tmp_path, monkeypatch):
+def test_once_writes_the_page(tmp_path):
     ctx = _machine(tmp_path)
-    monkeypatch.setattr(
-        ctx.source, "refresh", lambda: "mirror failed: host unreachable"
-    )
     out = tmp_path / "page" / "index.html"
-    assert dashboard.write_once(ctx, out) == 1
-    assert "mirror failed: host unreachable" in out.read_text()
-
-
-def test_once_shows_but_does_not_fail_on_a_failed_mailbox(
-    tmp_path, monkeypatch
-):
-    ctx = _machine(tmp_path)
-    status = "mirrored from h; mailbox failed: no such file"
-    monkeypatch.setattr(ctx.source, "refresh", lambda: status)
-    out = tmp_path / "page" / "index.html"
-    assert dashboard.write_once(ctx, out) == 0
-    assert "mailbox failed: no such file" in out.read_text()
+    dashboard.write_once(ctx, out)
+    assert "Fine-tuning dashboard" in out.read_text()
 
 
 def test_sections_send_only_what_changed(server):
@@ -109,3 +97,59 @@ def test_sections_send_only_what_changed(server):
     # Unchanged parts come back as their hash alone; the clock moves on.
     for key in ("loss", "nowcasts", "tables"):
         assert second[key] == {"hash": first[key]["hash"]}
+
+
+def test_the_page_never_waits_on_a_build(tmp_path):
+    # Sam's page hung for minutes: the nowcasts rebuild (~450 s) held the
+    # lock the page request waited on. A request serves the last page
+    # built, while another build holds the lock.
+    ctx = _machine(tmp_path)
+    ctx.once = False
+    pages = dashboard.Pages(ctx)
+    pages.refresh()
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx, pages))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        with dashboard.LOCK:
+            status, body = get(url + "/")
+            assert status == 200
+            assert "<h2>Nowcasts</h2>" in body
+            status, body = get(url + "/data/germany/DE.json")
+            assert status == 200
+    finally:
+        srv.shutdown()
+
+
+def test_before_the_first_build_the_page_says_it_is_building(tmp_path):
+    ctx = _machine(tmp_path)
+    ctx.once = False
+    pages = dashboard.Pages(ctx)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx, pages))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        status, body = get(url + "/")
+        assert status == 200
+        assert "building" in body.lower()
+        assert 'http-equiv="refresh"' in body
+    finally:
+        srv.shutdown()
+
+
+def test_a_client_that_leaves_is_dropped_quietly(tmp_path, capsys):
+    # A browser that gives up mid-answer is not a server error.
+    class Gone:
+        def write(self, _b):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            pass
+
+    cls = dashboard.handler(_machine(tmp_path))
+    h = cls.__new__(cls)
+    h.path, h.command, h.request_version = "/favicon.ico", "GET", "HTTP/1.1"
+    h.requestline, h.client_address = "GET /favicon.ico HTTP/1.1", ("x", 0)
+    h.wfile = Gone()
+    h.do_GET()
+    assert "Traceback" not in capsys.readouterr().err

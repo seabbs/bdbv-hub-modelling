@@ -15,6 +15,10 @@ dependencies = [
   "nowcastfoundation",
 ]
 
+[project.scripts]
+germany-site-check = "nowcastgermany.reporting:check_site"
+germany-ft-store = "nowcastgermany.ft_store:main"
+
 [tool.uv.sources]
 nowcastutils = { workspace = true }
 nowcasteval = { workspace = true }

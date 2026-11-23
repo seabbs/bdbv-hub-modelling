@@ -54,9 +54,12 @@ def test_the_monitor_serves_each_target_s_page(tmp_path):
     monitor_server.add_dag(app, cfg, lambda: [])
     assert "/dag/toy" in app.views["/dag/"]()
     page = app.views["/dag/<name>"]("toy")
-    assert "viz-standalone.js" in page
-    assert "a\\\\nn: 1" in page
+    assert "viz-global.js" in page
+    assert '"wildcards": {"n": "1"}' in page
     assert app.views["/dag/<name>"]("other")[1] == 404
+    data = app.views["/dag/<name>.json"]("toy")
+    assert [r["rule"] for r in data["rules"]] == ["all", "a"]
+    assert app.views["/dag/<name>.json"]("other")[1] == 404
 
 
 def test_panoptes_pages_link_to_the_dag():

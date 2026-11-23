@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from flowlib import dag
 
 # `snakemake --dag` of `all` <- b{n} <- a{n}, n = 1, 2, with a1 made.
@@ -78,18 +79,46 @@ def test_a_rule_is_running_while_any_job_is_and_done_when_all_are():
     assert dag.rule_state({"failed": 1, "running": 1}) == "failed"
 
 
-def test_the_views_colour_and_count_the_jobs():
+def test_the_page_data_counts_each_rule_s_jobs_by_state():
     seen = [{"rule": "b", "wildcards": {"n": "1"}, "state": "running"}]
-    got = dag.views(built(), seen)
+    got = dag.navigable(built(), seen)
     assert got["totals"] == {
         "pending": 3,
         "running": 1,
         "done": 1,
         "failed": 0,
     }
-    assert f'fillcolor="{dag.COLOURS["running"]}"' in got["rules"]
-    assert 'label="a\\n1 of 2"' in got["rules"]
-    assert 'label="a\\nn: 1"' in got["jobs"]
+    rules = {r["rule"]: r for r in got["rules"]}
+    assert rules["a"]["counts"] == {
+        "pending": 1,
+        "running": 0,
+        "done": 1,
+        "failed": 0,
+    }
+    assert rules["b"]["state"] == "running"
+    assert rules["all"]["state"] == "pending"
+    names = {r["id"]: r["rule"] for r in got["rules"]}
+    assert sorted((names[u], names[v]) for u, v in got["edges"]) == [
+        ("a", "b"),
+        ("b", "all"),
+    ]
+
+
+def test_a_job_is_grouped_by_the_wildcards_it_and_its_inputs_show():
+    # `b`'s label shows no wildcard; its input `a` shows n, so each b job
+    # is b for one n. `all` gathers both n, so it shows none.
+    got = dag.navigable(built(), [])
+    jobs = sorted(
+        (j["rule"], tuple(j["wildcards"].items()), j["state"])
+        for j in got["jobs"]
+    )
+    assert jobs == [
+        ("a", (("n", "1"),), "done"),
+        ("a", (("n", "2"),), "pending"),
+        ("all", (), "pending"),
+        ("b", (("n", "1"),), "pending"),
+        ("b", (("n", "2"),), "pending"),
+    ]
 
 
 def test_the_monitor_s_rows_become_jobs():
@@ -132,27 +161,68 @@ def test_a_build_keeps_both_graphs(tmp_path):
     assert len(got["rules"]["nodes"]) == 3
 
 
-def test_the_page_loads_viz_js_s_browser_bundle():
-    # viz-js 3.29 ships the global `Viz` as dist/viz-global.js; the
-    # lib/viz-standalone.js of older releases is a 404, so no graph drew.
+def test_the_page_loads_its_libraries_from_the_server_first():
+    # Served from the monitor, not a CDN, and loaded before the page's own
+    # script: that script checked `window.Viz` before the libraries had
+    # loaded, so every browser showed "did not load" and drew nothing.
     from flowlib import monitor_server as ms
 
-    assert ms.VIZ.endswith("@viz-js/viz@3.29.0/dist/viz-global.js")
-    assert ms.VIZ in ms.target_page(None, [], "x")
+    page = ms.target_page(built(), [], "x")
+    own = page.index("const DATA_URL")
+    for src in (ms.VIZ, ms.PAN_ZOOM):
+        assert src.startswith("/dag/static/")
+        assert (ms.STATIC / src.rsplit("/", 1)[1]).is_file()
+        assert page.index(f'<script src="{src}"') < own
+    assert "cdn" not in page.lower()
+
+
+def test_the_vendored_libraries_are_the_pinned_versions():
+    from flowlib import monitor_server as ms
+
+    viz = (ms.STATIC / "viz-global.js").read_text()[:200]
+    pan = (ms.STATIC / "svg-pan-zoom.min.js").read_text()[:200]
+    assert "Viz.js 3.29.0" in viz
+    assert "svg-pan-zoom v3.6.2" in pan
 
 
 def test_the_page_says_when_graphviz_does_not_load():
     from flowlib import monitor_server as ms
 
-    page = ms.target_page(
-        {
-            "target": "t",
-            "built": "now",
-            "jobs": {"nodes": {}, "edges": []},
-            "rules": {"nodes": {}, "edges": []},
-        },
-        [],
-        "x",
-    )
+    page = ms.target_page(built(), [], "x")
     assert "onerror=" in page
     assert "Graphviz did not load" in page
+
+
+def test_the_page_is_the_rule_graph_with_pan_zoom_and_filters():
+    from flowlib import monitor_server as ms
+
+    page = ms.target_page(built(), [], "toy")
+    for control in ("fit", "expand-all", "collapse-all", "running-only"):
+        assert f'id="{control}"' in page
+    for state in dag.STATES:
+        assert f'value="{state}"' in page
+    # The data the page draws from and polls, as JSON.
+    assert '"rule": "a"' in page
+    assert "/dag/toy.json" in page
+
+
+def test_the_page_data_is_served_as_json(tmp_path):
+    flask = pytest.importorskip("flask")
+    from flowlib import monitor_server as ms
+
+    (tmp_path / "monitor" / "dag").mkdir(parents=True)
+    (tmp_path / "monitor" / "dag" / "toy.json").write_text(json.dumps(built()))
+    app = flask.Flask("t")
+    ms.add_dag(
+        app,
+        {"ROOT": str(tmp_path), "MONITOR_DAG": "toy=all"},
+        lambda: [{"rule": "b", "wildcards": {"n": "1"}, "state": "running"}],
+    )
+    client = app.test_client()
+    js = client.get("/dag/static/viz-global.js")
+    assert js.status_code == 200
+    assert js.mimetype in ("text/javascript", "application/javascript")
+    got = client.get("/dag/toy.json").get_json()
+    assert got["totals"]["running"] == 1
+    assert client.get("/dag/toy").status_code == 200
+    assert client.get("/dag/nope.json").status_code == 404

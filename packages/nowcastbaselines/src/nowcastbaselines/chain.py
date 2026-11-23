@@ -75,6 +75,7 @@ from nowcastbaselines.obs import fit_sizes
 from nowcastbaselines.pooling import MIN_LEVEL, pool_matrix, source_index
 from nowcastbaselines.walk import walk_noise, walk_variance
 from nowcastutils.base import ModelUnavailableError
+from nowcastutils.shapes import round_up
 from nowcastutils.snapshots import SnapshotArrays, week_sum, weekly_sums
 
 __all__ = [
@@ -243,6 +244,10 @@ def _pairs_at(
     return np.stack([keep, keep + 1], axis=1).astype(np.int64)
 
 
+PAIR_BUCKET = 16
+"""The pairs a delay fit sums are padded to a multiple of this."""
+
+
 def _delay_counts(snap: SnapshotArrays, r: int) -> np.ndarray:
     """Return counts with downward revisions moved onto earlier releases.
 
@@ -252,22 +257,27 @@ def _delay_counts(snap: SnapshotArrays, r: int) -> np.ndarray:
     increments. The cumulative counts are then rebuilt, and never fall
     from one release to the next. Releases after `r` are left as they
     are, and are not read by a fit at `r`.
+
+    Every release's increments are passed, those after `r` unobserved,
+    so the compiled scan sees one shape for every `r`: an unobserved
+    cell is zero and passes no amount on, so the releases up to `r` are
+    as they would be alone.
     """
     c = np.asarray(snap.counts, dtype=float)
-    n_loc, _, n_day = c.shape
-    obs = snap.observed[: r + 1]
-    cum = c[:, : r + 1]
+    n_loc, n_rel, n_day = c.shape
+    obs = np.asarray(snap.observed).copy()
+    obs[r + 1 :] = False
     prev = np.concatenate(
-        [np.zeros_like(cum[:, :1]), cum[:, :-1] * obs[None, :-1]], axis=1
+        [np.zeros_like(c[:, :1]), c[:, :-1] * obs[None, :-1]], axis=1
     )
-    inc = np.where(obs[None], cum - prev, 0.0)
-    rows = inc.transpose(0, 2, 1).reshape(n_loc * n_day, r + 1)
+    inc = np.where(obs[None], c - prev, 0.0)
+    rows = inc.transpose(0, 2, 1).reshape(n_loc * n_day, n_rel)
     mask = np.tile(obs.T, (n_loc, 1))
     fixed = np.asarray(preprocess_negative_values(rows, mask, validate=False))
-    fixed = fixed.reshape(n_loc, n_day, r + 1).transpose(0, 2, 1)
+    fixed = fixed.reshape(n_loc, n_day, n_rel).transpose(0, 2, 1)[:, : r + 1]
     out = c.copy()
     out[:, : r + 1] = np.where(
-        obs[None], np.cumsum(fixed, axis=1), c[:, : r + 1]
+        obs[None, : r + 1], np.cumsum(fixed, axis=1), c[:, : r + 1]
     )
     return out
 
@@ -309,14 +319,20 @@ def delay_sums(
         first = min(first, oldest)
     window = day > first
     observed = snap.observed & window[None, :]
+    # The pairs are padded to a multiple of PAIR_BUCKET with copies of the
+    # first, and their sums cut off after, so the compiled sums see a few
+    # shapes rather than one a release.
+    n = len(pairs)
+    first_of = np.full(round_up(n, PAIR_BUCKET), pairs[0, 0], dtype=np.int64)
+    first_of[:n] = pairs[:, 0]
     num, den = pair_sums(
         jnp.asarray(counts),
         jnp.asarray(observed),
         jnp.asarray(snap.cut),
-        jnp.asarray(pairs[:, 0]),
+        jnp.asarray(first_of),
         settings.max_delay,
     )
-    return pairs, np.asarray(num), np.asarray(den), gaps
+    return pairs, np.asarray(num)[:, :n], np.asarray(den)[:, :n], gaps
 
 
 def own_ages(

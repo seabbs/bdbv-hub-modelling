@@ -41,7 +41,6 @@ def test_workflow_tasks_and_ticks_report_to_it():
     "rel",
     [
         "scripts/paper.sh",
-        "tools/run_target.sh",
         "workflow/scripts/paper_run.py",
     ],
 )
