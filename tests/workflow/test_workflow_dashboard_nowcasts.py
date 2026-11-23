@@ -435,3 +435,25 @@ def test_a_dataset_shows_only_the_model_inputs_its_config_lists(tmp_path):
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE, sources={"daily"})
     for by_target in built["series"]["DE"].values():
         assert set(by_target["7day"]) == {"daily"}
+
+
+def test_a_run_s_own_score_folders_are_its_checkpoints(tmp_path):
+    # A run scores its saved checkpoints into <run>/scores/<unit>/n<N>;
+    # each is the run's checkpoint of that segment's hash.
+    cache = tmp_path / "cache" / "germany-days"
+    _quantiles(cache / "reference" / "2022-02-09.csv.gz", "randomwalknowcast")
+    run = tmp_path / "run"
+    (run / "train" / "n100").mkdir(parents=True)
+    (run / "train" / "n100" / "settings.json").write_text(
+        '{"hash": "abc123def456", "n_outbreaks": 100}'
+    )
+    _quantiles(
+        run / "scores" / "germany-days" / "n100" / "2022-02-09.csv.gz",
+        "fm_chronos_daily_ragged_ft",
+    )
+    _, refs = _setup()
+    rs = [runs.make_run("runa", str(run), live=True)]
+    built = nowcasts.build(cache, rs, refs, levels=PAGE, unit="germany-days")
+    assert "abc123def456" in built["sets"]
+    assert "rw" in built["sets"]
+    assert built["folders"]["abc123def456"] == "runa-abc123def456"
