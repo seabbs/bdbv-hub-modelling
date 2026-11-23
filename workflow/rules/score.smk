@@ -61,6 +61,9 @@ rule score_germany:
         copy_back=unit_rows(GERMANY_UNIT),
         cache=lambda wc, output: Path(output[0]).parents[1],
         label=lambda wc: wc.label,
+        # The reference reruns when its models' code changes (a digest of
+        # it); it redoes only the rows of the models whose key moved.
+        code=lambda wc: scoring.reference_key(wc.label),
     shell:
         unit_shell("germany")
 
