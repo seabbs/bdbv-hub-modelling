@@ -159,6 +159,7 @@ Settings:
 
 - `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), the notes filter.
 - `config/dashboard.local.yaml` (git ignores it; `config/dashboard.example.yaml` is committed; `DASHBOARD_CONFIG` in `config/local.env` names another file): this machine's runs (training output folders with a hue, the live run, a base run, or release prefixes), exclusions, the mirror folder, and where the score table, each dataset, extra tables, notes and the notes file come from. A `host:path` source is copied read-only with rsync over ssh; nothing is written back.
+- `workflow/config.yaml`'s `runs`: each run, from `<ROOT>/runs/<name>`, shown with no other setting, so `task nowcast-foundation:dashboard` alone shows the workflow's runs.
 - `DASHBOARD_RUNS` and `--run`, `--ref`: more runs and references on top.
 
 On a machine that trains while another scores:
