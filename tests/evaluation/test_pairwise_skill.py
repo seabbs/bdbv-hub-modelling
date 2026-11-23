@@ -47,10 +47,10 @@ out <- list()
 for (m in input$metrics) {
   x <- s[, c("model", "location", "reference_date", "horizon", m),
     with = FALSE]
-  x <- scoringutils::as_scores(x, metrics = m)
+  x <- scoringutils:::as_scores(x, metrics = m)
   for (by in list(NULL, "horizon")) {
     p <- scoringutils::get_pairwise_comparisons(
-      x, by = c("model", by), metric = m, baseline = input$reference
+      x, by = by, metric = m, baseline = input$reference
     )
     keep <- c("model", by, paste0(m, "_relative_skill"),
       paste0(m, "_scaled_relative_skill"))
@@ -117,6 +117,7 @@ def test_pairwise_skill_by_horizon_matches_scoringutils(
     want = r_skill.loc[
         (r_skill["metric"] == "wis") & (r_skill["by"] == "horizon")
     ]
+    assert len(want) == 2 * len(_MODELS)
     for row in want.itertuples():
         key = (row.model, int(row.horizon))
         assert got.loc[key, "relative_wis"] == pytest.approx(
