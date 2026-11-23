@@ -773,3 +773,15 @@ def test_a_reference_row_counts_once_per_target() -> None:
     assert aggregation_numbers(rows)["germany"]["national"]["fm"] == {
         "joint": 0.5
     }
+
+
+def test_no_lag_horizon_evidence_is_read_or_written(tmp_path) -> None:
+    assert "lag_germany" not in EVIDENCE
+    write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "f",
+        tmp_path / "e.yml",
+    )
+    numbers = yaml.safe_load((tmp_path / "e.yml").read_text())["evidence"]
+    assert "lag" not in numbers
