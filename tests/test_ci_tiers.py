@@ -168,3 +168,10 @@ def test_pull_requests_skip_coverage_and_steal_work():
     assert "github.event_name != 'pull_request'" in tests["run"]
     (upload,) = [s for s in job["steps"] if "codecov" in str(s.get("uses"))]
     assert upload["if"] == "${{ github.event_name != 'pull_request' }}"
+
+
+def test_the_full_tier_has_the_workflow_s_tools():
+    # Slow workflow tests (the compute runs) skip without Snakemake.
+    steps = _workflow("test.yml")["jobs"]["full"]["steps"]
+    runs = " ".join(s.get("run", "") for s in steps)
+    assert "--group paper pytest -q -m slow" in runs

@@ -139,6 +139,7 @@ def _run(coord, worker_spec, croot, state, path=None):
     )
 
 
+@pytest.mark.slow
 def test_a_job_runs_on_the_worker_and_comes_back(setup):
     coord, worker, (croot, wroot), state = setup
     got = _run(coord, f"w=local:{wroot}:{worker}", croot, state)
@@ -158,6 +159,7 @@ def test_a_job_runs_on_the_worker_and_comes_back(setup):
     assert not (wroot / "side" / "side").exists()
 
 
+@pytest.mark.slow
 def test_a_worker_on_another_commit_fails_the_job(setup):
     coord, worker, (croot, wroot), state = setup
     (coord / "new.txt").write_text("x")
@@ -172,6 +174,7 @@ def test_a_worker_on_another_commit_fails_the_job(setup):
     assert "commit" in (croot / "logs" / "b.log").read_text()
 
 
+@pytest.mark.slow
 def test_an_unreachable_worker_fails_at_submit(setup):
     coord, _, (croot, _), state = setup
     got = _run(coord, "w=nohost.invalid:/x:/y", croot, state)
@@ -180,6 +183,7 @@ def test_an_unreachable_worker_fails_at_submit(setup):
     assert "nohost.invalid" in got.stderr + got.stdout
 
 
+@pytest.mark.slow
 def test_an_rsync_that_cannot_copy_fails_at_submit(setup, tmp_path):
     # The coordinator's rsync is checked before any job goes to a
     # worker, so a job is not run there only for its copies to fail.
@@ -196,6 +200,7 @@ def test_an_rsync_that_cannot_copy_fails_at_submit(setup, tmp_path):
     assert str(fake) in got.stderr + got.stdout
 
 
+@pytest.mark.slow
 def test_a_job_still_running_on_the_worker_is_not_started_twice(setup):
     # A dropped ssh can leave the job running on the worker; its retry
     # must not start a second copy beside it.
