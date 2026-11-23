@@ -167,7 +167,7 @@ def test_the_page_loads_viz_js_s_browser_bundle():
     from flowlib import monitor_server as ms
 
     assert ms.VIZ.endswith("@viz-js/viz@3.29.0/dist/viz-global.js")
-    assert ms.VIZ in ms.target_page(None, [], "x")
+    assert ms.VIZ in ms.target_page(built(), [], "x")
 
 
 def test_the_page_says_when_graphviz_does_not_load():
