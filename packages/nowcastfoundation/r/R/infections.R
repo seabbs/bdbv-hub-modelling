@@ -160,7 +160,7 @@ strata_log_r <- function(grid, n, strata, design, v) {
   scale <- v$gt_mean
   shared <- path_log_r(n, v$path, v)
   own_path <- function() {
-    if (v$path %in% c("endemic", "controlled")) {
+    if (v$path %in% c("endemic", "controlled", "oscillating")) {
       v$path
     } else {
       sample(names(grid$factors$trajectory), 1)
@@ -181,7 +181,17 @@ strata_log_r <- function(grid, n, strata, design, v) {
     lagged = lapply(seq_along(places), function(i) {
       k <- v$place_lags[i]
       c(rep(shared[1], k), shared)[seq_len(n)]
-    })
+    }),
+    nested = {
+      region <- v$place_region[seq_along(places)]
+      common <- lapply(seq_len(max(region)), function(r) {
+        weekly_noise(n, scale * v$place_sd)
+      })
+      lapply(seq_along(places), function(i) {
+        shared + sqrt(v$place_rho) * common[[region[i]]] +
+          sqrt(1 - v$place_rho) * weekly_noise(n, scale * v$place_sd)
+      })
+    }
   )
   path <- paths[match(strata$place, places)]
   drift <- log(v$r_drift) * (seq_len(n) - 1) / n
@@ -292,7 +302,10 @@ latent_onsets <- function(grid, n, gt, strata, design, v) {
   } else {
     start[, on] <- rep(v$level * rel[on], each = n_gt)
   }
-  if (any(colSums(start) > population)) {
+  # An established epidemic ran at its level before the span too: its
+  # onsets take that history, about the level over the mean incubation.
+  history <- if (early) 0 else start[1L, ] * v$incubation_mean[strata$.group]
+  if (any(colSums(start) + history > population)) {
     stop("an established epidemic larger than its population")
   }
   unit <- (if (early) v$seed else v$level) * rel

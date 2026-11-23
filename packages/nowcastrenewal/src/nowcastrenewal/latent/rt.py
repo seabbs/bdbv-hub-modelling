@@ -59,7 +59,7 @@ KINDS = (
 """Path kinds: a weekly walk around R = 1 (`endemic`), a start at the
 amplitude decaying onto that walk (`controlled`), and shapes on log R."""
 
-RELATIONS = ("shared", "independent", "correlated", "lagged")
+RELATIONS = ("shared", "independent", "correlated", "lagged", "nested")
 """How places' paths relate."""
 
 # The weekly noise's half-life in weeks, for an autocorrelation of 0.8.
@@ -306,8 +306,8 @@ class PlaceRt(RandomVariable):
         One of `RELATIONS`.
     kinds : sequence of str
         The kinds an independent place draws its own path from, each
-        equally likely (an `endemic` or `controlled` outbreak keeps its
-        kind in every place).
+        equally likely (an `endemic`, `controlled` or `oscillating`
+        outbreak keeps its kind in every place, as R stays about 1).
     values : mapping
         The values each own path takes its settings from.
     noise_scale : float
@@ -317,7 +317,10 @@ class PlaceRt(RandomVariable):
         For `correlated`, the places' noise sd as a share of the scale.
     place_rho : float
         For `correlated`, the share of the places' noise variance that
-        they have in common.
+        they have in common; for `nested`, the share their region has in
+        common.
+    place_region : sequence of int
+        For `nested`, each place's region (1-based).
     place_lags : sequence of int
         For `lagged`, each place's lag in days.
     drift : float
@@ -346,6 +349,7 @@ class PlaceRt(RandomVariable):
         noise_scale: float = 1.0,
         place_sd: float = 0.0,
         place_rho: float = 0.0,
+        place_region: Sequence[int] = (),
         place_lags: Sequence[int] = (),
         drift: float = 1.0,
         coupling: float = 1.0,
@@ -361,6 +365,7 @@ class PlaceRt(RandomVariable):
         self.noise_scale = noise_scale
         self.place_sd = place_sd
         self.place_rho = place_rho
+        self.place_region = [int(x) for x in place_region]
         self.place_lags = [int(x) for x in place_lags]
         self.drift = drift
         self.coupling = coupling
@@ -368,7 +373,7 @@ class PlaceRt(RandomVariable):
         self.noise = WeeklyNoise(f"{name}_noise")
 
     def _own_kind(self, i: int) -> str:
-        if self.path.kind in ("endemic", "controlled"):
+        if self.path.kind in ("endemic", "controlled", "oscillating"):
             return self.path.kind
         j = numpyro.sample(
             f"{self.name}_path_{i}",
@@ -401,6 +406,8 @@ class PlaceRt(RandomVariable):
                 * self.noise(n=n, sd=sd, noise_name=f"{self.name}_place_{i}")
                 for i in range(n_places)
             ]
+        if self.relation == "nested":
+            return self._nested_paths(shared, n, n_places)
         lags = self.place_lags
         if len(lags) < n_places:
             raise ValueError(
@@ -409,6 +416,30 @@ class PlaceRt(RandomVariable):
             )
         return [
             jnp.concatenate([jnp.full(lags[i], shared[0]), shared])[:n]
+            for i in range(n_places)
+        ]
+
+    def _nested_paths(
+        self, shared: Array, n: int, n_places: int
+    ) -> list[Array]:
+        """Places within regions: each region's noise, then each place's."""
+        region = self.place_region
+        if len(region) < n_places:
+            raise ValueError(
+                f"nested R paths need a region for each of {n_places} "
+                f"places, got {len(region)}"
+            )
+        sd = self.noise_scale * self.place_sd
+        common = [
+            self.noise(n=n, sd=sd, noise_name=f"{self.name}_region_{r}")
+            for r in range(1, max(region[:n_places]) + 1)
+        ]
+        rho = self.place_rho
+        return [
+            shared
+            + math.sqrt(rho) * common[region[i] - 1]
+            + math.sqrt(1 - rho)
+            * self.noise(n=n, sd=sd, noise_name=f"{self.name}_place_{i}")
             for i in range(n_places)
         ]
 

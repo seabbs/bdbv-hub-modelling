@@ -65,12 +65,12 @@ RISING_PATH = {
     "rise_fall_sharp": "rise_fall_sharp",
     "rise_fall_gradual": "rise_fall_gradual",
     "fall_rise": "rise_fall_sharp",
-    "oscillating": "multi_wave",
+    "oscillating": "oscillating",
     "multi_wave": "multi_wave",
 }
 """The rising shape an early outbreak not brought under control follows:
-its drawn trajectory if it rises, else that trajectory's rising
-counterpart."""
+its drawn trajectory if it rises or oscillates around R = 1, else that
+trajectory's rising counterpart."""
 
 
 def read_grid(path: str | Path) -> dict[str, Any]:
@@ -417,6 +417,13 @@ def draw_values(
     v["place_rho"] = ds("place_rho")
     v["place_sd"] = ds("place_sd")
     v["place_lags"] = [0, *vec(dc("place_lag_days", n_p - 1))]
+    # Places within 2 to 6 regions (four or more places), each region
+    # sharing an R deviation under `nested` place R.
+    k = int(rng.integers(2, min(6, n_p // 2) + 1)) if n_p >= 4 else 1
+    region = np.empty(n_p, dtype=int)
+    region[rng.permutation(n_p)] = 1 + np.arange(n_p) % k
+    v["n_regions"] = k
+    v["place_region"] = vec(region)
     v["late_at"] = ds("late_at")
     v["late_days"] = dc("late_days")
     v["mixing_eps"] = ds("mixing_eps")
@@ -439,7 +446,9 @@ def draw_values(
             "controlled" if controlled else RISING_PATH[design["trajectory"]]
         )
     elif endemic:
-        v["path"] = "endemic"
+        # An endemic outbreak walks around R = 1 or oscillates around it.
+        oscillating = design["trajectory"] == "oscillating"
+        v["path"] = "oscillating" if oscillating else "endemic"
     else:
         v["path"] = design["trajectory"]
     v["gt_mean"] = ds("gt_mean")

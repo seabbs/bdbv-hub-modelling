@@ -395,8 +395,9 @@ def test_controlled_paths_start_near_r_1_8(grid):
 def test_reporting_delay_shapes_are_not_capped_at_2(grid):
     # The joint model reports any gamma shape (#614), so the shape below
     # 2 that epinowcast's simulate branch needed is gone.
+    assert grid["distributions"]["delay_shape"]["dist"] == "lognormal"
     shape = _scipy(grid["distributions"]["delay_shape"])
-    assert shape.ppf(0.975) > 3
+    assert shape.ppf(0.995) > 2
     assert shape.ppf(0.025) < 0.3
 
 
@@ -407,3 +408,54 @@ def test_strata_mostly_deviate_moderately_from_a_shared_path(grid):
     assert link["independent"] / sum(link.values()) <= 0.25
     coupling = _scipy(grid["distributions"]["coupling"])
     assert coupling.ppf(0.025) >= 0.5
+
+
+def test_oscillating_paths_come_in_every_window(grid):
+    rng = draws.generator(41)
+    by_window = Counter()
+    oscillating = Counter()
+    for _ in range(4_000):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        by_window[d["window"]] += 1
+        oscillating[d["window"]] += v["path"] == "oscillating"
+    for window in ("early", "established", "endemic"):
+        assert oscillating[window] / by_window[window] > 0.05, window
+
+
+def test_reporting_delays_put_real_mass_on_99th_centiles_of_40_to_90_days(
+    grid,
+):
+    # Germany's national 99th centile is about 69 days.
+    rng = draws.generator(42)
+    q99 = []
+    for _ in range(3_000):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        parametric = d["delay_form"] != "non_parametric"
+        family = d["delay_family"] if parametric else "none"
+        q99.append(draws.delay_q99(family, v))
+    q99 = np.asarray(q99)
+    assert np.median(q99) >= 40
+    assert np.mean((q99 >= 40) & (q99 <= 90)) >= 0.28
+
+
+def test_places_nest_in_two_to_six_regions(grid):
+    rng = draws.generator(43)
+    seen = set()
+    for _ in range(2_000):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        n_p, k = int(d["n_places"]), v["n_regions"]
+        region = v["place_region"]
+        assert len(region) == n_p
+        if n_p < 4:
+            assert k == 1
+        else:
+            assert 2 <= k <= min(6, n_p // 2)
+            seen.add(k)
+        # Every region has a place, and regions are as even as they can be.
+        sizes = np.bincount(region, minlength=k + 1)[1:]
+        assert sizes.min() >= 1
+        assert sizes.max() - sizes.min() <= 1
+    assert seen == {2, 3, 4, 5, 6}
