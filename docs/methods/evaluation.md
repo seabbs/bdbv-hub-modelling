@@ -247,7 +247,7 @@ The backtest scores its complete weeks the same way, on the first release the tr
 Relative scores divide a model's mean score by `randomwalknowcast`'s on the nowcasts both made.
 The paper's relative scores divide by the hub's own baseline, `KIT-frozen_baseline`.
 Both baselines are set in `config/germany.toml`.
-`bdbvhubrenewal germany-paper` writes every forecast, with its truth, as the paper's long table.
+`nowcastgermany paper` writes every forecast, with its truth, as the paper's long table.
 
 The teams' nowcasts are those the paper gathered, prospective and retrospective, at the horizons our models give.
 Two fixes are the paper's.

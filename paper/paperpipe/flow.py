@@ -581,3 +581,8 @@ PYTHON: Final = f"PYTHONPATH=paper {shlex.quote(sys.executable)}"
 
 BDBV: Final = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
 """The project's command line, beside that Python."""
+
+GERMANY_CLI: Final = shlex.quote(
+    str(Path(sys.executable).parent / "nowcastgermany")
+)
+"""The German benchmark's command line (`nowcastgermany.cli`)."""

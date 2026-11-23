@@ -219,7 +219,7 @@ def test_benchmark_commands_run_from_the_repository_root(
     commands = [
         line.strip().removeprefix("Shell command:").strip()
         for line in (paper.stdout + paper.stderr).splitlines()
-        if "germany-backtest" in line
+        if "nowcastgermany backtest" in line
     ]
     assert len(commands) == 2
     for line in commands:

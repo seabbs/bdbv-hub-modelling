@@ -142,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--store", required=True, help="The germany-ft-forecasts tree."
     )
     gft.add_argument(
-        "--out", required=True, help="A germany-backtest results directory."
+        "--out", required=True, help="A `backtest` results directory."
     )
     gft.add_argument(
         "--checkpoint-scores",

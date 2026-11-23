@@ -180,7 +180,7 @@ FT = "fm_chronos_daily_ragged_ft"
 
 
 def _with_ft(res: Path, tag: str | None = "chronos-ft-bbb") -> None:
-    """Add the stored fine-tuned model, as `germany-ft-load` does."""
+    """Add the stored fine-tuned model, as `nowcastgermany ft-load` does."""
     fc = pd.read_csv(res / "forecasts.csv.gz", dtype=str)
     ft = _forecasts((FT,))
     ft = ft.loc[ft["origin"] < CONFIG.split_date]

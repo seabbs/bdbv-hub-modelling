@@ -1,6 +1,6 @@
 """Load the German nowcast benchmark (Wolffram et al. 2023) for the paper.
 
-`bdbvhubrenewal germany-backtest`, `germany-teams` and `germany-paper`
+`nowcastgermany backtest`, `nowcastgermany teams` and `nowcastgermany paper`
 write our models' and the hub teams' nowcasts as the paper's long table,
 `paper-forecasts.csv.gz` (`nowcastgermany.evaluation`).
 `forecasts` reads one or more of them. `observations` gives the 7-day sums
@@ -43,14 +43,14 @@ def extra_table(
     Parameters
     ----------
     path : str or pathlib.Path
-        A paper table, or with `backtest` a `germany-backtest` forecast
+        A paper table, or with `backtest` a `nowcastgermany backtest` forecast
         table.
     models : str, optional
         A regular expression the kept models match.
     suffix : str
         Added to every model name, to tell runs of one model apart.
     backtest : bool
-        Whether `path` is a `germany-backtest` table.
+        Whether `path` is a `nowcastgermany backtest` table.
 
     Returns
     -------

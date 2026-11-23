@@ -41,7 +41,7 @@ def test_the_stored_ft_model_is_not_forecast_by_pages() -> None:
         "fm_chronos_weekly_ragged_ft",
     }
     run = _build_script()
-    load = run.index("germany-ft-load")
+    load = run.index("nowcastgermany ft-load")
     assert "germany-ft-forecasts" in run
     assert load < run.index("concat-results --out results/germany")
     assert "parts-germany-ft-store/germany" in run
