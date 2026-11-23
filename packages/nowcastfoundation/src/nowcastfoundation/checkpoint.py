@@ -27,6 +27,7 @@ Usage:
   python -m nowcastfoundation.checkpoint table CACHE EVIDENCE \\
     CHECKPOINTS HASH...
   python -m nowcastfoundation.checkpoint run TRAIN SCORES REFERENCE RUN OUT
+  python -m nowcastfoundation.checkpoint daily TRAIN SCORES REFERENCE RUN OUT
   python -m nowcastfoundation.checkpoint compare OUT TABLE...
 """
 
@@ -265,12 +266,16 @@ def matched(rows: pd.DataFrame, cell: list[str]) -> pd.DataFrame:
 
 
 def relative(
-    rows: pd.DataFrame, study: str, metrics: tuple[str, str]
+    rows: pd.DataFrame,
+    study: str,
+    metrics: tuple[str, str],
+    baseline: str = BASELINE,
+    target: str = "7day",
 ) -> pd.DataFrame:
-    """Return mean scores relative to the baseline, by level and model.
+    """Return mean scores relative to `baseline`, by level and model.
 
     With the mean WIS and its components, and coverage, where the rows
-    have them.
+    have them. Rows are tagged with `target`.
     """
     widths = (*COVERAGE, *GERMANY_COVERAGE)
     extra = [
@@ -286,11 +291,11 @@ def relative(
     mean["n_origins"] = origins.nunique()
     mean["first_origin"] = origins.min()
     mean["last_origin"] = origins.max()
-    base = mean.xs((BASELINE, "zero-shot"), level=("model", "checkpoint"))
+    base = mean.xs((baseline, "zero-shot"), level=("model", "checkpoint"))
     at = mean.index.get_level_values("level")
     for m in metrics:
         mean[f"rel_{m}"] = mean[m] / base[m].reindex(at).to_numpy()
-    out = mean.reset_index().assign(study=study, rule=RULE, target="7day")
+    out = mean.reset_index().assign(study=study, rule=RULE, target=target)
     return out.reindex(columns=COLUMNS)
 
 
@@ -530,16 +535,15 @@ def release_unit(cache: Path, label: str) -> None:
 # Table -----------------------------------------------------------------
 
 
-def _cached(root: Path) -> pd.DataFrame | None:
+def _cached(root: Path, target: str = "7day") -> pd.DataFrame | None:
     files = sorted(root.glob("*.csv.gz"))
     if not files:
         return None
     dtype = {"origin": str, "target_end_date": str}
     rows = pd.concat([pd.read_csv(f, dtype=dtype) for f in files])
     if "target" not in rows:
-        return rows
-    # Files of the earlier script also hold the daily target.
-    keep = rows["target"].fillna("7day") == "7day"
+        return rows if target == "7day" else None
+    keep = rows["target"].fillna("7day") == target
     return rows.loc[keep].drop(columns="target")
 
 
@@ -554,18 +558,23 @@ def _with_precision(
     return rows.assign(precision=rows["checkpoint"].map(at))
 
 
-def germany_rows(folders: Mapping[str, Path]) -> pd.DataFrame:
+def germany_rows(
+    folders: Mapping[str, Path],
+    target: str = "7day",
+    baseline: str = BASELINE,
+) -> pd.DataFrame:
     """Return the German development half's rule rows.
 
-    `folders` gives each label's cached German unit.
+    `folders` gives each label's cached German unit. Rows are of the view
+    `target` (`7day` or `daily`), relative to zero-shot `baseline`.
     """
     from nowcastgermany import evaluation as de
 
     config = de.load_germany_config("config/germany.toml")
     parts = []
     for label, folder in folders.items():
-        fc = _cached(folder)
-        if fc is None:
+        fc = _cached(folder, target)
+        if fc is None or fc.empty:
             continue
         # The table scores the hub's horizons only, as the paper scores
         # the teams; the forecast days are for the page.
@@ -584,7 +593,13 @@ def germany_rows(folders: Mapping[str, Path]) -> pd.DataFrame:
     if not parts:
         return pd.DataFrame(columns=COLUMNS)
     sc = pd.concat(parts, ignore_index=True).rename(columns={"pool": "level"})
-    out = relative(matched(sc, GERMANY_CELL), "germany", ("wis", "log_wis"))
+    out = relative(
+        matched(sc, GERMANY_CELL),
+        "germany",
+        ("wis", "log_wis"),
+        baseline,
+        target,
+    )
     return _with_precision(out, folders)
 
 
@@ -639,6 +654,64 @@ def table(
     return new
 
 
+def _segments(train: Path) -> list[Path]:
+    """Return a run's saved segments `n<N>` with settings, smallest first."""
+    return sorted(
+        (
+            d
+            for d in Path(train).glob("n*")
+            if d.name[1:].isdigit() and (d / "settings.json").is_file()
+        ),
+        key=lambda d: int(d.name[1:]),
+    )
+
+
+VIEWS: Final = {"7day": "7-day sums", "daily": "daily counts"}
+"""The German views' names in the daily comparison's sets."""
+
+
+def daily_table(
+    train: Path, scores: Path, reference: Path, run: str
+) -> pd.DataFrame:
+    """Return a run's checkpoints on both German views, for the SI.
+
+    Each saved segment's relative WIS on the 7-day sums (against the
+    config's `baseline`) and on the daily counts (against its
+    `daily_baseline`), by level, in the comparison layout (`set`, `run`,
+    `outbreaks`, `score`) of `paperpipe.evidence.comparison_figure`.
+    """
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config("config/germany.toml")
+    folders = {REFERENCE: Path(reference)} | {
+        d.name: Path(scores) / d.name
+        for d in _segments(train)
+        if (Path(scores) / d.name).is_dir()
+    }
+    outbreaks = {
+        d.name: outbreaks_and_grid(
+            json.loads((d / "settings.json").read_text()), {}
+        )[0]
+        for d in _segments(train)
+    }
+    bases = {"7day": config.baseline, "daily": config.daily_baseline}
+    parts = []
+    for target in config.targets:
+        rows = germany_rows(folders, target, bases[target])
+        rows = rows.loc[rows["checkpoint"].isin(outbreaks)]
+        parts.append(
+            pd.DataFrame(
+                {
+                    "set": f"Germany, {VIEWS[target]}, " + rows["level"],
+                    "run": run,
+                    "outbreaks": rows["checkpoint"].map(outbreaks),
+                    "score": rows["rel_wis"],
+                }
+            )
+        )
+    return pd.concat(parts, ignore_index=True)
+
+
 def run_table(
     train: Path, scores: Path, reference: Path, run: str
 ) -> pd.DataFrame:
@@ -649,14 +722,7 @@ def run_table(
     beside zero-shot's in `reference`, and its held-out losses from its
     settings and sidecar. Rows carry the run's name as `run`.
     """
-    segments = sorted(
-        (
-            d
-            for d in Path(train).glob("n*")
-            if d.name[1:].isdigit() and (d / "settings.json").is_file()
-        ),
-        key=lambda d: int(d.name[1:]),
-    )
+    segments = _segments(train)
     settings = {}
     for d in segments:
         sidecar = d / SIDECAR
@@ -709,6 +775,9 @@ def main(argv: Sequence[str]) -> None:
         release_unit(cache, argv[2])
     elif study == "run" and len(argv) == 6:
         out = run_table(cache, Path(argv[2]), Path(argv[3]), argv[4])
+        out.round(4).to_csv(argv[5], index=False)
+    elif study == "daily" and len(argv) == 6:
+        out = daily_table(cache, Path(argv[2]), Path(argv[3]), argv[4])
         out.round(4).to_csv(argv[5], index=False)
     elif study == "compare" and len(argv) >= 3:
         tables = [pd.read_csv(p) for p in argv[2:]]

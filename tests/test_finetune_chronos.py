@@ -572,14 +572,13 @@ def test_blocks_reach_deployed_sizes_on_many_places():
     )
     for col in ("reference_date", "report_date"):
         counts[col] = counts[col].dt.date.astype(str)
-    big = []
-    for seed in range(30):
-        for b in outbreak_blocks(
-            counts, places, np.random.default_rng(seed), 3
-        ):
-            big.append((b["n_targets"], b["context"].shape[0]))
-    # BDBV's daily block: 27 targets and 783 series.
-    assert any(t >= 27 and s >= 700 for t, s in big)
+    # BDBV's daily block: 27 targets and 783 series. The search stops at
+    # the first block that size (seed 0 gives one), not after every seed.
+    assert any(
+        b["n_targets"] >= 27 and b["context"].shape[0] >= 700
+        for seed in range(30)
+        for b in outbreak_blocks(counts, places, np.random.default_rng(seed), 3)
+    )
 
 
 def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):

@@ -144,16 +144,15 @@ evidence:
   # checkpoints are shown as preliminary (nowcastfoundation.live_checkpoint).
   checkpoint_scores:
     file: $SCORE_CACHE/tables/checkpoint-scores.csv
-  # Each walk model's rho_p by origin, the rows of its rounds' copula.json
-  # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
-  copula_rho: null
   # Each fine-tuning comparison's scores by checkpoint (paperpipe.evidence:
   # set, run, outbreaks, score). Pending: the runs' checkpoints.
   compare_slots: null
   compare_delays: null
   compare_realdata: null
-  # Pending: daily and hub-target scores from the target column.
-  compare_daily: null
+  # Each run's checkpoints on daily counts and on the 7-day sums, relative
+  # to the German config's references (workflow rule compare_daily).
+  compare_daily:
+    file: $ROOT/runs/compare-daily.csv
   # Pending: the realised shares of each combination of block
   # layout and options.
   block_combinations: null

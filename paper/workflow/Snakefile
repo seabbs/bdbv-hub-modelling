@@ -594,7 +594,9 @@ rule pairing_germany:
     input:
         TRIANGLE,
     output:
-        f"{R}/evidence/pairing/pairing-germany.csv.gz",
+        scores=f"{R}/evidence/pairing/pairing-germany.csv.gz",
+        # Each walk model's rolling rho_p by nowcast date and level.
+        rho=f"{R}/evidence/pairing/pairing-germany-rho.csv.gz",
     log:
         f"{R}/logs/pairing_germany.log",
     conda:
@@ -604,7 +606,7 @@ rule pairing_germany:
     params:
         bdbv=BDBV,
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-        out=lambda w, output: Path(output[0]).parent,
+        out=lambda w, output: Path(output.scores).parent,
     shell:
         "exec >{log} 2>&1; "
         "{params.bdbv} pairing-sensitivity --study germany {params.args} "
@@ -635,7 +637,7 @@ rule pairing_synthetic:
 
 rule si_copula:
     input:
-        rules.pairing_germany.output,
+        rules.pairing_germany.output.scores,
         rules.pairing_synthetic.output,
     output:
         f"{R}/evidence/si-copula.csv",
@@ -707,6 +709,7 @@ rule evidence:
         # The published-range table's rows (workflow rule sim_diseases).
         diseases=FLOW.sim_diseases(),
         copula=rules.si_copula.output,
+        rho=rules.pairing_germany.output.rho,
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -727,7 +730,7 @@ rule evidence:
         "--finetune-heldout {input.heldout} "
         "--sim-summaries {input.realism[0]} --sim-realism {input.realism[1]} "
         "--sim-diseases {input.diseases} "
-        "--si-copula {input.copula} "
+        "--si-copula {input.copula} --copula-rho {input.rho} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 
