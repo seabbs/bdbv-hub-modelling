@@ -63,3 +63,4 @@ def test_the_copula_scores_are_workflow_outputs(tmp_path):
     for rule in ("pairing_germany", "pairing_synthetic", "si_copula"):
         assert f"rule {rule}:" in out.stdout
     assert "--si-copula" in out.stdout
+    assert "--copula-rho" in out.stdout

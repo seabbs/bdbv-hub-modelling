@@ -144,9 +144,6 @@ evidence:
   # checkpoints are shown as preliminary (nowcastfoundation.live_checkpoint).
   checkpoint_scores:
     file: $SCORE_CACHE/tables/checkpoint-scores.csv
-  # Each walk model's rho_p by origin, the rows of its rounds' copula.json
-  # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
-  copula_rho: null
   # Each fine-tuning comparison's scores by checkpoint (paperpipe.evidence:
   # set, run, outbreaks, score). Pending: the runs' checkpoints.
   compare_slots: null

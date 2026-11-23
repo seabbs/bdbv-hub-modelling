@@ -365,7 +365,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Score randomwalk and randomwalknowcast with no pairing and "
         "with their provinces paired by the rolling rho_p, from one "
         "forecast each, on the BDBV release backtest or the German "
-        "development half (`evaluation.pairing`).",
+        "development half (`evaluation.pairing`), with the German "
+        "rho_p of each task.",
     )
     pst.add_argument("--study", choices=["bdbv", "germany"], required=True)
     pst.add_argument(
@@ -2046,23 +2047,33 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
         dates = de.nowcast_dates(de.load_germany_config(config))
         if args.chunk:
             dates = chunk(dates, args.chunk)
-        # Each date is kept as it is scored, so a rerun resumes.
+        # Each date's scores and rho_p are kept as it is scored, so a
+        # rerun resumes.
         done = out / "germany-dates"
         done.mkdir(exist_ok=True)
         for date in dates:
-            path = done / f"{date}.csv.gz"
-            if not path.exists():
-                write_csv(
-                    pairing.germany_sensitivity(data, config, [date]), path
-                )
+            path, rho_path = (
+                done / f"{date}.csv.gz",
+                done / f"{date}-rho.csv.gz",
+            )
+            if not (path.exists() and rho_path.exists()):
+                scored, rho = pairing.germany_sensitivity(data, config, [date])
+                write_csv(scored, path)
+                write_csv(rho, rho_path)
         scores = pd.concat(
             [_read_or_empty(done / f"{d}.csv.gz") for d in dates],
+            ignore_index=True,
+        )
+        rho = pd.concat(
+            [_read_or_empty(done / f"{d}-rho.csv.gz") for d in dates],
             ignore_index=True,
         )
     if args.chunk:
         name += "-" + args.chunk.replace("/", "of")
     path = out / f"{name}.csv.gz"
     write_csv(scores, path)
+    if args.study == "germany":
+        write_csv(rho, out / f"{name}-rho.csv.gz")
     print(f"Pairing sensitivity ({args.study}): {len(scores)} rows in {path}.")
     return 0
 

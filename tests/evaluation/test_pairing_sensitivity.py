@@ -29,7 +29,7 @@ def setup(target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame):
 @pytest.fixture(scope="module")
 def scores(setup) -> pd.DataFrame:
     task, truth = setup
-    drawn = variant_forecasts("randomwalknowcast", task)
+    drawn, _ = variant_forecasts("randomwalknowcast", task)
     return pd.concat(
         [
             variant_scores(
@@ -48,10 +48,18 @@ def scores(setup) -> pd.DataFrame:
 
 def test_one_forecast_gives_every_variant_with_the_country(setup) -> None:
     task, _ = setup
-    drawn = variant_forecasts("randomwalknowcast", task)
+    drawn, _ = variant_forecasts("randomwalknowcast", task)
     assert list(drawn) == list(VARIANTS) == ["off", "rolling"]
     for samples in drawn.values():
         assert NATIONAL in set(samples["location"])
+
+
+def test_the_forecast_gives_the_rho_p_it_paired_by(setup) -> None:
+    task, _ = setup
+    _, fit = variant_forecasts("randomwalknowcast", task)
+    assert fit["model"] == "randomwalknowcast"
+    assert fit["origin"] == task.vintage
+    assert 0.0 <= fit["rho_provinces"] <= 0.95
 
 
 def test_per_cell_scores_do_not_move_and_sums_do(scores) -> None:

@@ -38,6 +38,7 @@ from nowcastutils.base import (
 
 __all__ = [
     "MODELS",
+    "RHO_COLUMNS",
     "SCORE_COLUMNS",
     "VARIANTS",
     "summarise_pairing",
@@ -64,10 +65,23 @@ SCORE_COLUMNS: Final = (
 )
 """Columns of `variant_scores`."""
 
+RHO_COLUMNS: Final = (
+    "model",
+    "origin",
+    "level",
+    "n_scores",
+    "rho_provinces",
+    "n_pairs",
+    "fallback",
+)
+"""Columns of `germany_sensitivity`'s rho_p rows."""
+
 _CELL = ["location", "target_end_date"]
 
 
-def variant_forecasts(name: str, task: ForecastTask) -> dict[str, pd.DataFrame]:
+def variant_forecasts(
+    name: str, task: ForecastTask
+) -> tuple[dict[str, pd.DataFrame], dict[str, object] | None]:
     """Forecast a task once and return it under both pairings.
 
     Parameters
@@ -83,6 +97,10 @@ def variant_forecasts(name: str, task: ForecastTask) -> dict[str, pd.DataFrame]:
         Each variant's samples, by label (`VARIANTS`), with the country
         added as the sum of the provinces where the task has provinces.
         Empty where the model cannot forecast the task.
+    dict or None
+        The model's copula record (`RandomWalk.copula_fit`: `model`,
+        `origin`, `n_scores`, `rho_provinces`, `n_pairs`, `fallback`),
+        None where it paired nothing.
     """
     model: RandomWalk = dataclasses.replace(
         cast("RandomWalk", get_model(name)), keep_variants=True
@@ -90,12 +108,12 @@ def variant_forecasts(name: str, task: ForecastTask) -> dict[str, pd.DataFrame]:
     try:
         paired = model.forecast(task)
     except ModelUnavailableError:
-        return {}
+        return {}, None
     out = {}
     for label, drawn in zip(VARIANTS, (model.unpaired(), paired), strict=True):
         zones = drawn["location"].str.count("-") >= 2
         out[label] = drawn if zones.all() else add_national(drawn)
-    return out
+    return out, model.copula_fit
 
 
 def _level(
@@ -281,7 +299,8 @@ def bdbv_sensitivity(
         if origins is not None and origin not in origins:
             continue
         for name in MODELS:
-            for label, s in variant_forecasts(name, tasks[origin]).items():
+            drawn, _ = variant_forecasts(name, tasks[origin])
+            for label, s in drawn.items():
                 frames.append(
                     variant_scores(
                         s,
@@ -301,8 +320,8 @@ def germany_sensitivity(
     data: str,
     config_path: str = "config/germany.toml",
     dates: list[str] | None = None,
-) -> pd.DataFrame:
-    """Score both pairings on the German development half.
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    r"""Score both pairings on the German development half.
 
     Each nowcast date's states tasks (with Germany their sum) and age
     groups tasks, one pair per weekday offset, are forecast as the German
@@ -323,6 +342,10 @@ def germany_sensitivity(
     -------
     pandas.DataFrame
         `variant_scores` rows of every model, variant, date and level.
+    pandas.DataFrame
+        The rolling $\rho_p$ of each model and task (`RHO_COLUMNS`): its
+        copula record, with `origin` the nowcast date and `level` its
+        places (`states` or `ages`).
     """
     from pathlib import Path
 
@@ -341,7 +364,7 @@ def germany_sensitivity(
     triangle = hub_triangle(Path(data) / Path(cfg.triangle).name)
     run = de.nowcast_dates(cfg) if dates is None else list(dates)
     levels = dict.fromkeys(AGE_GROUPS, "ages")
-    frames = []
+    frames, fits = [], []
     # The models see the counts the truth holds (`within_delay`).
     seen = within_delay(triangle, cfg.truth_delay)
     for date in run:
@@ -351,8 +374,13 @@ def germany_sensitivity(
             cfg.n_samples,
             cfg.seed,
         ):
+            level = (
+                "ages" if set(task.locations) & set(AGE_GROUPS) else "states"
+            )
             for name in MODELS:
-                drawn = variant_forecasts(name, task)
+                drawn, fit = variant_forecasts(name, task)
+                if fit is not None:
+                    fits.append({**fit, "origin": date, "level": level})
                 if not drawn:
                     continue
                 moved = {
@@ -386,9 +414,10 @@ def germany_sensitivity(
                             },
                         )
                     )
+    rho = pd.DataFrame(fits, columns=list(RHO_COLUMNS))
     if not frames:
-        return pd.DataFrame(columns=list(SCORE_COLUMNS))
+        return pd.DataFrame(columns=list(SCORE_COLUMNS)), rho
     out = pd.concat(frames, ignore_index=True)
     # Germany's provinces are its states.
     out["level"] = out["level"].replace({"provinces": "states"})
-    return out
+    return out, rho
