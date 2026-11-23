@@ -170,7 +170,7 @@ uv run --group paper python workflow/scripts/dashboard.py --port 8765
 # open the address it prints; with the venv active, plain `python` works too
 ```
 
-## 7. Paper (`paper/workflow/Snakefile`)
+## 7. Paper (`rules/paper.smk`, `paper/workflow/Snakefile`)
 
 A module of this workflow (`use rule * from paper_workflow`), run from the repository root; its paths are from the root and its outputs are in `paper/results/<mode>/`.
 `development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.
@@ -220,6 +220,7 @@ Panoptes has no DAG view, so the same server adds one at `/dag/` (`workflow/flow
 For each `MONITOR_DAG` target (`NAME=TARGET`) it draws the rule graph and the job DAG, each job pending, running, done or failed.
 A job Snakemake would not run is done; Panoptes gives the rest their state, so the colours follow the run on each visit.
 The graphs are built with `MONITOR_DAG_OPTIONS` every `MONITOR_DAG_EVERY` seconds, without a lock; `task nowcast-workflow:dag -- NAME=TARGET` builds one now.
+In the workflow (`rules/monitor.smk`), `monitor_dag` builds one target's graphs into `<ROOT>/monitor/dag/<name>.json` and `monitor` every `MONITOR_DAG` target's; both are opt-in.
 Each tick also writes its machine's status to `<ROOT>/status/<host>.json` every `STATUS_EVERY` seconds (`workflow/flowlib/runstatus.py`).
 The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), not jobs.
 
