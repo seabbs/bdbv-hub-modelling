@@ -100,9 +100,11 @@ def test_every_logo_exists_in_light_and_dark(where: str) -> None:
     marks = re.findall(r"assets/logos/([\w-]+)/logo-mark(-dark)?\.svg", text)
     slugs = {s for s, _ in marks}
     assert len(slugs) == len(PROJECTS) + len(PACKAGES)
+    # The docs site serves its own copy of the marks.
+    logos = ROOT / ("docs" if where == "home" else "") / "assets" / "logos"
     for slug in slugs:
         for f in ("logo-mark.svg", "logo-mark-dark.svg"):
-            assert (ROOT / "assets" / "logos" / slug / f).is_file(), slug
+            assert (logos / slug / f).is_file(), slug
         assert (slug, "") in marks, slug
         assert (slug, "-dark") in marks, slug
 
