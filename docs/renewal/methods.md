@@ -16,7 +16,7 @@ Zone populations and centres come from WorldPop 2025 counts and the zone map beh
 
 We fit health zones, not provinces.
 A zone is fitted if it had a case in the walk window of the random walk baselines ([Baseline models](../methods/baselines.md)), which was 55 of the 519 hub zones at the 2026-11-08 release.
-Each other zone is forecast by the random walk's introduction layer: zero until an introduction, then its walk.
+Each other zone is forecast with them from the fit's posterior, with infections only through the fitted importation from the fitted zones ([Silent zones](../methods/model.md#silent-zones)).
 A province forecast is the sum of its zones' forecasts, draw by draw, and the national forecast is the sum of the provinces.
 So the three levels are coherent by construction, and correlation between zones in the same draw carries through to provinces and the country.
 
@@ -136,9 +136,6 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
 
 - Fits are slow.
   A zone fit takes 1.5 to 2 times as long as a fit by province, and the time grows with the number of zones fitted.
-- The silent zones take the random walk's introductions, whose delay is fitted to pairs of releases at most 42 days apart.
-  Where no pair is that close, as at the 2026-10-09 origin, the delay is fitted to the longer pairs instead.
-  A day of every age at the first release of such a pair is final at the second, so the delay is still identified, but from one pair only.
 - Fits by province saturate the maximum tree depth in most draws, which makes their convergence slow and fragile.
   The zone fits do not.
   In `renewalsp`, the centred walk keeps its largest province from doing so.
@@ -146,7 +143,7 @@ The submission walks a chain of candidates, `renewalbvd`, `renewalsp`, `renewal`
   On weeks complete at the newest release they were mixed at the province level.
   Both did worse than `randomwalknowcast` at the national level at the two latest origins.
 - The delay is by province, so zones in the same province cannot differ in how fast they report.
-- Silent zones are forecast by the random walk's introduction layer, independent of the fit, so a new zone's cases do not come from its neighbours' transmission.
+- Silent zones receive the fitted importation but send nothing on, so an introduced zone does not seed further introductions within the horizon.
 - The SD inflation $\kappa$ is set by judgement, not learnt or tuned on scores.
 
 [^worldpop]: WorldPop (2025). Global high resolution population denominators. [www.worldpop.org](https://www.worldpop.org).

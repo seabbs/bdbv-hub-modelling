@@ -17,8 +17,8 @@ is no nesting, and fitted to one place at a time it is `renewalsp`.
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, fields, replace
 from typing import Any
 
 import jax
@@ -624,6 +624,7 @@ def zone_vintage_from_tables(
     parents: Mapping[str, str] | None = None,
     *,
     imputation_delay: np.ndarray,
+    receivers: tuple[str, ...] = (),
 ) -> ZoneVintage:
     """Build a `ZoneVintage` from zone rows and province delay rows.
 
@@ -664,6 +665,9 @@ def zone_vintage_from_tables(
     imputation_delay : numpy.ndarray
         The daily pmf of the delay the data provider subtracts to impute
         a missing onset (`ForecastTask.imputation_delay`).
+    receivers : tuple of str
+        Silent zones the kernel is normalised over but that are not
+        fitted (`gravity_kernel`, `extend_vintage`).
 
     Returns
     -------
@@ -680,7 +684,11 @@ def zone_vintage_from_tables(
         delays, parent_names, config, masked, every=active == (NATIONAL,)
     )
     known, imputed, totals, pops, names = grid.onsets(active, table, config)
-    kernel = None if len(names) == 1 else gravity_kernel(active, table)
+    kernel = (
+        None
+        if len(names) == 1 and not receivers
+        else gravity_kernel(active, table, receivers=receivers)
+    )
     off = [p in masked or parent_of.get(p, p) in masked for p in names]
     return ZoneVintage(
         start_date=start,
@@ -702,6 +710,106 @@ def zone_vintage_from_tables(
         parents=np.array([parent_names.index(parent_of[p]) for p in names]),
         parent_names=parent_names,
         own=totals.sum(axis=0) >= MIN_OWN_CASES,
+    )
+
+
+def extend_vintage(
+    data: ZoneVintage, silent: Sequence[str], table: pd.DataFrame
+) -> ZoneVintage:
+    """Add silent zones to a fitted zone vintage, to forecast them.
+
+    The silent zones are never seeded and have no data, so the zone model
+    of the extended vintage has the fitted model's sampled sites and the
+    fit's posterior drives it (#768 item 8). They receive infections only
+    through the fitted importation: the kernel is normalised per origin
+    over every zone (`gravity_kernel` with `receivers`, as the fit's
+    was), its fitted block is the fit's kernel and silent zones send
+    nothing, so the fitted zones are as in the fit. Their province takes
+    its fitted value, or the shared one if it has no fitted zone. The
+    axes and the delay data are the fit's.
+
+    Parameters
+    ----------
+    data : ZoneVintage
+        The fitted vintage, whose kernel was built with the silent zones
+        as `receivers`.
+    silent : sequence of str
+        Zones to add.
+    table : pandas.DataFrame
+        Zone populations and centres (`ForecastTask.places`).
+
+    Returns
+    -------
+    ZoneVintage
+        The fitted zones, then the silent ones.
+
+    Raises
+    ------
+    ValueError
+        If a silent zone is already fitted or has no place row.
+    """
+    from nowcastutils.hierarchy import province_of
+
+    quiet = list(silent)
+    if set(quiet) & set(data.names):
+        raise ValueError("A silent zone is already in the fitted vintage.")
+    if not quiet:
+        return data
+    if data.parents is None or data.parent_names is None:
+        raise ValueError("A zone vintage needs each zone's province.")
+    names = [*data.names, *quiet]
+    rows = table.set_index("location").reindex(quiet)
+    if rows["population"].isna().any():
+        raise ValueError(
+            f"No place rows for {rows.index[rows['population'].isna()]}."
+        )
+    p, s = len(data.names), len(quiet)
+    full = gravity_kernel(tuple(names), table)
+    kernel = np.zeros((p + s, p + s))
+    kernel[:, :p] = full[:, :p]
+    kernel[:p, :p] = data.kernel if data.kernel is not None else 0.0
+    parent_names = list(data.parent_names)
+    for z in quiet:
+        if province_of(z) not in parent_names:
+            parent_names.append(province_of(z))
+    zeros = np.zeros((data.n_weeks, s))
+    counts = np.zeros(
+        (
+            data.delay_counts.shape[0],
+            len(parent_names),
+            data.delay_counts.shape[2],
+        )
+    )
+    counts[:, : data.delay_counts.shape[1]] = data.delay_counts
+    bvd = data.bvd
+    if bvd is not None:
+        groups = np.asarray(bvd["groups"], dtype=bool)
+        pad = np.zeros((groups.shape[0], s), dtype=bool)
+        bvd = {**bvd, "groups": np.hstack([groups, pad])}
+    return replace(
+        data,
+        known=np.hstack([data.known, zeros]),
+        imputed=np.hstack([data.imputed, zeros]),
+        delay_counts=counts,
+        populations=np.concatenate(
+            [data.populations, rows["population"].to_numpy(float)]
+        ),
+        kernel=kernel,
+        names=names,
+        fit_mask=None
+        if data.fit_mask is None
+        else np.concatenate([data.fit_mask, np.zeros(s, dtype=bool)]),
+        bvd=bvd,
+        seed_days=None
+        if data.seed_days is None
+        else np.concatenate([data.seed_days, np.full(s, np.inf)]),
+        parents=np.concatenate(
+            [data.parents, [parent_names.index(province_of(z)) for z in quiet]]
+        ),
+        parent_names=parent_names,
+        own=None
+        if data.own is None
+        else np.concatenate([data.own, np.zeros(s, dtype=bool)]),
     )
 
 
@@ -809,7 +917,7 @@ def build_zone_model(
             "mixing",
             DeterministicVariable("kernel", data.kernel),
             DistributionalVariable("importation", dist.Beta(1, 100)),
-            outflow="sent",
+            outflow="exported",
         )
 
     effective_population = None

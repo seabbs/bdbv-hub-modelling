@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import urllib.error
+from collections.abc import Collection
 from dataclasses import replace
 from email.message import Message
 from pathlib import Path
@@ -45,17 +46,28 @@ def quiet_zones(
     return silent
 
 
-def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
-    data = zr.zone_vintage_inputs(task, rn.model_config(variant))
+def _fake_run(
+    task: ForecastTask, variant: rn.Variant, quiet: Collection[str] = ()
+) -> rn.RenewalRun:
+    """A run as `ZoneRenewalModel.run` returns it.
+
+    Its trajectories cover every zone of the task. The zones in `quiet`
+    are silent: they are not in its fitted inputs, and so have no Rt.
+    """
+    places = zr.zone_vintage_inputs(task, rn.model_config(variant))
+    fitted = tuple(z for z in task.locations if z not in set(quiet))
+    data = zr.zone_vintage_inputs(
+        replace(task, locations=fitted), rn.model_config(variant)
+    )
     rng = np.random.default_rng(4)
-    weeks = data.n_weeks + data.horizon_weeks
-    zone = rng.poisson(5.0, size=(task.n_samples, weeks, len(data.names)))
+    weeks = places.n_weeks + places.horizon_weeks
+    zone = rng.poisson(5.0, size=(task.n_samples, weeks, len(places.names)))
     draws: dict[str, Any] = {
         "province": zone.astype(float),
         "insample": {"known": zone * 0.7, "imputed": zone * 0.3},
         "as_reported": {
             cut: {"province": np.ones_like(zone, dtype=float)}
-            for cut in rn.report_cutoffs(task, data)
+            for cut in rn.report_cutoffs(task, places)
         },
         "rt": {
             "rt": rng.lognormal(
@@ -93,6 +105,7 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
         seconds=1.5,
         cpu_seconds=2.9,
         delay=delay,
+        forecast_data=places if quiet else None,
     )
 
 
@@ -208,7 +221,9 @@ def test_fit_renewal_fits_zones_and_writes_their_samples(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(
-        zr.ZoneRenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
+        zr.ZoneRenewalModel,
+        "run",
+        lambda self, t: _fake_run(t, self.variant, quiet_zones),
     )
     record = rn.fit_renewal(
         task, {"num_chains": 2}, tmp_path, variant="renewal", config_name="main"
@@ -432,8 +447,11 @@ def test_silent_zones_follow_the_fit_through_its_importation(
     from nowcastrenewal.model.zones import build_zone_model, extend_vintage
 
     config = rn.model_config(rn.VARIANTS["renewalbvd"])
-    silent = zr.silent_zones(task)
     zt = replace(task, target=zr.zone_target(task))
+    # The four zones with most cases are fitted, the rest are silent.
+    counts = zt.target.groupby("location")["total"].sum()
+    busy = set(counts.sort_values().index[-4:])
+    silent = {z for z in zr.task_zones(task) if z not in busy}
     fitted = tuple(z for z in zr.task_zones(task) if z not in silent)
     quiet = tuple(z for z in zr.task_zones(task) if z in silent)
     # A quiet zone with old cases, and a province with no fitted zone.
@@ -443,7 +461,8 @@ def test_silent_zones_follow_the_fit_through_its_importation(
     data = zr.zone_vintage_inputs(
         replace(zt, locations=fitted), config, receivers=quiet
     )
-    ext = extend_vintage(data, quiet, rn.task_places(task))
+    places = zr._zone_places(replace(zt, locations=(*fitted, *quiet)))
+    ext = extend_vintage(data, quiet, places)
     p = len(fitted)
     assert ext.names == [*data.names, *quiet]
     assert ext.start_date == data.start_date
@@ -490,3 +509,24 @@ def test_silent_zones_follow_the_fit_through_its_importation(
     )
     assert np.all(full[..., p:] >= 0)
     assert full[..., p:].sum() > 0
+
+
+def test_silent_zones_have_no_onset_in_the_walk_window(
+    task: ForecastTask,
+) -> None:
+    from nowcastbaselines.chain import Settings
+    from nowcastutils.dates import epiweek_end
+
+    quiet = zr.silent_zones(task)
+    rows = zr.zone_target(task)
+    cut = epiweek_end(task.cutoff)
+    start = cut - dt.timedelta(weeks=Settings().walk_weeks - 1)
+    recent = rows.loc[
+        (rows["target_end_date"] >= str(start))
+        & (rows["target_end_date"] <= str(cut))
+    ]
+    busy = set(recent["location"])
+    assert quiet == set(zr.task_zones(task)) - busy
+    # The zone task gives the same zones.
+    zones = replace(task, locations=zr.task_zones(task))
+    assert zr.silent_zones(zones) == quiet
