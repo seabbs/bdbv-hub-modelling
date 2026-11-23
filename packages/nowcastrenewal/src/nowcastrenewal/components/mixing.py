@@ -15,6 +15,12 @@ place keeps, $1 - \ell_p$, is set by `outflow`:
   what it sends and the total force is kept. With a kernel normalised per
   origin (`per="origin"`) this is $\ell_p = \varepsilon_p$: the fitted
   models' importation.
+- `"exported"`: $\ell_p = \varepsilon_p$, so each origin loses its
+  whole share wherever it goes. With a block of a kernel normalised per
+  origin over more receivers than the block lists, what goes to the
+  unlisted receivers leaves: the zone models' importation, whose silent
+  zones receive from the fitted zones after the fit. On a kernel whose
+  columns sum to 1 it is `"sent"`.
 - `"received"`: $\ell_p = \sum_q K_{pq} \varepsilon_q$, so each place's
   force is a weighted average of its own and its sources'. With a kernel
   normalised per receiver (`per="receiver"`) and one share a day this is
@@ -48,7 +54,7 @@ __all__ = [
     "normalise_kernel",
 ]
 
-OUTFLOWS = ("sent", "received")
+OUTFLOWS = ("sent", "exported", "received")
 """What each place gives up (see the module docstring)."""
 
 _EARTH_KM = 6371.0
@@ -173,7 +179,7 @@ def mixing_matrix(
     share : array_like
         $\varepsilon$ by origin on the last axis, broadcast to `(..., k)`:
         a scalar, one per origin `(k,)`, or one per day `(n, 1)`.
-    outflow : {"sent", "received"}
+    outflow : {"sent", "exported", "received"}
         What each place gives up (module docstring).
     fractions : array_like, optional
         Population fractions `(k,)`: the matrix is then per resident.
@@ -197,8 +203,12 @@ def mixing_matrix(
         share_, (*share_.shape[:-1], k) if share_.ndim else (k,)
     )
     moved = K * eps[..., None, :]
-    sent = outflow == "sent"
-    leave = eps * K.sum(axis=0) if sent else moved.sum(axis=-1)
+    if outflow == "sent":
+        leave = eps * K.sum(axis=0)
+    elif outflow == "exported":
+        leave = eps
+    else:
+        leave = moved.sum(axis=-1)
     W = moved + jnp.eye(k) * (1 - leave)[..., None, :]
     if fractions is None:
         return W
@@ -218,7 +228,7 @@ class Mixing(RandomVariable):
         `DeterministicVariable`.
     share_rv : RandomVariable
         Returns $\varepsilon$ (`mixing_matrix`).
-    outflow : {"sent", "received"}
+    outflow : {"sent", "exported", "received"}
         What each place gives up.
 
     Raises

@@ -53,7 +53,31 @@ def test_the_held_out_key_hashes_the_cutting_code_not_the_trainer():
     assert code["stream.cut"] == want
     assert "stream.snapshots" in code
     assert "foundation.layout_block" in code
-    assert set(fs.ft.CODE) <= set(code)
+    assert set(fs.ft.CODE) - set(fs.ft.SIMULATOR) <= set(code)
+
+
+def test_the_saved_blocks_are_keyed_on_the_sims_not_the_simulator(tmp_path):
+    # Lead 13:00: Run A recut its held-out blocks at a restart because the
+    # simulator's source changed (#853), though its sims on disk had not.
+    # The blocks depend on the sims' files, which the key hashes instead.
+    from nowcastfoundation.finetune import stream as fs
+
+    code = fs.cut_code_sha256()
+    assert not set(fs.ft.SIMULATOR) & set(code)
+    for seed in (7001, 7002):
+        (tmp_path / f"counts-{seed}.csv.gz").write_bytes(b"c%d" % seed)
+        (tmp_path / f"settings-{seed}.csv").write_bytes(b"s%d" % seed)
+    ids = ["7001-0001", "7001-0002", "7002-0001"]
+    first = fs.sims_sha256(tmp_path, ids)
+    assert set(first) == {
+        "counts-7001.csv.gz",
+        "settings-7001.csv",
+        "counts-7002.csv.gz",
+        "settings-7002.csv",
+    }
+    assert fs.sims_sha256(tmp_path, ids[:2]).keys() < first.keys()
+    (tmp_path / "counts-7002.csv.gz").write_bytes(b"other")
+    assert fs.sims_sha256(tmp_path, ids) != first
 
 
 def test_each_trainer_constant_has_its_own_docstring():

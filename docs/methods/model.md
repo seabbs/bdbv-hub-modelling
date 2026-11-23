@@ -22,7 +22,7 @@ Every time-varying part is a weekly random walk or AR(1), so it stays near const
 ```mermaid
 flowchart TD
     PM["<b>Place model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
-    RN["<b>renewal</b><br/>zones with recent cases<br/>fitted together<br/>+ pooled log R walk<br/>+ province and zone<br/>sum-to-zero AR(1) deviations<br/>+ importation between zones<br/>+ share at risk<br/>+ delay pooled by province<br/>+ silent zones by introductions<br/>provinces are zone sums"]
+    RN["<b>renewal</b><br/>zones with recent cases<br/>fitted together<br/>+ pooled log R walk<br/>+ province and zone<br/>sum-to-zero AR(1) deviations<br/>+ importation between zones<br/>+ share at risk<br/>+ delay pooled by province<br/>+ silent zones by the<br/>fitted importation<br/>provinces are zone sums"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
     SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>+ share at risk"]
 
@@ -292,8 +292,9 @@ x_z(t) = S_z(t)\big\{1 - e^{-\Phi_z(t)/\nu}\big\},
 S_z(t + 1) = S_z(t)\, e^{-\Phi_z(t)/\nu}.
 $$
 
-- $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K \mathrm{diag}(N)$ mixes transmission between zones, with $\varepsilon \sim \text{Beta}(1, 100)$.
-- $K$ is a gravity kernel with rows that receive, normalised per origin, $K_{zq} \propto N_z e^{-D_{zq}/300\,\text{km}}$ for $q \ne z$, with $D$ the great-circle distance between zone centroids.
+- $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K \mathrm{diag}(N)$ mixes transmission between zones, with $\varepsilon \sim \text{Beta}(1, 100)$: each zone sends the share $\varepsilon$ of its force away.
+- $K$ is a gravity kernel with rows that receive, normalised per origin over every zone of the task, fitted or silent, $K_{zq} \propto N_z e^{-D_{zq}/300\,\text{km}}$ for $q \ne z$, with $D$ the great-circle distance between zone centroids.
+  The fit uses its block for the fitted zones, so what a fitted zone sends to silent zones leaves the fit ([Silent zones](#silent-zones)).
 - $N_z$ is the zone's WorldPop 2025 count and its centroid is that of its largest polygon, both from the map behind the province centres ([`zone_centres.csv`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastbdbv/src/nowcastbdbv/data/zone_centres.csv)).
   The 19 hub zones the map lacks, none with a case, take their province's centre and mean zone population.
 - $\nu \sim \text{LogNormal}(\log 0.05, 0.75^2)$ is the share at risk.
@@ -330,10 +331,14 @@ They start with province spread $\mathcal{N}^+(0, 0.5^2)$, sampled non-centred, 
 
 ### Silent zones
 
-A zone with no case in the random walks' walk window is silent and is not fitted.
-It takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
-The introduction rate pools the zone with the other zones of its province, so a province with no case in any zone is forecast by its zones' introductions alone.
-These draws are independent of the fit.
+A zone with no case in the random walks' walk window ([Baseline models](baselines.md)) is silent and is not fitted.
+It is forecast with the fitted zones from the fit's posterior, in the same model with the silent zones added.
+A silent zone is never seeded and has no data, so it adds no parameters and the fit's posterior drives it.
+Its infections come only through the fitted importation: the rows of $K$ above for the silent zones, times the share $\varepsilon$ and the fitted zones' infections of the same draw.
+It then follows the renewal with its province's Rt, or the pooled Rt where its province has no fitted zone, and is observed as any zone.
+Silent zones send nothing on, so the fitted zones are exactly as in the fit.
+Within the forecast horizon this leaves out an introduced zone seeding further introductions.
+Each draw of a silent zone comes from the same posterior draw as the fitted zones' trajectory, so provinces and the country stay coherent.
 
 ### Provinces and the country
 

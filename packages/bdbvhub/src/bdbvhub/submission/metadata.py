@@ -126,7 +126,8 @@ MODEL_METADATA = {
             "province and zone deviations. "
             "Infections move between zones through a gravity kernel, and "
             "susceptibles are depleted. "
-            "Zones with no recent case take a random walk introduction layer. "
+            "Zones with no recent case are not fitted: they take infections "
+            "only through the fitted importation from the fitted zones. "
             + _ZONE_SUMS
             + _RENEWAL_OBSERVATION
         ),
@@ -167,7 +168,8 @@ MODEL_METADATA = {
             "province and zone deviations. "
             "Infections move between zones through a gravity kernel, and "
             "susceptibles are depleted. "
-            "Zones with no recent case take a random walk introduction layer. "
+            "Zones with no recent case are not fitted: they take infections "
+            "only through the fitted importation from the fitted zones. "
             "The model's national, province and zone Rt in the week of the "
             "newest BVDOutbreakSize release published by the cut-off are tied "
             "to that release's Rt estimates by a likelihood term with their "

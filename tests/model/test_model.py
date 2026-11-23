@@ -11,7 +11,7 @@ from nowcastrenewal.model import MAIN, ModelConfig, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
 from nowcastrenewal.model.model import incubation_period, seed_lead
 
-from .conftest import SIM_LOCATIONS, VINTAGE_DAYS, vintage_date
+from .conftest import PLACES, VINTAGES, release
 
 _SIMPLE = {
     "streams": "total",
@@ -41,9 +41,9 @@ def trace(model, data, forecast=False):
     return tr
 
 
-def test_vintage_shapes(sim_vintage):
-    v = sim_vintage
-    assert v.names == list(SIM_LOCATIONS)
+def test_vintage_shapes(latest_vintage):
+    v = latest_vintage
+    assert v.names == list(PLACES)
     assert v.known.shape == v.imputed.shape == (v.n_weeks, 6)
     assert v.delay_counts.shape == (v.n_weeks, 6, 61)
     assert v.start_date.weekday() == 6
@@ -51,19 +51,19 @@ def test_vintage_shapes(sim_vintage):
     np.testing.assert_allclose(v.hub_delay_pmf.sum(), 1.0)
 
 
-def test_provinces_with_no_case_are_never_seeded(outbreak, sim_tables, table):
-    # At day 41 some provinces have no case yet: they are modelled, but
-    # never seeded, so their infections come from importation only.
-    target, delays = outbreak.vintage(vintage_date(outbreak, 41))
+def test_provinces_with_no_case_are_never_seeded(tables, table):
+    # Some provinces have no case: they are modelled, but never seeded,
+    # so their infections come from importation only.
+    target, delays = release(VINTAGES[0])
     v = vintage_from_tables(
         target,
         delays,
-        vintage_date(outbreak, 41),
-        SIM_LOCATIONS,
+        VINTAGES[0],
+        PLACES,
         table,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, 41)),
+        imputation_delay=hub_delay_pmf(VINTAGES[0]),
     )
-    assert v.names == list(SIM_LOCATIONS)
+    assert v.names == list(PLACES)
     none = (v.known + v.imputed).sum(axis=0) == 0
     assert none.any()
     assert np.all(np.isinf(v.seed_days[none]))
@@ -76,17 +76,17 @@ def test_provinces_with_no_case_are_never_seeded(outbreak, sim_tables, table):
         *CONFIGS,
     ],
 )
-def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
+def test_model_sites_and_shapes(tables, table, cfg):
+    day = VINTAGES[-1]
+    target, delays = tables[day]
     data = vintage_from_tables(
         target,
         delays,
-        vintage_date(outbreak, day),
-        SIM_LOCATIONS,
+        day,
+        PLACES,
         table,
         cfg,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
+        imputation_delay=hub_delay_pmf(day),
     )
     model = build_model(data, cfg)
     tr = trace(model, data, forecast=True)
@@ -111,15 +111,15 @@ def test_model_sites_and_shapes(outbreak, sim_tables, table, cfg):
     assert np.isfinite(float(log_density))
 
 
-def test_masked_province_has_no_likelihood(outbreak, sim_tables, table):
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
-    vintage = vintage_date(outbreak, day)
+def test_masked_province_has_no_likelihood(tables, table):
+    day = VINTAGES[-1]
+    target, delays = tables[day]
+    vintage = day
     data = vintage_from_tables(
         target,
         delays,
         vintage,
-        SIM_LOCATIONS,
+        PLACES,
         table,
         masked=("CD-NK",),
         imputation_delay=hub_delay_pmf(vintage),
@@ -150,9 +150,9 @@ def test_masked_province_has_no_likelihood(outbreak, sim_tables, table):
     assert np.all(np.asarray(tr["onsets_expected_known"]["value"])[:, 1] >= 0)
 
 
-def test_wrong_data_shape_is_rejected(sim_vintage):
-    model = build_model(sim_vintage)
-    args = model_args(model, sim_vintage)
+def test_wrong_data_shape_is_rejected(latest_vintage):
+    model = build_model(latest_vintage)
+    args = model_args(model, latest_vintage)
     args["onsets"]["known"] = args["onsets"]["known"][1:]
     with pytest.raises(ValueError, match="known has shape"):
         model.validate_data(
@@ -162,10 +162,10 @@ def test_wrong_data_shape_is_rejected(sim_vintage):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("depletion", [True, False])
-def test_prior_predictive_is_bounded_by_depletion(sim_vintage, depletion):
+def test_prior_predictive_is_bounded_by_depletion(latest_vintage, depletion):
     cfg = ModelConfig(depletion=depletion)
-    model = build_model(sim_vintage, cfg)
-    args = model_args(model, sim_vintage, forecast=True)
+    model = build_model(latest_vintage, cfg)
+    args = model_args(model, latest_vintage, forecast=True)
     prior = Predictive(model.sample, num_samples=200)(random.key(4), **args)
     expected = np.asarray(
         prior["onsets_expected_known_final"]
@@ -173,7 +173,7 @@ def test_prior_predictive_is_bounded_by_depletion(sim_vintage, depletion):
     )
     cumulative = expected.sum(axis=1)
     nu = prior.get("effective_population", np.ones(200))
-    pool = np.asarray(nu)[:, None] * sim_vintage.populations[None, :]
+    pool = np.asarray(nu)[:, None] * latest_vintage.populations[None, :]
     share = cumulative / pool
     draws = np.asarray(prior["onsets_final_total"])
     if depletion:
@@ -207,17 +207,17 @@ def test_real_data_kernels_are_finite(table):
         assert np.all(np.isfinite(data.kernel))
 
 
-def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
-    # At day 166 Nord-Kivu (seeded day 30 in the simulation) has its first
-    # cases weeks after Ituri, so it starts near empty.
-    target, delays = outbreak.vintage(vintage_date(outbreak, 166))
+def test_late_provinces_are_seeded_at_their_first_cases(table):
+    # Nord-Kivu has its first cases weeks after Ituri, so it starts near
+    # empty.
+    target, delays = release(VINTAGES[1])
     data = vintage_from_tables(
         target,
         delays,
-        vintage_date(outbreak, 166),
-        SIM_LOCATIONS,
+        VINTAGES[1],
+        PLACES,
         table,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, 166)),
+        imputation_delay=hub_delay_pmf(VINTAGES[1]),
     )
     assert data.seed_days[0] == 0 and data.seed_days[1] > 0
     # The seed leads the first case week by the incubation lead.
@@ -233,17 +233,17 @@ def test_late_provinces_are_seeded_at_their_first_cases(outbreak, table):
     assert x[:day, 1].sum() < 1e-3 * x[day : day + 7, 1].sum()
 
 
-def test_unseeded_provinces_get_infections_only_by_importation(sim_vintage):
-    # CD-BU and CD-SK have no case: with coupling they gain infections
+def test_unseeded_provinces_get_infections_only_by_importation(latest_vintage):
+    # CD-KE and CD-KN have no case: with coupling they gain infections
     # from the other provinces, without it they stay near zero.
-    j = [sim_vintage.names.index(p) for p in ("CD-BU", "CD-SK")]
-    other = [i for i in range(len(sim_vintage.names)) if i not in j]
+    j = [latest_vintage.names.index(p) for p in ("CD-KE", "CD-KN")]
+    other = [i for i in range(len(latest_vintage.names)) if i not in j]
 
     def share(config):
-        model = build_model(sim_vintage, config)
-        tr = trace(model, sim_vintage)
+        model = build_model(latest_vintage, config)
+        tr = trace(model, latest_vintage)
         x = np.asarray(tr["latent_infections_by_subpop"]["value"])
-        pops = np.asarray(sim_vintage.populations)
+        pops = np.asarray(latest_vintage.populations)
         cases = x * pops
         return cases[:, j].sum() / cases[:, other].sum()
 
@@ -252,37 +252,37 @@ def test_unseeded_provinces_get_infections_only_by_importation(sim_vintage):
     assert share(ModelConfig()) > 100 * alone
 
 
-def test_missingness_offsets_are_non_centred(sim_vintage):
-    model = build_model(sim_vintage)
-    tr = trace(model, sim_vintage)
+def test_missingness_offsets_are_non_centred(latest_vintage):
+    model = build_model(latest_vintage)
+    tr = trace(model, latest_vintage)
     assert "logit_pi0_z" in tr and "logit_pi0_offsets" not in tr
     assert "log_rt0_offsets" in tr
 
 
 @pytest.mark.slow
-def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
+def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(latest_vintage):
     from nowcastrenewal.model import forecast_trajectories
 
-    model = build_model(sim_vintage)
+    model = build_model(latest_vintage)
     prior = Predictive(model.sample, num_samples=20)(
-        random.key(1), **model_args(model, sim_vintage)
+        random.key(1), **model_args(model, latest_vintage)
     )
     sampled = {
         k: v
         for k, v in prior.items()
         if not k.endswith("_obs") and k != "onsets_delays"
     }
-    later = sim_vintage.cutoff + 14
+    later = latest_vintage.cutoff + 14
     draws = forecast_trajectories(
         model,
-        sim_vintage,
+        latest_vintage,
         20,
         posterior=sampled,
-        as_of=(sim_vintage.cutoff, later),
+        as_of=(latest_vintage.cutoff, later),
     )
-    now = draws["as_reported"][sim_vintage.cutoff]["province"]
-    seen = sim_vintage.known + sim_vintage.imputed
-    n = sim_vintage.n_weeks
+    now = draws["as_reported"][latest_vintage.cutoff]["province"]
+    seen = latest_vintage.known + latest_vintage.imputed
+    n = latest_vintage.n_weeks
     # At the vintage's own cut-off the known counts are the vintage's, and
     # the imputed ones are centred on it.
     np.testing.assert_allclose(
@@ -301,14 +301,14 @@ def test_as_reported_draws_match_the_vintage_at_its_own_cutoff(sim_vintage):
     )
 
 
-def test_unseeded_provinces_sample_no_seed_or_deviation(sim_vintage):
+def test_unseeded_provinces_sample_no_seed_or_deviation(latest_vintage):
     # Barely informed, they follow the pooled Rt trend and missing-onset
     # share and take a fixed seed.
-    unseeded = ~sim_vintage.seeded
+    unseeded = ~latest_vintage.seeded
     k = int((~unseeded).sum())
     assert unseeded.any()
-    model = build_model(sim_vintage)
-    tr = trace(model, sim_vintage)
+    model = build_model(latest_vintage)
+    tr = trace(model, latest_vintage)
     assert tr["initial_infections"]["value"].shape == (k,)
     assert tr["log_rt0_offsets"]["value"].shape == (k - 1,)
     rt = np.asarray(tr["latent::rt_subpop"]["value"])
@@ -318,11 +318,11 @@ def test_unseeded_provinces_sample_no_seed_or_deviation(sim_vintage):
     )
 
 
-def test_centred_rt_samples_the_baseline_levels(sim_vintage):
-    plain = trace(build_model(sim_vintage), sim_vintage)
+def test_centred_rt_samples_the_baseline_levels(latest_vintage):
+    plain = trace(build_model(latest_vintage), latest_vintage)
     assert "log_rt_baseline_z" in plain and "log_rt_baseline_x" not in plain
-    model = build_model(sim_vintage, ModelConfig(centred_rt=True))
-    tr = trace(model, sim_vintage)
+    model = build_model(latest_vintage, ModelConfig(centred_rt=True))
+    tr = trace(model, latest_vintage)
     assert "log_rt_baseline_x" in tr and "log_rt_baseline_z" not in tr
     assert (
         tr["log_rt_baseline_x"]["value"].size
@@ -337,19 +337,21 @@ def _prior_draws(model, data, n=4):
     )
 
 
-def test_weekly_rt_is_infection_weighted_by_week_of_infection(sim_vintage):
+def test_weekly_rt_is_infection_weighted_by_week_of_infection(latest_vintage):
     from nowcastrenewal.model import weekly_rt
 
-    model = build_model(sim_vintage, MAIN)
-    posterior = _prior_draws(model, sim_vintage)
-    out = weekly_rt(model, sim_vintage, posterior, seed=3)
+    model = build_model(latest_vintage, MAIN)
+    posterior = _prior_draws(model, latest_vintage)
+    out = weekly_rt(model, latest_vintage, posterior, seed=3)
     n_init = model.latent.n_initialization_points
-    n_weeks = n_init // 7 + sim_vintage.n_weeks + sim_vintage.horizon_weeks
-    p = len(sim_vintage.names)
+    n_weeks = (
+        n_init // 7 + latest_vintage.n_weeks + latest_vintage.horizon_weeks
+    )
+    p = len(latest_vintage.names)
     # Every draw, on the forecast axis: the fit-time sites are redrawn.
     assert out["rt"].shape == out["weight"].shape == (4, n_weeks, p)
     # The axis starts the seeding days before the first data Sunday.
-    assert out["start"] == sim_vintage.start_date - dt.timedelta(days=n_init)
+    assert out["start"] == latest_vintage.start_date - dt.timedelta(days=n_init)
     # The effective Rt and the infection counts of the same draws.
     latent = {
         k: v
@@ -364,10 +366,10 @@ def test_weekly_rt_is_infection_weighted_by_week_of_infection(sim_vintage):
             "latent::rt_subpop_adjusted",
             "latent_infections_by_subpop",
         ],
-    )(random.key(3), **model_args(model, sim_vintage, forecast=True))
+    )(random.key(3), **model_args(model, latest_vintage, forecast=True))
     rt = np.asarray(pred["latent::rt_subpop_adjusted"])
     counts = np.asarray(pred["latent_infections_by_subpop"]) * np.asarray(
-        sim_vintage.populations
+        latest_vintage.populations
     )
     week = 7 * (n_init // 7 + 2)
     w = counts[:, week : week + 7]

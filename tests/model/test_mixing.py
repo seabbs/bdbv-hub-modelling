@@ -129,3 +129,22 @@ def test_the_component_checks_its_parts() -> None:
         Mixing("mixing", np.eye(2), DeterministicVariable("e", 0.1))
     with pytest.raises(ValueError, match="outflow"):
         Mixing("mixing", kernel, DeterministicVariable("e", 0.1), "kept")
+
+
+def test_exported_outflow_loses_the_whole_share_whatever_the_kernel():
+    # A kernel normalised per origin over more receivers than it lists
+    # (columns sum to less than 1): with "exported" each origin still
+    # loses its whole share, as what goes to the unlisted receivers
+    # leaves (#768 item 8).
+    full = normalise_kernel(K_WEIGHTS, "origin")
+    sub = full[:3, :3]
+    assert np.all(sub.sum(axis=0) < 1)
+    eps = np.array([0.1, 0.2, 0.3])
+    W = np.asarray(mixing_matrix(sub, eps, outflow="exported"))
+    np.testing.assert_allclose(np.diag(W), 1 - eps)
+    np.testing.assert_allclose(W - np.diag(np.diag(W)), sub * eps)
+    # On a kernel whose columns sum to 1 it is "sent".
+    np.testing.assert_allclose(
+        mixing_matrix(full, 0.2, outflow="exported"),
+        mixing_matrix(full, 0.2, outflow="sent"),
+    )

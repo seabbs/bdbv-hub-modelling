@@ -10,7 +10,6 @@ import pytest
 from nowcastfoundation import forecaster
 from nowcastfoundation.forecaster import (
     LAG_QUANTILE,
-    LAG_WINDOW,
     MAX_LAG,
     lag_count,
 )
@@ -50,9 +49,7 @@ def _releases(
 
 def delay_lags(rows, source, places, last, quantile=LAG_QUANTILE):
     """The lag count of releases `rows`, as a forecast reads them."""
-    tri = forecaster.hub_triangle(
-        rows, source, places, last, max_lag=LAG_WINDOW[source][1]
-    )
+    tri = forecaster.hub_triangle(rows, source, places, last, all_lags=True)
     return lag_count(tri, source, quantile)
 
 
@@ -100,13 +97,24 @@ def test_a_long_delay_with_a_recent_cut_is_not_biased_short() -> None:
     assert naive < 21
 
 
-def test_little_history_gives_as_many_lags_as_it_allows() -> None:
+def test_little_history_still_reads_the_delay_it_shows() -> None:
+    # 20 days of daily releases: days seen for twice their delay settle
+    # at lag 3, so 4 lags, with no fixed window to wait for.
     rows = _releases(20)
+    assert delay_lags(rows, "daily", ("A",), rows["cutoff"].max()) == 4
+
+
+def test_a_delay_longer_than_the_history_takes_the_history() -> None:
+    # 99% by lag 20 needs 21 lags; 12 days of history cannot show it.
+    def reported(d):
+        return 10_000 * (1 - 0.8 ** (d + 1))
+
+    rows = _releases(12, reported=reported)
     got = delay_lags(rows, "daily", ("A",), rows["cutoff"].max())
     tri = forecaster.hub_triangle(
         rows, "daily", ("A",), rows["cutoff"].max(), max_lag=1
     )
-    assert got == max(1, tri.last - 1) == 18
+    assert got == max(1, tri.last - 1) == 10
     assert got != MAX_LAG["daily"]
 
 

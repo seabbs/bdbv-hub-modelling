@@ -2,9 +2,10 @@
 """`renewal` and `renewalbvd`, fitted on health zones.
 
 `ZoneRenewalModel` fits the zones with a case in the random walks' walk
-window in one model, nested in their provinces (`model.zones`), gives
-the silent zones `randomwalknowcast`'s introduction layer, and sums the
-zones to the provinces, sample by sample. National is the sum of the
+window in one model, nested in their provinces (`model.zones`), draws
+the silent zones with them from its posterior through its fitted
+importation (`model.zones.extend_vintage`), and sums the zones to the
+provinces, sample by sample. National is the sum of the
 provinces. Importing this module registers it as `renewal` and
 `renewalbvd`; `nowcastrenewal.forecaster` registers only the per-province
 `renewalsp`.
@@ -31,7 +32,6 @@ from nowcastrenewal.forecaster import (
     RenewalRun,
     Variant,
     _as_reported,
-    _silent_walk,
     bvd_record,
     bvd_release,
     check_national,
@@ -153,19 +153,48 @@ def zone_target(task: ForecastTask) -> pd.DataFrame:
     return out.loc[out["total"] > 0].reset_index(drop=True)
 
 
-def _zone_walk_task(task: ForecastTask) -> ForecastTask:
-    """Return the random walks' zone task, which finds the silent zones."""
-    from nowcastbaselines.zones import zone_task
-    from nowcastutils.snapshots import weekly_counts
+def silent_zones(task: ForecastTask) -> set[str]:
+    """Return the task's zones with no case in the walk window.
 
-    daily = _daily_zones()
-    counts = weekly_counts(daily, task.vintage)
-    history = (
-        daily
-        if task.daily_history is None
-        else pd.concat([task.daily_history, daily], ignore_index=True)
+    The random walks' rule (`nowcastbaselines.introductions.
+    silent_places`): no onset in the `walk_weeks` weeks up to the week
+    holding the vintage's cut-off, as reported at the vintage. So the
+    renewal and the walks call the same zones silent.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        A task of a real release whose locations are provinces, or the
+        zones of its provinces (as `ZoneRenewalModel.run` takes it).
+
+    Returns
+    -------
+    set of str
+        Zone codes.
+    """
+    from nowcastbaselines.chain import Settings
+    from nowcastbaselines.introductions import silent_places
+    from nowcastutils.dates import epiweek_end
+    from nowcastutils.hierarchy import is_zone, province_of
+
+    if any(is_zone(c) for c in task.locations):
+        zones = tuple(task.locations)
+        task = replace(
+            task, locations=tuple(sorted({province_of(z) for z in zones}))
+        )
+    else:
+        zones = task_zones(task)
+    weekly = zone_target(task).pivot_table(
+        index="location", columns="target_end_date", values="total"
     )
-    return zone_task(task, counts, task_zones(task), history)
+    cut = epiweek_end(task.cutoff)
+    first = min([cut, *(dt.date.fromisoformat(w) for w in weekly.columns)])
+    weeks = [str(d.date()) for d in pd.date_range(first, cut, freq="7D")]
+    reported = weekly.reindex(index=list(zones), columns=weeks).fillna(0.0)
+    quiet = silent_places(
+        reported.to_numpy(float), weeks.index(str(cut)), Settings().walk_weeks
+    )
+    return {z for z, q in zip(zones, quiet, strict=True) if q}
 
 
 def sum_zones(samples: pd.DataFrame) -> pd.DataFrame:
@@ -292,7 +321,10 @@ def zone_bvd_rows(
 
 
 def zone_vintage_inputs(
-    task: ForecastTask, config: Any, bvd: pd.DataFrame | None = None
+    task: ForecastTask,
+    config: Any,
+    bvd: pd.DataFrame | None = None,
+    receivers: tuple[str, ...] = (),
 ) -> Any:
     """Turn a zone task into the zone model's `ZoneVintage`.
 
@@ -305,6 +337,9 @@ def zone_vintage_inputs(
         The model configuration.
     bvd : pandas.DataFrame, optional
         BVDOutbreakSize rows (`bvd_rows`).
+    receivers : tuple of str
+        Silent zones the importation kernel is normalised over but that
+        are not fitted (`model.zones.extend_vintage`).
 
     Returns
     -------
@@ -322,13 +357,14 @@ def zone_vintage_inputs(
         task.delays,
         task.vintage,
         tuple(task.locations),
-        _zone_places(task),
+        _zone_places(replace(task, locations=(*task.locations, *receivers))),
         config,
         horizon_weeks(task),
         tuple(task.mask),
         bvd=bvd,
         release_pairs=pairs,
         imputation_delay=task_imputation_delay(task),
+        receivers=receivers,
     )
 
 
@@ -399,9 +435,30 @@ class ZoneRenewalModel(RenewalModel):
         """Fit the zone model to a zone task and draw trajectories.
 
         As `RenewalModel.run`, with `zone_vintage_inputs` and
-        `build_zone_model`, and the delay summaries by province.
+        `build_zone_model`, and the delay summaries by province. The
+        zones with a recent case are fitted. The silent ones
+        (`silent_zones`) are drawn with them in one forecast pass of the
+        extended model (`model.zones.extend_vintage`) from the fit's
+        posterior, so their infections come only through its fitted
+        importation and sample k of every zone is one joint draw. The
+        posterior checks and the weekly Rt are the fitted zones'.
+
+        Raises
+        ------
+        ModelUnavailableError
+            If every zone of the task is silent.
         """
-        from nowcastrenewal.model.zones import build_zone_model
+        from nowcastrenewal.model.zones import build_zone_model, extend_vintage
+
+        quiet_set = silent_zones(task)
+        quiet = tuple(z for z in task.locations if z in quiet_set)
+        fitted = tuple(z for z in task.locations if z not in quiet_set)
+        if not fitted:
+            raise ModelUnavailableError(
+                f"{self.name}: every zone of {task.vintage} is silent."
+            )
+        places = _zone_places(task)
+        task = replace(task, locations=fitted)
 
         pr = engine()
         config = model_config(self.variant)
@@ -418,7 +475,7 @@ class ZoneRenewalModel(RenewalModel):
                     rows = pd.concat([rows, zone_rows], ignore_index=True)
                     used = {**used, "zones": len(zone_rows)}
             self._log(f"variant={self.name} bvd={used['tag'] or 'none'}")
-        data = zone_vintage_inputs(task, config, bvd=rows)
+        data = zone_vintage_inputs(task, config, bvd=rows, receivers=quiet)
         model = build_zone_model(data, config)
         self._log(
             f"variant={self.name} zones={data.n_provinces} sampling start"
@@ -432,14 +489,25 @@ class ZoneRenewalModel(RenewalModel):
             f"variant={self.name} sampling done seconds={seconds:.0f} "
             f"cpu_seconds={cpu_seconds:.0f}"
         )
+        ext = extend_vintage(data, quiet, places)
+        sampled = {
+            k: v
+            for k, v in model.mcmc.get_samples().items()
+            if k in model.mcmc.last_state.z
+        }
+        traj = pr.forecast_trajectories(
+            build_zone_model(ext, config),
+            ext,
+            task.n_samples,
+            seed=task.seed,
+            posterior=sampled,
+            as_of=tuple(report_cutoffs(task, ext)),
+        )
+        # The posterior checks are the fitted zones' (the first columns).
+        p = len(data.names)
         draws = {
-            **pr.forecast_trajectories(
-                model,
-                data,
-                task.n_samples,
-                seed=task.seed,
-                as_of=tuple(report_cutoffs(task, data)),
-            ),
+            **traj,
+            "insample": {k: v[..., :p] for k, v in traj["insample"].items()},
             "rt": pr.weekly_rt(model, data, seed=task.seed),
         }
         by_chain = model.mcmc.get_samples(group_by_chain=True)
@@ -486,6 +554,7 @@ class ZoneRenewalModel(RenewalModel):
             cpu_seconds,
             delay,
             used,
+            forecast_data=ext,
         )
 
     def fit_inputs(self, task: ForecastTask) -> str:
@@ -528,9 +597,9 @@ class ZoneRenewalModel(RenewalModel):
         """Fit the zones together and sum them to the provinces.
 
         The zones with a case in the random walks' walk window are
-        fitted in one model. The rest take `randomwalknowcast`'s
-        introduction layer (`_silent_walk`), so a zone with no recent
-        case is exactly 0 until an introduction. Each province sample is
+        fitted in one model, and the silent ones are drawn with them from
+        its posterior, taking infections only through its fitted
+        importation (`run`, #768 item 8). Each province sample is
         the sum of its zones' samples of the same id. National is the
         sum of the provinces, and a task with national cases in no
         province stops (`check_national`).
@@ -556,20 +625,11 @@ class ZoneRenewalModel(RenewalModel):
                 f"{task.kind} task does not have."
             )
         check_national(task)
-        walk, silent = _silent_walk(_zone_walk_task(task))
-        fitted = tuple(z for z in task_zones(task) if z not in silent)
-        zones = [walk]
-        later = [
-            walk.loc[walk["target_end_date"] <= d].assign(as_of=d)
-            for d in task.report_by
-        ]
-        runs: dict[str, RenewalRun] = {}
-        if fitted:
-            zt = replace(task, target=zone_target(task), locations=fitted)
-            runs = self._run_all({"all": zt})
-            zones.append(samples_table(zt, runs["all"].data, runs["all"].draws))
-            later.extend(_as_reported(zt, runs["all"]))
-        zone_samples = pd.concat(zones, ignore_index=True)
+        zt = replace(task, target=zone_target(task), locations=task_zones(task))
+        runs = self._run_all({"all": zt})
+        run = runs["all"]
+        zone_samples = samples_table(zt, run.places, run.draws)
+        later = _as_reported(zt, run)
         # The samples hold the zones too, so the forecast, the store and
         # the scores read the zone fit's own zones, not a split
         # (`nowcastbaselines.zones.with_zones` leaves them as they are).

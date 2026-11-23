@@ -1,4 +1,3 @@
-import datetime as dt
 import os
 from pathlib import Path
 
@@ -10,16 +9,26 @@ numpyro.set_host_device_count(2)
 
 from nowcastbdbv.data.delays import hub_delay_pmf  # noqa: E402
 from nowcastbdbv.data.tidy import PROVINCE_CENTRES, PROVINCE_POPULATIONS  # noqa: E402
-from nowcastfoundation.simulate import simulate_outbreak  # noqa: E402
 from nowcastrenewal.model import MAIN  # noqa: E402
 from nowcastrenewal.model.inputs import vintage_from_tables  # noqa: E402
 
-# Vintage dates as days after the simulation start (each a Saturday).
-VINTAGE_DAYS = (166, 206)
 FIXTURE_DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 MAIN_REPO_DATA = Path(os.environ.get("BDBV_DATA", str(FIXTURE_DATA)))
-# Two provinces with no cases, modelled with importation only.
-SIM_LOCATIONS = ("CD-IT", "CD-NK", "CD-HU", "CD-TO", "CD-BU", "CD-SK")
+# Releases of the frozen fixture with delay rows, oldest first.
+VINTAGES = ("2026-10-09", "2026-10-24", "2026-11-08")
+# Ituri first, a later start (Nord-Kivu), a late one (Tshopo) and two
+# provinces with no case, modelled with importation only.
+PLACES = ("CD-IT", "CD-NK", "CD-HU", "CD-TO", "CD-KE", "CD-KN")
+
+
+def release(vintage):
+    """Return the fixture's target and delay rows of one release."""
+    target = pd.read_csv(FIXTURE_DATA / "target.csv")
+    delays = pd.read_csv(FIXTURE_DATA / "delays.csv.gz")
+    return (
+        target.loc[target["vintage"] == vintage],
+        delays.loc[delays["vintage"] == vintage],
+    )
 
 
 @pytest.fixture(scope="session")
@@ -37,32 +46,21 @@ def table():
 
 
 @pytest.fixture(scope="session")
-def outbreak():
-    return simulate_outbreak()
-
-
-def vintage_date(outbreak, day):
-    return (outbreak.settings.start + dt.timedelta(days=day)).isoformat()
+def tables():
+    return {v: release(v) for v in VINTAGES}
 
 
 @pytest.fixture(scope="session")
-def sim_tables(outbreak):
-    return {
-        d: outbreak.vintage(vintage_date(outbreak, d)) for d in VINTAGE_DAYS
-    }
-
-
-@pytest.fixture(scope="session")
-def sim_vintage(outbreak, sim_tables, table):
-    day = VINTAGE_DAYS[-1]
-    target, delays = sim_tables[day]
+def latest_vintage(tables, table):
+    day = VINTAGES[-1]
+    target, delays = tables[day]
     return vintage_from_tables(
         target,
         delays,
-        vintage_date(outbreak, day),
-        SIM_LOCATIONS,
+        day,
+        PLACES,
         table,
-        imputation_delay=hub_delay_pmf(vintage_date(outbreak, day)),
+        imputation_delay=hub_delay_pmf(day),
     )
 
 
