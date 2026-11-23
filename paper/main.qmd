@@ -226,7 +226,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 ::: {#tbl-live-summary}
 {{< include build/tables/si/live-summary.md >}}
 
-Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's held-out loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Held-out synthetic data
