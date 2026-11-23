@@ -36,6 +36,7 @@ KNOWN: dict[str, set[str]] = {
     # Upward imports of bdbvhub.
     "nowcastfoundation": {"nowcastfoundation.simulate"},
     "nowcastgermany": {
+        "nowcastgermany.cli",
         "nowcastgermany.evaluation",
         "nowcastgermany.pairing",
         "nowcastgermany.ft_store",

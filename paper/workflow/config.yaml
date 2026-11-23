@@ -79,7 +79,7 @@ germany:
   # Further forecasts of the benchmark from evidence rows (`evidence`
   # below), such as models run outside config/germany.toml: `models`
   # keeps the models matching a regular expression, `suffix` renames
-  # them, and `backtest` reads a `germany-backtest` table. A development
+  # them, and `backtest` reads a `nowcastgermany backtest` table. A development
   # run fails if one holds a held-out date.
   # `provisional` notes what is to be redone, in every German caption.
   # The Chronos-2 models are in config/germany.toml.
