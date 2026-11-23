@@ -299,6 +299,7 @@ def test_an_offline_config_leaves_the_workflow_inputs_out(
     )
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
+    config["germany"]["real"] = False
     config["final_run"] = None
     config["rounds_dir"] = None
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
@@ -321,6 +322,8 @@ def test_the_evidence_reads_the_workflow_rules_outputs() -> None:
     args = flow.options(files)
     assert f"--finetune-heldout {files['finetune_heldout']}" in args
     assert _flow(final_run=None).workflow_evidence().keys() == {
+        "si_copula",
+        "copula_rho",
         "sim_diseases",
         "sim_summaries",
         "sim_realism",

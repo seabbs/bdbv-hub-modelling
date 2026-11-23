@@ -4,9 +4,10 @@
 panel each: the final daily counts by onset date, and the counts known at
 three release dates, so the reporting delay is visible. The workflow's
 `sim_examples` rule runs it on the development round's simulations
-(`synthetic.examples` in the workflow config).
+(`synthetic.examples` in the workflow config); with no simulations it
+draws a note of what it waits on.
 
-Usage: python -m paperfigs.sim_examples --counts CSV... --settings CSV...
+Usage: python -m paperfigs.sim_examples [--counts CSV...] [--settings CSV...]
     --picks JSON --out PNG
 """
 
@@ -109,20 +110,37 @@ def examples_figure(
     return fig
 
 
+def waiting_figure() -> Figure:
+    """Return the note the figure shows until the simulations exist."""
+    fig, ax = plt.subplots(figsize=(6, 1.2))
+    ax.axis("off")
+    ax.text(
+        0.5,
+        0.5,
+        "Not yet available: waits on the workflow's validation round.",
+        ha="center",
+        va="center",
+    )
+    return fig
+
+
 def main() -> None:
     """Draw the figure from the simulations' files."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--counts", type=Path, nargs="+", required=True)
-    parser.add_argument("--settings", type=Path, nargs="+", required=True)
+    parser.add_argument("--counts", type=Path, nargs="*", default=[])
+    parser.add_argument("--settings", type=Path, nargs="*", default=[])
     parser.add_argument(
         "--picks", required=True, help="[[simulation, label], ...] as JSON."
     )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    counts = pd.concat(pd.read_csv(p) for p in args.counts)
-    settings = pd.concat(pd.read_csv(p) for p in args.settings)
-    picks = [tuple(p) for p in json.loads(args.picks)]
-    fig = examples_figure(counts, settings, picks)
+    if args.counts:
+        counts = pd.concat(pd.read_csv(p) for p in args.counts)
+        settings = pd.concat(pd.read_csv(p) for p in args.settings)
+        picks = [tuple(p) for p in json.loads(args.picks)]
+        fig = examples_figure(counts, settings, picks)
+    else:
+        fig = waiting_figure()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, dpi=200)
     plt.close(fig)
