@@ -60,9 +60,9 @@ tasks:
 
 
   dashboard:
-    desc: Serve the fine-tuning dashboard on 127.0.0.1 (PORT=8765); the workflow's runs, or `-- --run NAME` for some of them
+    desc: Serve the fine-tuning dashboard on DASHBOARD_HOST:DASHBOARD_PORT (config/local.env); the workflow's runs, or `-- --run NAME` for some of them
     cmds:
-      - uv run --group paper python workflow/scripts/dashboard.py --port {{.PORT | default 8765}} {{.CLI_ARGS}}
+      - uv run --group paper python workflow/scripts/dashboard.py {{.CLI_ARGS}}
 
 
   dashboard-static:

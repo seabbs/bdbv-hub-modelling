@@ -158,7 +158,8 @@ Reports read the other steps' outputs back for people, each with one script.
 
 ## 6. Dashboard (`workflow/flowlib/dashboard/`)
 
-`task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py --port 8765`, serves a page for a running fine-tune on 127.0.0.1; it is not a Snakemake job, so it never holds the workflow's lock.
+`task nowcast-foundation:dashboard`, or `uv run --group paper python workflow/scripts/dashboard.py`, serves a page for a running fine-tune on the machine settings' `DASHBOARD_HOST` and `DASHBOARD_PORT` (default 127.0.0.1, port 8765); it is not a Snakemake job, so it never holds the workflow's lock.
+It is one process: the page is rebuilt in the background and a client that leaves is dropped, so it needs no proxy or restart loop.
 `task nowcast-foundation:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a mailbox) and Tables. Every chart has an info marker (`page/explain.json`).
@@ -167,12 +168,12 @@ Settings:
 
 - `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), the notes filter.
 - `workflow/config.yaml`'s `runs`: the runs shown, each from `<ROOT>/runs/<name>`, the first live. `--run NAME` shows only the named runs, the first live.
-- `config/local.env`: `ROOT`, the scoring cache (`SCORE_CACHE`) the score table and each dataset's forecasts are read from, and the mailbox (`MAILBOX`).
+- `config/local.env` (or the file `LOCAL_CONFIG` names, outside the checkout): `ROOT`, the scoring cache (`SCORE_CACHE`) the score table and each dataset's forecasts are read from, the mailbox (`MAILBOX`), and where it listens (`DASHBOARD_HOST`, `DASHBOARD_PORT`).
 - `--ref`: more references, or ones replacing the configured.
 
 ```sh
 uv sync --group paper                                          # once
-uv run --group paper python workflow/scripts/dashboard.py --port 8765 --run runa
+LOCAL_CONFIG=/path/to/machine.env task nowcast-foundation:dashboard -- --run runa
 # open the address it prints
 ```
 
