@@ -654,3 +654,27 @@ def test_bad_rt_quantiles_fail(tmp_path: Path, rows: list[list[Any]]) -> None:
 def test_rt_week_the_round_does_not_take_fails(tmp_path: Path) -> None:
     rows = [[*r[:2], "2026-10-17", *r[3:]] for r in _rt_rows()]
     assert statuses(_rt_sub(tmp_path, rows), tasks=_rt_tasks())["rt"] == "fail"
+
+
+def _small_check(median: float) -> Any:
+    # A place whose recent maximum is 4, under the old floor of 20.
+    counts = {"2026-10-31": 4.0, "2026-11-07": 3.0, "2026-11-14": 2.0}
+    s = Samples(columns=[], rows=0)
+    for i in range(1, 11):
+        for w in ("2026-11-14", "2026-11-21", "2026-11-28"):
+            s.values["CD-HU"][str(i)][w] = median
+    obs = Observed(as_of="2026-11-15", counts={"CD-HU": counts})
+    return check_plausible(s, obs, dt.date(2026, 11, 21), 1, POLICY.checks)
+
+
+def test_the_plausible_base_is_the_recent_maximum_with_no_floor() -> None:
+    # Sam (lead 2026-11-24 12:10): no plausibility floor. A median of 50
+    # is over 5 times the recent maximum of 4 (the old floor of 20 let it
+    # pass), and a median of 0.1 is under 1/20 of it (the old floor
+    # skipped the low check under 20).
+    assert "plausible_floor" not in POLICY.checks
+    assert _small_check(3.0).status == "pass"
+    high = _small_check(50.0)
+    assert high.status == "fail"
+    assert "recent maximum 4" in " ".join(high.details)
+    assert _small_check(0.1).status == "fail"
