@@ -21,7 +21,7 @@ if [ "${SKIP_FETCH:-false}" != true ]; then
   "$CI_DIR/../scripts/fit-store.sh" fetch "$store"
 fi
 made="$WORK/candidates.csv.gz"
-# Exits 1 when a candidate is not archived, after writing the others,
+# Exits 1 when any model is not archived, after writing the others,
 # which are pushed all the same.
 archived=0
 cli fit-store archive --store "$store" --origin "$AS_OF" \
@@ -42,7 +42,7 @@ ledger_push "$ledger" "Archive the candidates' forecasts for $REFERENCE_DATE" \
   write_archive
 if [ "$archived" != 0 ]; then
   note "Ledger: some candidates' forecasts at $AS_OF archived for $REFERENCE_DATE, not all (see the log above)."
-  echo "::error::not every candidate was archived; see the log above"
+  echo "::error::not every model was archived; see the log above"
   exit "$archived"
 fi
 note "Ledger: every candidate's forecasts at $AS_OF archived for $REFERENCE_DATE."

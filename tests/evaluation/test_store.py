@@ -1136,7 +1136,7 @@ def test_a_model_that_fails_leaves_the_others_archived(
     hub = _Hub(fail="fails")
     # Every model is tried, then one error names each that failed.
     with pytest.raises(
-        store_archive.NotArchived, match="broken, fails, missing, nocode"
+        store_archive.ArchiveError, match="broken, fails, missing, nocode"
     ) as failed:
         store_archive.archive(root, task, task, models, {}, hub, code)
     assert set(failed.value.table["model"]) == {fitted_flat, "plain"}
@@ -1155,7 +1155,7 @@ def test_a_model_that_fails_leaves_the_others_archived(
     # missing fit.
     assert err.count("Traceback (most recent call last)") == 4
     # No store task at the origin: the stored models are reported.
-    with pytest.raises(store_archive.NotArchived, match=fitted_flat) as failed:
+    with pytest.raises(store_archive.ArchiveError, match=fitted_flat) as failed:
         store_archive.archive(root, task, None, models, {}, hub, code)
     assert set(failed.value.table["model"]) == {"plain"}
     assert f"{fitted_flat} not archived" in capsys.readouterr().err
@@ -1271,10 +1271,11 @@ def test_stored_samples_missing_a_week_are_not_archived(
     rows = fit.forecasts.loc[fit.forecasts["target_end_date"] != last]
     root = tmp_path / "store"
     store.write_fit(root, dataclasses.replace(fit, forecasts=rows))
-    table = store_archive.archive(
-        root, task, task, {fitted_flat: None}, {}, _Hub(), lambda _: "c"
-    )
-    assert table.empty
+    with pytest.raises(store_archive.ArchiveError) as failed:
+        store_archive.archive(
+            root, task, task, {fitted_flat: None}, {}, _Hub(), lambda _: "c"
+        )
+    assert failed.value.table.empty
     assert f"{fitted_flat} not archived: ValueError" in capsys.readouterr().err
 
 
