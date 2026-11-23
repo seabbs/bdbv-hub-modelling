@@ -48,13 +48,13 @@ floors:
 shares:
   controlled: 0.5      # early outbreaks brought towards R = 1
   drift: 0.3           # non-endemic settings with a slow drift in R
-  reactive: 0.8        # shifts that react to effective R
+  reactive: 0.4        # shifts that react to effective R (fewer spikes)
   shift_up: 0.5        # non-reactive shifts that raise R
   mixing_switch_on: 0.5
 rates:
-  shifts: 2            # shifts in R per simulation
+  shifts: 0.7          # shifts in R per simulation (half have none)
   extra_waves: 0.5     # multi-wave: waves beyond 2
-  variants_per_year: 4 # immune-escape variants (none in early outbreaks)
+  variants_per_year: 1.5 # immune-escape variants (none in early outbreaks)
 counts:
   late_days: {base: 7, mean: 3}
   place_lag_days: {base: 0, mean: 10}
@@ -120,14 +120,18 @@ factors:
   incubation_family:
     gamma: 1
     lognormal: 1
+  # Common shapes first (lead 14:05): R settling slowly from 1.3-2.5 to
+  # about 1 over weeks to months (controlled) in a quarter, and R
+  # oscillating around 1 in a sixth.
   trajectory:
+    controlled: 3
+    oscillating: 2
     growth: 1
     decline: 1
     flat: 1
     rise_fall_sharp: 1
     rise_fall_gradual: 1
     fall_rise: 1
-    oscillating: 1
     multi_wave: 1
   delay_family:
     lognormal: 1
@@ -160,10 +164,12 @@ factors:
   spread:
     even: 1
     concentrated: 1
+  # Places mostly deviate moderately around a shared path (correlated);
+  # an independent path in each place is the rarest.
   place_rt:
     shared: 1
-    independent: 1
-    correlated: 1
+    independent: 0.5
+    correlated: 2
     lagged: 1
   seeding:
     start: 1
@@ -340,7 +346,7 @@ distributions:
     median: 42.0
     sdlog: 0.5
     layer: infections
-    why: control brings an early outbreak's R to 1 over 2 to 16 weeks
+    why: control or immunity brings R to about 1 over 2 to 16 weeks
   r_drift:
     dist: lognormal
     median: 0.8
@@ -357,10 +363,10 @@ distributions:
     why: shifts in R away from the ends of the series
   shift_size:
     dist: lognormal
-    median: 0.35
+    median: 0.22
     sdlog: 0.4
     layer: infections
-    why: shifts of R by about x1.2 to x2
+    why: shifts of R by about x1.1 to x1.6
   shift_days:
     dist: lognormal
     median: 14.0
@@ -385,10 +391,10 @@ distributions:
     why: a variant returns about a tenth to a half of the immune
   variant_r:
     dist: lognormal
-    median: 1.3
-    sdlog: 0.15
+    median: 1.2
+    sdlog: 0.1
     layer: infections
-    why: a variant raises R by about x1.1 to x1.7
+    why: a variant raises R by about x1 to x1.5
   population:
     dist: lognormal
     median: 200000.0

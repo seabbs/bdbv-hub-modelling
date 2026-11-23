@@ -343,3 +343,34 @@ def test_incubation_varies_by_place_and_age(grid):
             assert np.ptp(m.mean(1)) > 0
             assert np.ptp(m.mean(0)) > 0
     assert seen > 10
+
+
+def test_settling_and_oscillating_paths_are_common(grid):
+    # Lead 14:05: slow declines to R = 1 and oscillation around it are
+    # common shapes, in every window; each trajectory has a rising
+    # counterpart for early outbreaks not brought under control.
+    levels = grid["factors"]["trajectory"]
+    assert set(draws.RISING_PATH) == set(levels)
+    total = sum(levels.values())
+    assert levels["controlled"] / total >= 0.2
+    assert levels["oscillating"] / total >= 0.15
+    rng = draws.generator(31)
+    paths = []
+    for _ in range(2_000):
+        d = draws.draw_design(grid, rng)
+        if d["window"] == "established":
+            paths.append(draws.draw_values(grid, d, rng)["path"])
+    assert paths.count("controlled") / len(paths) > 0.15
+
+
+def test_spike_pieces_are_rare_and_small(grid):
+    # Shifts, reactive shifts, variants and independent place R are what
+    # give R spikes; they stay, rarer and smaller (lead 14:05).
+    assert grid["rates"]["shifts"] < 1
+    assert grid["shares"]["reactive"] <= 0.5
+    assert grid["rates"]["variants_per_year"] <= 1.5
+    place = grid["factors"]["place_rt"]
+    assert place["independent"] == min(place.values())
+    assert place["correlated"] == max(place.values())
+    size = _scipy(grid["distributions"]["shift_size"])
+    assert size.ppf(0.975) < np.log(1.7)

@@ -58,6 +58,7 @@ WEEK = (
 """The weekdays, in the order of `report_weekdays`."""
 
 RISING_PATH = {
+    "controlled": "growth",
     "growth": "growth",
     "decline": "growth",
     "flat": "rise_fall_gradual",

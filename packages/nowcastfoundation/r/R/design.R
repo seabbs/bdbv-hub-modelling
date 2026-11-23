@@ -119,7 +119,7 @@ draw_design <- function(grid, weeks = NULL) {
 # its drawn trajectory if it rises, else that trajectory's rising
 # counterpart.
 rising_path <- c(
-  growth = "growth", decline = "growth", flat = "rise_fall_gradual",
+  controlled = "growth", growth = "growth", decline = "growth", flat = "rise_fall_gradual",
   rise_fall_sharp = "rise_fall_sharp",
   rise_fall_gradual = "rise_fall_gradual", fall_rise = "rise_fall_sharp",
   oscillating = "multi_wave", multi_wave = "multi_wave"
