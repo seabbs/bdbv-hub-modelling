@@ -84,8 +84,12 @@ def test_backtest_code_never_imports_report_only_modules() -> None:
         assert not used, f"{rel} imports {used}"
 
 
-def _ran(run: object) -> set[str]:
-    """Run a call and return the package files whose functions it ran."""
+def _ran(run: object, imports: bool = True) -> set[str]:
+    """Run a call and return the package files whose functions it ran.
+
+    With `imports=False`, code run only while a module is imported (its
+    body and what that calls) does not count.
+    """
     import sys
 
     src = tuple(s.as_posix() for s in SOURCES)
@@ -93,8 +97,14 @@ def _ran(run: object) -> set[str]:
 
     def profile(frame, event, arg):  # type: ignore[no-untyped-def]
         del arg
-        if event == "call" and frame.f_code.co_filename.startswith(src):
-            seen.add(frame.f_code.co_filename)
+        if event != "call" or not frame.f_code.co_filename.startswith(src):
+            return
+        if not imports and "<module>" in (
+            frame.f_code.co_name,
+            frame.f_back.f_code.co_name if frame.f_back else "",
+        ):
+            return
+        seen.add(frame.f_code.co_filename)
 
     sys.setprofile(profile)
     try:
@@ -216,9 +226,13 @@ def test_fit_code_covers_what_a_stored_fit_runs(
         }
     }
     out: list[store.StoredFit] = []
-    ran = _ran(lambda: out.append(store.fit(model, task, tiny, "c")))
+    ran = _ran(
+        lambda: out.append(store.fit(model, task, tiny, "c")), imports=False
+    )
     assert out[0].meta["status"] == "ok", out[0].meta.get("error")
-    missing = ran - set(store.fit_code(model, ROOT))
+    # The store's and the backtest's functions a fit runs are keyed by
+    # function (`FIT_FUNCTIONS`), not by file.
+    missing = ran - set(store.fit_code(model, ROOT)) - set(store.FIT_FUNCTIONS)
     assert not missing, f"{model} runs code its key leaves out: {missing}"
 
 
