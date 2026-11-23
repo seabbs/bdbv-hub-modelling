@@ -119,7 +119,7 @@ draw_design <- function(grid, weeks = NULL) {
 # its drawn trajectory if it rises, else that trajectory's rising
 # counterpart.
 rising_path <- c(
-  growth = "growth", decline = "growth", flat = "rise_fall_gradual",
+  controlled = "growth", growth = "growth", decline = "growth", flat = "rise_fall_gradual",
   rise_fall_sharp = "rise_fall_sharp",
   rise_fall_gradual = "rise_fall_gradual", fall_rise = "rise_fall_sharp",
   oscillating = "multi_wave", multi_wave = "multi_wave"
@@ -182,6 +182,9 @@ draw_values <- function(grid, design) {
   v$gt_mean <- ds("gt_mean")
   v$gt_cv <- ds("gt_cv")
   v$amplitude <- ds("amplitude")
+  # A controlled path starts at its own R and settles towards 1.
+  v$control_r <- ds("control_r")
+  if (v$path == "controlled") v$amplitude <- log(v$control_r)
   v$flat <- ds("flat")
   v$peak <- ds("peak")
   v$period <- max(grid$floors$period_days, ds("period"))
@@ -227,9 +230,15 @@ draw_values <- function(grid, design) {
   v$ascertainment <- stratum_values(
     grid, design$observation_strata, n_s, "ascertainment", probability = TRUE
   )
-  v$incubation_mean <- stratum_values(
-    grid, design$observation_strata, n_s, "incubation_mean"
-  )
+  # Infection to reference: a shared mean times a place effect and an age
+  # effect (strata are places, then ages), constant over time.
+  v$incubation_cv <- ds("incubation_cv")
+  v$incubation_place_sd <- ds("incubation_place_sd")
+  v$incubation_age_sd <- ds("incubation_age_sd")
+  place <- v$incubation_place_sd * ds("pool_z", n_p)
+  age <- v$incubation_age_sd * ds("pool_z", design$n_ages)
+  v$incubation_mean <- ds("incubation_mean") *
+    exp(as.vector(t(outer(place, age, `+`))))
   v$sqrt_phi <- ds("sqrt_phi")
   v$obs_phi_sd <- ds("obs_phi_sd")
   v$obs_sqrt_phi <- if (design$obs_strata == "shared") {

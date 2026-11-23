@@ -55,3 +55,11 @@ def test_the_paper_s_disease_table_is_a_workflow_output(tmp_path):
     assert out.returncode == 0, out.stderr + out.stdout
     assert "rule sim_diseases:" in out.stdout
     assert "--sim-diseases" in out.stdout
+
+
+def test_the_copula_scores_are_workflow_outputs(tmp_path):
+    out = dry_run(tmp_path, "development", quiet=False, extra=["-p"])
+    assert out.returncode == 0, out.stderr + out.stdout
+    for rule in ("pairing_germany", "pairing_synthetic", "si_copula"):
+        assert f"rule {rule}:" in out.stdout
+    assert "--si-copula" in out.stdout

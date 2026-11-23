@@ -281,9 +281,6 @@ Each step is filled until it holds 256 series or more, so one large block can ma
 :::
 
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
-A floor of one count at inference only hurts small series, of five counts or fewer, on held-out simulations.
-At the largest checkpoint tested their median loss is {{< meta evidence.scale_floor.sims.n4000.small.median_loss.none >}} without it and {{< meta evidence.scale_floor.sims.n4000.small.median_loss.floor >}} with it, and the share of 99% quantiles over 100 times the truth is {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.none >}}% and {{< meta evidence.scale_floor.sims.n4000.small.q99_over_100x.floor >}}%.
-Large series are unchanged, with median loss {{< meta evidence.scale_floor.sims.n4000.large.median_loss.none >}} and {{< meta evidence.scale_floor.sims.n4000.large.median_loss.floor >}}.
 Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
 
 ::: {.callout-note title="Plan"}
@@ -298,7 +295,6 @@ Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quanti
 - The lag count is the smaller of this estimate and the history available, keeping two steps of context before the longest lag.
 - With no complete steps, no counts in them, or a 99% point not reached within 112 days, we use as many lags as the history allows.
 - A user can set a fixed count or another quantile instead.
-- We compare this lag count with a fixed cap of 4 weeks or 28 days on the German development half.
 :::
 
 To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real`).
@@ -578,7 +574,7 @@ Choices tuned on development data, with their values and the data they were set 
 
 ### Impact of correlated trajectories
 
-- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half and the held-out simulations, at the national level and for provinces.
+- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half and the development simulations, at the national level and for provinces.
 - The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.
 - The median rolling $\rho_p$ over origins is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} origins falling back to the prior.
 

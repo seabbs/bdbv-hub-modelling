@@ -21,6 +21,7 @@ REPORTS = {
     "germany_triangle",
     "germany_dev_stats",
     "sim_report",
+    "sim_diseases",
     "sim_report_run",
     "sim_reports",
     "german_report",

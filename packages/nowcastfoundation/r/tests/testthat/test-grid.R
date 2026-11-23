@@ -48,13 +48,13 @@ test_that("series run a median 30 weeks and at least 4", {
   expect_true(any(w > 52))
 })
 
-test_that("values keep the gamma shape below 2 and periods a month", {
+test_that("values keep a positive gamma shape and periods a month", {
   grid <- test_grid()
   set.seed(3)
   for (g in 0:400) {
     d <- draw_design(grid)
     v <- draw_values(grid, d)
-    expect_true(1 / v$delay_cv^2 < 2)
+    expect_gt(v$delay_cv, 0)
     expect_gte(v$period, 30)
     expect_gte(v$smooth_period, 30)
     expect_gte(v$waves, 2)

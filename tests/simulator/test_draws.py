@@ -309,3 +309,100 @@ def test_draws_match_the_r_engine_s(grid):
                     np.asarray(xa, float), np.asarray(xb, float)
                 )
                 assert ks.pvalue > 1e-4, (part, key, ks)
+
+
+def test_incubation_is_wide_with_a_drawn_cv_and_family(grid):
+    # Infection to reference: cholera-like 1-2 d to Ebola-like 9-12 d and
+    # infection to admission 10-15 d (lead 13:55).
+    d = _scipy(grid["distributions"]["incubation_mean"])
+    lo, hi = d.ppf([0.025, 0.975])
+    assert lo < 2
+    assert hi > 20
+    assert "incubation_cv" not in grid["constants"]
+    assert set(grid["factors"]["incubation_family"]) == {"gamma", "lognormal"}
+    cv = _scipy(grid["distributions"]["incubation_cv"]).ppf([0.025, 0.975])
+    assert cv[0] < 0.3
+    assert cv[1] > 0.9
+
+
+def test_incubation_varies_by_place_and_age(grid):
+    rng = draws.generator(21)
+    seen = 0
+    for _ in range(400):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        assert d["incubation_family"] in ("gamma", "lognormal")
+        assert v["incubation_cv"] > 0
+        n_p, n_a = d["n_places"], d["n_ages"]
+        m = np.log(np.asarray(v["incubation_mean"])).reshape(n_p, n_a)
+        # A place effect plus an age effect (strata are places, then ages).
+        fit = m.mean(1, keepdims=True) + m.mean(0, keepdims=True) - m.mean()
+        np.testing.assert_allclose(m, fit, atol=1e-9)
+        if n_p > 1 and n_a > 1:
+            seen += 1
+            assert np.ptp(m.mean(1)) > 0
+            assert np.ptp(m.mean(0)) > 0
+    assert seen > 10
+
+
+def test_settling_and_oscillating_paths_are_common(grid):
+    # Lead 14:05: slow declines to R = 1 and oscillation around it are
+    # common shapes, in every window; each trajectory has a rising
+    # counterpart for early outbreaks not brought under control.
+    levels = grid["factors"]["trajectory"]
+    assert set(draws.RISING_PATH) == set(levels)
+    total = sum(levels.values())
+    assert levels["controlled"] / total >= 0.2
+    assert levels["oscillating"] / total >= 0.15
+    rng = draws.generator(31)
+    paths = []
+    for _ in range(2_000):
+        d = draws.draw_design(grid, rng)
+        if d["window"] == "established":
+            paths.append(draws.draw_values(grid, d, rng)["path"])
+    assert paths.count("controlled") / len(paths) > 0.15
+
+
+def test_spike_pieces_are_rare_and_small(grid):
+    # Shifts, reactive shifts, variants and independent place R are what
+    # give R spikes; they stay, rarer and smaller (lead 14:05).
+    assert grid["rates"]["shifts"] < 1
+    assert grid["shares"]["reactive"] <= 0.5
+    assert grid["rates"]["variants_per_year"] <= 1.5
+    place = grid["factors"]["place_rt"]
+    assert place["independent"] == min(place.values())
+    assert place["correlated"] == max(place.values())
+    size = _scipy(grid["distributions"]["shift_size"])
+    assert size.ppf(0.975) < np.log(1.7)
+
+
+def test_controlled_paths_start_near_r_1_8(grid):
+    # Lead 01:20: slow declines from about R = 1.8 to 1.
+    rng = draws.generator(32)
+    starts = []
+    for _ in range(3_000):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        if v["path"] == "controlled":
+            starts.append(np.exp(v["amplitude"]))
+    assert len(starts) > 200
+    assert 1.65 < np.median(starts) < 1.95
+    assert np.quantile(starts, 0.025) > 1.2
+    assert np.quantile(starts, 0.975) < 2.8
+
+
+def test_reporting_delay_shapes_are_not_capped_at_2(grid):
+    # The joint model reports any gamma shape (#614), so the shape below
+    # 2 that epinowcast's simulate branch needed is gone.
+    shape = _scipy(grid["distributions"]["delay_shape"])
+    assert shape.ppf(0.975) > 3
+    assert shape.ppf(0.025) < 0.3
+
+
+def test_strata_mostly_deviate_moderately_from_a_shared_path(grid):
+    # Lead 01:20: moderate strata deviations. Strata are mostly linked
+    # (one outbreak), not each an outbreak of its own.
+    link = grid["factors"]["strata_link"]
+    assert link["independent"] / sum(link.values()) <= 0.25
+    coupling = _scipy(grid["distributions"]["coupling"])
+    assert coupling.ppf(0.025) >= 0.5

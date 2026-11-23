@@ -102,9 +102,11 @@ rule run_table:
     # A run's saved checkpoints in the tables' rows (German relative
     # scores and held-out losses), under the run's name.
     input:
-        references(),
-        lambda wc: run_units(wc.run),
-        lambda wc: [f for n in saved_prefixes(wc.run) for f in offloaded(wc.run, n)],
+        references=references(),
+        units=lambda wc: run_units(wc.run),
+        offloaded=lambda wc: [
+            f for n in saved_prefixes(wc.run) for f in offloaded(wc.run, n)
+        ],
     output:
         f"{RUN}/reports/checkpoint-scores.csv",
     log:
@@ -116,7 +118,7 @@ rule run_table:
         evaluate=EVALUATE,
         train=lambda wc: train_dir(wc.run),
         scores=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}",
-        reference=f"{CACHE}/{GERMANY_UNIT}/{SC['reference'][0]}",
+        reference=lambda wc, input: input.references[0].removesuffix(".done"),
     shell:
         "{params.evaluate} run {params.train} {params.scores} "
         "{params.reference} {wildcards.run} {output} > {log} 2>&1"

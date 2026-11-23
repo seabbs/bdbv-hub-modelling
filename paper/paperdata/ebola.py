@@ -13,8 +13,10 @@ Three sources give samples.
   kept.
 - `candidate_samples`: files of our models' forecasts in the layout of
   `data/candidate-forecasts.csv.gz`.
-- `store_samples`: the fit store branch. Each model and origin keeps the
-  first fit stored, and only if it was made before its round closed.
+- `history_samples`: the fit store's history, a file of the first fit
+  stored for each model and origin, kept only if it was made before its
+  round closed. `write_store_history` writes it from the fit store
+  branch (`store_samples`), for the workflow to publish as a release.
 
 `load` gives every hub forecast's samples, one row per sample, in the
 paper's schema with `truth` left for the workflow to attach.
@@ -45,6 +47,7 @@ __all__ = [
     "TARGET",
     "backtest_samples",
     "candidate_samples",
+    "history_samples",
     "hub_samples",
     "load",
     "release_observations",
@@ -52,6 +55,7 @@ __all__ = [
     "round_of",
     "store_samples",
     "truth_delay",
+    "write_store_history",
 ]
 
 TARGET: Final = "wk inc confirmed cases"
@@ -201,22 +205,41 @@ def store_samples(
     return pd.concat(frames, ignore_index=True)
 
 
+def write_store_history(
+    repo: str | Path, ref: str, out: str | Path
+) -> pd.DataFrame:
+    """Write the fit store's prospective fits (`store_samples`) to `out`.
+
+    The file is what `history_samples` reads, so the paper reads the
+    store's history without the branch.
+    """
+    table = store_samples(repo, ref)
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(path, index=False)
+    return table
+
+
+def history_samples(path: str | Path) -> pd.DataFrame:
+    """Read a file `write_store_history` wrote, as `store_samples` gives."""
+    return _samples(pd.read_csv(path, dtype={"location": str}))
+
+
 def load(
     hub: str | Path,
     candidates: Iterable[str | Path] = (),
-    store: str | Path | None = None,
-    store_ref: str = "origin/fit-store",
+    history: str | Path | None = None,
 ) -> pd.DataFrame:
     """Return every forecast's samples, with `truth` left empty.
 
     `hub` is a clone of the hub. `candidates` are files of our models'
-    stored forecasts and `store` a clone holding the fit store branch
-    `store_ref`. A model and round in more than one source is taken from
-    the first of hub, candidates and store.
+    stored forecasts and `history` the fit store's history
+    (`history_samples`). A model and round in more than one source is
+    taken from the first of hub, candidates and history.
     """
     parts = [hub_samples(hub), candidate_samples(candidates)]
-    if store is not None:
-        parts.append(store_samples(store, store_ref))
+    if history is not None:
+        parts.append(history_samples(history))
     seen: set[tuple[str, pd.Timestamp]] = set()
     kept = []
     for part in parts:

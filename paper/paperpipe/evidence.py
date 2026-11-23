@@ -58,7 +58,6 @@ __all__ = [
     "realism_numbers",
     "realism_reference",
     "rho_medians",
-    "scale_floor_numbers",
     "slots_rows",
     "slots_summary",
     "waiting",
@@ -471,28 +470,6 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     return fig
 
 
-def scale_floor_numbers(rows: pd.DataFrame) -> dict:
-    """Return the scale-floor test without and with the floor.
-
-    Held-out simulation rows give, by model and series size (the first
-    word of `size`), the median loss and the percentage of 99% quantiles
-    over 100 times the truth. Each value is keyed `none` (no floor) or
-    `floor`.
-    """
-    arm = {0: "none", 1: "floor"}
-    out: dict = {"sims": {}}
-    for r in rows.itertuples():
-        size = str(r.size).split()[0]
-        node = out["sims"].setdefault(r.model, {}).setdefault(size, {})
-        node.setdefault("median_loss", {})[arm[r.floor]] = round(
-            float(r.median_loss), 1
-        )
-        node.setdefault("q99_over_100x", {})[arm[r.floor]] = round(
-            100 * float(r.share_q99_over_100x)
-        )
-    return out
-
-
 def heldout_figure(curve: pd.DataFrame) -> Figure:
     """Plot held-out loss against the outbreaks seen.
 
@@ -659,7 +636,6 @@ EVIDENCE: Final = {
     "sim_realism": "the German development half's values",
     "sim_diseases": "the published disease values",
     "checkpoint_scores": "the scores of each checkpoint of the final run",
-    "scale_floor": "the scale-floor test",
     "compare_slots": "the slots and no-slots runs' scores by checkpoint",
     "compare_delays": "the full and no-delay runs' scores by checkpoint",
     "compare_realdata": "the real-data and synthetic fine-tunes' scores",
@@ -695,7 +671,7 @@ QUOTED: Final = {
 
 COPULA_STUDIES: Final = {
     "germany": "Germany",
-    "synthetic": "Held-out synthetic",
+    "synthetic": "Synthetic",
 }
 """The copula figure's studies, in its row order, all on development data."""
 
@@ -1013,11 +989,6 @@ def write_evidence(
     numbers = {
         "evidence": {
             "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
-            "scale_floor": (
-                None
-                if data["scale_floor"] is None
-                else scale_floor_numbers(data["scale_floor"])
-            ),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "live": live_numbers(raw, run),
             "aggregation": (None if agg is None else aggregation_numbers(agg)),
