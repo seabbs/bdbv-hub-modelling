@@ -221,6 +221,10 @@ class PaperFlow:
             ],
         }
 
+    def sim_diseases(self) -> str:
+        """Return the disease table's rows (workflow rule sim_diseases)."""
+        return f"{self.config['rounds_dir']}/report/sim-diseases.csv"
+
     def live_arg(self) -> str:
         """Return the live run option, whose newest checkpoints are shown."""
         live = self.config.get("live_run")
