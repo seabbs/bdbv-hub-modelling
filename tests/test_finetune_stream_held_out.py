@@ -54,3 +54,25 @@ def test_the_held_out_key_hashes_the_cutting_code_not_the_trainer():
     assert "stream.snapshots" in code
     assert "foundation.layout_block" in code
     assert set(fs.ft.CODE) <= set(code)
+
+
+def test_each_trainer_constant_has_its_own_docstring():
+    # Review on #784: NEXT_CHUNK_* sat between HELD_OUT_* and their
+    # docstrings. Each module-level constant is followed by its string.
+    import ast
+    import inspect
+
+    from nowcastfoundation.finetune import stream as fs
+
+    body = ast.parse(inspect.getsource(fs)).body
+    names = (
+        "HELD_OUT_BLOCKS",
+        "HELD_OUT_KEY",
+        "NEXT_CHUNK_BLOCKS",
+        "NEXT_CHUNK_KEY",
+    )
+    for i, node in enumerate(body):
+        if isinstance(node, ast.Assign) and node.targets[0].id in names:
+            doc = body[i + 1]
+            assert isinstance(doc, ast.Expr), node.targets[0].id
+            assert isinstance(doc.value, ast.Constant), node.targets[0].id

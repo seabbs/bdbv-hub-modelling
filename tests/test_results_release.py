@@ -3,11 +3,16 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "results-release.sh"
+MODULE = (
+    Path(__file__).resolve().parents[1]
+    / "packages/bdbvhub/src/bdbvhub/submission/release.py"
+)
+"""Run by path with `-I`, as the Pages `release` job does."""
 
 # A stand-in gh. `release view --json assets` prints $ASSETS, or fails
 # when $ASSETS is `none` (no release); every call is
@@ -87,7 +92,14 @@ def _attach(
     log = tmp_path / "gh.log"
     log.write_text("")
     subprocess.run(
-        ["bash", str(SCRIPT), "attach", str(build), str(tmp_path / "site")],
+        [
+            sys.executable,
+            "-I",
+            str(MODULE),
+            "attach",
+            str(build),
+            str(tmp_path / "site"),
+        ],
         cwd=clone,
         env={
             **os.environ,

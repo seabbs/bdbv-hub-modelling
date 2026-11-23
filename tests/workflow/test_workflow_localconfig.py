@@ -141,8 +141,8 @@ def test_paper_cores_come_from_the_local_config():
     taskfile = (ROOT / "paper" / "Taskfile.yml").read_text()
     assert "--cores {{.CORES" not in taskfile
     assert "paper_run.py --targets development" in taskfile
-    script = (ROOT / "scripts" / "paper.sh").read_text()
-    assert "localconfig.py CORES" in script
+    runner = (ROOT / "workflow" / "scripts" / "paper_run.py").read_text()
+    assert 'cfg.get("CORES")' in runner
 
 
 @pytest.mark.parametrize(

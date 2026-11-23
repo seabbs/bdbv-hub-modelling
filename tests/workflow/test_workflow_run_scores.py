@@ -32,7 +32,7 @@ def test_a_run_checkpoint_is_scored_from_its_own_segment(tmp_path):
     run = tmp_path / "runs" / "runa"
     assert f"{run}/scores/germany-days/n250.done" in unit
     assert (
-        f"nowcastfoundation.checkpoint germany {run}/scores n250 "
+        f"nowcastgermany.checkpoint germany {run}/scores n250 "
         f"{run}/train/n250 " in unit
     )
 

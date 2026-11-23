@@ -133,7 +133,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 ## 4. Score (`rules/score.smk`)
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task nowcast-foundation:score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
-- `score_germany`, `score_release`: the units of `nowcastfoundation.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
+- `score_germany`, `score_release`: the units of `nowcastgermany.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
   Units run on the forecasting device with its threads (`forecast` in the config; `FORECAST_DEVICE`/`FORECAST_THREADS` override it per machine), beside the trainer: `train_segment` takes the `gpu` resource, with the highest priority, so the next segment starts the moment the previous ends. With `forecast.device: cuda`, `forecast.gpu: exclusive` makes forecasting jobs take it too (they wait for the GPU) and `share` runs them beside the trainer on it.
   BDBV is held out for the paper, so no BDBV unit runs.
 - `score_run_germany`: a run's own saved checkpoint `n<N>`, loaded from `<ROOT>/runs/<run>/train/n<N>` with no release, cached in `<ROOT>/runs/<run>/scores/`.
