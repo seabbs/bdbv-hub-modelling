@@ -28,7 +28,6 @@ def run(tmp_path, monkeypatch):
     monkeypatch.setattr(paper_run.localconfig, "read", lambda: cfg)
     monkeypatch.setattr(paper_run, "say", lambda text, _cfg: lines.append(text))
     monkeypatch.setattr(paper_run, "missing", lambda: codes.get("missing", []))
-    monkeypatch.setattr(paper_run, "pin", lambda: "slots-abc")
     return calls, lines, codes
 
 
@@ -63,12 +62,6 @@ def test_the_paper_waits_for_its_held_out_inputs_without_failing(run):
     assert lines == ["waiting for: paper/sims/READY"]
 
 
-def test_the_paper_pins_the_final_run_s_newest_checkpoint(run):
-    _, lines, _ = run
-    assert paper_run.main(["paper"]) == 0
-    assert "slots-abc" in lines[0]
-
-
 def test_a_failed_run_is_reported_with_its_first_error(run):
     _, lines, codes = run
     codes["rc"], codes["fail"] = 2, True
@@ -92,14 +85,3 @@ def test_single_targets_run_the_paper_workflow(run):
 def test_unknown_targets_are_an_error():
     with pytest.raises(SystemExit):
         paper_run.main(["nope"])
-
-
-def test_a_failed_pin_is_reported(run, monkeypatch):
-    _, lines, _ = run
-
-    def broken():
-        raise subprocess.CalledProcessError(1, "pin", stderr="no releases\n")
-
-    monkeypatch.setattr(paper_run, "pin", broken)
-    assert paper_run.main(["paper"]) == 1
-    assert lines == ["FAILED pin: no releases"]

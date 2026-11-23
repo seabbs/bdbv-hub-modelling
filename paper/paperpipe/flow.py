@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
+from nowcastfoundation.forecaster import newest_segment
+
 from paperpipe.config import run_settings, run_studies
 from paperpipe.outputs import (
     JOINT_STUDIES,
@@ -92,9 +94,9 @@ class PaperFlow:
 
         The simulation folders are expanded in `config` itself (`expand`,
         `flowlib.localconfig.expand`), so each step that is passed the
-        config reads the same folders. A set `finetuned` checkpoint is
-        put in the environment as `BDBV_CHRONOS_FT`, which every `_ft`
-        model loads.
+        config reads the same folders. `finetuned` is the final run's
+        newest saved checkpoint (`final_run`), put in the environment as
+        `BDBV_CHRONOS_FT`, which every `_ft` model loads.
 
         Parameters
         ----------
@@ -131,8 +133,12 @@ class PaperFlow:
             mode: expand(folder)
             for mode, folder in synthetic["simulations"].items()
         }
-        if config.get("finetuned"):
-            os.environ.update(BDBV_CHRONOS_FT=str(config["finetuned"]))
+        # The `_ft` models load the final run's newest saved checkpoint,
+        # pending until it has one.
+        segment = newest_segment(Path(expand(config["final_run"])) / "train")
+        config["finetuned"] = None if segment is None else str(segment)
+        if segment is not None:
+            os.environ.update(BDBV_CHRONOS_FT=str(segment))
         with (root / "config" / "finetune.toml").open("rb") as f:
             after = tomllib.load(f)["realdata_bdbv"]["release"]
         return cls(config, evidence, str(after))

@@ -6,14 +6,11 @@ build: paper/build
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]
-# The final fine-tuning run (with series slots) writes each checkpoint to
-# `finetune_run`/n<outbreaks>/ and publishes it as `chronos-ft-<hash>`.
-# `finetuned` is the checkpoint every `_ft` model of the workflow loads;
-# null leaves the fine-tuned forecasts pending. scripts/follow_checkpoint.py
-# sets it.
-finetune_run: output/checkpoints/slots
-finetuned: null
-final_checkpoints: []
+# The final fine-tuning run's folder (a workflow `runs` entry). Every
+# `_ft` model loads its newest saved checkpoint, train/n<N>
+# (nowcastfoundation.forecaster.newest_segment); before it has one the
+# fine-tuned forecasts are pending.
+final_run: $ROOT/runs/runa
 # The live fine-tuning run (the checkpoint scores' `run`) whose newest
 # scored checkpoints the SI curve, comparisons and tables show as
 # preliminary, from `evidence.checkpoint_scores` at its branch head.

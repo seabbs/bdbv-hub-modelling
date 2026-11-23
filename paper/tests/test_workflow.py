@@ -311,16 +311,16 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
             "paper": str(tmp_path / "out" / "synthetic.csv.gz"),
         },
     }
-    # Until the final run publishes a checkpoint, the fine-tuned models
-    # are pending: not run, and no checkpoint recorded.
-    assert CONFIG["finetuned"] is None
+    # Until the final run saves a checkpoint, the fine-tuned models are
+    # pending: not run, and no checkpoint recorded.
+    run = tmp_path / "run"
     pending = _snakemake(
         "development",
         "-n",
         "-p",
         "--configfile",
         base,
-        str(_offline(tmp_path, synthetic=synthetic)),
+        str(_offline(tmp_path, synthetic=synthetic, final_run=str(run))),
     )
     assert pending.returncode == 0, pending.stderr
     log = pending.stdout + pending.stderr
@@ -328,13 +328,19 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     runner = [line for line in log.splitlines() if "run_synthetic.py" in line]
     assert runner
     assert all("_ft" not in line for line in runner)
+    # Then they load its newest saved checkpoint.
+    segment = run / "train" / "n800"
+    (segment / "finetuned-ckpt").mkdir(parents=True)
+    (segment / "settings.json").write_text("{}")
+    for name in ("adapter_config.json", "adapter_model.safetensors"):
+        (segment / "finetuned-ckpt" / name).write_text("")
     pinned = _snakemake(
         "development",
         "-n",
         "-p",
         "--configfile",
         base,
-        str(_offline(tmp_path, synthetic=synthetic, finetuned="abcdef123456")),
+        str(_offline(tmp_path, synthetic=synthetic, final_run=str(run))),
     )
     assert pinned.returncode == 0, pinned.stderr
-    assert "--finetuned abcdef123456" in pinned.stdout + pinned.stderr
+    assert f"--finetuned {segment}" in pinned.stdout + pinned.stderr
