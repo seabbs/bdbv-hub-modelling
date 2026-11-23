@@ -45,10 +45,8 @@ class NonCentredRandomWalk(TemporalProcess):
     With `n_fit` set, only the first `n_fit` points use `{prefix}_z`,
     which is all a fit sees. A longer axis adds a separate
     `{prefix}_z_future` site that `Predictive` draws from the prior given
-    the posterior, so steps with no data never enter NUTS.
-    `forecast_half_life` $h_f$ makes the steps past the fit axis AR(1)
-    with $\phi_f = 2^{-1/h_f}$, so a random walk reverts towards 0 there
-    and the fit is unchanged.
+    the posterior, so steps with no data never enter NUTS. The forecast
+    steps continue the same process, with the same $\phi$.
     """
 
     step_size: int = 1
@@ -59,7 +57,6 @@ class NonCentredRandomWalk(TemporalProcess):
         frozen: int = 0,
         n_fit: int | None = None,
         half_life_rv: RandomVariable | None = None,
-        forecast_half_life: float | None = None,
         centred: bool = False,
     ) -> None:
         r"""Initialize the process.
@@ -74,21 +71,18 @@ class NonCentredRandomWalk(TemporalProcess):
             Length of the fit axis. `None` samples every step as one site.
         half_life_rv
             Half-life in steps; makes the process AR(1).
-        forecast_half_life
-            Half-life in steps of the reversion past the fit axis.
         centred
-            Sample the fitted levels, `{prefix}_x`, with steps
-            $N(0, \sigma)$, instead of the standardised steps. For a
-            walk the data pin closely, so that each level is one
-            parameter rather than a sum of steps. Random walk only.
+            Sample the fitted levels, `{prefix}_x`, with
+            $x(t) \mid x(t - 1) \sim N(\phi x(t - 1), \sigma)$, instead
+            of the standardised steps. For a walk the data pin closely,
+            so that each level is one parameter rather than a sum of
+            steps.
 
         Raises
         ------
         TypeError
             If `innovation_sd_rv` or `half_life_rv` is not a
             `RandomVariable`.
-        ValueError
-            If `centred` is set with `half_life_rv`.
         """
         if not isinstance(innovation_sd_rv, RandomVariable):
             raise TypeError("innovation_sd_rv must be a RandomVariable.")
@@ -100,9 +94,6 @@ class NonCentredRandomWalk(TemporalProcess):
         self.frozen = frozen
         self.n_fit = n_fit
         self.half_life_rv = half_life_rv
-        self.forecast_half_life = forecast_half_life
-        if centred and half_life_rv is not None:
-            raise ValueError("A centred walk must be a random walk.")
         self.centred = centred
 
     def __repr__(self) -> str:
@@ -110,8 +101,7 @@ class NonCentredRandomWalk(TemporalProcess):
         return (
             f"NonCentredRandomWalk(innovation_sd_rv={self.innovation_sd_rv!r}"
             f", frozen={self.frozen}, n_fit={self.n_fit}, "
-            f"half_life_rv={self.half_life_rv!r}, "
-            f"forecast_half_life={self.forecast_half_life}"
+            f"half_life_rv={self.half_life_rv!r}"
             + (", centred=True)" if self.centred else ")")
         )
 
@@ -121,6 +111,28 @@ class NonCentredRandomWalk(TemporalProcess):
         Subclasses shift it; the forecast continues from its last value.
         """
         return past
+
+    def _levels(
+        self, sd: ArrayLike, phi: ArrayLike, x0: Array, n_free: int
+    ) -> dist.Distribution:
+        r"""Return the distribution of the free levels, `(n_processes, n_free)`.
+
+        $x(t) \mid x(t - 1) \sim N(\phi x(t - 1), \sigma)$ from $x_0$: a
+        Gaussian random walk for $\phi = 1$, otherwise the multivariate
+        normal with mean $\phi^t x_0$ and Cholesky factor $\sigma$ times
+        the damped-sum weights (`_damped_sum`).
+        """
+        if self.half_life_rv is None:
+            return dist.TransformedDistribution(
+                dist.GaussianRandomWalk(sd, num_steps=n_free).expand(
+                    [x0.shape[0]]
+                ),
+                dist.transforms.AffineTransform(x0[:, None], 1.0),
+            )
+        lag = jnp.arange(n_free)[:, None] - jnp.arange(n_free)[None, :]
+        weights = jnp.where(lag >= 0, phi ** jnp.maximum(lag, 0), 0.0)
+        mean = x0[:, None] * phi ** jnp.arange(1, n_free + 1)[None, :]
+        return dist.MultivariateNormal(mean, scale_tril=sd * weights)
 
     def sample(
         self,
@@ -168,30 +180,24 @@ class NonCentredRandomWalk(TemporalProcess):
             if self.half_life_rv is None
             else 0.5 ** (1.0 / self.half_life_rv())
         )
+        decay = phi ** jnp.arange(1, n_free + 1)[:, None]
         if self.centred:
-            # The levels themselves, with N(0, sd) steps from x0, one walk
-            # per process. Relative to x0 instead, the data would pin only
-            # x0 plus each level, a long direction for NUTS. With no free
-            # level the walk holds its start.
+            # The levels themselves, one walk per process. Relative to x0
+            # instead, the data would pin only x0 plus each level, a long
+            # direction for NUTS. With no free level the walk holds its
+            # start.
             free = jnp.zeros((0, n_processes))
             if n_free > 0:
                 levels = numpyro.sample(
-                    f"{name_prefix}_x",
-                    dist.TransformedDistribution(
-                        dist.GaussianRandomWalk(sd, num_steps=n_free).expand(
-                            [n_processes]
-                        ),
-                        dist.transforms.AffineTransform(x0[:, None], 1.0),
-                    ),
+                    f"{name_prefix}_x", self._levels(sd, phi, x0, n_free)
                 )
-                free = levels.T - x0[None, :]
+                free = levels.T - decay * x0[None, :]
         else:
             z = numpyro.sample(
                 f"{name_prefix}_z",
                 dist.Normal(0.0, 1.0).expand([n_free, n_processes]),
             )
             free = _damped_sum(phi, sd * z)
-        decay = phi ** jnp.arange(1, n_free + 1)[:, None]
         past = jnp.vstack(
             [jnp.repeat(x0[None, :], frozen + 1, axis=0), decay * x0 + free]
         )
@@ -203,8 +209,6 @@ class NonCentredRandomWalk(TemporalProcess):
             f"{name_prefix}_z_future",
             dist.Normal(0.0, 1.0).expand([n_future, n_processes]),
         )
-        if self.forecast_half_life is not None:
-            phi = 0.5 ** (1.0 / self.forecast_half_life)
         decay = phi ** jnp.arange(1, n_future + 1)[:, None]
         future = decay * past[-1] + _damped_sum(phi, sd * z_future)
         return jnp.vstack([past, future])
