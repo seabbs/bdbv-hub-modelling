@@ -218,6 +218,9 @@ jobs:
             any::jsonlite
             any::data.table
             any::flexsurv
+            # primarycensored's fitdistdoublecens, a Suggests, which
+            # tests/model/test_hub_imputation_delays.py calls.
+            any::fitdistrplus
             any::posterior
           dependencies: '"hard"'
       - name: Install CmdStan
