@@ -12,7 +12,7 @@ if(!(S.nd>=2))S.nd=4;
 function cur(){return DSS.find(function(d){return d.key==S.ds})||DSS[0]}
 // A dataset with no nowcasts yet (held-out simulations until they are scored) shows why.
 function empty(){$("gdate").textContent="";$("gck").innerHTML="";$("glocs").innerHTML="";$("gsum").textContent="Locations";
- $("gplot").innerHTML='<p class=mut>No nowcasts for '+C.label+' yet'+(C.missing?': '+C.missing:'')+'.</p>';$("gwis").innerHTML='';save()}
+ $("gplot").innerHTML='<p class=mut>No nowcasts for '+C.label+' yet.</p>';$("gwis").innerHTML='';save()}
 var C=cur();S.ds=C.key;
 function ofRun(k){return C.meta.filter(function(m){return m.run==k}).sort(function(a,b){return a.n-b.n})}
 function refs(){return C.meta.filter(function(m){return m.run=="ref"})}

@@ -247,27 +247,6 @@ def test_the_mailbox_section_is_hidden_without_a_mailbox(tmp_path):
     assert "Recent activity" not in page.build(ctx)
 
 
-def test_samples_are_summarised_outside_page_builds(tmp_path, monkeypatch):
-    from flowlib.dashboard import nowcasts
-
-    ctx = _machine(tmp_path)
-    ctx.datasets = [{"key": "b", "format": "samples", "groups": []}]
-    calls = []
-    monkeypatch.setattr(
-        nowcasts, "summarise_samples", lambda *a, **_k: calls.append(a) or 14
-    )
-    truth = tmp_path / "truth.csv"
-    truth.write_text("kind\n")
-    (tmp_path / "scores" / "b").mkdir(parents=True)
-    monkeypatch.setattr(ctx.source, "truth", lambda _key: truth)
-    page.build(ctx)
-    assert calls == []
-    ctx.summarise()
-    ctx.summarise()  # nothing changed: the summaries are not redone
-    assert len(calls) == 1
-    assert ctx.delays["b"] == 14
-
-
 def test_checkpoint_tables_have_a_column_per_source(tmp_path):
     ctx = _machine(tmp_path)
     out = page.build(ctx)
@@ -397,13 +376,7 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
     ctx = _machine(tmp_path)
     ctx.datasets = [
         *ctx.datasets,
-        {"key": "other", "label": "Other", "format": "samples"},
-        {
-            "key": "held_out",
-            "label": "Held-out simulations",
-            "format": "quantiles",
-            "missing": "the scoring workflow writes none yet",
-        },
+        {"key": "other", "label": "Other"},
     ]
     sel = page.sections(ctx)["nowcasts"]
     data = _gdata(sel)
@@ -411,9 +384,6 @@ def test_every_configured_dataset_is_in_the_selector(tmp_path):
         (d["key"], d["label"], bool(d.get("empty"))) for d in data["datasets"]
     ]
     assert ("other", "Other", True) in got
-    assert ("held_out", "Held-out simulations", True) in got
-    held = next(d for d in data["datasets"] if d["key"] == "held_out")
-    assert "the scoring workflow writes none yet" in held["missing"]
 
 
 def test_speed_and_etas_come_from_the_status_file_when_steps_are_sparse(

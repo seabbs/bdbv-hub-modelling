@@ -81,8 +81,6 @@ class Context:
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
     mirror_status: str = ""
-    delays: dict[str, int | None] = field(default_factory=dict)
-    summarised: dict[str, tuple] = field(default_factory=dict)
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -119,54 +117,17 @@ class Context:
         return pairs, training.steps_per_simulation(0, [], cks)
 
     def dataset(self, key: str) -> Mapping[str, Any]:
-        """Return a configured dataset by key (a quantiles one if unknown)."""
+        """Return a configured dataset by key (an empty one if unknown)."""
         return next(
             (d for d in self.datasets if d["key"] == key),
-            {"key": key, "label": key, "format": "quantiles", "groups": []},
+            {"key": key, "label": key, "groups": []},
         )
-
-    def forecasts(self, key: str) -> Path:
-        """Return the quantile files a dataset's panels read.
-
-        A samples dataset's are its summaries (`summarise`), never made
-        while a page is built.
-        """
-        if self.dataset(key).get("format") != "samples":
-            return self.source.dataset(key)
-        return self.source.root / f"{key}-quantiles"
-
-    def summarise(self) -> None:
-        """Summarise each samples dataset whose truth or files changed.
-
-        Run at start, before a static render and in the background loop.
-        """
-        for ds in self.datasets:
-            if ds.get("format") != "samples":
-                continue
-            key = ds["key"]
-            folder = self.source.dataset(key)
-            truth = self.source.truth(key)
-            if truth is None or not truth.is_file() or not folder.is_dir():
-                continue
-            sig = (
-                truth.stat().st_mtime_ns,
-                tuple(
-                    (str(f), f.stat().st_mtime_ns)
-                    for f in sorted(folder.glob("*/*.csv.gz"))
-                ),
-            )
-            if self.summarised.get(key) == sig:
-                continue
-            self.delays[key] = nowcasts.summarise_samples(
-                folder, self.forecasts(key), truth, ds
-            )
-            self.summarised[key] = sig
 
     def nowcasts(self, key: str) -> dict[str, Any] | None:
         """Return a dataset's nowcasts, rebuilt only when its files change."""
         ds = self.dataset(key)
         return nowcasts.cached_build(
-            self.forecasts(key),
+            self.source.dataset(key),
             self.runs,
             self.references,
             self.stores.setdefault(key, {}),
@@ -776,20 +737,13 @@ INPUT_LABELS = {"daily": "daily counts", "weekly": "weekly totals"}
 """The nowcast panels' model inputs, as the control names them."""
 
 
-def _caption(ctx: Context, ds: Mapping[str, Any]) -> str:
-    text = ds.get("truth", "")
-    delay = ctx.delays.get(ds["key"])
-    return text.replace("{delay}", "" if delay is None else str(delay))
-
-
 def nowcasts_section(
     ctx: Context, sizes: Mapping[str, int], builts: Mapping[str, Any]
 ) -> str:
     """Return the nowcast panels of every dataset, behind a selector.
 
-    Every configured dataset is listed (Germany's development half and
-    the held-out simulations; BDBV is held out). One with no
-    nowcasts yet is listed as empty, with why (its `missing`), so the
+    Every configured dataset is listed (Germany's development half; BDBV
+    is held out). One with no nowcasts yet is listed as empty, so the
     selector always offers it.
     """
     datasets, sources = [], set()
@@ -802,7 +756,6 @@ def nowcasts_section(
                     "label": ds.get("label", ds["key"]),
                     "metric": ds.get("metric", ""),
                     "empty": True,
-                    "missing": ds.get("missing", ""),
                     "truth": "",
                     "meta": [],
                     "locs": [],
@@ -835,7 +788,7 @@ def nowcasts_section(
                 "key": ds["key"],
                 "label": ds.get("label", ds["key"]),
                 "metric": ds.get("metric", ""),
-                "truth": _caption(ctx, ds),
+                "truth": ds.get("truth", ""),
                 "target": ds.get("target", ""),
                 "meta": meta,
                 "locs": built["locs"],

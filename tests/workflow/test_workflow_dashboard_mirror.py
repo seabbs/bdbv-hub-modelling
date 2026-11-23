@@ -1,11 +1,11 @@
-"""Where the dashboard reads scores, forecasts, truth and notes from."""
+"""Where the dashboard reads scores, forecasts and notes from."""
 
 import subprocess
 from pathlib import Path
 
 from flowlib.dashboard import mirror
 
-DATASETS = [{"key": "germany"}, {"key": "bdbv", "truth_source": "data/t.csv"}]
+DATASETS = [{"key": "germany"}, {"key": "bdbv"}]
 
 
 def test_by_default_the_scoring_cache_is_read_in_place(tmp_path):
@@ -13,8 +13,6 @@ def test_by_default_the_scoring_cache_is_read_in_place(tmp_path):
     src = mirror.Source(cfg, tmp_path / "m", datasets=DATASETS, root=tmp_path)
     assert src.scores == tmp_path / "s" / "tables" / "checkpoint-scores.csv"
     assert src.dataset("germany") == tmp_path / "s" / "germany"
-    assert src.truth("bdbv") == tmp_path / "data" / "t.csv"
-    assert src.truth("germany") is None
     assert src.mailbox is None
     assert src.commands() == []
 
@@ -22,11 +20,7 @@ def test_by_default_the_scoring_cache_is_read_in_place(tmp_path):
 def test_remote_sources_are_mirrored_read_only(tmp_path):
     datasets = [
         {"key": "germany", "source": "h:cache/germany/"},
-        {
-            "key": "bdbv",
-            "source": "h:cache/bdbv/",
-            "truth_source": "h:repo/data/target.csv",
-        },
+        {"key": "bdbv", "source": "h:cache/bdbv/"},
     ]
     src = mirror.Source(
         {"REMOTE": "", "SCORE_CACHE": "/x", "MAILBOX": ""},
@@ -38,7 +32,6 @@ def test_remote_sources_are_mirrored_read_only(tmp_path):
     )
     assert src.dataset("germany") == tmp_path / "m" / "germany"
     assert src.scores == tmp_path / "m" / "checkpoint-scores.csv"
-    assert src.truth("bdbv") == tmp_path / "m" / "bdbv-truth.csv"
     assert src.mailbox == tmp_path / "m" / "mailbox.md"
     cmds = src.commands()
     assert [
@@ -51,7 +44,7 @@ def test_remote_sources_are_mirrored_read_only(tmp_path):
         "h:box.md",
         str(tmp_path / "m" / "mailbox.md"),
     ] in cmds
-    assert len(cmds) == 5
+    assert len(cmds) == 4
 
 
 def test_local_sources_are_read_where_they_are(tmp_path):
@@ -106,17 +99,6 @@ def test_refresh_reports_each_failed_copy(tmp_path, monkeypatch):
     assert src.failed
 
 
-def test_a_samples_dataset_is_mirrored_apart_from_its_summaries(tmp_path):
-    datasets = [{"key": "bdbv", "format": "samples", "source": "h:cache/bdbv/"}]
-    src = mirror.Source(
-        {"REMOTE": "", "SCORE_CACHE": "/x", "MAILBOX": ""},
-        tmp_path,
-        datasets=datasets,
-        root=tmp_path,
-    )
-    assert src.dataset("bdbv") == tmp_path / "bdbv-samples"
-
-
 def test_notes_and_tables_may_be_remote(tmp_path):
     src = mirror.Source(
         {"REMOTE": "", "SCORE_CACHE": "/x", "MAILBOX": ""},
@@ -131,17 +113,3 @@ def test_notes_and_tables_may_be_remote(tmp_path):
         "h:review/notes.md",
         str(tmp_path / "m" / "extra-0-notes.md"),
     ] in src.commands()
-
-
-def test_a_dataset_that_may_be_empty_does_not_fail_the_mirror(tmp_path):
-    src = mirror.Source(
-        {"REMOTE": "host", "SCORE_CACHE": "/c"},
-        tmp_path,
-        datasets=[
-            {"key": "germany"},
-            {"key": "held_out", "missing": "none yet"},
-        ],
-    )
-    required = {n: r for n, (_, _, _, r) in src._items.items()}
-    assert required["dataset:germany"]
-    assert not required["dataset:held_out"]
