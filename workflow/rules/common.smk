@@ -439,12 +439,15 @@ def run_scores_dir(run):
     return f"{RUNS_DIR}/{run}/scores"
 
 
+def saved_prefixes(run):
+    """The run's saved checkpoints, by outbreaks."""
+    return [n for n in RUNS[run].ft["prefixes"] if saved(run, n)]
+
+
 def run_units(run):
     """The German units of the run's saved checkpoints."""
     return [
-        f"{run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done"
-        for n in RUNS[run].ft["prefixes"]
-        if saved(run, n)
+        f"{run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done" for n in saved_prefixes(run)
     ]
 
 
@@ -455,9 +458,8 @@ def references():
 
 def report_names(wc):
     """The German report's LABEL=NAME arguments and reference folders."""
-    saved_ns = [n for n in RUNS[wc.run].ft["prefixes"] if saved(wc.run, n)]
     return scoring.report_args(
-        wc.run, saved_ns, SC["reference"], f"{CACHE}/{GERMANY_UNIT}"
+        wc.run, saved_prefixes(wc.run), SC["reference"], f"{CACHE}/{GERMANY_UNIT}"
     )
 
 
