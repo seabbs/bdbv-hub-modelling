@@ -246,19 +246,19 @@ def test_the_fit_takes_one_earlier_release_a_week():
         str(pd.Timestamp("2026-08-15") + pd.Timedelta(weeks=k))[:10]
         for k in range(10)
     ]
-    got = foundation.coupling_releases(weekly)
-    assert got == weekly[-foundation.COUPLING_WEEKS - 1 : -1]
+    got = trajectories.coupling_releases(weekly)
+    assert got == weekly[-trajectories.COUPLING_WEEKS - 1 : -1]
     daily = [
         str(pd.Timestamp("2026-08-01") + pd.Timedelta(days=k))[:10]
         for k in range(80)
     ]
-    got = foundation.coupling_releases(daily)
-    assert len(got) == foundation.COUPLING_WEEKS
+    got = trajectories.coupling_releases(daily)
+    assert len(got) == trajectories.COUPLING_WEEKS
     last = pd.Timestamp(daily[-1])
     assert [(last - pd.Timestamp(d)).days for d in got] == list(
-        range(7 * foundation.COUPLING_WEEKS, 0, -7)
+        range(7 * trajectories.COUPLING_WEEKS, 0, -7)
     )
-    assert foundation.coupling_releases(daily[:1]) == []
+    assert trajectories.coupling_releases(daily[:1]) == []
 
 
 def test_earlier_blocks_raise_errors_other_than_no_rows(

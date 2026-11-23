@@ -62,10 +62,9 @@ from nowcastutils.base import (
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.hierarchy import province_of
 from nowcastutils.trajectories import (
-    CANDIDATES,
-    MIN_EARLIER,
     choose_coupling,
     couple,
+    coupling_releases,
     fit_coupling,
 )
 
@@ -138,14 +137,6 @@ COUPLINGS: Final = ("online", "independent", "comonotone")
 `online` chooses and fits the coupling at each forecast
 (`nowcastutils.trajectories.choose_coupling`); the other two need no fit
 and are the supplement's comparisons."""
-
-COUPLING_WEEKS: Final = (
-    max(w for _, w in CANDIDATES if w is not None) + MIN_EARLIER
-)
-"""How many earlier releases the online coupling reads: the latest at
-least 1, 2, ... weeks before the task's, so one a week, enough for the
-longest gaussian window (`CANDIDATES`) to be scored at `MIN_EARLIER`
-origins' worth of history."""
 
 PERIODS: Final = {"daily": "rolling7"}
 """The aggregate row each place has in a ragged block, by source
@@ -1649,39 +1640,6 @@ def native_sampler(
         return out
 
     return sample
-
-
-def coupling_releases(
-    vintages: Sequence[str] | pd.Series, weeks: int = COUPLING_WEEKS
-) -> list[str]:
-    """Return the earlier releases a task's coupling is fitted from.
-
-    For each of 1 to `weeks` weeks, the latest release at least that long
-    before the latest of `vintages`: one a week, whether releases are
-    weekly or daily.
-
-    Parameters
-    ----------
-    vintages : sequence of str
-        The task's release dates, ISO formatted.
-    weeks : int
-        How many weeks back.
-
-    Returns
-    -------
-    list of str
-        The releases, oldest first, each once.
-    """
-    days = sorted({as_date(str(v)) for v in vintages})
-    if not days:
-        return []
-    picked = set()
-    for k in range(1, weeks + 1):
-        edge = days[-1] - dt.timedelta(weeks=k)
-        before = [d for d in days if d <= edge]
-        if before:
-            picked.add(before[-1])
-    return [d.isoformat() for d in sorted(picked)]
 
 
 class _CollectedError(Exception):

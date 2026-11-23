@@ -22,23 +22,29 @@ estimates them from normal scores of the model's own matured forecasts
 (`pit_scores`), and `choose_coupling` picks the coupling and how many of
 those origins to fit it from by the energy score (`energy_score`) of each
 candidate's draws on the matured earlier forecasts.
-This module depends on numpy and scipy only, so any model can use it.
+This module depends on numpy, scipy and `nowcastutils.dates` only, so any
+model can use it.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import datetime as dt
+from collections.abc import Iterable, Mapping
 from typing import Any, Final
 
 import numpy as np
 from scipy.special import ndtr, ndtri
 
+from nowcastutils.dates import as_date
+
 __all__ = [
     "CANDIDATES",
+    "COUPLING_WEEKS",
     "METHODS",
     "MIN_EARLIER",
     "choose_coupling",
     "couple",
+    "coupling_releases",
     "energy_score",
     "fit_coupling",
     "history_windows",
@@ -505,6 +511,47 @@ look-back window, is chosen from the data at each forecast."""
 MIN_EARLIER: Final = 2
 """Earlier origins an origin needs to be scored on in `choose_coupling`:
 the fewest a gaussian fit has evidence from."""
+
+
+COUPLING_WEEKS: Final = (
+    max(w for _, w in CANDIDATES if w is not None) + MIN_EARLIER
+)
+"""How many weeks of earlier origins `choose_coupling` reads
+(`coupling_releases`): enough for the longest gaussian window
+(`CANDIDATES`) to be fitted at an origin with `MIN_EARLIER` before it."""
+
+
+def coupling_releases(
+    vintages: Iterable[Any], weeks: int = COUPLING_WEEKS
+) -> list[str]:
+    """Return the earlier origins a forecast's coupling is chosen from.
+
+    For each of 1 to `weeks` weeks, the latest release at least that long
+    before the latest of `vintages`: one a week, whether releases are
+    weekly or daily.
+
+    Parameters
+    ----------
+    vintages : sequence of str
+        The task's release dates, ISO formatted.
+    weeks : int
+        How many weeks back.
+
+    Returns
+    -------
+    list of str
+        The releases, oldest first, each once.
+    """
+    days = sorted({as_date(str(v)) for v in vintages})
+    if not days:
+        return []
+    picked = set()
+    for k in range(1, weeks + 1):
+        edge = days[-1] - dt.timedelta(weeks=k)
+        before = [d for d in days if d <= edge]
+        if before:
+            picked.add(before[-1])
+    return [d.isoformat() for d in sorted(picked)]
 
 
 def _label(method: str, window: int | None) -> str:
