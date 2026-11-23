@@ -20,6 +20,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 FOUNDATION = "src/bdbvhubrenewal/forecasters/foundation.py"
 """The module whose functions `code_sha256` names `foundation.<name>`,
@@ -97,7 +98,7 @@ def problems(
     return found
 
 
-def settings_problems(settings: dict) -> list[str]:
+def settings_problems(settings: dict[str, Any]) -> list[str]:
     """Return a problem if the hashed settings do not give the hash."""
     hashed = {k: v for k, v in settings.items() if k not in NOT_HASHED}
     text = json.dumps(hashed, sort_keys=True).encode()
