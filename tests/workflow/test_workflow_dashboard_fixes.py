@@ -59,24 +59,24 @@ def test_a_page_with_no_runs_says_so(tmp_path):
 
 
 def test_a_server_error_is_logged_not_sent(tmp_path, monkeypatch):
+    # A failed build is logged with its detail; the page served (the last
+    # one built, or the building notice) never carries it.
     ctx = _machine(tmp_path)
 
     def boom(_ctx):
         raise RuntimeError("secret detail")
 
-    monkeypatch.setattr(dashboard.page, "build", boom)
+    monkeypatch.setattr(dashboard.page, "render", boom)
     err = io.StringIO()
     monkeypatch.setattr(sys, "stderr", err)
     srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx))
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
-        with pytest.raises(urllib.error.HTTPError) as got:
-            urllib.request.urlopen(
-                f"http://127.0.0.1:{srv.server_address[1]}/", timeout=30
-            )
-        body = got.value.read().decode()
+        url = f"http://127.0.0.1:{srv.server_address[1]}/"
+        with urllib.request.urlopen(url, timeout=30) as r:
+            body = r.read().decode()
     finally:
         srv.shutdown()
-    assert got.value.code == 500
     assert "secret detail" not in body
+    assert "building" in body.lower()
     assert "secret detail" in err.getvalue()
