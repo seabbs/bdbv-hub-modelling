@@ -247,3 +247,30 @@ def test_the_fitted_models_do_not_import_the_simulator_components() -> None:
         check=True,
     )
     assert out.stdout.strip() == "[]"
+
+
+def test_latent_onsets_use_the_drawn_incubation_family_and_cv() -> None:
+    from nowcastfoundation.simulator import draws
+    from nowcastrenewal.latent.simulate import simulate_latent
+
+    grid = draws.read_grid(
+        __import__("pathlib").Path(__file__).parents[2]
+        / "config"
+        / "finetune"
+        / "grid.yaml"
+    )
+    rng = draws.generator(5)
+    while True:
+        d = draws.draw_design(grid, rng, weeks=8)
+        if d["window"] == "early" and d["n_places"] * d["n_ages"] == 1:
+            break
+    d["incubation_family"] = "lognormal"
+    v = draws.draw_values(grid, d, rng)
+    v["incubation_mean"], v["incubation_cv"] = [6.0], 1.0
+    gt = gt_pmf(v["gt_mean"], d["gt_family"], v["gt_cv"])
+    strata = pd.DataFrame({"place": ["P01"], "age": ["A1"], ".group": [1]})
+    run_ = run(simulate_latent, 70, gt, strata, d, v)
+    pmf = delay_pmf(Delay.from_mean_cv("lognormal", 6.0, 1.0))
+    inf = run_.infections[:, 0]
+    want = v["ascertainment"][0] * np.convolve(inf, pmf)[: len(inf)]
+    np.testing.assert_allclose(run_.onsets[:, 0], want, rtol=1e-6, atol=1e-9)

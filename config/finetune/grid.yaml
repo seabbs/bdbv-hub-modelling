@@ -88,6 +88,7 @@ factor_layers:
   window: infections
   trajectory: infections
   gt_family: infections
+  incubation_family: observation
   strata: strata
   spread: strata
   place_rt: strata
@@ -111,10 +112,12 @@ factor_layers:
   revisions: reporting
 constants:
   walk_ar: 0.7         # pull of the weekly log R walk back to R = 1
-  incubation_cv: 0.5   # infection-to-reference delay, gamma CV
   expected_scale: 1000
 factors:
   gt_family:
+    gamma: 1
+    lognormal: 1
+  incubation_family:
     gamma: 1
     lognormal: 1
   trajectory:
@@ -487,10 +490,36 @@ distributions:
     why: strata's dispersion within about x2 to x3 of the outbreak's
   incubation_mean:
     dist: lognormal
-    median: 5.0
-    sdlog: 0.5
+    median: 6.0
+    sdlog: 0.65
     layer: observation
-    why: infection to onset, test or admission in about 2 to 13 days
+    why: infection to onset, test or admission, a mean of about 1.7 to 21
+      days. The reference values span it - cholera (median 1.4, Azman 2013)
+      and influenza A (median 1.4, Lessler 2009), COVID-19 (means 3.5 to
+      6.5, Xu 2023), dengue (5.9, Chan 2012), Bundibugyo (6.3, MacNeil
+      2010), mpox (7.6 to 9.9), Ebola (9.1 to 11.4, WHO 2014), measles
+      (median 12.5, Lessler 2009; mean 13.5) - and infection to admission
+      of 10 to 15 days
+  incubation_cv:
+    dist: lognormal
+    median: 0.5
+    sdlog: 0.35
+    layer: observation
+    why: infection-to-reference CV of about 0.25 to 1, from narrow
+      incubation periods to wide ones and delays to admission
+  incubation_place_sd:
+    dist: lognormal
+    median: 0.28
+    sdlog: 0.45
+    layer: strata
+    why: places' infection-to-reference delays differ by up to about x2,
+      as their reporting delays (delay_place_sd) do
+  incubation_age_sd:
+    dist: halfnormal
+    scale: 0.13
+    layer: strata
+    why: ages' infection-to-reference delays differ little, as their
+      reporting delays (delay_age_sd) do
   pool_z:
     dist: normal
     mean: 0.0

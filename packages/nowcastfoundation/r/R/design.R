@@ -227,9 +227,15 @@ draw_values <- function(grid, design) {
   v$ascertainment <- stratum_values(
     grid, design$observation_strata, n_s, "ascertainment", probability = TRUE
   )
-  v$incubation_mean <- stratum_values(
-    grid, design$observation_strata, n_s, "incubation_mean"
-  )
+  # Infection to reference: a shared mean times a place effect and an age
+  # effect (strata are places, then ages), constant over time.
+  v$incubation_cv <- ds("incubation_cv")
+  v$incubation_place_sd <- ds("incubation_place_sd")
+  v$incubation_age_sd <- ds("incubation_age_sd")
+  place <- v$incubation_place_sd * ds("pool_z", n_p)
+  age <- v$incubation_age_sd * ds("pool_z", design$n_ages)
+  v$incubation_mean <- ds("incubation_mean") *
+    exp(as.vector(t(outer(place, age, `+`))))
   v$sqrt_phi <- ds("sqrt_phi")
   v$obs_phi_sd <- ds("obs_phi_sd")
   v$obs_sqrt_phi <- if (design$obs_strata == "shared") {

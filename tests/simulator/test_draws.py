@@ -309,3 +309,37 @@ def test_draws_match_the_r_engine_s(grid):
                     np.asarray(xa, float), np.asarray(xb, float)
                 )
                 assert ks.pvalue > 1e-4, (part, key, ks)
+
+
+def test_incubation_is_wide_with_a_drawn_cv_and_family(grid):
+    # Infection to reference: cholera-like 1-2 d to Ebola-like 9-12 d and
+    # infection to admission 10-15 d (lead 13:55).
+    d = _scipy(grid["distributions"]["incubation_mean"])
+    lo, hi = d.ppf([0.025, 0.975])
+    assert lo < 2
+    assert hi > 20
+    assert "incubation_cv" not in grid["constants"]
+    assert set(grid["factors"]["incubation_family"]) == {"gamma", "lognormal"}
+    cv = _scipy(grid["distributions"]["incubation_cv"]).ppf([0.025, 0.975])
+    assert cv[0] < 0.3
+    assert cv[1] > 0.9
+
+
+def test_incubation_varies_by_place_and_age(grid):
+    rng = draws.generator(21)
+    seen = 0
+    for _ in range(400):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        assert d["incubation_family"] in ("gamma", "lognormal")
+        assert v["incubation_cv"] > 0
+        n_p, n_a = d["n_places"], d["n_ages"]
+        m = np.log(np.asarray(v["incubation_mean"])).reshape(n_p, n_a)
+        # A place effect plus an age effect (strata are places, then ages).
+        fit = m.mean(1, keepdims=True) + m.mean(0, keepdims=True) - m.mean()
+        np.testing.assert_allclose(m, fit, atol=1e-9)
+        if n_p > 1 and n_a > 1:
+            seen += 1
+            assert np.ptp(m.mean(1)) > 0
+            assert np.ptp(m.mean(0)) > 0
+    assert seen > 10
