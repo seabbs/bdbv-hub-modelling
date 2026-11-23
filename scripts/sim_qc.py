@@ -19,6 +19,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nowcastfoundation.finetune import simulations
+
 CELL = [
     "strata",
     "n_places",
@@ -48,7 +50,7 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
     rows = []
     for path in sorted(sim_dir.glob("counts-*.csv.gz")):
         counts = pd.read_csv(path)
-        counts["simulation"] = counts["outbreak"].str.rsplit("-", n=1).str[0]
+        counts["simulation"] = simulations(counts["outbreak"])
         for simulation, c in counts.groupby("simulation"):
             ref = pd.to_datetime(c["reference_date"])
             delay = (pd.to_datetime(c["report_date"]) - ref).dt.days
