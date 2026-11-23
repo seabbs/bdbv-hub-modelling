@@ -99,9 +99,6 @@ DEFAULTS = (
     ("COORDINATE_PAUSE", "60"),
     ("COORDINATE_BACKOFF", "600"),
     ("SCHEDULE_KIND", ""),
-    # Dashboard runs with a local folder (flowlib.dashboard.runs specs,
-    # separated by `;`).
-    ("DASHBOARD_RUNS", ""),
     # Where jobs run (flowlib.compute): single (this machine) or ssh
     # (this machine coordinates its WORKERS, name=host:ROOT:CHECKOUT,
     # with rule groups placed on them, group=worker; not GROUPS, which
@@ -132,14 +129,11 @@ def _unquote(value: str) -> str:
 OPTIONAL = (
     "BLOCK_LIMIT",
     "CHRONOS_BATCH",
-    "DASHBOARD_CONFIG",
     "EVAL_DEVICE",
     "EVAL_THREADS",
     "HF_HOME",
     "MPS_HIGH_WATERMARK",
     "PRECISION",
-    "REMOTE_MAILBOX",
-    "REMOTE_SCORE_CACHE",
     "RUN",
     "SCORE_DATES",
 )

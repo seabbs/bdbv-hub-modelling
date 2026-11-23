@@ -4,15 +4,14 @@
 of section links, the live run's step and one shared run and reference
 selector that every chart follows. Its data come from the runs' folders
 (`logs`, `training`, `bias`), the score table (`scores`), each
-configured dataset's forecasts (`nowcasts`), optional tables and notes,
-and an optional notes file, through `mirror.Source`; its runs,
-references, datasets and defaults from configuration. The page's
+configured dataset's forecasts (`nowcasts`) and an optional mailbox,
+through `sources.Sources`; its runs, references, datasets and defaults
+from configuration. The page's
 scripts, style and tooltips are in `page/`.
 """
 
 from __future__ import annotations
 
-import csv
 import html
 import json
 import math
@@ -38,8 +37,8 @@ from . import (
     training,
 )
 from .logs import _size
-from .mirror import Source
 from .runs import Reference, Run, split_label
+from .sources import Sources
 
 ASSETS = Path(__file__).with_name("page")
 MODES = ("raw", "start", "base")
@@ -63,7 +62,7 @@ class Context:
 
     runs: Sequence[Run]
     references: Sequence[Reference]
-    source: Source
+    source: Sources
     rule: str
     outbreaks: int
     learning_rate: float
@@ -76,12 +75,9 @@ class Context:
     mail_lines: int = 400
     once: bool = False
     view: Mapping[str, Any] = field(default_factory=dict)
-    tables: Sequence[Mapping[str, str]] = ()
-    notes: Sequence[Mapping[str, str]] = ()
     logs: dict[str, logs.RunLog] = field(default_factory=dict)
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
-    mirror_status: str = ""
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -266,7 +262,8 @@ def live_status(
         points.append(status)
         if step is None or status[1] > step:
             step = int(status[1])
-    rate, span = training.recent_rate(points)
+    since = training.resumed_at(folder) if folder else None
+    rate, span = training.recent_rate(points, since=since)
     sims_rate = None
     if rate and span and sims:
         newest = max(points)
@@ -556,25 +553,12 @@ LOSS_TYPES = {
 def loss_section(ctx: Context, live: Run, st: Status) -> str:
     """Return the loss controls and the client-side loss plots' data."""
     cks = {r.key: _checkpoints(r) for r in ctx.runs}
-    own = {
-        r.key: training.loss_run(
+    out = [
+        training.loss_run(
             r, ctx.log(r), cks[r.key], ctx.sims(r), None, r.colour
         )
         for r in ctx.runs
-    }
-    out = []
-    for r in ctx.runs:
-        base = own.get(r.base or "") if r.base else None
-        refs = (
-            {k: base[k] for k in ("full0", "src0", "parts0", "lvl0")}
-            if base
-            else None
-        )
-        out.append(
-            training.loss_run(
-                r, ctx.log(r), cks[r.key], ctx.sims(r), refs, r.colour
-            )
-        )
+    ]
     # x is simulations trained: checkpoints sit at their own sizes.
     marks = [
         (int(s.get("n_outbreaks") or _size(nm)), nm)
@@ -644,6 +628,27 @@ def bias_section(ctx: Context, live: Run, st: Status) -> str:
     )
 
 
+ROLLING_CHECK = "daily+rolling7"
+"""The held-out source whose rolling-sum rows the checkpoint tables check
+against its daily rows (`finetune.evaluate.rolling_consistency`)."""
+
+
+def rolling_check(s: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """Return a checkpoint's 7-day row gap and relative roughness.
+
+    The gap is the 7-day row's median off the 7-day sums of the daily
+    rows' medians, per unit of those sums; the roughness is the 7-day
+    row's over those sums', so 1 is as smooth as the daily rows' sums
+    and more copies their day-of-week cycle. None where not scored.
+    """
+    check = s.get("held_out_rolling") or {}
+    gap = check.get(f"{ROLLING_CHECK}_gap")
+    rough = check.get(f"{ROLLING_CHECK}_rough")
+    base = check.get(f"{ROLLING_CHECK}_rough_daily_sum")
+    ratio = rough / base if rough is not None and base else None
+    return gap, ratio
+
+
 def checkpoint_table(
     run: Run, info: Mapping[str, Any], mode: str, sources: Sequence[str] = ()
 ) -> str:
@@ -664,11 +669,13 @@ def checkpoint_table(
     by_head = "".join(f"<th>{html.escape(src)}" for src in sources)
     out = [
         f"<table><tr><th>run<th>ckpt<th>hash<th>{head}<th>nowcast part"
-        f"<th>forecast part<th>held-out start{by_head}<th>saved</tr>"
+        f"<th>forecast part<th>7-day row gap<th>7-day row roughness"
+        f"<th>held-out start{by_head}<th>saved</tr>"
     ]
     for name, s, mtime in rows:
         by = s.get("held_out_loss_by_source") or {}
         ho = s.get("held_out_loss")
+        gap, rough = rolling_check(s)
         cells = [
             html.escape(run.label),
             name,
@@ -683,6 +690,8 @@ def checkpoint_table(
                     s.get("held_out_loss_forecast"),
                 )
             ),
+            _fmt(gap, 3) or "n/a",
+            _fmt(rough, 2) or "n/a",
             _fmt(s.get("held_out_loss_start")),
             *(_fmt(by.get(src)) or "n/a" for src in sources),
             datetime.fromtimestamp(mtime).strftime("%m-%d %H:%M")
@@ -691,19 +700,6 @@ def checkpoint_table(
         ]
         out.append("<tr>" + "".join(f"<td>{c}" for c in cells) + "</tr>")
     return "".join(out) + "</table>"
-
-
-def notes_section(ctx: Context) -> str:
-    """Return the configured notes (markdown files) as collapsed blocks."""
-    out = []
-    for note in ctx.notes:
-        path = Path(note["path"]).expanduser()
-        if path.is_file():
-            out.append(
-                f"<details><summary>{html.escape(note['label'])}</summary>"
-                f"<pre>{html.escape(path.read_text())}</pre></details>"
-            )
-    return "".join(out)
 
 
 def checkpoint_sizes(
@@ -901,28 +897,6 @@ def tables_section(ctx: Context, info: Mapping[str, Any]) -> str:
         for m in MODES
     ]
     out.append("</div>")
-    for table in ctx.tables:
-        path = Path(table["path"]).expanduser()
-        out.append(f"<h3>{html.escape(table['label'])}</h3><div class=wrap>")
-        if not path.is_file():
-            out.append(f"<p class=mut>{html.escape(str(path))} not present</p>")
-        else:
-            with path.open() as f:
-                rows = list(csv.reader(f))
-            out.append(
-                "<table>"
-                + "".join(
-                    "<tr>"
-                    + "".join(
-                        f"<{'th' if i == 0 else 'td'}>{html.escape(c)}"
-                        for c in r
-                    )
-                    + "</tr>"
-                    for i, r in enumerate(rows)
-                )
-                + "</table>"
-            )
-        out.append("</div>")
     return "".join(out)
 
 
@@ -993,8 +967,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         for r in ctx.runs
     }
     for r in ctx.runs:
-        base = info.get(r.base or r.key, info[r.key])
-        info[r.key]["bfull"] = base["full0"]
+        info[r.key]["bfull"] = info[r.key]["full0"]
     score_rows = [
         r
         for r in scores.read(ctx.source.scores)
@@ -1007,7 +980,6 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     about = {
         "trainer_status": status,
         "block_views": views,
-        "scores": ctx.mirror_status,
         "updates_every_s": None if ctx.once else 60,
     }
     parts = [
@@ -1033,7 +1005,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     ]
     if mail:
         parts.append(("mailbox", "Recent activity", mail, True))
-    tables = tables_section(ctx, info) + notes_section(ctx)
+    tables = tables_section(ctx, info)
     parts.append(("tables", "Tables", tables, False))
     bar = f"{bar} <span class=mut>{datetime.now():%H:%M:%S}</span>"
     return live, bar, selector_data(ctx, builts), parts
@@ -1053,8 +1025,7 @@ def sections(ctx: Context) -> dict[str, str]:
     `bar` is the top bar's status; the rest are each section's content
     (`<details id=...>` without its summary).
     """
-    _, bar, _, parts = _parts(ctx)
-    return {"bar": bar} | {key: content for key, _, content, _ in parts}
+    return render(ctx)[1]
 
 
 def build(ctx: Context) -> str:
@@ -1065,7 +1036,16 @@ def build(ctx: Context) -> str:
     ValueError
         If no run is configured.
     """
+    return render(ctx)[0]
+
+
+def render(ctx: Context) -> tuple[str, dict[str, str]]:
+    """Return the dashboard page and its in-place parts, from one build.
+
+    The parts are `sections`'; the page is `build`'s.
+    """
     live, bar, seldata, parts = _parts(ctx)
+    updates = {"bar": bar} | {key: content for key, _, content, _ in parts}
     nav = "".join(
         f'<a href="#{key}">{NAV.get(key, title)}</a>'
         for key, title, _, _ in parts
@@ -1089,7 +1069,7 @@ def build(ctx: Context) -> str:
         "t=window.ftExplain[k];return t?'<span class=info tabindex=0 "
         'data-tip="\'+t.replace(/"/g,"&quot;")+\'">\\u24d8</span>\':""};'
     )
-    return (
+    page = (
         "<!doctype html><html><head><meta charset=utf-8>"
         '<meta name=viewport content="width=device-width,initial-scale=1">'
         "<title>Fine-tuning dashboard</title>"
@@ -1100,3 +1080,4 @@ def build(ctx: Context) -> str:
         f"{_asset('expand.js')}\n{'' if ctx.once else _asset('live.js')}"
         "</script></body></html>"
     )
+    return page, updates

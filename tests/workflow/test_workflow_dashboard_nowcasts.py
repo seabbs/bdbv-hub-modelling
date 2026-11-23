@@ -2,9 +2,12 @@
 
 import csv
 import gzip
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import pytest
+from dashboard_helpers import saved_run
 from flowlib.dashboard import nowcasts, runs
 
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
@@ -57,7 +60,14 @@ def _quantiles(
 
 
 def _setup():
-    rs = runs.load_runs([], "s=slots-,hue=217", [])
+    rs = [
+        saved_run(
+            Path(tempfile.mkdtemp()),
+            "s",
+            ("aaaaaa", "bbbbbb"),
+            colour="#2a78d6",
+        )
+    ]
     refs = runs.load_references(
         [
             {
@@ -160,7 +170,7 @@ def test_excluded_and_unclaimed_checkpoints_are_left_out(tmp_path):
     assert set(built["sets"]) == {"zero"}
 
 
-def test_checkpoints_of_a_run_are_shaded_by_size(tmp_path):
+def test_checkpoints_of_a_run_take_its_colour_by_size(tmp_path):
     for h in ("aaaaaa", "bbbbbb"):
         _quantiles(
             tmp_path / f"slots-{h}" / "2022-02-09.csv.gz",
@@ -169,8 +179,8 @@ def test_checkpoints_of_a_run_are_shaded_by_size(tmp_path):
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
     meta = nowcasts.meta(built, rs, refs, {"aaaaaa": 250, "bbbbbb": 500})
-    cols = [m["color"] for m in meta if m["run"] == "s"]
-    assert cols == ["hsl(217,80%,66%)", "hsl(217,80%,38%)"]
+    got = [(m["n"], m["color"]) for m in meta if m["run"] == "s"]
+    assert got == [(250, "#2a78d6"), (500, "#2a78d6")]
 
 
 def test_one_location_has_truth_and_latest_by_target(tmp_path):
@@ -544,3 +554,37 @@ def test_ranges_keep_every_folder_s_files(tmp_path):
     zero = sorted(score["zero"]["7day"]["daily"])
     assert zero == ["2022-02-02", "2022-02-09"]
     assert list(score["aaaaaa"]["7day"]["daily"]) == ["2022-02-09"]
+
+
+def test_one_file_s_wis_is_scored_in_one_pass_whatever_its_dates(
+    tmp_path, monkeypatch
+):
+    # Scoring each date apart took minutes for a German run's files.
+    calls = []
+    real = nowcasts.wis_quantile
+
+    def counted(*args, **kwargs):
+        calls.append(len(args[0]))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(nowcasts, "wis_quantile", counted)
+    rs, refs = _setup()
+    ranges = {"all": (None, None), "nowcast": (None, 0), "forecast": (1, None)}
+    passes = []
+    for n in (4, 40):
+        _days(
+            tmp_path / str(n) / "reference" / "2022-02-09.csv.gz",
+            "fm_chronos_daily_ragged",
+            "2022-02-09",
+            range(-n // 2, n // 2),
+        )
+        calls.clear()
+        nowcasts.build(
+            tmp_path / str(n),
+            rs,
+            refs,
+            levels=nowcasts.LEVELS,
+            ranges=ranges,
+        )
+        passes.append(len(calls))
+    assert passes[0] == passes[1]

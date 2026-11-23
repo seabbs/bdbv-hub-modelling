@@ -118,7 +118,6 @@ MACHINE_KEYS = frozenset(
         "MONITOR_DAG",
         "MONITOR_DAG_OPTIONS",
         "MONITOR_DAG_EVERY",
-        "DASHBOARD_RUNS",
         "MIN_FREE_GB",
         "MIN_DISK_GB",
         "MAX_LOAD",

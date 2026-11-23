@@ -20,6 +20,7 @@ from the 5% and 95% quantiles where a file has them (`OUTER`), else the
 from __future__ import annotations
 
 import csv
+import functools
 import gzip
 import json
 from collections.abc import Iterable, Mapping, Sequence
@@ -34,7 +35,7 @@ from nowcasteval.scoring import wis_quantile
 
 from .paperstyle import WIS_PARTS
 from .rows import num, sources
-from .runs import Classifier, Reference, Run, shade, split_label
+from .runs import Classifier, Reference, Run, split_label
 
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 """The cached quantile levels."""
@@ -57,6 +58,15 @@ TARGET = "7day"
 def wis(q: Sequence[float], y: float) -> float:
     """Return the WIS of the seven cached quantiles at truth `y`."""
     return float(wis_quantile([y], [list(q)], list(LEVELS))["wis"][0])
+
+
+def wis_each(scored: Sequence[tuple[Sequence[float], float]]) -> list[float]:
+    """Return `wis` of each (seven quantiles, truth), scored in one pass."""
+    if not scored:
+        return []
+    q = np.array([qs for qs, _ in scored], dtype=float)
+    y = np.array([y for _, y in scored], dtype=float)
+    return [float(v) for v in wis_quantile(y, q, list(LEVELS))["wis"]]
 
 
 def wis_parts(scored: Sequence[tuple[Sequence[float], float]]) -> list[float]:
@@ -184,7 +194,9 @@ def read_file(
 
 
 def wis_split(
-    scored: Sequence[tuple[str, Sequence[float], float]], origin: str
+    scored: Sequence[tuple[str, Sequence[float], float]],
+    origin: str,
+    each: Sequence[float] | None = None,
 ) -> dict[str, Any]:
     """Return mean WIS of the nowcast part and of each forecast week ahead.
 
@@ -192,17 +204,19 @@ def wis_split(
     is the target dates up to the nowcast date `origin`; the forecast part
     the dates after it, by week ahead (days 1 to 7 after are week 1), as
     the held-out loss and the paper split them (`labels.HORIZON_PARTS`).
-    Each part is [mean WIS, dates], the mean None with no dates.
+    Each part is [mean WIS, dates], the mean None with no dates. `each`
+    is each date's WIS, if already scored (`wis_each`).
     """
-    o = pd.Timestamp(origin)
+    if each is None:
+        each = wis_each([(q, y) for _, q, y in scored])
     now: list[float] = []
     ahead: dict[str, list[float]] = {}
-    for day, q, y in scored:
-        days = (pd.Timestamp(day) - o).days
+    for (day, _, _), w in zip(scored, each, strict=True):
+        days = _offset(day, origin)
         if days <= 0:
-            now.append(wis(q, y))
+            now.append(w)
         else:
-            ahead.setdefault(str(-(-days // 7)), []).append(wis(q, y))
+            ahead.setdefault(str(-(-days // 7)), []).append(w)
 
     def mean(v: list[float]) -> list[Any]:
         return [round(sum(v) / len(v), 4) if v else None, len(v)]
@@ -255,11 +269,17 @@ def horizons(
     return days, ranges, spec.get("default")
 
 
+@functools.lru_cache(maxsize=1 << 16)
+def _offset(day: str, origin: str) -> int:
+    """Return the days from `origin` to `day`."""
+    return (pd.Timestamp(day) - pd.Timestamp(origin)).days
+
+
 def _within(day: str, origin: str | None, span: Range | None) -> bool:
     """Return whether target date `day` is in `span` days of `origin`."""
     if span is None or origin is None:
         return True
-    d = (pd.Timestamp(day) - pd.Timestamp(origin)).days
+    d = _offset(day, origin)
     lo, hi = span
     return (lo is None or d >= lo) and (hi is None or d <= hi)
 
@@ -267,12 +287,20 @@ def _within(day: str, origin: str | None, span: Range | None) -> bool:
 def _scored(
     scored: Sequence[tuple[Sequence[float], float, float | None]],
     outers: Sequence[Sequence[float] | None],
+    each: Sequence[float],
 ) -> dict[str, Any]:
-    """Return the stats, mean score and, for WIS, its parts of forecasts."""
+    """Return the stats, mean score and, for WIS, its parts of forecasts.
+
+    `each` is each forecast's WIS (`wis_each`), used where the file has
+    no score of its own.
+    """
     out: dict[str, Any] = {
         "stats": stats([(q, y) for q, y, _ in scored], outers),
         "score": round(
-            sum(s if s is not None else wis(q, y) for q, y, s in scored)
+            sum(
+                s if s is not None else w
+                for (_, _, s), w in zip(scored, each, strict=True)
+            )
             / len(scored),
             2,
         ),
@@ -334,7 +362,8 @@ def digest(
                 "series": {"t": times, "q": drawn, "band": 90 if ninety else 95}
             }
             if scored:
-                entry |= _scored(scored, outers)
+                each = wis_each([(q, y) for q, y, _ in scored])
+                entry |= _scored(scored, outers, each)
                 by_range = {}
                 for name, span in (ranges or {}).items():
                     keep = [
@@ -344,15 +373,16 @@ def digest(
                     ]
                     if keep:
                         by_range[name] = _scored(
-                            [scored[i] for i in keep], [outers[i] for i in keep]
+                            [scored[i] for i in keep],
+                            [outers[i] for i in keep],
+                            [each[i] for i in keep],
                         )
                 if by_range:
                     entry["ranges"] = by_range
                 if all(s is None for _, _, s in scored) and origin is not None:
-                    o = pd.Timestamp(origin)
                     entry["byday"] = {
-                        str((pd.Timestamp(d) - o).days): round(wis(q, y), 4)
-                        for d, (q, y, _) in zip(days_, scored, strict=True)
+                        str(_offset(d, origin)): round(w, 4)
+                        for d, w in zip(days_, each, strict=True)
                     }
                 if "parts" in entry and origin is not None:
                     entry["split"] = wis_split(
@@ -361,6 +391,7 @@ def digest(
                             for d, (q, y, _) in zip(days_, scored, strict=True)
                         ],
                         origin,
+                        each,
                     )
         out.append((loc, sid, src, tgt, entry, seen, last))
     return out
@@ -621,8 +652,8 @@ def meta(
     """Return each series' label, run, size and colour, in page order.
 
     References first, in their configured order, then other reference
-    models by name, then each run's checkpoints by size, shaded light to
-    dark when the run has a hue.
+    models by name, then each run's checkpoints by size, in the run's
+    colour.
     """
     which = Classifier(run_list, references, excluded)
     refs = {r.key: r for r in references}
@@ -654,7 +685,7 @@ def meta(
             run = which.run_of(built["folders"].get(s, s))
             if run is None:
                 continue
-            n = sizes.get(s) or by_key[run].n.get(s) or 0
+            n = sizes.get(s) or 0
             label = (
                 f"{by_key[run].label} n{n} {s}"
                 if n
@@ -670,8 +701,7 @@ def meta(
             else (1, run_rank[m["run"]], m["n"], m["id"])
         )
     )
-    for run in run_list:
-        group = [m for m in out if m["run"] == run.key]
-        for i, m in enumerate(group):
-            m["color"] = shade(run, i, len(group))
+    for m in out:
+        if m["run"] != "ref":
+            m["color"] = by_key[m["run"]].colour
     return out

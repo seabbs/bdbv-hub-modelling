@@ -188,10 +188,25 @@ def test_every_run_is_in_the_level_and_lora_panels(tmp_path):
             )
         )
         folders[key] = folder
-    rs = runs.load_runs([], f"r5={folders['r5']};r6={folders['r6']},live", [])
+    rs = [
+        runs.make_run("r5", folders["r5"]),
+        runs.make_run("r6", folders["r6"], live=True),
+    ]
     out = level_loss_lora.section(rs)
     assert "leaf (r5)" in out
     assert "leaf (r6)" in out
     assert "simulations trained" in out
     # One legend: levels by colour, runs by line style.
     assert out.count(">leaf</span>") == 1
+
+
+def test_the_gram_matrices_are_the_products_of_the_lora_factors():
+    from array import array
+
+    import numpy as np
+    from flowlib.dashboard import level_loss_lora as lll
+
+    m = np.arange(6, dtype=np.float32).reshape(2, 3)
+    values = array("f", m.ravel().tolist())
+    np.testing.assert_allclose(lll._gram([2, 3], values, rows=True), m @ m.T)
+    np.testing.assert_allclose(lll._gram([2, 3], values, rows=False), m.T @ m)

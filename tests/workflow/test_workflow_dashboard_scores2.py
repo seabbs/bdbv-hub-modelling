@@ -1,5 +1,9 @@
 """Score panels: target, metric and layout per row; studies from config."""
 
+import tempfile
+from pathlib import Path
+
+from dashboard_helpers import saved_run
 from flowlib.dashboard import runs, scores
 
 RULE = "R"
@@ -31,7 +35,7 @@ def _row(
 
 
 def _setup():
-    rs = runs.load_runs([], "s=slots-", [])
+    rs = [saved_run(Path(tempfile.mkdtemp()), "s", ("a1b2c3",))]
     refs = runs.load_references(
         [
             {
