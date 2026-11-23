@@ -87,3 +87,20 @@ def test_the_cutter_imports_without_the_evaluation_module():
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "False"
+
+
+def test_german_blocks_keep_the_real_dates(monkeypatch):
+    # Lead 01:05 sweep (7): the German tasks score on the real dates, so
+    # a block is cut on its own date, not moved to the Saturday after.
+    counts = fg.german_counts(_wide(), "2021-07-31")
+    seen = []
+
+    def block(own, _source, _view, cutoffs, max_lag):  # noqa: ARG001
+        seen.append((own, cutoffs))
+
+    monkeypatch.setattr(fg, "training_block", block)
+    fg.german_blocks(counts, ["2021-06-01"], "2021-07-31")
+    assert seen
+    for own, cutoffs in seen:
+        assert cutoffs[-1] == "2021-06-01"  # a Tuesday
+        assert own["reference_date"].min() == "2021-03-01"

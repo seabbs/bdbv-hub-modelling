@@ -23,7 +23,6 @@ from nowcastfoundation.finetune import AHEAD_WEEKS, training_block
 from nowcastfoundation.finetune import chronos as ft
 from nowcastgermany import data as de
 from nowcastutils.base import NATIONAL
-from nowcastutils.dates import epiweek_end
 
 SOURCE = "daily+rolling7"
 """The blocks' source: daily counts with each place's 7-day rolling sums,
@@ -106,11 +105,6 @@ def german_counts(wide: pd.DataFrame, as_of: str) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
-def _moved(dates: pd.Series, days: int) -> pd.Series:
-    """Return ISO dates moved `days` days later."""
-    return (pd.to_datetime(dates) + pd.Timedelta(days=days)).dt.date.astype(str)
-
-
 def german_blocks(
     counts: pd.DataFrame,
     cuts: list[str],
@@ -119,9 +113,9 @@ def german_blocks(
 ) -> list[dict[str, Any]]:
     """Return the training blocks of the German data at nowcast dates.
 
-    Each cut is laid out as the German tasks lay it out: dates move so the
-    cut is a Saturday, every report date up to it is a release, and
-    Germany is the country (`parent` exact). Each of `PLACES` gives a
+    Each cut is laid out as the German tasks lay it out, on its real
+    dates: every report date up to it is a release, and Germany is the
+    country (`parent` exact). Each of `PLACES` gives a
     block by `finetune.training_block`, at a lag taken in turn from
     `LAGS` (from cut `first` on), padded as the simulated blocks are.
 
@@ -142,18 +136,12 @@ def german_blocks(
                 f"cut {cut} needs truth to {end}, past the truth date "
                 f"{truth_until}"
             )
-        shift = (epiweek_end(cut) - dt.date.fromisoformat(cut)).days
-        moved = counts.assign(
-            reference_date=_moved(counts["reference_date"], shift),
-            report_date=_moved(counts["report_date"], shift),
-        )
-        last = (dt.date.fromisoformat(cut) + dt.timedelta(shift)).isoformat()
-        cutoffs = sorted(d for d in moved["report_date"].unique() if d <= last)
+        cutoffs = sorted(d for d in counts["report_date"].unique() if d <= cut)
         for j, which in enumerate(PLACES):
             view = (NATIONAL,)
             if which != "national":
                 view = (NATIONAL, *leaves[which])
-            own = moved.loc[moved["location"].isin(leaves[which])]
+            own = counts.loc[counts["location"].isin(leaves[which])]
             block = training_block(
                 own,
                 SOURCE,
