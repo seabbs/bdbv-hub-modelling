@@ -510,9 +510,11 @@ for study in STUDIES:
             f"--realdata-after {FLOW.realdata_after}"
 
 
-# Example simulations of the grid, from pilot simulations on an evidence
-# branch (`paperfigs.sim_examples`).
+# Example simulations of the grid, from the development round
+# (`paperfigs.sim_examples`).
 rule sim_examples:
+    input:
+        **FLOW.example_files(),
     output:
         f"{R}/{{mode}}/figures/si/sim-examples.png",
     log:
@@ -521,18 +523,11 @@ rule sim_examples:
         TOOLS_ENV
     params:
         python=PYTHON,
-        ref=SYNTHETIC["examples"]["ref"],
-        path=SYNTHETIC["examples"]["path"],
         picks=shlex.quote(json.dumps(SYNTHETIC["examples"]["picks"])),
-        tmp=f"{R}/{{mode}}/sim-examples",
     shell:
         "exec >{log} 2>&1; "
-        "(git cat-file -e {params.ref}^{{commit}} 2>/dev/null || "
-        "git fetch -q origin {params.ref}) && "
-        "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-        "git archive {params.ref} {params.path} | tar -x -C {params.tmp} "
-        "&& {params.python} -m paperfigs.sim_examples --sims {params.tmp}/{params.path} "
-        "--picks {params.picks} --out {output}"
+        "{params.python} -m paperfigs.sim_examples --counts {input.counts} "
+        "--settings {input.settings} --picks {params.picks} --out {output}"
 
 
 # The grid tables and SI notes, read from the grid config
@@ -565,6 +560,8 @@ rule grid_tables:
 rule evidence:
     input:
         **{n: FLOW.evidence_file(n) for n in EVIDENCE if n in EVIDENCE_NAMES},
+        # The final run's held-out loss by level (workflow rule heldout_curve).
+        heldout=FLOW.heldout_curve(),
     output:
         yml=f"{R}/{{mode}}/evidence.yml",
     log:
@@ -582,6 +579,7 @@ rule evidence:
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m paperpipe evidence {params.args} --mode {wildcards.mode} "
+        "--finetune-heldout {input.heldout} "
         "--si-dir {params.si} --fig-dir {params.fig} --out {output.yml} "
         "{params.live}"
 

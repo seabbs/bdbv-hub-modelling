@@ -36,6 +36,8 @@ include: "rules/evaluate.smk"
 include: "rules/publish.smk"
 include: "rules/score.smk"
 include: "rules/report.smk"
+include: "rules/paper.smk"
+include: "rules/monitor.smk"
 
 
 rule all:
@@ -52,15 +54,3 @@ rule all:
 
 onerror:
     say(f"FAILED; the failing rule and its error are in the Snakemake log {log}")
-
-
-# The paper (paper/workflow/Snakefile): targets `development`, `paper` and
-# `render`.
-module paper_workflow:
-    snakefile:
-        "../paper/workflow/Snakefile"
-    config:
-        config
-
-
-use rule * from paper_workflow

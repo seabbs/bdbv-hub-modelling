@@ -169,6 +169,14 @@ def offloaded(run, n):
     return [f"{train}/n{n}/{SIDECAR}", f"{train}/evals/n{n}.done"]
 
 
+def heldout_curve_inputs(wc):
+    """Each of the run's checkpoints, with its held-out losses."""
+    train, ns = train_dir(wc.run), RUNS[wc.run].ft["prefixes"]
+    return [f"{train}/n{n}/settings.json" for n in ns] + [
+        f for n in ns for f in offloaded(wc.run, n)
+    ]
+
+
 def training_seeds(run):
     """The run's training seeds, in the order it trains on them."""
     f = RUNS[run].ft

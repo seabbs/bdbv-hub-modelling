@@ -92,9 +92,9 @@ class PaperFlow:
 
         The simulation folders are expanded in `config` itself (`expand`,
         `flowlib.localconfig.expand`), so each step that is passed the
-        config reads the same folders. A set `finetuned` checkpoint is
-        put in the environment as `BDBV_CHRONOS_FT`, which every `_ft`
-        model loads.
+        config reads the same folders, as is the final run's folder. A
+        set `finetuned` checkpoint is put in the environment as
+        `BDBV_CHRONOS_FT`, which every `_ft` model loads.
 
         Parameters
         ----------
@@ -131,6 +131,7 @@ class PaperFlow:
             mode: expand(folder)
             for mode, folder in synthetic["simulations"].items()
         }
+        config["final_run"] = expand(config["final_run"])
         if config.get("finetuned"):
             os.environ.update(BDBV_CHRONOS_FT=str(config["finetuned"]))
         with (root / "config" / "finetune.toml").open("rb") as f:
@@ -199,6 +200,10 @@ class PaperFlow:
             if n in names
         )
 
+    def heldout_curve(self) -> str:
+        """Return the final run's held-out loss curve (rule heldout_curve)."""
+        return f"{self.config['final_run']}/heldout-curve.csv"
+
     def live_arg(self) -> str:
         """Return the live run option, whose newest checkpoints are shown."""
         live = self.config.get("live_run")
@@ -262,6 +267,21 @@ class PaperFlow:
             for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
         ]
         return files if all(Path(f).exists() for f in files) else []
+
+    def example_files(self) -> dict[str, list[str]]:
+        """Return the SI examples' simulation files, by kind.
+
+        The examples are picked from the development round, so the
+        held-out round is never read for them. Each pick names a
+        simulation, `<seed>-<n>`, and the files are its seed's.
+        """
+        folder = self.synthetic["simulations"]["development"]
+        picks = self.synthetic["examples"]["picks"]
+        seeds = sorted({str(sim).split("-")[0] for sim, _ in picks})
+        return {
+            "counts": [f"{folder}/counts-{s}.csv.gz" for s in seeds],
+            "settings": [f"{folder}/settings-{s}.csv" for s in seeds],
+        }
 
     # A study's data ------------------------------------------------------
 
