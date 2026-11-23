@@ -40,7 +40,6 @@ __all__ = [
     "FitConfig",
     "FitResult",
     "get_config",
-    "list_configs",
     "no_sampler_diagnostics",
     "randomwalk_config",
     "read_fit",
@@ -135,17 +134,6 @@ def get_config(name: str) -> FitConfig:
     if name not in _CONFIGS:
         raise KeyError(f"No fit config {name!r}. Known: {sorted(_CONFIGS)}.")
     return _CONFIGS[name]
-
-
-def list_configs() -> list[FitConfig]:
-    """List the registered fit configurations by name.
-
-    Returns
-    -------
-    list of FitConfig
-        The configurations.
-    """
-    return [_CONFIGS[k] for k in sorted(_CONFIGS)]
 
 
 def no_sampler_diagnostics(
