@@ -180,7 +180,7 @@ uv run --group paper python workflow/scripts/dashboard.py --port 8765
 A module of this workflow (`use rule * from paper_workflow`), run from the repository root; its paths are from the root and its outputs are in `paper/results/<mode>/`.
 `development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.
 
-- Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
+- Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `fit_store_history` (our stored Ebola forecasts, from their release; `publish_fit_store_history` publishes it, opt-in), `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
 - Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
 - Evidence read from git (`evidence_aggregation_scores`, `evidence_checkpoint_scores`, `evidence_lag_germany`), gathered by `evidence`.
