@@ -71,11 +71,11 @@ class ForecastTask:
         (`nowcastutils.releases.release_cutoff`).
     target : pandas.DataFrame
         The target table rows of this vintage only (columns as in
-        `bdbvhub.data.tidy.tidy_target`), for the country and
+        `nowcastbdbv.data.tidy.tidy_target`), for the country and
         provinces.
     delays : pandas.DataFrame or None
         Delay line data available at this vintage (see
-        `bdbvhub.data.tidy.tidy_delays`), or None if none was published.
+        `nowcastbdbv.data.tidy.tidy_delays`), or None if none was published.
     locations : tuple of str
         Provinces to forecast.
     target_end_dates : tuple of str
@@ -114,14 +114,14 @@ class ForecastTask:
         if there are none.
     zone_history : pandas.DataFrame or None
         Health-zone target rows of every release on or before `vintage`
-        (`bdbvhub.data.tidy.load_health_zones`). None if there are none.
+        (`nowcastbdbv.data.tidy.load_health_zones`). None if there are none.
         Only models with `reads_zones` set have it in their fit key.
     zone_daily_history : pandas.DataFrame or None
         Daily health-zone onsets of every release on or before `vintage`,
         as `daily_history`. None if there are none. Keyed as
         `zone_history`.
     zone_codes : tuple of str
-        The hub's zone codes (`bdbvhub.data.zones.hub_zones`).
+        The hub's zone codes (`nowcastbdbv.data.zones.hub_zones`).
         Keyed as `zone_history`.
     imputation_delay : numpy.ndarray or None
         The daily pmf of the delay the data provider subtracts from a

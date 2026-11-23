@@ -187,8 +187,10 @@ class ModelConfig:
         data twice at full weight, and larger values widen the estimates
         so they move our Rt mainly where our own data are weak. It is set
         by that judgement, like a prior, and is not tuned on scores.
-        $\sqrt{2}$ halves the precision, the power prior with tempering
-        0.5. `math.inf` gives the model without the term, exactly.
+        Sam set 1.5 (#768 item 5), the power prior with tempering
+        $1 / 1.5^2 \approx 0.44$, a little weaker than the earlier
+        $\sqrt{2}$ (tempering 0.5). `math.inf` gives the model without
+        the term, exactly.
     dmax : int
         Maximum onset-to-report delay in days. Longer delays of known
         onsets are counted at `dmax`, the last cell of the hazard pmf,
@@ -214,7 +216,7 @@ class ModelConfig:
     depletion: bool = True
     effective_population: float | None = None
     bvd: bool = False
-    bvd_sd_inflation: float = 2.0**0.5
+    bvd_sd_inflation: float = 1.5
     dmax: int = 60
     delay_counts: Literal["multinomial", "dirichlet-multinomial"] = (
         "dirichlet-multinomial"

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Build `packages/bdbvhub/src/bdbvhub/data/zone_centres.csv`.
+"""Build `packages/nowcastbdbv/src/nowcastbdbv/data/zone_centres.csv`.
 
 Reads the INRB-UMIE build of the DRC health zone map, the source of
 `province_centres.csv`, and the hub's zone code mapping, and writes one
@@ -9,7 +9,7 @@ BVDOutbreakSize computes it.
 
 Usage (from the repo root)::
 
-    uv run python packages/bdbvhub/data-raw/build_zone_centres.py \
+    uv run python packages/nowcastbdbv/data-raw/build_zone_centres.py \
         GEOJSON MAPPING
 """
 
@@ -22,14 +22,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-OUT = Path("packages/bdbvhub/src/bdbvhub/data/zone_centres.csv")
+OUT = Path("packages/nowcastbdbv/src/nowcastbdbv/data/zone_centres.csv")
 HEADER = (
     "# Area-weighted centroids of each health zone's largest ring and "
     "WorldPop 2025 counts. Source: INRB-UMIE/BDBV2026-Data@f7d3907 "
     "build/drc_health_zones.geojson (MoH DRC_Health_zones via HDX, ODbL "
     "1.0; WorldPop 2025, CC BY 4.0), joined to hub codes on DHIS2 code "
     "(auxiliary-data/health-zone-code-mapping.csv). Built by "
-    "packages/bdbvhub/data-raw/build_zone_centres.py.\n"
+    "packages/nowcastbdbv/data-raw/build_zone_centres.py.\n"
 )
 
 

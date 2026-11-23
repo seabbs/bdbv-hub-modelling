@@ -22,6 +22,7 @@ dependencies = [
   "nowcastfoundation",
   "nowcastrenewal",
   "nowcastgermany",
+  "nowcastbdbv",
   "bdbvhub",
 ]
 keywords = [
@@ -113,6 +114,7 @@ nowcastfoundation = { workspace = true }
 nowcastrenewal = { workspace = true }
 bdbvhub = { workspace = true }
 nowcastgermany = { workspace = true }
+nowcastbdbv = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -153,6 +155,7 @@ known-first-party = [
   "nowcastfoundation",
   "nowcastrenewal",
   "nowcastgermany",
+  "nowcastbdbv",
   "bdbvhub",
 ]
 
@@ -214,6 +217,7 @@ root_packages = [
   "nowcastrenewal",
   "nowcastfoundation",
   "nowcastgermany",
+  "nowcastbdbv",
   "bdbvhub",
 ]
 
@@ -222,7 +226,7 @@ name = "Packages import only the packages below them"
 type = "layers"
 layers = [
   "bdbvhub",
-  "nowcastgermany",
+  "nowcastbdbv | nowcastgermany",
   "nowcastfoundation",
   "nowcastrenewal",
   "nowcastbaselines",
@@ -233,9 +237,9 @@ layers = [
 # that owns the code, or out of the import. A new upward import is a
 # layering bug to fix, not to list here.
 ignore_imports = [
-  "nowcasteval.backtest -> bdbvhub.data.delays",
-  "nowcasteval.backtest -> bdbvhub.data.tidy",
-  "nowcasteval.backtest -> bdbvhub.data.zones",
+  "nowcasteval.backtest -> nowcastbdbv.data.delays",
+  "nowcasteval.backtest -> nowcastbdbv.data.tidy",
+  "nowcasteval.backtest -> nowcastbdbv.data.zones",
   "nowcasteval.backtest -> bdbvhub.zones",
   "nowcasteval.backtest -> nowcastfoundation.simulate",
   "nowcasteval.backtest -> nowcastrenewal.bvd",
@@ -244,21 +248,21 @@ ignore_imports = [
   "nowcasteval.checks -> nowcastbaselines.chain",
   "nowcasteval.nowcast -> nowcastrenewal.forecaster",
   "nowcasteval.nowcast_plots -> bdbvhub.reporting.site",
-  "nowcasteval.pairing -> bdbvhub.data.tidy",
+  "nowcasteval.pairing -> nowcastbdbv.data.tidy",
   "nowcasteval.pairing -> bdbvhub.store.store",
   "nowcasteval.pairing -> nowcastbaselines.randomwalk",
-  "nowcasteval.plots -> bdbvhub.data.delays",
-  "nowcasteval.plots -> bdbvhub.data.tidy",
+  "nowcasteval.plots -> nowcastbdbv.data.delays",
+  "nowcasteval.plots -> nowcastbdbv.data.tidy",
   "nowcasteval.plots -> bdbvhub.reporting.site",
   "nowcasteval.plots -> nowcastbaselines.chain",
   "nowcasteval.scoresummary -> bdbvhub.reporting.site",
-  "nowcastfoundation.simulate -> bdbvhub.data.delays",
-  "nowcastfoundation.simulate -> bdbvhub.data.tidy",
-  "nowcastgermany.evaluation -> bdbvhub.data.tidy",
+  "nowcastfoundation.simulate -> nowcastbdbv.data.delays",
+  "nowcastfoundation.simulate -> nowcastbdbv.data.tidy",
+  "nowcastgermany.evaluation -> nowcastbdbv.data.tidy",
   "nowcastgermany.evaluation -> bdbvhub.models",
   "nowcastgermany.reporting -> bdbvhub.reporting.explorer",
   "nowcastgermany.reporting -> bdbvhub.reporting.site",
-  "nowcastrenewal.zones -> bdbvhub.data.tidy",
+  "nowcastrenewal.zones -> nowcastbdbv.data.tidy",
 ]
 
 [tool.mypy]

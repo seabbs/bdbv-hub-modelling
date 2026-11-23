@@ -18,7 +18,7 @@ PROJECTS = [
 GROUPS = [
     ("Shared", ["nowcastutils", "nowcasteval"]),
     ("Models", ["nowcastbaselines", "nowcastfoundation", "nowcastrenewal"]),
-    ("Studies", ["bdbvhub", "nowcastgermany"]),
+    ("Studies", ["bdbvhub", "nowcastbdbv", "nowcastgermany"]),
 ]
 PACKAGES = [name for _, group in GROUPS for name in group]
 ON_DISK = sorted(

@@ -7,7 +7,9 @@ is run) and writes one page with the docs site's interactive charts
 coverage), and the forecast explorer (`explorer.js`) with its location,
 round and model controls. A plain summary comes first and one small table
 last: each model's pairwise relative WIS on the cells it shares with
-every other model, scaled to `seabbs-rwnowcast`.
+every other model, scaled to `seabbs-rwnowcast`. Models `compare-hub`
+reran on current code for each round (`--models`) are shown beside our
+submissions as `<model> (current code)`.
 
 The page reads its data from the folder `<OUT stem>-data/` beside it.
 
@@ -19,7 +21,6 @@ from __future__ import annotations
 
 import datetime as dt
 import html
-import itertools
 import json
 import shutil
 import sys
@@ -29,12 +30,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhub.data.tidy import load_target
 from bdbvhub.reporting.explorer import (
     explorer_data,
     explorer_html,
     write_explorer,
 )
+from nowcastbdbv.data.tidy import load_target
 from nowcasteval.plots import (
     comparison_colours,
     comparison_label,
@@ -42,6 +43,7 @@ from nowcasteval.plots import (
 )
 from nowcasteval.scorechart import write_score_chart
 from nowcasteval.scoresummary import summary_html, summary_rows
+from nowcasteval.scoring import pairwise_skill
 
 ROOT = Path(__file__).parents[2]
 
@@ -116,11 +118,22 @@ def as_submitted(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.assign(source=np.where(ours, "submitted", frame["source"]))
 
 
+def label(model: str, source: str) -> str:
+    """Return a row's model name on the page.
+
+    A hub team's id; `<hub id> (submitted)`; or `<model> (current code)`
+    for a model rerun on current code for the round.
+    """
+    if source in ("hub", "submitted"):
+        return comparison_label(model, source)
+    return f"{model} (current code)"
+
+
 def labelled(frame: pd.DataFrame) -> pd.DataFrame:
-    """Each row's model named as the comparison shows it."""
+    """Each row's model named as the page shows it."""
     return frame.assign(
         model=[
-            comparison_label(m, s)
+            label(m, s)
             for m, s in zip(frame["model"], frame["source"], strict=True)
         ]
     )
@@ -129,36 +142,16 @@ def labelled(frame: pd.DataFrame) -> pd.DataFrame:
 def pairwise(scores: pd.DataFrame, reference: str) -> pd.DataFrame:
     """Pairwise relative WIS, scaled to `reference` (the hubs' way).
 
-    For each pair of models, the ratio of their mean WIS on the cells
-    both forecast; a model's relative WIS is the geometric mean of its
-    ratios against every other model, divided by `reference`'s.
+    `nowcasteval.scoring.pairwise_skill` on the cells, with each model's
+    cells, rounds and mean coverage.
     """
-    wide = scores.pivot_table(index=list(MATCH), columns="model", values="wis")
-    models = list(wide.columns)
-    ratios: dict[str, list[float]] = {m: [] for m in models}
-    for a, b in itertools.permutations(models, 2):
-        both = wide[[a, b]].dropna()
-        if len(both) and both[b].mean() > 0:
-            ratios[a].append(both[a].mean() / both[b].mean())
-    theta = {
-        m: float(np.exp(np.mean(np.log(r)))) if r else np.nan
-        for m, r in ratios.items()
-    }
-    base = theta.get(reference, np.nan)
-    rows = []
-    for m in models:
-        own = scores.loc[scores["model"] == m]
-        rows.append(
-            {
-                "model": m,
-                "relative_wis": theta[m] / base,
-                "cells": len(own),
-                "rounds": own["reference_date"].nunique(),
-                "coverage_50": own["coverage_50"].mean(),
-                "coverage_90": own["coverage_90"].mean(),
-            }
-        )
-    return pd.DataFrame(rows).sort_values("relative_wis")
+    skill = pairwise_skill(
+        scores, reference, metrics=("wis",), match_on=MATCH
+    ).rename(columns={"n": "cells"})
+    cover = scores.groupby("model")[["coverage_50", "coverage_90"]].mean()
+    tab = skill.merge(cover, left_on="model", right_index=True)
+    cols = ["model", "relative_wis", "cells", "rounds"]
+    return tab[[*cols, *cover.columns]].sort_values("relative_wis")
 
 
 def fmt(v: float, n: int = 2) -> str:
@@ -173,7 +166,7 @@ def small_table(tab: pd.DataFrame) -> str:
     out = ["<table><tr>" + "".join(f"<th>{h}</th>" for h in heads)]
     for r in tab.itertuples():
         name = html.escape(str(r.model))
-        if str(r.model).split(" ")[0] in OURS:
+        if str(r.model).split(" ")[0] in OURS or "(current code)" in r.model:
             name = f"<b>{name}</b>"
         cells = [name, fmt(r.relative_wis), str(r.cells), str(r.rounds),
                  fmt(r.coverage_50), fmt(r.coverage_90)]  # fmt: skip
@@ -218,6 +211,13 @@ def summary_text(
                 f"intervals and {fmt(r.coverage_90)} in its 90%, most of "
                 "them zone-weeks with no cases."
             )
+        now = ranked.loc[ranked["model"] == "randomwalknowcast (current code)"]
+        if len(now):
+            parts.append(
+                "randomwalknowcast on current code, rerun on each round's "
+                f"data, scores {fmt(now.iloc[0].relative_wis)} against the "
+                "seabbs-rwnowcast we submitted."
+            )
         parts.append(
             "Teams that forecast few cells (the table at the end) have "
             "noisy scores. Only past weeks are complete so far, so these "
@@ -253,13 +253,18 @@ def build(
 
     quantiles = window(quantiles)
     scores, energy = window(scores), window(energy)
-    teams = sorted(set(quantiles.loc[quantiles["source"] == "hub", "model"]))
+    source = quantiles["source"]
+    teams = sorted(set(quantiles.loc[source == "hub", "model"]))
+    rerun = sorted(
+        set(quantiles.loc[~source.isin(["hub", "submitted"]), "model"])
+    )
     ours = [f"{h} (submitted)" for h in OURS]
+    current = {label(m, "real"): m for m in rerun}
     colours = comparison_colours(
-        {}, {f"{h} (submitted)": m for h, m in OURS.items()}, teams
+        current, {f"{h} (submitted)": m for h, m in OURS.items()}, teams
     )
     reference = f"{REFERENCE} (submitted)"
-    models = [*ours, *teams]
+    models = [*ours, *current, *teams]
 
     data = out.with_name(out.stem + "-data")
     if data.exists():
@@ -333,9 +338,10 @@ def build(
         "the intervals, against the latest release.</p>",
         explorer_html(f"{rel}/explorer.json", "Forecast explorer"),
         "<h2>Pairwise relative WIS</h2>",
-        "<p class=mut>As the hubs rank teams: each pair's mean WIS ratio on "
-        "the cells both forecast, a model's geometric mean over the "
-        "others, scaled so seabbs-rwnowcast is 1. Complete weeks.</p>",
+        "<p class=mut>As the hubs rank teams (scoringutils' pairwise "
+        "comparisons): each pair's mean WIS ratio on the cells both "
+        "forecast, a model's geometric mean over every model, itself "
+        "included, scaled so seabbs-rwnowcast is 1. Complete weeks.</p>",
         small_table(tab) if len(tab) else "<p>Nothing scored yet.</p>",
     ]
     doc = (

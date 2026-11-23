@@ -31,7 +31,7 @@ import tempfile
 import time
 import tomllib
 import urllib.request
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cache, partial
 from pathlib import Path
@@ -264,6 +264,32 @@ def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
     if os.environ.get(FINETUNED_ENV):
         return os.environ[FINETUNED_ENV]
     return str(tomllib.loads(Path(path).read_text())["hash"])
+
+
+def active_zone_rule(
+    path: Path | str = FINETUNED_CONFIG,
+) -> tuple[int | None, int, int]:
+    """Return the fine-tuned models' active-zone rule (`active_places`).
+
+    `active_zone_cases` missing gives None: every zone in one block.
+    `active_zone_weeks` is 8 and `active_zone_recent_weeks` 4 when
+    missing.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file, `config/finetune.toml`.
+
+    Returns
+    -------
+    tuple
+        The cases, the weeks and the recent weeks.
+    """
+    conf = tomllib.loads(Path(path).read_text())
+    cases = conf.get("active_zone_cases")
+    weeks = int(conf.get("active_zone_weeks", 8))
+    recent = int(conf.get("active_zone_recent_weeks", 4))
+    return (None if cases is None else int(cases)), weeks, recent
 
 
 def _passing(err: BaseException) -> bool:
@@ -516,6 +542,7 @@ def _finetuned(
     trained on complete counts (the no-delays run).
     """
     spec = finetuned_spec()
+    cases, weeks, recent = active_zone_rule()
     return FoundationModel(
         name,
         source,
@@ -526,6 +553,9 @@ def _finetuned(
             else resolve_checkpoint(spec)
         ),
         two_step=two_step,
+        active_zone_cases=cases,
+        active_zone_weeks=weeks,
+        active_zone_recent_weeks=recent,
     )
 
 
@@ -891,6 +921,12 @@ Known = Mapping[str, np.ndarray]
 """Chronos-2's native quantiles of groups, `[V, horizon, Q]`, by
 `group_key`, predicted ahead (`prefetch`)."""
 
+BlockViews = tuple[
+    Sequence[tuple[tuple[str, ...], tuple[str, ...]]], Sequence[str], bool
+]
+"""A block cut into views: the views (`block_views`), the block's places,
+and whether its places have aggregate rows (`_owned`)."""
+
 
 def group_key(
     group: Series,
@@ -958,13 +994,17 @@ def chronos_sampler(
     checkpoint: Checkpoint | None = None,
     known: Known | None = None,
     coupling: Mapping[str, Any] | None = None,
+    views: BlockViews | None = None,
 ) -> list[np.ndarray]:
     """Draw trajectories from Chronos-2's quantiles.
 
     Each cell follows its quantiles, and `coupling` (a
     `nowcastutils.trajectories.fit_coupling` record) joins the cells
-    (`couple`); with none, every cell draws its own level. Runs on a CUDA
-    or Apple GPU when torch sees one.
+    (`couple`); with none, every cell draws its own level. With `views`,
+    the groups are a block's views: each place's quantiles are taken from
+    the view that forecasts it (`_owned`) and the block is coupled once,
+    so one fit joins every place. Runs on a CUDA or Apple GPU when torch
+    sees one.
 
     Parameters
     ----------
@@ -984,11 +1024,15 @@ def chronos_sampler(
         group.
     coupling : mapping, optional
         The coupling's fit, with its `method`; `independent` by default.
+    views : BlockViews, optional
+        The block's views, its places and whether it has aggregate rows,
+        when `groups` are the views of one block.
 
     Returns
     -------
     list of numpy.ndarray
-        Draws, `[n_samples, V, horizon]` per group.
+        Draws, `[n_samples, V, horizon]` per group, or the block's one
+        with `views`.
 
     Raises
     ------
@@ -1005,8 +1049,12 @@ def chronos_sampler(
     levels = np.asarray(pipeline.quantiles, dtype=float)
     fit = dict(coupling) if coupling else {"method": "independent"}
     rng = np.random.default_rng(seed)
+    native = _native(pipeline, groups, horizon, known)  # [V, horizon, Q]
+    if views is not None:
+        parts = [np.moveaxis(q, -1, 0) for q in native]  # [Q, V, horizon]
+        native = [np.moveaxis(_owned(parts, *views), 0, -1)]
     out = []
-    for q in _native(pipeline, groups, horizon, known):  # [V, horizon, Q]
+    for q in native:
         own = int(rng.integers(0, 2**31 - 1))
         out.append(couple(q, levels, fit["method"], fit, n_samples, own))
     return out
@@ -1039,9 +1087,9 @@ def layout_block(
     Returns
     -------
     Series
-        The targets' context, the place of each target row
-        (`target_places`, indices into `places`), and for `ragged` each
-        place's lag series as past and future covariates.
+        The targets' context, the places (`places`), the place of each
+        target row (`target_places`, indices into `places`), and for
+        `ragged` each place's lag series as past and future covariates.
     """
     target = tri.final[:, :start]
     target_places = list(range(len(places)))
@@ -1049,7 +1097,11 @@ def layout_block(
         target = np.concatenate([target, period.totals[:, :start]])
         target_places += target_places
     if layout == "complete":
-        return {"target": target, "target_places": target_places}
+        return {
+            "target": target,
+            "places": list(places),
+            "target_places": target_places,
+        }
     lags = tri.partial.shape[2]
     names = [f"{p}_lag_{d}" for p in places for d in range(lags)]
     cells = tri.partial.transpose(0, 2, 1).reshape(len(names), -1)
@@ -1132,6 +1184,72 @@ def _owned(
             out[:, i] = draws[:, j]
             if period:
                 out[:, k + i] = draws[:, len(view) + j]
+    return out
+
+
+def _zones(places: Sequence[str]) -> list[str]:
+    """Return the places that are zones of a province in `places`."""
+    return [p for p in places if p.count("-") >= 2 and province_of(p) in places]
+
+
+def active_places(
+    places: Sequence[str],
+    tri: HubTriangle,
+    cases: int,
+    weeks: int,
+    recent_weeks: int,
+    source: str,
+) -> set[str]:
+    """Return the active zones.
+
+    A zone is active with at least `cases` cases in the last `weeks`
+    weeks and at least one in the last `recent_weeks` weeks (0: no such
+    rule), as reported at the latest release, over the steps that end
+    with its cut-off.
+    """
+    per = 7 if source == "daily" else 1
+    end = tri.last + 1
+
+    def total(n_weeks: int) -> np.ndarray:
+        start = max(0, end - n_weeks * per)
+        return np.nansum(tri.final[:, start:end], axis=1)
+
+    window = total(weeks)
+    lately = total(recent_weeks) if recent_weeks else np.ones(len(places))
+    at = {p: i for i, p in enumerate(places)}
+    return {
+        z
+        for z in _zones(places)
+        if window[at[z]] >= cases and lately[at[z]] >= 1
+    }
+
+
+def active_views(
+    places: Sequence[str], active: Collection[str], cap: int | None
+) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
+    """Return the views of a block whose joint block holds active zones.
+
+    The joint block is the country, every province and the `active`
+    zones (cut into `block_views` over `cap`). Each province has a block
+    of itself and all its zones (cut into chunks of zones under the
+    province over `cap`, as training cuts), which forecasts its zones not
+    in the joint block. Every place is forecast by exactly one view.
+    """
+    places = tuple(places)
+    zones = _zones(places)
+    rest = [z for z in zones if z not in active]
+    if not rest:
+        return block_views(places, cap) if cap else [(places, places)]
+    main = tuple(p for p in places if p not in rest)
+    out = block_views(main, cap) if cap else [(main, main)]
+    step = max(1, cap - 1) if cap else len(zones)
+    for province in dict.fromkeys(province_of(z) for z in zones):
+        own = [z for z in zones if province_of(z) == province]
+        for i in range(0, len(own), step):
+            chunk = tuple(own[i : i + step])
+            mine = tuple(z for z in chunk if z in rest)
+            if mine:
+                out.append(((province, *chunk), mine))
     return out
 
 
@@ -1302,6 +1420,18 @@ class FoundationModel:
         (`block_views`), as training cuts a system over its limit. None
         (the default) reads `CHRONOS_BLOCK_LIMIT` from the environment,
         else no limit.
+    active_zone_cases : int or None
+        With a value, the joint block holds the country, every province
+        and the active zones: at least this many cases in the last
+        `active_zone_weeks` weeks and one in the last
+        `active_zone_recent_weeks` (`active_places`). Every other zone
+        takes its forecast from its province's block, the province and
+        all its zones (`active_views`). None (the default): every zone in
+        the joint block.
+    active_zone_weeks : int
+        The weeks to the cut-off `active_zone_cases` counts over.
+    active_zone_recent_weeks : int
+        The weeks to the cut-off an active zone has a case in.
     """
 
     name: str
@@ -1321,6 +1451,9 @@ class FoundationModel:
     )
     block_limit: int | None = None
     two_step: bool = False
+    active_zone_cases: int | None = None
+    active_zone_weeks: int = 8
+    active_zone_recent_weeks: int = 4
     reads_zones: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
@@ -1456,6 +1589,9 @@ class FoundationModel:
                     chronos_sampler,
                     checkpoint=self.checkpoint,
                     known=self.known,
+                    views=None
+                    if whole
+                    else (views, places, period is not None),
                     coupling=self._coupling_fit(
                         past,
                         horizon,
@@ -1466,9 +1602,11 @@ class FoundationModel:
                     ),
                 )
             parts = sample(groups, horizon, task.n_samples, seed)
+            # Chronos-2's sampler puts the views back together itself; a
+            # model's own sampler draws each view.
             draws = (
                 parts[0]
-                if whole
+                if whole or self.sample is None
                 else _owned(parts, views, places, period is not None)
             )
             # Counts are not negative; Chronos-2's output is otherwise kept
@@ -1553,22 +1691,72 @@ class FoundationModel:
     def _views(
         self, places: Sequence[str], tri: HubTriangle
     ) -> list[tuple[tuple[str, ...], tuple[str, ...]]]:
-        """Return the block's views under `block_limit` (`block_views`).
+        """Return the block's views (`active_views` or `block_views`).
 
-        A place's series are its count row, its aggregate row (`period`)
-        and, for `ragged`, its lag series.
+        With an active-zone rule, `active_views`, else `block_views` under
+        `block_limit`. A place's series are its count row, its aggregate
+        row (`period`) and, for `ragged`, its lag series.
         """
-        if not self.block_limit:
-            return [(tuple(places), tuple(places))]
         per = 1 + (self.period is not None)
         if self.layout == "ragged":
             per += int(tri.partial.shape[2])
-        return block_views(places, max(2, self.block_limit // per))
+        cap = max(2, self.block_limit // per) if self.block_limit else None
+        if self.active_zone_cases is not None:
+            active = active_places(
+                places,
+                tri,
+                self.active_zone_cases,
+                self.active_zone_weeks,
+                self.active_zone_recent_weeks,
+                self.source,
+            )
+            return active_views(places, active, cap)
+        if cap is None:
+            return [(tuple(places), tuple(places))]
+        return block_views(places, cap)
 
     def lag_count(self, task: ForecastTask) -> int:
         """Return the lag count the model gives `task`'s block."""
         rows, places, weeks = self._rows(task)
         return int(self._triangle(rows, places, weeks[-1]).partial.shape[2])
+
+    def block_sizes(self, task: ForecastTask) -> pd.DataFrame:
+        """Return the size of each view the model predicts for `task`.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per view: `view` (its index), `part` (`joint` for the
+            views forecasting the country or a province, else `zones`),
+            `places`,
+            `forecasts` (the places it forecasts), `target_rows` (count and
+            aggregate rows), `lag_series` (for `ragged`) and `series`.
+        """
+        rows, places, weeks = self._rows(task)
+        tri = self._triangle(rows, places, weeks[-1])
+        lags = int(tri.partial.shape[2]) if self.layout == "ragged" else 0
+        per = 1 + (self.period is not None)
+        joint = {p for p in places if p.count("-") < 2}
+        out = []
+        for i, (view, mine) in enumerate(self._views(places, tri)):
+            target_rows = per * len(view)
+            out.append(
+                {
+                    "view": i,
+                    "part": "joint" if set(mine) & joint else "zones",
+                    "places": len(view),
+                    "forecasts": len(mine),
+                    "target_rows": target_rows,
+                    "lag_series": lags * len(view),
+                    "series": target_rows + lags * len(view),
+                }
+            )
+        return pd.DataFrame(out)
 
     def _period(self, tri: HubTriangle) -> PeriodRows | None:
         """Return the block's aggregate rows on `tri`, or None."""

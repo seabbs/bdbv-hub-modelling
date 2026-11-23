@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.tidy import load_health_zones, load_target
 from bdbvhub.reporting import rtcheck
+from nowcastbdbv.data.tidy import load_health_zones, load_target
 from nowcastutils.hierarchy import is_zone, parent
 
 pytest.importorskip("nowcastrenewal")

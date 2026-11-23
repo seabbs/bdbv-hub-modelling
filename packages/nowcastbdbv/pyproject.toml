@@ -1,0 +1,23 @@
+[project]
+name = "nowcastbdbv"
+version = "0.1.0"
+description = "The BDBV outbreak as a case study: the hub's data streams, health zones and onset-to-report delays"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
+requires-python = ">=3.13"
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.1,<4",
+  "tzdata>=2024.1",
+  "nowcastutils",
+  "nowcastrenewal",
+]
+
+[tool.uv.sources]
+nowcastutils = { workspace = true }
+nowcastrenewal = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.8,<0.14"]
+build-backend = "uv_build"

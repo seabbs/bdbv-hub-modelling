@@ -20,7 +20,7 @@ GENERIC = (
     "nowcastutils.base",
 )
 
-HUB_ZONES = "bdbvhub.data.zones"
+HUB_ZONES = "nowcastbdbv.data.zones"
 
 
 def _file(module: str) -> Path:
@@ -78,7 +78,7 @@ def test_generic_helpers_live_in_generic_modules() -> None:
 
 
 def test_hub_release_labels_live_with_the_hub_data() -> None:
-    hub = _defs("bdbvhub.data.tidy")
+    hub = _defs("nowcastbdbv.data.tidy")
     assert {"ORIGINAL_AS_OF", "release_id"} <= hub
     labels = {"ORIGINAL_AS_OF", "release_id"}
     assert not labels & _defs("nowcastutils.releases")
@@ -131,7 +131,7 @@ def test_renewal_code_reads_no_hub_delay_or_places() -> None:
         "nowcastrenewal.forecaster",
         "nowcastrenewal.zones",
     ):
-        assert "bdbvhub.data.delays" not in _imported(module), module
-        loaders = _imports_from(module, "bdbvhub.data.tidy")
+        assert "nowcastbdbv.data.delays" not in _imported(module), module
+        loaders = _imports_from(module, "nowcastbdbv.data.tidy")
         assert "load_locations" not in loaders, module
     assert "zone_places" in _defs(HUB_ZONES)

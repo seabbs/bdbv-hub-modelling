@@ -11,7 +11,7 @@ import pytest
 from jax import random
 from numpyro.infer import Predictive
 
-from bdbvhub.data.delays import hub_delay_pmf
+from nowcastbdbv.data.delays import hub_delay_pmf
 from nowcastrenewal.model import MAIN, build_model, model_args
 from nowcastrenewal.model.model import (
     MAX_PUBLICATION_LAG,

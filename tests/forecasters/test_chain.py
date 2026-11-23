@@ -319,8 +319,8 @@ def test_downward_revisions_move_onto_earlier_releases(snap24) -> None:
 def test_no_nowcast_is_below_the_reported_count_at_11_01(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
-    from bdbvhub.data.tidy import load_health_zones  # noqa: F401
-    from bdbvhub.data.zones import hub_zones
+    from nowcastbdbv.data.tidy import load_health_zones  # noqa: F401
+    from nowcastbdbv.data.zones import hub_zones
 
     data = Path(__file__).resolve().parents[1] / "fixtures" / "data"
     zones = hub_zones(data / "hub-config" / "tasks.json")
