@@ -1197,6 +1197,22 @@ def _segment(root: Path, settings: dict) -> Path:
     return root
 
 
+def test_a_run_s_newest_segment_is_its_largest_saved_one(
+    tmp_path: Path,
+) -> None:
+    # The paper's fine-tuned models load the final run's newest
+    # checkpoint: the largest segment with its settings and adapter.
+    train = tmp_path / "train"
+    assert foundation.newest_segment(train) is None
+    _segment(train / "n100", {"hash": "a"})
+    _segment(train / "n800", {"hash": "b"})
+    _segment(train / "n200", {"hash": "c"})
+    # Still training: settings but no adapter yet.
+    (train / "n1600").mkdir()
+    (train / "n1600" / "settings.json").write_text("{}")
+    assert foundation.newest_segment(train) == train / "n800"
+
+
 @pytest.mark.usefixtures("releases")
 def test_a_local_segment_is_its_release_s_checkpoint(tmp_path: Path) -> None:
     # A run scores its own segments before any release: the checkpoint is

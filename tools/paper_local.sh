@@ -60,10 +60,7 @@ for _ in $(seq 1 144); do
   sleep 600
 done
 ready > /dev/null || { say "FAILED: still waiting after 24 h"; exit 1; }
-# The fine-tuned models load the final run's newest checkpoint.
-run=$(python -c "import yaml; print(yaml.safe_load(open('paper/workflow/config.yaml'))['finetune_run'])")
-pin=$(cd paper && python scripts/follow_checkpoint.py "$run" --write workflow/config.yaml)
-say "started at $(git rev-parse --short=9 HEAD), fine-tuned checkpoint ${pin:-pending} (log $log)"
+say "started at $(git rev-parse --short=9 HEAD) (log $log)"
 if nice -n 19 scripts/paper.sh "$target" > "$log" 2>&1; then
   say "done: docs/paper/main.html and si.html in $root"
 else

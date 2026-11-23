@@ -6,17 +6,12 @@ build: paper/build
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]
-# The final fine-tuning run (with series slots) writes each checkpoint to
-# `finetune_run`/n<outbreaks>/ and publishes it as `chronos-ft-<hash>`.
-# `finetuned` is the checkpoint every `_ft` model of the workflow loads;
-# null leaves the fine-tuned forecasts pending. scripts/follow_checkpoint.py
-# sets it.
-finetune_run: output/checkpoints/slots
-finetuned: null
-final_checkpoints: []
 # The paper's final fine-tuning run: its folder, a `runs` entry of the
 # workflow (workflow/config.yaml), under the machine's ROOT. Its held-out
-# loss curve is the SI's (rule heldout_curve).
+# loss curve is the SI's (rule heldout_curve), and every `_ft` model
+# loads its newest saved checkpoint, train/n<N>
+# (nowcastfoundation.forecaster.newest_segment); before it has one the
+# fine-tuned forecasts are pending.
 final_run: $ROOT/runs/runa
 # The simulation rounds' folder under the machine's ROOT (the workflow's
 # rounds): the SI's realism reads the grid's training rounds
