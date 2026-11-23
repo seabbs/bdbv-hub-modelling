@@ -139,9 +139,9 @@ COUPLINGS: Final = ("online", "independent", "comonotone")
 and are the supplement's comparisons."""
 
 PERIODS: Final = {"daily": "rolling7"}
-"""The aggregate row each place has in a ragged block, by source
-(`FoundationModel.period`): the daily source's 7-day rolling sums, from
-which the hub's 7-day target is read."""
+"""The aggregate row each place has in a block, ragged or complete, by
+source (`FoundationModel.period`): the daily source's 7-day rolling sums,
+from which the hub's 7-day target is read."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
 """Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
@@ -506,7 +506,7 @@ def _finetuned(
 
     A spec that is a folder is a run's own segment (`local_checkpoint`).
     The weekly and daily models share the checkpoint. Each builds the
-    block its zero-shot model of `layout` builds (`PERIODS` for ragged);
+    block its zero-shot model of `layout` builds (`PERIODS` rows in both);
     only the weights differ. The complete layout is for checkpoints
     trained on complete counts (the no-delays run).
     """
@@ -520,7 +520,7 @@ def _finetuned(
             if Path(spec).is_dir()
             else resolve_checkpoint(spec)
         ),
-        period=PERIODS.get(source) if layout == "ragged" else None,
+        period=PERIODS.get(source),
     )
 
 
@@ -1729,7 +1729,7 @@ for _source in SOURCES:
                 _name,
                 _source,
                 _layout,
-                period=PERIODS.get(_source) if _layout == "ragged" else None,
+                period=PERIODS.get(_source),
             ),
             f"Chronos-2 on the hub target's {_source} releases, {_layout} "
             "layout, every target in one block.",
