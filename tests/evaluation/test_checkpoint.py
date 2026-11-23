@@ -656,7 +656,9 @@ def test_a_german_unit_redoes_dates_forecast_from_other_tasks(
     assert old in done
     assert unrecorded in done
     assert current not in done
-    assert ck.written(root)[old] == TASKS
+    rec = ck.written(root).items()
+    got = {k for (d, m), k in rec if d == old and m != ck.EVERY}
+    assert got == {TASKS}
 
 
 def test_a_reference_unit_redoes_only_the_models_whose_code_changed(

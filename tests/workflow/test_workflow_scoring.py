@@ -95,3 +95,13 @@ def test_a_run_is_scored_on_its_saved_checkpoints(tmp_path):
     assert s.run_units("x") == [f"{unit}/n100.done"]
     assert s.run_scores() == [f"{tmp_path}/runs/x/reports/german/index.html"]
     assert "'n100=x n100'" in s.report_names(type("W", (), {"run": "x"}))
+
+
+def test_the_reference_unit_reruns_when_its_models_code_changes():
+    # The reference's forecasts are shared by every run and depend only on
+    # its models' code and the German config, so those are its inputs.
+    files = scoring.reference_code("reference")
+    assert "config/germany.toml" in files
+    assert any(f.endswith("nowcastbaselines/randomwalk.py") for f in files)
+    assert any(f.endswith("nowcastfoundation/forecaster.py") for f in files)
+    assert scoring.reference_code("abc123def456") == []
