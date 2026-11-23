@@ -31,13 +31,17 @@ from flowlib import dag, localconfig
 CHECKOUT = Path(__file__).resolve().parents[2]
 """The checkout whose workflow the graphs are built from."""
 
-VIZ = "https://cdn.jsdelivr.net/npm/@viz-js/viz@3.29.0/dist/viz-global.js"
-"""Graphviz in the browser, which draws the graphs: viz-js's bundle that
-defines the global `Viz` (from 3.x it is in dist/, not lib/)."""
+STATIC = Path(__file__).resolve().parent / "static"
+"""Vendored browser libraries the DAG page loads from this server, not a
+CDN (a browser that blocks or cannot reach the CDN drew no graph):
+viz-js 3.29.0 (dist/viz-global.js, MIT, Graphviz under EPL) and
+svg-pan-zoom 3.6.2 (dist/svg-pan-zoom.min.js, BSD-2-Clause)."""
 
-PAN_ZOOM = (
-    "https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"
-)
+VIZ = "/dag/static/viz-global.js"
+"""Graphviz in the browser, which draws the graphs: viz-js's bundle that
+defines the global `Viz`."""
+
+PAN_ZOOM = "/dag/static/svg-pan-zoom.min.js"
 """Pan and zoom for the drawn graph."""
 
 MAX_GROUPS = 60
@@ -101,6 +105,7 @@ outline running</label><br>
 <div id="graph"></div>
 <p id="noviz" class="muted" hidden>Graphviz did not load from __VIZ__
 (or svg-pan-zoom from __PAN_ZOOM__), so the graph is not drawn.</p>
+__LIBS__
 <script type="application/json" id="data">__DATA__</script>
 <script>
 const DATA_URL = "/dag/__NAME_URL__.json";
@@ -209,6 +214,9 @@ function toDot() {
   }
   for (const [u, v] of data.edges) {
     if (!(u in anchor && v in anchor)) continue;
+    // A rule's edge to itself (segment N after N-1) is drawn on the rule,
+    // not on one of its groups.
+    if (u === v && frame[u]) continue;
     const at = [];
     if (frame[u]) at.push('ltail="' + frame[u] + '"');
     if (frame[v]) at.push('lhead="' + frame[v] + '"');
@@ -247,7 +255,7 @@ document.getElementById("graph").addEventListener("click", e => {
   if (g.id[0] === "r") expanded.add(g.id.slice(1));
   else if (g.id[0] === "c") expanded.delete(g.id.slice(1));
   else return;
-  draw(true);
+  draw(false);
 });
 const FILTERS = "input[name=state], #rules, #running-only, #highlight";
 for (const el of document.querySelectorAll(FILTERS)) {
@@ -332,13 +340,15 @@ def target_page(built: Mapping | None, seen: list[dict], name: str) -> str:
             "COLOURS": json.dumps(dag.COLOURS),
             "MAX_GROUPS": str(MAX_GROUPS),
             "DATA": json.dumps(data).replace("</", "<\\/"),
+            # Loaded before the page's own script, which draws with them.
+            "LIBS": "".join(
+                f'<script src="{src}" onerror="document.getElementById'
+                f"('noviz').hidden = false\"></script>\n"
+                for src in (VIZ, PAN_ZOOM)
+            ),
         },
     )
-    scripts = (
-        f'<script src="{VIZ}" onerror="noviz()"></script>\n'
-        f'<script src="{PAN_ZOOM}" onerror="noviz()"></script>\n'
-    )
-    return _page(body, scripts)
+    return _page(body)
 
 
 def index_page(names: list[str]) -> str:
@@ -382,7 +392,13 @@ def add_dag(app, cfg: Mapping[str, str], seen) -> None:
             return {"error": f"no graph for {name}"}, 404
         return dag.navigable(built, seen())
 
+    def static(name: str):
+        from flask import send_from_directory
+
+        return send_from_directory(STATIC, name, max_age=86400)
+
     app.add_url_rule("/dag/", "dag_index", index)
+    app.add_url_rule("/dag/static/<path:name>", "dag_static", static)
     app.add_url_rule("/dag/<name>.json", "dag_data", target_data)
     app.add_url_rule("/dag/<name>", "dag_target", target)
 
