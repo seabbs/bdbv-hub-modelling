@@ -38,6 +38,7 @@ include: "rules/score.smk"
 include: "rules/report.smk"
 include: "rules/paper.smk"
 include: "rules/monitor.smk"
+include: "rules/hub.smk"
 
 
 rule all:

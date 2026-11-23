@@ -183,6 +183,11 @@ score:
   # The only branch `land` commits and pushes the tables on.
   branch: checkpoint-scoring
 
+hub_rounds:
+  # The hub rounds report (rules/hub.smk): our last this many submitted
+  # rounds against every hub team.
+  rounds: 4
+
 dashboard:
   # The fine-tuning dashboard (task nowcast-foundation:dashboard; workflow/flowlib/dashboard).
   # It shows the workflow's runs (`runs` above), each in <ROOT>/runs/<run>,
