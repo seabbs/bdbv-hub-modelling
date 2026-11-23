@@ -520,3 +520,88 @@ def test_a_german_unit_forecasts_the_config_s_targets_and_redoes_others(
     ck.germany_unit(tmp_path, "n100")
     assert first in seen[0][0]
     assert {t for *_, t in seen} == {config.targets}
+
+
+def _daily_unit(folder: Path, model: str, spread: float) -> None:
+    # One origin's daily rows of `model` at DE: quantiles `spread` either
+    # side of a truth of 100, so the WIS grows with `spread`.
+    levels = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
+    folder.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        [
+            {
+                "model": model,
+                "target": target,
+                "origin": "2021-11-22",
+                "location": "DE",
+                "target_end_date": "2021-11-20",
+                "horizon": -2,
+                "quantile": q,
+                "value": 100 + spread * (q - 0.5) * 4,
+                "truth": 130.0,
+                "truth_vintage": "2021-12-30",
+            }
+            for target in ("7day", "daily")
+            for q in levels
+        ]
+    ).to_csv(folder / "2021-11-22.csv.gz", index=False)
+
+
+def test_daily_rows_are_relative_to_the_config_s_daily_reference(
+    tmp_path: Path,
+) -> None:
+    from nowcastgermany.evaluation import load_germany_config
+
+    config = load_germany_config("config/germany.toml")
+    assert config.daily_baseline == "fm_chronos_daily_ragged"
+    ref, n100 = tmp_path / "reference", tmp_path / "n100"
+    _daily_unit(ref, "fm_chronos_daily_ragged", 10.0)
+    _daily_unit(n100, "fm_chronos_daily_ragged_ft", 40.0)
+    rows = ck.germany_rows(
+        {ck.REFERENCE: ref, "n100": n100},
+        target="daily",
+        baseline=config.daily_baseline,
+    )
+    assert set(rows["target"]) == {"daily"}
+    one = rows.set_index("checkpoint")["rel_wis"]
+    assert one["zero-shot"] == pytest.approx(1.0)
+    # Wider quantiles reach the truth of 130: a lower WIS than zero-shot.
+    assert one["n100"] < 1.0
+
+
+def test_a_run_s_daily_table_holds_both_views_by_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The SI's daily comparison: each checkpoint's relative WIS on daily
+    # counts and on the 7-day sums, by level, in the comparison layout.
+    train = tmp_path / "train"
+    _saved(train, 100)
+    _saved(train, 200)
+    scores = tmp_path / "s"
+    for n in (100, 200):
+        (scores / f"n{n}").mkdir(parents=True)
+    seen = []
+
+    def germany(folders, target="7day", baseline=ck.BASELINE):
+        seen.append((target, baseline, sorted(folders)))
+        return pd.DataFrame(
+            [{"checkpoint": c, "level": "national", "target": target,
+              "model": "fm_chronos_daily_ragged",
+              "rel_wis": {"zero-shot": 1.0, "n100": 0.8, "n200": 0.6}[c]}
+             for c in ("zero-shot", "n100", "n200")]
+        ).reindex(columns=ck.COLUMNS)  # fmt: skip
+
+    monkeypatch.setattr(ck, "germany_rows", germany)
+    got = ck.daily_table(train, scores, tmp_path / "r", "runa")
+    assert {(t, b) for t, b, _ in seen} == {
+        ("7day", "randomwalknowcast"),
+        ("daily", "fm_chronos_daily_ragged"),
+    }
+    assert list(got.columns) == ["set", "run", "outbreaks", "score"]
+    assert sorted(got["set"].unique()) == [
+        "Germany, 7-day sums, national",
+        "Germany, daily counts, national",
+    ]
+    assert set(got["run"]) == {"runa"}
+    by = got.set_index(["set", "outbreaks"])["score"]
+    assert by[("Germany, daily counts, national", 200)] == 0.6
