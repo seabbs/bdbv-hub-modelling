@@ -74,6 +74,7 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "randomwalknowcast",
         "fm_chronos_daily_complete",
         "fm_chronos_daily_ragged",
+        "fm_chronos_daily_reported",
         "fm_chronos_daily_ragged_ft",
     )
     assert config.truth_delay == 40

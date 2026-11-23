@@ -36,12 +36,15 @@ split_date = "2022-02-10"
 forecast_days = 28
 # Germany is scored and shown on daily data only: every model takes the
 # daily releases (no weekly source) and forecasts the hub's 7-day rolling
-# sums. The checkpoint units run the Chronos-2 models listed here.
+# sums. The checkpoint units run the Chronos-2 models listed here;
+# `fm_chronos_daily_reported` is the ragged layout with each place's counts
+# reported to date as one more row.
 models = [
   "randomwalk",
   "randomwalknowcast",
   "fm_chronos_daily_complete",
   "fm_chronos_daily_ragged",
+  "fm_chronos_daily_reported",
   "fm_chronos_daily_ragged_ft",
 ]
 # Chronos-2 fine-tuned on real data alone, the German development half and

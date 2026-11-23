@@ -151,6 +151,8 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "fm_chronos_daily_ragged_ft": (6, "dashdotdot"),
     "fm_chronos_weekly_ragged_real": (6, "shortdash"),
     "fm_chronos_daily_ragged_real": (6, "longdashdot"),
+    "fm_chronos_daily_reported": (5, "solid"),
+    "fm_chronos_weekly_reported": (5, "dashed"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
 
