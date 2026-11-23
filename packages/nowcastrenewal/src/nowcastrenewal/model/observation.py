@@ -868,7 +868,8 @@ class OnsetStreams(BaseObservationProcess):
             cut-offs), for scoring against a later vintage as reported.
         release_pairs : dict, optional
             Rows of each delay file and how many the previous file had
-            (`data.releases.release_pairs`), scored by `pair_likelihood`.
+            (`nowcastutils.releases.release_pairs`), scored by
+            `pair_likelihood`.
 
         Returns
         -------

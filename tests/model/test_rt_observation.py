@@ -63,3 +63,15 @@ def test_repr_names_the_component():
     assert repr(obs) == (
         "RtPseudoObservation(name='bvd', sd_inflation=1.5, day=7, n_groups=2)"
     )
+
+
+def test_group_rt_weights_each_place_by_its_infections():
+    from nowcastrenewal.model.rt_observation import group_rt
+
+    rt = jnp.array([1.0, 2.0, 4.0])
+    weight = jnp.array([1.0, 3.0, 0.0])
+    members = jnp.array([[1.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0, 1.0]])
+    out = group_rt(rt, weight, members)
+    assert float(out[0]) == pytest.approx(7.0 / 4.0)
+    assert math.isnan(float(out[1]))
+    assert float(out[2]) == pytest.approx(7.0 / 4.0)

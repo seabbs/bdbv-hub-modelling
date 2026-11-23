@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as dt
 import urllib.error
 from dataclasses import replace
 from email.message import Message
@@ -64,6 +65,15 @@ def _fake_run(task: ForecastTask, variant: rn.Variant) -> rn.RenewalRun:
         "as_reported": {
             cut: {"province": np.ones_like(zone, dtype=float)}
             for cut in rn.report_cutoffs(task, data)
+        },
+        "rt": {
+            "rt": rng.lognormal(
+                0.0, 0.3, size=(40, 6 + weeks, len(data.names))
+            ),
+            "weight": rng.gamma(
+                2.0, 5.0, size=(40, 6 + weeks, len(data.names))
+            ),
+            "start": data.start_date - dt.timedelta(days=42),
         },
     }
     n = 50
@@ -229,6 +239,15 @@ def test_fit_renewal_fits_zones_and_writes_their_samples(
         summed.sort_index(),
         check_names=False,
     )
+    # Rt for each fitted zone, its province and the nation; none for the
+    # zones outside the fit.
+    rt = pd.read_csv(tmp_path / rn.RT_FILE)
+    fitted = set(zones["location"]) - quiet_zones
+    assert set(rt["location"]) == {
+        *fitted,
+        *map(province_of, fitted),
+        "CD",
+    }
 
 
 def test_zone_inputs_take_the_zone_counts_and_province_delays(

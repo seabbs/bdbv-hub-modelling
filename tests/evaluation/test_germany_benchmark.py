@@ -503,7 +503,6 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
         return pd.DataFrame()
 
     monkeypatch.setattr(de, "_tasks", tasks)
-    monkeypatch.setattr(de, "_own", lambda _model, task: task)
     monkeypatch.setattr(de, "get_model", lambda name: name)
     monkeypatch.setattr(de, "forecast_quantiles", quantiles)
     dates = ["2021-10-04", "2021-10-05", "2021-10-06"]
@@ -535,7 +534,6 @@ def test_chronos_is_prefetched_at_the_levels_it_forecasts(
     monkeypatch.setattr(de, "get_model", lambda _name: Chronos())
     monkeypatch.setattr(de, "prefetch", prefetch)
     monkeypatch.setattr(de, "_tasks", lambda *_a: ["task"])
-    monkeypatch.setattr(de, "_own", lambda _model, task: task)
     monkeypatch.setattr(de, "forecast_quantiles", quantiles)
     de.germany_forecasts(["chronos2"], pd.DataFrame(), ["2021-10-04"], 10, 1)
     assert seen["prefetch"] == seen["forecast"]
@@ -702,7 +700,6 @@ def test_daily_rows_are_each_tasks_own_daily_quantiles(
         de, "forecast_quantiles", lambda *_a, **_k: pd.DataFrame()
     )
     monkeypatch.setattr(de, "hub_forecasts", moved)
-    monkeypatch.setattr(de, "_own", lambda _model, task: task)
     out = de.germany_forecasts(
         ["own", "none"], pd.DataFrame(), ["2021-10-04"], 10, 1,
         targets=("7day", "daily"),

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tomllib
 from pathlib import Path
 
 import yaml
@@ -15,16 +14,17 @@ def _jobs() -> dict:
     return yaml.safe_load(PAGES.read_text())["jobs"]
 
 
-def test_the_held_out_matrix_covers_every_german_model() -> None:
-    config = tomllib.loads((ROOT / "config" / "germany.toml").read_text())
-    models = set(config["nowcast"]["models"])
-    matrix = _jobs()["germany-heldout"]["strategy"]["matrix"]["include"]
-    held = {row["model"] for row in matrix}
-    assert models <= held, sorted(models - held)
-    # The Chronos-2 models need the chronos group.
-    for row in matrix:
-        if row["model"].startswith("fm_chronos"):
-            assert row.get("group") == "chronos", row
+def test_pages_forecasts_nothing_for_the_german_benchmark() -> None:
+    # The German forecasts (development and held-out) are stored outputs
+    # Pages loads; no job of its own forecasts them (Sam, 2026-11-23).
+    jobs = _jobs()
+    assert "germany-heldout" not in jobs
+    cells = jobs["backtest"]["strategy"]["matrix"]["include"]
+    german = [c["cell"] for c in cells if "germany" in c["cell"]]
+    assert german == []
+    assert (
+        "FIT_STORE_BRANCH=fit-store-scratch-fm-chronos" not in PAGES.read_text()
+    )
 
 
 def _build_script() -> str:

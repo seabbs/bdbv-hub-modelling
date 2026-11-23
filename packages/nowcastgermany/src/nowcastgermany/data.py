@@ -23,8 +23,7 @@ with the count reported by then, the layout of epinowcast's
   (`HORIZONS`). A nowcast date gives one pair of tasks whose target dates
   are all of them, so every sum comes from one forecast with one context
   end. Dates are real: the nowcast date is the cut-off, whatever its
-  weekday. A model of weekly steps forecasts the sums ending on Saturdays
-  (`weekly_task`).
+  weekday, and every model forecasts every target date.
 
 `hub_forecasts` moves the forecasts back and names the places as the hub
 does, and `hub_target` gives the 7-day sums as each report date gives
@@ -35,7 +34,6 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Sequence
-from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
@@ -59,7 +57,6 @@ __all__ = [
     "nowcast_tasks",
     "place_code",
     "read_triangle",
-    "weekly_task",
     "within_delay",
 ]
 
@@ -366,18 +363,6 @@ def nowcast_tasks(
     return tasks
 
 
-def weekly_task(task: ForecastTask) -> ForecastTask:
-    """Return the task with only the target dates that end hub weeks.
-
-    Models of weekly steps forecast hub weeks, so of a `nowcast_tasks`
-    task they forecast the 7-day sums ending on Saturdays.
-    """
-    weeks = tuple(
-        d for d in task.target_end_dates if epiweek_end(d) == as_date(d)
-    )
-    return replace(task, target_end_dates=weeks)
-
-
 def _place_codes(locations: pd.Series, ages: pd.Series) -> np.ndarray:
     """Return `place_code` of each row, each distinct pair once."""
     loc, locs = pd.factorize(locations)
@@ -471,9 +456,7 @@ def hub_forecasts(
     rows = samples.loc[samples["as_of"].isna()]
     if ages:
         rows = rows.loc[rows["location"] != NATIONAL]
-    # The task's dates moved by its cut-off less the nowcast date.
-    shift = as_date(task.cutoff) - as_date(nowcast_date)
-    end = pd.to_datetime(rows["target_end_date"]) - shift
+    end = pd.to_datetime(rows["target_end_date"])
     return pd.DataFrame(
         {
             "model": rows["model"].to_numpy(),

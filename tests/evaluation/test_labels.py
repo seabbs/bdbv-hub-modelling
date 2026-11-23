@@ -7,7 +7,6 @@ from nowcasteval.labels import (
     WIS_PART_FILLS,
     WIS_PART_STACK,
     model_label,
-    tint,
 )
 
 MAIN = {
@@ -62,8 +61,6 @@ def test_wis_parts_stack_and_differ_by_fill() -> None:
         "dispersion": "solid",
         "overprediction": "hatch-up",
     }
-    assert tint("#2a78d6", 1.0) == "#2a78d6"
-    assert tint("#2a78d6", 0.0) == "#ffffff"
 
 
 # Colour checks: CIEDE2000 between the shared colours under normal vision

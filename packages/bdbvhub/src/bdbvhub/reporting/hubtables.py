@@ -108,7 +108,7 @@ def hub_tables(
     zones : tuple of str
         The hub's zone codes.
     fitted : pandas.DataFrame, optional
-        The zone fits' zone samples (`evaluation.store.ZONE_FITS_FILE`),
+        The zone fits' zone samples (`bdbvhub.store.store.ZONE_FITS_FILE`),
         with `model` and `vintage`. A model with rows at the task's
         vintage takes them in place of `zones_for_model`.
 

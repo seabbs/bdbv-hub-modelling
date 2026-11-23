@@ -9,6 +9,31 @@ from __future__ import annotations
 
 __all__ = ["MODEL_METADATA"]
 
+_RENEWAL_RT = (
+    " We also provide the wk R_t target. "
+    "It is the model's weekly effective reproduction number (Rt times the "
+    "susceptible share), indexed to the week of infection, for each health "
+    "zone the model fits, each province and the country. "
+    "A province or the country weights its zones' Rt by their infections. "
+    "The generation interval and incubation period come from "
+    "BVDOutbreakSize, with their uncertainty, and the quantiles carry the "
+    "full posterior uncertainty. "
+    "Please read it with two points in mind. "
+    "First, it is estimated from the hub target data (confirmed cases by "
+    "symptom onset, including the hub's imputed onsets). "
+    "Because of how onsets are imputed "
+    "(https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), it is "
+    "likely to react more slowly than transmission and to be out of phase "
+    "with the outbreak. "
+    "Second, because this target is collected as quantiles, the submission "
+    "gives each week and location's distribution on its own. "
+    "The joint Rt trajectories behind them, with their dependence across "
+    "weeks and locations, cannot be represented, and quantiles joined "
+    "across weeks or locations do not describe a trajectory. "
+    "For an Rt estimate less affected by these issues, please see the "
+    "BVDOutbreakSize summary "
+    "(https://epiforecasts.io/BVDOutbreakSize/stable/)."
+)
 _RENEWAL_OBSERVATION = (
     "Rt is dated by infection. "
     "Onsets are infections convolved with a log-normal incubation period, "
@@ -29,6 +54,7 @@ _RENEWAL_OBSERVATION = (
     "The model is fitted by NUTS (NumPyro) to each data release, and each "
     "sample is one joint posterior trajectory. "
     "See https://samabbott.co.uk/bdbv-hub-modelling/methods/model/."
+    + _RENEWAL_RT
 )
 _ZONE_SUMS = (
     "Health zones are fitted. "

@@ -123,3 +123,15 @@ def test_the_horizon_split_pools_the_common_nowcast_dates():
     assert "(com||[]).forEach" in pool
     assert "(ds||[])" not in pool
     assert "nowcast date(s) shown" not in js
+
+
+def test_nowcasts_over_time_draw_every_shown_model_over_any_span():
+    # Over time, every ticked model is drawn (as one nowcast date draws
+    # them), with no single-model choice, and the origins can be every
+    # scored date.
+    html = (PAGE / "nowcasts.html").read_text()
+    js = (PAGE / "nowcasts.js").read_text()
+    assert "id=gmodl" not in html
+    assert "<option value=0>all</option>" in html
+    eff = js[js.index("function effective(") :]
+    assert eff[: eff.index("}") + 1] == "function effective(){return ticked()}"

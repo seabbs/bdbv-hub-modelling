@@ -125,7 +125,20 @@ BVD_PROVINCES = {
 }
 """BVDOutbreakSize patch keys to hub province codes."""
 BVD_TAU_MIN = 0.05
-"""Floor on the SD of a BVD patch's deviation from the national log Rt."""
+r"""Floor on the SD of a BVD patch's deviation from the national log Rt.
+
+The deviation SD is $\sqrt{\sigma_k^2 - \sigma_{CD}^2}$, from the
+release's patch and national SDs. That is 0 or negative when a patch's
+interval is no wider than the national one, and `RtPseudoObservation`
+needs a positive SD. The floor keeps it positive and is set well below
+the deviations it does not touch. In the BVDOutbreakSize releases cached
+on 2026-11-24 (3151 to 3505) it never binds for the 8 provinces (smallest
+deviation SD 0.13, median 0.23 to 0.27). It binds for 4 to 15 of the
+about 50 zones per release (median 0.21 to 0.27), where the subtraction
+gives 0. On the log scale 0.05 is about 5% in Rt, before the SD
+inflation (`ModelConfig.bvd_sd_inflation`) widens it. It is set by that
+judgement and is not tuned on scores.
+"""
 Z90 = 1.6448536
 """Standard normal 95% quantile, to turn a 90% interval into an SD."""
 
@@ -282,7 +295,7 @@ class WeekTables:
 
     The grid starts one week before national weekly onsets first reach
     `START_COUNT` and ends with the week holding the vintage's cut-off,
-    its latest onset day (`data.releases.release_cutoff`).
+    its latest onset day (`nowcastutils.releases.release_cutoff`).
     """
 
     wide: pd.DataFrame
@@ -427,7 +440,7 @@ def vintage_from_tables(
     from a near-zero start with importation only. The week grid
     starts one week before national weekly onsets first reach
     `START_COUNT` and ends with the week holding the vintage's cut-off,
-    its latest onset day (`data.releases.release_cutoff`).
+    its latest onset day (`nowcastutils.releases.release_cutoff`).
 
     Parameters
     ----------
@@ -454,7 +467,7 @@ def vintage_from_tables(
         this vintage (`ForecastTask.auxiliary["bvd"]`).
     release_pairs : dict, optional
         Rows of each earlier delay file and how many the file before it
-        had (`data.releases.release_pairs`).
+        had (`nowcastutils.releases.release_pairs`).
     imputation_delay : numpy.ndarray
         The daily pmf of the delay the data provider subtracts to impute
         a missing onset (`ForecastTask.imputation_delay`).

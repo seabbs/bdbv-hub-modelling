@@ -57,7 +57,7 @@ from nowcastutils.dates import epiweek_end
 from nowcastutils.devices import usable_cpus
 from nowcastutils.files import write_csv
 from nowcastutils.forecast import Forecast
-from nowcastutils.hierarchy import is_zone
+from nowcastutils.hierarchy import is_zone, parent
 
 if TYPE_CHECKING:
     from nowcastrenewal.bvd import BvdRelease
@@ -69,6 +69,8 @@ __all__ = [
     "DELAY_SUMMARY_FILE",
     "FIT_VARIANTS",
     "HUB_MODEL",
+    "RT_FILE",
+    "RT_QUANTILES",
     "SAMPLER_ENV",
     "TRAJECTORY_DRAW_FILE",
     "VARIANTS",
@@ -94,6 +96,7 @@ __all__ = [
     "parameter_diagnostics",
     "ppc_rows",
     "report_cutoffs",
+    "rt_quantiles",
     "run_nuts",
     "sampler_settings",
     "samples_table",
@@ -1209,7 +1212,7 @@ class RenewalModel:
             The fit and its draws.
         """
         # Imported from its module, not the package, so that the fit key
-        # (`evaluation.store.fit_code`) follows the builder.
+        # (`bdbvhub.store.store.fit_code`) follows the builder.
         from nowcastrenewal.model.zones import build_model
 
         pr = engine()
@@ -1228,13 +1231,16 @@ class RenewalModel:
             f"variant={self.name} sampling done seconds={seconds:.0f} "
             f"cpu_seconds={cpu_seconds:.0f}"
         )
-        draws = pr.forecast_trajectories(
-            model,
-            data,
-            task.n_samples,
-            seed=task.seed,
-            as_of=tuple(report_cutoffs(task, data)),
-        )
+        draws = {
+            **pr.forecast_trajectories(
+                model,
+                data,
+                task.n_samples,
+                seed=task.seed,
+                as_of=tuple(report_cutoffs(task, data)),
+            ),
+            "rt": pr.weekly_rt(model, data, seed=task.seed),
+        }
         by_chain = model.mcmc.get_samples(group_by_chain=True)
         trace = {
             k: np.asarray(by_chain[k])
@@ -1283,7 +1289,7 @@ class RenewalModel:
         window) take `randomwalknowcast`'s draws: exactly 0 until an
         introduction, then its walk. National is the sum of the provinces
         (`check_national`). The pooled variants, `renewal` and `renewalbvd`,
-        fit health zones (`forecasters.zonerenewal.ZoneRenewalModel`).
+        fit health zones (`nowcastrenewal.zones.ZoneRenewalModel`).
 
         Parameters
         ----------
@@ -1442,6 +1448,95 @@ TRAJECTORY_DRAW_FILE: Final = "trajectory_draw.csv"
 """The posterior draw behind each trajectory, by fit, so a later stage
 (health zones) can pair trajectories with posterior draws."""
 TRAJECTORIES_FILE: Final = "trajectories.json"
+RT_FILE: Final = "rt.csv.gz"
+"""Weekly effective Rt quantiles by week of infection (`rt_quantiles`),
+for the hub's `wk R_t` target."""
+RT_QUANTILES: Final = (
+    0.01,
+    0.025,
+    *(round(0.05 * k, 2) for k in range(1, 20)),
+    0.975,
+    0.99,
+)
+"""The hub's quantile levels of `wk R_t`."""
+
+
+def rt_quantiles(
+    task: ForecastTask, runs: Mapping[str, RenewalRun]
+) -> pd.DataFrame:
+    """Weekly effective Rt quantiles of every place a fit models.
+
+    Each fitted place (a zone, or a province fitted on its own), each
+    province above fitted zones and the nation take the infection
+    weighted Rt of their fitted places (`rt_observation.group_rt`),
+    draw by draw, so every level comes from joint draws. Fits of
+    provinces on their own pair draws by index, as their samples do.
+    Places outside the fits (silent ones) have no Rt, and so add nothing
+    to their province or the nation. A location and week with no
+    infections in some draw has no row.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task: its `target_end_dates` are the weeks, by week of
+        infection.
+    runs : mapping
+        `RenewalRun`s whose draws hold `weekly_rt` output (`rt`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        `location`, `target_end_date`, `output_type_id` (`RT_QUANTILES`)
+        and `value`.
+    """
+    from nowcastrenewal.model.rt_observation import group_rt
+
+    weekly = [run.draws["rt"] for run in runs.values()]
+    places = [name for run in runs.values() for name in run.data.names]
+    n = min(w["rt"].shape[0] for w in weekly)
+    codes: list[str] = []
+    for place in places:
+        code: str | None = place
+        while code is not None:
+            if code not in codes:
+                codes.append(code)
+            code = parent(code)
+
+    def within(place: str, code: str) -> bool:
+        while place != code and parent(place) is not None:
+            place = str(parent(place))
+        return place == code
+
+    members = np.array([[within(p, c) for p in places] for c in codes])
+    out: list[pd.DataFrame] = []
+    for date in task.target_end_dates:
+        rt, weight = [], []
+        for w in weekly:
+            i = (epiweek_end(date) - (w["start"] + dt.timedelta(days=6))).days
+            k, p = i // 7, w["rt"].shape[2]
+            if 0 <= k < w["rt"].shape[1]:
+                rt.append(w["rt"][:n, k])
+                weight.append(w["weight"][:n, k])
+            else:
+                rt.append(np.full((n, p), np.nan))
+                weight.append(np.zeros((n, p)))
+        draws = np.asarray(
+            group_rt(np.hstack(rt), np.hstack(weight), members), dtype=float
+        )
+        keep = np.isfinite(draws).all(axis=0)
+        levels = np.quantile(draws[:, keep], RT_QUANTILES, axis=0)
+        kept = [c for c, k in zip(codes, keep, strict=True) if k]
+        out.append(
+            pd.DataFrame(
+                {
+                    "location": np.repeat(kept, len(RT_QUANTILES)),
+                    "target_end_date": date,
+                    "output_type_id": np.tile(RT_QUANTILES, len(kept)),
+                    "value": levels.T.reshape(-1),
+                }
+            )
+        )
+    return pd.concat(out, ignore_index=True)
 
 
 def fit_renewal(
@@ -1455,7 +1550,7 @@ def fit_renewal(
     """Fit a variant for the CI and write the fit directory.
 
     The variant is the registered model, so `renewal` and `renewalbvd`
-    fit health zones (`forecasters.zonerenewal`) and also write their
+    fit health zones (`nowcastrenewal.zones`) and also write their
     zone samples.
     Trajectories are drawn here, so `forecast_renewal` only reads them.
     Writes `samples.csv.gz`, `delay-summary.csv`, `trajectories.json`
@@ -1546,6 +1641,8 @@ def write_fit_dir(
     # a forecast returns.
     write_csv(fit.samples.loc[:, list(SAMPLE_COLUMNS)], out / SAMPLES_FILE)
     write_csv(fit_delays(fit, task), out / DELAY_SUMMARY_FILE)
+    if fit.runs:
+        write_csv(rt_quantiles(task, fit.runs), out / RT_FILE)
     pairs = [
         pd.DataFrame(
             {
@@ -1644,7 +1741,7 @@ def _factory(variant: Variant) -> RenewalModel:
     return RenewalModel(variant)
 
 
-# The pooled variants are registered by `forecasters.zonerenewal`.
+# The pooled variants are registered by `nowcastrenewal.zones`.
 for _variant in VARIANTS.values():
     if not _variant.per_province:
         continue

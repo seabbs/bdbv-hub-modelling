@@ -373,7 +373,7 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     """List the source files a stored fit of one model can run.
 
     The import closure of the model's module, with any other model's
-    module it builds on (`evaluation.digest.model_code`), and the
+    module it builds on (`bdbvhub.store.digest.model_code`), and the
     package's data files (`STORE_DATA`), without the loader, IO and report
     modules in `KEY_SKIP`. A model with a fit directory also holds the
     code that writes its fit records (`RECORD_CODE`). The store's and the

@@ -6,7 +6,7 @@ jobs and caches each one's outputs under `backtest_digest` of what it
 reads. A change to report-only code or to docstrings and comments then
 reruns none of them.
 
-This lives apart from `evaluation.store`, whose own code is part of
+This lives apart from `bdbvhub.store.store`, whose own code is part of
 every stored fit's key, so a change here refits nothing.
 """
 
@@ -69,7 +69,7 @@ def backtest_digest(
     The files in `BACKTEST_INPUTS` and `extra`, less `REPORT_ONLY`,
     `data/raw` and `data/sources.json`, are hashed by path and content,
     Python files as syntax trees without docstrings (as
-    `evaluation.store.code_digest`). Then `text` (such as the commands
+    `bdbvhub.store.store.code_digest`). Then `text` (such as the commands
     run), the Python minor version and the locked runtime dependencies.
 
     Parameters

@@ -77,6 +77,8 @@ permissions:
   contents: read
 
 env:
+  # Chronos-2 runs on the device named here, never a detected one.
+  DEVICE: cpu
   CI_DIR: ci
   WORK: output/ci
   # The model is `[submission] model` in config/hub.toml and the hub id

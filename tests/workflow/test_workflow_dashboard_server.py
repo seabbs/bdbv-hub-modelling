@@ -153,3 +153,63 @@ def test_a_client_that_leaves_is_dropped_quietly(tmp_path, capsys):
     h.wfile = Gone()
     h.do_GET()
     assert "Traceback" not in capsys.readouterr().err
+
+
+def _bare(cls, path):
+    h = cls.__new__(cls)
+    h.path, h.command, h.request_version = path, "GET", "HTTP/1.1"
+    h.requestline, h.client_address = f"GET {path} HTTP/1.1", ("x", 0)
+    return h
+
+
+@pytest.mark.parametrize(
+    "gone", [ConnectionAbortedError, ConnectionResetError, TimeoutError]
+)
+def test_every_kind_of_client_leaving_is_dropped_quietly(
+    tmp_path, capsys, gone
+):
+    # Lead 02:50: the server must not need a respawn loop. A client that
+    # leaves in any way is not a server error.
+    class Gone:
+        def write(self, _b):
+            raise gone("gone")
+
+        def flush(self):
+            pass
+
+    h = _bare(dashboard.handler(_machine(tmp_path)), "/")
+    h.wfile = Gone()
+    h.do_GET()
+    assert "Traceback" not in capsys.readouterr().err
+
+
+def test_a_client_gone_while_an_error_is_sent_is_dropped(tmp_path, monkeypatch):
+    class Gone:
+        def write(self, _b):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        def flush(self):
+            pass
+
+    cls = dashboard.handler(_machine(tmp_path))
+    monkeypatch.setattr(
+        cls, "_data", lambda *_: (_ for _ in ()).throw(RuntimeError("x"))
+    )
+    h = _bare(cls, "/data/germany/DE.json")
+    h.wfile = Gone()
+    h.do_GET()  # raises nothing
+
+
+def test_the_server_listens_where_the_machine_settings_say(tmp_path):
+    # Lead 02:50: the host and port are machine settings (outside the
+    # repo), so no proxy forwards to a loopback-only server.
+    from flowlib import localconfig
+
+    env = tmp_path / "local.env"
+    env.write_text("DASHBOARD_HOST=localhost\nDASHBOARD_PORT=8790\n")
+    assert dashboard.address(localconfig.read(env, {})) == ("localhost", 8790)
+    assert dashboard.address(localconfig.read(tmp_path / "none", {})) == (
+        "127.0.0.1",
+        8765,
+    )
+    localconfig.check(env, {})

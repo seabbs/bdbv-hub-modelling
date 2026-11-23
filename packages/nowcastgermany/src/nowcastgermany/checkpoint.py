@@ -9,7 +9,7 @@ with `rule` = `RULE`:
 
 - `germany`: the development half of the German benchmark
   (config/germany.toml), quantile WIS and log WIS on each model's own
-  quantiles (`evaluation.germany.germany_forecasts`), by level.
+  quantiles (`nowcastgermany.evaluation.germany_forecasts`), by level.
 - `held_out`: the trainer's held-out loss from the release's
   settings.json (unit `release`).
 
@@ -17,7 +17,7 @@ BDBV is held out for the paper, so no BDBV rows are scored here.
 
 Relative scores divide by randomwalknowcast's on the cells every model
 and checkpoint of a level made. Every score comes from
-`evaluation.scoring`, as the paper's and the dashboard's do. Rows are
+`nowcasteval.scoring`, as the paper's and the dashboard's do. Rows are
 keyed by checkpoint hash and run, with the checkpoint's outbreaks and
 grid.
 
@@ -79,7 +79,7 @@ COVERAGE: Final = (50, 90)
 GERMANY_COVERAGE: Final = (50, 95)
 """The German rows' intervals: the hub's quantiles have no 0.05 or 0.95,
 so there is no 90% interval and its rows keep the 95% one the hub
-scored (`evaluation.germany`)."""
+scored (`nowcastgermany.evaluation`)."""
 WIS_PARTS: Final = ("dispersion", "overprediction", "underprediction")
 """WIS's components (Bracher et al. 2021), which sum to it."""
 REPO: Final = "seabbs/BDBVHubRenewal"
@@ -387,7 +387,8 @@ def german_tasks_dir(
     """Return the store of the German tasks every checkpoint scores.
 
     Keyed on what the tasks are built from: the triangle file's bytes,
-    the task-building code (`data.germany` and the `data.dates` it uses),
+    the task-building code (`nowcastgermany.data` and the
+    `nowcastutils.dates` it uses),
     the fields of the `ForecastTask` they are pickled as, the draws and
     seed, and the longest delay the models see (`max_delay`).
     """

@@ -630,7 +630,7 @@ def zone_vintage_from_tables(
     Every zone in `locations` is modelled. The week grid
     starts one week before national weekly onsets first reach
     `START_COUNT` and ends with the week holding the vintage's cut-off,
-    its latest onset day (`data.releases.release_cutoff`).
+    its latest onset day (`nowcastutils.releases.release_cutoff`).
 
     Parameters
     ----------
@@ -656,7 +656,7 @@ def zone_vintage_from_tables(
         this vintage (`ForecastTask.auxiliary["bvd"]`).
     release_pairs : dict, optional
         Rows of each earlier delay file and how many the file before it
-        had (`data.releases.release_pairs`).
+        had (`nowcastutils.releases.release_pairs`).
     parents : mapping, optional
         The province of each zone. Defaults to the code's first five
         characters. The delay counts are by province, `masked` names

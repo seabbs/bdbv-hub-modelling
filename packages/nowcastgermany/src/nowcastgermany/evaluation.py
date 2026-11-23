@@ -62,7 +62,6 @@ from nowcastgermany.data import (
     hub_target,
     level,
     nowcast_tasks,
-    weekly_task,
     within_delay,
 )
 from nowcastutils.base import ForecastTask
@@ -466,18 +465,6 @@ def _tasks(
     return tasks
 
 
-def _own(model: Any, task: ForecastTask) -> ForecastTask:
-    """Return the task as `model` forecasts it.
-
-    A model of daily steps (`source` "daily": the daily Chronos-2 models
-    and `randomwalknowcast_daily`) forecasts every target date of a
-    `nowcast_tasks` task; a model of weekly steps, the hub weeks only
-    (`weekly_task`).
-    """
-    daily = getattr(model, "source", None) == "daily"
-    return task if daily else weekly_task(task)
-
-
 def _timed_prefetch(
     name: str,
     model: FoundationModel,
@@ -533,10 +520,10 @@ def germany_forecasts(
     horizons : sequence of int
         Days from each nowcast date to the end of each 7-day sum, the
         hub's 0 to -28 (`HORIZONS`) by default; days after it are
-        forecasts (`data.germany.nowcast_tasks`).
+        forecasts (`nowcastgermany.data.nowcast_tasks`).
     max_delay : int, optional
         The truth's delay (`GermanyConfig.truth_delay`): the models see
-        only the counts reported within it (`data.germany.within_delay`),
+        only the counts reported within it (`nowcastgermany.data.within_delay`),
         so they forecast the count the truth holds, not the eventual one.
         A `tasks_dir` must then be keyed on it.
     timings : list, optional
@@ -573,7 +560,7 @@ def germany_forecasts(
         }
         every = [t for ts in tasks.values() for t in ts]
         built = [
-            _timed_prefetch(name, m, [_own(m, t) for t in every], timings)
+            _timed_prefetch(name, m, every, timings)
             if isinstance(m, FoundationModel)
             else m
             for name, m in zip(models, built, strict=True)
@@ -594,9 +581,8 @@ def germany_forecasts(
         for task in mine:
             for name, model in zip(models, built, strict=True):
                 start = time.perf_counter()
-                own = _own(model, task)
                 at = forecast_quantiles(
-                    model, own, FORECAST_LEVELS, n_samples, seed
+                    model, task, FORECAST_LEVELS, n_samples, seed
                 )
                 spent[name] += time.perf_counter() - start
                 if at.empty:
@@ -604,7 +590,7 @@ def germany_forecasts(
                 # `hub_forecasts` moves rows to the hub's dates and places,
                 # carrying each row's level where it carries a sample.
                 moved = hub_forecasts(
-                    at.rename(columns={"quantile": "sample"}), own, date
+                    at.rename(columns={"quantile": "sample"}), task, date
                 )
                 frames.append(
                     moved.rename(
