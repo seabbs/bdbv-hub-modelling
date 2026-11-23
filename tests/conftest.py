@@ -12,6 +12,10 @@ from bdbvhub.data.tidy import load_daily, load_delays, load_target
 from nowcasteval.backtest import BacktestConfig
 from nowcastutils.base import ForecastTask
 
+# Chronos-2 never detects a device (`chronos2.torch_device`): the tests
+# run on the CPU unless the environment names one, as CI does.
+os.environ.setdefault("DEVICE", "cpu")
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "tests" / "fixtures" / "data"
 """A frozen copy of the tidy hub data. It is never refreshed: the

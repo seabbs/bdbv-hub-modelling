@@ -138,7 +138,6 @@ class Scoring:
         # config, which the machine may override).
         self.forecast = forecast.settings(config, local)
         self.unit_threads = self.forecast.threads
-        self.eval_device = self.forecast.device
 
     def checkpoint_labels(self, wc: Any = None) -> list[str]:  # noqa: ARG002
         """Return the checkpoints to score, less `score.skip`."""
@@ -157,8 +156,8 @@ class Scoring:
 
     def unit_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
         """Return the unit's device (torch and JAX), threads and batch."""
-        env = machine.torch_env(self.local, threads, self.eval_device)
-        env["JAX_PLATFORMS"] = forecast.JAX_PLATFORM[self.eval_device]
+        env = machine.torch_env(self.local, threads, self.forecast.device)
+        env["JAX_PLATFORMS"] = forecast.JAX_PLATFORM[self.forecast.device]
         return machine.shell_env(env)
 
     def unit_rows(self, study: str) -> Callable[[Any], str]:
