@@ -28,8 +28,10 @@ DEVICES = ("cpu", "cuda", "mps")
 GPU_MODES = ("exclusive", "share")
 """How a CUDA forecasting job meets the trainer's GPU."""
 
-JAX_PLATFORM = {"cpu": "cpu", "cuda": "cuda", "mps": "cpu"}
-"""JAX's platform for each device (JAX has no MPS backend)."""
+JAX_PLATFORM = {"cpu": "cpu", "cuda": "cuda,cpu", "mps": "cpu"}
+"""JAX's platforms for each device, in order: with cuda, JAX models run on
+CUDA where jaxlib has it and on the CPU where it has not (archie's
+jaxlib), while torch (Chronos-2) takes CUDA; JAX has no MPS backend."""
 
 THREAD_VARS = (
     "TORCH_THREADS",
@@ -73,7 +75,7 @@ class Forecast:
         """Return the environment a forecasting job runs with.
 
         `DEVICE` for torch (Chronos-2), `JAX_PLATFORMS` for JAX (the
-        renewal and walk models), the thread counts torch and BLAS read,
+        renewal and walk models; CUDA then the CPU for cuda), the thread counts torch and BLAS read,
         and a single-threaded XLA Eigen pool, kept beside flags already
         set.
         """
