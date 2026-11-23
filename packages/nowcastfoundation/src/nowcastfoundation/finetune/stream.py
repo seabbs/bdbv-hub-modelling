@@ -612,21 +612,42 @@ def cut(
 def cut_code_sha256() -> dict[str, str]:
     """Return the hashes of the code that decides the cut blocks.
 
-    The simulator and block-design files (`ft.CODE`), and the sources of
-    the trainer's sampling (`snapshots`, `cut`) and the foundation's
-    layout (`ft.FOUNDATION_CODE`). Not the whole trainer file: an edit to
-    training, evaluation or status leaves saved blocks valid
-    (`held_out_blocks`).
+    The block-design files (`ft.CODE` without the simulator's), and the
+    sources of the trainer's sampling (`snapshots`, `cut`) and the
+    foundation's layout (`ft.FOUNDATION_CODE`). Not the whole trainer
+    file: an edit to training, evaluation or status leaves saved blocks
+    valid (`held_out_blocks`). Not the simulator's source: the blocks are
+    cut from sims already on disk, whose own files the key hashes
+    (`sims_sha256`), so a simulator edit re-keys only new sims.
     """
     sources = {f"stream.{f.__name__}": f for f in (snapshots, cut)}
     sources |= {f"foundation.{f.__name__}": f for f in ft.FOUNDATION_CODE}
+    simulator = set(ft.SIMULATOR)
     return {
-        **{n: ft.code_sha256(p) for n, p in ft.CODE.items()},
+        **{
+            n: ft.code_sha256(p)
+            for n, p in ft.CODE.items()
+            if n not in simulator
+        },
         **{
             n: hashlib.sha256(inspect.getsource(f).encode()).hexdigest()
             for n, f in sources.items()
         },
     }
+
+
+def sims_sha256(sim_dir: Path, ids: Sequence[str]) -> dict[str, str]:
+    """Return the hashes of the sim files outbreaks `ids` are cut from.
+
+    Each of their seeds' counts and settings files (`cut`), by name.
+    """
+    seeds = sorted({ft._order(o)[0] for o in ids})
+    names = [
+        name
+        for s in seeds
+        for name in (f"counts-{s}.csv.gz", f"settings-{s}.csv")
+    ]
+    return {name: ft._sha256(Path(sim_dir) / name) for name in names}
 
 
 def init_worker(
@@ -1857,6 +1878,7 @@ def main(root: Path | None = None) -> None:
         "block_limit": ft.BLOCK_LIMIT,
         **layout_settings(ft.LAYOUT),
         "code_sha256": cut_code_sha256(),
+        "sims_sha256": sims_sha256(sim_dir, held),
     }
     val = held_out_blocks(out, key, cut_held_out)
 
@@ -1864,7 +1886,10 @@ def main(root: Path | None = None) -> None:
 
     def chunk_key(ids: Sequence[str]) -> dict[str, Any]:
         # A training chunk's blocks depend on what the held-out cut does.
-        return cut_key | {"outbreaks": list(ids)}
+        return cut_key | {
+            "outbreaks": list(ids),
+            "sims_sha256": sims_sha256(sim_dir, ids),
+        }
 
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
     torch.manual_seed(args.seed)
