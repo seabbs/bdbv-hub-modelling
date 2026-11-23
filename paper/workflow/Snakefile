@@ -249,6 +249,62 @@ rule ebola_hub:
         "rm -rf {params.hub} && mv {params.hub}.clone {params.hub}"
 
 
+if FLOW.store_history():
+
+    # Our stored forecasts made before each round closed, from the fit
+    # store's history release, checked against its checksum.
+    rule fit_store_history:
+        output:
+            FLOW.store_history(),
+        log:
+            f"{R}/logs/fit_store_history.log",
+        conda:
+            TOOLS_ENV
+        params:
+            repo=EBOLA["store_history"]["repo"],
+            tag=EBOLA["store_history"]["tag"],
+            asset=EBOLA["store_history"]["asset"],
+            tmp=f"{R}/evidence/fit-store-history.tmp",
+        shell:
+            "exec >{log} 2>&1; "
+            "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+            "gh release download {params.tag} -R {params.repo} "
+            "-p {params.asset} -p {params.asset}.sha256 -D {params.tmp} && "
+            "(cd {params.tmp} && sha256sum -c {params.asset}.sha256) && "
+            "mv {params.tmp}/{params.asset} {output} && rm -rf {params.tmp}"
+
+    # Opt-in: publish the fit store's history (`paperpipe fit-store-history`)
+    # with its checksum, replacing the release's assets.
+    rule publish_fit_store_history:
+        output:
+            touch(f"{R}/evidence/fit-store-history.published"),
+        log:
+            f"{R}/logs/publish_fit_store_history.log",
+        localrule: True
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+            repo=EBOLA["store_history"]["repo"],
+            branch=EBOLA["store_history"]["branch"],
+            tag=EBOLA["store_history"]["tag"],
+            asset=EBOLA["store_history"]["asset"],
+            tmp=f"{R}/evidence/history-upload",
+        shell:
+            "exec >{log} 2>&1; "
+            "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
+            "git fetch -q origin {params.branch} && "
+            "{params.python} -m paperpipe fit-store-history "
+            "--ref origin/{params.branch} --out {params.tmp}/{params.asset} && "
+            "(cd {params.tmp} && sha256sum {params.asset} > {params.asset}.sha256) && "
+            "(gh release view {params.tag} -R {params.repo} > /dev/null || "
+            "gh release create {params.tag} -R {params.repo} --prerelease "
+            "--title 'Fit store history' "
+            "--notes 'The first fit of each model and origin, made before its round closed.') && "
+            "gh release upload {params.tag} -R {params.repo} --clobber "
+            "{params.tmp}/{params.asset} {params.tmp}/{params.asset}.sha256"
+
+
 rule ebola_backtest_draws:
     input:
         f"{EBOLA['data']}/target.csv",
