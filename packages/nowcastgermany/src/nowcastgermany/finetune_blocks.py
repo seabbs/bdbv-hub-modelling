@@ -3,7 +3,7 @@
 The German hub triangle cut into training blocks as the German tasks lay
 it out, from reports before the first scored German date only
 (`window`), so the real-data run is never scored on what it trained on.
-Run as `python -m nowcastfoundation.finetune.germany TRIANGLE OUT`, the
+Run as `python -m nowcastgermany.finetune_blocks TRIANGLE OUT`, the
 window read from `config/germany.toml`.
 """
 
@@ -20,6 +20,8 @@ import pandas as pd
 
 from nowcastfoundation.finetune import AHEAD_WEEKS, training_block
 from nowcastfoundation.finetune import chronos as ft
+from nowcastgermany import data as de
+from nowcastgermany.evaluation import load_germany_config
 from nowcastutils.base import NATIONAL
 from nowcastutils.dates import epiweek_end
 
@@ -77,8 +79,6 @@ def german_counts(wide: pd.DataFrame, as_of: str) -> pd.DataFrame:
         `location`, `reference_date`, `report_date` and `count`, as
         `finetune.training_block` reads.
     """
-    from nowcastgermany import data as de
-
     long = de.hub_changes(wide)
     long = long.loc[long["delay"] <= 80]
     states = (long["age_group"] == de.ALL_AGES) & (
@@ -212,8 +212,6 @@ def make_blocks(
 
 def main() -> None:
     """Cut the German blocks, the window from the German config."""
-    from nowcastgermany.evaluation import load_germany_config
-
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("triangle", type=Path)
     parser.add_argument("out", type=Path)
