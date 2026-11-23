@@ -105,6 +105,7 @@ Outputs are in `<ROOT>/rounds/r<N>/`.
 Runs are entries of `runs` in `workflow/config.yaml`: a name and the `finetune` settings it changes (`workflow/flowlib/runs.py`).
 Every run takes the same rules through the `{run}` wildcard and keeps its files in `<ROOT>/runs/<run>/`; the rounds it trains on are shared.
 `finetune` trains the runs in `train_runs` (every run when unset).
+A run outside `train_runs` that another target asks for starts only after their final checkpoints.
 
 One continuous run of `scripts/finetune_stream.py` from base Chronos-2, cut into one segment per checkpoint prefix (`finetune.prefixes`).
 Segment N resumes from the state kept with the prefix before and stops once `n<N>` is saved (`--until N`).
