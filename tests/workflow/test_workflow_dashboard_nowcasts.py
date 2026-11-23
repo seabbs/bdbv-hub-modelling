@@ -417,3 +417,21 @@ def test_the_split_reaches_each_location_s_page_data(tmp_path):
     got = split["zero"]["7day"]["daily"]["2022-02-09"]
     assert got["nowcast"] == [None, 0]
     assert list(got["forecast"]) == ["1"]
+
+
+def test_a_dataset_shows_only_the_model_inputs_its_config_lists(tmp_path):
+    # Germany is daily only: weekly-input rows in its files are left out,
+    # and a model with no input of its own (randomwalknowcast) is shown
+    # under the daily input alone, not under a weekly one.
+    day = tmp_path / "reference" / "2022-02-09.csv.gz"
+    _quantiles(day, "fm_chronos_weekly_ragged")
+    _quantiles(
+        tmp_path / "reference" / "2022-02-10.csv.gz", "randomwalknowcast"
+    )
+    _quantiles(
+        tmp_path / "reference" / "2022-02-11.csv.gz", "fm_chronos_daily_ragged"
+    )
+    rs, refs = _setup()
+    built = nowcasts.build(tmp_path, rs, refs, levels=PAGE, sources={"daily"})
+    for by_target in built["series"]["DE"].values():
+        assert set(by_target["7day"]) == {"daily"}
