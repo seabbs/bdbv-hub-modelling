@@ -554,3 +554,37 @@ def test_ranges_keep_every_folder_s_files(tmp_path):
     zero = sorted(score["zero"]["7day"]["daily"])
     assert zero == ["2022-02-02", "2022-02-09"]
     assert list(score["aaaaaa"]["7day"]["daily"]) == ["2022-02-09"]
+
+
+def test_one_file_s_wis_is_scored_in_one_pass_whatever_its_dates(
+    tmp_path, monkeypatch
+):
+    # Scoring each date apart took minutes for a German run's files.
+    calls = []
+    real = nowcasts.wis_quantile
+
+    def counted(*args, **kwargs):
+        calls.append(len(args[0]))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(nowcasts, "wis_quantile", counted)
+    rs, refs = _setup()
+    ranges = {"all": (None, None), "nowcast": (None, 0), "forecast": (1, None)}
+    passes = []
+    for n in (4, 40):
+        _days(
+            tmp_path / str(n) / "reference" / "2022-02-09.csv.gz",
+            "fm_chronos_daily_ragged",
+            "2022-02-09",
+            range(-n // 2, n // 2),
+        )
+        calls.clear()
+        nowcasts.build(
+            tmp_path / str(n),
+            rs,
+            refs,
+            levels=nowcasts.LEVELS,
+            ranges=ranges,
+        )
+        passes.append(len(calls))
+    assert passes[0] == passes[1]

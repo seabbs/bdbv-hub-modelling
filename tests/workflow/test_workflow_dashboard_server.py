@@ -97,3 +97,36 @@ def test_sections_send_only_what_changed(server):
     # Unchanged parts come back as their hash alone; the clock moves on.
     for key in ("loss", "nowcasts", "tables"):
         assert second[key] == {"hash": first[key]["hash"]}
+
+
+def test_the_page_never_waits_on_a_nowcast_build(tmp_path, monkeypatch):
+    # A restart builds every nowcast file first; the page answers meanwhile
+    # (nowcasts empty until built), then shows the build once it is done.
+    ctx = _machine(tmp_path)
+    ctx.once = False
+    release = threading.Event()
+    real = dashboard.nowcasts.cached_build
+
+    def slow(*args, **kwargs):
+        release.wait(60)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(dashboard.nowcasts, "cached_build", slow)
+    dashboard.keep_warm(ctx, 3600)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), dashboard.handler(ctx))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}"
+    try:
+        with urllib.request.urlopen(url + "/", timeout=10) as r:
+            assert r.status == 200
+        assert ctx.nowcasts("germany") is None
+        release.set()
+        for _ in range(100):
+            if ctx.nowcasts("germany") is not None:
+                break
+            threading.Event().wait(0.1)
+        assert ctx.nowcasts("germany") is not None
+        assert status_of(url + "/data/germany/DE.json") == 200
+    finally:
+        release.set()
+        srv.shutdown()
