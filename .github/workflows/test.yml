@@ -211,6 +211,9 @@ jobs:
           extra-repositories: https://stan-dev.r-universe.dev
       # epinowcast at the commit the simulator's reporting ports, and
       # baselinenowcast 0.2.2 (not on CRAN yet: the commit that set it).
+      # fitdistrplus: primarycensored's fitdistdoublecens needs it (a
+      # Suggests), for tests/model/test_hub_imputation_delays.py. No
+      # comments inside `packages`: pak reads every line as a package.
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
           packages: |
@@ -222,8 +225,6 @@ jobs:
             any::jsonlite
             any::data.table
             any::flexsurv
-            # primarycensored's fitdistdoublecens, a Suggests, which
-            # tests/model/test_hub_imputation_delays.py calls.
             any::fitdistrplus
             any::posterior
           dependencies: '"hard"'

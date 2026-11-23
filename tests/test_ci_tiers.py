@@ -140,3 +140,20 @@ def test_the_r_live_job_installs_what_the_live_r_tests_call():
     # primarycensored's fitdistdoublecens needs fitdistrplus (a Suggests).
     for name in ("primarycensored", "flexsurv", "fitdistrplus"):
         assert name in packages
+
+
+def test_r_package_lists_hold_packages_only():
+    # pak reads every line of `packages` as a package, so a comment there
+    # breaks the install (r-live failed at setup-r-dependencies).
+    for path in WORKFLOWS.glob("*.yml"):
+        for job in (
+            yaml.safe_load(path.read_text()).get("jobs") or {}
+        ).values():
+            for step in job.get("steps", []):
+                listed = str((step.get("with") or {}).get("packages", ""))
+                bad = [
+                    ln
+                    for ln in listed.splitlines()
+                    if ln.strip().startswith("#")
+                ]
+                assert bad == [], f"{path.name}: {bad}"
