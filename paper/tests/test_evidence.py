@@ -9,6 +9,7 @@ import yaml
 from paperpipe.evidence import (
     EVIDENCE,
     aggregation_numbers,
+    realism_reference,
     write_evidence,
 )
 
@@ -54,6 +55,70 @@ def test_aggregation_is_relative_to_the_reference_on_shared_targets() -> None:
     assert numbers["ebola"]["national"]["fm"] == {"joint": 0.5, "level": 2.0}
 
 
+def _germany_stats() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {"kind": k, "statistic": s, "value": v}
+            for k, base in (("national", 1.0), ("states", 2.0), ("ages", 3.0))
+            for s, v in (("zero_share", base / 10), ("delay_q99", base * 10))
+        ]
+        + [{"kind": "national", "statistic": "only_germany", "value": 1.0}]
+    )
+
+
+def test_realism_compares_the_simulations_with_germany_only() -> None:
+    sims = pd.DataFrame(
+        {
+            "outbreak": [f"o{i}" for i in range(101)],
+            "zero_share": np.linspace(0, 1, 101),
+            "delay_q99": np.linspace(0, 100, 101),
+        }
+    )
+    ref = realism_reference(_germany_stats(), sims)
+    assert list(ref.columns) == [
+        "Germany national",
+        "Germany states",
+        "Germany ages",
+        "sim_q5",
+        "sim_q50",
+        "sim_q95",
+    ]
+    assert sorted(ref.index) == ["delay_q99", "zero_share"]
+    assert ref.loc["zero_share", "Germany states"] == 0.2
+    assert ref.loc["delay_q99", "sim_q95"] == pytest.approx(95.0)
+
+
+def test_the_realism_step_writes_the_rounds_and_the_reference(tmp_path) -> None:
+    from paperpipe.__main__ import main
+
+    germany = tmp_path / "germany.csv"
+    _germany_stats().to_csv(germany, index=False)
+    rounds = []
+    for r in (34, 35):
+        path = tmp_path / f"r{r}.csv"
+        pd.DataFrame({"outbreak": ["a", "b"], "zero_share": [0.1, 0.3]}).to_csv(
+            path, index=False
+        )
+        rounds.append(str(path))
+    sims, ref = tmp_path / "sims.csv", tmp_path / "ref.csv"
+    main(
+        [
+            "realism",
+            "--germany",
+            str(germany),
+            "--out-sims",
+            str(sims),
+            "--out-reference",
+            str(ref),
+            *rounds,
+        ]
+    )
+    assert len(pd.read_csv(sims)) == 4
+    got = pd.read_csv(ref, index_col=0)
+    assert list(got.index) == ["zero_share"]
+    assert "BDBV" not in got.columns
+
+
 def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
     out = write_evidence(
         dict.fromkeys(EVIDENCE),
@@ -65,7 +130,10 @@ def test_missing_evidence_leaves_a_note_and_no_numbers(tmp_path) -> None:
     assert (tmp_path / "fig" / "sim-realism.png").is_file()
     doc = yaml.safe_load((tmp_path / "e.yml").read_text())
     zero = doc["evidence"]["realism"]["zero_share"]
-    assert zero["BDBV"] == "(not yet available)"
+    assert zero == {
+        "sim_q95": "(not yet available)",
+        "Germany_states": "(not yet available)",
+    }
     assert len(out["evidence"]["waiting"]) == len(EVIDENCE)
 
 

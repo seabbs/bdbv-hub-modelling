@@ -18,6 +18,10 @@ final_checkpoints: []
 # workflow (workflow/config.yaml), under the machine's ROOT. Its held-out
 # loss curve is the SI's (rule heldout_curve).
 final_run: $ROOT/runs/runa
+# The simulation rounds' folder under the machine's ROOT (the workflow's
+# rounds): the SI's realism reads the grid's training rounds
+# (`grid_rounds.rounds`) and the German development half's statistics.
+rounds_dir: $ROOT/rounds
 # The live fine-tuning run (the checkpoint scores' `run`) whose newest
 # scored checkpoints the SI curve, comparisons and tables show as
 # preliminary, from `evidence.checkpoint_scores` at its branch head.
@@ -167,10 +171,6 @@ evidence:
   # Pending: the realised shares of each combination of block
   # layout and options.
   block_combinations: null
-  # Pending: summaries of the final grid's simulations.
-  sim_summaries: null
-  # Pending: the final grid's realism comparison.
-  sim_realism: null
   # Pending: the final grid's ranges against published values.
   sim_diseases: null
 
