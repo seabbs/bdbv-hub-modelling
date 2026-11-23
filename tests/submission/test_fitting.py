@@ -382,13 +382,14 @@ def test_chronos_track_metadata_is_the_committed_file(
         assert "chronos-ft-" in text
 
 
+@pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
 def test_nowcast_records_the_checkpoint_it_loaded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_checkpoint: str
 ) -> None:
     from nowcastfoundation import forecaster as foundation
 
-    def zeros(groups, horizon, n, _seed, checkpoint=None):  # type: ignore[no-untyped-def]
+    def zeros(groups, horizon, n, _seed, checkpoint=None, **_):  # type: ignore[no-untyped-def]
         assert checkpoint.hash == fake_checkpoint
         return [
             np.zeros((n, np.atleast_2d(g["target"]).shape[0], horizon))
@@ -396,6 +397,13 @@ def test_nowcast_records_the_checkpoint_it_loaded(
         ]
 
     monkeypatch.setattr(foundation, "chronos_sampler", zeros)
+    # The Gaussian coupling's fit runs Chronos-2 on earlier releases;
+    # independence keeps the test off the model and its adapter.
+    monkeypatch.setattr(
+        foundation.FoundationModel,
+        "_coupling_fit",
+        lambda *_: foundation.fit_coupling(np.empty((0, 0, 0)), "independent"),
+    )
     out = tmp_path / "ft"
     args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
     assert main(["nowcast", *args]) == 0

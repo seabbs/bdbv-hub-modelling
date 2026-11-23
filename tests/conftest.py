@@ -104,6 +104,24 @@ def _fake_checkpoint_releases(
     foundation.resolve_checkpoint.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _keep_the_checkpoint_pin():  # type: ignore[no-untyped-def]
+    """Restore `BDBV_CHRONOS_FT` after each test.
+
+    `nowcastfoundation.checkpoint._pin` writes it to `os.environ` for the
+    rest of a scoring process, which a monkeypatch would not undo when it
+    was unset before.
+    """
+    from nowcastfoundation.forecaster import FINETUNED_ENV
+
+    before = os.environ.get(FINETUNED_ENV)
+    yield
+    if before is None:
+        os.environ.pop(FINETUNED_ENV, None)
+    else:
+        os.environ[FINETUNED_ENV] = before
+
+
 @pytest.fixture
 def write_release():  # type: ignore[no-untyped-def]
     """Write a fake checkpoint release (`_write_checkpoint_release`)."""

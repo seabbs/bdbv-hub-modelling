@@ -59,6 +59,8 @@ def test_every_other_snakemake_run_reports_to_it(rel):
 
 
 def test_the_logger_plugin_is_in_the_workflow_group():
+    # The `paper` group installs Snakemake and the plugin together.
+    pytest.importorskip("snakemake")
     assert importlib.util.find_spec("snakemake_logger_plugin_panoptes")
 
 
