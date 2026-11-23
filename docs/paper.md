@@ -1,9 +1,12 @@
 # Paper
 
 A paper on fine-tuning Chronos-2 on simulated outbreaks for nowcasting.
+This page links to the rendered paper and to how it is reproduced.
 
-- [Main text](paper/main.html) and [supporting information](paper/si.html), with their PDFs.
-- [Reproducing the paper](https://github.com/seabbs/bdbv-hub-modelling/blob/main/paper/README.md): the workflow, its targets and how the held-out data are protected.
+## Where to start
+
+- To read it, start with the [main text](paper/main.html), then the [supporting information](paper/si.html). Both have PDFs.
+- To reproduce it, start with [Reproducing the paper](https://github.com/seabbs/bdbv-hub-modelling/blob/main/paper/README.md): the workflow, its targets and how the held-out data are protected.
 
 ```mermaid
 flowchart LR
@@ -21,3 +24,7 @@ flowchart LR
 
     This site shows the development run.
     Figures from a study without its real data yet are marked as illustrative, dummy data.
+
+Each step is a section of the [workflow](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md).
+
+Next: [Using the fine-tuned model](methods/finetuned-chronos.md).
