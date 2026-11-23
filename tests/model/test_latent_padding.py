@@ -74,6 +74,7 @@ def test_padded_r_keeps_its_days(relation: str) -> None:
             place_sd=0.3,
             place_rho=0.5,
             place_lags=[0, 9, 20],
+            place_region=[1, 1, 2],
             drift=1.7,
             coupling=0.4,
             horizon=horizon,
