@@ -1,6 +1,7 @@
 """A run's schedule and losses, for the status tiles and loss plots."""
 
 import json
+from datetime import datetime
 
 import pytest
 from flowlib.dashboard import logs, runs, training
@@ -340,16 +341,29 @@ def test_an_offloaded_run_s_step_evaluations_are_its_held_out_line(tmp_path):
     assert got["held_parts"]["forecast"] == [[50.0, 0.1], [100.0, 0.1]]
 
 
-def test_the_recent_rate_starts_after_a_restart_s_gap():
+def test_the_recent_rate_starts_at_the_trainer_s_resume(tmp_path):
     # Run A stopped 10:09 to 11:10: a window spanning it gave 0.10 steps/s
     # and an ETA of days. The rate is over the steps since the resume.
     before = [(0.0, 0.0), (600.0, 600.0)]
     after = [(4200.0, 600.0), (4300.0, 680.0), (4400.0, 760.0)]
-    rate, span = training.recent_rate(before + after, window=4200.0)
+    rate, span = training.recent_rate(
+        before + after, window=4400.0, since=4200.0
+    )
     assert rate == pytest.approx(0.8)
     assert span == pytest.approx(200.0)
     # One point since the resume: no rate yet, not the gap's.
-    assert training.recent_rate([*before, (4200.0, 610.0)]) == (None, None)
+    got = training.recent_rate([*before, (4200.0, 610.0)], since=4200.0)
+    assert got == (None, None)
+    # The resume is read from the newest segment log.
+    train = tmp_path / "train"
+    train.mkdir()
+    (train / "n3200.log").write_text(
+        "2026-11-23 13:09:17 [train] 90 held-out outbreaks, 3660 blocks\n"
+        "2026-11-23 13:09:18 [train] resumed at step 41800, outbreaks 1801-\n"
+    )
+    (train / "n3200.log.pin-014a2bac5").write_text("")
+    want = datetime(2026, 11, 23, 13, 9, 18).timestamp()
+    assert training.resumed_at(tmp_path) == want
 
 
 def test_only_checkpoint_folders_count_as_checkpoints(tmp_path):
