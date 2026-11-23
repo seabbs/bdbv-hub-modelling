@@ -116,11 +116,12 @@ def write_settings(where: Path, train: Path, step: int, done: int) -> None:
     settings are the last saved checkpoint's, less the counts and losses
     that are its own (`NOT_ITS_OWN`), with this one's outbreaks, steps
     and list hashes, `interim` and the checkpoint it follows
-    (`from_checkpoint`); its `hash` is taken from them as the trainer
-    takes a checkpoint's, so it verifies (`finetune-verify`) and is
-    released by the workflow as any checkpoint is.
+    (`from_checkpoint`). Its `hash` is taken from them less those
+    outside the hash (`verify.NOT_HASHED`), so it verifies
+    (`finetune-verify`) and the workflow releases it as any checkpoint.
     """
     from nowcastfoundation.finetune import chronos as ft
+    from nowcastfoundation.finetune import verify
 
     last = _last_checkpoint(train)
     trained = json.loads((train / "state" / "state.json").read_text())[
@@ -149,7 +150,9 @@ def write_settings(where: Path, train: Path, step: int, done: int) -> None:
         "interim": True,
         "from_checkpoint": last.name,
     }
-    settings["hash"] = ft._settings_hash(settings)
+    settings["hash"] = ft._settings_hash(
+        {k: v for k, v in settings.items() if k not in verify.NOT_HASHED}
+    )
     for key in ("code_commit", "code_paths", "device"):
         if key in kept:
             settings[key] = kept[key]
