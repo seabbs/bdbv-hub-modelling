@@ -280,3 +280,12 @@ dashboard:
         - {name: national, match: "^DE$"}
         - {name: states, match: "^DE-"}
         - {name: ages, match: "^(\\d\\d-\\d\\d|80\\+)$"}
+
+rt_check:
+  # The Rt sense check of a stored renewal fit (rule rt_check,
+  # bdbvhub.reporting.rtcheck): the fit-store checkout to read, the tidy
+  # hub data with its BVDOutbreakSize cache, and where pages go, as
+  # <out_dir>/<model>-<origin>.html.
+  store: output/fit-store
+  data: data
+  out_dir: results/rt-check

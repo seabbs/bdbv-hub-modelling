@@ -31,6 +31,7 @@ REPORTS = {
     "hub_comparison",
     "hub_rounds_report",
     "hub_rounds",
+    "rt_check",
 }
 
 
