@@ -190,7 +190,6 @@ properties:
     type: object
     additionalProperties: false
     required:
-      - runs
       - references
       - studies
       - levels
@@ -199,11 +198,9 @@ properties:
       - rule
       - held_out
       - mail_filter
-      - mirror
-      - mirror_every
+      - refresh_every
       - datasets
     properties:
-      runs: {type: array}
       references:
         type: array
         items:
@@ -231,8 +228,7 @@ properties:
           studies: {$ref: "#/$defs/labels"}
           mail: {type: string}
       mail_filter: {type: string}
-      mirror: {type: string}
-      mirror_every: {$ref: "#/$defs/positive"}
+      refresh_every: {$ref: "#/$defs/positive"}
       datasets:
         type: array
         items:

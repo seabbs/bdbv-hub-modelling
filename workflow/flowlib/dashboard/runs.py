@@ -1,29 +1,17 @@
 """The runs and references a dashboard shows, from configuration.
 
-Nothing about which runs exist is in the code. Runs come in three layers,
-each replacing a run of the same name from the one before: the
-committed `dashboard.runs` of workflow/config.yaml, then `DASHBOARD_RUNS`
-in config/local.env (specs separated by `;`), then `--run` on the
-command line. A run spec is
-
-    name=SOURCE[,label=L][,colour=C][,hue=H][,live][,base=OTHER][,prefix=P]
-        [,hashes=H1+H2][,n=H1:250+H2:500]
-
-A spec splits only at a comma that starts a known field, so a value may
-hold commas not followed by a field name (a regex such as `a{1,2}`).
-Config entries are read as they are, so their labels may hold anything.
-
-SOURCE is a training output folder (its `train/n<N>/settings.json` name
-the run's checkpoints) or a release prefix ending in `-`, such as
-`realdata-ft-`. `hashes` and `n` name checkpoints a run has no folder
-for. `base` names the run whose step-0 losses are the base model's.
-One run is `live`, the one the status follows; by default the first.
+Nothing about which runs exist is in the code. The runs are the
+workflow's (`runs` in workflow/config.yaml, `flowlib.dashboard.context`),
+each its training output folder, whose `train/n<N>/settings.json` name
+its checkpoints. One run is `live`, the one the status follows.
 
 References (zero-shot ragged, complete-data only, randomwalknowcast)
 match score and forecast rows by a model regex and, optionally, a
-checkpoint value, in the same layers: `dashboard.references`, then
-`--ref` specs
-`name=MODEL_REGEX[,checkpoint=C][,label=L][,colour=C][,role=R]`.
+checkpoint value: `dashboard.references`, then `--ref` specs
+`name=MODEL_REGEX[,checkpoint=C][,label=L][,colour=C][,role=R]`, each
+replacing a reference of the same name. A spec splits only at a comma
+that starts a known field, so a value may hold commas not followed by a
+field name (a regex such as `a{1,2}`).
 """
 
 from __future__ import annotations
@@ -31,25 +19,15 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from nowcasteval import labels
 
 PALETTE = labels.RUN_SHADES
-"""Colours of runs that name none, in order (`labels.RUN_SHADES`; the
-context names and colours every run as the fine-tuned model)."""
+"""Colours of runs, in order (`labels.RUN_SHADES`; the context names and
+colours every run as the fine-tuned model)."""
 
-RUN_FIELDS = {
-    "label",
-    "colour",
-    "live",
-    "base",
-    "prefix",
-    "hashes",
-    "n",
-    "hue",
-}
 REF_FIELDS = {"label", "colour", "checkpoint", "role"}
 ROLES = {"baseline", "start", "other"}
 """A reference's role on the score panels: the series scores are relative
@@ -65,24 +43,7 @@ class Run:
     label: str
     colour: str = ""
     folder: Path | None = None
-    prefix: str | None = None
-    hashes: tuple[str, ...] = ()
-    n: Mapping[str, int] = field(default_factory=dict)
-    base: str | None = None
     live: bool = False
-    hue: int | None = None
-
-
-def shade(run: Run, rank: int, count: int) -> str:
-    """Return the colour of a run's `rank`th checkpoint of `count`.
-
-    A run with a `hue` shades its checkpoints from light (earliest) to
-    dark (latest); a run with a fixed colour keeps it.
-    """
-    if run.hue is None:
-        return run.colour
-    light = 46 if count < 2 else 66 - 28 * rank / (count - 1)
-    return f"hsl({run.hue},80%,{light:.0f}%)"
 
 
 @dataclass(frozen=True)
@@ -117,7 +78,7 @@ def _split(spec: str, fields: set[str]) -> tuple[str, str, dict[str, str]]:
     known = "|".join(sorted(fields))
     head, *rest = re.split(rf",(?=(?:{known})(?:=|,|$))", spec)
     if "=" not in head:
-        raise ValueError(f"a spec is name=SOURCE[,key=value...], not {spec!r}")
+        raise ValueError(f"a spec is name=VALUE[,key=value...], not {spec!r}")
     name, value = (x.strip() for x in head.split("=", 1))
     stray = re.search(r",([A-Za-z_]+)=", value)
     if stray:
@@ -131,95 +92,27 @@ def _split(spec: str, fields: set[str]) -> tuple[str, str, dict[str, str]]:
 
 def make_run(
     key: str,
-    source: str,
+    folder: Path | str | None,
     *,
     label: str | None = None,
     colour: str = "",
     live: bool = False,
-    base: str | None = None,
-    prefix: str | None = None,
-    hashes: Sequence[str] = (),
-    n: Mapping[str, int] | None = None,
-    hue: int | None = None,
 ) -> Run:
-    """Return a run; SOURCE is a folder, or a release prefix ending in `-`."""
-    is_prefix = source.endswith("-") and "/" not in source
+    """Return a run of a training output folder."""
     return Run(
         key=key,
         label=label or key,
-        colour=colour or "",
-        folder=None if is_prefix else Path(source).expanduser(),
-        prefix=source if is_prefix else prefix,
-        hashes=tuple(hashes),
-        n=dict(n or {}),
-        base=base,
-        live=bool(live),
-        hue=None if hue is None else int(hue),
+        colour=colour,
+        folder=None if folder is None else Path(folder).expanduser(),
+        live=live,
     )
 
 
-def parse_run(spec: str) -> Run:
-    """Return the run of a `name=SOURCE[,...]` spec."""
-    name, source, o = _split(spec, RUN_FIELDS)
-    sizes = {}
-    for pair in filter(None, o.get("n", "").split("+")):
-        h, _, size = pair.partition(":")
-        sizes[h] = int(size)
-    return make_run(
-        name,
-        source,
-        label=o.get("label"),
-        colour=o.get("colour", ""),
-        live="live" in o,
-        base=o.get("base"),
-        prefix=o.get("prefix"),
-        hashes=tuple(filter(None, o.get("hashes", "").split("+"))),
-        n=sizes,
-        hue=int(o["hue"]) if o.get("hue") else None,
-    )
-
-
-def _from_config(entry: Mapping) -> Run:
-    return make_run(
-        entry["key"],
-        entry["source"],
-        label=entry.get("label"),
-        colour=entry.get("colour", ""),
-        live=bool(entry.get("live")),
-        base=entry.get("base"),
-        prefix=entry.get("prefix"),
-        hashes=tuple(entry.get("hashes") or ()),
-        n={h: int(v) for h, v in (entry.get("n") or {}).items()},
-        hue=entry.get("hue"),
-    )
-
-
-def load_runs(
-    config: Iterable[Mapping], machine: str, cli: Sequence[str]
-) -> list[Run]:
-    """Return the runs of the three layers, in order, one live."""
-    out: dict[str, Run] = {}
-    layers = [
-        [_from_config(e) for e in config],
-        [parse_run(s) for s in machine.split(";") if s.strip()],
-        [parse_run(s) for s in cli],
-    ]
-    # A later layer replaces a run in place, keeping its order.
-    for layer in layers:
-        for r in layer:
-            out[r.key] = r
-    runs = list(out.values())
-    live = [r.key for r in runs if r.live]
-    first = live[-1] if live else (runs[0].key if runs else None)
+def load_runs(runs: Iterable[tuple[str, Path | str]]) -> list[Run]:
+    """Return a run of each (name, folder), the first live."""
     return [
-        replace(
-            r,
-            live=r.key == first,
-            colour=r.colour
-            or (shade(r, 0, 1) if r.hue is not None else "")
-            or PALETTE[i % len(PALETTE)],
-        )
-        for i, r in enumerate(runs)
+        make_run(name, folder, live=i == 0, colour=PALETTE[i % len(PALETTE)])
+        for i, (name, folder) in enumerate(runs)
     ]
 
 
@@ -331,15 +224,11 @@ class Classifier:
 
     def run_of(self, name: str) -> str | None:
         """Return the run of a checkpoint name, or None if none claims it."""
-        key, prefix = split_label(name)
+        key, _ = split_label(name)
         if key in self.excluded:
             return None
-        bare = prefix.removeprefix("chronos-")
         for r in self.runs:
-            if key in r.hashes or key in self._saved[r.key]:
-                return r.key
-        for r in self.runs:
-            if r.prefix and r.prefix in (prefix, bare):
+            if key in self._saved[r.key]:
                 return r.key
         return None
 

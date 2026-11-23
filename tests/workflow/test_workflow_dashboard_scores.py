@@ -1,6 +1,10 @@
 """Score panels read whichever runs and references are configured."""
 
+import tempfile
+from pathlib import Path
+
 import pytest
+from dashboard_helpers import saved_run
 from flowlib.dashboard import runs, scores
 
 RULE = "own-quantile-wis_crps-1000-common"
@@ -20,9 +24,13 @@ def _row(model, checkpoint, study="germany", n="", value="0.9", rule=RULE):
 
 
 def _which():
-    rs = runs.load_runs(
-        [], "slots=slots-,colour=#111;realdata=realdata-ft-,colour=#222", []
-    )
+    tmp = Path(tempfile.mkdtemp())
+    rs = [
+        saved_run(tmp / "slots", "slots", ("aaaaaa",), colour="#111"),
+        saved_run(
+            tmp / "realdata", "realdata", ("bbbbbb",), live=False, colour="#222"
+        ),
+    ]
     refs = runs.load_references(
         [
             {
@@ -104,7 +112,7 @@ def test_the_first_scored_run_and_the_references_are_shown_first():
 
 
 def test_reference_roles_go_to_the_page():
-    rs = runs.load_runs([], "a=a-", [])
+    rs = [runs.make_run("a", None, live=True)]
     refs = runs.load_references(
         [
             {

@@ -173,11 +173,8 @@ score:
 
 dashboard:
   # The fine-tuning dashboard (task nowcast-foundation:dashboard; workflow/flowlib/dashboard).
-  # Runs on every machine: release-prefix runs need no paths. Runs with a
-  # local folder go in DASHBOARD_RUNS in config/local.env or --run, as
-  # name=<folder|prefix>[,label=..][,colour=..][,live][,base=..]
-  # [,prefix=..][,hashes=h1+h2][,n=h1:250+h2:500].
-  runs: []
+  # It shows the workflow's runs (`runs` above), each in <ROOT>/runs/<run>,
+  # or those --run NAME picks; the first is the live run.
   # Reference series, matched on rows by model and checkpoint; --ref adds
   # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]
   # [,role=..]). Role: baseline (scores are relative to it), start (each
@@ -205,13 +202,13 @@ dashboard:
     held_out: held-out synthetic
   levels: [national, states, age, provinces]
   score_defaults: {target: 7day, metric: wis, source: daily, level: national}
-  # Checkpoints no panel shows (more, and folders, in the local file).
+  # Checkpoints no panel shows.
   exclude: {hashes: []}
   # The checkpoint scores' rule shown.
   rule: own-quantile-wis_crps-1000-common
   # Held out of model development: BDBV (Ebola) is entirely held out for
   # the paper, so no panel, selector, table or mailbox line shows its
-  # scores or nowcasts, even if a machine's local file adds them.
+  # scores or nowcasts.
   # Datasets and score studies by key; mailbox lines matching `mail`.
   held_out:
     datasets: [bdbv]
@@ -219,13 +216,12 @@ dashboard:
     mail: "\\bebola\\b|\\bBDBV\\b(?![-_])"
   # Mailbox lines shown (a regular expression).
   mail_filter: "slots|ckpt-scores|fm-finetune|sim round|workflow:"
-  # Where scores are mirrored to when REMOTE is set, and how often (s).
-  mirror: output/dashboard/mirror
-  mirror_every: 300
+  # How often the server rebuilds the nowcast panels' data (s).
+  refresh_every: 300
   # The nowcast panels' datasets, in selector order. Rows carry quantile,
-  # value and truth. source: the per-checkpoint forecast folders (default:
-  # SCORE_CACHE/<key>; a local file can name a "host:path"). sources: the
-  # model inputs shown (daily, weekly), or all.
+  # value and truth, from the per-checkpoint forecast folders in
+  # SCORE_CACHE/<unit>. sources: the model inputs shown (daily, weekly),
+  # or all.
   # target: a line under the panels saying what every model forecasts.
   # truth: the truth line's caption.
   datasets:

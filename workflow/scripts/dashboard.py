@@ -1,12 +1,11 @@
 """Serve the fine-tuning dashboard, or write it once as a static page.
 
-    dashboard.py [--port 8765] [--run SPEC ...] [--ref SPEC ...]
-    dashboard.py --once FILE [--run SPEC ...]
+    dashboard.py [--port 8765] [--run NAME ...] [--ref SPEC ...]
+    dashboard.py --once FILE [--run NAME ...]
 
-Runs and references come from workflow/config.yaml's `dashboard`,
-`DASHBOARD_RUNS` in config/local.env, and `--run`/`--ref` (see
-`flowlib.dashboard.runs`). With `REMOTE` set, the scores are mirrored
-read-only before each page. Serves on 127.0.0.1 only.
+The runs are the workflow's (`runs` in workflow/config.yaml), or those
+`--run` names; references come from its `dashboard` section and `--ref`
+(see `flowlib.dashboard.context`). Serves on 127.0.0.1 only.
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--once", type=Path, metavar="FILE")
-    p.add_argument("--run", action="append", default=[], metavar="SPEC")
+    p.add_argument("--run", action="append", default=[], metavar="NAME")
     p.add_argument("--ref", action="append", default=[], metavar="SPEC")
     p.add_argument("--config", type=Path, default=CONFIG)
     return p
@@ -110,15 +109,12 @@ def handler(ctx: page.Context) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def keep_mirrored(ctx: page.Context, every: float) -> None:
-    """Refresh copies and warm nowcasts every `every` s, outside requests."""
+def keep_warm(ctx: page.Context, every: float) -> None:
+    """Build each dataset's nowcasts every `every` s, outside requests."""
 
     def loop() -> None:
         while True:
-            status = ctx.source.refresh()
             with LOCK:
-                ctx.mirror_status = status
-                # Warm each dataset's nowcasts, so pages do not build them.
                 for ds in ctx.datasets:
                     ctx.nowcasts(ds["key"])
             time.sleep(every)
@@ -126,19 +122,11 @@ def keep_mirrored(ctx: page.Context, every: float) -> None:
     threading.Thread(target=loop, daemon=True).start()
 
 
-def write_once(ctx: page.Context, out: Path) -> int:
-    """Refresh the mirror and write the page to `out`.
-
-    Returns 1 if the score mirror failed, so the page shows the failure
-    and the caller fails too, else 0. A failed mailbox copy is shown on
-    the page but does not fail it, as the mailbox is optional.
-    """
-    ctx.mirror_status = ctx.source.refresh()
-    print(ctx.mirror_status)
+def write_once(ctx: page.Context, out: Path) -> None:
+    """Write the page to `out`."""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(page.build(ctx))
     print("wrote", out)
-    return int(ctx.mirror_status.startswith("mirror failed"))
 
 
 def main() -> None:
@@ -149,10 +137,10 @@ def main() -> None:
         config, localconfig.read(), runs=a.run, refs=a.ref, once=bool(a.once)
     )
     if a.once:
-        sys.exit(write_once(ctx, a.once))
-    # Copies and nowcasts are kept fresh in the background, from the start
-    # and also on a machine whose sources are all local, so no page waits.
-    keep_mirrored(ctx, float(config["dashboard"].get("mirror_every", 300)))
+        write_once(ctx, a.once)
+        return
+    # Nowcasts are kept fresh in the background, so no page waits.
+    keep_warm(ctx, float(config["dashboard"]["refresh_every"]))
     server = ThreadingHTTPServer(("127.0.0.1", a.port), handler(ctx))
     print(f"http://127.0.0.1:{a.port}/")
     server.serve_forever()
