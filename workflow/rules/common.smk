@@ -9,13 +9,13 @@ import tomllib
 from flowlib import (
     compute,
     evaluations,
-    grids,
     runs,
     hosts,
     localconfig,
     manifest,
     notify,
     releases,
+    rounds,
     scoring,
     segments,
     simulator,
@@ -24,8 +24,6 @@ from flowlib import (
 from nowcastfoundation.sidecar import HELD_OUT_BLOCKS, SIDECAR
 
 LOCAL = localconfig.read()
-HOST = LOCAL["HOST_NAME"]
-ROUNDS_DIR = f"{LOCAL['ROOT']}/rounds"
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"
@@ -41,90 +39,28 @@ def job_prefix(mem_mb):
     return LOCAL["JOB_PREFIX"].replace("{mem}", f"{int(mem_mb)}M")
 
 
-# From simulate.smk.
+# From simulate.smk (flowlib.rounds).
 
-SIM = config["simulate"]
-REMOTE = LOCAL["REMOTE"]
-REMOTE_ROUNDS = f"{LOCAL['REMOTE_ROOT'] or LOCAL['ROOT']}/rounds"
-
-
-def seeds_of(round_):
-    """A round's batch seeds, its grid block."""
-    return segments.round_seeds(int(round_), SIM["seed_base"], SIM["batches"])
-
-
-MINE = hosts.seeds(LOCAL["SIM_SEEDS"], seeds_of)
-
-
-def here(seed):
-    """Whether this host simulates batch `seed`."""
-    return hosts.simulates(int(seed), MINE)
-
-
-# The grid the simulator runs (its factors and sampling distributions).
-GRID_FILE = SIM["grid_file"]
-
-
-def batch_priority(wc):
-    """A batch's priority: 15, earlier seeds a fraction higher."""
-    return segments.batch_priority(int(wc.seed), 15, SIM["seed_base"])
-
-
-def batch_files(wc):
-    """A batch's files: simulated here, or pushed by its host."""
-    if here(wc.seed):
-        return {
-            "counts": rules.simulate_batch.output.counts.format(**wc),
-            "settings": rules.simulate_batch.output.settings.format(**wc),
-        }
-    return {"arrived": rules.await_batch.output[0].format(**wc)}
-
-
-def grid_id():
-    """The grid file the simulator runs, as its manifest identifier."""
-    return simulator.grid_id(GRID_FILE)
-
-
-def round_records(wc):
-    """A round's batch manifest rows."""
-    return [
-        f"{ROUNDS_DIR}/r{wc.round}/records/record-{s}.csv" for s in seeds_of(wc.round)
-    ]
-
-
-def round_sims(wc):
-    """A round's batches' counts, settings and latent files."""
-    kinds = (("counts", "csv.gz"), ("settings", "csv"), ("latent", "csv.gz"))
-    return [
-        f"{ROUNDS_DIR}/r{wc.round}/sims/{kind}-{seed}.{ext}"
-        for seed in seeds_of(wc.round)
-        for kind, ext in kinds
-    ]
-
-
-def release_owner(wc):
-    """Which grid round `wc.round`'s release belongs to (flowlib.grids)."""
-    return grids.owner(
-        int(wc.round), config["grid_rounds"], config.get("retired_rounds")
-    )
-
-
-def release_check(wc):
-    """Raise unless the rounds asked for may be released (flowlib.grids)."""
-    retired = config.get("retired_rounds")
-    return grids.check_release(config["rounds"], config["grid_rounds"], retired) or []
-
-
-def round_sources(wc, input):
-    """`r<N>=<file>` for each round in `rounds` and its file."""
-    return " ".join(f"r{r}={path}" for r, path in zip(config["rounds"], input))
-
-
-def summary_sources(rounds, summaries):
-    """`r<N>=<round's sims>:<summary>` for each round and its summary."""
-    return " ".join(
-        f"r{r}={ROUNDS_DIR}/r{r}/sims:{path}" for r, path in zip(rounds, summaries)
-    )
+ROUNDS = rounds.Rounds(config, LOCAL, rules)
+SIM = ROUNDS.sim
+ROUNDS_DIR = ROUNDS.dir
+REMOTE = ROUNDS.remote
+REMOTE_ROUNDS = ROUNDS.remote_dir
+GRID_FILE = ROUNDS.grid_file
+seeds_of = ROUNDS.seeds_of
+round_of = ROUNDS.round_of
+here = ROUNDS.here
+batch_priority = ROUNDS.batch_priority
+batch_files = ROUNDS.batch_files
+round_records = ROUNDS.round_records
+round_sims = ROUNDS.round_sims
+release_owner = ROUNDS.release_owner
+release_check = ROUNDS.release_check
+round_sources = ROUNDS.round_sources
+summary_sources = ROUNDS.summary_sources
+write_record = ROUNDS.write_record
+mark_ready = ROUNDS.mark_ready
+push_record = ROUNDS.push_record
 
 
 # From finetune.smk.
@@ -232,10 +168,6 @@ def offloaded(run, n):
         return []
     train = train_dir(run)
     return [f"{train}/n{n}/{SIDECAR}", f"{train}/evals/n{n}.done"]
-
-
-def round_of(seed):
-    return (int(seed) - SIM["seed_base"]) // 100
 
 
 def heldout_curve_inputs(wc):
@@ -483,41 +415,6 @@ def unit_stamps(wc=None):
 
 
 # The longer run directives' steps.
-
-
-def write_record(input, output, params, wildcards):
-    """Write a batch's manifest row, kept if the manifest has it."""
-    manifest.record(
-        output[0], params.old, params.sims, round_=int(wildcards.round),
-        seed=int(wildcards.seed), mine=here(wildcards.seed), **batch_fields(),
-    )  # fmt: skip
-
-
-def batch_fields():
-    """The manifest row fields a batch takes from this host and grid."""
-    return {
-        "grid": grid_id(),
-        "draws": SIM["draws"],
-        "batch": SIM["batch"],
-        "host": HOST,
-    }
-
-
-def mark_ready(input, output, params, wildcards):
-    """Write a round's seed list and READY, and say so."""
-    seeds = seeds_of(wildcards.round)
-    manifest.mark_ready(seeds, output.seeds, output.ready)
-    qc = Path(input[0]).read_text().strip()
-    say(f"round {wildcards.round} ready: {len(seeds)} batches, one grid block; {qc}")
-
-
-def push_record(input, output, params, wildcards):
-    """Send a helping host's batch and its manifest row to the rounds host."""
-    s = int(wildcards.seed)
-    row = manifest.new_row(
-        params.sims, round_=int(wildcards.round), seed=s, **batch_fields()
-    )
-    hosts.push(params.sims, s, params.there, row, REMOTE)
 
 
 @functools.cache
