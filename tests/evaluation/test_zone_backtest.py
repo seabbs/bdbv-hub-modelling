@@ -5,9 +5,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhub.data.tidy import load_daily, load_daily_zones
-from bdbvhub.data.zones import hub_zones
 from bdbvhub.zones import ZONE_BASELINE, zone_backtest, zone_relative_skill
+from nowcastbdbv.data.tidy import load_daily, load_daily_zones
+from nowcastbdbv.data.zones import hub_zones
 
 DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 

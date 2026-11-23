@@ -81,7 +81,7 @@ jobs:
         run: >-
           uv run --group paper pytest -q -n auto --dist worksteal --durations=30
           --junitxml=pytest-durations.xml
-          ${{ github.ref == 'refs/heads/main' && '--cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=bdbvhub --cov-report=term-missing --cov-report=xml' || '' }}
+          ${{ github.ref == 'refs/heads/main' && '--cov=nowcastutils --cov=nowcasteval --cov=nowcastbaselines --cov=nowcastfoundation --cov=nowcastrenewal --cov=nowcastgermany --cov=nowcastbdbv --cov=bdbvhub --cov-report=term-missing --cov-report=xml' || '' }}
       - name: Paper tests
         working-directory: paper
         run: uv run --group paper pytest -q -n auto --dist worksteal --durations=10 tests

@@ -225,7 +225,7 @@ def load_province_centres() -> pd.DataFrame:
         Columns `location`, `latitude`, `longitude`, `worldpop` and
         `zones`.
     """
-    path = files("bdbvhub.data").joinpath("province_centres.csv")
+    path = files("nowcastbdbv.data").joinpath("province_centres.csv")
     with path.open() as fh:
         return pd.read_csv(fh, comment="#")
 
@@ -1019,7 +1019,7 @@ def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
 
     Examples
     --------
-    >>> from bdbvhub.data.tidy import load_target, vintages
+    >>> from nowcastbdbv.data.tidy import load_target, vintages
     >>> target = load_target()
     >>> latest = vintages(target, kind="real")[-1]
     >>> target.loc[target["vintage"] == latest].head()
@@ -1044,7 +1044,7 @@ def load_daily(data_dir: Path | str | None = None) -> pd.DataFrame:
 
     Examples
     --------
-    >>> from bdbvhub.data.tidy import load_daily
+    >>> from nowcastbdbv.data.tidy import load_daily
     >>> daily = load_daily()
     >>> daily.groupby("vintage")["observed"].sum().tail()
     """
@@ -1087,7 +1087,7 @@ def load_delays(data_dir: Path | str | None = None) -> pd.DataFrame:
 
     Examples
     --------
-    >>> from bdbvhub.data.tidy import delays_for_vintage, load_delays
+    >>> from nowcastbdbv.data.tidy import delays_for_vintage, load_delays
     >>> delays, note = delays_for_vintage(load_delays(), "2026-10-17")
     >>> delays["delay"].describe()
     """

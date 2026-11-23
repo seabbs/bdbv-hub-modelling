@@ -11,12 +11,12 @@ import pandas as pd
 import pytest
 
 from bdbvhub.cli import main
-from bdbvhub.data.tidy import coherence_summary, national_coherence
 from bdbvhub.submission.fitting import (
     get_config,
     randomwalk_config,
     register_config,
 )
+from nowcastbdbv.data.tidy import coherence_summary, national_coherence
 from nowcasteval.plots import plot_submission
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -213,7 +213,7 @@ def test_cli_plot_ppc(tmp_path: Path) -> None:
 def test_delays_for_vintage_uses_the_latest_available(
     delays: pd.DataFrame,
 ) -> None:
-    from bdbvhub.data.tidy import delays_for_vintage
+    from nowcastbdbv.data.tidy import delays_for_vintage
 
     have = str(delays["vintage"].max())
     same, note = delays_for_vintage(delays, have)
@@ -472,7 +472,7 @@ def test_cli_prints_the_checkpoint_a_run_resolves(
 def test_zone_coherence(
     target: pd.DataFrame, health_zones: pd.DataFrame
 ) -> None:
-    from bdbvhub.data.tidy import zone_coherence
+    from nowcastbdbv.data.tidy import zone_coherence
 
     table = zone_coherence(target, health_zones)
     assert set(table["level"]) == {"province", "national"}
@@ -485,7 +485,7 @@ def test_zone_coherence(
 def test_zone_coherence_reports_cases_in_no_zone(
     target: pd.DataFrame, health_zones: pd.DataFrame
 ) -> None:
-    from bdbvhub.data.tidy import zone_coherence
+    from nowcastbdbv.data.tidy import zone_coherence
 
     zones = health_zones.copy()
     row = zones.index[

@@ -12,9 +12,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.zones import ZoneData, load_zone_data
 from bdbvhub.models import get_model
 from bdbvhub.store import store
+from nowcastbdbv.data.zones import ZoneData, load_zone_data
 from nowcasteval.backtest import (
     BacktestConfig,
     make_tasks,
@@ -350,7 +350,9 @@ def test_fit_time_data_files_key_a_fit(tmp_path: Path) -> None:
     # The gravity kernel reads the province centres at fit time.
     root = _copy_repo(tmp_path)
     before = store.code_digest("renewal", root)
-    path = root / "packages/bdbvhub/src/bdbvhub/data/province_centres.csv"
+    path = (
+        root / "packages/nowcastbdbv/src/nowcastbdbv/data/province_centres.csv"
+    )
     path.write_text(path.read_text() + "CD-XX,0.0,0.0\n")
     assert store.code_digest("renewal", root) != before
 

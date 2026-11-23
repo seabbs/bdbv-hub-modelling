@@ -272,7 +272,7 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     import numpy as np
 
     from bdbvhub.cli import _stored
-    from bdbvhub.data.tidy import load_target
+    from nowcastbdbv.data.tidy import load_target
     from nowcasteval.backtest import run_forecasts
     from nowcasteval.scoring import energy_scores
     from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
@@ -576,7 +576,7 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
     import argparse
 
     from bdbvhub import cli
-    from bdbvhub.data.tidy import load_delays
+    from nowcastbdbv.data.tidy import load_delays
     from nowcasteval import backtest as bt
     from nowcasteval.nowcast import (
         ReleaseBacktest,
@@ -739,7 +739,7 @@ def test_loaders_follow_bdbv_data_dir_after_the_cli_starts(
     cwd, env = _outside_repo(tmp_path)
     code = (
         "from bdbvhub.cli import main\n"
-        "from bdbvhub.data.tidy import load_locations\n"
+        "from nowcastbdbv.data.tidy import load_locations\n"
         "main(['--version'])\n"
         "print(len(load_locations()))\n"
     )
@@ -897,7 +897,7 @@ def test_stored_samples_take_every_week_of_the_stored_fit(
     import json
 
     from bdbvhub.cli import _stored
-    from bdbvhub.data.tidy import load_target
+    from nowcastbdbv.data.tidy import load_target
 
     weeks = ["2026-09-12", "2026-09-19", "2026-09-26", "2026-10-03"]
     store = tmp_path / "store"

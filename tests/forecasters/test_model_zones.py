@@ -8,10 +8,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhub.data.tidy import load_daily_zones
-from bdbvhub.data.zones import hub_zones, load_zone_data
 from bdbvhub.models import get_model
 from nowcastbaselines.zones import ZoneAllocator, with_zones
+from nowcastbdbv.data.tidy import load_daily_zones
+from nowcastbdbv.data.zones import hub_zones, load_zone_data
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcastrenewal import forecaster as rn
 from nowcastutils.base import ForecastTask

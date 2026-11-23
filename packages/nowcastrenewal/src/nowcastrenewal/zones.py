@@ -76,7 +76,7 @@ def _data_dir() -> Path:
 
 
 def _daily_zones() -> pd.DataFrame:
-    from bdbvhub.data.tidy import load_daily_zones
+    from nowcastbdbv.data.tidy import load_daily_zones
 
     return load_daily_zones(_data_dir())
 
@@ -288,7 +288,7 @@ def zone_bvd_rows(
         path.write_bytes(body)
     est = pd.read_csv(path)
     if names is None:
-        from bdbvhub.data.tidy import load_health_zones
+        from nowcastbdbv.data.tidy import load_health_zones
 
         names = load_health_zones(_data_dir())
     hub = names.drop_duplicates("location")
@@ -587,7 +587,7 @@ class ZoneRenewalModel(RenewalModel):
         digest = hashlib.sha256(mine.to_csv(index=False).encode())
         digest.update(repr(_zones_of(task)).encode())
         if model_config(self.variant).bvd:
-            from bdbvhub.data.tidy import load_health_zones
+            from nowcastbdbv.data.tidy import load_health_zones
 
             names = load_health_zones(_data_dir())
             digest.update(names.to_csv(index=False).encode())

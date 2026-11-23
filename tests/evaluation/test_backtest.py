@@ -532,7 +532,7 @@ def test_backtest_sampler_comes_from_the_config(
 def test_scenarios_are_scored_final_and_as_of(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    from bdbvhub.data.tidy import load_health_zones
+    from nowcastbdbv.data.tidy import load_health_zones
     from nowcasteval.backtest import run_scenarios
 
     data = DATA
@@ -571,7 +571,7 @@ def test_scenarios_are_scored_final_and_as_of(
 def test_tasks_carry_the_daily_releases_up_to_their_vintage(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbvhub.data.tidy import load_daily
+    from nowcastbdbv.data.tidy import load_daily
 
     daily = load_daily()
     real = target.loc[target["kind"] == "real"]
@@ -614,7 +614,7 @@ def test_skipped_origins_stay_in_the_later_tasks(
 def test_development_tasks_pass_the_daily_releases(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from bdbvhub.data.tidy import load_daily
+    from nowcastbdbv.data.tidy import load_daily
 
     tasks = development_tasks(
         target, delays, BacktestConfig(), daily=load_daily(),
@@ -623,7 +623,7 @@ def test_development_tasks_pass_the_daily_releases(
 
 
 def test_simulated_tasks_carry_daily_releases(config: BacktestConfig) -> None:
-    from bdbvhub.data.tidy import load_daily
+    from nowcastbdbv.data.tidy import load_daily
 
     lags = cutoff_lags(load_daily())
     tasks = recovery_tasks(config, lags=lags)
@@ -675,7 +675,7 @@ def test_recovery_run_by_date_chunk_matches_one_run(
 def test_scenarios_run_by_date_match_one_run(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    from bdbvhub.data.tidy import load_health_zones
+    from nowcastbdbv.data.tidy import load_health_zones
     from nowcasteval.backtest import run_scenarios
 
     zones = load_health_zones(DATA)
@@ -737,7 +737,7 @@ def test_scenarios_forecast_apart_by_model_score_as_one_run(
     config: BacktestConfig,
     tmp_path: Path,
 ) -> None:
-    from bdbvhub.data.tidy import load_health_zones
+    from nowcastbdbv.data.tidy import load_health_zones
     from nowcasteval.backtest import (
         run_scenarios,
         scenario_forecasts,
@@ -803,7 +803,7 @@ def test_sample_counts_come_from_the_config(
 def test_tasks_carry_the_imputation_delay_and_places(
     target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
 ) -> None:
-    from bdbvhub.data.delays import hub_delay_pmf
+    from nowcastbdbv.data.delays import hub_delay_pmf
 
     task = make_tasks(
         target.loc[target["vintage"] == "2026-10-09"], delays, config

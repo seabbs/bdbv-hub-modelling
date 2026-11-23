@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bdbvhub.data.delays import (
+from nowcastbdbv.data.delays import (
     HUB_GENGAMMA,
     EmpiricalDelayModel,
     delay_summary,

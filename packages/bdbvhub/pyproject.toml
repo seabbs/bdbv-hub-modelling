@@ -20,6 +20,7 @@ dependencies = [
   "nowcastfoundation",
   "nowcastrenewal",
   "nowcastgermany",
+  "nowcastbdbv",
 ]
 
 [project.scripts]
@@ -36,6 +37,7 @@ nowcastbaselines = { workspace = true }
 nowcastfoundation = { workspace = true }
 nowcastrenewal = { workspace = true }
 nowcastgermany = { workspace = true }
+nowcastbdbv = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.8,<0.14"]

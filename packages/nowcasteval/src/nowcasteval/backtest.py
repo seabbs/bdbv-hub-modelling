@@ -34,9 +34,9 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bdbvhub.data.delays import hub_delay_pmf
-from bdbvhub.data.tidy import delays_for_vintage
-from bdbvhub.data.zones import ZoneData, hub_places
+from nowcastbdbv.data.delays import hub_delay_pmf
+from nowcastbdbv.data.tidy import delays_for_vintage
+from nowcastbdbv.data.zones import ZoneData, hub_places
 from nowcasteval.nowcast import TRUTH_LEVEL, truth_from_vintage
 from nowcasteval.scoring import energy_scores, score_forecasts
 from nowcastfoundation.simulate import (
@@ -397,7 +397,7 @@ def make_tasks(
     Examples
     --------
     >>> import dataclasses
-    >>> from bdbvhub.data.tidy import (
+    >>> from nowcastbdbv.data.tidy import (
     ...     delays_for_vintage, load_daily, load_delays, load_target
     ... )
     >>> from nowcasteval import backtest as bt

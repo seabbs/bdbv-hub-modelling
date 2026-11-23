@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 from jax.scipy.stats import norm
 
-from bdbvhub.data.delays import hub_delay_pmf
+from nowcastbdbv.data.delays import hub_delay_pmf
 from nowcastrenewal.model import BVD, MAIN, build_model, model_args
 from nowcastrenewal.model.inputs import (
     bvd_inputs,
