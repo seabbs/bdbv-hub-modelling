@@ -180,11 +180,11 @@ uv run --group paper python workflow/scripts/dashboard.py --port 8765
 A module of this workflow (`use rule * from paper_workflow`), run from the repository root; its paths are from the root and its outputs are in `paper/results/<mode>/`.
 `development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.
 
-- Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `fit_store_history` (our stored Ebola forecasts, from their release; `publish_fit_store_history` publishes it, opt-in), `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
+- Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
 - Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
 - Fit store history: `fit_store_history` fetches the release asset of our stored forecasts made before each round closed and checks its checksum; `publish_fit_store_history` (opt-in) builds and publishes it from the fit store branch.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
-- Evidence read from git (`evidence_aggregation_scores`, `evidence_checkpoint_scores`), gathered by `evidence`.
+- Evidence read from git (`evidence_checkpoint_scores`), gathered by `evidence`.
 - Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `pairing_germany`, `pairing_synthetic` and `si_copula` (the walks' scores with and without pairing, on development data), `grid_tables`, `summary` and `publish_paper`.
 
 ## Scheduled runs
@@ -237,7 +237,7 @@ The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), n
 | tests and dry runs of every target (`task nowcast-workflow:check`) | yes | fast, no network |
 | the paper and its figures and tables | yes, as now (Pages) | from stored forecasts and pinned evidence |
 | `score_table` from stored caches | yes, once the paper module lands | cheap |
-| checkpoint forecasts, slots check, aggregation fits | no | hours, needs the checkpoints |
+| checkpoint forecasts, slots check | no | hours, needs the checkpoints |
 | `simulate`, `finetune` | never | heavy R, GPU |
 | `release`, `publish`, `land` | never | outward-facing |
 

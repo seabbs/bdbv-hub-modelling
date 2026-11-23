@@ -1,6 +1,6 @@
 """SI tables and figures from results kept on evidence branches.
 
-The copula, the aggregation options and the fine-tuning runs write
+The copula and the fine-tuning runs write
 their results as rows to evidence branches (see
 `workflow/config.yaml`, block `evidence`). This module turns those rows
 into the SI's tables, figures and quoted numbers, so nothing is typed into
@@ -10,8 +10,6 @@ waits on in place of its table, and `None` in place of its numbers.
 - `copula_figure`: the rolling copula against no pairing, by study and
   level.
 - `rho_medians`: the median rolling rho_p of each walk model.
-- `aggregation_figure`: WIS of each aggregation option relative to
-  `randomwalknowcast` on the same targets, by study and level.
 - `heldout_figure` and `realism_figure`: the fine-tune's held-out loss
   and the simulated outbreaks against the data and published values.
 """
@@ -41,8 +39,6 @@ from paperpipe.outputs import to_markdown
 
 __all__ = [
     "EVIDENCE",
-    "aggregation_figure",
-    "aggregation_numbers",
     "checkpoint_figure",
     "checkpoint_numbers",
     "checkpoint_rows",
@@ -50,7 +46,6 @@ __all__ = [
     "copula_figure",
     "diseases_table",
     "drop_bdbv",
-    "drop_finetuned",
     "heldout_figure",
     "live_numbers",
     "realism_figure",
@@ -63,20 +58,6 @@ __all__ = [
     "write_evidence",
 ]
 
-OPTIONS: Final = {
-    "joint": "(a)",
-    "level": "(b)",
-    "zones_summed": "(c)",
-    "zones_copula": "(d)",
-    "weekly_row": "(e) weekly row",
-    "days_copula": "(e) days, copula",
-    "days_summed": "(e) days, random",
-}
-"""Aggregation options as the SI names them, in figure order: (a) to (d)
-sum over places, and (e) over time, comparing the daily model's in-block
-weekly row with its days summed after pairing by the rolling copula or at
-random."""
-
 
 def waiting(what: str) -> str:
     """Return the note a table shows until its rows exist."""
@@ -88,103 +69,6 @@ def _pair(a: pd.Series, b: pd.Series) -> list[str]:
         "" if pd.isna(x) or pd.isna(y) else f"{x:.2f} / {y:.2f}"
         for x, y in zip(a, b, strict=True)
     ]
-
-
-def _relative_wis(scores: pd.DataFrame, reference: str) -> pd.Series:
-    """Return WIS relative to `reference` by study, level, model and option.
-
-    Summed over the targets each shares with `reference`, whose rows
-    count once per target.
-    """
-    keys = ["study", "level", "location", "origin_date", "target_date"]
-    ref = scores.loc[scores["model"] == reference, [*keys, "wis"]]
-    ref = ref.drop_duplicates(keys)
-    paired = scores.loc[scores["model"] != reference].merge(
-        ref, on=keys, suffixes=("", "_ref")
-    )
-    sums = paired.groupby(["study", "level", "model", "option"])[
-        ["wis", "wis_ref"]
-    ].sum()
-    return sums["wis"] / sums["wis_ref"]
-
-
-def aggregation_figure(
-    scores: pd.DataFrame, reference: str = "randomwalknowcast"
-) -> Figure:
-    """Plot each option's WIS relative to the reference, by study and level.
-
-    One panel per study and level, never pooled across levels, with the
-    options (`OPTIONS`) on the x axis and one marker per model, on the
-    targets each shares with `reference`.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        Per-target rows: `study`, `model`, `option`, `level`, `location`,
-        `origin_date`, `target_date` and `wis`, with the reference
-        model's rows.
-    reference : str
-        The model scores are relative to.
-    """
-    rel = _relative_wis(scores, reference).rename("rel").reset_index()
-    panels = list(dict.fromkeys(zip(rel["study"], rel["level"], strict=True)))
-    studies = list(dict.fromkeys(s for s, _ in panels))
-    ncol = max(sum(s == st for s, _ in panels) for st in studies)
-    fig, axes = plt.subplots(
-        len(studies),
-        ncol,
-        figsize=(3.6 * ncol, 2.8 * len(studies)),
-        layout="constrained",
-        squeeze=False,
-    )
-    options = [o for o in OPTIONS if o in set(rel["option"])]
-    models = sorted(rel["model"].unique())
-    markers = dict(zip(models, "osD^v<>", strict=False))
-    for i, study in enumerate(studies):
-        levels = [lv for s, lv in panels if s == study]
-        for j in range(ncol):
-            ax = axes[i, j]
-            if j >= len(levels):
-                ax.set_visible(False)
-                continue
-            one = rel.loc[(rel["study"] == study) & (rel["level"] == levels[j])]
-            for model, g in one.groupby("model"):
-                ax.plot(
-                    [options.index(o) for o in g["option"]],
-                    g["rel"],
-                    ls="none",
-                    marker=markers[model],
-                    label=model_label(model),
-                )
-            ax.axhline(1, color="#888888", lw=1)
-            ax.set_xticks(
-                range(len(options)),
-                [OPTIONS[o] for o in options],
-                fontsize=7,
-                rotation=30,
-                ha="right",
-            )
-            ax.set_title(f"{study}, {levels[j]}", fontsize=9)
-            ax.set_ylabel("Relative WIS")
-    handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="outside lower center", ncol=2, fontsize=7)
-    return fig
-
-
-def aggregation_numbers(
-    scores: pd.DataFrame, reference: str = "randomwalknowcast"
-) -> dict:
-    """Return each option's relative WIS, as the paper quotes them.
-
-    Keys are study, level, model and option (`OPTIONS`), and values the
-    WIS relative to `reference` on shared targets, to two decimals.
-    """
-    rel = _relative_wis(scores, reference).round(2)
-    out: dict = {}
-    for (study, level, model, option), value in rel.items():
-        node = out.setdefault(study, {}).setdefault(level, {})
-        node.setdefault(model, {})[option] = float(value)
-    return out
 
 
 CHECKPOINT_RULE: Final = "own-quantile-wis_crps-1000-common"
@@ -323,17 +207,6 @@ def live_numbers(scores: pd.DataFrame | None, run: str = LIVE_RUN) -> dict:
         else "Fine-tuned checkpoint scores are not yet available."
     )
     return out
-
-
-FINETUNED_EVIDENCE: Final = ("aggregation_scores",)
-"""Evidence of both zero-shot and fine-tuned models, whose fine-tuned rows
-come from earlier fine-tunes than the paper's and are left out."""
-
-
-def drop_finetuned(rows: pd.DataFrame) -> pd.DataFrame:
-    """Leave out the fine-tuned models' rows (`_ft`, `_ft_n<k>`)."""
-    fine = rows["model"].astype(str).str.contains(r"_ft(_|$)")
-    return rows.loc[~fine].reset_index(drop=True)
 
 
 MIN_CELLS: Final = 5
@@ -629,7 +502,6 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 EVIDENCE: Final = {
     "si_copula": "the walks' scores, no pairing against rolling rho_p",
     "copula_rho": "the walk models' rho_p by origin (copula.json rows)",
-    "aggregation_scores": "the per-target aggregation scores",
     "finetune_heldout": "the final run's held-out loss curve",
     "sim_summaries": "per-outbreak summaries of the final grid's simulations",
     "sim_realism": "the German development half's values",
@@ -866,9 +738,6 @@ def write_evidence(
         if frame is not None and name != "sim_realism":
             kept = drop_bdbv(frame)
             data[name] = None if kept.empty else kept
-    for name in FINETUNED_EVIDENCE:
-        if data.get(name) is not None and "model" in data[name]:
-            data[name] = drop_finetuned(data[name])
 
     def table(name: str, frame: pd.DataFrame | None, needs: list[str]) -> None:
         # Rows for another study only still leave this one waiting.
@@ -893,12 +762,6 @@ def write_evidence(
         fig.savefig(fig_dir / f"{name}.png", dpi=200)
         plt.close(fig)
 
-    agg = data["aggregation_scores"]
-    figure(
-        "aggregation",
-        None if agg is None else aggregation_figure(agg),
-        ["aggregation_scores"],
-    )
     cop = data["si_copula"]
     figure(
         "copula-impact",
@@ -965,7 +828,6 @@ def write_evidence(
             "rho": QUOTED["rho"] if rho is None else rho_medians(rho),
             "checkpoints": (None if ckpt is None else checkpoint_numbers(ckpt)),
             "live": live_numbers(raw, run),
-            "aggregation": (None if agg is None else aggregation_numbers(agg)),
             "realism": (
                 QUOTED["realism"] if ref is None else realism_numbers(ref)
             ),

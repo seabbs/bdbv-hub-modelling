@@ -8,51 +8,9 @@ import yaml
 
 from paperpipe.evidence import (
     EVIDENCE,
-    aggregation_numbers,
     realism_reference,
     write_evidence,
 )
-
-
-def test_aggregation_is_relative_to_the_reference_on_shared_targets() -> None:
-    base = {
-        "study": "ebola",
-        "level": "national",
-        "location": "CD",
-        "origin_date": "2026-10-04",
-        "cover50": 1,
-        "cover95": 1,
-    }
-    rows = [
-        {
-            **base,
-            "model": "randomwalknowcast",
-            "option": "reference",
-            "target_date": t,
-            "wis": 10.0,
-            "log_wis": 1.0,
-        }
-        for t in ("2026-09-27", "2026-10-04")
-    ] + [
-        {
-            **base,
-            "model": "fm",
-            "option": "joint",
-            "target_date": "2026-09-27",
-            "wis": 5.0,
-            "log_wis": 0.5,
-        },
-        {
-            **base,
-            "model": "fm",
-            "option": "level",
-            "target_date": "2026-09-27",
-            "wis": 20.0,
-            "log_wis": 2.0,
-        },
-    ]
-    numbers = aggregation_numbers(pd.DataFrame(rows))
-    assert numbers["ebola"]["national"]["fm"] == {"joint": 0.5, "level": 2.0}
 
 
 def _germany_stats() -> pd.DataFrame:
@@ -154,29 +112,6 @@ def test_a_paper_run_fails_while_evidence_is_missing(tmp_path) -> None:
                 str(tmp_path / "e.yml"),
             ]
         )
-
-
-def test_a_study_without_rows_still_waits(tmp_path) -> None:
-    rows = tmp_path / "agg.csv"
-    pd.DataFrame(
-        {
-            "study": "ebola",
-            "model": ["randomwalknowcast", "fm"],
-            "option": ["reference", "joint"],
-            "level": "national",
-            "location": "CD",
-            "origin_date": "2026-10-04",
-            "target_date": "2026-09-27",
-            "wis": 1.0,
-            "log_wis": 1.0,
-            "cover50": 1,
-            "cover95": 1,
-        }
-    ).to_csv(rows, index=False)
-    paths = dict.fromkeys(EVIDENCE) | {"aggregation_scores": rows}
-    write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
-    assert (tmp_path / "fig" / "aggregation.png").is_file()
-    assert not (tmp_path / "si" / "aggregation-cost.md").exists()
 
 
 def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
@@ -380,32 +315,6 @@ def test_checkpoint_rows_keep_only_the_live_run() -> None:
     assert list(checkpoint_rows(rows, "one-model")["checkpoint"]) == ["b"]
 
 
-def test_joint_evidence_leaves_out_fine_tuned_rows_of_earlier_runs() -> None:
-    from paperpipe.evidence import drop_finetuned
-
-    rows = pd.DataFrame(
-        {
-            "model": [
-                "fm_chronos_daily_ragged",
-                "fm_chronos_daily_ragged_ft",
-                "fm_chronos_daily_ragged_ft_n1000",
-                "randomwalknowcast",
-            ]
-        }
-    )
-    assert list(drop_finetuned(rows)["model"]) == [
-        "fm_chronos_daily_ragged",
-        "randomwalknowcast",
-    ]
-
-
-def test_aggregation_options_name_the_lowest_level_not_zones() -> None:
-    # Germany's lowest level is states or age groups, not zones.
-    from paperpipe.evidence import OPTIONS
-
-    assert not any("zone" in label.lower() for label in OPTIONS.values())
-
-
 def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     # The fine-tuned checkpoints are the curve; zero-shot Chronos-2 on the
     # ragged layout and on complete data only are horizontal lines, and
@@ -504,44 +413,6 @@ def test_the_daily_nowcasts_have_a_figure(tmp_path) -> None:
     paths = dict.fromkeys(EVIDENCE) | {"compare_daily": rows}
     write_evidence(paths, tmp_path / "si", tmp_path / "fig", tmp_path / "e.yml")
     assert (tmp_path / "fig" / "compare-daily.png").is_file()
-
-
-def test_the_aggregation_figure_has_a_panel_per_study_and_level() -> None:
-    from paperpipe.evidence import aggregation_figure
-
-    rows = []
-    for study, levels in [
-        ("ebola", ["national", "provinces", "zones"]),
-        ("germany", ["national", "states", "age groups"]),
-    ]:
-        for level in levels:
-            for model, option in [
-                ("randomwalknowcast", "joint"),
-                ("fm_chronos_daily_ragged", "joint"),
-                ("fm_chronos_daily_ragged", "weekly_row"),
-                ("fm_chronos_daily_ragged", "days_copula"),
-                ("fm_chronos_daily_ragged", "days_summed"),
-            ]:
-                rows.append(
-                    {
-                        "study": study,
-                        "model": model,
-                        "option": option,
-                        "level": level,
-                        "location": "X",
-                        "origin_date": "2026-10-01",
-                        "target_date": "2026-09-26",
-                        "wis": 1.0 if model == "randomwalknowcast" else 0.8,
-                        "log_wis": 1.0,
-                        "cover50": 1,
-                        "cover95": 1,
-                    }
-                )
-    fig = aggregation_figure(pd.DataFrame(rows))
-    drawn = [ax for ax in fig.axes if ax.get_visible() and ax.has_data()]
-    assert len(drawn) == 6
-    labels = {t.get_text() for t in drawn[0].get_xticklabels()}
-    assert {"(a)", "(e) weekly row", "(e) days, copula"} <= labels
 
 
 def _si_copula() -> pd.DataFrame:
@@ -683,24 +554,17 @@ def test_no_evidence_input_is_bdbv_scores() -> None:
     assert not [n for n in config["evidence"] if "bdbv" in n]
 
 
-def test_a_reference_row_counts_once_per_target() -> None:
-    base = {
-        "study": "germany",
-        "level": "national",
-        "location": "DE",
-        "origin_date": "2026-10-04",
-        "target_date": "2026-09-27",
-    }
-    rows = pd.DataFrame(
-        [
-            {**base, "model": "randomwalknowcast", "option": o, "wis": w}
-            for o, w in (("reference", 10.0), ("joint", 30.0))
-        ]
-        + [{**base, "model": "fm", "option": "joint", "wis": 5.0}]
+def test_no_aggregation_evidence_is_read_or_written(tmp_path) -> None:
+    assert "aggregation_scores" not in EVIDENCE
+    write_evidence(
+        dict.fromkeys(EVIDENCE),
+        tmp_path / "si",
+        tmp_path / "f",
+        tmp_path / "e.yml",
     )
-    assert aggregation_numbers(rows)["germany"]["national"]["fm"] == {
-        "joint": 0.5
-    }
+    numbers = yaml.safe_load((tmp_path / "e.yml").read_text())["evidence"]
+    assert "aggregation" not in numbers
+    assert not (tmp_path / "f" / "aggregation.png").exists()
 
 
 def test_no_lag_horizon_evidence_is_read_or_written(tmp_path) -> None:

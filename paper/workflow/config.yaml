@@ -147,9 +147,6 @@ evidence:
   # Each walk model's rho_p by origin, the rows of its rounds' copula.json
   # (model, origin, n_scores, rho_provinces, n_pairs, fallback). Pending.
   copula_rho: null
-  aggregation_scores:
-    ref: 5a3e0440880f54751fd8dccbfa14133a2a74ba81
-    path: results/agg/aggregation-scores.csv.gz
   # Each fine-tuning comparison's scores by checkpoint (paperpipe.evidence:
   # set, run, outbreaks, score). Pending: the runs' checkpoints.
   compare_slots: null

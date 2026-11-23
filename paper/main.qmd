@@ -297,7 +297,6 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 ::: {.callout-note title="Plan"}
 - We show national nowcasts against the other submissions.
 - We summarise the scores.
-- The SI compares the joint block with each level alone and with the lowest level summed (Joint block or aggregation).
 - The SI compares the walks with the rolling copula and with no pairing (Impact of correlated trajectories).
 :::
 
