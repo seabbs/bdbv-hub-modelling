@@ -1,0 +1,364 @@
+"""Interactive HTML report of our hub rounds against every hub team.
+
+Reads the `compare-hub` output over the hub's own files (no model of ours
+is run) and writes one page with the docs site's interactive charts
+(`docs/javascripts`): the score summary (`scoresummary.js`), relative to
+`seabbs-rwnowcast`, with its metric picker (WIS or WIS on the log scale,
+coverage), and the forecast explorer (`explorer.js`) with its location,
+round and model controls. A plain summary comes first and one small table
+last: each model's pairwise relative WIS on the cells it shares with
+every other model, scaled to `seabbs-rwnowcast`.
+
+The page reads its data from the folder `<OUT stem>-data/` beside it.
+
+    python workflow/scripts/hub_rounds_report.py OUT.html COMPARISON_DIR \
+        DATA_DIR SUBMISSIONS_CSV HEAD_FILE N_ROUNDS
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import html
+import itertools
+import json
+import shutil
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from bdbvhub.data.tidy import load_target
+from bdbvhub.reporting.explorer import (
+    explorer_data,
+    explorer_html,
+    write_explorer,
+)
+from nowcasteval.plots import (
+    comparison_colours,
+    comparison_label,
+    location_names,
+)
+from nowcasteval.scorechart import write_score_chart
+from nowcasteval.scoresummary import summary_html, summary_rows
+
+ROOT = Path(__file__).parents[2]
+
+OURS = {"seabbs-renewal": "renewalbvd", "seabbs-rwnowcast": "randomwalknowcast"}
+"""Our hub ids and the model whose colour each takes."""
+
+REFERENCE = "seabbs-rwnowcast"
+"""The hub id every relative score divides by."""
+
+MATCH = ("reference_date", "truth_vintage", "location", "target_end_date")
+"""What makes two models' scores the same cell."""
+
+SCRIPTS = (
+    "toggles.js",
+    "zoom.js",
+    "summarise.js",
+    "energy.js",
+    "tablesort.js",
+    "tablefilter.js",
+    "placemap.js",
+    "explorer.js",
+    "scorechart.js",
+    "scoresummary.js",
+)
+"""The docs scripts the charts need, in the docs' load order."""
+
+THEME = """
+:root{--md-default-bg-color:#fff;--md-default-fg-color:rgba(0,0,0,.87);
+--md-default-fg-color--light:rgba(0,0,0,.54);
+--md-default-fg-color--lighter:rgba(0,0,0,.32);
+--md-default-fg-color--lightest:rgba(0,0,0,.07);
+--md-accent-fg-color:#526cfe;--md-typeset-a-color:#4051b5}
+[data-md-color-scheme=slate]{--md-default-bg-color:#1e2129;
+--md-default-fg-color:rgba(226,228,233,.82);
+--md-default-fg-color--light:rgba(226,228,233,.56);
+--md-default-fg-color--lighter:rgba(226,228,233,.32);
+--md-default-fg-color--lightest:rgba(226,228,233,.12);
+--md-accent-fg-color:#5e8bde;--md-typeset-a-color:#5e8bde}
+body{background:var(--md-default-bg-color);color:var(--md-default-fg-color);
+font:15px/1.5 system-ui,sans-serif;max-width:1200px;margin:0 auto;
+padding:16px}
+a{color:var(--md-typeset-a-color)}
+table{border-collapse:collapse;font-size:13px;margin:8px 0 16px}
+td,th{border-bottom:1px solid var(--md-default-fg-color--lightest);
+padding:3px 8px;text-align:right}
+td:first-child,th:first-child{text-align:left}
+.mut{color:var(--md-default-fg-color--light)}
+"""
+
+SCHEME = """
+(function () {
+  var dark = window.matchMedia("(prefers-color-scheme: dark)");
+  function set() {
+    document.body.setAttribute("data-md-color-scheme",
+      dark.matches ? "slate" : "default");
+  }
+  set();
+  dark.addEventListener("change", set);
+})();
+"""
+
+
+def last_rounds(quantiles: pd.DataFrame, n: int) -> list[str]:
+    """Return the last `n` rounds any of our hub ids forecast."""
+    ours = quantiles.loc[quantiles["model"].isin(list(OURS))]
+    return sorted(set(ours["reference_date"].astype(str)))[-n:]
+
+
+def as_submitted(frame: pd.DataFrame) -> pd.DataFrame:
+    """Our hub ids' rows as `submitted`, whichever copy they came from."""
+    ours = frame["model"].isin(list(OURS))
+    return frame.assign(source=np.where(ours, "submitted", frame["source"]))
+
+
+def labelled(frame: pd.DataFrame) -> pd.DataFrame:
+    """Each row's model named as the comparison shows it."""
+    return frame.assign(
+        model=[
+            comparison_label(m, s)
+            for m, s in zip(frame["model"], frame["source"], strict=True)
+        ]
+    )
+
+
+def pairwise(scores: pd.DataFrame, reference: str) -> pd.DataFrame:
+    """Pairwise relative WIS, scaled to `reference` (the hubs' way).
+
+    For each pair of models, the ratio of their mean WIS on the cells
+    both forecast; a model's relative WIS is the geometric mean of its
+    ratios against every other model, divided by `reference`'s.
+    """
+    wide = scores.pivot_table(index=list(MATCH), columns="model", values="wis")
+    models = list(wide.columns)
+    ratios: dict[str, list[float]] = {m: [] for m in models}
+    for a, b in itertools.permutations(models, 2):
+        both = wide[[a, b]].dropna()
+        if len(both) and both[b].mean() > 0:
+            ratios[a].append(both[a].mean() / both[b].mean())
+    theta = {
+        m: float(np.exp(np.mean(np.log(r)))) if r else np.nan
+        for m, r in ratios.items()
+    }
+    base = theta.get(reference, np.nan)
+    rows = []
+    for m in models:
+        own = scores.loc[scores["model"] == m]
+        rows.append(
+            {
+                "model": m,
+                "relative_wis": theta[m] / base,
+                "cells": len(own),
+                "rounds": own["reference_date"].nunique(),
+                "coverage_50": own["coverage_50"].mean(),
+                "coverage_90": own["coverage_90"].mean(),
+            }
+        )
+    return pd.DataFrame(rows).sort_values("relative_wis")
+
+
+def fmt(v: float, n: int = 2) -> str:
+    """Return a number for a table cell."""
+    return "" if v is None or not np.isfinite(v) else f"{v:.{n}f}"
+
+
+def small_table(tab: pd.DataFrame) -> str:
+    """Return the one table: pairwise relative WIS and coverage by model."""
+    heads = ["model", "relative WIS", "cells", "rounds", "50% cover",
+             "90% cover"]  # fmt: skip
+    out = ["<table><tr>" + "".join(f"<th>{h}</th>" for h in heads)]
+    for r in tab.itertuples():
+        name = html.escape(str(r.model))
+        if str(r.model).split(" ")[0] in OURS:
+            name = f"<b>{name}</b>"
+        cells = [name, fmt(r.relative_wis), str(r.cells), str(r.rounds),
+                 fmt(r.coverage_50), fmt(r.coverage_90)]  # fmt: skip
+        out.append("<tr>" + "".join(f"<td>{c}</td>" for c in cells))
+    return "\n".join([*out, "</table>"])
+
+
+def summary_text(
+    tab: pd.DataFrame, table: pd.DataFrame, rounds: Sequence[str]
+) -> str:
+    """Return the plain summary up top."""
+    went = ""
+    if not table.empty:
+        t = table.loc[table["reference_date"].isin(rounds)]
+        sub = t.loc[t["hub_id"] == "seabbs-renewal"]
+        models = sorted(set(sub["model"]))
+        swapped = int((sub["substituted"] == "true").sum())
+        went = (
+            " Under seabbs-renewal the chain submitted "
+            f"{', '.join(models) or 'nothing'}"
+            + (
+                f", with {swapped} substituted round(s)"
+                if swapped
+                else ", never a fallback"
+            )
+            + "; seabbs-rwnowcast is the random walk on a nowcast."
+        )
+    parts = [f"We submitted {len(rounds)} rounds ({', '.join(rounds)}).{went}"]
+    if not tab.empty:
+        ranked = tab.dropna(subset=["relative_wis"]).reset_index(drop=True)
+        mine = ranked.loc[ranked["model"].str.startswith("seabbs-renewal")]
+        if len(mine):
+            i = int(mine.index[0])
+            r = ranked.iloc[i]
+            better = ranked.loc[: i - 1, "model"].tolist() if i else []
+            parts.append(
+                "On the weeks scored so far, seabbs-renewal's WIS is "
+                f"{fmt(r.relative_wis)} times seabbs-rwnowcast's, "
+                f"{i + 1} of {len(ranked)} models"
+                + (f" (behind {', '.join(better)})" if better else "")
+                + f"; {fmt(r.coverage_50)} of truths fall in its 50% "
+                f"intervals and {fmt(r.coverage_90)} in its 90%, most of "
+                "them zone-weeks with no cases."
+            )
+        parts.append(
+            "Teams that forecast few cells (the table at the end) have "
+            "noisy scores. Only past weeks are complete so far, so these "
+            "are nowcast scores."
+        )
+    return " ".join(parts)
+
+
+def build(
+    out: Path,
+    comparison: Path,
+    data_dir: Path,
+    submissions: Path,
+    head: Path,
+    n_rounds: int,
+) -> Path:
+    """Write the page and its data folder; return the page."""
+    meta = json.loads((comparison / "summary.json").read_text())
+    quantiles = as_submitted(pd.read_csv(comparison / "quantiles.csv.gz"))
+    scores = as_submitted(pd.read_csv(comparison / "scores.csv"))
+    energy = as_submitted(pd.read_csv(comparison / "energy.csv"))
+    table = (
+        pd.read_csv(submissions, dtype=str, keep_default_na=False)
+        if submissions.exists()
+        else pd.DataFrame()
+    )
+    target = load_target(data_dir)
+    names = location_names(target)
+    rounds = last_rounds(quantiles, n_rounds)
+
+    def window(f: pd.DataFrame) -> pd.DataFrame:
+        return f.loc[f["reference_date"].astype(str).isin(rounds)]
+
+    quantiles = window(quantiles)
+    scores, energy = window(scores), window(energy)
+    teams = sorted(set(quantiles.loc[quantiles["source"] == "hub", "model"]))
+    ours = [f"{h} (submitted)" for h in OURS]
+    colours = comparison_colours(
+        {}, {f"{h} (submitted)": m for h, m in OURS.items()}, teams
+    )
+    reference = f"{REFERENCE} (submitted)"
+    models = [*ours, *teams]
+
+    data = out.with_name(out.stem + "-data")
+    if data.exists():
+        shutil.rmtree(data)
+    data.mkdir(parents=True)
+    rel = data.name
+    srcs = {}
+    for key, kind in (("complete", "complete"), ("latest", "reported")):
+        s = labelled(scores.loc[scores["target"] == kind])
+        if s.empty or reference not in set(s["model"]):
+            continue
+        s = s.assign(
+            kind="real", vintage=s["origin"], origin=s["reference_date"]
+        )
+        e = labelled(energy.loc[energy["target"] == kind])
+        e = e.assign(origin=e["reference_date"])
+        write_score_chart(
+            data / f"scores-{key}.json",
+            summary_rows(
+                s,
+                models,
+                colours,
+                names,
+                baseline=reference,
+                default_on=models,
+                energy=e,
+            ),
+        )
+        srcs[key] = f"{rel}/scores-{key}.json"
+    write_explorer(
+        data / "explorer.json",
+        explorer_data(
+            labelled(quantiles).assign(ours=quantiles["source"] != "hub"),
+            target,
+            names,
+            int(meta["complete_after_weeks"]),
+            colours,
+            truth_vintage=meta["truth_vintage"],
+            samples=None,
+        ),
+    )
+    complete = labelled(scores.loc[scores["target"] == "complete"])
+    tab = pairwise(complete, reference) if len(complete) else pd.DataFrame()
+
+    js = "\n".join(
+        (ROOT / "docs" / "javascripts" / f).read_text() for f in SCRIPTS
+    )
+    css = (ROOT / "docs" / "stylesheets" / "extra.css").read_text()
+    commit = html.escape(head.read_text().strip()[:9])
+    parts = [
+        "<h1>Our hub rounds against the hub teams</h1>",
+        "<p class=mut>Truth: the hub's release of "
+        f"{html.escape(meta['truth_vintage'])} (hub data commit {commit}). "
+        f"Built {dt.datetime.now(dt.UTC):%Y-%m-%d %H:%M} UTC, again "
+        "whenever the hub's data change. The hub's files as submitted; no "
+        "model of ours is rerun.</p>",
+        f"<p>{html.escape(summary_text(tab, table, rounds))}</p>",
+        "<h2>Scores</h2>",
+        "<p class=mut>Relative scores divide by seabbs-rwnowcast on the "
+        "cells both forecast, so seabbs-rwnowcast is 1 and below 1 is "
+        "better. Pick the metric (WIS, shown as CRPS, on the natural or "
+        "the log scale; coverage), the release (complete weeks or the "
+        "latest release), the scale and the models.</p>",
+        summary_html(srcs, "Scores by model", view="overall")
+        if srcs
+        else "<p>No round has a score yet.</p>",
+        "<h3>By horizon</h3>",
+        summary_html(srcs, "Scores by horizon", view="horizon") if srcs else "",
+        "<h2>Forecasts</h2>",
+        "<p class=mut>Pick a location, a round and the models; bands are "
+        "the intervals, against the latest release.</p>",
+        explorer_html(f"{rel}/explorer.json", "Forecast explorer"),
+        "<h2>Pairwise relative WIS</h2>",
+        "<p class=mut>As the hubs rank teams: each pair's mean WIS ratio on "
+        "the cells both forecast, a model's geometric mean over the "
+        "others, scaled so seabbs-rwnowcast is 1. Complete weeks.</p>",
+        small_table(tab) if len(tab) else "<p>Nothing scored yet.</p>",
+    ]
+    doc = (
+        "<!doctype html><html lang=en><meta charset=utf-8>"
+        "<meta name=viewport content='width=device-width,initial-scale=1'>"
+        f"<title>Hub rounds</title><style>{THEME}{css}</style>"
+        f"<body data-md-color-scheme=default><script>{SCHEME}</script>"
+        + "\n".join(parts)
+        + f"<script>{js}</script></body></html>"
+    )
+    tmp = out.with_name(out.name + ".tmp")
+    tmp.write_text(doc)
+    tmp.rename(out)
+    return out
+
+
+def main(argv: Sequence[str]) -> None:
+    """Build the report from the command line."""
+    out, comp, data, subs, head, n = argv
+    print(
+        build(Path(out), Path(comp), Path(data), Path(subs), Path(head), int(n))
+    )
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

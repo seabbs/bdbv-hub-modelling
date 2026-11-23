@@ -82,6 +82,7 @@ def _reported_sums(task, k):
     return by.rolling(k).sum()
 
 
+@pytest.mark.slow
 def test_the_7_day_view_gives_every_target_day_from_one_forecast(task, model):
     out = model.forecast(task)
     assert set(out["target_end_date"]) == set(task.target_end_dates)

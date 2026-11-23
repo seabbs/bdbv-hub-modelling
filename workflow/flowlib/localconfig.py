@@ -84,6 +84,8 @@ DEFAULTS = (
     # (empty: none; flowlib.schedule), every how many minutes, and the timer
     # (cron, systemd or launchd; empty: by platform).
     ("SCHEDULE_TARGETS", ""),
+    # Where `hub_rounds` copies the hub rounds report (empty: nowhere).
+    ("REVIEW_DIR", ""),
     # The status each tick writes, every how many seconds
     # (flowlib.runstatus).
     ("STATUS_EVERY", "60"),

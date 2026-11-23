@@ -57,6 +57,10 @@ models = [
   "fm_chronos_daily_complete",
   "fm_chronos_daily_ragged",
   "fm_chronos_daily_ragged_ft",
+  # The two-step sensitivity analysis (#538): baselinenowcast's point
+  # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
+  "fm_chronos_daily_complete_2step",
+  "fm_chronos_daily_complete_2step_ft",
 ]
 # Chronos-2 fine-tuned on real data alone, the German development half and
 # BDBV to date (scripts/finetune_realdata.py on the germany-ft branch), run
