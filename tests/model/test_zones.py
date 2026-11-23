@@ -1,5 +1,7 @@
 """The renewal model with health zones as its places."""
 
+import dataclasses
+
 import numpy as np
 import numpyro
 import pandas as pd
@@ -279,3 +281,34 @@ def test_anchored_starts_are_non_centred(zone_vintage):
     # Anchored starts sample no centred offsets, only non-centred ones.
     assert "log_rt0_offsets" not in params
     assert "log_rt0_province_z" in params
+
+
+def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
+    zone_vintage, outbreak, sim_tables, table
+):
+    # Option (a), #736: the pooled log Rt walk and the province and zone
+    # deviations are AR(1) with a fitted half-life, and the forecast
+    # continues that process with no forecast-only reversion.
+    import nowcastrenewal.model.model as module
+
+    assert not hasattr(module, "FORECAST_RT_HALF_LIFE")
+    day = VINTAGE_DAYS[-1]
+    target, delays = sim_tables[day]
+    vintage = vintage_date(outbreak, day)
+    province = vintage_from_tables(
+        target,
+        delays,
+        vintage,
+        SIM_LOCATIONS[:1],
+        table,
+        imputation_delay=hub_delay_pmf(vintage),
+    )
+    centred = dataclasses.replace(MAIN, national=True, centred_rt=True)
+    for model, data in (
+        (build_zone_model(zone_vintage), zone_vintage),
+        (build_model(province), province),
+        (build_model(province, centred), province),
+    ):
+        _, params = _params(model, data)
+        assert "rt_sd_half_life" in params
+        assert "rt_dev_sd_half_life" in params

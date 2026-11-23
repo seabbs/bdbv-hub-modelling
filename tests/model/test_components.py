@@ -180,12 +180,16 @@ def test_random_walk_and_pooled_walk_shapes():
     np.testing.assert_allclose(groups[0], [0.1, 0.2, 0.3], atol=1e-6)
 
 
-def test_forecast_reverts_towards_zero():
+def test_forecast_continues_the_fitted_process():
+    # The forecast steps use the fitted process: a random walk holds its
+    # level and an AR(1) reverts with its fitted half-life.
     def walk(half_life):
         rw = NonCentredRandomWalk(
             DeterministicVariable("sd", 1e-6),
             n_fit=4,
-            forecast_half_life=half_life,
+            half_life_rv=None
+            if half_life is None
+            else DeterministicVariable("h", half_life),
         )
         z = jnp.array([[1.0e6], [1.0e6], [1.0e6]])
         with numpyro.handlers.condition(data={"rw_z": z}):
@@ -195,9 +199,13 @@ def test_forecast_reverts_towards_zero():
     np.testing.assert_allclose(free[:4, 0], [0.0, 1.0, 2.0, 3.0], atol=1e-4)
     np.testing.assert_allclose(free[4:, 0], 3.0, atol=1e-3)
     damped = walk(1.0)
-    np.testing.assert_allclose(damped[:4, 0], free[:4, 0], atol=1e-6)
-    np.testing.assert_allclose(damped[4, 0], 1.5, atol=1e-3)
+    np.testing.assert_allclose(damped[:4, 0], [0.0, 1.0, 1.5, 1.75], atol=1e-4)
+    np.testing.assert_allclose(damped[4, 0], 0.875, atol=1e-3)
     np.testing.assert_allclose(damped[-1, 0], 0.0, atol=1e-3)
+    with pytest.raises(TypeError):
+        NonCentredRandomWalk(
+            DeterministicVariable("sd", 0.1), forecast_half_life=2.0
+        )
 
 
 def test_missing_fraction_and_hazard_delay_shapes():
