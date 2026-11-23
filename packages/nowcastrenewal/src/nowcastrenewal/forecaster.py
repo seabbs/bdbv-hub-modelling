@@ -677,12 +677,12 @@ def report_cutoffs(task: ForecastTask, data: Any) -> dict[int, str]:
 def _as_reported(task: ForecastTask, run: RenewalRun) -> list[pd.DataFrame]:
     """Province samples of the counts reported by each later vintage."""
     out = []
-    for cut, date in report_cutoffs(task, run.data).items():
+    for cut, date in report_cutoffs(task, run.places).items():
         weeks = tuple(w for w in task.target_end_dates if w <= date)
         if not weeks:
             continue
         sub = replace(task, target_end_dates=weeks)
-        part = samples_table(sub, run.data, run.draws["as_reported"][cut])
+        part = samples_table(sub, run.places, run.draws["as_reported"][cut])
         out.append(part.assign(as_of=date))
     return out
 
@@ -1115,6 +1115,10 @@ class RenewalRun:
     bvd : dict or None
         The BVDOutbreakSize release used (`bvd_record`), for a variant
         with the BVD term.
+    forecast_data : nowcastrenewal.model.Vintage or None
+        The inputs whose places the trajectories cover, where they are
+        more than the fitted ones: a zone fit's fitted and silent zones
+        (`model.zones.extend_vintage`). None where they are `data`'s.
     """
 
     variant: Variant
@@ -1126,6 +1130,12 @@ class RenewalRun:
     cpu_seconds: float
     delay: pd.DataFrame
     bvd: Mapping[str, Any] | None = None
+    forecast_data: Any = None
+
+    @property
+    def places(self) -> Any:
+        """The inputs whose places the trajectories cover."""
+        return self.data if self.forecast_data is None else self.forecast_data
 
 
 @dataclass(frozen=True)
