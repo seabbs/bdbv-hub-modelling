@@ -210,6 +210,24 @@ def test_energy_matches_scoringrules_fair() -> None:
     assert energy_sample(obs, samples) == pytest.approx(want)
 
 
+def test_energy_holds_one_sample_s_distances_at_a_time() -> None:
+    # The zone backtest scores vectors of thousands of cells. Every pair
+    # of samples at once is samples^2 * cells floats (40 MB here), which
+    # ran a 16 GB runner out of memory; one sample's row is 0.4 MB.
+    import tracemalloc
+
+    rng = np.random.default_rng(7)
+    samples = rng.poisson(20, (100, 500)).astype(float)
+    obs = rng.poisson(20, 500).astype(float)
+    want = float(sr.es_ensemble(obs, samples, estimator="fair"))
+    tracemalloc.start()
+    got = energy_sample(obs, samples)
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    assert got == pytest.approx(want, rel=1e-12)
+    assert peak < 5e6
+
+
 def test_energy_scores_share_cells_and_scale() -> None:
     rng = np.random.default_rng(6)
     rows = []
