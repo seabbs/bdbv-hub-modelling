@@ -739,16 +739,6 @@ if FLOW.rounds_dir:
 
 # The grid tables and SI notes, read from the grid config
 # (`papertables.synthetic_grid`).
-# The release layer of the run the paper reports (`final_run`), if it has
-# one: the grid table's last group.
-def final_release_layer():
-    run = Path(config["final_run"]).name if config.get("final_run") else None
-    entry = (config.get("runs") or {}).get(run) or {}
-    return entry.get(
-        "release_layer", (config.get("finetune") or {}).get("release_layer")
-    )
-
-
 rule grid_tables:
     input:
         grid=SYNTHETIC["grid_file"],
