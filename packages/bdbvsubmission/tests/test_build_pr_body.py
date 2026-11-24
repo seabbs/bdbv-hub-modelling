@@ -355,12 +355,33 @@ def test_says_when_the_fit_was_made_in_the_run(tmp_path: Path) -> None:
     assert visible(body(g, provenance=prov))[3] == (
         "Fit: made in this run, as the fit store holds no fit for this round."
     )
-    for kind in ("randomwalk", "direct"):
-        prov["run"].update(kind=kind)
-        assert not any(
-            line.startswith("Fit:")
-            for line in visible(body(g, provenance=prov))
-        )
+    prov["run"].update(kind="direct")
+    assert not any(
+        line.startswith(("Fit:", "Forecast:"))
+        for line in visible(body(g, provenance=prov))
+    )
+
+
+def test_says_which_stored_walk_forecast_it_read(tmp_path: Path) -> None:
+    # A walk fits nothing, but its forecast comes from the fit store too.
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    prov["run"].update(
+        kind="randomwalk",
+        store={
+            "model": "randomwalk",
+            "origin": "2026-10-31",
+            "key": "0123456789abcdef",
+            "commit": "c0ffee0" * 5 + "c",
+            "fitted_at": "2026-11-01T08:00:00+00:00",
+            "store_commit": "5707e00" * 5 + "5",
+        },
+    )
+    assert visible(body(g, provenance=prov))[3] == (
+        "Forecast: read from the fit store, the `randomwalk` forecast at "
+        "2026-10-31 (key `0123456789abcdef`, made at `c0ffee0`, fit-store "
+        "commit `5707e00`)."
+    )
 
 
 def test_names_the_checkpoint_a_model_loaded(tmp_path: Path) -> None:

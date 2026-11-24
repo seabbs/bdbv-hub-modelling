@@ -27,8 +27,8 @@ export MODEL=$TRACK_MODEL MODEL_ID=$TRACK_ID
 echo "model_id=$TRACK_ID" >> "${GITHUB_OUTPUT:-/dev/null}"
 
 # Plain random walk is built only as the reference the model's forecast
-# is checked against. It is a shadow here and is never selected. Neither
-# needs a fit.
+# is checked against. It is a shadow here and is never selected. The
+# walks are read from the fit store with FIT_SOURCE=store.
 CAND_ID=randomwalk CAND_KIND=randomwalk CAND_CONFIG=randomwalk \
   CAND_MODEL=randomwalk CAND_LABEL="random walk baseline" CAND_SAMPLER='{}' \
   REQUIRE_ZONES=true "$(dirname "$0")/candidate.sh"

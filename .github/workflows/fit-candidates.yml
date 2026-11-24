@@ -62,9 +62,7 @@ jobs:
         with:
           name: inputs
           path: ${{ env.WORK }}
-      # Random walk candidates read no fit, so they need no store.
       - name: Fetch the fit store
-        if: matrix.kind != 'randomwalk'
         env:
           FIT_STORE_BRANCH: ${{ inputs.store_branch }}
         run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
