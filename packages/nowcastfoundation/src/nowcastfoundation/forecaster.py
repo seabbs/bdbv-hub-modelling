@@ -1787,11 +1787,12 @@ class FoundationModel:
                     ),
                 )
             parts = sample(groups, horizon, task.n_samples, seed)
-            # Chronos-2's sampler puts the views back together itself; a
-            # model's own sampler draws each view.
+            # Chronos-2's sampler puts the views back together itself, so
+            # it returns one part; any sampler that returns one part per
+            # view has them put together here.
             draws = (
                 parts[0]
-                if whole or self.sample is None
+                if len(parts) == 1
                 else _owned(parts, views, places, period is not None)
             )
             # Counts are not negative; Chronos-2's output is otherwise kept

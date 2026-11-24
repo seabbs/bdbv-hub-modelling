@@ -1343,3 +1343,25 @@ def test_block_sizes_report_each_view_s_places_and_series(
     assert joint["series"] == joint["target_rows"] + joint["lag_series"]
     zones = sizes.loc[sizes["part"] == "zones"]
     assert zones["forecasts"].sum() == len(_zones(task))
+
+
+def test_a_sampler_s_parts_are_put_back_together_by_view(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A sampler that returns one draw array per view, as a stand-in for
+    # Chronos-2 does, gives every place its view's draws: the joint view's
+    # places alone are not the whole block.
+    def per_view(groups, horizon, n, _seed, **_):  # type: ignore[no-untyped-def]
+        return [
+            np.ones((n, np.atleast_2d(g["target"]).shape[0], horizon))
+            for g in groups
+        ]
+
+    monkeypatch.setattr(foundation, "chronos_sampler", per_view)
+    model = dataclasses.replace(
+        get_model("fm_chronos_weekly_ragged"),
+        active_zone_cases=10**9,
+        coupling="independent",
+    )
+    weekly, _ = model.forecast_both(task)
+    assert set(weekly["location"]) >= {"CD", *_zones(task)}
