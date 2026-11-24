@@ -118,7 +118,7 @@ BLOCK_KEYS = ("context", "n_targets", "prediction_length", "levels")
 """Keys every block the trainer reads must have."""
 
 
-def load_blocks(path: Path) -> list[dict]:
+def load_blocks(path: Path) -> list[dict[str, Any]]:
     """Return the blocks pickled at `path`, refusing stale ones.
 
     A block cut by older code may lack a key the trainer reads only at a
@@ -180,7 +180,7 @@ def code_paths(bias: bool) -> dict[str, str]:
     return paths
 
 
-def lora_config(bias: bool):
+def lora_config(bias: bool) -> Any:
     """Return the LoRA config, saving the series bias if `bias`.
 
     The bias (`nowcastfoundation.series_bias`) trains beside the
@@ -246,7 +246,9 @@ VIEWS_FILE = "views.csv"
 run's training folder (`record_views`)."""
 
 
-def record_views(out: Path, pairs: list[tuple[str, dict[str, Any]]], part: str) -> str:
+def record_views(
+    out: Path, pairs: list[tuple[str, dict[str, Any]]], part: str
+) -> str:
     """Add each view of a system over the block limit to `VIEWS_FILE`.
 
     One row a block: the outbreak, the part of the run (`held-out` or the
@@ -298,7 +300,9 @@ RELEASES_FILE = "releases.csv"
 outbreak, in the run's train folder (`record_releases`)."""
 
 
-def record_releases(out: Path, pairs: list[tuple[str, dict[str, Any]]], part: str) -> str:
+def record_releases(
+    out: Path, pairs: list[tuple[str, dict[str, Any]]], part: str
+) -> str:
     """Add each block's releases to `RELEASES_FILE`, under a release layer.
 
     One row a block: the outbreak, the part of the run, source, cut,
@@ -366,7 +370,9 @@ def quiet_settings(min_cases: int | None) -> dict[str, Any]:
     }
 
 
-def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
+def param_groups(
+    model: Any, lr: float, bias_lr: float = 0.0
+) -> list[dict[str, Any]]:
     """Return the optimiser's groups: the adapter at `lr`, the bias at its own.
 
     Each keeps its starting rate as `base_lr`, which `set_learning_rates`
@@ -374,7 +380,8 @@ def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
     would reach only about 0.2 by the end at 1e-5, small against the
     attention scores, so they have their own rate.
     """
-    adapter, bias = [], []
+    adapter: list[Any] = []
+    bias: list[Any] = []
     for name, p in model.named_parameters():
         if p.requires_grad:
             (bias if series_bias.BIAS_MODULE in name else adapter).append(p)
@@ -386,7 +393,7 @@ def param_groups(model, lr: float, bias_lr: float = 0.0) -> list[dict]:
     return groups
 
 
-def make_optimiser(model, lr: float, bias_lr: float = 0.0):
+def make_optimiser(model: Any, lr: float, bias_lr: float = 0.0) -> Any:
     """Return AdamW over `param_groups`, with no weight decay in any group.
 
     As Chronos-2's own fit (the HF Trainer's default weight decay of 0,
@@ -397,18 +404,18 @@ def make_optimiser(model, lr: float, bias_lr: float = 0.0):
     return torch.optim.AdamW(param_groups(model, lr, bias_lr), weight_decay=0.0)
 
 
-def group_rates(optimiser) -> dict[str, Any]:
+def group_rates(optimiser: Any) -> dict[str, Any]:
     """Return each optimiser group's current rate by its name."""
     return {g["name"]: g["lr"] for g in optimiser.param_groups}
 
 
-def set_learning_rates(optimiser, sims: float, outbreaks: int) -> None:
+def set_learning_rates(optimiser: Any, sims: float, outbreaks: int) -> None:
     """Set each group's rate at `sims` simulations of `outbreaks`."""
     for group in optimiser.param_groups:
         group["lr"] = learning_rate(sims, group["base_lr"], outbreaks)
 
 
-def check_pairs(model, pairs: tuple[str, ...], source) -> None:
+def check_pairs(model: Any, pairs: tuple[str, ...], source: Any) -> None:
     """Refuse to continue from `source` unless it holds `model`'s pairs.
 
     A run continues only with the series bias it was trained with.
@@ -428,7 +435,7 @@ def check_pairs(model, pairs: tuple[str, ...], source) -> None:
         )
 
 
-def lora_model(base, config, init: Path | None):
+def lora_model(base: Any, config: Any, init: Path | None) -> Any:
     """Return `base` with a LoRA adapter to train.
 
     A fresh adapter from `config`, or, to continue a round, the adapter
@@ -588,7 +595,7 @@ def snapshots(
     rng: np.random.Generator,
     n_draws: int | None = None,
     subset_seed: int = 0,
-) -> list[tuple]:
+) -> list[tuple[Any, ...]]:
     """Return the draws cut at each of `CUTS` snapshots, with a source each.
 
     Every observation draw is cut once at each snapshot, so a simulation
@@ -638,7 +645,7 @@ def cut(
         [pd.read_csv(sim_dir / f"settings-{s}.csv") for s in seeds]
     ).set_index("outbreak")
     by = dict(tuple(counts.groupby("simulation")))
-    out = []
+    out: list[Any] = []
     for simulation in ids:
         row = settings.loc[simulation]
         days = row.get("max_delay", np.nan)
@@ -766,7 +773,7 @@ def submit_cut(
     seed: int,
     per_simulation: int,
     parts: int,
-) -> list[Future]:
+) -> list[Future[Any]]:
     """Start cutting the simulations `ids` in `parts` (`cut_in_workers`)."""
     split = np.array_split(np.arange(len(ids)), max(1, min(parts, len(ids))))
     futures = []
@@ -782,7 +789,7 @@ def submit_cut(
 
 
 def _join(
-    futures: list[Future],
+    futures: list[Future[Any]],
 ) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
     """Return the blocks and empty blocks of cut parts, in order."""
     pairs: list[tuple[str, dict[str, Any]]] = []
@@ -794,7 +801,9 @@ def _join(
     return pairs, empty
 
 
-def forward(model, batch: dict[str, Any], accepted, device=None):
+def forward(
+    model: Any, batch: dict[str, Any], accepted: Any, device: Any = None
+) -> Any:
     """Run the model on a batch, its rows given their places if any."""
     import torch
 
@@ -807,7 +816,9 @@ def forward(model, batch: dict[str, Any], accepted, device=None):
         return model(**inputs)
 
 
-def train_step(model, batch: dict[str, Any], accepted, device, share: float) -> float:
+def train_step(
+    model: Any, batch: dict[str, Any], accepted: Any, device: Any, share: float
+) -> float:
     """Accumulate a batch's gradients, scaled by `share`; return its loss.
 
     Forward and backward both run with the rows' places assigned, so a
@@ -820,7 +831,7 @@ def train_step(model, batch: dict[str, Any], accepted, device, share: float) -> 
     return float(loss.detach())
 
 
-def bias_summary(model) -> dict[str, Any]:
+def bias_summary(model: Any) -> dict[str, Any]:
     """Return each series bias pair's values, by layer and head, and range.
 
     Empty for a model without the bias.
@@ -850,7 +861,7 @@ def _bias_range(summary: dict[str, Any]) -> str:
     )
 
 
-def block_rows(blocks: list[dict]) -> np.ndarray:
+def block_rows(blocks: list[dict[str, Any]]) -> np.ndarray:
     """Return the places and parents of the rows of blocks batched together.
 
     A block's targets are at its `target_places` (a place's daily counts
@@ -910,7 +921,7 @@ def checkpoint_large_batches(above: int) -> None:
 
     forward = Chronos2EncoderBlock.forward
 
-    def checkpointed(self, hidden_states, **kwargs):
+    def checkpointed(self: Any, hidden_states: Any, **kwargs: Any) -> Any:
         large = hidden_states.shape[0] > above
         if large and self.training and torch.is_grad_enabled():
             return checkpoint(
@@ -959,9 +970,9 @@ class ByLength:
 
     def __init__(
         self,
-        blocks: list[dict],
+        blocks: list[dict[str, Any]],
         batch_size: int,
-        mode,
+        mode: Any,
         bias: bool = False,
     ) -> None:
         from chronos.chronos2.dataset import Chronos2Dataset, DatasetMode
@@ -999,7 +1010,7 @@ class ByLength:
             batch["series_rows"] = block_rows([self.inputs[i] for i in indices])
         return trim_context(batch)
 
-    def indices(self):
+    def indices(self) -> Any:
         """Yield every block's index once, in batches of one length.
 
         Batches are those Chronos-2's sequential batches make: blocks in
@@ -1017,7 +1028,7 @@ class ByLength:
             if batch:
                 yield batch
 
-    def batches(self):
+    def batches(self) -> Any:
         """Yield every block once, in batches of one length."""
         for indices in self.indices():
             yield self._build_batch(indices)
@@ -1050,13 +1061,13 @@ class _LossSplit:
         self.steps = None
         self.parts: dict[str, float] = {}
 
-    def __enter__(self):
+    def __enter__(self) -> Any:
         import torch
         from chronos.chronos2.model import Chronos2Model
 
         self.original = original = Chronos2Model._compute_loss
 
-        def compute(model, **kwargs):
+        def compute(model: Any, **kwargs: Any) -> Any:
             loss = original(model, **kwargs)
             if self.steps is None:
                 return loss
@@ -1074,14 +1085,14 @@ class _LossSplit:
         Chronos2Model._compute_loss = compute
         return self
 
-    def __exit__(self, *exc) -> None:
+    def __exit__(self, *exc: Any) -> None:
         from chronos.chronos2.model import Chronos2Model
 
         Chronos2Model._compute_loss = self.original
 
 
 def held_out_parts(
-    model, blocks: list[dict], batch_size: int
+    model: Any, blocks: list[dict[str, Any]], batch_size: int
 ) -> dict[str, float]:
     """Return the mean quantile loss of a model on blocks, and its parts.
 
@@ -1140,7 +1151,9 @@ def _described(parts: dict[str, float]) -> str:
     )
 
 
-def held_out_loss(model, blocks: list[dict], batch_size: int) -> float:
+def held_out_loss(
+    model: Any, blocks: list[dict[str, Any]], batch_size: int
+) -> float:
     """Return the mean quantile loss of a Chronos-2 model on blocks."""
     import torch
     from chronos.chronos2.dataset import DatasetMode
@@ -1202,7 +1215,7 @@ def memory() -> str:
     return "CPU"
 
 
-def publish(where: Path, key: str, run=subprocess.run) -> None:
+def publish(where: Path, key: str, run: Any = subprocess.run) -> None:
     """Publish a checkpoint as the release `chronos-ft-<key>`.
 
     Safe to run again: a release whose sha256sums match is left as it is,
@@ -1278,7 +1291,7 @@ def wait_for_memory(waits: int) -> None:
 
 
 def accumulate(
-    indices: list[int], backward, zero, wait=wait_for_memory
+    indices: list[int], backward: Any, zero: Any, wait: Any = wait_for_memory
 ) -> float:
     """Return a batch's loss, accumulating its gradients by `backward`.
 
@@ -1297,7 +1310,7 @@ def accumulate(
         training, so the run stops (lower the checkpoint threshold).
     """
     parts = [indices]
-    retried: dict[str, Any] = {}
+    retried: dict[int, int] = {}
     retry = False
     while True:
         if retry:
@@ -1332,7 +1345,7 @@ def accumulate(
                 wait(runs)
 
 
-def finite_step(params: list[Any], optimiser, value: float) -> bool:
+def finite_step(params: list[Any], optimiser: Any, value: float) -> bool:
     """Clip and apply the gradients unless any is not finite.
 
     The step is skipped if the loss or a gradient is not finite, and the
@@ -1360,14 +1373,17 @@ def finite_step(params: list[Any], optimiser, value: float) -> bool:
 
 
 def held_out_by_source(
-    model, blocks: list[dict], batch_size: int, n: int | None = None
+    model: Any,
+    blocks: list[dict[str, Any]],
+    batch_size: int,
+    n: int | None = None,
 ) -> dict[str, Any]:
     """Return held-out loss by source (weekly, daily, 3day).
 
     Each source's loss is on its first `n` blocks, or all of them, so a
     source's curve compares across runs that cut it alike.
     """
-    by: dict[str, list[dict]] = {}
+    by: dict[str, list[dict[str, Any]]] = {}
     for block in blocks:
         by.setdefault(block["source"], []).append(block)
     return {
@@ -1381,7 +1397,9 @@ def _by_source(losses: dict[str, Any]) -> str:
     return ", ".join(f"{s} {v:.4f}" for s, v in losses.items())
 
 
-def held_out_by_level(model, blocks: list[dict], n: int) -> dict[str, Any]:
+def held_out_by_level(
+    model: Any, blocks: list[dict[str, Any]], n: int
+) -> dict[str, Any]:
     """Return held-out loss by level (national, intermediate, leaf).
 
     Each of the first `n` blocks is scored once per level it holds, with
@@ -1495,7 +1513,9 @@ def load_rng(where: Path) -> bool:
     return True
 
 
-def save_state(where: Path, model, optimiser, state: dict[str, Any]) -> None:
+def save_state(
+    where: Path, model: Any, optimiser: Any, state: dict[str, Any]
+) -> None:
     """Save the trainer's state: adapter, optimiser and position."""
     import torch
     from peft import get_peft_model_state_dict
@@ -1518,7 +1538,7 @@ def save_state(where: Path, model, optimiser, state: dict[str, Any]) -> None:
 def backfill(
     train: Path,
     prefixes: Sequence[int],
-    blocks: list[dict],
+    blocks: list[dict[str, Any]],
     device: str,
     batch_size: int,
     report: Callable[..., None],
@@ -1564,7 +1584,9 @@ def pending_checkpoints(train: Path, prefixes: Sequence[int]) -> list[Path]:
     return out
 
 
-def resume_progress(where: Path, until: int | None, outbreaks: int) -> dict[str, Any]:
+def resume_progress(
+    where: Path, until: int | None, outbreaks: int
+) -> dict[str, Any]:
     """Return the step and outbreaks a run resumes from, and its segment.
 
     Read from the saved state (`save_state`) without loading it, so the
@@ -1584,7 +1606,9 @@ def resume_progress(where: Path, until: int | None, outbreaks: int) -> dict[str,
     }
 
 
-def load_state(where: Path, model, optimiser) -> dict[str, Any] | None:
+def load_state(
+    where: Path, model: Any, optimiser: Any
+) -> dict[str, Any] | None:
     """Load the trainer's saved state into the model and optimiser.
 
     If a save stopped between its renames, the last state is in `.old`.
@@ -1738,7 +1762,7 @@ def check_offload(mode: str, stop_from: int, outbreaks: int) -> None:
         )
 
 
-def save_snapshot(model, where: Path, request: dict[str, Any]) -> None:
+def save_snapshot(model: Any, where: Path, request: dict[str, Any]) -> None:
     """Save the adapter (and series bias) and what to evaluate on it.
 
     For `finetune.evaluate`. Written beside `where` and then
@@ -1753,7 +1777,7 @@ def save_snapshot(model, where: Path, request: dict[str, Any]) -> None:
     tmp.rename(where)
 
 
-def save_blocks(blocks: list[dict], path: Path) -> None:
+def save_blocks(blocks: list[dict[str, Any]], path: Path) -> None:
     """Save the held-out blocks, so an evaluator scores exactly these."""
     tmp = path.with_name(path.name + ".tmp")
     with tmp.open("wb") as f:
@@ -1799,7 +1823,9 @@ def save_chunk(
     saved.write_text(json.dumps(want))
 
 
-def load_chunk(out: Path, key: dict[str, Any]) -> tuple[list, list[Any]] | None:
+def load_chunk(
+    out: Path, key: dict[str, Any]
+) -> tuple[list[Any], list[Any]] | None:
     """Return a saved chunk's blocks and skipped blocks if `key` matches."""
     want = json.loads(json.dumps(key))
     for path, saved in _chunk_slots(out):
@@ -1811,8 +1837,8 @@ def load_chunk(out: Path, key: dict[str, Any]) -> tuple[list, list[Any]] | None:
 
 
 def held_out_blocks(
-    out: Path, key: dict[str, Any], cut: Callable[[], list[dict]]
-) -> list[dict]:
+    out: Path, key: dict[str, Any], cut: Callable[[], list[dict[str, Any]]]
+) -> list[dict[str, Any]]:
     """Return the held-out blocks, cut once for each `key`.
 
     `key` holds everything the cut depends on: the outbreaks, seeds,
@@ -1927,7 +1953,7 @@ def main(root: Path | None = None) -> None:
         **resume_progress(out / "state", args.until, args.outbreaks),
     }
 
-    def report(**kwargs) -> None:
+    def report(**kwargs: Any) -> None:
         status.update(kwargs, time=time.strftime("%Y-%m-%d %H:%M:%S"))
         status_file.write_text(json.dumps(status))
 
@@ -1989,7 +2015,7 @@ def main(root: Path | None = None) -> None:
         ),
     )
 
-    def cut_held_out() -> list[dict]:
+    def cut_held_out() -> list[dict[str, Any]]:
         report(stage=f"cutting held-out blocks of {len(held)} outbreaks")
         held_pairs, empty = cut_in_workers(
             pool, sim_dir, held, args.seed, k, args.cut_workers
@@ -2155,7 +2181,7 @@ def main(root: Path | None = None) -> None:
     seen = {"blocks": 0, "series": 0}
     losses: list[float] = []
 
-    def request(kinds: list[str], **extra) -> dict[str, Any]:
+    def request(kinds: list[str], **extra: Any) -> dict[str, Any]:
         """Return what an offloaded evaluation of the model now scores."""
         return {
             "step": step,
@@ -2238,7 +2264,7 @@ def main(root: Path | None = None) -> None:
         free_memory()
 
     # The next chunk's blocks are cut in `pool` while this one trains.
-    ahead: dict[tuple[str, ...], list[Future]] = {}
+    ahead: dict[tuple[str, ...], list[Future[Any]]] = {}
 
     saved_ahead: set[tuple[str, ...]] = set()
 
@@ -2253,7 +2279,7 @@ def main(root: Path | None = None) -> None:
                 pool, sim_dir, ids, args.seed, k, args.cut_workers
             )
 
-    real_training: list[dict] = []
+    real_training: list[dict[str, Any]] = []
     if args.real_training:
         real_training = load_blocks(args.real_training)
         log(f"{len(real_training)} real-data training blocks")

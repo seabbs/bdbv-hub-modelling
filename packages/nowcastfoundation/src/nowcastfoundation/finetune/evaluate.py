@@ -178,7 +178,7 @@ def _predictions(
     )
     accepted = inspect.signature(Chronos2Model.forward).parameters
     with torch.no_grad():
-        for indices in data.indices():  # type: ignore[no-untyped-call]
+        for indices in data.indices():
             batch = data._build_batch(indices)
             out = fs.forward(model, batch, accepted)
             raw = out.quantile_preds.float().cpu().numpy()
