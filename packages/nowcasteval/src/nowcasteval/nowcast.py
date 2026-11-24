@@ -67,7 +67,6 @@ from nowcasteval.scoring import (
     relative_skill,
     score_forecasts,
 )
-from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 from nowcastutils.base import (
     NATIONAL,
     ForecastModel,
@@ -76,7 +75,6 @@ from nowcastutils.base import (
     ModelUnavailableError,
     add_national,
     get_model,
-    list_models,
 )
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.files import write_csv
@@ -106,7 +104,6 @@ __all__ = [
     "rolling_truth",
     "score_releases",
     "stack_parts",
-    "stored_delays",
     "summarise",
     "truth_from_vintage",
     "week_shares",
@@ -466,30 +463,6 @@ def reported_samples(
         both = pd.concat([drawn, places.loc[~mapped]], ignore_index=True)
         out[o2] = add_national(both) if whole else both
     return out
-
-
-def stored_delays(results: Path | str) -> pd.DataFrame:
-    """Return the fitted models' stored delay summaries.
-
-    `fit-store load` writes them to `results`.
-
-    Parameters
-    ----------
-    results : pathlib.Path or str
-        The results directory.
-
-    Returns
-    -------
-    pandas.DataFrame
-        The delay summaries of the fitted models, with `model` and
-        `vintage`, and no rows if no fits were loaded.
-    """
-    path = Path(results) / DELAY_SUMMARY_FILE
-    if not path.exists():
-        return pd.DataFrame(columns=["model", "vintage"])
-    learnt = pd.read_csv(path)
-    fitted = [s.name for s in list_models() if s.fitted]
-    return learnt.loc[learnt["model"].isin(fitted)]
 
 
 def _label(

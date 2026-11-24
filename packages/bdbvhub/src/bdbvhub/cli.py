@@ -52,6 +52,7 @@ import pandas as pd
 
 from bdbvhub.store import archive as store_archive
 from bdbvhub.store import store
+from bdbvhub.store.store import stored_delays
 from bdbvhub.submission.fitting import get_config, run_fit, run_forecast
 from bdbvhub.submission.hub import (
     ROUND_NAME,
@@ -101,7 +102,6 @@ from nowcasteval.nowcast import (
     release_backtest,
     resolve_truth_delay,
     score_releases,
-    stored_delays,
 )
 from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 from nowcastrenewal.zones import ZONES_FILE
