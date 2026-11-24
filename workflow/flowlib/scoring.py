@@ -240,15 +240,23 @@ class Scoring:
         """Return the run's score cache: its own checkpoints' units."""
         return f"{self.training.dir}/{run}/scores"
 
-    def saved_prefixes(self, run: str) -> list[int]:
-        """Return the run's saved checkpoint prefixes."""
+    def run_prefixes(self, run: str) -> list[int]:
+        """Return the run's checkpoints a target asks for.
+
+        On a machine that trains (`finetune` in TARGETS) those saved and
+        those this pass trains (`to_train`), so a table or report pulls
+        the training and scoring it needs; elsewhere those saved, so a
+        machine that only scores never trains.
+        """
+        if "finetune" in str(self.local.get("TARGETS", "")).split():
+            return self.training.to_train(run)
         prefixes = self.training.runs[run].ft["prefixes"]
         return [n for n in prefixes if self.training.saved(run, n)]
 
     def run_units(self, run: str) -> list[str]:
-        """Return the German units of the run's saved checkpoints."""
+        """Return the German units of the run's checkpoints (`run_prefixes`)."""
         unit = f"{self.run_scores_dir(run)}/{GERMANY_UNIT}"
-        return [f"{unit}/n{n}.done" for n in self.saved_prefixes(run)]
+        return [f"{unit}/n{n}.done" for n in self.run_prefixes(run)]
 
     def reference_key_input(self, label: str) -> list[str]:
         """Return the reference unit's code-key file (`key_file`).
@@ -269,7 +277,7 @@ class Scoring:
         """Return the German report's LABEL=NAME arguments and folders."""
         return report_args(
             wc.run,
-            self.saved_prefixes(wc.run),
+            self.run_prefixes(wc.run),
             self.sc["reference"],
             f"{self.cache}/{GERMANY_UNIT}",
         )

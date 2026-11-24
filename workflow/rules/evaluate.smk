@@ -110,7 +110,7 @@ rule evaluate_checkpoint:
 
 
 rule seven_day_check:
-    # Lead 00:55 (Sam): each checkpoint's 7-day row against the 7-day sums
+    # Each checkpoint's 7-day row against the 7-day sums
     # of its daily rows (median ratio, sums in its 90% interval) and the
     # roughness of its median against the truth's, on the run's held-out
     # blocks (nowcastfoundation.finetune.evaluate.seven_day_check), on the

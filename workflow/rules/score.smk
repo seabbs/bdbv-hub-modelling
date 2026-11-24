@@ -113,7 +113,7 @@ rule run_table:
         references=references(),
         units=lambda wc: run_units(wc.run),
         offloaded=lambda wc: [
-            f for n in saved_prefixes(wc.run) for f in offloaded(wc.run, n)
+            f for n in run_prefixes(wc.run) for f in offloaded(wc.run, n)
         ],
     output:
         f"{RUN}/reports/checkpoint-scores.csv",
