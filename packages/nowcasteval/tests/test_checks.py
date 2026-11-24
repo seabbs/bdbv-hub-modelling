@@ -52,7 +52,7 @@ def test_place_types_split_on_the_recent_maximum() -> None:
     origins = pd.DataFrame(
         {"origin": ORIGIN, "location": ["wamba", "rungu", "steady", "quiet"]}
     )
-    got = place_types(COUNTS, origins).set_index("location")["place_type"]
+    got = place_types(COUNTS, origins, 9).set_index("location")["place_type"]
     assert got.to_dict() == {
         "wamba": "larger",
         "rungu": "small",

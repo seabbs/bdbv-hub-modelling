@@ -27,6 +27,7 @@ from bdbvhub.compare import (
     stored_forecasts,
     summarise_comparison,
 )
+from bdbvhub.reporting.chain_plots import baseline_share, plot_delay_check
 from bdbvhub.reporting.explorer import (
     explorer_data,
     explorer_html,
@@ -41,6 +42,7 @@ from bdbvhub.reporting.zone_nowcast import (
     zone_nowcast,
 )
 from bdbvhub.store.store import ZONE_FITS_FILE, samplers, stored_models
+from nowcastbaselines.chain import Settings
 from nowcastbdbv.data.delays import delay_summary
 from nowcastbdbv.data.tidy import (
     COHERENCE_STREAMS,
@@ -69,7 +71,6 @@ from nowcasteval.backtest import (
     truth_changes,
 )
 from nowcasteval.checks import (
-    RECENT_WEEKS,
     SMALL_MAX,
     check_summary,
     flags,
@@ -85,13 +86,11 @@ from nowcasteval.nowcast_plots import (
 )
 from nowcasteval.pairing_plots import pairing_page
 from nowcasteval.plots import (
-    baseline_share,
     comparison_colours,
     comparison_label,
     location_names,
     model_style,
     plot_cutoff_days,
-    plot_delay_check,
     plot_delay_distribution,
     plot_delays_over_time,
     plot_downward_updates,
@@ -377,6 +376,10 @@ def make_report(
         fig / "renewal-delay.svg",
     )
 
+
+RECENT_WEEKS: Final = Settings().walk_weeks
+"""Weeks up to an origin whose counts set a place's type in the checks:
+the random walk's window."""
 
 _RELEASE_PLACES: Final = ("CD", "CD-IT", "CD-NK")
 _RELEASE_MODELS: Final = (
@@ -1596,7 +1599,7 @@ def _checks_section(
     summaries = {}
     for name, kind in (("complete", "complete"), ("latest", "reported")):
         scores = every.loc[every["target"] == kind]
-        types = place_types(counts, scores)
+        types = place_types(counts, scores, RECENT_WEEKS)
         summaries[name] = {
             base: check_summary(scores, types, flagged, baseline=base)
             for base in names
