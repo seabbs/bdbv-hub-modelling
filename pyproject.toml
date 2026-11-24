@@ -189,10 +189,22 @@ convention = "numpy"
 [tool.pytest.ini_options]
 # Each package's own tests, then the rest. `tests/` is on the path for
 # the shared test helpers (such as `model.r_live`).
-testpaths = ["packages/*/tests", "workflow/tests", "tests"]
+testpaths = [
+  "packages/nowcastutils/tests",
+  "packages/nowcasteval/tests",
+  "packages/nowcastbaselines/tests",
+  "packages/nowcastfoundation/tests",
+  "packages/nowcastrenewal/tests",
+  "packages/nowcastgermany/tests",
+  "packages/nowcastbdbv/tests",
+  "packages/bdbvhub/tests",
+  "workflow/tests",
+  "tests",
+]
 pythonpath = ["tests"]
 # Model fits are slow; `task test-slow` runs them.
-# packages/bdbvsubmission has its own environment and runs its own tests.
+# packages/bdbvsubmission has its own environment and runs its own tests,
+# so it is not in `testpaths`.
 addopts = [
   "-ra", "--strict-markers", "--strict-config", "-m", "not slow",
   "--ignore=packages/bdbvsubmission",

@@ -21,8 +21,11 @@ GROUPS = [
     ("Studies", ["bdbvhub", "nowcastbdbv", "nowcastgermany"]),
 ]
 PACKAGES = [name for _, group in GROUPS for name in group]
+# bdbvsubmission sits behind the "Hub submission" project link instead.
 ON_DISK = sorted(
-    p.parent.name for p in (ROOT / "packages").glob("*/pyproject.toml")
+    p.parent.name
+    for p in (ROOT / "packages").glob("*/pyproject.toml")
+    if p.parent.name != "bdbvsubmission"
 )
 HOME_PROJECT = re.compile(r"\*\*([\w\- ]+)\*\*\]\(([\w/]+index\.md)\)")
 HOME_PACKAGE = re.compile(r"\| (\w*) \| \[.*?\*\*(\w+)\*\*\]\(([^)\s]+)\)")
