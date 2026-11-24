@@ -45,7 +45,7 @@ How a week's submission runs: [Submission workflow](https://samabbott.co.uk/bdbv
 
 ## Tasks
 
-`task bdbvhub:test` runs its tests; `task --list-all` lists every task, `task bdbvhub:<task>` from the root or `task <task>` in this folder.
+`task bdbvhub:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

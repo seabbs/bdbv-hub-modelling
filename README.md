@@ -102,7 +102,7 @@ task --list-all                            # every task
 - Watch a fine-tuning run: `task workflow:dashboard`.
 - Extras: the renewal model needs PyRenew (`uv sync --extra model`), Chronos-2 needs torch (`uv sync --group chronos`, a GPU is optional), and the live R checks need R.
 
-The repository holds the [packages](packages/README.md), the [workflow](workflow/README.md), the hub [submission CI](ci/README.md), the [paper](paper/README.md), the [docs site](docs/README.md), the [config](config/README.md) and the [data](data/README.md).
+The repository holds the [packages](packages/README.md), the [workflow](workflow/README.md), the hub [submission CI](ci/README.md), the [paper](paper/README.md), the [docs site](docs/README.md), the [config](config/) and the [data](data/README.md).
 
 ## Data
 

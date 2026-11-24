@@ -46,7 +46,7 @@ More recipes: [how-to](https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/h
 
 ## Tasks
 
-`task nowcastutils:test` runs its tests; `task --list-all` lists every task, `task nowcastutils:<task>` from the root or `task <task>` in this folder.
+`task nowcastutils:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

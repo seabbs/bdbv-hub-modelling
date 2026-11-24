@@ -45,7 +45,7 @@ A runnable version: [how-to](https://samabbott.co.uk/bdbv-hub-modelling/nowcaste
 
 ## Tasks
 
-`task nowcasteval:test` runs its tests; `task --list-all` lists every task, `task nowcasteval:<task>` from the root or `task <task>` in this folder.
+`task nowcasteval:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

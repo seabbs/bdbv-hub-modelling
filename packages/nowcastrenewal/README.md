@@ -49,7 +49,7 @@ How the models work: [Methods](https://samabbott.co.uk/bdbv-hub-modelling/renewa
 
 ## Tasks
 
-`task nowcastrenewal:test` runs its tests; `task --list-all` lists every task, `task nowcastrenewal:<task>` from the root or `task <task>` in this folder.
+`task nowcastrenewal:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

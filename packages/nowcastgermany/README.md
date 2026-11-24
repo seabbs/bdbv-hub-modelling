@@ -45,7 +45,7 @@ The results: [German nowcast benchmark](https://samabbott.co.uk/bdbv-hub-modelli
 
 ## Tasks
 
-`task nowcastgermany:test` runs its tests; `task --list-all` lists every task, `task nowcastgermany:<task>` from the root or `task <task>` in this folder.
+`task nowcastgermany:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

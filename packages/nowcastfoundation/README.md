@@ -50,7 +50,7 @@ The fine-tuning: [Fine-tuned foundation](https://samabbott.co.uk/bdbv-hub-modell
 
 ## Tasks
 
-`task nowcastfoundation:test` runs its tests; `task --list-all` lists every task, `task nowcastfoundation:<task>` from the root or `task <task>` in this folder.
+`task nowcastfoundation:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

@@ -55,3 +55,13 @@ def test_a_package_without_its_own_site_has_a_page_from_its_readme():
         # Every link is absolute, so --strict finds no missing file.
         relative = re.findall(r"\]\((?!https?://|#|mailto:)([^)]+)\)", rendered)
         assert relative == [], (package, relative)
+
+
+def test_the_docs_readme_is_not_a_site_page():
+    # It would clash with docs/index.md under mkdocs --strict.
+    import yaml
+
+    config = yaml.safe_load(
+        (ROOT / "mkdocs.yml").read_text().split("\nnav:")[0]
+    )
+    assert "README.md" in config["exclude_docs"].split()

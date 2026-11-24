@@ -18,6 +18,7 @@ hooks:
   - docs/hooks/readmes.py
 
 exclude_docs: |
+  README.md
   hooks/*
   generated/*
   examples/*
