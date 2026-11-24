@@ -127,6 +127,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 - `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`).
+- `publish_germany_unit`: opt-in, attaches a released checkpoint's German unit (`<SCORE_CACHE>/germany-days/slots-<hash>`) to its release as `germany-forecasts.tar.gz` (`nowcastgermany unit-publish`), which the Pages build loads for the checkpoint `config/finetune.toml` pins.
 - `publish`: every checkpoint.
 
 ## 4. Score (`rules/score.smk`)

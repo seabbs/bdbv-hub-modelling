@@ -33,7 +33,6 @@ KNOWN: dict[str, set[str]] = {
         "nowcastgermany.cli",
         "nowcastgermany.evaluation",
         "nowcastgermany.pairing",
-        "nowcastgermany.ft_store",
         "nowcastgermany.reporting",
     },
     # scoringrules, through nowcasteval.scoring.

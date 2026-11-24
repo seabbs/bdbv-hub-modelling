@@ -30,10 +30,10 @@ def _build_script() -> str:
 
 
 def test_the_stored_ft_model_is_not_forecast_by_pages() -> None:
-    # Its forecasts come from the checkpoint scorer's store.
+    # Its forecasts are the pinned release's asset.
     run = _build_script()
     load = run.index("nowcastgermany ft-load")
-    assert "germany-ft-forecasts" in run
+    assert "germany-forecasts.tar.gz" in run
     assert load < run.index("concat-results --out results/germany")
     assert "parts-germany-ft-store/germany" in run
 

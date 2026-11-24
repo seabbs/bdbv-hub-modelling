@@ -5,7 +5,9 @@
 #
 # `verify_checkpoint` checks that a checkpoint's hash recomputes from its
 # commit (`finetune-verify`); `publish_checkpoint` releases a
-# verified one (workflow/scripts/publish_checkpoint.py). Publishing writes
+# verified one (workflow/scripts/publish_checkpoint.py), and
+# `publish_germany_unit` attaches a released checkpoint's German unit to
+# its release for the Pages build. Publishing writes
 # GitHub releases, so it is the opt-in target `publish`, never part of
 # `finetune` or `all`.
 
@@ -53,6 +55,29 @@ rule publish_checkpoint:
         uv run python workflow/scripts/notify.py "checkpoint {wildcards.ck} published:" \
             "$(cat {output})" || true
         """
+
+
+rule publish_germany_unit:
+    # A released checkpoint's German unit (score_germany), packed as the
+    # stored forecasts the Pages build loads and attached to its own
+    # release (`nowcastgermany unit-publish`, nowcastgermany.store).
+    # Opt-in, as it writes to a release.
+    input:
+        f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",
+    output:
+        touch(f"{CACHE}/{GERMANY_UNIT}/{{label}}.published"),
+    log:
+        f"{CACHE}/log/{GERMANY_UNIT}-{{label}}-publish.log",
+    wildcard_constraints:
+        label=r"slots-[0-9a-f]+",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        cache=lambda wc, input: Path(input[0]).parents[1],
+    shell:
+        "uv run nowcastgermany unit-publish {params.cache} {wildcards.label} "
+        "> {log} 2>&1"
 
 
 rule publish:

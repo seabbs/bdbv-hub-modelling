@@ -48,16 +48,16 @@ def test_a_pin_names_its_release():
 def test_a_unit_packs_its_fine_tuned_development_forecasts(tmp_path):
     from nowcastgermany.store import ASSET, FORECASTS, pack_unit
 
-    _unit(tmp_path / "cache", "slots-abc", ["2021-11-22", "2021-11-23"])
-    out = pack_unit(tmp_path / "cache", "slots-abc", tmp_path, "2022-02-10")
+    _unit(tmp_path / "cache", "slots-abcdef", ["2021-11-22", "2021-11-23"])
+    out = pack_unit(tmp_path / "cache", "slots-abcdef", tmp_path, "2022-02-10")
     assert out.name == ASSET
     with tarfile.open(out) as tar:
         names = tar.getnames()
-        assert f"chronos-slots-abc/{FORECASTS}" in names
+        assert f"chronos-slots-abcdef/{FORECASTS}" in names
         manifest = json.load(
-            tar.extractfile("chronos-slots-abc/manifest.json")  # type: ignore[arg-type]
+            tar.extractfile("chronos-slots-abcdef/manifest.json")  # type: ignore[arg-type]
         )
-    assert manifest["label"] == "slots-abc"
+    assert manifest["label"] == "slots-abcdef"
     assert manifest["models"] == ["fm_chronos_daily_ragged_ft"]
     assert manifest["origins"] == 2
 
@@ -65,9 +65,9 @@ def test_a_unit_packs_its_fine_tuned_development_forecasts(tmp_path):
 def test_a_unit_with_held_out_dates_is_refused(tmp_path):
     from nowcastgermany.store import pack_unit
 
-    _unit(tmp_path / "cache", "slots-abc", ["2021-11-22", "2022-02-10"])
+    _unit(tmp_path / "cache", "slots-abcdef", ["2021-11-22", "2022-02-10"])
     with pytest.raises(ValueError, match="held-out"):
-        pack_unit(tmp_path / "cache", "slots-abc", tmp_path, "2022-02-10")
+        pack_unit(tmp_path / "cache", "slots-abcdef", tmp_path, "2022-02-10")
 
 
 def test_the_side_branch_and_its_fallback_are_gone():

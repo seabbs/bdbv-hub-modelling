@@ -2,17 +2,18 @@
 """Stored German forecasts of the fine-tuned Chronos-2 model.
 
 The Pages build never runs `STORED_MODELS` on the German benchmark. The
-checkpoint scorer (`scripts/checkpoint_scores.py germany` on the
-`checkpoint-scoring` branch) already nowcasts every development date
-with each published checkpoint, by `germany_forecasts` and `with_truth`
-as `nowcastgermany backtest` does. `germany-ft-store` (`ft_store`)
-writes a checkpoint's forecasts from its cache to the `STORE_BRANCH`
-branch, one directory per release tag (`write_stored`), and the Pages
-build loads the one `choose_checkpoint` picks (`nowcastgermany
-ft-load`), so it is scored and shown like every other model.
+workflow's German unit (`score_germany`, `nowcastgermany.checkpoint`)
+already nowcasts every development date with each released checkpoint.
+`publish_germany_unit` packs a released checkpoint's unit into a store
+directory (`pack_unit`, `write_stored`) as the `ASSET` tarball and
+attaches it to the checkpoint's own release (`nowcastgermany
+unit-publish`). The Pages build downloads the asset of the checkpoint
+config/finetune.toml pins (`pinned_tag`) and loads it (`nowcastgermany
+ft-load`), so it is scored and shown like every other model; no other
+checkpoint stands in.
 
-Only development dates, nowcast dates before the split date, are ever
-stored or loaded (`development_rows`).
+Only development dates, nowcast dates before the split date, at the
+hub's nowcast horizons are ever stored or loaded (`development_rows`).
 """
 
 from __future__ import annotations
@@ -21,25 +22,24 @@ import gzip
 import io
 import json
 import re
-from collections.abc import Collection, Iterable, Mapping
+import tarfile
+import tempfile
 from pathlib import Path
-from typing import Any, Final
+from typing import Final
 
 import pandas as pd
 
-from nowcastfoundation.forecaster import (
-    FINETUNED_PREFIX,
-    SLOTS_PREFIX,
-    SLOTS_RELEASE_PREFIX,
-)
+from nowcastfoundation.forecaster import SLOTS_PREFIX
 from nowcastfoundation.forecaster import release_tag as foundation_release_tag
 
 __all__ = [
+    "ASSET",
     "STORED_MODELS",
-    "STORE_BRANCH",
-    "choose_checkpoint",
     "development_rows",
     "load_stored",
+    "pack_unit",
+    "pinned_tag",
+    "read_unit",
     "release_tag",
     "stored_tags",
     "write_stored",
@@ -49,8 +49,12 @@ STORED_MODELS: Final = ("fm_chronos_daily_ragged_ft",)
 """The models whose German forecasts come from the store: Germany is
 daily only (`config/germany.toml`)."""
 
-STORE_BRANCH: Final = "germany-ft-forecasts"
-"""The branch that holds the stored forecasts."""
+ASSET: Final = "germany-forecasts.tar.gz"
+"""The release asset with a checkpoint's stored German forecasts."""
+
+UNIT: Final = "germany-days"
+"""The German unit's folder in the score cache
+(`nowcastgermany.checkpoint.GERMANY_UNIT`)."""
 
 FORECASTS: Final = "forecasts.csv.gz"
 MANIFEST: Final = "manifest.json"
@@ -84,72 +88,89 @@ def release_tag(label: str) -> str:
     return foundation_release_tag(label)
 
 
-def _published(releases: Iterable[Mapping[str, Any]], prefix: str) -> list[str]:
-    """Return the published tags with a prefix, oldest first."""
-    rows = sorted(
-        (str(r["published_at"]), str(r["tag_name"]))
-        for r in releases
-        if str(r["tag_name"]).startswith(f"{prefix}-")
-        and not r.get("draft")
-        and r.get("published_at")
-    )
-    return [tag for _, tag in rows]
-
-
-def choose_checkpoint(
-    stored: Collection[str],
-    releases: Iterable[Mapping[str, Any]],
-    spec: str,
-    live: Collection[str] | None = None,
-) -> tuple[str | None, str | None]:
-    """Return the checkpoint whose stored forecasts the page shows.
-
-    The newest published `SLOTS_RELEASE_PREFIX` release with stored forecasts
-    wins: the final run's checkpoint, once the scorer has stored it.
-    Otherwise the checkpoint `spec` pins, as the `_ft` models load it
-    (`foundation.resolve_checkpoint`): the newest `FINETUNED_PREFIX` release for
-    `"latest"`, else that spec's release (`chronos-slots-<hash>` for
-    `slots-<hash>`). If its forecasts are not stored
-    yet, the newest stored `FINETUNED_PREFIX` release is shown instead.
+def pinned_tag(spec: str) -> str:
+    """Return the release of the checkpoint config/finetune.toml pins.
 
     Parameters
     ----------
-    stored : collection of str
-        Release tags with stored forecasts (`stored_tags`).
-    releases : iterable of mapping
-        The repository's releases, each with `tag_name`, `published_at`
-        and `draft` (`foundation.finetuned_releases`).
     spec : str
-        `hash` of config/finetune.toml: `"latest"` or a settings hash.
-    live : collection of str, optional
-        The live fine-tuning run's release tags
-        (`live_checkpoint.live_tags`). When given, only its newest stored
-        checkpoint is shown, and none while it has none stored.
+        The pin, `slots-<hash>` or a settings hash (`finetuned_spec`).
 
     Returns
     -------
-    tuple
-        The tag shown, None if no candidate is stored, and the tag `spec`
-        pins, None if there is no such release.
+    str
+        Its release tag.
     """
-    releases = list(releases)
-    published = _published(releases, SLOTS_RELEASE_PREFIX)
-    slots = [t for t in published if t in stored]
-    if live is not None:
-        slots = [t for t in slots if t in live]
-    ft = _published(releases, FINETUNED_PREFIX)
-    if spec == "latest":
-        pinned = ft[-1] if ft else None
-    else:
-        pinned = foundation_release_tag(spec)
-    if slots:
-        return slots[-1], pinned
-    if live is not None:
-        return None, pinned
-    if pinned in stored:
-        return pinned, pinned
-    fallback = [t for t in ft if t in stored]
-    return (fallback[-1] if fallback else None), pinned
+    return release_tag(spec)
+
+
+def read_unit(cache: Path | str, label: str) -> pd.DataFrame:
+    """Stack a label's German unit files as the page scores them.
+
+    The 7-day sums at the hub's nowcast horizons (0 days back or
+    earlier), without the `target` column.
+
+    Parameters
+    ----------
+    cache : pathlib.Path or str
+        The score cache, with `<UNIT>/<label>/<date>.csv.gz`.
+    label : str
+        The checkpoint's label.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The rows.
+
+    Raises
+    ------
+    ValueError
+        If the unit has no files.
+    """
+    root = Path(cache) / UNIT / label
+    files = sorted(root.glob("20*.csv.gz"))
+    if not files:
+        raise ValueError(f"No German unit files in {root}.")
+    dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
+    rows = pd.concat(
+        [pd.read_csv(f, dtype=dtype) for f in files], ignore_index=True
+    )
+    if "target" in rows:
+        rows = rows.loc[rows["target"] == "7day"].drop(columns="target")
+    return rows.loc[rows["horizon"] <= 0].reset_index(drop=True)
+
+
+def pack_unit(
+    cache: Path | str, label: str, out: Path | str, split_date: str
+) -> Path:
+    """Pack a label's development forecasts as the release asset.
+
+    Parameters
+    ----------
+    cache : pathlib.Path or str
+        The score cache.
+    label : str
+        The checkpoint's label (`slots-<hash>` or a settings hash).
+    out : pathlib.Path or str
+        The folder the asset is written to.
+    split_date : str
+        The first held-out nowcast date; any later row is refused.
+
+    Returns
+    -------
+    pathlib.Path
+        `<out>/ASSET`, holding `<release tag>/forecasts.csv.gz` and
+        `manifest.json`.
+    """
+    tag = release_tag(label)
+    rows = read_unit(cache, label)
+    with tempfile.TemporaryDirectory() as tmp:
+        write_stored(tmp, tag, rows, split_date, label, f"{UNIT}/{label}")
+        path = Path(out) / ASSET
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tarfile.open(path, "w:gz") as tar:
+            tar.add(Path(tmp) / tag, arcname=tag)
+    return path
 
 
 def development_rows(
@@ -210,8 +231,7 @@ def development_rows(
 def _csv_gz(frame: pd.DataFrame, path: Path) -> None:
     """Write a gzipped CSV with no timestamp.
 
-    The same rows give the same bytes, so an unchanged checkpoint commits
-    nothing.
+    The same rows give the same bytes.
     """
     buf = io.BytesIO()
     with gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as gz:
@@ -232,7 +252,7 @@ def write_stored(
     Parameters
     ----------
     store : pathlib.Path or str
-        The store's root, as the `STORE_BRANCH` branch's tree.
+        The store's root, one folder per release tag.
     tag : str
         The checkpoint's release tag, the directory written.
     forecasts : pandas.DataFrame
