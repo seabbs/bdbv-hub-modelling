@@ -275,6 +275,8 @@ module = [
   "torch.*",
   "safetensors",
   "safetensors.*",
+  "huggingface_hub",
+  "huggingface_hub.*",
 ]
 ignore_missing_imports = true
 
