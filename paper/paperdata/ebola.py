@@ -275,7 +275,7 @@ def load(
 def release_observations(data: str | Path) -> pd.DataFrame:
     """Return each release's weekly counts, in the paper's schema.
 
-    The tidy target table of main's data (`bdbvhubrenewal data`) has one
+    The tidy target table of main's data (`bdbvhub data`) has one
     row per release, place and week. A release's `as_of_date` is its
     cut-off, the latest onset day it covers, as the release backtest
     dates it.
@@ -303,7 +303,7 @@ def backtest_samples(
 ) -> pd.DataFrame:
     """Return release-backtest samples in the paper's schema.
 
-    `bdbvhubrenewal backtest` forecasts from every past release, and
+    `bdbvhub backtest` forecasts from every past release, and
     `fit-store load` adds the stored fits' forecasts, to one table of
     samples (`results/forecasts.csv.gz`): `model`, `kind`, `vintage` (the
     release), `location`, `target_end_date`, `sample`, `value`, `as_of`

@@ -27,7 +27,7 @@ def test_the_fast_tier_runs_no_slow_tests(name, job):
     runs = " ".join(s.get("run", "") for s in steps)
     assert "pytest" in runs
     assert "-m slow" not in runs
-    assert "bdbvhubrenewal fit" not in runs
+    assert "bdbvhub fit" not in runs
     # Across the runner's cores (pytest-xdist).
     assert "-n auto" in runs
 

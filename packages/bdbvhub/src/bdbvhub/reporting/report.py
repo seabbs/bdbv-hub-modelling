@@ -204,7 +204,7 @@ def make_report(
     config_path : pathlib.Path or str
         Backtest settings.
     hub_comparison : pathlib.Path or str
-        Output of `bdbvhubrenewal compare-hub`, if it has been run.
+        Output of `bdbvhub compare-hub`, if it has been run.
     germany : pathlib.Path or str
         Output of `nowcastgermany backtest`, if it has been run.
     germany_config : pathlib.Path or str
@@ -1806,7 +1806,7 @@ def _comparison_page(
 ) -> None:
     summary_path = cmp_dir / "summary.json"
     if not summary_path.exists():
-        missing = "Not run yet: `bdbvhubrenewal compare-hub --fetch`.\n"
+        missing = "Not run yet: `bdbvhub compare-hub --fetch`.\n"
         for name in (
             "comparison-lead.md",
             "comparison-scores.md",

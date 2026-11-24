@@ -4,7 +4,7 @@
 The results release carries these tables, so every model, submitted or
 not, is archived with each hub release. For each model `hub_tables`
 gives the hub sample table, with the country, the provinces and the
-health zones, as `bdbvhubrenewal nowcast` writes it for a submission,
+health zones, as `bdbvhub nowcast` writes it for a submission,
 and the same forecast as hub quantiles.
 As in a submission, the zone fits of `renewal` and `renewalbvd` give
 their own zone samples, and the zones of every other model come from

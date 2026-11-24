@@ -43,6 +43,6 @@ def test_the_backtests_are_scored_after_the_fits_and_stored() -> None:
         job["needs"]
     )
     run = "\n".join(str(s.get("run", "")) for s in job["steps"])
-    assert run.index("fit-store load") < run.index("bdbvhubrenewal score")
+    assert run.index("fit-store load") < run.index("bdbvhub score")
     assert "push-backtests" in run
     assert "backtests" in _jobs()["pages"]["needs"]

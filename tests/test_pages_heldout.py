@@ -60,10 +60,10 @@ def test_pages_forecasts_and_scores_nothing() -> None:
         str(s.get("run", "")) for job in jobs.values() for s in job["steps"]
     )
     for command in (
-        "bdbvhubrenewal backtest",
-        "bdbvhubrenewal zone-backtest",
+        "bdbvhub backtest",
+        "bdbvhub zone-backtest",
         "pairing-sensitivity",
-        "bdbvhubrenewal score",
+        "bdbvhub score",
     ):
         assert command not in run, command
     assert "backtests/latest.tar.gz" in run
