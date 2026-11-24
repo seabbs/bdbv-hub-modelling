@@ -186,7 +186,7 @@ LOCAL_CONFIG=/path/to/machine.env task nowcast-foundation:dashboard -- --run run
 A module of this workflow (`use rule * from paper_workflow`), run from the repository root; its paths are from the root and its outputs are in `paper/results/<mode>/`.
 `development` runs the development seeds and the German first half only, `paper` the held-out seeds and both German halves, and `render` renders `paper/main.qmd` and `paper/si.qmd` from the run `publish_paper` last copied to `paper/build/`.
 
-- Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
+- Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `ebola_data` (the hub's releases, downloaded on the driver for `ebola_backtest`), `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
 - Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
 - Fit store history: `fit_store_history` fetches the release asset of our stored forecasts made before each round closed and checks its checksum; `publish_fit_store_history` (opt-in) builds and publishes it from the fit store branch.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
