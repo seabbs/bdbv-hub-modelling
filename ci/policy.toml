@@ -140,6 +140,11 @@ sum_tolerance = 1e-9       # absolute (or 1e-12 relative)
 # L over `plausible_low_ratio` where that is a case or more.
 # A median at or above the count already observed for that week passes
 # the low check.
+# A candidate ruled out only by values or samples failing at some
+# provinces is kept, with those provinces (and their zones) from the next
+# candidate in the chain that passes there, national re-summed
+# (location_fallback.py). false turns this off.
+location_fallback = true
 plausible_recent_weeks = 4
 plausible_poisson_level = 0.975
 plausible_median_ratio = 5.0

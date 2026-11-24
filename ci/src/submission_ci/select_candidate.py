@@ -10,6 +10,11 @@ convergence failure thresholds or its file would be invalid on the hub
 forecast is from the recent data) and the posterior predictive checks
 are reported, never gated.
 
+A candidate ruled out only by checks tied to some provinces (values or
+samples there) is kept, with those provinces and their health zones from
+the next candidate in the chain that passes there, national re-summed,
+and the merged file checked and validated again (`location_fallback`).
+
 If nothing is left the round is skipped.
 
 `select` writes `provenance.json` and `provenance.md` and copies the
@@ -39,6 +44,7 @@ from .common import (
     write_json,
     write_text,
 )
+from .location_fallback import try_merge
 from .policy import UNFITTED, Candidate, Policy, load_policy
 
 Validator = Callable[[Path, Path], str]  # (submission, log) -> status
@@ -59,6 +65,10 @@ class Attempt:
     reasons: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     handled: list[str] = field(default_factory=list)
+    substituted: dict[str, str] = field(default_factory=dict)
+    """Province -> the candidate its subtree came from (location fallback)."""
+    source: str = ""
+    """The merged candidate directory, when locations were substituted."""
 
 
 def _submission(cdir: Path) -> Path | None:
@@ -164,19 +174,74 @@ def _validate(a: Attempt, cdir: Path, validate: Validator | None) -> bool:
     return True
 
 
+def _keep_at_locations(
+    a: Attempt,
+    cdir: Path,
+    later: Sequence[Candidate],
+    root: Path,
+    out: Path,
+    policy: Policy,
+    validate: Validator | None,
+    tasks: dict[str, Any] | None,
+) -> bool:
+    """Keep a candidate ruled out only by checks at some provinces, with
+    those provinces from later candidates (`location_fallback`)."""
+    if (
+        not policy.checks.get("location_fallback", True)
+        or not later
+        or a.status == "missing"
+        or blocks(a.fit)
+        or not blocks(a.checks)
+        or _submission(cdir) is None
+    ):
+        return False
+    kept = try_merge(
+        cdir,
+        [(c.id, root / c.id) for c in later],
+        out,
+        policy.checks,
+        tasks,
+        validate,
+    )
+    if kept is None:
+        return False
+    dest, by, notes = kept
+    a.source, a.substituted = str(dest), by
+    a.validation = "pass" if validate else "skip"
+    a.warnings += notes
+    a.status = "warn"
+    return True
+
+
 def select(
-    policy: Policy, root: Path, validate: Validator | None
+    policy: Policy,
+    root: Path,
+    validate: Validator | None,
+    out: Path | None = None,
+    tasks: dict[str, Any] | None = None,
 ) -> tuple[Attempt | None, list[Attempt]]:
-    """Return the chosen attempt (or None) and every attempt."""
+    """Return the chosen attempt (or None) and every attempt.
+
+    With `out`, a candidate ruled out only by checks at some provinces is
+    kept with those provinces from later candidates (`location_fallback`).
+    """
     attempts: list[Attempt] = []
     chosen: Attempt | None = None
-    for c in policy.chain():
+    chain = policy.chain()
+    for i, c in enumerate(chain):
         if chosen is not None:
             attempts.append(Attempt(c.id, c.kind, c.label, status="not needed"))
             continue
         a = assess(c, root / c.id)
         attempts.append(a)
-        if blocks_status(a.status) or not _validate(a, root / c.id, validate):
+        if blocks_status(a.status):
+            if out is not None and _keep_at_locations(
+                a, root / c.id, chain[i + 1 :], root, out, policy, validate,
+                tasks,
+            ):  # fmt: skip
+                chosen = a
+            continue
+        if not _validate(a, root / c.id, validate):
             continue
         chosen = a
     return chosen, attempts
@@ -263,6 +328,7 @@ def run_select(
     validate: Validator | None,
     shadows: bool = True,
     only: bool = False,
+    tasks: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Select, write provenance and copy the chosen files.
 
@@ -270,7 +336,7 @@ def run_select(
     its own whose run fits none of them. `only` marks a chain of one model
     with no fallback, so a skip says so.
     """
-    chosen, attempts = select(policy, root, validate)
+    chosen, attempts = select(policy, root, validate, out, tasks)
     prov: dict[str, Any] = {
         "selected": chosen.id if chosen else None,
         "kind": chosen.kind if chosen else None,
@@ -283,6 +349,7 @@ def run_select(
         "reason": _reason(chosen, attempts, only),
         "warnings": chosen.warnings if chosen else [],
         "handled": chosen.handled if chosen else [],
+        "locations_substituted": chosen.substituted if chosen else {},
         "attempts": [asdict(a) for a in attempts],
         "shadows": _shadows(policy, root) if shadows else [],
     }
@@ -294,7 +361,7 @@ def run_select(
         dest = out / "selected"
         if dest.exists():
             shutil.rmtree(dest)
-        shutil.copytree(cdir, dest)
+        shutil.copytree(Path(chosen.source) if chosen.source else cdir, dest)
     write_json(out / "provenance.json", prov)
     md = provenance_markdown(prov)
     write_text(out / "provenance.md", md)
@@ -320,6 +387,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--validate-cmd", default="")
     p.add_argument(
+        "--tasks",
+        type=Path,
+        default=None,
+        help="The hub's tasks.json, for re-checking a merged file",
+    )
+    p.add_argument(
         "--no-shadows", action="store_true", help="Leave shadows out"
     )
     args = p.parse_args(argv)
@@ -335,6 +408,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         validate,
         shadows=not args.no_shadows,
         only=only,
+        tasks=read_json(args.tasks) if args.tasks else None,
     )
     set_outputs(
         {
