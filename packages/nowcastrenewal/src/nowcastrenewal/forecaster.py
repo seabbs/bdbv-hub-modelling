@@ -62,7 +62,6 @@ if TYPE_CHECKING:
     from nowcastrenewal.model import ModelConfig, Vintage
 
 __all__ = [
-    "CENTRED_RT_MIN_CASES",
     "DEFAULT_SAMPLER",
     "DELAY_SUMMARY_FILE",
     "FIT_VARIANTS",
@@ -78,6 +77,7 @@ __all__ = [
     "bvd_record",
     "bvd_release",
     "bvd_rows",
+    "centred_min_weekly_cases",
     "chain_diagnostics",
     "check_national",
     "delay_summary",
@@ -228,11 +228,7 @@ VARIANTS: Final[dict[str, Variant]] = {
             # Each zone alone drops pooling and importation; depletion and
             # the Rt process are those of the zone models (Sam, 2026-11-24:
             # it replaces the fit of each province on its own).
-            overrides={
-                "national": True,
-                "centred_rt": True,
-                "rt_sd_lognormal": (0.12, 0.5),
-            },
+            overrides={"national": True},
             per_province=True,
         ),
         Variant(
@@ -244,13 +240,6 @@ VARIANTS: Final[dict[str, Variant]] = {
     )
 }
 """Model variants, by name."""
-
-CENTRED_RT_MIN_CASES: Final = 250
-"""Cases, known and imputed, a single-patch fit needs by the cut-off for
-its log Rt walk to be centred (`ModelConfig.centred_rt`). At the
-2026-11-15 release, centred walks diverged in provinces of 2 to 13 cases
-(40 to 148 of 1500 draws) and did no better at 120 cases, while at 527
-cases and above they had a step size about 5 times the non-centred one."""
 
 FIT_VARIANTS: Final[dict[str, str]] = {
     "main": "renewal",
@@ -278,12 +267,39 @@ def model_config(variant: Variant) -> ModelConfig:
     return dataclasses.replace(base, **dict(variant.overrides))
 
 
+def centred_min_weekly_cases(config: ModelConfig) -> float:
+    r"""Return the weekly cases from which a fit's log Rt walk is centred.
+
+    The count noise on a weekly log change in cases is about
+    $1/\sqrt{n}$ for $n$ cases a week. Where it is below the prior median
+    step SD of the walk, $m$ (`ModelConfig.rt_sd_lognormal`), the counts
+    pin the walk's weekly changes, so its levels are sampled (centred);
+    otherwise its standardised steps are (non-centred). So the cut-off
+    is $1/m^2$: 69.4 cases a week for $m = 0.12$.
+
+    Parameters
+    ----------
+    config : ModelConfig
+        The configuration.
+
+    Returns
+    -------
+    float
+        Mean weekly cases, known and imputed, over the fit's places and
+        data weeks.
+    """
+    median = (
+        0.2 if config.rt_sd_lognormal is None else config.rt_sd_lognormal[0]
+    )
+    return 1.0 / median**2
+
+
 def fit_config(variant: Variant, data: Vintage) -> ModelConfig:
     """Build the `ModelConfig` a variant fits to one vintage with.
 
-    A centred log Rt walk funnels where few cases inform it, so a
-    variant's `centred_rt` holds only with at least
-    `CENTRED_RT_MIN_CASES` cases by the cut-off.
+    The same rule for every variant: the fit's log Rt walk is centred
+    where its data's mean weekly cases, known and imputed, summed over its
+    places, reach `centred_min_weekly_cases`, and non-centred otherwise.
 
     Parameters
     ----------
@@ -295,13 +311,13 @@ def fit_config(variant: Variant, data: Vintage) -> ModelConfig:
     Returns
     -------
     nowcastrenewal.model.ModelConfig
-        `model_config(variant)`, centred only where the data allow.
+        `model_config(variant)`, centred where the counts pin the walk.
     """
     config = model_config(variant)
-    cases = np.nansum(data.known) + np.nansum(data.imputed)
-    if config.centred_rt and cases < CENTRED_RT_MIN_CASES:
-        config = dataclasses.replace(config, centred_rt=False)
-    return config
+    weeks = max(int(np.asarray(data.known).shape[0]), 1)
+    weekly = (np.nansum(data.known) + np.nansum(data.imputed)) / weeks
+    centred = bool(weekly >= centred_min_weekly_cases(config))
+    return dataclasses.replace(config, centred_rt=centred)
 
 
 def sampler_settings(

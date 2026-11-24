@@ -6,7 +6,7 @@ is imported in a new interpreter, and the job fails if any module does
 not import: it uses a package above it or a dependency it does not
 declare.
 
-Usage: python tests/packages/package_alone.py <package> <src folder>
+Usage: python .github/scripts/package_alone.py <package> <src folder>
 """
 
 from __future__ import annotations

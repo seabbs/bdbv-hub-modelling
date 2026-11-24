@@ -110,7 +110,12 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.
 - The other is one block per province, of the province and all its zones, cut into views as in training when over the block limit.
 - The country, provinces and active zones take their forecast from the joint block, and every other zone from its province's block (SI).
-- The number of lag series, in training and at prediction alike, comes from how long the data's counts take to settle, read from the release history up to the nowcast date and capped only by that history (SI).
+- At forecast time the number of lag rows, $D$, is set from the data by default, for the zero-shot and fine-tuned models alike (SI).
+- Each onset day first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
+- $D$ is one more than the 98th percentile of these settling lags, using only days seen for at least $1.5D$ lags.
+- With no such day, $D$ is the release history.
+- A study can set a fixed $D$ instead.
+- Training blocks use the same rule for $D$ in 90% of blocks and $D$ scaled by a factor drawn from Normal(1, 0.05) in the other 10%, so the model is robust to $D$ set slightly differently.
 - We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.
 - We plot each checkpoint's scores, with both as reference lines (SI).
 - Figure 1 shows the simulation, the ragged series, training and forecasting.
@@ -163,7 +168,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - We set each tuned choice on development data, apart from every scored set (SI).
 - We score each model's quantiles with WIS and log-scale WIS, bias, and 50% and 90% coverage (95% for Germany, whose hub quantiles have no 5% or 95% level), relative to `randomwalknowcast`, and split WIS into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021].
 - In the SI we also score samples with the fair CRPS and the fair energy score, which correct for the number of samples, so forecasts with different numbers of samples, ours and the hub teams', compare fairly [@Ferro2014; @Zamo2018; @zanetta_scoringrules_2024].
-- We score against the data as reported $D$ days later, with $D$ each outbreak's 98% reporting delay.
+- We score against the data as reported $T$ days later, with $T$ each outbreak's 98% reporting delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
 :::
 
@@ -199,12 +204,14 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - Every model, ours and the hub teams', forecasts some targets and places only, so we compare models on the forecasts they share and report the country, provinces and zones apart.
 - We compare models by pairwise relative skill on the forecasts each pair shares, as scoringutils does, with WIS on the natural and log scales side by side [@Bosse2023-sx; @bosse2022scoringutils].
 - We score only the hub's own targets and horizons.
+- The hub's releases are few, weekly and begin with a backfill, so too few onset days have settled to estimate $D$.
+- We therefore set $D = 40$ days at forecast time, as the random walk nowcast does, for the fine-tuned and zero-shot models alike.
 - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
 - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, taking the hub teams' quantiles from their samples.
-- We score each week against its count in the first release at least $D$ days after the week ends, with $D$ the 98% point of the hub data's reporting delay.
+- We score each week against its count in the first release at least $T$ days after the week ends, with $T$ the 98% point of the hub data's reporting delay.
 - By then nearly all of a week's cases are reported, so the truth changes little afterwards while every round can still be scored.
-- $D$ is part of the scoring rule, not a choice tuned on the data.
+- $T$ is part of the scoring rule, not a choice tuned on the data.
 - The SI compares the samples directly with the fair CRPS.
 - We score Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
 - Quantiles from 100 draws are noisier than those from 1,000, so WIS is biased against the hub teams, and the fair CRPS in the SI checks this.
