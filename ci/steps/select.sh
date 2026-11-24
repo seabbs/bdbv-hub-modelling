@@ -23,6 +23,18 @@ if [ "${VALIDATE:-true}" = "true" ]; then
 fi
 status=0
 sci python -m submission_ci.select_candidate "${args[@]}" || status=$?
+# Each validated candidate's hub-validation.log, printed and kept in the
+# gate artefact (gate/validation/<id>.log), so a validation failure says
+# which check failed.
+mkdir -p "$WORK/gate/validation"
+for log in "$WORK"/candidates/*/hub-validation.log; do
+  [ -f "$log" ] || continue
+  id=$(basename "$(dirname "$log")")
+  cp "$log" "$WORK/gate/validation/$id.log"
+  echo "::group::hub validation: $id"
+  cat "$log"
+  echo "::endgroup::"
+done
 if [ "$status" = 0 ]; then
   # The selected file becomes the file the PR holds. A resubmission keeps
   # the hub's rows unchanged and adds this forecast's.
