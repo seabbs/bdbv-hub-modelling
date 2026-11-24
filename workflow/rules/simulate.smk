@@ -104,6 +104,9 @@ rule simulator_benchmark:
     conda:
         TOOLS_ENV
     threads: 1
+    # A cuda benchmark takes a GPU, as a scheduler must know.
+    resources:
+        gpu=lambda wc: int(wc.device == "cuda"),
     params:
         draws=SIM["draws"],
         grid=GRID_FILE,

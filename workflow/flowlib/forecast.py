@@ -119,8 +119,18 @@ def settings(config: Mapping[str, Any], local: Mapping[str, str]) -> Forecast:
         The device, threads and GPU use.
     """
     fc = config["forecast"]
-    return Forecast(
+    got = Forecast(
         device=local.get("FORECAST_DEVICE") or str(fc["device"]),
         threads=int(local.get("FORECAST_THREADS") or fc["threads"]),
         gpu_mode=str(fc.get("gpu", "exclusive")),
     )
+    # A cluster job (COMPUTE other than single or ssh) has only the GPU
+    # it asks for, and a shared one asks for none.
+    compute = local.get("COMPUTE") or "single"
+    shared = got.device == "cuda" and got.gpu_mode == "share"
+    if shared and compute not in ("single", "ssh"):
+        raise ValueError(
+            f"COMPUTE={compute}: forecast.gpu must be exclusive for cuda, "
+            "as a cluster job gets only the GPU it asks for"
+        )
+    return got
