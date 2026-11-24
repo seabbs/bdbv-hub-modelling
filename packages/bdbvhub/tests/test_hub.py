@@ -337,8 +337,8 @@ def test_the_submission_plot_reads_the_count_samples_only(
 ) -> None:
     """The PR's plot draws the count samples; `wk R_t` quantile rows in the
     same file are left out."""
+    from bdbvhub.reporting.data_plots import read_submission
     from bdbvhub.submission.hub import rt_table
-    from nowcasteval.plots import read_submission
 
     counts = _table(_samples(), "2026-11-28")
     rt = rt_table(_rt(("2026-11-28",)), "2026-11-28", ("2026-11-28",),

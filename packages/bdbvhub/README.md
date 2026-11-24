@@ -16,7 +16,7 @@ It reads the hub's data (`nowcastbdbv`), fits and stores the models, writes and 
 - [`pairing`](src/bdbvhub/pairing.py): the walk models' pairing sensitivity on the BDBV backtest.
 - [`compare`](src/bdbvhub/compare.py): comparison with the hub's forecasts. Health-zone forecasts are in [`nowcastbdbv.zones`](../nowcastbdbv/src/nowcastbdbv/zones.py).
 - [`submission`](src/bdbvhub/submission/): the hub file writer and checks, model metadata, the rounds and the CI fit configurations.
-- [`reporting`](src/bdbvhub/reporting/): the docs pages and tables.
+- [`reporting`](src/bdbvhub/reporting/): the docs pages, tables and figures of the hub data.
 - [`cli`](src/bdbvhub/cli.py): the command.
 
 ## Next

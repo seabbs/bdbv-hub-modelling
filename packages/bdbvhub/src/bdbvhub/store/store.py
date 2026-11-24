@@ -100,6 +100,7 @@ __all__ = [
     "samplers",
     "stack_forecasts",
     "store_path",
+    "stored_delays",
     "stored_models",
     "unpack",
     "write_fit",
@@ -1114,6 +1115,32 @@ def load(
         json.dumps([vars(s) for s in status], indent=1) + "\n"
     )
     return status
+
+
+def stored_delays(results: Path | str) -> pd.DataFrame:
+    """Return the fitted models' stored delay summaries.
+
+    `fit-store load` writes them to `results`.
+
+    Parameters
+    ----------
+    results : pathlib.Path or str
+        The results directory.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The delay summaries of the fitted models, with `model` and
+        `vintage`, and no rows if no fits were loaded.
+    """
+    from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
+
+    path = Path(results) / DELAY_SUMMARY_FILE
+    if not path.exists():
+        return pd.DataFrame(columns=["model", "vintage"])
+    learnt = pd.read_csv(path)
+    fitted = [s.name for s in list_models() if s.fitted]
+    return learnt.loc[learnt["model"].isin(fitted)]
 
 
 def _zone_samples(fit: StoredFit) -> pd.DataFrame:

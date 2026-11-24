@@ -11,13 +11,13 @@ import pandas as pd
 import pytest
 
 from bdbvhub.cli import main
+from bdbvhub.reporting.data_plots import plot_submission
 from bdbvhub.submission.fitting import (
     get_config,
     randomwalk_config,
     register_config,
 )
 from nowcastbdbv.data.tidy import coherence_summary, national_coherence
-from nowcasteval.plots import plot_submission
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
