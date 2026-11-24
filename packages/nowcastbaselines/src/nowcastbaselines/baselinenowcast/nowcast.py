@@ -358,8 +358,8 @@ def week_nowcast(
     """Return baselinenowcast's count of each hub week `gap` days after `r`.
 
     Each hub week is a reference time of a weekly reporting triangle,
-    with a column every 7 days from the cut-off of release `r` and a last
-    one at `gap`.
+    with a column every `snap.period` days from the cut-off of release
+    `r` and a last one at `gap`.
     The share of the week reported by a column is the mean, over the
     week's days observed at `r`, of their growth from that column to
     `gap` inverted.
@@ -387,7 +387,7 @@ def week_nowcast(
     seen = np.broadcast_to(snap.observed[r], snap.counts[:, r, :].shape)
     x = week_sum(snap, np.where(seen, snap.counts[:, r, :], 0.0))
     n = week_sum(snap, seen.astype(float))
-    steps = np.r_[np.arange(0, gap, 7), gap]
+    steps = np.r_[np.arange(0, gap, snap.period), gap]
     share = np.stack(
         [
             week_sum(
@@ -580,7 +580,7 @@ def _completeness(
     """
     g = final_growth(snap, o, fit, settings)
     inv = np.where(snap.observed[o][None, :], 1.0 / g, 0.0)
-    complete = week_sum(snap, inv) / 7.0
+    complete = week_sum(snap, inv) / snap.period
     good = complete >= settings.completeness
     start = np.where(
         good.any(axis=1), snap.n_weeks - 1 - np.argmax(good[:, ::-1], axis=1), 0
@@ -615,6 +615,10 @@ def start_weeks(
     NoDelayPair
         If no two releases are a day or more apart.
     """
+    # The walk's weeks are blocks of the snapshots' period.
+    settings = replace(
+        settings, walk_weeks=settings.walk_weeks * 7 // snap.period
+    )
     o, fit = _latest_fit(snap, settings, delay)
     return _completeness(snap, o, fit, settings)[2]
 

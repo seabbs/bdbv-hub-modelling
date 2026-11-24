@@ -15,7 +15,7 @@ Hub weeks run Sunday to Saturday and are labelled by the Saturday.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -27,6 +27,7 @@ from nowcastutils.releases import release_cutoff
 
 __all__ = [
     "SnapshotArrays",
+    "blocks",
     "snapshot_arrays",
     "week_sum",
     "weekly_counts",
@@ -60,6 +61,9 @@ class SnapshotArrays:
         The $W$ hub weeks, labelled by their Saturday.
     parent : numpy.ndarray
         Index of each node's parent, or -1, `[L]`.
+    period : int
+        Days in each block of `week`: 7 for weeks, 1 for days
+        (`blocks`).
     """
 
     locations: tuple[str, ...]
@@ -71,6 +75,7 @@ class SnapshotArrays:
     week: np.ndarray
     week_ends: tuple[str, ...]
     parent: np.ndarray
+    period: int = 7
 
     @property
     def n_weeks(self) -> int:
@@ -174,6 +179,56 @@ def snapshot_arrays(
     )  # fmt: skip
 
 
+def blocks(snap: SnapshotArrays, period: int, end: int = 5) -> SnapshotArrays:
+    """Regroup the days into blocks of `period` days ending on a weekday.
+
+    The reference time a model nowcasts: 7-day blocks ending Saturday are
+    the hub weeks, those ending another weekday the 7-day sums ending that
+    day, and 1-day blocks the days. Empty days are added after the last
+    day so the last block is whole; the releases and cut-offs are the
+    same.
+
+    Parameters
+    ----------
+    snap : SnapshotArrays
+        The snapshots.
+    period : int
+        Days in a block, 1 or 7.
+    end : int, default 5
+        Weekday each 7-day block ends on, Monday 0 to Sunday 6.
+
+    Returns
+    -------
+    SnapshotArrays
+        The snapshots with `week`, `week_ends` and `period` of the blocks.
+
+    Raises
+    ------
+    ValueError
+        If `period` is not 1 or 7.
+    """
+    if period not in (1, 7):
+        raise ValueError(f"A block is 1 or 7 days, not {period}.")
+    first = snap.days[0]
+    last = snap.days[-1]
+    if period == 7:
+        last = last + pd.Timedelta(days=(end - last.weekday()) % 7)
+    days = pd.date_range(first, last, freq="D")
+    extra = days.size - snap.days.size
+    pad = ((0, 0), (0, 0), (0, extra))
+    counts = np.pad(snap.counts, pad)
+    observed = np.pad(snap.observed, pad[1:])
+    ahead = ((end - days.weekday) % 7) if period == 7 else np.zeros(days.size)
+    ends = days + pd.to_timedelta(ahead, unit="D")
+    week_ends = tuple(sorted({e.date().isoformat() for e in ends}))
+    where = {w: i for i, w in enumerate(week_ends)}
+    week = np.array([where[e.date().isoformat()] for e in ends], dtype=np.int64)
+    return replace(
+        snap, days=days, counts=counts, observed=observed, week=week,
+        week_ends=week_ends, period=period,
+    )  # fmt: skip
+
+
 def week_sum(snap: SnapshotArrays, x: np.ndarray) -> np.ndarray:
     """Sum day values to hub weeks.
 
@@ -189,6 +244,9 @@ def week_sum(snap: SnapshotArrays, x: np.ndarray) -> np.ndarray:
     numpy.ndarray
         Week sums, shape `[L, W]`.
     """
+    if snap.n_weeks == snap.week.size:
+        # Blocks of one day are the days.
+        return np.asarray(x)
     onehot = np.zeros((snap.week.size, snap.n_weeks))
     onehot[np.arange(snap.week.size), snap.week] = 1.0
     return np.asarray(x @ onehot)

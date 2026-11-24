@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from nowcastutils.releases import release_cutoff
-from nowcastutils.snapshots import snapshot_arrays, weekly_sums
+from nowcastutils.snapshots import blocks, snapshot_arrays, weekly_sums
 
 VINTAGES = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
 
@@ -93,3 +93,36 @@ def test_weeks_run_sunday_to_saturday(snap) -> None:
     assert (
         weekly[0, snap.week_ends.index("2026-10-17")] == rows["total"].iloc[0]
     )
+
+
+def test_seven_day_blocks_ending_saturday_are_the_hub_weeks(snap) -> None:
+    again = blocks(snap, 7, 5)
+    assert again.week_ends == snap.week_ends
+    assert (again.week == snap.week).all()
+    assert (again.counts == snap.counts).all()
+    assert again.period == 7
+
+
+def test_blocks_end_on_their_weekday_and_cover_the_cutoff(snap) -> None:
+    for end in range(7):
+        b = blocks(snap, 7, end)
+        ends = pd.to_datetime(list(b.week_ends))
+        assert (ends.weekday == end).all()
+        assert (np.diff(ends).astype("timedelta64[D]").astype(int) == 7).all()
+        # The days are those of the snapshots, then empty to the last end.
+        n = snap.days.size
+        assert (b.days[:n] == snap.days).all()
+        assert b.days[-1] == ends[-1]
+        assert (b.counts[:, :, :n] == snap.counts).all()
+        assert (b.counts[:, :, n:] == 0).all()
+        assert (b.cut == snap.cut).all()
+        # Every day is in the block ending on or after it, within 7 days.
+        lag = (ends[b.week] - b.days).days
+        assert ((lag >= 0) & (lag < 7)).all()
+
+
+def test_one_day_blocks_are_the_days(snap) -> None:
+    b = blocks(snap, 1)
+    assert b.n_weeks == b.days.size
+    assert (b.week == np.arange(b.days.size)).all()
+    assert b.period == 1
