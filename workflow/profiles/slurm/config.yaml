@@ -1,0 +1,44 @@
+# COMPUTE=slurm (flowlib.compute): every job is a Slurm job, through
+# snakemake-executor-plugin-slurm (the paper group), on a cluster whose
+# nodes share this checkout and ROOT. Run the driver on the submit host,
+# or as a long low-resource Slurm job where login nodes forbid one.
+# Nothing machine-specific is here. The cluster's account and partition
+# (and a GPU partition for train_segment, if it has one) go in an
+# untracked profile layered on this one (SNAKEMAKE_PROFILE), as
+# default-resources slurm_account=... slurm_partition=... and
+# set-resources. Without them the plugin passes sinfo's default
+# partition and a guessed account explicitly, which override any
+# SBATCH_* in the environment.
+# Before a run: `uv sync --all-groups` once, then UV_NO_SYNC=1 (and
+# UV_OFFLINE=1 for offline nodes) and HF_HOME on the shared filesystem
+# in the submit environment, which Slurm passes to each job; DEVICE and
+# forecast.device set outright (cuda), not detected on the login node.
+executor: slurm
+jobs: 100
+rerun-triggers: [mtime]
+printshellcmds: true
+keep-going: true
+retries: 1
+# A shared filesystem shows a node's outputs late.
+latency-wait: 120
+default-resources:
+  - mem_mb=2048
+  - runtime=60
+set-threads:
+  - simulate_batch=1
+  - train_segment=8
+set-resources:
+  # A batch is run by count elsewhere and claims no memory there; a
+  # Slurm job must, or it gets the whole node or the partition default.
+  - simulate_batch:mem_mb=4096
+  - simulate_batch:runtime=120
+  - train_segment:mem_mb=32768
+  - train_segment:runtime=720
+  - score_germany:runtime=240
+  - score_run_germany:runtime=240
+  - ft_check_forecast:runtime=240
+# The caps machine.args sets on one machine, without its cores and
+# memory, which Slurm schedules.
+resources:
+  - sim_slots=100
+  - awaiting=1

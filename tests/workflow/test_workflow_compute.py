@@ -280,6 +280,7 @@ def test_only_the_profiles_this_setup_uses_ship():
     assert sorted(p.name for p in profiles.iterdir()) == [
         "ci",
         "default",
+        "slurm",
         "ssh",
     ]
 
