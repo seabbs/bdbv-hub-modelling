@@ -357,3 +357,58 @@ def test_places_nest_in_two_to_six_regions(grid):
         assert sizes.min() >= 1
         assert sizes.max() - sizes.min() <= 1
     assert seen == {2, 3, 4, 5, 6}
+
+
+def test_half_of_sims_draw_a_structured_weekday_pattern(grid):
+    # Structured patterns (weekend dip, first-day catch-up, Friday surge,
+    # quiet day, weekdays high, combined) in half of sims, free otherwise.
+    shaped, profiles = [], []
+    for i in range(300):
+        design = draws.draw_design(grid, draws.generator(11, i, 1))
+        v = draws.draw_values(grid, design, draws.generator(11, i, 2))
+        shaped.append("reference_dow_profile" in v)
+        if shaped[-1]:
+            for kind in ("reference", "report"):
+                p = np.asarray(v[f"{kind}_dow_profile"])
+                assert abs(p.mean()) < 1e-9
+                assert abs(p.std() - 1) < 1e-9
+                profiles.append(p)
+            assert v["weekday_noise"] == grid["weekday_noise"]
+    assert abs(np.mean(shaped) - grid["shares"]["weekday_pattern"]) < 0.08
+    # Drawn per sim, not one fixed shape.
+    distinct = {tuple(np.round(p, 6)) for p in profiles}
+    assert len(distinct) > len(profiles) // 2
+
+
+@pytest.mark.parametrize(
+    ("part", "check"),
+    [
+        ("weekend_dip", lambda p: p[[5, 6]].min() < p[:5].min()),
+        ("friday_surge", lambda p: p[4] == p.max()),
+        ("weekdays_high", lambda p: p[:5].min() > p[5:].max()),
+    ],
+)
+def test_each_pattern_part_has_its_shape(grid, part, check):
+    one = {**grid, "weekday_patterns": [part]}
+    for seed in range(20):
+        assert check(draws.weekday_pattern(one, np.random.default_rng(seed)))
+
+
+def test_first_day_catch_up_follows_the_dip(grid):
+    one = {
+        **grid,
+        "weekday_patterns": ["weekend_dip", "first_day_catch_up"],
+        "shares": {**grid["shares"], "weekday_pattern_part": 1.0},
+    }
+    for seed in range(20):
+        p = draws.weekday_pattern(one, np.random.default_rng(seed))
+        low = [d for d in (5, 6) if p[d] < p[:5].min()]
+        assert low
+        assert np.argmax(p) == (max(low) + 1) % 7
+
+
+def test_unknown_weekday_pattern_parts_are_refused(grid):
+    with pytest.raises(ValueError, match="unknown weekday pattern"):
+        draws.weekday_pattern(
+            {**grid, "weekday_patterns": ["holiday"]}, np.random.default_rng(0)
+        )

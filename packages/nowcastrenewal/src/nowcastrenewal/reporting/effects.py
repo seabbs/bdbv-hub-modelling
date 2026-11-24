@@ -540,6 +540,7 @@ class ReportEffects(RandomVariable):
             z = numpyro.sample(
                 f"{self.name}::day_of_week", dist.Normal(0.0, 1.0).expand([7])
             )
+            z = self._shaped(z, "report")
             n = T + self.max_delay - 1
             dow = (self.frame.day_of_week[0] + np.arange(n)) % 7
             report = jnp.broadcast_to(
@@ -551,6 +552,20 @@ class ReportEffects(RandomVariable):
                 f"{self.name}::reference_day_of_week",
                 dist.Normal(0.0, 1.0).expand([7]),
             )
+            z = self._shaped(z, "reference")
             sd = float(self.values["reference_dow_sd"])
             reference = jnp.broadcast_to(sd * z[self.frame.day_of_week], (G, T))
         return report, reference
+
+    def _shaped(self, z: Any, kind: str) -> Any:
+        """Return the weekday draws `z`, or a pattern plus their noise.
+
+        A sim with a `<kind>_dow_profile` (Monday to Sunday, unit sd;
+        `simulator.draws.weekday_pattern`) takes it plus `weekday_noise`
+        times `z`, a structured pattern rather than a free profile.
+        """
+        profile = self.values.get(f"{kind}_dow_profile")
+        if profile is None:
+            return z
+        noise = float(self.values.get("weekday_noise", 0.0))
+        return jnp.asarray(profile, dtype=float) + noise * z
