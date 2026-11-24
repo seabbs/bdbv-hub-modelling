@@ -57,19 +57,18 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    assert set(rn.VARIANTS) == {
-        "renewal",
-        "renewalsp",
-        "renewalsp_zones",
-        "renewalbvd",
-    }
-    assert specs["renewalsp_zones"].fitted
+    # Sam (lead 2026-11-24 12:32): renewalsp is the single-patch model
+    # fitted per zone; the per-province fit and its zone split are gone.
+    assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
+    assert "renewalsp_zones" not in specs
+    assert not hasattr(rn, "with_zones")
+    field_names = {f.name for f in fields(rn.Variant)}
+    assert {"zones", "sampler_of"}.isdisjoint(field_names)
     # The pooled variants can forecast a province with its data held out;
     # renewalsp fits each province on its own data only, so it cannot.
     assert get_model("renewal").supports_mask
     assert get_model("renewalbvd").supports_mask
     assert not get_model("renewalsp").supports_mask
-    assert not get_model("renewalsp_zones").supports_mask
     assert not specs["randomwalk"].fitted
     # Hub model abbreviations: letters, digits and underscores, under 16.
     for name in specs:
@@ -85,7 +84,6 @@ def test_only_renewalsp_centres_its_rt_walk() -> None:
     assert centred == {
         "renewal": False,
         "renewalsp": True,
-        "renewalsp_zones": True,
         "renewalbvd": False,
     }
 
@@ -814,7 +812,6 @@ def test_renewalsp_keeps_its_rt_walk_step_sd_off_zero(
     assert priors == {
         "renewal": None,
         "renewalsp": (0.12, 0.5),
-        "renewalsp_zones": (0.12, 0.5),
         "renewalbvd": None,
     }
     variant = rn.VARIANTS["renewalsp"]

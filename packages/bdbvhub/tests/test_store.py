@@ -483,7 +483,6 @@ def test_samplers_come_from_the_policy() -> None:
         "renewal",
         "renewalbvd",
         "renewalsp",
-        "renewalsp_zones",
     }
     assert table["renewalbvd"]["num_samples"] == 1500
     assert table["renewalbvd"]["thinning"] == 2
@@ -1378,12 +1377,3 @@ def test_the_backtest_takes_its_draws_from_the_config_unless_given() -> None:
     assert cli.build_parser().parse_args(["backtest"]).samples is None
     got = cli.build_parser().parse_args(["backtest", "--samples", "7"])
     assert got.samples == 7
-
-
-def test_a_staged_variant_takes_the_sampler_of_the_model_it_may_replace() -> (
-    None
-):
-    # renewalsp_zones is compared with renewalsp (#768 item 9), so its
-    # stored fits use renewalsp's sampler table.
-    table = store.samplers(ROOT / "ci" / "policy.toml")
-    assert table["renewalsp_zones"] == table["renewalsp"]

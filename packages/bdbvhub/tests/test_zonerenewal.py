@@ -539,18 +539,18 @@ def test_silent_zones_have_no_onset_in_the_walk_window(
     assert zr.silent_zones(zones) == quiet
 
 
-def test_renewalsp_zones_fits_each_zone_on_its_own(
+def test_renewalsp_fits_each_zone_on_its_own(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # #768 item 9, staged: the single-patch model fitted to each zone with
     # a recent case on its own, beside renewalsp. Silent zones keep the
     # walk's introductions, and provinces are zone sums, so no province
     # sample is split across zones.
-    model = get_model("renewalsp_zones")
+    model = get_model("renewalsp")
     assert isinstance(model, zr.SingleZoneRenewalModel)
     assert model.variant.per_province
     assert rn.model_config(model.variant).national
-    assert "renewalsp_zones" not in rn.FIT_VARIANTS.values()
+    assert rn.FIT_VARIANTS["renewalsp"] == "renewalsp"
     zones = zr.task_zones(task)
     counts = zr.zone_target(task).groupby("location")["total"].sum()
     busy = tuple(sorted(counts.sort_values().index[-3:]))
