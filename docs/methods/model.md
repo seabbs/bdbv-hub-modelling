@@ -354,9 +354,13 @@ It keeps the share at risk and depletion of the zone models, so the three models
 One series barely informs $\nu$, so it stays close to its prior.
 Every province with a case in the random walks' walk window is fitted, however few its cases.
 A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
-National is the sum of the provinces plus the data's national gap.
+National is the sum of the provinces.
 A province is fitted only on its own data, so `renewalsp` cannot forecast a province left out.
 Its zones are split from its provinces ([Health zones](#health-zones)).
+
+`renewalsp_zones`, staged beside it, fits the same model to each health zone with a case in the walk window on its own instead.
+Silent zones take the random walk's introductions, and provinces and the country are zone sums, so no province sample is split across zones.
+It replaces `renewalsp` only if it scores at least as well.
 
 ## BVDOutbreakSize-informed (`renewalbvd`) { #bvdoutbreaksize-informed }
 

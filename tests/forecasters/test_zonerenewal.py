@@ -153,13 +153,17 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
         return _fake_run(t, self.variant)
 
     monkeypatch.setattr(zr.ZoneRenewalModel, "run", fake)
+
+    def no_walk(_: ForecastTask) -> None:
+        raise AssertionError("renewal used the random-walk layer")
+
+    monkeypatch.setattr(zr, "_silent_walk", no_walk)
     model = get_model("renewal")
     assert isinstance(model, zr.ZoneRenewalModel)
     samples = model.forecast(task)
     # #768 item 8: no random-walk layer. The run takes every zone of the
     # task: it fits the zones with a recent case and draws the silent
     # ones from the fitted importation, in one forecast pass.
-    assert not hasattr(zr, "_silent_walk")
     (given,) = seen
     assert set(given) == set(zr.task_zones(task))
     zones = model.zone_samples

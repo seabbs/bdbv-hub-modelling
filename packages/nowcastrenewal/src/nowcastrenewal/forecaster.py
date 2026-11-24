@@ -201,6 +201,10 @@ class Variant:
     per_province : bool
         Fit each province on its own series, in a loop, with the same
         model code and no pooling or coupling across provinces.
+    zones : bool
+        With `per_province`, fit each health zone with a recent case on
+        its own instead of each province (`zones.SingleZoneRenewalModel`),
+        so provinces are zone sums.
     """
 
     name: str
@@ -208,6 +212,7 @@ class Variant:
     base: str = "MAIN"
     overrides: Mapping[str, Any] = field(default_factory=dict)
     per_province: bool = False
+    zones: bool = False
 
 
 VARIANTS: Final[dict[str, Variant]] = {
@@ -228,6 +233,18 @@ VARIANTS: Final[dict[str, Variant]] = {
             # pins its Rt walk, whose levels are then sampled.
             overrides={"national": True, "centred_rt": True},
             per_province=True,
+        ),
+        Variant(
+            "renewalsp_zones",
+            "Single patch by zone: renewal fitted to each health zone with a "
+            "recent case on its own, with no pooling or coupling; silent "
+            "zones take the random walk's introductions, and provinces are "
+            "zone sums.",
+            # renewalsp's model on each zone's series (#768 item 9, staged
+            # beside renewalsp until it is at least as good).
+            overrides={"national": True, "centred_rt": True},
+            per_province=True,
+            zones=True,
         ),
         Variant(
             "renewalbvd",
@@ -1752,8 +1769,9 @@ def _factory(variant: Variant) -> RenewalModel:
 
 
 # The pooled variants are registered by `nowcastrenewal.zones`.
+# The zone variants are registered by `nowcastrenewal.zones`.
 for _variant in VARIANTS.values():
-    if not _variant.per_province:
+    if not _variant.per_province or _variant.zones:
         continue
     register_model(
         _variant.name,
