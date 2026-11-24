@@ -27,7 +27,7 @@ def test_the_fast_tier_runs_no_slow_tests(name, job):
     runs = " ".join(s.get("run", "") for s in steps)
     assert "pytest" in runs
     assert "-m slow" not in runs
-    assert "bdbvhubrenewal fit" not in runs
+    assert "bdbvhub fit" not in runs
     # Across the runner's cores (pytest-xdist).
     assert "-n auto" in runs
 
@@ -240,3 +240,13 @@ def test_r_live_scores_the_paper_against_scoringutils_live():
     assert any("tests/test_scoringutils.py" in s["run"] for s in paper)
     fixtures = Path(__file__).parents[1] / "paper" / "tests" / "fixtures"
     assert not (fixtures / "scoringutils-expected.csv").exists()
+
+
+def test_repo_checks_fail_on_copied_code_across_the_packages():
+    # pylint's symilar over every package's source: any block of 10 or
+    # more lines found twice fails the job (Sam: as DRY as possible).
+    job = _workflow("ci.yml")["jobs"]["repo"]
+    (step,) = [s for s in job["steps"] if s.get("name") == "Duplicate code"]
+    assert "symilar -d 10" in step["run"]
+    assert "packages" in step["run"]
+    assert "duplicates=0 " in step["run"]

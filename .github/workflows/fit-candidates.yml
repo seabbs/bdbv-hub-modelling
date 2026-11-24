@@ -5,7 +5,7 @@ name: Fit candidates
 # primary stage, with every renewal candidate and shadow in parallel.
 #
 # Each leg reads the fit store's fit of the same code and data
-# (`bdbvhubrenewal fit-store unpack`, keyed as fit-store.yml stores it),
+# (`bdbvhub fit-store unpack`, keyed as fit-store.yml stores it),
 # so the submitted forecast is the fit the docs and the backtest show.
 # A candidate the store lacks is ruled out. Nothing is fitted here.
 
@@ -37,7 +37,7 @@ env:
   WORK: output/ci
   # The model and hub id come from the run's context.json, which
   # `prepare` resolves from config/hub.toml.
-  # Every bdbvhubrenewal command reads the tidy data the prepare job
+  # Every bdbvhub command reads the tidy data the prepare job
   # pinned to the hub commit, shipped in the `inputs` artefact.
   BDBV_DATA_DIR: output/ci/inputs/data
   BDBV_RAW_DIR: output/ci/raw

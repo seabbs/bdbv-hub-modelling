@@ -47,6 +47,16 @@ jobs:
       - name: actionlint
         if: ${{ !cancelled() }}
         run: uvx --from actionlint-py actionlint
+      # Any block of 10 or more lines (comments, docstrings, imports and
+      # signatures aside) found twice in the packages' source fails.
+      - name: Duplicate code
+        if: ${{ !cancelled() }}
+        run: |
+          mapfile -t files < <(find packages -path '*/src/*.py' | sort)
+          uvx --from pylint==3.3.7 symilar -d 10 --ignore-comments \
+            --ignore-docstrings --ignore-imports --ignore-signatures \
+            "${files[@]}" | tee symilar.txt
+          grep -q 'duplicates=0 ' symilar.txt
 
   # The packages a change reaches.
   plan:

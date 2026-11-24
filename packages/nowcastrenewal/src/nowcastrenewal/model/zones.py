@@ -476,8 +476,6 @@ class ZoneInfections(MetapopulationInfections):
         As `MetapopulationInfections.sample`, with `zone_pooled_walk` in
         place of `pooled_walk`.
         """
-        from pyrenew.latent.base import LatentSample
-
         pop = self._parse_and_validate_fractions(subpop_fractions)
         n_init = self.n_initialization_points
         if self.start_sd_rv is None:
@@ -518,29 +516,9 @@ class ZoneInfections(MetapopulationInfections):
                 bases,
                 coord_starts=(starts[0], starts[1]),
             )
-        rt = jnp.exp(log_rt)
-        gen_int = self.gen_int_rv()
-        I0 = self._validate_and_prepare_I0(jnp.asarray(self.I0_rv()), pop)
-        I0_all, seeding = self._initial_infections(I0, n_days_post_init)
-        post, r_eff = self._infections_from_rt(
-            rt[n_init:], I0_all, gen_int, pop, seeding
+        return self._latent(
+            log_rt, log_rt_baseline, n_init, n_days_post_init, pop
         )
-        infections = jnp.vstack([I0_all, post])
-        aggregate = infections @ pop.fractions
-        with numpyro.handlers.scope(prefix=self.name, divider="::"):
-            numpyro.deterministic("rt_baseline", jnp.exp(log_rt_baseline))
-            numpyro.deterministic("rt_subpop", rt)
-            numpyro.deterministic(
-                "rt_subpop_adjusted", jnp.vstack([rt[:n_init], r_eff])
-            )
-        if self.rt_observation is not None:
-            self.rt_observation(
-                rt=rt,
-                infections=infections,
-                n_init=n_init,
-                fractions=pop.fractions,
-            )
-        return LatentSample(aggregate=aggregate, all_subpops=infections)
 
 
 class ZoneOnsetStreams(OnsetStreams):

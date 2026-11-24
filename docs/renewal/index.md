@@ -10,7 +10,7 @@ This section is for readers who want to know how the renewal models submitted to
 ## Where to start
 
 - To understand the models, start with [Methods](methods.md), which follows the data from the hub to the submission.
-- To fit one, start with `bdbvhubrenewal fit` ([CLI](../development/cli.md)) or `nowcastrenewal.forecaster` in [Python](../reference/model.md).
+- To fit one, start with `bdbvhub fit` ([CLI](../development/cli.md)) or `nowcastrenewal.forecaster` in [Python](../reference/model.md).
 
 ## In this section
 

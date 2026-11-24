@@ -5,7 +5,7 @@ It reads the hub's data (`nowcastbdbv`), fits and stores the models, writes and 
 
 ## Start here
 
-- The `bdbvhub` command: `uv run bdbvhub --help` lists every step, from `data` (download and tidy) to `nowcast` (write a hub file). It is also installed as `bdbvhubrenewal`, the name CI calls.
+- The `bdbvhub` command: `uv run bdbvhub --help` lists every step, from `data` (download and tidy) to `nowcast` (write a hub file).
 - To see which models exist, read [`models`](src/bdbvhub/models.py); importing it registers every model.
 
 ## Modules

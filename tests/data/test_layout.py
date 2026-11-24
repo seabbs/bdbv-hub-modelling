@@ -89,7 +89,7 @@ def test_generic_modules_import_only_generic_modules() -> None:
         own = {
             m
             for m in _imported(module)
-            if m.split(".")[0] in ("bdbvhubrenewal", "bdbvhub")
+            if m.split(".")[0] in ("bdbvhub", "bdbvhub")
         }
         assert not own, (module, own)
 
