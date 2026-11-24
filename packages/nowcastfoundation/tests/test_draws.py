@@ -194,9 +194,10 @@ def test_the_longest_delay_is_the_first_option_past_the_99th_centile():
 
 
 def test_long_delay_tails_are_a_real_share(grid):
-    """A fifth of draws have a 99% delay of 60 days or more (Germany's is
-    61 to 81), some with a fast head as well, and the longest delay
-    reaches the grid's last option."""
+    """Over a sixth of draws have a 99% delay of 60 days or more (Germany's
+    is 61 to 81), some with a fast head as well, and the longest delay
+    reaches the grid's last option. The lognormal tail is trimmed (#1043),
+    so fast-head long-tail lognormals are fewer, but still a real share."""
     rng = draws.generator(8)
     q99, head, longest = [], [], []
     for _ in range(3_000):
@@ -213,7 +214,7 @@ def test_long_delay_tails_are_a_real_share(grid):
     q99 = np.asarray(q99)
     assert np.mean(q99 >= 60) > 0.15
     assert np.mean(q99 >= 120) > 0.04
-    assert np.mean(head) > 0.08
+    assert np.mean(head) > 0.05
     assert max(OPTIONS) in longest
 
 
