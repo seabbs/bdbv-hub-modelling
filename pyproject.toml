@@ -247,8 +247,6 @@ ignore_imports = [
   "nowcasteval.backtest -> nowcastbdbv.data.delays",
   "nowcasteval.backtest -> nowcastbdbv.data.tidy",
   "nowcasteval.backtest -> nowcastbdbv.data.zones",
-  "nowcasteval.backtest -> nowcastrenewal.bvd",
-  "nowcasteval.backtest -> nowcastrenewal.forecaster",
   "nowcastrenewal.zones -> nowcastbdbv.data.tidy",
 ]
 

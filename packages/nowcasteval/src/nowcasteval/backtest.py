@@ -16,9 +16,7 @@ from __future__ import annotations
 
 import datetime as dt
 import functools
-import json
 import logging
-import os
 import tomllib
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
@@ -33,7 +31,6 @@ from nowcastbdbv.data.tidy import delays_for_vintage
 from nowcastbdbv.data.zones import ZoneData, hub_places
 from nowcasteval.nowcast import TRUTH_LEVEL, truth_from_vintage
 from nowcasteval.scoring import energy_scores, score_forecasts
-from nowcastrenewal.bvd import MAX_RHAT
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
@@ -49,7 +46,6 @@ from nowcastutils.releases import release_cutoff
 
 __all__ = [
     "BacktestConfig",
-    "apply_sampler",
     "check_distinct",
     "development_tasks",
     "energy_tasks",
@@ -112,11 +108,12 @@ class BacktestConfig:
         $K$: a truth week counts as complete if it ended at least this
         many weeks before the truth vintage.
     sampler : dict
-        NUTS settings of the fitted models (`apply_sampler`).
-    bvd_max_rhat : float
+        NUTS settings of the fitted models (`bdbvhub.cli.apply_sampler`).
+    bvd_max_rhat : float, optional
         The limit on the joint fit's worst R-hat of a BVDOutbreakSize
         release the BVD variant may use
-        (`nowcastrenewal.bvd.select_release`).
+        (`nowcastrenewal.bvd.select_release`). None leaves the BVD
+        module's own default.
     skip_origins : tuple of str
         Real releases that are not backtest origins. They stay in the
         histories of later origins.
@@ -136,7 +133,7 @@ class BacktestConfig:
     seed: int = 0
     complete_after_weeks: int = 0
     sampler: dict[str, Any] = field(default_factory=dict)
-    bvd_max_rhat: float = MAX_RHAT
+    bvd_max_rhat: float | None = None
     skip_origins: tuple[str, ...] = ()
     truth_delay: int | None = None
     truth_level: float = TRUTH_LEVEL
@@ -183,23 +180,6 @@ def tasks_for_scoring(
         The tasks with `n_samples` set to `score_samples`.
     """
     return [replace(t, n_samples=config.score_samples) for t in tasks]
-
-
-def apply_sampler(config: BacktestConfig) -> None:
-    """Set the fitted models' NUTS settings from the backtest config.
-
-    The settings go in the `SAMPLER_ENV` environment variable, which
-    models read when they are built. Settings already there are kept.
-
-    Parameters
-    ----------
-    config : BacktestConfig
-        Gives `sampler`.
-    """
-    from nowcastrenewal.forecaster import SAMPLER_ENV
-
-    if config.sampler and not os.environ.get(SAMPLER_ENV):
-        os.environ[SAMPLER_ENV] = json.dumps(config.sampler)
 
 
 def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
