@@ -325,6 +325,28 @@ class ReferenceEffects(RandomVariable):
         self.hazard = design["delay_form"] != "parametric"
         self.covariates = change_covariates(frame, design, values)
         self.effects = _effects(frame, design, values)
+        self.jitter = (
+            float(values["delay_jitter_sd"])
+            if design.get("delay_jitter") == "yes"
+            else 0.0
+        )
+
+    def _jitter(self, name: str) -> Array:
+        """Each stratum and day's week-to-week delay jitter, `(G, T)`.
+
+        A standard normal per week times `delay_jitter_sd`, the same in
+        every stratum and centred over the observed days as the random
+        effects, so the delay moves from week to week with no trend.
+        """
+        G, T = len(self.frame.place), len(self.frame.dates)
+        week = np.asarray(self.frame.week)
+        z = numpyro.sample(
+            f"{self.name}::jitter_{name}",
+            dist.Normal(0.0, 1.0).expand([int(week.max()) + 1]),
+        )
+        x = self.jitter * z[week]
+        x = x - x[: self.frame.observed].mean()
+        return jnp.broadcast_to(x, (G, T))
 
     def _random(self, prefix: str) -> Array:
         """Each stratum and day's random effects, centred, `(G, T)`."""
@@ -352,11 +374,14 @@ class ReferenceEffects(RandomVariable):
     def location(self) -> Array:
         r"""Return $\mu_{g,t}$, `(G, T)` (centred effects)."""
         delay = Delay.from_values(self.design["delay_family"], self.values)
-        return (
+        mu = (
             jnp.asarray(delay.mu)
             + self._fixed(1.0, centre=True)
             + self._random("mean")
         )
+        if self.jitter:
+            mu = mu + self._jitter("location")
+        return mu
 
     def non_parametric(self) -> Array:
         """Return the non-parametric logit hazard, `(G, T, D)`."""
@@ -376,7 +401,16 @@ class ReferenceEffects(RandomVariable):
         by_delay = by_delay - by_delay.mean()
         intercept = jnp.log(1 / v["delay_mean"])  # logit(1 / (1 + mean))
         by_day = self._fixed(-1.0, centre=True) + self._random("hazard")
-        return jnp.asarray(intercept + by_day[..., None] + by_delay)
+        out = intercept + by_day[..., None] + by_delay
+        if self.jitter:
+            # The level and the shape (a tilt across delays) by week.
+            tilt = (jnp.arange(D) - (D - 1) / 2) / D
+            out = (
+                out
+                + self._jitter("hazard")[..., None]
+                + self._jitter("shape")[..., None] * tilt
+            )
+        return jnp.asarray(out)
 
     def sample(self, **kwargs: object) -> tuple[Array, Array]:
         """Return the parametric and non-parametric logit hazards.
@@ -399,7 +433,11 @@ class ReferenceEffects(RandomVariable):
             sigma = Delay.from_values(family, self.values).sigma
             mu = self.location()
             numpyro.deterministic(f"{self.name}::location", mu)
-            delay = Delay(family, mu, sigma)
+            scale = jnp.broadcast_to(jnp.asarray(sigma, dtype=float), mu.shape)
+            if self.jitter:
+                scale = scale * jnp.exp(self._jitter("scale"))
+            numpyro.deterministic(f"{self.name}::scale", scale)
+            delay = Delay(family, mu, scale)
             parametric = (
                 censored_log_pmf(delay, D)
                 if self.as_log_pmf

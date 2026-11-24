@@ -321,10 +321,12 @@ def test_oscillating_paths_come_in_every_window(grid):
         assert oscillating[window] / by_window[window] > 0.05, window
 
 
-def test_reporting_delays_put_real_mass_on_99th_centiles_of_40_to_90_days(
+def test_reporting_delays_centre_on_a_month_with_short_and_long_tails(
     grid,
 ):
-    # Germany's national 99th centile is about 69 days.
+    # The per-sim 99th centile delay centres on 30-40 days, with real mass
+    # at Germany's ~69 days (40-90), a fair share of short delays (within
+    # two weeks) and a long tail (90 days or more) kept small.
     rng = draws.generator(42)
     q99 = []
     for _ in range(3_000):
@@ -334,8 +336,21 @@ def test_reporting_delays_put_real_mass_on_99th_centiles_of_40_to_90_days(
         family = d["delay_family"] if parametric else "none"
         q99.append(draws.delay_q99(family, v))
     q99 = np.asarray(q99)
-    assert np.median(q99) >= 40
-    assert np.mean((q99 >= 40) & (q99 <= 90)) >= 0.28
+    assert 30 <= np.median(q99) <= 40
+    assert np.mean((q99 >= 40) & (q99 <= 90)) >= 0.25
+    assert np.mean(q99 <= 14) >= 0.12
+    assert np.mean(q99 >= 90) <= 0.2
+
+
+def test_a_third_of_sims_jitter_their_delay(grid):
+    rng = draws.generator(44)
+    on = []
+    for _ in range(1_500):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        on.append(d["delay_jitter"] == "yes")
+        assert v["delay_jitter_sd"] > 0
+    assert abs(np.mean(on) - 1 / 3) < 0.05
 
 
 def test_places_nest_in_two_to_six_regions(grid):

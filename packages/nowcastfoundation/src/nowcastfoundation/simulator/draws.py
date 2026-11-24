@@ -629,4 +629,7 @@ def draw_values(
         for kind in ("reference", "report"):
             v[f"{kind}_dow_profile"] = vec(weekday_pattern(grid, rng))
         v["weekday_noise"] = float(grid["weekday_noise"])
+    # Week-to-week delay jitter (`delay_jitter`), drawn last so the draws
+    # above are unchanged.
+    v["delay_jitter_sd"] = ds("delay_jitter_sd")
     return v
