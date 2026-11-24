@@ -2,7 +2,8 @@
 r"""The baseline chain's delay at a release, for the report's delay check.
 
 `baseline_share` gives the share of the final count each age has reported
-under `randomwalknowcast`'s chain ladder (`nowcastbaselines.chain`), and
+under `randomwalknowcast`'s chain ladder
+(`nowcastbaselines.baselinenowcast.nowcast`), and
 `plot_delay_check` plots the growth and spread each place uses.
 """
 
