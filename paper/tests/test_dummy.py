@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+from nowcasteval.labels import FINETUNED
 
 from paperfigs.dummy import STUDY_SETUP, dummy_study
 from paperfigs.schema import (
@@ -29,10 +30,8 @@ def test_dummy_models_include_baseline_and_foundation_models(study) -> None:
     models = set(fc["model"])
     assert STUDY_BASELINES[name] in models
     assert {"randomwalk", "randomwalknowcast"} <= models
-    assert any(
-        m.startswith("fm_chronos_") and m.endswith("_ragged") for m in models
-    )
-    assert any(m.endswith("_ft") for m in models)
+    assert "foundation_zeroshot" in models
+    assert any(m in FINETUNED for m in models)
     if name != "synthetic":
         assert any(m.startswith("hub_") for m in models)
 
@@ -120,10 +119,11 @@ def test_germany_has_age_strata_for_the_nation(study) -> None:
 def test_dummy_has_complete_ragged_and_fine_tuned_chronos(study) -> None:
     _, fc, _ = study
     models = set(fc["model"])
-    for m in models:
-        if m.startswith("fm_chronos_") and m.endswith("_ragged_ft"):
-            family = m.removesuffix("_ragged_ft")
-            assert {f"{family}_complete", f"{family}_ragged"} <= models
+    assert {
+        "foundation",
+        "foundation_zeroshot",
+        "foundation_zeroshot_complete",
+    } <= models
 
 
 def test_dummy_cells_take_a_level_of_each_grid_factor() -> None:

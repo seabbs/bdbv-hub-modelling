@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import yaml
+from nowcasteval.labels import FINETUNED_OF
 from nowcastutils.base import NATIONAL, ModelUnavailableError, get_model
 from nowcastutils.hierarchy import parent as parent_of
 
@@ -198,15 +199,13 @@ def test_models_by_name_skip_unregistered_ones() -> None:
     assert skipped == ["no_such_model"]
 
 
-@pytest.mark.parametrize(
-    "name", ["fm_chronos_weekly_ragged", "fm_chronos_daily_ragged"]
-)
+@pytest.mark.parametrize("name", ["foundation_zeroshot"])
 def test_default_models_include_the_zero_shot_ragged_ones(name: str) -> None:
     assert name in synthetic.MODELS
     assert "randomwalknowcast" in synthetic.MODELS
     assert "randomwalk" in synthetic.MODELS
     assert name.replace("ragged", "complete") in synthetic.MODELS
-    assert f"{name}_ft" in synthetic.MODELS
+    assert FINETUNED_OF[name] in synthetic.MODELS
 
 
 def test_the_random_walk_forecasts_a_single_place_as_the_country() -> None:

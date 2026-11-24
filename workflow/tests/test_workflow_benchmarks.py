@@ -22,7 +22,7 @@ def test_jobs_and_model_dates_are_one_table(tmp_path):
     unit.mkdir(parents=True)
     pd.DataFrame(
         {
-            "model": ["randomwalknowcast", "fm_chronos_daily_ragged"],
+            "model": ["randomwalknowcast", "foundation_zeroshot"],
             "origin": ["2021-12-01", ""],
             "stage": ["forecast", "prefetch"],
             "seconds": [1.5, 30.0],
@@ -39,7 +39,7 @@ def test_jobs_and_model_dates_are_one_table(tmp_path):
         ["key", "model", "origin", "stage", "seconds"]
     ].to_numpy().tolist() == [
         ["reference", "randomwalknowcast", "2021-12-01", "forecast", 1.5],
-        ["reference", "fm_chronos_daily_ragged", "", "prefetch", 30.0],
+        ["reference", "foundation_zeroshot", "", "prefetch", 30.0],
     ]
 
 

@@ -52,8 +52,8 @@ SCORED_FROM: Final = "2026-11-21"
 HUB_TARGET: Final = "7day"
 """The target scored: the hub's own."""
 
-MODELS: Final = ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged")
-"""The fine-tuned models, shown daily then weekly in each cell."""
+MODELS: Final = ("foundation_zeroshot",)
+"""The models whose scores each cell shows."""
 
 STUDIES: Final = ("germany", "ebola", "held_out")
 
@@ -129,7 +129,7 @@ def label(outbreaks: int) -> str:
 
 
 def _pair(rows: pd.DataFrame, study: str, column: str) -> str:
-    """Return the national daily and weekly scores as `d / w`, or ''."""
+    """Return the national score of each of `MODELS`, joined by ` / `, or ''."""
     one = rows.loc[(rows["study"] == study) & (rows["level"] == "national")]
     values = []
     for model in MODELS:

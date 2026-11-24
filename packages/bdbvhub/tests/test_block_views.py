@@ -64,7 +64,7 @@ def test_cutting_a_block_changes_nothing_a_series_forecasts_alone():
     from nowcastgermany.data import nowcast_tasks
 
     task = nowcast_tasks(_triangle(), NOWCAST, 4, 7, horizons=HORIZONS)[0]
-    model: FoundationModel = get_model("fm_chronos_daily_ragged")
+    model: FoundationModel = get_model("foundation_zeroshot")
     whole_seen, cut_seen = [], []
     whole = dataclasses.replace(model, sample=_own_sampler(whole_seen))
     per = 2 + whole.lag_count(task)

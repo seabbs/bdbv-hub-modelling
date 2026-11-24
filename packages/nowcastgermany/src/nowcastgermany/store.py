@@ -45,7 +45,7 @@ __all__ = [
     "write_stored",
 ]
 
-STORED_MODELS: Final = ("fm_chronos_daily_ragged_ft",)
+STORED_MODELS: Final = ("foundation",)
 """The models whose German forecasts come from the store: Germany is
 daily only (`config/germany.toml`)."""
 

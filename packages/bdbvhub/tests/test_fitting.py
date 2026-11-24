@@ -326,7 +326,7 @@ def test_committed_metadata_is_only_for_hub_models() -> None:
     # One file per hub model in config/hub.toml, written as the CLI does.
     names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
     assert names == [
-        "seabbs-nowcastfm",
+        "seabbs-foundation",
         "seabbs-renewal",
         "seabbs-rwnowcast",
     ]
@@ -373,14 +373,14 @@ def test_committed_rwnowcast_metadata_is_the_rendered_text(
 def test_chronos_track_metadata_is_the_committed_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert main(["hub-id", "--model", "fm_chronos_daily_ragged_ft"]) == 0
-    assert capsys.readouterr().out.strip() == "seabbs-nowcastfm"
-    for model in ("fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"):
+    assert main(["hub-id", "--model", "foundation"]) == 0
+    assert capsys.readouterr().out.strip() == "seabbs-foundation"
+    for model in ("foundation",):
         out = tmp_path / model
-        args = ["--model", model, "--abbr", "nowcastfm", "--out", str(out)]
+        args = ["--model", model, "--abbr", "foundation", "--out", str(out)]
         assert main(["metadata", *args]) == 0
-        text = (out / "seabbs-nowcastfm.yml").read_text()
-        assert "model_abbr: nowcastfm" in text
+        text = (out / "seabbs-foundation.yml").read_text()
+        assert "model_abbr: foundation" in text
         assert "chronos-ft-" in text
 
 
@@ -410,7 +410,7 @@ def test_nowcast_records_the_checkpoint_it_loaded(
         foundation.FoundationModel, "_coupling_fit", independent
     )
     out = tmp_path / "ft"
-    args = ["--model", "fm_chronos_weekly_ragged_ft", "--out", str(out)]
+    args = ["--model", "foundation", "--out", str(out)]
     assert main(["nowcast", *args]) == 0
     record = json.loads((out / "checkpoint.json").read_text())
     assert record["tag"] == f"chronos-ft-{fake_checkpoint}"
@@ -453,12 +453,12 @@ def test_chronos_metadata_names_the_release(
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
     foundation.resolve_checkpoint.cache_clear()
     out = tmp_path / "meta"
-    args = ["--model", "fm_chronos_daily_ragged_ft", "--out", str(out)]
+    args = ["--model", "foundation", "--out", str(out)]
     assert main(["metadata", *args]) == 0
-    text = (out / "seabbs-nowcastfm.yml").read_text()
+    text = (out / "seabbs-foundation.yml").read_text()
     assert "release chronos-ft-2c2b22a03107 of" in text
     assert "<" not in text
-    committed = ROOT / "hub" / "model-metadata" / "seabbs-nowcastfm.yml"
+    committed = ROOT / "hub" / "model-metadata" / "seabbs-foundation.yml"
     assert committed.read_text() == text
 
 

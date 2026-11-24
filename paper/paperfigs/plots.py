@@ -169,22 +169,20 @@ def _pad_log_limits(ax: Axes, values: np.ndarray, axis: str = "y") -> None:
 
 
 def _ribbon_models(models: Sequence[str], baseline: str) -> list[str]:
-    """Baseline, the best variant of each Chronos family, and an ensemble.
+    """Baseline, the best Chronos-2 variant, and an ensemble.
 
-    A family's best variant is fine-tuned if present, else ragged, else
-    complete.
+    The best variant is the fine-tuned one if present, else zero-shot
+    ragged, else complete.
     """
     keep = [m for m in models if m in (baseline, "hub_ensemble")]
-    families = {
-        m.split("_complete")[0].split("_ragged")[0]
-        for m in models
-        if m.startswith("fm_chronos_")
-    }
-    for family in sorted(families):
-        for suffix in ("_ragged_ft", "_ragged", "_complete"):
-            if family + suffix in models:
-                keep.append(family + suffix)
-                break
+    for name in (
+        "foundation",
+        "foundation_zeroshot",
+        "foundation_zeroshot_complete",
+    ):
+        if name in models:
+            keep.append(name)
+            break
     return model_order(keep)
 
 

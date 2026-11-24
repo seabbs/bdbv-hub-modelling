@@ -94,15 +94,22 @@ def test_inference_rows_carry_the_total_rows_places():
         assert place[4 + k] == PLACES.index(name.rsplit("_lag_", 1)[0])
 
 
-def test_the_weekly_and_daily_finetuned_models_share_one_adapter(ft):
-    weekly = get_model("fm_chronos_weekly_ragged_ft")
-    assert weekly.checkpoint == ft.checkpoint
+def test_the_cadence_is_read_from_the_task(ft, task: ForecastTask):
+    # One model: the daily releases when the task has them, with the
+    # 7-day rolling rows, else the weekly releases alone.
+    daily = ft.for_task(task)
+    assert (ft.source, daily.source, daily.period) == (
+        foundation.FROM_DATA,
+        "daily",
+        "rolling7",
+    )
+    weekly = ft.for_task(dataclasses.replace(task, daily_history=None))
     assert (weekly.source, weekly.period) == ("weekly", None)
-    assert (ft.source, ft.period) == ("daily", "rolling7")
-    # The zero-shot daily models have the same rolling rows, complete
-    # data too: the layouts differ only in the lag rows.
-    assert get_model("fm_chronos_daily_ragged").period == "rolling7"
-    assert get_model("fm_chronos_daily_complete").period == "rolling7"
+    assert weekly.checkpoint == ft.checkpoint
+    # The zero-shot models have the same rolling rows, complete data too:
+    # the layouts differ only in the lag rows.
+    for name in ("foundation_zeroshot", "foundation_zeroshot_complete"):
+        assert get_model(name).for_task(task).period == "rolling7"
 
 
 def test_the_real_data_daily_model_has_the_rolling_rows(monkeypatch):
@@ -111,9 +118,10 @@ def test_the_real_data_daily_model_has_the_rolling_rows(monkeypatch):
     monkeypatch.setattr(foundation, "realdata_spec", lambda: "abc123")
     fake = functools.cache(lambda spec, *_: spec)
     monkeypatch.setattr(foundation, "resolve_checkpoint", fake)
-    daily = foundation._real_data("fm_chronos_daily_ragged_real", "daily")
-    weekly = foundation._real_data("fm_chronos_weekly_ragged_real", "weekly")
-    assert (daily.period, weekly.period) == ("rolling7", None)
+    model = foundation._real_data("foundation_real")
+    assert model.source == foundation.FROM_DATA
+    daily = dataclasses.replace(model, source="daily")
+    assert daily.period == "rolling7"
 
 
 def test_a_complete_block_has_daily_and_rolling_rows_and_no_lags():
@@ -170,7 +178,7 @@ def task(
 
 @pytest.fixture
 def ft(fake_checkpoint):  # noqa: ARG001 (the fake release)
-    return get_model("fm_chronos_daily_ragged_ft")
+    return get_model("foundation")
 
 
 def test_weekly_forecasts_are_read_from_the_total_rows(
@@ -203,7 +211,8 @@ def test_the_weekly_finetuned_model_uses_the_weekly_block_alone(
 ) -> None:
     store: list = []
     weekly = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged_ft"),
+        get_model("foundation"),
+        source="weekly",
         sample=_aggregate_sampler(store),
     )
     assert weekly.checkpoint.hash == fake_checkpoint
@@ -249,13 +258,10 @@ def test_zero_shot_and_finetuned_get_the_same_block(
     # Only the weights differ: the same rows, rolling rows and lag rows,
     # the zero-case places' lags included.
     blocks = []
-    for name in (
-        f"fm_chronos_{source}_ragged",
-        f"fm_chronos_{source}_ragged_ft",
-    ):
+    for name in ("foundation_zeroshot", "foundation"):
         store: list = []
         model = dataclasses.replace(
-            get_model(name), sample=_aggregate_sampler(store)
+            get_model(name), source=source, sample=_aggregate_sampler(store)
         )
         model.forecast(task)
         blocks.append(store[-1])
@@ -394,15 +400,21 @@ def test_daily_counts_are_the_count_rows_native_quantiles(
     # The complete layout's count rows are the daily counts themselves:
     # its daily quantiles are their own too, from the same prediction.
     store.clear()
-    whole = get_model("fm_chronos_daily_complete").daily_quantiles(task, levels)
+    whole = get_model("foundation_zeroshot_complete").daily_quantiles(
+        task, levels
+    )
     assert whole is not None
     last = sorted(whole["date"].unique())[-7:]
     tail = whole.loc[whole["date"].isin(last)]
     assert not tail.empty
     want = tail["quantile"].map({q: k + 1.0 for k, q in enumerate(levels)})
     np.testing.assert_array_equal(tail["value"], want)
-    # The weekly source has no daily counts.
+    # The weekly source has no daily counts: a task with weekly releases
+    # only gives none.
+    weekly_only = dataclasses.replace(task, daily_history=None)
     assert (
-        get_model("fm_chronos_weekly_complete").daily_quantiles(task, levels)
+        get_model("foundation_zeroshot_complete").daily_quantiles(
+            weekly_only, levels
+        )
         is None
     )

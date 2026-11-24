@@ -61,9 +61,9 @@ def test_references_match_rows():
     )
     assert [r.key for r in refs] == ["zero", "rw", "complete"]
     which = runs.Classifier([], refs)
-    row = {"model": "fm_chronos_daily_ragged_ft", "checkpoint": "zero-shot"}
+    row = {"model": "foundation", "checkpoint": "zero-shot"}
     assert which.series(row) == "zero"
-    row = {"model": "fm_chronos_daily_complete", "checkpoint": "zero-shot"}
+    row = {"model": "foundation_zeroshot_complete", "checkpoint": "zero-shot"}
     assert which.series(row) == "complete"
     row = {"model": "randomwalknowcast", "checkpoint": "abc"}
     assert which.series(row) == "rw"

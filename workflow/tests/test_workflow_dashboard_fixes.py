@@ -14,9 +14,9 @@ from flowlib.dashboard import rows, runs
 
 def test_a_ref_regex_may_hold_commas():
     ref = runs.parse_reference(
-        "multi=^fm_chronos_(daily|weekly){1,2}$,checkpoint=zero-shot,role=start"
+        "multi=^foundation(_zeroshot){0,1}$,checkpoint=zero-shot,role=start"
     )
-    assert ref.model == "^fm_chronos_(daily|weekly){1,2}$"
+    assert ref.model == "^foundation(_zeroshot){0,1}$"
     assert ref.checkpoint == "zero-shot"
     assert ref.role == "start"
 
@@ -35,7 +35,7 @@ def test_config_and_spec_references_share_their_defaults():
 def test_shared_row_helpers():
     assert rows.num("0.5") == 0.5
     assert rows.num("") is None
-    assert rows.source("fm_chronos_daily_ragged_ft") == "daily"
+    assert rows.source("foundation") == "daily"
     assert rows.source("randomwalknowcast") is None
     assert rows.sources("randomwalknowcast") == ["daily", "weekly"]
 

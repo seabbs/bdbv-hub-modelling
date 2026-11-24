@@ -33,11 +33,11 @@ SCOPES: dict[str, tuple[str, str]] = {
 """Each study's development and scored parts, as the text names them."""
 
 QUOTED_MODELS: tuple[str, ...] = (
-    "fm_chronos_daily_complete",
-    "fm_chronos_daily_ragged",
-    "fm_chronos_daily_ragged_ft",
-    "fm_chronos_daily_twostep",
-    "fm_chronos_daily_twostep_ft",
+    "foundation_zeroshot_complete",
+    "foundation_zeroshot",
+    "foundation",
+    "foundation_zeroshot_twostep",
+    "foundation_twostep",
 )
 """Models whose scores against `randomwalknowcast` the text quotes."""
 

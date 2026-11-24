@@ -348,7 +348,7 @@ def test_fit_settings_skip_models_with_no_sampler(
     monkeypatch.chdir(ROOT)
     settings = report._fit_settings()
     assert "renewal" in settings
-    assert not any(name.startswith("fm_chronos_") for name in settings)
+    assert not any(name.startswith("foundation") for name in settings)
 
 
 def test_complete_target_text_names_models_with_no_complete_score() -> None:

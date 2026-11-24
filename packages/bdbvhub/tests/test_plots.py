@@ -153,7 +153,7 @@ def test_model_styles_are_fixed_by_name() -> None:
     registered = {s.name for s in list_models()}
     # The real-data models are registered only once their release is
     # pinned, but keep their style either way.
-    pending = {f"fm_chronos_{s}_ragged_real" for s in ("daily", "weekly")}
+    pending = {"foundation_real"}
     assert registered <= set(plots.MODEL_STYLE)
     assert set(plots.MODEL_STYLE) - registered <= pending
     # Each colour and dash pair belongs to one model.

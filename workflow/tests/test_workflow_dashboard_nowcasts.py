@@ -93,11 +93,11 @@ def _setup():
 
 def test_quantile_series_by_target_with_old_files_as_7day(tmp_path):
     _quantiles(
-        tmp_path / "reference" / "2022-02-09.csv.gz", "fm_chronos_daily_ragged"
+        tmp_path / "reference" / "2022-02-09.csv.gz", "foundation_zeroshot"
     )
     _quantiles(
         tmp_path / "slots-aaaaaa" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged_ft",
+        "foundation",
         target="daily",
     )
     rs, refs = _setup()
@@ -112,7 +112,7 @@ def test_stats_and_score_from_the_seven_levels(tmp_path):
     # Truth 10.5: inside 50% (10..12)? no; inside 95% (8..14) yes.
     _quantiles(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         truth=9.5,
     )
     rs, refs = _setup()
@@ -136,7 +136,7 @@ def test_stats_and_score_from_the_seven_levels(tmp_path):
 def test_a_file_score_wins_over_wis(tmp_path):
     _quantiles(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         score=3.25,
     )
     rs, refs = _setup()
@@ -156,15 +156,13 @@ def test_other_reference_models_are_shown_under_their_name(tmp_path):
 
 def test_excluded_and_unclaimed_checkpoints_are_left_out(tmp_path):
     _quantiles(
-        tmp_path / "reference" / "2022-02-09.csv.gz", "fm_chronos_daily_ragged"
+        tmp_path / "reference" / "2022-02-09.csv.gz", "foundation_zeroshot"
     )
     _quantiles(
         tmp_path / "slots-aaaaaa" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged_ft",
+        "foundation",
     )
-    _quantiles(
-        tmp_path / "ffffff" / "2022-02-09.csv.gz", "fm_chronos_daily_ragged_ft"
-    )
+    _quantiles(tmp_path / "ffffff" / "2022-02-09.csv.gz", "foundation")
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE, excluded={"aaaaaa"})
     assert set(built["sets"]) == {"zero"}
@@ -174,7 +172,7 @@ def test_checkpoints_of_a_run_take_its_colour_by_size(tmp_path):
     for h in ("aaaaaa", "bbbbbb"):
         _quantiles(
             tmp_path / f"slots-{h}" / "2022-02-09.csv.gz",
-            "fm_chronos_daily_ragged_ft",
+            "foundation",
         )
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
@@ -185,7 +183,7 @@ def test_checkpoints_of_a_run_take_its_colour_by_size(tmp_path):
 
 def test_one_location_has_truth_and_latest_by_target(tmp_path):
     _quantiles(
-        tmp_path / "reference" / "2022-02-09.csv.gz", "fm_chronos_daily_ragged"
+        tmp_path / "reference" / "2022-02-09.csv.gz", "foundation_zeroshot"
     )
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
@@ -209,7 +207,7 @@ def test_wis_parts_on_both_scales_sum_to_each_scale_s_wis(tmp_path):
 
     _quantiles(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         truth=15.5,
     )
     rs, refs = _setup()
@@ -235,7 +233,7 @@ def test_wis_parts_on_both_scales_sum_to_each_scale_s_wis(tmp_path):
 def test_a_file_score_has_no_parts(tmp_path):
     _quantiles(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         score=3.25,
     )
     rs, refs = _setup()
@@ -247,7 +245,7 @@ def test_with_5_and_95_quantiles_bands_and_coverage_are_90(tmp_path):
     # 90% interval 9.6 to 12.4: truth 9.5 is outside it, inside 95%.
     _quantiles(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         truth=9.5,
         outer=(9.6, 12.4),
     )
@@ -294,7 +292,7 @@ def test_wis_splits_into_nowcast_and_forecast_weeks_ahead():
 def test_the_split_reaches_each_location_s_page_data(tmp_path):
     _quantiles(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         truth=9.5,
         week="2022-02-16",
     )
@@ -311,12 +309,12 @@ def test_a_dataset_shows_only_the_model_inputs_its_config_lists(tmp_path):
     # and a model with no input of its own (randomwalknowcast) is shown
     # under the daily input alone, not under a weekly one.
     day = tmp_path / "reference" / "2022-02-09.csv.gz"
-    _quantiles(day, "fm_chronos_weekly_ragged")
+    _quantiles(day, "foundation_zeroshot")
     _quantiles(
         tmp_path / "reference" / "2022-02-10.csv.gz", "randomwalknowcast"
     )
     _quantiles(
-        tmp_path / "reference" / "2022-02-11.csv.gz", "fm_chronos_daily_ragged"
+        tmp_path / "reference" / "2022-02-11.csv.gz", "foundation_zeroshot"
     )
     rs, refs = _setup()
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE, sources={"daily"})
@@ -336,7 +334,7 @@ def test_a_run_s_own_score_folders_are_its_checkpoints(tmp_path):
     )
     _quantiles(
         run / "scores" / "germany-days" / "n100" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged_ft",
+        "foundation",
     )
     _, refs = _setup()
     rs = [runs.make_run("runa", str(run), live=True)]
@@ -370,7 +368,7 @@ def test_plotted_truth_is_the_raw_count_in_both_german_views(tmp_path):
     fc = pd.DataFrame(
         [
             {
-                "model": "fm_chronos_daily_ragged",
+                "model": "foundation_zeroshot",
                 "target": target,
                 "origin": "2021-10-01",
                 "location": "DE",
@@ -447,7 +445,7 @@ Q7 = [8.0 + i for i in range(7)]
 def test_rows_outside_the_configured_days_are_left_out(tmp_path):
     _days(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         "2022-02-09",
         [-30, -5, 3, 40],
     )
@@ -465,7 +463,7 @@ def test_rows_outside_the_configured_days_are_left_out(tmp_path):
 def test_each_horizon_range_has_its_own_scores(tmp_path):
     _days(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         "2022-02-09",
         [-5, 0, 3],
     )
@@ -497,7 +495,7 @@ def test_each_horizon_range_has_its_own_scores(tmp_path):
 def test_wis_by_day_of_the_horizon_reaches_the_page(tmp_path):
     _days(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         "2022-02-09",
         [-5, 3],
         target="daily",
@@ -532,13 +530,13 @@ def test_ranges_keep_every_folder_s_files(tmp_path):
     for origin in ("2022-02-02", "2022-02-09"):
         _days(
             tmp_path / "reference" / f"{origin}.csv.gz",
-            "fm_chronos_daily_ragged",
+            "foundation_zeroshot",
             origin,
             [-5, 3],
         )
     _days(
         tmp_path / "slots-aaaaaa" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged_ft",
+        "foundation",
         "2022-02-09",
         [-5, 3],
     )
@@ -575,7 +573,7 @@ def test_one_file_s_wis_is_scored_in_one_pass_whatever_its_dates(
     for n in (4, 40):
         _days(
             tmp_path / str(n) / "reference" / "2022-02-09.csv.gz",
-            "fm_chronos_daily_ragged",
+            "foundation_zeroshot",
             "2022-02-09",
             range(-n // 2, n // 2),
         )
@@ -610,7 +608,7 @@ def test_a_run_s_interim_checkpoint_is_shown_labelled_interim(tmp_path):
         / "interim"
         / "s4810"
         / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged_ft",
+        "foundation",
     )
     _, refs = _setup()
     rs = [runs.make_run("runa", str(run), live=True)]
@@ -630,7 +628,7 @@ def test_a_unit_with_forecast_days_has_its_split_on_every_date(tmp_path):
     for origin in ("2022-02-08", "2022-02-09"):
         _days(
             tmp_path / "reference" / f"{origin}.csv.gz",
-            "fm_chronos_daily_ragged",
+            "foundation_zeroshot",
             origin,
             [-3, 0, 2, 9],
         )
@@ -650,7 +648,7 @@ def test_the_truth_context_reaches_the_page_before_the_first_forecast(
     # before any forecast file's, never replacing a file's own truth.
     _days(
         tmp_path / "reference" / "2022-02-09.csv.gz",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot",
         "2022-02-09",
         [-5, 3],
     )

@@ -23,7 +23,7 @@ def _unit(cache: Path, label: str, dates: list[str]) -> None:
         pd.DataFrame(
             {
                 "model": [
-                    "fm_chronos_daily_ragged_ft",
+                    "foundation",
                     "randomwalknowcast_daily",
                 ],
                 "target": ["7day", "7day"],
@@ -58,7 +58,7 @@ def test_a_unit_packs_its_fine_tuned_development_forecasts(tmp_path):
             tar.extractfile("chronos-slots-abcdef/manifest.json")  # type: ignore[arg-type]
         )
     assert manifest["label"] == "slots-abcdef"
-    assert manifest["models"] == ["fm_chronos_daily_ragged_ft"]
+    assert manifest["models"] == ["foundation"]
     assert manifest["origins"] == 2
 
 

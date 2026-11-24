@@ -10,9 +10,9 @@ from nowcasteval.labels import (
 )
 
 MAIN = {
-    "fm_chronos_daily_ragged_ft": "Fine-tuned (delays)",
-    "fm_chronos_daily_ragged": "Zero-shot (delays)",
-    "fm_chronos_daily_complete": "Zero-shot (complete data only)",
+    "foundation": "Fine-tuned (delays)",
+    "foundation_zeroshot": "Zero-shot (delays)",
+    "foundation_zeroshot_complete": "Zero-shot (complete data only)",
     "randomwalknowcast": "Random walk nowcast",
     "randomwalk": "Random walk",
 }
@@ -36,13 +36,9 @@ def test_main_models_have_distinct_colours() -> None:
 
 def test_checkpoints_real_data_and_hub_teams() -> None:
     assert (
-        model_label("fm_chronos_daily_ragged_ft@2000")
-        == "Fine-tuned (delays), 2,000 outbreaks"
+        model_label("foundation@2000") == "Fine-tuned (delays), 2,000 outbreaks"
     )
-    assert (
-        model_label("fm_chronos_daily_ragged_real")
-        == "Fine-tuned on real data (delays)"
-    )
+    assert model_label("foundation_real") == "Fine-tuned on real data (delays)"
     assert model_label("OHTJHU-someteam") == "OHTJHU-someteam"
 
 
@@ -152,8 +148,8 @@ def test_zero_shot_is_green_and_complete_data_zero_shot_purple() -> None:
         _, a, b = _lab(_linear(colour))
         return float(np.degrees(np.arctan2(b, a)) % 360)
 
-    assert 120 < hue(MODEL_STYLES["fm_chronos_daily_ragged"][0]) < 160
-    assert 290 < hue(MODEL_STYLES["fm_chronos_daily_complete"][0]) < 330
+    assert 120 < hue(MODEL_STYLES["foundation_zeroshot"][0]) < 160
+    assert 290 < hue(MODEL_STYLES["foundation_zeroshot_complete"][0]) < 330
 
 
 @pytest.mark.parametrize("vision", sorted(_CVD))
@@ -202,10 +198,10 @@ def test_zero_shots_meet_the_palette_validator_against_the_main_models():
     # under simulated deuteranopia and protanopia and 15 under normal
     # vision, for every pair of the four.
     models = [
-        "fm_chronos_daily_ragged_ft",
+        "foundation",
         "randomwalknowcast",
-        "fm_chronos_daily_ragged",
-        "fm_chronos_daily_complete",
+        "foundation_zeroshot",
+        "foundation_zeroshot_complete",
     ]
     colours = [MODEL_STYLES[m][0] for m in models]
     for vision, floor in (("normal", 15), ("deutan", 8), ("protan", 8)):
@@ -218,7 +214,7 @@ def test_zero_shots_meet_the_palette_validator_against_the_main_models():
         assert worst >= floor, (vision, worst)
     # Line styles differ too: complete data dashed, delays dotted.
     dashes = [MODEL_STYLES[m][1] for m in models[::2]] + [
-        MODEL_STYLES["fm_chronos_daily_complete"][1]
+        MODEL_STYLES["foundation_zeroshot_complete"][1]
     ]
     assert dashes == ["solid", "dotted", "dashed"]
 
@@ -240,5 +236,5 @@ def test_dashboard_colour_maps_are_shared_and_distinct() -> None:
         assert len(set(colours.values())) == len(colours)
         assert set(colours.values()) <= {*labels.CATEGORICAL, labels.NEUTRAL}
     # Earlier runs' shades are the fine-tuned model's blues, apart from it.
-    ft_blue = labels.MODEL_STYLES["fm_chronos_daily_ragged_ft"][0]
+    ft_blue = labels.MODEL_STYLES["foundation"][0]
     assert ft_blue not in labels.RUN_SHADES

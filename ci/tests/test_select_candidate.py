@@ -360,7 +360,7 @@ def test_a_chosen_variant_falls_back_to_the_random_walk(
 
 def test_a_direct_model_needs_no_fit(tmp_path: Path) -> None:
     # The Chronos-2 track runs its model in the job, with no fit.
-    pol = POLICY.for_model("fm_chronos_daily_ragged_ft", only=True)
+    pol = POLICY.for_model("foundation", only=True)
     (cid,) = [c.id for c in pol.chain()]
     c = tmp_path / "c"
     candidate(c, cid, fit=None)

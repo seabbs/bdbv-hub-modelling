@@ -6,7 +6,7 @@ import yaml
 from paperpipe.evidence import EVIDENCE, write_evidence
 
 RULE = "own-quantile-wis_crps-1000-common"
-MODELS = ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged")
+MODELS = ("foundation_zeroshot",)
 
 
 def _scores() -> pd.DataFrame:
@@ -56,7 +56,7 @@ def _scores() -> pd.DataFrame:
                 {
                     "study": "held_out",
                     "level": "all",
-                    "model": "fm_chronos",
+                    "model": "foundation_zeroshot",
                     "checkpoint": ck,
                     "run": run,
                     "outbreaks": n,
@@ -128,8 +128,8 @@ def test_the_runs_are_compared_at_matched_sizes() -> None:
     )
     out = slots_summary(pd.concat([_scores(), extra]), "one-model", "no-slots")
     # Both runs reached 1,000, so both rows give 1,000, not 2,000.
-    assert out.iloc[2]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
-    assert out.iloc[1]["BDBV CRPS"] == "1.00 / 1.00 (1,000)"
+    assert out.iloc[2]["BDBV CRPS"] == "1.00 (1,000)"
+    assert out.iloc[1]["BDBV CRPS"] == "1.00 (1,000)"
 
 
 def test_the_curve_keeps_the_hub_target_only() -> None:
