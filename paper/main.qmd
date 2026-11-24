@@ -405,6 +405,9 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - We used one layout, daily counts and daily lag series, with an aggregate row per place in both models with delays, and could also have included weekly lag series in the block.
   - We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.
   - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
+  - We simulate and fine-tune on counts only.
+  - Other common nowcasting targets are proportions, such as influenza-like illness as a share of visits, variant or sequence proportions, and wastewater samples [@Bracher2026; @placeholder].
+  - Extending the simulator and fine-tuning to these targets is future work.
   - We cut systems too large for one block into views (Methods).
   - Zones in different subtrees then inform each other only through the aggregated totals.
   - For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.
