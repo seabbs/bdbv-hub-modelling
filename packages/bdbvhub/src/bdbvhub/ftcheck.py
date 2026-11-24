@@ -42,6 +42,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from bdbvhub.compare import forecast_quantiles
 from bdbvhub.models import get_model
 from bdbvhub.reporting.page import html_table, standalone, write_page
 from bdbvhub.store import store
@@ -213,7 +214,8 @@ def skill_tables(
     -------
     dict of str to pandas.DataFrame
         `scores` (complete weeks), `overall` and `by_weeks_back` (pairwise
-        skill), `quantiles` and `blocks` (each Chronos-2 model's block
+        skill), `quantiles` (scored), `samples` (every forecast's
+        final-count draws) and `blocks` (each Chronos-2 model's block
         sizes by release).
     """
     tasks, target, daily, conf = release_tasks(data)
@@ -243,6 +245,7 @@ def skill_tables(
         "overall": overall,
         "by_weeks_back": by,
         "quantiles": result.quantiles,
+        "samples": run.samples,
         "blocks": pd.concat(blocks, ignore_index=True)
         if blocks
         else pd.DataFrame(),
@@ -326,18 +329,19 @@ def roughness(quantiles: pd.DataFrame) -> pd.DataFrame:
 
 
 def explorer_quantiles(
-    quantiles: pd.DataFrame, names: dict[str, str]
+    samples: pd.DataFrame, names: dict[str, str]
 ) -> pd.DataFrame:
-    """Return the release quantiles as the forecast explorer reads them.
+    """Return each model's final-count forecasts as the explorer reads them.
 
-    Every forecast week once (complete or not), models by their display
-    names, each origin as the round, and the 5% quantile (`q5`) as
-    `q05`.
+    The quantiles of every forecast week's draws, complete or not, once
+    per model and round (`compare.forecast_quantiles`, as the this-round
+    page), models by their display names and each origin as the round.
 
     Parameters
     ----------
-    quantiles : pandas.DataFrame
-        `ReleaseBacktest.quantiles`.
+    samples : pandas.DataFrame
+        `ReleaseForecasts.samples`: `model`, `origin`, `location`,
+        `target_end_date`, `sample` and `value`.
     names : dict of str to str
         Display name of each model id.
 
@@ -347,12 +351,13 @@ def explorer_quantiles(
         Columns `model`, `ours`, `reference_date`, `location`,
         `target_end_date` and `QUANTILE_COLUMNS`.
     """
-    # Every forecast week, complete or not, once: a forecast is scored
-    # against several releases, with the same quantiles each time.
-    keys = ["model", "origin", "location", "target_end_date"]
-    q = quantiles.drop_duplicates(keys)
-    q = _named(q.rename(columns={"q5": "q05"}), names)
-    return q.assign(ours=True, reference_date=q["origin"])
+    draws = samples.assign(
+        source="real",
+        reference_date=samples["origin"].astype(str),
+        target_end_date=samples["target_end_date"].astype(str),
+    )
+    q = forecast_quantiles(draws)
+    return _named(q, names).assign(ours=True)
 
 
 def _named(frame: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
@@ -470,7 +475,7 @@ def write_report(
     target = tables["target"]
     real = target.loc[target["kind"] == "real"]
     places = location_names(real)
-    q = explorer_quantiles(tables["quantiles"], names)
+    q = explorer_quantiles(tables["samples"], names)
     rounds = sorted(set(q["reference_date"].astype(str)))
     asof = real.loc[real["vintage"].astype(str).isin(rounds)]
     asof = asof.assign(reference_date=asof["vintage"].astype(str))
