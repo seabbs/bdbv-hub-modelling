@@ -231,3 +231,16 @@ def test_the_status_names_the_model_load_after_saved_held_out_blocks(
     with pytest.raises(CutError):
         fs.main()
     assert seen["stage"] == "loading the model"
+
+
+def test_the_status_names_a_checkpoint_s_evaluation():
+    # Overseer 04:31: Run B's status said 'training' through the n100
+    # evaluation (~20 min on the GPU), which the dashboard reads.
+    import inspect
+
+    assert fs.checkpoint_stage(100) == "evaluating checkpoint n100"
+    source = inspect.getsource(fs.main)
+    named = source.index("report(stage=checkpoint_stage(done))")
+    # Just before the checkpoint's held-out evaluation.
+    gap = source.index("parts = held_out_parts(model, val", named) - named
+    assert gap < 400
