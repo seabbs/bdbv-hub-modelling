@@ -130,3 +130,14 @@ def test_roughness_compares_week_to_week_changes_with_the_truth_s():
     truth = np.log1p(12) - np.log1p(10)
     assert got.loc[("a", "national"), "median"] == pytest.approx(med)
     assert got.loc[("a", "national"), "truth"] == pytest.approx(truth)
+
+
+def test_weeks_with_nothing_reported_have_no_ratio_to_it():
+    import numpy as np
+
+    from bdbvhub.ftcheck import calibration
+
+    q = _quantiles().assign(reported=0.0)
+    got = calibration(q)
+    assert got["median_over_reported"].isna().all()
+    assert np.isfinite(got["median_over_truth"]).all()
