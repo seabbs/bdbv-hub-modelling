@@ -76,11 +76,10 @@ HELD_OUT_BLOCKS = "held-out-blocks.pkl"
 """The held-out blocks an offloaded run saves for its evaluator."""
 HELD_OUT_KEY = "held-out-blocks.json"
 """What the saved held-out blocks were cut from (`held_out_blocks`)."""
-NEXT_CHUNK_BLOCKS = "next-chunk-blocks.pkl"
-"""The next chunk's cut blocks (`save_chunk`): a restart loads them
-rather than cutting the chunk again (about 8 minutes)."""
-NEXT_CHUNK_KEY = "next-chunk-blocks.json"
-"""What the saved next chunk's blocks were cut from (`load_chunk`)."""
+CHUNK_SLOTS = 2
+"""Cut chunks kept saved (`save_chunk`, `chunk-blocks-<i>.pkl` and their
+keys): the chunk in training and the next, so a restart within a chunk
+loads its blocks rather than cutting them again with the GPU idle."""
 
 POLL = 60
 """Seconds between checks for a chunk's simulations."""
@@ -1762,33 +1761,53 @@ def save_blocks(blocks: list[dict], path: Path) -> None:
     tmp.rename(path)
 
 
+def _chunk_slots(out: Path) -> list[tuple[Path, Path]]:
+    """Return each saved chunk's blocks file and key file."""
+    return [
+        (out / f"chunk-blocks-{i}.pkl", out / f"chunk-blocks-{i}.json")
+        for i in range(CHUNK_SLOTS)
+    ]
+
+
+def _saved_key(saved: Path) -> Any:
+    return json.loads(saved.read_text()) if saved.is_file() else None
+
+
 def save_chunk(
     out: Path, key: dict[str, Any], pairs: list, empty: list[str]
 ) -> None:
-    """Save a cut chunk's blocks with their key, replacing the last.
+    """Save a cut chunk's blocks with their key, keeping the last saved.
 
     `key` holds the chunk's outbreaks and everything the cut depends on,
-    as the held-out key does (`held_out_blocks`).
+    as the held-out key does (`held_out_blocks`). The chunk takes its own
+    slot if saved before, else an empty one, else the oldest, so the
+    `CHUNK_SLOTS` chunks saved last stay.
     """
-    saved = out / NEXT_CHUNK_KEY
+    want = json.loads(json.dumps(key))
+    slots = _chunk_slots(out)
+    same = [s for s in slots if _saved_key(s[1]) == want]
+
+    def age(slot: tuple[Path, Path]) -> float:
+        return slot[1].stat().st_mtime if slot[1].is_file() else -1.0
+
+    path, saved = same[0] if same else min(slots, key=age)
     saved.unlink(missing_ok=True)
-    tmp = out / (NEXT_CHUNK_BLOCKS + ".tmp")
+    tmp = path.with_name(path.name + ".tmp")
     with tmp.open("wb") as f:
         pickle.dump((pairs, empty), f, protocol=pickle.HIGHEST_PROTOCOL)
-    tmp.rename(out / NEXT_CHUNK_BLOCKS)
-    saved.write_text(json.dumps(json.loads(json.dumps(key))))
+    tmp.rename(path)
+    saved.write_text(json.dumps(want))
 
 
 def load_chunk(out: Path, key: dict[str, Any]) -> tuple[list, list] | None:
     """Return a saved chunk's blocks and skipped blocks if `key` matches."""
-    path, saved = out / NEXT_CHUNK_BLOCKS, out / NEXT_CHUNK_KEY
-    if not (path.is_file() and saved.is_file()):
-        return None
-    if json.loads(saved.read_text()) != json.loads(json.dumps(key)):
-        return None
-    with path.open("rb") as f:
-        pairs, empty = pickle.load(f)
-    return pairs, empty
+    want = json.loads(json.dumps(key))
+    for path, saved in _chunk_slots(out):
+        if path.is_file() and _saved_key(saved) == want:
+            with path.open("rb") as f:
+                pairs, empty = pickle.load(f)
+            return pairs, empty
+    return None
 
 
 def held_out_blocks(
@@ -2283,6 +2302,9 @@ def main(root: Path | None = None) -> None:
                     pool, sim_dir, chunk, args.seed, k, args.cut_workers
                 )
             pairs, empty = _join(ahead.pop(tuple(chunk)))
+            # Saved too, so a restart within this chunk loads it.
+            if tuple(chunk) not in saved_ahead:
+                save_chunk(out, chunk_key(chunk), pairs, empty)
         log(
             f"outbreaks {done + 1}-{hi}: "
             f"{record_views(out, pairs, f'{done + 1}-{hi}')}"
