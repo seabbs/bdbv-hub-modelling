@@ -38,7 +38,8 @@ budget=$(( ${WAIT_MINUTES:-0} * 60 ))
 started=$(date -u +%s)
 
 # The number of candidate fits the store lacks at AS_OF. A fit stored as
-# failed is not missing: unpack says so and the gate rules it out.
+# failed is not missing: unpack says so and the gate rules it out. Nor
+# is a model with an older stored fit, which unpack uses (--usable).
 missing() {
   if [ "${SKIP_FETCH:-false}" != true ]; then
     rm -rf "$store"
@@ -46,7 +47,7 @@ missing() {
   fi
   # shellcheck disable=SC2086  # MODELS is a list
   cli fit-store plan --store "$store" --models $MODELS --origins "$AS_OF" \
-    --out "$out/missing.json" > "$out/plan.log"
+    --usable --out "$out/missing.json" > "$out/plan.log"
   python3 -c 'import json, sys
 print(len(json.load(open(sys.argv[1]))["include"]))' "$out/missing.json"
 }
