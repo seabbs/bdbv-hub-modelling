@@ -244,11 +244,6 @@ layers = [
 # that owns the code, or out of the import. A new upward import is a
 # layering bug to fix, not to list here.
 ignore_imports = [
-  "nowcasteval.backtest -> nowcastbdbv.data.delays",
-  "nowcasteval.backtest -> nowcastbdbv.data.tidy",
-  "nowcasteval.backtest -> nowcastbdbv.data.zones",
-  "nowcasteval.backtest -> nowcastrenewal.bvd",
-  "nowcasteval.backtest -> nowcastrenewal.forecaster",
   "nowcastrenewal.zones -> nowcastbdbv.data.tidy",
 ]
 

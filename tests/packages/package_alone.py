@@ -51,7 +51,7 @@ KNOWN: dict[str, set[str]] = {
         "bdbvhub.store.store",
     },
     # scoringrules, through nowcasteval.scoring.
-    "nowcastbdbv": {"nowcastbdbv.zones"},
+    "nowcastbdbv": {"nowcastbdbv.backtest", "nowcastbdbv.zones"},
 }
 """Modules that fail to import alone, by package, as of 2026-11-22."""
 

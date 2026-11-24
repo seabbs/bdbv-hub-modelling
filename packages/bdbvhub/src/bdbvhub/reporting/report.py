@@ -48,6 +48,7 @@ from bdbvhub.reporting.zone_nowcast import (
 )
 from bdbvhub.store.store import ZONE_FITS_FILE, samplers, stored_models
 from nowcastbaselines.chain import Settings
+from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.delays import delay_summary
 from nowcastbdbv.data.tidy import (
     COHERENCE_STREAMS,
@@ -71,7 +72,6 @@ from nowcasteval.backtest import (
     BacktestConfig,
     check_distinct,
     load_config,
-    make_tasks,
     run_forecasts,
     truth_changes,
 )

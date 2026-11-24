@@ -8,17 +8,20 @@ import pandas as pd
 import pytest
 
 from bdbvhub.models import get_model
-from nowcasteval.backtest import (
-    BacktestConfig,
+from nowcastbdbv.backtest import (
+    bvd_max_rhat,
     development_tasks,
-    energy_tasks,
-    forecast_weeks,
-    load_config,
     lopo_tasks,
     make_tasks,
     run_development,
-    run_forecasts,
     run_lopo,
+)
+from nowcasteval.backtest import (
+    BacktestConfig,
+    energy_tasks,
+    forecast_weeks,
+    load_config,
+    run_forecasts,
     score_tasks,
     truth_changes,
 )
@@ -34,8 +37,7 @@ def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.n_samples == 100
     # A generous convergence gate on BVDOutbreakSize releases.
-    assert cfg.bvd_max_rhat == 1.1
-    assert BacktestConfig().bvd_max_rhat == 1.1
+    assert bvd_max_rhat(ROOT / "config" / "backtest.toml") == 1.1
     # The first release is not a backtest origin.
     assert cfg.skip_origins == ("2026-08-18",)
     assert BacktestConfig().skip_origins == ()
@@ -476,7 +478,7 @@ def test_lopo_scores_only_the_masked_province(
 def test_backtest_sampler_comes_from_the_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nowcasteval.backtest import apply_sampler
+    from nowcastbdbv.backtest import apply_sampler
     from nowcastrenewal.forecaster import SAMPLER_ENV, sampler_settings
 
     cfg = load_config(ROOT / "config" / "backtest.toml")

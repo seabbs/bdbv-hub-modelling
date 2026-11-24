@@ -27,11 +27,8 @@ from dataclasses import dataclass
 import pandas as pd
 
 from nowcastbaselines.zones import zone_draws, zone_task
-from nowcasteval.backtest import (
-    BacktestConfig,
-    make_tasks,
-    real_vintages,
-)
+from nowcastbdbv.backtest import make_tasks
+from nowcasteval.backtest import BacktestConfig, real_vintages
 from nowcasteval.nowcast import (
     ForecastParts,
     complete_weeks,

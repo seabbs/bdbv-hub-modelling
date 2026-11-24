@@ -59,6 +59,7 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhub.models import get_model, list_models
+from nowcastbdbv.backtest import vintage_task
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcastbdbv.data.zones import ZoneData, load_zone_data
 from nowcasteval.backtest import (
@@ -67,7 +68,6 @@ from nowcasteval.backtest import (
     merge_by_model,
     real_vintages,
     run_forecasts,
-    vintage_task,
 )
 from nowcastutils.base import ForecastModel, ForecastTask
 from nowcastutils.files import write_csv

@@ -18,9 +18,10 @@ from nowcastbaselines.zones import (
     zone_task,
     zones_for_model,
 )
+from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.tidy import load_health_zones
 from nowcastbdbv.data.zones import hub_zones
-from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcasteval.backtest import BacktestConfig
 from nowcastutils.base import NATIONAL, ForecastTask
 from nowcastutils.hierarchy import province_of
 from nowcastutils.snapshots import weekly_counts
