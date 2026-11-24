@@ -51,6 +51,8 @@ def _ledger(root: Path) -> Path:
         d = ledger / "archive" / REF / "10" / model_id
         d.mkdir(parents=True)
         (d / "nowcast.png").write_bytes(f"png {model_id}".encode())
+        if i == 0:
+            (d / "warnings.png").write_bytes(b"warned")
         (d / "provenance.json").write_text(
             json.dumps(
                 {
@@ -224,3 +226,16 @@ def test_gh_pr_state_says_what_gh_said(monkeypatch) -> None:
     monkeypatch.setattr(rounds.subprocess, "run", run)
     with pytest.raises(RuntimeError, match="HTTP 404"):
         rounds.gh_pr_state("https://github.com/o/r/pull/1")
+
+
+def test_warned_locations_plot_only_where_checks_warned(
+    tmp_path: Path,
+) -> None:
+    docs, gen = tmp_path / "docs", tmp_path / "gen"
+    make_round_pages(_ledger(tmp_path), docs, gen, _state)
+    rounds = docs / "submission" / "rounds"
+    page = (rounds / f"{REF}.md").read_text()
+    image = f"{REF}-{IDS[0]}-warnings.png"
+    assert f"({image})" in page
+    assert (rounds / image).read_bytes() == b"warned"
+    assert f"{IDS[1]}-warnings.png" not in page
