@@ -150,9 +150,7 @@ def write_settings(where: Path, train: Path, step: int, done: int) -> None:
         "interim": True,
         "from_checkpoint": last.name,
     }
-    settings["hash"] = ft._settings_hash(
-        {k: v for k, v in settings.items() if k not in verify.NOT_HASHED}
-    )
+    settings["hash"] = verify.settings_hash(settings)
     for key in ("code_commit", "code_paths", "device"):
         if key in kept:
             settings[key] = kept[key]
