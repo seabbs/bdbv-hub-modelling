@@ -436,7 +436,8 @@ class PaperFlow:
                 *stored,
             ]
         if w.study == "synthetic":
-            return [self.synthetic["forecasts"][w.mode]]
+            fc = self.synthetic["forecasts"][w.mode]
+            return [fc] if fc else []
         return []
 
     def limits(self, w: Wildcards) -> str:

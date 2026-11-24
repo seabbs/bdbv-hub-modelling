@@ -108,7 +108,11 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
 
 # The synthetic runner forecasts each run's simulated outbreaks once they
 # exist (`scripts/run_synthetic.py`), at `synthetic.samples` draws per forecast.
+# A run with no forecasts file (`synthetic.forecasts.<mode>: null`) uses the
+# dummy synthetic study, as `germany.real: false` does.
 for _mode in MODES:
+    if not SYNTHETIC["forecasts"][_mode]:
+        continue
 
     rule:
         name:
