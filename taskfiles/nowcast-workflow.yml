@@ -86,4 +86,4 @@ tasks:
   check:
     desc: Test the workflow's helpers and dry-run every target, as CI does
     cmds:
-      - uv run --group paper pytest -q tests/workflow
+      - uv run --group paper pytest -q workflow/tests

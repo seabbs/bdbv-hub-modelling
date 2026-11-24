@@ -359,7 +359,8 @@ def test_plotted_truth_is_the_raw_count_in_both_german_views(tmp_path):
     from nowcastgermany.evaluation import with_truth
 
     fixture = (
-        Path(__file__).resolve().parents[1]
+        Path(__file__).resolve().parents[2]
+        / "tests"
         / "fixtures"
         / "germany"
         / "germany_covid19_hosp.csv.gz"
