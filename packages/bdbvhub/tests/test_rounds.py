@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bdbvhub.cli import main
 from bdbvhub.submission.rounds import freeze_round, make_round_pages
@@ -187,3 +189,38 @@ def test_freeze_round_command(tmp_path: Path) -> None:
     assert main(args) == 0
     assert (ledger / "pages" / f"{REF}.md").exists()
     assert main(args) == 0  # already frozen: nothing to do
+
+
+def test_gh_pr_state_reads_the_hub_pr_over_rest(monkeypatch) -> None:
+    # The Actions token reads another org's public PR over REST, not over
+    # GraphQL (`gh pr view`), so Site's round pages failed on hub PR 95.
+    from bdbvhub.submission import rounds
+
+    calls = []
+
+    def run(args, **_):
+        calls.append(args)
+        merged = "2026-11-20T10:00:00Z" if args[2].endswith("/95") else None
+        out = json.dumps({"state": "closed", "merged_at": merged})
+        return subprocess.CompletedProcess(args, 0, out, "")
+
+    monkeypatch.setattr(rounds.subprocess, "run", run)
+    hub = "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull"
+    assert rounds.gh_pr_state(f"{hub}/95") == "merged"
+    assert rounds.gh_pr_state(f"{hub}/96") == "closed"
+    assert calls[0][:3] == [
+        "gh",
+        "api",
+        "repos/InsightNet-US/BDBV-Modeling-Hub/pulls/95",
+    ]
+
+
+def test_gh_pr_state_says_what_gh_said(monkeypatch) -> None:
+    from bdbvhub.submission import rounds
+
+    def run(args, **_):
+        return subprocess.CompletedProcess(args, 1, "", "HTTP 404: Not Found")
+
+    monkeypatch.setattr(rounds.subprocess, "run", run)
+    with pytest.raises(RuntimeError, match="HTTP 404"):
+        rounds.gh_pr_state("https://github.com/o/r/pull/1")
