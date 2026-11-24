@@ -42,6 +42,8 @@ checkpoint release_list:
 
 
 rule score_germany:
+    input:
+        germany=GERMANY_TRIANGLE,
     output:
         f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",
     log:
@@ -73,6 +75,7 @@ rule score_run_germany:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        germany=GERMANY_TRIANGLE,
     output:
         f"{RUN}/scores/{GERMANY_UNIT}/n{{n}}.done",
     log:

@@ -70,3 +70,57 @@ def test_r_matches_manifest(
 ) -> None:
     got = r_results[str(BUNDLE / fx["path"])]
     assert sorted(got) == fx["r_failures"]
+
+
+def test_custom_checks_run_with_their_scripts_and_source(
+    hub_path: Path, tmp_path: Path
+) -> None:
+    # The hub's custom checks (hub-config/validations.yml, since 2026-11-16)
+    # source scripts from src/ and read the new file from the original
+    # checkout at a base commit. Without them every submission failed R
+    # validation (main dry run 45296907564, 2026-11-24).
+    hub = tmp_path / "hub"
+    shutil.copytree(hub_path, hub)
+    custom = BUNDLE / "fixtures" / "custom-check"
+    shutil.copy(custom / "hub-config" / "validations.yml", hub / "hub-config")
+    shutil.copytree(custom / "src", hub / "src")
+    for args in (
+        ["init", "-q"],
+        ["add", "-A"],
+        ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "hub"],
+    ):
+        subprocess.run(["git", "-C", str(hub), *args], check=True)
+    out = tmp_path / "r.json"
+    sub = (
+        BUNDLE
+        / "fixtures/constructed/valid_basic/testteam-testmodel"
+        / "2026-10-31-testteam-testmodel.csv"
+    )
+    md = [a for d in METADATA_DIRS for a in ("--metadata-dir", str(d))]
+    subprocess.run(
+        [
+            "Rscript",
+            str(R_VALIDATOR),
+            "--hub",
+            str(hub),
+            *md,
+            "--skip-window",
+            "--json",
+            str(out),
+            str(sub),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    checks = {x["check"]: x["status"] for x in json.loads(out.read_text())}
+    assert checks["probe"] == "pass"
+    # The checkout is left as it was.
+    status = subprocess.run(
+        ["git", "-C", str(hub), "status", "--porcelain"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert status.stdout == ""

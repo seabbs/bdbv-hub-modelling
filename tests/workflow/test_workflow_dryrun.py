@@ -677,6 +677,7 @@ def test_skipped_checkpoints_are_not_scored(tmp_path):
 def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     # With mtime triggers alone, a new label's units under tables already
     # built would be "missing, no update", and no tick would score them.
+    _fetched(tmp_path)
     cache = tmp_path / "scores"
     for unit, labels in (
         ("germany-days", ["reference", "slots-aaa"]),
@@ -710,7 +711,15 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
     assert "release_list" not in jobs
 
 
+def _fetched(tmp_path):
+    """Write the German triangle, fetched before any unit ran."""
+    triangle = tmp_path / "germany" / "COVID-19_hospitalizations.csv"
+    triangle.parent.mkdir(parents=True, exist_ok=True)
+    triangle.write_text("x\n")
+
+
 def test_finished_units_are_kept(tmp_path):
+    _fetched(tmp_path)
     (tmp_path / "scores" / "germany-days").mkdir(parents=True)
     (tmp_path / "scores" / "germany-days" / "reference.done").write_text("")
     config = {"score": {"labels": ["aaa"]}}
@@ -1252,3 +1261,12 @@ def test_each_checkpoint_gets_its_7_day_check(tmp_path):
     (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
     jobs = dry(tmp_path, f"{where}/seven-day.json", config=FT)
     assert jobs == {"seven_day_check": 1}
+
+
+def test_a_new_machine_fetches_the_german_triangle_before_scoring(tmp_path):
+    # The German units read the fetched triangle, so with none yet the
+    # fetch runs first.
+    config = {"score": {"labels": ["aaa"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert jobs["germany_triangle"] == 1
+    assert jobs["score_germany"] >= 1
