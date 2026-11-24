@@ -59,7 +59,7 @@ RELEASES = [
 
 
 def test_release_tag_maps_scorer_labels() -> None:
-    assert release_tag("7962fd718a47") == "chronos-ft-7962fd718a47"
+    assert release_tag("deadbeef0005") == "chronos-ft-deadbeef0005"
     assert release_tag("slots-1234abcd") == "chronos-slots-1234abcd"
     for bad in ("reference", "", "slots-", "../x", "chronos-ft-abc"):
         with pytest.raises(ValueError, match="label"):

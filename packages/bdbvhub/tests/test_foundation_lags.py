@@ -186,3 +186,13 @@ def test_the_ragged_block_takes_the_estimated_lag_count(task: ForecastTask):
     got = len(_lags_seen(model, task))
     assert got == model.lag_count(task)
     assert 1 <= got <= D
+
+
+def test_a_grid_that_ends_before_the_cut_off_is_read_up_to_its_end():
+    # Targets all before the cut-off: the triangle's grid ends earlier
+    # than its last release, so only the steps on the grid are read.
+    tri = _triangle(200, lambda _t, d: min(1.0, (d + 1) / 10))
+    short = HubTriangle(
+        tri.times[:150], tri.final[:, :150], tri.partial[:, :150], tri.last
+    )
+    assert lag_count(short, "daily") == 10

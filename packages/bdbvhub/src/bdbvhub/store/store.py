@@ -274,7 +274,6 @@ def _strip(source: str) -> str:
 
 
 KEY_PACKAGES: Final = (
-    "bdbvhubrenewal",
     "nowcastutils",
     "nowcasteval",
     "nowcastbaselines",

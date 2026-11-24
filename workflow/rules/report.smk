@@ -490,9 +490,10 @@ rule ft_check:
 # round the latest Submit run on main targeted, against the data as of
 # the round, with the wk R_t quantiles, the gate's pick and the renewal
 # fits' convergence (workflow/scripts/this_round_report.py). No scores.
-# It reruns when <ROOT>/hub/round/run.txt (the run and its status) or
-# <ROOT>/hub/round/store.txt (the fit store's commit) changes, which
-# workflow/scripts/hub_watch.sh writes. Not part of `all`.
+# It reruns when <ROOT>/hub/round/run.txt (the run and its status),
+# <ROOT>/hub/round/store.txt (the fit store's commit) or
+# <ROOT>/hub/round/submissions.txt (the hub's newest model-output commit)
+# changes, which workflow/scripts/hub_watch.sh writes. Not part of `all`.
 
 
 rule this_round_inputs:
@@ -500,6 +501,7 @@ rule this_round_inputs:
         target=rules.hub_data.output,
         run=f"{HUB}/round/run.txt",
         store=f"{HUB}/round/store.txt",
+        submissions=f"{HUB}/round/submissions.txt",
     output:
         candidates=f"{HUB}/round/candidates.csv.gz",
         run=f"{HUB}/round/run/run.json",

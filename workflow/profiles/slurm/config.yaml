@@ -3,10 +3,11 @@
 # nodes share this checkout and ROOT. Run the driver on the submit host,
 # or as a long low-resource Slurm job where login nodes forbid one.
 # Nothing machine-specific is here. The cluster's account and partition
-# (and a GPU partition for train_segment, if it has one) go in an
-# untracked profile layered on this one (SNAKEMAKE_PROFILE), as
-# default-resources slurm_account=... slurm_partition=... and
-# set-resources. Without them the plugin passes sinfo's default
+# (and a GPU partition for train_segment, if it has one) go in a copy of
+# this profile outside the repository, as default-resources
+# slurm_account=... slurm_partition=... and set-resources, named by
+# SNAKEMAKE_PROFILE in config/local.env (it replaces this one). Without them
+# the plugin passes sinfo's default
 # partition and a guessed account explicitly, which override any
 # SBATCH_* in the environment.
 # Before a run: `uv sync --all-groups` once, then UV_NO_SYNC=1 (and

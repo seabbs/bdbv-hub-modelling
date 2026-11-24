@@ -607,7 +607,7 @@ def _task_args(p: argparse.ArgumentParser, data_dir: str) -> None:
 
 def _version() -> str:
     try:
-        return version("BDBVHubRenewal")
+        return version("bdbvhub")
     except PackageNotFoundError:  # pragma: no cover
         return "unknown"
 
@@ -1751,11 +1751,10 @@ def _compare_hub(args: argparse.Namespace) -> int:
         stored, _fit_store_forecasts(args), rounds, live
     )
     hub_ids = hc.own_hub_ids()
-    forecasts = hc.with_submissions(
+    forecasts = hc.as_submitted(
         pd.concat(
             [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
         ),
-        hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
     table_file = Path(args.submissions_table or cfg.submissions_table)

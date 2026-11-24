@@ -115,6 +115,7 @@ def test_a_late_block_keeps_its_counts_and_loses_its_early_lag_cells():
         assert b["release_start_days"] == 40
         # A block cut before its start day has the cut's release alone.
         assert b["first_release"] >= "2026-02-12" or b["releases"] == 1
+        assert b["first_release"] <= b["cut_date"]
         # The counts row holds the whole history known at the cut, from
         # the first onset. Compared over the context both share: the lag
         # rule can give the late block another lag count, so its context

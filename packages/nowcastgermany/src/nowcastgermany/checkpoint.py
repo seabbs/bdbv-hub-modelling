@@ -81,7 +81,7 @@ so there is no 90% interval and its rows keep the 95% one the hub
 scored (`nowcastgermany.evaluation`)."""
 WIS_PARTS: Final = ("dispersion", "overprediction", "underprediction")
 """WIS's components (Bracher et al. 2021), which sum to it."""
-REPO: Final = "seabbs/BDBVHubRenewal"
+REPO: Final = "seabbs/bdbv-hub-modelling"
 COLUMNS: Final = [
     "study",
     "level",

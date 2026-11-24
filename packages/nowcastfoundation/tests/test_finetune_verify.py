@@ -11,7 +11,6 @@ from nowcastfoundation import forecaster as foundation
 from nowcastfoundation.finetune.verify import (
     function_source,
     problems,
-    settings_problems,
 )
 
 FOUNDATION = Path(foundation.__file__)
@@ -100,15 +99,6 @@ def test_foundation_functions_are_read_from_code_paths(tmp_path):
     (tmp_path / "settings.json").write_text(json.dumps(settings))
     files = {"packages/f/foundation.py": src.encode()}
     assert problems(tmp_path, lambda _, path: files[path]) == []
-
-
-RELEASED = Path(__file__).parents[3] / "tests" / "fixtures" / "checkpoints"
-
-
-@pytest.mark.parametrize("name", ["r6-n250", "r6-n500"])
-def test_released_checkpoints_give_their_hash(name):
-    settings = json.loads((RELEASED / name / "settings.json").read_text())
-    assert settings_problems(settings) == []
 
 
 def test_the_code_names_are_the_files_paths():

@@ -172,7 +172,7 @@ def test_plot_scores_by_truth() -> None:
 @pytest.mark.slow
 @pytest.mark.usefixtures("in_root", "flat_model")
 def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
-    from evaluation.test_backtest import _MaskAware
+    from test_backtest import _MaskAware
 
     from nowcastutils.base import _REGISTRY, register_model
 
@@ -291,7 +291,7 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     data.mkdir()
     for f in DATA.iterdir():
         (data / f.name).symlink_to(f)
-    sub = ROOT / "data" / "our-submissions" / "model-output" / "seabbs-renewal"
+    sub = FIXTURES / "hub-submissions" / "model-output" / "seabbs-renewal"
     hub = data / "hub-submissions" / "model-output" / "seabbs-renewal"
     hub.mkdir(parents=True)
     for f in sub.iterdir():

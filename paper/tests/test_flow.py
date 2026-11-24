@@ -146,7 +146,6 @@ def test_ebola_sources_name_every_input() -> None:
         "--ebola-backtest",
         "--ebola-draws",
         "--ebola-draws-models randomwalk randomwalknowcast",
-        "--candidates",
         "--store-history",
     ):
         assert option in args
@@ -353,10 +352,3 @@ def test_the_simulations_and_their_ready_file_are_always_inputs(
     assert flow.source_files(_w("paper", "synthetic")) == [
         flow.synthetic["forecasts"]["paper"]
     ]
-
-
-def test_the_ebola_candidates_are_inputs() -> None:
-    flow = _flow()
-    files = flow.source_files(_w("paper", "ebola"))
-    for candidate in CONFIG["ebola"]["candidates"]:
-        assert candidate in files

@@ -1,5 +1,5 @@
 [project]
-name = "BDBVHubRenewal"
+name = "bdbv-hub-modelling"
 version = "0.1.0"
 description = "Renewal-model nowcasts and forecasts for the BDBV Modeling Hub, with data tools and a backtest harness"
 readme = "README.md"
@@ -59,7 +59,7 @@ Issues = "https://github.com/seabbs/bdbv-hub-modelling/issues"
 
 [dependency-groups]
 dev = [
-  "BDBVHubRenewal[model]",
+  "bdbv-hub-modelling[model]",
   "import-linter>=2.1",
   "mypy>=1.11",
   "pandas-stubs>=2.1",

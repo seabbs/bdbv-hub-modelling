@@ -172,7 +172,7 @@ ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 """The LoRA adapter's files. A checkpoint's release holds them and its
 `settings.json`."""
 
-FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
+FINETUNED_CACHE: Final = "~/.cache/bdbv-hub-modelling"
 """Directory each downloaded checkpoint is kept in, as
 `chronos-ft-<hash>`."""
 
@@ -941,7 +941,10 @@ def lag_count(
         return most
     released = int((t + d).min())
     history = int(max(1, min(most, tri.last - released + 1)))
-    steps = np.arange(released, tri.last + 1)
+    # Steps on the grid: a grid of targets before the cut-off ends early.
+    steps = np.arange(released, min(tri.last, tri.final.shape[1] - 1) + 1)
+    if steps.size == 0:
+        return history
     final = tri.final[:, steps]
     seen = np.nan_to_num(
         pd.DataFrame(tri.partial[:, steps, :width].reshape(-1, width))

@@ -131,7 +131,7 @@ def citation_bibtex(path: Path | str) -> str:
         "url": f"https://doi.org/{doi}" if doi else cff["repository-code"],
     }
     body = ",\n".join(f"  {k} = {{{v}}}" for k, v in fields.items() if v)
-    return f"@software{{abbott_bdbvhubrenewal,\n{body}\n}}"
+    return f"@software{{abbott_bdbv_hub_modelling,\n{body}\n}}"
 
 
 def _front_matter() -> str:

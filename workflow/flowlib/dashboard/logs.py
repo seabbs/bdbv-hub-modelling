@@ -51,6 +51,16 @@ CHUNK = re.compile(
 )
 """A chunk the trainer plans: its first and last simulation and steps."""
 
+CHUNK_TIME = re.compile(
+    r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] chunk time: "
+    r"wait ([\d.]+) s, cut ([\d.]+) s, train ([\d.]+) s, eval ([\d.]+) s"
+)
+"""A chunk's time when it ends: waiting for batches, cutting blocks,
+training and evaluating, in seconds."""
+
+SPLIT = ("wait", "cut", "train", "eval")
+"""The parts of a chunk's time, as the trainer logs them."""
+
 
 def _float(x: str | None) -> float | None:
     return float(x) if x is not None else None
@@ -64,6 +74,8 @@ class Log:
         self.offset = 0
         self._rows: dict[int, dict[str, Any]] = {}
         self._chunks: dict[int, tuple[int, int]] = {}
+        self._times: dict[int, dict[str, Any]] = {}
+        self._open: tuple[int, int, int] | None = None
 
     def _update(self) -> None:
         try:
@@ -72,6 +84,7 @@ class Log:
             return
         if size < self.offset:
             self.offset, self._rows, self._chunks = 0, {}, {}
+            self._times, self._open = {}, None
         if size == self.offset:
             return
         with self.path.open("rb") as f:
@@ -84,6 +97,26 @@ class Log:
             if c:
                 a, b, n = map(int, c.groups())
                 self._chunks[a - 1] = (b, n)
+                self._open = (a, b, n)
+                continue
+            ct = CHUNK_TIME.match(line)
+            if ct:
+                # The time ends the chunk planned last; one with no plan
+                # in this log (it began before a restart) is left out.
+                if self._open:
+                    a, b, n = self._open
+                    t = datetime.strptime(ct[1], "%Y-%m-%d %H:%M:%S")
+                    self._times[a] = {
+                        "t": t.timestamp(),
+                        "first": a,
+                        "sims": b - a + 1,
+                        "steps": n,
+                        **{
+                            k: float(v)
+                            for k, v in zip(SPLIT, ct.groups()[1:], strict=True)
+                        },
+                    }
+                    self._open = None
                 continue
             m = STEP.match(line)
             if not m:
@@ -122,6 +155,14 @@ class Log:
         self._update()
         return dict(self._chunks)
 
+    def chunk_times(self) -> list[dict[str, Any]]:
+        """Return each finished chunk's simulations, steps and time split.
+
+        A chunk logged twice (a resumed segment) keeps its newest time.
+        """
+        self._update()
+        return [self._times[k] for k in sorted(self._times)]
+
 
 class RunLog:
     """A run's logged steps from every log it writes, each read as a `Log`.
@@ -157,6 +198,20 @@ class RunLog:
             merged |= log.chunks()
         return merged
 
+    def chunk_times(self) -> list[dict[str, Any]]:
+        """Return every log's finished chunks (`Log.chunk_times`).
+
+        Each names its segment (the log's `n<N>`); a chunk in two logs
+        keeps the newest.
+        """
+        merged: dict[int, dict[str, Any]] = {}
+        for log in self._each():
+            for row in log.chunk_times():
+                old = merged.get(row["first"])
+                if old is None or row["t"] >= old["t"]:
+                    merged[row["first"]] = row | {"segment": log.path.stem}
+        return [merged[k] for k in sorted(merged)]
+
     def last_line(self) -> tuple[float, str] | None:
         """Return the time and text of the newest log's last line.
 
@@ -191,6 +246,26 @@ class RunLog:
                 ):
                     merged[row["step"]] = row
         return [merged[k] for k in sorted(merged)]
+
+
+def throughput(rows: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the rates of finished chunks, over the chunks' own time.
+
+    Steps a minute and simulations an hour over the summed wait, cut,
+    train and evaluation time (`SPLIT`), so a restart or a pause between
+    chunks does not count; the GPU is busy training and evaluating. None
+    with no chunk.
+    """
+    total = sum(r[k] for r in rows for k in SPLIT)
+    if not rows or total <= 0:
+        return None
+    return {
+        "chunks": len(rows),
+        "steps_per_min": sum(r["steps"] for r in rows) / total * 60,
+        "sims_per_hour": sum(r["sims"] for r in rows) / total * 3600,
+        "gpu_busy": sum(r["train"] + r["eval"] for r in rows) / total,
+        "share": {k: sum(r[k] for r in rows) / total for k in SPLIT},
+    }
 
 
 class JsonCache:

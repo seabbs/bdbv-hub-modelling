@@ -161,7 +161,9 @@ Downloader = Callable[[str], bytes]
 
 
 def _download(url: str) -> bytes:  # pragma: no cover - network
-    req = urllib.request.Request(url, headers={"User-Agent": "bdbvhubrenewal"})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "bdbv-hub-modelling"}
+    )
     with urllib.request.urlopen(req, timeout=120) as resp:
         data: bytes = resp.read()
     return data
@@ -226,7 +228,7 @@ def list_releases(
             f"https://api.github.com/repos/{BVD_REPO}/releases"
             f"?per_page=100&page={page}"
         )
-        headers = {"User-Agent": "bdbvhubrenewal"}
+        headers = {"User-Agent": "bdbv-hub-modelling"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
         req = urllib.request.Request(url, headers=headers)
