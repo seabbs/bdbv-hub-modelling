@@ -223,3 +223,59 @@ def test_the_proposed_layer_trains_5_percent_without_lag_rows():
         ft.ROOT / "config" / "finetune" / "release-layer.yaml"
     )
     assert layer["no_lags"]["share"] == 0.05
+
+
+JITTER = {"lag_jitter": {"share": 1.0, "sd": 0.05}}
+
+
+def test_a_jittered_block_scales_the_rule_s_lag_count():
+    # Lead 15:08 (Sam): 10% of blocks take the rule's D times a factor
+    # from Normal(1, 0.05), rounded, at least 1, within the history.
+    off = {(b["source"], b["cut"]): b for b in _blocks(None)}
+    on = _blocks(JITTER)
+    assert on
+    moved = 0
+    for b in on:
+        a = off[(b["source"], b["cut"])]
+        assert b["lag_scale"] != 1.0
+        d_a = a["n_covariates"] // a["n_targets"]
+        d_b = b["n_covariates"] // b["n_targets"]
+        assert d_b >= 1
+        moved += d_b != d_a
+    assert moved
+
+
+def test_no_jitter_leaves_the_rule_s_lag_count():
+    off = _blocks(None)
+    none = _blocks({"lag_jitter": {"share": 0.0, "sd": 0.05}})
+    for a, b in zip(off, none, strict=True):
+        np.testing.assert_array_equal(a["context"], b["context"])
+        assert b["lag_scale"] == 1.0
+
+
+def test_a_scaled_lag_count_stays_within_the_history():
+    counts = _counts()
+    days = [d for d in DAYS if d <= "2026-02-01"]
+    big = ft.training_block(counts, "daily", ("P01",), days, lag_scale=50.0)
+    one = ft.training_block(counts, "daily", ("P01",), days, lag_scale=1e-6)
+    assert big["n_covariates"] <= len(days)
+    assert one["n_covariates"] == 1
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"lag_jitter": {"share": 1.2, "sd": 0.05}},
+        {"lag_jitter": {"share": 0.1}},
+    ],
+)
+def test_a_lag_jitter_that_cannot_be_drawn_is_refused(bad):
+    with pytest.raises(ValueError, match="release layer"):
+        ft.check_release_layer(bad)
+
+
+def test_run_b_s_layer_jitters_a_tenth_of_lag_counts():
+    layer = ft.read_release_layer(
+        ft.ROOT / "config" / "finetune" / "release-layer.yaml"
+    )
+    assert layer["lag_jitter"] == {"share": 0.1, "sd": 0.05}

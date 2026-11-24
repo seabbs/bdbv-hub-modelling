@@ -167,8 +167,9 @@ RELEASE_LAYER: dict[str, Any] | None = None
 """The release layer (`finetune.release_layer`, `check_release_layer`),
 drawn per block at fine-tune time from the simulations already made: a
 late start to a share of blocks' releases (`release_start`), a share of
-blocks with no lag series (`complete_block`) and the release cadences of
-each step width (`draw_cadence`). None leaves each
+blocks with no lag series (`complete_block`), a share whose lag count is
+the rule's times a factor drawn from Normal(1, `sd`) (`lag_jitter`), and
+the release cadences of each step width (`draw_cadence`). None leaves each
 block's releases as the block design draws them."""
 
 NAMED_PARAMETERS: Final = {
@@ -192,7 +193,8 @@ def check_release_layer(layer: dict[str, Any]) -> None:
     """Raise unless every part of the release layer can be drawn.
 
     `start` needs a `share` from 0 to 1 and a named `delay_days`
-    distribution; `no_lags` a `share` from 0 to 1. Each step width of
+    distribution; `no_lags` a `share` from 0 to 1; `lag_jitter` a `share`
+    from 0 to 1 and a positive `sd`. Each step width of
     `cadences` (`NATIVE_CADENCE`) needs
     shares of that width's cadences (`CADENCES`) summing to one.
 
@@ -201,7 +203,7 @@ def check_release_layer(layer: dict[str, Any]) -> None:
     ValueError
         Naming the part that cannot be drawn.
     """
-    extra = set(layer) - {"start", "cadences", "no_lags"}
+    extra = set(layer) - {"start", "cadences", "no_lags", "lag_jitter"}
     if extra:
         raise ValueError(f"release layer: no part {sorted(extra)}")
     if "start" in layer:
@@ -217,6 +219,13 @@ def check_release_layer(layer: dict[str, Any]) -> None:
         share = layer["no_lags"].get("share")
         if not isinstance(share, (int, float)) or not 0 <= share <= 1:
             raise ValueError(f"release layer: no_lags share {share!r}")
+    if "lag_jitter" in layer:
+        jitter = layer["lag_jitter"]
+        share, sd = jitter.get("share"), jitter.get("sd")
+        if not isinstance(share, (int, float)) or not 0 <= share <= 1:
+            raise ValueError(f"release layer: lag_jitter share {share!r}")
+        if not isinstance(sd, (int, float)) or sd <= 0:
+            raise ValueError(f"release layer: lag_jitter sd {sd!r}")
     for width, mix in layer.get("cadences", {}).items():
         if width not in CADENCES:
             raise ValueError(f"release layer: no step width {width!r}")
@@ -871,7 +880,7 @@ def outbreak_blocks(
             days = release_days(first, cutoffs[cut], cadence, option_rng)
             # A late start to the releases (`RELEASE_LAYER`), from a child
             # generator, so the other draws are as without it.
-            start_days, no_lags = 0, False
+            start_days, no_lags, lag_scale = 0, False, 1.0
             if RELEASE_LAYER is not None:
                 layer_rng = option_rng.spawn(1)[0]
                 if "start" in RELEASE_LAYER:
@@ -882,6 +891,11 @@ def outbreak_blocks(
                 if "no_lags" in RELEASE_LAYER:
                     share = RELEASE_LAYER["no_lags"]["share"]
                     no_lags = bool(layer_rng.random() < share)
+                # The rule's lag count scaled by a drawn factor.
+                if "lag_jitter" in RELEASE_LAYER:
+                    jitter = RELEASE_LAYER["lag_jitter"]
+                    if layer_rng.random() < jitter["share"]:
+                        lag_scale = float(layer_rng.normal(1.0, jitter["sd"]))
             totals = any("-" in p for p in provinces)
             # A view with the country draws its cases as the whole did.
             country_rng = copy.deepcopy(parent_rng)
@@ -894,6 +908,7 @@ def outbreak_blocks(
                 parent=parent,
                 rng=parent_rng,
                 parent_draws=parents,
+                lag_scale=lag_scale,
                 **options,
             )
             if block is None:
@@ -928,6 +943,7 @@ def outbreak_blocks(
                             parent=how,
                             rng=copy.deepcopy(country_rng),
                             parent_draws=parents,
+                            lag_scale=lag_scale,
                             **options,
                         )
                         if part is None or part["start"] < 2:
@@ -981,6 +997,7 @@ def outbreak_blocks(
                 padded["cadence"] = cadence
                 padded["release_start_days"] = start_days
                 padded["no_lags"] = no_lags
+                padded["lag_scale"] = lag_scale
                 padded["first_release"] = days[0]
                 padded["releases"] = len(days)
                 padded["cut_date"] = days[-1]

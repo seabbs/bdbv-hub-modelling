@@ -730,3 +730,20 @@ def test_a_german_unit_forecasts_only_the_hub_window(
     config = de.load_germany_config("config/germany.toml")
     done = [d for dates, *_ in seen for d in dates]
     assert done == de.nowcast_dates(config)
+
+
+def test_units_sharing_a_cache_write_through_their_own_temporary_files(
+    tmp_path,
+):
+    # Two units in one cache both write the shared truth file; a fixed
+    # temporary name let one rename away the other's (FileNotFoundError).
+    # Another writer's temporary file in the way does not stop this one.
+    import pandas as pd
+
+    from nowcastgermany.checkpoint import _write
+
+    path = tmp_path / "truth.csv.gz"
+    (tmp_path / "truth.csv.gz.tmp").mkdir()
+    _write(pd.DataFrame({"a": [1]}), path)
+    assert pd.read_csv(path)["a"].tolist() == [1]
+    assert [p.name for p in tmp_path.iterdir() if p.is_file()] == [path.name]

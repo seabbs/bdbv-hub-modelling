@@ -517,6 +517,7 @@ def training_block(
     rng: np.random.Generator | None = None,
     period_end: int | None = None,
     parent_draws: dict[str, dict[str, Any]] | None = None,
+    lag_scale: float = 1.0,
 ) -> dict[str, Any] | None:
     """Return one training block, cut at the last of `cutoffs`.
 
@@ -553,6 +554,9 @@ def training_block(
         Draws the `parent` cases; a fixed seed by default.
     parent_draws : dict, optional
         The non-summing parent's draws (`country_counts`).
+    lag_scale : float
+        Multiplies the rule's lag count (default 1), before the history
+        caps it: the release layer's lag-count jitter.
     period_end : int, optional
         For a source with period totals (`MIXED`), the day its periods
         end on (`period_totals`). Sources with rolling sums (`ROLLING`)
@@ -596,6 +600,9 @@ def training_block(
             all_lags=True,
         )
         lag_steps = forecaster.lag_count(full, lag_source)
+        # A jittered block (the release layer's `lag_jitter`) scales it,
+        # rounded and at least 1; the history caps it below.
+        lag_steps = max(1, round(lag_steps * lag_scale))
         k = BINNED.get(source, 1)
         # In the block's steps, capped by its history in those steps, as
         # `lag_count` caps it in days: two bins of context.

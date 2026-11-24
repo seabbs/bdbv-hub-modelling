@@ -114,6 +114,10 @@ class BacktestConfig:
         (`nowcasteval.nowcast.resolve_truth_delay`).
     truth_level : float
         The share of the national count reported by an estimated $D$.
+    max_delay : int, optional
+        The study's longest reporting delay $D$ in days, which the models
+        read from each task (`ForecastTask.max_delay`) in place of their
+        own. None leaves each model its own.
     """
 
     min_horizon: int = -4
@@ -127,6 +131,7 @@ class BacktestConfig:
     skip_origins: tuple[str, ...] = ()
     truth_delay: int | None = None
     truth_level: float = TRUTH_LEVEL
+    max_delay: int | None = None
 
 
 def for_scoring(config: BacktestConfig) -> BacktestConfig:
@@ -198,6 +203,9 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         complete_after_weeks=int(sp["complete_after_weeks"]),
         sampler=dict(raw["sampler"]),
         bvd_max_rhat=float(raw["bvd"]["max_rhat"]),
+        max_delay=(
+            int(fc["max_delay"]) if fc.get("max_delay") is not None else None
+        ),
         skip_origins=tuple(str(d) for d in sp.get("skip_origins", ())),
         truth_delay=_truth_delay(sp.get("truth_delay", "auto")),
         truth_level=_truth_level(sp.get("truth_level", TRUTH_LEVEL)),

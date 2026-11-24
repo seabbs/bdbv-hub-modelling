@@ -154,24 +154,6 @@ unit_stamps = SCORING.unit_stamps
 land_tables = SCORING.land_tables
 
 
-# The BDBV foundation-model check (rules/report.smk `ft_check`); FTC and
-# FTC_DIR are set there.
-def ft_check_checkpoint():
-    """The fine-tuned checkpoint the check runs: the config's or the pin."""
-    import tomllib
-
-    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
-    return FTC["checkpoint"] or pin
-
-
-def ft_check_folders():
-    """The BDBV check's forecast folders: each model's and the checkpoint's
-    (rules/report.smk `ft_check`)."""
-    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
-        f"{FTC_DIR}/forecasts/ft-{ft_check_checkpoint()}"
-    ]
-
-
 # The Hugging Face Hub upload (rules/publish.smk `publish_hf`).
 def hf_repo():
     """The Hub repository `publish_hf` uploads to, from config/finetune.toml
@@ -206,8 +188,16 @@ def ft_check_checkpoint():
     return FTC["checkpoint"] or pin
 
 
+def ft_check_key():
+    """The code key every BDBV check forecast folder carries
+    (`scoring.ft_check_key`), so a folder from other code is never used."""
+    return scoring.ft_check_key()
+
+
 def ft_check_folders(ckpt):
-    """The forecast folders of the check's models and the checkpoint's."""
-    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
-        f"{FTC_DIR}/forecasts/ft-{ckpt}"
+    """The forecast folders of the check's models and the checkpoint's,
+    each `<model>@<code key>`."""
+    key = ft_check_key()
+    return [f"{FTC_DIR}/forecasts/{m}@{key}" for m in FTC["models"]] + [
+        f"{FTC_DIR}/forecasts/ft-{ckpt}@{key}"
     ]

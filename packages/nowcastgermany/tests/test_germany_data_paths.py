@@ -36,3 +36,14 @@ def test_the_german_score_rules_take_the_fetched_triangle():
         )
         assert body, rule
         assert "germany=GERMANY_TRIANGLE" in body[1], rule
+
+
+def test_every_command_reads_the_data_where_fetch_writes_it(monkeypatch):
+    from nowcastgermany.cli import build_parser
+
+    monkeypatch.setenv("BDBV_DATA_DIR", "/x")
+    parser = build_parser()
+    written = parser.parse_args(["fetch"]).out
+    for command in ("backtest", "teams", "asof"):
+        args = parser.parse_args([command])
+        assert args.data == written, command

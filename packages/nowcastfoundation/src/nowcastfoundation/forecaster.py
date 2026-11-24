@@ -81,6 +81,7 @@ __all__ = [
     "FINETUNED_PREFIX",
     "FINETUNED_RELEASES",
     "FINETUNED_URL",
+    "LAG_GUARD",
     "LAG_QUANTILE",
     "LAYOUTS",
     "MAX_LAG",
@@ -131,8 +132,13 @@ MAX_LAG: Final = {"weekly": 4, "daily": 28}
 cap the SI compares the estimated lag count (`lag_count`) with, and the
 triangle's default width."""
 
-LAG_QUANTILE: Final = 0.99
-"""The share of a count reported by the lag `lag_count` takes as $D$."""
+LAG_QUANTILE: Final = 0.98
+"""`lag_count`'s share of a step's latest count at which it settles, and
+its percentile of the settling lags."""
+
+LAG_GUARD: Final = 1.5
+"""`lag_count` reads a step once the releases have seen it for at least
+this many times $D$ lags (right truncation)."""
 
 COUPLINGS: Final = ("online", "independent", "comonotone")
 """How a foundation model joins its cells (`FoundationModel.coupling`):
@@ -898,12 +904,13 @@ def lag_count(
     Looking back from the cut-off over every release, each step first
     published after releases began (not backfilled by the first release)
     settles at the first lag at which its reported count reaches
-    `quantile` of its latest count. $D - 1$ is the `quantile` (99th
-    percentile) of the settling lags over steps and places with a count,
-    using only steps old enough to have settled within the release
-    history: seen for at least $2D$ lags, so their latest count stands
-    for their final one and recent steps, which have not yet seen their
-    long delays, do not bias it short (right truncation). $D$ is the
+    `quantile` of its latest count. $D - 1$ is the `quantile` (98th
+    percentile, `LAG_QUANTILE`) of the settling lags over steps and
+    places with a count, using only steps old enough to have settled
+    within the release history: seen for at least `LAG_GUARD` (1.5)
+    times $D$ lags, so their latest count stands for their final one and
+    recent steps, which have not yet seen their long delays, do not bias
+    it short (right truncation). $D$ is the
     smallest count that meets this. A lag no release fell on carries the
     count of the lag before (weekly releases of daily data). Steps before
     the first release are not evidence: a first release that backfills
@@ -965,7 +972,7 @@ def lag_count(
     first = np.minimum(first, age[None, :])
     counted = final > 0
     for lags in range(1, history + 1):
-        use = counted & (age >= 2 * lags)[None, :]
+        use = counted & (age >= LAG_GUARD * lags)[None, :]
         if not use.any():
             break
         if np.quantile(first[use], quantile, method="higher") + 1 <= lags:
@@ -1672,16 +1679,28 @@ class FoundationModel:
         return PERIODS.get(self.source)
 
     def for_task(self, task: ForecastTask) -> FoundationModel:
-        """Return the model with its source for `task`.
+        """Return the model with its source and lags for `task`.
 
         With `FROM_DATA`, the daily releases when the task has them, so one
         pass gives the daily counts and the 7-day target from its 7-day
-        rows, else the weekly releases. A fixed source is kept.
+        rows, else the weekly releases. A fixed source is kept. A task
+        with a study `max_delay` $D$ (days) gives lags 0 to $D$, in the
+        source's steps (weeks rounded up), unless the model fixes `lags`.
         """
-        if self.source != FROM_DATA:
-            return self
-        daily = task.daily_history is not None and not task.daily_history.empty
-        return replace(self, source="daily" if daily else "weekly")
+        run = self
+        if self.source == FROM_DATA:
+            daily = (
+                task.daily_history is not None and not task.daily_history.empty
+            )
+            run = replace(self, source="daily" if daily else "weekly")
+        if task.max_delay is not None and not run.lags:
+            steps = (
+                -(-int(task.max_delay) // 7)
+                if run.source == "weekly"
+                else int(task.max_delay)
+            )
+            run = replace(run, lags=steps + 1)
+        return run
 
     @property
     def needs_snapshots(self) -> bool:
