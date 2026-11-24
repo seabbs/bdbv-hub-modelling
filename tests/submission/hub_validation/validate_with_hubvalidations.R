@@ -84,7 +84,43 @@ make_temp_hub <- function(hub) {
   dir.create(file.path(tmp, "model-output"), recursive = TRUE)
   dir.create(file.path(tmp, "model-metadata"))
   file.copy(file.path(hub, "hub-config"), tmp, recursive = TRUE)
+  # The hub's custom checks (`hub-config/validations.yml`, since
+  # 2026-11-16) source their scripts from `src/`, so they come too.
+  if (dir.exists(file.path(hub, "src"))) {
+    file.copy(file.path(hub, "src"), tmp, recursive = TRUE)
+  }
   tmp
+}
+
+# The hub's forecast_date check (`src/validations/forecast-date.R`)
+# validates a staged hub against the original checkout
+# (`FORECAST_SOURCE_HUB`), whose working tree holds the new file, and its
+# base commit (`PR_BASE_SHA`), as the hub's PR workflow sets them. Here
+# the staged hub is the temporary one, the source is a shared clone of
+# the hub checkout at HEAD with the file placed in it, and the base is
+# that HEAD, so the checkout itself is never modified. A caller that sets
+# both keeps them.
+stage_forecast_source <- function(hub, file, model_dir) {
+  if (nzchar(Sys.getenv("FORECAST_SOURCE_HUB")) &&
+      nzchar(Sys.getenv("PR_BASE_SHA"))) {
+    return(NULL)
+  }
+  head <- suppressWarnings(system2(
+    "git", c("-C", shQuote(hub), "rev-parse", "HEAD"),
+    stdout = TRUE, stderr = FALSE
+  ))
+  if (length(head) != 1L) return(NULL)
+  src <- tempfile("hub-source-")
+  status <- system2(
+    "git", c("clone", "--quiet", "--shared", shQuote(hub), shQuote(src)),
+    stdout = FALSE, stderr = FALSE
+  )
+  if (status != 0L) return(NULL)
+  dest <- file.path(src, "model-output", model_dir)
+  dir.create(dest, recursive = TRUE, showWarnings = FALSE)
+  file.copy(file, file.path(dest, basename(file)), overwrite = TRUE)
+  Sys.setenv(FORECAST_SOURCE_HUB = src, PR_BASE_SHA = head)
+  src
 }
 
 find_metadata <- function(model_id, metadata_dir, hub) {
@@ -158,6 +194,16 @@ validate_one <- function(file, opts) {
     dest <- file.path(tmp, "model-output", model_dir)
     dir.create(dest)
     copy_new_forecast(file, file.path(dest, basename(file)), opts$previous)
+    src <- stage_forecast_source(hub, file, model_dir)
+    if (!is.null(src)) {
+      on.exit(
+        {
+          unlink(src, recursive = TRUE)
+          Sys.unsetenv(c("FORECAST_SOURCE_HUB", "PR_BASE_SHA"))
+        },
+        add = TRUE
+      )
+    }
     if (!opts$no_metadata) {
       # hubValidations looks metadata up by the model_id in the file name.
       model_id <- sub(
