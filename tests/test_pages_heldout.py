@@ -58,3 +58,14 @@ def test_a_paper_dispatch_is_never_deployed() -> None:
     jobs = _jobs()
     for name in ("deploy", "release"):
         assert "inputs.paper_target != 'paper'" in jobs[name]["if"], name
+
+
+def test_each_backtest_is_scored_in_its_own_process() -> None:
+    # One `score` of every backtest's parts ran the runner out of memory.
+    steps = _jobs()["build"]["steps"]
+    (score,) = [s for s in steps if s.get("name") == "Score the backtests"]
+    calls = score["run"].split("uv run bdbvhubrenewal score")[1:]
+    kinds = ["development", "recovery", "zones", "scenario"]
+    assert [[k for k in kinds if f"-{k}-" in c] for c in calls] == [
+        [k] for k in kinds
+    ]
