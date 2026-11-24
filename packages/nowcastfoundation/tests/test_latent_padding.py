@@ -35,7 +35,7 @@ from nowcastrenewal.latent.rt import KINDS, RELATIONS, PlaceRt, RtPath
 from nowcastrenewal.latent.simulate import simulate_latent
 from nowcastrenewal.simulation import outbreak
 
-GRID = read_grid(Path(__file__).parents[2] / "config/finetune/grid.yaml")
+GRID = read_grid(Path(__file__).parents[3] / "config/finetune/grid.yaml")
 PAD = 37
 RTOL = 1e-12
 N = 150

@@ -102,7 +102,7 @@ def test_foundation_functions_are_read_from_code_paths(tmp_path):
     assert problems(tmp_path, lambda _, path: files[path]) == []
 
 
-RELEASED = Path(__file__).parent / "fixtures" / "checkpoints"
+RELEASED = Path(__file__).parents[3] / "tests" / "fixtures" / "checkpoints"
 
 
 @pytest.mark.parametrize("name", ["r6-n250", "r6-n500"])
@@ -120,7 +120,7 @@ def test_the_code_names_are_the_files_paths():
         "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",
     }
     assert all(name == path for name, path in ft.CODE.items())
-    root = Path(__file__).parents[1]
+    root = Path(__file__).parents[3]
     for path in (*ft.CODE.values(), ft.FOUNDATION_PATH, ft.TRAINER):
         assert (root / path).exists(), path
 

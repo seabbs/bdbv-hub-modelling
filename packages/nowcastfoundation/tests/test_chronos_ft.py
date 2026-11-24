@@ -19,7 +19,7 @@ _ADAPTER = {
     "adapter_model.safetensors": b"weights",
 }
 
-EXAMPLE = Path(__file__).parents[1] / "docs" / "examples" / "chronos_ft.py"
+EXAMPLE = Path(__file__).parents[3] / "docs" / "examples" / "chronos_ft.py"
 
 
 @pytest.fixture

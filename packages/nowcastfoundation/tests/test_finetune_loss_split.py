@@ -1,15 +1,11 @@
 """Held-out loss split into nowcast and forecast steps."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 pytest.importorskip("chronos")
 
-sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
 from chronos_toy import LAG, N_PLACES, T, tiny_model, toy_block  # noqa: E402
 
 from nowcastfoundation.finetune import stream as fs  # noqa: E402

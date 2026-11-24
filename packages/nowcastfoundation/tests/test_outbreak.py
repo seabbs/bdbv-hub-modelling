@@ -28,7 +28,7 @@ from nowcastrenewal.reporting.expectation import ReportingExpectation
 from nowcastrenewal.reporting.simulate import COUNT_COLUMNS, reporting_frame
 from nowcastrenewal.simulation.outbreak import outbreak_model, simulate_outbreak
 
-GRID = read_grid(Path(__file__).parents[2] / "config/finetune/grid.yaml")
+GRID = read_grid(Path(__file__).parents[3] / "config/finetune/grid.yaml")
 
 
 def _sim(seed: int) -> tuple[pd.DataFrame, dict, dict, int]:

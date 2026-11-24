@@ -194,7 +194,7 @@ def test_latent_onsets_use_the_drawn_incubation_family_and_cv() -> None:
     from nowcastrenewal.latent.simulate import simulate_latent
 
     grid = draws.read_grid(
-        __import__("pathlib").Path(__file__).parents[2]
+        __import__("pathlib").Path(__file__).parents[3]
         / "config"
         / "finetune"
         / "grid.yaml"

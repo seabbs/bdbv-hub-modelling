@@ -527,7 +527,7 @@ def test_blocks_are_cut_without_torch(tmp_path):
     )
     out = subprocess.run(
         [sys.executable, "-c", code],
-        cwd=Path(__file__).parents[1],
+        cwd=Path(__file__).parents[3],
         capture_output=True,
         text=True,
     )
@@ -968,7 +968,7 @@ def test_every_source_is_native_or_binned():
 
 
 def test_the_package_must_be_this_worktrees(tmp_path):
-    ft.check_package(Path(__file__).parents[1])
+    ft.check_package(Path(__file__).parents[3])
     with pytest.raises(RuntimeError, match="not this worktree"):
         ft.check_package(tmp_path)
 
@@ -1380,7 +1380,7 @@ def test_parents_come_from_the_grid_file(monkeypatch):
     from nowcastfoundation.finetune.chronos import NATIONAL, outbreak_blocks
 
     grid = yaml.safe_load(
-        (Path(__file__).parents[1] / "config/finetune/grid.yaml").read_text()
+        (Path(__file__).parents[3] / "config/finetune/grid.yaml").read_text()
     )
     ft.use_grid()
     try:

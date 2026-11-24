@@ -1,8 +1,5 @@
 """The trainer's series bias (`finetune.stream --series-bias`)."""
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 
@@ -10,7 +7,6 @@ torch = pytest.importorskip("torch")
 pytest.importorskip("chronos")
 pytest.importorskip("peft")
 
-sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
 from chronos_toy import HIER, LAG, N_PLACES, tiny_model, toy_block  # noqa: E402
 
 from nowcastfoundation import series_bias  # noqa: E402

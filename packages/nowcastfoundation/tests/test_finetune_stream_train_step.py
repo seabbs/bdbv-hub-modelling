@@ -1,8 +1,6 @@
 """A training step keeps the bias's rows until backward is done."""
 
 import inspect
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -10,7 +8,6 @@ torch = pytest.importorskip("torch")
 pytest.importorskip("chronos")
 pytest.importorskip("peft")
 
-sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
 from chronos_toy import batch_of, tiny_model, toy_block  # noqa: E402
 from test_series_bias import toy_rows  # noqa: E402
 

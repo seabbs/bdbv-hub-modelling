@@ -22,7 +22,7 @@ from nowcastfoundation.simulator import draws, simulate_batch
 from nowcastrenewal.reporting.simulate import COUNT_COLUMNS
 from nowcastrenewal.simulation import outbreak as joint
 
-ROOT = Path(__file__).parents[2]
+ROOT = Path(__file__).parents[3]
 GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
 
 

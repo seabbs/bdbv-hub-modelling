@@ -4,7 +4,7 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).parents[1]
+ROOT = Path(__file__).parents[3]
 
 from nowcastfoundation.finetune import stream as fs  # noqa: E402
 

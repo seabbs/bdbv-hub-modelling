@@ -115,6 +115,7 @@ def test_a_package_with_its_own_tests_has_none_left_under_tests() -> None:
         "nowcasteval",
         "nowcastbaselines",
         "nowcastrenewal",
+        "nowcastfoundation",
     } <= moved
     left = [
         f
