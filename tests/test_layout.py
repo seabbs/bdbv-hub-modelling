@@ -159,7 +159,7 @@ def test_config_holds_only_machine_settings():
             r"[^ \"'(=]*config/[A-Za-z0-9_.-]+",
             "--",
             "packages/*/src",
-            "ci",
+            "packages/bdbvsubmission",
             "workflow",
             "paper/paperpipe",
             ".github/workflows",
