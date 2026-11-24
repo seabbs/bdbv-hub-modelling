@@ -5,7 +5,8 @@
 #   packages/bdbvsubmission/run_dry.sh fallback     one scenario, printing its PR body
 #
 # It runs the same step scripts as .github/workflows/submit.yml, in the
-# same order: detect -> prepare (random walk) -> await the fit store ->
+# same order: detect -> prepare (the walks, from the fit store) ->
+# await the fit store ->
 # primary candidates, read from the store -> select -> submit
 # (DRY_RUN=true). The model is the
 # fixture CLI (fixtures/fake_bdbvhub.py) and `gh`/`git` are never
@@ -112,10 +113,13 @@ run_scenario() {
   REFERENCE_DATE=$(get reference_date)
   export HUB_REF DATA_COMMIT AS_OF REFERENCE_DATE
 
-  # 2. Shared inputs and the random walk candidate (`prepare` job).
+  # 2. Shared inputs (`prepare` job).
   SKIP_DATA=true OBSERVED="$FIX/hub/time-series.csv" TASKS="$FIX/hub/tasks.json" \
     PREVIOUS="$FIX/hub/previous.csv" EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
     "$CI_DIR/steps/prepare.sh" > "$WORK/prepare.log"
+  # The walks, read from the fit store (`prepare` job).
+  EXPECTED_LOCATIONS="CD,CD-IT,CD-NK,CD-HU" \
+    "$CI_DIR/steps/baselines.sh" > "$WORK/baselines.log"
 
   # The model `prepare` resolved (the latest model choice).
   local model

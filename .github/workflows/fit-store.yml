@@ -2,7 +2,9 @@ name: Fit store
 
 # Fits each fitted model once per real origin and stores the result on
 # the fit-store branch, one file per fit, keyed by a hash of what reaches
-# the fit (bdbvhub.store.store.fit_key). `plan` lists the
+# the fit (bdbvhub.store.store.fit_key). The random walks fit nothing,
+# but their forecasts are stored the same way (`SAMPLE_FREE`), so the
+# submission, the backtests and Pages read one forecast of each. `plan` lists the
 # keys the store lacks, so only those are fitted: a model code change
 # refits every origin, and a new hub release adds one fit per model.
 # Pages reads the store and never fits; this workflow rebuilds it when
@@ -10,7 +12,8 @@ name: Fit store
 # starts this workflow when a round's fits are missing, so the newest
 # origin is fitted and stored first, before any backfill.
 #
-#   plan -> fit-current -> store-current (the newest origin)
+#   plan -> fit-quick -> store-quick (the walks, every origin, minutes)
+#        -> fit-current -> store-current (the newest origin)
 #        -> fit-rest -> store-rest (every other origin) -> pages
 #
 # Only `store` can write, and it runs no project code. Fits are written
@@ -135,6 +138,8 @@ jobs:
     timeout-minutes: 20
     outputs:
       count: ${{ steps.plan.outputs.count }}
+      quick: ${{ steps.plan.outputs.quick }}
+      quick_count: ${{ steps.plan.outputs.quick_count }}
       current: ${{ steps.plan.outputs.current }}
       current_count: ${{ steps.plan.outputs.current_count }}
       rest: ${{ steps.plan.outputs.rest }}
@@ -205,15 +210,28 @@ jobs:
             ({"renewalbvd": 0, "renewal": 1, "renewalsp": 2}[.model] // 3),
             (.origin | explode | map(-.)))' matrix.json > sorted.json
           mv sorted.json matrix.json
+          # The walks take minutes, so they are stored first, apart from
+          # the fits: the submission waits for them before anything else.
+          walks=$(uv run python -c 'import json
+          from bdbvhub.store.store import SAMPLE_FREE
+          print(json.dumps(list(SAMPLE_FREE)))')
+          jq -c --argjson w "$walks" \
+            '.include |= map(select(.model as $m | $w | index($m)))' \
+            matrix.json > quick.json
+          jq -c --argjson w "$walks" \
+            '.include |= map(select(.model as $m | $w | index($m) | not))' \
+            matrix.json > slow.json
           # The newest origin's fits are fitted and stored first: they are
           # the submission's, and a backfill can take hours.
-          newest=$(jq -r '[.include[].origin] | max // ""' matrix.json)
+          newest=$(jq -r '[.include[].origin] | max // ""' slow.json)
           for part in current rest; do
             op='=='
             [ "$part" = rest ] && op='!='
             jq -c --arg o "$newest" \
-              ".include |= map(select(.origin $op \$o))" matrix.json \
+              ".include |= map(select(.origin $op \$o))" slow.json \
               > "$part.json"
+          done
+          for part in quick current rest; do
             {
               echo "$part=$(cat "$part.json")"
               echo "${part}_count=$(jq '.include | length' "$part.json")"
@@ -235,6 +253,7 @@ jobs:
           name: plan
           path: |
             keys.json
+            quick.json
             current.json
             rest.json
           retention-days: 3
@@ -333,6 +352,42 @@ jobs:
           name: plan
       - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json current.json
 
+  # The walks' forecasts, one short job each, stored as soon as they are
+  # all made, before the slow fits.
+  fit-quick:
+    name: Forecast ${{ matrix.model }} at ${{ matrix.origin }}
+    needs: plan
+    if: needs.plan.outputs.write == 'true' && needs.plan.outputs.quick_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJSON(needs.plan.outputs.quick) }}
+    steps: *fit-steps
+
+  store-quick:
+    name: Store the walks' forecasts
+    needs: [plan, fit-quick]
+    if: >-
+      always() && needs.plan.outputs.write == 'true'
+      && needs.plan.outputs.quick_count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: fit-*
+          path: new
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: plan
+      - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json quick.json
+
   # With the longest fits first, 8 runners finish a full refit as soon
   # as 12 (the longest fit, about 4 h). The rest of the 20 are left for
   # the submission and Pages workflows.
@@ -372,9 +427,11 @@ jobs:
           name: plan
       - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json rest.json
 
-  # The BDBV backtests of the models that fit nothing (the walks'
-  # development and zone backtests and the pairing sensitivity), one job
-  # per cell, beside the fits and under the same write guard. Each only
+  # The BDBV backtests of the models that fit nothing (the walks' release
+  # snapshots and zone backtests and the pairing sensitivity), one job
+  # per cell, beside the fits and under the same write guard. The walks'
+  # forecasts at each origin are stored fits (`fit-quick`), which
+  # `backtests` loads; these cells forecast what the store does not hold. Each only
   # forecasts (`--forecast-only`), cached under a hash of the code and
   # data it reads (`bdbvhub digest --model`), so a change to one
   # model reruns only its cells. `backtests` scores them with the stored
@@ -408,11 +465,11 @@ jobs:
             model: randomwalk
             run: >-
               uv run bdbvhub zone-backtest --forecast-only --models randomwalk
-          - cell: development-randomwalknowcast
+          - cell: releases-randomwalknowcast
             model: randomwalknowcast
             run: >-
               uv run bdbvhub backtest --forecast-only --models randomwalknowcast
-          - cell: development-randomwalk
+          - cell: releases-randomwalk
             model: randomwalk
             run: >-
               uv run bdbvhub backtest --forecast-only --models randomwalk
@@ -478,7 +535,8 @@ jobs:
   # Pages run after the fits are stored (`pages`) shows the new fits.
   backtests:
     name: Score and store the backtests
-    needs: [plan, backtest]
+    # After the walks' forecasts are stored, which it loads.
+    needs: [plan, backtest, store-quick]
     if: >-
       !cancelled() && needs.plan.outputs.write == 'true'
       && needs.backtest.result == 'success'
@@ -510,7 +568,7 @@ jobs:
       - name: Score
         run: |
           p=output/parts/parts
-          uv run bdbvhub score "$p"-development-{randomwalk,randomwalknowcast}
+          uv run bdbvhub score "$p"-releases-{randomwalk,randomwalknowcast}
           uv run bdbvhub score "$p"-zones-{randomwalk,randomwalknowcast}
           # The pairing sensitivity's blocks, for docs/pairing.md.
           mkdir -p results/pairing
@@ -533,10 +591,11 @@ jobs:
 
   pages:
     name: Rebuild the docs from the store
-    needs: [plan, store-current, store-rest]
+    needs: [plan, store-quick, store-current, store-rest]
     if: >-
       always() && needs.plan.result == 'success'
-      && (needs.store-current.result == 'success'
+      && (needs.store-quick.result == 'success'
+      || needs.store-current.result == 'success'
       || needs.store-rest.result == 'success')
       && github.ref == 'refs/heads/main' && inputs.store_branch == ''
     runs-on: ubuntu-latest

@@ -1,4 +1,7 @@
-"""A run scores its own saved checkpoints on the German development half."""
+"""A run scores its own checkpoints on the German development half.
+
+A machine that only scores (no `finetune` in TARGETS) scores those saved.
+"""
 
 import re
 
@@ -11,10 +14,13 @@ CONFIG = {**FT, "score": {"labels": []}}
 
 
 def _blocks(tmp_path, local_extra=""):
-    return score_jobs(tmp_path, CONFIG, local_extra, target="run_scores")
+    return score_jobs(
+        tmp_path, CONFIG, f"TARGETS=score\n{local_extra}", target="run_scores"
+    )
 
 
 def test_a_run_scores_only_its_saved_checkpoints(tmp_path):
+    _local(tmp_path, "TARGETS=score")
     _checkpoint(tmp_path, 250)
     jobs = dry(tmp_path, "run_scores", config=CONFIG)
     # n250 and the reference, n500 not yet saved.
@@ -53,6 +59,14 @@ def test_the_report_reads_the_run_and_the_shared_reference(tmp_path):
     )
 
 
+def test_a_training_machine_s_report_pulls_the_rest_of_the_run(tmp_path):
+    # Where the run trains, its report asks for every checkpoint in reach.
+    _checkpoint(tmp_path, 250)
+    jobs = dry(tmp_path, "run_scores", config=CONFIG)
+    assert jobs["train_segment"] == 1
+    assert jobs["score_run_germany"] == 2
+
+
 def test_scoring_keeps_off_the_trainer_device_by_default(tmp_path):
     _checkpoint(tmp_path, 250)
     blocks = _blocks(tmp_path, "DEVICE=cuda\n")
@@ -64,7 +78,7 @@ def test_scoring_keeps_off_the_trainer_device_by_default(tmp_path):
 
 
 def test_the_score_target_takes_each_run_scores(tmp_path):
-    _local(tmp_path)
+    _local(tmp_path, "TARGETS=score")
     _checkpoint(tmp_path, 250)
     jobs = dry(tmp_path, "score", config=CONFIG)
     assert jobs["score_run_germany"] == 1

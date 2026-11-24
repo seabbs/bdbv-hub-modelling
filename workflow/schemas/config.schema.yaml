@@ -63,6 +63,7 @@ $defs:
       quiet_min_cases:
         oneOf: [{type: "null"}, {$ref: "#/$defs/count"}]
       chunk: {$ref: "#/$defs/positive"}
+      cut_workers: {$ref: "#/$defs/positive"}
       eval_every: {$ref: "#/$defs/positive"}
       by_source_every: {$ref: "#/$defs/positive"}
       eval: {enum: [local, offload]}
@@ -150,6 +151,7 @@ properties:
           - loss_horizon_days
           - quiet_min_cases
           - chunk
+          - cut_workers
           - eval_every
           - by_source_every
           - eval

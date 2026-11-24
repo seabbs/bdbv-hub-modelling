@@ -80,7 +80,7 @@ def test_bias_settings_enter_the_hash_only_when_on():
 def test_the_bias_trains_in_its_own_group_at_its_own_rate():
     model = tiny_model()
     series_bias.attach(model)
-    model = fs.lora_model(model, fs.lora_config(True), None)
+    model = fs.lora_model(model, fs.lora_config(True))
     opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-3))
     assert [g["lr"] for g in opt.param_groups] == [1e-5, 1e-3]
     bias = {
@@ -100,7 +100,7 @@ def test_the_bias_trains_in_its_own_group_at_its_own_rate():
 def test_the_bias_round_trips_through_the_trainer_state(tmp_path):
     model = tiny_model()
     series_bias.attach(model)
-    model = fs.lora_model(model, fs.lora_config(True), None)
+    model = fs.lora_model(model, fs.lora_config(True))
     for n, p in model.named_parameters():
         if series_bias.BIAS_MODULE in n and p.requires_grad:
             p.data.fill_(0.25)
@@ -108,7 +108,7 @@ def test_the_bias_round_trips_through_the_trainer_state(tmp_path):
     fs.save_state(tmp_path / "state", model, opt, {"step": 3})
     fresh = tiny_model()
     series_bias.attach(fresh)
-    fresh = fs.lora_model(fresh, fs.lora_config(True), None)
+    fresh = fs.lora_model(fresh, fs.lora_config(True))
     opt2 = torch.optim.AdamW(fs.param_groups(fresh, 1e-5, 1e-3))
     assert fs.load_state(tmp_path / "state", fresh, opt2) == {"step": 3}
     got = [
@@ -120,22 +120,11 @@ def test_the_bias_round_trips_through_the_trainer_state(tmp_path):
     assert all(bool((p == 0.25).all()) for p in got)
 
 
-def test_continuing_without_the_bias_in_the_adapter_is_refused(tmp_path):
-    from peft import LoraConfig, get_peft_model
-
-    config = LoraConfig(r=2, lora_alpha=4, target_modules=["self_attention.q"])
-    get_peft_model(tiny_model(), config).save_pretrained(tmp_path / "round0")
-    model = tiny_model()
-    series_bias.attach(model)
-    with pytest.raises(ValueError, match="bias"):
-        fs.lora_model(model, fs.lora_config(True), tmp_path / "round0")
-
-
 def test_bias_summary_gives_each_pairs_values_by_layer_and_head():
     model = tiny_model()
     assert fs.bias_summary(model) == {}
     series_bias.attach(model)
-    model = fs.lora_model(model, fs.lora_config(True), None)
+    model = fs.lora_model(model, fs.lora_config(True))
     for n, p in model.named_parameters():
         if n.endswith(".same") and p.requires_grad:
             with torch.no_grad():
@@ -153,7 +142,7 @@ def test_bias_summary_gives_each_pairs_values_by_layer_and_head():
 def test_each_group_reports_its_current_rate_by_name():
     model = tiny_model()
     series_bias.attach(model)
-    model = fs.lora_model(model, fs.lora_config(True), None)
+    model = fs.lora_model(model, fs.lora_config(True))
     opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-3))
     fs.set_learning_rates(opt, 25, 100)
     assert fs.group_rates(opt) == {
@@ -180,7 +169,7 @@ def test_the_bias_learning_rate_of_1e3_reaches_the_optimiser():
     assert args.bias_lr == 1e-3
     model = tiny_model()
     series_bias.attach(model)
-    model = fs.lora_model(model, fs.lora_config(True), None)
+    model = fs.lora_model(model, fs.lora_config(True))
     opt = fs.make_optimiser(model, 1e-5, args.bias_lr)
     assert fs.group_rates(opt) == {"lora": 1e-5, "bias": 1e-3}
 
@@ -189,7 +178,7 @@ def test_neither_group_has_weight_decay():
     # As Chronos-2's own fit (the HF Trainer's default of 0).
     model = tiny_model()
     series_bias.attach(model)
-    model = fs.lora_model(model, fs.lora_config(True), None)
+    model = fs.lora_model(model, fs.lora_config(True))
     opt = fs.make_optimiser(model, 1e-5, fs.BIAS_LR)
     assert isinstance(opt, torch.optim.AdamW)
     decay = {g["name"]: g["weight_decay"] for g in opt.param_groups}
@@ -201,20 +190,15 @@ def test_a_state_with_other_pairs_is_not_resumed(tmp_path):
     other = (series_bias._SAVED_ONLY, *series_bias.PAIRS)
     model = tiny_model()
     series_bias.attach(model, other)
-    model = fs.lora_model(model, fs.lora_config(True), None)
+    model = fs.lora_model(model, fs.lora_config(True))
     opt = torch.optim.AdamW(fs.param_groups(model, 1e-5, 1e-3))
     fs.save_state(tmp_path / "state", model, opt, {"step": 3})
-    model.save_pretrained(tmp_path / "adapter")
     fresh = tiny_model()
     series_bias.attach(fresh)
-    peft = fs.lora_model(fresh, fs.lora_config(True), None)
+    peft = fs.lora_model(fresh, fs.lora_config(True))
     opt2 = torch.optim.AdamW(fs.param_groups(peft, 1e-5, 1e-3))
     with pytest.raises(ValueError, match="code it was trained with"):
         fs.load_state(tmp_path / "state", peft, opt2)
-    fresh = tiny_model()
-    series_bias.attach(fresh)
-    with pytest.raises(ValueError, match="code it was trained with"):
-        fs.lora_model(fresh, fs.lora_config(True), tmp_path / "adapter")
 
 
 @pytest.mark.parametrize("checkpointed", [False, True])

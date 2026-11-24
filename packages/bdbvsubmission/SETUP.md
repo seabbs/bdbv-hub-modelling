@@ -10,7 +10,7 @@ It is safe to install as is, because `DRY_RUN` is on until you turn it off.
 | job | what |
 | --- | --- |
 | `detect` | Runs on schedule from Saturday 23:00 UTC (Sunday 00:00 Kinshasa) to Tuesday. It compares the hub's newest data commit and `as_of` with the ledger and stops unless there is new data for the open round. |
-| `prepare` | Pins the hub data at one commit and builds the random walk candidate, which is also the baseline for the checks. |
+| `prepare` | Pins the hub data at one commit and reads the random walk candidates from the fit store, which stores the walks' forecasts at each origin like a fit. Plain random walk is also the baseline for the checks. If the store lacks them it starts the Fit store workflow, which stores the walks first, and waits at most an hour. |
 | `await-fits` | Waits for the fit store (`fit-store` branch) to hold the renewal candidates' fits at the round's origin, keyed on the code and data as Fit store keys them. If any is missing it starts the Fit store workflow and waits, at most the `[timing]` fit timeout. |
 | `fit` | A matrix over the renewal candidates (`bvd`, `renewalsp` and `main`), in parallel. Each reads its stored fit (`fit-store unpack`); one the store lacks is ruled out. A stored fit forecasts one week past its own round, so a round with no new release reads last week's fit. |
 | `gate` | Walks the chain `bvd` → `renewalsp` → `main` → `randomwalknowcast` → `randomwalk`. A candidate is ruled out if its fit is past the convergence failure thresholds, its forecast is far from the recent data, or its file is invalid (format checks or hubValidations). |
@@ -142,7 +142,7 @@ Nearly every `renewalbvd` and `renewal` draw reaches the maximum tree depth, so 
 The candidates fit in separate jobs at the same time, so the fit stage takes about 30 minutes.
 Time a real fit with a dry run on a past vintage (see above), and read the `Fit took N s` line in the job summary.
 
-The chain runs prepare (random walk), then every renewal fit in parallel, then the gate.
+The chain runs prepare (the random walks), then every renewal fit in parallel, then the gate.
 Scheduled runs check every 3 hours through the window, at 17 minutes past 00:00, 03:00 and so on to 21:00 UTC on Sunday, Monday and Tuesday, after the Saturday 23:17 UTC run as the window opens.
 So a round the hub merges into its `tasks.json` during the day is picked up within hours.
 A round is submitted once: when the ledger records its PR, later scheduled runs stop, and a manual dispatch resubmits.
