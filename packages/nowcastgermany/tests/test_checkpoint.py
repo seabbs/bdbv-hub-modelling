@@ -43,7 +43,7 @@ def test_each_label_runs_the_german_config_s_models(tmp_path):
         ' "foundation"]\n'
     )
     assert ck.label_models("reference", config) == (
-        "randomwalknowcast_daily",
+        "randomwalknowcast",
         "foundation_zeroshot_complete",
         "foundation_zeroshot",
     )
@@ -108,7 +108,7 @@ def _scores(models, checkpoints, levels, base=1.0):
                         "location": "CD",
                         "target_end_date": "w",
                         "crps": base
-                        * (2 if model == "randomwalknowcast_daily" else 1),
+                        * (2 if model == "randomwalknowcast" else 1),
                         "log_crps": 1.0,
                         "coverage_50": 1.0,
                         "coverage_90": 1.0,
@@ -120,7 +120,7 @@ def _scores(models, checkpoints, levels, base=1.0):
 
 def test_relative_divides_by_the_baseline_by_level():
     rows = _scores(
-        ["randomwalknowcast_daily", "foundation_zeroshot"],
+        ["randomwalknowcast", "foundation_zeroshot"],
         ["zero-shot", "abc"],
         ["national", "zones"],
     )
@@ -139,7 +139,7 @@ def test_coverage_is_50_and_90_but_95_for_the_german_hub_levels():
     assert ck.COVERAGE == (50, 90)
     assert ck.GERMANY_COVERAGE == (50, 95)
     rows = _scores(
-        ["randomwalknowcast_daily", "foundation_zeroshot"],
+        ["randomwalknowcast", "foundation_zeroshot"],
         ["zero-shot", "abc"],
         ["national"],
     )
@@ -278,7 +278,7 @@ def test_cached_draws_keep_the_7day_target(tmp_path):
 
 def test_relative_rows_mean_the_wis_components():
     rows = _scores(
-        ["randomwalknowcast_daily", "foundation_zeroshot"],
+        ["randomwalknowcast", "foundation_zeroshot"],
         ["zero-shot", "abc"],
         ["national"],
     ).assign(wis=3.0, dispersion=1.0, overprediction=0.5, underprediction=1.5)
@@ -614,7 +614,7 @@ def test_a_run_s_daily_table_holds_both_views_by_checkpoint(
     monkeypatch.setattr(ck, "germany_rows", germany)
     got = ck.daily_table(train, scores, tmp_path / "r", "runa")
     assert {(t, b) for t, b, _ in seen} == {
-        ("7day", "randomwalknowcast_daily"),
+        ("7day", "randomwalknowcast"),
         ("daily", "foundation_zeroshot"),
     }
     assert list(got.columns) == ["set", "run", "outbreaks", "score"]

@@ -739,13 +739,22 @@ if FLOW.rounds_dir:
 
 # The grid tables and SI notes, read from the grid config
 # (`papertables.synthetic_grid`).
+# The release layer of the run the paper reports (`final_run`), if it has
+# one: the grid table's last group.
+def final_release_layer():
+    run = Path(config["final_run"]).name if config.get("final_run") else None
+    entry = (config.get("runs") or {}).get(run) or {}
+    return entry.get(
+        "release_layer", (config.get("finetune") or {}).get("release_layer")
+    )
+
+
 rule grid_tables:
     input:
         grid=SYNTHETIC["grid_file"],
+        release=lambda w: [final_release_layer()] if final_release_layer() else [],
     output:
-        epidemic=f"{R}/{{mode}}/tables/si/grid-epidemic.md",
-        reporting=f"{R}/{{mode}}/tables/si/grid-reporting.md",
-        distributions=f"{R}/{{mode}}/tables/si/grid-distributions.md",
+        grid=f"{R}/{{mode}}/tables/si/grid.md",
         model=f"{R}/{{mode}}/tables/si/epinowcast-model.md",
         heldout=f"{R}/{{mode}}/tables/si/heldout-set.md",
     log:
@@ -757,11 +766,15 @@ rule grid_tables:
         config=shlex.quote(json.dumps(FLOW.grid_config())),
         si=f"{R}/{{mode}}/tables/si",
         grid_name=lambda w, input: input.grid,
+        release=lambda w, input: (
+            f"--release-layer {input.release[0]}" if input.release else ""
+        ),
     shell:
         "exec >{log} 2>&1; "
         "{params.python} -m papertables.synthetic_grid --grid {input.grid} "
         "--grid-name {params.grid_name} "
-        "--config {params.config} --si-dir {params.si}"
+        "--config {params.config} --si-dir {params.si} "
+        "{params.release}"
 
 
 rule evidence:

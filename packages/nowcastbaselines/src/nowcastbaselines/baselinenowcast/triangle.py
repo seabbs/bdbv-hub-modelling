@@ -8,6 +8,7 @@ times given to the delay and to the retrospective nowcasts
 
 from __future__ import annotations
 
+import datetime as dt
 import math
 import warnings
 from typing import Any
@@ -15,6 +16,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pandas as pd
 from jax import Array, lax
 
 from ._checks import (
@@ -28,6 +30,7 @@ __all__ = [
     "Triangle",
     "allocate_reference_times",
     "apply_reporting_structure",
+    "daily_triangle",
     "get_reporting_structure",
     "preprocess_negative_values",
     "truncate_to_rows",
@@ -324,3 +327,55 @@ def allocate_reference_times(
         n_retro = n_min_retro_nowcasts
         n_history_delay = n_used - n_retro
     return int(n_history_delay), int(n_retro)
+
+
+def daily_triangle(
+    history: pd.DataFrame, place: str, cutoff: dt.date, rows: int, delay: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return a place's daily reporting triangle at `cutoff`.
+
+    Parameters
+    ----------
+    history : pandas.DataFrame
+        Daily releases (`ForecastTask.daily_history`): `vintage`,
+        `location`, `onset_date` and `observed`, the count of the onset
+        day reported by the vintage.
+    place : str
+        The place.
+    cutoff : datetime.date
+        The latest release.
+    rows : int
+        Reference days, the last one the cut-off.
+    delay : int
+        Longest delay, $D$.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        Counts first reported at each delay, `[rows, D + 1]`, and the mask
+        of the cells reported by the cut-off.
+    """
+    own = history.loc[history["location"] == place]
+    first = cutoff - dt.timedelta(days=rows - 1)
+    days = pd.date_range(first, cutoff).strftime("%Y-%m-%d")
+    vintages = pd.date_range(first, cutoff).strftime("%Y-%m-%d")
+    cum = (
+        own.pivot_table(
+            index="onset_date",
+            columns="vintage",
+            values="observed",
+            aggfunc="sum",
+        )
+        .reindex(index=days, columns=vintages)
+        .ffill(axis=1)
+        .fillna(0.0)
+        .to_numpy()
+    )
+    t = np.arange(rows)[:, None]
+    d = np.arange(delay + 1)[None, :]
+    col = t + d
+    mask = col <= rows - 1
+    seen = np.take_along_axis(cum, np.minimum(col, rows - 1), axis=1)
+    seen = np.where(mask, seen, 0.0)
+    counts = np.diff(seen, axis=1, prepend=0.0)
+    return np.where(mask, counts, 0.0), mask

@@ -25,7 +25,7 @@ horizons.
 it ends, the paper's 40-day truth (`rolling_truth`).
 `score_germany` scores both by `score_quantiles`, and `relative_scores`
 gives each model's pairwise relative skill, scaled to a reference:
-`randomwalknowcast_daily` on the page, the hub's own baseline in the paper.
+`randomwalknowcast` on the page, the hub's own baseline in the paper.
 `paper_forecasts` writes the forecasts as the paper's long table.
 """
 
@@ -47,8 +47,6 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-# Registers `randomwalknowcast_daily`, the German study's walk.
-from nowcastbaselines.daily import DailyWalkNowcast  # noqa: F401
 from nowcasteval.marginals import forecast_quantiles
 from nowcasteval.nowcast import rolling_truth
 from nowcasteval.scoring import pairwise_skill, score_quantiles

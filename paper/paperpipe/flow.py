@@ -47,9 +47,7 @@ HELD_OUT_INCLUDES: Final = (
 """The tables main.qmd and si.qmd include for every case study."""
 
 DESIGN_TABLES: Final = (
-    "grid-epidemic",
-    "grid-reporting",
-    "grid-distributions",
+    "grid",
     "epinowcast-model",
     "heldout-set",
 )

@@ -110,6 +110,8 @@ factor_layers:
   shocks: reporting
   revisions: reporting
   delay_jitter: delays
+  report_cap: reporting
+  report_stop: reporting
 # Structured weekday patterns: with `weekday_pattern`, a sim's reference
 # and report weekday effects each take a pattern drawn from these parts
 # (each in with `weekday_pattern_part`, at least one; which days and the
@@ -260,6 +262,17 @@ factors:
   # settings, with no trend, in a third of sims.
   delay_jitter:
     'no': 2
+    'yes': 1
+  # A hard maximum reporting delay: reports later than `report_cap_days`
+  # never arrive (the window's longest delay, `max_delay_days`, otherwise
+  # takes the whole tail at its last delay). In a quarter of sims.
+  report_cap:
+    'no': 3
+    'yes': 1
+  # Reporting that stops for good `report_stop_at` of the way through
+  # (pauses that resume are `shocks: outage`). In a tenth of sims.
+  report_stop:
+    'no': 9
     'yes': 1
 distributions:
   quiet:
@@ -735,6 +748,20 @@ distributions:
     sdlog: 0.4
     layer: reporting
     why: each part of a structured weekday pattern, relative to the others (the pattern is scaled to unit sd)
+  report_cap_days:
+    dist: lognormal
+    median: 21.0
+    sdlog: 0.5
+    layer: reporting
+    why: a hard maximum reporting delay of about 9 to 48 days (5-95%), often well below the delay's tail
+  report_stop_at:
+    dist: beta
+    a: 2.0
+    b: 2.0
+    lower: 0.4
+    upper: 0.95
+    layer: reporting
+    why: reporting stops in the second half of the series, rarely at its very end
   delay_jitter_sd:
     dist: lognormal
     median: 0.1

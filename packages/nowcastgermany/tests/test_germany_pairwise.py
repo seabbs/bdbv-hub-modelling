@@ -16,7 +16,7 @@ def _scores() -> pd.DataFrame:
     # different targets.
     rng = np.random.default_rng(11)
     rows = []
-    for model in ("randomwalknowcast_daily", "fm", "team"):
+    for model in ("randomwalknowcast", "fm", "team"):
         for day in range(4):
             if model == "team" and day > 1:
                 continue
@@ -41,7 +41,7 @@ def _scores() -> pd.DataFrame:
 
 def test_relative_scores_are_pairwise_skill_on_each_models_own_forecasts():
     scores = _scores()
-    base = "randomwalknowcast_daily"
+    base = "randomwalknowcast"
     got = relative_scores(scores, ("pool",), base).set_index(["pool", "model"])
     want = pairwise_skill(
         scores,

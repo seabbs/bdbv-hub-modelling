@@ -16,7 +16,6 @@ def test_a_model_s_source_is_daily_or_weekly_else_both():
     assert rows.source("foundation_zeroshot") == "daily"
     assert rows.source("foundation") == "daily"
     assert rows.source("fm_chronos_weekly_ragged") == "weekly"
-    assert rows.source("randomwalknowcast_daily") == "daily"
     assert rows.source("randomwalknowcast") is None
     assert rows.sources("foundation") == ["daily"]
     assert rows.sources("randomwalknowcast") == ["daily", "weekly"]

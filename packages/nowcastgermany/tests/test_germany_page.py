@@ -77,7 +77,7 @@ def _forecasts(models: tuple[str, ...]) -> pd.DataFrame:
 
 def _scores(path: Path) -> None:
     path.mkdir(parents=True)
-    ours = ("foundation_zeroshot", "randomwalknowcast_daily")
+    ours = ("foundation_zeroshot", "randomwalknowcast")
     _forecasts(ours).to_csv(path / "forecasts.csv.gz", index=False)
     teams = ("KIT", "KIT-frozen_baseline")
     _forecasts(teams).to_csv(path / "teams-forecasts.csv.gz", index=False)
@@ -89,9 +89,7 @@ def _scores(path: Path) -> None:
             "total": [30, 20],
         }
     ).to_csv(path / "asof.csv.gz", index=False)
-    ours = _rows(
-        (("foundation_zeroshot", 10.0), ("randomwalknowcast_daily", 5.0))
-    )
+    ours = _rows((("foundation_zeroshot", 10.0), ("randomwalknowcast", 5.0)))
     held = ours.assign(origin="2022-03-01")
     pd.concat([ours, held]).to_csv(path / "scores.csv.gz", index=False)
     _rows((("KIT", 4.0),)).to_csv(path / "teams.csv.gz", index=False)
@@ -104,7 +102,7 @@ def test_page_tables_and_summaries(tmp_path: Path) -> None:
     germany_page(fig, gen, res, CONFIG, list)
     table = (gen / "germany-scores.md").read_text()
     assert CONFIG.split_date in table
-    assert "randomwalknowcast_daily" in table
+    assert "randomwalknowcast" in table
     assert "| KIT " in table
     assert "rel_wis" in table
     assert "| wis " not in table
@@ -115,7 +113,7 @@ def test_page_tables_and_summaries(tmp_path: Path) -> None:
     names = {p["id"]: p["name"] for p in data["places"]}
     assert names["DE-BY"] == "Bavaria"
     assert names["80+"] == "Age 80+"
-    assert data["models"][data["baseline"]]["name"] == "randomwalknowcast_daily"
+    assert data["models"][data["baseline"]]["name"] == "randomwalknowcast"
     assert data["origins"] == ["2021-12-01"]
     assert [m["name"] for m in data["models"]][-1] == "KIT"
     keys = [m["key"] for m in data["metrics"]]
@@ -131,7 +129,7 @@ def test_hidden_models_start_switched_off(tmp_path: Path) -> None:
     assert CONFIG.hidden == ("KIT-frozen_baseline",)
     data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
     on = {m["name"]: m["on"] for m in data["models"]}
-    assert on["randomwalknowcast_daily"]
+    assert on["randomwalknowcast"]
     assert on["KIT"]
 
 
@@ -153,7 +151,7 @@ def test_nowcast_explorer_shows_development_plot_dates(tmp_path: Path) -> None:
     assert data["rounds"] == ["2021-11-22"]
     on = {m["name"]: m["on"] for m in data["models"]}
     assert on == {
-        "randomwalknowcast_daily": True,
+        "randomwalknowcast": True,
         "KIT": True,
         "KIT-frozen_baseline": False,
     }

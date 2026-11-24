@@ -61,7 +61,11 @@ import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 
-from nowcastbaselines.baselinenowcast.delays import Settings
+from nowcastbaselines.baselinenowcast.delays import (
+    DelayFit,
+    Settings,
+    fit_delay,
+)
 from nowcastbaselines.baselinenowcast.nowcast import (
     NoCompleteWeek,
     Origin,
@@ -85,7 +89,7 @@ from nowcastutils.base import (
     register_model,
 )
 from nowcastutils.dates import as_date
-from nowcastutils.snapshots import SnapshotArrays, snapshot_arrays
+from nowcastutils.snapshots import SnapshotArrays, blocks, snapshot_arrays
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
 
@@ -122,6 +126,10 @@ def _clear_caches(task: ForecastTask) -> None:
     _ORIGINS.add(origin)
 
 
+HUB_WEEKDAY: Final = 5
+"""The weekday the hub's weeks end on, Saturday (Monday is 0)."""
+
+
 def _key(task: ForecastTask) -> jax.Array:
     return jax.random.key(int(task.rng().integers(0, 2**31 - 1)))
 
@@ -131,7 +139,8 @@ def _timeline(origin: Origin, task: ForecastTask) -> list[str]:
     weeks = list(origin.snap.week_ends)
     last = as_date(max(task.target_end_dates))
     while as_date(weeks[-1]) < last:
-        weeks.append((as_date(weeks[-1]) + dt.timedelta(days=7)).isoformat())
+        step = dt.timedelta(days=origin.snap.period)
+        weeks.append((as_date(weeks[-1]) + step).isoformat())
     return weeks
 
 
@@ -180,23 +189,25 @@ def _walks(
     return np.asarray(lam, np.float64), counts
 
 
-def start_window(settings: Settings) -> int:
-    """Return the weeks back from the cut-off week a start week may be.
+def start_window(settings: Settings, period: int = 7) -> int:
+    """Return the blocks back from the cut-off block a start may be.
 
     It is `Settings.history_delay`, the onset days the nowcast's delay is
-    fitted on (1.5 D), in whole weeks.
+    fitted on (1.5 D), in whole blocks of `period` days.
 
     Parameters
     ----------
     settings : Settings
         Settings.
+    period : int, default 7
+        Days in a block (`SnapshotArrays.period`).
 
     Returns
     -------
     int
-        Weeks, counting the cut-off week.
+        Blocks, counting the cut-off block.
     """
-    return -(-settings.history_delay // 7)
+    return -(-settings.history_delay // period)
 
 
 def _start_ok(origin: Origin) -> np.ndarray:
@@ -210,7 +221,11 @@ def _start_ok(origin: Origin) -> np.ndarray:
     ok = (origin.complete[:, : full + 1] >= settings.start_share) & (
         origin.reported[:, : full + 1] >= settings.start_count
     )
-    first = origin.snap.cut_week(origin.o) - start_window(settings) + 1
+    first = (
+        origin.snap.cut_week(origin.o)
+        - start_window(settings, origin.snap.period)
+        + 1
+    )
     ok[:, : max(first, 0)] = False
     return ok
 
@@ -232,7 +247,7 @@ def _level(origin: Origin) -> np.ndarray:
     """
     weeks = np.arange(origin.reported.shape[1])
     last = np.asarray(origin.start)[:, None]
-    first = last - start_window(origin.settings) + 1
+    first = last - start_window(origin.settings, origin.snap.period) + 1
     mask = (weeks >= first) & (weeks <= last)
     out: np.ndarray = (origin.reported * mask).sum(1) / mask.sum(1)
     return out
@@ -602,14 +617,27 @@ class RandomWalkNowcast(RandomWalk):
     ----------
     name : str
         Model name.
+    error_days : int, default 7
+        Days in a block of the observation model. With 7, a task of hub
+        weeks is nowcast by week and one whose targets are other days by
+        blocks of 7 days ending on each, each with its own observation
+        model (baselinenowcast's 7-day rolling `ref_time_aggregator`).
+        With 1, the observation model is fitted on daily counts and the
+        7-day sums are sums of daily draws.
     delay_summary : pandas.DataFrame or None
-        The delay of the last forecast (`chain.delay_summary`), which maps
-        its final counts to what later releases show.
+        The delay of the last forecast
+        (`baselinenowcast.nowcast.delay_summary`), which maps its final
+        counts to what later releases show.
     """
 
     name: str = "randomwalknowcast"
+    error_days: int = 7
     delay_summary: pd.DataFrame | None = field(
         init=False, default=None, repr=False
+    )
+    _snap: SnapshotArrays | None = field(init=False, default=None, repr=False)
+    _fits: dict[tuple[int, bool], DelayFit | None] = field(
+        init=False, default_factory=dict, repr=False
     )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
@@ -632,6 +660,9 @@ class RandomWalkNowcast(RandomWalk):
             If the task has no snapshots, or no pair of releases within
             the delay window.
         """
+        ends = pd.to_datetime(list(task.target_end_dates))
+        if self.error_days != 7 or (ends.weekday != HUB_WEEKDAY).any():
+            return self._rolling(task)
         origin = self.origin_at(task, errors=True)
         values, weeks = self.trajectories(origin, task, origin.point)
         values = self.pair(origin, task, values)
@@ -643,6 +674,123 @@ class RandomWalkNowcast(RandomWalk):
         )
         self._kept_frame = (weeks, self.rows(origin, task), task)
         return frame(task, weeks, values, self.rows(origin, task))
+
+    def _block_draws(
+        self, task: ForecastTask, period: int, end: int = HUB_WEEKDAY
+    ) -> tuple[Origin, dict[str, np.ndarray]]:
+        """Return the draws of each block of `period` days ending `end`.
+
+        The delay is fitted once, on the hub weeks' snapshots, and shared
+        by every block (`_shared_delay`); the observation model, the walk
+        and the copula are fitted on the blocks.
+        """
+        snap = self._snap
+        assert snap is not None
+        origin = build_origin(
+            blocks(snap, period, end),
+            self.settings_for(task),
+            True,
+            self._shared_delay,
+        )
+        values, labels = self.trajectories(origin, task, origin.point)
+        values = self.pair(origin, task, values)
+        return origin, {w: values[:, :, i] for i, w in enumerate(labels)}
+
+    def _shared_delay(
+        self,
+        snap: SnapshotArrays,  # noqa: ARG002 - the blocks, as `DelayFn` gives
+        r: int,
+        settings: Settings,
+        longer: bool = False,
+    ) -> DelayFit | None:
+        """Fit the delay on the hub weeks' snapshots, once per release."""
+        key = (r, longer)
+        if key not in self._fits:
+            assert self._snap is not None
+            self._fits[key] = fit_delay(self._snap, r, settings, longer)
+        return self._fits[key]
+
+    def _start(self, task: ForecastTask) -> None:
+        """Hold the task's snapshots and clear the delay fits."""
+        self._snap = self.snapshots(task)
+        self._fits = {}
+
+    def _rolling(self, task: ForecastTask) -> pd.DataFrame:
+        """Return draws of the 7-day sums ending on each target date.
+
+        With `error_days` 7 each sum is a block of 7 days ending on its
+        weekday, with its own observation model, as baselinenowcast's
+        `ref_time_aggregator` of 7-day rolling sums; with 1, the sums are
+        of draws of daily counts, whose observation model is fitted on
+        days.
+        """
+        self._start(task)
+        targets = list(task.target_end_dates)
+        draws: dict[str, np.ndarray] = {}
+        if self.error_days == 1:
+            origin, days = self._block_draws(task, 1)
+            labels = list(days)
+            x = np.stack([days[d] for d in labels], axis=-1)
+            c = np.concatenate(
+                [np.zeros((*x.shape[:2], 1)), np.cumsum(x, axis=-1)], axis=-1
+            )
+            week = c[..., 7:] - c[..., :-7]
+            draws = {d: week[..., i] for i, d in enumerate(labels[6:])}
+        else:
+            ends = sorted({as_date(d).weekday() for d in targets})
+            for end in ends:
+                origin, got = self._block_draws(task, 7, end)
+                draws.update(got)
+        self.delay_summary = delay_summary(origin, self.name, task.vintage)
+        rows = self.rows(origin, task)
+        n = task.n_samples
+        values = np.stack(
+            [draws.get(d, np.zeros((n, len(origin.snap.locations))))
+             for d in targets],
+            axis=-1,
+        )  # fmt: skip
+        self._kept_frame = (targets, rows, task)
+        return frame(task, targets, values, rows)
+
+    def daily_quantiles(
+        self, task: ForecastTask, levels: tuple[float, ...]
+    ) -> pd.DataFrame:
+        """Return quantiles of each target date's count, by place.
+
+        The draws are of blocks of one day, with the observation model
+        fitted on daily counts.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task.
+        levels : tuple of float
+            Quantile levels.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `location`, `date`, `quantile` and `value`.
+        """
+        self._start(task)
+        origin, days = self._block_draws(task, 1)
+        targets = list(task.target_end_dates)
+        n = task.n_samples
+        values = np.stack(
+            [days.get(d, np.zeros((n, len(origin.snap.locations))))
+             for d in targets],
+            axis=-1,
+        )  # fmt: skip
+        draws = frame(task, targets, values, self.rows(origin, task))
+        q = (
+            draws.groupby(["location", "target_end_date"])["value"]
+            .quantile(np.asarray(levels))
+            .rename("value")
+            .reset_index()
+        )
+        return q.rename(
+            columns={"target_end_date": "date", "level_2": "quantile"}
+        )[["location", "date", "quantile", "value"]]
 
     def trajectories(
         self, origin: Origin, task: ForecastTask, point: np.ndarray
@@ -713,7 +861,9 @@ class RandomWalkNowcast(RandomWalk):
         part = np.asarray(
             jax.random.poisson(
                 key_part,
-                jnp.asarray(lam[rows, :, at_cw] * miss / 7, jnp.float32),
+                jnp.asarray(
+                    lam[rows, :, at_cw] * miss / snap.period, jnp.float32
+                ),
             ),
             dtype=np.float64,
         )  # [L, S]

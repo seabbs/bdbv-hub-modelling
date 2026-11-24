@@ -167,12 +167,10 @@ def test_the_proposed_layer_file_is_valid():
         / "release-layer.yaml"
     )
     ft.check_release_layer(layer)
-    # Daily-step blocks are 60% of all blocks; a quarter of them released
-    # weekly is 15% of all blocks (lead 10:35).
-    daily_share = sum(
-        s for k, s in ft.SOURCE_SHARES.items() if ft.DAYS_PER_STEP[k] == 1
-    )
-    assert abs(daily_share * layer["cadences"]["daily"]["weekly"] - 0.15) < 0.01
+    # Lead 21:15 (Sam, exact): a third of daily-step blocks are released
+    # weekly, and 15% of blocks start late.
+    assert layer["cadences"]["daily"]["weekly"] == 1 / 3
+    assert layer["start"]["share"] == 0.15
 
 
 def test_each_block_s_releases_are_recorded_under_a_layer(tmp_path):

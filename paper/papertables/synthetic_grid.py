@@ -9,10 +9,9 @@ each placed in a layer by `factor_layers`, and named sampling
 (`nowcastfoundation.simulator`) reads the same file, so the tables cannot
 drift from what is simulated.
 
-- `layer_tables`: the SI's two grid tables, strata and infections, and
-  observation, delays and the reporting system, with each factor's levels
-  and each layer's sampling distributions;
-- `distribution_table`: every sampling distribution with its reason;
+- `grid_table`: the SI's one grid table, by layer: each factor's levels
+  and each sampling distribution with its reason, then the release layer
+  the paper's run draws at fine-tune time;
 - `model_note` and `heldout_note`: the SI notes on the simulator and on
   the held-out set (the `synthetic` block of the paper workflow config).
 
@@ -39,25 +38,20 @@ from paperdata.synthetic_runner import (
 
 __all__ = [
     "LAYERS",
-    "TABLES",
+    "RELEASE_NAME",
+    "TABLE_HEADERS",
     "distribution",
-    "distribution_table",
     "factor_shares",
+    "grid_table",
     "heldout_note",
-    "layer_tables",
     "model_note",
     "read_grid",
+    "release_rows",
     "to_markdown",
 ]
 
 LAYERS: Final = ("strata", "infections", "observation", "delays", "reporting")
 """The grid's layers, in the order the SI describes them."""
-
-TABLES: Final = {
-    "epidemic": ("strata", "infections"),
-    "reporting": ("observation", "delays", "reporting"),
-}
-"""The layers of each SI grid table."""
 
 LAYER_NAMES: Final = {
     "strata": "Strata and aggregation",
@@ -68,19 +62,25 @@ LAYER_NAMES: Final = {
 }
 """Each layer's name in the tables."""
 
-HEADERS: Final = {
-    "layer": "Layer",
+RELEASE_NAME: Final = "Release layer, at fine-tune time"
+"""The grid table's last group: drawn per block, not simulated."""
+
+TABLE_HEADERS: Final = {
     "setting": "Setting",
     "values": "Levels or sampling distribution",
-}
-"""Headers of the SI grid tables."""
-
-DISTRIBUTION_HEADERS: Final = {
-    "setting": "Setting",
-    "distribution": "Sampling distribution",
     "why": "Reason",
 }
-"""Headers of the SI table of sampling distributions."""
+"""Headers of the SI grid table."""
+
+RELEASE_WHY: Final = {
+    "start": "releases that begin after the outbreak, so the first kept"
+    " release fills in earlier onsets, as the Ebola hub's first release did",
+    "no_lags": "counts alone, as when only the latest data are at hand",
+    "lag_jitter": "lag counts near the rule's, so the model does not rely on"
+    " its exact value",
+    "cadences": "release cadences of the daily blocks",
+}
+"""The reason for each part of the release layer."""
 
 
 def read_grid(path: Path | str) -> dict[str, Any]:
@@ -140,19 +140,20 @@ def _levels(shares: dict[str, float]) -> str:
     )
 
 
-def layer_tables(grid: dict[str, Any]) -> dict[str, pd.DataFrame]:
-    """Return the grid's two SI tables, by layer.
+def _grid_rows(grid: dict[str, Any]) -> dict[str, list[dict[str, str]]]:
+    """Return each layer's factors and then its sampling distributions.
 
-    Each layer's factors (levels, with their shares where uneven), then
-    its sampling distributions. A factor or distribution whose layer is
-    not one of `LAYERS` fails, so a new one is placed.
+    A factor or distribution whose layer is not one of `LAYERS` fails, so
+    a new one is placed.
     """
     rows: dict[str, list[dict[str, str]]] = {k: [] for k in LAYERS}
     shares = factor_shares(grid)
     for name, layer in grid["factor_layers"].items():
         if layer not in rows:
             raise KeyError(f"factor {name} has layer {layer}, not in LAYERS")
-        rows[layer].append({"setting": name, "values": _levels(shares[name])})
+        rows[layer].append(
+            {"setting": f"`{name}`", "values": _levels(shares[name]), "why": ""}
+        )
     missing = set(shares) - set(grid["factor_layers"])
     if missing:
         raise KeyError(f"factors with no layer: {sorted(missing)}")
@@ -160,50 +161,85 @@ def layer_tables(grid: dict[str, Any]) -> dict[str, pd.DataFrame]:
         if entry["layer"] not in rows:
             raise KeyError(f"{name} has layer {entry['layer']}, not in LAYERS")
         rows[entry["layer"]].append(
-            {"setting": name, "values": distribution(entry)}
-        )
-    return {
-        table: pd.DataFrame(
-            [
-                {
-                    "layer": LAYER_NAMES[layer],
-                    "setting": f"`{r['setting']}`",
-                    "values": r["values"],
-                }
-                for layer in layers
-                for r in rows[layer]
-            ]
-        )
-        for table, layers in TABLES.items()
-    }
-
-
-def distribution_table(grid: dict[str, Any]) -> pd.DataFrame:
-    """Return every sampling distribution with its reason, by layer."""
-    order = {layer: i for i, layer in enumerate(LAYERS)}
-    entries = sorted(
-        grid["distributions"].items(), key=lambda kv: order[kv[1]["layer"]]
-    )
-    return pd.DataFrame(
-        [
             {
                 "setting": f"`{name}`",
-                "distribution": distribution(entry),
+                "values": distribution(entry),
                 "why": entry.get("why", ""),
             }
-            for name, entry in entries
-        ]
-    )
+        )
+    return rows
 
 
-def to_markdown(table: pd.DataFrame, headers: dict[str, str]) -> str:
-    """Return the table as Markdown, with `headers` as its columns."""
-    cols = list(headers)
+def release_rows(release: dict[str, Any]) -> list[dict[str, str]]:
+    """Return the release layer's rows: what each part draws, per block."""
+    out = []
+    if start := release.get("start"):
+        out.append(
+            {
+                "setting": "`start`",
+                "values": f"{start['share']:.0%} of blocks; delay "
+                f"{distribution(start['delay_days'])} days",
+                "why": RELEASE_WHY["start"],
+            }
+        )
+    if no_lags := release.get("no_lags"):
+        out.append(
+            {
+                "setting": "`no_lags`",
+                "values": f"{no_lags['share']:.0%} of blocks",
+                "why": RELEASE_WHY["no_lags"],
+            }
+        )
+    if jitter := release.get("lag_jitter"):
+        out.append(
+            {
+                "setting": "`lag_jitter`",
+                "values": f"{jitter['share']:.0%} of blocks; lag count times "
+                f"Normal(1, {_number(jitter['sd'])}), rounded",
+                "why": RELEASE_WHY["lag_jitter"],
+            }
+        )
+    for width, shares in (release.get("cadences") or {}).items():
+        out.append(
+            {
+                "setting": f"`cadences` ({width})",
+                "values": _levels(shares),
+                "why": RELEASE_WHY["cadences"].replace("daily", width),
+            }
+        )
+    return out
+
+
+def grid_table(
+    grid: dict[str, Any], release: dict[str, Any] | None
+) -> pd.DataFrame:
+    """Return the SI's grid table: a header row per layer, then its rows.
+
+    The release layer (`release`, the paper's run's file, or None for a
+    run with none) is the last group. A header row has its name in
+    `header` and empty cells; a setting's row has an empty `header`.
+    """
+    groups = [(LAYER_NAMES[k], v) for k, v in _grid_rows(grid).items()]
+    if release:
+        groups.append((RELEASE_NAME, release_rows(release)))
+    out = []
+    for name, rows in groups:
+        out.append({"header": name, "setting": "", "values": "", "why": ""})
+        out += [{"header": ""} | r for r in rows]
+    return pd.DataFrame(out)
+
+
+def to_markdown(table: pd.DataFrame) -> str:
+    """Return the grid table as Markdown, header rows in bold."""
+    cols = list(TABLE_HEADERS)
     lines = [
-        "| " + " | ".join(headers[c] for c in cols) + " |",
+        "| " + " | ".join(TABLE_HEADERS[c] for c in cols) + " |",
         "|" + "---|" * len(cols),
     ]
     for _, row in table.iterrows():
+        if row["header"]:
+            lines.append(f"| **{row['header']}** | | |")
+            continue
         cells = [str(row[c]).replace("|", "\\|") for c in cols]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
@@ -230,19 +266,13 @@ def model_note(grid: dict[str, Any], grid_file: str) -> str:
         f"The simulator runs on the grid config `{grid_file}`.",
         "Each simulation draws every categorical setting independently from"
         " its levels' shares, and every continuous setting from its named"
-        " sampling distribution, as the SI tables list.",
+        " sampling distribution, as the grid table lists.",
         "A parameter we did not set is drawn from its epinowcast prior.",
         f"Seed infections are at least {floors['seed']} and series at least"
         f" {floors['weeks']} weeks long.",
         "A draw that errors or reports no cases is drawn again, up to"
         f" {grid['tries']} times, then from a new design.",
-        "",
-        "##### Factors",
-        "",
     ]
-    for name, shares in factor_shares(grid).items():
-        layer = LAYER_NAMES[grid["factor_layers"][name]]
-        lines.append(f"- `{name}` ({layer.lower()}): {_levels(shares)}.")
     return "\n".join(lines) + "\n"
 
 
@@ -273,13 +303,13 @@ def heldout_note(config: dict) -> str:
     lines = [
         "#### The held-out synthetic set",
         "",
-        f"The held-out set is simulated on grid `{config['grid']}` with"
-        f" {_seeds(seeds)}, {n} simulations each.",
+        f"The held-out set is simulated from the grid config"
+        f" `{config['grid_file']}` with {_seeds(seeds)}, {n} simulations"
+        " each.",
         f"We evaluate draw {DRAW} of each simulation, so the"
         " outbreaks are independent.",
         "The fine-tune never trains on these seeds.",
-        f"The simulations are written to `{config['simulations']['paper']}`,"
-        " and the workflow config records them.",
+        "The workflow config records the seeds.",
         "The synthetic runner runs the models on the set.",
         "",
         "The held-out set was reserved for the final evaluation.",
@@ -316,17 +346,18 @@ def main() -> None:
     parser.add_argument(
         "--config", required=True, help="The `synthetic` block as JSON."
     )
+    parser.add_argument(
+        "--release-layer",
+        type=Path,
+        default=None,
+        help="The paper's run's release layer file, if it has one.",
+    )
     parser.add_argument("--si-dir", type=Path, required=True)
     args = parser.parse_args()
     grid = read_grid(args.grid)
+    release = read_grid(args.release_layer) if args.release_layer else None
     args.si_dir.mkdir(parents=True, exist_ok=True)
-    for name, table in layer_tables(grid).items():
-        (args.si_dir / f"grid-{name}.md").write_text(
-            to_markdown(table, HEADERS)
-        )
-    (args.si_dir / "grid-distributions.md").write_text(
-        to_markdown(distribution_table(grid), DISTRIBUTION_HEADERS)
-    )
+    (args.si_dir / "grid.md").write_text(to_markdown(grid_table(grid, release)))
     (args.si_dir / "epinowcast-model.md").write_text(
         model_note(grid, args.grid_name)
     )
