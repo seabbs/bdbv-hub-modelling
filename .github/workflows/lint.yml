@@ -43,13 +43,13 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen
-      - name: Ruff and mypy
+      # The packages are checked in their own CI jobs (ci.yml).
+      - name: Ruff
         run: |
-          uv run ruff check packages tests workflow docs/hooks
-          uv run ruff format --check packages tests workflow docs/hooks
+          uv run ruff check tests workflow docs/hooks
+          uv run ruff format --check tests workflow docs/hooks
           # The paper, with its own settings (paper/ruff.toml).
           (cd paper && uv run ruff check . && uv run ruff format --check .)
-          uv run mypy packages/*/src
       # The packages import one way (pyproject.toml's import-linter
       # contract).
       - name: Import contract

@@ -1,0 +1,121 @@
+name: CI
+
+# One job per workspace package: built and installed alone with every
+# module imported, ruff, ruff format, mypy and the tests it owns
+# (tests/packages/owners.py). A pull request runs the jobs of the
+# packages its change can reach; a push to main or next, and a dispatch,
+# run them all.
+
+on:
+  push:
+    branches: [main, next]
+    paths:
+      - 'packages/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/ci.yml'
+      - '.github/actions/setup-forecast-env/**'
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/ci.yml'
+      - '.github/actions/setup-forecast-env/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Off main and next, a newer push cancels the running run. On main and
+  # next the running run finishes and only the newest queued run waits.
+  cancel-in-progress: >-
+    ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/next' }}
+
+jobs:
+  # The packages a change reaches.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.legs.outputs.packages }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Packages the change reaches
+        id: legs
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            changed=$(git diff --name-only "$BASE"...HEAD)
+          else
+            changed=uv.lock
+          fi
+          packages=$(printf '%s\n' "$changed" |
+            python3 tests/packages/owners.py --legs)
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "Packages: $packages"
+
+  package:
+    needs: plan
+    if: ${{ needs.plan.outputs.packages != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.plan.outputs.packages) }}
+    env:
+      PACKAGE: ${{ matrix.package }}
+      # The tests read the frozen data in tests/fixtures/data, never the
+      # live hub data.
+      BDBV_DATA_DIR: tests/fixtures/data
+      DEVICE: cpu
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: package-${{ matrix.package }}
+      # With only the dependencies its pyproject.toml declares, at the
+      # locked versions; the workspace packages it needs from their wheels.
+      - name: Install the package alone
+        run: |
+          uv build --all-packages --out-dir dist
+          uv venv alone
+          uv export --frozen --package "$PACKAGE" --no-dev --all-extras \
+            --no-hashes --no-header --no-annotate > requirements.txt
+          grep -v '^-e ' requirements.txt > third-party.txt
+          uv pip install --python alone -r third-party.txt
+          wheels=()
+          while read -r name; do
+            wheels+=(dist/"$name"-*.whl)
+          done < <(sed -n 's#^-e \./packages/##p' requirements.txt)
+          uv pip install --python alone --no-deps "${wheels[@]}"
+      - name: Import every module
+        # Outside the checkout, so the modules come from the wheels.
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$GITHUB_WORKSPACE/alone/bin/python" -I \
+            "$GITHUB_WORKSPACE/tests/packages/package_alone.py" "$PACKAGE" \
+            "$GITHUB_WORKSPACE/packages/$PACKAGE/src/$PACKAGE"
+      - name: Ruff and mypy
+        if: ${{ !cancelled() }}
+        run: |
+          uv run ruff check "packages/$PACKAGE"
+          uv run ruff format --check "packages/$PACKAGE"
+          uv run mypy "packages/$PACKAGE/src"
+      # Every owned test not marked slow, across the runner's cores.
+      - name: Tests
+        if: ${{ !cancelled() }}
+        run: |
+          mapfile -t files < <(python3 tests/packages/owners.py "$PACKAGE")
+          [ "${#files[@]}" -gt 0 ] || exit 0
+          uv run --group paper pytest -q -n auto --dist worksteal \
+            --durations=10 "${files[@]}"
