@@ -12,6 +12,7 @@ import numpy as np
 import numpyro
 import pytest
 from jax.flatten_util import ravel_pytree
+from model.reference_kernels import kept_share_reference
 from numpyro.infer.util import log_density
 
 from nowcastrenewal.model import MAIN, build_model, model_args
@@ -21,8 +22,6 @@ from nowcastrenewal.model.observation import (
     onset_expectations_by_place,
     weekly_onset_expectations,
 )
-
-from .reference_kernels import kept_share_reference
 
 STREAMS = ("known", "imputed", "known_final", "imputed_final", "triangle")
 

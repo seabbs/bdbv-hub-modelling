@@ -10,7 +10,9 @@ import numpy as np
 import numpyro
 import pandas as pd
 import pytest
+from bdbv_cases import PLACES, VINTAGES
 from jax.scipy.stats import norm
+from test_model import trace
 
 from nowcastbdbv.data.delays import hub_delay_pmf
 from nowcastrenewal.model import BVD, MAIN, build_model, model_args
@@ -20,9 +22,6 @@ from nowcastrenewal.model.inputs import (
     vintage_from_tables,
 )
 from nowcastrenewal.model.rt_observation import RtPseudoObservation
-
-from .conftest import PLACES, VINTAGES
-from .test_model import trace
 
 DATA = Path(__file__).parent / "data"
 

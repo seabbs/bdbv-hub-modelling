@@ -3,6 +3,7 @@ import datetime as dt
 import numpy as np
 import numpyro
 import pytest
+from bdbv_cases import PLACES, VINTAGES, release
 from jax import random
 from numpyro.infer import Predictive, init_to_median
 
@@ -10,8 +11,6 @@ from nowcastbdbv.data.delays import hub_delay_pmf
 from nowcastrenewal.model import MAIN, ModelConfig, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
 from nowcastrenewal.model.model import incubation_period, seed_lead
-
-from .conftest import PLACES, VINTAGES, release
 
 _SIMPLE = {
     "streams": "total",
@@ -187,9 +186,9 @@ def test_prior_predictive_is_bounded_by_depletion(latest_vintage, depletion):
 
 
 def test_real_data_kernels_are_finite(table):
-    from nowcastbdbv.data.tidy import load_delays, load_target
+    from bdbv_cases import MAIN_REPO_DATA
 
-    from .conftest import MAIN_REPO_DATA
+    from nowcastbdbv.data.tidy import load_delays, load_target
 
     if not MAIN_REPO_DATA.exists():
         pytest.skip("main repo data absent")

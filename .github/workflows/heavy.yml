@@ -148,7 +148,7 @@ jobs:
       # epinowcast at the commit the simulator's reporting ports, and
       # baselinenowcast 0.2.2 (not on CRAN yet: the commit that set it).
       # fitdistrplus: primarycensored's fitdistdoublecens needs it (a
-      # Suggests), for tests/model/test_hub_imputation_delays.py.
+      # Suggests), for nowcastbdbv's test_hub_imputation_delays.py.
       # scoringutils 2.3.0: nowcasteval's test_pairwise_skill.py and
       # paper/tests/test_scoringutils.py. No comments inside `packages`:
       # pak reads every line as a package.
@@ -174,7 +174,7 @@ jobs:
           uv run pytest -q packages/nowcastrenewal/tests/test_pmfs.py
           packages/nowcastrenewal/tests/test_latent_epinowcast.py
           packages/nowcastrenewal/tests/test_reporting_delays.py
-          tests/model/test_hub_imputation_delays.py
+          packages/nowcastbdbv/tests/test_hub_imputation_delays.py
           packages/nowcastrenewal/tests/test_triangle.py
           packages/nowcastrenewal/tests/test_reporting_effects.py
           packages/nowcastrenewal/tests/test_reporting_expectation.py

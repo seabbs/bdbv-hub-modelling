@@ -178,6 +178,7 @@ convention = "numpy"
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 "packages/nowcastrenewal/tests/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
+"packages/nowcastbdbv/tests/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 # The port's abort tests check R's conditions, not message text.
 "packages/nowcastbaselines/tests/baselinenowcast/**" = ["PT011"]
 

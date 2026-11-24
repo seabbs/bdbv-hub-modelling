@@ -6,6 +6,7 @@ import numpy as np
 import numpyro
 import pandas as pd
 import pytest
+from bdbv_cases import PLACES, VINTAGES
 from numpyro.infer import init_to_median
 
 from nowcastbdbv.data.delays import hub_delay_pmf
@@ -19,8 +20,6 @@ from nowcastrenewal.model.zones import (
     single_patch,
     zone_vintage_from_tables,
 )
-
-from .conftest import PLACES, VINTAGES
 
 # Two real zone codes per province, so the zone table has them.
 ZONES = {
