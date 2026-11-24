@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Write hub submissions and model metadata.
 
 A submission is a CSV with columns `reference_date`, `forecast_date`,
@@ -15,7 +15,7 @@ samples for each `(reference_date, location, target)`, and each sample
 index covers the same target weeks within a location.
 
 `submission.validate` checks the written files as `hubValidations` does.
-The authoritative check is still `hubValidations` (`task hub:validate`).
+The authoritative check is still `hubValidations` (`task bdbvhub:validate`).
 """
 
 from __future__ import annotations

@@ -28,7 +28,7 @@ from nowcastutils.snapshots import weekly_counts
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
-SNAPSHOT = ROOT / "tests/submission/hub_validation/fixtures/hub-snapshot"
+SNAPSHOT = ROOT / "packages/bdbvhub/tests/hub_validation/fixtures/hub-snapshot"
 HUB = Hub.load(SNAPSHOT)
 """The pinned hub config."""
 OPEN_VINTAGE = "2026-10-24"

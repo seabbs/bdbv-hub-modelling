@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: "nowcastfoundation: foundation-model nowcasts and forecasts: Chronos-2 forecasters, fine-tuning helpers and checkpoint scoring"
+message: "If you use nowcastfoundation, please cite it as below."
+type: software
+authors:
+  - family-names: Abbott
+    given-names: Sam
+    email: sam.abbott@lshtm.ac.uk
+    affiliation: London School of Hygiene & Tropical Medicine
+    orcid: https://orcid.org/0000-0001-8057-8037
+  - family-names: Holt
+    given-names: Charlotte
+    affiliation: London School of Hygiene & Tropical Medicine
+abstract: >-
+  Foundation-model nowcasts and forecasts: Chronos-2 forecasters, fine-tuning helpers and checkpoint scoring. Part of bdbv-hub-modelling, a workspace of separate packages.
+license: MIT
+repository-code: "https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastfoundation"
+url: "https://samabbott.co.uk/bdbv-hub-modelling/"

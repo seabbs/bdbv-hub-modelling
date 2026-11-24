@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The walk models' forecasts under each pairing of their draws.
 
 `randomwalk` and `randomwalknowcast` pair their province draws within

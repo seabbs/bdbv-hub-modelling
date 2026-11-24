@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The simulator's reporting side: PyRenew components for release triangles.
 
 Kept apart from `nowcastrenewal.model`, the fitted models' code, whose

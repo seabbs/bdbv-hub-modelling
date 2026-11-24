@@ -12,8 +12,8 @@ Line references are to that commit and use these short names.
 - `W` is `.github/workflows/validate-submission.yaml`.
 
 Where the config and the README differ, the config is what CI enforces.
-Behaviour marked "tested" was checked by running hubValidations 3.0.0 (the version the hub's CI installed on 2026-10-27) on the fixtures in `tests/submission/hub_validation/fixtures/`.
-A pinned copy of the three config files is in `tests/submission/hub_validation/fixtures/hub-snapshot/hub-config/`.
+Behaviour marked "tested" was checked by running hubValidations 3.0.0 (the version the hub's CI installed on 2026-10-27) on the fixtures in `packages/bdbvhub/tests/hub_validation/fixtures/`.
+A pinned copy of the three config files is in `packages/bdbvhub/tests/hub_validation/fixtures/hub-snapshot/hub-config/`.
 
 ## 1. File path and name
 
@@ -258,7 +258,7 @@ hubValidations enforces `format: email` (tested, `invalid_bad_email`).
 
 ## 9. Fixtures
 
-`tests/submission/hub_validation/fixtures/manifest.json` lists every fixture, its expected failing checks for Python and R and, for real files, the source path and commit.
+`packages/bdbvhub/tests/hub_validation/fixtures/manifest.json` lists every fixture, its expected failing checks for Python and R and, for real files, the source path and commit.
 
 Real submissions copied from the hub:
 
@@ -271,5 +271,5 @@ Real submissions copied from the hub:
 | `model-metadata/epiforecasts-renewal.yml` | `4174b51` | contributors without email |
 | `model-metadata/MOBS-GLEAM_BDBV.yml` | `ae5ffd8` | block-style list |
 
-Constructed fixtures are written by `tests/submission/hub_validation/make_fixtures.py`.
+Constructed fixtures are written by `packages/bdbvhub/tests/hub_validation/make_fixtures.py`.
 Each invalid file changes one thing in `valid_basic`.

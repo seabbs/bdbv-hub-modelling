@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The German COVID-19 hospitalisation nowcasting hub data as forecast tasks.
 
 The German hub (Wolffram et al. 2023) collected nowcasts of the 7-day

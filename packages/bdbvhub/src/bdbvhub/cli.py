@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Command line interface: `bdbvhub <command>`.
 
 Commands:
@@ -414,6 +414,17 @@ def build_parser() -> argparse.ArgumentParser:
     ppc.add_argument("--out", required=True)
     ppc.add_argument("--stream", default="total")
 
+    tsn = sub.add_parser(
+        "truth-sensitivity",
+        help="How the truth-final constants move what is scored "
+        "(nowcasteval.nowcast.truth_sensitivity), as a Markdown table.",
+    )
+    tsn.add_argument("--data", default=data_dir)
+    tsn.add_argument("--config", default="config/backtest.toml")
+    tsn.add_argument(
+        "--out", default=None, help="Markdown file; stdout if not given."
+    )
+
     rtc = sub.add_parser(
         "rt-check",
         help="Write the Rt sense-check page of a renewal fit directory: "
@@ -596,7 +607,7 @@ def _task_args(p: argparse.ArgumentParser, data_dir: str) -> None:
 
 def _version() -> str:
     try:
-        return version("BDBVHubRenewal")
+        return version("bdbvhub")
     except PackageNotFoundError:  # pragma: no cover
         return "unknown"
 
@@ -741,7 +752,7 @@ def _backtest(args: argparse.Namespace) -> int:
         if not names:
             print(
                 "ERROR: fitted models come from the fit store: run "
-                "`task hub:fit-store`.",
+                "`task bdbvhub:fit-store`.",
                 file=sys.stderr,
             )
             return 1
@@ -1740,11 +1751,10 @@ def _compare_hub(args: argparse.Namespace) -> int:
         stored, _fit_store_forecasts(args), rounds, live
     )
     hub_ids = hc.own_hub_ids()
-    forecasts = hc.with_submissions(
+    forecasts = hc.as_submitted(
         pd.concat(
             [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
         ),
-        hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
     table_file = Path(args.submissions_table or cfg.submissions_table)
@@ -1933,6 +1943,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _plot_submission(args)
     if args.command == "coherence":
         return _coherence(args)
+    if args.command == "truth-sensitivity":
+        from nowcasteval.nowcast import truth_sensitivity
+
+        conf = bt.load_config(args.config)
+        got = truth_sensitivity(
+            load_target(args.data),
+            load_daily(args.data),
+            skip=conf.skip_origins,
+        )
+        text = (
+            got["delays"].to_markdown(index=False)
+            + "\n\n"
+            + got["complete"].round(3).to_markdown(index=False)
+            + "\n"
+        )
+        if args.out:
+            Path(args.out).write_text(text)
+        else:
+            print(text)
+        return 0
     if args.command == "rt-check":
         from bdbvhub.reporting.rtcheck import rt_check_from_fit
 
@@ -1972,12 +2002,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
     if args.command == "finetuned-checkpoint":
-        from nowcastfoundation.forecaster import (
-            finetuned_spec,
-            resolve_checkpoint,
-        )
+        from nowcastfoundation.forecaster import finetuned_checkpoint
 
-        print(resolve_checkpoint(finetuned_spec()).hash)
+        print(finetuned_checkpoint().hash)
         return 0
     if args.command == "hub-id":
         print(model_id(model_abbr_for(args.model, args.hub_toml)))

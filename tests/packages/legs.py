@@ -39,7 +39,7 @@ SHARED = (
     "uv.lock",
     "conftest.py",
     "tests/packages/",
-    ".github/workflows/ci.yml",
+    ".github/workflows/tests.yml",
 )
 """Files every package's job depends on."""
 

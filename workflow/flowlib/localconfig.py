@@ -49,6 +49,8 @@ DEFAULTS = (
     ("REMOTE", ""),
     ("REMOTE_ROOT", ""),
     ("SIM_SEEDS", ""),
+    # A Snakemake profile of this machine's own, kept outside the
+    # repository, which replaces the one COMPUTE gives (empty: none).
     ("SNAKEMAKE_PROFILE", ""),
     # Where the dashboard (workflow/scripts/dashboard.py) listens: its
     # host (an address of this machine; 127.0.0.1 keeps it local) and
@@ -88,7 +90,7 @@ DEFAULTS = (
     ("STATUS_EVERY", "60"),
     # The workflow monitor (flowlib.monitor): the Panoptes server every
     # Snakemake run reports to (empty: off), and where
-    # `task nowcast-workflow:monitor` serves it; the targets whose rule
+    # `task workflow:monitor` serves it; the targets whose rule
     # graph and job DAG it draws (flowlib.dag, NAME=TARGET), the Snakemake
     # options they are built with, and every how many seconds.
     ("MONITOR_URL", "http://$MONITOR_HOST:$MONITOR_PORT"),

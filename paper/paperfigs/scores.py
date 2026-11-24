@@ -48,6 +48,8 @@ Both forms:
 
 Positive bias means overprediction. `relative_scores` divides a model's
 mean score by the study baseline's mean score on the forecasts both made.
+`pairwise_scores` gives each model's pairwise relative skill, as
+scoringutils' `get_pairwise_comparisons` (`nowcasteval.scoring.pairwise_skill`).
 """
 
 from __future__ import annotations
@@ -57,7 +59,12 @@ from typing import Final
 
 import numpy as np
 import pandas as pd
-from nowcasteval.scoring import QUANTILE_LEVELS, crps_ensemble, wis_quantile
+from nowcasteval.scoring import (
+    QUANTILE_LEVELS,
+    crps_ensemble,
+    pairwise_skill,
+    wis_quantile,
+)
 
 from paperfigs.schema import DEFAULT_STRATUM, FORECAST_KEYS
 
@@ -71,6 +78,7 @@ __all__ = [
     "coverage_columns",
     "forecast_share",
     "metric_of",
+    "pairwise_scores",
     "relative_scores",
     "score_forecasts",
     "summarise_scores",
@@ -442,6 +450,56 @@ def _relative_one(
             sums[c] / sums["base_log" if c.startswith("log_") else "base"]
         )
     return out.reset_index()
+
+
+def pairwise_scores(
+    scores: pd.DataFrame,
+    by: Sequence[str] = (),
+    baseline: str | None = None,
+) -> pd.DataFrame:
+    """Return each model's pairwise relative skill on both scales.
+
+    Each pair of models is compared on the forecasts both made, and a
+    model's skill is the geometric mean of its ratios against every model,
+    scaled to the baseline's (`nowcasteval.scoring.pairwise_skill`), so
+    models that forecast different targets and places are compared
+    through the others.
+
+    Parameters
+    ----------
+    scores : pandas.DataFrame
+        Output of `score_forecasts`.
+    by : sequence of str
+        Columns to compare within beyond study, such as `horizon`.
+    baseline : str, optional
+        The reference model. Defaults to `STUDY_BASELINES` for each study.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `study`, `model`, `by`, `pair_score` and `pair_log_score`, the
+        skill on the natural and log scales. The baseline scores 1.
+    """
+    parts = []
+    for study, sc in scores.groupby("study", sort=False):
+        ref = baseline or STUDY_BASELINES[str(study)]
+        skill = pairwise_skill(
+            sc,
+            ref,
+            by=list(by),
+            metrics=("score", "log_score"),
+            match_on=_MATCH,
+            rounds="origin_date",
+        )
+        parts.append(
+            skill.assign(study=study).rename(
+                columns={
+                    "relative_score": "pair_score",
+                    "relative_log_score": "pair_log_score",
+                }
+            )[["study", "model", *by, "pair_score", "pair_log_score"]]
+        )
+    return pd.concat(parts, ignore_index=True)
 
 
 def forecast_share(forecasts: pd.DataFrame) -> pd.DataFrame:

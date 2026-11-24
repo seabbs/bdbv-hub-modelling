@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Hub metadata text for each model that may be submitted.
 
 `bdbvhub metadata --model <model>` renders it with

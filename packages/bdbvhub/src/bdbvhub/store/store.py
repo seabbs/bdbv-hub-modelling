@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The fit store: one stored fit per fitted model and real origin.
 
 The fitted models are slow, so the docs never fit them.
@@ -274,7 +274,6 @@ def _strip(source: str) -> str:
 
 
 KEY_PACKAGES: Final = (
-    "bdbvhubrenewal",
     "nowcastutils",
     "nowcasteval",
     "nowcastbaselines",

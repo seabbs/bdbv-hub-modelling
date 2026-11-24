@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The held-out synthetic evaluation of the paper.
 
 The held-out outbreaks are simulations of the paper's synthetic grid

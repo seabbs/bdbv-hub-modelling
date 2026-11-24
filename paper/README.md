@@ -23,7 +23,7 @@ flowchart LR
 ```
 
 Simulation and fine-tuning run locally, not on CI, and publish each checkpoint as a `chronos-ft-<hash>` release.
-A round's simulations are made on a CPU host (`task nowcast-foundation:simulate`) and trained on a GPU (`task nowcast-foundation:finetune`) by the Snakemake workflow in [`workflow/`](../workflow/README.md).
+A round's simulations are made on a CPU host (`task workflow:simulate`) and trained on a GPU (`task workflow:finetune`) by the Snakemake workflow in [`workflow/`](../workflow/README.md).
 Everything from forecasting on runs in this workflow, locally or on CI.
 
 <details>
@@ -76,7 +76,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - The evidence figures and numbers read no BDBV scores.
 - Development German data stop at the split, with releases up to D days after it for the truth of the last dates.
 - CI runs the development target.
-  The `paper` target runs only when the Pages workflow is dispatched with `paper_target: paper`.
+  The `paper` target runs only when the Site workflow is dispatched with `paper_target: paper`.
   That build is never deployed to the site or attached to a release.
 - No held-out data or results are committed.
   `results/` and `build/` are ignored.
@@ -87,7 +87,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 <details>
 <summary>CI</summary>
 
-- The Pages workflow (`.github/workflows/pages.yml`) runs the backtests for the site and then this workflow with `--rerun-triggers mtime`, so the paper reuses their forecasts rather than running them again.
+- The Site workflow (`.github/workflows/pages.yml`) runs the backtests for the site and then this workflow with `--rerun-triggers mtime`, so the paper reuses their forecasts rather than running them again.
   It renders the paper into the site at `/paper/`.
 - It runs on changes to `paper/`, the package, `config/` and the data, and when the hub data change.
 - The Paper tests workflow runs ruff, the tests, a dry run of both targets and a development run on dummy data.
@@ -118,3 +118,16 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - [`tests/`](tests): `task test`.
 
 </details>
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../CITATION.cff).
+
+```bibtex
+@software{abbott_paper,
+  author = {Abbott, Sam and Holt, Charlotte},
+  title = {{The bdbv-hub-modelling paper: fine-tuned Chronos-2 and joint-model-informed renewal nowcasts for the BDBV Modeling Hub}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/paper}
+}
+```

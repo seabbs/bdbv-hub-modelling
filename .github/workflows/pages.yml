@@ -1,4 +1,4 @@
-name: Pages
+name: Site
 
 # Builds the site on pull requests, publishes it as a preview at
 # pr-preview/pr-N/ and comments the link (pr-closed.yml removes
@@ -110,8 +110,9 @@ jobs:
           python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
           bundle=output/fit-store/backtests/latest.tar.gz
           if [ ! -f "$bundle" ]; then
-            echo "::error::the fit store holds no backtests (Fit store's backtests job writes them)"
-            exit 1
+            echo "::warning::the fit store holds no backtests yet (Fit store's backtests job writes them); their sections are left out"
+            echo "Backtests: not yet stored" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
           tar -xzf "$bundle"
           cat output/fit-store/backtests/latest.json >> "$GITHUB_STEP_SUMMARY"
@@ -139,6 +140,7 @@ jobs:
           retention-days: 1
 
   build:
+    name: Build the site and the paper
     needs: prep
     if: ${{ !cancelled() && needs.prep.result == 'success' }}
     runs-on: ubuntu-latest
@@ -311,6 +313,7 @@ jobs:
   # Only main deploys: a dispatch from another branch would otherwise
   # replace the site with that branch's build.
   deploy:
+    name: Publish the site
     needs: build
     if: >-
       !cancelled() && needs.build.result == 'success'
@@ -343,6 +346,7 @@ jobs:
   # Each job below names the build's result, as the skipped held-out job
   # upstream would otherwise skip it.
   preview:
+    name: Publish the pull request's preview
     needs: build
     if: >-
       !cancelled() && needs.build.result == 'success'
@@ -371,6 +375,7 @@ jobs:
   # code. Adding files to an existing release needs no tag, so the
   # workflow token can do it.
   release:
+    name: Attach the round's files to its release
     needs: build
     if: >-
       !cancelled() && needs.build.result == 'success'

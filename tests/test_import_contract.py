@@ -54,7 +54,9 @@ def test_ci_checks_each_package_in_its_own_job() -> None:
     packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
     assert set(layers()) == packages
     workflows = ROOT / ".github" / "workflows"
-    job = yaml.safe_load((workflows / "ci.yml").read_text())["jobs"]["package"]
+    job = yaml.safe_load((workflows / "tests.yml").read_text())["jobs"][
+        "package"
+    ]
     runs = " ".join(s.get("run", "") for s in job["steps"])
     for check in (
         "package_alone.py",
@@ -82,7 +84,7 @@ def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
     from legs import layers, legs
 
     assert legs(["docs/index.md"]) == []
-    assert legs(["tests/workflow/test_workflow_dag.py"]) == []
+    assert legs(["workflow/tests/test_workflow_dag.py"]) == []
     assert legs(["uv.lock"]) == layers()
     assert legs(["packages/bdbvhub/tests/test_zones.py"]) == ["bdbvhub"]
     seen = legs(["packages/nowcastbaselines/src/nowcastbaselines/chain.py"])

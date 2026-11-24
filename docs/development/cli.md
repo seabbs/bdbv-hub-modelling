@@ -25,7 +25,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `hub-id` | Print the hub model id that submissions use. |
 | `freeze-round` | Write a round's docs page to the ledger once its pull request has merged. |
 | `report` | Make the docs figures and tables. |
-| `digest [--with PATH...] [--text TEXT] [--model M]` | Print a hash of what a backtest reads, which keys its cached outputs in the Pages workflow. With `--model`, only that model's code (its import closure, less the other models' modules) with the data. |
+| `digest [--with PATH...] [--text TEXT] [--model M]` | Print a hash of what a backtest reads, which keys its cached outputs in the Site workflow. With `--model`, only that model's code (its import closure, less the other models' modules) with the data. |
 | `backtest --forecast-only`, `zone-backtest --forecast-only` | Forecast without scoring and write the forecasts to `--parts`, so each model can run apart. |
 | `score PART...` | Score the forecasts of `--forecast-only` runs, every model together, and write the results files one run of each backtest writes. |
 | `concat-results --out DIR [--dedupe FILE...] PART...` | Stack the results files of runs made apart, such as blocks of dates, in the order given. `--dedupe` keeps one copy of rows every part writes in full. |
@@ -35,17 +35,17 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 ## Evaluation
 
 ```bash
-task nowcast-eval:backtest           # development backtest and real releases
-task nowcast-eval:backtest-lopo      # leave one province out
-task nowcast-eval:backtest-zones     # random walk models at health-zone level
-task nowcast-eval:results            # every derived file in results/, as the Pages build makes them
-task docs                            # build the site into _site/ (runs task nowcast-eval:results, about 25 min)
-task serve                           # serve the site (run task nowcast-eval:results once first)
+task bdbvhub:backtest           # development backtest and real releases
+task bdbvhub:backtest-lopo      # leave one province out
+task bdbvhub:backtest-zones     # random walk models at health-zone level
+task bdbvhub:results            # every derived file in results/, as the Pages build makes them
+task docs                            # build the site into _site/ (runs task bdbvhub:results, about 25 min)
+task serve                           # serve the site (run task bdbvhub:results once first)
 ```
 
 `--models` runs some models and keeps the others' rows in `results/`.
-The files in `results/` are not committed, apart from `development-log.csv` and `model-choice.yml`.
-The Pages build makes the rest with the steps of `task nowcast-eval:results`, from the code, the data and the fit store.
+The files in `results/` are not committed.
+The Pages build makes the rest with the steps of `task bdbvhub:results`, from the code, the data and the fit store.
 
 ## Fit store
 
@@ -82,11 +82,11 @@ To test a branch, dispatch the workflow on it with `store_branch` set to a name 
 When fits are stored, the workflow rebuilds the docs.
 
 ```bash
-task bdbv-hub:fit-store-plan  # the fits the store lacks for this code and data
-task bdbv-hub:fit-store       # load the stored fits into results/
+task bdbvhub:fit-store-plan  # the fits the store lacks for this code and data
+task bdbvhub:fit-store       # load the stored fits into results/
 ```
 
-`task nowcast-eval:backtest` loads the store first.
+`task bdbvhub:backtest` loads the store first.
 Where the store has no fit for the current key, `load` uses the newest stored fit of that model and origin.
 Pages with fitted-model results list the commits of their fits and the fits not yet made.
 A full refit is 20 fits (4 models at 5 origins): 43 minutes and 5.3 runner-hours, with the slowest fit 39 minutes (`renewalbvd`).
@@ -121,7 +121,7 @@ When the reference date is an open round in `tasks.json`, it checks the file wit
 It skips the submission window and the model metadata, which `bdbvhub metadata` checks.
 For any other reference date it prints a note and skips the checks.
 
-`task bdbv-hub:validate` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
+`task bdbvhub:validate` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 
 `bdbvhub metadata` writes `hub/model-metadata/<model id>.yml` and checks it against the hub's schema.
 

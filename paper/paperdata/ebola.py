@@ -11,8 +11,6 @@ Three sources give samples.
   submissions and the hub's baseline (`HUB_BASELINE`) included. A file
   may hold several forecasts; the one with the latest `forecast_date` is
   kept.
-- `candidate_samples`: files of our models' forecasts in the layout of
-  `data/candidate-forecasts.csv.gz`.
 - `history_samples`: the fit store's history, a file of the first fit
   stored for each model and origin, kept only if it was made before its
   round closed. `write_store_history` writes it from the fit store
@@ -31,7 +29,7 @@ from __future__ import annotations
 import gzip
 import json
 import subprocess
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Final
 
@@ -46,7 +44,6 @@ __all__ = [
     "HUB_BASELINE",
     "TARGET",
     "backtest_samples",
-    "candidate_samples",
     "history_samples",
     "hub_samples",
     "load",
@@ -134,17 +131,6 @@ def hub_samples(hub: str | Path) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame(columns=SAMPLE_COLUMNS)
     return _samples(pd.concat(frames, ignore_index=True))
-
-
-def candidate_samples(paths: Iterable[str | Path]) -> pd.DataFrame:
-    """Read our models' samples from files of stored forecasts."""
-    frames = [pd.read_csv(p) for p in paths]
-    if not frames:
-        return pd.DataFrame(columns=SAMPLE_COLUMNS)
-    frame = pd.concat(frames, ignore_index=True)
-    if "kind" in frame:
-        frame = frame[frame["kind"] == "real"]
-    return _samples(frame)
 
 
 def _git(repo: str | Path, *args: str) -> bytes:
@@ -243,17 +229,14 @@ def history_samples(path: str | Path) -> pd.DataFrame:
 
 def load(
     hub: str | Path,
-    candidates: Iterable[str | Path] = (),
     history: str | Path | None = None,
 ) -> pd.DataFrame:
     """Return every forecast's samples, with `truth` left empty.
 
-    `hub` is a clone of the hub. `candidates` are files of our models'
-    stored forecasts and `history` the fit store's history
-    (`history_samples`). A model and round in more than one source is
-    taken from the first of hub, candidates and history.
+    `hub` is a clone of the hub and `history` the fit store's history
+    (`history_samples`). A model and round in both is taken from the hub.
     """
-    parts = [hub_samples(hub), candidate_samples(candidates)]
+    parts = [hub_samples(hub)]
     if history is not None:
         parts.append(history_samples(history))
     seen: set[tuple[str, pd.Timestamp]] = set()

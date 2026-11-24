@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Attention bias that ties a place's series together and to its parent.
 
 Chronos-2's group attention has no series identity, so in the ragged

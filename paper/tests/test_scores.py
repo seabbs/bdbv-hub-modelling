@@ -9,6 +9,7 @@ from paperfigs.scores import (
     STUDY_COVERAGE,
     WIS_PARTS,
     forecast_share,
+    pairwise_scores,
     relative_scores,
     score_forecasts,
 )
@@ -355,4 +356,62 @@ def test_relative_parts_sum_to_the_relative_wis() -> None:
         total = "rel_log_score" if scale else "rel_score"
         assert rel[parts].sum(axis=1).to_numpy() == pytest.approx(
             rel[total].to_numpy()
+        )
+
+
+def test_pairwise_skill_is_the_ratio_with_every_forecast_shared() -> None:
+    df = pd.concat(
+        [_rows("ref", Q, 5.0, location=loc) for loc in "ab"]
+        + [_rows("m", Q * 2, 5.0, location=loc) for loc in "ab"]
+        + [_rows("k", Q * 0.5, 5.0, location=loc) for loc in "ab"]
+    )
+    s = score_forecasts(df)
+    pair = pairwise_scores(s, baseline="ref").set_index("model")
+    rel = relative_scores(s, baseline="ref").set_index("model")
+    for col in ("pair_score", "pair_log_score"):
+        assert pair.loc["ref", col] == pytest.approx(1)
+    assert pair["pair_score"].to_dict() == pytest.approx(
+        rel["rel_score"].to_dict()
+    )
+    assert pair["pair_log_score"].to_dict() == pytest.approx(
+        rel["rel_log_score"].to_dict()
+    )
+
+
+def test_pairwise_skill_compares_through_the_other_models() -> None:
+    # m forecasts only location a, where the reference does badly, and k
+    # forecasts both: m is judged against k too, not only against ref on a.
+    df = pd.concat(
+        [
+            _rows("ref", Q * 3, 5.0, location="a"),
+            _rows("ref", Q, 5.0, location="b"),
+            _rows("k", Q, 5.0, location="a"),
+            _rows("k", Q, 5.0, location="b"),
+            _rows("m", Q, 5.0, location="a"),
+        ]
+    )
+    s = score_forecasts(df)
+    pair = pairwise_scores(s, baseline="ref").set_index("model")
+    rel = relative_scores(s, baseline="ref").set_index("model")
+    assert pair.loc["m", "pair_score"] != pytest.approx(
+        rel.loc["m", "rel_score"]
+    )
+    # Each model's geometric mean of its ratios to every model, itself
+    # included, on the forecasts each pair shares, scaled to ref's.
+    w = s.set_index(["model", "location"])["score"]
+    ref_a, ref_b, k_a, k_b, m_a = (
+        w["ref", "a"],
+        w["ref", "b"],
+        w["k", "a"],
+        w["k", "b"],
+        w["m", "a"],
+    )
+    theta = {
+        "ref": ((ref_a + ref_b) / (k_a + k_b) * ref_a / m_a) ** (1 / 3),
+        "k": ((k_a + k_b) / (ref_a + ref_b) * k_a / m_a) ** (1 / 3),
+        "m": (m_a / ref_a * m_a / k_a) ** (1 / 3),
+    }
+    for model in ("k", "m"):
+        assert pair.loc[model, "pair_score"] == pytest.approx(
+            theta[model] / theta["ref"]
         )

@@ -74,3 +74,11 @@ def test_pages_cancels_in_progress_on_every_ref() -> None:
 
     workflow = _yaml.safe_load(PAGES.read_text())
     assert workflow["concurrency"]["cancel-in-progress"] is True
+
+
+def test_pages_builds_without_stored_backtests_yet() -> None:
+    # A missing bundle is a warning, not a failed build.
+    steps = _jobs()["prep"]["steps"]
+    (load,) = [s for s in steps if s.get("name") == "Load the stored backtests"]
+    assert "::warning::" in load["run"]
+    assert "exit 1" not in load["run"]

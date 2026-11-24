@@ -22,7 +22,6 @@ from __future__ import annotations
 import datetime as dt
 import html
 import json
-import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -30,6 +29,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from bdbvhub.reporting import pages
 from nowcastbdbv.data.tidy import load_target
 from nowcasteval.explorer import (
     explorer_data,
@@ -55,55 +55,6 @@ REFERENCE = "seabbs-rwnowcast"
 
 MATCH = ("reference_date", "truth_vintage", "location", "target_end_date")
 """What makes two models' scores the same cell."""
-
-SCRIPTS = (
-    "toggles.js",
-    "zoom.js",
-    "summarise.js",
-    "energy.js",
-    "tablesort.js",
-    "tablefilter.js",
-    "placemap.js",
-    "explorer.js",
-    "scorechart.js",
-    "scoresummary.js",
-)
-"""The docs scripts the charts need, in the docs' load order."""
-
-THEME = """
-:root{--md-default-bg-color:#fff;--md-default-fg-color:rgba(0,0,0,.87);
---md-default-fg-color--light:rgba(0,0,0,.54);
---md-default-fg-color--lighter:rgba(0,0,0,.32);
---md-default-fg-color--lightest:rgba(0,0,0,.07);
---md-accent-fg-color:#526cfe;--md-typeset-a-color:#4051b5}
-[data-md-color-scheme=slate]{--md-default-bg-color:#1e2129;
---md-default-fg-color:rgba(226,228,233,.82);
---md-default-fg-color--light:rgba(226,228,233,.56);
---md-default-fg-color--lighter:rgba(226,228,233,.32);
---md-default-fg-color--lightest:rgba(226,228,233,.12);
---md-accent-fg-color:#5e8bde;--md-typeset-a-color:#5e8bde}
-body{background:var(--md-default-bg-color);color:var(--md-default-fg-color);
-font:15px/1.5 system-ui,sans-serif;max-width:1200px;margin:0 auto;
-padding:16px}
-a{color:var(--md-typeset-a-color)}
-table{border-collapse:collapse;font-size:13px;margin:8px 0 16px}
-td,th{border-bottom:1px solid var(--md-default-fg-color--lightest);
-padding:3px 8px;text-align:right}
-td:first-child,th:first-child{text-align:left}
-.mut{color:var(--md-default-fg-color--light)}
-"""
-
-SCHEME = """
-(function () {
-  var dark = window.matchMedia("(prefers-color-scheme: dark)");
-  function set() {
-    document.body.setAttribute("data-md-color-scheme",
-      dark.matches ? "slate" : "default");
-  }
-  set();
-  dark.addEventListener("change", set);
-})();
-"""
 
 
 def last_rounds(quantiles: pd.DataFrame, n: int) -> list[str]:
@@ -266,10 +217,7 @@ def build(
     reference = f"{REFERENCE} (submitted)"
     models = [*ours, *current, *teams]
 
-    data = out.with_name(out.stem + "-data")
-    if data.exists():
-        shutil.rmtree(data)
-    data.mkdir(parents=True)
+    data = pages.data_dir(out)
     rel = data.name
     srcs = {}
     for key, kind in (("complete", "complete"), ("latest", "reported")):
@@ -309,10 +257,6 @@ def build(
     complete = labelled(scores.loc[scores["target"] == "complete"])
     tab = pairwise(complete, reference) if len(complete) else pd.DataFrame()
 
-    js = "\n".join(
-        (ROOT / "docs" / "javascripts" / f).read_text() for f in SCRIPTS
-    )
-    css = (ROOT / "docs" / "stylesheets" / "extra.css").read_text()
     commit = html.escape(head.read_text().strip()[:9])
     parts = [
         "<h1>Our hub rounds against the hub teams</h1>",
@@ -344,18 +288,9 @@ def build(
         "included, scaled so seabbs-rwnowcast is 1. Complete weeks.</p>",
         small_table(tab) if len(tab) else "<p>Nothing scored yet.</p>",
     ]
-    doc = (
-        "<!doctype html><html lang=en><meta charset=utf-8>"
-        "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>Hub rounds</title><style>{THEME}{css}</style>"
-        f"<body data-md-color-scheme=default><script>{SCHEME}</script>"
-        + "\n".join(parts)
-        + f"<script>{js}</script></body></html>"
+    return pages.write_page(
+        out, pages.page("Hub rounds", parts, pages.SCORE_SCRIPTS, ROOT)
     )
-    tmp = out.with_name(out.name + ".tmp")
-    tmp.write_text(doc)
-    tmp.rename(out)
-    return out
 
 
 def main(argv: Sequence[str]) -> None:

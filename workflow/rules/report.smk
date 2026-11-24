@@ -378,11 +378,28 @@ rule hub_rounds:
 # every hub release into its own folder, keyed by the code it depends on
 # (scoring.ft_check_key), so the reference models are made once; the
 # fine-tuned model's folder is named by its checkpoint, so a new one
-# reruns only it. `ft_check` scores them together and copies the page to
-# REVIEW_DIR as bdbv-ft-check.html. Not part of `all`.
+# reruns only it. `ft_check_page` scores them together for one checkpoint,
+# ft-check/<ckpt>/bdbv-ft-check-<ckpt>.html, copied to REVIEW_DIR under
+# that name, so each checkpoint is its own target. `ft_check` is the page
+# of ft_check.checkpoint (or config/finetune.toml's pin), copied to
+# REVIEW_DIR as bdbv-ft-check.html too; `finetune` asks for the page of
+# every released checkpoint (`ft_check_released`). Not part of `all`.
 
 FTC = config["ft_check"]
-FTC_DIR = f"{HUB}/ft-check"
+
+
+def ft_check_checkpoint():
+    """The fine-tuned checkpoint the check runs: the config's or the pin."""
+    import tomllib
+
+    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
+    return FTC["checkpoint"] or pin
+
+
+def ft_check_folders(ckpt):
+    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
+        f"{FTC_DIR}/forecasts/ft-{ckpt}"
+    ]
 
 
 rule ft_check_forecast:
@@ -420,41 +437,63 @@ rule ft_check_forecast:
         "--data {params.data} --out {params.out} > {log} 2>&1"
 
 
-rule ft_check:
+rule ft_check_page:
     input:
-        lambda wc: [f"{f}.done" for f in ft_check_folders()],
+        lambda wc: [f"{f}.done" for f in ft_check_folders(wc.ckpt)],
     output:
-        f"{FTC_DIR}/bdbv-ft-check.html",
+        ft_check_page("{ckpt}"),
     log:
-        f"{FTC_DIR}/logs/report.log",
+        f"{FTC_DIR}/logs/report-{{ckpt}}.log",
+    wildcard_constraints:
+        ckpt=r"slots-[0-9a-f]+|[0-9a-f]+",
     localrule: True
     conda:
         TOOLS_ENV
     params:
         data=lambda wc: f"{HUB}/data",
-        folders=lambda wc: " ".join(ft_check_folders()),
-        checkpoint=lambda wc: ft_check_checkpoint(),
+        folders=lambda wc: " ".join(ft_check_folders(wc.ckpt)),
         reference=FTC["reference"],
         review=LOCAL["REVIEW_DIR"],
+        stem=lambda wc, output: Path(output[0]).stem,
     shell:
         "(BDBV_DATA_DIR={params.data} uv run bdbvhub ft-check report "
         "--data {params.data} --reference {params.reference} "
-        "--checkpoint {params.checkpoint} --out {output} {params.folders} "
+        "--checkpoint {wildcards.ckpt} --out {output} {params.folders} "
         "&& if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
-        "rm -rf '{params.review}/bdbv-ft-check-data' && "
-        "cp -r $(dirname {output})/bdbv-ft-check-data '{params.review}/' && "
-        "cp {output} '{params.review}/bdbv-ft-check.html.tmp' && "
+        "rm -rf '{params.review}/{params.stem}-data' && "
+        "cp -r $(dirname {output})/{params.stem}-data '{params.review}/' && "
+        "cp {output} '{params.review}/{params.stem}.html.tmp' && "
+        "mv '{params.review}/{params.stem}.html.tmp' "
+        "'{params.review}/{params.stem}.html'; fi) > {log} 2>&1"
+
+
+rule ft_check:
+    # The configured checkpoint's page, also as REVIEW_DIR's latest,
+    # bdbv-ft-check.html (its data folder is the checkpoint's own).
+    input:
+        lambda wc: ft_check_page(ft_check_checkpoint()),
+    log:
+        f"{FTC_DIR}/logs/latest.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        review=LOCAL["REVIEW_DIR"],
+    shell:
+        "if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
+        "cp {input} '{params.review}/bdbv-ft-check.html.tmp' && "
         "mv '{params.review}/bdbv-ft-check.html.tmp' "
-        "'{params.review}/bdbv-ft-check.html'; fi) > {log} 2>&1"
+        "'{params.review}/bdbv-ft-check.html'; fi > {log} 2>&1"
 
 
 # The this-round page: every candidate's forecasts and nowcasts for the
 # round the latest Submit run on main targeted, against the data as of
 # the round, with the wk R_t quantiles, the gate's pick and the renewal
 # fits' convergence (workflow/scripts/this_round_report.py). No scores.
-# It reruns when <ROOT>/hub/round/run.txt (the run and its status) or
-# <ROOT>/hub/round/store.txt (the fit store's commit) changes, which
-# workflow/scripts/hub_watch.sh writes. Not part of `all`.
+# It reruns when <ROOT>/hub/round/run.txt (the run and its status),
+# <ROOT>/hub/round/store.txt (the fit store's commit) or
+# <ROOT>/hub/round/submissions.txt (the hub's newest model-output commit)
+# changes, which workflow/scripts/hub_watch.sh writes. Not part of `all`.
 
 
 rule this_round_inputs:
@@ -462,6 +501,7 @@ rule this_round_inputs:
         target=rules.hub_data.output,
         run=f"{HUB}/round/run.txt",
         store=f"{HUB}/round/store.txt",
+        submissions=f"{HUB}/round/submissions.txt",
     output:
         candidates=f"{HUB}/round/candidates.csv.gz",
         run=f"{HUB}/round/run/run.json",

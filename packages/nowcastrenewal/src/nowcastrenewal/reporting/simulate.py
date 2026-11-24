@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""A simulation's reported counts from its expected onsets.
 
 `reporting_model` is the reporting step as one numpyro model: the

@@ -27,3 +27,16 @@ It holds the renewal models fitted to the hub's data and the joint model that si
 ```sh
 uv add "nowcastrenewal[model]"
 ```
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../../CITATION.cff).
+
+```bibtex
+@software{abbott_nowcastrenewal,
+  author = {Abbott, Sam},
+  title = {{nowcastrenewal: renewal-model nowcasts and forecasts: the PyRenew renewal model, its forecasters and the BVDOutbreakSize inputs}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastrenewal}
+}
+```

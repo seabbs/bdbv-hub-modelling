@@ -225,11 +225,13 @@ rule finetune:
         # Its own scoring (lead 10:15, Sam): each checkpoint's German unit
         # and the references, on the forecasting device.
         finetune_scores,
+        # And each released checkpoint's BDBV check page (lead 10:50).
+        ft_check_released,
 
 
 rule dashboard:
     # A static render of the dashboard for the configured runs, for a
-    # finished run or the record; `task nowcast-foundation:dashboard` serves it live instead.
+    # finished run or the record; `task workflow:dashboard` serves it live instead.
     output:
         f"{LOCAL['ROOT']}/reports/dashboard.html",
     log:

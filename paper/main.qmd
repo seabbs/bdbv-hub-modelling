@@ -194,9 +194,10 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ::: {.callout-note title="Plan"}
 - We compare with the other submissions, relative to the hub's baseline.
 - We score every hub round, all held out from model development.
-- We scored the fine-tuned model on past hub rounds once, in the week of TODO (date), to check whether to submit it.
-- TODO: state that no model setting was chosen on these scores, once confirmed.
+- From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past hub rounds, to decide whether it could be submitted.
+- These past rounds therefore informed that decision, and only rounds after the fine-tuned model's first submission are prospective for it.
 - Every model, ours and the hub teams', forecasts some targets and places only, so we compare models on the forecasts they share and report the country, provinces and zones apart.
+- We compare models by pairwise relative skill on the forecasts each pair shares, as scoringutils does, with WIS on the natural and log scales side by side [@Bosse2023-sx; @bosse2022scoringutils].
 - We score only the hub's own targets and horizons.
 - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
 - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
@@ -287,7 +288,7 @@ On the {{< meta results.synthetic.scope >}}, the best model was {{< meta results
 ::: {#tbl-synthetic-scores}
 {{< include build/tables/main/synthetic-scores.md >}}
 
-Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}}. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
 ### German nowcast hub
@@ -316,15 +317,15 @@ On the {{< meta results.germany.scope >}}, the best model was {{< meta results.g
 ::: {#tbl-germany-scores}
 {{< include build/tables/main/germany-scores.md >}}
 
-German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}}. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ### Ebola hub submissions
 
 ::: {.callout-note title="Plan"}
 - We show national nowcasts against the other submissions.
-- We report the rounds before the submission check and after it apart, as only the later rounds are prospective for the fine-tuned model.
-- TODO: whether the main text scores from the fine-tuned model's first submission and the SI the final models, or the reverse.
+- The main text scores the fine-tuned model from its first submission on, prospectively.
+- The SI scores our final models on every round, retrospectively, including the past rounds that informed the submission.
 - We summarise the scores.
 :::
 
@@ -347,7 +348,7 @@ Ebola: forecasts of every hub round, all held out, each from the last release be
 ::: {#tbl-ebola-scores}
 {{< include build/tables/main/ebola-scores.md >}}
 
-Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}}. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
 :::::

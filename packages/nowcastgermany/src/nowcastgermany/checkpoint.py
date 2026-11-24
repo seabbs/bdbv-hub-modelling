@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Score each published Chronos-2 checkpoint.
 
 Each checkpoint (release `chronos-ft-<hash>` or `chronos-slots-<hash>`)
@@ -81,7 +81,7 @@ so there is no 90% interval and its rows keep the 95% one the hub
 scored (`nowcastgermany.evaluation`)."""
 WIS_PARTS: Final = ("dispersion", "overprediction", "underprediction")
 """WIS's components (Bracher et al. 2021), which sum to it."""
-REPO: Final = "seabbs/BDBVHubRenewal"
+REPO: Final = "seabbs/bdbv-hub-modelling"
 COLUMNS: Final = [
     "study",
     "level",

@@ -30,6 +30,31 @@ LOCAL = localconfig.read()
 # The German triangle at config/germany.toml's commit (`germany_triangle`),
 # which the German scoring units and the real-data blocks read.
 GERMANY_TRIANGLE = f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv"
+# The BDBV foundation-model check's folder (rules/report.smk).
+FTC_DIR = f"{LOCAL['ROOT']}/hub/ft-check"
+
+
+def ft_check_page(ckpt):
+    """The BDBV check page of one fine-tuned checkpoint."""
+    return f"{FTC_DIR}/{ckpt}/bdbv-ft-check-{ckpt}.html"
+
+
+def ft_check_released(wc=None):
+    """The BDBV check page of every released checkpoint of the trained
+    runs: each segment or interim checkpoint with a published.json."""
+    import glob
+
+    pages = []
+    for run in TRAINING.trained_runs():
+        for path in sorted(
+            glob.glob(f"{TRAINING.dir}/{run}/train/**/published.json", recursive=True)
+        ):
+            tag = json.loads(Path(path).read_text()).get("hash")
+            if tag:
+                pages.append(ft_check_page(f"slots-{tag}"))
+    return pages
+
+
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"
@@ -145,3 +170,25 @@ def ft_check_folders():
     return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
         f"{FTC_DIR}/forecasts/ft-{ft_check_checkpoint()}"
     ]
+
+
+# The Hugging Face Hub upload (rules/publish.smk `publish_hf`).
+def hf_repo():
+    """The Hub repository `publish_hf` uploads to, from config/finetune.toml
+    ([huggingface] repo); empty until one is chosen."""
+    import tomllib
+
+    conf = tomllib.loads(Path("config/finetune.toml").read_text())
+    return str(conf.get("huggingface", {}).get("repo", ""))
+
+
+def hf_args():
+    """`publish-hf`'s options: the repository, the scores, the dry run."""
+    hf = config["huggingface"]
+    repo = hf_repo()
+    args = [f"--repo {repo}"] if repo else []
+    if hf["scores"]:
+        args.append(f"--scores {hf['scores']}")
+    if hf["dry_run"] or not repo:
+        args.append("--dry-run")
+    return " ".join(args)

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The Chronos-2 foundation model on the hub target's releases.
 
 See the Foundation models methods page for the model.
@@ -172,7 +172,7 @@ ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 """The LoRA adapter's files. A checkpoint's release holds them and its
 `settings.json`."""
 
-FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
+FINETUNED_CACHE: Final = "~/.cache/bdbv-hub-modelling"
 """Directory each downloaded checkpoint is kept in, as
 `chronos-ft-<hash>`."""
 
@@ -185,6 +185,11 @@ without the bias."""
 
 SLOTS_RELEASE_PREFIX: Final = "chronos-slots"
 """Tag prefix of the releases of checkpoints with the series bias."""
+
+FINETUNED_SOURCES: Final = ("huggingface", "github", "local")
+"""Where the `_ft` models' checkpoint is read from (`source` in
+`FINETUNED_CONFIG`, `finetuned_checkpoint`): a Hugging Face Hub repository
+at a pinned revision, a GitHub release, or a training segment's folder."""
 
 
 def release_tag(spec: str) -> str:
@@ -217,12 +222,17 @@ class Checkpoint:
         A run's own adapter folder (`local_checkpoint`), read in place
         instead of the release. Left out of the repr and of equality, so
         it is the same checkpoint as its release.
+    hub : tuple of (str, str) or None
+        The Hugging Face Hub repository and pinned revision the adapter is
+        read from instead of the release (`hub_checkpoint`). Left out of
+        the repr and of equality, as `path` is.
     """
 
     hash: str
     sha256: tuple[tuple[str, str], ...]
     prefix: str = field(default=FINETUNED_PREFIX, repr=False)
     path: str | None = field(default=None, repr=False, compare=False)
+    hub: tuple[str, str] | None = field(default=None, repr=False, compare=False)
 
     @property
     def tag(self) -> str:
@@ -449,6 +459,16 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
                 f"The release {tag} has no {SUMS_FILE} ({url})."
             ) from err
         raise _unreachable(url, err) from err
+    return Checkpoint(
+        checkpoint, _adapter_sums(text, f"the release {tag}"), prefix
+    )
+
+
+def _adapter_sums(text: str, where: str) -> tuple[tuple[str, str], ...]:
+    """Return the SHA-256 of each of `ADAPTER_FILES` from a `SUMS_FILE`.
+
+    Raises `ValueError` if the file lacks one; `where` names its source.
+    """
     sums = {}
     for line in text.splitlines():
         parts = line.split(maxsplit=1)
@@ -458,11 +478,147 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     missing = [f for f in ADAPTER_FILES if f not in sums]
     if missing:
         raise ValueError(
-            f"{SUMS_FILE} of the release {tag} has no SHA-256 of "
-            f"{', '.join(missing)}."
+            f"{SUMS_FILE} of {where} has no SHA-256 of {', '.join(missing)}."
         )
-    return Checkpoint(
-        checkpoint, tuple((f, sums[f]) for f in ADAPTER_FILES), prefix
+    return tuple((f, sums[f]) for f in ADAPTER_FILES)
+
+
+def _hub_file(repo: str, revision: str, name: str) -> Path:
+    """Return one file of a Hub repository at a revision, cached locally.
+
+    `huggingface_hub` downloads it once into its own cache.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the repository has no such file at the revision.
+    LookupError
+        If there is no such repository or revision.
+    ConnectionError
+        If the Hub cannot be reached.
+    """
+    from huggingface_hub import hf_hub_download
+    from huggingface_hub.errors import (
+        EntryNotFoundError,
+        LocalEntryNotFoundError,
+        RepositoryNotFoundError,
+        RevisionNotFoundError,
+    )
+
+    where = f"{repo}@{revision}"
+    try:
+        return Path(
+            hf_hub_download(repo_id=repo, filename=name, revision=revision)
+        )
+    except LocalEntryNotFoundError as err:
+        # The Hub could not be reached and the file is not cached.
+        raise ConnectionError(
+            f"Cannot read {name} of {where} from the Hugging Face Hub, and "
+            "it is not cached."
+        ) from err
+    except EntryNotFoundError as err:
+        raise FileNotFoundError(f"{where} has no {name}.") from err
+    except (RepositoryNotFoundError, RevisionNotFoundError) as err:
+        raise LookupError(
+            f"No Hugging Face repository and revision {where}."
+        ) from err
+    except OSError as err:
+        raise ConnectionError(
+            f"Cannot read {name} of {where} from the Hugging Face Hub: {err!r}."
+        ) from err
+
+
+@cache
+def hub_checkpoint(repo: str, revision: str) -> Checkpoint:
+    """Return a fine-tuned checkpoint from the Hugging Face Hub.
+
+    The repository holds, at `revision`, the files a release holds:
+    `ADAPTER_FILES`, `settings.json` and `SUMS_FILE`. The checkpoint is
+    the one its release would give (`checkpoint_spec`, the SHA-256 of
+    `ADAPTER_FILES` in `SUMS_FILE`), read from the Hub. Each process
+    resolves once.
+
+    Parameters
+    ----------
+    repo : str
+        The repository id, `<owner>/<name>`.
+    revision : str
+        The pinned revision: a tag or a commit hash.
+
+    Returns
+    -------
+    Checkpoint
+
+    Raises
+    ------
+    FileNotFoundError, LookupError, ConnectionError
+        As `_hub_file`.
+    ValueError
+        If `SUMS_FILE` lacks an adapter file.
+    """
+    where = f"{repo}@{revision}"
+    sums = _adapter_sums(
+        _hub_file(repo, revision, SUMS_FILE).read_text(), where
+    )
+    settings = json.loads(
+        _hub_file(repo, revision, "settings.json").read_text()
+    )
+    return Checkpoint(checkpoint_spec(settings), sums, hub=(repo, revision))
+
+
+def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
+    """Return the checkpoint the `_ft` models load, from its source.
+
+    `source` in `path` is one of `FINETUNED_SOURCES`: `huggingface`
+    reads `[huggingface] repo` at `revision` (`hub_checkpoint`), `github`
+    the release `hash` names (`resolve_checkpoint`), `local` the training
+    segment folder `local` (`local_checkpoint`). `FINETUNED_ENV`, when
+    set, overrides the file with a segment folder or a settings hash, as a
+    run pins the checkpoint it resolved once; a hash is read from the Hub
+    when the configured Hub revision holds it, else from its release.
+    Every source is checked against the adapter's SHA-256.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file, `config/finetune.toml`.
+
+    Returns
+    -------
+    Checkpoint
+
+    Raises
+    ------
+    ValueError
+        For an unknown source, or a source without its settings.
+    """
+    pinned = os.environ.get(FINETUNED_ENV, "")
+    if pinned and Path(pinned).is_dir():
+        return local_checkpoint(pinned)
+    conf = tomllib.loads(Path(path).read_text())
+    source = str(conf.get("source", "github"))
+    if source == "huggingface":
+        hub = conf.get("huggingface", {})
+        for key in ("repo", "revision"):
+            if not hub.get(key):
+                raise ValueError(
+                    f"source is huggingface, but [huggingface] {key} in "
+                    f"{path} is empty."
+                )
+        checkpoint = hub_checkpoint(str(hub["repo"]), str(hub["revision"]))
+        if not pinned or pinned == checkpoint.hash:
+            return checkpoint
+    if pinned:
+        return resolve_checkpoint(pinned)
+    if source == "github":
+        return resolve_checkpoint(str(conf["hash"]))
+    if source == "local":
+        if not conf.get("local"):
+            raise ValueError(f"source is local, but local in {path} is empty.")
+        return local_checkpoint(str(conf["local"]))
+    raise ValueError(
+        f"Unknown checkpoint source {source!r} in {path}: one of "
+        f"{FINETUNED_SOURCES}."
     )
 
 
@@ -522,25 +678,19 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
 def _finetuned(
     name: str, source: str, layout: str = "ragged", two_step: bool = False
 ) -> FoundationModel:
-    """Build a fine-tuned model with the checkpoint `finetuned_spec` names.
+    """Build a fine-tuned model with the checkpoint `finetuned_checkpoint`.
 
-    A spec that is a folder is a run's own segment (`local_checkpoint`).
     The weekly and daily models share the checkpoint. Each builds the
     block its zero-shot model of `layout` builds (`PERIODS` rows in both);
     only the weights differ. The complete layout is for checkpoints
     trained on complete counts (the no-delays run).
     """
-    spec = finetuned_spec()
     cases, weeks, recent = active_zone_rule()
     return FoundationModel(
         name,
         source,
         layout,
-        (
-            local_checkpoint(spec)
-            if Path(spec).is_dir()
-            else resolve_checkpoint(spec)
-        ),
+        finetuned_checkpoint(),
         two_step=two_step,
         active_zone_cases=cases,
         active_zone_weeks=weeks,
@@ -791,7 +941,10 @@ def lag_count(
         return most
     released = int((t + d).min())
     history = int(max(1, min(most, tri.last - released + 1)))
-    steps = np.arange(released, tri.last + 1)
+    # Steps on the grid: a grid of targets before the cut-off ends early.
+    steps = np.arange(released, min(tri.last, tri.final.shape[1] - 1) + 1)
+    if steps.size == 0:
+        return history
     final = tri.final[:, steps]
     seen = np.nan_to_num(
         pd.DataFrame(tri.partial[:, steps, :width].reshape(-1, width))
@@ -844,6 +997,8 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
         If the release's settings hash or an adapter file's SHA-256 is not
         the checkpoint's.
     """
+    if checkpoint.hub is not None:
+        return _hub_adapter(checkpoint)
     if checkpoint.path is not None:
         local = Path(checkpoint.path)
         for name, expected in checkpoint.sha256:
@@ -900,6 +1055,33 @@ def finetuned_adapter(checkpoint: Checkpoint) -> Path:
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return out
+
+
+def _hub_adapter(checkpoint: Checkpoint) -> Path:
+    """Return a Hub checkpoint's adapter folder, checked as a release is.
+
+    `huggingface_hub` keeps the files of one revision in one folder.
+    """
+    assert checkpoint.hub is not None
+    repo, revision = checkpoint.hub
+    where = f"{repo}@{revision}"
+    files = {
+        name: _hub_file(repo, revision, name)
+        for name in (*ADAPTER_FILES, "settings.json")
+    }
+    found = json.loads(files["settings.json"].read_text()).get("hash")
+    if found != checkpoint.hash.removeprefix(SLOTS_PREFIX):
+        raise ValueError(
+            f"{where} holds the checkpoint with settings hash {found}."
+        )
+    for name, expected in checkpoint.sha256:
+        sha = hashlib.sha256(files[name].read_bytes()).hexdigest()
+        if sha != expected:
+            raise ValueError(
+                f"{name} of {where} has SHA-256 {sha}, not {expected}."
+            )
+    (folder,) = {p.parent for p in files.values()}
+    return folder
 
 
 @cache
@@ -1605,11 +1787,12 @@ class FoundationModel:
                     ),
                 )
             parts = sample(groups, horizon, task.n_samples, seed)
-            # Chronos-2's sampler puts the views back together itself; a
-            # model's own sampler draws each view.
+            # Chronos-2's sampler puts the views back together itself, so
+            # it returns one part; any sampler that returns one part per
+            # view has them put together here.
             draws = (
                 parts[0]
-                if whole or self.sample is None
+                if len(parts) == 1
                 else _owned(parts, views, places, period is not None)
             )
             # Counts are not negative; Chronos-2's output is otherwise kept

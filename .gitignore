@@ -6,21 +6,15 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 _site/
-# Hub data: fetched by `task nowcast-utils:data` and `task nowcast-utils:data-bvd`, and by each
+# Hub data: fetched by `task nowcastbdbv:data` and `task nowcastbdbv:data-bvd`, and by each
 # workflow before use. Tests read the frozen copy in tests/fixtures/data/.
-# Only our own records are committed: what we submitted to the hub and
-# the unsubmitted candidates, which nothing can fetch again.
 data/*
-!data/our-submissions/
-!data/candidate-forecasts.csv.gz
-# Backtest forecasts and other run output: re-created by `task nowcast-eval:backtest`.
+!data/README.md
+# Backtest forecasts and other run output: re-created by `task bdbvhub:backtest`.
 output/
-# Derived results: made by the Pages build (`task nowcast-eval:results` locally) from
-# the code, the data and the fit store. Only these records are committed.
+# Derived results: made by the Pages build (`task bdbvhub:results` locally) from
+# the code, the data and the fit store.
 results/*
-!results/development-log.csv
-!results/ladder.csv
-!results/model-choice.yml
 # Docs figures and generated snippets: built at docs build time.
 docs/figures/*.svg
 docs/generated/
@@ -44,8 +38,6 @@ results/delay-summary.csv
 
 # Machine settings (workflow/flowlib/localconfig.py); see config/local.env.example.
 config/local.env
-# A machine's own Snakemake profile (config/profile.example).
-config/profile/
 /.venv
 
 

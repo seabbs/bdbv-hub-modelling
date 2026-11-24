@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Scores of the walk models' draws under each pairing (the sensitivity page).
 
 Pairing only reorders draws (`nowcastbaselines.pairing.variant_forecasts`

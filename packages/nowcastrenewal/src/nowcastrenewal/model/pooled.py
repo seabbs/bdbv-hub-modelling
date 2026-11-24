@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Group values that pool around a shared value with sum-to-zero offsets.
 
 The offsets of $P$ groups are sampled as $P - 1$ coordinates on an

@@ -26,6 +26,7 @@ dependencies = [
 finetune-stream = "nowcastfoundation.finetune.stream:main"
 finetune-verify = "nowcastfoundation.finetune.verify:main"
 sim-qc = "nowcastfoundation.finetune.qc:main"
+publish-hf = "nowcastfoundation.hubpublish:main"
 
 [tool.uv.sources]
 nowcastutils = { workspace = true }

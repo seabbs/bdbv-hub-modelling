@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Draw Figure 1, a schematic of the fine-tuning pipeline.
 
 Writes `fig1-pipeline.svg` next to this script, and `fig1-pipeline.pdf`

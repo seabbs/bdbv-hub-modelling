@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Compare our forecasts with the forecasts submitted to the hub.
 
 `fetch_hub_submissions` downloads every team's metadata and its sample
@@ -66,6 +66,7 @@ __all__ = [
     "QUANTILES",
     "WEEKLY_TARGET",
     "ComparisonConfig",
+    "as_submitted",
     "attribution",
     "fetch_hub_submissions",
     "fetch_submissions_table",
@@ -85,7 +86,6 @@ __all__ = [
     "substituted_label",
     "summarise_comparison",
     "trajectory_samples",
-    "with_submissions",
     "zone_truth",
 ]
 
@@ -141,9 +141,6 @@ class ComparisonConfig:
         Locations shown in the plots.
     ref : str
         Git ref of the hub to fetch from.
-    submitted : str
-        Directory holding the forecasts we submitted to the hub, as
-        `model-output/<hub id>/*.csv.gz`.
     submissions_table : str
         The ledger's table of each round's submitted model per hub id
         (`submission_ci.submissions`), fetched by `--fetch`.
@@ -158,7 +155,6 @@ class ComparisonConfig:
     stored: tuple[str, ...] = ()
     locations: tuple[str, ...] = ("CD",)
     ref: str = "main"
-    submitted: str = "data/our-submissions"
     submissions_table: str = "data/raw/submission-ledger/submissions.csv"
     substituted: str = "apart"
 
@@ -185,7 +181,6 @@ def load_comparison_config(
         stored=tuple(raw.get("stored", default.stored)),
         locations=tuple(raw.get("locations", default.locations)),
         ref=str(raw.get("ref", default.ref)),
-        submitted=str(raw.get("submitted", default.submitted)),
         submissions_table=str(
             raw.get("submissions_table", default.submissions_table)
         ),
@@ -241,51 +236,31 @@ def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
     }
 
 
-def with_submissions(
-    forecasts: pd.DataFrame,
-    submitted: pd.DataFrame,
-    hub_ids: Mapping[str, str],
+def as_submitted(
+    forecasts: pd.DataFrame, hub_ids: Mapping[str, str]
 ) -> pd.DataFrame:
-    """Add what we submitted beside our main-build forecasts.
+    """Mark the hub's copy of our submissions as `submitted`.
 
     Parameters
     ----------
     forecasts : pandas.DataFrame
-        Samples with `SAMPLE_COLUMNS`: the hub's, which hold a copy of our
-        submissions, and our main builds.
-    submitted : pandas.DataFrame
-        Our submissions, from `load_hub_submissions`, by hub id.
+        Samples with `SAMPLE_COLUMNS`: the hub's, which hold a copy of
+        every round we submitted, and our main builds.
     hub_ids : mapping
         Model name to hub id (`own_hub_ids`).
 
     Returns
     -------
     pandas.DataFrame
-        `forecasts` without the hub's copy of the rounds `submitted`
-        holds, and the submitted rows under their hub id with `source`
-        `submitted`. The hub's copy of our other rounds and our main
-        builds stay.
+        `forecasts`, with the hub's rows under our hub ids given `source`
+        `submitted`.
     """
-    ours = list(hub_ids.values())
-    held = set(
-        zip(
-            submitted["model"],
-            submitted["reference_date"].astype(str),
-            strict=True,
-        )
+    ours = forecasts["model"].isin(list(hub_ids.values())) & (
+        forecasts["source"] == "hub"
     )
-    keys = zip(
-        forecasts["model"],
-        forecasts["reference_date"].astype(str),
-        strict=True,
+    return forecasts.assign(
+        source=forecasts["source"].where(~ours, "submitted")
     )
-    copy: np.ndarray = (
-        (forecasts["source"] == "hub").to_numpy(dtype=bool)
-        & forecasts["model"].isin(ours).to_numpy(dtype=bool)
-        & np.array([k in held for k in keys], dtype=bool)
-    )
-    sub = submitted.assign(source="submitted")[list(SAMPLE_COLUMNS)]
-    return pd.concat([forecasts.loc[~copy], sub], ignore_index=True)
 
 
 SUBSTITUTED_MODES: Final = ("apart", "together")
@@ -319,7 +294,7 @@ def split_substituted(
     ----------
     forecasts : pandas.DataFrame
         Samples with `model` and `reference_date`, our submissions under
-        their hub id (`with_submissions`).
+        their hub id (`as_submitted`).
     table : pandas.DataFrame
         The ledger's submissions table: `reference_date`, `hub_id`,
         `model` and `substituted` (`true`, `false` or empty).
@@ -646,11 +621,12 @@ def our_forecasts(
 ) -> pd.DataFrame:
     """Run our models for hub rounds from the matching vintages.
 
-    Each model runs on the country and provinces, and again on the health
-    zones with cases at the vintage, as the zone backtest runs them. Only
-    the zones are kept from the zone run, as it also gives the country.
-    A model that forecasts the zones itself (`reads_zones`) has no zone
-    run, and only its zones with cases are kept.
+    Each model runs on the country and provinces, and again on every hub
+    health zone (`zones.codes`), as the submission does (`zones_for_model`
+    over `hub_zones`), so a model rerun for a round is scored on the cells
+    its submitted file covers. Only the zones are kept from the zone run,
+    as it also gives the country. A model that forecasts the zones itself
+    (`reads_zones`) has no zone run, and its hub zones are kept.
 
     Parameters
     ----------
@@ -689,11 +665,11 @@ def our_forecasts(
         rows = real.loc[real["vintage"] == vintage]
         tasks = make_tasks(rows, delays, config, daily=daily, zones=zones)
         counts = weekly_counts(zones.daily, vintage)
-        here = tuple(z for z in zones.codes if z in set(counts["location"]))
+        here = tuple(zones.codes)
         history = pd.concat([daily, zones.daily])
         walks = [m for m in built if not getattr(m, "reads_zones", False)]
         fc = run_forecasts(built, tasks)
-        # Every model's zones are those with cases, as the walks run on.
+        # Every model's zones are the hub's, as its submission's are.
         fc = fc.loc[~fc["location"].map(is_zone) | fc["location"].isin(here)]
         if walks:
             zone = run_forecasts(
@@ -722,8 +698,8 @@ def stored_forecasts(
         Outputs of `run_forecasts`, such as the backtest forecasts.
         Missing files are skipped, and so are the rows of counts as
         reported by a later vintage (`as_of`). A model's round is taken
-        from the first file that holds it, so a later file, such as
-        unsubmitted candidates, fills only the rounds the others lack.
+        from the first file that holds it, so a later file fills only the
+        rounds the earlier ones lack.
     reference_dates : sequence of str
         Hub reference dates.
     exclude : sequence of str

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """How much pairing the walk models' draws matters on the German benchmark.
 
 The German study of the sensitivity page: `nowcastbaselines.pairing`

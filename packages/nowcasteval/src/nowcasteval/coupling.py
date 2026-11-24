@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """How each coupling of quantile forecasts into trajectories scores.
 
 The evidence for `nowcastutils.trajectories`: every model's quantile

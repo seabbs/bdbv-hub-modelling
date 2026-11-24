@@ -288,7 +288,7 @@ def test_checkpoint_rows_of_other_runs_leave_only_zero_shot() -> None:
             "study": ["germany", "germany"],
             "level": "national",
             "model": "fm_chronos_daily_ragged",
-            "checkpoint": ["zero-shot", "6b7aaa8d4f55"],
+            "checkpoint": ["zero-shot", "deadbeef0006"],
             "outbreaks": [0, 1000],
             "n": 9,
             "rel_wis": [2.0, 1.5],
