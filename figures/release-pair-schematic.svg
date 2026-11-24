@@ -1,0 +1,333 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1136" width="1200" height="1136" role="img" aria-label="Release-pair chain ladder schematic">
+<style>
+:root{--bg:#ffffff;--panel:#f6f8fa;--fg:#1f2328;--muted:#57606a;--grid:#8c959f;
+--r1:#2563eb;--r2:#16a34a;--r3:#d97706;--r4:#db2777;--r5:#0891b2;--hi:#7c3aed;--drop:#8c959f;}
+@media (prefers-color-scheme: dark){:root{--bg:#0d1117;--panel:#161b22;--fg:#e6edf3;--muted:#9da7b3;
+--grid:#6e7681;--r1:#60a5fa;--r2:#4ade80;--r3:#fbbf24;--r4:#f472b6;--r5:#22d3ee;--hi:#c4b5fd;--drop:#6e7681;}}
+svg{font-family:system-ui,sans-serif}
+.bg{fill:var(--bg)} .panel{fill:var(--panel);stroke:var(--grid);stroke-width:1}
+.t{fill:var(--fg);font-size:14px} .ts{fill:var(--fg);font-size:12px} .m{fill:var(--muted);font-size:12px}
+.cap{fill:var(--muted);font-size:13px} .h1{fill:var(--fg);font-size:22px;font-weight:700}
+.h2{fill:var(--fg);font-size:16px;font-weight:700} .num{fill:var(--fg);font-size:15px;font-weight:600}
+.numd{fill:var(--drop);font-size:15px} .mono{fill:var(--fg);font-size:14px;font-family:ui-monospace,monospace}
+.eq{fill:var(--fg);font-size:15px;font-weight:600} .hit{fill:var(--hi);font-size:13px;font-weight:600}
+.cell{stroke:var(--grid);stroke-width:1} .c1{fill:var(--r1);fill-opacity:.28} .c2{fill:var(--r2);fill-opacity:.28}
+.c3{fill:var(--r3);fill-opacity:.30} .c4{fill:var(--r4);fill-opacity:.26} .c5{fill:var(--r5);fill-opacity:.28}
+.s1{fill:var(--r1)} .s2{fill:var(--r2)} .s3{fill:var(--r3)} .s4{fill:var(--r4)} .s5{fill:var(--r5)}
+.empty{fill:none;stroke:var(--grid);stroke-width:1;stroke-dasharray:4 3}
+.hatch{fill:url(#hatch);stroke:var(--grid);stroke-width:1} .hl{stroke:var(--grid);stroke-width:1}
+.hatchline{stroke:var(--muted);stroke-width:1.5}
+.grey{fill:var(--drop);fill-opacity:.18;stroke:var(--grid);stroke-width:1}
+.hibox{fill:none;stroke:var(--hi);stroke-width:3} .hiline{stroke:var(--hi);stroke-width:2.5;fill:none}
+.strike{stroke:var(--drop);stroke-width:2.5} .line{stroke:var(--grid);stroke-width:1.5;fill:none}
+.arrow{stroke:var(--fg);stroke-width:1.5;fill:none} .ring{fill:none;stroke:var(--fg);stroke-width:2}
+.bar1{fill:var(--hi);fill-opacity:.35} .tick{stroke:var(--fg);stroke-width:1}
+</style>
+<defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" class="hatchline"/></pattern><marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" class="s1" style="fill:var(--fg)"/></marker></defs>
+<rect x="0" y="0" width="1200" height="1136" class="bg" />
+<text x="30" y="40" class="h1" text-anchor="start">Estimating the delay from pairs of consecutive releases</text>
+<text x="30" y="64" class="cap" text-anchor="start">Toy data: onset days 1 to 6, delays 0 to 3, five daily releases R1 to R5 with cut-off days 2 to 6.</text>
+<rect x="20" y="84" width="570" height="510" rx="8" class="panel"/>
+<rect x="610" y="84" width="570" height="510" rx="8" class="panel"/>
+<rect x="20" y="608" width="570" height="510" rx="8" class="panel"/>
+<rect x="610" y="608" width="570" height="510" rx="8" class="panel"/>
+<text x="38" y="114" class="h2" text-anchor="start">1  The reporting triangle</text>
+<text x="141.0" y="154" class="m" text-anchor="middle">delay 0</text>
+<text x="203.0" y="154" class="m" text-anchor="middle">delay 1</text>
+<text x="265.0" y="154" class="m" text-anchor="middle">delay 2</text>
+<text x="327.0" y="154" class="m" text-anchor="middle">delay 3</text>
+<text x="100" y="188.0" class="ts" text-anchor="end">day 1</text>
+<rect x="110" y="164" width="62" height="38" class="hatch" />
+<text x="141.0" y="188.0" class="num" text-anchor="middle">?</text>
+<rect x="172" y="164" width="62" height="38" class="cell c1" />
+<text x="203.0" y="188.0" class="num" text-anchor="middle">7</text>
+<rect x="234" y="164" width="62" height="38" class="cell c2" />
+<text x="265.0" y="188.0" class="num" text-anchor="middle">2</text>
+<rect x="296" y="164" width="62" height="38" class="cell c3" />
+<text x="327.0" y="188.0" class="num" text-anchor="middle">1</text>
+<text x="100" y="226.0" class="ts" text-anchor="end">day 2</text>
+<rect x="110" y="202" width="62" height="38" class="cell c1" />
+<text x="141.0" y="226.0" class="num" text-anchor="middle">6</text>
+<rect x="172" y="202" width="62" height="38" class="cell c2" />
+<text x="203.0" y="226.0" class="num" text-anchor="middle">4</text>
+<rect x="234" y="202" width="62" height="38" class="cell c3" />
+<text x="265.0" y="226.0" class="num" text-anchor="middle">2</text>
+<rect x="296" y="202" width="62" height="38" class="cell c4" />
+<text x="327.0" y="226.0" class="num" text-anchor="middle">1</text>
+<text x="100" y="264.0" class="ts" text-anchor="end">day 3</text>
+<rect x="110" y="240" width="62" height="38" class="cell c2" />
+<text x="141.0" y="264.0" class="num" text-anchor="middle">5</text>
+<rect x="172" y="240" width="62" height="38" class="cell c3" />
+<text x="203.0" y="264.0" class="num" text-anchor="middle">3</text>
+<rect x="234" y="240" width="62" height="38" class="cell c4" />
+<text x="265.0" y="264.0" class="num" text-anchor="middle">2</text>
+<rect x="296" y="240" width="62" height="38" class="cell c5" />
+<text x="327.0" y="264.0" class="num" text-anchor="middle">1</text>
+<text x="100" y="302.0" class="ts" text-anchor="end">day 4</text>
+<rect x="110" y="278" width="62" height="38" class="cell c3" />
+<text x="141.0" y="302.0" class="num" text-anchor="middle">8</text>
+<rect x="172" y="278" width="62" height="38" class="cell c4" />
+<text x="203.0" y="302.0" class="num" text-anchor="middle">4</text>
+<rect x="234" y="278" width="62" height="38" class="cell c5" />
+<text x="265.0" y="302.0" class="num" text-anchor="middle">3</text>
+<rect x="296" y="278" width="62" height="38" class="empty" />
+<text x="100" y="340.0" class="ts" text-anchor="end">day 5</text>
+<rect x="110" y="316" width="62" height="38" class="cell c4" />
+<text x="141.0" y="340.0" class="num" text-anchor="middle">7</text>
+<rect x="172" y="316" width="62" height="38" class="cell c5" />
+<text x="203.0" y="340.0" class="num" text-anchor="middle">5</text>
+<rect x="234" y="316" width="62" height="38" class="empty" />
+<rect x="296" y="316" width="62" height="38" class="empty" />
+<text x="100" y="378.0" class="ts" text-anchor="end">day 6</text>
+<rect x="110" y="354" width="62" height="38" class="cell c5" />
+<text x="141.0" y="378.0" class="num" text-anchor="middle">6</text>
+<rect x="172" y="354" width="62" height="38" class="empty" />
+<rect x="234" y="354" width="62" height="38" class="empty" />
+<rect x="296" y="354" width="62" height="38" class="empty" />
+<text x="110" y="134" class="ts" text-anchor="start">New cases reported at each delay</text>
+<text x="388" y="154" class="ts" text-anchor="start">First filled by</text>
+<rect x="388" y="164" width="22" height="18" class="cell c1" />
+<text x="418" y="178" class="ts" text-anchor="start">R1 (cut-off day 2)</text>
+<rect x="388" y="190" width="22" height="18" class="cell c2" />
+<text x="418" y="204" class="ts" text-anchor="start">R2 (cut-off day 3)</text>
+<rect x="388" y="216" width="22" height="18" class="cell c3" />
+<text x="418" y="230" class="ts" text-anchor="start">R3 (cut-off day 4)</text>
+<rect x="388" y="242" width="22" height="18" class="cell c4" />
+<text x="418" y="256" class="ts" text-anchor="start">R4 (cut-off day 5)</text>
+<rect x="388" y="268" width="22" height="18" class="cell c5" />
+<text x="418" y="282" class="ts" text-anchor="start">R5 (cut-off day 6)</text>
+<rect x="388" y="300" width="22" height="18" class="empty" />
+<text x="418" y="314" class="ts" text-anchor="start">not yet reported</text>
+<rect x="388" y="326" width="22" height="18" class="hatch" />
+<text x="418" y="340" class="ts" text-anchor="start">never reported alone</text>
+<text x="38" y="422" class="cap" text-anchor="start">Day 1 is first seen in R1 at age 1, so its delay 0 and 1</text>
+<text x="38" y="440" class="cap" text-anchor="start">cases arrive together as 7 (4 + 3). It is left-truncated.</text>
+<text x="38" y="466" class="cap" text-anchor="start">Each release fills one diagonal. Rows are onset days.</text>
+<text x="628" y="114" class="h2" text-anchor="start">2  Standard chain ladder (R estimate_delay)</text>
+<text x="700" y="134" class="ts" text-anchor="start">The same triangle, cumulative along each row</text>
+<text x="731.0" y="154" class="m" text-anchor="middle">delay 0</text>
+<text x="793.0" y="154" class="m" text-anchor="middle">delay 1</text>
+<text x="855.0" y="154" class="m" text-anchor="middle">delay 2</text>
+<text x="917.0" y="154" class="m" text-anchor="middle">delay 3</text>
+<text x="690" y="188.0" class="ts" text-anchor="end">day 1</text>
+<rect x="700" y="164" width="62" height="38" class="hatch" />
+<text x="731.0" y="188.0" class="num" text-anchor="middle">?</text>
+<rect x="762" y="164" width="62" height="38" class="grey" />
+<text x="793.0" y="188.0" class="numd" text-anchor="middle">7</text>
+<rect x="824" y="164" width="62" height="38" class="grey" />
+<text x="855.0" y="188.0" class="numd" text-anchor="middle">9</text>
+<rect x="886" y="164" width="62" height="38" class="grey" />
+<text x="917.0" y="188.0" class="numd" text-anchor="middle">10</text>
+<text x="690" y="226.0" class="ts" text-anchor="end">day 2</text>
+<rect x="700" y="202" width="62" height="38" class="cell c1" />
+<text x="731.0" y="226.0" class="num" text-anchor="middle">6</text>
+<rect x="762" y="202" width="62" height="38" class="cell c2" />
+<text x="793.0" y="226.0" class="num" text-anchor="middle">10</text>
+<rect x="824" y="202" width="62" height="38" class="cell c3" />
+<text x="855.0" y="226.0" class="num" text-anchor="middle">12</text>
+<rect x="886" y="202" width="62" height="38" class="cell c4" />
+<text x="917.0" y="226.0" class="num" text-anchor="middle">13</text>
+<text x="690" y="264.0" class="ts" text-anchor="end">day 3</text>
+<rect x="700" y="240" width="62" height="38" class="cell c2" />
+<text x="731.0" y="264.0" class="num" text-anchor="middle">5</text>
+<rect x="762" y="240" width="62" height="38" class="cell c3" />
+<text x="793.0" y="264.0" class="num" text-anchor="middle">8</text>
+<rect x="824" y="240" width="62" height="38" class="cell c4" />
+<text x="855.0" y="264.0" class="num" text-anchor="middle">10</text>
+<rect x="886" y="240" width="62" height="38" class="cell c5" />
+<text x="917.0" y="264.0" class="num" text-anchor="middle">11</text>
+<text x="690" y="302.0" class="ts" text-anchor="end">day 4</text>
+<rect x="700" y="278" width="62" height="38" class="cell c3" />
+<text x="731.0" y="302.0" class="num" text-anchor="middle">8</text>
+<rect x="762" y="278" width="62" height="38" class="cell c4" />
+<text x="793.0" y="302.0" class="num" text-anchor="middle">12</text>
+<rect x="824" y="278" width="62" height="38" class="cell c5" />
+<text x="855.0" y="302.0" class="num" text-anchor="middle">15</text>
+<rect x="886" y="278" width="62" height="38" class="empty" />
+<text x="690" y="340.0" class="ts" text-anchor="end">day 5</text>
+<rect x="700" y="316" width="62" height="38" class="cell c4" />
+<text x="731.0" y="340.0" class="num" text-anchor="middle">7</text>
+<rect x="762" y="316" width="62" height="38" class="cell c5" />
+<text x="793.0" y="340.0" class="num" text-anchor="middle">12</text>
+<rect x="824" y="316" width="62" height="38" class="empty" />
+<rect x="886" y="316" width="62" height="38" class="empty" />
+<text x="690" y="378.0" class="ts" text-anchor="end">day 6</text>
+<rect x="700" y="354" width="62" height="38" class="cell c5" />
+<text x="731.0" y="378.0" class="num" text-anchor="middle">6</text>
+<rect x="762" y="354" width="62" height="38" class="empty" />
+<rect x="824" y="354" width="62" height="38" class="empty" />
+<rect x="886" y="354" width="62" height="38" class="empty" />
+<line x1="696" y1="183.0" x2="944" y2="183.0" class="strike"/>
+<text x="960" y="188.0" class="ts" text-anchor="start">dropped</text>
+<rect x="762" y="202" width="124" height="114" class="hibox"/>
+<text x="960" y="250" class="hit" text-anchor="start">rows seen from</text>
+<text x="960" y="267" class="hit" text-anchor="start">delay 0 that reach</text>
+<text x="960" y="284" class="hit" text-anchor="start">delay 2</text>
+<text x="628" y="422" class="ts" text-anchor="start">Factor from delay 1 to 2 = column sums over those rows</text>
+<text x="628" y="446" class="eq" text-anchor="start">(12 + 10 + 15) / (10 + 8 + 12) = 37/30 = 1.23</text>
+<text x="628" y="470" class="ts" text-anchor="start">All factors:</text>
+<text x="720" y="470" class="ts" text-anchor="start">0→1  42/26 = 1.62</text>
+<text x="870" y="470" class="ts" text-anchor="start">1→2  37/30 = 1.23</text>
+<text x="1020" y="470" class="ts" text-anchor="start">2→3  24/22 = 1.09</text>
+<text x="628" y="498" class="cap" text-anchor="start">Every row must be seen from delay 0. R 0.2.2 refuses the hatched cell:</text>
+<text x="628" y="516" class="cap" text-anchor="start">“NA values should only appear in the bottom right portion of the triangle”.</text>
+<text x="628" y="534" class="cap" text-anchor="start">So day 1 is dropped, with all of its later growth.</text>
+<text x="38" y="638" class="h2" text-anchor="start">3  Release pairs (the extension)</text>
+<text x="38" y="662" class="ts" text-anchor="start">Each release is a snapshot of cumulative cases by onset day.</text>
+<text x="190" y="694" class="ts" text-anchor="middle">R1, cut-off day 2</text>
+<text x="390" y="694" class="ts" text-anchor="middle">R2, cut-off day 3</text>
+<text x="60" y="733" class="ts" text-anchor="start">day 1</text>
+<rect x="150" y="708" width="80" height="32" class="cell c1" />
+<text x="190" y="729" class="num" text-anchor="middle">7</text>
+<text x="142" y="729" class="m" text-anchor="end">age 1</text>
+<rect x="350" y="708" width="80" height="32" class="cell c2" />
+<text x="390" y="729" class="num" text-anchor="middle">9</text>
+<text x="438" y="729" class="m" text-anchor="start">age 2</text>
+<line x1="234" y1="724" x2="344" y2="724" class="hiline" marker-end="url(#arr)"/>
+<text x="60" y="773" class="ts" text-anchor="start">day 2</text>
+<rect x="150" y="748" width="80" height="32" class="cell c1" />
+<text x="190" y="769" class="num" text-anchor="middle">6</text>
+<text x="142" y="769" class="m" text-anchor="end">age 0</text>
+<rect x="350" y="748" width="80" height="32" class="cell c2" />
+<text x="390" y="769" class="num" text-anchor="middle">10</text>
+<text x="438" y="769" class="m" text-anchor="start">age 1</text>
+<line x1="234" y1="764" x2="344" y2="764" class="arrow" marker-end="url(#arr)"/>
+<text x="60" y="813" class="ts" text-anchor="start">day 3</text>
+<rect x="150" y="788" width="80" height="32" class="empty" />
+<text x="190" y="809" class="m" text-anchor="middle">not yet</text>
+<rect x="350" y="788" width="80" height="32" class="cell c2" />
+<text x="390" y="809" class="num" text-anchor="middle">5</text>
+<text x="438" y="809" class="m" text-anchor="start">age 0</text>
+<text x="290.0" y="742" class="hit" text-anchor="middle">late row counts</text>
+<text x="290.0" y="758" class="m" text-anchor="middle"></text>
+<text x="38" y="850" class="ts" text-anchor="start">Days seen in both give later / earlier at each age a:</text>
+<text x="38" y="870" class="ts" text-anchor="start">age 1 → 2: 9/7 (day 1),   age 0 → 1: 10/6 (day 2).</text>
+<text x="38" y="902" class="ts" text-anchor="start">Summed over all four pairs</text>
+<text x="238" y="902" class="ts" text-anchor="start">all days</text>
+<text x="378" y="902" class="ts" text-anchor="start">without day 1</text>
+<text x="58" y="924" class="ts" text-anchor="start">age 0 → 1</text>
+<text x="238" y="924" class="ts" text-anchor="start">42/26 = 1.62</text>
+<text x="378" y="924" class="ts" text-anchor="start">42/26 = 1.62</text>
+<text x="58" y="944" class="ts" text-anchor="start">age 1 → 2</text>
+<text x="238" y="944" class="hit" text-anchor="start">46/37 = 1.24</text>
+<text x="378" y="944" class="ts" text-anchor="start">37/30 = 1.23</text>
+<text x="58" y="964" class="ts" text-anchor="start">age 2 → 3</text>
+<text x="238" y="964" class="hit" text-anchor="start">34/31 = 1.10</text>
+<text x="378" y="964" class="ts" text-anchor="start">24/22 = 1.09</text>
+<text x="378" y="984" class="m" text-anchor="start">= panel 2</text>
+<text x="38" y="1014" class="eq" text-anchor="start">log(Σ later / Σ earlier) = g(a) + … + g(a + s − 1)</text>
+<text x="38" y="1036" class="cap" text-anchor="start">s is the gap in days. Pairs with the same gap are summed by age first.</text>
+<text x="38" y="1054" class="cap" text-anchor="start">Each equation is weighted by Σ earlier, and g ≥ 0 (non-negative least squares).</text>
+<text x="38" y="1072" class="cap" text-anchor="start">Here s = 1, so exp g(a) is the chain ladder factor.</text>
+<text x="38" y="1090" class="cap" text-anchor="start">Dropping day 1 gives panel 2 exactly. Keeping it adds its growth.</text>
+<text x="628" y="638" class="h2" text-anchor="start">4  BDBV-like data: weekly, backfilled releases</text>
+<text x="628" y="662" class="ts" text-anchor="start">28 onset days, releases on days 14, 21 and 28, delays up to D = 14.</text>
+<text x="698.0" y="700" class="m" text-anchor="middle">1</text>
+<text x="794.0" y="700" class="m" text-anchor="middle">7</text>
+<text x="906.0" y="700" class="m" text-anchor="middle">14</text>
+<text x="1018.0" y="700" class="m" text-anchor="middle">21</text>
+<text x="1130.0" y="700" class="m" text-anchor="middle">28</text>
+<text x="682" y="700" class="m" text-anchor="end">day</text>
+<text x="682" y="724" class="ts" text-anchor="end">R1</text>
+<rect x="690" y="708" width="14" height="22" class="cell c1" />
+<rect x="706" y="708" width="14" height="22" class="cell c1" />
+<rect x="722" y="708" width="14" height="22" class="cell c1" />
+<rect x="738" y="708" width="14" height="22" class="cell c1" />
+<rect x="754" y="708" width="14" height="22" class="cell c1" />
+<rect x="770" y="708" width="14" height="22" class="cell c1" />
+<rect x="786" y="708" width="14" height="22" class="cell c1" />
+<rect x="802" y="708" width="14" height="22" class="cell c1" />
+<rect x="818" y="708" width="14" height="22" class="cell c1" />
+<rect x="834" y="708" width="14" height="22" class="cell c1" />
+<rect x="850" y="708" width="14" height="22" class="cell c1" />
+<rect x="866" y="708" width="14" height="22" class="cell c1" />
+<rect x="882" y="708" width="14" height="22" class="cell c1" />
+<rect x="898" y="708" width="14" height="22" class="cell c1" />
+<circle cx="905.0" cy="719.0" r="5" class="ring"/>
+<rect x="914" y="708" width="14" height="22" class="empty" />
+<rect x="930" y="708" width="14" height="22" class="empty" />
+<rect x="946" y="708" width="14" height="22" class="empty" />
+<rect x="962" y="708" width="14" height="22" class="empty" />
+<rect x="978" y="708" width="14" height="22" class="empty" />
+<rect x="994" y="708" width="14" height="22" class="empty" />
+<rect x="1010" y="708" width="14" height="22" class="empty" />
+<rect x="1026" y="708" width="14" height="22" class="empty" />
+<rect x="1042" y="708" width="14" height="22" class="empty" />
+<rect x="1058" y="708" width="14" height="22" class="empty" />
+<rect x="1074" y="708" width="14" height="22" class="empty" />
+<rect x="1090" y="708" width="14" height="22" class="empty" />
+<rect x="1106" y="708" width="14" height="22" class="empty" />
+<rect x="1122" y="708" width="14" height="22" class="empty" />
+<text x="682" y="754" class="ts" text-anchor="end">R2</text>
+<rect x="690" y="738" width="14" height="22" class="cell c2" />
+<rect x="706" y="738" width="14" height="22" class="cell c2" />
+<rect x="722" y="738" width="14" height="22" class="cell c2" />
+<rect x="738" y="738" width="14" height="22" class="cell c2" />
+<rect x="754" y="738" width="14" height="22" class="cell c2" />
+<rect x="770" y="738" width="14" height="22" class="cell c2" />
+<rect x="786" y="738" width="14" height="22" class="cell c2" />
+<rect x="802" y="738" width="14" height="22" class="cell c2" />
+<rect x="818" y="738" width="14" height="22" class="cell c2" />
+<rect x="834" y="738" width="14" height="22" class="cell c2" />
+<rect x="850" y="738" width="14" height="22" class="cell c2" />
+<rect x="866" y="738" width="14" height="22" class="cell c2" />
+<rect x="882" y="738" width="14" height="22" class="cell c2" />
+<rect x="898" y="738" width="14" height="22" class="cell c2" />
+<rect x="914" y="738" width="14" height="22" class="cell c2" />
+<rect x="930" y="738" width="14" height="22" class="cell c2" />
+<rect x="946" y="738" width="14" height="22" class="cell c2" />
+<rect x="962" y="738" width="14" height="22" class="cell c2" />
+<rect x="978" y="738" width="14" height="22" class="cell c2" />
+<rect x="994" y="738" width="14" height="22" class="cell c2" />
+<rect x="1010" y="738" width="14" height="22" class="cell c2" />
+<circle cx="1017.0" cy="749.0" r="5" class="ring"/>
+<rect x="1026" y="738" width="14" height="22" class="empty" />
+<rect x="1042" y="738" width="14" height="22" class="empty" />
+<rect x="1058" y="738" width="14" height="22" class="empty" />
+<rect x="1074" y="738" width="14" height="22" class="empty" />
+<rect x="1090" y="738" width="14" height="22" class="empty" />
+<rect x="1106" y="738" width="14" height="22" class="empty" />
+<rect x="1122" y="738" width="14" height="22" class="empty" />
+<text x="682" y="784" class="ts" text-anchor="end">R3</text>
+<rect x="690" y="768" width="14" height="22" class="cell c3" />
+<rect x="706" y="768" width="14" height="22" class="cell c3" />
+<rect x="722" y="768" width="14" height="22" class="cell c3" />
+<rect x="738" y="768" width="14" height="22" class="cell c3" />
+<rect x="754" y="768" width="14" height="22" class="cell c3" />
+<rect x="770" y="768" width="14" height="22" class="cell c3" />
+<rect x="786" y="768" width="14" height="22" class="cell c3" />
+<rect x="802" y="768" width="14" height="22" class="cell c3" />
+<rect x="818" y="768" width="14" height="22" class="cell c3" />
+<rect x="834" y="768" width="14" height="22" class="cell c3" />
+<rect x="850" y="768" width="14" height="22" class="cell c3" />
+<rect x="866" y="768" width="14" height="22" class="cell c3" />
+<rect x="882" y="768" width="14" height="22" class="cell c3" />
+<rect x="898" y="768" width="14" height="22" class="cell c3" />
+<rect x="914" y="768" width="14" height="22" class="cell c3" />
+<rect x="930" y="768" width="14" height="22" class="cell c3" />
+<rect x="946" y="768" width="14" height="22" class="cell c3" />
+<rect x="962" y="768" width="14" height="22" class="cell c3" />
+<rect x="978" y="768" width="14" height="22" class="cell c3" />
+<rect x="994" y="768" width="14" height="22" class="cell c3" />
+<rect x="1010" y="768" width="14" height="22" class="cell c3" />
+<rect x="1026" y="768" width="14" height="22" class="cell c3" />
+<rect x="1042" y="768" width="14" height="22" class="cell c3" />
+<rect x="1058" y="768" width="14" height="22" class="cell c3" />
+<rect x="1074" y="768" width="14" height="22" class="cell c3" />
+<rect x="1090" y="768" width="14" height="22" class="cell c3" />
+<rect x="1106" y="768" width="14" height="22" class="cell c3" />
+<rect x="1122" y="768" width="14" height="22" class="cell c3" />
+<circle cx="1129.0" cy="779.0" r="5" class="ring"/>
+<rect x="690" y="812" width="222" height="12" class="bar1" />
+<text x="690" y="840" class="ts" text-anchor="start">R1 → R2: days 1–14, ages 0–13</text>
+<rect x="802" y="846" width="222" height="12" class="bar1" />
+<text x="802" y="874" class="ts" text-anchor="start">R2 → R3: days 8–21, ages 0–13</text>
+<circle cx="640" cy="891" r="5" class="ring"/>
+<text x="654" y="896" class="ts" text-anchor="start">Seen at age 0: days 14, 21, 28 only, 3 of 28. R1 backfills</text>
+<text x="654" y="914" class="ts" text-anchor="start">days 1–13 at once. None has a full row. Day 14 is seen only</text>
+<text x="654" y="932" class="ts" text-anchor="start">at ages 0, 7 and 14.</text>
+<text x="628" y="962" class="eq" text-anchor="start">Release pairs use 28 day-pairs (14 + 14).</text>
+<text x="628" y="988" class="ts" text-anchor="start">log(Σ later / Σ earlier) = g(a) + … + g(a + 6), with g = 0 from D on</text>
+<text x="628" y="1016" class="cap" text-anchor="start">Most onset days are first seen late, so the chain ladder has no full row.</text>
+<text x="628" y="1034" class="cap" text-anchor="start">Release pairs use every day seen in two releases within D.</text>
+</svg>
