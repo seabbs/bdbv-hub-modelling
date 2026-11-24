@@ -1301,7 +1301,11 @@ def test_the_hub_model_loads_the_latest_released_checkpoint() -> None:
     import tomllib
 
     root = Path(__file__).resolve().parents[3]
-    conf = tomllib.loads((root / "config" / "finetune.toml").read_text())
+    conf = tomllib.loads(
+        (
+            root / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+        ).read_text()
+    )
     assert (conf["source"], conf["hash"]) == ("github", "latest")
 
 

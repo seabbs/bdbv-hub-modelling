@@ -136,14 +136,13 @@ def test_renewal_code_reads_no_hub_delay_or_places() -> None:
     assert "zone_places" in _defs(HUB_ZONES)
 
 
-def test_config_holds_only_machine_and_fine_tuning_settings():
+def test_config_holds_only_machine_settings():
     # Each other config file lives beside the code that reads it (Sam,
-    # 24 Nov). The fine-tuning files stay: the trainer, hashed into every
-    # checkpoint, reads config/finetune/grid.yaml by that path.
+    # 24 Nov).
     import subprocess
 
     root = Path(__file__).parents[1]
-    kept = {"local.env.example", "finetune.toml", "finetune", "README.md"}
+    kept = {"local.env.example", "README.md"}
     tracked = subprocess.run(
         ["git", "ls-files", "config"],
         cwd=root,
@@ -170,8 +169,13 @@ def test_config_holds_only_machine_and_fine_tuning_settings():
         text=True,
         check=False,
     ).stdout.split()
-    beside = ("bdbvhub/", "nowcastbdbv/", "nowcastgermany/")
-    allowed = {"local.env", "local.env.example", "finetune.toml", "finetune"}
+    beside = (
+        "bdbvhub/",
+        "nowcastbdbv/",
+        "nowcastgermany/",
+        "nowcastfoundation/",
+    )
+    allowed = {"local.env", "local.env.example"}
 
     def name(hit: str) -> str:
         return hit[hit.rfind("config/") + len("config/") :].rstrip(".,;:`)")

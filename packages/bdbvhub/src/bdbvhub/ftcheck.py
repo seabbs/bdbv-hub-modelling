@@ -7,7 +7,7 @@ reruns only itself. The Chronos-2 models, zero-shot and fine-tuned alike,
 build the fine-tuned models' layout: one joint block of the country,
 every province and the active zones, and one block per province of the
 province and all its zones (`nowcastfoundation.forecaster.active_views`,
-the rule in `config/finetune.toml`).
+the rule in `packages/nowcastfoundation/config/finetune.toml`).
 
 The report (`bdbvhub.reporting.ftcheck_report`) scores the folders
 together (`score_releases`) and gives each model's pairwise relative
@@ -96,7 +96,7 @@ def check_model(name: str, checkpoint: str | None = None) -> ForecastModel:
         A registered model.
     checkpoint : str, optional
         The fine-tuned checkpoint (a settings hash) an `_ft` model loads,
-        in place of `config/finetune.toml`'s.
+        in place of `packages/nowcastfoundation/config/finetune.toml`'s.
 
     Returns
     -------

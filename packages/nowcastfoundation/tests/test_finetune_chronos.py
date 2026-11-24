@@ -1338,7 +1338,10 @@ def test_parents_come_from_the_grid_file(monkeypatch):
     from nowcastfoundation.finetune.chronos import NATIONAL, outbreak_blocks
 
     grid = yaml.safe_load(
-        (Path(__file__).parents[3] / "config/finetune/grid.yaml").read_text()
+        (
+            Path(__file__).parents[3]
+            / "packages/nowcastfoundation/config/finetune/grid.yaml"
+        ).read_text()
     )
     ft.use_grid()
     try:

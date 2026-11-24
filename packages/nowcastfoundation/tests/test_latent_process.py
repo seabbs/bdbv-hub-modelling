@@ -223,7 +223,14 @@ def test_the_start_is_a_seed_grown_into_the_last_day_or_a_level(
 
 def _simulations() -> list[dict[str, Any]]:
     """Two runs of one established multi-stratum grid draw, and a short one."""
-    grid = draws.read_grid(ROOT / "config" / "finetune" / "grid.yaml")
+    grid = draws.read_grid(
+        ROOT
+        / "packages"
+        / "nowcastfoundation"
+        / "config"
+        / "finetune"
+        / "grid.yaml"
+    )
     for i in range(500):
         design = draws.draw_design(grid, draws.generator(77, i, 1), weeks=8)
         if (
@@ -261,7 +268,14 @@ def test_seeds_and_import_pulses_make_no_one_day_spike(
     # A seed put on one day, or a pulse of imports on one day, entered the
     # renewal as a spike that fell straight back (the next day is the
     # seed or pulse times R times the generation time's first lag).
-    grid = draws.read_grid(ROOT / "config" / "finetune" / "grid.yaml")
+    grid = draws.read_grid(
+        ROOT
+        / "packages"
+        / "nowcastfoundation"
+        / "config"
+        / "finetune"
+        / "grid.yaml"
+    )
     sims = []
     for i in range(2000):
         design = draws.draw_design(grid, draws.generator(81, i, 1), weeks=12)

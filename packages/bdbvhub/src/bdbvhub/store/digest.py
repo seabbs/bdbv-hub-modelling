@@ -49,9 +49,10 @@ CONFIG: Final = (
     "packages/bdbvhub/config",
     "packages/nowcastbdbv/config",
     "packages/nowcastgermany/config",
+    "packages/nowcastfoundation/config",
 )
-"""The config a run may read: the machine-independent files beside their
-packages, and config/ (the fine-tuning grid and settings)."""
+"""The config a run may read: config/, and the settings beside each
+package that reads them."""
 
 BACKTEST_INPUTS: Final = (
     "packages/nowcastutils/src",

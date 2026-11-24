@@ -159,7 +159,12 @@ def test_a_layer_that_cannot_be_drawn_is_refused(bad):
 
 def test_the_proposed_layer_file_is_valid():
     layer = ft.read_release_layer(
-        ft.ROOT / "config" / "finetune" / "release-layer.yaml"
+        ft.ROOT
+        / "packages"
+        / "nowcastfoundation"
+        / "config"
+        / "finetune"
+        / "release-layer.yaml"
     )
     ft.check_release_layer(layer)
     # Daily-step blocks are 60% of all blocks; a quarter of them released
@@ -220,7 +225,12 @@ def test_a_no_lags_share_outside_0_to_1_is_refused(bad):
 
 def test_the_proposed_layer_trains_5_percent_without_lag_rows():
     layer = ft.read_release_layer(
-        ft.ROOT / "config" / "finetune" / "release-layer.yaml"
+        ft.ROOT
+        / "packages"
+        / "nowcastfoundation"
+        / "config"
+        / "finetune"
+        / "release-layer.yaml"
     )
     assert layer["no_lags"]["share"] == 0.05
 
@@ -276,6 +286,11 @@ def test_a_lag_jitter_that_cannot_be_drawn_is_refused(bad):
 
 def test_run_b_s_layer_jitters_a_tenth_of_lag_counts():
     layer = ft.read_release_layer(
-        ft.ROOT / "config" / "finetune" / "release-layer.yaml"
+        ft.ROOT
+        / "packages"
+        / "nowcastfoundation"
+        / "config"
+        / "finetune"
+        / "release-layer.yaml"
     )
     assert layer["lag_jitter"] == {"share": 0.1, "sd": 0.05}

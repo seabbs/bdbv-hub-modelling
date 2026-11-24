@@ -381,7 +381,7 @@ rule hub_rounds:
 # reruns only it. `ft_check_page` scores them together for one checkpoint,
 # ft-check/<ckpt>/bdbv-ft-check-<ckpt>.html, copied to REVIEW_DIR under
 # that name, so each checkpoint is its own target. `ft_check` is the page
-# of ft_check.checkpoint (or config/finetune.toml's pin), copied to
+# of ft_check.checkpoint (or packages/nowcastfoundation/config/finetune.toml's pin), copied to
 # REVIEW_DIR as bdbv-ft-check.html too; `finetune` asks for the page of
 # every released checkpoint (`ft_check_released`). Not part of `all`.
 

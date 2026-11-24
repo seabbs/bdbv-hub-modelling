@@ -130,7 +130,7 @@ def test_the_simulator_hashes_the_workflow_grid_until_a_run_sets_its_own(
 
     from nowcastfoundation.finetune import chronos as ft
 
-    grid = "config/finetune/grid.yaml"
+    grid = "packages/nowcastfoundation/config/finetune/grid.yaml"
     assert ft.SIMULATOR[0] == ft.workflow_grid_file() == grid
     monkeypatch.setattr(ft, "SIMULATOR", ft.SIMULATOR)
     monkeypatch.setattr(ft, "CODE", ft.CODE)
@@ -207,10 +207,16 @@ def test_the_simulator_hashes_its_grid_and_python():
         for name in names
     }
     first = {
-        "config/finetune/grid.yaml",
+        "packages/nowcastfoundation/config/finetune/grid.yaml",
         *python,
     }
-    names = set(ft.code_files(ft.simulator_files("config/finetune/grid.yaml")))
+    names = set(
+        ft.code_files(
+            ft.simulator_files(
+                "packages/nowcastfoundation/config/finetune/grid.yaml"
+            )
+        )
+    )
     trainer = {
         "packages/nowcastfoundation/src/nowcastfoundation/finetune/chronos.py",
         "packages/nowcastfoundation/src/nowcastfoundation/finetune/__init__.py",

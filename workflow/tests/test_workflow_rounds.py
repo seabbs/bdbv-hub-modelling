@@ -8,7 +8,7 @@ SIM = {
     "batches": 3,
     "batch": 20,
     "draws": 5,
-    "grid_file": "config/finetune/grid.yaml",
+    "grid_file": "packages/nowcastfoundation/config/finetune/grid.yaml",
 }
 
 

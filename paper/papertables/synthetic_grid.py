@@ -1,6 +1,7 @@
 """The synthetic scenario grid tables and SI notes, read from the grid config.
 
-The grid config (`config/finetune/grid.yaml`, the one the main
+The grid config (`packages/nowcastfoundation/config/finetune/grid.yaml`, the
+one the main
 workflow's `simulate.grid_file` names) defines the grid: categorical
 `factors` (levels with weights, drawn independently for each simulation),
 each placed in a layer by `factor_layers`, and named sampling

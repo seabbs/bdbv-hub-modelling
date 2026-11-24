@@ -67,7 +67,10 @@ def test_the_config_names_no_grid_version():
     text = (ROOT / "workflow" / "config.yaml").read_text()
     assert "grids/" not in text
     assert "grid" not in CONFIG["finetune"]
-    assert CONFIG["simulate"]["grid_file"] == "config/finetune/grid.yaml"
+    assert (
+        CONFIG["simulate"]["grid_file"]
+        == "packages/nowcastfoundation/config/finetune/grid.yaml"
+    )
     assert "name" not in yaml.safe_load(
         (ROOT / CONFIG["simulate"]["grid_file"]).read_text()
     )

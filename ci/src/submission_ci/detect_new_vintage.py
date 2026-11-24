@@ -58,6 +58,7 @@ CODE_PATHS = (
     "config",
     "packages/bdbvhub/config",
     "packages/nowcastbdbv/config",
+    "packages/nowcastfoundation/config",
     "ci/policy.toml",
     "uv.lock",
     "ci/steps",

@@ -63,7 +63,7 @@ rule publish_hf:
     # A verified checkpoint's Hub repository folder: its adapter, settings,
     # sha256sums.txt and model card (nowcastfoundation.hubpublish), in
     # <ck>/huggingface/, uploaded as the revision tagged with its spec to
-    # [huggingface] repo in config/finetune.toml. A dry run
+    # [huggingface] repo in packages/nowcastfoundation/config/finetune.toml. A dry run
     # (`huggingface.dry_run`, or no repo) writes the folder only. The
     # token is HF_TOKEN from the environment, never logged. Opt-in: no
     # target asks for it; name its output to run it.

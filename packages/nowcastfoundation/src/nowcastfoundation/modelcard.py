@@ -105,6 +105,13 @@ class CardEvaluation:
                 )
 
 
+GRID_PATHS = (
+    "packages/nowcastfoundation/config/finetune/grid.yaml",
+    "config/finetune/grid.yaml",
+)
+"""Where checkpoints record the simulation grid, newest first."""
+
+
 def citation_bibtex(path: Path | str) -> str:
     """Return a BibTeX entry of the repository from its `CITATION.cff`.
 
@@ -185,7 +192,13 @@ def _count(value: Any) -> str:
 
 def _training(settings: Mapping[str, Any]) -> list[str]:
     """Return the lines on the training data."""
-    grid = settings.get("code_sha256", {}).get("config/finetune/grid.yaml")
+    # Checkpoints record the grid by its path when trained: the config
+    # moved beside nowcastfoundation on 24 Nov.
+    hashes = settings.get("code_sha256", {})
+    grid = next(
+        (hashes[p] for p in GRID_PATHS if p in hashes),
+        None,
+    )
     lines = [
         "## Training data",
         "",

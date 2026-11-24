@@ -589,7 +589,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--checkpoint",
         default="",
         help="The fine-tuned checkpoint (settings hash) the _ft model "
-        "loads; config/finetune.toml's if empty.",
+        "loads; packages/nowcastfoundation/config/finetune.toml's if empty.",
     )
     ftc.add_argument(
         "--out", required=True, help="forecast: the folder; report: the page."
