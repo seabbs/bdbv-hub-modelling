@@ -220,7 +220,12 @@
         if (o >= 0) origins[o] = true;
       });
       var keep = function (r) { return r[3] === place && origins[r[1]]; };
-      var s = window.bdbvSummarise(summary, keep, rel.index());
+      // Relative scores are computed for one round or every round.
+      var picked = Object.keys(origins).map(Number);
+      var group = picked.length === summary.origins.length ?
+        window.bdbvSummarise.key(null, "x" + place) :
+        picked.length === 1 ? window.bdbvSummarise.key(picked[0], "x" + place) : null;
+      var s = window.bdbvSummarise(summary, keep, rel.index(), group);
       var names = d.models.map(function (m) { return m.name; });
       window.bdbvSummaryTable(table, summary, s, function (m) {
         var i = names.indexOf(summary.models[m].name);
