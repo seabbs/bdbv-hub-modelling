@@ -175,7 +175,7 @@ def test_a_step_says_whether_it_is_the_pool():
 def test_a_tick_does_not_build_the_dashboard():
     # The static page has no inputs, so a tick on file times built it once
     # and never again; a run serves it live (dashboard.serve) and
-    # `task nowcast-foundation:dashboard-static` writes the page.
+    # `task workflow:dashboard-static` writes the page.
     assert "dashboard" not in schedule.TARGETS
     assert "dashboard" not in schedule.POOL
 

@@ -1,0 +1,20 @@
+version: "3"
+
+# The random walk baselines (nowcastbaselines).
+# Included by the root Taskfile.yml as `nowcastbaselines`: run `task nowcastbaselines:<task>` from the
+# repository root, or `task <task>` here. Tasks that read or write the
+# repository's data/, results/ or output/ run from its root (`dir`).
+
+tasks:
+  test:
+    dir: ../..
+    desc: Run nowcastbaselines's tests (the fast ones; `-- -m ""` for all)
+    cmds:
+      - uv run pytest -q packages/nowcastbaselines/tests {{.CLI_ARGS}}
+
+
+  docs:
+    dir: ../..
+    desc: Build nowcastbaselines's own docs site into _site/nowcastbaselines/
+    cmds:
+      - uv run mkdocs build --strict -f packages/nowcastbaselines/mkdocs.yml -d _site/nowcastbaselines

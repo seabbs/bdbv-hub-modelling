@@ -1,0 +1,20 @@
+version: "3"
+
+# Shared pieces: dates, releases, hierarchies, tasks (nowcastutils).
+# Included by the root Taskfile.yml as `nowcastutils`: run `task nowcastutils:<task>` from the
+# repository root, or `task <task>` here. Tasks that read or write the
+# repository's data/, results/ or output/ run from its root (`dir`).
+
+tasks:
+  test:
+    dir: ../..
+    desc: Run nowcastutils's tests (the fast ones; `-- -m ""` for all)
+    cmds:
+      - uv run pytest -q packages/nowcastutils/tests {{.CLI_ARGS}}
+
+
+  docs:
+    dir: ../..
+    desc: Build nowcastutils's own docs site into _site/nowcastutils/
+    cmds:
+      - uv run mkdocs build --strict -f packages/nowcastutils/mkdocs.yml -d _site/nowcastutils

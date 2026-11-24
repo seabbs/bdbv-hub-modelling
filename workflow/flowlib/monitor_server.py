@@ -7,7 +7,7 @@ thread builds the graphs again every `MONITOR_DAG_EVERY` seconds, so
 new jobs and finished files show without Snakemake being asked on each
 visit.
 
-`task nowcast-workflow:monitor` serves it on `MONITOR_HOST` and
+`task workflow:monitor` serves it on `MONITOR_HOST` and
 `MONITOR_PORT` (config/local.env), its database at `PANOPTES_DB_URL`.
 """
 

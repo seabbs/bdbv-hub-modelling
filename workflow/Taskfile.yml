@@ -1,0 +1,181 @@
+version: "3"
+
+# The workflow: its targets, runs, monitor and checks (workflow/).
+# Included by the root Taskfile.yml as `workflow`: run `task workflow:<task>` from the
+# repository root, or `task <task>` here. Tasks that read or write the
+# repository's data/, results/ or output/ run from its root (`dir`).
+
+vars:
+  SNAKEMAKE: uv run --group paper snakemake
+
+tasks:
+
+  # The top-level workflow (workflow/Snakefile, workflow/README.md). Each
+  # task runs a target; pass more Snakemake options after `--`, such as
+  # `task workflow:score -- -n` for a dry run or a file to build one output.
+  # Every target runs with workflow/profiles/default and this machine's
+  # cores and resources less its headroom (flowlib.machine), or with the
+  # untracked profile SNAKEMAKE_PROFILE names (see config/profile.example).
+  wf:
+    dir: ..
+    internal: true
+    vars:
+      SNAKEMAKE_PROFILE:
+        sh: python3 workflow/flowlib/localconfig.py SNAKEMAKE_PROFILE
+    cmds:
+      - >-
+        {{.SNAKEMAKE}} {{.WF_TARGET}}
+        {{if .SNAKEMAKE_PROFILE}}--workflow-profile {{.SNAKEMAKE_PROFILE}}
+        {{else}}$(python3 workflow/flowlib/compute.py){{end}}
+        {{.CLI_ARGS}}
+
+
+  all:
+    dir: ..
+    desc: Run every workflow target that writes nothing outside this machine (simulate, finetune, score)
+    cmds:
+      - task: wf
+        vars: {WF_TARGET: all}
+
+
+  monitor:
+    dir: ..
+    desc: Serve the workflow monitor (Panoptes), every Snakemake run's jobs as they run, and at /dag/ the MONITOR_DAG targets' rule graphs and job DAGs, on MONITOR_HOST and MONITOR_PORT (config/local.env); runs report to MONITOR_URL
+    vars:
+      HOST:
+        sh: python3 workflow/flowlib/localconfig.py MONITOR_HOST
+      PORT:
+        sh: python3 workflow/flowlib/localconfig.py MONITOR_PORT
+      ROOT:
+        sh: python3 workflow/flowlib/localconfig.py ROOT
+    cmds:
+      - mkdir -p "{{.ROOT}}/monitor"
+      - >-
+        PANOPTES_DB_URL="sqlite:///{{.ROOT}}/monitor/panoptes.db"
+        uv run --group paper python workflow/flowlib/monitor_server.py
+
+
+  dag:
+    dir: ..
+    desc: "Build a target's rule graph and job DAG for the monitor's /dag/ page (task workflow:dag -- NAME=TARGET [snakemake options])"
+    cmds:
+      - uv run --group paper python workflow/flowlib/dag.py {{.CLI_ARGS}}
+
+
+  tick:
+    dir: ..
+    desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks the coordinator run uses
+    cmds:
+      - python3 workflow/scripts/tick.py
+
+
+  run:
+    dir: ..
+    desc: The persistent coordinator run, one tick after another until `touch output/coordinator.stop` (run it once, under nohup or tmux)
+    cmds:
+      - python3 workflow/scripts/coordinate.py
+
+
+  rulegraph:
+    dir: ..
+    desc: Draw the workflow's rule graph (TARGET=all by default) as workflow-dag.svg
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --rulegraph | dot -Tsvg > workflow-dag.svg"
+
+
+  progress:
+    dir: ..
+    desc: Show which workflow outputs exist and which would run (TARGET=all by default)
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --summary"
+
+
+  report:
+    dir: ..
+    desc: Write Snakemake's browsable HTML report of the workflow (workflow-report.html)
+    cmds:
+      - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --report workflow-report.html"
+
+
+  check:
+    dir: ..
+    desc: Test the workflow's helpers and dry-run every target, as CI does
+    cmds:
+      - uv run --group paper pytest -q workflow/tests
+
+
+
+  simulate:
+    dir: ..
+    desc: Simulate the rounds in ROUNDS (for example ROUNDS=4 or ROUNDS="4 5"), with QC and manifests
+    cmds:
+      - task: wf
+        vars:
+          WF_TARGET: 'simulate --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
+
+
+  push:
+    dir: ..
+    desc: Simulate this host's seeds (SIM_SEEDS) of ROUNDS and push each batch to the rounds host (REMOTE)
+    cmds:
+      - task: wf
+        vars:
+          WF_TARGET: 'push --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
+
+
+  release:
+    dir: ..
+    desc: Upload each simulated batch of ROUNDS to its sims-r<N> release (writes GitHub releases)
+    cmds:
+      - task: wf
+        vars:
+          WF_TARGET: 'release --config "rounds=[{{.ROUNDS | default "" | splitList " " | join ","}}]"'
+
+
+  finetune:
+    dir: ..
+    desc: Train every checkpoint prefix of the fine-tuning run, one segment at a time on the GPU
+    cmds:
+      - task: wf
+        vars: {WF_TARGET: finetune}
+
+
+  publish:
+    dir: ..
+    desc: Verify and release every finished checkpoint (writes GitHub releases)
+    cmds:
+      - task: wf
+        vars: {WF_TARGET: publish}
+
+
+  score:
+    dir: ..
+    desc: Score every released checkpoint (German, BDBV, held-out), then the slots check and aggregation rows; the releases are listed afresh in a run of their own first
+    cmds:
+      - task: wf
+        vars: {WF_TARGET: "release_list --forcerun release_list"}
+      - task: wf
+        vars: {WF_TARGET: score}
+
+
+  land:
+    dir: ..
+    desc: Commit the checkpoint score tables to evidence/ and push (writes to GitHub)
+    cmds:
+      - task: wf
+        vars: {WF_TARGET: land}
+
+
+  dashboard:
+    dir: ..
+    desc: Serve the fine-tuning dashboard alone on DASHBOARD_HOST:DASHBOARD_PORT (config/local.env), for the runs under DASHBOARD_ROOT; `-- --run NAME` for some of them (dashboard.serve serves it with a run instead)
+    cmds:
+      - uv run --group paper python workflow/scripts/dashboard.py {{.CLI_ARGS}}
+
+
+  dashboard-static:
+    dir: ..
+    desc: Write the dashboard once as a static page (<ROOT>/reports/dashboard.html)
+    cmds:
+      - task: wf
+        vars: {WF_TARGET: "dashboard --forcerun dashboard"}

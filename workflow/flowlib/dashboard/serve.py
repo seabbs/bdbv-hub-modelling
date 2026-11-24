@@ -6,7 +6,7 @@ the pid file (`pidfile`) is still alive. The server ends by itself when
 the process it was started for ends (`--while-pid`): the coordinator
 run (`DRIVER_ENV`, set by workflow/scripts/coordinate.py), else the
 Snakemake run. The workflow calls it from its `onstart` when
-`dashboard.serve` is true; `task nowcast-foundation:dashboard` runs the
+`dashboard.serve` is true; `task workflow:dashboard` runs the
 same script in the foreground.
 """
 

@@ -24,11 +24,11 @@ function mark(shape,x,y,c,t){var tt='<title>'+t+'</title>';
  return '<circle cx="'+x+'" cy="'+y+'" r=3.2 fill="'+c+'">'+tt+'</circle>'}
 function msw(shape){return '<svg width=12 height=10 viewBox="0 0 12 10">'+mark(shape,6,5,"var(--fg)","")+'</svg>'}
 // A chart fills its card when the card is full screen (expand.js), else
-// draws at 440 x 280 and scales with the card's width.
-function size(el){var f=window.ftFull&&window.ftFull(el);if(!f)return [440,280];
+// draws at the card's own width, so its text is never scaled down.
+function size(el){var f=window.ftFull&&window.ftFull(el);if(!f)return [Math.max(300,el.clientWidth-20),300];
  return [Math.max(440,el.clientWidth-8),Math.max(280,f.clientHeight-140)]}
 function chart(o,el){
- var wh=size(el),W=wh[0],H=wh[1],L=40,R=8,T=8,B=26,xs=[],ys=[];
+ var wh=size(el),W=wh[0],H=wh[1],L=40,R=18,T=8,B=26,xs=[],ys=[];
  var ser=o.series.map(function(s){var p=s.pts.filter(function(q){return q[1]!=null&&q[1]>0&&(o.xmax==null||q[0]<=o.xmax)});return {label:s.label,color:s.color,kind:s.kind,dash:s.dash,shape:s.shape,pts:p}}).filter(function(s){return s.pts.length});
  if(!ser.length)return '<h3>'+o.title+'</h3><p class=mut>no data for the selected runs</p>';
  ser.forEach(function(s){s.pts.forEach(function(q){xs.push(q[0]);ys.push(Math.log10(q[1]))})});
@@ -42,12 +42,14 @@ function chart(o,el){
  for(var x=0;x<=x1;x+=st)h+='<text x="'+sx(x)+'" y="'+(H-B+12)+'" text-anchor=middle class=ax>'+(+x.toPrecision(6))+'</text>';
  h+='<text x="'+(W/2)+'" y="'+(H-2)+'" text-anchor=middle class=ax>simulations trained</text>';
  if(o.hl)h+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+sy(1)+'" y2="'+sy(1)+'" class=mark />';
- (D.marks||[]).forEach(function(m){if(m[0]<=x1)h+='<line x1="'+sx(m[0])+'" x2="'+sx(m[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=mark /><text x="'+(sx(m[0])+2)+'" y="'+(T+9)+'" class=ax>'+m[1]+'</text>'});
+ // Checkpoint marks: every line, a label only where it has room (axes.js).
+ var mk=(D.marks||[]).filter(function(m){return m[0]<=x1}).sort(function(a,b){return a[0]-b[0]}),keep=thinLabels(mk.map(function(m){return sx(m[0])}),34);
+ mk.forEach(function(m,i){h+='<line x1="'+sx(m[0])+'" x2="'+sx(m[0])+'" y1="'+T+'" y2="'+(H-B)+'" class=mark><title>'+m[1]+'</title></line>'+(keep.indexOf(i)>=0?'<text x="'+(sx(m[0])+2)+'" y="'+(T+9)+'" class=ax>'+m[1]+'</text>':'')});
  ser.forEach(function(s){var d=s.dash?' stroke-dasharray="'+s.dash+'"':"";
   if(s.kind=="marks"){s.pts.forEach(function(q){h+=mark(s.shape,sx(q[0]),sy(q[1]),s.color,s.label+' at '+Math.round(q[0])+' simulations: '+(+q[1].toPrecision(4)))});return}
-  if(s.kind=="dots")s.pts.forEach(function(q){h+='<circle cx="'+sx(q[0])+'" cy="'+sy(q[1])+'" r=1.8 fill="'+s.color+'" opacity=".35" />'});
-  else{var pl=s.pts.map(function(q){return sx(q[0])+","+sy(q[1])}).join(" ");
-   h+='<polyline points="'+pl+'" fill=none stroke="'+s.color+'" stroke-width=1.6'+d+(s.kind=="faint"?' opacity=".4"':'')+' />';
+  if(s.kind=="dots")s.pts.forEach(function(q){h+='<circle cx="'+sx(q[0])+'" cy="'+sy(q[1])+'" r=1.5 fill="'+s.color+'" opacity=".18" />'});
+  else{splitGaps(s.pts).forEach(function(run){var pl=run.map(function(q){return sx(q[0])+","+sy(q[1])}).join(" ");
+   h+='<polyline points="'+pl+'" fill=none stroke="'+s.color+'" stroke-width=2'+d+(s.kind=="faint"?' opacity=".4"':'')+' />'});
    if(s.kind=="pts")s.pts.forEach(function(q){h+='<circle cx="'+sx(q[0])+'" cy="'+sy(q[1])+'" r=2.2 fill="'+s.color+'"><title>'+s.label+' step '+q[0]+': '+(+q[1].toPrecision(4))+'</title></circle>'})}});
  var leg=o.leg||ser.map(function(s){return '<span><i style="background:'+s.color+'"></i>'+s.label+(s.dash?" (dashed)":"")+'</span>'}).join("");
  return '<h3>'+o.title+ftInfo(o.info)+'</h3><div class=leg>'+leg+'</div>'+h+'</svg>'}
@@ -94,7 +96,7 @@ function draw(){
   +(LT=="level"?'<span class=mut>by level: step 0 and checkpoints only (the trainer logs no level loss in between)</span>':"")
   +(mode=="base"&&runs.some(function(r){return r.held.length})?'<span class=mut>subset: no base Chronos-2 value</span>':"")
   +(mode=="start"&&has(function(h){return h.sub})?'<span class=mut>subset: relative to its first evaluation</span>':"");
- var trLeg=(runs.some(function(r){return r.live})?'<span><svg width=12 height=10><circle cx=6 cy=5 r=1.8 fill="var(--fg)" opacity=".35"/></svg> logged values (live run)</span>':"")+'<span>'+sw("var(--fg)","")+' rolling mean of 20</span>';
+ var trLeg=(runs.some(function(r){return r.live})?'<span><svg width=12 height=10><circle cx=6 cy=5 r=1.8 fill="var(--fg)" opacity=".3"/></svg> logged values (live run)</span>':"")+'<span>'+sw("var(--fg)","")+' rolling mean of 20</span>';
  var ttl="Validation loss, "+{total:"all steps",nowcast:"nowcast steps",forecast:"forecast steps",layout:"by layout",level:"by level"}[LT]+", subset and full set";
  cards([{title:"Training loss"+suf,info:"train",series:tr,xmax:xmax,hl:hl,leg:trLeg},{title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl,leg:heldLeg}]);
  [].forEach.call(document.querySelectorAll("[data-lt]"),function(b){b.classList.toggle("on",b.dataset.lt==LT)});

@@ -341,7 +341,7 @@ def test_the_learning_rate_falls_over_simulations_not_constant(tmp_path):
     out = page.build(ctx)
     assert "linear decay to 0 at 1000 simulations" in out
     assert ">constant<" not in out
-    assert "learning rate vs simulations trained" in out
+    assert "Learning rate vs simulations trained" in out
 
 
 def test_the_last_log_line_is_the_running_segment_s(tmp_path):

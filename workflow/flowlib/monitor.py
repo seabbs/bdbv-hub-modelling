@@ -4,7 +4,7 @@ Panoptes (`panoptes-ui`) serves every run's jobs, their state, what is
 running and what has failed; Snakemake sends them through its logger
 plugin (`snakemake-logger-plugin-panoptes`). `args` gives a run's logger
 options from the machine's `MONITOR_URL` (config/local.env), and
-`task nowcast-workflow:monitor` serves the page on `MONITOR_HOST` and
+`task workflow:monitor` serves the page on `MONITOR_HOST` and
 `MONITOR_PORT`. The plugin drops events it cannot send, so a run goes on
 when no server is listening.
 
