@@ -25,7 +25,8 @@ def test_the_held_out_cut_is_its_own_stage(tmp_path, monkeypatch):
         seen.update(json.loads((out / "stream-status.json").read_text()))
         raise CutError
 
-    monkeypatch.setattr(fs, "ready_outbreaks", lambda *_: ["a", "b"])
+    monkeypatch.setattr(fs, "ready_outbreaks", lambda *_: ["3-0001", "3-0002"])
+    monkeypatch.setattr(fs, "sims_sha256", lambda *_: {})
     monkeypatch.setattr(fs, "code_commit", lambda: "c")
     monkeypatch.setattr(fs, "checkpoint_large_batches", lambda *_: None)
     monkeypatch.setattr(fs, "ProcessPoolExecutor", lambda *_, **__: None)
@@ -68,7 +69,8 @@ def test_a_resumed_run_s_status_carries_its_step_and_segment(
         seen.update(json.loads((out / "stream-status.json").read_text()))
         raise CutError
 
-    monkeypatch.setattr(fs, "ready_outbreaks", lambda *_: ["a", "b"])
+    monkeypatch.setattr(fs, "ready_outbreaks", lambda *_: ["3-0001", "3-0002"])
+    monkeypatch.setattr(fs, "sims_sha256", lambda *_: {})
     monkeypatch.setattr(fs, "code_commit", lambda: "c")
     monkeypatch.setattr(fs, "checkpoint_large_batches", lambda *_: None)
     monkeypatch.setattr(fs, "ProcessPoolExecutor", lambda *_, **__: None)
@@ -107,3 +109,80 @@ def test_a_fresh_run_s_status_starts_at_step_zero(tmp_path):
         "segment": "n400",
         "target": 400,
     }
+
+
+def test_cut_only_saves_the_held_out_and_first_chunk_without_the_gpu(
+    tmp_path, monkeypatch
+):
+    # Lead 13:00: Run B's GPU must never wait on a cut. Its held-out
+    # blocks and first chunk are cut on the CPU, under the keys the
+    # trainer will look up, before it takes the GPU.
+    out = tmp_path / "train"
+    held = (["3-0001-1"], [])
+    first = ([("1-0001-1", {"source": "daily"})], [])
+
+    def no_model(*_args, **_kwargs):
+        raise AssertionError("cut-only loaded the model")
+
+    monkeypatch.setattr(fs, "ready_outbreaks", lambda *_: ["3-0001", "3-0002"])
+    monkeypatch.setattr(fs, "code_commit", lambda: "c")
+    monkeypatch.setattr(fs, "checkpoint_large_batches", lambda *_: None)
+    monkeypatch.setattr(fs, "ProcessPoolExecutor", lambda *_, **__: None)
+    monkeypatch.setattr(fs, "cut_in_workers", lambda *_a, **_k: held)
+    monkeypatch.setattr(fs, "sims_sha256", lambda _d, ids: {"n": len(ids)})
+    monkeypatch.setattr(fs, "next_chunk", lambda *_: ["1-0001", "1-0002"])
+    monkeypatch.setattr(fs, "submit_cut", lambda *_a, **_k: "futures")
+    monkeypatch.setattr(fs, "_join", lambda _f: first)
+    import chronos
+
+    monkeypatch.setattr(chronos.Chronos2Pipeline, "from_pretrained", no_model)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "finetune_stream",
+            str(tmp_path / "sims"),
+            str(out),
+            "--train-seeds",
+            "1",
+            "2",
+            "--held-out-seeds",
+            "3",
+            "4",
+            "--holdout",
+            "2",
+            "--cut-only",
+        ],
+    )
+    fs.main()
+    assert (out / fs.HELD_OUT_KEY).exists()
+    key = json.loads((out / fs.HELD_OUT_KEY).read_text())
+    saved = fs.load_chunk(
+        out, key | {"outbreaks": ["1-0001", "1-0002"], "sims_sha256": {"n": 2}}
+    )
+    assert saved is not None
+    assert saved[0][0][0] == "1-0001-1"
+
+
+def test_cut_only_is_for_a_fresh_run(tmp_path, monkeypatch):
+    out = tmp_path / "train"
+    (out / "state").mkdir(parents=True)
+    (out / "state" / "state.json").write_text(json.dumps({"step": 5}))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "finetune_stream",
+            str(tmp_path / "sims"),
+            str(out),
+            "--train-seeds",
+            "1",
+            "2",
+            "--held-out-seeds",
+            "3",
+            "4",
+            "--cut-only",
+        ],
+    )
+    with pytest.raises(SystemExit):
+        fs.main()
