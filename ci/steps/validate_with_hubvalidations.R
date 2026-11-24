@@ -96,10 +96,14 @@ make_temp_hub <- function(hub) {
 # validates a staged hub against the original checkout
 # (`FORECAST_SOURCE_HUB`), whose working tree holds the new file, and its
 # base commit (`PR_BASE_SHA`), as the hub's PR workflow sets them. Here
-# the staged hub is the temporary one, the source is a shared clone of
-# the hub checkout at HEAD with the file placed in it, and the base is
-# that HEAD, so the checkout itself is never modified. A caller that sets
-# both keeps them.
+# the staged hub is the temporary one and the source is a detached
+# worktree of the hub checkout at HEAD with no files checked out but the
+# new one. A worktree shares the checkout's objects, so it works for the
+# shallow, partial, sparse checkout Submit makes, where a clone of it
+# fails on the blobs it never fetched (main dry run 45379275554). The
+# checkout's files are never touched, and the worktree is removed after
+# the file. A caller that sets both variables keeps them. If the source
+# cannot be staged it says why, and the check then fails on it.
 stage_forecast_source <- function(hub, file, model_dir) {
   if (nzchar(Sys.getenv("FORECAST_SOURCE_HUB")) &&
       nzchar(Sys.getenv("PR_BASE_SHA"))) {
@@ -107,20 +111,27 @@ stage_forecast_source <- function(hub, file, model_dir) {
   }
   head <- suppressWarnings(system2(
     "git", c("-C", shQuote(hub), "rev-parse", "HEAD"),
-    stdout = TRUE, stderr = FALSE
+    stdout = TRUE, stderr = TRUE
   ))
-  if (length(head) != 1L) return(NULL)
+  if (!is.null(attr(head, "status")) || length(head) != 1L) {
+    message("Cannot stage the forecast source: ", paste(head, collapse = " "))
+    return(NULL)
+  }
   src <- tempfile("hub-source-")
-  status <- system2(
-    "git", c("clone", "--quiet", "--shared", shQuote(hub), shQuote(src)),
-    stdout = FALSE, stderr = FALSE
-  )
-  if (status != 0L) return(NULL)
+  out <- suppressWarnings(system2(
+    "git", c("-C", shQuote(hub), "worktree", "add", "--quiet",
+             "--no-checkout", "--detach", shQuote(src), head),
+    stdout = TRUE, stderr = TRUE
+  ))
+  if (!is.null(attr(out, "status"))) {
+    message("Cannot stage the forecast source: ", paste(out, collapse = " "))
+    return(NULL)
+  }
   dest <- file.path(src, "model-output", model_dir)
   dir.create(dest, recursive = TRUE, showWarnings = FALSE)
   file.copy(file, file.path(dest, basename(file)), overwrite = TRUE)
   Sys.setenv(FORECAST_SOURCE_HUB = src, PR_BASE_SHA = head)
-  src
+  structure(src, hub = hub)
 }
 
 find_metadata <- function(model_id, metadata_dir, hub) {
@@ -198,6 +209,9 @@ validate_one <- function(file, opts) {
     if (!is.null(src)) {
       on.exit(
         {
+          system2("git", c("-C", shQuote(attr(src, "hub")), "worktree",
+                           "remove", "--force", shQuote(src)),
+                  stdout = FALSE, stderr = FALSE)
           unlink(src, recursive = TRUE)
           Sys.unsetenv(c("FORECAST_SOURCE_HUB", "PR_BASE_SHA"))
         },
