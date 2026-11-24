@@ -68,7 +68,10 @@ details.sec{scroll-margin-top:92px}details.sec h2{margin:10px 0 6px}
 .gsc svg{max-width:100%;height:auto}
 @media(max-width:1100px){.gscores{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.gscores{grid-template-columns:1fr}}
-#lrcard svg{max-width:520px}
+#lrcard:not(.fs) svg{max-width:520px}
+/* Full screen enlarges a fixed-width chart only so far, so its text stays
+   in proportion to the page's. */
+.fs svg.srv{max-width:min(100%,800px);margin:0 auto}
 /* Charts drawn on the server at a fixed width shrink on a phone; their
    axis text does not. */
 @media(max-width:560px){svg.srv .ax{font-size:14px}}
