@@ -431,24 +431,13 @@ The dashboard was built with the help of a large language model.
 
 {{< include build/tables/si/epinowcast-model.md >}}
 
-::: {#tbl-grid-epidemic}
-{{< include build/tables/si/grid-epidemic.md >}}
+We draw every continuous setting from a named sampling distribution, which states what we believe likely outbreaks look like (@tbl-grid).
 
-The simulation grid, strata and infections: each categorical setting's levels and each continuous setting's sampling distribution, read from the grid config.
-:::
+::: {#tbl-grid}
+{{< include build/tables/si/grid.md >}}
 
-::: {#tbl-grid-reporting}
-{{< include build/tables/si/grid-reporting.md >}}
-
-The simulation grid, observation, reporting delays and the reporting system: as @tbl-grid-epidemic.
-:::
-
-We draw every continuous setting from a named sampling distribution of the simulation settings, which states what we believe likely outbreaks look like (@tbl-grid-distributions).
-
-::: {#tbl-grid-distributions}
-{{< include build/tables/si/grid-distributions.md >}}
-
-Sampling distributions of the continuous simulation settings, read from the grid config, with the reason for each.
+The simulation grid, read from the grid config: by layer, each categorical setting's levels with their shares where uneven, and each continuous setting's sampling distribution with its reason.
+The last group is the release layer, drawn per training block at fine-tuning time.
 :::
 
 

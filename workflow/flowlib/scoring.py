@@ -106,7 +106,8 @@ FT_CHECK_CODE = (
 )
 """What the BDBV check's forecasts depend on, past the data: the models'
 packages, the release tasks and the backtest config. The active-zone rule
-in config/finetune.toml is keyed by its values (`ft_check_key`), so a new
+in packages/nowcastfoundation/config/finetune.toml is keyed by its values
+(`ft_check_key`), so a new
 checkpoint pinned there reruns only the fine-tuned model."""
 
 
@@ -126,7 +127,11 @@ def ft_check_key(root: Path | str = ".") -> str:
         for f in files:
             h.update(str(f.relative_to(root)).encode())
             h.update(f.read_bytes())
-    conf = tomllib.loads((Path(root) / "config/finetune.toml").read_text())
+    conf = tomllib.loads(
+        (
+            Path(root) / "packages/nowcastfoundation/config/finetune.toml"
+        ).read_text()
+    )
     rule = {k: v for k, v in conf.items() if k.startswith("active_zone")}
     h.update(repr(sorted(rule.items())).encode())
     return h.hexdigest()[:12]

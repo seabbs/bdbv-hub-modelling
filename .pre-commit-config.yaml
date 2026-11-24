@@ -7,7 +7,7 @@ repos:
     hooks:
       # Downloaded, generated and fixture files are left as they are.
       - id: end-of-file-fixer
-        exclude: &generated ^(data|results|docs/(generated|figures|examples)|packages/bdbvhub/tests/hub_validation/fixtures|ci/fixtures|workflow/flowlib/static)/
+        exclude: &generated ^(data|results|docs/(generated|figures|examples)|packages/bdbvhub/tests/hub_validation/fixtures|packages/bdbvsubmission/fixtures|workflow/flowlib/static)/
       - id: trailing-whitespace
         exclude: *generated
       # mkdocs.yml uses !!python/name tags for pymdownx.
@@ -36,18 +36,18 @@ repos:
         files: ^packages/
         pass_filenames: false
       - id: ruff-ci
-        name: ruff (ci/)
-        entry: bash -c 'cd ci && uv run ruff check --fix src tests fixtures && uv run ruff format src tests fixtures'
+        name: ruff (packages/bdbvsubmission/)
+        entry: bash -c 'cd packages/bdbvsubmission && uv run ruff check --fix src tests fixtures && uv run ruff format src tests fixtures'
         language: system
         types: [python]
-        files: ^ci/
+        files: ^packages/bdbvsubmission/
         pass_filenames: false
       - id: mypy-ci
-        name: mypy (ci/)
-        entry: bash -c 'cd ci && uv run mypy'
+        name: mypy (packages/bdbvsubmission/)
+        entry: bash -c 'cd packages/bdbvsubmission && uv run mypy'
         language: system
         types: [python]
-        files: ^ci/
+        files: ^packages/bdbvsubmission/
         pass_filenames: false
       - id: actionlint
         name: actionlint

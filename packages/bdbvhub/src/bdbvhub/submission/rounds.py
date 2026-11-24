@@ -88,13 +88,20 @@ def gh_pr_state(url: str) -> str:
     str
         `open`, `closed` or `merged`.
     """
+    # Over REST: the Actions token reads another org's public pull
+    # request there, but not over GraphQL (`gh pr view`).
+    owner, repo, _, number = url.rstrip("/").split("/")[-4:]
     out = subprocess.run(
-        ["gh", "pr", "view", url, "--json", "state", "-q", ".state"],
+        ["gh", "api", f"repos/{owner}/{repo}/pulls/{number}"],
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
     )
-    return out.stdout.strip().lower()
+    if out.returncode != 0:
+        msg = f"gh could not read {url}: {out.stderr.strip()}"
+        raise RuntimeError(msg)
+    pr = json.loads(out.stdout)
+    return "merged" if pr["merged_at"] else str(pr["state"])
 
 
 def _link(url: str, text: str) -> str:

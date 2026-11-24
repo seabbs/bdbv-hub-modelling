@@ -1,0 +1,31 @@
+# The release layer (finetune.release_layer; nowcastfoundation.finetune.
+# chronos.check_release_layer): drawn per block at fine-tune time from the
+# simulations already made (lead 10:35, Sam: no resimulation). Run B's
+# entry in workflow/config.yaml names this file.
+#
+# start: the share of blocks whose releases start late (15%, lead 21:15), and the delay in
+# days from the outbreak's first report to the first kept release. The
+# releases before it are dropped, so the first kept one backfills the
+# onsets before it, as the BDBV hub's first release of 2026-08-18 held
+# onsets from February. Beta(1, 3) on 7 to 182 days: short delays most
+# often, up to about six months.
+start:
+  share: 0.15
+  delay_days: {dist: beta, a: 1, b: 3, lower: 7, upper: 182}
+# no_lags: the share of blocks trained on their counts alone, with no lag
+# series, as when only the latest data are at hand (lead 02:00, Sam): the
+# complete layout's blocks (counts to the last complete step).
+no_lags:
+  share: 0.05
+# lag_jitter: the share of blocks whose lag count is the rule's times a
+# factor drawn from Normal(1, sd), rounded, at least 1 and within the
+# block's history (lead 15:08, Sam); the rest use the rule's exactly.
+lag_jitter:
+  share: 0.1
+  sd: 0.05
+# cadences: the release cadences of each step width and their shares, in
+# place of the block design's (finetune.chronos.BLOCK_DESIGN). Daily-step
+# blocks are 60% of all blocks; a third of them released weekly (lead 21:15,
+# Sam) is 20% of all blocks (the block design's 0.2 gives 12%).
+cadences:
+  daily: {daily: 0.4666666666666667, weekly: 0.3333333333333333, daily_gaps: 0.1, weekdays: 0.1}

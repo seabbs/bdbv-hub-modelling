@@ -1182,7 +1182,10 @@ def test_a_round_s_batch_runs_the_grid(tmp_path):
     text = " ".join("".join(blocks).replace("\\\n", " ").split())
     shell = text[text.index("-m nowcastfoundation.simulator") - 400 :]
     assert "ENW_CELLS" not in shell
-    assert "nowcastfoundation.simulator config/finetune/grid.yaml 20 " in shell
+    assert (
+        "nowcastfoundation.simulator "
+        "packages/nowcastfoundation/config/finetune/grid.yaml 20 " in shell
+    )
 
 
 def test_grid_figures_summarise_each_round_then_compare_them(tmp_path):
@@ -1365,7 +1368,8 @@ def test_a_new_machine_fetches_the_german_triangle_before_scoring(tmp_path):
 
 def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
     # Lead 10:55 (#969): publish_hf is opt-in and uploads only with a
-    # repository in config/finetune.toml and dry_run off; the repository
+    # repository in packages/nowcastfoundation/config/finetune.toml and dry_run
+    # off; the repository
     # is empty until Sam picks it, so it writes the folder only.
     where = tmp_path / "runs" / "runa" / "train" / "interim" / "s48100"
     (where / "finetuned-ckpt").mkdir(parents=True)

@@ -109,7 +109,7 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
     assert (development / "tables" / "main" / "synthetic-grid.csv").is_file()
     joint = development / "tables" / "main" / "synthetic-joint.md"
     assert "rel_energy_log" in joint.read_text()
-    design = development / "tables" / "si" / "grid-epidemic.md"
+    design = development / "tables" / "si" / "grid.md"
     assert "Infections" in design.read_text()
     assert (development / "figures" / "si" / "sim-examples.png").is_file()
 
@@ -214,7 +214,8 @@ def test_benchmark_commands_run_from_the_repository_root(
     tmp_path: Path,
 ) -> None:
     # The models read config/ relative to the working directory
-    # (config/finetune.toml); the workflow runs from the root.
+    # (packages/nowcastfoundation/config/finetune.toml); the workflow runs from
+    # the root.
     cfg = tmp_path / "real.yaml"
     cfg.write_text(yaml.safe_dump({"results": str(tmp_path / "results")}))
     base = str(PAPER / "workflow" / "config.yaml")

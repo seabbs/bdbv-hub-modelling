@@ -34,19 +34,56 @@ def test_factor_shares_are_the_weights_normalised() -> None:
         assert abs(sum(levels.values()) - 1) < 1e-12
 
 
-def test_every_factor_and_distribution_is_in_one_table() -> None:
-    tables = synthetic_grid.layer_tables(GRID)
-    shown = {s.strip("`") for t in tables.values() for s in t["setting"]}
-    assert shown == set(GRID["factors"]) | set(GRID["distributions"])
-    layers = {layer for t in tables.values() for layer in t["layer"]}
-    assert layers == set(synthetic_grid.LAYER_NAMES.values())
+RELEASE_FILE = GRID_FILE.parent / "release-layer.yaml"
+RELEASE = yaml.safe_load(RELEASE_FILE.read_text())
+
+
+def _rows(table):
+    return table[table["header"] == ""]
+
+
+def test_the_grid_is_one_table_with_every_setting_once() -> None:
+    # The grid was three tables and a list: two by layer, one of
+    # distributions and the factors again in the model note.
+    table = synthetic_grid.grid_table(GRID, RELEASE)
+    shown = [s.strip("`") for s in _rows(table)["setting"]]
+    grid_settings = set(GRID["factors"]) | set(GRID["distributions"])
+    assert grid_settings <= set(shown)
+    assert len([s for s in shown if s in grid_settings]) == len(grid_settings)
+    heads = [h for h in table["header"] if h]
+    assert heads == [
+        *(synthetic_grid.LAYER_NAMES[k] for k in synthetic_grid.LAYERS),
+        synthetic_grid.RELEASE_NAME,
+    ]
+    assert list(synthetic_grid.TABLE_HEADERS) == ["setting", "values", "why"]
+
+
+def test_each_distribution_gives_its_reason() -> None:
+    rows = _rows(synthetic_grid.grid_table(GRID, RELEASE)).set_index("setting")
+    gt = rows.loc["`gt_mean`"]
+    assert gt["values"].startswith("LogNormal(median 7")
+    assert gt["why"] == GRID["distributions"]["gt_mean"]["why"]
+
+
+def test_the_release_layer_is_the_last_group() -> None:
+    table = synthetic_grid.grid_table(GRID, RELEASE)
+    last = table.index[table["header"] == synthetic_grid.RELEASE_NAME][0]
+    rows = table.loc[last + 1 :].set_index("setting")
+    start = RELEASE["start"]
+    assert f"{start['share']:.0%} of blocks" in rows.loc["`start`", "values"]
+    assert "Beta(1, 3) on [7, 182] days" in rows.loc["`start`", "values"]
+    assert "Normal(1, 0.05)" in rows.loc["`lag_jitter`", "values"]
+    assert "`weekly` (25%)" in rows.loc["`cadences` (daily)", "values"]
+    assert synthetic_grid.grid_table(GRID, None)["header"].tolist()[-1] != (
+        synthetic_grid.RELEASE_NAME
+    )
 
 
 def test_a_factor_with_no_layer_fails() -> None:
     grid = {**GRID, "factor_layers": dict(GRID["factor_layers"])}
     grid["factor_layers"].pop("window")
     with pytest.raises(KeyError, match="window"):
-        synthetic_grid.layer_tables(grid)
+        synthetic_grid.grid_table(grid, None)
 
 
 def test_distributions_read_as_text() -> None:
@@ -67,28 +104,33 @@ def test_distributions_read_as_text() -> None:
     )
 
 
-def test_the_distribution_table_gives_every_reason() -> None:
-    table = synthetic_grid.distribution_table(GRID)
-    assert len(table) == len(GRID["distributions"])
-    assert table["why"].str.len().gt(0).all()
-    gt = table.set_index("setting").loc["`gt_mean`", "distribution"]
-    assert gt.startswith("LogNormal(median 7")
-
-
 def test_uneven_levels_show_their_shares() -> None:
-    epi = synthetic_grid.layer_tables(GRID)["epidemic"].set_index("setting")
+    rows = _rows(synthetic_grid.grid_table(GRID, None)).set_index("setting")
     # window: early 5, endemic 7, established 8 of 20.
-    assert "`early` (25%)" in epi.loc["`window`", "values"]
-    assert "%" not in epi.loc["`gt_family`", "values"]
+    assert "`early` (25%)" in rows.loc["`window`", "values"]
+    assert "%" not in rows.loc["`gt_family`", "values"]
 
 
-def test_markdown_escapes_pipes() -> None:
-    table = synthetic_grid.layer_tables(GRID)["reporting"]
-    md = synthetic_grid.to_markdown(table, synthetic_grid.HEADERS)
+def test_markdown_has_header_rows_and_escapes_pipes() -> None:
+    table = synthetic_grid.grid_table(GRID, RELEASE)
+    md = synthetic_grid.to_markdown(table)
     lines = md.strip().splitlines()
     assert len(lines) == len(table) + 2
+    assert f"| **{synthetic_grid.LAYER_NAMES['strata']}** | | |" in lines
     # Four unescaped pipes bound the three cells of each row.
     assert all(len(re.findall(r"(?<!\\)\|", line)) == 4 for line in lines[2:])
+
+
+def test_the_si_includes_one_grid_table() -> None:
+    from paperpipe import flow
+
+    assert "grid" in flow.DESIGN_TABLES
+    assert not {"grid-epidemic", "grid-reporting", "grid-distributions"} & set(
+        flow.DESIGN_TABLES
+    )
+    si = (PAPER / "si.qmd").read_text()
+    assert si.count("{{< include build/tables/si/grid.md >}}") == 1
+    assert "grid-epidemic.md" not in si
 
 
 def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
@@ -97,14 +139,15 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
         "heldout_seeds": CONFIG["heldout"]["synthetic_seeds"],
         "development_seeds": CONFIG["development"]["synthetic_seeds"],
     }
-    model = synthetic_grid.model_note(GRID, "config/finetune/grid.yaml")
-    for levels in GRID["factors"].values():
-        for level in levels:
-            assert f"`{level}`" in model
+    model = synthetic_grid.model_note(
+        GRID, "packages/nowcastfoundation/config/finetune/grid.yaml"
+    )
+    # The factors are in the grid table, not repeated in the note.
+    assert "##### Factors" not in model
     assert "PyRenew" in model
     assert "enw_simulate" not in model
     assert "epinowcast is pinned" not in model
-    assert "config/finetune/grid.yaml" in model
+    assert "packages/nowcastfoundation/config/finetune/grid.yaml" in model
     assert "finetune_simulate" not in model
     heldout = synthetic_grid.heldout_note(config)
     seeds = config["heldout_seeds"]
@@ -112,3 +155,18 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
     # One sentence per line.
     for note in (model, heldout):
         assert all(line.count(". ") == 0 for line in note.splitlines() if line)
+
+
+def test_the_held_out_note_names_the_grid_file_and_no_machine_path() -> None:
+    # It named a retired grid label and printed the simulations' folder.
+    config = {
+        **CONFIG["synthetic"],
+        "simulations": {"paper": "/home/someone/rounds/r38/sims"},
+        "heldout_seeds": CONFIG["heldout"]["synthetic_seeds"],
+        "development_seeds": CONFIG["development"]["synthetic_seeds"],
+    }
+    note = synthetic_grid.heldout_note(config)
+    assert f"`{CONFIG['synthetic']['grid_file']}`" in note
+    assert "/home/" not in note
+    assert "on grid `" not in note
+    assert "grid" not in CONFIG["synthetic"]

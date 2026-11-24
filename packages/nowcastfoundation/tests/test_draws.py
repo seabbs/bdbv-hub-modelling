@@ -16,7 +16,14 @@ from scipy import stats
 from nowcastfoundation.simulator import draws
 
 ROOT = Path(__file__).parents[3]
-GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
+GRID_FILE = (
+    ROOT
+    / "packages"
+    / "nowcastfoundation"
+    / "config"
+    / "finetune"
+    / "grid.yaml"
+)
 OPTIONS = tuple(draws.read_grid(GRID_FILE)["max_delay_days"])
 
 
@@ -187,9 +194,10 @@ def test_the_longest_delay_is_the_first_option_past_the_99th_centile():
 
 
 def test_long_delay_tails_are_a_real_share(grid):
-    """A fifth of draws have a 99% delay of 60 days or more (Germany's is
-    61 to 81), some with a fast head as well, and the longest delay
-    reaches the grid's last option."""
+    """Over a sixth of draws have a 99% delay of 60 days or more (Germany's
+    is 61 to 81), some with a fast head as well, and the longest delay
+    reaches the grid's last option. The lognormal tail is trimmed (#1043),
+    so fast-head long-tail lognormals are fewer, but still a real share."""
     rng = draws.generator(8)
     q99, head, longest = [], [], []
     for _ in range(3_000):
@@ -206,7 +214,7 @@ def test_long_delay_tails_are_a_real_share(grid):
     q99 = np.asarray(q99)
     assert np.mean(q99 >= 60) > 0.15
     assert np.mean(q99 >= 120) > 0.04
-    assert np.mean(head) > 0.08
+    assert np.mean(head) > 0.05
     assert max(OPTIONS) in longest
 
 
@@ -427,3 +435,17 @@ def test_unknown_weekday_pattern_parts_are_refused(grid):
         draws.weekday_pattern(
             {**grid, "weekday_patterns": ["holiday"]}, np.random.default_rng(0)
         )
+
+
+def test_some_sims_cap_their_reporting_delay_or_stop_reporting(grid):
+    rng = draws.generator(45)
+    cap, stop = [], []
+    for _ in range(1_500):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        cap.append(d["report_cap"] == "yes")
+        stop.append(d["report_stop"] == "yes")
+        assert v["report_cap_days"] > 0
+        assert 0.4 <= v["report_stop_at"] <= 0.95
+    assert abs(np.mean(cap) - 0.25) < 0.05
+    assert abs(np.mean(stop) - 0.1) < 0.04

@@ -6,7 +6,7 @@ import subprocess
 from flowlib import simulator
 from test_workflow_dryrun import dry_run
 
-GRID = "config/finetune/grid.yaml"
+GRID = "packages/nowcastfoundation/config/finetune/grid.yaml"
 
 
 def test_the_grid_identifier_is_read_from_the_grid(tmp_path):

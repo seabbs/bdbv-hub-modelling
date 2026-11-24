@@ -59,9 +59,9 @@ rule grid_figures:
 # against the German development half and the paper's reference values.
 # Target `sim_reports`. The German triangle is the hub's, at
 # packages/nowcastgermany/config/germany.toml's commit; no BDBV data.
-GERMANY_SPLIT = tomllib.loads(Path("packages/nowcastgermany/config/germany.toml").read_text())["nowcast"][
-    "split_date"
-]
+GERMANY_SPLIT = tomllib.loads(
+    Path("packages/nowcastgermany/config/germany.toml").read_text()
+)["nowcast"]["split_date"]
 REFERENCE_VALUES = "paper/data/reference-values.csv"
 
 
@@ -278,7 +278,7 @@ rule hub_data:
 
 rule hub_submissions_table:
     # Each round's submitted model per hub id, from the ledger branch
-    # (submission_ci.submissions), so the report says which chain model
+    # (bdbvsubmission.submissions), so the report says which chain model
     # went out.
     input:
         f"{HUB}/head.txt",
@@ -294,9 +294,9 @@ rule hub_submissions_table:
     shell:
         "(git fetch -q origin submission-ledger && rm -rf {params.ledger} && "
         "mkdir -p {params.ledger} && git archive origin/submission-ledger "
-        "| tar -x -C {params.ledger} && uv run --quiet --project ci "
+        "| tar -x -C {params.ledger} && uv run --quiet --project packages/bdbvsubmission "
         "submissions-table --state {params.ledger}/state.json "
-        "--policy ci/policy.toml --hub-config packages/bdbvhub/config/hub.toml "
+        "--policy packages/bdbvsubmission/policy.toml --hub-config packages/bdbvhub/config/hub.toml "
         "--out {output}) > {log} 2>&1"
 
 
@@ -381,7 +381,8 @@ rule hub_rounds:
 # reruns only it. `ft_check_page` scores them together for one checkpoint,
 # ft-check/<ckpt>/bdbv-ft-check-<ckpt>.html, copied to REVIEW_DIR under
 # that name, so each checkpoint is its own target. `ft_check` is the page
-# of ft_check.checkpoint (or config/finetune.toml's pin), copied to
+# of ft_check.checkpoint (or packages/nowcastfoundation/config/finetune.toml's
+# pin), copied to
 # REVIEW_DIR as bdbv-ft-check.html too; `finetune` asks for the page of
 # every released checkpoint (`ft_check_released`). Not part of `all`.
 

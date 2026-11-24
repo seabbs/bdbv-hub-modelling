@@ -15,7 +15,10 @@ ROOT = Path(__file__).resolve().parents[3]
 SETTINGS = {
     "hash": "08f3982239a3",
     "chronos_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
-    "code_sha256": {"config/finetune/grid.yaml": "d907d9e5bb58" + "0" * 52},
+    "code_sha256": {
+        "packages/nowcastfoundation/config/finetune/grid.yaml": "d907d9e5bb58"
+        + "0" * 52
+    },
     "lags": "one lag count a block: the largest 99% delay",
     "lora": {"r": 8, "alpha": 16, "modules_to_save": ["series_bias"]},
     "series_bias": {"pairs": "same place", "per": "encoder layer and head"},

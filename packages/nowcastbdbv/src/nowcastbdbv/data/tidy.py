@@ -873,7 +873,7 @@ def coherence_summary(
     """Summarise national coherence for one real vintage.
 
     This is the `coherence.json` record the submission CI reads (see
-    `ci/INTEGRATION.md`).
+    `packages/bdbvsubmission/INTEGRATION.md`).
 
     Parameters
     ----------

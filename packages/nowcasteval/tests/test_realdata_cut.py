@@ -12,7 +12,9 @@ ROOT = Path(__file__).parents[3]
 
 
 def _cut() -> dict:
-    text = (ROOT / "config" / "finetune.toml").read_text()
+    text = (
+        ROOT / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).read_text()
     return tomllib.loads(text)["realdata_bdbv"]
 
 

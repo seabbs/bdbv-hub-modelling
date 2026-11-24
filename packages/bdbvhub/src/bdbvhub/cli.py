@@ -367,7 +367,7 @@ def build_parser() -> argparse.ArgumentParser:
     fst.add_argument(
         "--config", default="packages/nowcastbdbv/config/backtest.toml"
     )
-    fst.add_argument("--policy", default="ci/policy.toml")
+    fst.add_argument("--policy", default="packages/bdbvsubmission/policy.toml")
     fst.add_argument(
         "--model", help="With `fit` or `unpack`: the model to fit or read."
     )
@@ -467,7 +467,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--model", default="randomwalk", choices=sorted(MODEL_METADATA)
     )
     _abbr_args(meta)
-    meta.add_argument("--out", default="hub/model-metadata")
+    meta.add_argument("--out", default="packages/bdbvsubmission/model-metadata")
     meta.add_argument(
         "--data", default=data_dir, help="Data directory with hub-config/."
     )
@@ -552,7 +552,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--submissions-table",
         default=None,
         help="Each round's submitted model per hub id "
-        "(submission_ci.submissions). Defaults to the config's.",
+        "(bdbvsubmission.submissions). Defaults to the config's.",
     )
 
     frz = sub.add_parser(
@@ -589,7 +589,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--checkpoint",
         default="",
         help="The fine-tuned checkpoint (settings hash) the _ft model "
-        "loads; config/finetune.toml's if empty.",
+        "loads; packages/nowcastfoundation/config/finetune.toml's if empty.",
     )
     ftc.add_argument(
         "--out", required=True, help="forecast: the folder; report: the page."
