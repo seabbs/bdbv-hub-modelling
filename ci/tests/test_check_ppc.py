@@ -26,7 +26,7 @@ from submission_ci.common import read_json
 from submission_ci.select_candidate import assess
 
 _spec = importlib.util.spec_from_file_location(
-    "fake_cli", FIXTURES / "fake_bdbvhubrenewal.py"
+    "fake_cli", FIXTURES / "fake_bdbvhub.py"
 )
 assert _spec is not None and _spec.loader is not None
 fake = importlib.util.module_from_spec(_spec)

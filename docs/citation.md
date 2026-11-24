@@ -9,7 +9,7 @@ The citation metadata are in [CITATION.cff](https://github.com/seabbs/bdbv-hub-m
 GitHub turns it into the "Cite this repository" button on the repository page.
 
 ```bibtex
-@software{abbott_bdbvhubrenewal,
+@software{abbott_bdbv_hub_modelling,
   author = {Abbott, Sam},
   title = {{bdbv-hub-modelling}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
   year = {2026},

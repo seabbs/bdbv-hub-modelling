@@ -22,7 +22,7 @@ def download(url: str, token: str | None = None) -> bytes:
     -------
     bytes
     """
-    headers = {"User-Agent": "bdbvhubrenewal"}
+    headers = {"User-Agent": "bdbv-hub-modelling"}
     if token and url.startswith("https://api.github.com"):
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers)

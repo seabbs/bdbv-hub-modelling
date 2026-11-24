@@ -204,3 +204,11 @@ def test_every_setting_of_the_example_is_one_something_reads():
 def test_the_workflow_checks_the_local_config_before_reading_it():
     text = (ROOT / "workflow" / "rules" / "common.smk").read_text()
     assert text.index("localconfig.check()") < text.index("localconfig.read()")
+
+
+def test_the_only_example_config_is_the_machine_settings():
+    # A machine's own profile starts from a copy of a shipped one; the
+    # machine settings are the one list localconfig checks against.
+    examples = sorted(p.name for p in (ROOT / "config").glob("*.example"))
+    assert examples == ["local.env.example"]
+    assert not (ROOT / "config" / "profile.example").exists()

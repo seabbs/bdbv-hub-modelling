@@ -3,7 +3,7 @@
 The bundle drops into `seabbs/bdbv-hub-modelling` as `ci/` plus `.github/`.
 `ci/` is its own small uv project with only the standard library.
 The workflows call the main repo only through the `bdbvhub` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbvhub`), and through `ci/steps/validate_hub.R`, the hub's own checks (hubValidations), which also run as a live test.
-`ci/fixtures/fake_bdbvhubrenewal.py` implements everything below on fixture data.
+`ci/fixtures/fake_bdbvhub.py` implements everything below on fixture data.
 It is the reference for the interface, and `ci/run_dry.sh` runs the whole workflow against it.
 
 ## What exists and what is needed

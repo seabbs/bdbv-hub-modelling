@@ -183,7 +183,7 @@ def previous() -> None:
     subprocess.run(
         [
             sys.executable,
-            str(HERE / "fake_bdbvhubrenewal.py"),
+            str(HERE / "fake_bdbvhub.py"),
             "nowcast",
             "--model",
             "renewal",
