@@ -1,6 +1,6 @@
 # Score tests/fixtures/scoring-fixture.csv with scoringutils and write the
-# expected scores to tests/fixtures/scoringutils-expected.csv.
-# Run from paper/: Rscript tests/scoringutils_reference.R
+# expected scores to OUT. tests/test_scoringutils.py runs it live.
+# Run from paper/: Rscript tests/scoringutils_reference.R OUT
 # Uses scoringutils' defaults: WIS with weigh = TRUE and the median
 # counted once; CRPS by scoringRules::crps_sample ("edf"); bias_quantile
 # and bias_sample; coverage of central intervals, from type-7 sample
@@ -10,6 +10,7 @@ suppressPackageStartupMessages({
   library(scoringutils)
   library(data.table)
 })
+dest <- commandArgs(trailingOnly = TRUE)[1]
 fixture <- fread("tests/fixtures/scoring-fixture.csv")
 setnames(fixture, c("value", "truth"), c("predicted", "observed"))
 keys <- c("study", "model", "location", "origin_date", "target_date", "horizon")
@@ -60,5 +61,5 @@ out[, coverage_50 := as.numeric(coverage_50)]
 out[, coverage_90 := as.numeric(coverage_90)]
 out[, coverage_95 := as.numeric(coverage_95)]
 setcolorder(out, c(keys, "metric", "score", "log_score", "bias"))
-fwrite(out, "tests/fixtures/scoringutils-expected.csv")
+fwrite(out, dest)
 cat("scoringutils", as.character(packageVersion("scoringutils")), "\n")

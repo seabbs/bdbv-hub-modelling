@@ -149,7 +149,8 @@ jobs:
       # baselinenowcast 0.2.2 (not on CRAN yet: the commit that set it).
       # fitdistrplus: primarycensored's fitdistdoublecens needs it (a
       # Suggests), for tests/model/test_hub_imputation_delays.py.
-      # scoringutils 2.3.0: tests/evaluation/test_pairwise_skill.py. No
+      # scoringutils 2.3.0: tests/evaluation/test_pairwise_skill.py and
+      # paper/tests/test_scoringutils.py. No
       # comments inside `packages`: pak reads every line as a package.
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
@@ -178,6 +179,10 @@ jobs:
           tests/model/test_reporting_effects.py
           tests/model/test_reporting_expectation.py
           tests/evaluation/test_pairwise_skill.py
+      # The paper's scores against scoringutils, scored live.
+      - name: Live scoringutils check (paper)
+        working-directory: paper
+        run: uv run --group paper pytest -q tests/test_scoringutils.py
       # With the slow sampler checks.
       - name: Live baselinenowcast checks
         run: uv run pytest -q -m "" tests/baselinenowcast

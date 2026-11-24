@@ -232,6 +232,16 @@ def test_the_submission_ci_has_its_own_ci_job():
     assert flags == ["ci"]
 
 
+def test_r_live_scores_the_paper_against_scoringutils_live():
+    # The paper's scores are checked against scoringutils run live, not
+    # against a committed copy of what R once wrote.
+    steps = _workflow("heavy.yml")["jobs"]["r-live"]["steps"]
+    paper = [s for s in steps if s.get("working-directory") == "paper"]
+    assert any("tests/test_scoringutils.py" in s["run"] for s in paper)
+    fixtures = Path(__file__).parents[1] / "paper" / "tests" / "fixtures"
+    assert not (fixtures / "scoringutils-expected.csv").exists()
+
+
 def test_repo_checks_fail_on_copied_code_across_the_packages():
     # pylint's symilar over every package's source: any block of 10 or
     # more lines found twice fails the job (Sam: as DRY as possible).
