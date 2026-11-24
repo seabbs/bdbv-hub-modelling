@@ -149,7 +149,12 @@ def test_paper_cores_come_from_the_local_config():
     [
         "Taskfile.yml",
         "paper/Taskfile.yml",
-        *(f"taskfiles/{p.name}" for p in (ROOT / "taskfiles").glob("*.yml")),
+        "workflow/Taskfile.yml",
+        "ci/Taskfile.yml",
+        *(
+            str(p.relative_to(ROOT))
+            for p in (ROOT / "packages").glob("*/Taskfile.yml")
+        ),
     ],
 )
 def test_task_leaves_the_local_config_to_localconfig(taskfile):
@@ -161,7 +166,7 @@ def test_task_leaves_the_local_config_to_localconfig(taskfile):
 
 
 def test_the_workflow_s_profile_comes_from_the_local_config():
-    text = (ROOT / "taskfiles" / "nowcast-workflow.yml").read_text()
+    text = (ROOT / "workflow" / "Taskfile.yml").read_text()
     assert "localconfig.py SNAKEMAKE_PROFILE" in text
 
 

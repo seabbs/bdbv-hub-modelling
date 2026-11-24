@@ -213,7 +213,7 @@ ft_check:
   checkpoint: ""
 
 dashboard:
-  # The fine-tuning dashboard (task nowcast-foundation:dashboard; workflow/flowlib/dashboard).
+  # The fine-tuning dashboard (task workflow:dashboard; workflow/flowlib/dashboard).
   # serve: true serves it with a run whose targets include finetune
   # (flowlib.dashboard.serve), on DASHBOARD_HOST:DASHBOARD_PORT, for as
   # long as the coordinator (or that Snakemake run) lives.

@@ -1,0 +1,136 @@
+version: "3"
+
+# The hub submission and its backtests: fit store, nowcasts, metadata, checks (bdbvhub).
+# Included by the root Taskfile.yml as `bdbvhub`: run `task bdbvhub:<task>` from the
+# repository root, or `task <task>` here. Tasks that read or write the
+# repository's data/, results/ or output/ run from its root (`dir`).
+
+tasks:
+
+  fit-store:
+    dir: ../..
+    desc: Load the fitted models' stored fits into results/ (fetches the fit-store branch)
+    run: once
+    cmds:
+      - uv run fit-store-branch fetch output/fit-store
+      - uv run bdbvhub fit-store load --store output/fit-store
+
+
+  fit-store-plan:
+    dir: ../..
+    desc: List the fits the store lacks for this code and data
+    cmds:
+      - uv run fit-store-branch fetch output/fit-store
+      - uv run bdbvhub fit-store plan --store output/fit-store
+
+
+  nowcast:
+    dir: ../..
+    desc: Forecast from the latest vintage and write a checked hub file to output/submission/
+    cmds:
+      - uv run bdbvhub nowcast {{.CLI_ARGS}}
+
+
+  metadata:
+    dir: ../..
+    desc: Write and check the metadata of the hub models in hub/model-metadata/
+    cmds:
+      - uv run bdbvhub metadata --model randomwalk --out hub/model-metadata
+      - uv run bdbvhub metadata --model randomwalknowcast --out hub/model-metadata
+      - uv run bdbvhub metadata --model fm_chronos_daily_ragged_ft --out hub/model-metadata
+
+
+  validate:
+    dir: ../..
+    desc: Check the nowcast file and metadata with hub_validate (Python) and hubValidations (R)
+    deps: [metadata]
+    vars:
+      MODEL: '{{.MODEL | default "randomwalknowcast"}}'
+      ID:
+        sh: uv run --quiet bdbvhub hub-id --model {{.MODEL}}
+    env:
+      R_CACHE_ROOTPATH: '{{.R_CACHE_ROOTPATH | default (printf "%s/rcache" (env "TMPDIR" | default "/tmp"))}}'
+    cmds:
+      - uv run bdbvhub nowcast --model {{.MODEL}}
+      - rm -rf output/hub
+      - git clone --depth 1 -q https://github.com/InsightNet-US/BDBV-Modeling-Hub.git output/hub
+      - >-
+        uv run bdbvhub validate --hub output/hub --skip-window
+        --metadata-dir hub/model-metadata
+        $(ls output/submission/model-output/{{.ID}}/*.csv | tail -n 1)
+        hub/model-metadata/{{.ID}}.yml
+      - >-
+        Rscript ci/steps/validate_hub.R output/hub
+        $(ls output/submission/model-output/{{.ID}}/*.csv | tail -n 1)
+        hub/model-metadata/{{.ID}}.yml
+
+
+  ci-fit:
+    dir: ../..
+    desc: "Fit one fit config and forecast from it, as a CI candidate does (CONFIG=main by default)"
+    vars:
+      CONFIG: '{{.CONFIG | default "main"}}'
+    cmds:
+      - rm -rf output/fits/{{.CONFIG}}
+      - uv run bdbvhub fit --config {{.CONFIG}} --out output/fits/{{.CONFIG}} {{.CLI_ARGS}}
+      - uv run bdbvhub nowcast --config {{.CONFIG}} --fit output/fits/{{.CONFIG}} --out output/candidates/{{.CONFIG}}
+
+
+
+  backtest:
+    dir: ../..
+    desc: Run the development backtest, the real-release evaluation, with the fitted models from the fit store
+    cmds:
+      - task: fit-store
+      - uv run bdbvhub backtest {{.CLI_ARGS}}
+
+
+  # The same commands as the backtest jobs of .github/workflows/pages.yml;
+  # keep the two in step.
+  results:
+    dir: ../..
+    desc: Make every derived file in results/ as the Pages build does (the backtest and zone runs)
+    cmds:
+      - task: backtest
+      - uv run bdbvhub zone-backtest
+
+
+  backtest-lopo:
+    dir: ../..
+    desc: Leave one province out on the development vintages, for the variants that take a mask
+    cmds:
+      - uv run bdbvhub backtest --lopo {{.CLI_ARGS}}
+
+
+  backtest-zones:
+    dir: ../..
+    desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
+    cmds:
+      - uv run bdbvhub zone-backtest {{.CLI_ARGS}}
+
+
+  compare-hub:
+    dir: ../..
+    desc: Fetch the hub's weekly-round forecasts and score them with ours
+    cmds:
+      - uv run bdbvhub compare-hub --fetch
+
+
+  plots:
+    dir: ../..
+    desc: Make the docs figures and tables from the backtest results
+    cmds:
+      - task: fit-store
+      - uv run bdbvhub compare-hub
+      - uv run bdbvhub report
+      - >-
+        uv run score-history --docs docs/generated
+        --figures docs/figures --current docs/figures
+        --out output/score-history.csv
+
+
+  test:
+    dir: ../..
+    desc: Run bdbvhub's tests (the fast ones; `-- -m ""` for all)
+    cmds:
+      - uv run pytest -q packages/bdbvhub/tests {{.CLI_ARGS}}

@@ -17,7 +17,7 @@ Each is opted in on its own in `config/hub.toml`.
 Until it is `false`, a scheduled run builds and checks an opted-in model but pushes nothing.
 A manual dispatch with `dry_run=false` pushes whatever `DRY_RUN` is.
 
-`task bdbv-hub:preflight` checks every step it can and lists what is missing.
+`task ci:preflight` checks every step it can and lists what is missing.
 Run it after each part, logged in to `gh` as `seabbs`.
 
 ## Once

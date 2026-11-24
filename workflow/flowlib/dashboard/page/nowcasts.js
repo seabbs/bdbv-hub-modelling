@@ -148,6 +148,8 @@ function plots(){
   if(ms_.length)$("gplot").insertAdjacentHTML("beforeend",'<p class=mut>No forecast in the horizon shown'+(HZR()?' ('+HZR()[0]+')':'')+' for some nowcast dates: '+ms_.join(", ")+'</p>');
   // The score card compares every ticked model, in either view.
   wisChart(all[0],ticked(),ds)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
+// Score panels a row: three on a wide card, two on a medium one, else one.
+function scoreCols(w){return w>=1084?3:w>=544?2:1}
 // Round axis ticks from 0 to `top`: steps of 1, 2, 2.5 or 5 times a
 // power of ten, about `n` of them.
 function niceTicks(top,n){n=n||3;var raw=top/n,p=Math.pow(10,Math.floor(Math.log10(raw||1))),
@@ -192,7 +194,7 @@ function wisChart(d,eff,ds){
  var rk={};eff.forEach(function(e){rk[e.id]=e.run=="ref"?0:e.rank});
  function lab(id,y){return '<line x1="0" x2="22" y1="'+(y+5)+'" y2="'+(y+5)+'" stroke="'+colour(id)+'" stroke-width="2.2"'+lineDash(id,rk[id]||0)+' /><text x="28" y="'+(y+9)+'" class=ax>'+shortLab(id)+'</text>'}
  // Two panels a row (.gscores), one on a narrow card: each takes its share.
- var CW=$("gwis").clientWidth,W=Math.max(200,CW<520?CW:Math.floor((CW-8)/2)),RH=30;
+ var CW=$("gwis").clientWidth,NC=scoreCols(CW),W=Math.max(200,Math.floor((CW-16*(NC-1))/NC)),RH=30;
  function rows(title,body,H,k,after){return '<div class=gsc><h3>'+title+ftInfo(k)+'</h3><svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">'+body+'</svg>'+(after||'')+'</div>'}
  // mean WIS
  var mx=Math.max.apply(null,wis)*1.05,h1='';
@@ -236,11 +238,11 @@ function wisChart(d,eff,ds){
  hz.forEach(function(r){r.forEach(function(x){if(grp.indexOf(x[1])<0)grp.push(x[1])})});
  grp.sort(function(a,b){return (a=="now"?-1:+a.slice(3))-(b=="now"?-1:+b.slice(3))});
  var H5=Math.max(170,H2),gb=groupedBars(grp,sel.map(function(id,i){var v={};hz[i].forEach(function(x){v[x[1]]=x[2]});return {id:id,values:v}}),W,H5),h5='';
- [0,0.5,1].forEach(function(f){var v=gb.top*f,y=H5-gb.bottom-f*(H5-gb.bottom-12);h5+='<line x1="'+gb.left+'" x2="'+W+'" y1="'+y+'" y2="'+y+'" class=grid /><text x="'+(gb.left-4)+'" y="'+(y+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
+ niceTicks(gb.top/1.08,4).forEach(function(v){var f=v/gb.top,y=H5-gb.bottom-f*(H5-gb.bottom-12);h5+='<line x1="'+gb.left+'" x2="'+W+'" y1="'+y+'" y2="'+y+'" class=grid /><text x="'+(gb.left-4)+'" y="'+(y+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
  grp.forEach(function(g,gi){h5+='<text x="'+(gb.left+(gi+0.5)*gb.width)+'" y="'+(H5-3)+'" text-anchor=middle class=ax>'+g+'</text>'});
  gb.bars.forEach(function(b){var kind=b.g=="now"?"nowcast":"forecast";
   h5+='<rect x="'+b.x+'" y="'+b.y+'" width="'+b.w+'" height="'+b.h+'" fill="'+fillKind(colour(b.m),HF[kind]||"solid")+'" stroke="'+colour(b.m)+'" stroke-width=".8"><title>'+shortLab(b.m)+', '+(b.g=="now"?"nowcast part":"forecast, week "+b.g.slice(3)+" ahead")+': '+C.metric+' '+fmt(b.v)+'</title></rect>'
-  +'<text transform="translate('+(b.x+b.w/2+3)+','+(b.y-2)+') rotate(-90)" class=ax style="font-size:8px">'+fmt(b.v)+'</text>'});
+});
  // Models whose files hold no forecast days are named, not left to look like zero.
  var noFc=sel.filter(function(id,i){return !hz[i].some(function(x){return x[0]=="forecast"})}).map(shortLab);
  var hzNote=noFc.length&&(!HR||HR[2]===null||HR[2]>0)?'<div class=mut style="font-size:11px">No forecast days on the common dates: '+noFc.join(", ")+'.</div>':'';
@@ -255,9 +257,9 @@ function wisChart(d,eff,ds){
  var allp=lines.reduce(function(a,l){return a.concat(l)},[]),h6='',H6=Math.max(H2,150);
  if(allp.length){var kx0=Math.min.apply(null,allp.map(function(p){return p[0]})),kx1=Math.max.apply(null,allp.map(function(p){return p[0]})),wy=Math.max.apply(null,allp.map(function(p){return p[1]}))*1.05||1;
   var L6=40,B6=18,sxk=function(k){return L6+(kx1==kx0?0.5:(k-kx0)/(kx1-kx0))*(W-L6-6)},syw=function(v){return 4+(1-v/wy)*(H6-B6-4)};
-  niceTicks(wy).forEach(function(v){h6+='<line x1="'+L6+'" x2="'+(W-6)+'" y1="'+syw(v)+'" y2="'+syw(v)+'" class=grid /><text x="'+(L6-4)+'" y="'+(syw(v)+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
+  niceTicks(wy,4).forEach(function(v){h6+='<line x1="'+L6+'" x2="'+(W-6)+'" y1="'+syw(v)+'" y2="'+syw(v)+'" class=grid /><text x="'+(L6-4)+'" y="'+(syw(v)+3)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
   if(kx0<=0&&kx1>=0)h6+='<line x1="'+sxk(0)+'" x2="'+sxk(0)+'" y1="4" y2="'+(H6-B6)+'" class=mark />';
-  [kx0,0,kx1].filter(function(k,i,a){return k>=kx0&&k<=kx1&&a.indexOf(k)==i}).forEach(function(k){h6+='<text x="'+sxk(k)+'" y="'+(H6-4)+'" text-anchor=middle class=ax>'+k+'</text>'});
+  [kx0].concat([-28,-21,-14,-7,0,7,14,21,28],[kx1]).filter(function(k,i,a){return k>=kx0&&k<=kx1&&a.indexOf(k)==i&&(k%7==0||k==kx0||k==kx1)&&!(k!=kx0&&k!=kx1&&(Math.abs(k-kx0)<4||Math.abs(k-kx1)<4))}).forEach(function(k){h6+='<text x="'+sxk(k)+'" y="'+(H6-4)+'" text-anchor=middle class=ax>'+k+'</text>'});
   lines.forEach(function(l,i){if(!l.length)return;var id=sel[i];
    h6+='<polyline points="'+l.map(function(p){return sxk(p[0])+","+syw(p[1])}).join(" ")+'" fill=none stroke="'+colour(id)+'" stroke-width=1.8'+lineDash(id,rk[id]||0)+'><title>'+shortLab(id)+'</title></polyline>'})}
  var byDay=allp.length?'<div class=gsc><h3>'+C.metric+' by day of the horizon'+(HR?' ('+HR[0]+')':'')+'</h3><svg viewBox="0 0 '+W+' '+H6+'" width="'+W+'" height="'+H6+'">'+h6+'</svg><div class=mut style="font-size:11px">days from the nowcast date; 0 marked</div></div>':'';
@@ -265,7 +267,7 @@ function wisChart(d,eff,ds){
  // One legend on top: the three parts' fills, labelled, in stack order;
  // its hidden defs hold every bar's pattern once.
  var top=(any?'<div style="font-size:11px">'+key()+'</div>':'<svg width=0 height=0 style="position:absolute">'+defs()+'</svg>');
- $("gwis").innerHTML=top+'<div class=gscores>'+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
+ $("gwis").innerHTML=top+'<div class=gscores style="grid-template-columns:repeat('+NC+',minmax(0,1fr))">'+rows("mean "+C.metric,h1,H2,"wis")+(any?rows("mean "+C.metric+" on the log scale, log(x + 1)",h4,H2,"logwis"):'')+rows("coverage 50% and "+outs.join("% or ")+"% (dashed: nominal)",h2,H2,"coverage")+rows("bias (+: forecast above truth)",h3,H2,"biasscore")
   +rows(C.metric+" by part of the horizon",h5,H5,"wissplit",'<div style="font-size:11px">'+hzKey+'</div>'+hzNote)+byDay+'</div>'
   +'<div class=mut style="font-size:11px">'+com.length+' common nowcast dates</div>';
 }
