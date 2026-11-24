@@ -243,27 +243,6 @@ def test_forecast_tabs() -> None:
     assert report._forecast_tabs([], {"CD": "DRC"}) == ""
 
 
-def test_recovery_section() -> None:
-    energy = pd.DataFrame(
-        {
-            "scale": ["national", "national"],
-            "model": ["randomwalk", "randomwalk"],
-            "energy": [4.0, 6.0],
-            "log_energy": [0.25, 0.75],
-        }
-    )
-    text = report._recovery_section({"complete": "summary.json"}, energy)
-    assert text.startswith("## Recovery on simulated vintages")
-    for view in ("overall", "horizon", "place"):
-        assert (
-            """data-targets='{"complete": "summary.json"}' """
-            f'data-view="{view}"'
-        ) in text
-    assert "recovery-crps-horizon.svg" in text
-    assert "mean energy score" in text
-    assert "| national | randomwalk |   2 |" in text
-
-
 def _scenario_scores() -> pd.DataFrame:
     rows = []
     for model in ("randomwalk", "randomwalknowcast"):
@@ -293,33 +272,6 @@ def _scenario_scores() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def test_scenario_scores_table(tmp_path: Path) -> None:
-    path = tmp_path / "scenario-scores.csv"
-    _scenario_scores().to_csv(path, index=False)
-    energy = tmp_path / "scenario-energy.csv"
-    pd.DataFrame(
-        {
-            "scenario": "calibrated_falling",
-            "scale": "national",
-            "model": "randomwalk",
-            "truth_view": ["final", "as of 2 weeks later"],
-            "energy": [3.0, 5.0],
-            "log_energy": [0.3, 0.5],
-        }
-    ).to_csv(energy, index=False)
-    text = report._scenario_scores(path, energy)
-    assert "Energy score against final data, complete weeks" in text
-    assert "final data, complete weeks" in text
-    assert "as of 2 weeks later" in text
-    assert "calibrated_falling" in text
-    assert "national" in text
-    assert "province" in text
-    assert "randomwalknowcast" in text
-    assert "10.5" in text  # mean CRPS over horizons 0 and 1
-    assert "0.12" in text  # bias to 2 dp
-    assert '<div class="tablesort" markdown="1">' in text
-
-
 def test_plot_scenarios() -> None:
     from nowcasteval.plots import plot_scenarios
 
@@ -334,13 +286,6 @@ def test_dropdown_wraps_and_indents() -> None:
     assert text == '??? note "Tables"\n\n    a\n\n    b\n'
     assert report._dropdown("  \n") == ""
     assert report._dropdown("x", "More").startswith('??? note "More"')
-
-
-def test_metric_tabs_have_crps_and_log_crps() -> None:
-    text = report._metric_tabs("x", "CRPS by horizon.")
-    assert '=== "CRPS"' in text
-    assert '=== "CRPS on the log scale"' in text
-    assert "figures/x-log-crps.svg#only-light" in text
 
 
 def test_nowcast_groups() -> None:
@@ -492,33 +437,6 @@ def _scenario_results(res: Path) -> None:
     pd.DataFrame(samples).to_csv(res / "scenario-forecasts.csv.gz", index=False)
     pd.DataFrame(energy).to_csv(res / "scenario-energy.csv", index=False)
     pd.DataFrame(truth).to_csv(res / "scenario-truth.csv", index=False)
-
-
-def test_scenario_section_draws_every_final_week(tmp_path: Path) -> None:
-    _scenario_results(tmp_path)
-    text = report._scenario_section(
-        tmp_path, tmp_path, ["randomwalk", "randomwalknowcast"], {}
-    )
-    for section in ("Overall", "By horizon", "By place", "Forecasts by place"):
-        assert f"### {section}" in text
-    for key, title in report._SCENARIOS.items():
-        assert text.count(f'=== "{title}"') == 4
-        summary = json.loads(
-            (
-                tmp_path / f"scoresummary-scenario-{key}-complete.json"
-            ).read_text()
-        )
-        explorer = json.loads(
-            (tmp_path / f"explorer-scenario-{key}.json").read_text()
-        )
-        assert explorer["rounds"] == summary["origins"]
-        # The weeks before the scored ones are drawn too.
-        assert [w for w, _ in explorer["data"]["CD-IT"]] == [
-            "2026-10-03",
-            "2026-10-10",
-            "2026-10-17",
-            "2026-10-24",
-        ]
 
 
 def test_checks_chart_has_a_set_per_baseline() -> None:

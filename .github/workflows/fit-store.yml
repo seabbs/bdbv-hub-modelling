@@ -41,6 +41,9 @@ on:
       - 'packages/bdbvhub/src/bdbvhub/submission/fitting.py'
       - 'packages/bdbvhub/src/bdbvhub/models.py'
       - 'packages/nowcastrenewal/src/**'
+      # The backtests' code (`backtest`, `backtests`).
+      - 'packages/nowcasteval/src/**'
+      - 'packages/nowcastbdbv/src/**'
       - 'config/backtest.toml'
       - 'config/finetune.toml'
       - 'ci/policy.toml'
@@ -73,6 +76,9 @@ on:
       - 'packages/bdbvhub/src/bdbvhub/submission/fitting.py'
       - 'packages/bdbvhub/src/bdbvhub/models.py'
       - 'packages/nowcastrenewal/src/**'
+      # The backtests' code (`backtest`, `backtests`).
+      - 'packages/nowcasteval/src/**'
+      - 'packages/nowcastbdbv/src/**'
       - 'config/backtest.toml'
       - 'config/finetune.toml'
       - 'ci/policy.toml'

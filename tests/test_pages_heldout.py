@@ -19,9 +19,6 @@ def test_pages_forecasts_nothing_for_the_german_benchmark() -> None:
     # Pages loads; no job of its own forecasts them (Sam, 2026-11-23).
     jobs = _jobs()
     assert "germany-heldout" not in jobs
-    cells = jobs["backtest"]["strategy"]["matrix"]["include"]
-    german = [c["cell"] for c in cells if "germany" in c["cell"]]
-    assert german == []
     assert (
         "FIT_STORE_BRANCH=fit-store-scratch-fm-chronos" not in PAGES.read_text()
     )
@@ -34,12 +31,6 @@ def _build_script() -> str:
 
 def test_the_stored_ft_model_is_not_forecast_by_pages() -> None:
     # Its forecasts come from the checkpoint scorer's store.
-    cells = _jobs()["backtest"]["strategy"]["matrix"]["include"]
-    live = {c["model"] for c in cells if c.get("germany")}
-    assert not live & {
-        "fm_chronos_daily_ragged_ft",
-        "fm_chronos_weekly_ragged_ft",
-    }
     run = _build_script()
     load = run.index("nowcastgermany ft-load")
     assert "germany-ft-forecasts" in run
@@ -60,12 +51,26 @@ def test_a_paper_dispatch_is_never_deployed() -> None:
         assert "inputs.paper_target != 'paper'" in jobs[name]["if"], name
 
 
-def test_each_backtest_is_scored_in_its_own_process() -> None:
-    # One `score` of every backtest's parts ran the runner out of memory.
-    steps = _jobs()["build"]["steps"]
-    (score,) = [s for s in steps if s.get("name") == "Score the backtests"]
-    calls = score["run"].split("uv run bdbvhubrenewal score")[1:]
-    kinds = ["development", "recovery", "zones", "scenario"]
-    assert [[k for k in kinds if f"-{k}-" in c] for c in calls] == [
-        [k] for k in kinds
-    ]
+def test_pages_forecasts_and_scores_nothing() -> None:
+    # Pages only loads stored results and renders (Sam, 2026-11-24): the
+    # BDBV backtests and their scores come from the fit store.
+    jobs = _jobs()
+    assert "backtest" not in jobs
+    run = "\n".join(
+        str(s.get("run", "")) for job in jobs.values() for s in job["steps"]
+    )
+    for command in (
+        "bdbvhubrenewal backtest",
+        "bdbvhubrenewal zone-backtest",
+        "pairing-sensitivity",
+        "bdbvhubrenewal score",
+    ):
+        assert command not in run, command
+    assert "backtests/latest.tar.gz" in run
+
+
+def test_pages_cancels_in_progress_on_every_ref() -> None:
+    import yaml as _yaml
+
+    workflow = _yaml.safe_load(PAGES.read_text())
+    assert workflow["concurrency"]["cancel-in-progress"] is True

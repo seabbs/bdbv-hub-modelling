@@ -85,6 +85,10 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     if not isinstance(group, dict) or "cancel-in-progress" not in group:
         pytest.skip("no cancellable concurrency group")
     keep = "${{ github.ref != 'refs/heads/main' }}"
+    if path.name == "pages.yml":
+        # Pages only loads and renders, so the newest run wins everywhere.
+        assert group["cancel-in-progress"] is True
+        return
     if path.name == "test.yml":
         # Tests keeps next's runs too (every merge gets a verdict).
         keep = (
