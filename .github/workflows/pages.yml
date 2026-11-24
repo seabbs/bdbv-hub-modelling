@@ -98,6 +98,23 @@ jobs:
         run: |
           uv run bdbvhubrenewal data
           uv run bdbvhubrenewal bvd
+      # The BDBV backtests (the walks' development and zone backtests and
+      # the pairing sensitivity) and their scores, as Fit store ran and
+      # scored them (`backtests` there), unpacked before the stored fits
+      # are loaded so the newest fits win. Pages forecasts and scores
+      # nothing.
+      - name: Load the stored backtests
+        env:
+          FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
+        run: |
+          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
+          bundle=output/fit-store/backtests/latest.tar.gz
+          if [ ! -f "$bundle" ]; then
+            echo "::error::the fit store holds no backtests (Fit store's backtests job writes them)"
+            exit 1
+          fi
+          tar -xzf "$bundle"
+          cat output/fit-store/backtests/latest.json >> "$GITHUB_STEP_SUMMARY"
       # Pages never fits a model. The fitted models' forecasts come from
       # the fit store (fit-store.yml), which reruns this build when it has
       # stored new fits. `load` writes them into results/ with a record of
@@ -108,21 +125,7 @@ jobs:
           # The fine-tuned models list the releases for their checkpoint.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
           uv run bdbvhubrenewal fit-store load --store output/fit-store
-      # The BDBV backtests (the walks' development and zone backtests and
-      # the pairing sensitivity) and their scores, with the stored fits,
-      # as Fit store ran and scored them (`backtests` there). Pages
-      # forecasts and scores nothing.
-      - name: Load the stored backtests
-        run: |
-          bundle=output/fit-store/backtests/latest.tar.gz
-          if [ ! -f "$bundle" ]; then
-            echo "::error::the fit store holds no backtests (Fit store's backtests job writes them)"
-            exit 1
-          fi
-          tar -xzf "$bundle"
-          cat output/fit-store/backtests/latest.json >> "$GITHUB_STEP_SUMMARY"
       # The store too, as the Getting started notebook reads a stored fit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -132,6 +135,7 @@ jobs:
             !data/raw
             results
             output
+            !output/fit-store/backtests
           retention-days: 1
 
   build:

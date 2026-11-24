@@ -476,7 +476,7 @@ jobs:
     name: Score and store the backtests
     needs: [plan, backtest, store-current, store-rest]
     if: >-
-      always() && needs.plan.outputs.write == 'true'
+      !cancelled() && needs.plan.outputs.write == 'true'
       && needs.backtest.result == 'success'
       && needs.store-current.result != 'failure'
       && needs.store-rest.result != 'failure'
@@ -514,8 +514,12 @@ jobs:
           cp "$p"-pairing-bdbv/pairing/*.csv.gz results/pairing/
       - name: Store
         run: |
-          tar -czf "$RUNNER_TEMP/backtests.tar.gz" --exclude=output/fit-store \
-            --exclude=output/parts results output
+          # Only what this job made or changed, never a committed file,
+          # so Pages keeps its own checkout's results.
+          git ls-files --others --modified -- results output \
+            | grep -v -e '^output/fit-store/' -e '^output/parts/' \
+            > "$RUNNER_TEMP/backtests.txt"
+          tar -czf "$RUNNER_TEMP/backtests.tar.gz" -T "$RUNNER_TEMP/backtests.txt"
           python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py \
             push-backtests "$RUNNER_TEMP/backtests.tar.gz" "$GITHUB_SHA"
 
