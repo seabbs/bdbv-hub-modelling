@@ -29,7 +29,9 @@ MOVED = {
     "scripts/build_zone_centres.py": (
         "packages/nowcastbdbv/data-raw/build_zone_centres.py"
     ),
-    "scripts/hub_imputation_fit.R": "tests/model/test_hub_imputation_delays.py",
+    "scripts/hub_imputation_fit.R": (
+        "packages/nowcastbdbv/tests/test_hub_imputation_delays.py"
+    ),
     "scripts/fit-store.sh": "packages/bdbvhub/src/bdbvhub/store/branch.py",
     "scripts/results-release.sh": (
         "packages/bdbvhub/src/bdbvhub/submission/release.py"

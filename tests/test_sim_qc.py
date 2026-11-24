@@ -8,9 +8,8 @@ import pandas as pd
 import yaml
 
 ROOT = Path(__file__).parents[1]
-sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(ROOT / "scripts"))
-from test_finetune_chronos import _sim_dir  # noqa: E402
+from sim_rounds import sim_dir  # noqa: E402
 
 # The grid sets no sim QC thresholds: the round's QC records each
 # simulation's summaries and excludes none.
@@ -27,7 +26,7 @@ def test_the_grid_sets_no_thresholds():
 def test_the_round_s_check_is_recorded(tmp_path):
     sims = tmp_path / "r1" / "sims"
     sims.mkdir(parents=True)
-    _sim_dir(sims)
+    sim_dir(sims)
     subprocess.run(
         [
             sys.executable,

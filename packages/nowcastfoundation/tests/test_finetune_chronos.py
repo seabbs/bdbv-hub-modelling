@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from sim_rounds import sim_dir
 
 from nowcastfoundation.finetune import chronos as ft
 from nowcastfoundation.finetune.chronos import (
@@ -409,53 +410,10 @@ def test_strata_with_no_cases_give_no_empty_blocks():
             assert block["context"].shape[0] > 0
 
 
-def _sim_dir(tmp_path):
-    import pandas as pd
-
-    rows, settings = [], []
-    for seed in (6001, 6002):
-        for sim in (1, 2):
-            simulation = f"{seed}-{sim:04d}"
-            settings.append((simulation, 2, 1, 28))
-            for draw in (1, 2):
-                for place, scale in (("P01", 1), ("P02", draw + sim)):
-                    for onset in pd.date_range("2026-01-03", periods=120):
-                        for d in (0, 2, 6):
-                            report = onset + pd.Timedelta(days=d)
-                            rows.append(
-                                (
-                                    f"{simulation}-{draw}",
-                                    place,
-                                    onset.date().isoformat(),
-                                    report.date().isoformat(),
-                                    scale,
-                                )
-                            )
-    counts = pd.DataFrame(
-        rows,
-        columns=[
-            "outbreak",
-            "location",
-            "reference_date",
-            "report_date",
-            "count",
-        ],
-    )
-    table = pd.DataFrame(
-        settings, columns=["outbreak", "n_places", "n_ages", "max_delay"]
-    )
-    for seed in (6001, 6002):
-        part = counts["outbreak"].str.startswith(str(seed))
-        counts[part].to_csv(tmp_path / f"counts-{seed}.csv.gz", index=False)
-        keep = table["outbreak"].str.startswith(str(seed))
-        table[keep].to_csv(tmp_path / f"settings-{seed}.csv", index=False)
-    return [o for o, *_ in settings]
-
-
 def test_blocks_cut_in_workers_match_blocks_cut_here(tmp_path):
     from nowcastfoundation.finetune.stream import cut, cut_in_workers
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     here = cut(tmp_path, ids, 1, 6)
     pairs, empty = cut_in_workers(None, tmp_path, ids, 1, 6, parts=3)
     assert [o for o, _ in pairs] == [o for o, _ in here]
@@ -477,7 +435,7 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
         init_worker,
     )
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     here = cut(tmp_path, ids, 1, 6)
     with ProcessPoolExecutor(
         2,
@@ -495,7 +453,7 @@ def test_blocks_cut_by_a_process_pool_match(tmp_path):
 def test_a_chunk_waits_for_a_missing_batch_in_seed_order(tmp_path):
     from nowcastfoundation.finetune.stream import next_chunk
 
-    ids = _sim_dir(tmp_path)  # seeds 6001 and 6002, two simulations each
+    ids = sim_dir(tmp_path)  # seeds 6001 and 6002, two simulations each
     # Seed 6002 finished; 6001 has not.
     for name in ("counts-6001.csv.gz", "settings-6001.csv"):
         (tmp_path / name).rename(tmp_path / f"late-{name}")
@@ -511,7 +469,7 @@ def test_a_chunk_waits_for_a_missing_batch_in_seed_order(tmp_path):
 def test_blocks_are_cut_without_torch(tmp_path):
     import subprocess
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     # CI's test environment has no torch: cutting blocks must not need it.
     code = (
         "import builtins, sys\n"
@@ -553,7 +511,7 @@ def test_one_source_cuts_only_that_source(tmp_path, monkeypatch):
     from nowcastfoundation.finetune import chronos as finetune_chronos
     from nowcastfoundation.finetune.stream import cut
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("weekly",))
     blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
     assert blocks
@@ -608,7 +566,7 @@ def test_three_day_source_cuts_three_day_blocks(tmp_path, monkeypatch):
     from nowcastfoundation.finetune import chronos as finetune_chronos
     from nowcastfoundation.finetune.stream import cut
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("3day",))
     blocks = [b for _, b in cut(tmp_path, ids, 1, 32)]
     assert blocks
@@ -623,7 +581,7 @@ def test_blocks_predict_their_own_horizon_in_whole_patches(tmp_path):
     from nowcastfoundation.finetune.chronos import CONTEXT, OUTPUT_PATCH
     from nowcastfoundation.finetune.stream import cut
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     for _, b in cut(tmp_path, ids, 1, 32):
         truth = b["context"][0, CONTEXT:]
         horizon = int((~np.isnan(truth)).sum())
@@ -645,7 +603,7 @@ def test_a_loss_horizon_stops_blocks_days_after_the_cut_off(
     )
     from nowcastfoundation.finetune.stream import cut
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     full = [b for _, b in cut(tmp_path, ids, 1, 32)]
     monkeypatch.setattr(finetune_chronos, "LOSS_HORIZON_DAYS", 7)
     short = [b for _, b in cut(tmp_path, ids, 1, 32)]
@@ -767,7 +725,7 @@ def test_quiet_cut_offs_are_not_cut_when_set(tmp_path, monkeypatch):
     from nowcastfoundation.finetune import chronos as finetune_chronos
     from nowcastfoundation.finetune.stream import cut
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     full = [b for _, b in cut(tmp_path, ids, 1, 32)]
     # Unset, `quiet` is not asked.
     monkeypatch.setattr(finetune_chronos, "quiet", None)
@@ -913,7 +871,7 @@ def test_a_finished_batch_reads_every_outbreak(tmp_path, monkeypatch):
 
     sims = tmp_path / "sims"
     sims.mkdir()
-    _sim_dir(sims)
+    sim_dir(sims)
     monkeypatch.setattr(finetune_stream, "_READY", {})
     assert finetune_stream.batch_outbreaks(sims, 6001) == [
         "6001-0001",
@@ -1234,7 +1192,7 @@ def test_blocks_record_their_cadence_and_daily_releases_fill_lags(
     from nowcastfoundation.finetune import chronos as finetune_chronos
     from nowcastfoundation.finetune.stream import cut
 
-    ids = _sim_dir(tmp_path)
+    ids = sim_dir(tmp_path)
     monkeypatch.setattr(finetune_chronos, "SOURCES", ("daily",))
     fills = {}
     for cadence in ("daily", "weekly"):
