@@ -79,7 +79,7 @@ tasks:
     cmds:
       - uv run ruff check packages tests workflow docs/hooks
       - uv run ruff format --check packages tests workflow docs/hooks
-      - uv run mypy packages/*/src
+      - uv run mypy
       - uv run lint-imports --no-logo
 
 
