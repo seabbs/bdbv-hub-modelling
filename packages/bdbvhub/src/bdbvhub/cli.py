@@ -1972,12 +1972,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "bvd":  # pragma: no cover - network
         return _bvd(args)
     if args.command == "finetuned-checkpoint":
-        from nowcastfoundation.forecaster import (
-            finetuned_spec,
-            resolve_checkpoint,
-        )
+        from nowcastfoundation.forecaster import finetuned_checkpoint
 
-        print(resolve_checkpoint(finetuned_spec()).hash)
+        print(finetuned_checkpoint().hash)
         return 0
     if args.command == "hub-id":
         print(model_id(model_abbr_for(args.model, args.hub_toml)))
