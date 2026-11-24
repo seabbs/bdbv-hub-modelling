@@ -153,13 +153,17 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
         return _fake_run(t, self.variant)
 
     monkeypatch.setattr(zr.ZoneRenewalModel, "run", fake)
+
+    def no_walk(_: ForecastTask) -> None:
+        raise AssertionError("renewal used the random-walk layer")
+
+    monkeypatch.setattr(zr, "_silent_walk", no_walk)
     model = get_model("renewal")
     assert isinstance(model, zr.ZoneRenewalModel)
     samples = model.forecast(task)
     # #768 item 8: no random-walk layer. The run takes every zone of the
     # task: it fits the zones with a recent case and draws the silent
     # ones from the fitted importation, in one forecast pass.
-    assert not hasattr(zr, "_silent_walk")
     (given,) = seen
     assert set(given) == set(zr.task_zones(task))
     zones = model.zone_samples
@@ -530,3 +534,61 @@ def test_silent_zones_have_no_onset_in_the_walk_window(
     # The zone task gives the same zones.
     zones = replace(task, locations=zr.task_zones(task))
     assert zr.silent_zones(zones) == quiet
+
+
+def test_renewalsp_zones_fits_each_zone_on_its_own(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #768 item 9, staged: the single-patch model fitted to each zone with
+    # a recent case on its own, beside renewalsp. Silent zones keep the
+    # walk's introductions, and provinces are zone sums, so no province
+    # sample is split across zones.
+    model = get_model("renewalsp_zones")
+    assert isinstance(model, zr.SingleZoneRenewalModel)
+    assert model.variant.per_province
+    assert rn.model_config(model.variant).national
+    assert "renewalsp_zones" not in rn.FIT_VARIANTS.values()
+    zones = zr.task_zones(task)
+    counts = zr.zone_target(task).groupby("location")["total"].sum()
+    busy = tuple(sorted(counts.sort_values().index[-3:]))
+    silent = [z for z in zones if z not in busy]
+    rows = pd.DataFrame(
+        [
+            (z, date, k, 0.0)
+            for z in silent
+            for date in task.target_end_dates
+            for k in range(1, task.n_samples + 1)
+        ],
+        columns=["location", "target_end_date", "sample", "value"],
+    )
+    monkeypatch.setattr(zr, "_silent_walk", lambda _: (rows, set(silent)))
+    seen: list[tuple[str, ...]] = []
+
+    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        seen.append(t.locations)
+        return _fake_run(t, self.variant)
+
+    monkeypatch.setattr(rn.RenewalModel, "run", fake)
+    samples = model.forecast(task)
+    # One fit per busy zone, each alone, on the zone counts.
+    assert sorted(seen) == [(z,) for z in busy]
+    out = model.zone_samples
+    assert out is not None
+    assert set(out["location"]) == set(zones)
+    # Provinces are the sums of their zones, sample by sample.
+    keys = ["location", "target_end_date", "sample"]
+    own = samples["location"].map(is_zone)
+    final = out.loc[out["as_of"].isna()] if "as_of" in out else out
+    summed = (
+        final.assign(location=final["location"].map(province_of))
+        .groupby(keys)["value"]
+        .sum()
+    )
+    rows_p = samples.loc[~own & samples["location"].isin(task.locations)]
+    if "as_of" in rows_p:
+        rows_p = rows_p.loc[rows_p["as_of"].isna()]
+    pd.testing.assert_series_equal(
+        rows_p.set_index(keys)["value"].sort_index(),
+        summed.sort_index(),
+        check_names=False,
+    )

@@ -56,12 +56,19 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
+    assert set(rn.VARIANTS) == {
+        "renewal",
+        "renewalsp",
+        "renewalsp_zones",
+        "renewalbvd",
+    }
+    assert specs["renewalsp_zones"].fitted
     # The pooled variants can forecast a province with its data held out;
     # renewalsp fits each province on its own data only, so it cannot.
     assert get_model("renewal").supports_mask
     assert get_model("renewalbvd").supports_mask
     assert not get_model("renewalsp").supports_mask
+    assert not get_model("renewalsp_zones").supports_mask
     assert not specs["randomwalk"].fitted
     # Hub model abbreviations: letters, digits and underscores, under 16.
     for name in specs:
@@ -74,7 +81,12 @@ def test_only_renewalsp_centres_its_rt_walk() -> None:
     centred = {
         name: rn.model_config(v).centred_rt for name, v in rn.VARIANTS.items()
     }
-    assert centred == {"renewal": False, "renewalsp": True, "renewalbvd": False}
+    assert centred == {
+        "renewal": False,
+        "renewalsp": True,
+        "renewalsp_zones": True,
+        "renewalbvd": False,
+    }
 
 
 def test_renewalsp_centres_only_where_the_data_pin_the_walk() -> None:

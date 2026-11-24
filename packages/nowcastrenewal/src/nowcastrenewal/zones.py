@@ -32,6 +32,7 @@ from nowcastrenewal.forecaster import (
     RenewalRun,
     Variant,
     _as_reported,
+    _silent_walk,
     bvd_record,
     bvd_release,
     check_national,
@@ -56,6 +57,7 @@ from nowcastutils.files import write_csv
 __all__ = [
     "ZONES_FILE",
     "ZONE_VARIANTS",
+    "SingleZoneRenewalModel",
     "ZoneRenewalFit",
     "ZoneRenewalModel",
     "sum_zones",
@@ -195,6 +197,21 @@ def silent_zones(task: ForecastTask) -> set[str]:
         reported.to_numpy(float), weeks.index(str(cut)), Settings().walk_weeks
     )
     return {z for z, q in zip(zones, quiet, strict=True) if q}
+
+
+def _zone_walk_task(task: ForecastTask) -> ForecastTask:
+    """Return the random walks' zone task, for their silent zones."""
+    from nowcastbaselines.zones import zone_task
+    from nowcastutils.snapshots import weekly_counts
+
+    daily = _daily_zones()
+    counts = weekly_counts(daily, task.vintage)
+    history = (
+        daily
+        if task.daily_history is None
+        else pd.concat([task.daily_history, daily], ignore_index=True)
+    )
+    return zone_task(task, counts, task_zones(task), history)
 
 
 def sum_zones(samples: pd.DataFrame) -> pd.DataFrame:
@@ -640,6 +657,78 @@ class ZoneRenewalModel(RenewalModel):
         return record
 
 
+@dataclass
+class SingleZoneRenewalModel(ZoneRenewalModel):
+    """A single-patch variant fitted to each zone on its own.
+
+    Each zone with a case in the random walks' walk window is fitted with
+    the single-patch model on its own series (`RenewalModel.run` on the
+    zone), as `renewalsp` fits each province. The silent zones take
+    `randomwalknowcast`'s introductions (`_silent_walk`), as in
+    `renewalsp`. Provinces are the sums of their zones, sample by sample,
+    and national is their sum, so no province sample is split across
+    zones. Zone fits pair draws by index, as `renewalsp`'s provinces do.
+    Staged beside `renewalsp` (#768 item 9).
+    """
+
+    def run(self, task: ForecastTask) -> RenewalRun:
+        """Fit one zone on its own (`RenewalModel.run`)."""
+        return RenewalModel.run(self, task)
+
+    def forecast_fit(self, task: ForecastTask) -> ZoneRenewalFit:
+        """Fit each zone with a recent case on its own and sum them.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            A province task of a real release.
+
+        Returns
+        -------
+        ZoneRenewalFit
+            The runs by zone, province samples and zone samples.
+
+        Raises
+        ------
+        ModelUnavailableError
+            For a simulated task, which has no zone data.
+        """
+        if task.kind != "real":
+            raise ModelUnavailableError(
+                f"{self.name} fits the hub's zone data, which a "
+                f"{task.kind} task does not have."
+            )
+        check_national(task)
+        walk, silent = _silent_walk(_zone_walk_task(task))
+        target = zone_target(task)
+        fitted = tuple(z for z in task_zones(task) if z not in silent)
+        tasks = {
+            z: replace(task, target=target, locations=(z,), mask=())
+            for z in fitted
+        }
+        runs = self._run_all(tasks)
+        frames = [walk]
+        later = [
+            walk.loc[walk["target_end_date"] <= d].assign(as_of=d)
+            for d in task.report_by
+        ]
+        for key, run in runs.items():
+            frames.append(samples_table(tasks[key], run.data, run.draws))
+            later.extend(_as_reported(tasks[key], run))
+        zone_samples = pd.concat(frames, ignore_index=True)
+        return ZoneRenewalFit(
+            runs,
+            pd.concat(
+                [sum_zones(zone_samples), zone_samples[list(SAMPLE_COLUMNS)]],
+                ignore_index=True,
+            ),
+            as_reported=sum_zones(pd.concat(later, ignore_index=True))
+            if later
+            else None,
+            zones=zone_samples,
+        )
+
+
 def _factory(variant: Variant) -> ZoneRenewalModel:
     return ZoneRenewalModel(variant)
 
@@ -652,3 +741,12 @@ for _name in ZONE_VARIANTS:
         _variant.description,
         fitted=True,
     )
+
+for _variant in VARIANTS.values():
+    if _variant.zones:
+        register_model(
+            _variant.name,
+            partial(SingleZoneRenewalModel, _variant),
+            _variant.description,
+            fitted=True,
+        )
