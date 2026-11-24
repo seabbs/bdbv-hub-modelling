@@ -10,65 +10,44 @@ from __future__ import annotations
 __all__ = ["MODEL_METADATA"]
 
 _RENEWAL_RT = (
-    " We also provide the wk R_t target. "
-    "It is the model's weekly effective reproduction number (Rt times the "
-    "susceptible share), indexed to the week of infection, for each health "
-    "zone the model fits, each province and the country. "
-    "A province or the country weights its zones' Rt by their infections. "
-    "The generation interval and incubation period come from "
-    "BVDOutbreakSize, with their uncertainty, and the quantiles carry the "
-    "full posterior uncertainty. "
-    "Please read it with two points in mind. "
-    "First, it is estimated from the hub target data (confirmed cases by "
-    "symptom onset, including the hub's imputed onsets). "
-    "Because of how onsets are imputed "
-    "(https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), it is "
-    "likely to react more slowly than transmission and to be out of phase "
-    "with the outbreak. "
-    "Second, because this target is collected as quantiles, the submission "
-    "gives each week and location's distribution on its own. "
-    "The joint Rt trajectories behind them, with their dependence across "
-    "weeks and locations, cannot be represented, and quantiles joined "
-    "across weeks or locations do not describe a trajectory. "
-    "For an Rt estimate less affected by these issues, please see the "
-    "BVDOutbreakSize summary "
+    " We also submit the wk R_t target. "
+    "It is the model's weekly effective reproduction number by week of "
+    "infection. "
+    "Please note two points. "
+    "First, it is estimated from the hub's onsets, including imputed onsets "
+    "(https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), so it "
+    "is likely to react more slowly than transmission and to be out of "
+    "phase with the outbreak. "
+    "Second, the hub collects quantiles, so quantiles joined across weeks "
+    "or locations do not describe a trajectory. "
+    "For a less affected Rt estimate, see the BVDOutbreakSize summary "
     "(https://epiforecasts.io/BVDOutbreakSize/stable/)."
 )
-_RENEWAL_OBSERVATION = (
-    "Rt is dated by infection. "
-    "Onsets are infections convolved with a log-normal incubation period, "
-    "with BVDOutbreakSize's priors on its mean and SD. "
-    "A time-varying share of onsets is confirmed. "
-    "The onset-to-report delay is a discrete hazard, smooth over delay, "
-    "with a national weekly shift and province offsets and drifts pooled "
-    "towards it. "
-    "Known onsets are right truncated by this delay and by a 0 to 7 day "
-    "report-to-publication lag learnt from consecutive releases. "
-    "The share of reports with no onset date is modelled by province. "
-    "The hub's imputed onsets are modelled as the hub makes them: cases "
-    "with no onset date, back-sampled from report day with the hub's delay. "
-    "Weekly known and imputed counts are negative binomial, and the delays "
-    "of known onsets are Dirichlet-multinomial. "
-    "Log Rt reverts towards Rt = 1 with a fitted half-life, in the fit "
-    "and the forecast weeks alike. "
-    "The model is fitted by NUTS (NumPyro) to each data release, and each "
-    "sample is one joint posterior trajectory. "
+_RENEWAL_REST = (
+    "The model includes the incubation period, reporting delays, right "
+    "truncation, the share confirmed and the hub's onset imputation. "
+    "It is fitted with NUTS in NumPyro to each release. "
+    "Provinces and the country are sums of zones. "
+    "seabbs-renewal submits the first model to pass its checks, in order: "
+    "the zone "
+    "model with BVDOutbreakSize Rt, single-zone models, the zone model, a "
+    "random walk from a nowcast and a random walk. "
     "See https://samabbott.co.uk/bdbv-hub-modelling/methods/model/."
     + _RENEWAL_RT
 )
-_ZONE_SUMS = (
-    "Health zones are fitted. "
-    "Each province is the sum of its zones and national is the sum of the "
-    "provinces, sample by sample. "
-    "Zone WorldPop populations and the centroids of each zone's largest "
-    "polygon set the importation kernel between zones. "
+_ZONE_MODEL = (
+    "We fit a renewal model in PyRenew to the health zones with recent "
+    "cases. "
+    "Log Rt is a national weekly AR(1) with pooled province and zone "
+    "deviations. "
+    "Infections move between zones through a gravity kernel, and "
+    "susceptibles are depleted. "
+    "Zones with no recent case only receive imported infections. "
 )
 _RENEWAL_INPUTS = (
-    "Hub target data (weekly confirmed cases by onset week, observed plus "
-    "imputed, for the country, provinces and health zones), the hub's "
-    "published onset-to-report delays by vintage, province populations and "
-    "population-weighted province centres. The generation interval is "
-    "BVDOutbreakSize's."
+    "Hub weekly cases by onset week (observed plus imputed) and reporting "
+    "delays by release. Zone populations and locations. BVDOutbreakSize's "
+    "generation interval and incubation period priors."
 )
 
 MODEL_METADATA = {
@@ -110,40 +89,25 @@ MODEL_METADATA = {
     "renewal": {
         "model_name": "Pooled zone renewal model (PyRenew)",
         "methods": (
-            "A renewal model per health zone with pooled Rt, importation "
-            "between zones and depletion, fitted to known and imputed onsets "
-            "with modelled delays. Provinces are zone sums."
+            "A pooled renewal model of health zones with importation and "
+            "depletion. Provinces and the country are zone sums."
         ),
-        "methods_long": (
-            "We model infections in each health zone with recent cases with "
-            "a renewal process in PyRenew. "
-            "Log Rt is a national weekly AR(1) plus partially pooled "
-            "province and zone deviations. "
-            "Infections move between zones through a gravity kernel, and "
-            "susceptibles are depleted. "
-            "Zones with no recent case are not fitted: they take infections "
-            "only through the fitted importation from the fitted zones. "
-            + _ZONE_SUMS
-            + _RENEWAL_OBSERVATION
-        ),
+        "methods_long": _ZONE_MODEL + _RENEWAL_REST,
         "data_inputs": _RENEWAL_INPUTS,
     },
     "renewalsp": {
         "model_name": "Single-zone renewal models (PyRenew)",
         "methods": (
             "A renewal model fitted to each health zone on its own, with no "
-            "pooling or importation, to known and imputed onsets with "
-            "modelled delays. Provinces are zone sums."
+            "pooling or importation. Provinces and the country are zone sums."
         ),
         "methods_long": (
-            "We fit a renewal process in PyRenew to each health zone's "
-            "series on its own. "
+            "We fit a renewal model in PyRenew to each health zone on its "
+            "own. "
             "Each has its own weekly AR(1) on log Rt and susceptible "
             "depletion, with no pooling or importation. "
             "A zone with no case in the last nine weeks is zero until an "
-            "introduction, then a random walk. "
-            "Each province is the sum of its zones and national is the sum "
-            "of the provinces, sample by sample. " + _RENEWAL_OBSERVATION
+            "introduction, then a random walk. " + _RENEWAL_REST
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },
@@ -152,27 +116,18 @@ MODEL_METADATA = {
             "Pooled zone renewal model informed by BVDOutbreakSize Rt (PyRenew)"
         ),
         "methods": (
-            "A renewal model per health zone with pooled Rt, importation and "
-            "depletion, with Rt tied to the newest BVDOutbreakSize estimates "
-            "with their SDs inflated. Provinces are zone sums."
+            "A pooled renewal model of health zones with importation and "
+            "depletion, and Rt informed by BVDOutbreakSize. Provinces and the "
+            "country are zone sums."
         ),
         "methods_long": (
-            "We model infections in each health zone with recent cases with "
-            "a renewal process in PyRenew. "
-            "Log Rt is a national weekly AR(1) plus partially pooled "
-            "province and zone deviations. "
-            "Infections move between zones through a gravity kernel, and "
-            "susceptibles are depleted. "
-            "Zones with no recent case are not fitted: they take infections "
-            "only through the fitted importation from the fitted zones. "
-            "The model's national, province and zone Rt in the week of the "
-            "newest BVDOutbreakSize release published by the cut-off are tied "
-            "to that release's Rt estimates by a likelihood term with their "
-            "SDs inflated by 1.5. " + _ZONE_SUMS + _RENEWAL_OBSERVATION
+            _ZONE_MODEL + "Rt in the week of the newest BVDOutbreakSize "
+            "release is fitted to that release's estimates, with their SDs "
+            "inflated by 1.5. " + _RENEWAL_REST
         ),
         "data_inputs": (
-            _RENEWAL_INPUTS + " The newest BVDOutbreakSize release published "
-            "by the forecast's cut-off, for its Rt estimates."
+            _RENEWAL_INPUTS + " Rt from the newest BVDOutbreakSize release "
+            "before the cut-off."
         ),
     },
     # A hub model of its own (seabbs-rwnowcast), submitted every round.
@@ -180,38 +135,28 @@ MODEL_METADATA = {
         "model_name": "Random walk from a chain-ladder nowcast "
         "(baselinenowcast)",
         "methods": (
-            "A chain-ladder nowcast of each place's recent weeks from the "
-            "daily release snapshots (baselinenowcast), carried forward as a "
-            "log-scale random walk. National is the province sum."
+            "A chain-ladder nowcast (baselinenowcast) of each province and "
+            "zone, carried forward as a log-scale random walk. The country "
+            "sums the provinces."
         ),
         "methods_long": (
-            "We nowcast and forecast weekly confirmed cases by onset week "
-            "for each health zone and province. "
-            "The nowcast is the baselinenowcast method (Johnson et al. 2025, "
-            "Wellcome Open Research, doi:10.12688/wellcomeopenres.25027.2), "
-            "from a JAX port of baselinenowcast 0.2.2. "
-            "A chain ladder on the hub's daily release snapshots fits one "
-            "daily reporting delay to every release pair in a 42-day window, "
-            "by non-negative least squares on the log scale. "
-            "Report days no release observes are skipped, and downward "
-            "revisions are moved onto earlier releases. "
-            "Daily nowcasts are summed to hub weeks. "
-            "The cases still to be reported are negative binomial, with a "
-            "dispersion fitted per horizon from retrospective nowcasts. "
-            "Each nowcast draw is carried forward from its latest week as a "
-            "random walk on the log scale with Poisson noise. "
-            "A place with fewer than 10 cases a week uses the delay, "
-            "dispersion and walk spread pooled over its parent (zone, then "
-            "province, then country). "
-            "Within each week the provinces' draws are paired by a Gaussian "
-            "copula whose correlation is estimated from the model's own past "
-            "errors (Schaake shuffle), so each province keeps its draws. "
-            "The national value is the sum of the provinces. "
+            "We nowcast each province and health zone with a JAX port of "
+            "baselinenowcast (Johnson et al. 2025, "
+            "doi:10.12688/wellcomeopenres.25027.2). "
+            "The delay is fitted to release pairs up to 42 days apart. "
+            "Cases still to be reported are negative binomial, with "
+            "dispersion fitted to past nowcasts. "
+            "Each draw follows a log-scale random walk with Poisson "
+            "noise. "
+            "Zones are forecast from their own data. "
+            "Places under 10 cases a week use their parent's delay and "
+            "spread. "
+            "A Gaussian copula pairs the province draws within each week. "
             "See https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/."
         ),
         "data_inputs": (
             "Hub daily onsets by release (observed plus imputed) for "
-            "provinces and health zones, and the hub's weekly target data."
+            "provinces and health zones."
         ),
     },
     # Fine-tuned Chronos-2, the hub model seabbs-foundation. `{release}`
