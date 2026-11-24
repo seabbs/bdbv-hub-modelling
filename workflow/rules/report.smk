@@ -391,7 +391,7 @@ rule ft_check_forecast:
         # Reruns when its code or the active-zone rule changes (a key
         # file, as reruns follow file times).
         code=lambda wc: scoring.key_file(
-            f"{FTC_DIR}/keys/forecast.key", scoring.ft_check_key()
+            f"{FTC_DIR}/keys", "forecast", scoring.ft_check_key()
         ),
     output:
         touch(f"{FTC_DIR}/forecasts/{{fmodel}}.done"),

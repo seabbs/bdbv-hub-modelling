@@ -178,3 +178,9 @@ def test_a_tick_does_not_build_the_dashboard():
     # `task nowcast-foundation:dashboard-static` writes the page.
     assert "dashboard" not in schedule.TARGETS
     assert "dashboard" not in schedule.POOL
+
+
+def test_a_machine_still_listing_the_dashboard_keeps_ticking(capsys):
+    steps = schedule.plan({"SCHEDULE_TARGETS": "score dashboard"})
+    assert all("dashboard" not in step[1] for step in steps)
+    assert "no longer a tick target" in capsys.readouterr().err

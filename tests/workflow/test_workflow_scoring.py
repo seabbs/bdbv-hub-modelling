@@ -1,5 +1,7 @@
 """Scoring units' commands and the German report's arguments."""
 
+from pathlib import Path
+
 from flowlib import scoring
 
 
@@ -115,32 +117,6 @@ def test_the_german_unit_is_given_its_fetched_triangle():
     assert "GERMANY_TRIANGLE" not in scoring.unit_shell("release")
 
 
-def test_a_key_file_changes_only_when_its_key_does(tmp_path):
-    # Every profile reruns on file times only (rerun-triggers: mtime), so
-    # a code key reaches a rule as a file it reads, rewritten only when
-    # the key moves: a checkout reruns nothing, a code change reruns it.
-    import os
-
-    path = tmp_path / "keys" / "reference.key"
-    assert scoring.key_file(path, "abc") == str(path)
-    assert path.read_text() == "abc\n"
-    # A first key is older than any output made before it existed.
-    assert path.stat().st_mtime == 0
-    os.utime(path, (1, 1))
-    scoring.key_file(path, "abc")
-    assert path.stat().st_mtime == 1
-    scoring.key_file(path, "def")
-    assert path.read_text() == "def\n"
-    assert path.stat().st_mtime > 1
-
-
-def test_the_reference_unit_reads_its_code_key_as_a_file(tmp_path):
-    s = _scoring(tmp_path, labels=[])
-    ref = s.reference_key_input(scoring.REFERENCE)
-    assert ref == [f"{tmp_path / 'cache'}/keys/{scoring.REFERENCE}.key"]
-    assert s.reference_key_input("abc123") == []
-
-
 def test_no_rule_keys_code_by_a_param_mtime_never_reads():
     from pathlib import Path
 
@@ -148,3 +124,29 @@ def test_no_rule_keys_code_by_a_param_mtime_never_reads():
     text = "".join(p.read_text() for p in rules.glob("*.smk"))
     assert "code=lambda wc: scoring.reference_key" not in text
     assert "code=lambda wc: scoring.ft_check_key()" not in text
+
+
+def test_a_key_is_a_file_made_once_per_code(tmp_path):
+    # Every profile reruns on file times only (rerun-triggers: mtime), so
+    # a code key reaches a rule as a file named by the key.
+    folder = tmp_path / "keys"
+    first = scoring.key_file(folder, "reference", "abc")
+    assert first == str(folder / "reference-abc.key")
+    # The first key is older than any output made before keys existed.
+    assert Path(first).stat().st_mtime == 0
+    assert scoring.key_file(folder, "reference", "abc") == first
+    # Changed code: a new file, dated now, so the rule reruns once.
+    changed = scoring.key_file(folder, "reference", "def")
+    assert Path(changed).stat().st_mtime > 0
+    # Checkouts with either code share the folder without rewriting it.
+    assert scoring.key_file(folder, "reference", "abc") == first
+    assert Path(first).stat().st_mtime == 0
+    assert not list(folder.glob(".*"))
+
+
+def test_the_reference_unit_reads_its_code_key_as_a_file(tmp_path):
+    s = _scoring(tmp_path, labels=[])
+    (ref,) = s.reference_key_input(scoring.REFERENCE)
+    assert Path(ref).parent == tmp_path / "cache" / "keys"
+    assert Path(ref).name.startswith(f"{scoring.REFERENCE}-")
+    assert s.reference_key_input("abc123") == []

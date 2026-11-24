@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import fcntl
 import os
+import sys
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
@@ -44,6 +45,10 @@ TARGETS = (
 
 POOL = ("simulate", "push", "finetune", "score")
 """Targets that share one Snakemake run and the machine's budget."""
+
+RETIRED = {"dashboard"}
+"""Former tick targets, left out with a warning: the dashboard is served
+with a run (`dashboard.serve`) or written by its task."""
 
 NEEDS_POOL = {"land", "release"}
 """Outward targets that run only after a pool run that succeeded: each
@@ -93,6 +98,13 @@ def plan(cfg: Mapping[str, str]) -> list[tuple[str, list[str], bool]]:
         If a target is not one a tick may run.
     """
     targets = cfg.get("SCHEDULE_TARGETS", "").split()
+    if RETIRED & set(targets):
+        print(
+            f"SCHEDULE_TARGETS: {sorted(RETIRED & set(targets))} no longer "
+            "a tick target; left out (drop it from config/local.env)",
+            file=sys.stderr,
+        )
+        targets = [t for t in targets if t not in RETIRED]
     bad = [t for t in targets if t not in TARGETS]
     if bad:
         raise ValueError(f"targets {bad} are not among {sorted(TARGETS)}")

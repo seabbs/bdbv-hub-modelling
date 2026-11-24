@@ -52,26 +52,28 @@ def reference_code(label: str, root: Path | str = ".") -> list[str]:
     return out
 
 
-def key_file(path: Path | str, key: str) -> str:
-    """Write `key` to `path` unless it holds it already; return the path.
+def key_file(folder: Path | str, name: str, key: str) -> str:
+    """Return the file that stands for `key`, made once; `folder/name-key`.
 
     Every profile reruns a job on file times only (`rerun-triggers:
-    mtime`), so a code key reaches a rule as an input file, rewritten only
-    when the key moves: a checkout reruns nothing, a code change reruns
-    the rule. A first key is dated from the epoch, so outputs made before
-    it existed stay current. Written while the DAG is built.
+    mtime`), so a code key reaches a rule as an input file named by the
+    key. The first key in `folder` is dated from the epoch, so outputs
+    made before keys existed stay current; a later one (the code changed)
+    is dated now, so the rule reruns once. Checkouts with other code each
+    keep their own file, so two sharing one ROOT never rerun each other's
+    work back and forth. Written at DAG build, atomically.
     """
-    path = Path(path)
-    want = f"{key}\n"
-    if path.is_file() and path.read_text() == want:
+    folder = Path(folder)
+    path = folder / f"{name}-{key}.key"
+    if path.is_file():
         return str(path)
-    new = not path.is_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(want)
-    if new:
-        # A key seen for the first time dates from the epoch, so outputs
-        # made before this file existed are not taken as stale.
-        os.utime(path, (0, 0))
+    folder.mkdir(parents=True, exist_ok=True)
+    first = not any(folder.glob(f"{name}-*.key"))
+    tmp = folder / f".{path.name}.{os.getpid()}"
+    tmp.write_text(f"{key}\n")
+    if first:
+        os.utime(tmp, (0, 0))
+    tmp.replace(path)
     return str(path)
 
 
@@ -248,7 +250,7 @@ class Scoring:
         key = reference_key(label)
         if not key:
             return []
-        return [key_file(f"{self.cache}/keys/{label}.key", key)]
+        return [key_file(f"{self.cache}/keys", label, key)]
 
     def references(self) -> list[str]:
         """Return the reference labels' German units, shared by every run."""
