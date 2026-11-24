@@ -62,10 +62,12 @@ def test_the_one_machine_caps_hold_on_the_cluster():
 
 
 def test_no_cluster_names_are_committed():
-    # Partition and account come from SBATCH_* in the submit environment.
-    text = PROFILE.read_text()
-    for key in ("slurm_partition=", "slurm_account="):
-        assert key not in text
+    # Account and partition go in an untracked profile layered on this
+    # one (SNAKEMAKE_PROFILE).
+    got = _profile()
+    values = [*got["default-resources"], *got["set-resources"]]
+    for key in ("slurm_partition", "slurm_account"):
+        assert not any(key in v for v in values), key
 
 
 def test_a_dry_run_sizes_each_batch_as_a_slurm_job(tmp_path):

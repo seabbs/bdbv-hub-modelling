@@ -2,10 +2,13 @@
 # snakemake-executor-plugin-slurm (the paper group), on a cluster whose
 # nodes share this checkout and ROOT. Run the driver on the submit host,
 # or as a long low-resource Slurm job where login nodes forbid one.
-# Nothing machine-specific is here: Slurm reads the partition and
-# account from SBATCH_PARTITION and SBATCH_ACCOUNT in the submit
-# environment, and a GPU partition, if the cluster has one, goes in an
-# untracked profile layered on this one (SNAKEMAKE_PROFILE).
+# Nothing machine-specific is here. The cluster's account and partition
+# (and a GPU partition for train_segment, if it has one) go in an
+# untracked profile layered on this one (SNAKEMAKE_PROFILE), as
+# default-resources slurm_account=... slurm_partition=... and
+# set-resources. Without them the plugin passes sinfo's default
+# partition and a guessed account explicitly, which override any
+# SBATCH_* in the environment.
 # Before a run: `uv sync --all-groups` once, then UV_NO_SYNC=1 (and
 # UV_OFFLINE=1 for offline nodes) and HF_HOME on the shared filesystem
 # in the submit environment, which Slurm passes to each job; DEVICE and
