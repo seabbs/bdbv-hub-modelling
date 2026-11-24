@@ -17,6 +17,9 @@ DASHES = {
 }
 """Dash patterns and the legend's name for each."""
 
+LABEL_GAP = 34
+"""Pixels between the starts of two vertical mark labels."""
+
 
 def nice(lo: float, hi: float, n: int = 5) -> list[float]:
     """Return round tick values covering `lo` to `hi`, about `n` steps."""
@@ -91,7 +94,10 @@ def chart(
     def sy(y: float) -> float:
         return top + (1 - (f(y) - y0) / (y1 - y0)) * (height - top - bottom)
 
-    o = [f'<svg viewBox="0 0 {width} {height}" width="100%" role="img">']
+    o = [
+        f'<svg class=srv viewBox="0 0 {width} {height}" width="100%" '
+        'role="img">'
+    ]
     for t in nice(y0, y1):
         if y0 <= t <= y1:
             yy = top + (1 - (t - y0) / (y1 - y0)) * (height - top - bottom)
@@ -127,13 +133,22 @@ def chart(
                 f'<line x1="{left}" x2="{width - right}" y1="{sy(hv):.1f}" '
                 f'y2="{sy(hv):.1f}" class=mark />'
             )
-    for m, lab in marks:
+    # A label closer than LABEL_GAP to the last one drawn is left out; its
+    # line stays and names itself on hover.
+    last = -math.inf
+    for m, lab in sorted(marks):
         if not xticks and x0 <= m <= x1:
             o.append(
                 f'<line x1="{sx(m):.1f}" x2="{sx(m):.1f}" y1="{top}" '
-                f'y2="{height - bottom}" class=mark /><text '
-                f'x="{sx(m) + 2:.1f}" y="{top + 10}" class=ax>{lab}</text>'
+                f'y2="{height - bottom}" class=mark><title>{lab}</title>'
+                "</line>"
             )
+            if sx(m) - last >= LABEL_GAP:
+                o.append(
+                    f'<text x="{sx(m) + 2:.1f}" y="{top + 10}" '
+                    f"class=ax>{lab}</text>"
+                )
+                last = sx(m)
     for s in series:
         lab, col, p, kind = s[:4]
         dash = f' stroke-dasharray="{DASHES[s[4]][0]}"' if len(s) > 4 else ""
@@ -176,5 +191,5 @@ def chart(
     )
     return (
         f"<div class=card><h3>{title}</h3><div class=leg>{leg}</div>"
-        f"{''.join(o)}{note}</div>"
+        f"{''.join(o)}{f'<p class=cnote>{note}</p>' if note else ''}</div>"
     )

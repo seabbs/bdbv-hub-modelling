@@ -37,9 +37,9 @@ MOVED = {
         "packages/bdbvhub/src/bdbvhub/submission/release.py"
     ),
     "scripts/paper.sh": "workflow/scripts/paper_run.py",
-    "scripts/validate-hub.R": "tests/submission/hub_validation/validate_hub.R",
+    "scripts/validate-hub.R": "ci/steps/validate_hub.R",
     "scripts/validate_with_hubvalidations.R": (
-        "tests/submission/hub_validation/validate_with_hubvalidations.R"
+        "ci/steps/validate_with_hubvalidations.R"
     ),
     "tools/README.md": "deleted",
     "tools/paper_local.sh": "deleted",
@@ -76,7 +76,9 @@ def test_no_path_names_a_moved_helper() -> None:
     for path in [
         *ROOT.glob(".github/workflows/*.yml"),
         *ROOT.glob("workflow/rules/*.smk"),
-        *ROOT.glob("taskfiles/*.yml"),
+        *ROOT.glob("packages/*/Taskfile.yml"),
+        ROOT / "workflow" / "Taskfile.yml",
+        ROOT / "ci" / "Taskfile.yml",
         *ROOT.glob("ci/steps/*.sh"),
         ROOT / "Taskfile.yml",
         ROOT / "mkdocs.yml",

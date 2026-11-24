@@ -34,11 +34,16 @@ def test_the_fast_tier_runs_no_slow_tests(name, job):
 
 @pytest.mark.parametrize("job", ["full", "r-live", "chronos"])
 def test_fits_and_replays_run_nightly_on_dispatch_or_when_labelled(job):
+    # The plan job decides: every tier nightly and on dispatch, and on a
+    # labelled pull request each tier whose code the change reaches.
     workflow = _workflow("heavy.yml")
-    when = workflow["jobs"][job]["if"]
+    when = workflow["jobs"]["plan"]["if"]
     for case in ("schedule", "workflow_dispatch", OPT_IN):
         assert case in when
     assert "schedule" in _triggers(workflow)
+    tier = workflow["jobs"][job]
+    assert tier["needs"] == "plan"
+    assert tier["if"] == f"${{{{ needs.plan.outputs.{job} == 'true' }}}}"
 
 
 def test_the_chronos_job_runs_every_torch_gated_test_with_torch():
@@ -113,7 +118,7 @@ def test_integration_runs_the_tests_of_no_package_in_15_minutes():
     assert job["timeout-minutes"] <= 15
     runs = " ".join(s.get("run", "") for s in job["steps"])
     (tests,) = [s for s in job["steps"] if s.get("name") == "Tests"]
-    assert tests["run"].split()[-1] == "tests"
+    assert tests["run"].split()[-2:] == ["tests", "workflow/tests"]
     assert "snakefmt --check" in runs
     assert "snakemake -s workflow/Snakefile --lint" in runs
     assert "--group paper pytest" in runs
@@ -210,7 +215,7 @@ def test_the_heavy_tiers_are_opt_in_in_their_own_workflow():
     # Nightly, dispatch or the label: no push runs them, and Tests is gone.
     assert not (WORKFLOWS / "test.yml").exists()
     workflow = _workflow("heavy.yml")
-    assert set(workflow["jobs"]) == {"full", "chronos", "r-live"}
+    assert set(workflow["jobs"]) == {"plan", "full", "chronos", "r-live"}
     assert "push" not in _triggers(workflow)
 
 

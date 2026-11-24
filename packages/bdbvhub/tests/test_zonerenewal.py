@@ -329,7 +329,9 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
     from nowcastrenewal import bvd
     from nowcastrenewal.model.zones import zone_bvd_inputs
 
-    fixtures = Path(__file__).resolve().parents[3] / "tests" / "data" / "bvd"
+    fixtures = (
+        Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "bvd"
+    )
     release = bvd.load_release(fixtures / "results-3086")
     folder = tmp_path / release.tag
     folder.mkdir()
@@ -395,7 +397,7 @@ def test_bvd_zone_fit_records_the_release_and_its_rhat(
 
     data = tmp_path / "data"
     shutil.copytree(ROOT / "tests" / "fixtures" / "data", data)
-    fixtures = ROOT / "tests" / "data" / "bvd"
+    fixtures = ROOT / "tests" / "fixtures" / "bvd"
     releases = bvd.parse_releases(
         json.loads((fixtures / "releases.json").read_text())
     )

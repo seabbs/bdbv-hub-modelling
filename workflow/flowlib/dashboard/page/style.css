@@ -15,7 +15,7 @@ font-variant-numeric:tabular-nums}.s{font-size:11px;color:var(--mut)}
 .plots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,440px),1fr));
 gap:8px}svg{display:block}.grid{stroke:var(--line);stroke-width:1}
 .mark{stroke:var(--mut);stroke-dasharray:3 3;stroke-width:1}
-.ax{fill:var(--mut);font-size:10px}.leg{font-size:12px;display:flex;gap:12px;
+.ax{fill:var(--mut);font-size:11px}.cnote{font-size:12px;color:var(--mut);margin:4px 0 0;line-height:1.35}.leg{font-size:12px;display:flex;gap:12px;
 flex-wrap:wrap}.leg i{display:inline-block;width:10px;height:10px;
 border-radius:2px;margin-right:4px}
 table{border-collapse:collapse;width:100%;margin-bottom:10px;
@@ -24,7 +24,7 @@ border-bottom:1px solid var(--line);font-size:12px}
 .gctl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;
 margin-bottom:8px}.gwide input{width:200px;vertical-align:middle}
 .gck{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:8px}
-.mode{display:none}body.m-raw .m-raw:not(.rng),body.m-start .m-start:not(.rng),
+.mode{display:none;overflow-x:auto;min-width:0;max-width:100%}body.m-raw .m-raw:not(.rng),body.m-start .m-start:not(.rng),
 body.m-base .m-base:not(.rng){display:block}
 body.m-raw.r-zoom .m-raw.r-zoom,body.m-raw.r-full .m-raw.r-full,
 body.m-start.r-zoom .m-start.r-zoom,body.m-start.r-full .m-start.r-full,
@@ -41,13 +41,15 @@ font-size:12px}
 .cardinfo{position:absolute;top:4px;right:8px;line-height:1}.card{position:relative}
 .tog.dis{opacity:.55;cursor:help;background:transparent;border-style:dashed}
 .refnote{display:flex;gap:4px;min-height:0;margin-bottom:2px}
-.sctl .mut{margin-left:10px}.lg{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
+.sctl .mut{margin-left:10px}.lg{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;margin-right:14px}
 .leg2{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 18px}.glocs{margin:6px 0}.glocs .tog{margin:1px}.panels{display:grid;gap:8px}
 .panels h4{margin:0 0 2px;font-size:12px}#gplot .ax,#gwis .ax{font-size:11px}.plots3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px}
 .plots3 .leg{font-size:11px;gap:2px 8px}
-.biasrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
-.biasdyn{display:contents}.biasmore{display:contents}.fs.biasline{max-width:none}
-.biastabs{flex-basis:100%}
+/* Bias over training and the learning rates side by side, the matrices
+   below across the row. */
+.biasrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:8px;align-items:start}
+.biasdyn{display:contents}.biasmore{display:contents}.biasline{order:1}#lrcard{order:2}
+.biastabs,.biasheat{order:3;grid-column:1/-1}
 .topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0 4px;
 border-bottom:1px solid var(--line);margin-bottom:6px}
 .navrow{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
@@ -60,15 +62,20 @@ display:flex;align-items:center}details.sec>summary::-webkit-details-marker{disp
 details.sec>summary::before{content:"▸";margin-right:6px;color:var(--mut)}
 details.sec[open]>summary::before{content:"▾"}
 details.sec{scroll-margin-top:92px}details.sec h2{margin:10px 0 6px}
-.gwrap{display:grid;grid-template-columns:minmax(0,720px) 540px;gap:8px;align-items:start}
-.gwrap.wide{grid-template-columns:minmax(0,1fr) 540px}
-.gscores{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:start}
+/* The nowcast plot takes the full width; its scores sit below it. */
+.gwrap{display:grid;grid-template-columns:1fr;gap:8px;align-items:start}
+.gscores{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 16px;align-items:start}
 .gsc svg{max-width:100%;height:auto}
-@media(max-width:1100px){.gwrap,.gwrap.wide{grid-template-columns:1fr}}
+@media(max-width:1100px){.gscores{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.gscores{grid-template-columns:1fr}}
-@media(max-width:1250px){.tiles4{flex-wrap:wrap;width:292px}#biasdyn>div:not(.card):not(.biastabs){max-width:292px}}
-.biasrow .card{padding:4px;line-height:0}
-.biasline{flex:1 1 300px;max-width:480px}.biasline svg{width:100%;height:auto}.tiles4{display:flex;gap:6px}
+#lrcard:not(.fs) svg{max-width:520px}
+/* Full screen enlarges a fixed-width chart only so far, so its text stays
+   in proportion to the page's. */
+.fs svg.srv{max-width:min(100%,800px);margin:0 auto}
+/* Charts drawn on the server at a fixed width shrink on a phone; their
+   axis text does not. */
+@media(max-width:560px){svg.srv .ax{font-size:14px}}
+.biasline svg{width:100%;height:auto}.tiles4{display:flex;flex-wrap:wrap;gap:12px}
 .tile4 .mut{font-size:11px;line-height:1.3}.tile4 svg{display:block}
 .rel .band{opacity:0;pointer-events:none}.rel:hover .band{opacity:.22}
 .rel{pointer-events:all}

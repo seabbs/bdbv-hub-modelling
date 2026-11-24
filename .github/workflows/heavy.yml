@@ -2,8 +2,9 @@ name: Heavy
 
 # The heavy tiers: slow fits and backtests (full), the torch-gated tests
 # (chronos) and the live R checks (r-live). Opt-in: nightly, on dispatch
-# and on a pull request labelled `full-tests`. The fast tier runs in CI
-# and Integration.
+# and on a pull request labelled `full-tests`, where each tier runs only
+# if the change reaches its code (`plan`). The fast tier runs in CI and
+# Integration.
 
 on:
   schedule:
@@ -38,15 +39,61 @@ env:
   DEVICE: cpu
 
 jobs:
+  # Which tiers a labelled pull request's change reaches; the schedule and
+  # dispatches run them all.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: >-
+      ${{ github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'full-tests') }}
+    outputs:
+      full: ${{ steps.tiers.outputs.full }}
+      chronos: ${{ steps.tiers.outputs.chronos }}
+      r-live: ${{ steps.tiers.outputs.r-live }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Tiers the change reaches
+        id: tiers
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          shared='^(pyproject\.toml|uv\.lock|conftest\.py|\.github/workflows/heavy\.yml|\.github/actions/)'
+          if [ "$EVENT" != pull_request ]; then
+            changed=pyproject.toml
+          else
+            changed=$(git diff --name-only "$BASE"...HEAD)
+          fi
+          reach() {
+            if printf '%s\n' "$changed" | grep -qE "$shared|$1"; then
+              echo "$2=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$2=false" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          # The fits, backtests and smoke runs: any package or workflow.
+          reach '^(packages/|workflow/|paper/|config/|tests/)' full
+          # Chronos-2 and the trainer, and any torch-gated test file.
+          mapfile -t gated < <(grep -rlE \
+            '(importorskip|find_spec)\("(torch|chronos|peft|transformers)"' \
+            tests packages/*/tests | sort)
+          torch=$(printf '%s|' "${gated[@]}" | sed 's/|$//; s/\./\\./g')
+          reach "^(packages/nowcastfoundation/|${torch})" chronos
+          # The code R checks live, the R cases and the live tests.
+          reach '(\.R$|^tests/model/|r_live|^packages/nowcastrenewal/src/nowcastrenewal/(components|reporting|latent)/|^packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/|^packages/nowcastbaselines/tests/baselinenowcast/|^packages/nowcasteval/src/nowcasteval/scoring\.py|^packages/nowcastbdbv/src/nowcastbdbv/data/delays\.py|^paper/.*scor)' r-live
+          cat "$GITHUB_OUTPUT"
+
   # The full tier: every test marked slow (model fits, Chronos-2
   # inference, backtests) and the smoke runs. Nightly,
   # on dispatch, and on a pull request labelled `full-tests`.
   full:
     runs-on: ubuntu-latest
-    if: >-
-      ${{ github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'full-tests') }}
+    needs: plan
+    if: ${{ needs.plan.outputs.full == 'true' }}
     env:
       BDBV_DATA_DIR: tests/fixtures/data
       # The fixture's latest vintage. The nowcasts below forecast from it
@@ -100,10 +147,8 @@ jobs:
   chronos:
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    if: >-
-      ${{ github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'full-tests') }}
+    needs: plan
+    if: ${{ needs.plan.outputs.chronos == 'true' }}
     env:
       BDBV_DATA_DIR: tests/fixtures/data
       CUDA_VISIBLE_DEVICES: ''
@@ -115,13 +160,19 @@ jobs:
           jax-scope: chronos
       - name: Install the chronos group
         run: uv sync --frozen --group chronos
+      # Chronos-2's weights, downloaded once.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-chronos-2
       - name: Torch-gated tests
         run: |
           mapfile -t files < <(grep -rlE \
             '(importorskip|find_spec)\("(torch|chronos|peft|transformers)"' \
             tests packages/*/tests | sort)
           printf '%s\n' "${files[@]}"
-          uv run --no-sync pytest -q -m "" --durations=30 "${files[@]}"
+          uv run --no-sync pytest -q -m "" -n auto --dist loadfile \
+            --durations=30 "${files[@]}"
 
   # Live checks against the R packages our code stands in for
   # (tests/model/r_live.py): epinowcast's own Stan functions and
@@ -130,10 +181,8 @@ jobs:
   # fail rather than skip.
   r-live:
     runs-on: ubuntu-latest
-    if: >-
-      ${{ github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch' ||
-      contains(github.event.pull_request.labels.*.name, 'full-tests') }}
+    needs: plan
+    if: ${{ needs.plan.outputs.r-live == 'true' }}
     env:
       R_LIVE_REQUIRED: '1'
     steps:
@@ -167,11 +216,20 @@ jobs:
             any::posterior
             scoringutils@2.3.0
           dependencies: '"hard"'
+      # CmdStan, built once and kept.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cmdstan
+          key: cmdstan-${{ runner.os }}-v1
       - name: Install CmdStan
-        run: Rscript -e 'cmdstanr::install_cmdstan(cores = 2)'
+        run: >-
+          Rscript -e 'if (length(Sys.glob("~/.cmdstan/cmdstan-*")) == 0)
+          cmdstanr::install_cmdstan(cores = 4)'
+      # Each file runs its R cases once, so files go to workers whole.
       - name: Live R checks
         run: >-
-          uv run pytest -q packages/nowcastrenewal/tests/test_pmfs.py
+          uv run pytest -q -n auto --dist loadfile --durations=20
+          packages/nowcastrenewal/tests/test_pmfs.py
           packages/nowcastrenewal/tests/test_latent_epinowcast.py
           packages/nowcastrenewal/tests/test_reporting_delays.py
           packages/nowcastbdbv/tests/test_hub_imputation_delays.py
@@ -185,4 +243,6 @@ jobs:
         run: uv run --group paper pytest -q tests/test_scoringutils.py
       # With the slow sampler checks.
       - name: Live baselinenowcast checks
-        run: uv run pytest -q -m "" packages/nowcastbaselines/tests/baselinenowcast
+        run: >-
+          uv run pytest -q -m "" -n auto --dist loadfile --durations=20
+          packages/nowcastbaselines/tests/baselinenowcast

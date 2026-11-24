@@ -12,13 +12,18 @@ the rule in `config/finetune.toml`).
 The report scores the folders together (`score_releases`) and gives each
 model's pairwise relative skill (`nowcasteval.scoring.pairwise_skill`) on
 the CRPS and the log CRPS, scaled to the reference, overall and by weeks
-back, with each model's forecasts and rounds, the active zones per
-release, and the forecasts with their 50% and 90% intervals.
+back, with each model's forecasts and rounds; each model's calibration by
+level and weeks back (`calibration`: medians against truth and against
+what was already reported, 90% coverage) and the week-to-week roughness
+of its medians against the truth's (`roughness`); the active zones per
+release; and the forecasts with their 50% and 90% intervals. Only the
+hub's weekly targets at its locations are scored.
 
 - `release_tasks`: the scored tasks of every release.
 - `check_model`: a model as the check runs it.
 - `forecast`: one model's forecasts, written to a folder.
 - `skill_tables`: the scores and the pairwise tables.
+- `calibration`, `roughness`: the calibration tables.
 - `write_report`: the page.
 """
 
@@ -33,6 +38,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from bdbvhub.models import get_model
@@ -62,10 +68,12 @@ from nowcastfoundation.forecaster import (
 from nowcastutils.base import ForecastModel, ForecastTask
 
 __all__ = [
+    "calibration",
     "check_model",
     "explorer_quantiles",
     "forecast",
     "release_tasks",
+    "roughness",
     "skill_tables",
     "write_report",
 ]
@@ -236,6 +244,81 @@ def skill_tables(
     }
 
 
+LEVELS = {0: "national", 1: "province"}
+"""Place levels by the number of dashes in the code; deeper are zones."""
+
+
+def _complete(quantiles: pd.DataFrame) -> pd.DataFrame:
+    q = quantiles
+    if "target" in q:
+        q = q.loc[q["target"] == "complete"]
+    level = q["location"].str.count("-").map(LEVELS).fillna("zone")
+    return q.assign(level=level).dropna(subset=["truth"])
+
+
+def calibration(quantiles: pd.DataFrame) -> pd.DataFrame:
+    """Return each model's medians against truth and what was reported.
+
+    On complete weeks, by model, level and weeks back: the summed medians
+    over the summed truth (`median_over_truth`) and over the summed counts
+    already reported at the origin (`median_over_reported`), and the
+    share of truths inside the 90% interval (`coverage_90`). A nowcast
+    that only repeats what was reported has `median_over_reported` 1.
+
+    Parameters
+    ----------
+    quantiles : pandas.DataFrame
+        `ReleaseBacktest.quantiles`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model`, `level`, `weeks_back`, `n` and the three.
+    """
+    q = _complete(quantiles)
+    inside = (q["q5"] <= q["truth"]) & (q["truth"] <= q["q95"])
+    grp = q.assign(_in=inside).groupby(["model", "level", "weeks_back"])
+    out = grp.size().rename("n").to_frame()
+    out["median_over_truth"] = grp["q50"].sum() / grp["truth"].sum()
+    reported = grp["reported"].sum()
+    # Weeks after the origin have nothing reported: no ratio.
+    out["median_over_reported"] = grp["q50"].sum() / reported.where(
+        reported > 0
+    )
+    out["coverage_90"] = grp["_in"].mean()
+    return out.reset_index()
+
+
+def roughness(quantiles: pd.DataFrame) -> pd.DataFrame:
+    """Return how much medians and truth move from one week to the next.
+
+    The mean absolute change of `log1p` from each week to the next within
+    a forecast (one origin and place), of the medians (`median`) and of
+    the truth (`truth`), by model and level, on complete weeks.
+
+    Parameters
+    ----------
+    quantiles : pandas.DataFrame
+        `ReleaseBacktest.quantiles`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model`, `level`, `median` and `truth`.
+    """
+    q = _complete(quantiles).sort_values(
+        ["model", "origin", "location", "target_end_date"]
+    )
+    q = q.drop_duplicates(["model", "origin", "location", "target_end_date"])
+    keys = ["model", "origin", "location"]
+    steps = q.assign(
+        median=np.log1p(q["q50"]).groupby([q[k] for k in keys]).diff().abs(),
+        truth=np.log1p(q["truth"]).groupby([q[k] for k in keys]).diff().abs(),
+    )
+    out = steps.groupby(["model", "level"])[["median", "truth"]].mean()
+    return out.reset_index()
+
+
 def explorer_quantiles(
     quantiles: pd.DataFrame, names: dict[str, str]
 ) -> pd.DataFrame:
@@ -359,6 +442,30 @@ def write_report(
         _table(overall, cols),
         "<h2>By weeks back</h2>",
         _table(by, ["weeks_back", *cols]),
+        "<h2>Calibration by level and weeks back</h2>",
+        "<p class=mut>Summed medians over summed truth and over the counts "
+        "already reported at the origin (1 there means the nowcast only "
+        "repeats what was reported), and the share of truths inside the "
+        "90% interval. Complete weeks.</p>",
+        _table(
+            _named(calibration(tables["quantiles"]), names),
+            [
+                "model",
+                "level",
+                "weeks_back",
+                "n",
+                "median_over_truth",
+                "median_over_reported",
+                "coverage_90",
+            ],
+        ),
+        "<h2>Week-to-week roughness</h2>",
+        "<p class=mut>Mean absolute change of log(1 + value) from one week "
+        "to the next within a forecast, of the medians and of the truth.</p>",
+        _table(
+            _named(roughness(tables["quantiles"]), names),
+            ["model", "level", "median", "truth"],
+        ),
         "<h2>Forecasts</h2>",
         "<p class=mut>Medians with their 50% and 90% intervals.</p>",
         explorer_html(f"{data.name}/explorer.json", "Forecast explorer"),

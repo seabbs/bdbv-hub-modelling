@@ -108,6 +108,8 @@ The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so 
 Later releases are trained from the code here, so retraining from it gives the same hash.
 Each checkpoint is published as the repository's release `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
 The models load the newest such release by publish date, unless `config/finetune.toml` pins a hash.
+`source` in `config/finetune.toml` says where the checkpoint is read from: `github` (the release), `huggingface` (a Hugging Face Hub repository at a pinned revision holding the same files) or `local` (a training segment folder).
+A checkpoint read from the Hub is the same checkpoint as its release, so it keys the same stored fits.
 The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the `_ft` models, and each stored fit records the checkpoint it used.
 The adapter is downloaded once and checked against `sha256sums.txt` and the settings hash.
 The fit store resolves the release once per run, with the workflow's GitHub token, and passes its hash to every fit in `BDBV_CHRONOS_FT`.

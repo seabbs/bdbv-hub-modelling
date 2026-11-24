@@ -337,3 +337,26 @@ def test_the_copula_evidence_reads_real_german_data_only() -> None:
     dummy = _flow(germany__real=False).workflow_evidence()
     assert "si_copula" not in dummy
     assert "copula_rho" not in dummy
+
+
+def test_the_simulations_and_their_ready_file_are_always_inputs(
+    tmp_path: Path,
+) -> None:
+    # Missing simulations are made by the simulate rules, not skipped.
+    sims = tmp_path / "r38" / "sims"
+    flow = _flow(
+        synthetic__simulations={"development": str(sims), "paper": str(sims)}
+    )
+    files = flow.synthetic_simulations("paper")
+    assert f"{tmp_path}/r38/READY" in files
+    assert any(f.startswith(f"{sims}/counts-") for f in files)
+    assert flow.source_files(_w("paper", "synthetic")) == [
+        flow.synthetic["forecasts"]["paper"]
+    ]
+
+
+def test_the_ebola_candidates_are_inputs() -> None:
+    flow = _flow()
+    files = flow.source_files(_w("paper", "ebola"))
+    for candidate in CONFIG["ebola"]["candidates"]:
+        assert candidate in files
