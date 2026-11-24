@@ -1437,6 +1437,14 @@ def _backtest_page(
         partial(plot_scores_by_truth, reported, models=names),
         fig / "scores-by-truth.svg",
     )
+    # The figure through a snippet, so the page builds before the
+    # backtests are stored (`_not_stored`).
+    alt = "Mean CRPS of each origin's forecasts against each later release."
+    _write(
+        gen / "scores-by-truth-figure.md",
+        f"![{alt}](figures/scores-by-truth.svg#only-light)\n"
+        f"![{alt}](figures/scores-by-truth-dark.svg#only-dark)\n",
+    )
     _write(
         gen / "scores-by-truth.md",
         _table(

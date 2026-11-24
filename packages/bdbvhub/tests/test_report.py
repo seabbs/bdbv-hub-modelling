@@ -404,3 +404,12 @@ def test_sections_not_stored_yet_say_so(tmp_path: Path) -> None:
     assert (gen / "release-headline.md").read_text() == report.NOT_STORED
     assert (gen / "vintages.md").read_text() == "table\n"
     assert not (gen / "example.md").exists()
+
+
+def test_no_docs_page_embeds_a_backtest_figure_directly() -> None:
+    # A figure only the stored backtests make goes through a snippet, so
+    # the site builds (mkdocs --strict) before they are stored.
+    root = Path(__file__).parents[3]
+    text = (root / "docs" / "backtest.md").read_text()
+    assert "](figures/scores-by-truth" not in text
+    assert '--8<-- "scores-by-truth-figure.md"' in text
