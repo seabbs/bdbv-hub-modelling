@@ -9,7 +9,7 @@ checked by every package's tests that can see it. A changed test runs
 its own package's job only. A change to the shared test setup or the
 lock file runs every job.
 
-Usage: git diff --name-only ... | python tests/packages/legs.py
+Usage: git diff --name-only ... | python .github/scripts/legs.py
            (a JSON list of packages)
 """
 
@@ -38,7 +38,7 @@ SHARED = (
     "pyproject.toml",
     "uv.lock",
     "conftest.py",
-    "tests/packages/",
+    ".github/scripts/",
     ".github/workflows/tests.yml",
 )
 """Files every package's job depends on."""
@@ -65,7 +65,7 @@ def importers() -> dict[str, set[str]]:
 
 
 def legs(changed: list[str]) -> list[str]:
-    """The packages whose jobs a change to `changed` runs, in layer order."""
+    """Return the packages whose jobs a change runs, in layer order."""
     order = layers()
     if any(f == s or f.startswith(s) for f in changed for s in SHARED):
         return order
@@ -88,6 +88,7 @@ def legs(changed: list[str]) -> list[str]:
 
 
 def main() -> int:
+    """Print, as JSON, the packages the changed files on stdin reach."""
     changed = [line.strip() for line in sys.stdin if line.strip()]
     print(json.dumps(legs(changed)))
     return 0
