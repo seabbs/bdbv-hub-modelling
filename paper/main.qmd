@@ -367,11 +367,11 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 - The lag count against a fixed cap and the joint block against each level alone and the sum of the lowest level have no SI section yet, and get a paragraph when they do.
 :::
 
-Against `randomwalknowcast`, zero-shot Chronos-2 on the two-step input scored {{< meta results.synthetic.models.chronos_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.chronos_twostep >}} on the German {{< meta results.germany.scope >}}.
-The fine-tuned model on the same input scored {{< meta results.synthetic.models.chronos_twostep_ft >}} and {{< meta results.germany.models.chronos_twostep_ft >}}, and on the ragged layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
+Against `randomwalknowcast`, zero-shot Chronos-2 on the two-step input scored {{< meta results.synthetic.models.foundation_zeroshot_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_twostep >}} on the German {{< meta results.germany.scope >}}.
+The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_twostep >}} and {{< meta results.germany.models.foundation_twostep >}}, and on the ragged layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
 
 ::: {.content-visible when-meta="results.ebola.shown"}
-On the Ebola {{< meta results.ebola.scope >}}, zero-shot Chronos-2 and the fine-tuned model on the two-step input and the fine-tuned model on the ragged layout scored {{< meta results.ebola.models.chronos_twostep >}}, {{< meta results.ebola.models.chronos_twostep_ft >}} and {{< meta results.ebola.models.foundation >}}.
+On the Ebola {{< meta results.ebola.scope >}}, zero-shot Chronos-2 and the fine-tuned model on the two-step input and the fine-tuned model on the ragged layout scored {{< meta results.ebola.models.foundation_zeroshot_twostep >}}, {{< meta results.ebola.models.foundation_twostep >}} and {{< meta results.ebola.models.foundation >}}.
 :::
 
 We score the model fine-tuned on real data on the German held-out half and on Ebola rounds after its last training release, {{< meta results.realdata_after >}}, against the model fine-tuned on simulations (SI, Real-data fine-tune against synthetic).
