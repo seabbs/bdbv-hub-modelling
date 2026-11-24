@@ -1,6 +1,6 @@
 version: "3"
 
-# The workflow itself: its runs, schedule, monitor and checks
+# The workflow itself: its runs, monitor and checks
 # (nowcast-workflow).
 
 tasks:
@@ -65,13 +65,7 @@ tasks:
       - python3 workflow/scripts/coordinate.py
 
 
-  schedule:
-    desc: Show or remove the old timer that ran `task nowcast-workflow:tick` (ACTION=show|uninstall); `task nowcast-workflow:run` replaces it
-    cmds:
-      - python3 workflow/scripts/schedule.py {{.ACTION | default "show"}}
-
-
-  dag:
+  rulegraph:
     desc: Draw the workflow's rule graph (TARGET=all by default) as workflow-dag.svg
     cmds:
       - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --rulegraph | dot -Tsvg > workflow-dag.svg"

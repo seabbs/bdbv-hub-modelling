@@ -32,7 +32,7 @@ uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    #
 The settings in `workflow/config.yaml`, with any `--configfile` or `--config` on top, are checked against `workflow/schemas/config.schema.yaml` when the workflow loads, so a misspelt or unknown setting is an error before any job runs.
 A run in `runs` takes any `finetune` setting and no other.
 
-Helpers: `task nowcast-workflow:dag` draws the rule graph, `task nowcast-workflow:progress` lists what exists and what would run, `task nowcast-workflow:report` writes Snakemake's HTML report, and `task nowcast-workflow:check` runs the tests and dry runs CI runs.
+Helpers: `task nowcast-workflow:rulegraph` draws the rule graph, `task nowcast-workflow:progress` lists what exists and what would run, `task nowcast-workflow:report` writes Snakemake's HTML report, and `task nowcast-workflow:check` runs the tests and dry runs CI runs.
 
 ## Machine settings
 
@@ -213,7 +213,6 @@ Snakemake locks the worktree it runs in, so each machine has one driver worktree
 A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
 `task nowcast-workflow:run` (`workflow/scripts/coordinate.py`) is the coordinator run: it runs a tick, and as soon as one ends starts the next, after `COORDINATE_PAUSE` seconds (60), or `COORDINATE_BACKOFF` (600) after a failed tick. No timer runs it: start it once, under nohup or a service manager, and stop it with `touch output/coordinator.stop` (it ends after the running tick) or by its pid.
-The timer that ran ticks before is not installed any more; `task nowcast-workflow:schedule` shows an old one (`ACTION=show`) and removes it (`ACTION=uninstall`).
 
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
 
