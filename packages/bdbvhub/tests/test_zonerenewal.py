@@ -22,7 +22,7 @@ from nowcastutils.hierarchy import is_zone, province_of
 
 pytest.importorskip("pyrenew")
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
 
 
@@ -324,7 +324,7 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
     from nowcastrenewal import bvd
     from nowcastrenewal.model.zones import zone_bvd_inputs
 
-    fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
+    fixtures = Path(__file__).resolve().parents[3] / "tests" / "data" / "bvd"
     release = bvd.load_release(fixtures / "results-3086")
     folder = tmp_path / release.tag
     folder.mkdir()

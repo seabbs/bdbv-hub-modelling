@@ -448,7 +448,7 @@ def test_bvd_variant_reads_the_release_for_its_vintage(
 
     from nowcastrenewal import bvd
 
-    fixtures = Path(__file__).resolve().parents[1] / "data" / "bvd"
+    fixtures = Path(__file__).resolve().parents[3] / "tests" / "data" / "bvd"
     releases = bvd.parse_releases(
         json.loads((fixtures / "releases.json").read_text())
     )

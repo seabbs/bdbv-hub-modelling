@@ -30,7 +30,7 @@ from nowcastgermany.evaluation import (
     with_truth,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = (
     ROOT / "tests" / "fixtures" / "germany" / "germany_covid19_hosp.csv.gz"
 )

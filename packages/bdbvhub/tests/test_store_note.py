@@ -91,7 +91,7 @@ def test_the_preview_head_comes_from_the_environment(
 def test_pages_passes_the_pull_request_head() -> None:
     import yaml
 
-    pages = Path(__file__).parents[2] / ".github" / "workflows" / "pages.yml"
+    pages = Path(__file__).parents[3] / ".github" / "workflows" / "pages.yml"
     steps = yaml.safe_load(pages.read_text())["jobs"]["build"]["steps"]
     (step,) = [
         s

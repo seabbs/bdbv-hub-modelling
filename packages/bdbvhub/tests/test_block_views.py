@@ -1,20 +1,16 @@
 """A block over the limit is cut into views at inference, as in training."""
 
 import dataclasses
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 pytest.importorskip("jax")
 
+from test_daily_walk import HORIZONS, NOWCAST, _triangle
+
 from nowcastfoundation.forecaster import FoundationModel, block_views
 from nowcastutils.base import NATIONAL
-
-sys.path.insert(0, str(Path(__file__).parent))
-
-from test_daily_walk import HORIZONS, NOWCAST, _triangle
 
 
 def _owners(views):

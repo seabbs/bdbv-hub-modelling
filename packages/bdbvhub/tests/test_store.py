@@ -24,9 +24,9 @@ from nowcasteval.backtest import (
 from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS, ForecastTask
 from nowcastutils.forecast import Forecast
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
-DATA = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "data"
+DATA = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture

@@ -24,7 +24,7 @@ from nowcasteval.backtest import (
 )
 from nowcasteval.nowcast import resolve_truth_delay
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
 
 pytestmark = pytest.mark.usefixtures("flat_model")

@@ -21,7 +21,7 @@ from nowcastutils.base import NATIONAL
 from nowcastutils.hierarchy import is_zone, province_of
 from nowcastutils.snapshots import weekly_counts
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
 
 

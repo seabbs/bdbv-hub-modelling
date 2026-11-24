@@ -11,7 +11,7 @@ import pytest
 from bdbvhub.store.digest import REPORT_ONLY, backtest_digest
 from nowcasteval.backtest import BacktestConfig
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _digest_tree(root: Path) -> dict[str, Path]:

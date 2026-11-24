@@ -1,15 +1,11 @@
 """Two-step Chronos-2: baselinenowcast's point nowcast, then Chronos-2."""
 
 import dataclasses
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 pytest.importorskip("jax")
-
-sys.path.insert(0, str(Path(__file__).parent))
 
 from test_daily_walk import HORIZONS, NOWCAST, _triangle
 

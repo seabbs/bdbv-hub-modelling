@@ -19,7 +19,7 @@ from bdbvhub.submission.fitting import (
 from nowcastbdbv.data.tidy import coherence_summary, national_coherence
 from nowcasteval.plots import plot_submission
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
 
 

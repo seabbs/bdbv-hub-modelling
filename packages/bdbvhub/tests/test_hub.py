@@ -22,8 +22,8 @@ from bdbvhub.submission.validate import (
     validate_submission,
 )
 
-ROOT = Path(__file__).resolve().parents[2]
-FIXTURES = Path(__file__).parent / "hub_validation" / "fixtures"
+ROOT = Path(__file__).resolve().parents[3]
+FIXTURES = ROOT / "tests" / "submission" / "hub_validation" / "fixtures"
 HUB = Hub.load(FIXTURES / "hub-snapshot")
 """The pinned hub config, in which the round of 2026-10-31 is open."""
 METADATA = ROOT / "hub" / "model-metadata"

@@ -25,7 +25,8 @@ from nowcastgermany.pairing import hub_weeks
 from nowcastutils.base import NATIONAL
 
 FIXTURE = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[3]
+    / "tests"
     / "fixtures"
     / "germany"
     / "germany_covid19_hosp.csv.gz"

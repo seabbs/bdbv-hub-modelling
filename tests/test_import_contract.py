@@ -74,7 +74,7 @@ def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
 
     assert legs(["docs/index.md"]) == []
     assert legs(["uv.lock"]) == layers()
-    assert legs(["tests/forecasters/test_zones.py"]) == ["bdbvhub"]
+    assert legs(["packages/bdbvhub/tests/test_zones.py"]) == ["bdbvhub"]
     seen = legs(["packages/nowcastbaselines/src/nowcastbaselines/chain.py"])
     assert {"nowcastbaselines", "nowcastrenewal", "bdbvhub"} <= set(seen)
     assert "nowcastutils" not in seen
@@ -118,6 +118,7 @@ def test_a_package_with_its_own_tests_has_none_left_under_tests() -> None:
         "nowcastfoundation",
         "nowcastgermany",
         "nowcastbdbv",
+        "bdbvhub",
     } <= moved
     left = [
         f
