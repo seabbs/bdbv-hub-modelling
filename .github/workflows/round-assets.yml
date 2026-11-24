@@ -29,7 +29,7 @@ permissions:
 
 env:
   WORK: output/ci
-  CI_DIR: ci
+  CI_DIR: packages/bdbvsubmission
 
 jobs:
   attach:
