@@ -2,13 +2,16 @@
 """Per-forecast scores for the in-browser summaries.
 
 The page embeds one row per model, origin, release, place and week, and
-`docs/javascripts/summarise.js` summarises any selection of them as
-`relative_crps` does: over the forecasts the baseline also made, the mean
-of each metric and, for relative metrics, the model's mean over the
-baseline's. A model with fewer of the baseline's forecasts than the
-baseline is marked partial (`mark_partial`), so its row is read apart
-from the full rows, which all have the baseline's n. A new metric is a
-score column and a label.
+`docs/javascripts/summarise.js` summarises a selection of them as
+`relative_crps` does: the mean of each metric over each model's own
+forecasts and, for relative metrics, its pairwise relative skill
+(`nowcasteval.scoring.pairwise_skill`). The skill is computed here, once,
+as each model's geometric mean of ratios (`skill`) for every selection
+the page offers: each round or all rounds, by scale or by place, overall
+or at each horizon. The page divides one model's by the chosen baseline's,
+which only rescales them. A model with fewer forecasts than the baseline
+is marked partial (`mark_partial`). A new metric is a score column and a
+label.
 """
 
 from __future__ import annotations
@@ -16,15 +19,16 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping, Sequence
 
+import numpy as np
 import pandas as pd
 
-from bdbvhub.reporting.site import site_baseline
 from nowcastutils.base import NATIONAL
 
 __all__ = [
     "ENERGY_SUMMARY",
     "SUMMARY_METRICS",
     "mark_partial",
+    "skill_key",
     "summary_html",
     "summary_rows",
     "targets_attr",
@@ -105,7 +109,7 @@ def summary_rows(
     models: Sequence[str],
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
-    baseline: str | None = None,
+    baseline: str,
     metrics: Sequence[tuple[str, str, float | None, bool]] = SUMMARY_METRICS,
     default_on: Sequence[str] | None = None,
     energy: pd.DataFrame | None = None,
@@ -143,12 +147,11 @@ def summary_rows(
         `baseline` (its index), `metrics` (key, label, ref, relative),
         `origins`, `releases`, `weeks`, `pools` (id and label, in order),
         `places` (id, name, pool) and `rows`: model, origin, release,
-        place and week indices, then each metric, and `horizons`, each
-        row's horizon. With `energy`, also `energy`: `metrics` (key and
-        label) and `rows` of model, origin, release and pool indices, then
-        each energy score.
+        place and week indices, then each metric, `horizons`, each row's
+        horizon, and `skill` (`_skill`). With `energy`, also `energy`:
+        `metrics` (key and label) and `rows` of model, origin, release and
+        pool indices, then each energy score.
     """
-    baseline = baseline or site_baseline()
     shown = [m for m in models if m in set(scores["model"])]
     s = scores.loc[scores["model"].isin(shown)]
     origins = sorted(set(s["origin"].astype(str)))
@@ -203,9 +206,96 @@ def summary_rows(
         ],
         "rows": rows,
         "horizons": horizons,
+        "skill": _skill(
+            s,
+            shown,
+            baseline,
+            idx,
+            pools,
+            pool_of,
+            [k for k, _, _, rel in metrics if rel],
+        ),
     }
     if energy is not None:
         out["energy"] = _energy_rows(energy, idx, pools)
+    return out
+
+
+SKILL_MATCH = ("origin", "truth_vintage", "location", "target_end_date")
+"""What makes two models' scores the same forecast in a summary."""
+
+
+def skill_key(round_: int | None, select: str, horizon: int | None) -> str:
+    """Return the key of one selection's skill in `summary_rows`.
+
+    `round_` is an origin index or None for every round; `select` is
+    `p<pool index>` or `x<place index>`; `horizon` a horizon or None for
+    every horizon.
+    """
+    r = "all" if round_ is None else str(round_)
+    h = "all" if horizon is None else str(horizon)
+    return f"{r}|{select}|{h}"
+
+
+def _skill(
+    scores: pd.DataFrame,
+    shown: Sequence[str],
+    baseline: str,
+    idx: Mapping[str, Mapping[str, int]],
+    pools: Sequence[str],
+    pool_of: Callable[[str], str],
+    keys: Sequence[str],
+) -> dict[str, dict[str, list[float | None]]]:
+    """Return each model's pairwise skill for every selection of the page.
+
+    One entry per `skill_key`: each round and all rounds, by scale (and at
+    each horizon) and by place. Each holds, per relative metric, the
+    models' `skill_<metric>` in `shown` order, None where a model has none.
+    """
+    if not keys:
+        return {}
+    # Imported here: nowcasteval.scoring needs scoringrules, which the
+    # page modules do not otherwise import.
+    from nowcasteval.scoring import pairwise_skill
+
+    t = scores.assign(
+        _round=scores["origin"].astype(str).map(idx["origin"]),
+        _pool=scores["location"]
+        .map(pool_of)
+        .map({p: i for i, p in enumerate(pools)}),
+        _place=scores["location"].astype(str).map(idx["location"]),
+    )
+    at = {m: i for i, m in enumerate(shown)}
+    out: dict[str, dict[str, list[float | None]]] = {}
+    for rounds in (None, "_round"):
+        for select, hz in (
+            ("_pool", None),
+            ("_pool", "horizon"),
+            ("_place", None),
+        ):
+            by = [c for c in (rounds, select, hz) if c]
+            skill = pairwise_skill(
+                t,
+                baseline,
+                by=by,
+                metrics=keys,
+                match_on=SKILL_MATCH,
+                rounds="origin",
+            )
+            tag = "p" if select == "_pool" else "x"
+            for row in skill.to_dict("records"):
+                key = skill_key(
+                    int(row["_round"]) if rounds else None,
+                    f"{tag}{int(row[select])}",
+                    int(row["horizon"]) if hz else None,
+                )
+                entry = out.setdefault(
+                    key, {k: [None] * len(shown) for k in keys}
+                )
+                for k in keys:
+                    v = row[f"skill_{k}"]
+                    if np.isfinite(v):
+                        entry[k][at[row["model"]]] = round(float(v), 10)
     return out
 
 

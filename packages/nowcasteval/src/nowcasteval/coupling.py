@@ -71,7 +71,7 @@ as the foundation model's fit (`nowcastfoundation.forecaster`)."""
 CELL: Final = ["location", "target_end_date"]
 
 
-def _grid(
+def panel_grid(
     rows: pd.DataFrame,
 ) -> tuple[list[str], list[str], np.ndarray]:
     """Return a model's places, end dates and quantile levels."""
@@ -331,7 +331,7 @@ def coupling_scores(
     """
     out = []
     for model, own in rows.groupby("model", sort=True):
-        places, dates, levels = _grid(own)
+        places, dates, levels = panel_grid(own)
         history = _matured(own, places, dates)
         origins = [
             (

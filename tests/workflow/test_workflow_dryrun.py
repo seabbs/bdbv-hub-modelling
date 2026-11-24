@@ -83,13 +83,11 @@ def _sim_commands(out):
     ]
 
 
-def test_batches_run_by_count_under_the_shared_prefix_not_a_cap(tmp_path):
+def test_batches_run_by_count_not_a_cap(tmp_path):
     # SIM_SLOTS alone sets how many batches run at once: a batch claims
-    # no memory and has no cap of its own, only the machine's SIM_PREFIX
-    # (such as one systemd slice all batches share).
+    # no memory and runs under no prefix.
     (tmp_path / "local.env").write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
-        "JOB_PREFIX='percap {mem}'\nSIM_PREFIX='inslice'\n"
     )
     out = dry_run(tmp_path, "simulate", config={"rounds": [4]}, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
@@ -101,16 +99,6 @@ def test_batches_run_by_count_under_the_shared_prefix_not_a_cap(tmp_path):
     assert len(claims) == 40
     assert all("sim_slots=1" in c for c in claims)
     assert not any(re.search(r"mem_mb=[1-9]", c) for c in claims)
-    shared = re.compile(r"eigen=false\s+inslice\s+workflow/scripts/timed\.sh")
-    assert all(shared.search(x) for x in lines)
-    assert not any("percap" in x for x in lines)
-
-
-def test_with_no_sim_prefix_a_batch_runs_bare(tmp_path):
-    out = dry_run(tmp_path, "simulate", config={"rounds": [4]}, quiet=False)
-    assert out.returncode == 0, out.stderr + out.stdout
-    lines = _sim_commands(out)
-    assert lines
     bare = re.compile(r"eigen=false\s+workflow/scripts/timed\.sh")
     assert all(bare.search(x) for x in lines)
 
@@ -170,8 +158,9 @@ def test_a_host_can_take_whole_rounds(tmp_path):
 
 def test_only_generic_profiles_ship():
     profiles = (ROOT / "workflow" / "profiles").iterdir()
-    # ssh names no machine: its workers are in the local config.
-    assert sorted(p.name for p in profiles) == ["ci", "default", "ssh"]
+    # ssh and slurm name no machine: ssh's workers are in the local
+    # config, slurm's partition and account in the submit environment.
+    assert sorted(p.name for p in profiles) == ["ci", "default", "slurm", "ssh"]
 
 
 FT = {
@@ -643,14 +632,13 @@ def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     assert "land" not in jobs
 
 
-def test_units_wait_below_the_load_ceiling(tmp_path):
-    blocks = score_jobs(
-        tmp_path, {"score": {"labels": ["aaa"]}}, "MAX_LOAD=12\n"
-    )
+def test_units_start_by_their_resources_alone(tmp_path):
+    blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert units
     for block in units:
-        assert f"wait_for_room.sh 20 16 {tmp_path}/scores 12 " in block
+        for gone in ("wait_for_room", "nice -n"):
+            assert gone not in block, gone
 
 
 def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
@@ -689,6 +677,7 @@ def test_skipped_checkpoints_are_not_scored(tmp_path):
 def test_a_checkpoint_released_after_the_tables_is_scored(tmp_path):
     # With mtime triggers alone, a new label's units under tables already
     # built would be "missing, no update", and no tick would score them.
+    _fetched(tmp_path)
     cache = tmp_path / "scores"
     for unit, labels in (
         ("germany-days", ["reference", "slots-aaa"]),
@@ -722,7 +711,15 @@ def test_score_takes_checkpoints_from_the_release_list(tmp_path):
     assert "release_list" not in jobs
 
 
+def _fetched(tmp_path):
+    """Write the German triangle, fetched before any unit ran."""
+    triangle = tmp_path / "germany" / "COVID-19_hospitalizations.csv"
+    triangle.parent.mkdir(parents=True, exist_ok=True)
+    triangle.write_text("x\n")
+
+
 def test_finished_units_are_kept(tmp_path):
+    _fetched(tmp_path)
     (tmp_path / "scores" / "germany-days").mkdir(parents=True)
     (tmp_path / "scores" / "germany-days" / "reference.done").write_text("")
     config = {"score": {"labels": ["aaa"]}}
@@ -1264,3 +1261,12 @@ def test_each_checkpoint_gets_its_7_day_check(tmp_path):
     (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
     jobs = dry(tmp_path, f"{where}/seven-day.json", config=FT)
     assert jobs == {"seven_day_check": 1}
+
+
+def test_a_new_machine_fetches_the_german_triangle_before_scoring(tmp_path):
+    # The German units read the fetched triangle, so with none yet the
+    # fetch runs first.
+    config = {"score": {"labels": ["aaa"]}}
+    jobs = dry(tmp_path, "score", config=config)
+    assert jobs["germany_triangle"] == 1
+    assert jobs["score_germany"] >= 1

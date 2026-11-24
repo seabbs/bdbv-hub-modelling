@@ -46,6 +46,8 @@ for name, entry in FLOW.pinned().items():
             FLOW.evidence_file(name),
         log:
             f"{R}/logs/evidence_{name}.log",
+        # git fetch: runs on the driver's host.
+        localrule: True
         conda:
             TOOLS_ENV
         params:
@@ -119,6 +121,7 @@ for _mode in MODES:
             f"{R}/logs/synthetic_forecasts_{_mode}.log",
         conda:
             TOOLS_ENV
+        threads: FORECAST.threads
         resources:
             heavy=1,
             gpu=FORECAST.gpu,
@@ -161,6 +164,8 @@ rule render:
         "paper/si.pdf",
     log:
         f"{R}/logs/render.log",
+    # Needs the network, git or quarto: runs on the driver's host.
+    localrule: True
     conda:
         TOOLS_ENV
     shell:
@@ -172,6 +177,8 @@ rule germany_fetch:
         TRIANGLE,
     log:
         f"{R}/logs/germany_fetch.log",
+    # Needs the network, git or quarto: runs on the driver's host.
+    localrule: True
     conda:
         TOOLS_ENV
     params:
@@ -195,6 +202,7 @@ rule germany_development:
         f"{R}/benchmarks/germany_development/germany_development.tsv"
     conda:
         TOOLS_ENV
+    threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
     params:
@@ -223,6 +231,7 @@ rule germany_heldout:
         f"{R}/benchmarks/germany_heldout/germany_heldout.tsv"
     conda:
         TOOLS_ENV
+    threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
     params:
@@ -247,6 +256,8 @@ rule ebola_hub:
     log:
         f"{R}/logs/ebola_hub.log",
     # Snakemake makes the output's folders first, so clone beside them.
+    # Needs the network, git or quarto: runs on the driver's host.
+    localrule: True
     conda:
         TOOLS_ENV
     params:
@@ -268,6 +279,8 @@ if FLOW.store_history():
             FLOW.store_history(),
         log:
             f"{R}/logs/fit_store_history.log",
+        # gh release download: runs on the driver's host.
+        localrule: True
         conda:
             TOOLS_ENV
         params:
@@ -326,6 +339,7 @@ rule ebola_backtest_draws:
         f"{R}/benchmarks/ebola_backtest_draws/ebola_backtest_draws.tsv"
     conda:
         TOOLS_ENV
+    threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
         heavy=1,
@@ -354,6 +368,7 @@ rule ebola_backtest:
         f"{R}/benchmarks/ebola_backtest/ebola_backtest.tsv"
     conda:
         TOOLS_ENV
+    threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
     params:
@@ -404,6 +419,7 @@ rule forecasts:
         f"{R}/{{mode}}/logs/forecasts-{{study}}.log",
     conda:
         TOOLS_ENV
+    threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
     params:
@@ -622,6 +638,7 @@ if GERMANY["real"]:
             f"{R}/logs/pairing_germany.log",
         conda:
             TOOLS_ENV
+        threads: FORECAST.threads
         resources:
             gpu=FORECAST.gpu,
             heavy=1,
@@ -644,6 +661,7 @@ if GERMANY["real"]:
             f"{R}/logs/pairing_synthetic.log",
         conda:
             TOOLS_ENV
+        threads: FORECAST.threads
         resources:
             gpu=FORECAST.gpu,
             heavy=1,
@@ -785,6 +803,8 @@ rule publish_paper:
         touch(f"{R}/{{mode}}/published"),
     log:
         f"{R}/{{mode}}/logs/publish.log",
+    # Needs the network, git or quarto: runs on the driver's host.
+    localrule: True
     conda:
         TOOLS_ENV
     params:

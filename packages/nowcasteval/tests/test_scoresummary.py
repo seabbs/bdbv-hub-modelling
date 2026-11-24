@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 
 from nowcasteval.nowcast import relative_crps, relative_energy
-from nowcasteval.scoresummary import summary_html, summary_rows
-from nowcasteval.scoring import relative_skill
+from nowcasteval.scoresummary import skill_key, summary_html, summary_rows
+from nowcasteval.scoring import pairwise_skill
 
 SUMMARISE = Path(__file__).parents[3] / "docs" / "javascripts" / "summarise.js"
 MODELS = ["randomwalk", "a", "b"]
@@ -54,12 +54,19 @@ def _scores() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _node(data: dict[str, object], keep: str) -> list[dict[str, object]]:
+def _node(
+    data: dict[str, object],
+    keep: str,
+    group: str | None = None,
+    baseline: int | None = None,
+) -> list[dict[str, object]]:
     script = (
         f"const s = require({json.dumps(str(SUMMARISE))});"
         "const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
         f"const keep = {keep};"
-        "process.stdout.write(JSON.stringify(s(d, keep)));"
+        f"const b = {json.dumps(baseline)};"
+        f"const g = {json.dumps(group)};"
+        "process.stdout.write(JSON.stringify(s(d, keep, b, g)));"
     )
     out = subprocess.run(
         ["node", "-e", script],
@@ -78,7 +85,12 @@ def test_browser_summary_matches_relative_crps(pool: str) -> None:
     scores["pool"] = depth.map({0: "national", 1: "provinces", 2: "zones"})
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     places = [i for i, p in enumerate(data["places"]) if p["pool"] == pool]
-    got = _node(data, f"function (r) {{ return {places}.includes(r[3]); }}")
+    pools = [p["id"] for p in data["pools"]]
+    got = _node(
+        data,
+        f"function (r) {{ return {places}.includes(r[3]); }}",
+        skill_key(None, f"p{pools.index(pool)}", None),
+    )
     want = relative_crps(scores, by=("pool",)).set_index(["pool", "model"])
     for row in got:
         exp = want.loc[(pool, MODELS[row["model"]])]
@@ -183,58 +195,70 @@ def test_a_zero_baseline_gives_no_relative_score() -> None:
     base = (scores["model"] == "randomwalk") & (scores["location"] == "CD")
     scores.loc[base, ["crps", "log_crps"]] = 0.0
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
-    got = _node(data, "function (r) { return r[3] === 0; }")
+    got = _node(
+        data, "function (r) { return r[3] === 0; }", skill_key(None, "x0", None)
+    )
     assert data["places"][0]["id"] == "CD"
     assert all(r["rel"]["crps"] is None for r in got)
     rel = relative_crps(scores.loc[scores["location"] == "CD"])
-    assert rel["rel_crps"].isna().all()
+    assert not np.isfinite(rel["rel_crps"]).any()
 
 
 def test_browser_summary_by_horizon_matches_relative_crps() -> None:
     scores = _scores()
+    depth = scores["location"].str.count("-")
+    scores["pool"] = depth.map({0: "national", 1: "provinces", 2: "zones"})
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
-    got = _node(data, "function (r, i) { return d.horizons[i] === 0; }")
-    want = relative_crps(scores, by=("horizon",)).set_index(
-        ["horizon", "model"]
+    places = [
+        i for i, p in enumerate(data["places"]) if p["pool"] == "provinces"
+    ]
+    got = _node(
+        data,
+        f"function (r, i) {{ return {places}.includes(r[3]) && "
+        "d.horizons[i] === 0; }",
+        skill_key(None, "p1", 0),
     )
+    want = relative_crps(scores, by=("pool", "horizon")).set_index(
+        ["pool", "horizon", "model"]
+    )
+    assert len(got) == len(MODELS)
     for row in got:
-        exp = want.loc[(0, MODELS[row["model"]])]
+        exp = want.loc[("provinces", 0, MODELS[row["model"]])]
         assert row["n"] == exp["n"]
         assert row["rel"]["crps"] == pytest.approx(exp["rel_crps"], abs=1e-3)
 
 
-def test_browser_relative_scores_are_mean_over_mean_like_relative_skill() -> (
-    None
-):
-    # randomwalk has no forecast for one place and week, so the browser and
-    # relative_skill both leave it out and divide mean by mean. The mean of
-    # per-forecast ratios would differ.
+@pytest.mark.parametrize("baseline", MODELS)
+def test_browser_divides_python_pairwise_skill_for_every_baseline(
+    baseline: str,
+) -> None:
+    # The browser only divides each model's skill by the baseline's; the
+    # skill is nowcasteval.scoring.pairwise_skill, so any baseline gives
+    # Python's relative scores, by place and by pool.
     scores = _scores()
+    drop = (scores["model"] == "a") & (scores["location"] == "CD-IT")
+    scores = scores.loc[~(drop & (scores["target_end_date"] == "2026-10-10"))]
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
-    got = _node(data, "function () { return true; }")
-    want = relative_skill(
-        scores,
-        metrics=("crps", "log_crps"),
-        match_on=("origin", "truth_vintage", "location", "target_end_date"),
-    ).set_index("model")
-    pair = scores.merge(
-        scores.loc[scores["model"] == "randomwalk"],
-        on=["origin", "truth_vintage", "location", "target_end_date"],
-        suffixes=("", "_base"),
-    )
-    ratios = (pair["crps"] / pair["crps_base"]).groupby(pair["model"]).mean()
-    for row in got:
-        model = MODELS[row["model"]]
-        exp = want.loc[model]
-        assert row["n"] == exp["n"]
-        assert row["rel"]["crps"] == pytest.approx(
-            exp["relative_crps"], abs=1e-6
+    for i, place in enumerate(data["places"]):
+        got = _node(
+            data,
+            f"function (r) {{ return r[3] === {i}; }}",
+            skill_key(None, f"x{i}", None),
+            MODELS.index(baseline),
         )
-        assert row["rel"]["log_crps"] == pytest.approx(
-            exp["relative_log_crps"], abs=1e-6
-        )
-        if model != "randomwalk":
-            assert row["rel"]["crps"] != pytest.approx(ratios[model], abs=1e-3)
+        want = pairwise_skill(
+            scores.loc[scores["location"] == place["id"]],
+            baseline,
+            metrics=("crps", "log_crps"),
+            match_on=("origin", "truth_vintage", "location", "target_end_date"),
+            rounds="origin",
+        ).set_index("model")
+        for row in got:
+            exp = want.loc[MODELS[row["model"]]]
+            for k in ("crps", "log_crps"):
+                assert row["rel"][k] == pytest.approx(
+                    exp[f"relative_{k}"], rel=1e-8
+                )
 
 
 def test_summary_html_offers_a_map_only_when_given_one() -> None:
@@ -284,7 +308,13 @@ def test_browser_summary_takes_any_model_as_the_baseline(pool: str) -> None:
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     places = [i for i, p in enumerate(data["places"]) if p["pool"] == pool]
     keep = f"function (r) {{ return {places}.includes(r[3]); }}"
-    got = _node_with(SUMMARISE, data, keep, MODELS.index("a"))
+    pools = [p["id"] for p in data["pools"]]
+    got = _node(
+        data,
+        keep,
+        skill_key(None, f"p{pools.index(pool)}", None),
+        MODELS.index("a"),
+    )
     assert isinstance(got, list)
     want = relative_crps(scores, by=("pool",), baseline="a").set_index(
         ["pool", "model"]
@@ -336,13 +366,17 @@ def test_a_zero_energy_baseline_gives_no_relative_score() -> None:
 
 
 def _node_rounds(
-    data: dict[str, object], rounds: str
+    data: dict[str, object], rounds: str, group: str | None = None
 ) -> list[dict[str, object]]:
     """Summarise in node over the rounds (origin indices, or null) given."""
     script = (
         f"const s = require({json.dumps(str(SUMMARISE))});"
         "const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
-        f"process.stdout.write(JSON.stringify(s(d, s.inRounds({rounds}))));"
+        f"const g = {json.dumps(group)};"
+        "const keep = s.inRounds("
+        f"{rounds});"
+        "const nat = (r, i) => keep(r, i) && r[3] === 0;"
+        "process.stdout.write(JSON.stringify(s(d, nat, null, g)));"
     )
     out = subprocess.run(
         ["node", "-e", script],
@@ -355,7 +389,10 @@ def _node_rounds(
 
 
 def _check_against(got: list[dict[str, object]], scores: pd.DataFrame) -> None:
-    want = relative_crps(scores, by=()).set_index("model")
+    # The national pool (place 0, CD).
+    want = relative_crps(
+        scores.loc[scores["location"] == "CD"], by=()
+    ).set_index("model")
     assert len(got) == len(MODELS)
     for row in got:
         exp = want.loc[MODELS[row["model"]]]
@@ -369,41 +406,42 @@ def test_one_round_scores_as_that_round_alone() -> None:
     scores = _scores()
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     first = data["origins"].index("2026-10-24")
-    got = _node_rounds(data, f"[{first}]")
+    got = _node_rounds(data, f"[{first}]", skill_key(first, "p0", None))
     alone = scores.loc[scores["origin"] == "2026-10-24"]
     _check_against(got, alone)
-    # One round, one release, 4 places and 2 weeks, less randomwalk's gap.
-    assert {row["n"] for row in got} == {7}
+    # One round, one release, CD and 2 weeks.
+    assert {row["n"] for row in got} == {2}
 
 
-def test_several_rounds_pool_their_cells() -> None:
+def test_several_rounds_have_means_but_no_relative_scores() -> None:
+    # Relative scores are computed per round and over every round only.
     scores = _scores()
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     both = [data["origins"].index(o) for o in ("2026-10-17", "2026-10-24")]
     got = _node_rounds(data, json.dumps(both))
-    # Recomputed over the union of the rounds' cells, not a mean of each
-    # round's scores.
-    _check_against(got, scores)
-    assert {row["n"] for row in got} == {21}
+    assert all(r["rel"]["crps"] is None for r in got)
+    assert {row["n"] for row in got} == {6}
 
 
 def test_all_rounds_keeps_every_row() -> None:
     scores = _scores()
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
-    _check_against(_node_rounds(data, "null"), scores)
+    _check_against(
+        _node_rounds(data, "null", skill_key(None, "p0", None)), scores
+    )
 
 
 @pytest.mark.parametrize(
     ("baseline", "partial"),
-    # randomwalk also lacks one CD-NK week, which "a" has.
-    [("randomwalk", {"b"}), ("a", {"b", "randomwalk"})],
+    # randomwalk lacks one CD-NK week, which "a" and "b" have; "b" lacks
+    # one CD-IT week, so it has as many forecasts as randomwalk.
+    [("randomwalk", set()), ("a", {"b", "randomwalk"})],
 )
 def test_browser_summary_puts_a_model_lacking_cells_apart(
     baseline: str, partial: set[str]
 ) -> None:
-    # "b" has no forecast for CD-IT in one week. Every model with all the
-    # baseline's cells has the baseline's n, and "b", with fewer, is
-    # marked partial so its row is not read beside the others.
+    # A model with fewer forecasts of its own than the baseline is marked
+    # partial so its row is not read beside the others.
     scores = _scores()
     drop = (scores["model"] == "b") & (scores["location"] == "CD-IT")
     drop &= scores["target_end_date"] == "2026-10-10"
@@ -411,15 +449,13 @@ def test_browser_summary_puts_a_model_lacking_cells_apart(
     data = summary_rows(scores, MODELS, COLOURS, {}, baseline="randomwalk")
     places = [i for i, p in enumerate(data["places"]) if p["pool"] != "zones"]
     keep = f"function (r) {{ return {places}.includes(r[3]); }}"
-    got = _node_with(SUMMARISE, data, keep, MODELS.index(baseline))
-    assert isinstance(got, list)
+    got = _node(data, keep, None, MODELS.index(baseline))
     rows = {MODELS[r["model"]]: r for r in got}
     base_n = rows[baseline]["n"]
     assert all(r["cells"] == base_n for r in got)
     assert {m for m, r in rows.items() if r["partial"]} == partial
     assert all(rows[m]["n"] < base_n for m in partial)
-    full = [r for m, r in rows.items() if m not in partial]
-    assert {r["n"] for r in full} == {base_n}
+    assert all(r["n"] >= base_n for m, r in rows.items() if m not in partial)
 
 
 def test_bdbv_summaries_and_labels_say_crps() -> None:

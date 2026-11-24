@@ -25,12 +25,8 @@ KNOWN: dict[str, set[str]] = {
         "nowcasteval.coupling",
         "nowcasteval.marginals",
         "nowcasteval.nowcast",
-        "nowcasteval.nowcast_plots",
         "nowcasteval.pairing",
         "nowcasteval.pairing_plots",
-        "nowcasteval.plots",
-        "nowcasteval.ppc",
-        "nowcasteval.scoresummary",
         "nowcasteval.scoring",
     },
     "nowcastgermany": {
@@ -45,6 +41,7 @@ KNOWN: dict[str, set[str]] = {
         "bdbvhub.cli",
         "bdbvhub.compare",
         "bdbvhub.ftcheck",
+        "bdbvhub.pairing",
         "bdbvhub.reporting.hubtables",
         "bdbvhub.reporting.report",
         "bdbvhub.reporting.store_note",
@@ -54,7 +51,7 @@ KNOWN: dict[str, set[str]] = {
         "bdbvhub.store.store",
     },
     # scoringrules, through nowcasteval.scoring.
-    "nowcastbdbv": {"nowcastbdbv.zones"},
+    "nowcastbdbv": {"nowcastbdbv.backtest", "nowcastbdbv.zones"},
 }
 """Modules that fail to import alone, by package, as of 2026-11-22."""
 

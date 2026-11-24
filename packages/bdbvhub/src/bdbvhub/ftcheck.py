@@ -36,15 +36,15 @@ from typing import Any
 import pandas as pd
 
 from bdbvhub.models import get_model
-from bdbvhub.reporting.explorer import (
-    explorer_data,
-    explorer_html,
-    write_explorer,
-)
 from bdbvhub.store import store
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcastbdbv.data.zones import load_zone_data
 from nowcasteval import backtest as bt
+from nowcasteval.explorer import (
+    explorer_data,
+    explorer_html,
+    write_explorer,
+)
 from nowcasteval.labels import MODEL_STYLES, NEUTRAL, model_label
 from nowcasteval.nowcast import (
     ReleaseForecasts,
@@ -63,6 +63,7 @@ from nowcastutils.base import ForecastModel, ForecastTask
 
 __all__ = [
     "check_model",
+    "explorer_quantiles",
     "forecast",
     "release_tasks",
     "skill_tables",
@@ -235,6 +236,34 @@ def skill_tables(
     }
 
 
+def explorer_quantiles(
+    quantiles: pd.DataFrame, names: dict[str, str]
+) -> pd.DataFrame:
+    """Return the release quantiles as the forecast explorer reads them.
+
+    Complete weeks only, models by their display names, each origin as
+    the round, and the 5% quantile (`q5`) as `q05`.
+
+    Parameters
+    ----------
+    quantiles : pandas.DataFrame
+        `ReleaseBacktest.quantiles`.
+    names : dict of str to str
+        Display name of each model id.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns `model`, `ours`, `reference_date`, `location`,
+        `target_end_date` and `QUANTILE_COLUMNS`.
+    """
+    q = quantiles
+    if "target" in q:
+        q = q.loc[q["target"] == "complete"]
+    q = _named(q.rename(columns={"q5": "q05"}), names)
+    return q.assign(ours=True, reference_date=q["origin"])
+
+
 def _table(frame: pd.DataFrame, cols: Sequence[str]) -> str:
     head = "".join(f"<th>{html.escape(c)}</th>" for c in cols)
     body = []
@@ -291,9 +320,7 @@ def write_report(
         for m in models
     }
     target = tables["target"]
-    q = tables["quantiles"]
-    q = q.loc[q["target"] == "complete"] if "target" in q else q
-    q = _named(q, names).assign(ours=True, reference_date=q["origin"])
+    q = explorer_quantiles(tables["quantiles"], names)
     write_explorer(
         data / "explorer.json",
         explorer_data(

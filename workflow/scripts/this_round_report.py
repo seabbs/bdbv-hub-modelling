@@ -38,13 +38,13 @@ import pandas as pd
 from hub_rounds_report import SCHEME, THEME
 
 from bdbvhub import compare as hc
-from bdbvhub.reporting.explorer import (
+from bdbvhub.store.store import read_fit
+from nowcastbdbv.data.tidy import load_target
+from nowcasteval.explorer import (
     explorer_data,
     explorer_html,
     write_explorer,
 )
-from bdbvhub.store.store import read_fit
-from nowcastbdbv.data.tidy import load_target
 from nowcasteval.plots import comparison_colours, location_names
 
 ROOT = Path(__file__).parents[2]

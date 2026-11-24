@@ -44,13 +44,13 @@ __all__ = [
 
 MAX_RHO: Final = 0.95
 """Largest $\rho_p$ `estimate_rho` gives. On the release backtest
-(`nowcasteval.pairing.bdbv_candidates`, 5 origins) caps of 0.9, 0.95 and
+(`bdbvhub.pairing.bdbv_candidates`, 5 origins) caps of 0.9, 0.95 and
 0.99 score the same, as no estimate reaches 0.3."""
 
 PRIOR: Final = 0.1
 """The $\rho_p$ estimates are shrunk towards, and the value where no earlier
 release can be scored. Chosen on the release backtest
-(`nowcasteval.pairing.bdbv_candidates`) as the lowest mean provinces
+(`bdbvhub.pairing.bdbv_candidates`) as the lowest mean provinces
 energy score from 0, 0.1, 0.2, 0.3, 0.5, 0.7 and 0.9 (0.998 of the mean;
 all within 0.7%). It acts at the 2 origins of 5 with no earlier release;
 the other 3 estimate 0.16 to 0.27."""
@@ -104,7 +104,7 @@ CANDIDATES: Final = tuple(
     )
 )
 """The settings scored on the release backtest
-(`nowcasteval.pairing.bdbv_candidates`); the defaults are the best."""
+(`bdbvhub.pairing.bdbv_candidates`); the defaults are the best."""
 
 
 def _provinces(

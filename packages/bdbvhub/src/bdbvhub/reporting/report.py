@@ -27,10 +27,16 @@ from bdbvhub.compare import (
     stored_forecasts,
     summarise_comparison,
 )
-from bdbvhub.reporting.explorer import (
-    explorer_data,
-    explorer_html,
-    write_explorer,
+from bdbvhub.reporting.chain_plots import baseline_share, plot_delay_check
+from bdbvhub.reporting.data_plots import (
+    plot_cutoff_days,
+    plot_delays_over_time,
+    plot_downward_updates,
+    plot_imputed_by_release,
+    plot_imputed_share,
+    plot_newly_missing,
+    plot_release_counts,
+    plot_revisions,
 )
 from bdbvhub.reporting.hubtables import hub_tables, write_hub_tables
 from bdbvhub.reporting.site import site_baseline, site_models
@@ -41,6 +47,8 @@ from bdbvhub.reporting.zone_nowcast import (
     zone_nowcast,
 )
 from bdbvhub.store.store import ZONE_FITS_FILE, samplers, stored_models
+from nowcastbaselines.chain import Settings
+from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.delays import delay_summary
 from nowcastbdbv.data.tidy import (
     COHERENCE_STREAMS,
@@ -64,16 +72,19 @@ from nowcasteval.backtest import (
     BacktestConfig,
     check_distinct,
     load_config,
-    make_tasks,
     run_forecasts,
     truth_changes,
 )
 from nowcasteval.checks import (
-    RECENT_WEEKS,
     SMALL_MAX,
     check_summary,
     flags,
     place_types,
+)
+from nowcasteval.explorer import (
+    explorer_data,
+    explorer_html,
+    write_explorer,
 )
 from nowcasteval.nowcast import relative_crps as _relative_crps
 from nowcasteval.nowcast import relative_energy
@@ -85,25 +96,15 @@ from nowcasteval.nowcast_plots import (
 )
 from nowcasteval.pairing_plots import pairing_page
 from nowcasteval.plots import (
-    baseline_share,
     comparison_colours,
     comparison_label,
     location_names,
     model_style,
-    plot_cutoff_days,
-    plot_delay_check,
     plot_delay_distribution,
-    plot_delays_over_time,
-    plot_downward_updates,
     plot_forecasts,
     plot_hub_round,
-    plot_imputed_by_release,
-    plot_imputed_share,
     plot_location_grid,
-    plot_newly_missing,
-    plot_release_counts,
     plot_renewal_delay,
-    plot_revisions,
     plot_scores,
     plot_scores_by_truth,
     plot_target,
@@ -317,7 +318,13 @@ def make_report(
         fig, gen, res, out, config, target, names, data_dir, summaries
     )
     _comparison_page(fig, gen, Path(hub_comparison), target)
-    germany_page(fig, gen, Path(germany), load_germany_config(germany_config))
+    germany_page(
+        fig,
+        gen,
+        Path(germany),
+        load_germany_config(germany_config),
+        site_models,
+    )
     pairing_page(res / "pairing", gen)
 
     # Nowcast page: latest real vintage, every registered model.
@@ -377,6 +384,10 @@ def make_report(
         fig / "renewal-delay.svg",
     )
 
+
+RECENT_WEEKS: Final = Settings().walk_weeks
+"""Weeks up to an origin whose counts set a place's type in the checks:
+the random walk's window."""
 
 _RELEASE_PLACES: Final = ("CD", "CD-IT", "CD-NK")
 _RELEASE_MODELS: Final = (
@@ -690,6 +701,7 @@ def _release_section(
             plot_relative_overall,
             reported,
             [n for n in names if n in set(reported["model"])],
+            site_baseline(),
             metrics={**OVERALL_METRICS, **ENERGY_METRICS},
         ),
         fig / "relative-overall.svg",
@@ -1595,7 +1607,7 @@ def _checks_section(
     summaries = {}
     for name, kind in (("complete", "complete"), ("latest", "reported")):
         scores = every.loc[every["target"] == kind]
-        types = place_types(counts, scores)
+        types = place_types(counts, scores, RECENT_WEEKS)
         summaries[name] = {
             base: check_summary(scores, types, flagged, baseline=base)
             for base in names

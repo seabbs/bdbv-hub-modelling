@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Download the German hospitalisation benchmark's data.",
     )
     gfe.add_argument("--config", default="config/germany.toml")
-    gfe.add_argument("--out", default=f"{data_dir}/raw/germany")
+    gfe.add_argument("--out", default=data_dir)
 
     gbt = sub.add_parser(
         "backtest",

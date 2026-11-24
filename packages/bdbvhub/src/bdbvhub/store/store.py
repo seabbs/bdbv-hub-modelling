@@ -59,6 +59,7 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhub.models import get_model, list_models
+from nowcastbdbv.backtest import vintage_task
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcastbdbv.data.zones import ZoneData, load_zone_data
 from nowcasteval.backtest import (
@@ -67,7 +68,6 @@ from nowcasteval.backtest import (
     merge_by_model,
     real_vintages,
     run_forecasts,
-    vintage_task,
 )
 from nowcastutils.base import ForecastModel, ForecastTask
 from nowcastutils.files import write_csv
@@ -100,6 +100,7 @@ __all__ = [
     "samplers",
     "stack_forecasts",
     "store_path",
+    "stored_delays",
     "stored_models",
     "unpack",
     "write_fit",
@@ -1114,6 +1115,32 @@ def load(
         json.dumps([vars(s) for s in status], indent=1) + "\n"
     )
     return status
+
+
+def stored_delays(results: Path | str) -> pd.DataFrame:
+    """Return the fitted models' stored delay summaries.
+
+    `fit-store load` writes them to `results`.
+
+    Parameters
+    ----------
+    results : pathlib.Path or str
+        The results directory.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The delay summaries of the fitted models, with `model` and
+        `vintage`, and no rows if no fits were loaded.
+    """
+    from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
+
+    path = Path(results) / DELAY_SUMMARY_FILE
+    if not path.exists():
+        return pd.DataFrame(columns=["model", "vintage"])
+    learnt = pd.read_csv(path)
+    fitted = [s.name for s in list_models() if s.fitted]
+    return learnt.loc[learnt["model"].isin(fitted)]
 
 
 def _zone_samples(fit: StoredFit) -> pd.DataFrame:
