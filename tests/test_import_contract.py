@@ -54,7 +54,9 @@ def test_ci_checks_each_package_in_its_own_job() -> None:
     packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
     assert set(layers()) == packages
     workflows = ROOT / ".github" / "workflows"
-    job = yaml.safe_load((workflows / "ci.yml").read_text())["jobs"]["package"]
+    job = yaml.safe_load((workflows / "tests.yml").read_text())["jobs"][
+        "package"
+    ]
     runs = " ".join(s.get("run", "") for s in job["steps"])
     for check in (
         "package_alone.py",

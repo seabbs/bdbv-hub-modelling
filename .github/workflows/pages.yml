@@ -1,4 +1,4 @@
-name: Pages
+name: Site
 
 # Builds the site on pull requests, publishes it as a preview at
 # pr-preview/pr-N/ and comments the link (pr-closed.yml removes
@@ -140,6 +140,7 @@ jobs:
           retention-days: 1
 
   build:
+    name: Build the site and the paper
     needs: prep
     if: ${{ !cancelled() && needs.prep.result == 'success' }}
     runs-on: ubuntu-latest
@@ -312,6 +313,7 @@ jobs:
   # Only main deploys: a dispatch from another branch would otherwise
   # replace the site with that branch's build.
   deploy:
+    name: Publish the site
     needs: build
     if: >-
       !cancelled() && needs.build.result == 'success'
@@ -344,6 +346,7 @@ jobs:
   # Each job below names the build's result, as the skipped held-out job
   # upstream would otherwise skip it.
   preview:
+    name: Publish the pull request's preview
     needs: build
     if: >-
       !cancelled() && needs.build.result == 'success'
@@ -372,6 +375,7 @@ jobs:
   # code. Adding files to an existing release needs no tag, so the
   # workflow token can do it.
   release:
+    name: Attach the round's files to its release
     needs: build
     if: >-
       !cancelled() && needs.build.result == 'success'

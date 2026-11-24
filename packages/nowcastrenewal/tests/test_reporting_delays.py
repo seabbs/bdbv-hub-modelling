@@ -58,7 +58,7 @@ ROWS = _rows()
 def epinowcast_hazards() -> list[dict[str, Any]]:
     """epinowcast's discretised logit hazards and log pmfs, one R run.
 
-    At CI's pin (`.github/workflows/heavy.yml`, job `r-live`)
+    At CI's pin (`.github/workflows/tests.yml`, job `r-live`)
     epinowcast discretises the parametric delay with primarycensored
     (`primarycensored_pmf.stan`).
     """
@@ -183,7 +183,7 @@ def test_ci_runs_the_live_r_checks() -> None:
     from model.r_live import ROOT
 
     workflow = yaml.safe_load(
-        (ROOT / ".github/workflows/heavy.yml").read_text()
+        (ROOT / ".github/workflows/tests.yml").read_text()
     )
     job = workflow["jobs"]["r-live"]
     assert job["env"]["R_LIVE_REQUIRED"] == "1"
