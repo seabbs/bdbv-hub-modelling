@@ -16,11 +16,8 @@ data/*
 # Backtest forecasts and other run output: re-created by `task bdbvhub:backtest`.
 output/
 # Derived results: made by the Pages build (`task bdbvhub:results` locally) from
-# the code, the data and the fit store. Only these records are committed.
+# the code, the data and the fit store.
 results/*
-!results/development-log.csv
-!results/ladder.csv
-!results/model-choice.yml
 # Docs figures and generated snippets: built at docs build time.
 docs/figures/*.svg
 docs/generated/

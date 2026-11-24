@@ -200,6 +200,38 @@ def test_finetune_asks_for_its_scores(tmp_path):
     assert jobs["score_germany"] == len(config["score"]["reference"])
 
 
+def _hub(tmp_path):
+    """The hub data's head, which the BDBV check's forecasts depend on."""
+    (tmp_path / "hub").mkdir(exist_ok=True)
+    (tmp_path / "hub" / "head.txt").write_text("abc\n")
+
+
+def test_each_checkpoint_has_its_own_ft_check_page(tmp_path):
+    # Lead 08:00: a new checkpoint is a new page, so it is built without
+    # forcing; the reference models' forecasts are shared.
+    _hub(tmp_path)
+    config = {"ft_check": {"checkpoint": "slots-abcdef"}}
+    out = dry_run(tmp_path, "ft_check", config=config, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "ft-check/slots-abcdef/bdbv-ft-check-slots-abcdef.html" in out.stdout
+    jobs = dict(re.findall(r"^(\w+)\s+(\d+)$", out.stdout, re.M))
+    assert jobs["ft_check_page"] == "1"
+    assert jobs["ft_check_forecast"] == "3"
+
+
+def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
+    # Lead 10:50: each released checkpoint (its published.json) gets its
+    # BDBV check page.
+    _hub(tmp_path)
+    seg = tmp_path / "runs" / "runa" / "train" / "n250"
+    seg.mkdir(parents=True)
+    (seg / "published.json").write_text(
+        '{"tag": "chronos-slots-abcdef", "hash": "abcdef"}'
+    )
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["ft_check_page"] == 1
+
+
 SMALL = {
     **FT,
     "finetune": {
@@ -1221,6 +1253,30 @@ def test_the_comparison_scores_every_run_s_checkpoints(tmp_path):
     assert "rule comparison:" in out.stdout
     assert "rule run_table:" in out.stdout
     assert f"{tmp_path}/runs/runa/reports/checkpoint-scores.csv" in out.stdout
+
+
+@pytest.mark.parametrize(
+    ("table", "report"),
+    [
+        ("comparison.csv", "checkpoint-scores.csv"),
+        ("compare-daily.csv", "compare-daily.csv"),
+    ],
+)
+def test_the_comparisons_ask_only_for_the_paper_s_runs(tmp_path, table, report):
+    # The paper's live run and the runs it is compared with, not every run
+    # the workflow config names.
+    # The overlay merges into the paper config's comparisons, so each names
+    # the same run here.
+    pairs = dict.fromkeys(("slots", "delays", "realdata"), "noslots")
+    config = {**FT, "live_run": "runa", "comparisons": pairs}
+    out = dry_run(
+        tmp_path, f"{tmp_path}/runs/{table}", config=config, quiet=False
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    for run in ("runa", "noslots"):
+        assert f"{tmp_path}/runs/{run}/reports/{report}" in out.stdout
+    for run in ("nodelays", "realdata", "runb"):
+        assert f"{tmp_path}/runs/{run}/reports/{report}" not in out.stdout
 
 
 def test_a_run_s_block_combinations_come_from_its_final_checkpoint(tmp_path):

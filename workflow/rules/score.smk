@@ -155,10 +155,18 @@ rule daily_table:
         "{params.reference} {wildcards.run} {output} > {log} 2>&1"
 
 
+# The runs the paper compares: its live run and each comparison's run
+# (paper config `live_run`, `comparisons`), not every run the workflow
+# config names.
+PAPER_RUNS = list(
+    dict.fromkeys([config["live_run"], *(config.get("comparisons") or {}).values()])
+)
+
+
 rule compare_daily:
-    # Every run's daily table in one, the paper's `compare_daily`.
+    # The paper's runs' daily tables in one, the paper's `compare_daily`.
     input:
-        expand(f"{RUN}/reports/compare-daily.csv", run=list(RUNS)),
+        expand(f"{RUN}/reports/compare-daily.csv", run=PAPER_RUNS),
     output:
         f"{RUNS_DIR}/compare-daily.csv",
     log:
@@ -173,10 +181,10 @@ rule compare_daily:
 
 
 rule comparison:
-    # Every run's checkpoints in one table, for the fine-tuning
+    # The paper's runs' checkpoints in one table, for the fine-tuning
     # comparisons (paperpipe.evidence.COMPARISONS).
     input:
-        expand(f"{RUN}/reports/checkpoint-scores.csv", run=list(RUNS)),
+        expand(f"{RUN}/reports/checkpoint-scores.csv", run=PAPER_RUNS),
     output:
         f"{RUNS_DIR}/comparison.csv",
     log:

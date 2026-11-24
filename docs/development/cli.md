@@ -44,7 +44,7 @@ task serve                           # serve the site (run task bdbvhub:results 
 ```
 
 `--models` runs some models and keeps the others' rows in `results/`.
-The files in `results/` are not committed, apart from `development-log.csv` and `model-choice.yml`.
+The files in `results/` are not committed.
 The Pages build makes the rest with the steps of `task bdbvhub:results`, from the code, the data and the fit store.
 
 ## Fit store

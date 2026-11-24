@@ -1107,26 +1107,6 @@ def _nowcast_forecasts(
     return pd.concat(frames, ignore_index=True)
 
 
-def _evidence_link(evidence: object) -> str:
-    """Render a log row's evidence as a link."""
-    if not isinstance(evidence, str) or not evidence:
-        return ""
-    if evidence.startswith("http"):
-        label = evidence.rstrip("/").rsplit("/", 1)[-1]
-        return f"[{label}]({evidence})"
-    url = f"https://github.com/seabbs/bdbv-hub-modelling/blob/main/{evidence}"
-    return f"[`{evidence}`]({url})"
-
-
-def _development_log(path: Path) -> str:
-    """Return the development log as a table, newest first."""
-    log = pd.read_csv(path, dtype=str).fillna("")
-    log = log.iloc[::-1].sort_values("date", ascending=False, kind="stable")
-    log["evidence"] = log["evidence"].map(_evidence_link)
-    log.columns = [c.capitalize() for c in log.columns]
-    return log.to_markdown(index=False) + "\n"
-
-
 def _lopo_section(path: Path) -> str:
     """Return the leave-one-province-out section, or nothing without results."""
     if not path.exists() or path.stat().st_size <= 1:
@@ -1556,10 +1536,6 @@ def _backtest_page(
         else "",
     )
     _write(gen / "lopo-section.md", _lopo_section(res / "lopo-scores.csv"))
-    _write(
-        gen / "development-log.md",
-        _development_log(res / "development-log.csv"),
-    )
     fits_path = res / "backtest-fits.csv"
     _write(
         gen / "backtest-sampler.md",
