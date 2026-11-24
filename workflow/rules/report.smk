@@ -387,19 +387,19 @@ rule hub_rounds:
 
 
 rule ft_check_forecast:
+    # Each folder carries the code key (`ft_check_folders`): the models'
+    # code, the release tasks, the backtest config and the active-zone
+    # rule, so other code makes its own folder and none is reused.
     input:
         data=rules.hub_data.output,
-        # Reruns when its code or the active-zone rule changes (a key
-        # file, as reruns follow file times).
-        code=lambda wc: scoring.key_file(
-            f"{FTC_DIR}/keys", "forecast", scoring.ft_check_key()
-        ),
     output:
-        touch(f"{FTC_DIR}/forecasts/{{fmodel}}.done"),
+        touch(f"{FTC_DIR}/forecasts/{{fmodel}}@{{key}}.done"),
     log:
-        f"{FTC_DIR}/logs/{{fmodel}}.log",
+        f"{FTC_DIR}/logs/{{fmodel}}@{{key}}.log",
     benchmark:
-        f"{FTC_DIR}/benchmarks/{{fmodel}}.tsv"
+        f"{FTC_DIR}/benchmarks/{{fmodel}}@{{key}}.tsv"
+    wildcard_constraints:
+        key=r"[0-9a-f]{12}",
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -409,7 +409,7 @@ rule ft_check_forecast:
     params:
         env=unit_env,
         data=lambda wc, input: Path(input.data[0]).parent,
-        out=lambda wc: f"{FTC_DIR}/forecasts/{wc.fmodel}",
+        out=lambda wc: f"{FTC_DIR}/forecasts/{wc.fmodel}@{wc.key}",
         model=lambda wc: (
             FTC["finetuned"] if wc.fmodel.startswith("ft-") else wc.fmodel
         ),
