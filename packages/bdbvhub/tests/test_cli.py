@@ -150,7 +150,7 @@ def test_forecast_draws_trajectories_ribbons_and_median() -> None:
         }
     )
     fig, ax = plt.subplots()
-    plots._draw_forecast(ax, samples, "C0", "", "randomwalk")
+    plots.draw_forecast(ax, samples, "C0", "", "randomwalk")
     # One faint line per sample, plus the median.
     faint = [ln for ln in ax.lines if (ln.get_alpha() or 1) < 0.5]
     assert len(faint) == 100
@@ -440,6 +440,7 @@ def test_backtest_scores_the_complete_target_on_the_truth_delay(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from bdbvhub import cli
+    from nowcastbdbv import backtest as bdbv_bt
     from nowcasteval import backtest as bt
     from nowcasteval.nowcast import resolve_truth_delay
 
@@ -454,7 +455,7 @@ def test_backtest_scores_the_complete_target_on_the_truth_delay(
         seen.update(kwargs)
         raise SystemExit(0)
 
-    monkeypatch.setattr(bt, "run_development", development)
+    monkeypatch.setattr(bdbv_bt, "run_development", development)
     monkeypatch.setattr(
         cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())
     )

@@ -52,6 +52,7 @@ import pandas as pd
 
 from bdbvhub.store import archive as store_archive
 from bdbvhub.store import store
+from bdbvhub.store.store import stored_delays
 from bdbvhub.submission.fitting import get_config, run_fit, run_forecast
 from bdbvhub.submission.hub import (
     ROUND_NAME,
@@ -76,6 +77,7 @@ from bdbvhub.submission.validate import (
 )
 from bdbvhub.submission.validate import main as validate_main
 from nowcastbaselines.zones import zones_for_model
+from nowcastbdbv import backtest as bdbv_bt
 from nowcastbdbv.data import tidy
 from nowcastbdbv.data.tidy import (
     build_tidy_data,
@@ -101,7 +103,6 @@ from nowcasteval.nowcast import (
     release_backtest,
     resolve_truth_delay,
     score_releases,
-    stored_delays,
 )
 from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 from nowcastrenewal.zones import ZONES_FILE
@@ -651,13 +652,15 @@ def _round_task(
     """
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
-    task, note = bt.vintage_task(
+    task, note = bdbv_bt.vintage_task(
         target, delays, config, vintage, daily, zones=zones, places=places
     )
     notes = [note] if note else []
     if reference_date and as_date(reference_date) != task.reference_date:
         ref = as_date(reference_date)
-        weeks = dataclasses.replace(config, min_horizon=bt.TASK_MIN_HORIZON)
+        weeks = dataclasses.replace(
+            config, min_horizon=bdbv_bt.TASK_MIN_HORIZON
+        )
         task = dataclasses.replace(
             task,
             reference_date=ref,
@@ -697,6 +700,24 @@ def _add_store_arg(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def apply_sampler(config: bt.BacktestConfig) -> None:
+    """Set the fitted models' NUTS settings from the backtest config.
+
+    The settings go in the `SAMPLER_ENV` environment variable, which the
+    renewal models read when they are built. Settings already there are
+    kept.
+
+    Parameters
+    ----------
+    config : BacktestConfig
+        Gives `sampler`.
+    """
+    from nowcastrenewal.forecaster import SAMPLER_ENV
+
+    if config.sampler and not os.environ.get(SAMPLER_ENV):
+        os.environ[SAMPLER_ENV] = json.dumps(config.sampler)
+
+
 def _models(names: Sequence[str] | None) -> list[str]:
     return list(names) if names else [s.name for s in list_models()]
 
@@ -707,7 +728,7 @@ def _backtest(args: argparse.Namespace) -> int:
     config = bt.load_config(args.config)
     if args.samples is not None:
         config = dataclasses.replace(config, score_samples=args.samples)
-    bt.apply_sampler(config)
+    apply_sampler(config)
     host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
@@ -732,7 +753,7 @@ def _backtest(args: argparse.Namespace) -> int:
         return _forecast_parts(args, config, target, delays, models)
     fits: list[pd.DataFrame] = []
     if args.lopo:
-        lopo_fc, lopo_scores = bt.run_lopo(
+        lopo_fc, lopo_scores = bdbv_bt.run_lopo(
             models,
             target,
             delays,
@@ -745,7 +766,7 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
     learnt: list[pd.DataFrame] = []
-    forecasts = bt.run_development(
+    forecasts = bdbv_bt.run_development(
         models,
         target,
         delays,
@@ -783,7 +804,7 @@ def _forecast_parts(
     daily = load_daily(args.data)
     fits: list[pd.DataFrame] = []
     learnt: list[pd.DataFrame] = []
-    forecasts = bt.run_development(
+    forecasts = bdbv_bt.run_development(
         models, target, delays, config, fits=fits, learnt=learnt,
         daily=daily, zones=_zone_data(args.data),
     )  # fmt: skip
@@ -1536,7 +1557,7 @@ def _write_national_sidecar(
 
 
 def _plot_submission(args: argparse.Namespace) -> int:
-    from nowcasteval.plots import plot_submission
+    from bdbvhub.reporting.data_plots import plot_submission
 
     target = load_target(args.data)
     real = target.loc[target["kind"] == "real"]
@@ -1656,7 +1677,9 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
         Path(args.data) / "bvd",
         vintages,
         bvd.list_releases(token),
-        max_rhat=config.bvd_max_rhat,
+        max_rhat=(
+            bvd.MAX_RHAT if config.bvd_max_rhat is None else config.bvd_max_rhat
+        ),
     )
     for vintage, choice in chosen.items():
         if choice is None:
