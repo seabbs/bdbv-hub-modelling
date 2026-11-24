@@ -79,32 +79,69 @@ def test_cutoffs_fall_on_the_weekday() -> None:
     ]
 
 
-def test_block_is_the_ragged_layout_with_final_counts_ahead() -> None:
+def test_block_is_the_cutoff_layout_with_final_counts_ahead() -> None:
     places = (NATIONAL, "A", "B")
     cutoffs = ["2026-10-07", "2026-10-09"]
     block = training_block(_counts(), "daily", places, cutoffs, max_lag=3)
     start, horizon = block["start"], block["horizon"]
     context = block["context"]
     assert block["n_targets"] == 3
-    assert block["n_covariates"] == block["n_future_covariates"] == 9
+    # The lag series are past covariates only.
+    assert block["n_covariates"] == 9
+    assert block["n_future_covariates"] == 0
     assert context.shape == (12, start + horizon)
-    # Cut-off 10-09 with D = 3 gives context to 10-06 from onset 10-05.
-    assert start == 2
-    # The horizon runs to the Saturday four weeks after the cut-off's week.
+    # The counts run to the cut-off, 10-09, from onset 10-05.
+    assert start == 5
+    assert block["nowcast"] == 0
+    # The horizon runs from the day after the cut-off to the Saturday four
+    # weeks after the cut-off's week.
     assert (
         horizon
-        == (pd.Timestamp("2026-11-07") - pd.Timestamp("2026-10-07")).days + 1
+        == (pd.Timestamp("2026-11-07") - pd.Timestamp("2026-10-10")).days + 1
     )
-    # Targets past the context are the final counts.
-    assert context[0, start : start + 8].tolist() == [9.0] * 8
-    assert np.all(context[0, start + 8 :] == 0.0)
+    # The country's counts as reported by 10-09, then the final counts.
+    assert context[0, :start].tolist() == [6.0, 6.0, 3.0, 3.0, 3.0]
+    assert context[0, start : start + 5].tolist() == [9.0] * 5
+    assert np.all(context[0, start + 5 :] == 0.0)
     # Lag 0 of the country at 10-09 is the cut-off's same-day report.
     assert context[3, 4] == 3.0
     # Lag 0 at 10-08 is missing: no release had its cut-off on 10-08.
     assert np.isnan(context[3, 3])
+    # No lag is known after the cut-off.
+    assert np.isnan(context[3:, start:]).all()
+
+
+def test_block_counts_and_lags_are_the_forecasts_block() -> None:
+    from nowcastfoundation.forecaster import layout_block, layout_start
+
+    places = (NATIONAL, "A", "B")
+    cutoffs = ["2026-10-07", "2026-10-09"]
+    block = training_block(_counts(), "daily", places, cutoffs, max_lag=3)
+    rows = releases(_counts(), "daily", cutoffs)
+    tri = hub_triangle(rows, "daily", places, "2026-11-07", max_lag=3)
+    start = layout_start(tri, "cutoff")
+    group = layout_block(tri, "cutoff", places, start)
+    assert block["start"] == start
+    assert np.array_equal(block["context"][:3, :start], group["target"])
+    lags = np.stack(list(group["past_covariates"].values()))
     assert np.array_equal(
-        block["future_covariates"], context[:, start:], equal_nan=True
+        block["context"][3:, :start], lags, equal_nan=True
     )
+
+
+def test_complete_block_ends_at_the_last_complete_step() -> None:
+    places = (NATIONAL, "A", "B")
+    cutoffs = ["2026-10-07", "2026-10-09"]
+    block = training_block(
+        _counts(), "daily", places, cutoffs, max_lag=3, layout="complete"
+    )
+    # Cut-off 10-09 with D = 3 gives context to 10-06 from onset 10-05.
+    assert block["start"] == 2
+    assert block["nowcast"] == 3
+    assert block["context"].shape[0] == 3
+    assert block["n_covariates"] == block["n_future_covariates"] == 0
+    # The final counts after it.
+    assert block["context"][0, 2:10].tolist() == [9.0] * 8
 
 
 def test_releases_add_each_place_total_of_its_strata() -> None:

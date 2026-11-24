@@ -46,7 +46,7 @@ def daily_tri(lags: int = 3) -> HubTriangle:
 def test_a_period_block_adds_one_total_row_per_place_after_the_daily_rows():
     tri, start = daily_tri(), 10
     rows = rolling_rows(tri, 7)
-    group = layout_block(tri, "ragged", PLACES, start, period=rows)
+    group = layout_block(tri, "cutoff", PLACES, start, period=rows)
     target = group["target"]
     assert target.shape == (4, start)
     np.testing.assert_array_equal(target[:2], tri.final[:, :start])
@@ -58,9 +58,27 @@ def test_a_period_block_adds_one_total_row_per_place_after_the_daily_rows():
 
 
 def test_a_block_without_periods_names_one_row_per_place():
-    group = layout_block(daily_tri(), "ragged", PLACES, 10)
+    group = layout_block(daily_tri(), "cutoff", PLACES, 10)
     assert group["target"].shape == (2, 10)
     assert list(group["target_places"]) == [0, 1]
+
+
+def test_a_cutoff_block_runs_to_the_cut_off_with_past_lags_only():
+    tri = daily_tri()
+    start = foundation.layout_start(tri, "cutoff")
+    assert start == tri.last + 1
+    group = layout_block(tri, "cutoff", PLACES, start)
+    np.testing.assert_array_equal(group["target"], tri.final)
+    assert "future_covariates" not in group
+    assert len(group["past_covariates"]) == 2 * 3
+    assert all(v.shape == (start,) for v in group["past_covariates"].values())
+
+
+def test_a_cutoff_block_without_lags_has_no_lag_rows():
+    tri = daily_tri(lags=0)
+    group = layout_block(tri, "cutoff", PLACES, tri.last + 1)
+    assert group["target"].shape == (2, 14)
+    assert group.get("past_covariates", {}) == {}
 
 
 def test_a_total_row_joins_its_places_bias_group():
@@ -84,7 +102,7 @@ def test_a_total_row_joins_its_places_bias_group():
 
 def test_inference_rows_carry_the_total_rows_places():
     tri = daily_tri()
-    group = layout_block(tri, "ragged", PLACES, 10, period=rolling_rows(tri, 7))
+    group = layout_block(tri, "cutoff", PLACES, 10, period=rolling_rows(tri, 7))
     place, parent = chronos2._group_rows(group)
     assert list(place[:4]) == [0, 1, 0, 1]
     assert list(parent[:4]) == [-1, 0, -1, 0]
