@@ -75,9 +75,19 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ### Baselines
 
 ::: {.callout-note title="Plan"}
-- We compare with `randomwalk`, a random walk with no delay adjustment, and `randomwalknowcast`, a random walk nowcast.
-- The SI describes both in full.
-- Key references: [@Johnson2025].
+- We compare with two baselines, `randomwalknowcast` and `randomwalk`.
+- `randomwalknowcast` is our port of baselinenowcast [@Johnson2025], with a random walk on the log scale on top for the forecast horizons.
+- baselinenowcast estimates the reporting delay from past releases and fills in the counts not yet reported.
+- We extend its delay estimate to release histories that start late.
+- The extension uses every pair of cells observed in consecutive releases, so onset days that were first released after some of their cases were reported still count.
+- On a complete reporting triangle it gives the standard baselinenowcast estimate.
+- The Ebola case study needs it, as the hub's first release filled in months of earlier onsets, so its reporting triangle has no early rows.
+- The method has two settings: which releases it uses, every daily release or only those on one weekday, and its error term, on daily counts or on 7-day rolling sums.
+- The German case study uses every daily release, with both error terms where we report them.
+- The Ebola case study uses one weekday's releases with the 7-day error term, which gives the hub's weeks.
+- `randomwalk` is the same random walk started from the latest complete week, with no nowcast.
+- Both baselines pair the places' draws within each week by a Gaussian copula (SI).
+- The SI gives the equations and the settings.
 :::
 
 ### Foundation model setup and fine-tuning
