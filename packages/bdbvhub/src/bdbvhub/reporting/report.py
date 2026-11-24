@@ -47,7 +47,7 @@ from bdbvhub.reporting.zone_nowcast import (
     zone_nowcast,
 )
 from bdbvhub.store.store import ZONE_FITS_FILE, samplers, stored_models
-from nowcastbaselines.chain import Settings
+from nowcastbaselines.baselinenowcast.delays import Settings
 from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.delays import delay_summary
 from nowcastbdbv.data.tidy import (

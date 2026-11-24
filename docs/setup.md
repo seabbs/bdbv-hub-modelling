@@ -58,7 +58,7 @@ from nowcastbdbv.data.tidy import (
 from nowcasteval import backtest as bt
 from nowcasteval.nowcast import relative_crps, release_backtest
 from nowcastutils.base import NATIONAL
-from nowcastbaselines.chain import Settings
+from nowcastbaselines.baselinenowcast.delays import Settings
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcasteval.plots import plot_location_grid
 

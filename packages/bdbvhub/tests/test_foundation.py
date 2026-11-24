@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 
 from bdbvhub.models import get_model, list_models
-from nowcastbaselines.chain import NoWalkSpread
+from nowcastbaselines.baselinenowcast.nowcast import NoWalkSpread
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcastbaselines.zones import (
     ZoneAllocator,

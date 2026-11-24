@@ -77,7 +77,11 @@ def test_code_digest_keeps_its_key_when_modules_move(tmp_path: Path) -> None:
     src = root / "packages/nowcastbaselines/src/nowcastbaselines"
     before = store.code_digest("randomwalk", root)
     (src / "walk.py").rename(src / "steps.py")
-    for name in ("chain.py", "introductions.py", "randomwalk.py"):
+    for name in (
+        "baselinenowcast/nowcast.py",
+        "introductions.py",
+        "randomwalk.py",
+    ):
         path = src / name
         path.write_text(
             path.read_text().replace(
@@ -128,7 +132,7 @@ def test_code_digest_keeps_its_key_when_a_function_moves(
     walk.write_text(
         walk.read_text().replace('"walk_noise", "walk_variance"', "")
     )
-    chain = src / "chain.py"
+    chain = src / "baselinenowcast" / "nowcast.py"
     chain.write_text(
         chain.read_text().replace(
             "nowcastbaselines.walk import walk_noise",
@@ -156,7 +160,11 @@ def test_code_digest_keeps_its_key_when_a_module_moves_package(
         f"from nowcastutils.walks.steps import {', '.join(names)}\n\n"
         f"__all__ = {names!r}\n"
     )
-    for name in ("chain.py", "introductions.py", "randomwalk.py"):
+    for name in (
+        "baselinenowcast/nowcast.py",
+        "introductions.py",
+        "randomwalk.py",
+    ):
         path = base / name
         path.write_text(
             path.read_text().replace(
