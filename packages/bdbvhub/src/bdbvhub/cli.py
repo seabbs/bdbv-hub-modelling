@@ -18,6 +18,7 @@ Commands:
   load the stored fits into the results (`bdbvhub.store.store`), or archive
   every candidate's forecasts for a round (`bdbvhub.store.archive`).
 - `plot-submission`: plot a submitted hub file.
+- `plot-rt-submission`: plot the `wk R_t` rows of a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
 - `rt-check`: write the Rt sense-check page of a renewal fit directory
@@ -428,6 +429,18 @@ def build_parser() -> argparse.ArgumentParser:
     plot.add_argument("--vintage", default="latest")
     plot.add_argument("--data", default=data_dir)
     plot.add_argument("--out", required=True)
+
+    prt = sub.add_parser(
+        "plot-rt-submission",
+        help="Plot the wk R_t rows of a submitted hub file.",
+    )
+    prt.add_argument("--submission", required=True)
+    prt.add_argument(
+        "--names",
+        default=None,
+        help="A CSV with `location` and `location_name`, for the titles.",
+    )
+    prt.add_argument("--out", required=True)
 
     ppc = sub.add_parser(
         "plot-ppc", help="Plot a fit's posterior predictive checks."
@@ -1646,6 +1659,23 @@ def _plot_submission(args: argparse.Namespace) -> int:
     return 0
 
 
+def _plot_rt_submission(args: argparse.Namespace) -> int:
+    from bdbvhub.reporting.rtcheck import plot_submitted_rt
+
+    names = None
+    if args.names:
+        table = pd.read_csv(args.names, dtype=str)
+        names = dict(
+            zip(table["location"], table["location_name"], strict=True)
+        )
+    fig = plot_submitted_rt(args.submission, names)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=100, facecolor="white", transparent=False)
+    print(f"Wrote {out}.")
+    return 0
+
+
 def _plot_ppc(args: argparse.Namespace) -> int:
     from nowcasteval.ppc import plot_ppc, read_ppc
 
@@ -2031,6 +2061,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         out.write_text(rt_check_from_fit(args.fit, args.data))
         print(f"Wrote {out}")
         return 0
+    if args.command == "plot-rt-submission":
+        return _plot_rt_submission(args)
     if args.command == "plot-ppc":
         return _plot_ppc(args)
     if args.command == "backtest":

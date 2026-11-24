@@ -176,3 +176,77 @@ def test_cli_writes_the_page(tmp_path: Path) -> None:
     assert main(["rt-check", "--fit", str(fit), "--data", str(DATA),
                  "--out", str(out)]) == 0  # fmt: skip
     assert out.read_text().startswith("<!doctype html>")
+
+
+def _hub_file(tmp_path: Path) -> Path:
+    """A hub file with counts and `wk R_t` rows from two forecast dates."""
+    rng = np.random.default_rng(3)
+    weeks = ["2026-11-21", "2026-11-28"]
+    parts = []
+    for fdate, shift in (("2026-11-17", 5.0), ("2026-11-24", 0.0)):
+        rt = _rt_rows(["CD", "CD-IT", "CD-NK", "CD-IT-01"], weeks, rng)
+        rt["value"] += shift
+        parts.append(
+            rt.assign(
+                forecast_date=fdate, target="wk R_t", output_type="quantile"
+            )
+        )
+    parts.append(
+        pd.DataFrame(
+            {
+                "location": "CD",
+                "target_end_date": weeks[1],
+                "output_type_id": "1",
+                "value": 10.0,
+                "forecast_date": "2026-11-24",
+                "target": "wk inc confirmed cases",
+                "output_type": "sample",
+            },
+            index=[0],
+        )
+    )
+    path = tmp_path / "2026-11-28-seabbs-renewal.csv"
+    pd.concat(parts).assign(reference_date="2026-11-28").to_csv(
+        path, index=False
+    )
+    return path
+
+
+def test_plot_submitted_rt_draws_the_country_and_each_province(
+    tmp_path: Path,
+) -> None:
+    fig = rtcheck.plot_submitted_rt(
+        _hub_file(tmp_path), {"CD": "DRC", "CD-IT": "Ituri"}
+    )
+    shown = [ax for ax in fig.axes if ax.get_visible()]
+    titles = [ax.get_title(loc="left") for ax in shown]
+    assert titles == ["DRC (CD)", "Ituri (CD-IT)", "CD-NK (CD-NK)"]
+    for ax in shown:
+        # The reference line at Rt = 1, and only the newest forecast's
+        # rows (the older ones sit near 6).
+        assert any(
+            list(line.get_ydata()) == [1.0, 1.0] for line in ax.get_lines()
+        )
+        assert ax.get_ylim()[1] < 5.0
+
+
+def test_plot_submitted_rt_needs_rt_rows(tmp_path: Path) -> None:
+    path = _hub_file(tmp_path)
+    table = pd.read_csv(path)
+    table.loc[table["target"] != "wk R_t"].to_csv(path, index=False)
+    with pytest.raises(ValueError, match="no wk R_t rows"):
+        rtcheck.plot_submitted_rt(path)
+
+
+def test_cli_plots_the_submitted_rt(tmp_path: Path) -> None:
+    from bdbvhub.cli import main
+
+    names = tmp_path / "time-series.csv"
+    pd.DataFrame({"location": ["CD"], "location_name": ["DRC"]}).to_csv(
+        names, index=False
+    )
+    out = tmp_path / "gate" / "rt.png"
+    assert main(["plot-rt-submission", "--submission",
+                 str(_hub_file(tmp_path)), "--names", str(names),
+                 "--out", str(out)]) == 0  # fmt: skip
+    assert out.read_bytes()[:4] == b"\x89PNG"
