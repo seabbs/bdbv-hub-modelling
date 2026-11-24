@@ -101,3 +101,19 @@ def test_these_packages_import_no_study() -> None:
                 ):
                     found.append(f"{path.relative_to(ROOT)}:{n}")
     assert found == []
+
+
+def test_a_package_with_its_own_tests_has_none_left_under_tests() -> None:
+    # Packages move their tests to packages/<name>/tests one at a time;
+    # once moved, no root test is theirs.
+    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    from owners import owners
+
+    moved = {p.parent.name for p in ROOT.glob("packages/*/tests")}
+    assert "nowcastutils" in moved
+    left = [
+        f
+        for f, owner in owners().items()
+        if f.startswith("tests/") and owner in moved
+    ]
+    assert left == []

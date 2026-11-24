@@ -16,7 +16,7 @@ from nowcastutils.base import ForecastTask
 # run on the CPU unless the environment names one, as CI does.
 os.environ.setdefault("DEVICE", "cpu")
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "tests" / "fixtures" / "data"
 """A frozen copy of the tidy hub data. It is never refreshed: the
 workflows fetch the live data, and the tests read only this copy."""
