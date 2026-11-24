@@ -120,11 +120,10 @@ finetune:
   # same either way.
   eval: offload
   series_bias: true
-  # The training blocks' layout: ragged (each place's counts to the last
-  # complete step and its lag series) or complete (the same blocks
-  # without their lag series, so the context ends at the last complete
-  # step). Ragged adds nothing to the settings hash.
-  layout: ragged
+  # The training blocks' layout: cutoff (each place's counts to the
+  # cut-off, with its lag series as past covariates) or complete (each
+  # place's counts to the last complete step, without lag series).
+  layout: cutoff
   # The release layer's file (null: none): late release starts and the
   # release cadences, drawn per block at fine-tune time from the
   # simulations already made

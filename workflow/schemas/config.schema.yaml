@@ -68,7 +68,7 @@ $defs:
       by_source_every: {$ref: "#/$defs/positive"}
       eval: {enum: [local, offload]}
       series_bias: {type: boolean}
-      layout: {enum: [ragged, complete]}
+      layout: {enum: [cutoff, complete]}
       release_layer: {type: ["null", string]}
       real_training: {enum: [null, germany]}
       note: {type: string}

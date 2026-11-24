@@ -124,7 +124,7 @@ def trainer_options(run: Run) -> str:
     """Return the run's optional trainer arguments, each only when set.
 
     The series bias and its rate, the loss horizon, the quiet-block
-    floor, a layout other than ragged, the release layer and the real-data
+    floor, a layout other than cutoff, the release layer and the real-data
     blocks.
     """
     f = run.ft
@@ -135,7 +135,7 @@ def trainer_options(run: Run) -> str:
             option("--loss-horizon-days", f.get("loss_horizon_days")),
             option("--quiet-min-cases", f.get("quiet_min_cases")),
             bias,
-            "" if f["layout"] == "ragged" else f"--layout {f['layout']}",
+            "" if f["layout"] == "cutoff" else f"--layout {f['layout']}",
             option("--release-layer", f.get("release_layer")),
             option(
                 "--real-training",

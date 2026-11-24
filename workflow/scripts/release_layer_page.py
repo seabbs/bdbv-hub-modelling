@@ -68,7 +68,7 @@ def _init(grid: str, layer: dict | None) -> None:
         RUN_A["loss_days"],
         RUN_A["quiet"],
         RUN_A["block_limit"],
-        "ragged",
+        "cutoff",
         layer,
     )
 
