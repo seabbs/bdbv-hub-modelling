@@ -230,3 +230,13 @@ def test_the_submission_ci_has_its_own_ci_job():
         assert check in runs, check
     flags = [s["with"]["flags"] for s in job["steps"] if "codecov" in str(s)]
     assert flags == ["ci"]
+
+
+def test_repo_checks_fail_on_copied_code_across_the_packages():
+    # pylint's symilar over every package's source: any block of 10 or
+    # more lines found twice fails the job (Sam: as DRY as possible).
+    job = _workflow("ci.yml")["jobs"]["repo"]
+    (step,) = [s for s in job["steps"] if s.get("name") == "Duplicate code"]
+    assert "symilar -d 10" in step["run"]
+    assert "packages" in step["run"]
+    assert "duplicates=0 " in step["run"]
