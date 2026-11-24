@@ -151,6 +151,9 @@ runs:
   # Run A with the German real-data blocks mixed in (the paper's
   # real-data comparison).
   realdata: {real_training: germany}
+  # Run B: Run A's recipe on the grid's new simulations with the release
+  # layer (late release starts and the weekly-release share).
+  runb: {release_layer: config/finetune/release-layer.yaml}
 
 # The runs `finetune` trains (null: every run in `runs`). The variants
 # train after Run A, so they never take its GPU.
