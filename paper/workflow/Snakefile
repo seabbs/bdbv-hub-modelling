@@ -358,10 +358,27 @@ rule ebola_backtest_draws:
         "--results {params.folder}/results --output {params.folder}"
 
 
+rule ebola_data:
+    # The hub's releases (`bdbvhub data`): the network, so on the driver's
+    # host; the backtests read them from the shared data folder.
+    output:
+        f"{EBOLA['data']}/target.csv",
+    log:
+        f"{R}/logs/ebola_data.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        bdbv=BDBV,
+    shell:
+        "exec >{log} 2>&1; {params.bdbv} data"
+
+
 rule ebola_backtest:
+    input:
+        f"{EBOLA['data']}/target.csv",
     output:
         EBOLA["backtest"],
-        f"{EBOLA['data']}/target.csv",
     log:
         f"{R}/logs/ebola_backtest.log",
     benchmark:
@@ -377,7 +394,6 @@ rule ebola_backtest:
         models=" ".join(EBOLA["backtest_models"]),
     shell:
         "exec >{log} 2>&1; {params.env} "
-        "{params.bdbv} data && "
         "{params.bdbv} backtest --models {params.models}"
 
 
