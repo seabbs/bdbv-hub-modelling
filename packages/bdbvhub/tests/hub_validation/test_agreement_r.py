@@ -72,8 +72,13 @@ def test_r_matches_manifest(
     assert sorted(got) == fx["r_failures"]
 
 
+def _git(*args: str) -> None:
+    subprocess.run(["git", *args], check=True, capture_output=True)
+
+
+@pytest.mark.parametrize("checkout", ["full", "partial"])
 def test_custom_checks_run_with_their_scripts_and_source(
-    hub_path: Path, tmp_path: Path
+    hub_path: Path, tmp_path: Path, checkout: str
 ) -> None:
     # The hub's custom checks (hub-config/validations.yml, since 2026-11-16)
     # source scripts from src/ and read the new file from the original
@@ -88,8 +93,22 @@ def test_custom_checks_run_with_their_scripts_and_source(
         ["init", "-q"],
         ["add", "-A"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "hub"],
+        ["config", "uploadpack.allowFilter", "true"],
     ):
-        subprocess.run(["git", "-C", str(hub), *args], check=True)
+        _git("-C", str(hub), *args)
+    if checkout == "partial":
+        # As Submit's actions/checkout makes it: shallow, without blobs
+        # outside the sparse paths (main dry run 45379275554, where a
+        # shared clone of it failed and the check had no source).
+        clone = tmp_path / "hub-clone"
+        _git("init", "-q", str(clone))
+        _git("-C", str(clone), "remote", "add", "origin", hub.as_uri())
+        _git("-C", str(clone), "fetch", "-q", "--depth=1",
+             "--filter=blob:none", "origin", "HEAD")  # fmt: skip
+        _git("-C", str(clone), "sparse-checkout", "set", "--no-cone",
+             "hub-config", "model-metadata", "src")  # fmt: skip
+        _git("-C", str(clone), "checkout", "-q", "FETCH_HEAD")
+        hub = clone
     out = tmp_path / "r.json"
     sub = (
         BUNDLE
