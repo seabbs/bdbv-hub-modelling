@@ -7,7 +7,7 @@ by week of infection, with BVDOutbreakSize's Rt overlaid where the
 release has one, and under it the cases by week of onset: reported,
 imputed and the fit's nowcast of the final count. The weeks the round
 submits are marked. It lists the zones with cases that the fit has no Rt
-for. `bdbvhubrenewal rt-check` writes it from a fit directory.
+for. `bdbvhub rt-check` writes it from a fit directory.
 """
 
 from __future__ import annotations
@@ -487,9 +487,7 @@ def rt_check_from_fit(fit_dir: Path | str, data_dir: Path | str) -> str:
         release = bvd_mod.load_release(cache / tag)
         overlay = bvd_rt(
             pd.read_csv(cache / tag / "province_timeseries.csv"),
-            zone_bvd_rows(
-                release, cache_dir=cache, names=load_health_zones(data)
-            ),
+            zone_bvd_rows(release, load_health_zones(data), cache_dir=cache),
             bvd_mod.BVD_PROVINCES,
             bvd_mod.Z90,
         )

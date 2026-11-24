@@ -285,7 +285,6 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "scoringrules" },
     { name = "types-pyyaml" },
 ]
 docs = [
@@ -300,6 +299,7 @@ paper = [
     { name = "snakefmt" },
     { name = "snakemake" },
     { name = "snakemake-executor-plugin-cluster-generic" },
+    { name = "snakemake-executor-plugin-slurm" },
     { name = "snakemake-logger-plugin-panoptes" },
 ]
 
@@ -341,7 +341,6 @@ dev = [
     { name = "pytest-cov", specifier = ">=5" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "ruff", specifier = ">=0.6" },
-    { name = "scoringrules", specifier = ">=0.7" },
     { name = "types-pyyaml" },
 ]
 docs = [
@@ -356,6 +355,7 @@ paper = [
     { name = "snakefmt", specifier = ">=0.10" },
     { name = "snakemake", specifier = ">=9.27,<10" },
     { name = "snakemake-executor-plugin-cluster-generic", specifier = ">=1.0.9" },
+    { name = "snakemake-executor-plugin-slurm", specifier = ">=2.8,<3" },
     { name = "snakemake-logger-plugin-panoptes", specifier = ">=0.3,<0.4" },
 ]
 
@@ -2411,7 +2411,6 @@ source = { editable = "packages/nowcastbdbv" }
 dependencies = [
     { name = "nowcastbaselines" },
     { name = "nowcasteval" },
-    { name = "nowcastfoundation" },
     { name = "nowcastrenewal" },
     { name = "nowcastutils" },
     { name = "numpy" },
@@ -2423,7 +2422,6 @@ dependencies = [
 requires-dist = [
     { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
-    { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
     { name = "nowcastrenewal", editable = "packages/nowcastrenewal" },
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
@@ -2440,6 +2438,7 @@ dependencies = [
     { name = "nowcastutils" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "scoringrules" },
 ]
 
 [package.metadata]
@@ -2448,6 +2447,7 @@ requires-dist = [
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "pandas", specifier = ">=2.1,<4" },
+    { name = "scoringrules", specifier = ">=0.7" },
 ]
 
 [[package]]
@@ -2484,6 +2484,7 @@ name = "nowcastgermany"
 version = "0.1.0"
 source = { editable = "packages/nowcastgermany" }
 dependencies = [
+    { name = "nowcastbaselines" },
     { name = "nowcasteval" },
     { name = "nowcastfoundation" },
     { name = "nowcastutils" },
@@ -2494,6 +2495,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
     { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
     { name = "nowcastutils", editable = "packages/nowcastutils" },
@@ -3952,6 +3954,37 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a9/7a/b2c291a8312fef0e5b6e7d178097b3a57327ed9358250fe95d4f993d7db7/snakemake_executor_plugin_cluster_generic-1.0.9.tar.gz", hash = "sha256:ad0dc2d8bde7d4f336364bebe11a3b2209653c481ce8fbb0ae8bec81016a9a14", size = 5709, upload-time = "2024-03-11T20:06:07.919Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ae/b9/a0284debbe1b125c3402976029d3f67e5b678701ff7b1fa8145693fa2b1d/snakemake_executor_plugin_cluster_generic-1.0.9-py3-none-any.whl", hash = "sha256:39a9af6fe16d8be5e6150cbffca40e6cfe76f42b3834874da3372ea0e5be3458", size = 6423, upload-time = "2024-03-11T20:06:06.349Z" },
+]
+
+[[package]]
+name = "snakemake-executor-plugin-slurm"
+version = "2.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "pyyaml" },
+    { name = "snakemake-executor-plugin-slurm-jobstep" },
+    { name = "snakemake-interface-common" },
+    { name = "snakemake-interface-executor-plugins" },
+    { name = "throttler" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/74/56d92bf50d148b6bb3f39d096ad7bc4aa21509b917bee5921b94551c3a80/snakemake_executor_plugin_slurm-2.8.0.tar.gz", hash = "sha256:97d931284b1452b6a7afd2f1b6d2002c278ce7a5e8f6a982dc77688817d30399", size = 137886, upload-time = "2026-08-10T09:33:07.06Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b6/1d/5c61f9db841498be3c933bee40debcc3e74b0b0552f2446a5920ed9592fa/snakemake_executor_plugin_slurm-2.8.0-py3-none-any.whl", hash = "sha256:9b7fdb89261cee00a499d592f408d985ff64ae89916ece768d0506eb848ab58c", size = 46256, upload-time = "2026-08-10T09:33:06.073Z" },
+]
+
+[[package]]
+name = "snakemake-executor-plugin-slurm-jobstep"
+version = "0.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "snakemake-interface-common" },
+    { name = "snakemake-interface-executor-plugins" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/ec/4d4e41125a29717b71610ae7962a3cde0552c6b0c72c995139b8a0adeb7b/snakemake_executor_plugin_slurm_jobstep-0.6.1.tar.gz", hash = "sha256:0ed2feaa88d1d64f35dc66b4990f131d3f151733edece90d5e952dec0e8f7feb", size = 7437, upload-time = "2026-05-27T12:14:28.522Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/85/c6f70395037964e1d3b5334dde546cebc4bb0d05bd4c96399b03b6c4beab/snakemake_executor_plugin_slurm_jobstep-0.6.1-py3-none-any.whl", hash = "sha256:120e122ee1317257bd9608a2a458527ad9fe4520aa1a86109e9ce2ac322321ef", size = 8275, upload-time = "2026-05-27T12:14:29.514Z" },
 ]
 
 [[package]]

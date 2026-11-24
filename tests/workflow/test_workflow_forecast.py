@@ -93,3 +93,15 @@ def test_jax_starts_with_the_cuda_platform_list_without_cuda():
     )
     assert out.returncode == 0, out.stderr[-1000:]
     assert out.stdout.strip() in {"cpu", "gpu", "cuda"}
+
+
+def test_a_cluster_refuses_a_shared_gpu():
+    # On one machine a shared GPU is run by count; a cluster job only has
+    # the GPU it asks for, and a shared one asks for none.
+    cfg = {"forecast": {"device": "cuda", "threads": 2, "gpu": "share"}}
+    assert forecast.settings(cfg, {"COMPUTE": "single"}).gpu == 0
+    assert forecast.settings(cfg, {"COMPUTE": "ssh"}).gpu == 0
+    with pytest.raises(ValueError, match="exclusive"):
+        forecast.settings(cfg, {"COMPUTE": "slurm"})
+    cfg["forecast"]["gpu"] = "exclusive"
+    assert forecast.settings(cfg, {"COMPUTE": "slurm"}).gpu == 1

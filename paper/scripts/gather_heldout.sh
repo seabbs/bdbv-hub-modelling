@@ -16,7 +16,7 @@ SAY_PREFIX="paper: CI gather (run $run)"
 # shellcheck source=workflow/scripts/notify.sh
 source "$root/workflow/scripts/notify.sh"
 repo=seabbs/bdbv-hub-modelling
-bdbv="$root/.venv/bin/bdbvhubrenewal"
+bdbv="$root/.venv/bin/bdbvhub"
 germany="$root/.venv/bin/nowcastgermany"
 cd "$root"
 jobs() {
@@ -41,9 +41,7 @@ mkdir -p output/parts && cp -R output/ci/dl/parts-* output/parts/ 2>/dev/null
 p=output/parts/parts
 if "$bdbv" score \
      "$p"-development-{randomwalk,randomwalknowcast} \
-     "$p"-recovery-randomwalk "$p"-recovery-randomwalknowcast-{0,1,2} \
-     "$p"-zones-{randomwalk,randomwalknowcast} \
-     "$p"-scenario-{randomwalk,randomwalknowcast}-{falling,flat,rising} &&
+     "$p"-zones-{randomwalk,randomwalknowcast} &&
    "$bdbv" concat-results --out results/germany \
      output/parts/parts-germany-*/germany &&
    "$germany" fetch &&

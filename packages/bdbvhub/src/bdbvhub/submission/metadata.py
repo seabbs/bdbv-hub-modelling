@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Hub metadata text for each model that may be submitted.
 
-`bdbvhubrenewal metadata --model <model>` renders it with
+`bdbvhub metadata --model <model>` renders it with
 `bdbvhub.submission.hub.render_model_metadata`.
 """
 
@@ -110,8 +110,8 @@ MODEL_METADATA = {
     # metadata of the model the chain submits (`metadata --model <variant>`).
     # The committed hub/model-metadata/seabbs-renewal.yml is that of
     # `[submission] model` in config/hub.toml: regenerate it with
-    #   bdbvhubrenewal metadata --model <renewal|renewalsp|renewalbvd>
-    # when that changes (tests/submission/test_fitting.py checks it).
+    #   bdbvhub metadata --model <renewal|renewalsp|renewalbvd>
+    # when that changes (bdbvhub's tests/test_fitting.py checks it).
     "renewal": {
         "model_name": "Pooled zone renewal model (PyRenew)",
         "methods": (
@@ -222,7 +222,7 @@ MODEL_METADATA = {
     # Fine-tuned Chronos-2, the hub model seabbs-nowcastfm. `{release}`
     # is the checkpoint release the model loads, filled in by `metadata`.
     # The committed hub/model-metadata/seabbs-nowcastfm.yml is that of
-    # the model in config/hub.toml (tests/submission/test_fitting.py).
+    # the model in config/hub.toml (bdbvhub's tests/test_fitting.py).
     "fm_chronos_daily_ragged_ft": {
         "model_name": "Nowcast foundation (fine-tuned Chronos-2, daily "
         "releases)",

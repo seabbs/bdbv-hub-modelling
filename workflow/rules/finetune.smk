@@ -202,7 +202,7 @@ rule real_training_blocks:
     # German triangle's reports before the first scored German date, cut
     # as the German tasks lay it out (nowcastgermany.finetune_blocks).
     input:
-        f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv",
+        GERMANY_TRIANGLE,
     output:
         f"{RUN}/real-training.pkl",
     log:
@@ -222,6 +222,9 @@ rule real_training_blocks:
 rule finetune:
     input:
         finetune_inputs,
+        # Its own scoring (lead 10:15, Sam): each checkpoint's German unit
+        # and the references, on the forecasting device.
+        finetune_scores,
 
 
 rule dashboard:

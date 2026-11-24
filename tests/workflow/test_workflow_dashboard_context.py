@@ -206,3 +206,11 @@ def test_references_take_their_line_style_from_the_shared_map():
     assert paperstyle.model_dash("fm_chronos_daily_ragged") == "dotted"
     assert paperstyle.model_dash("fm_chronos_daily_complete") == "dashed"
     assert paperstyle.model_dash("fm_chronos_daily_ragged_ft") == "solid"
+
+
+def test_the_machine_may_point_the_dashboard_at_another_root(tmp_path):
+    # Standalone, from any checkout: DASHBOARD_ROOT names whose runs to show.
+    cfg, local = _workflow(tmp_path)
+    other = tmp_path / "elsewhere"
+    ctx = context.build(cfg, {**local, "DASHBOARD_ROOT": str(other)})
+    assert ctx.runs[0].folder == other / "runs" / "runa"

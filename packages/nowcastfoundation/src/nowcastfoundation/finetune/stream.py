@@ -48,7 +48,7 @@ import pandas as pd
 
 from nowcastfoundation import series_bias, sidecar
 from nowcastfoundation.finetune import chronos as ft
-from nowcastfoundation.finetune import combinations, simulations
+from nowcastfoundation.finetune import combinations, simulations, verify
 from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
@@ -303,13 +303,14 @@ def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
     """Add each block's releases to `RELEASES_FILE`, under a release layer.
 
     One row a block: the outbreak, the part of the run, source, cut,
-    cadence, the drawn release-start delay in days, the first kept
+    cadence, the drawn release-start delay in days, whether it has no
+    lag series, the first kept
     release and the number of releases. Returns a line for the log, empty
     without a layer.
     """
     if ft.RELEASE_LAYER is None or not pairs:
         return ""
-    cols = ("source", "cut", "cadence", "release_start_days")
+    cols = ("source", "cut", "cadence", "release_start_days", "no_lags")
     frame = pd.DataFrame(
         [
             {
@@ -339,7 +340,8 @@ def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
     )
     return (
         f"{late.mean():.0%} of {len(frame)} blocks start their releases "
-        f"late (median {median} days), {weekly:.0%} released weekly"
+        f"late (median {median} days), {weekly:.0%} released weekly, "
+        f"{frame['no_lags'].mean():.0%} without lag series"
     )
 
 
@@ -1122,6 +1124,11 @@ def held_out_parts(
     return {k: float(np.average(v, weights=weights)) for k, v in losses.items()}
 
 
+def checkpoint_stage(n: int) -> str:
+    """Return the status stage while checkpoint `n<n>` is evaluated."""
+    return f"evaluating checkpoint n{n}"
+
+
 def loss_parts(name: str, parts: dict[str, float]) -> dict[str, float]:
     """Return a loss's nowcast and forecast parts as `<name>_<part>`."""
     return {f"{name}_{k}": parts[k] for k in ("nowcast", "forecast")}
@@ -1695,6 +1702,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
+    # Cut the held-out blocks and the first chunk, save them under the
+    # keys training looks up, and stop: a fresh run's cuts on the CPU
+    # before it takes the GPU (lead 13:00), so the GPU never waits.
+    parser.add_argument("--cut-only", action="store_true")
     # The series bias (nowcastfoundation.series_bias): learned
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
@@ -1816,6 +1827,40 @@ def check_cadence(eval_every: int, by_source_every: int) -> None:
         )
 
 
+def cut_first_chunk(
+    out: Path,
+    sim_dir: Path,
+    seeds: Sequence[int],
+    args: argparse.Namespace,
+    pool: ProcessPoolExecutor,
+    key_of: Callable[[Sequence[str]], dict[str, Any]],
+    report: Callable[..., None],
+) -> None:
+    """Cut a fresh run's first chunk and save it under its key.
+
+    Waits for its simulations, as training does; the trainer then loads
+    the saved blocks (`load_chunk`) instead of cutting them.
+    """
+    size = min(CHUNK, args.outbreaks)
+    report(stage=f"cut only: waiting for outbreaks 1-{size}")
+    while (ids := next_chunk(sim_dir, seeds, [], size)) is None:
+        time.sleep(POLL)
+    report(stage=f"cut only: cutting outbreaks 1-{size}")
+    pairs, empty = _join(
+        submit_cut(
+            pool,
+            sim_dir,
+            ids,
+            args.seed,
+            args.blocks_per_simulation,
+            args.cut_workers,
+        )
+    )
+    save_chunk(out, key_of(ids), pairs, empty)
+    log(f"cut only: held-out blocks and outbreaks 1-{size} saved")
+    report(stage="cut only: done")
+
+
 def main(root: Path | None = None) -> None:
     """Train on the chunks as they are simulated.
 
@@ -1849,6 +1894,10 @@ def main(root: Path | None = None) -> None:
     global DRAWS_PER_PASS, SUBSET_SEED
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
+    if args.cut_only and (out / "state" / "state.json").exists():
+        parser.error(
+            "--cut-only cuts a fresh run's first chunk; this run has a state"
+        )
     # Read once at start: the worktree may move on while training.
     commit = code_commit()
     out.mkdir(parents=True, exist_ok=True)
@@ -1963,9 +2012,16 @@ def main(root: Path | None = None) -> None:
         }
 
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
+    if args.cut_only:
+        cut_first_chunk(
+            out, sim_dir, training_seeds(), args, pool, chunk_key, report
+        )
+        return
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = torch_device(args.device)
+    # Saved held-out blocks load in seconds: say so, not still waiting.
+    report(stage="loading the model")
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
@@ -2099,6 +2155,7 @@ def main(root: Path | None = None) -> None:
         log("held-out loss at the start left to the evaluator")
     elif state is None:
         consumed.write_text("")
+        report(stage="validation at the start (base Chronos-2)")
         start_parts = held_out_parts(model, val, args.batch_size)
         start_loss = start_parts["loss"]
         by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
@@ -2407,7 +2464,8 @@ def main(root: Path | None = None) -> None:
                 "tokens": seen.get("tokens", 0),
                 "checkpoint_above": args.checkpoint_above,
             }
-            key = ft._settings_hash(settings)
+            # Memory settings (checkpoint_above) are outside the hash.
+            key = verify.settings_hash(settings)
             settings["hash"] = key
             # The commit the trainer ran from, outside the hash: the
             # checkpoint is rebuilt from it to the same hash.
@@ -2422,6 +2480,7 @@ def main(root: Path | None = None) -> None:
                 described = "left to the evaluator"
             else:
                 settings["held_out_loss_start"] = start_loss
+                report(stage=checkpoint_stage(done))
                 parts = held_out_parts(model, val, args.batch_size)
                 settings["held_out_loss"] = parts["loss"]
                 settings |= loss_parts("held_out_loss", parts)

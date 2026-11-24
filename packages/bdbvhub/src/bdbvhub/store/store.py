@@ -29,7 +29,7 @@ which `unpack` writes out for the submission to forecast from, so the
 submission uses the stored fit rather than fitting again.
 Where the store has no fit for the current key, `load` uses the newest
 stored fit of that pair and says so (`StoreStatus`).
-`command` runs `bdbvhubrenewal fit-store`.
+`command` runs `bdbvhub fit-store`.
 """
 
 from __future__ import annotations
@@ -59,6 +59,7 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhub.models import get_model, list_models
+from nowcastbdbv.backtest import vintage_task
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcastbdbv.data.zones import ZoneData, load_zone_data
 from nowcasteval.backtest import (
@@ -67,7 +68,6 @@ from nowcasteval.backtest import (
     merge_by_model,
     real_vintages,
     run_forecasts,
-    vintage_task,
 )
 from nowcastutils.base import ForecastModel, ForecastTask
 from nowcastutils.files import write_csv
@@ -100,6 +100,7 @@ __all__ = [
     "samplers",
     "stack_forecasts",
     "store_path",
+    "stored_delays",
     "stored_models",
     "unpack",
     "write_fit",
@@ -188,6 +189,8 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
 
     A stored fit uses the sampler table of the submission candidate that
     runs the same model, so the docs show the fits the submission makes.
+    A staged variant (`Variant.sampler_of`) takes the table of the model
+    it may replace, so the two are compared like for like.
 
     Parameters
     ----------
@@ -214,6 +217,11 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
             msg = f"Two candidates in {policy} run {c['model']}."
             raise ValueError(msg)
         out[c["model"]] = dict(c["sampler"])
+    from nowcastrenewal.forecaster import VARIANTS
+
+    for name, variant in VARIANTS.items():
+        if variant.sampler_of in out and name not in out:
+            out[name] = dict(out[variant.sampler_of])
     return out
 
 
@@ -853,7 +861,7 @@ def fit_files(
 ) -> dict[str, str]:
     """Return a submission candidate's fit directory, after its forecast.
 
-    The directory `bdbvhubrenewal fit --config` would write: the model's
+    The directory `bdbvhub fit --config` would write: the model's
     `write_fit_dir` (samples and `ppc.json`), with `diagnostics.json`
     and `fit.json` (`write_records`). A model that is no candidate's
     (`renewal.FIT_VARIANTS`) has none.
@@ -1109,6 +1117,32 @@ def load(
     return status
 
 
+def stored_delays(results: Path | str) -> pd.DataFrame:
+    """Return the fitted models' stored delay summaries.
+
+    `fit-store load` writes them to `results`.
+
+    Parameters
+    ----------
+    results : pathlib.Path or str
+        The results directory.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The delay summaries of the fitted models, with `model` and
+        `vintage`, and no rows if no fits were loaded.
+    """
+    from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
+
+    path = Path(results) / DELAY_SUMMARY_FILE
+    if not path.exists():
+        return pd.DataFrame(columns=["model", "vintage"])
+    learnt = pd.read_csv(path)
+    fitted = [s.name for s in list_models() if s.fitted]
+    return learnt.loc[learnt["model"].isin(fitted)]
+
+
 def _zone_samples(fit: StoredFit) -> pd.DataFrame:
     """Return a stored zone fit's final-count zone samples, else none."""
     from nowcastrenewal.zones import ZONES_FILE
@@ -1183,7 +1217,7 @@ def _merge(path: Path, frames: Iterable[pd.DataFrame]) -> None:
 
 
 def command(args: argparse.Namespace) -> int:
-    """Run `bdbvhubrenewal fit-store plan|fit|load|unpack`.
+    """Run `bdbvhub fit-store plan|fit|load|unpack`.
 
     `plan` prints the fits to make and writes them as a GitHub Actions
     matrix (`--out`), with every current key (`--keys`) for pruning;

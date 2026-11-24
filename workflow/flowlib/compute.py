@@ -96,8 +96,6 @@ MACHINE_KEYS = frozenset(
         "HOST_NAME",
         "MAILBOX",
         "NOTIFY",
-        "JOB_PREFIX",
-        "SIM_PREFIX",
         "SNAKEMAKE_PROFILE",
         "HEADROOM_CORES",
         "HEADROOM_GB",
@@ -108,8 +106,6 @@ MACHINE_KEYS = frozenset(
         "CHECKPOINT_ABOVE",
         "TARGETS",
         "SCHEDULE_TARGETS",
-        "SCHEDULE_EVERY",
-        "SCHEDULE_KIND",
         "COORDINATE_PAUSE",
         "COORDINATE_BACKOFF",
         "STATUS_EVERY",
@@ -121,7 +117,6 @@ MACHINE_KEYS = frozenset(
         "MONITOR_DAG_EVERY",
         "MIN_FREE_GB",
         "MIN_DISK_GB",
-        "MAX_LOAD",
         "PAPER_LOGS",
         "COMPUTE",
         "WORKERS",
@@ -256,6 +251,9 @@ def job_env(cfg: Mapping[str, str], worker: Worker) -> dict[str, str]:
             value = worker.root + value[len(root.rstrip("/")) :]
         out[key] = value
     out["COMPUTE"] = "single"
+    # A worker's Snakemake runs one job: it never serves the dashboard
+    # (flowlib.dashboard.serve), which the coordinator's run does.
+    out["WORKFLOW_JOB"] = "1"
     return out
 
 

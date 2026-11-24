@@ -1,19 +1,16 @@
 # CLI
 
-The `bdbvhubrenewal` command.
+The `bdbvhub` command.
 { .page-subtitle }
 
 Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
-`bdbvhubrenewal <command> --help` lists each command's options.
+`bdbvhub <command> --help` lists each command's options.
 
 | Command | What it does |
 |---|---|
 | `data` | Download the hub data and write the tidy tables to `data/`. |
-| `backtest` | Run the development backtest, the evaluation on the real releases (`results/nowcast-*.csv`) and the recovery check. Fitted models are never run: their rows in `results/` come from the fit store and are kept. With `--models`, only those models run and the others' rows are kept. |
+| `backtest` | Run the development backtest, the evaluation on the real releases (`results/nowcast-*.csv`). Fitted models are never run: their rows in `results/` come from the fit store and are kept. With `--models`, only those models run and the others' rows are kept. |
 | `backtest --lopo` | Leave one province out: forecast each province with its counts masked, for the variants that take a mask. |
-| `backtest --scenarios-only` | Run only the scenarios calibrated to the real data, from `--scenario-as-of` and `--scenario-dates`. `--scenarios` runs only the named scenarios. |
-| `backtest --recovery-only`, `--no-recovery` | Run only the recovery check on the simulated outbreak, or leave it out, so it can run apart. |
-| `backtest --chunk K/N` | With `--recovery-only` or `--scenarios-only`, run only block K of N (from 0) of the dates. Stacking the blocks' results (`concat-results`) gives one run's. |
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
@@ -38,9 +35,8 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 ## Evaluation
 
 ```bash
-task nowcast-eval:backtest           # development backtest, real releases and recovery check
+task nowcast-eval:backtest           # development backtest and real releases
 task nowcast-eval:backtest-lopo      # leave one province out
-task nowcast-eval:backtest-scenarios # simulated scenarios calibrated to the real data
 task nowcast-eval:backtest-zones     # random walk models at health-zone level
 task nowcast-eval:results            # every derived file in results/, as the Pages build makes them
 task docs                            # build the site into _site/ (runs task nowcast-eval:results, about 25 min)
@@ -70,7 +66,7 @@ The key hashes:
 The renewal variants use the sampler table of the submission candidate that runs them, in `ci/policy.toml`.
 A model code or sampler change refits every origin.
 A new hub release adds one fit per model.
-The task at each origin is the submission's (`backtest.vintage_task`): weeks from 6 before the reference date to one week past `[forecast] max_horizon`, so the next round can be forecast from the same fit when no new release comes, and the latest earlier delays for a release with none of its own.
+The task at each origin is the submission's (`nowcastbdbv.backtest.vintage_task`): weeks from 6 before the reference date to one week past `[forecast] max_horizon`, so the next round can be forecast from the same fit when no new release comes, and the latest earlier delays for a release with none of its own.
 The backtest loads the weeks from `[forecast] min_horizon` to `max_horizon`.
 A submission candidate's fit also holds the fit directory the submission reads (samples, `ppc.json` and `diagnostics.json`), and the submission forecasts from it (`fit-store unpack`).
 
@@ -99,19 +95,19 @@ A new release adds 4 fits: about 40 minutes and 1.3 runner-hours.
 To fit a model locally, for example a new variant:
 
 ```bash
-uv run bdbvhubrenewal fit-store fit --model renewal --origin 2026-10-24 --store output/fit-store
-uv run bdbvhubrenewal fit-store load --store output/fit-store
+uv run bdbvhub fit-store fit --model renewal --origin 2026-10-24 --store output/fit-store
+uv run bdbvhub fit-store load --store output/fit-store
 ```
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 
 ```bash
-uv run bdbvhubrenewal compare-hub --fetch
+uv run bdbvhub compare-hub --fetch
 ```
 
 ## Hub files
 
-`bdbvhubrenewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
+`bdbvhub nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
 The model id is `seabbs-` plus the model's `model_abbr` in `config/hub.toml`.
 When the reference date is an open round in `tasks.json`, it checks the file with `submission.validate`, the Python port of the hub's checks:
 
@@ -122,12 +118,12 @@ When the reference date is an open round in `tasks.json`, it checks the file wit
 - exactly 100 samples per location, and every sample covers the same weeks;
 - integer sample ids, finite non-negative values, no duplicate rows.
 
-It skips the submission window and the model metadata, which `bdbvhubrenewal metadata` checks.
+It skips the submission window and the model metadata, which `bdbvhub metadata` checks.
 For any other reference date it prints a note and skips the checks.
 
 `task bdbv-hub:validate` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 
-`bdbvhubrenewal metadata` writes `hub/model-metadata/<model id>.yml` and checks it against the hub's schema.
+`bdbvhub metadata` writes `hub/model-metadata/<model id>.yml` and checks it against the hub's schema.
 
 !!! note "Sample ids"
     Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.

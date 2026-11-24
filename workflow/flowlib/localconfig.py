@@ -36,10 +36,6 @@ DEFAULTS = (
     ("MAILBOX", ""),
     # The workflow's own settings.
     ("SCORE_CACHE", "$ROOT/scores"),
-    ("JOB_PREFIX", ""),
-    # The prefix every simulation batch runs under, with no cap of its
-    # own (such as one systemd slice they all share; empty: none).
-    ("SIM_PREFIX", ""),
     # The folder simulation batches share their JAX compiles in (empty:
     # none) and the size in GB past which a batch empties it
     # (flowlib.simulator.jax_cache_env).
@@ -59,6 +55,8 @@ DEFAULTS = (
     # port.
     ("DASHBOARD_HOST", "127.0.0.1"),
     ("DASHBOARD_PORT", "8765"),
+    # The ROOT whose runs the dashboard shows, from any checkout.
+    ("DASHBOARD_ROOT", "$ROOT"),
     # This machine's budget for workflow/profiles/default
     # (flowlib.machine): its cores and memory less the headroom kept free,
     # unless CORES and MEM_MB set them; simulation batches at once; and
@@ -81,8 +79,7 @@ DEFAULTS = (
     ("TARGETS", "simulate finetune score"),
     ("SIMS_FROM", ""),
     # Scheduled runs (workflow/scripts/tick.py): the targets each tick runs
-    # (empty: none; flowlib.schedule), every how many minutes, and the timer
-    # (cron, systemd or launchd; empty: by platform).
+    # (empty: none; flowlib.schedule).
     ("SCHEDULE_TARGETS", ""),
     # Where `hub_rounds` copies the hub rounds report (empty: nowhere).
     ("REVIEW_DIR", ""),
@@ -100,12 +97,10 @@ DEFAULTS = (
     ("MONITOR_DAG", ""),
     ("MONITOR_DAG_OPTIONS", ""),
     ("MONITOR_DAG_EVERY", "900"),
-    ("SCHEDULE_EVERY", "60"),
     # The coordinator run's pause between ticks, and after a failed one
     # (seconds; workflow/scripts/coordinate.py).
     ("COORDINATE_PAUSE", "60"),
     ("COORDINATE_BACKOFF", "600"),
-    ("SCHEDULE_KIND", ""),
     # Where jobs run (flowlib.compute): single (this machine) or ssh
     # (this machine coordinates its WORKERS, name=host:ROOT:CHECKOUT,
     # with rule groups placed on them, group=worker; not GROUPS, which
@@ -115,12 +110,9 @@ DEFAULTS = (
     ("WORKERS", ""),
     ("WORKER_GROUPS", ""),
     ("WORKER_SNAKEMAKE", "uv run --group paper snakemake"),
-    # Memory and disk a job leaves free when it starts (GB).
+    # Memory and disk a tick needs free to start (GB; flowlib.schedule).
     ("MIN_FREE_GB", "20"),
     ("MIN_DISK_GB", "16"),
-    # The load average below which a heavy job starts (empty: the core
-    # count).
-    ("MAX_LOAD", ""),
     # Logs of the paper's detached jobs (paper/scripts).
     ("PAPER_LOGS", "$HOME/paper-jobs"),
 )

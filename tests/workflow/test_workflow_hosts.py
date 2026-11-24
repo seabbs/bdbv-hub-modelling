@@ -8,7 +8,6 @@ import pytest
 from flowlib import hosts, manifest
 
 ROOT = Path(__file__).parents[2]
-CAP = ROOT / "workflow" / "scripts" / "mem_cap.sh"
 TIMED = ROOT / "workflow" / "scripts" / "timed.sh"
 
 
@@ -85,30 +84,6 @@ def test_the_row_of_a_pushed_batch_hashes_its_files(tmp_path):
     assert row.split(",")[7] == hashlib.sha256(b"counts").hexdigest()
 
 
-def test_the_memory_cap_kills_a_job_over_it():
-    out = subprocess.run(
-        ["bash", str(CAP), "1K", "sleep", "30"],
-        env={"PATH": "/usr/bin:/bin", "CAP_POLL": "1"},
-        capture_output=True,
-        text=True,
-        timeout=20,
-    )
-    assert out.returncode != 0
-    assert "over the" in out.stderr
-
-
-def test_the_memory_cap_passes_on_a_job_under_it():
-    out = subprocess.run(
-        ["bash", str(CAP), "1024M", "bash", "-c", "echo hi; exit 3"],
-        env={"PATH": "/usr/bin:/bin", "CAP_POLL": "1"},
-        capture_output=True,
-        text=True,
-        timeout=20,
-    )
-    assert out.returncode == 3
-    assert out.stdout == "hi\n"
-
-
 def test_timing_writes_the_gnu_time_line_on_any_os():
     out = subprocess.run(
         ["bash", str(TIMED), "bash", "-c", "echo err >&2; echo out"],
@@ -125,6 +100,23 @@ def test_timing_writes_the_gnu_time_line_on_any_os():
     assert int(last[1]) > 0
     assert last[2] == "wall_s"
     float(last[3])
+
+
+def test_timing_without_a_time_program_gives_the_wall_time(tmp_path):
+    # A cluster node may have neither GNU nor BSD time: the batch still
+    # runs, with its wall time and no peak memory.
+    got = subprocess.run(
+        ["bash", str(TIMED), "bash", "-c", "echo hi >&2; exit 3"],
+        env={"PATH": "/usr/bin:/bin", "TIMED_TIME": str(tmp_path / "none")},
+        capture_output=True,
+        text=True,
+    )
+    assert got.returncode == 3
+    assert "hi" in got.stderr
+    assert "peak_rss_kb" not in got.stderr
+    last = got.stderr.strip().splitlines()[-1].split()
+    assert last[0] == "wall_s"
+    float(last[1])
 
 
 def test_a_mirrored_round_counts_once_its_qc_ran(tmp_path):

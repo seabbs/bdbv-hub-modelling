@@ -14,18 +14,24 @@ MOVED = {
     "scripts/finetune_verify.py": "finetune-verify",
     "scripts/sim_qc.py": "sim-qc",
     "scripts/check_germany_site.py": "germany-site-check",
-    "scripts/germany_ft_store.py": "germany-ft-store",
+    "scripts/germany_ft_store.py": "deleted",
     "scripts/score_history.py": "score-history",
     "scripts/package_alone.py": "tests/packages/package_alone.py",
-    "scripts/baselinenowcast_fixtures.R": "tests/baselinenowcast/r/cases.R",
-    "scripts/snapshot_fixtures.R": "tests/baselinenowcast/r/cases.R",
+    "scripts/baselinenowcast_fixtures.R": (
+        "packages/nowcastbaselines/tests/baselinenowcast/r/cases.R"
+    ),
+    "scripts/snapshot_fixtures.R": (
+        "packages/nowcastbaselines/tests/baselinenowcast/r/cases.R"
+    ),
     "scripts/check_fixtures.py": "deleted",
     "scripts/cache_bust.py": "docs/hooks/cache_bust.py",
     "scripts/build_diagrams.sh": "deleted",
     "scripts/build_zone_centres.py": (
         "packages/nowcastbdbv/data-raw/build_zone_centres.py"
     ),
-    "scripts/hub_imputation_fit.R": "tests/model/test_hub_imputation_delays.py",
+    "scripts/hub_imputation_fit.R": (
+        "packages/nowcastbdbv/tests/test_hub_imputation_delays.py"
+    ),
     "scripts/fit-store.sh": "packages/bdbvhub/src/bdbvhub/store/branch.py",
     "scripts/results-release.sh": (
         "packages/bdbvhub/src/bdbvhub/submission/release.py"

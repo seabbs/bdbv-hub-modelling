@@ -7,9 +7,9 @@ its scored weeks are then averaged by each.
 Week $w$ is the latest week ending on or before $o$, and $c(t)$ the
 count reported at $o$ for the week ending $t$, 0 where none is.
 
-**Place type.** From the largest count $m$ of the `RECENT_WEEKS` weeks up
-to $w$, the random walk's walk window: silent if $m = 0$, small if
-$m \le$ `SMALL_MAX`, larger otherwise.
+**Place type.** From the largest count $m$ of the recent weeks up to $w$
+(the caller's window; the report uses the random walk's): silent if
+$m = 0$, small if $m \le$ `SMALL_MAX`, larger otherwise.
 
 **Flag.** From the forecast of week $w + 1$, the first week after the
 origin's latest full week, with median $q_{50}$ and 95% quantile $q_{95}$.
@@ -31,20 +31,14 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhub.reporting.site import site_baseline
-from nowcastbaselines.chain import Settings
 from nowcasteval.scoring import summarise_scores
 
 __all__ = [
-    "RECENT_WEEKS",
     "SMALL_MAX",
     "check_summary",
     "flags",
     "place_types",
 ]
-
-RECENT_WEEKS = Settings().walk_weeks
-"""Weeks up to the origin whose counts set the place type, the walk's."""
 
 SMALL_MAX = 5
 """Largest recent weekly count of a small place."""
@@ -63,11 +57,13 @@ def _last_week(origin: pd.Series) -> pd.Series:
     return day - pd.to_timedelta((day.dt.weekday - 5) % 7, unit="D")
 
 
-def _by_week(counts: pd.DataFrame, origins: pd.DataFrame) -> pd.DataFrame:
-    """Return `c(w - k)` for k = 0 to `RECENT_WEEKS - 1`, wide by k."""
+def _by_week(
+    counts: pd.DataFrame, origins: pd.DataFrame, weeks: int
+) -> pd.DataFrame:
+    """Return `c(w - k)` for k = 0 to `weeks - 1`, wide by k."""
     keys = origins[["origin", "location"]].drop_duplicates()
     keys = keys.assign(week=_last_week(keys["origin"]))
-    lags = pd.DataFrame({"k": range(RECENT_WEEKS)})
+    lags = pd.DataFrame({"k": range(weeks)})
     grid = keys.merge(lags, how="cross")
     grid["target_end_date"] = (
         grid["week"] - pd.to_timedelta(7 * grid["k"], unit="D")
@@ -84,7 +80,9 @@ def _by_week(counts: pd.DataFrame, origins: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def place_types(counts: pd.DataFrame, origins: pd.DataFrame) -> pd.DataFrame:
+def place_types(
+    counts: pd.DataFrame, origins: pd.DataFrame, weeks: int
+) -> pd.DataFrame:
     """Return the place type of each place at each origin.
 
     Parameters
@@ -94,6 +92,8 @@ def place_types(counts: pd.DataFrame, origins: pd.DataFrame) -> pd.DataFrame:
         `location`, `target_end_date` and `total`. Missing weeks are 0.
     origins : pandas.DataFrame
         The `origin` and `location` pairs to type.
+    weeks : int
+        Weeks up to the origin whose largest count sets the type.
 
     Returns
     -------
@@ -101,7 +101,7 @@ def place_types(counts: pd.DataFrame, origins: pd.DataFrame) -> pd.DataFrame:
         Columns `origin`, `location` and `place_type`, one of `silent`,
         `small` and `larger`.
     """
-    top = _by_week(counts, origins).max(axis=1)
+    top = _by_week(counts, origins, weeks).max(axis=1)
     kind = pd.Series("larger", index=top.index)
     kind[top <= SMALL_MAX] = "small"
     kind[top == 0] = "silent"
@@ -129,7 +129,7 @@ def flags(counts: pd.DataFrame, quantiles: pd.DataFrame) -> pd.DataFrame:
     quantiles = quantiles.loc[
         pd.to_datetime(quantiles["target_end_date"]) == after
     ]
-    wide = _by_week(counts, quantiles)
+    wide = _by_week(counts, quantiles, 5)
     level = pd.concat([(wide[3] + wide[2]) / 2, wide[1]], axis=1).max(axis=1)
     recent = wide[[0, 1, 2, 3, 4]].max(axis=1).clip(lower=1.0)
     out = quantiles.join(
@@ -150,7 +150,7 @@ def check_summary(
     scores: pd.DataFrame,
     types: pd.DataFrame,
     flagged: pd.DataFrame,
-    baseline: str | None = None,
+    baseline: str,
 ) -> pd.DataFrame:
     """Average the scores by scale, model and place type, and by flag.
 
@@ -174,7 +174,6 @@ def check_summary(
         Columns `scale`, `split` (`place type` or `flag`), `group`,
         `model`, `n`, the mean of each metric and `relative CRPS`.
     """
-    baseline = baseline or site_baseline()
     keyed = scores.merge(types, on=["origin", "location"], how="left").merge(
         flagged, on=["model", "origin", "location"], how="left"
     )

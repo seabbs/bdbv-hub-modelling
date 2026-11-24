@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -42,15 +43,51 @@ def test_the_packages_keep_the_contract() -> None:
     assert "No matches for ignored import" not in run.stdout + run.stderr
 
 
-def test_ci_installs_and_imports_every_package_alone() -> None:
+def test_ci_checks_each_package_in_its_own_job() -> None:
+    # One CI job per package: installed alone with every module imported,
+    # ruff, format, mypy and its own tests (packages/<name>/tests).
     import yaml
 
-    workflow = yaml.safe_load(
-        (ROOT / ".github" / "workflows" / "packages.yml").read_text()
-    )
-    matrix = workflow["jobs"]["alone"]["strategy"]["matrix"]["package"]
+    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    from legs import layers
+
     packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
-    assert set(matrix) == packages
+    assert set(layers()) == packages
+    workflows = ROOT / ".github" / "workflows"
+    job = yaml.safe_load((workflows / "ci.yml").read_text())["jobs"]["package"]
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    for check in (
+        "package_alone.py",
+        "ruff check",
+        "ruff format --check",
+        "mypy",
+        'packages/$PACKAGE/tests"',
+        "pytest",
+    ):
+        assert check in runs, check
+    assert not (workflows / "packages.yml").exists()
+
+
+def test_every_package_has_its_own_tests() -> None:
+    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    from legs import layers
+
+    for name in layers():
+        assert list((ROOT / "packages" / name / "tests").glob("test_*.py"))
+    assert not (ROOT / "tests" / "packages" / "owners.py").exists()
+
+
+def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
+    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    from legs import layers, legs
+
+    assert legs(["docs/index.md"]) == []
+    assert legs(["tests/workflow/test_workflow_dag.py"]) == []
+    assert legs(["uv.lock"]) == layers()
+    assert legs(["packages/bdbvhub/tests/test_zones.py"]) == ["bdbvhub"]
+    seen = legs(["packages/nowcastbaselines/src/nowcastbaselines/chain.py"])
+    assert {"nowcastbaselines", "nowcastrenewal", "bdbvhub"} <= set(seen)
+    assert "nowcastutils" not in seen
 
 
 STUDIES = ("nowcastgermany",)
@@ -74,3 +111,11 @@ def test_these_packages_import_no_study() -> None:
                 ):
                     found.append(f"{path.relative_to(ROOT)}:{n}")
     assert found == []
+
+
+def test_the_layers_contract_lists_no_exceptions() -> None:
+    # Every upward import was moved to the package that owns the code; a
+    # new one is a layering bug to fix, not an exception to list.
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    for contract in config["tool"]["importlinter"]["contracts"]:
+        assert "ignore_imports" not in contract, contract["name"]

@@ -1,18 +1,22 @@
 """Serve the fine-tuning dashboard, or write it once as a static page.
 
-    dashboard.py [--run NAME ...] [--ref SPEC ...]
+    dashboard.py [--run NAME ...] [--ref SPEC ...] [--while-pid PID]
     dashboard.py --once FILE [--run NAME ...]
 
 The runs are the workflow's (`runs` in workflow/config.yaml), or those
 `--run` names; references come from its `dashboard` section and `--ref`
 (see `flowlib.dashboard.context`). It listens on the machine settings'
-`DASHBOARD_HOST` and `DASHBOARD_PORT` (config/local.env.example).
+`DASHBOARD_HOST` and `DASHBOARD_PORT` (config/local.env.example), showing
+the runs under `DASHBOARD_ROOT` (default `ROOT`). With `--while-pid` it
+ends when that process does: a workflow run serves it so
+(flowlib.dashboard.serve).
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import sys
 import threading
 import time
@@ -41,7 +45,20 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--run", action="append", default=[], metavar="NAME")
     p.add_argument("--ref", action="append", default=[], metavar="SPEC")
     p.add_argument("--config", type=Path, default=CONFIG)
+    p.add_argument("--while-pid", type=int, metavar="PID")
     return p
+
+
+def end_with(pid: int, every: float = 30.0) -> None:
+    """End this process once process `pid` has ended."""
+    from flowlib.dashboard import serve
+
+    def watch() -> None:
+        while serve.alive(pid):
+            time.sleep(every)
+        os._exit(0)
+
+    threading.Thread(target=watch, daemon=True).start()
 
 
 BUILDING = (
@@ -203,6 +220,8 @@ def main() -> None:
         return
     # The page and nowcasts are rebuilt in the background, so no request
     # waits on a build.
+    if a.while_pid:
+        end_with(a.while_pid)
     pages = Pages(ctx)
     pages.start(float(config["dashboard"]["refresh_every"]))
     host, port = address(local)

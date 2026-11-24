@@ -2,7 +2,7 @@
 """Say where the fitted models' results on a page come from.
 
 Every page with fitted-model results includes `fit-store.md`, written
-from the record `bdbvhubrenewal fit-store load` leaves in the results
+from the record `bdbvhub fit-store load` leaves in the results
 (`bdbvhub.store.store.STATUS_FILE`): the commits the fits
 were made at, and the fits for this build's code not stored yet.
 """

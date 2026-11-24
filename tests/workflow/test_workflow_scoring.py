@@ -1,11 +1,13 @@
 """Scoring units' commands and the German report's arguments."""
 
+from pathlib import Path
+
 from flowlib import scoring
 
 
-def test_a_unit_waits_for_room_then_scores_and_stamps():
-    got = scoring.unit_shell("germany", "wait && ", "{params.segment} ")
-    assert got.startswith("mkdir -p {params.copy_back} && wait && ")
+def test_a_unit_scores_and_stamps():
+    got = scoring.unit_shell("germany", "{params.segment} ")
+    assert got.startswith("mkdir -p {params.copy_back} && env {params.env} ")
     assert (
         f"{scoring.EVALUATE} germany {{params.cache}} {{params.label}} " in got
     )
@@ -41,7 +43,6 @@ def _scoring(tmp_path, labels=None, listing=None):
         "SCORE_CACHE": str(tmp_path / "cache"),
         "MIN_FREE_GB": "1",
         "MIN_DISK_GB": "2",
-        "MAX_LOAD": "",
         "FORECAST_THREADS": "",
     }
     trained = training.Training(cfg, local, rounds.Rounds(cfg, local, None))
@@ -76,15 +77,13 @@ def test_unlisted_labels_come_from_the_release_listing(tmp_path, monkeypatch):
     assert seen == ["releases.json"]
 
 
-def test_a_unit_waits_for_this_machine_s_room(tmp_path):
+def test_a_unit_runs_its_evaluation_with_no_wait_or_prefix(tmp_path):
     s = _scoring(tmp_path, labels=[])
-    assert s.room == (
-        f"workflow/scripts/wait_for_room.sh 1 2 {tmp_path / 'cache'}  && "
-    )
     assert s.unit_threads == 2
-    assert s.unit_shell("germany").startswith(
-        f"mkdir -p {{params.copy_back}} && {s.room}"
-    )
+    shell = s.unit_shell("germany")
+    assert shell.startswith("mkdir -p {params.copy_back} && env {params.env} ")
+    for gone in ("wait_for_room", "nice", "{params.prefix}"):
+        assert gone not in shell, gone
 
 
 def test_a_run_is_scored_on_its_saved_checkpoints(tmp_path):
@@ -110,3 +109,44 @@ def test_the_reference_unit_reruns_when_its_models_code_changes():
     key = scoring.reference_key("reference")
     assert len(key) == 12
     assert scoring.reference_key("abc123def456") == ""
+
+
+def test_the_german_unit_is_given_its_fetched_triangle():
+    got = scoring.unit_shell("germany")
+    assert "GERMANY_TRIANGLE={input.germany} " in got
+    assert "GERMANY_TRIANGLE" not in scoring.unit_shell("release")
+
+
+def test_no_rule_keys_code_by_a_param_mtime_never_reads():
+    from pathlib import Path
+
+    rules = Path(__file__).parents[2] / "workflow" / "rules"
+    text = "".join(p.read_text() for p in rules.glob("*.smk"))
+    assert "code=lambda wc: scoring.reference_key" not in text
+    assert "code=lambda wc: scoring.ft_check_key()" not in text
+
+
+def test_a_key_is_a_file_made_once_per_code(tmp_path):
+    # Every profile reruns on file times only (rerun-triggers: mtime), so
+    # a code key reaches a rule as a file named by the key.
+    folder = tmp_path / "keys"
+    first = scoring.key_file(folder, "reference", "abc")
+    assert first == str(folder / "reference-abc.key")
+    # The first key is older than any output made before keys existed.
+    assert Path(first).stat().st_mtime == 0
+    assert scoring.key_file(folder, "reference", "abc") == first
+    # Changed code: a new file, dated now, so the rule reruns once.
+    changed = scoring.key_file(folder, "reference", "def")
+    assert Path(changed).stat().st_mtime > 0
+    # Checkouts with either code share the folder without rewriting it.
+    assert scoring.key_file(folder, "reference", "abc") == first
+    assert Path(first).stat().st_mtime == 0
+    assert not list(folder.glob(".*"))
+
+
+def test_the_reference_unit_reads_its_code_key_as_a_file(tmp_path):
+    s = _scoring(tmp_path, labels=[])
+    (ref,) = s.reference_key_input(scoring.REFERENCE)
+    assert Path(ref).parent == tmp_path / "cache" / "keys"
+    assert Path(ref).name.startswith(f"{scoring.REFERENCE}-")
+    assert s.reference_key_input("abc123") == []

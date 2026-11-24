@@ -1,0 +1,348 @@
+"""The renewal model with health zones as its places."""
+
+import dataclasses
+
+import numpy as np
+import numpyro
+import pandas as pd
+import pytest
+from bdbv_cases import PLACES, VINTAGES
+from numpyro.infer import init_to_median
+
+from nowcastbdbv.data.delays import hub_delay_pmf
+from nowcastbdbv.data.zones import zone_places
+from nowcastrenewal.model import MAIN, build_model, model_args
+from nowcastrenewal.model.inputs import vintage_from_tables
+from nowcastrenewal.model.zones import (
+    ZoneInfections,
+    build_zone_model,
+    nested_basis,
+    single_patch,
+    zone_vintage_from_tables,
+)
+
+# Two real zone codes per province, so the zone table has them.
+ZONES = {
+    "CD-IT": ("CD-IT-10", "CD-IT-35"),
+    "CD-NK": ("CD-NK-03", "CD-NK-14"),
+    "CD-HU": ("CD-HU-12", "CD-HU-02"),
+    "CD-TO": ("CD-TO-06", "CD-TO-16"),
+    "CD-KE": ("CD-KE-01", "CD-KE-02"),
+    "CD-KN": ("CD-KN-01", "CD-KN-02"),
+}
+
+
+def _params(model, data):
+    median = numpyro.handlers.substitute(
+        numpyro.handlers.seed(model.sample, rng_seed=0),
+        substitute_fn=init_to_median(num_samples=15),
+    )
+    with numpyro.handlers.trace() as tr:
+        median(**model_args(model, data))
+    return tr, {
+        k: v["value"]
+        for k, v in tr.items()
+        if v["type"] == "sample" and not v["is_observed"]
+    }
+
+
+def _density(model, data, params):
+    return float(
+        numpyro.infer.util.log_density(
+            model.sample, (), model_args(model, data), params
+        )[0]
+    )
+
+
+def _split(target):
+    """Split each province's weekly counts over its two zones."""
+    rows = []
+    prov = target.loc[target["location"].isin(ZONES)]
+    for _, r in prov.iterrows():
+        a, b = ZONES[r["location"]]
+        for zone, share in ((a, 0.7), (b, 0.3)):
+            obs = np.floor(r["observed"] * share)
+            imp = np.floor(r["imputed"] * share)
+            if zone == b:
+                obs, imp = (
+                    r["observed"] - np.floor(r["observed"] * 0.7),
+                    r["imputed"] - np.floor(r["imputed"] * 0.7),
+                )
+            rows.append(
+                {
+                    **r.to_dict(),
+                    "location": zone,
+                    "observed": obs,
+                    "imputed": imp,
+                    "total": obs + imp,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_nested_basis_pools_zones_within_provinces():
+    parents = np.array([0, 0, 0, 1, 1, 2])
+    active = np.ones(6, dtype=bool)
+    between, within = nested_basis(parents, active)
+    # Province deviations: equal within a province, sum to zero over the
+    # provinces.
+    assert between.shape == (6, 2)
+    for col in between.T:
+        assert col[0] == col[1] == col[2] and col[3] == col[4]
+        assert np.unique(col[parents], return_index=True)[0].size <= 3
+    by_province = between[[0, 3, 5]]
+    np.testing.assert_allclose(by_province.sum(axis=0), 0.0, atol=1e-12)
+    np.testing.assert_allclose(
+        by_province.T @ by_province, np.eye(2), atol=1e-12
+    )
+    # Zone deviations sum to zero within each province; a province with
+    # one zone has none.
+    assert within.shape == (6, 2 + 1)
+    for p in range(3):
+        np.testing.assert_allclose(
+            within[parents == p].sum(axis=0), 0.0, atol=1e-12
+        )
+    np.testing.assert_allclose(within[5], 0.0)
+    np.testing.assert_allclose(between.T @ within, 0.0, atol=1e-12)
+    np.testing.assert_allclose(within.T @ within, np.eye(3), atol=1e-12)
+
+
+def test_nested_basis_leaves_out_inactive_places():
+    parents = np.array([0, 0, 1, 1, 2])
+    active = np.array([True, False, True, True, False])
+    between, within = nested_basis(parents, active)
+    # Province 2 has no active zone, so it follows the pooled trend.
+    assert between.shape == (5, 1)
+    np.testing.assert_allclose(between[4], 0.0)
+    # An inactive zone takes its province's deviation, with no own.
+    np.testing.assert_allclose(between[1], between[0])
+    np.testing.assert_allclose(within[[0, 1, 4]], 0.0)
+    assert within.shape == (5, 1)
+
+
+@pytest.mark.slow
+def test_one_zone_per_province_is_the_province_model(tables, table):
+    day = VINTAGES[-1]
+    target, delays = tables[day]
+    vintage = day
+    province = vintage_from_tables(
+        target,
+        delays,
+        vintage,
+        PLACES,
+        table,
+        imputation_delay=hub_delay_pmf(vintage),
+    )
+    zoned = zone_vintage_from_tables(
+        target,
+        delays,
+        vintage,
+        PLACES,
+        table,
+        parents={p: p for p in PLACES},
+        imputation_delay=hub_delay_pmf(vintage),
+    )
+    assert zoned.parent_names == list(PLACES)
+    p_model = build_model(province)
+    z_model = build_zone_model(zoned, anchor=False)
+    _, params = _params(p_model, province)
+    assert _density(z_model, zoned, params) == pytest.approx(
+        _density(p_model, province, params), rel=1e-5
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("places", [PLACES[:1], PLACES])
+def test_the_province_model_is_the_zone_model_one_place_a_patch(
+    tables, table, places
+):
+    # renewalsp fits one place at a time: the zone model with that place
+    # as its only patch.
+    day = VINTAGES[-1]
+    target, delays = tables[day]
+    province = vintage_from_tables(
+        target,
+        delays,
+        day,
+        places,
+        table,
+        imputation_delay=hub_delay_pmf(day),
+    )
+    patched = single_patch(province)
+    assert patched.parents.tolist() == list(range(len(places)))
+    assert patched.parent_names == list(places)
+    p_model = build_model(province)
+    # One model: the province builder is the zone builder.
+    assert isinstance(p_model.latent, ZoneInfections)
+    z_model = build_zone_model(patched, anchor=False)
+    _, params = _params(p_model, province)
+    assert _density(z_model, patched, params) == pytest.approx(
+        _density(p_model, province, params), rel=1e-5
+    )
+
+
+@pytest.fixture(scope="module")
+def zone_vintage(tables):
+    day = VINTAGES[-1]
+    target, delays = tables[day]
+    zones = tuple(z for p in PLACES for z in ZONES[p])
+    return zone_vintage_from_tables(
+        _split(target),
+        delays,
+        day,
+        zones,
+        zone_places(),
+        parents={z: z[:5] for z in zones},
+        imputation_delay=hub_delay_pmf(day),
+    )
+
+
+def test_zone_vintage_scores_delays_by_province(zone_vintage):
+    v = zone_vintage
+    assert v.n_provinces == 12
+    assert v.parent_names == list(PLACES)
+    assert v.parents.tolist() == [i // 2 for i in range(12)]
+    assert v.delay_counts.shape == (v.n_weeks, 6, 61)
+    assert v.kernel.shape == (12, 12)
+    np.testing.assert_allclose(v.kernel.sum(axis=0), 1.0)
+    pops = zone_places().set_index("location")["population"]
+    np.testing.assert_allclose(v.populations, pops[v.names].to_numpy())
+
+
+@pytest.mark.slow
+def test_zone_model_shares_province_parts(zone_vintage):
+    v = zone_vintage
+    model = build_zone_model(v)
+    tr, params = _params(model, v)
+    # Delay offsets and missing-onset deviations are by province.
+    seeded_provinces = np.unique(v.parents[v.seeded]).size
+    assert params["delay_offset_z"].shape == (seeded_provinces - 1,)
+    assert params["logit_pi0_z"].shape[-1] == seeded_provinces - 1
+    assert tr["delay_shift"]["value"].shape[-1] == 6
+    # Rt has province deviations and zone deviations within provinces.
+    _, within = nested_basis(v.parents, v.seeded, v.own)
+    assert params["log_rt_deviations_z"].shape[-1] == seeded_provinces - 1
+    assert params["log_rt_zone_deviations_z"].shape[-1] == within.shape[1]
+    assert tr["onsets_delays"]["value"].shape[-2:] == (6, 61)
+    assert np.isfinite(_density(model, v, params))
+
+
+def test_zone_bvd_groups_map_by_province(tables):
+    from nowcastrenewal.model.inputs import bvd_inputs
+
+    rows = pd.DataFrame(
+        {
+            "group": ["national", "p1"],
+            "members": ["", "CD-IT"],
+            "as_of": ["2026-09-01"] * 2,
+            "log_mean": [0.0, 0.1],
+            "log_sd": [0.1, 0.2],
+            "ref_log_mean": [0.0, 0.0],
+            "ref_log_sd": [0.1, 0.1],
+        }
+    )
+    names = ["CD-IT-10", "CD-IT-35", "CD-NK-03"]
+    # Zones enter by their province, so a patch holds its zones.
+    out = bvd_inputs(
+        rows,
+        [z[:5] for z in names],
+        pd.Timestamp("2026-08-01").date(),
+    )
+    assert out["groups"].tolist() == [[True, True, True], [True, True, False]]
+    assert MAIN.bvd is False
+
+
+def test_mean_anchored_walk_starts_at_its_mean_level():
+    from pyrenew.randomvariable import DistributionalVariable
+
+    from nowcastrenewal.model.zones import MeanAnchoredWalk
+
+    walk = MeanAnchoredWalk(
+        DistributionalVariable("sd", numpyro.distributions.HalfNormal(0.3)),
+        frozen=2,
+        n_fit=10,
+    )
+    with numpyro.handlers.seed(rng_seed=1):
+        x = walk.sample(14, initial_value=np.array([0.5, -1.0]), n_processes=2)
+    assert x.shape == (14, 2)
+    np.testing.assert_allclose(
+        np.asarray(x[:10]).mean(axis=0), [0.5, -1.0], atol=1e-5
+    )
+    # The fitted part still moves.
+    assert np.ptp(np.asarray(x[:10]), axis=0).min() > 0
+
+
+def test_anchored_starts_are_non_centred(zone_vintage):
+    model = build_zone_model(zone_vintage)
+    _, params = _params(model, zone_vintage)
+    assert np.isfinite(_density(model, zone_vintage, params))
+    # Anchored starts sample no centred offsets, only non-centred ones.
+    assert "log_rt0_offsets" not in params
+    assert "log_rt0_province_z" in params
+
+
+def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
+    zone_vintage, tables, table
+):
+    # Option (a), #736: the pooled log Rt walk and the province and zone
+    # deviations are AR(1) with a fitted half-life, and the forecast
+    # continues that process with no forecast-only reversion.
+    import nowcastrenewal.model.model as module
+
+    assert not hasattr(module, "FORECAST_RT_HALF_LIFE")
+    day = VINTAGES[-1]
+    target, delays = tables[day]
+    vintage = day
+    province = vintage_from_tables(
+        target,
+        delays,
+        vintage,
+        PLACES[:1],
+        table,
+        imputation_delay=hub_delay_pmf(vintage),
+    )
+    centred = dataclasses.replace(MAIN, national=True, centred_rt=True)
+    _, params = _params(build_zone_model(zone_vintage), zone_vintage)
+    for name in ("rt_sd", "rt_dev_sd", "rt_zone_dev_sd"):
+        assert f"{name}_half_life" in params, name
+    # One province has no deviations, so its trend is its only Rt walk.
+    for config in (MAIN, centred):
+        _, params = _params(build_model(province, config), province)
+        assert "rt_sd_half_life" in params
+
+
+def test_the_seed_grows_at_bvdoutbreaksizes_cryptic_growth_prior(
+    zone_vintage,
+):
+    # #768 item 6: one shared seed growth rate with BVDOutbreakSize's
+    # prior on cryptic growth, in place of a clip on the growth implied
+    # by the first Rt.
+    from nowcastrenewal.model.model import SEED_DOUBLING_DAYS
+
+    assert SEED_DOUBLING_DAYS == 11.7
+    model = build_zone_model(zone_vintage)
+    tr, params = _params(model, zone_vintage)
+    assert np.shape(params["seed_growth"]) == ()
+    prior = tr["seed_growth"]["fn"]
+    median = float(np.exp(prior.base_dist.loc))
+    assert median == pytest.approx(np.log(2) / 11.7, rel=1e-6)
+
+
+def test_seeding_stays_within_the_pool_under_the_prior(zone_vintage):
+    import jax
+
+    model = build_zone_model(zone_vintage)
+    latent = model.latent
+
+    def draw(key):
+        with numpyro.handlers.seed(rng_seed=key):
+            seed_total = latent._initial_infections(latent.I0_rv(), 10)[0].sum(
+                axis=0
+            )
+            return seed_total, latent.effective_population_rv()
+
+    seeded, pool = jax.vmap(draw)(jax.random.split(jax.random.key(0), 4000))
+    within = np.mean(np.asarray(seeded) < np.asarray(pool)[:, None], axis=0)
+    # Every zone, the smallest included, keeps its seed within its
+    # at-risk pool in at least 99.9% of prior draws.
+    assert within.min() >= 0.999, within.min()

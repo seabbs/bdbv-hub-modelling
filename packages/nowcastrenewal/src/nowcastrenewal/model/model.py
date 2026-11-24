@@ -207,6 +207,15 @@ class ModelConfig:
         Sample the levels of the shared log Rt walk (`log_rt_baseline_x`)
         rather than its standardised steps (`NonCentredRandomWalk`), for
         a fit where the data pin that walk (one place).
+    rt_sd_lognormal : tuple of float or None
+        Median and log-scale SD of a LogNormal prior on that walk's step
+        SD, in place of HalfNormal(0.2). A centred walk funnels where its
+        step SD nears 0, which HalfNormal allows: at the 2026-11-22
+        release, CD-NK fitted alone mixed the step SD at bulk ESS 29 and
+        E-BFMI 0.27 to 0.36 under HalfNormal(0.2), and at 72 and 0.49 to
+        0.70 under LogNormal(log 0.12, 0.5), in the same time and with no
+        divergences. The prior moves its posterior median from 0.04 to
+        0.08 a week.
     """
 
     national: bool = False
@@ -222,6 +231,7 @@ class ModelConfig:
         "dirichlet-multinomial"
     )
     centred_rt: bool = False
+    rt_sd_lognormal: tuple[float, float] | None = None
 
 
 MAIN = ModelConfig()
@@ -334,6 +344,7 @@ def _named_walk(
     n_weeks: int,
     ar: bool = False,
     centred: bool = False,
+    sd_prior: dist.Distribution | None = None,
 ) -> TemporalProcess:
     """Weekly walk frozen over the seeding period, fitted on the data weeks.
 
@@ -341,9 +352,12 @@ def _named_walk(
     forecast pass. With `ar`, the walk is AR(1) with a half-life of
     LogNormal(log 6 weeks, 0.6) (BVDOutbreakSize deviations: 42 days),
     in the fit and the forecast alike. With `centred`, the fitted levels
-    are sampled rather than the standardised steps.
+    are sampled rather than the standardised steps. `sd_prior`, when
+    given, is the step SD's prior in place of HalfNormal(`sd`).
     """
-    sd_rv = DistributionalVariable(name, dist.HalfNormal(sd))
+    sd_rv = DistributionalVariable(
+        name, dist.HalfNormal(sd) if sd_prior is None else sd_prior
+    )
     frozen = GEN_INT_LENGTH // 7
     half_life = None
     if ar:

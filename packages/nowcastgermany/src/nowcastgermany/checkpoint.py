@@ -478,6 +478,23 @@ def _reaches(path: Path, last: int, targets: Sequence[str]) -> bool:
     return set(targets) <= held
 
 
+TRIANGLE_ENV = "GERMANY_TRIANGLE"
+"""The environment variable with the German triangle's path, which the
+workflow sets to the file its fetch rule wrote."""
+
+
+def triangle_path(config: Any) -> Path:
+    """Return the German triangle a unit reads.
+
+    `TRIANGLE_ENV` when set (the workflow's fetched file), else
+    `data/raw/germany/<the config's triangle file>`.
+    """
+    given = os.environ.get(TRIANGLE_ENV)
+    if given:
+        return Path(given)
+    return Path("data/raw/germany") / Path(config.triangle).name
+
+
 def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     """Forecast each German development date, own quantiles with truth.
 
@@ -491,7 +508,7 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
 
     _pin(label, segment)
     config = de.load_germany_config("config/germany.toml")
-    path = Path("data/raw/germany") / Path(config.triangle).name
+    path = triangle_path(config)
     triangle = hub_triangle(path)
     # Built once for every checkpoint, then read back.
     tasks_dir = german_tasks_dir(

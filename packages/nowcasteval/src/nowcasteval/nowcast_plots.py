@@ -14,16 +14,15 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 
-from bdbvhub.reporting.site import site_baseline
 from nowcasteval.plots import (
     THEMES,
-    _date_axis,
-    _grid,
     bar_style,
+    date_axis,
     model_colour,
     model_dash,
     model_style,
     mpl_dash,
+    panel_grid,
     point_style,
 )
 from nowcasteval.scorechart import OVERALL_METRICS
@@ -78,7 +77,7 @@ def plot_release_nowcasts(
     final = quantiles.loc[quantiles["target"] == "complete"]
     final = final.loc[final["model"].isin(models)]
     origins = sorted(final["origin"].unique())
-    fig, axes = _grid(
+    fig, axes = panel_grid(
         len(origins) * len(locations), len(locations), width=3.4, height=2.6
     )
     ink = THEMES[mode]
@@ -117,7 +116,7 @@ def plot_release_nowcasts(
                 colour = model_colour(m, models, mode)
                 _draw_bars(ax, rows, colour, model_dash(m), (m_i - mid) * width)
             ax.set_title(f"{loc}, origin {origin}")
-            _date_axis(ax)
+            date_axis(ax)
             ax.xaxis.set_major_locator(
                 mdates.WeekdayLocator(byweekday=5, interval=2)
             )
@@ -142,7 +141,7 @@ def plot_release_nowcasts(
 def plot_relative_overall(
     table: pd.DataFrame,
     models: Sequence[str],
-    baseline: str | None = None,
+    baseline: str,
     mode: str = "light",
     x: str = "pool",
     metrics: Mapping[str, tuple[str, float | None]] = OVERALL_METRICS,
@@ -175,12 +174,11 @@ def plot_relative_overall(
         A panel of bars grouped by pool per metric, each with a dotted line
         at its reference.
     """
-    baseline = baseline or site_baseline()
     ink = THEMES[mode]
     pick = 0 if mode == "light" else 1
     have_pools = set(table[x])
     pools = [p for p in ("national", "provinces", "zones") if p in have_pools]
-    fig, axes = _grid(len(metrics), 3, width=3.4, height=2.6)
+    fig, axes = panel_grid(len(metrics), 3, width=3.4, height=2.6)
     width = 0.8 / len(models)
     for i, m in enumerate(models):
         rows = table.loc[table["model"] == m].set_index(x)

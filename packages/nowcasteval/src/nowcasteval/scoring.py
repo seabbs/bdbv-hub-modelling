@@ -705,7 +705,10 @@ def _theta(wide: pd.DataFrame) -> pd.Series:
         both = have[:, i] & have[:, j]
         if not both.any():
             continue
-        ratio = vals[both, i].sum() / vals[both, j].sum()
+        # A pair whose sums are both 0 has no ratio (NaN, left out); a 0
+        # denominator alone gives an infinite one, as in scoringutils.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = vals[both, i].sum() / vals[both, j].sum()
         if np.isnan(ratio):
             continue
         logs[models[i]].append(float(np.log(ratio)))

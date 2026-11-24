@@ -2,10 +2,9 @@
 
 Run in an environment that holds the package's wheel and only what its
 `pyproject.toml` declares (the per-package CI job builds one). Each module
-is imported in a new interpreter. Modules in `KNOWN` still import a
-package above them or an undeclared dependency at import time; the job
-fails if one of them starts to import (remove it from `KNOWN`) or if any
-other module fails.
+is imported in a new interpreter, and the job fails if any module does
+not import: it uses a package above it or a dependency it does not
+declare.
 
 Usage: python tests/packages/package_alone.py <package> <src folder>
 """
@@ -15,49 +14,6 @@ from __future__ import annotations
 import subprocess
 import sys
 from pathlib import Path
-
-KNOWN: dict[str, set[str]] = {
-    # Upward imports (bdbvhub, nowcastbaselines; the import-linter
-    # exceptions) and scoringrules, which the next refit declares.
-    "nowcasteval": {
-        "nowcasteval.backtest",
-        "nowcasteval.checks",
-        "nowcasteval.coupling",
-        "nowcasteval.marginals",
-        "nowcasteval.nowcast",
-        "nowcasteval.nowcast_plots",
-        "nowcasteval.pairing",
-        "nowcasteval.pairing_plots",
-        "nowcasteval.plots",
-        "nowcasteval.ppc",
-        "nowcasteval.scoresummary",
-        "nowcasteval.scoring",
-    },
-    # Upward imports of bdbvhub.
-    "nowcastfoundation": {"nowcastfoundation.simulate"},
-    "nowcastgermany": {
-        "nowcastgermany.cli",
-        "nowcastgermany.evaluation",
-        "nowcastgermany.pairing",
-        "nowcastgermany.ft_store",
-        "nowcastgermany.reporting",
-    },
-    # scoringrules, through nowcasteval.scoring.
-    "bdbvhub": {
-        "bdbvhub.cli",
-        "bdbvhub.compare",
-        "bdbvhub.reporting.hubtables",
-        "bdbvhub.reporting.report",
-        "bdbvhub.reporting.store_note",
-        "bdbvhub.reporting.zone_nowcast",
-        "bdbvhub.store.archive",
-        "bdbvhub.store.digest",
-        "bdbvhub.store.store",
-    },
-    # scoringrules, through nowcasteval.scoring.
-    "nowcastbdbv": {"nowcastbdbv.zones"},
-}
-"""Modules that fail to import alone, by package, as of 2026-11-22."""
 
 
 def modules(src: Path) -> list[str]:
@@ -86,18 +42,13 @@ def failures(names: list[str]) -> dict[str, str]:
 
 
 def main(argv: list[str]) -> int:
-    """Check one package; print what changed and return the exit code."""
+    """Check one package; print each failing module and return 1 if any."""
     package, src = argv[0], Path(argv[1])
     failed = failures(modules(src))
-    known = KNOWN.get(package, set())
-    new = {m: e for m, e in failed.items() if m not in known}
-    fixed = sorted(known - set(failed))
-    for name, error in sorted(new.items()):
+    for name, error in sorted(failed.items()):
         print(f"FAIL {name}: {error}")
-    for name in fixed:
-        print(f"NOW IMPORTS {name}: remove it from KNOWN")
-    print(f"{package}: {len(failed)} known failures, {len(new)} new")
-    return 1 if new or fixed else 0
+    print(f"{package}: {len(failed)} modules fail to import")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

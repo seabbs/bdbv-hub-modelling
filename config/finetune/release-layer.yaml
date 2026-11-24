@@ -1,7 +1,7 @@
 # The release layer (finetune.release_layer; nowcastfoundation.finetune.
 # chronos.check_release_layer): drawn per block at fine-tune time from the
-# simulations already made (lead 10:35, Sam: no resimulation). A proposal:
-# no run uses it until its entry in workflow/config.yaml names this file.
+# simulations already made (lead 10:35, Sam: no resimulation). Run B's
+# entry in workflow/config.yaml names this file.
 #
 # start: the share of blocks whose releases start late, and the delay in
 # days from the outbreak's first report to the first kept release. The
@@ -12,6 +12,11 @@
 start:
   share: 0.3
   delay_days: {dist: beta, a: 1, b: 3, lower: 7, upper: 182}
+# no_lags: the share of blocks trained on their counts alone, with no lag
+# series, as when only the latest data are at hand (lead 02:00, Sam): the
+# complete layout's blocks (counts to the last complete step).
+no_lags:
+  share: 0.05
 # cadences: the release cadences of each step width and their shares, in
 # place of the block design's (finetune.chronos.BLOCK_DESIGN). Daily-step
 # blocks are 60% of all blocks, so a weekly share of 0.25 releases 15% of

@@ -67,7 +67,7 @@ REFERENCE_VALUES = "paper/data/reference-values.csv"
 
 rule germany_triangle:
     output:
-        f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv",
+        GERMANY_TRIANGLE,
     log:
         f"{LOCAL['ROOT']}/germany/fetch.log",
     localrule: True
@@ -236,10 +236,10 @@ rule rt_check:
         fit=$(mktemp -d)
         trap 'rm -rf "$fit"' EXIT
         export BDBV_DATA_DIR={params.data}
-        uv run bdbvhubrenewal fit-store unpack --store {params.store} \
+        uv run bdbvhub fit-store unpack --store {params.store} \
             --data {params.data} --model {wildcards.model} \
             --origin {wildcards.origin} --out "$fit"
-        uv run bdbvhubrenewal rt-check --fit "$fit" --data {params.data} \
+        uv run bdbvhub rt-check --fit "$fit" --data {params.data} \
             --out {output}
         if [ -n '{params.review}' ]; then
             mkdir -p '{params.review}'
@@ -372,3 +372,150 @@ rule hub_rounds:
         "cp {input} '{params.review}/hub-rounds.html.tmp' && "
         "mv '{params.review}/hub-rounds.html.tmp' "
         "'{params.review}/hub-rounds.html'; fi > {log} 2>&1"
+
+
+# The BDBV foundation-model check (bdbvhub.ftcheck): each model forecasts
+# every hub release into its own folder, keyed by the code it depends on
+# (scoring.ft_check_key), so the reference models are made once; the
+# fine-tuned model's folder is named by its checkpoint, so a new one
+# reruns only it. `ft_check` scores them together and copies the page to
+# REVIEW_DIR as bdbv-ft-check.html. Not part of `all`.
+
+FTC = config["ft_check"]
+FTC_DIR = f"{HUB}/ft-check"
+
+
+rule ft_check_forecast:
+    input:
+        data=rules.hub_data.output,
+        # Reruns when its code or the active-zone rule changes (a key
+        # file, as reruns follow file times).
+        code=lambda wc: scoring.key_file(
+            f"{FTC_DIR}/keys", "forecast", scoring.ft_check_key()
+        ),
+    output:
+        touch(f"{FTC_DIR}/forecasts/{{fmodel}}.done"),
+    log:
+        f"{FTC_DIR}/logs/{{fmodel}}.log",
+    benchmark:
+        f"{FTC_DIR}/benchmarks/{{fmodel}}.tsv"
+    conda:
+        TOOLS_ENV
+    threads: UNIT_THREADS
+    resources:
+        mem_mb=SC["mem_mb"],
+        gpu=FORECAST.gpu,
+    params:
+        env=unit_env,
+        data=lambda wc, input: Path(input.data[0]).parent,
+        out=lambda wc: f"{FTC_DIR}/forecasts/{wc.fmodel}",
+        model=lambda wc: (
+            FTC["finetuned"] if wc.fmodel.startswith("ft-") else wc.fmodel
+        ),
+        checkpoint=lambda wc: wc.fmodel[3:] if wc.fmodel.startswith("ft-") else "",
+    shell:
+        "env {params.env} BDBV_DATA_DIR={params.data} "
+        "uv run --group chronos bdbvhub ft-check forecast "
+        "--model {params.model} --checkpoint '{params.checkpoint}' "
+        "--data {params.data} --out {params.out} > {log} 2>&1"
+
+
+rule ft_check:
+    input:
+        lambda wc: [f"{f}.done" for f in ft_check_folders()],
+    output:
+        f"{FTC_DIR}/bdbv-ft-check.html",
+    log:
+        f"{FTC_DIR}/logs/report.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        data=lambda wc: f"{HUB}/data",
+        folders=lambda wc: " ".join(ft_check_folders()),
+        checkpoint=lambda wc: ft_check_checkpoint(),
+        reference=FTC["reference"],
+        review=LOCAL["REVIEW_DIR"],
+    shell:
+        "(BDBV_DATA_DIR={params.data} uv run bdbvhub ft-check report "
+        "--data {params.data} --reference {params.reference} "
+        "--checkpoint {params.checkpoint} --out {output} {params.folders} "
+        "&& if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
+        "rm -rf '{params.review}/bdbv-ft-check-data' && "
+        "cp -r $(dirname {output})/bdbv-ft-check-data '{params.review}/' && "
+        "cp {output} '{params.review}/bdbv-ft-check.html.tmp' && "
+        "mv '{params.review}/bdbv-ft-check.html.tmp' "
+        "'{params.review}/bdbv-ft-check.html'; fi) > {log} 2>&1"
+
+
+# The this-round page: every candidate's forecasts and nowcasts for the
+# round the latest Submit run on main targeted, against the data as of
+# the round, with the wk R_t quantiles, the gate's pick and the renewal
+# fits' convergence (workflow/scripts/this_round_report.py). No scores.
+# It reruns when <ROOT>/hub/round/run.txt (the run and its status) or
+# <ROOT>/hub/round/store.txt (the fit store's commit) changes, which
+# workflow/scripts/hub_watch.sh writes. Not part of `all`.
+
+
+rule this_round_inputs:
+    input:
+        target=rules.hub_data.output,
+        run=f"{HUB}/round/run.txt",
+        store=f"{HUB}/round/store.txt",
+    output:
+        candidates=f"{HUB}/round/candidates.csv.gz",
+        run=f"{HUB}/round/run/run.json",
+    log:
+        f"{HUB}/logs/this-round-inputs.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        out=lambda wc, output: Path(output.candidates).parent,
+        data=lambda wc, input: Path(input.target[0]).parent,
+    shell:
+        "workflow/scripts/this_round_inputs.sh {params.out} {params.data} "
+        "{input.run} > {log} 2>&1"
+
+
+rule this_round_report:
+    input:
+        script="workflow/scripts/this_round_report.py",
+        target=rules.hub_data.output,
+        candidates=rules.this_round_inputs.output.candidates,
+        run=rules.this_round_inputs.output.run,
+    output:
+        f"{HUB}/this-round.html",
+    log:
+        f"{HUB}/logs/this-round.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        store=lambda wc, input: Path(input.candidates).parent / "store",
+        data=lambda wc, input: Path(input.target[0]).parent,
+        run=lambda wc, input: Path(input.run).parent,
+    shell:
+        "uv run python {input.script} {output} {input.candidates} "
+        "{params.store} {params.data} {params.run} > {log} 2>&1"
+
+
+rule this_round:
+    # The page, copied to REVIEW_DIR (config/local.env) when it is set.
+    input:
+        rules.this_round_report.output,
+    log:
+        f"{HUB}/logs/this-round-publish.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        review=LOCAL["REVIEW_DIR"],
+        data=lambda wc, input: Path(input[0]).with_name("this-round-data"),
+    shell:
+        "if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
+        "rm -rf '{params.review}/this-round-data' && "
+        "cp -r {params.data} '{params.review}/this-round-data' && "
+        "cp {input} '{params.review}/this-round.html.tmp' && "
+        "mv '{params.review}/this-round.html.tmp' "
+        "'{params.review}/this-round.html'; fi > {log} 2>&1"

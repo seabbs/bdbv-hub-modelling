@@ -27,12 +27,14 @@ from nowcastfoundation.sidecar import HELD_OUT_BLOCKS, SIDECAR
 
 localconfig.check()
 LOCAL = localconfig.read()
+# The German triangle at config/germany.toml's commit (`germany_triangle`),
+# which the German scoring units and the real-data blocks read.
+GERMANY_TRIANGLE = f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv"
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"
-# A mailbox line, when NOTIFY is set; a job's command prefix by memory.
+# A mailbox line, when NOTIFY is set.
 say = functools.partial(notify.post, cfg=LOCAL)
-job_prefix = functools.partial(machine.job_prefix, LOCAL)
 
 
 # From simulate.smk (flowlib.rounds).
@@ -121,6 +123,25 @@ run_units = SCORING.run_units
 references = SCORING.references
 report_names = SCORING.report_names
 run_scores = SCORING.run_scores
+finetune_scores = SCORING.finetune_scores
 table_inputs = SCORING.table_inputs
 unit_stamps = SCORING.unit_stamps
 land_tables = SCORING.land_tables
+
+
+# The BDBV foundation-model check (rules/report.smk `ft_check`); FTC and
+# FTC_DIR are set there.
+def ft_check_checkpoint():
+    """The fine-tuned checkpoint the check runs: the config's or the pin."""
+    import tomllib
+
+    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
+    return FTC["checkpoint"] or pin
+
+
+def ft_check_folders():
+    """The BDBV check's forecast folders: each model's and the checkpoint's
+    (rules/report.smk `ft_check`)."""
+    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
+        f"{FTC_DIR}/forecasts/ft-{ft_check_checkpoint()}"
+    ]

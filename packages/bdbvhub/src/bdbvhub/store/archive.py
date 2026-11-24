@@ -24,8 +24,9 @@ import pandas as pd
 
 from bdbvhub.store import store
 from bdbvhub.submission.hub import HUB_COLUMNS, own_national
+from nowcastbdbv.backtest import vintage_task
 from nowcastbdbv.data.zones import ZoneData
-from nowcasteval.backtest import BacktestConfig, vintage_task
+from nowcasteval.backtest import BacktestConfig
 from nowcastrenewal.zones import ZONES_FILE
 from nowcastutils.base import (
     NATIONAL,
@@ -273,7 +274,7 @@ def archive(
     root : pathlib.Path or str
         The store root.
     task : ForecastTask
-        The round's task, as `bdbvhubrenewal nowcast` builds it.
+        The round's task, as `bdbvhub nowcast` builds it.
     origin_task : ForecastTask or None
         The store's task at the same origin (`store.origin_tasks`), for
         the stored fits' keys; None if the store fits no such origin.

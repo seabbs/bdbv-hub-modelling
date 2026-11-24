@@ -542,21 +542,24 @@ def test_the_trainer_status_is_folded_and_the_loss_open(tmp_path):
     assert "<details class=sec id=loss open>" in page_html
 
 
-def test_checkpoint_tables_show_the_rolling_row_check(tmp_path):
-    # The 7-day row's gap to the sum of its daily rows, and its roughness
-    # over that sum's (1 is as smooth as the daily rows' sums).
+def test_checkpoint_tables_show_the_7_day_check(tmp_path):
+    # Lead 00:55: the 7-day row against its daily rows' sums (median
+    # ratio, sums inside its 90% interval) and its roughness over the
+    # truth's (1 is as smooth as the truth), from the checkpoint's
+    # seven-day.json (rule seven_day_check).
     ctx = _machine(tmp_path)
-    s = ctx.runs[0].folder / "train" / "n250" / "settings.json"
-    settings = json.loads(s.read_text())
-    settings["held_out_rolling"] = {
-        "daily+rolling7_gap": 0.05,
-        "daily+rolling7_rough": 0.012,
-        "daily+rolling7_rough_daily_sum": 0.003,
-    }
-    s.write_text(json.dumps(settings))
+    where = ctx.runs[0].folder / "train" / "n250"
+    (where / "seven-day.json").write_text(
+        json.dumps(
+            {"seven_day": {"ratio": 1.02, "inside90": 0.91, "rough_ratio": 1.5}}
+        )
+    )
     out = page.build(ctx)
-    assert "<th>7-day row gap<th>7-day row roughness" in out
-    assert "<td>0.050<td>4.00" in out
+    assert (
+        "<th>7-day / daily sums<th>sums in 7-day 90%<th>7-day roughness / truth"
+        in out
+    )
+    assert "<td>1.02<td>91%<td>1.50" in out
 
 
 def test_the_trainer_s_losses_are_labelled_validation(tmp_path):

@@ -1,0 +1,95 @@
+name: Integration
+
+# The root tests (no package's own): the workflow with Snakemake's dry
+# runs, the repo checks and how the packages work together, plus
+# the workflow's Snakemake lint and the paper's own tests. The packages'
+# tests run in their CI jobs (ci.yml).
+
+on:
+  push:
+    branches: [main, next]
+    paths:
+      - 'packages/**'
+      - 'tests/**'
+      - 'workflow/**'
+      - 'paper/**'
+      - 'config/**'
+      - 'results/**'
+      - 'hub/**'
+      - 'docs/**'
+      - 'Taskfile.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/**'
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'tests/**'
+      - 'workflow/**'
+      - 'paper/**'
+      - 'config/**'
+      - 'results/**'
+      - 'hub/**'
+      - 'docs/**'
+      - 'Taskfile.yml'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Off main and next, a newer push cancels the running run. On main and
+  # next the running run finishes and only the newest queued run waits,
+  # so a merge is never left without a verdict by the next one.
+  cancel-in-progress: >-
+    ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/next' }}
+
+env:
+  # Chronos-2 runs on the device named here, never a detected one.
+  DEVICE: cpu
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The tests read the frozen data in tests/fixtures/data, never the
+    # live hub data.
+    env:
+      BDBV_DATA_DIR: tests/fixtures/data
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: integration
+      - run: uv sync --frozen --group paper
+      - name: snakefmt
+        run: uv run snakefmt --check workflow paper/workflow
+      - name: snakemake --lint
+        if: ${{ !cancelled() }}
+        run: |
+          printf 'ROOT=%s\nHOST_NAME=ci\n' "$RUNNER_TEMP" > "$RUNNER_TEMP/local.env"
+          export LOCAL_CONFIG="$RUNNER_TEMP/local.env"
+          uv run snakemake -s workflow/Snakefile --lint
+      # Workers steal queued tests, so a slow one does not hold up the end.
+      - name: Tests
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --group paper pytest -q -n auto --dist worksteal \
+            --durations=30 --junitxml=pytest-durations.xml tests
+      - name: Paper tests
+        if: ${{ !cancelled() }}
+        working-directory: paper
+        run: uv run --group paper pytest -q -n auto --dist worksteal --durations=10 tests
+      # Every test's time, to find the slow ones.
+      - name: Keep the test durations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pytest-durations
+          path: pytest-durations.xml
+          if-no-files-found: ignore
+          retention-days: 7

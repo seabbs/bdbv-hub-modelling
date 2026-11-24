@@ -84,7 +84,7 @@ env:
   # The model is `[submission] model` in config/hub.toml and the hub id
   # is set there too (seabbs-renewal). `prepare` resolves both into the
   # run's context.json.
-  # Every bdbvhubrenewal command reads the tidy data the prepare job
+  # Every bdbvhub command reads the tidy data the prepare job
   # pinned to the hub commit, shipped in the `inputs` artefact.
   BDBV_DATA_DIR: output/ci/inputs/data
   BDBV_RAW_DIR: output/ci/raw
@@ -181,6 +181,9 @@ jobs:
   release:
     name: Release closed rounds
     needs: detect
+    # Main only: GitHub refuses the hub-submission environment to any
+    # other branch, and the release needs its bot token to tag.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The bot's token tags the round's commit. The workflow token cannot:
@@ -372,9 +375,11 @@ jobs:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
           path: output/hub-clone
+          # src/: the custom checks hub-config/validations.yml sources.
           sparse-checkout: |
             hub-config
             model-metadata
+            src
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         if: vars.HUB_VALIDATIONS != 'false'
         with:
@@ -426,8 +431,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The environment holds the bot's token. It has no required
-    # reviewers: the gate is the approval. Restrict it to `main`.
-    environment: hub-submission
+    # reviewers: the gate is the approval. It is restricted to `main`, so
+    # other branches take no environment and their dry runs use the
+    # workflow token.
+    environment: ${{ github.ref == 'refs/heads/main' && 'hub-submission' || '' }}
     outputs:
       action: ${{ steps.pr.outputs.action }}
       pr_url: ${{ steps.pr.outputs.pr_url }}
@@ -498,7 +505,9 @@ jobs:
       needs.prepare.outputs.baseline == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: hub-submission
+    # The bot's token on main only: GitHub refuses the environment to
+    # other branches, whose dry runs use the workflow token.
+    environment: ${{ github.ref == 'refs/heads/main' && 'hub-submission' || '' }}
     outputs:
       action: ${{ steps.track.outputs.action }}
       pr_url: ${{ steps.track.outputs.pr_url }}
@@ -524,9 +533,11 @@ jobs:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
           path: output/hub-clone
+          # src/: the custom checks hub-config/validations.yml sources.
           sparse-checkout: |
             hub-config
             model-metadata
+            src
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         if: vars.HUB_VALIDATIONS != 'false'
         with:
@@ -590,7 +601,9 @@ jobs:
       needs.prepare.outputs.chronos == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: hub-submission
+    # The bot's token on main only: GitHub refuses the environment to
+    # other branches, whose dry runs use the workflow token.
+    environment: ${{ github.ref == 'refs/heads/main' && 'hub-submission' || '' }}
     outputs:
       action: ${{ steps.track.outputs.action }}
       pr_url: ${{ steps.track.outputs.pr_url }}
@@ -622,7 +635,7 @@ jobs:
         id: finetuned
         env:
           GH_TOKEN: ${{ github.token }}
-        run: echo "hash=$(uv run bdbvhubrenewal finetuned-checkpoint)" >> "$GITHUB_OUTPUT"
+        run: echo "hash=$(uv run bdbvhub finetuned-checkpoint)" >> "$GITHUB_OUTPUT"
       - name: Cache the fine-tuned checkpoints
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -637,9 +650,11 @@ jobs:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
           path: output/hub-clone
+          # src/: the custom checks hub-config/validations.yml sources.
           sparse-checkout: |
             hub-config
             model-metadata
+            src
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         if: vars.HUB_VALIDATIONS != 'false'
         with:

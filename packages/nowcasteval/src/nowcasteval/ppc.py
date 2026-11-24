@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Posterior predictive checks: the `ppc.json` a fit writes, and its plot.
 
-`bdbvhubrenewal fit` writes `<fit dir>/ppc.json` beside
+`bdbvhub fit` writes `<fit dir>/ppc.json` beside
 `diagnostics.json`, and the submission gate (`ci/`) reads it to check
 interval coverage and calibration in sample.
 The schema (version 1) is documented in `ci/INTEGRATION.md`.
@@ -31,7 +31,7 @@ from matplotlib.dates import DateFormatter
 from matplotlib.figure import Figure
 from numpy.typing import ArrayLike
 
-from nowcasteval.plots import _grid, model_colour, theme
+from nowcasteval.plots import model_colour, panel_grid, theme
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -306,7 +306,7 @@ def plot_ppc(
     with theme("light") as ink:
         colour = model_colour("model", ["model"], "light")
         miss = model_colour("miss", ["model", "miss"], "light")
-        fig, axes = _grid(len(locations), ncol, width=3.6, height=2.4)
+        fig, axes = panel_grid(len(locations), ncol, width=3.6, height=2.4)
         fig.set_facecolor("white")
         for ax, loc in zip(axes, locations, strict=True):
             d = table.loc[table["location"] == loc].sort_values("date")

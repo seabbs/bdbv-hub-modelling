@@ -23,19 +23,18 @@ from __future__ import annotations
 import json
 import re
 import sys
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
 import pandas as pd
 
-from bdbvhub.reporting.explorer import (
+from nowcasteval.explorer import (
     QUANTILE_COLUMNS,
     explorer_data,
     explorer_html,
     write_explorer,
 )
-from bdbvhub.reporting.site import site_models
 from nowcasteval.plots import DASHES, MODEL_COLOURS, MODEL_STYLE, model_style
 from nowcasteval.scorechart import write_score_chart
 from nowcasteval.scoresummary import summary_html, summary_rows
@@ -245,8 +244,7 @@ def _ft_note(results: Path) -> str:
     note = (
         f"{models} show the fine-tuned checkpoint [`{tag}`]"
         f"({_RELEASES}/{tag}). Their forecasts are those the checkpoint "
-        "scoring run made, stored on the `germany-ft-forecasts` branch, "
-        "not rerun here."
+        "scoring run made, attached to its release, not rerun here."
     )
     if meta.get("label"):
         note = f"**{meta['label']}** " + note
@@ -255,10 +253,14 @@ def _ft_note(results: Path) -> str:
     return note + "\n"
 
 
-def _read(results: Path, names: tuple[str, ...]) -> pd.DataFrame | None:
+def _read(
+    results: Path,
+    names: tuple[str, ...],
+    shown: Callable[[Iterable[str]], list[str]],
+) -> pd.DataFrame | None:
     """Stack the result files that exist, or None if none does.
 
-    Models the site hides (`config/site.toml`) are left out.
+    Models `shown` leaves out (the site's hidden ones) are dropped.
     """
     dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
     frames = [
@@ -271,8 +273,8 @@ def _read(results: Path, names: tuple[str, ...]) -> pd.DataFrame | None:
     rows = pd.concat(frames, ignore_index=True)
     if "model" not in rows.columns:
         return rows
-    shown = set(site_models(rows["model"].unique()))
-    return rows.loc[rows["model"].isin(shown)].reset_index(drop=True)
+    keep = set(shown(rows["model"].unique()))
+    return rows.loc[rows["model"].isin(keep)].reset_index(drop=True)
 
 
 def germany_explorer(
@@ -351,7 +353,11 @@ def germany_explorer(
 
 
 def germany_page(
-    fig: Path, gen: Path, results: Path, config: GermanyConfig
+    fig: Path,
+    gen: Path,
+    results: Path,
+    config: GermanyConfig,
+    shown: Callable[[Iterable[str]], list[str]],
 ) -> None:
     """Write the German nowcast benchmark page's table and summaries.
 
@@ -369,6 +375,9 @@ def germany_page(
         benchmark has not been run.
     config : GermanyConfig
         The benchmark's source, which the page credits.
+    shown : callable
+        Keeps the models the page shows, in order (the site's
+        `bdbvhub.reporting.site.site_models`).
     """
     url = f"https://github.com/{config.repo}/blob/{config.commit}"
     teams_url = (
@@ -388,7 +397,7 @@ def germany_page(
         for name in _PAGES[:-1]:
             _write(gen / name, "Not run yet: `task eval:germany`.\n")
         return
-    scores = _read(results, ("scores.csv.gz", "teams.csv.gz"))
+    scores = _read(results, ("scores.csv.gz", "teams.csv.gz"), shown)
     assert scores is not None
     scores = _shared_cells(_development(scores, config))
     _refuse_held_out(scores, config.split_date)
@@ -396,7 +405,9 @@ def germany_page(
     # up to 40 days into the held-out half. The page names the truth,
     # not its report date.
     scores = scores.assign(truth_vintage=f"{config.truth_delay}-day truth")
-    forecasts = _read(results, ("forecasts.csv.gz", "teams-forecasts.csv.gz"))
+    forecasts = _read(
+        results, ("forecasts.csv.gz", "teams-forecasts.csv.gz"), shown
+    )
     run = set(scores["model"])
     if forecasts is not None:
         run |= set(forecasts["model"])
@@ -442,7 +453,10 @@ def germany_page(
         write_explorer(
             fig / "explorer-germany.json",
             germany_explorer(
-                forecasts, _read(results, ("asof.csv.gz",)), config, models
+                forecasts,
+                _read(results, ("asof.csv.gz",), shown),
+                config,
+                models,
             ),
         )
         _write(

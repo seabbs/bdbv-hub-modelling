@@ -1,6 +1,5 @@
 """The persistent coordinator run: a tick, then the next, until stopped."""
 
-import subprocess
 import sys
 from pathlib import Path
 
@@ -47,17 +46,6 @@ def test_a_stop_file_before_it_starts_runs_nothing(passes):
     assert codes == []
 
 
-def test_an_installed_timer_is_refused():
-    got = subprocess.run(
-        ["python3", "workflow/scripts/schedule.py", "install"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    assert got.returncode != 0
-    assert "task workflow:run" in got.stdout + got.stderr
-
-
 def test_the_taskfile_runs_the_coordinator():
     text = (ROOT / "taskfiles" / "nowcast-workflow.yml").read_text()
     assert "workflow/scripts/coordinate.py" in text
@@ -79,3 +67,19 @@ def test_a_tick_that_raises_backs_off_and_goes_on(tmp_path):
     assert rc == 0
     assert len(calls) == 2
     assert slept == [60]
+
+
+def test_no_timer_runs_ticks_and_each_task_is_named_once():
+    # The coordinator run replaced the timer (schedule.py), and a task
+    # named twice in a Taskfile silently loses its first definition.
+    assert not (ROOT / "workflow" / "scripts" / "schedule.py").exists()
+    for path in (ROOT / "taskfiles").glob("*.yml"):
+        names = [
+            line.strip().rstrip(":")
+            for line in path.read_text().splitlines()
+            if line.startswith("  ")
+            and not line.startswith("   ")
+            and line.rstrip().endswith(":")
+        ]
+        dupes = sorted({n for n in names if names.count(n) > 1})
+        assert dupes == [], f"{path.name}: {dupes}"

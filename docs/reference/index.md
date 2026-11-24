@@ -1,26 +1,27 @@
 # API reference
 
-The Python API of `bdbvhubrenewal`, grouped by task. See [Setup](../setup.md) to install it and [Getting started](../getting-started.ipynb) for a worked example.
+The Python API of `bdbvhub`, grouped by task. See [Setup](../setup.md) to install it and [Getting started](../getting-started.ipynb) for a worked example.
 { .page-subtitle }
 
 | Task | Pages | Start with |
 |---|---|---|
 | Data | [Data](data.md) | `load_target`, `load_daily`, `load_delays`, `delays_for_vintage` |
 | Models | [nowcastbaselines](../nowcastbaselines/reference/), [Forecasters](forecasters.md), [Renewal model](model.md) | `get_model`, `list_models`, `ForecastTask`, `ForecastModel.forecast` |
-| Evaluation | [nowcasteval](../nowcasteval/reference/), [Evaluation](evaluation.md) | `make_tasks`, `run_forecasts`, `score_forecasts`, `release_backtest` |
+| Evaluation | [nowcasteval](../nowcasteval/reference/), [Evaluation](evaluation.md) | `run_forecasts`, `score_forecasts`, `release_backtest`; the BDBV tasks are `nowcastbdbv.backtest.make_tasks` |
 | Reporting | [nowcasteval](../nowcasteval/reference/), [Figures and tables](reporting.md), [Submission](submission.md) | `plot_location_grid`, `plot_forecasts`, `to_hub_table`, `write_submission` |
-| CLI | [CLI](cli.md) | `bdbvhubrenewal --help` |
+| CLI | [CLI](cli.md) | `bdbvhub --help` |
 
 The task, the registry, releases and snapshots come from the [nowcastutils](../nowcastutils/reference/) package.
 Scores, backtests and score figures are in [nowcasteval](../nowcasteval/reference/), and the random walk baselines in [nowcastbaselines](../nowcastbaselines/reference/).
 
 ## A forecast in five steps
 
-Run from the repository root after `bdbvhubrenewal data` has written the tidy tables to `data/`.
+Run from the repository root after `bdbvhub data` has written the tidy tables to `data/`.
 
 ```python
 import dataclasses
 
+from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.tidy import (
     delays_for_vintage,
     load_daily,
@@ -41,7 +42,7 @@ config = dataclasses.replace(
     bt.load_config("config/backtest.toml"), min_horizon=-6
 )
 vintage = "2026-10-17"
-task = bt.make_tasks(
+task = make_tasks(
     real.loc[real["vintage"] == vintage],
     delays_for_vintage(delays, vintage)[0],
     config,

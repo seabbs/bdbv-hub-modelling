@@ -67,7 +67,6 @@ dev = [
   "pytest-cov>=5",
   "pytest-xdist>=3.6",
   "ruff>=0.6",
-  "scoringrules>=0.7",
   "types-PyYAML",
 ]
 # Chronos-2 for the foundation models (`nowcastfoundation.forecaster`).
@@ -90,14 +89,15 @@ paper = [
   "snakefmt>=0.10",
   "snakemake>=9.27,<10",
   "snakemake-executor-plugin-cluster-generic>=1.0.9",
+  "snakemake-executor-plugin-slurm>=2.8,<3",
   "snakemake-logger-plugin-panoptes>=0.3,<0.4",
 ]
 
 [tool.uv]
 default-groups = ["dev"]
 # The workspace root holds no code of its own: the packages are in
-# packages/, and `bdbvhub` installs the `bdbvhub` and `bdbvhubrenewal`
-# commands.
+# packages/, and `bdbvhub` installs the `bdbvhub`
+# command.
 package = false
 
 [[tool.uv.index]]
@@ -165,6 +165,7 @@ convention = "numpy"
 [tool.ruff.lint.per-file-ignores]
 # Test functions are named for what they check; docstrings would repeat it.
 "tests/**" = ["D", "PD101"]
+"packages/*/tests/**" = ["D", "PD101"]
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
 # The small config classes and helpers carry no docstrings.
@@ -176,11 +177,16 @@ convention = "numpy"
 "packages/nowcastrenewal/src/nowcastrenewal/components/**" = ["ARG002", "N803", "N806"]
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
+"packages/nowcastrenewal/tests/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
+"packages/nowcastbdbv/tests/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 # The port's abort tests check R's conditions, not message text.
-"tests/baselinenowcast/**" = ["PT011"]
+"packages/nowcastbaselines/tests/baselinenowcast/**" = ["PT011"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Each package's own tests, then the rest. `tests/` is on the path for
+# the shared test helpers (such as `model.r_live`).
+testpaths = ["packages/*/tests", "tests"]
+pythonpath = ["tests"]
 # Model fits are slow; `task test-slow` runs them.
 addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not slow"]
 xfail_strict = true
@@ -233,37 +239,6 @@ layers = [
   "nowcasteval",
   "nowcastutils",
 ]
-# Imports against the order as of 2026-11-22. Each moves to the package
-# that owns the code, or out of the import. A new upward import is a
-# layering bug to fix, not to list here.
-ignore_imports = [
-  "nowcasteval.backtest -> nowcastbdbv.data.delays",
-  "nowcasteval.backtest -> nowcastbdbv.data.tidy",
-  "nowcasteval.backtest -> nowcastbdbv.data.zones",
-  "nowcasteval.backtest -> nowcastbdbv.zones",
-  "nowcasteval.backtest -> nowcastfoundation.simulate",
-  "nowcasteval.backtest -> nowcastrenewal.bvd",
-  "nowcasteval.backtest -> nowcastrenewal.forecaster",
-  "nowcasteval.checks -> bdbvhub.reporting.site",
-  "nowcasteval.checks -> nowcastbaselines.chain",
-  "nowcasteval.nowcast -> nowcastrenewal.forecaster",
-  "nowcasteval.nowcast_plots -> bdbvhub.reporting.site",
-  "nowcasteval.pairing -> nowcastbdbv.data.tidy",
-  "nowcasteval.pairing -> bdbvhub.store.store",
-  "nowcasteval.pairing -> nowcastbaselines.randomwalk",
-  "nowcasteval.plots -> nowcastbdbv.data.delays",
-  "nowcasteval.plots -> nowcastbdbv.data.tidy",
-  "nowcasteval.plots -> bdbvhub.reporting.site",
-  "nowcasteval.plots -> nowcastbaselines.chain",
-  "nowcasteval.scoresummary -> bdbvhub.reporting.site",
-  "nowcastfoundation.simulate -> nowcastbdbv.data.delays",
-  "nowcastfoundation.simulate -> nowcastbdbv.data.tidy",
-  "nowcastgermany.evaluation -> nowcastbdbv.data.tidy",
-  "nowcastgermany.evaluation -> bdbvhub.models",
-  "nowcastgermany.reporting -> bdbvhub.reporting.explorer",
-  "nowcastgermany.reporting -> bdbvhub.reporting.site",
-  "nowcastrenewal.zones -> nowcastbdbv.data.tidy",
-]
 
 [tool.mypy]
 python_version = "3.13"
@@ -276,6 +251,7 @@ files = ["packages/*/src"]
 module = [
   "nowcasteval.plots",
   "nowcasteval.nowcast_plots",
+  "bdbvhub.reporting.data_plots",
 ]
 disallow_untyped_calls = false
 

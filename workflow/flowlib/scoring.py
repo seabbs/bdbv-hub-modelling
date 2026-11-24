@@ -8,7 +8,9 @@ what `score.smk`, `evaluate.smk` and the report rules ask of the units;
 
 from __future__ import annotations
 
+import os
 import shlex
+import tempfile
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -51,12 +53,38 @@ def reference_code(label: str, root: Path | str = ".") -> list[str]:
     return out
 
 
+def key_file(folder: Path | str, name: str, key: str) -> str:
+    """Return the file that stands for `key`, made once; `folder/name-key`.
+
+    Every profile reruns a job on file times only (`rerun-triggers:
+    mtime`), so a code key reaches a rule as an input file named by the
+    key. The first key in `folder` is dated from the epoch, so outputs
+    made before keys existed stay current; a later one (the code changed)
+    is dated now, so the rule reruns once. Checkouts with other code each
+    keep their own file, so two sharing one ROOT never rerun each other's
+    work back and forth. Written at DAG build, atomically.
+    """
+    folder = Path(folder)
+    path = folder / f"{name}-{key}.key"
+    if path.is_file():
+        return str(path)
+    folder.mkdir(parents=True, exist_ok=True)
+    first = not any(folder.glob(f"{name}-*.key"))
+    fd, name_ = tempfile.mkstemp(dir=folder, prefix=f".{path.name}.")
+    os.close(fd)
+    tmp = Path(name_)
+    tmp.write_text(f"{key}\n")
+    if first:
+        os.utime(tmp, (0, 0))
+    tmp.replace(path)
+    return str(path)
+
+
 def reference_key(label: str, root: Path | str = ".") -> str:
     """Return a digest of `reference_code`'s contents ("" for a checkpoint).
 
-    A rule parameter: Snakemake reruns the unit when it changes (not on
-    file times, so a checkout reruns nothing), and the unit redoes only
-    the rows of the models whose own key moved.
+    The reference unit reads it as a file (`Scoring.reference_key_input`),
+    and redoes only the rows of the models whose own key moved.
     """
     import hashlib
 
@@ -68,16 +96,55 @@ def reference_key(label: str, root: Path | str = ".") -> str:
     return h.hexdigest()[:12] if files else ""
 
 
-def unit_shell(study: str, room: str, segment: str = "") -> str:
+FT_CHECK_CODE = (
+    "packages/nowcastbaselines/src",
+    "packages/nowcastfoundation/src",
+    "packages/nowcastbdbv/src",
+    "packages/nowcasteval/src/nowcasteval/nowcast.py",
+    "packages/nowcasteval/src/nowcasteval/backtest.py",
+    "config/backtest.toml",
+)
+"""What the BDBV check's forecasts depend on, past the data: the models'
+packages, the release tasks and the backtest config. The active-zone rule
+in config/finetune.toml is keyed by its values (`ft_check_key`), so a new
+checkpoint pinned there reruns only the fine-tuned model."""
+
+
+def ft_check_key(root: Path | str = ".") -> str:
+    """Return a digest of `FT_CHECK_CODE` and the active-zone rule.
+
+    The check's forecasts read it as a file (`key_file`), so they rerun
+    when it changes, not on a checkout.
+    """
+    import hashlib
+    import tomllib
+
+    h = hashlib.sha256()
+    for part in FT_CHECK_CODE:
+        path = Path(root) / part
+        files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
+        for f in files:
+            h.update(str(f.relative_to(root)).encode())
+            h.update(f.read_bytes())
+    conf = tomllib.loads((Path(root) / "config/finetune.toml").read_text())
+    rule = {k: v for k, v in conf.items() if k.startswith("active_zone")}
+    h.update(repr(sorted(rule.items())).encode())
+    return h.hexdigest()[:12]
+
+
+def unit_shell(study: str, segment: str = "") -> str:
     """Return a unit's shell command, as a rule's `shell:` template.
 
-    The unit of `study` caches under {params.cache} as {params.label}
-    once `room` (a wait-for-room prefix ending `&& `, or empty) passes;
+    The unit of `study` caches under {params.cache} as {params.label};
     `segment`, if given, is the run's own checkpoint folder it loads.
+    When it starts is the scheduler's: its rule's `resources` (memory,
+    GPU) against the machine's (flowlib.machine).
     """
+    # The German unit reads the triangle its rule takes as input.
+    triangle = "GERMANY_TRIANGLE={input.germany} " if study == "germany" else ""
     return (
-        f"mkdir -p {{params.copy_back}} && {room}{{params.prefix}} nice -n 19 "
-        f"env {{params.env}} {EVALUATE} {study} {{params.cache}} "
+        f"mkdir -p {{params.copy_back}} && "
+        f"env {{params.env}} {triangle}{EVALUATE} {study} {{params.cache}} "
         f"{{params.label}} {segment}> {{log}} 2>&1 && touch {{output}}"
     )
 
@@ -108,8 +175,8 @@ class Scoring:
     config : mapping
         The workflow config (`score`).
     local : mapping
-        This machine's settings (`localconfig.read`): SCORE_CACHE, the
-        room to wait for and FORECAST_DEVICE/FORECAST_THREADS, which
+        This machine's settings (`localconfig.read`): SCORE_CACHE and
+        FORECAST_DEVICE/FORECAST_THREADS, which
         override the config's `forecast` (`flowlib.forecast`).
     training : Training
         The fine-tuning runs whose checkpoints are scored.
@@ -130,10 +197,6 @@ class Scoring:
         self.training = training
         self.checkpoints = checkpoints
         self.cache = local["SCORE_CACHE"]
-        self.room = (
-            f"workflow/scripts/wait_for_room.sh {local['MIN_FREE_GB']} "
-            f"{local['MIN_DISK_GB']} {self.cache} {local['MAX_LOAD']} && "
-        )
         # Every forecasting job's device and threads (`forecast` in the
         # config, which the machine may override).
         self.forecast = forecast.settings(config, local)
@@ -166,7 +229,7 @@ class Scoring:
 
     def unit_shell(self, study: str, segment: str = "") -> str:
         """Return a unit's shell command (`unit_shell`)."""
-        return unit_shell(study, self.room, segment)
+        return unit_shell(study, segment)
 
     def run_scores_dir(self, run: str) -> str:
         """Return the run's score cache: its own checkpoints' units."""
@@ -182,6 +245,16 @@ class Scoring:
         unit = f"{self.run_scores_dir(run)}/{GERMANY_UNIT}"
         return [f"{unit}/n{n}.done" for n in self.saved_prefixes(run)]
 
+    def reference_key_input(self, label: str) -> list[str]:
+        """Return the reference unit's code-key file (`key_file`).
+
+        None for a checkpoint, whose own files are its inputs.
+        """
+        key = reference_key(label)
+        if not key:
+            return []
+        return [key_file(f"{self.cache}/keys", label, key)]
+
     def references(self) -> list[str]:
         """Return the reference labels' German units, shared by every run."""
         unit = f"{self.cache}/{GERMANY_UNIT}"
@@ -195,6 +268,20 @@ class Scoring:
             self.sc["reference"],
             f"{self.cache}/{GERMANY_UNIT}",
         )
+
+    def finetune_scores(self, wc: Any = None) -> list[str]:  # noqa: ARG002
+        """Return what fine-tuning scores: its checkpoints' German units.
+
+        Each trained run's German unit of every checkpoint `finetune`
+        asks for, and the reference labels' units they are compared
+        with; Snakemake keeps those that are up to date.
+        """
+        units = [
+            f"{self.run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done"
+            for run in self.training.trained_runs()
+            for n in self.training.to_train(run)
+        ]
+        return units + self.references()
 
     def run_scores(self, wc: Any = None) -> list[str]:  # noqa: ARG002
         """Return each trained run's German report."""

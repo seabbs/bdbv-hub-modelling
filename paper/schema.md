@@ -79,7 +79,7 @@ The latest `as_of_date` for a study is the final data.
 - `bias`, scoringutils' bias in [-1, 1], positive for overprediction, using the count form for sample forecasts in every study (`STUDY_COUNTS`);
 - `coverage_<width>`, whether the truth is in the central interval (from linear sample quantiles for samples). Widths are set per study in `STUDY_COVERAGE`: 50% and 95% for germany, whose hub has no 0.05 or 0.95 level, and 50% and 90% otherwise.
 
-These match scoringutils 2.2 defaults, checked by `tests/test_scoringutils.py` against `tests/scoringutils_reference.R`.
+These match scoringutils 2.2 defaults, checked live by `tests/test_scoringutils.py`, which runs `tests/scoringutils_reference.R` (CI's r-live job).
 
 `paperfigs.scores.relative_scores` divides each model's mean score by the baseline's on the forecasts both made (matched on location, stratum, origin, target and horizon), within each group.
 The baseline is set per study in `STUDY_BASELINES`: `randomwalknowcast` for synthetic, `KIT-frozen_baseline` for germany and `BDBVHub-baseline` for Ebola.

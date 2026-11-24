@@ -9,7 +9,7 @@ We submit the random walk nowcast as `seabbs-rwnowcast`, the first renewal model
 ## Where to start
 
 - To see this week's forecasts, start with [Nowcast](../nowcast.md).
-- To run a model yourself, start with the `bdbvhubrenewal` command ([CLI](../development/cli.md)): `bdbvhubrenewal data`, then `bdbvhubrenewal nowcast`.
+- To run a model yourself, start with the `bdbvhub` command ([CLI](../development/cli.md)): `bdbvhub data`, then `bdbvhub nowcast`.
 - To see how a round is submitted, start with the [Submission workflow](../submission/workflow.md).
 
 ## In this section

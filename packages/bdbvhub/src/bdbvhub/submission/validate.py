@@ -13,7 +13,7 @@ not a Saturday within the README's window).
 
 Usage::
 
-    bdbvhubrenewal validate --hub PATH [--metadata-dir DIR]
+    bdbvhub validate --hub PATH [--metadata-dir DIR]
         [--now ISO8601 | --skip-window] [--json OUT] FILE...
 
 Exit status is 1 if any file has a failed check.

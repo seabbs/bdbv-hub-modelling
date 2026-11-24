@@ -151,6 +151,9 @@ runs:
   # Run A with the German real-data blocks mixed in (the paper's
   # real-data comparison).
   realdata: {real_training: germany}
+  # Run B: Run A's recipe on the grid's new simulations with the release
+  # layer (late release starts and the weekly-release share).
+  runb: {release_layer: config/finetune/release-layer.yaml}
 
 # The runs `finetune` trains (null: every run in `runs`). The variants
 # train after Run A, so they never take its GPU.
@@ -196,8 +199,25 @@ hub_rounds:
   # that round (`compare-hub --models`), beside what we submitted.
   models: [randomwalknowcast]
 
+ft_check:
+  # The BDBV foundation-model check (rules/report.smk, bdbvhub.ftcheck):
+  # every hub release forecast by each model, scored together with
+  # pairwise relative skill scaled to `reference`. `models` are made once
+  # per code change and reused; `finetuned` reruns alone for each
+  # checkpoint, `checkpoint`, or config/finetune.toml's when empty. A
+  # checkpoint is its release's settings hash as `slots-<hash>` (the
+  # release chronos-slots-<hash>), for example slots-08f3982239a3.
+  reference: randomwalknowcast
+  models: [randomwalknowcast, fm_chronos_daily_ragged]
+  finetuned: fm_chronos_daily_ragged_ft
+  checkpoint: ""
+
 dashboard:
   # The fine-tuning dashboard (task nowcast-foundation:dashboard; workflow/flowlib/dashboard).
+  # serve: true serves it with a run whose targets include finetune
+  # (flowlib.dashboard.serve), on DASHBOARD_HOST:DASHBOARD_PORT, for as
+  # long as the coordinator (or that Snakemake run) lives.
+  serve: false
   # It shows the workflow's runs (`runs` above), each in <ROOT>/runs/<run>,
   # or those --run NAME picks; the first is the live run.
   # Reference series, matched on rows by model and checkpoint; --ref adds

@@ -15,7 +15,7 @@ import copy
 import inspect
 import json
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -71,7 +71,6 @@ def evaluate(
         out |= fs.loss_parts("held_out_loss", parts)
     if "start" in kinds or "checkpoint" in kinds:
         out["held_out_coverage"] = held_out_coverage(model, val, batch_size)
-        out["held_out_rolling"] = held_out_rolling(model, val, batch_size)
     if "start" in kinds:
         out["by_level"] = fs.held_out_by_level(model, val, fs.LEVEL_BLOCKS)
         out["by_source"] = fs.held_out_by_source(
@@ -108,21 +107,10 @@ def _covered(
     A step is a nowcast step up to its block's cut-off
     (`finetune.stream.nowcast_steps`), as the loss's parts split them.
     """
-    levels = np.asarray(model.chronos_config.quantiles, dtype=float)
-    # Each interval end is the model's quantile at that level, linear
-    # between its two nearest levels where it has none.
-    upper = np.clip(
-        np.searchsorted(levels, INTERVAL_LEVELS), 1, len(levels) - 1
-    )
-    weight = np.clip(
-        (np.asarray(INTERVAL_LEVELS) - levels[upper - 1])
-        / (levels[upper] - levels[upper - 1]),
-        0.0,
-        1.0,
-    )[None, :, None]
+    at = at_levels(model, INTERVAL_LEVELS)
     rows: list[dict[str, Any]] = []
     for block, raw, target in _predictions(model, blocks, batch_size):
-        preds = (1 - weight) * raw[:, upper - 1] + weight * raw[:, upper]
+        preds = at(raw)
         n_steps = int(block["prediction_length"])
         d = fs.nowcast_steps(block)
         names = block.get("levels", ())
@@ -140,6 +128,33 @@ def _covered(
                 }
             )
     return rows
+
+
+def at_levels(
+    model: Any, wanted: Sequence[float]
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Return a function giving the model's quantiles at levels `wanted`.
+
+    From `[rows, Q, steps]` at the model's own levels to `[rows,
+    len(wanted), steps]`: each the model's quantile at that level, linear
+    between its two nearest levels where it has none.
+    """
+    levels = np.asarray(model.chronos_config.quantiles, dtype=float)
+    upper = np.clip(np.searchsorted(levels, wanted), 1, len(levels) - 1)
+    weight = np.clip(
+        (np.asarray(wanted) - levels[upper - 1])
+        / (levels[upper] - levels[upper - 1]),
+        0.0,
+        1.0,
+    )[None, :, None]
+
+    def at(raw: np.ndarray) -> np.ndarray:
+        out: np.ndarray = (1 - weight) * raw[:, upper - 1] + weight * raw[
+            :, upper
+        ]
+        return out
+
+    return at
 
 
 def _predictions(
@@ -204,38 +219,40 @@ def held_out_coverage(
     return out
 
 
-ROLLING_PARTS = ("gap", "scale", "rough", "rough_daily_sum", "rough_truth")
-"""What `rolling_consistency` sums over a block's places and steps."""
+SEVEN_DAY_LEVELS = (0.05, 0.5, 0.95)
+"""The levels the 7-day check reads: the 90% interval's ends and the
+median."""
+
+SEVEN_DAY_BLOCKS = 100
+"""Held-out blocks with 7-day rows each checkpoint's 7-day check scores
+(`seven_day_check`)."""
 
 
-def rolling_consistency(
-    block: dict[str, Any], median: np.ndarray
-) -> dict[str, float] | None:
-    """Return how far a block's rolling-sum rows are from its daily rows.
+def seven_day_parts(
+    block: dict[str, Any],
+    median: np.ndarray,
+    lower: np.ndarray,
+    upper: np.ndarray,
+) -> dict[str, np.ndarray] | None:
+    """Return a block's 7-day check, step by step, or None without 7-day rows.
 
     A `ROLLING` source's block has each place's daily row, then its
-    rolling-sum row. The rolling row's median should be the rolling sum
-    of the daily row's medians, the context's last days included. The
-    sums over places and steps: `gap`, the absolute difference between
-    the two; `scale`, the sum of the daily rows' rolling sums; and the
-    roughness (absolute second differences) of the rolling row's median
-    (`rough`), of the daily medians' rolling sum (`rough_daily_sum`) and
-    of the true rolling sums (`rough_truth`). A rolling row much rougher
-    than its daily sum copies the daily row's day-of-week cycle.
+    rolling-sum (7-day) row. The daily medians' rolling sums (the
+    context's last days included) are set against the 7-day row: their
+    ratio (`ratio`) and whether they fall in its 90% interval (`inside`).
+    `rough` and `rough_truth` are each place's mean absolute second
+    difference of the log (plus one) of the 7-day median and of the
+    truth: a 7-day median rougher than the truth carries a weekday cycle
+    the 7-day sums do not have. Steps with no truth (past the horizon)
+    are left out.
 
     Parameters
     ----------
     block : dict
         A held-out block, its target rows first.
-    median : numpy.ndarray
-        The model's median of each target row's future steps,
-        `[targets, steps]`.
-
-    Returns
-    -------
-    dict or None
-        The sums (`ROLLING_PARTS`) and `n`, the steps compared, or None
-        for a block of a source without rolling sums.
+    median, lower, upper : numpy.ndarray
+        The model's median and 90% interval ends of each target row's
+        future steps, `[targets, steps]`.
     """
     window = ROLLING.get(str(block.get("source", "")))
     if window is None:
@@ -244,71 +261,90 @@ def rolling_consistency(
     h = int(block["prediction_length"])
     context = np.asarray(block["context"], dtype=float)
     future = context.shape[1] - h
+    truth = context[n : 2 * n, future:]
+    keep = np.isfinite(truth).all(axis=0)
     past = np.nan_to_num(context[:n, future - (window - 1) : future])
     daily = np.concatenate([past, median[:n, :h]], axis=1)
-    own = rolling_totals(daily, window)[:, window - 1 :]
-    row = median[n : 2 * n, :h]
-    truth = context[n : 2 * n, future:]
+    sums = rolling_totals(daily, window)[:, window - 1 :][:, keep]
+    row = median[n : 2 * n, :h][:, keep]
+    lo, hi = lower[n : 2 * n, :h][:, keep], upper[n : 2 * n, :h][:, keep]
 
-    def rough(x: np.ndarray) -> float:
-        return float(np.nansum(np.abs(np.diff(x, 2, axis=1))))
+    def rough(x: np.ndarray) -> np.ndarray:
+        if x.shape[1] < 3:
+            return np.full(x.shape[0], np.nan)
+        diffs = np.diff(np.log1p(np.maximum(x, 0)), 2, axis=1)
+        out: np.ndarray = np.abs(diffs).mean(axis=1)
+        return out
 
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(sums > 0, row / sums, np.nan)
     return {
-        "gap": float(np.abs(row - own).sum()),
-        "scale": float(np.abs(own).sum()),
+        "ratio": ratio.ravel(),
+        "inside": ((lo <= sums) & (sums <= hi)).ravel(),
         "rough": rough(row),
-        "rough_daily_sum": rough(own),
-        "rough_truth": rough(truth),
-        "n": float(n * h),
+        "rough_truth": rough(truth[:, keep]),
     }
 
 
-def summarise_rolling(
-    parts: Sequence[tuple[str, dict[str, float] | None]],
+def summarise_seven_day(
+    parts: Sequence[dict[str, np.ndarray] | None],
 ) -> dict[str, float]:
-    """Return each source's rolling check over its blocks' sums.
+    """Return the 7-day check over blocks' steps and places.
 
-    `<source>_gap` is the summed gap over the summed scale; each
-    roughness is per unit of that scale, so the three compare;
-    `<source>_n` counts the steps.
+    `ratio`, the median of the 7-day row over its daily sums;
+    `inside90`, the share of daily sums in the row's 90% interval;
+    `rough` and `rough_truth`, the mean roughness of the 7-day median
+    and of the truth, and `rough_ratio` the first over the second (1 is
+    as smooth as the truth); `n`, the steps compared. Empty with no
+    7-day rows.
     """
-    by: dict[str, dict[str, float]] = {}
-    for source, part in parts:
-        if part is None:
-            continue
-        total = by.setdefault(source, dict.fromkeys([*ROLLING_PARTS, "n"], 0.0))
-        for key, value in part.items():
-            total[key] += value
-    out: dict[str, float] = {}
-    for source, total in sorted(by.items()):
-        scale = total["scale"] or np.nan
-        out[f"{source}_n"] = int(total["n"])
-        for key in ("gap", "rough", "rough_daily_sum", "rough_truth"):
-            out[f"{source}_{key}"] = float(total[key] / scale)
-    return out
+    found = [p for p in parts if p is not None and len(p["inside"])]
+    if not found:
+        return {}
+
+    def joined(key: str) -> np.ndarray:
+        return np.concatenate([p[key] for p in found])
+
+    rough, truth = (
+        np.nanmean(joined("rough")),
+        np.nanmean(joined("rough_truth")),
+    )
+    return {
+        "ratio": float(np.nanmedian(joined("ratio"))),
+        "inside90": float(joined("inside").mean()),
+        "rough": float(rough),
+        "rough_truth": float(truth),
+        "rough_ratio": float(rough / truth) if truth > 0 else float("nan"),
+        "n": len(joined("inside")),
+    }
 
 
-def held_out_rolling(
-    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+def seven_day_check(
+    adapter: Path,
+    base: Any,
+    blocks: Sequence[dict[str, Any]],
+    batch_size: int,
+    most: int = SEVEN_DAY_BLOCKS,
 ) -> dict[str, float]:
-    """Return the rolling check (`rolling_consistency`) by source.
+    """Return a checkpoint's 7-day check (`seven_day_parts`) on its blocks.
 
-    Only the blocks of sources with rolling sums (`ROLLING`) are
-    predicted; the median is the model's 0.5 level.
+    The first `most` held-out blocks with 7-day rows are predicted with
+    `base` and `adapter`, as `evaluate` loads them; the levels are read
+    as `at_levels` gives them.
     """
-    rolling = [b for b in blocks if b.get("source") in ROLLING]
+    from peft import PeftModel
+
+    rolling = [b for b in blocks if b.get("source") in ROLLING][:most]
     if not rolling:
         return {}
-    levels = list(model.chronos_config.quantiles)
-    mid = min(range(len(levels)), key=lambda i: abs(levels[i] - 0.5))
-    if abs(levels[mid] - 0.5) > 1e-9:
-        raise ValueError(f"the model has no 0.5 quantile: {levels}")
-    return summarise_rolling(
-        [
-            (str(block["source"]), rolling_consistency(block, raw[:, mid]))
-            for block, raw, _ in _predictions(model, rolling, batch_size)
-        ]
-    )
+    model = PeftModel.from_pretrained(base, adapter)
+    model.eval()
+    at = at_levels(model, SEVEN_DAY_LEVELS)
+    parts = []
+    for block, raw, _ in _predictions(model, rolling, batch_size):
+        q = at(raw)
+        parts.append(seven_day_parts(block, q[:, 1], q[:, 0], q[:, 2]))
+    return summarise_seven_day(parts)
 
 
 def load_base(device: str) -> Any:

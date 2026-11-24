@@ -60,7 +60,7 @@ tasks:
 
 
   dashboard:
-    desc: Serve the fine-tuning dashboard on DASHBOARD_HOST:DASHBOARD_PORT (config/local.env); the workflow's runs, or `-- --run NAME` for some of them
+    desc: Serve the fine-tuning dashboard alone on DASHBOARD_HOST:DASHBOARD_PORT (config/local.env), for the runs under DASHBOARD_ROOT; `-- --run NAME` for some of them (dashboard.serve serves it with a run instead)
     cmds:
       - uv run --group paper python workflow/scripts/dashboard.py {{.CLI_ARGS}}
 

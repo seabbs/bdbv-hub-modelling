@@ -87,3 +87,41 @@ def test_the_window_is_checked_often_and_off_the_hour() -> None:
     gaps = [b - a for a, b in itertools.pairwise(edges)]
     assert max(gaps) <= 3 * 60, gaps
     assert all(t % 60 != 0 for t in checks), checks
+
+
+def test_the_hub_submission_environment_is_used_on_main_only() -> None:
+    """GitHub rejects a job of the protected `hub-submission` environment
+    on any other branch, so a dry run from a branch would fail them. Its
+    jobs take the environment on main only, and the release, which needs
+    the environment's bot token to tag, runs on main only."""
+    workflow = ROOT / ".github" / "workflows" / "submit.yml"
+    jobs = yaml.safe_load(workflow.read_text())["jobs"]
+    main_only = "github.ref == 'refs/heads/main'"
+    for name in ("submit", "baseline", "chronos"):
+        env = str(jobs[name]["environment"])
+        assert main_only in env, (name, env)
+        assert "'hub-submission'" in env, (name, env)
+    assert jobs["release"]["environment"] == "hub-submission"
+    assert main_only in str(jobs["release"]["if"])
+    plain = [
+        n
+        for n, j in jobs.items()
+        if j.get("environment") == "hub-submission" and n != "release"
+    ]
+    assert plain == []
+
+
+def test_every_hub_checkout_holds_the_hubs_custom_checks() -> None:
+    """The hub's validations.yml sources its custom checks from src/, so
+    every sparse checkout of the hub that validation reads holds src/."""
+    workflow = ROOT / ".github" / "workflows" / "submit.yml"
+    jobs = yaml.safe_load(workflow.read_text())["jobs"]
+    sparse = [
+        (name, step["with"]["sparse-checkout"].split())
+        for name, job in jobs.items()
+        for step in job.get("steps", [])
+        if "hub-config" in str(step.get("with", {}).get("sparse-checkout", ""))
+    ]
+    assert sparse
+    for name, paths in sparse:
+        assert "src" in paths, (name, paths)

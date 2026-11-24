@@ -213,9 +213,14 @@ where $s_t$ is the number of simulations trained by step $t$, interpolated withi
 **Training blocks.**
 A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off.
 Releases follow the layout's steps, daily, every 3 days or weekly.
-Of the daily blocks, 20% have weekly releases, 10% releases on weekdays only and 10% daily releases with missed days.
+Of the daily blocks, 25% have weekly releases, 10% releases on weekdays only and 10% daily releases with missed days.
 Of the 3-day and weekly blocks, 20% have missed releases.
 In those blocks each release but the last is missed with chance 0.2.
+In 30% of blocks the releases start late, 7 to 182 days after the outbreak's first report, with the delay drawn from a Beta(1, 3) on that range, so short delays are most common.
+The releases before the start are dropped, so the first kept release fills in the earlier onsets, as the Ebola hub's first release held onsets from months before.
+Lag series start at that release, and the counts keep the whole history.
+In 5% of blocks there are no lag series, and the block holds counts to the last complete step, as the complete layout does.
+Release starts, cadences and blocks without lag series are drawn per block at fine-tuning time from the simulated releases, and every view of a block shares them.
 Each simulation gives one observation draw, cut at 14 cut-offs, one drawn at random within each of 14 equal stretches of its weekly cut-offs, so one simulation gives up to 14 blocks.
 Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
 A block with fewer than 10 cases reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
@@ -286,15 +291,16 @@ Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quanti
 ::: {.callout-note title="Plan"}
 - Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
 - Each block or task has one lag count.
-- We estimate each place's reporting delay 99% point from the 28 days or 4 weeks of reference steps ending 112 days or 16 weeks before the cut-off, whose reports at every shorter delay are known by then, so right truncation does not bias it short.
-- The lag count is one more than that delay, so the lags include the delay at which 99% is reported.
-- The block takes the largest over its places, so no place's delay is cut short.
-- A place with few cases can only understate its delay, so it does not raise the count.
+- Each step first published after releases began settles at the first lag at which its reported count reaches 99% of its latest count.
+- The lag count less one is the 99th percentile of these settling lags over the block's steps and places with a count.
+- Only steps seen for at least twice the lag count enter, so their latest count stands for their final one and right truncation does not bias the count short.
+- Steps before the first release are left out, as a first release that fills in earlier onsets measures when releases began, not a delay.
+- A lag on which no release fell carries the count of the lag before, as with weekly releases of daily data.
 - The estimate reads no release after the cut-off.
 - In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
-- The lag count is the smaller of this estimate and the history available, keeping two steps of context before the longest lag.
-- With no complete steps, no counts in them, or a 99% point not reached within 112 days, we use as many lags as the history allows.
-- A user can set a fixed count or another quantile instead.
+- The lag count is capped only by the history, keeping two steps of context before the longest lag.
+- With no step old enough to have settled, the block takes its whole release history, every step from the first release to the cut-off.
+- A user can set a fixed count instead.
 :::
 
 To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real`).
@@ -313,6 +319,10 @@ The last 14 German nowcast dates were held out to monitor the loss.
 
 A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (@fig-dashboard).
 It showed the training and validation loss by source, each checkpoint's scores against `randomwalknowcast` with the zero-shot and complete-only references, and the German nowcasts by checkpoint.
+At each checkpoint we also check the 7-day forecasts on up to 100 held-out blocks with a 7-day row per place.
+We compare the median of the 7-day row with the 7-day sums of the same block's daily medians, and give the share of those sums inside the row's 90% interval.
+We compare the roughness of the 7-day median, the mean absolute second difference of its log, with the truth's, so a ratio of 1 is as smooth as the truth.
+The dashboard shows these in its checkpoint tables.
 Reviewing it led to the complete-only reference in the checkpoint curve (@fig-checkpoint-curve).
 The dashboard was built with the help of a large language model.
 
@@ -366,7 +376,7 @@ The dashboard was built with the help of a large language model.
 - We report cases by reference and report date through a reporting delay hazard, as epinowcast's observation model does.
 - The reporting delay has a drawn family and mean, and differs between places and age groups.
 - Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.
-- In a third of simulations, the mean delay varies by reference weekday, mostly within about 10%.
+- In a third of simulations, the mean delay varies by reference weekday, by 4% to 23% (5% to 95%), spanning the weekday effects of the German and Ebola data.
 - The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
 - Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
 - Table (planned): "Layer 3, sampling distributions of the reporting delay settings, each with its reason."
@@ -375,9 +385,12 @@ The dashboard was built with the help of a large language model.
 #### Layer 4: the reporting system
 
 ::: {.callout-note title="Plan"}
-- Cases are reported every day in half of simulations, on weekdays only in a quarter, on two or three fixed days a week in 15% and on one day a week in 10%, with the days drawn.
-- In half of the simulations reporting every day, the chance of reporting varies by report weekday, mostly by a few percent and up to about 15%, with a tail to strong effects.
-- In a third of simulations, counts vary by reference weekday, mostly by a few percent.
+- Cases are reported every day in 45% of simulations, on weekdays only in a quarter, on two or three fixed weekdays in 15% and on one day a week in 15%, with the days drawn.
+- In half of the simulations reporting every day, the chance of reporting varies by report weekday.
+- In two thirds of simulations, counts vary by reference weekday.
+- Both weekday effects have a log weekday profile with a standard deviation of 0.13 to 0.69 (5% to 95%), so effects as strong as the German data's are common and mild ones are kept.
+- In half of simulations the weekday profiles are structured, built from parts such as a weekend dip, a catch-up on the first day after it, a Friday surge, one quiet day or weekdays above the weekend, with some free noise added.
+- Otherwise each weekday's effect is drawn freely.
 - Reporting shocks add backlogs or outages.
 - Revisions are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
 - Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.

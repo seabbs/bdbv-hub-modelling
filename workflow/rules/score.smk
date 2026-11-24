@@ -42,6 +42,12 @@ checkpoint release_list:
 
 
 rule score_germany:
+    input:
+        germany=GERMANY_TRIANGLE,
+        # The reference reruns when its models' code changes (a key file,
+        # as reruns follow file times); it redoes only the rows of the
+        # models whose key moved.
+        code=lambda wc: SCORING.reference_key_input(wc.label),
     output:
         f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",
     log:
@@ -56,14 +62,10 @@ rule score_germany:
         mem_mb=SC["mem_mb"],
         gpu=FORECAST.gpu,
     params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
         copy_back=unit_rows(GERMANY_UNIT),
         cache=lambda wc, output: Path(output[0]).parents[1],
         label=lambda wc: wc.label,
-        # The reference reruns when its models' code changes (a digest of
-        # it); it redoes only the rows of the models whose key moved.
-        code=lambda wc: scoring.reference_key(wc.label),
     shell:
         unit_shell("germany")
 
@@ -74,6 +76,7 @@ rule score_run_germany:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        germany=GERMANY_TRIANGLE,
     output:
         f"{RUN}/scores/{GERMANY_UNIT}/n{{n}}.done",
     log:
@@ -88,7 +91,6 @@ rule score_run_germany:
         mem_mb=SC["mem_mb"],
         gpu=FORECAST.gpu,
     params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
         copy_back=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}/n{wc.n}/",
         cache=lambda wc, output: Path(output[0]).parents[1],

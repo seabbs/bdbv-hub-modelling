@@ -433,7 +433,7 @@ def _table(scores: pd.DataFrame, by: list[str], baseline: str) -> pd.DataFrame:
     return out
 
 
-def _grid(locations: pd.DataFrame) -> pd.DataFrame:
+def panel_grid(locations: pd.DataFrame) -> pd.DataFrame:
     """Each grid factor's levels and their shares of the outbreaks.
 
     The factors are the non-numeric columns: each simulation's cell.
@@ -648,7 +648,7 @@ def score_tables(
         ),
     }
     if study == "synthetic":
-        tables[main_dir / f"{study}-grid.csv"] = _grid(locations)
+        tables[main_dir / f"{study}-grid.csv"] = panel_grid(locations)
     if study in STUDY_SI_TABLES:
         tables[si_dir / f"{study}-real-finetune.csv"] = real_finetune_table(
             every, split, after if study == "ebola" else None

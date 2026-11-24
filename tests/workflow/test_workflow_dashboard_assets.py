@@ -184,3 +184,20 @@ def test_the_audit_s_panel_fixes_are_in_place():
     assert "id=gleg" in js
     assert "interim" in js
     assert "function niceTicks(" in js
+
+
+def test_every_drawn_model_has_its_intervals():
+    # Only each run's newest checkpoint had bands, and the reference
+    # models none beside a run: every drawn forecast shows its 50% and
+    # outer intervals with its median.
+    js = (PAGE / "nowcasts.js").read_text()
+    assert "runBands" not in js
+    assert "e.rank==0&&" not in js
+    bands = js[js.index("if(S.bands<2)fs.forEach(") :]
+    bands = bands[
+        : bands.index(
+            "fs.forEach(function(z){var e=z.e,f=z.f,c=colour(e.id);\n  var P="
+        )
+    ]
+    assert "PP(f,0).concat(PP(f,6)" in bands
+    assert "PP(f,2).concat(PP(f,4)" in bands

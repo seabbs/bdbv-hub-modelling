@@ -13,9 +13,28 @@ TWO = {
 }
 
 
-def test_the_committed_runs_are_run_a_and_its_variants():
+def test_the_committed_runs_are_run_a_its_variants_and_run_b():
     cfg = runs.load_config()
-    assert list(cfg["runs"]) == ["runa", "noslots", "nodelays", "realdata"]
+    assert list(cfg["runs"]) == [
+        "runa",
+        "noslots",
+        "nodelays",
+        "realdata",
+        "runb",
+    ]
+
+
+def test_run_b_trains_with_the_release_layer():
+    # Lead 00:30: Run B is Run A's recipe on the new grid with the release
+    # layer; the committed config must name the layer's file.
+    cfg = runs.load_config()
+    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
+    layer = found["runb"].ft["release_layer"]
+    assert layer == "config/finetune/release-layer.yaml"
+    assert (runs.CONFIG.parents[1] / layer).is_file()
+    assert f"--release-layer {layer}" in runs.trainer_options(found["runb"])
+    assert "--release-layer" not in runs.trainer_options(found["runa"])
+    assert runs.trained(cfg, found) == ["runa"]
 
 
 def test_only_run_a_trains_until_the_variants_are_due():

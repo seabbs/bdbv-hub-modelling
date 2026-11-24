@@ -1,11 +1,11 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Command line interface: `bdbvhubrenewal <command>`.
+"""Command line interface: `bdbvhub <command>`.
 
 Commands:
 
 - `data`: download the hub data and write the tidy tables.
-- `backtest`: run the development backtest and the recovery check, or
-  with `--lopo` the leave-one-province-out check.
+- `backtest`: run the development backtest, or with `--lopo` the
+  leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
 - `zone-backtest`: score the random walk models run at zone level.
@@ -52,6 +52,7 @@ import pandas as pd
 
 from bdbvhub.store import archive as store_archive
 from bdbvhub.store import store
+from bdbvhub.store.store import stored_delays
 from bdbvhub.submission.fitting import get_config, run_fit, run_forecast
 from bdbvhub.submission.hub import (
     ROUND_NAME,
@@ -76,6 +77,7 @@ from bdbvhub.submission.validate import (
 )
 from bdbvhub.submission.validate import main as validate_main
 from nowcastbaselines.zones import zones_for_model
+from nowcastbdbv import backtest as bdbv_bt
 from nowcastbdbv.data import tidy
 from nowcastbdbv.data.tidy import (
     build_tidy_data,
@@ -101,9 +103,7 @@ from nowcasteval.nowcast import (
     release_backtest,
     resolve_truth_delay,
     score_releases,
-    stored_delays,
 )
-from nowcastfoundation.simulate import SCENARIO_RT_SCALE
 from nowcastrenewal.forecaster import DELAY_SUMMARY_FILE
 from nowcastrenewal.zones import ZONES_FILE
 from nowcastutils.base import (
@@ -120,7 +120,6 @@ from nowcastutils.devices import host_devices
 from nowcastutils.files import write_csv
 from nowcastutils.forecast import Forecast
 from nowcastutils.hierarchy import is_zone
-from nowcastutils.releases import cutoff_lags
 from nowcastutils.snapshots import weekly_counts
 
 __all__ = ["build_parser", "chunk", "host_devices", "main"]
@@ -155,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
     argparse.ArgumentParser
         The parser.
     """
-    parser = argparse.ArgumentParser(prog="bdbvhubrenewal")
+    parser = argparse.ArgumentParser(prog="bdbvhub")
     parser.add_argument(
         "--version", action="store_true", help="Print the version and exit."
     )
@@ -188,40 +187,6 @@ def build_parser() -> argparse.ArgumentParser:
         "from the fit store (`fit-store load`) and are kept.",
     )
     back.add_argument(
-        "--scenarios-only",
-        action="store_true",
-        help="Run only the scenarios calibrated to the real data.",
-    )
-    back.add_argument(
-        "--scenario-as-of",
-        default=None,
-        help="Real vintage the scenarios copy. Defaults to the latest.",
-    )
-    back.add_argument(
-        "--scenario-dates",
-        nargs="*",
-        default=None,
-        help="Simulated vintages to forecast from. Defaults to the four "
-        "weeks up to the scenario vintage.",
-    )
-    back.add_argument(
-        "--scenarios",
-        nargs="*",
-        choices=list(SCENARIO_RT_SCALE),
-        default=None,
-        help="Scenarios to run, so each can run apart. Defaults to all.",
-    )
-    back.add_argument(
-        "--recovery-only",
-        action="store_true",
-        help="Run only the recovery check on the simulated outbreak.",
-    )
-    back.add_argument(
-        "--no-recovery",
-        action="store_true",
-        help="Leave out the recovery check, to run it apart.",
-    )
-    back.add_argument(
         "--forecast-only",
         action="store_true",
         help="Forecast without scoring, writing the forecasts to --parts, "
@@ -231,14 +196,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--parts",
         default="output/parts",
         help="Where --forecast-only writes the forecasts.",
-    )
-    back.add_argument(
-        "--chunk",
-        default=None,
-        help=_CHUNK_HELP.format(
-            what="recovery check's dates (with --recovery-only) or the "
-            "scenario dates (with --scenarios-only)"
-        ),
     )
     back.add_argument(
         "--lopo",
@@ -309,7 +266,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Score randomwalk and randomwalknowcast with no pairing and "
         "with their provinces paired by the rolling rho_p, from one "
         "forecast each, on the BDBV release backtest "
-        "(`nowcasteval.pairing`); the German study is `nowcastgermany "
+        "(`bdbvhub.pairing`); the German study is `nowcastgermany "
         "pairing-sensitivity`.",
     )
     pst.add_argument("--study", choices=["bdbv"], default="bdbv")
@@ -323,7 +280,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--candidates",
         action="store_true",
         help="Score every copula.CANDIDATES setting instead, and print "
-        "them best first (`nowcasteval.pairing.bdbv_candidates`).",
+        "them best first (`bdbvhub.pairing.bdbv_candidates`).",
     )
 
     dig = sub.add_parser(
@@ -365,16 +322,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     cat = sub.add_parser(
         "concat-results",
-        help="Stack the results files of runs made apart, such as the "
-        "scenarios, in the order given.",
+        help="Stack the results files of runs made apart, in the order given.",
     )
     cat.add_argument("--out", default="results")
     cat.add_argument(
         "--dedupe",
         nargs="*",
         default=[],
-        help="Files every part writes in full, such as a scenario's truth "
-        "when its dates run apart: one copy of each row is kept.",
+        help="Files every part writes in full, such as a truth table: "
+        "one copy of each row is kept.",
     )
     cat.add_argument("parts", nargs="+", help="Each run's results directory.")
 
@@ -589,6 +545,29 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("--out", required=True)
     live.add_argument("--run", default=None, help="Defaults to LIVE_RUN.")
 
+    ftc = sub.add_parser(
+        "ft-check",
+        help="The BDBV foundation-model check (bdbvhub.ftcheck): forecast "
+        "every release with one model, or score the models and write the "
+        "page.",
+    )
+    ftc.add_argument("action", choices=["forecast", "report"])
+    ftc.add_argument("--data", default=data_dir)
+    ftc.add_argument("--model", help="forecast: the registered model.")
+    ftc.add_argument(
+        "--checkpoint",
+        default="",
+        help="The fine-tuned checkpoint (settings hash) the _ft model "
+        "loads; config/finetune.toml's if empty.",
+    )
+    ftc.add_argument(
+        "--out", required=True, help="forecast: the folder; report: the page."
+    )
+    ftc.add_argument("--reference", default="randomwalknowcast")
+    ftc.add_argument(
+        "parts", nargs="*", help="report: the models' forecast folders."
+    )
+
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
     rep.add_argument("--generated", default="docs/generated")
@@ -629,7 +608,7 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
     if vintage not in target_vintages:
         raise ValueError(
             f"No real data for vintage {vintage}; latest is "
-            f"{max(target_vintages)}. Run `bdbvhubrenewal data` first."
+            f"{max(target_vintages)}. Run `bdbvhub data` first."
         )
     return vintage
 
@@ -673,13 +652,15 @@ def _round_task(
     """
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
-    task, note = bt.vintage_task(
+    task, note = bdbv_bt.vintage_task(
         target, delays, config, vintage, daily, zones=zones, places=places
     )
     notes = [note] if note else []
     if reference_date and as_date(reference_date) != task.reference_date:
         ref = as_date(reference_date)
-        weeks = dataclasses.replace(config, min_horizon=bt.TASK_MIN_HORIZON)
+        weeks = dataclasses.replace(
+            config, min_horizon=bdbv_bt.TASK_MIN_HORIZON
+        )
         task = dataclasses.replace(
             task,
             reference_date=ref,
@@ -719,6 +700,24 @@ def _add_store_arg(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def apply_sampler(config: bt.BacktestConfig) -> None:
+    """Set the fitted models' NUTS settings from the backtest config.
+
+    The settings go in the `SAMPLER_ENV` environment variable, which the
+    renewal models read when they are built. Settings already there are
+    kept.
+
+    Parameters
+    ----------
+    config : BacktestConfig
+        Gives `sampler`.
+    """
+    from nowcastrenewal.forecaster import SAMPLER_ENV
+
+    if config.sampler and not os.environ.get(SAMPLER_ENV):
+        os.environ[SAMPLER_ENV] = json.dumps(config.sampler)
+
+
 def _models(names: Sequence[str] | None) -> list[str]:
     return list(names) if names else [s.name for s in list_models()]
 
@@ -729,7 +728,7 @@ def _backtest(args: argparse.Namespace) -> int:
     config = bt.load_config(args.config)
     if args.samples is not None:
         config = dataclasses.replace(config, score_samples=args.samples)
-    bt.apply_sampler(config)
+    apply_sampler(config)
     host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
@@ -749,40 +748,12 @@ def _backtest(args: argparse.Namespace) -> int:
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
-    if args.chunk and not (args.scenarios_only or args.recovery_only):
-        print(
-            "ERROR: --chunk needs --scenarios-only or --recovery-only.",
-            file=sys.stderr,
-        )
-        return 1
     models = [get_model(n) for n in names]
     if args.forecast_only:
         return _forecast_parts(args, config, target, delays, models)
     fits: list[pd.DataFrame] = []
-    if args.scenarios_only:
-        as_of, dates = _scenario_dates(args, target)
-        sforecasts, sscores, senergy, struth = bt.run_scenarios(
-            models,
-            bt.for_scoring(config),
-            target,
-            delays,
-            load_health_zones(args.data),
-            as_of,
-            dates,
-            names=args.scenarios or list(SCENARIO_RT_SCALE),
-            daily=load_daily(args.data),
-        )
-        for table, path in (
-            (sforecasts, output / "scenario-forecasts.csv.gz"),
-            (sscores, results / "scenario-scores.csv.gz"),
-            (senergy, results / "scenario-energy.csv"),
-        ):
-            write_csv(bt.merge_by_model(path, table), path)
-        write_csv(struth, results / "scenario-truth.csv")
-        print(f"Scenarios: {len(sscores)} scored forecasts in {results}.")
-        return 0
     if args.lopo:
-        lopo_fc, lopo_scores = bt.run_lopo(
+        lopo_fc, lopo_scores = bdbv_bt.run_lopo(
             models,
             target,
             delays,
@@ -794,15 +765,8 @@ def _backtest(args: argparse.Namespace) -> int:
         _write_fits(fits, results / "lopo-fits.csv")
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
-    if args.recovery_only:
-        if args.chunk:
-            dates = chunk(config.simulated_dates, args.chunk)
-            config = dataclasses.replace(config, simulated_dates=tuple(dates))
-        rscores = _recovery(args, config, models, results, output)
-        print(f"Recovery: {len(rscores)} scored forecasts in {results}.")
-        return 0
     learnt: list[pd.DataFrame] = []
-    forecasts = bt.run_development(
+    forecasts = bdbv_bt.run_development(
         models,
         target,
         delays,
@@ -819,28 +783,8 @@ def _backtest(args: argparse.Namespace) -> int:
     forecasts = bt.merge_by_model(output / "forecasts.csv.gz", forecasts)
     _release_backtest(args, config, target, delays, results, forecasts)
     write_csv(forecasts, output / "forecasts.csv.gz")
-    n_recovery = "not run"
-    if not args.no_recovery:
-        n_recovery = str(len(_recovery(args, config, models, results, output)))
-    print(
-        f"Development: {len(forecasts)} forecast rows; recovery: "
-        f"{n_recovery}. Written to {results}."
-    )
+    print(f"Development: {len(forecasts)} forecast rows. Written to {results}.")
     return 0
-
-
-def _scenario_dates(
-    args: argparse.Namespace, target: pd.DataFrame
-) -> tuple[str, list[str]]:
-    """Return the scenarios' real vintage and their forecast dates."""
-    as_of = args.scenario_as_of or bt.real_vintages(target)[-1]
-    dates = args.scenario_dates or [
-        (as_date(as_of) - dt.timedelta(weeks=k)).isoformat()
-        for k in (3, 2, 1, 0)
-    ]
-    if args.chunk:
-        dates = chunk(dates, args.chunk)
-    return as_of, dates
 
 
 def _forecast_parts(
@@ -858,51 +802,27 @@ def _forecast_parts(
     parts = Path(args.parts)
     parts.mkdir(parents=True, exist_ok=True)
     daily = load_daily(args.data)
-    if args.scenarios_only:
-        as_of, dates = _scenario_dates(args, target)
-        forecasts, zones = bt.scenario_forecasts(
-            models,
-            bt.for_scoring(config),
-            target,
-            delays,
-            load_health_zones(args.data),
-            as_of,
-            dates,
-            names=args.scenarios or list(SCENARIO_RT_SCALE),
-            daily=daily,
-        )
-        write_csv(forecasts, parts / "scenario-forecasts.csv.gz")
-        write_csv(zones, parts / "scenario-zone-forecasts.csv.gz")
-    elif args.recovery_only:
-        if args.chunk:
-            dates = chunk(config.simulated_dates, args.chunk)
-            config = dataclasses.replace(config, simulated_dates=tuple(dates))
-        forecasts = bt.recovery_forecasts(
-            models, bt.for_scoring(config), lags=cutoff_lags(daily)
-        )
-        write_csv(forecasts, parts / "recovery-forecasts.csv.gz")
-    else:
-        fits: list[pd.DataFrame] = []
-        learnt: list[pd.DataFrame] = []
-        forecasts = bt.run_development(
-            models, target, delays, config, fits=fits, learnt=learnt,
-            daily=daily, zones=_zone_data(args.data),
-        )  # fmt: skip
-        write_csv(forecasts, parts / "forecasts.csv.gz")
-        for name, frames in (
-            ("backtest-fits.csv", fits),
-            (DELAY_SUMMARY_FILE, learnt),
-        ):
-            table = pd.concat(frames, ignore_index=True) if frames else None
-            write_csv(pd.DataFrame() if table is None else table, parts / name)
-        tasks = list(
-            store.origin_tasks(
-                target, delays, config, daily, _zone_data(args.data)
-            ).values()
-        )
-        forecast_releases(
-            bt.tasks_for_scoring(tasks, config), target, models
-        ).write(parts)
+    fits: list[pd.DataFrame] = []
+    learnt: list[pd.DataFrame] = []
+    forecasts = bdbv_bt.run_development(
+        models, target, delays, config, fits=fits, learnt=learnt,
+        daily=daily, zones=_zone_data(args.data),
+    )  # fmt: skip
+    write_csv(forecasts, parts / "forecasts.csv.gz")
+    for name, frames in (
+        ("backtest-fits.csv", fits),
+        (DELAY_SUMMARY_FILE, learnt),
+    ):
+        table = pd.concat(frames, ignore_index=True) if frames else None
+        write_csv(pd.DataFrame() if table is None else table, parts / name)
+    tasks = list(
+        store.origin_tasks(
+            target, delays, config, daily, _zone_data(args.data)
+        ).values()
+    )
+    forecast_releases(
+        bt.tasks_for_scoring(tasks, config), target, models
+    ).write(parts)
     print(f"Forecasts of {[m.name for m in models]} written to {parts}.")
     return 0
 
@@ -925,8 +845,8 @@ def _order(table: pd.DataFrame) -> list[str]:
 def _score(args: argparse.Namespace) -> int:
     """Score every model's forecasts from --forecast-only runs together.
 
-    Writes the files the backtest, recovery check, scenarios and zone
-    backtest write when they run every model at once.
+    Writes the files the backtest and the zone backtest write when they
+    run every model at once.
     """
     from nowcastbdbv.zones import ZoneForecasts, score_zones
 
@@ -959,54 +879,6 @@ def _score(args: argparse.Namespace) -> int:
             ReleaseForecasts.read(release),
         )  # fmt: skip
         write_csv(forecasts, output / "forecasts.csv.gz")
-    recovery = _stack(parts, "recovery-forecasts.csv.gz")
-    if recovery is not None:
-        recovery = bt.joint_order(recovery, _order(recovery))
-        rscores, renergy = bt.score_recovery(recovery)
-        for table, path in (
-            (recovery, output / "recovery-forecasts.csv.gz"),
-            (rscores, results / "recovery-scores.csv"),
-            (renergy, results / "recovery-energy.csv"),
-        ):
-            write_csv(bt.merge_by_model(path, table), path)
-    scenario = _stack(parts, "scenario-forecasts.csv.gz")
-    if scenario is not None:
-        zone = _stack(parts, "scenario-zone-forecasts.csv.gz")
-        assert zone is not None
-        present = set(scenario["scenario"])
-        names = [n for n in SCENARIO_RT_SCALE if f"calibrated_{n}" in present]
-        sscores, senergy, struth = bt.score_scenarios(
-            scenario,
-            zone,
-            _order(scenario),
-            config,
-            target,
-            delays,
-            load_health_zones(args.data),
-            bt.real_vintages(target)[-1],
-            sorted(set(scenario["vintage"].astype(str))),
-            names,
-        )
-        # In the order one run makes them: by scenario, then task, then
-        # model.
-        models = _order(scenario)
-        scenario = pd.concat(
-            [
-                bt.joint_order(
-                    scenario.loc[scenario["scenario"] == f"calibrated_{n}"],
-                    models,
-                )
-                for n in names
-            ],
-            ignore_index=True,
-        )
-        for table, path in (
-            (scenario, output / "scenario-forecasts.csv.gz"),
-            (sscores, results / "scenario-scores.csv.gz"),
-            (senergy, results / "scenario-energy.csv"),
-        ):
-            write_csv(bt.merge_by_model(path, table), path)
-        write_csv(struth, results / "scenario-truth.csv")
     zoned = [p for p in parts if (p / "zone-forecast-runs.csv.gz").exists()]
     if zoned:
         run = ZoneForecasts.read(zoned)
@@ -1024,26 +896,6 @@ def _score(args: argparse.Namespace) -> int:
         )
     print(f"Scored the forecasts of {len(parts)} parts into {results}.")
     return 0
-
-
-def _recovery(
-    args: argparse.Namespace,
-    config: bt.BacktestConfig,
-    models: Sequence[ForecastModel],
-    results: Path,
-    output: Path,
-) -> pd.DataFrame:
-    """Run the recovery check, write its files and return its scores."""
-    rforecasts, rscores, renergy = bt.run_recovery(
-        models, bt.for_scoring(config), lags=cutoff_lags(load_daily(args.data))
-    )
-    for table, path in (
-        (rforecasts, output / "recovery-forecasts.csv.gz"),
-        (rscores, results / "recovery-scores.csv"),
-        (renergy, results / "recovery-energy.csv"),
-    ):
-        write_csv(bt.merge_by_model(path, table), path)
-    return rscores
 
 
 def _release_backtest(
@@ -1646,8 +1498,8 @@ def _write_zone_results(
 ) -> None:
     """Write the zone backtest's tables."""
     from bdbvhub.compare import forecast_quantiles
-    from bdbvhub.reporting.explorer import draw_subset
     from nowcastbdbv.zones import zone_relative_skill
+    from nowcasteval.explorer import draw_subset
 
     out.parent.mkdir(parents=True, exist_ok=True)
     write_csv(scores, out)
@@ -1705,7 +1557,7 @@ def _write_national_sidecar(
 
 
 def _plot_submission(args: argparse.Namespace) -> int:
-    from nowcasteval.plots import plot_submission
+    from bdbvhub.reporting.data_plots import plot_submission
 
     target = load_target(args.data)
     real = target.loc[target["kind"] == "real"]
@@ -1825,7 +1677,9 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
         Path(args.data) / "bvd",
         vintages,
         bvd.list_releases(token),
-        max_rhat=config.bvd_max_rhat,
+        max_rhat=(
+            bvd.MAX_RHAT if config.bvd_max_rhat is None else config.bvd_max_rhat
+        ),
     )
     for vintage, choice in chosen.items():
         if choice is None:
@@ -1842,7 +1696,7 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
 
 def _compare_hub(args: argparse.Namespace) -> int:
     from bdbvhub import compare as hc
-    from bdbvhub.reporting.explorer import TRAJECTORY_DRAWS
+    from nowcasteval.explorer import TRAJECTORY_DRAWS
 
     cfg = hc.load_comparison_config(args.config)
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
@@ -1943,7 +1797,8 @@ def _compare_hub(args: argparse.Namespace) -> int:
 
 
 def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
-    from nowcasteval import pairing
+    from bdbvhub import pairing
+    from nowcasteval.pairing import best_candidate
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1959,7 +1814,7 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
         from nowcastbaselines.copula import CANDIDATES
 
         scores = pairing.bdbv_candidates(CANDIDATES, data, config, origins)
-        print(pairing.best_candidate(scores).to_string(index=False))
+        print(best_candidate(scores).to_string(index=False))
     else:
         scores = pairing.bdbv_sensitivity(data, config, origins)
     if args.chunk:
@@ -1973,6 +1828,35 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
 def _data_root() -> Path:
     """Return the tidy data directory, `$BDBV_DATA_DIR` or `data/`."""
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
+
+
+def _ft_check(args: argparse.Namespace) -> int:
+    from bdbvhub import ftcheck
+    from nowcastfoundation.forecaster import finetuned_spec
+
+    if args.action == "forecast":
+        if not args.model:
+            print("ERROR: forecast needs --model.", file=sys.stderr)
+            return 1
+        ftcheck.forecast(args.model, args.data, args.out, args.checkpoint)
+        print(f"Forecasts of {args.model} written to {args.out}.")
+        return 0
+    tables = ftcheck.skill_tables(args.parts, args.data, args.reference)
+    root = Path(__file__).resolve().parents[4]
+    scripts = [
+        root / "docs" / "javascripts" / f
+        for f in ("toggles.js", "zoom.js", "explorer.js")
+        if (root / "docs" / "javascripts" / f).exists()
+    ]
+    out = ftcheck.write_report(
+        tables,
+        args.out,
+        args.reference,
+        args.checkpoint or finetuned_spec(),
+        scripts,
+    )
+    print(f"Wrote {out}.")
+    return 0
 
 
 def _live_checkpoint(args: argparse.Namespace) -> int:
@@ -2007,9 +1891,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     From the shell, download the data, forecast with the random walk
     nowcast and write its hub file under `output/submission/`:
 
-        bdbvhubrenewal data
-        bdbvhubrenewal nowcast --model randomwalknowcast --vintage latest
-        bdbvhubrenewal <command> --help
+        bdbvhub data
+        bdbvhub nowcast --model randomwalknowcast --vintage latest
+        bdbvhub <command> --help
 
     The same from Python:
 
@@ -2069,6 +1953,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _pairing_sensitivity(args, str(_data_root()))
     if args.command == "live-checkpoint":
         return _live_checkpoint(args)
+    if args.command == "ft-check":
+        return _ft_check(args)
     if args.command == "digest":
         from bdbvhub.store.digest import backtest_digest, model_digest
 

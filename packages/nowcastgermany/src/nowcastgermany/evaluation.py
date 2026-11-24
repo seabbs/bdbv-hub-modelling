@@ -47,7 +47,8 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 
-from bdbvhub.models import get_model, list_models
+# Registers `randomwalknowcast_daily`, the German study's walk.
+from nowcastbaselines.daily import DailyWalkNowcast  # noqa: F401
 from nowcasteval.marginals import forecast_quantiles
 from nowcasteval.nowcast import rolling_truth
 from nowcasteval.scoring import pairwise_skill, score_quantiles
@@ -64,7 +65,8 @@ from nowcastgermany.data import (
     nowcast_tasks,
     within_delay,
 )
-from nowcastutils.base import ForecastTask
+from nowcastutils.base import ForecastTask, get_model, list_models
+from nowcastutils.web import download
 
 log = logging.getLogger(__name__)
 
@@ -362,8 +364,6 @@ def fetch_germany(  # pragma: no cover - network
     dict
         The sources, also written to `dest/sources.json`.
     """
-    from nowcastbdbv.data.tidy import _request
-
     out = Path(dest)
     out.mkdir(parents=True, exist_ok=True)
     files = [(config.repo, config.commit, config.triangle)] + [
@@ -372,7 +372,7 @@ def fetch_germany(  # pragma: no cover - network
     ]
     for repo, commit, path in files:
         url = f"https://raw.githubusercontent.com/{repo}/{commit}/{path}"
-        (out / Path(path).name).write_bytes(_request(url, None))
+        (out / Path(path).name).write_bytes(download(url))
     sources: dict[str, object] = {
         "files": [
             {"repo": repo, "commit": commit, "path": path}
