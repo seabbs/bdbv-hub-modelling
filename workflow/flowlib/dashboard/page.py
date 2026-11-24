@@ -331,6 +331,83 @@ def throughput_line(folder: Path | None, segment: str | None) -> str:
     )
 
 
+def training_now(
+    folder: Path | None, status: Mapping[str, Any], rate: float | None
+) -> str:
+    """Return one line of what the trainer is doing now.
+
+    The status file's stage and, while a chunk trains, its simulations,
+    the steps done of it (the step less the finished chunks' steps) and
+    the time left at `rate` steps a second. Empty with no status.
+    """
+    stage = status.get("stage")
+    if not stage:
+        return ""
+    parts = [html.escape(str(stage))]
+    seg, step = status.get("segment"), status.get("step")
+    if folder is not None and seg and step is not None:
+        run = logs.RunLog(folder)
+        done = run.chunk_times()
+        finished = {r["first"] for r in done}
+        open_ = [
+            (a + 1, b, n)
+            for a, (b, n) in run.chunks().items()
+            if a + 1 not in finished
+        ]
+        if open_:
+            a, b, n = max(open_)
+            into = step - sum(r["steps"] for r in done)
+            if 0 <= into <= n:
+                parts.append(f"simulations {a}-{b} of {html.escape(seg)}")
+                parts.append(f"{into:,} of {n:,} steps")
+                if rate:
+                    parts.append(f"{_dur((n - into) / rate)} left")
+    return (
+        f"<p class=tnow><span class=k>Now{tip('t_now')}</span> "
+        f"{', '.join(parts)}</p>"
+    )
+
+
+def checkpoint_timings(folder: Path | None) -> str:
+    """Return a table of each checkpoint's chunks, steps and time split.
+
+    From the trainer's chunk-time lines (`logs.RunLog.chunk_times`); a
+    segment with no saved checkpoint yet is marked as running so far.
+    """
+    if folder is None:
+        return ""
+    rows = logs.RunLog(folder).chunk_times()
+    if not rows:
+        return ""
+    by: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        by.setdefault(r["segment"], []).append(r)
+    head = (
+        "<tr><th>checkpoint</th><th>chunks</th><th>steps</th>"
+        "<th>training</th><th>cutting</th><th>evaluating</th>"
+        "<th>in all</th><th>last chunk ended</th></tr>"
+    )
+    body = []
+    for seg in sorted(by, key=logs._size):
+        rs = by[seg]
+        part = {k: sum(r[k] for r in rs) for k in logs.SPLIT}
+        ended = datetime.fromtimestamp(max(r["t"] for r in rs))
+        saved = (folder / "train" / seg / "settings.json").exists()
+        body.append(
+            f"<tr><td>{html.escape(seg)}</td><td>{len(rs)}</td>"
+            f"<td>{sum(r['steps'] for r in rs):,}</td>"
+            f"<td>{_dur(part['train'])}</td><td>{_dur(part['cut'])}</td>"
+            f"<td>{_dur(part['eval'])}</td>"
+            f"<td>{_dur(sum(part.values()))}</td>"
+            f"<td>{ended:%d %b %H:%M}{'' if saved else ' (running)'}</td></tr>"
+        )
+    return (
+        "<details class=about open><summary class=mut>Checkpoint timings"
+        f"{tip('t_timings')}</summary><div class=wrap><table class=tim>"
+        f"{head}{''.join(body)}</table></div></details>"
+    )
+
+
 def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     """Return the status tiles and the sticky bar's step and next checkpoint."""
     now = datetime.now().timestamp()
@@ -984,6 +1061,8 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
     views = training.views_summary(live.folder) if live.folder else None
     tput = throughput_line(live.folder, status.get("segment"))
+    now = training_now(live.folder, status, st.rate)
+    timings = checkpoint_timings(live.folder)
     about = {
         "trainer_status": status,
         "block_views": views,
@@ -995,7 +1074,8 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
             "Status",
             # The trainer's status, views and sources: folded, as the tiles
             # say where the run is.
-            f"<div class=tiles>{tiles}</div>{tput}<details class=about>"
+            f"<div class=tiles>{tiles}</div>{now}{tput}{timings}"
+            "<details class=about>"
             f"<summary class=mut>Trainer status</summary>{kv.box(about)}"
             "</details>",
             True,

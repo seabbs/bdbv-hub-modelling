@@ -72,8 +72,9 @@ def test_training_now_names_the_chunk_and_its_progress(tmp_path):
 def test_training_now_says_only_the_stage_when_the_chunk_is_unknown(tmp_path):
     status = {"stage": "cutting blocks of outbreaks 1-100", "step": 0}
     out = page.training_now(tmp_path, status, None)
-    assert "cutting blocks of outbreaks 1-100" in out
-    assert "steps" not in out
+    shown = out.rsplit("</span>", 1)[1]
+    assert "cutting blocks of outbreaks 1-100" in shown
+    assert "steps" not in shown
     assert page.training_now(tmp_path, {}, None) == ""
 
 
