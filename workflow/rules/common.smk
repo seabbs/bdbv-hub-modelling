@@ -124,3 +124,21 @@ run_scores = SCORING.run_scores
 table_inputs = SCORING.table_inputs
 unit_stamps = SCORING.unit_stamps
 land_tables = SCORING.land_tables
+
+
+# The BDBV foundation-model check (rules/report.smk `ft_check`); FTC and
+# FTC_DIR are set there.
+def ft_check_checkpoint():
+    """The fine-tuned checkpoint the check runs: the config's or the pin."""
+    import tomllib
+
+    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
+    return FTC["checkpoint"] or pin
+
+
+def ft_check_folders():
+    """The BDBV check's forecast folders: each model's and the checkpoint's
+    (rules/report.smk `ft_check`)."""
+    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
+        f"{FTC_DIR}/forecasts/ft-{ft_check_checkpoint()}"
+    ]
