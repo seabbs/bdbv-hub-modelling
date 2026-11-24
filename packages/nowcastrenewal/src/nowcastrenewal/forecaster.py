@@ -238,7 +238,11 @@ VARIANTS: Final[dict[str, Variant]] = {
             # Each province alone drops pooling and importation; depletion
             # and the Rt process are those of the zone models. One series
             # pins its Rt walk, whose levels are then sampled.
-            overrides={"national": True, "centred_rt": True},
+            overrides={
+                "national": True,
+                "centred_rt": True,
+                "rt_sd_lognormal": (0.12, 0.5),
+            },
             per_province=True,
         ),
         Variant(
@@ -249,7 +253,11 @@ VARIANTS: Final[dict[str, Variant]] = {
             "zone sums.",
             # renewalsp's model on each zone's series (#768 item 9, staged
             # beside renewalsp until it is at least as good).
-            overrides={"national": True, "centred_rt": True},
+            overrides={
+                "national": True,
+                "centred_rt": True,
+                "rt_sd_lognormal": (0.12, 0.5),
+            },
             per_province=True,
             zones=True,
             sampler_of="renewalsp",
