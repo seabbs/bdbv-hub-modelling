@@ -385,22 +385,6 @@ rule hub_rounds:
 # REVIEW_DIR as bdbv-ft-check.html too; `finetune` asks for the page of
 # every released checkpoint (`ft_check_released`). Not part of `all`.
 
-FTC = config["ft_check"]
-
-
-def ft_check_checkpoint():
-    """The fine-tuned checkpoint the check runs: the config's or the pin."""
-    import tomllib
-
-    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
-    return FTC["checkpoint"] or pin
-
-
-def ft_check_folders(ckpt):
-    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
-        f"{FTC_DIR}/forecasts/ft-{ckpt}"
-    ]
-
 
 rule ft_check_forecast:
     input:
