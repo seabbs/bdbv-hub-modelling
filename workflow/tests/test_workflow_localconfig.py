@@ -212,3 +212,30 @@ def test_the_only_example_config_is_the_machine_settings():
     examples = sorted(p.name for p in (ROOT / "config").glob("*.example"))
     assert examples == ["local.env.example"]
     assert not (ROOT / "config" / "profile.example").exists()
+
+
+def _worktree(tmp_path):
+    """A main checkout and a git worktree of it, as git lays them out."""
+    main, wt = tmp_path / "repo", tmp_path / "repo" / ".worktrees" / "wt"
+    (main / ".git" / "worktrees" / "wt").mkdir(parents=True)
+    (main / "config").mkdir()
+    wt.mkdir(parents=True)
+    (wt / ".git").write_text(f"gitdir: {main}/.git/worktrees/wt\n")
+    return main, wt
+
+
+def test_a_worktree_shares_the_main_checkout_s_local_config(tmp_path):
+    # One local config a host: a worktree without its own reads the main
+    # checkout's.
+    main, wt = _worktree(tmp_path)
+    (main / "config" / "local.env").write_text("ROOT=/data\n")
+    assert localconfig.default_path(wt) == main / "config" / "local.env"
+    assert localconfig.default_path(main) == main / "config" / "local.env"
+
+
+def test_a_worktree_s_own_local_config_wins(tmp_path):
+    main, wt = _worktree(tmp_path)
+    (main / "config" / "local.env").write_text("ROOT=/data\n")
+    (wt / "config").mkdir()
+    (wt / "config" / "local.env").write_text("ROOT=/elsewhere\n")
+    assert localconfig.default_path(wt) == wt / "config" / "local.env"
