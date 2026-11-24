@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from model.r_live import run_r
 
 from nowcastbdbv.data.delays import HUB_GENGAMMA
-
-from .r_live import run_r
 
 URL = (
     "https://raw.githubusercontent.com/InsightNet-US/BDBV-Modeling-Hub/"

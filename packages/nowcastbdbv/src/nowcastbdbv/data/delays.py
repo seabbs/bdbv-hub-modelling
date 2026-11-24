@@ -62,7 +62,7 @@ HUB_GENGAMMA: Final = {
 """The hub's generalised gamma delay fits in hours, as `(mu, sigma, Q)`.
 
 flexsurv's parameterisation, refitted to the hub's 2026-10-17 delays by
-the live check in `tests/model/test_hub_imputation_delays.py`.
+the live check in the package's `tests/test_hub_imputation_delays.py`.
 """
 
 

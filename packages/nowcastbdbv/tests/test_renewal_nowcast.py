@@ -253,9 +253,9 @@ def test_model_log_density_is_the_same_with_weekly_blocks(
 
 
 def test_negative_and_long_delays_are_clipped_not_dropped(tables, table):
-    from nowcastrenewal.model.inputs import vintage_from_tables
+    from bdbv_cases import PLACES, VINTAGES
 
-    from .conftest import PLACES, VINTAGES
+    from nowcastrenewal.model.inputs import vintage_from_tables
 
     day = VINTAGES[-1]
     target, delays = tables[day]

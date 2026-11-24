@@ -11,13 +11,12 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro
 import pytest
+from bdbv_cases import MAIN_REPO_DATA
 from jax import enable_x64
 
 from nowcastbdbv.data.delays import hub_delay_pmf
 from nowcastrenewal.model import MAIN, build_model, model_args
 from nowcastrenewal.model.inputs import vintage_from_tables
-
-from .conftest import MAIN_REPO_DATA
 
 
 def real_vintage(table, config):

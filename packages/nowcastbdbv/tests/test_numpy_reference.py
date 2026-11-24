@@ -2,12 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from nowcastbdbv.data.delays import hub_delay_pmf
-from nowcastrenewal.components.pmfs import Delay, censored_pmf
-from nowcastrenewal.model import generation_interval
-
-from .numpy_reference import (
+from model.numpy_reference import (
     delay_matrix,
     expected_imputed_onsets,
     expected_known_onsets,
@@ -15,6 +10,10 @@ from .numpy_reference import (
     renewal,
     to_onset_weeks,
 )
+
+from nowcastbdbv.data.delays import hub_delay_pmf
+from nowcastrenewal.components.pmfs import Delay, censored_pmf
+from nowcastrenewal.model import generation_interval
 
 
 def test_known_plus_missing_equals_reports() -> None:

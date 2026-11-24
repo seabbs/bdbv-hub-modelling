@@ -23,7 +23,7 @@ from nowcastbdbv.data.tidy import (
 )
 from nowcastutils.files import write_csv
 
-DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+DATA = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "data"
 
 
 def _write(path: Path, rows: list[dict[str, object]]) -> Path:
@@ -409,7 +409,9 @@ def test_loaders_default_to_bdbv_data_dir(
     from nowcastbdbv.data import tidy
     from nowcastbdbv.data.tidy import load_locations
 
-    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+    fixture = (
+        Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "data"
+    )
     monkeypatch.setattr(tidy, "_DEFAULT_DATA_DIR", tmp_path / "absent")
     monkeypatch.setenv("BDBV_DATA_DIR", str(fixture))
     assert len(load_locations()) > 0
