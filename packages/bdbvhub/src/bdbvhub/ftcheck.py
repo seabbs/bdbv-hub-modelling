@@ -280,7 +280,11 @@ def calibration(quantiles: pd.DataFrame) -> pd.DataFrame:
     grp = q.assign(_in=inside).groupby(["model", "level", "weeks_back"])
     out = grp.size().rename("n").to_frame()
     out["median_over_truth"] = grp["q50"].sum() / grp["truth"].sum()
-    out["median_over_reported"] = grp["q50"].sum() / grp["reported"].sum()
+    reported = grp["reported"].sum()
+    # Weeks after the origin have nothing reported: no ratio.
+    out["median_over_reported"] = grp["q50"].sum() / reported.where(
+        reported > 0
+    )
     out["coverage_90"] = grp["_in"].mean()
     return out.reset_index()
 
