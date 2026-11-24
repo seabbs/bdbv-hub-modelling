@@ -41,8 +41,6 @@ results/delay-summary.csv
 
 # Machine settings (workflow/flowlib/localconfig.py); see config/local.env.example.
 config/local.env
-# A machine's own Snakemake profile (config/profile.example).
-config/profile/
 /.venv
 
 

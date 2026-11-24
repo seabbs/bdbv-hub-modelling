@@ -49,6 +49,8 @@ DEFAULTS = (
     ("REMOTE", ""),
     ("REMOTE_ROOT", ""),
     ("SIM_SEEDS", ""),
+    # A Snakemake profile of this machine's own, kept outside the
+    # repository, which replaces the one COMPUTE gives (empty: none).
     ("SNAKEMAKE_PROFILE", ""),
     # Where the dashboard (workflow/scripts/dashboard.py) listens: its
     # host (an address of this machine; 127.0.0.1 keeps it local) and
