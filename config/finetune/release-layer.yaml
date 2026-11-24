@@ -1,7 +1,7 @@
 # The release layer (finetune.release_layer; nowcastfoundation.finetune.
 # chronos.check_release_layer): drawn per block at fine-tune time from the
-# simulations already made (lead 10:35, Sam: no resimulation). A proposal:
-# no run uses it until its entry in workflow/config.yaml names this file.
+# simulations already made (lead 10:35, Sam: no resimulation). Run B's
+# entry in workflow/config.yaml names this file.
 #
 # start: the share of blocks whose releases start late, and the delay in
 # days from the outbreak's first report to the first kept release. The
