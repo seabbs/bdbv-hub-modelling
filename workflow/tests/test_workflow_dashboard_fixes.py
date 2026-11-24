@@ -80,3 +80,20 @@ def test_a_server_error_is_logged_not_sent(tmp_path, monkeypatch):
     assert "secret detail" not in body
     assert "building" in body.lower()
     assert "secret detail" in err.getvalue()
+
+
+def test_the_random_walk_reference_is_the_daily_series():
+    # Lead 15:58: Germany's random walk is randomwalknowcast_daily, a
+    # 7-day sum for every date; the weekly-step randomwalknowcast (every
+    # 7th date, from an old reference folder) is not drawn.
+    import re
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).parents[2]
+    config = yaml.safe_load((root / "workflow" / "config.yaml").read_text())
+    rw = next(r for r in config["dashboard"]["references"] if r["key"] == "rw")
+    pattern = re.compile(rw["model"])
+    assert pattern.search("randomwalknowcast_daily")
+    assert not pattern.search("randomwalknowcast")
