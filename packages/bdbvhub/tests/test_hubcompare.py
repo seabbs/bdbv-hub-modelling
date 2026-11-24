@@ -267,6 +267,25 @@ def test_our_forecasts_cover_the_hub_weeks(
     assert fc["horizon"].max() == 3
 
 
+def test_our_forecasts_have_every_hub_zone_the_submission_has(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    """A model rerun for a round forecasts every hub zone of its provinces,
+    as its submitted file does (`zones_for_model` over `hub_zones`), not
+    only the zones with cases, so it is scored on the same cells."""
+    from nowcastutils.hierarchy import province_of
+
+    config = BacktestConfig(n_samples=20, seed=1)
+    fc = our_forecasts(
+        ["2026-10-31"], target, delays, config, ["randomwalk"], daily,
+        ZONE_DATA, min_horizon=-2,
+    )  # fmt: skip
+    provinces = set(fc.loc[fc["location"].str.count("-") == 1, "location"])
+    want = {z for z in ZONE_DATA.codes if province_of(z) in provinces}
+    got = set(fc.loc[fc["location"].str.count("-") == 2, "location"])
+    assert got == want
+
+
 def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
     stored = pd.DataFrame(
         {

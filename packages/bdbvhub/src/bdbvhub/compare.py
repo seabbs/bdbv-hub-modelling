@@ -621,11 +621,12 @@ def our_forecasts(
 ) -> pd.DataFrame:
     """Run our models for hub rounds from the matching vintages.
 
-    Each model runs on the country and provinces, and again on the health
-    zones with cases at the vintage, as the zone backtest runs them. Only
-    the zones are kept from the zone run, as it also gives the country.
-    A model that forecasts the zones itself (`reads_zones`) has no zone
-    run, and only its zones with cases are kept.
+    Each model runs on the country and provinces, and again on every hub
+    health zone (`zones.codes`), as the submission does (`zones_for_model`
+    over `hub_zones`), so a model rerun for a round is scored on the cells
+    its submitted file covers. Only the zones are kept from the zone run,
+    as it also gives the country. A model that forecasts the zones itself
+    (`reads_zones`) has no zone run, and its hub zones are kept.
 
     Parameters
     ----------
@@ -664,11 +665,11 @@ def our_forecasts(
         rows = real.loc[real["vintage"] == vintage]
         tasks = make_tasks(rows, delays, config, daily=daily, zones=zones)
         counts = weekly_counts(zones.daily, vintage)
-        here = tuple(z for z in zones.codes if z in set(counts["location"]))
+        here = tuple(zones.codes)
         history = pd.concat([daily, zones.daily])
         walks = [m for m in built if not getattr(m, "reads_zones", False)]
         fc = run_forecasts(built, tasks)
-        # Every model's zones are those with cases, as the walks run on.
+        # Every model's zones are the hub's, as its submission's are.
         fc = fc.loc[~fc["location"].map(is_zone) | fc["location"].isin(here)]
         if walks:
             zone = run_forecasts(
