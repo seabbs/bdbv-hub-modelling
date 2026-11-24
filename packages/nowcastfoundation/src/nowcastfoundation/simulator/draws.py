@@ -635,4 +635,8 @@ def draw_values(
     # Week-to-week delay jitter (`delay_jitter`), drawn last so the draws
     # above are unchanged.
     v["delay_jitter_sd"] = ds("delay_jitter_sd")
+    # Reporting cut-offs (`report_cap`, `report_stop`), drawn last so the
+    # draws above are unchanged.
+    v["report_cap_days"] = ds("report_cap_days")
+    v["report_stop_at"] = ds("report_stop_at")
     return v
