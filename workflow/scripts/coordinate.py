@@ -12,6 +12,7 @@ and stop it with `touch output/coordinator.stop`, which ends it after
 the running pass, or by its pid. Standard library only.
 """
 
+import os
 import sys
 import time
 import traceback
@@ -54,6 +55,9 @@ def main() -> int:
     import tick
 
     cfg = localconfig.read()
+    # A dashboard served with the run (flowlib.dashboard.serve) lives as
+    # long as this coordinator, not one tick.
+    os.environ["WORKFLOW_DRIVER_PID"] = str(os.getpid())
     return run(
         tick.main,
         STOP,

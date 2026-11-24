@@ -52,5 +52,15 @@ rule all:
         rules.score.input if "score" in TARGETS else [],
 
 
+onstart:
+    # The fine-tuning dashboard, served with a run that fine-tunes when
+    # the config says so (`dashboard.serve`); it ends with the
+    # coordinator, or with this run (flowlib.dashboard.serve).
+    if config["dashboard"].get("serve") and "finetune" in TARGETS:
+        from flowlib.dashboard import serve
+
+        serve.ensure(LOCAL, serve.driver_pid())
+
+
 onerror:
     say(f"FAILED; the failing rule and its error are in the Snakemake log {log}")

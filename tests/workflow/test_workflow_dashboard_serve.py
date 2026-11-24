@@ -81,3 +81,22 @@ def test_the_coordinator_names_itself_as_the_driver():
     text = (ROOT / "workflow" / "scripts" / "coordinate.py").read_text()
     assert "WORKFLOW_DRIVER_PID" in text
     assert serve.DRIVER_ENV == "WORKFLOW_DRIVER_PID"
+
+
+def test_the_server_ends_when_its_driver_has(monkeypatch):
+    import pytest
+
+    pytest.importorskip("matplotlib")
+    sys.path.insert(0, str(ROOT / "workflow" / "scripts"))
+    import dashboard
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    ended = []
+    monkeypatch.setattr(dashboard.os, "_exit", ended.append)
+    dashboard.end_with(gone.pid, every=0.01)
+    for _ in range(100):
+        if ended:
+            break
+        time.sleep(0.02)
+    assert ended == [0]

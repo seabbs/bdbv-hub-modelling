@@ -75,7 +75,7 @@ def workflow_runs(
             "no runs to show: the dashboard shows the workflow's runs "
             "(runs in workflow/config.yaml) under ROOT in config/local.env"
         )
-    root = Path(local["ROOT"]).expanduser()
+    root = Path(local.get("DASHBOARD_ROOT") or local["ROOT"]).expanduser()
     return spec.load_runs([(n, root / "runs" / n) for n in chosen])
 
 

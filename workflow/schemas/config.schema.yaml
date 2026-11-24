@@ -273,6 +273,7 @@ properties:
         additionalProperties: {type: string}
       levels: {$ref: "#/$defs/labels"}
       score_defaults: {type: object}
+      serve: {type: boolean}
       exclude: {type: object}
       rule: {type: string}
       held_out:
