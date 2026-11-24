@@ -110,8 +110,9 @@ jobs:
           python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
           bundle=output/fit-store/backtests/latest.tar.gz
           if [ ! -f "$bundle" ]; then
-            echo "::error::the fit store holds no backtests (Fit store's backtests job writes them)"
-            exit 1
+            echo "::warning::the fit store holds no backtests yet (Fit store's backtests job writes them); their sections are left out"
+            echo "Backtests: not yet stored" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
           tar -xzf "$bundle"
           cat output/fit-store/backtests/latest.json >> "$GITHUB_STEP_SUMMARY"
