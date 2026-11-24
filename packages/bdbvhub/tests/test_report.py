@@ -383,3 +383,24 @@ def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
     assert "2026-11-08" in meta
     lead = report._release_intro(n, stored)
     assert f"{n:,} draws" in lead
+
+
+def test_sections_not_stored_yet_say_so(tmp_path: Path) -> None:
+    # Before the fit store holds the backtests, every snippet the docs
+    # include but nothing wrote says it is not stored yet, so the site
+    # still builds; one already written is kept.
+    docs = tmp_path / "docs"
+    gen = docs / "generated"
+    gen.mkdir(parents=True)
+    (docs / "backtest.md").write_text(
+        '--8<-- "release-headline.md"\n--8<-- "vintages.md"\n'
+    )
+    (docs / "examples").mkdir()
+    (docs / "examples" / "example.md").write_text("x\n")
+    (docs / "other.md").write_text('--8<-- "example.md"\n')
+    (gen / "vintages.md").write_text("table\n")
+    filled = report._not_stored(gen)
+    assert filled == ["release-headline.md"]
+    assert (gen / "release-headline.md").read_text() == report.NOT_STORED
+    assert (gen / "vintages.md").read_text() == "table\n"
+    assert not (gen / "example.md").exists()

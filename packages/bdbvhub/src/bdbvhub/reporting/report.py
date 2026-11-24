@@ -311,12 +311,16 @@ def make_report(
 
     # Backtest and comparison pages: the models the site shows.
     names = _page_models()
-    summaries = _release_section(
-        fig, gen, res, real, names, config.score_samples, config.n_samples
-    )
-    _backtest_page(
-        fig, gen, res, out, config, target, names, data_dir, summaries
-    )
+    # The backtests' scores come from the fit store (its backtests job);
+    # before it has stored any, their sections say so (`NOT_STORED`).
+    stored = (res / "nowcast-scores.csv").exists()
+    if stored:
+        summaries = _release_section(
+            fig, gen, res, real, names, config.score_samples, config.n_samples
+        )
+        _backtest_page(
+            fig, gen, res, out, config, target, names, data_dir, summaries
+        )
     _comparison_page(fig, gen, Path(hub_comparison), target)
     germany_page(
         fig,
@@ -325,7 +329,8 @@ def make_report(
         load_germany_config(germany_config),
         site_models,
     )
-    pairing_page(res / "pairing", gen)
+    if (res / "pairing").is_dir():
+        pairing_page(res / "pairing", gen)
 
     # Nowcast page: latest real vintage, every registered model.
     rows = real.loc[real["vintage"] == latest]
@@ -383,6 +388,45 @@ def make_report(
         partial(plot_renewal_delay, learnt, baseline, location_names(real)),
         fig / "renewal-delay.svg",
     )
+    if not stored:
+        _not_stored(gen)
+
+
+NOT_STORED: Final = (
+    "Not yet stored: the fit store's backtests job writes these results, "
+    "and the site is rebuilt when it has.\n"
+)
+"""What a section of the backtests says before the fit store holds them."""
+
+
+def _not_stored(gen: Path) -> list[str]:
+    """Write `NOT_STORED` for every snippet the docs include but lack.
+
+    Only when the backtests are not stored yet: then their sections (and
+    the pairing page's) have no file, and the site still builds. Once they
+    are stored a missing snippet is an error `mkdocs --strict` reports.
+    """
+    import re
+
+    docs = gen.parent
+    wanted = sorted(
+        {
+            name
+            for page in docs.rglob("*.md")
+            if gen not in page.parents
+            for name in re.findall(r'--8<-- "([^"]+)"', page.read_text())
+        }
+    )
+    filled = []
+    for name in wanted:
+        if (gen / name).exists() or (docs / "examples" / name).exists():
+            continue
+        (gen / name).parent.mkdir(parents=True, exist_ok=True)
+        (gen / name).write_text(NOT_STORED)
+        filled.append(name)
+    if filled:
+        print(f"backtests not stored yet: {len(filled)} sections say so")
+    return filled
 
 
 RECENT_WEEKS: Final = Settings().walk_weeks
