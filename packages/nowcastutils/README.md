@@ -17,7 +17,7 @@ It is for anyone writing a model or a scorer that should see the same releases a
 - [`dates`](src/nowcastutils/dates.py): epidemiological weeks and dates.
 - [`forecast`](src/nowcastutils/forecast.py): a model's forecast record.
 - [`trajectories`](src/nowcastutils/trajectories/): coherent sample trajectories from quantile forecasts.
-- [`files`](src/nowcastutils/files.py): table writing.
+- [`files`](src/nowcastutils/files.py), [`web`](src/nowcastutils/web.py): table writing and downloads.
 - [`devices`](src/nowcastutils/devices.py): compute device settings.
 
 ## Next

@@ -1477,8 +1477,8 @@ def _write_zone_results(
 ) -> None:
     """Write the zone backtest's tables."""
     from bdbvhub.compare import forecast_quantiles
-    from bdbvhub.reporting.explorer import draw_subset
     from nowcastbdbv.zones import zone_relative_skill
+    from nowcasteval.explorer import draw_subset
 
     out.parent.mkdir(parents=True, exist_ok=True)
     write_csv(scores, out)
@@ -1673,7 +1673,7 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
 
 def _compare_hub(args: argparse.Namespace) -> int:
     from bdbvhub import compare as hc
-    from bdbvhub.reporting.explorer import TRAJECTORY_DRAWS
+    from nowcasteval.explorer import TRAJECTORY_DRAWS
 
     cfg = hc.load_comparison_config(args.config)
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)

@@ -28,11 +28,6 @@ from bdbvhub.compare import (
     summarise_comparison,
 )
 from bdbvhub.reporting.chain_plots import baseline_share, plot_delay_check
-from bdbvhub.reporting.explorer import (
-    explorer_data,
-    explorer_html,
-    write_explorer,
-)
 from bdbvhub.reporting.hubtables import hub_tables, write_hub_tables
 from bdbvhub.reporting.site import site_baseline, site_models
 from bdbvhub.reporting.store_note import write_store_note
@@ -75,6 +70,11 @@ from nowcasteval.checks import (
     check_summary,
     flags,
     place_types,
+)
+from nowcasteval.explorer import (
+    explorer_data,
+    explorer_html,
+    write_explorer,
 )
 from nowcasteval.nowcast import relative_crps as _relative_crps
 from nowcasteval.nowcast import relative_energy
@@ -316,7 +316,13 @@ def make_report(
         fig, gen, res, out, config, target, names, data_dir, summaries
     )
     _comparison_page(fig, gen, Path(hub_comparison), target)
-    germany_page(fig, gen, Path(germany), load_germany_config(germany_config))
+    germany_page(
+        fig,
+        gen,
+        Path(germany),
+        load_germany_config(germany_config),
+        site_models,
+    )
     pairing_page(res / "pairing", gen)
 
     # Nowcast page: latest real vintage, every registered model.

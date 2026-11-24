@@ -16,8 +16,8 @@ import numpy as np
 import pandas as pd
 
 from bdbvhub.models import get_model
-from bdbvhub.reporting.explorer import compact, trajectories
 from nowcastbaselines.zones import zone_forecast
+from nowcasteval.explorer import compact, trajectories
 from nowcasteval.nowcast import SUMMARY_LEVELS
 from nowcastutils.base import ForecastTask
 from nowcastutils.hierarchy import province_of
