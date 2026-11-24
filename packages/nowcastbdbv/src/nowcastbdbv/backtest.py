@@ -166,6 +166,7 @@ def make_tasks(
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
                 seed=config.seed,
+                max_delay=config.max_delay,
                 report_by={
                     d: release_cutoff(source.loc[mine], d).isoformat()
                     for d in sorted(report_by)

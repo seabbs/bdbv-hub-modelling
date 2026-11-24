@@ -17,6 +17,12 @@ start:
 # complete layout's blocks (counts to the last complete step).
 no_lags:
   share: 0.05
+# lag_jitter: the share of blocks whose lag count is the rule's times a
+# factor drawn from Normal(1, sd), rounded, at least 1 and within the
+# block's history (lead 15:08, Sam); the rest use the rule's exactly.
+lag_jitter:
+  share: 0.1
+  sd: 0.05
 # cadences: the release cadences of each step width and their shares, in
 # place of the block design's (finetune.chronos.BLOCK_DESIGN). Daily-step
 # blocks are 60% of all blocks, so a weekly share of 0.25 releases 15% of

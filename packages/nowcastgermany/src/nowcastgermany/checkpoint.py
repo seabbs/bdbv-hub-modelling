@@ -363,8 +363,12 @@ def _free() -> None:
 
 
 def _write(frame: pd.DataFrame, path: Path) -> None:
-    """Write a gzipped CSV atomically, so a stopped run leaves no part."""
-    tmp = path.with_name(path.name + ".tmp")
+    """Write a gzipped CSV atomically, so a stopped run leaves no part.
+
+    The temporary file is this process's own, as units sharing a cache
+    write the same files (the shared truth).
+    """
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     frame.to_csv(tmp, index=False, compression="gzip")
     tmp.rename(path)
 

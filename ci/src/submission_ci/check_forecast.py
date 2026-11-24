@@ -28,10 +28,10 @@ Handled (warn or pass):
                  `national_source = "own"`: the model forecast the
                  country itself, and the hub does not require the sum.
 
-Plausibility (`plausible` fails; the others warn):
+Plausibility (every check only warns):
   `plausible`    each location's forecast near its recent data: median
                  and 97.5% quantile under set multiples of the last 4
-                 weeks' maximum, and the median not collapsed. Fails.
+                 weeks' maximum, and the median not collapsed.
   `bounds`       the 95th centile of each week is not far above the
                  largest weekly count the location has had.
   `growth`       week-on-week growth of the median over the forecast.
@@ -481,7 +481,7 @@ def check_plausible(
     horizon: int,
     c: Mapping[str, Any],
 ) -> Check:
-    """Rule out a forecast far from the recent data, at each location.
+    """Warn of a forecast far from the recent data, at each location.
 
     The base is the largest of the last `plausible_recent_weeks` observed
     weeks, $m$, with the exact Poisson limits $(L, U)$ of a mean given
@@ -492,8 +492,9 @@ def check_plausible(
     within `plausible_q975_ratio` times $U$. The median must be at least
     $L$ over `plausible_low_ratio` where that is a case or more, unless
     it is at least the count already observed for that week. Locations
-    without observed data are skipped. Any breach fails, so the chain
-    moves on.
+    without observed data are skipped. A breach only warns: the numbers
+    go in the PR body for a human to read, and never rule a model out
+    (Sam, 2026-11-24).
     """
     n_recent = int(c["plausible_recent_weeks"])
     level = float(c["plausible_poisson_level"])
@@ -520,7 +521,7 @@ def check_plausible(
             if med > hi * base:
                 found.append(
                     (
-                        "fail",
+                        "warn",
                         f"{loc} {w}: median {fmt(med)} is over {fmt(hi)} "
                         f"times {fmt(base)}, the upper limit of the recent "
                         f"maximum {fmt(top)}",
@@ -529,7 +530,7 @@ def check_plausible(
             elif q975 > tail * base:
                 found.append(
                     (
-                        "fail",
+                        "warn",
                         f"{loc} {w}: 97.5% quantile {fmt(q975)} is over "
                         f"{fmt(tail)} times {fmt(base)}, the upper limit of "
                         f"the recent maximum {fmt(top)}",
@@ -538,7 +539,7 @@ def check_plausible(
             elif least >= 1 and med < least and med < series.get(w, math.inf):
                 found.append(
                     (
-                        "fail",
+                        "warn",
                         f"{loc} {w}: median {fmt(med)} is under 1/"
                         f"{fmt(lo)} of {fmt(low)}, the lower limit of the "
                         f"recent maximum {fmt(top)}",

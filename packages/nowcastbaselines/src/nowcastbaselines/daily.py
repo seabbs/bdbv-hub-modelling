@@ -177,7 +177,8 @@ class DailyWalkNowcast:
         cutoff = as_date(task.cutoff)
         first = as_date(str(task.daily_history["onset_date"].min()))
         have = (cutoff - first).days + 1
-        delay = min(self.max_delay, int(have // self.scale_factor))
+        own = self.max_delay if task.max_delay is None else task.max_delay
+        delay = min(int(own), int(have // self.scale_factor))
         if delay < 3:
             raise MissingSnapshots(f"{self.name}: {have} days of data")
         ends = sorted(task.target_end_dates)
