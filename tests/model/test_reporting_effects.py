@@ -305,8 +305,33 @@ def test_ci_runs_the_reporting_effect_checks() -> None:
 
     from .r_live import ROOT
 
-    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/heavy.yml").read_text()
+    )
     runs = " ".join(
         s.get("run", "") for s in workflow["jobs"]["r-live"]["steps"]
     )
     assert "tests/model/test_reporting_effects.py" in runs
+
+
+def test_a_weekday_pattern_shapes_the_weekday_draws() -> None:
+    import jax.numpy as jnp
+
+    from nowcastrenewal.reporting.effects import ReportEffects
+
+    pattern = np.array([-1.5, 0.5, 0.6, 0.5, 0.4, 0.2, -0.7])
+    z = jnp.arange(7.0)
+    effects = ReportEffects.__new__(ReportEffects)
+    effects.values = {
+        "reference_dow_profile": pattern.tolist(),
+        "weekday_noise": 0.3,
+    }
+    np.testing.assert_allclose(
+        effects._shaped(z, "reference"),
+        pattern + 0.3 * np.arange(7.0),
+        rtol=1e-6,
+    )
+    # Without a pattern the draws are the free profile.
+    np.testing.assert_allclose(
+        effects._shaped(z, "report"), np.arange(7.0), rtol=1e-6
+    )

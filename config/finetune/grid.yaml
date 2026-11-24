@@ -46,6 +46,8 @@ shares:
   controlled: 0.5      # early outbreaks brought towards R = 1
   drift: 0.3           # non-endemic settings with a slow drift in R
   reactive: 0.4        # shifts that react to effective R (fewer spikes)
+  weekday_pattern: 0.5  # weekday effects with a structured pattern, not free
+  weekday_pattern_part: 0.5 # each part of a structured pattern
   shift_up: 0.5        # non-reactive shifts that raise R
   mixing_switch_on: 0.5
 rates:
@@ -107,6 +109,22 @@ factor_layers:
   report_days: reporting
   shocks: reporting
   revisions: reporting
+# Structured weekday patterns: with `weekday_pattern`, a sim's reference
+# and report weekday effects each take a pattern drawn from these parts
+# (each in with `weekday_pattern_part`, at least one; which days and the
+# sizes drawn), scaled to unit sd, plus `weekday_noise` of free standard
+# normal noise, times their drawn sd; the other sims keep free profiles.
+# weekend_dip: Saturday, Sunday or both low; first_day_catch_up: the first
+# day after the low days (Monday without a dip) high; friday_surge: Friday
+# high; quiet_day: one day low; weekdays_high: Monday to Friday above the
+# weekend.
+weekday_patterns:
+  - weekend_dip
+  - first_day_catch_up
+  - friday_surge
+  - quiet_day
+  - weekdays_high
+weekday_noise: 0.3
 constants:
   walk_ar: 0.7         # pull of the weekly log R walk back to R = 1
   expected_scale: 1000
@@ -703,12 +721,18 @@ distributions:
     sdlog: 0.5
     layer: reporting
     why: weekday effects on counts with a log weekday profile sd of 0.13-0.69 (5-95%), German-strength (0.3-0.4, German hospitalisations by place and age median 0.38) common and BDBV-mild (daily onsets 0.13) kept
+  weekday_pattern_size:
+    dist: lognormal
+    median: 1.0
+    sdlog: 0.4
+    layer: reporting
+    why: each part of a structured weekday pattern, relative to the others (the pattern is scaled to unit sd)
   delay_dow_sd:
     dist: lognormal
-    median: 0.08
+    median: 0.1
     sdlog: 0.5
     layer: delays
-    why: the mean delay by reference weekday mostly within 10%
+    why: the mean delay by reference weekday within 4-23% (5-95%), spanning BDBV onsets (log mean delay by weekday sd 0.064) and German hospitalisations (median 0.108 over 36 series)
   shock_at:
     dist: beta
     a: 3.0

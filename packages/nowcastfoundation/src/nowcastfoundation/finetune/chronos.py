@@ -16,7 +16,6 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import hashlib
-import json
 import os
 import re
 from pathlib import Path
@@ -1042,9 +1041,3 @@ def _order(outbreak: str) -> tuple[int, int]:
     """Sort key of an outbreak id, `<seed>-<index>`."""
     seed, index = outbreak.split("-")
     return int(seed), int(index)
-
-
-def _settings_hash(settings: dict[str, Any]) -> str:
-    """Return the first 12 hex digits of the settings' SHA-256."""
-    text = json.dumps(settings, sort_keys=True).encode()
-    return hashlib.sha256(text).hexdigest()[:12]
