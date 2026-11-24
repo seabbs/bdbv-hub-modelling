@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -11,7 +10,6 @@ from bdbvhub.submission.hub import to_hub_table, write_submission
 from bdbvhub.submission.validate import Hub, validate_submission
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcastbaselines.zones import (
-    ZoneAllocator,
     check_zone_coherence,
     walks_own_zones,
     zone_forecast,
@@ -85,22 +83,16 @@ def _hub_failures(path: Path) -> list[str]:
     return [f"{c.check}: {c.message}" for c in rep.failed]
 
 
-def _alloc(
-    task: ForecastTask,
-    counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    samples: pd.DataFrame | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    prov = RandomWalk().forecast(task) if samples is None else samples
-    return prov, ZoneAllocator().allocate(prov, task, counts, zones)
-
-
-@pytest.fixture(scope="module")
-def alloc_run(
-    task: ForecastTask, counts: pd.DataFrame, zones: tuple[str, ...]
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Random walk province samples at 2026-10-17 and their zone split."""
-    return _alloc(task, counts, zones)
+def _first_zone(prov: pd.DataFrame, zones: tuple[str, ...]) -> pd.DataFrame:
+    """Zone samples that sum to `prov`: each province's first zone."""
+    first: dict[str, str] = {}
+    for zone in zones:
+        first.setdefault(province_of(zone), zone)
+    own = prov.loc[prov["location"].isin(first)]
+    return own.assign(
+        location=own["location"].map(first),
+        value=own["value"].clip(lower=0).round(),
+    ).reset_index(drop=True)
 
 
 def test_hub_zones_are_the_519_zone_codes(zones: tuple[str, ...]) -> None:
@@ -121,212 +113,6 @@ def test_weekly_zone_counts_match_the_hub_time_series(
         ).fillna(0)
         assert (both["total_x"] == both["total_y"]).all()
         assert set(got.columns) == {"location", "target_end_date", "total"}
-
-
-def test_zone_samples_sum_to_the_province_samples(
-    alloc_run: tuple[pd.DataFrame, pd.DataFrame],
-) -> None:
-    prov, alloc = alloc_run
-    assert check_zone_coherence(prov, alloc) == []
-    summed = (
-        alloc.assign(location=alloc["location"].map(province_of))
-        .groupby(["location", "target_end_date", "sample"])["value"]
-        .sum()
-    )
-    want = prov.set_index(["location", "target_end_date", "sample"])["value"]
-    assert (summed.reindex(want.index) == want.clip(lower=0).round()).all()
-
-
-def test_every_zone_of_a_forecast_province_is_covered(
-    task: ForecastTask,
-    zones: tuple[str, ...],
-    alloc_run: tuple[pd.DataFrame, pd.DataFrame],
-) -> None:
-    _, alloc = alloc_run
-    want = {z for z in zones if province_of(z) in task.locations}
-    assert set(alloc["location"]) == want
-    assert len(want) > 150  # 8 provinces with cases hold 178 zones
-    per = alloc.groupby("location")["sample"].nunique()
-    assert (per == task.n_samples).all()
-    weeks = alloc.groupby("location")["target_end_date"].nunique()
-    assert (weeks == len(task.target_end_dates)).all()
-    assert (alloc["value"] >= 0).all()
-    assert (alloc["value"] == alloc["value"].round()).all()
-
-
-def test_published_zone_counts_are_kept(
-    counts: pd.DataFrame,
-    alloc_run: tuple[pd.DataFrame, pd.DataFrame],
-) -> None:
-    prov, alloc = alloc_run
-    seen = counts.set_index(["location", "target_end_date"])["total"]
-    both = alloc.join(seen, on=["location", "target_end_date"]).fillna(0)
-    # Random walk copies complete weeks, so the zones copy theirs too.
-    old = both.loc[both["target_end_date"] == "2026-09-13"]
-    assert (old["value"] == old["total"]).all()
-    # A zone never falls below what it has published, unless its
-    # province sample is below the province's published total.
-    published = (
-        counts.assign(location=counts["location"].map(province_of))
-        .groupby(["location", "target_end_date"])["total"]
-        .sum()
-        .rename("published")
-    )
-    keys = ["location", "target_end_date"]
-    prov = prov.join(published, on=keys).fillna({"published": 0})
-    covered = prov.loc[prov["value"] >= prov["published"]]
-    both["province"] = both["location"].map(province_of)
-    both = both.merge(
-        covered[[*keys, "sample"]].rename(columns={"location": "province"}),
-        on=["province", "target_end_date", "sample"],
-    )
-    assert len(both) > 0.5 * len(alloc)
-    assert (both["value"] >= both["total"]).all()
-
-
-def test_zones_with_no_recent_cases_get_near_zero_draws(
-    task: ForecastTask,
-    counts: pd.DataFrame,
-    alloc_run: tuple[pd.DataFrame, pd.DataFrame],
-) -> None:
-    _, alloc = alloc_run
-    recent = counts.loc[counts["target_end_date"] >= "2026-08-01"]
-    active = set(recent.loc[recent["total"] > 0, "location"])
-    future = alloc.loc[alloc["target_end_date"] > task.vintage]
-    quiet = future.loc[~future["location"].isin(active)]
-    busy = future.loc[future["location"].isin(active)]
-    assert quiet["value"].mean() < 0.1
-    # Near zero, not exactly zero: a quiet zone can still get a case.
-    assert quiet["value"].max() >= 1
-    assert busy["value"].mean() > 20 * quiet["value"].mean()
-
-
-def test_shares_shrink_recent_towards_longer_run() -> None:
-    # One province, three zones. A had cases long ago only; B has the
-    # recent cases; C never had any.
-    weeks = pd.date_range("2026-08-01", "2026-10-10", freq="7D")
-    rows = []
-    for i, w in enumerate(weeks):
-        recent = i >= len(weeks) - 3
-        rows += [
-            ("CD-XX-01", w, 0 if recent else 20),
-            ("CD-XX-02", w, 10 if recent else 0),
-        ]
-    counts = pd.DataFrame(
-        rows, columns=["location", "target_end_date", "total"]
-    )
-    counts["target_end_date"] = counts["target_end_date"].dt.date.astype(str)
-    zones = ("CD-XX-01", "CD-XX-02", "CD-XX-03")
-    split = ZoneAllocator(recent_weeks=4, prior_strength=20)
-    shares = split.shares(counts, zones, "2026-10-17")
-    a, b, c = (shares[z] for z in zones)
-    assert b > a > 0
-    # A zone with no case at the vintage has a tenth of the floor.
-    assert 0 < c < a
-    seen = ZoneAllocator(recent_weeks=4, prior_strength=20, unseen_floor=0.5)
-    assert c < seen.shares(counts, zones, "2026-10-17")["CD-XX-03"] / 5
-    assert sum(shares.values()) == pytest.approx(1)
-    # Stronger shrinkage moves the split towards the longer run.
-    strong = ZoneAllocator(recent_weeks=4, prior_strength=1e4).shares(
-        counts, zones, "2026-10-17"
-    )
-    assert strong["CD-XX-01"] > a
-
-
-def test_a_zone_with_no_case_gets_a_small_floor() -> None:
-    counts = pd.DataFrame(
-        {
-            "location": ["CD-XX-01"],
-            "target_end_date": ["2026-10-10"],
-            "total": [3],
-        }
-    )
-    zones = ("CD-XX-01", "CD-XX-02", "CD-YY-01", "CD-YY-02")
-    split = ZoneAllocator()
-    # 3 longer-run cases, the floor 0.5 and the zone's own floor 0.05.
-    assert split.alpha(counts, zones[:2], "2026-10-17")[1] == pytest.approx(
-        100 * 0.05 / 3.55
-    )
-    # A province with no case in any zone has nothing to split on, so its
-    # zones share equally.
-    np.testing.assert_allclose(
-        split.alpha(counts, zones[2:], "2026-10-17"), [50.0, 50.0]
-    )
-    weeks = ("2026-10-24", "2026-10-31")
-    prov = pd.DataFrame(
-        {
-            "location": np.repeat(["CD-XX", "CD-YY"], 2 * 50),
-            "target_end_date": np.tile(np.repeat(weeks, 50), 2),
-            "sample": np.tile(np.arange(1, 51), 4),
-            "value": 40.0,
-        }
-    )
-    task = ForecastTask(
-        vintage="2026-10-17",
-        reference_date=pd.Timestamp("2026-10-24").date(),
-        kind="real",
-        cutoff="2026-10-16",
-        target=pd.DataFrame(),
-        delays=None,
-        locations=("CD-XX", "CD-YY"),
-        target_end_dates=weeks,
-        n_samples=50,
-    )
-    none = ZoneAllocator(unseen_floor=0.0)
-    alloc = none.allocate(prov, task, counts, zones).set_index("location")
-    assert (alloc.loc["CD-XX-02", "value"] == 0).all()
-    assert alloc.loc["CD-XX-01", "value"].sum() == 40 * 2 * 50
-    assert alloc.loc["CD-YY-01", "value"].sum() > 0
-    assert alloc.loc["CD-YY-02", "value"].sum() > 0
-
-
-def test_provinces_below_their_published_zone_total_are_thinned() -> None:
-    counts = pd.DataFrame(
-        {
-            "location": ["CD-XX-01", "CD-XX-02"],
-            "target_end_date": ["2026-10-10", "2026-10-10"],
-            "total": [6, 4],
-        }
-    )
-    prov = pd.DataFrame(
-        {
-            "location": "CD-XX",
-            "target_end_date": "2026-10-10",
-            "sample": [1, 2],
-            "value": [3.0, 12.4],
-        }
-    )
-    task = ForecastTask(
-        vintage="2026-10-17",
-        reference_date=pd.Timestamp("2026-10-24").date(),
-        kind="real",
-        cutoff="2026-10-16",
-        target=pd.DataFrame(),
-        delays=None,
-        locations=("CD-XX",),
-        target_end_dates=("2026-10-10",),
-        n_samples=2,
-    )
-    alloc = ZoneAllocator().allocate(
-        prov, task, counts, ("CD-XX-01", "CD-XX-02")
-    )
-    by = alloc.set_index(["sample", "location"])["value"]
-    assert by.loc[1].sum() == 3
-    assert (by.loc[1] <= [6, 4]).all()
-    assert by.loc[2].sum() == 12
-    assert (by.loc[2] >= [6, 4]).all()
-
-
-def test_allocation_is_reproducible(
-    task: ForecastTask,
-    counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    alloc_run: tuple[pd.DataFrame, pd.DataFrame],
-) -> None:
-    prov = alloc_run[0]
-    a = ZoneAllocator().allocate(prov, task, counts, zones)
-    b = ZoneAllocator().allocate(prov, task, counts, zones)
-    pd.testing.assert_frame_equal(a, b)
 
 
 def test_zone_task_is_a_zero_filled_randomwalk_task(
@@ -350,48 +136,6 @@ def test_zone_task_is_a_zero_filled_randomwalk_task(
     assert {"CD", "CD-IT", "CD-IT-10"} <= set(zt.daily_history["location"])
     assert zt.daily_history["vintage"].max() == task.vintage
     assert zone_task(task, counts, zones).daily_history is None
-
-
-@pytest.mark.slow
-def test_hub_table_with_zones_validates(
-    open_task: ForecastTask,
-    open_counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    tmp_path: Path,
-) -> None:
-    prov, alloc = _alloc(open_task, open_counts, zones)
-    table = to_hub_table(
-        prov,
-        open_task.reference_date,
-        zones=alloc,
-        forecast_date=open_task.reference_date,
-    )
-    nat = table.loc[table["location"] == "CD"]
-    provs = table.loc[table["location"].str.len() == 5]
-    summed = provs.groupby(["output_type_id", "target_end_date"])["value"].sum()
-    got = nat.set_index(["output_type_id", "target_end_date"])["value"]
-    # The national value is the sum of the provinces, not of the zones.
-    assert (got.reindex(summed.index) == summed).all()
-    assert set(alloc["location"]) <= set(table["location"])
-    path = write_submission(table, tmp_path, "seabbs-renewal")
-    assert _hub_failures(path) == []
-
-
-def test_allocation_reads_final_rows_only(
-    task: ForecastTask,
-    counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    alloc_run: tuple[pd.DataFrame, pd.DataFrame],
-) -> None:
-    final = alloc_run[0]
-    prov = pd.concat(
-        [final.assign(as_of=np.nan), final.assign(as_of="2026-10-24")],
-        ignore_index=True,
-    )
-    alloc = ZoneAllocator().allocate(prov, task, counts, zones)
-    assert "as_of" not in alloc
-    assert check_zone_coherence(final, alloc) == []
-    assert np.isfinite(alloc["value"]).all()
 
 
 def _zone_model_inputs(
@@ -439,22 +183,6 @@ def test_zone_walk_models_are_their_own_zone_draws(
 
 
 @pytest.mark.slow
-def test_zone_values_follow_the_zone_model_not_the_shares(
-    task: ForecastTask,
-    counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    daily_zones: pd.DataFrame,
-) -> None:
-    model = RandomWalkNowcast()
-    sub, prov, got = _zone_model_inputs(task, counts, zones, daily_zones, model)
-    allocated = ZoneAllocator().allocate(prov, sub, counts, zones)
-    keys = ["location", "target_end_date"]
-    mine = got.groupby(keys)["value"].mean()
-    theirs = allocated.groupby(keys)["value"].mean()
-    assert not np.allclose(mine, theirs.reindex(mine.index))
-
-
-@pytest.mark.slow
 def test_zone_hub_table_validates_with_the_zone_models_own_draws(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
@@ -490,15 +218,16 @@ def test_zone_hub_table_validates_with_the_zone_models_own_draws(
 
 
 def test_hub_table_checks_zone_sums_unless_told_not_to(
-    open_task: ForecastTask, open_counts: pd.DataFrame, zones: tuple[str, ...]
+    open_task: ForecastTask, zones: tuple[str, ...]
 ) -> None:
     prov = RandomWalk().forecast(open_task)
-    alloc = ZoneAllocator().allocate(prov, open_task, open_counts, zones)
+    alloc = _first_zone(prov, zones)
+    assert check_zone_coherence(prov, alloc) == []
     # One more case in one zone than its province has.
     alloc.loc[alloc.index[0], "value"] += 1
     assert check_zone_coherence(prov, alloc)
     ref = open_task.reference_date
-    # A split model's zones must sum to its provinces.
+    # A summing model's zones must sum to its provinces.
     with pytest.raises(ValueError, match="zone"):
         to_hub_table(prov, ref, zones=alloc, forecast_date=ref)
     # The random walks' own zone draws need not.
@@ -534,7 +263,7 @@ def test_only_the_random_walks_forecast_their_own_zones() -> None:
 
 
 @pytest.mark.slow
-def test_walk_models_take_their_zone_draws_and_others_the_split(
+def test_walk_models_take_their_own_zone_draws(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
     zones: tuple[str, ...],
@@ -551,14 +280,14 @@ def test_walk_models_take_their_zone_draws_and_others_the_split(
     )
 
 
-def test_no_zones_are_split_outside_the_model(
+def test_samples_without_zones_get_none(
     open_task: ForecastTask,
     open_counts: pd.DataFrame,
     zones: tuple[str, ...],
     daily_zones: pd.DataFrame,
 ) -> None:
-    # A province model splits its zones in its own forecast, so samples
-    # with none get none here.
+    # A model's zones come from its own forecast, so samples with none
+    # get none here.
     prov = RandomWalk().forecast(open_task)
     got = zones_for_model(
         "renewal", open_task, prov, open_counts, zones, daily_zones

@@ -67,8 +67,7 @@ The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ 
 Relative energy scores are ratios of means against `randomwalknowcast` over the origins and releases both have, and $n$ counts those.
 The score rewards a joint pattern across places only where draws are joint.
 The draws of `renewal` and `renewalbvd` are joint across zones and provinces, one posterior draw per sample index.
-`renewalsp` fits each province on its own, so its provinces are independent.
-Its zones split each province draw, so they are joint within a province.
+`renewalsp` fits each zone on its own, so its zones are independent and its provinces are their sums.
 `randomwalk` and `randomwalknowcast` pair their province draws within each week by a rolling copula inside their forecast; their zones are not paired ([Correlated trajectories](#correlated-trajectories)).
 Hub teams' samples are joint across weeks within a place only, as the hub's sample format sets, so pairing their indices across places scores them as independent across places.
 
@@ -139,7 +138,7 @@ The run stops if an origin has no release snapshots or two models run here give 
 `randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the sum of the provinces, would be too narrow.
 Each pairs its province draws inside its own forecast (`nowcastbaselines.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
 The renewal models' draws are already joint trajectories, so they are left as they are: reordering would break their real dependence.
-`renewal` and `renewalbvd` fit their zones jointly and sum them to provinces, and `renewalsp` splits each province draw across its zones.
+`renewal` and `renewalbvd` fit their zones jointly and sum them to provinces, and `renewalsp` fits each zone on its own and sums them to provinces.
 
 Provinces are their own forecasts.
 The country is the sum of the provinces in each sample.

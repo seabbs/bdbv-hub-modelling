@@ -96,7 +96,7 @@ The country, provinces and zones all come straight from the block, daily or week
 Nothing is summed or split, so zones need not sum to their province.
 Each zone keeps its published count, as every series does.
 So the stored forecasts, the hub file and the scores all have the zones as submitted.
-The other fitted models split their provinces across the zones instead ([Health zones](baselines.md#health-zones)).
+The renewal models fit the zones and sum them to their provinces instead ([Health zones](model.md#health-zones)).
 
 ## Fine-tuning
 

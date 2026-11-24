@@ -707,18 +707,32 @@ def test_cli_fit_store_archives_what_each_model_submits(
     flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from bdbvhub.store import store
-    from nowcastbaselines.zones import with_zones
     from nowcastutils import base
+    from nowcastutils.hierarchy import province_of
 
     flat = base._REGISTRY[flat_model].factory
 
     class Zoned(flat):  # type: ignore[misc, valid-type]
-        """A province model, which splits its zones in its forecast."""
+        """A model with zone samples of its own: each province's first."""
 
         reads_zones = True
 
         def forecast(self, task):  # type: ignore[no-untyped-def]
-            return with_zones(super().forecast(task), task)
+            out = super().forecast(task)
+            final = out
+            if "as_of" in final:
+                final = final.loc[final["as_of"].isna()]
+            first: dict[str, str] = {}
+            rows = [out]
+            for zone in task.zone_codes:
+                prov = final.loc[final["location"] == province_of(zone)]
+                if prov.empty:
+                    continue
+                keep = first.setdefault(province_of(zone), zone) == zone
+                rows.append(
+                    prov.assign(location=zone, value=prov["value"] * keep)
+                )
+            return pd.concat(rows, ignore_index=True)
 
     monkeypatch.setitem(
         base._REGISTRY,

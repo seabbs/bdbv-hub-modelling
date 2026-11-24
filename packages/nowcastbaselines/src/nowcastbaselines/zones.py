@@ -1,62 +1,23 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Health-zone forecasts.
 
-`ZoneAllocator` splits each province sample across the province's zones,
-so the zone samples sum to it, sample by sample and week by week.
-The national total stays the sum of the provinces.
-
-For a province $p$ with zones $z$, let $o_z(w)$ be zone $z$'s published
-count for week $w$ at the vintage and $O(w) = \sum_z o_z(w)$.
-The split shares of province sample $k$ are drawn once and kept for all
-of its weeks:
-
-$$
-\theta^{(k)} \sim \text{Dirichlet}(\alpha), \qquad
-\alpha_z = r_z + \kappa\, \frac{l_z + a}{\sum_{z'} (l_{z'} + a)},
-$$
-
-with $r_z$ the zone's onsets in the `recent_weeks` weeks before the
-vintage and $l_z$ those in the `longer_weeks` weeks before it.
-So recent shares are shrunk towards the longer run with strength
-$\kappa$ (`prior_strength`), and the floor $a$ (`floor`) gives a zone
-with no recent cases a small share, so it gets near-zero draws.
-The floor is $a$ for a zone with a case at the vintage and $b$
-(`unseen_floor`), a tenth of it, for one with none.
-The models act between provinces, so a province sample says nothing on
-which new zones its cases reach, but new zones in a province with cases
-do get them, and the small floor lets them.
-In a province with no case in any zone, every zone has the floor $a$,
-so the zones share equally.
-A province sample $Y^{(k)}(w)$ keeps what each zone has published and
-splits the rest:
-
-$$
-y^{(k)}_z(w) = o_z(w) + m_z, \qquad
-m \sim \text{Multinomial}\big(Y^{(k)}(w) - O(w),\ \theta^{(k)}\big).
-$$
-
-Over samples this is a Dirichlet-multinomial split of the unpublished
-cases.
-If a sample is below the published total, $y^{(k)}(w)$ is drawn without
-replacement from the published zone counts instead.
-Province values are rounded first, as in the hub file.
-
-The random walk models instead run at zone level, on the zones' own
-release snapshots (`zone_task`), with the zone, then province, then
-national pooling of `pooling`.
+The random walk models run at zone level, on the zones' own release
+snapshots (`zone_task`), with the zone, then province, then national
+pooling of `pooling`.
 Their zone samples are the zone model's own draws, and need not sum to
 the province samples (`zone_forecast`).
 
-Chronos-2 forecasts the zones itself, as series of its joint block beside
-the provinces and the country, and its zone samples are used as they are:
-they need not sum to the province samples either
+The renewal models fit the zones themselves and sum them to the
+provinces, and Chronos-2 forecasts the zones as series of its joint
+block beside the provinces and the country.
+Both models' zone samples are used as they are (`zones_for_model`).
+Chronos-2's need not sum to its province samples
 (`submission.hub.zones_need_not_sum`).
 """
 
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -72,21 +33,15 @@ from nowcastutils.base import (
 )
 from nowcastutils.dates import as_date
 from nowcastutils.hierarchy import is_zone, province_of
-from nowcastutils.snapshots import weekly_counts
 
 __all__ = [
-    "ZoneAllocator",
     "check_zone_coherence",
     "walks_own_zones",
-    "with_zones",
     "zone_draws",
     "zone_forecast",
     "zone_task",
     "zones_for_model",
 ]
-
-_ZONE_STREAM = 7
-"""Extra seed word, so zone draws do not reuse the province stream."""
 
 
 def _final(samples: pd.DataFrame) -> pd.DataFrame:
@@ -94,238 +49,6 @@ def _final(samples: pd.DataFrame) -> pd.DataFrame:
     if "as_of" not in samples:
         return samples
     return samples.loc[samples["as_of"].isna()].drop(columns="as_of")
-
-
-def _window(counts: pd.DataFrame, vintage: str, weeks: int) -> pd.Series:
-    """Sum each zone's counts over the weeks ending in the window."""
-    end = pd.Timestamp(as_date(vintage))
-    start = end - pd.Timedelta(weeks=weeks)
-    dates = pd.to_datetime(counts["target_end_date"])
-    rows = counts.loc[(dates > start) & (dates <= end)]
-    return rows.groupby("location")["total"].sum()
-
-
-@dataclass
-class ZoneAllocator:
-    r"""Split province samples across their health zones.
-
-    Attributes
-    ----------
-    recent_weeks : int
-        Weeks before the vintage whose zone counts set the recent shares.
-    longer_weeks : int
-        Weeks before the vintage whose zone counts set the shares the
-        recent ones are shrunk towards.
-    prior_strength : float
-        Pseudo-cases $\kappa$ placed on the longer-run shares.
-    floor : float
-        Pseudo-cases $a$ added to the longer-run count of every zone with
-        a case at the vintage, or of every zone in a province with none.
-    unseen_floor : float
-        Pseudo-cases $b$ added to the longer-run count of a zone with no
-        case at the vintage, in a province with some.
-    """
-
-    recent_weeks: int = 2
-    longer_weeks: int = 16
-    prior_strength: float = 100.0
-    floor: float = 0.5
-    unseen_floor: float = 0.05
-
-    def alpha(
-        self, counts: pd.DataFrame, zones: tuple[str, ...], vintage: str
-    ) -> np.ndarray:
-        r"""Return the Dirichlet parameters of one province's zones.
-
-        Parameters
-        ----------
-        counts : pandas.DataFrame
-            Weekly zone counts (`weekly_counts`).
-        zones : tuple of str
-            The province's zones.
-        vintage : str
-            The vintage, ISO format.
-
-        Returns
-        -------
-        numpy.ndarray
-            $\alpha_z$, one per zone, in the order of `zones`.
-        """
-        recent = _window(counts, vintage, self.recent_weeks)
-        longer = _window(counts, vintage, self.longer_weeks)
-        r = recent.reindex(list(zones), fill_value=0).to_numpy(dtype=float)
-        lw = longer.reindex(list(zones), fill_value=0).to_numpy(dtype=float)
-        end = pd.Timestamp(as_date(vintage))
-        past = counts.loc[pd.to_datetime(counts["target_end_date"]) <= end]
-        seen = np.isin(zones, past.loc[past["total"] > 0, "location"])
-        floor = np.where(
-            seen | ~seen.any(), self.floor, self.unseen_floor
-        ).astype(float)
-        prior = (lw + floor) / (lw + floor).sum()
-        return np.asarray(r + self.prior_strength * prior)
-
-    def shares(
-        self, counts: pd.DataFrame, zones: tuple[str, ...], vintage: str
-    ) -> dict[str, float]:
-        """Return the expected share of each zone.
-
-        Parameters
-        ----------
-        counts : pandas.DataFrame
-            Weekly zone counts (`weekly_counts`).
-        zones : tuple of str
-            The province's zones.
-        vintage : str
-            The vintage, ISO format.
-
-        Returns
-        -------
-        dict
-            Zone code to its share, the Dirichlet mean.
-        """
-        a = self.alpha(counts, zones, vintage)
-        return dict(zip(zones, (a / a.sum()).tolist(), strict=True))
-
-    def allocate(
-        self,
-        samples: pd.DataFrame,
-        task: ForecastTask,
-        counts: pd.DataFrame,
-        zones: tuple[str, ...],
-    ) -> pd.DataFrame:
-        """Split province samples across the zones of each province.
-
-        Parameters
-        ----------
-        samples : pandas.DataFrame
-            A model's output for `task`. National rows and `as_of` rows
-            are ignored.
-        task : ForecastTask
-            The task the samples answer.
-        counts : pandas.DataFrame
-            Weekly zone counts at the task's vintage
-            (`weekly_counts`).
-        zones : tuple of str
-            Zone codes to cover. Each province in `samples` gets all of
-            its zones here.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Columns `SAMPLE_COLUMNS`, one row per zone, week and sample.
-        """
-        rng = np.random.default_rng(
-            [task.seed, as_date(task.vintage).toordinal(), _ZONE_STREAM]
-        )
-        final = _final(samples)
-        final = final.loc[final["location"] != NATIONAL]
-        weeks = list(task.target_end_dates)
-        ids = np.arange(1, task.n_samples + 1)
-        seen = counts.set_index(["location", "target_end_date"])["total"]
-        frames = []
-        for prov in sorted(set(final["location"])):
-            mine = tuple(z for z in zones if province_of(z) == prov)
-            if not mine:
-                continue
-            totals = (
-                final.loc[final["location"] == prov]
-                .pivot(
-                    index="sample", columns="target_end_date", values="value"
-                )
-                .reindex(index=ids, columns=weeks)
-                .clip(lower=0)
-                .round()
-                .to_numpy(dtype=np.int64)
-            )
-            published = np.array(
-                [[int(seen.get((z, w), 0)) for w in weeks] for z in mine]
-            )
-            values = self._split(
-                totals,
-                published,
-                self.alpha(counts, mine, task.vintage),
-                rng,
-            )
-            frames.append(_zone_frame(mine, weeks, ids, values))
-        if not frames:
-            return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
-        return pd.concat(frames, ignore_index=True)[list(SAMPLE_COLUMNS)]
-
-    @staticmethod
-    def _split(
-        totals: np.ndarray,
-        published: np.ndarray,
-        alpha: np.ndarray,
-        rng: np.random.Generator,
-    ) -> np.ndarray:
-        """Split `(samples, weeks)` totals into `(samples, weeks, zones)`."""
-        n, n_weeks = totals.shape
-        gam = rng.gamma(alpha, size=(n, alpha.size))
-        rows = gam.sum(axis=1, keepdims=True)
-        mean = alpha / alpha.sum()
-        theta = np.where(rows > 0, gam / np.where(rows > 0, rows, 1), mean)
-        extra = totals - published.sum(axis=0)[None, :]
-        out = np.broadcast_to(published.T, (n, n_weeks, alpha.size)).copy()
-        out += rng.multinomial(np.maximum(extra, 0), theta[:, None, :])
-        for k, w in zip(*np.nonzero(extra < 0), strict=True):
-            out[k, w] = rng.multivariate_hypergeometric(
-                published[:, w], totals[k, w]
-            )
-        return out
-
-
-def _zone_frame(
-    mine: tuple[str, ...],
-    weeks: list[str],
-    ids: np.ndarray,
-    values: np.ndarray,
-) -> pd.DataFrame:
-    """Return sample rows from `values` of shape `[samples, weeks, zones]`."""
-    return pd.DataFrame(
-        {
-            "location": np.repeat(mine, len(ids) * len(weeks)),
-            "target_end_date": np.tile(np.repeat(weeks, len(ids)), len(mine)),
-            "sample": np.tile(ids, len(weeks) * len(mine)),
-            "value": values.transpose(2, 1, 0).reshape(-1).astype(float),
-        }
-    )
-
-
-def with_zones(samples: pd.DataFrame, task: ForecastTask) -> pd.DataFrame:
-    """Return a province model's samples with its zones split from them.
-
-    Each province sample is split across the province's zones by
-    `ZoneAllocator`, from the task's zone counts at its vintage. This is
-    the one place a province-level model gets its zones, so every
-    consumer reads the zones it submits. Samples are returned as they are
-    when the task has no zone data, or when they already hold zones (a
-    model that forecasts the zones itself).
-
-    Parameters
-    ----------
-    samples : pandas.DataFrame
-        The model's output for `task`, provinces and optionally national,
-        with `as_of` rows if any.
-    task : ForecastTask
-        The task, with `zone_daily_history` and `zone_codes`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        `samples` with the zone rows added (no `as_of` rows for zones).
-    """
-    daily = task.zone_daily_history
-    if not task.zone_codes or daily is None or daily.empty:
-        return samples
-    if samples["location"].map(is_zone).any():
-        return samples
-    counts = weekly_counts(daily, task.vintage)
-    zones = ZoneAllocator().allocate(samples, task, counts, task.zone_codes)
-    if zones.empty:
-        return samples
-    if "as_of" in samples:
-        zones = zones.assign(as_of=np.nan)
-    return pd.concat([samples, zones], ignore_index=True)
 
 
 def zone_draws(samples: pd.DataFrame) -> pd.DataFrame:
@@ -503,10 +226,10 @@ def zones_for_model(
 ) -> pd.DataFrame:
     """Return a model's health-zone samples.
 
-    A model's own zone rows in `samples` are used as they are: a
-    province-level model splits its zones in its forecast (`with_zones`),
-    and Chronos-2 forecasts them. A random walk model with no fit is run on
-    the zones (`zone_forecast`). Other samples have no zones.
+    A model's own zone rows in `samples` are used as they are: the
+    renewal models fit them and Chronos-2 forecasts them. A random walk
+    model with no fit is run on the zones (`zone_forecast`). Other
+    samples have no zones.
 
     Parameters
     ----------
