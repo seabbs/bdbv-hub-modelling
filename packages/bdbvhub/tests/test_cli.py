@@ -291,7 +291,7 @@ def test_stored_samples_keep_numeric_values_without_our_forecasts(
     data.mkdir()
     for f in DATA.iterdir():
         (data / f.name).symlink_to(f)
-    sub = ROOT / "data" / "our-submissions" / "model-output" / "seabbs-renewal"
+    sub = FIXTURES / "hub-submissions" / "model-output" / "seabbs-renewal"
     hub = data / "hub-submissions" / "model-output" / "seabbs-renewal"
     hub.mkdir(parents=True)
     for f in sub.iterdir():

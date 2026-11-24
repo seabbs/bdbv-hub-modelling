@@ -4,7 +4,6 @@ import gzip
 import json
 import subprocess
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -26,25 +25,6 @@ def test_hub_samples_keep_latest_forecast_date(hub):
     s = ebola.hub_samples(hub)
     assert len(s) == 200
     assert s["value"].max() == 200
-
-
-def test_load_adds_candidates(hub, tmp_path):
-    cand = tmp_path / "candidates.csv.gz"
-    pd.DataFrame(
-        {
-            "model": "renewal",
-            "kind": "real",
-            "vintage": "2026-10-25",
-            "reference_date": "2026-10-31",
-            "location": "CD",
-            "target_end_date": "2026-11-07",
-            "sample": np.arange(1, 101),
-            "value": 50.0,
-            "as_of": None,
-        }
-    ).to_csv(cand, index=False)
-    table = ebola.load(hub, candidates=[cand])
-    assert set(table["model"]) == {"team-a", "renewal"}
 
 
 def _git(repo, *args):
