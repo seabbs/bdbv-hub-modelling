@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Build `packages/nowcastbdbv/src/nowcastbdbv/data/zone_centres.csv`.
 
 Reads the INRB-UMIE build of the DRC health zone map, the source of

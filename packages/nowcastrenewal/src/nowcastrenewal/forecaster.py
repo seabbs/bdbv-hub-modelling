@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The PyRenew renewal model behind the repository's interfaces.
 
 The model itself (JAX, NumPyro, PyRenew) is in `nowcastrenewal.model`.

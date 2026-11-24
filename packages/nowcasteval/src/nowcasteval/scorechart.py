@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Score metrics of the overall figures and the score summary's JSON writer.
 
 `docs/javascripts/scoresummary.js` draws the summaries with

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The simulator's latent side: PyRenew components for simulated outbreaks.
 
 Kept apart from `nowcastrenewal.model`, the fitted models' code, whose

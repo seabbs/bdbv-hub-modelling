@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The grid simulator of the fine-tuning simulations.
 
 `simulate_batch` (`batch`) is its one entry point: the design and value

@@ -25,7 +25,6 @@ import gzip
 import html
 import io
 import json
-import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -33,11 +32,8 @@ from typing import Any
 
 import pandas as pd
 
-# The page style and colour scheme of the hub rounds report, beside it
-# (`python` puts the script's folder first on the path).
-from hub_rounds_report import SCHEME, THEME
-
 from bdbvhub import compare as hc
+from bdbvhub.reporting import pages
 from bdbvhub.store.store import read_fit
 from nowcastbdbv.data.tidy import load_target
 from nowcasteval.explorer import (
@@ -66,9 +62,6 @@ RENEWAL = ("renewalbvd", "renewalsp", "renewal")
 
 RT_COLUMNS = {0.05: "q05", 0.25: "q25", 0.5: "q50", 0.75: "q75", 0.95: "q95"}
 """The `wk R_t` levels the explorer draws, as its quantile columns."""
-
-SCRIPTS = ("toggles.js", "zoom.js", "summarise.js", "explorer.js")
-"""The docs scripts the explorer needs, in the docs' load order."""
 
 
 def newest_fit(store: Path, model: str, origin: str) -> Any | None:
@@ -177,6 +170,26 @@ def gate_section(run: Path) -> str:
     return "\n".join(parts)
 
 
+def team_quantiles(round_dir: Path, ref: str) -> pd.DataFrame:
+    """Return every hub team's submission for the round, as quantiles.
+
+    Read from the hub's files `this_round_inputs` fetched (`hub/`, openly
+    licensed, and `hub-raw/`), as each team submitted them. Our own hub
+    ids are left out: our candidates are shown instead.
+    """
+    roots = [round_dir / "hub", round_dir / "hub-raw"]
+    if not any(r.exists() for r in roots):
+        return pd.DataFrame()
+    subs = hc.load_hub_submissions(*[r for r in roots if r.exists()])
+    subs = subs.loc[
+        (subs["reference_date"].astype(str) == ref)
+        & ~subs["model"].astype(str).str.startswith("seabbs-")
+    ]
+    if subs.empty:
+        return pd.DataFrame()
+    return hc.forecast_quantiles(subs).assign(ours=False)
+
+
 def build(
     out: Path, candidates: Path, store: Path, data_dir: Path, run: Path
 ) -> Path:
@@ -198,12 +211,13 @@ def build(
     q = q.loc[q["model"].isin(shown)]
     q = q.iloc[q["model"].map(shown.index).argsort(kind="stable")]
     missing = [m for m in CANDIDATES if m not in shown]
-    colours = comparison_colours({m: m for m in shown}, {}, [])
+    teams = team_quantiles(candidates.parent, ref)
+    names_t = sorted(set(teams["model"])) if len(teams) else []
+    colours = comparison_colours({m: m for m in shown}, {}, names_t)
+    if len(teams):
+        q = pd.concat([q, teams], ignore_index=True)
 
-    data = out.with_name(out.stem + "-data")
-    if data.exists():
-        shutil.rmtree(data)
-    data.mkdir(parents=True)
+    data = pages.data_dir(out)
     rel = data.name
     write_explorer(
         data / "cases.json",
@@ -235,10 +249,6 @@ def build(
                 data_label="no data (Rt is not observed)",
             ),
         )
-    js = "\n".join(
-        (ROOT / "docs" / "javascripts" / f).read_text() for f in SCRIPTS
-    )
-    css = (ROOT / "docs" / "stylesheets" / "extra.css").read_text()
     note = (
         f"<p class=mut>Not shown, with no good stored fit at {origin}: "
         f"{html.escape(', '.join(missing))}.</p>"
@@ -257,9 +267,11 @@ def build(
         "<h2>What the gate picks</h2>",
         gate_section(run),
         "<h2>Forecasts and nowcasts</h2>",
-        "<p class=mut>Every candidate against the data as of the round. "
-        "Pick the location (grouped by national, province and zone), "
-        "the models and the view.</p>",
+        "<p class=mut>Every candidate against the data as of the round, "
+        "beside every other team's submission for this round so far, "
+        "as each submitted it (read from the hub; toggle each in the "
+        "key). Pick the location (grouped by national, province and "
+        "zone), the models and the view.</p>",
         note,
         explorer_html(f"{rel}/cases.json", "Candidate forecasts"),
         "<h2>wk R_t</h2>",
@@ -271,18 +283,9 @@ def build(
         "<h2>Convergence</h2>",
         convergence(store, origin),
     ]
-    doc = (
-        "<!doctype html><html lang=en><meta charset=utf-8>"
-        "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>This round</title><style>{THEME}{css}</style>"
-        f"<body data-md-color-scheme=default><script>{SCHEME}</script>"
-        + "\n".join(parts)
-        + f"<script>{js}</script></body></html>"
+    return pages.write_page(
+        out, pages.page("This round", parts, pages.EXPLORER_SCRIPTS, ROOT)
     )
-    tmp = out.with_name(out.name + ".tmp")
-    tmp.write_text(doc)
-    tmp.rename(out)
-    return out
 
 
 def main(argv: Sequence[str]) -> None:

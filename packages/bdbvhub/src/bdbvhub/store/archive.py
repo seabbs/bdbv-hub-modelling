@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Every candidate model's forecasts for a round, for the ledger.
 
 `archive` returns the hub table each stored model and each submission

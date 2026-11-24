@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Daily chain ladder on release snapshots, with its uncertainty.
 
 Counts $N_r(t)$ are the daily onsets of release $r$, on the onset clock.

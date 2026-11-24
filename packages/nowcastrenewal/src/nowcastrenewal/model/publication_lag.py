@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The release-pair likelihood that the learnt publication lag is fitted to.
 
 A delay-file row with report day $t$ is in the release with last report

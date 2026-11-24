@@ -127,6 +127,7 @@ Abbott S (2026). bdbv-hub-modelling: renewal-model nowcasts and forecasts for th
 
 The DOI covers all versions, and each release has its own DOI on Zenodo.
 The metadata are in [CITATION.cff](CITATION.cff), which GitHub shows as the "Cite this repository" button.
+That entry is the repository as a whole; each subproject has its own citation, with its own authors: [bdbvhub](packages/bdbvhub/CITATION.cff), [nowcastbaselines](packages/nowcastbaselines/CITATION.cff), [nowcastbdbv](packages/nowcastbdbv/CITATION.cff), [nowcasteval](packages/nowcasteval/CITATION.cff), [nowcastfoundation](packages/nowcastfoundation/CITATION.cff), [nowcastgermany](packages/nowcastgermany/CITATION.cff), [nowcastrenewal](packages/nowcastrenewal/CITATION.cff), [nowcastutils](packages/nowcastutils/CITATION.cff) and the [paper](paper/CITATION.cff).
 
 ## Funding
 

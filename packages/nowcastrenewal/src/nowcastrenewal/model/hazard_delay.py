@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""A delay pmf that varies with the reference day, through a logit hazard.
 
 `HazardDelay` returns $f_{p,s}(d)$ of shape

@@ -290,6 +290,47 @@ def live_status(
     )
 
 
+def _rates(r: Mapping[str, Any]) -> str:
+    # Train is the GPU's share less evaluation; waiting shows only when
+    # it takes some time.
+    sh = r["share"]
+    split = [f"cut {sh['cut']:.0%}", f"eval {sh['eval']:.0%}"]
+    if sh["wait"] >= 0.005:
+        split.append(f"wait {sh['wait']:.0%}")
+    return (
+        f"{r['steps_per_min']:.1f} steps/min, "
+        f"{r['sims_per_hour']:.0f} simulations/h, "
+        f"GPU busy {r['gpu_busy']:.0%} ({', '.join(split)})"
+    )
+
+
+def throughput_line(folder: Path | None, segment: str | None) -> str:
+    """Return one line of throughput: the running segment and the run.
+
+    From the trainer's chunk-time lines (`logs.throughput`); empty for a
+    run with no finished chunk.
+    """
+    if folder is None:
+        return ""
+    rows = logs.RunLog(folder).chunk_times()
+    run = logs.throughput(rows)
+    if run is None:
+        return ""
+    parts = []
+    seg = logs.throughput([r for r in rows if r["segment"] == segment])
+    if seg:
+        n = seg["chunks"]
+        parts.append(
+            f"this segment ({html.escape(str(segment))}, {n} chunk"
+            f"{'s' if n != 1 else ''}): {_rates(seg)}"
+        )
+    parts.append(f"whole run ({run['chunks']} chunks): {_rates(run)}")
+    return (
+        f"<p class=tput><span class=k>Throughput{tip('t_tput')}</span> "
+        f"{' · '.join(parts)}</p>"
+    )
+
+
 def status_tiles(st: Status, live: Run) -> tuple[str, str]:
     """Return the status tiles and the sticky bar's step and next checkpoint."""
     now = datetime.now().timestamp()
@@ -942,6 +983,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     mail = mail_section(ctx)
     builts = {ds["key"]: ctx.nowcasts(ds["key"]) for ds in ctx.datasets}
     views = training.views_summary(live.folder) if live.folder else None
+    tput = throughput_line(live.folder, status.get("segment"))
     about = {
         "trainer_status": status,
         "block_views": views,
@@ -953,7 +995,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
             "Status",
             # The trainer's status, views and sources: folded, as the tiles
             # say where the run is.
-            f"<div class=tiles>{tiles}</div><details class=about>"
+            f"<div class=tiles>{tiles}</div>{tput}<details class=about>"
             f"<summary class=mut>Trainer status</summary>{kv.box(about)}"
             "</details>",
             True,

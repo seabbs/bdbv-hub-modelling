@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Simulate a batch of outbreaks from the grid config.
 
 Each simulation draws its design and values (`draws`), then runs as one

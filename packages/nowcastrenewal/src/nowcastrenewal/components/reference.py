@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Expected reference events (onsets, tests, admissions) from infections.
 
 `delayed_events` spreads each place's infections over an

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""A simulated outbreak as one numpyro model.
 
 `outbreak_model` runs a simulation's layers in one model from the shared

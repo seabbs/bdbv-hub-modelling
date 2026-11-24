@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The docs site's settings, from `config/site.toml`.
 
 Only the reporting reads them, so they never reach a stored fit's code or

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Epi weeks, reference dates and submission windows.
 
 The hub uses epi weeks that run Sunday to Saturday.

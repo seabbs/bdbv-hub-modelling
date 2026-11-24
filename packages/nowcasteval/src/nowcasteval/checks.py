@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Plausibility checks of the backtest forecasts, scored.
 
 Each forecast of a place from an origin $o$ gets a place type and a

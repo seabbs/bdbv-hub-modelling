@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The forecast task, the model interface and the model registry.
 
 A model is anything with a `name` and a `forecast(task)` method that

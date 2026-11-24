@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The baseline chain's delay at a release, for the report's delay check.
 
 `baseline_share` gives the share of the final count each age has reported

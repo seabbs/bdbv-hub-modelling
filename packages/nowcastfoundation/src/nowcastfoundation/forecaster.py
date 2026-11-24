@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The Chronos-2 foundation model on the hub target's releases.
 
 See the Foundation models methods page for the model.
@@ -941,7 +941,10 @@ def lag_count(
         return most
     released = int((t + d).min())
     history = int(max(1, min(most, tri.last - released + 1)))
-    steps = np.arange(released, tri.last + 1)
+    # Steps on the grid: a grid of targets before the cut-off ends early.
+    steps = np.arange(released, min(tri.last, tri.final.shape[1] - 1) + 1)
+    if steps.size == 0:
+        return history
     final = tri.final[:, steps]
     seen = np.nan_to_num(
         pd.DataFrame(tri.partial[:, steps, :width].reshape(-1, width))
@@ -1784,11 +1787,12 @@ class FoundationModel:
                     ),
                 )
             parts = sample(groups, horizon, task.n_samples, seed)
-            # Chronos-2's sampler puts the views back together itself; a
-            # model's own sampler draws each view.
+            # Chronos-2's sampler puts the views back together itself, so
+            # it returns one part; any sampler that returns one part per
+            # view has them put together here.
             draws = (
                 parts[0]
-                if whole or self.sample is None
+                if len(parts) == 1
                 else _owned(parts, views, places, period is not None)
             )
             # Counts are not negative; Chronos-2's output is otherwise kept
