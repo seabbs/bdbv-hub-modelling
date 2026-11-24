@@ -6,7 +6,8 @@ forecasts and nowcasts against the data as of the round, with the docs
 site's forecast explorer (`docs/javascripts/explorer.js`: location by
 level, model and view controls), the `wk R_t` quantiles of the renewal
 candidates the same way, the gate's pick and why, each candidate's
-checks, and the renewal fits' convergence.
+checks, a plot of each location the checks warned on, and the
+renewal fits' convergence.
 
 Inputs: the round's hub tables of every candidate (`fit-store archive`),
 the fit store (for the renewal fits' `rt.csv.gz` and `diagnostics.json`),
@@ -25,6 +26,7 @@ import gzip
 import html
 import io
 import json
+import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -172,6 +174,36 @@ def gate_section(run: Path) -> str:
     return "\n".join(parts)
 
 
+def warnings_section(run: Path, data: Path) -> str:
+    """Return each gate's plot of the locations its pick warned on.
+
+    The plots are the stored `warnings.png` of each gate's selected
+    candidate, copied into the page's data folder.
+    """
+    parts = []
+    for name, title in (("gate", "seabbs-renewal"),
+                        ("baseline-gate", "seabbs-rwnowcast")):  # fmt: skip
+        found = sorted((run / name).glob("**/selected/warnings.png"))
+        if not found:
+            continue
+        image = data / f"{name}-warnings.png"
+        shutil.copy(found[0], image)
+        parts.append(
+            f"<h3>{title}</h3><img src='{data.name}/{image.name}' "
+            f"alt='Locations the checks warned on for {title}' "
+            "style='max-width:100%'>"
+        )
+    if not parts:
+        return "<p class=mut>No check warned on a location.</p>"
+    note = (
+        "<p class=mut>One panel per location the forecast checks warned "
+        "on. Points are the counts reported at the vintage. Lines and "
+        "bands are the median and 90% interval of the pick, last week's "
+        "submission and the random walk nowcast.</p>"
+    )
+    return "\n".join([note, *parts])
+
+
 def team_quantiles(round_dir: Path, ref: str) -> pd.DataFrame:
     """Return every hub team's submission for the round, as quantiles.
 
@@ -268,6 +300,8 @@ def build(
         "yet.</p>",
         "<h2>What the gate picks</h2>",
         gate_section(run),
+        "<h2>Warned locations</h2>",
+        warnings_section(run, data),
         "<h2>Forecasts and nowcasts</h2>",
         "<p class=mut>Every candidate against the data as of the round, "
         "beside every other team's submission for this round so far, "

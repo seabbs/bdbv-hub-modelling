@@ -700,3 +700,16 @@ def test_plausibility_only_warns_and_never_rules_a_candidate_out(
     s = statuses(sub(tmp_path, growth=8.0))
     assert s["plausible"] == "warn"
     assert "fail" not in {s[n] for n in ("schema", "values", "samples")}
+
+
+def test_warnings_name_each_warned_location(tmp_path: Path) -> None:
+    low = {"CD-IT": 1.0, "CD-NK": 80.0, "CD-HU": 15.0}
+    checks = {c.name: c for c in run_checks(
+        sub(tmp_path, levels=low), reference_date=REF,
+        settings=POLICY.checks, national_sidecar=_sidecar(),
+        observed=read_observed(HUB / "time-series.csv"),
+    )}  # fmt: skip
+    warned = checks["plausible"].warnings
+    assert "CD-IT" in warned
+    assert all(m.startswith("CD-IT ") for m in warned["CD-IT"])
+    assert checks["schema"].warnings == {}
