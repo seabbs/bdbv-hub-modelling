@@ -48,6 +48,7 @@ Helpers: `task workflow:rulegraph` draws the rule graph, `task workflow:progress
 Paths and host details are in `config/local.env`, which git ignores; `config/local.env.example` lists every key.
 The file is read by `workflow/flowlib/localconfig.py`, which the Taskfile and shell scripts call (`python3 workflow/flowlib/localconfig.py KEY`).
 A value may use another setting, `$ROOT` say, in any order.
+A git worktree without its own `config/local.env` reads the main checkout's, so a host keeps one local config for all its worktrees.
 A variable in the environment wins, and with no file everything runs on this machine.
 The workflow uses:
 
