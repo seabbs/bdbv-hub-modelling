@@ -118,7 +118,8 @@ def test_cut_only_saves_the_held_out_and_first_chunk_without_the_gpu(
     # blocks and first chunk are cut on the CPU, under the keys the
     # trainer will look up, before it takes the GPU.
     out = tmp_path / "train"
-    held = (["3-0001-1"], [])
+    view = {"kind": "whole"}
+    held = ([("3-0001-1", {"source": "daily", "cut": 0, "view": view})], [])
     first = ([("1-0001-1", {"source": "daily"})], [])
 
     def no_model(*_args, **_kwargs):

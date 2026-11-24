@@ -1695,6 +1695,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
+    # Cut the held-out blocks and the first chunk, save them under the
+    # keys training looks up, and stop: a fresh run's cuts on the CPU
+    # before it takes the GPU (lead 13:00), so the GPU never waits.
+    parser.add_argument("--cut-only", action="store_true")
     # The series bias (nowcastfoundation.series_bias): learned
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
@@ -1816,6 +1820,40 @@ def check_cadence(eval_every: int, by_source_every: int) -> None:
         )
 
 
+def cut_first_chunk(
+    out: Path,
+    sim_dir: Path,
+    seeds: Sequence[int],
+    args: argparse.Namespace,
+    pool: ProcessPoolExecutor,
+    key_of: Callable[[Sequence[str]], dict[str, Any]],
+    report: Callable[..., None],
+) -> None:
+    """Cut a fresh run's first chunk and save it under its key.
+
+    Waits for its simulations, as training does; the trainer then loads
+    the saved blocks (`load_chunk`) instead of cutting them.
+    """
+    size = min(CHUNK, args.outbreaks)
+    report(stage=f"cut only: waiting for outbreaks 1-{size}")
+    while (ids := next_chunk(sim_dir, seeds, [], size)) is None:
+        time.sleep(POLL)
+    report(stage=f"cut only: cutting outbreaks 1-{size}")
+    pairs, empty = _join(
+        submit_cut(
+            pool,
+            sim_dir,
+            ids,
+            args.seed,
+            args.blocks_per_simulation,
+            args.cut_workers,
+        )
+    )
+    save_chunk(out, key_of(ids), pairs, empty)
+    log(f"cut only: held-out blocks and outbreaks 1-{size} saved")
+    report(stage="cut only: done")
+
+
 def main(root: Path | None = None) -> None:
     """Train on the chunks as they are simulated.
 
@@ -1849,6 +1887,10 @@ def main(root: Path | None = None) -> None:
     global DRAWS_PER_PASS, SUBSET_SEED
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
+    if args.cut_only and (out / "state" / "state.json").exists():
+        parser.error(
+            "--cut-only cuts a fresh run's first chunk; this run has a state"
+        )
     # Read once at start: the worktree may move on while training.
     commit = code_commit()
     out.mkdir(parents=True, exist_ok=True)
@@ -1963,6 +2005,11 @@ def main(root: Path | None = None) -> None:
         }
 
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
+    if args.cut_only:
+        cut_first_chunk(
+            out, sim_dir, training_seeds(), args, pool, chunk_key, report
+        )
+        return
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = torch_device(args.device)
