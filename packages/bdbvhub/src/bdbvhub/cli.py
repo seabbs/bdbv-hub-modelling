@@ -607,7 +607,7 @@ def _task_args(p: argparse.ArgumentParser, data_dir: str) -> None:
 
 def _version() -> str:
     try:
-        return version("BDBVHubRenewal")
+        return version("bdbvhub")
     except PackageNotFoundError:  # pragma: no cover
         return "unknown"
 

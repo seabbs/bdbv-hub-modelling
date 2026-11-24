@@ -8,7 +8,7 @@
 # same order: detect -> prepare (random walk) -> await the fit store ->
 # primary candidates, read from the store -> select -> submit
 # (DRY_RUN=true). The model is the
-# fixture CLI (fixtures/fake_bdbvhubrenewal.py) and `gh`/`git` are never
+# fixture CLI (fixtures/fake_bdbvhub.py) and `gh`/`git` are never
 # called for writing. Outputs go to a new $TMPDIR/submission-ci-dry.XXXXXX/
 # <scenario>/ for each run, so concurrent dry runs never share files.
 set -euo pipefail
@@ -20,7 +20,7 @@ tmp=${TMPDIR:-/tmp}
 ROOT=$(mktemp -d "${tmp%/}/submission-ci-dry.XXXXXX")
 echo "Dry-run outputs: $ROOT"
 export UV_CACHE_DIR=${UV_CACHE_DIR:-${TMPDIR:-/tmp}/uvcache}
-export FORECAST_CLI="python3 $FIX/fake_bdbvhubrenewal.py"
+export FORECAST_CLI="python3 $FIX/fake_bdbvhub.py"
 # MODEL and MODEL_ID are left unset, so `prepare` resolves them from
 # config/hub.toml and the fixture CLI (`hub-id`) as the workflow does.
 unset MODEL MODEL_ID

@@ -117,7 +117,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 Abbott S (2026). bdbv-hub-modelling: renewal-model nowcasts and forecasts for the BDBV Modeling Hub. Zenodo. <https://doi.org/10.5281/zenodo.23942616>.
 
 ```bibtex
-@software{abbott_bdbvhubrenewal,
+@software{abbott_bdbv_hub_modelling,
   author = {Abbott, Sam},
   title = {{bdbv-hub-modelling}: renewal-model nowcasts and forecasts for the {BDBV} Modeling Hub},
   year = {2026},
