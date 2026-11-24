@@ -84,7 +84,7 @@ MODELS: Final = (
     "foundation",
 )
 """The baseline, the random walk, zero-shot Chronos-2 on complete data and
-on the ragged releases, and the fine-tuned ragged model."""
+on the releases to the cut-off, and the fine-tuned cut-off model."""
 
 MIN_RELEASES: Final = 6
 """Releases up to the first origin: two weeks of context past the

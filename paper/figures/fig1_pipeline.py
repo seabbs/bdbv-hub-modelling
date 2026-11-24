@@ -11,7 +11,7 @@ The panels are:
 
 - A, the assumptions in the simulations
   (`nowcastfoundation.simulator`), one box per stage;
-- B, the reporting triangle laid out as ragged series for Chronos-2
+- B, the reporting triangle laid out as series for Chronos-2
   (`nowcastfoundation.forecaster.layout_block`), each place's count and lag
   series joined by a learned attention bias for rows of the same place,
   and another for a place and its parent, all places in one group;
@@ -370,14 +370,14 @@ def _block(
 
 
 def panel_b(g: Svg, oy: float) -> float:
-    """Draw panel B, the reporting triangle as ragged series."""
-    g.label(0, oy + 9, "B", "The reporting triangle as ragged series")
+    """Draw panel B, the reporting triangle as series."""
+    g.label(0, oy + 9, "B", "The reporting triangle as series")
     top = oy + 22
     # A toy triangle: onset steps 1 to 8, releases at steps 4 to 8, and
-    # lag series 0 to 3, so the target is complete up to E = 4.
+    # lag series 0 to 3; the target runs to the cut-off, E = 8.
     n_on, first_rel, n_lag = 8, 4, 4
     releases = list(range(first_rel, n_on + 1))
-    e_step = n_on - n_lag
+    e_step = n_on
     cw, ch = 15.0, 10.0
     tx, ty = 24.0, top + 14
     g.text(
@@ -413,15 +413,6 @@ def panel_b(g: Svg, oy: float) -> float:
                     sw=1.0,
                     rx=1,
                 )
-    hi = e_step + 1
-    g.rect(
-        tx + (hi - first_rel) * cw - 0.8,
-        ty + (hi - 1) * ch - 0.8,
-        (n_on - hi + 1) * cw + 1.6,
-        ch + 1.6,
-        stroke=ACCENT,
-        sw=1.3,
-    )
     ey = ty + e_step * ch
     g.line(tx - 2, ey, tx + cw * len(releases) + 3, ey, stroke=ACCENT, sw=1.1)
     g.text(
@@ -434,11 +425,11 @@ def panel_b(g: Svg, oy: float) -> float:
     )
     tri_bottom = ty + n_on * ch
 
-    # The arrow to the ragged layout.
+    # The arrow to the block.
     ax = tx + cw * len(releases) + 16
     g.line(ax, ty + 40, ax + 22, ty + 40, arrow="ah")
 
-    # The ragged block of two places: each a target and its lag series.
+    # The block of two places: each a target and its lag series.
     bx = 196.0
     by = ty + 2
     cols = n_on + 2
@@ -505,8 +496,7 @@ def panel_b(g: Svg, oy: float) -> float:
     # Column headings.
     for lo, hi_, name in [
         (1, e_step, "context"),
-        (e_step + 1, n_on, "nowcast"),
-        (n_on + 1, cols, "forecast"),
+        (e_step + 1, cols, "forecast"),
     ]:
         g.text(
             bx + (lo - 1 + hi_) / 2 * bw,
@@ -516,7 +506,7 @@ def panel_b(g: Svg, oy: float) -> float:
             anchor="middle",
             fill=MUTED,
         )
-    # E, the end of the targets' context, and the latest release.
+    # E, the cut-off: the end of the targets' context and the latest release.
     exx = bx + e_step * bw
     g.line(exx, by - 2, exx, bottom + 3, stroke=ACCENT, sw=1.1)
     g.text(
@@ -527,25 +517,6 @@ def panel_b(g: Svg, oy: float) -> float:
         weight="bold",
         fill=ACCENT,
         anchor="middle",
-    )
-    rx_ = bx + n_on * bw
-    g.line(rx_, by - 2, rx_, bottom + 3, stroke=FG, sw=0.8, dash="2.5 2")
-    # The highlighted onset step of place 1, read down its column.
-    g.rect(
-        bx + (hi - 1) * bw - 0.8,
-        starts[0] + rh + 1.2,
-        bw + 1.6,
-        n_lag * (rh + 1) + 1.6,
-        stroke=ACCENT,
-        sw=1.3,
-    )
-    # Known-future inputs, beside place 1's lag rows.
-    g.text(
-        bx + cols * bw + 7,
-        starts[0] + 24,
-        ["known", "future"],
-        size=SMALL,
-        fill=COV,
     )
     # Every place's series are one group in group attention.
     gx = bx + cols * bw + 3
@@ -710,21 +681,18 @@ def panel_c(g: Svg, oy: float) -> float:
     """Draw panel C, a training block and the LoRA adapters."""
     g.label(0, oy + 9, "C", "Training blocks and LoRA fine-tuning")
     top = oy + 22
-    # The training block, cut at a random cut-off.
+    # The training block, cut at a random cut-off, E.
     cw, rh = 12.0, 9.0
-    n_ctx, n_now, n_fc = 8, 4, 3
-    cols = n_ctx + n_now + n_fc
+    n_ctx, n_lag, n_fc = 12, 4, 3
+    cols = n_ctx + n_fc
     bx = 34.0
     by = top + 18
     rows = [["final" if c < n_ctx else "truth" for c in range(cols)]]
-    for d in range(n_now):
+    for d in range(n_lag):
         rows.append(
-            [
-                "lag" if d <= c < n_ctx + n_now - d else "none"
-                for c in range(cols)
-            ]
+            ["lag" if d <= c < n_ctx - d else "none" for c in range(cols)]
         )
-    bottom = by + (n_now + 1) * (rh + 1) + 1
+    bottom = by + (n_lag + 1) * (rh + 1) + 1
     # A stack of blocks behind, for many outbreaks and cut-offs.
     for k in (2, 1):
         g.rect(
@@ -777,9 +745,6 @@ def panel_c(g: Svg, oy: float) -> float:
         fill=ACCENT,
         anchor="middle",
     )
-    cut = bx + (n_ctx + n_now) * cw
-    g.line(cut, by - 2, cut, bottom + 3, stroke=FG, sw=0.8, dash="2.5 2")
-    g.text(cut, bottom + 11, "cut-off", size=SMALL, anchor="middle")
     left_bottom = bottom + 12
 
     # LoRA: the frozen model with small trained adapters.
@@ -896,9 +861,9 @@ def panel_d(g: Svg, oy: float) -> float:
         )
         if k:
             g.line(x - gap + 2, top + h / 2, x - 2, top + h / 2, arrow="ah")
-    # Stage 1: the latest data as a ragged block.
+    # Stage 1: the latest data as a block to the cut-off.
     cw, rh = 7.0, 5.0
-    rows = [["final" if c < 5 else "future" for c in range(10)]]
+    rows = [["final" if c < 9 else "future" for c in range(10)]]
     for d in range(4):
         rows.append(
             [

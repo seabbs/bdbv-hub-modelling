@@ -42,7 +42,7 @@ def test_foundation_cites_package_paths() -> None:
     assert "nowcastfoundation.finetune.training_block" in text
 
 
-def test_foundation_says_daily_ragged_reads_the_rolling_row() -> None:
+def test_foundation_says_daily_cutoff_reads_the_rolling_row() -> None:
     text = (DOCS / "methods" / "foundation.md").read_text()
     assert "The daily source is summed to weeks" not in text
     assert "rolling" in text

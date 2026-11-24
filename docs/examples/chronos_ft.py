@@ -1,4 +1,4 @@
-"""Nowcast a reporting triangle with our fine-tuned Chronos-2."""
+"""Forecast past a reporting triangle with our fine-tuned Chronos-2."""
 
 import numpy as np
 import pandas as pd

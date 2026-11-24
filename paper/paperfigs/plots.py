@@ -172,7 +172,7 @@ def _ribbon_models(models: Sequence[str], baseline: str) -> list[str]:
     """Baseline, the best Chronos-2 variant, and an ensemble.
 
     The best variant is the fine-tuned one if present, else zero-shot
-    ragged, else complete.
+    cut-off, else complete.
     """
     keep = [m for m in models if m in (baseline, "hub_ensemble")]
     for name in (

@@ -280,7 +280,7 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     greyed when n is under `MIN_CELLS`. Each fine-tuned model is a line
     over its checkpoints on a log axis of outbreaks. The models with no
     fine-tuning are horizontal lines in the same colour: zero-shot
-    Chronos-2 on the ragged layout (dashed) and on complete data only
+    Chronos-2 on the cut-off layout (dashed) and on complete data only
     (dotted, the `_complete` models), with `randomwalknowcast` the line at
     1. `scores` has one row per study, level, model and checkpoint, with
     `outbreaks` (0 for zero-shot) and `rel_wis` against `randomwalknowcast`.

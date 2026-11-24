@@ -4,7 +4,7 @@ The `foundation` model and its comparison variants give the hub target's release
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
-`foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the ragged layout.
+`foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the cut-off layout.
 The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), the two-step `foundation_twostep` and `foundation_zeroshot_twostep`, and `foundation_real` (fine-tuned on real data alone).
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
 Only `foundation` runs in the Fit store and the submission; the variants are run by the paper's workflow alone.
@@ -43,13 +43,13 @@ Chronos-2 forecasts every target series in the block jointly, from one shared la
 - **Complete** (`*_complete`): the targets $X_{p,t}$ for $t \le t^*$.
   $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([Baseline models](baselines.md#forecast)).
   It comes from the delay alone, so it needs no walk spread.
-- **Ragged** (`*_ragged`): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
+- **Cut-off** (the default): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
-  $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D$ estimated from the data (`lag_count`).
+  $t^* = c$, the cut-off: the targets are the counts as reported at the vintage, and the lag series are past covariates only.
+  $D$ is estimated from the data (`lag_count`).
   $D$ is the first lag at which the steps 28 to 112 days (4 to 16 weeks) before the cut-off had 99% of their counts reported, pooled over places and releases, read from no release after the cut-off.
   It is at most 112 days or 16 weeks and at most what the history allows, with two steps of context before the longest lag, and that many when the window has no counts or never reaches 99%.
   A model can fix $D$ instead (`lags`); the SI compares the estimate with 4 weeks or 28 days.
-  The lag series run past $t^*$ as known future values, which is how recent counts reach the nowcast.
   A place with no cases has no lag series, as they would be all zero.
   The daily block also has each place's 7-day rolling sum as a series (`rolling7`), so the hub's 7-day target is a series of the block.
   So the daily block, where 75 of 546 places have cases, fits in memory.
@@ -77,7 +77,7 @@ Independent and comonotone draws remain as named options (`coupling`) for the su
 A draw is rounded to the nearest count and floored at zero.
 Steps up to $t^*$ are their count at the vintage.
 The hub's target is weekly.
-A daily ragged model reads each week from its place's rolling 7-day series on the week's last day, and a daily complete model sums its seven daily draws.
+A daily cut-off model reads each week from its place's rolling 7-day series on the week's last day, and a daily complete model sums its seven daily draws.
 
 ## Patches and context
 

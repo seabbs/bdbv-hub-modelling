@@ -84,6 +84,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).
+- Each place's counts run to the cut-off as reported by then, and its delay series are past covariates.
+- Chronos-2 forecasts from the step after the cut-off, so the steps up to it keep their reported counts.
 - Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.
 - Without more information, the model has no marker of which delay series belong to which place's count.
 - We add learned attention biases that nudge these weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
@@ -118,14 +120,14 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - Training blocks use the same rule for $D$ in 90% of blocks and $D$ scaled by a factor drawn from Normal(1, 0.05) in the other 10%, so the model is robust to $D$ set slightly differently.
 - We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.
 - We plot each checkpoint's scores, with both as reference lines (SI).
-- Figure 1 shows the simulation, the ragged series, training and forecasting.
+- Figure 1 shows the simulation, the series, training and forecasting.
 - TODO: replace the SI's dashboard screenshot with a static render of the finished run from the workflow.
 - Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
 :::
 
 ![The fine-tuning pipeline.
 (A) The assumptions in the simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle.
-(B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs.
+(B) The reporting triangle laid out as series for Chronos-2: each place has a target of its counts as reported up to the cut-off E and one series per lag, missing until reported (daily lag series fill only on release days), all past inputs.
 Group attention has learned biases for a series attending to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai's any-variate attention [@Woo2024], while every place's series sit in one group.
 The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation (same place: a place's count series and its lag series).
 Beside it, one place's daily rows carry a weekly total row, missing until the last day of each week.
@@ -368,10 +370,10 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 :::
 
 Against `randomwalknowcast`, zero-shot Chronos-2 on the two-step input scored {{< meta results.synthetic.models.foundation_zeroshot_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_twostep >}} on the German {{< meta results.germany.scope >}}.
-The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_twostep >}} and {{< meta results.germany.models.foundation_twostep >}}, and on the ragged layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
+The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_twostep >}} and {{< meta results.germany.models.foundation_twostep >}}, and on the cut-off layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
 
 ::: {.content-visible when-meta="results.ebola.shown"}
-On the Ebola {{< meta results.ebola.scope >}}, zero-shot Chronos-2 and the fine-tuned model on the two-step input and the fine-tuned model on the ragged layout scored {{< meta results.ebola.models.foundation_zeroshot_twostep >}}, {{< meta results.ebola.models.foundation_twostep >}} and {{< meta results.ebola.models.foundation >}}.
+On the Ebola {{< meta results.ebola.scope >}}, zero-shot Chronos-2 and the fine-tuned model on the two-step input and the fine-tuned model on the cut-off layout scored {{< meta results.ebola.models.foundation_zeroshot_twostep >}}, {{< meta results.ebola.models.foundation_twostep >}} and {{< meta results.ebola.models.foundation >}}.
 :::
 
 We score the model fine-tuned on real data on the German held-out half and on Ebola rounds after its last training release, {{< meta results.realdata_after >}}, against the model fine-tuned on simulations (SI, Real-data fine-tune against synthetic).
@@ -383,7 +385,7 @@ The SI also scores Chronos-2's trajectories with its copula, with independent ce
 
 ## Discussion
 
-We used one foundation model, Chronos-2, because it forecasts a group of related series in one block and takes known-future covariates, which the reporting triangle laid out as ragged series needs.
+We used one foundation model, Chronos-2, because it forecasts a group of related series in one block and takes past covariates, which the reporting triangle laid out as series needs.
 In the SI we compare fine-tuning on simulations with fine-tuning on real data, on the German held-out half and on the held-out Ebola rounds after the real-data model's last training release.
 Those Ebola scores are retrospective, from data released before each round closed.
 The fine-tuned model is trained on simulations only, so it never sees the BDBV truth it is scored against.

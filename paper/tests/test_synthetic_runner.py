@@ -200,11 +200,11 @@ def test_models_by_name_skip_unregistered_ones() -> None:
 
 
 @pytest.mark.parametrize("name", ["foundation_zeroshot"])
-def test_default_models_include_the_zero_shot_ragged_ones(name: str) -> None:
+def test_default_models_include_the_zero_shot_cutoff_ones(name: str) -> None:
     assert name in synthetic.MODELS
     assert "randomwalknowcast" in synthetic.MODELS
     assert "randomwalk" in synthetic.MODELS
-    assert name.replace("ragged", "complete") in synthetic.MODELS
+    assert f"{name}_complete" in synthetic.MODELS
     assert FINETUNED_OF[name] in synthetic.MODELS
 
 

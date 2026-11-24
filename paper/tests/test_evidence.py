@@ -320,7 +320,7 @@ def test_checkpoint_rows_keep_only_the_live_run() -> None:
 
 def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     # The fine-tuned checkpoints are the curve; zero-shot Chronos-2 on the
-    # ragged layout and on complete data only are horizontal lines, and
+    # cut-off layout and on complete data only are horizontal lines, and
     # randomwalknowcast is the line at 1.
     from paperpipe.evidence import checkpoint_figure
 

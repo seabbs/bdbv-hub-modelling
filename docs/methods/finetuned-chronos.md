@@ -44,9 +44,10 @@ Cells after that are ignored, so they may be NaN.
 A missing cell before it is an error; give 0 where nothing was reported.
 The last delay is taken as final.
 
-The rows reported at every delay are Chronos-2's context.
-Each count at each earlier delay is a covariate, known up to the last cut-off.
-This is the ragged layout of the `foundation` model ([Layouts](foundation.md#layouts)).
+Each row's count reported by the last cut-off is Chronos-2's context.
+Each count at each earlier delay is a past covariate, known up to the last cut-off.
+This is the cut-off layout of the `foundation` model ([Layouts](foundation.md#layouts)).
+Chronos-2 forecasts the `horizon` rows after the last, at least one.
 Our checkpoints were fine-tuned with last delays of 2 to 7 weeks or 14 to 49 days, so triangles in those ranges match their training best.
 
 The output has one row per place, reference time and quantile level:
@@ -55,7 +56,7 @@ The output has one row per place, reference time and quantile level:
 |---|---|
 | `place` | `series`, or the key of each triangle when given a dict of places |
 | `reference` | the row's reference time, extended past the last row for dates and numbers |
-| `step` | rows after the last: 0 is the last row, below 0 the rows still being reported, above 0 rows ahead (`horizon`) |
+| `step` | rows after the last, from 1 to `horizon` |
 | `quantile_level` | the level, Chronos-2's own unless `quantile_levels` is given |
 | `value` | the quantile of the row's final count |
 

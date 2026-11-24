@@ -3,11 +3,11 @@
 The ink colours are those of bdbv-hub-modelling's `nowcasteval/plots.py`.
 Each model's colour, dash and display name are the shared ones of
 `nowcasteval.labels`, which the dashboard and site use too.
-The Chronos variants of one family share a colour: fine-tuned on ragged
-data is solid, zero-shot on ragged data dashed (hollow circles), and
+The Chronos variants of one family share a colour: fine-tuned on cut-off
+data is solid, zero-shot on cut-off data dashed (hollow circles), and
 zero-shot on complete data dotted (hollow squares). Bars are filled with
 the model's colour, and the model is named on the axis in that colour.
-They are listed complete, ragged, fine-tuned so each step reads left to
+They are listed complete, cut-off, fine-tuned so each step reads left to
 right.
 """
 
