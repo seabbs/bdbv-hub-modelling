@@ -259,11 +259,16 @@ def energy_sample(obs: ArrayLike, samples: ArrayLike) -> float:
     -------
     float
         The energy score, as scoringrules' `es_ensemble` with
-        `estimator="fair"`. In one dimension it is the fair CRPS.
+        `estimator="fair"`. In one dimension it is the fair CRPS. The
+        distances between samples are taken one sample at a time, so
+        memory grows with $m d$, not $m^2 d$.
     """
     y = np.asarray(obs, dtype=np.float64)
     x = np.asarray(samples, dtype=np.float64)
-    return float(sr.es_ensemble(y, x, estimator="fair", backend="numpy"))
+    m = x.shape[0]
+    error = np.linalg.norm(x - y, axis=-1).sum() / m
+    spread = sum(np.linalg.norm(x - row, axis=-1).sum() for row in x)
+    return float(error - 0.5 * spread / (m * (m - 1)))
 
 
 def scale_of(location: pd.Series) -> pd.Series:
