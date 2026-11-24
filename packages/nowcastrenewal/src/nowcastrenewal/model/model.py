@@ -205,12 +205,14 @@ class ModelConfig:
         thousands of pooled delays do not make the delay overconfident.
     centred_rt : bool
         Sample the levels of the shared log Rt walk (`log_rt_baseline_x`)
-        rather than its standardised steps (`NonCentredRandomWalk`), for
-        a fit where the data pin that walk (one place).
+        rather than its standardised steps (`NonCentredRandomWalk`).
+        Every variant sets it the same way, per fit, where the counts pin
+        the walk's weekly changes (`forecaster.fit_config`).
     rt_sd_lognormal : tuple of float or None
         Median and log-scale SD of a LogNormal prior on that walk's step
-        SD, in place of HalfNormal(0.2). A centred walk funnels where its
-        step SD nears 0, which HalfNormal allows: at the 2026-11-22
+        SD, shared by every variant (Sam, 2026-11-24). A centred walk
+        funnels where its step SD nears 0, which HalfNormal(0.2) allowed:
+        at the 2026-11-22
         release, CD-NK fitted alone mixed the step SD at bulk ESS 29 and
         E-BFMI 0.27 to 0.36 under HalfNormal(0.2), and at 72 and 0.49 to
         0.70 under LogNormal(log 0.12, 0.5), in the same time and with no
@@ -231,7 +233,7 @@ class ModelConfig:
         "dirichlet-multinomial"
     )
     centred_rt: bool = False
-    rt_sd_lognormal: tuple[float, float] | None = None
+    rt_sd_lognormal: tuple[float, float] | None = (0.12, 0.5)
 
 
 MAIN = ModelConfig()
