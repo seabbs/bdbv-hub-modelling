@@ -8,7 +8,8 @@ score summary (`nowcasteval.scoresummary.summary_rows` and
 `summary_html`). This module gives them one look: the docs theme's
 colours in light and dark (`THEME`, `SCHEME`), the docs scripts and
 stylesheet inlined (`page`), each page's data folder beside it
-(`data_dir`) and an atomic write (`write_page`).
+(`data_dir`), a table the reader can sort (`html_table`) and an atomic
+write (`write_page`).
 
     parts = ["<h1>...</h1>", explorer_html(f"{rel}/x.json", "Forecasts")]
     write_page(out, page("Title", parts))
@@ -16,10 +17,13 @@ stylesheet inlined (`page`), each page's data folder beside it
 
 from __future__ import annotations
 
+import html
 import shutil
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
+
+import pandas as pd
 
 __all__ = [
     "EXPLORER_SCRIPTS",
@@ -27,6 +31,7 @@ __all__ = [
     "SCORE_SCRIPTS",
     "THEME",
     "data_dir",
+    "html_table",
     "page",
     "write_page",
 ]
@@ -74,6 +79,9 @@ td,th{border-bottom:1px solid var(--md-default-fg-color--lightest);
 padding:3px 8px;text-align:right}
 td:first-child,th:first-child{text-align:left}
 .mut{color:var(--md-default-fg-color--light)}
+details{margin:8px 0}
+summary{cursor:pointer}
+.table-wrap{overflow-x:auto}
 """
 """The docs theme's colours (mkdocs-material variables the docs scripts
 and stylesheet read), light and `slate` dark, and the page layout."""
@@ -126,6 +134,47 @@ def page(
         f"<body data-md-color-scheme=default><script>{SCHEME}</script>"
         + "\n".join(parts)
         + f"<script>{js}</script></body></html>"
+    )
+
+
+def html_table(
+    frame: pd.DataFrame,
+    columns: Mapping[str, str],
+    digits: int = 2,
+) -> str:
+    """Return a table the reader can sort by any column (`tablesort.js`).
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        The rows.
+    columns : mapping of str to str
+        Each column shown and its heading, in order.
+    digits : int
+        Decimal places of floats; missing values show as `-`.
+
+    Returns
+    -------
+    str
+        A `table` inside a scrolling `tablesort` block.
+    """
+    head = "".join(f"<th>{html.escape(h)}</th>" for h in columns.values())
+    rows = []
+    for row in frame[list(columns)].itertuples(index=False):
+        cells = []
+        for v in row:
+            if isinstance(v, float):
+                text = "-" if pd.isna(v) else f"{v:.{digits}f}"
+            else:
+                text = str(v)
+            cells.append(f"<td>{html.escape(text)}</td>")
+        rows.append("<tr>" + "".join(cells) + "</tr>")
+    return (
+        "<div class='tablesort table-wrap'><table><thead><tr>"
+        + head
+        + "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
     )
 
 

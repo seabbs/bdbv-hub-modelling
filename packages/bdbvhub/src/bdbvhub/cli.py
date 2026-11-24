@@ -576,6 +576,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ftc.add_argument("--reference", default="randomwalknowcast")
     ftc.add_argument(
+        "--root",
+        default=".",
+        help="report: the repository root, holding docs/.",
+    )
+    ftc.add_argument(
         "parts", nargs="*", help="report: the models' forecast folders."
     )
 
@@ -1852,18 +1857,12 @@ def _ft_check(args: argparse.Namespace) -> int:
         print(f"Forecasts of {args.model} written to {args.out}.")
         return 0
     tables = ftcheck.skill_tables(args.parts, args.data, args.reference)
-    root = Path(__file__).resolve().parents[4]
-    scripts = [
-        root / "docs" / "javascripts" / f
-        for f in ("toggles.js", "zoom.js", "explorer.js")
-        if (root / "docs" / "javascripts" / f).exists()
-    ]
     out = ftcheck.write_report(
         tables,
         args.out,
         args.reference,
         args.checkpoint or finetuned_spec(),
-        scripts,
+        args.root,
     )
     print(f"Wrote {out}.")
     return 0

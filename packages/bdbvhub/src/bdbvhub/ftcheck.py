@@ -41,7 +41,10 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from bdbvhub.compare import forecast_quantiles
 from bdbvhub.models import get_model
+from bdbvhub.reporting import pages
+from bdbvhub.reporting.pages import html_table
 from bdbvhub.store import store
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcastbdbv.data.zones import load_zone_data
@@ -51,14 +54,17 @@ from nowcasteval.explorer import (
     explorer_html,
     write_explorer,
 )
-from nowcasteval.labels import MODEL_STYLES, NEUTRAL, model_label
+from nowcasteval.labels import model_label
 from nowcasteval.nowcast import (
+    COMPLETE_WEEKS,
     ReleaseForecasts,
     forecast_releases,
     resolve_truth_delay,
     score_releases,
 )
-from nowcasteval.plots import location_names
+from nowcasteval.plots import comparison_colours, location_names
+from nowcasteval.scorechart import write_score_chart
+from nowcasteval.scoresummary import summary_html, summary_rows
 from nowcasteval.scoring import pairwise_skill
 from nowcastfoundation.forecaster import (
     FINETUNED_ENV,
@@ -75,6 +81,7 @@ __all__ = [
     "release_tasks",
     "roughness",
     "skill_tables",
+    "summary_lines",
     "write_report",
 ]
 
@@ -207,7 +214,8 @@ def skill_tables(
     -------
     dict of str to pandas.DataFrame
         `scores` (complete weeks), `overall` and `by_weeks_back` (pairwise
-        skill), `quantiles` and `blocks` (each Chronos-2 model's block
+        skill), `quantiles` (scored), `samples` (every forecast's
+        final-count draws) and `blocks` (each Chronos-2 model's block
         sizes by release).
     """
     tasks, target, daily, conf = release_tasks(data)
@@ -237,6 +245,7 @@ def skill_tables(
         "overall": overall,
         "by_weeks_back": by,
         "quantiles": result.quantiles,
+        "samples": run.samples,
         "blocks": pd.concat(blocks, ignore_index=True)
         if blocks
         else pd.DataFrame(),
@@ -320,17 +329,19 @@ def roughness(quantiles: pd.DataFrame) -> pd.DataFrame:
 
 
 def explorer_quantiles(
-    quantiles: pd.DataFrame, names: dict[str, str]
+    samples: pd.DataFrame, names: dict[str, str]
 ) -> pd.DataFrame:
-    """Return the release quantiles as the forecast explorer reads them.
+    """Return each model's final-count forecasts as the explorer reads them.
 
-    Complete weeks only, models by their display names, each origin as
-    the round, and the 5% quantile (`q5`) as `q05`.
+    The quantiles of every forecast week's draws, complete or not, once
+    per model and round (`compare.forecast_quantiles`, as the this-round
+    page), models by their display names and each origin as the round.
 
     Parameters
     ----------
-    quantiles : pandas.DataFrame
-        `ReleaseBacktest.quantiles`.
+    samples : pandas.DataFrame
+        `ReleaseForecasts.samples`: `model`, `origin`, `location`,
+        `target_end_date`, `sample` and `value`.
     names : dict of str to str
         Display name of each model id.
 
@@ -340,31 +351,83 @@ def explorer_quantiles(
         Columns `model`, `ours`, `reference_date`, `location`,
         `target_end_date` and `QUANTILE_COLUMNS`.
     """
-    q = quantiles
-    if "target" in q:
-        q = q.loc[q["target"] == "complete"]
-    q = _named(q.rename(columns={"q5": "q05"}), names)
-    return q.assign(ours=True, reference_date=q["origin"])
-
-
-def _table(frame: pd.DataFrame, cols: Sequence[str]) -> str:
-    head = "".join(f"<th>{html.escape(c)}</th>" for c in cols)
-    body = []
-    for row in frame[list(cols)].itertuples(index=False):
-        cells = []
-        for v in row:
-            text = f"{v:.3f}" if isinstance(v, float) else str(v)
-            cells.append(f"<td>{html.escape(text)}</td>")
-        body.append("<tr>" + "".join(cells) + "</tr>")
-    return (
-        f"<table><thead><tr>{head}</tr></thead><tbody>"
-        + "".join(body)
-        + "</tbody></table>"
+    draws = samples.assign(
+        source="real",
+        reference_date=samples["origin"].astype(str),
+        target_end_date=samples["target_end_date"].astype(str),
     )
+    q = forecast_quantiles(draws)
+    return _named(q, names).assign(ours=True)
 
 
 def _named(frame: pd.DataFrame, names: dict[str, str]) -> pd.DataFrame:
     return frame.assign(model=frame["model"].map(lambda m: names.get(m, m)))
+
+
+def _by_horizon(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return weeks back as the hub's horizon, negative for nowcasts."""
+    return frame.assign(horizon=-frame["weeks_back"]).drop(columns="weeks_back")
+
+
+def _roles(models: Sequence[str]) -> tuple[str, str]:
+    """Return the fine-tuned and the zero-shot Chronos-2 model shown."""
+    tuned = next((m for m in models if m.endswith("_ft")), "")
+    zero = next(
+        (m for m in models if m.startswith("fm_") and not m.endswith("_ft")),
+        "",
+    )
+    return tuned, zero
+
+
+def summary_lines(
+    overall: pd.DataFrame,
+    cal: pd.DataFrame,
+    reference: str,
+    checkpoint: str,
+    rounds: Sequence[str],
+) -> list[str]:
+    """Return the page's three-line summary.
+
+    Which checkpoint and rounds; the fine-tuned model's relative CRPS
+    against the reference and against zero-shot Chronos-2; and its worst
+    calibrated nowcast (lowest 90% coverage at horizon 0 or earlier, at
+    the national or province level).
+    """
+    rel = overall.set_index("model")
+    tuned, zero = _roles(list(rel.index))
+    lines = [
+        f"Fine-tuned checkpoint {checkpoint}, on {len(rounds)} hub rounds "
+        f"({rounds[0]} to {rounds[-1]})"
+        if rounds
+        else f"Fine-tuned checkpoint {checkpoint}, with no scored round yet."
+    ]
+    if tuned in rel.index:
+        nat = rel["relative_crps"].astype(float).to_dict()
+        crps = nat[tuned]
+        log = rel["relative_log_crps"].astype(float).to_dict()[tuned]
+        text = (
+            f"Relative CRPS {crps:.2f} (log scale {log:.2f}) against "
+            f"{model_label(reference)}, where below 1 is better"
+        )
+        base = nat.get(zero, np.nan)
+        if base > 0:
+            ratio = crps / base
+            text += f"; {ratio:.2f} times zero-shot Chronos-2's CRPS"
+        lines.append(text + ".")
+    worst = cal.loc[
+        (cal["model"] == tuned)
+        & (cal["weeks_back"] >= 0)
+        & cal["level"].isin(["national", "province"])
+    ].sort_values("coverage_90")
+    if len(worst):
+        w = worst.iloc[0]
+        lines.append(
+            f"Weakest nowcast: {w['level']} at horizon "
+            f"{-int(w['weeks_back'])}, "
+            f"90% intervals cover {w['coverage_90']:.0%} of the truth, "
+            f"medians {w['median_over_truth']:.2f} times it."
+        )
+    return lines
 
 
 def write_report(
@@ -372,9 +435,16 @@ def write_report(
     out: Path | str,
     reference: str,
     checkpoint: str,
-    scripts: Sequence[Path] = (),
+    root: Path | str = ".",
 ) -> Path:
     """Write the page and its data folder `<stem>-data/`; return the page.
+
+    Built from the same parts as the hub rounds and this-round pages
+    (`bdbvhub.reporting.pages`): a three-line summary; the score summary
+    of relative CRPS by horizon (`nowcasteval.scoresummary`, natural and
+    log scale); the forecast explorer (`nowcasteval.explorer`) by
+    national, province and zone with each round's data and the later
+    truth; calibration and roughness; and the full tables, folded.
 
     Parameters
     ----------
@@ -386,33 +456,65 @@ def write_report(
         The reference model.
     checkpoint : str
         The fine-tuned checkpoint shown.
-    scripts : sequence of pathlib.Path
-        The explorer's scripts, inlined.
+    root : pathlib.Path or str
+        The repository root, holding `docs/` (stylesheet and scripts).
+
+    Returns
+    -------
+    pathlib.Path
+        The page.
     """
     out = Path(out)
-    data = out.with_name(out.stem + "-data")
-    data.mkdir(parents=True, exist_ok=True)
+    data = pages.data_dir(out)
     models = list(dict.fromkeys(tables["overall"]["model"]))
     names = {m: model_label(m) for m in models}
-    colours = {
-        names[m]: (
-            MODEL_STYLES.get(m, (NEUTRAL, "solid"))[0],
-            MODEL_STYLES.get(m, (NEUTRAL, "solid"))[0],
-            MODEL_STYLES.get(m, (NEUTRAL, "solid"))[1],
-        )
-        for m in models
-    }
+    colours = comparison_colours({names[m]: m for m in models}, {}, [])
     target = tables["target"]
-    q = explorer_quantiles(tables["quantiles"], names)
+    real = target.loc[target["kind"] == "real"]
+    places = location_names(real)
+    q = explorer_quantiles(tables["samples"], names)
+    rounds = sorted(set(q["reference_date"].astype(str)))
+    asof = real.loc[real["vintage"].astype(str).isin(rounds)]
+    asof = asof.assign(reference_date=asof["vintage"].astype(str))
     write_explorer(
         data / "explorer.json",
         explorer_data(
-            q, target, location_names(target), 4, colours, samples=None
+            q,
+            real,
+            places,
+            COMPLETE_WEEKS,
+            colours,
+            samples=None,
+            asof=asof,
         ),
     )
+    srcs = {}
+    scores = tables.get("scores")
+    if scores is not None and len(scores):
+        s = _named(scores, names).assign(horizon=-scores["weeks_back"])
+        write_score_chart(
+            data / "scores.json",
+            summary_rows(
+                s,
+                [names[m] for m in models],
+                colours,
+                places,
+                baseline=names.get(reference, reference),
+            ),
+        )
+        srcs["complete"] = f"{data.name}/scores.json"
+    cal = calibration(tables["quantiles"])
+    lines = summary_lines(tables["overall"], cal, reference, checkpoint, rounds)
+    skill = {
+        "model": "Model",
+        "relative_crps": "Relative CRPS",
+        "relative_log_crps": "Relative CRPS (log scale)",
+        "n": "Forecasts",
+        "rounds": "Rounds",
+    }
     overall = _named(tables["overall"], names).sort_values("relative_crps")
-    by = _named(tables["by_weeks_back"], names).sort_values(
-        ["weeks_back", "relative_crps"]
+    by = _by_horizon(_named(tables["by_weeks_back"], names)).sort_values(
+        ["horizon", "relative_crps"]
     )
     blocks = tables["blocks"]
     active = (
@@ -423,74 +525,100 @@ def write_report(
         if len(blocks)
         else pd.DataFrame()
     )
-    cols = ["model", "relative_crps", "relative_log_crps", "n", "rounds"]
-    js = "\n".join(p.read_text() for p in scripts)
     parts = [
-        "<h1>BDBV foundation-model check</h1>",
-        f"<p class=mut>Every hub release with a later one, scored on complete "
-        f"weeks. Fine-tuned checkpoint {html.escape(checkpoint)}. Built "
-        f"{dt.datetime.now(dt.UTC):%Y-%m-%d %H:%M} UTC.</p>",
-        "<p>Relative CRPS is pairwise relative skill (as scoringutils): "
-        "each pair's mean CRPS ratio on the forecasts both made, a model's "
-        "geometric mean over every model, scaled so "
+        "<h1>Ebola (BDBV): fine-tuned Chronos-2, "
+        f"{html.escape(checkpoint)}</h1>",
+        "<p>" + "<br>".join(html.escape(line) for line in lines) + "</p>",
+        f"<p class=mut>Built {dt.datetime.now(dt.UTC):%Y-%m-%d %H:%M} UTC. "
+        "Each hub round forecast from its release; scored on weeks the "
+        "latest release reports in full. Cases per week.</p>",
+        "<h2>Skill by horizon</h2>",
+        "<p class=mut>Pairwise relative CRPS (each pair of models on the "
+        "forecasts both made, as scoringutils), scaled so "
         f"{html.escape(model_label(reference))} is 1; below 1 is better. "
-        "The log CRPS is the CRPS of log counts. Zero-shot and fine-tuned "
-        "Chronos-2 build the same layout: one joint block of the country, "
-        "every province and the active zones, and one block per province "
-        "of the province and all its zones.</p>",
-        "<h2>Overall</h2>",
-        _table(overall, cols),
-        "<h2>By weeks back</h2>",
-        _table(by, ["weeks_back", *cols]),
-        "<h2>Calibration by level and weeks back</h2>",
-        "<p class=mut>Summed medians over summed truth and over the counts "
-        "already reported at the origin (1 there means the nowcast only "
-        "repeats what was reported), and the share of truths inside the "
-        "90% interval. Complete weeks.</p>",
-        _table(
-            _named(calibration(tables["quantiles"]), names),
-            [
-                "model",
-                "level",
-                "weeks_back",
-                "n",
-                "median_over_truth",
-                "median_over_reported",
-                "coverage_90",
-            ],
+        "Horizon in weeks from the round, negative for nowcasts. Pick "
+        "the metric for the log scale, the scale and the models.</p>",
+        summary_html(srcs, "Skill by horizon", view="horizon")
+        if srcs
+        else "<p>No scores yet.</p>",
+        "<h2>Forecasts</h2>",
+        "<p class=mut>Medians with 50% and 90% intervals, against the data "
+        "as of each round (line) and the latest release (points; hollow "
+        "where not yet complete). Pick the location by national, "
+        "province or zone, the rounds and the models.</p>",
+        explorer_html(f"{data.name}/explorer.json", "Forecast explorer"),
+        "<h2>Calibration</h2>",
+        "<p class=mut>National and province nowcasts: summed medians over "
+        "the truth and over what was already reported at the round (near 1 "
+        "means the nowcast only repeats the reported counts), and the "
+        "share of truths inside the 90% interval.</p>",
+        html_table(
+            _named(
+                _by_horizon(
+                    cal.loc[
+                        cal["level"].isin(["national", "province"])
+                        & (cal["weeks_back"] >= 0)
+                    ]
+                ),
+                names,
+            ).sort_values(["level", "horizon", "model"]),
+            {
+                "level": "Level",
+                "horizon": "Horizon",
+                "model": "Model",
+                "median_over_truth": "Median / truth",
+                "median_over_reported": "Median / reported",
+                "coverage_90": "90% coverage",
+                "n": "Forecasts",
+            },
         ),
         "<h2>Week-to-week roughness</h2>",
-        "<p class=mut>Mean absolute change of log(1 + value) from one week "
-        "to the next within a forecast, of the medians and of the truth.</p>",
-        _table(
+        "<p class=mut>Mean absolute change of log(1 + cases) from one week "
+        "to the next within a forecast: the medians against the "
+        "truth.</p>",
+        html_table(
             _named(roughness(tables["quantiles"]), names),
-            ["model", "level", "median", "truth"],
+            {
+                "model": "Model",
+                "level": "Level",
+                "median": "Medians",
+                "truth": "Truth",
+            },
         ),
-        "<h2>Forecasts</h2>",
-        "<p class=mut>Medians with their 50% and 90% intervals.</p>",
-        explorer_html(f"{data.name}/explorer.json", "Forecast explorer"),
+        "<h2>Tables</h2>",
+        "<details><summary>Relative CRPS over every horizon</summary>",
+        html_table(overall, skill),
+        "</details>",
+        "<details><summary>Relative CRPS by horizon</summary>",
+        html_table(by, {"horizon": "Horizon", **skill}),
+        "</details>",
+        "<details><summary>Calibration at every level and horizon</summary>",
+        html_table(
+            _named(_by_horizon(cal), names),
+            {
+                "model": "Model",
+                "level": "Level",
+                "horizon": "Horizon",
+                "median_over_truth": "Median / truth",
+                "median_over_reported": "Median / reported",
+                "coverage_90": "90% coverage",
+                "n": "Forecasts",
+            },
+        ),
+        "</details>",
     ]
     if len(active):
         parts += [
-            "<h2>Joint block per release</h2>",
-            "<p class=mut>Places in the joint block (country, provinces "
-            "and active zones).</p>",
-            _table(active, ["model", "origin", "places"]),
+            "<details><summary>Places in the joint block per round</summary>",
+            "<p class=mut>The country, every province and the active "
+            "zones.</p>",
+            html_table(
+                _named(active, names),
+                {"model": "Model", "origin": "Round", "places": "Places"},
+                digits=0,
+            ),
+            "</details>",
         ]
-    doc = (
-        "<!doctype html><html lang=en><meta charset=utf-8>"
-        "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        "<title>BDBV FM check</title>"
-        "<style>body{font-family:system-ui;margin:16px;max-width:1100px}"
-        "table{border-collapse:collapse}td,th{padding:2px 8px;"
-        "border-bottom:1px solid #ddd;text-align:right}.mut{color:#666}"
-        "</style><body>"
-        + "\n".join(parts)
-        + f"<script>{js}</script></body></html>"
-    )
-    tmp = out.with_name(out.name + ".tmp")
-    tmp.write_text(doc)
-    tmp.rename(out)
     (data / "skill.json").write_text(
         json.dumps(
             {
@@ -500,4 +628,7 @@ def write_report(
             default=str,
         )
     )
-    return out
+    title = f"BDBV check {checkpoint}"
+    return pages.write_page(
+        out, pages.page(title, parts, pages.SCORE_SCRIPTS, root)
+    )
