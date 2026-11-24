@@ -19,8 +19,11 @@ def _triggers(workflow):
     return workflow.get("on", workflow.get(True))
 
 
-def test_the_fast_tier_runs_no_slow_tests():
-    steps = _workflow("test.yml")["jobs"]["test"]["steps"]
+@pytest.mark.parametrize(
+    ("name", "job"), [("ci.yml", "package"), ("integration.yml", "integration")]
+)
+def test_the_fast_tier_runs_no_slow_tests(name, job):
+    steps = _workflow(name)["jobs"][job]["steps"]
     runs = " ".join(s.get("run", "") for s in steps)
     assert "pytest" in runs
     assert "-m slow" not in runs
@@ -85,8 +88,8 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     if not isinstance(group, dict) or "cancel-in-progress" not in group:
         pytest.skip("no cancellable concurrency group")
     keep = "${{ github.ref != 'refs/heads/main' }}"
-    if path.name in ("test.yml", "ci.yml"):
-        # Tests and CI keep next's runs too (every merge gets a verdict).
+    if path.name in ("test.yml", "ci.yml", "integration.yml"):
+        # These keep next's runs too (every merge gets a verdict).
         keep = (
             "${{ github.ref != 'refs/heads/main' && "
             "github.ref != 'refs/heads/next' }}"
@@ -94,14 +97,19 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     assert group["cancel-in-progress"].strip() == keep
 
 
-def test_a_pull_request_runs_one_test_job_of_at_most_15_minutes():
-    # The workflow and paper tests run inside the fast tier, with
-    # Snakemake (the paper group), rather than in jobs of their own.
+def test_integration_runs_the_tests_of_no_package_in_15_minutes():
+    # The workflow, paper and repo tests (those no package owns) and the
+    # workflow lint, with Snakemake (the paper group); the packages'
+    # tests run in their own CI jobs, so Tests has no fast tier.
     assert not (WORKFLOWS / "workflow.yml").exists()
     assert not (WORKFLOWS / "paper-tests.yml").exists()
-    job = _workflow("test.yml")["jobs"]["test"]
+    assert "test" not in _workflow("test.yml")["jobs"]
+    job = _workflow("integration.yml")["jobs"]["integration"]
     assert job["timeout-minutes"] <= 15
     runs = " ".join(s.get("run", "") for s in job["steps"])
+    assert "owners.py --none" in runs
+    assert "snakefmt --check" in runs
+    assert "snakemake -s workflow/Snakefile --lint" in runs
     assert "--group paper pytest" in runs
     paper = [s for s in job["steps"] if s.get("working-directory") == "paper"]
     assert paper
@@ -122,11 +130,12 @@ def test_no_test_runs_in_both_the_full_and_the_chronos_job():
     assert "--ignore=" in full
 
 
-def test_every_merge_into_next_gets_a_fast_tier_run():
+@pytest.mark.parametrize("name", ["ci.yml", "integration.yml"])
+def test_every_merge_into_next_gets_a_fast_tier_run(name):
     # Pull request runs are cancelled when the merge loop deletes the
     # branch, so a push to next runs the fast tier, and a newer merge
     # does not cancel the running one.
-    workflow = _workflow("test.yml")
+    workflow = _workflow(name)
     assert "next" in _triggers(workflow)["push"]["branches"]
     keep = workflow["concurrency"]["cancel-in-progress"]
     assert "refs/heads/next" in keep
@@ -164,7 +173,7 @@ def test_only_main_measures_coverage_and_workers_steal_work():
     # runs took up to 14 of 15 min), so only main's runs measure it:
     # its pushes, the schedule and dispatches there. Workers steal the
     # long tail.
-    job = _workflow("test.yml")["jobs"]["test"]
+    job = _workflow("ci.yml")["jobs"]["package"]
     (tests,) = [s for s in job["steps"] if s.get("name") == "Tests"]
     assert "--dist worksteal" in tests["run"]
     assert "github.ref == 'refs/heads/main'" in tests["run"]
@@ -178,3 +187,14 @@ def test_the_full_tier_has_the_workflow_s_tools():
     steps = _workflow("test.yml")["jobs"]["full"]["steps"]
     runs = " ".join(s.get("run", "") for s in steps)
     assert "--group paper pytest -q -m slow" in runs
+
+
+def test_repo_checks_run_on_every_pull_request():
+    # The import contract, the lint of what no package holds and the
+    # workflows' own lint, in one short job; lint.yml keeps only ci/.
+    job = _workflow("ci.yml")["jobs"]["repo"]
+    assert "if" not in job
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    for check in ("lint-imports", "ruff check tests", "actionlint"):
+        assert check in runs, check
+    assert set(_workflow("lint.yml")["jobs"]) == {"lint-ci"}
