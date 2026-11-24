@@ -98,11 +98,20 @@ def problems(
     return found
 
 
-def settings_problems(settings: dict[str, Any]) -> list[str]:
-    """Return a problem if the hashed settings do not give the hash."""
+def settings_hash(settings: dict[str, Any]) -> str:
+    """Return a checkpoint's hash: its settings but `NOT_HASHED`.
+
+    The first 12 hex digits of their SHA-256, as sorted JSON. The trainer
+    and interim checkpoints take it here, so verify recomputes the same.
+    """
     hashed = {k: v for k, v in settings.items() if k not in NOT_HASHED}
     text = json.dumps(hashed, sort_keys=True).encode()
-    if hashlib.sha256(text).hexdigest()[:12] != settings["hash"]:
+    return hashlib.sha256(text).hexdigest()[:12]
+
+
+def settings_problems(settings: dict[str, Any]) -> list[str]:
+    """Return a problem if the hashed settings do not give the hash."""
+    if settings_hash(settings) != settings["hash"]:
         return ["the settings do not give the hash"]
     return []
 

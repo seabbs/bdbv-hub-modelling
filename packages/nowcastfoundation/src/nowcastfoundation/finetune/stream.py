@@ -48,7 +48,7 @@ import pandas as pd
 
 from nowcastfoundation import series_bias, sidecar
 from nowcastfoundation.finetune import chronos as ft
-from nowcastfoundation.finetune import combinations, simulations
+from nowcastfoundation.finetune import combinations, simulations, verify
 from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
@@ -2454,7 +2454,8 @@ def main(root: Path | None = None) -> None:
                 "tokens": seen.get("tokens", 0),
                 "checkpoint_above": args.checkpoint_above,
             }
-            key = ft._settings_hash(settings)
+            # Memory settings (checkpoint_above) are outside the hash.
+            key = verify.settings_hash(settings)
             settings["hash"] = key
             # The commit the trainer ran from, outside the hash: the
             # checkpoint is rebuilt from it to the same hash.
