@@ -24,6 +24,10 @@ baselinenowcast does with an aggregator:
 - Daily counts (`daily_quantiles`): the same triangle, errors fitted on
   daily counts.
 
+A place with too few cases for baselinenowcast to estimate its delay or
+its errors, such as a health zone with no recent case, keeps the counts
+reported (0 for a zone with no case) and does not walk.
+
 Days after the cut-off are a random walk on $\log(1 + y)$ with daily steps
 (`walk.random_walks`) on the same view: each sample walks on from its own
 nowcast of the cut-off day. Its spread is the standard deviation of the
@@ -40,6 +44,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 from functools import partial
+from typing import Final
 
 import jax
 import jax.numpy as jnp
@@ -111,6 +116,12 @@ def daily_triangle(
     seen = np.where(mask, seen, 0.0)
     counts = np.diff(seen, axis=1, prepend=0.0)
     return np.where(mask, counts, 0.0), mask
+
+
+NO_RECENT_CASES: Final = ("only contain 0s", "Errors occurred in all")
+"""baselinenowcast's refusals when a place's triangle holds too few cases
+to estimate: no case in the delay-estimation rows, or none of the
+retrospective triangles the uncertainty is fitted on usable."""
 
 
 @dataclass
@@ -187,13 +198,25 @@ class DailyWalkNowcast:
             tri, mask = daily_triangle(
                 task.daily_history, place, cutoff, rows, delay
             )
-            draws = baselinenowcast(
-                tri,
-                mask,
-                key=keys[i],
-                draws=task.n_samples,
-                ref_time_aggregator=agg,
-            )
+            try:
+                draws = baselinenowcast(
+                    tri,
+                    mask,
+                    key=keys[i],
+                    draws=task.n_samples,
+                    ref_time_aggregator=agg,
+                )
+            except ValueError as err:
+                if not any(m in str(err) for m in NO_RECENT_CASES):
+                    raise
+                # Too few cases to estimate (a health zone with no or few
+                # recent cases): the place keeps what is reported, as k-day
+                # sums, and does not walk.
+                reported = (np.asarray(tri) * np.asarray(mask)).sum(axis=1)
+                sums = np.convolve(reported, np.ones(k), "valid")
+                nowcast.append(np.tile(sums, (task.n_samples, 1)))
+                sigma.append(0.0)
+                continue
             nowcast.append(np.asarray(draws, np.float64))
             point = np.asarray(
                 baselinenowcast(tri, mask, output_type="point"), np.float64
