@@ -363,7 +363,12 @@ def test_rules_that_need_the_network_or_git_run_on_the_driver():
     blocks = re.split(r"\n(?=\s*rule\b)", text)
     for block in blocks:
         shell = block.split("shell:", 1)[-1]
-        if re.search(r"git (clone|fetch)|gh release download|quarto", shell):
+        # `bdbvhub data` downloads the hub's releases.
+        pattern = (
+            r"git (clone|fetch)|gh release download|quarto"
+            r"|\{params\.bdbv\} data"
+        )
+        if re.search(pattern, shell):
             assert "localrule: True" in block, block.split("\n", 1)[0]
 
 
