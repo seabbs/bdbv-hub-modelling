@@ -77,10 +77,20 @@ def _data_dir() -> Path:
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
 
 
-def _daily_zones() -> pd.DataFrame:
-    from nowcastbdbv.data.tidy import load_daily_zones
+def _zone_daily(task: ForecastTask) -> pd.DataFrame:
+    """Return the daily zone onsets the task carries, up to its vintage."""
+    if task.zone_daily_history is None:
+        msg = "The task carries no daily zone onsets (`zone_daily_history`)."
+        raise ValueError(msg)
+    return task.zone_daily_history
 
-    return load_daily_zones(_data_dir())
+
+def _zone_names(task: ForecastTask) -> pd.DataFrame:
+    """Return the hub's zone codes and names the task carries."""
+    if task.zone_history is None:
+        msg = "The task carries no hub zone rows (`zone_history`)."
+        raise ValueError(msg)
+    return task.zone_history
 
 
 def _zones_of(task: ForecastTask) -> tuple[str, ...]:
@@ -138,7 +148,7 @@ def zone_target(task: ForecastTask) -> pd.DataFrame:
         Columns `vintage`, `location`, `target_end_date`, `observed`,
         `imputed`, `total` and `cutoff`, for zone weeks with an onset.
     """
-    daily = _daily_zones()
+    daily = _zone_daily(task)
     rows = daily.loc[daily["vintage"].astype(str) == task.vintage]
     onset = pd.to_datetime(rows["onset_date"])
     end = onset + pd.to_timedelta((5 - onset.dt.day_of_week) % 7, unit="D")
@@ -204,7 +214,7 @@ def _zone_walk_task(task: ForecastTask) -> ForecastTask:
     from nowcastbaselines.zones import zone_task
     from nowcastutils.snapshots import weekly_counts
 
-    daily = _daily_zones()
+    daily = _zone_daily(task)
     counts = weekly_counts(daily, task.vintage)
     history = (
         daily
@@ -254,8 +264,8 @@ def _norm(name: object) -> str:
 
 def zone_bvd_rows(
     release: Any,
+    names: pd.DataFrame,
     cache_dir: Path | str | None = None,
-    names: pd.DataFrame | None = None,
     download: Any = None,
 ) -> pd.DataFrame | None:
     """BVDOutbreakSize's zone Rt of a release, as rows of the BVD term.
@@ -272,11 +282,12 @@ def zone_bvd_rows(
     ----------
     release : nowcastrenewal.bvd.BvdRelease
         The release chosen for the vintage.
+    names : pandas.DataFrame
+        Hub zone codes and names: rows with `location` and
+        `location_name` (a task's `zone_history`).
     cache_dir : pathlib.Path or str, optional
         The release cache. Defaults to `bvd/` in the data directory. The
         file is downloaded into the release's folder if missing.
-    names : pandas.DataFrame, optional
-        Hub zone codes and names (`load_health_zones`).
     download : callable, optional
         Returns the bytes at a URL.
 
@@ -304,10 +315,6 @@ def zone_bvd_rows(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(body)
     est = pd.read_csv(path)
-    if names is None:
-        from nowcastbdbv.data.tidy import load_health_zones
-
-        names = load_health_zones(_data_dir())
     hub = names.drop_duplicates("location")
     key = hub["location"].str[:5] + "|" + hub["location_name"].map(_norm)
     code = dict(zip(key, hub["location"], strict=True))
@@ -487,7 +494,7 @@ class ZoneRenewalModel(RenewalModel):
             used = bvd_record(release)
             if release is not None:
                 rows = bvd.model_rows(release)
-                zone_rows = zone_bvd_rows(release)
+                zone_rows = zone_bvd_rows(release, _zone_names(task))
                 if zone_rows is not None:
                     rows = pd.concat([rows, zone_rows], ignore_index=True)
                     used = {**used, "zones": len(zone_rows)}
@@ -564,7 +571,7 @@ class ZoneRenewalModel(RenewalModel):
 
         from nowcastutils.hierarchy import province_of
 
-        daily = _daily_zones()
+        daily = _zone_daily(task)
         mine = daily.loc[
             (daily["vintage"].astype(str) <= task.vintage)
             & daily["location"].map(province_of).isin(task.locations)
@@ -572,10 +579,7 @@ class ZoneRenewalModel(RenewalModel):
         digest = hashlib.sha256(mine.to_csv(index=False).encode())
         digest.update(repr(_zones_of(task)).encode())
         if model_config(self.variant).bvd:
-            from nowcastbdbv.data.tidy import load_health_zones
-
-            names = load_health_zones(_data_dir())
-            digest.update(names.to_csv(index=False).encode())
+            digest.update(_zone_names(task).to_csv(index=False).encode())
         return digest.hexdigest()[:16]
 
     def forecast_fit(self, task: ForecastTask) -> ZoneRenewalFit:

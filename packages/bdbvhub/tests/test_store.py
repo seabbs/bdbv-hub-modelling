@@ -52,7 +52,10 @@ def tasks(
     daily: pd.DataFrame,
     config: BacktestConfig,
 ) -> dict[str, ForecastTask]:
-    return store.origin_tasks(target, delays, config, daily)
+    # With the zone tables: the zone fits read them from the task.
+    return store.origin_tasks(
+        target, delays, config, daily, load_zone_data(DATA)
+    )
 
 
 def _copy_repo(tmp_path: Path) -> Path:
@@ -283,20 +286,23 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
 
 
 def test_zone_data_keys_the_zone_fits(
-    tasks: dict[str, ForecastTask], monkeypatch: pytest.MonkeyPatch
+    tasks: dict[str, ForecastTask],
 ) -> None:
-    from nowcastrenewal import zones as zr
-
     sampler = store.samplers()
     models = ["renewal", "renewalsp"]
     keys = store.current_keys(tasks, models, sampler, "c")
-    daily = zr._daily_zones()
-    monkeypatch.setattr(
-        zr, "_daily_zones", lambda: daily.assign(observed=daily["observed"] + 1)
-    )
-    moved = store.current_keys(tasks, models, sampler, "c")
-    for (model, origin), key in keys.items():
-        assert (moved[(model, origin)] != key) == (model == "renewal")
+    more = {
+        origin: dataclasses.replace(
+            task,
+            zone_daily_history=task.zone_daily_history.assign(
+                observed=task.zone_daily_history["observed"] + 1
+            ),
+        )
+        for origin, task in tasks.items()
+    }
+    moved = store.current_keys(more, models, sampler, "c")
+    # Both read the task's zone tables (`reads_zones`), so both move.
+    assert all(moved[k] != key for k, key in keys.items())
 
 
 def test_fit_code_is_the_models_code_not_the_store() -> None:
@@ -514,6 +520,7 @@ def test_keys_follow_the_task_settings_and_bvd_release(
         delays.loc[delays["vintage"] != latest],
         config,
         daily.loc[daily["vintage"] != latest],
+        load_zone_data(DATA),
     )
     assert store.current_keys(older, models, sampler, "c") == {
         k: v for k, v in keys.items() if k[1] != latest
@@ -545,7 +552,7 @@ def test_skipped_origins_leave_the_other_keys_alone(
     models = ["renewal"]
     keys = store.current_keys(tasks, models, sampler, "c")
     skip = dataclasses.replace(config, skip_origins=("2026-08-18",))
-    kept = store.origin_tasks(target, delays, skip, daily)
+    kept = store.origin_tasks(target, delays, skip, daily, load_zone_data(DATA))
     assert "2026-08-18" not in kept
     assert store.current_keys(kept, models, sampler, "c") == {
         k: v for k, v in keys.items() if k[1] != "2026-08-18"

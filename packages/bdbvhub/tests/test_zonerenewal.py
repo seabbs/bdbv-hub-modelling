@@ -349,7 +349,7 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
             "location_name": ["Mambasa", "Bunia"],
         }
     )
-    rows = zr.zone_bvd_rows(release, tmp_path, names)
+    rows = zr.zone_bvd_rows(release, names, tmp_path)
     assert rows is not None
     # Gety has no hub case, so it has no term.
     assert rows["group"].tolist() == ["zone:CD-IT-25"]
@@ -374,14 +374,14 @@ def test_bvd_zone_rt_becomes_one_term_per_fitted_zone(tmp_path: Path) -> None:
     def missing(url: str) -> bytes:
         raise urllib.error.HTTPError(url, 404, "Not Found", Message(), None)
 
-    assert zr.zone_bvd_rows(release, tmp_path / "none", names, missing) is None
+    assert zr.zone_bvd_rows(release, names, tmp_path / "none", missing) is None
 
     # Any other failure is an error, not a release without zones.
     def offline(_: str) -> bytes:
         raise OSError("offline")
 
     with pytest.raises(OSError, match="offline"):
-        zr.zone_bvd_rows(release, tmp_path / "none", names, offline)
+        zr.zone_bvd_rows(release, names, tmp_path / "none", offline)
 
 
 @pytest.mark.usefixtures("quiet_zones")
