@@ -56,9 +56,9 @@ onstart:
     # The fine-tuning dashboard, served with a run that fine-tunes when
     # the config says so (`dashboard.serve`); it ends with the
     # coordinator, or with this run (flowlib.dashboard.serve).
-    if config["dashboard"].get("serve") and "finetune" in TARGETS:
-        from flowlib.dashboard import serve
+    from flowlib.dashboard import serve
 
+    if serve.wanted(config, TARGETS):
         serve.ensure(LOCAL, serve.driver_pid())
 
 

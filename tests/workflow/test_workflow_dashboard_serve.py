@@ -100,3 +100,22 @@ def test_the_server_ends_when_its_driver_has(monkeypatch):
             break
         time.sleep(0.02)
     assert ended == [0]
+
+
+def test_only_a_fine_tuning_run_that_asks_serves_it(monkeypatch):
+    monkeypatch.delenv(serve.JOB_ENV, raising=False)
+    on = {"dashboard": {"serve": True}}
+    assert serve.wanted(on, ["simulate", "finetune"])
+    assert not serve.wanted(on, ["score"])
+    assert not serve.wanted({"dashboard": {"serve": False}}, ["finetune"])
+    # One job of another machine's run (an ssh worker) serves nothing.
+    monkeypatch.setenv(serve.JOB_ENV, "1")
+    assert not serve.wanted(on, ["finetune"])
+
+
+def test_a_worker_job_is_marked_as_one():
+    from flowlib import compute
+
+    worker = compute.Worker("w", "host", "/w", "/c")
+    got = compute.job_env({"ROOT": "/r"}, worker)
+    assert got[serve.JOB_ENV] == "1"

@@ -47,6 +47,21 @@ def alive(pid: int) -> bool:
     return True
 
 
+JOB_ENV = "WORKFLOW_JOB"
+"""Set in a worker's job (flowlib.compute.job_env), which serves nothing."""
+
+
+def wanted(config: Mapping[str, object], targets: list[str]) -> bool:
+    """Return whether this run serves the dashboard.
+
+    It does when `dashboard.serve` is true, its targets include
+    `finetune`, and it is not one job of another machine's run.
+    """
+    dash = config.get("dashboard") or {}
+    on = bool(dash.get("serve")) if isinstance(dash, Mapping) else False
+    return on and "finetune" in targets and not os.environ.get(JOB_ENV)
+
+
 def driver_pid() -> int:
     """Return the process a served dashboard should outlive no longer."""
     return int(os.environ.get(DRIVER_ENV) or os.getpid())
