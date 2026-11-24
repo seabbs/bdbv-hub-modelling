@@ -191,6 +191,9 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ::: {.callout-note title="Plan"}
 - We compare with the other submissions, relative to the hub's baseline.
 - We score every hub round, all held out from model development.
+- We scored the fine-tuned model on past hub rounds once, in the week of TODO (date), to check whether to submit it.
+- TODO: state that no model setting was chosen on these scores, once confirmed.
+- Every model, ours and the hub teams', forecasts some targets and places only, so we compare models on the forecasts they share and report the country, provinces and zones apart.
 - We score only the hub's own targets and horizons.
 - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
 - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
@@ -317,6 +320,8 @@ German nowcast hub: mean scores, coverage and number of forecasts of each model,
 
 ::: {.callout-note title="Plan"}
 - We show national nowcasts against the other submissions.
+- We report the rounds before the submission check and after it apart, as only the later rounds are prospective for the fine-tuned model.
+- TODO: whether the main text scores from the fine-tuned model's first submission and the SI the final models, or the reverse.
 - We summarise the scores.
 :::
 
@@ -388,6 +393,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - The Ebola case study is held out from model development but not blind.
     We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
     A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
+  - We looked at the fine-tuned model's scores on past Ebola rounds to decide whether to submit it, so those rounds are not held out for that decision.
   - We evaluated on a retrospective and a real-time case study, with synthetic data that can be tuned to a setting.
   - Fine-tuning ran on one machine, so it needs no shared compute.
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
