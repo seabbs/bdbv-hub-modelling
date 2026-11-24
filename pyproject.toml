@@ -118,6 +118,9 @@ nowcastbdbv = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
+# The hub submission package keeps its own small, dependency-free
+# environment and lock (packages/bdbvsubmission/uv.lock).
+exclude = ["packages/bdbvsubmission"]
 
 [tool.ruff]
 line-length = 80
@@ -186,10 +189,26 @@ convention = "numpy"
 [tool.pytest.ini_options]
 # Each package's own tests, then the rest. `tests/` is on the path for
 # the shared test helpers (such as `model.r_live`).
-testpaths = ["packages/*/tests", "workflow/tests", "tests"]
+testpaths = [
+  "packages/nowcastutils/tests",
+  "packages/nowcasteval/tests",
+  "packages/nowcastbaselines/tests",
+  "packages/nowcastfoundation/tests",
+  "packages/nowcastrenewal/tests",
+  "packages/nowcastgermany/tests",
+  "packages/nowcastbdbv/tests",
+  "packages/bdbvhub/tests",
+  "workflow/tests",
+  "tests",
+]
 pythonpath = ["tests"]
 # Model fits are slow; `task test-slow` runs them.
-addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not slow"]
+# packages/bdbvsubmission has its own environment and runs its own tests,
+# so it is not in `testpaths`.
+addopts = [
+  "-ra", "--strict-markers", "--strict-config", "-m", "not slow",
+  "--ignore=packages/bdbvsubmission",
+]
 xfail_strict = true
 filterwarnings = [
   # Raised inside pandas by `pd.Timedelta(days=...)` with NumPy 2.4.
@@ -245,16 +264,17 @@ layers = [
 python_version = "3.13"
 strict = true
 warn_unreachable = true
-files = ["packages/*/src"]
-
-[[tool.mypy.overrides]]
-# The trainer is typed but for `snapshots` and `cut`, whose source keys
-# the saved training blocks (`cut_code_sha256`): typing them re-cuts the
-# blocks, so it waits for the next re-cut (#631).
-module = [
-  "nowcastfoundation.finetune.stream",
+# The workspace packages; packages/bdbvsubmission runs its own mypy.
+files = [
+  "packages/nowcastutils/src",
+  "packages/nowcasteval/src",
+  "packages/nowcastbaselines/src",
+  "packages/nowcastfoundation/src",
+  "packages/nowcastrenewal/src",
+  "packages/nowcastgermany/src",
+  "packages/nowcastbdbv/src",
+  "packages/bdbvhub/src",
 ]
-ignore_errors = true
 
 [[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.

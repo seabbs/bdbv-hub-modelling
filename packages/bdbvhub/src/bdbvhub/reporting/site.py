@@ -1,5 +1,5 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
-"""The docs site's settings, from `config/site.toml`.
+"""The docs site's settings, from `docs/site.toml`.
 
 Only the reporting reads them, so they never reach a stored fit's code or
 the paper. `site_baseline` is the model the site's scores are relative to
@@ -25,7 +25,7 @@ __all__ = [
     "site_models",
 ]
 
-SITE_CONFIG: Final = Path("config/site.toml")
+SITE_CONFIG: Final = Path("docs/site.toml")
 """The site settings, from the repository root."""
 
 

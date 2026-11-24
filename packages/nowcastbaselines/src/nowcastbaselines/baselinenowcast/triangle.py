@@ -1,9 +1,9 @@
-"""Reporting triangle helpers.
+"""Reporting triangles: structure, preprocessing and allocation.
 
-Ports of R baselinenowcast 0.2.2 ``preprocess.R``, ``truncate.R``,
-``apply_reporting_structure.R``, ``allocate_reference_times.R`` and the
-structure getter.
-Each function names its R source line.
+As baselinenowcast's: negative reports moved onto earlier ones
+(`preprocess_negative_values`), the reporting structure, and the reference
+times given to the delay and to the retrospective nowcasts
+(`allocate_reference_times`).
 """
 
 from __future__ import annotations
@@ -23,6 +23,16 @@ from ._checks import (
     n_unobserved_rows,
     validate_reporting_triangle,
 )
+
+__all__ = [
+    "Triangle",
+    "allocate_reference_times",
+    "apply_reporting_structure",
+    "get_reporting_structure",
+    "preprocess_negative_values",
+    "truncate_to_rows",
+]
+
 
 Triangle = tuple[Array, np.ndarray]
 """A reporting triangle and its mask: values, and True where observed."""
@@ -314,76 +324,3 @@ def allocate_reference_times(
         n_retro = n_min_retro_nowcasts
         n_history_delay = n_used - n_retro
     return int(n_history_delay), int(n_retro)
-
-
-def rolling_sum(
-    values: Array, mask: Array | np.ndarray, k: int
-) -> tuple[Array, np.ndarray]:
-    """Trailing sum over ``k`` rows, as ``zoo::rollsum(align = "right")``.
-
-    The first ``k - 1`` rows are dropped.
-    A window with any unobserved cell is unobserved.
-    Use ``functools.partial(rolling_sum, k=7)`` as a
-    ``ref_time_aggregator``.
-
-    Parameters
-    ----------
-    values : jax.Array
-        Matrix with reference times as rows.
-    mask : jax.Array or numpy.ndarray of bool
-        True where a cell is observed.
-    k : int
-        Window length in rows.
-
-    Returns
-    -------
-    tuple
-        The summed values and their mask, each with ``k - 1`` fewer rows.
-    """
-    v = jnp.asarray(values)
-    m = np.asarray(mask, dtype=bool)
-    n = v.shape[0]
-    if k < 1 or k > n:
-        raise ValueError("`k` must be between 1 and the number of rows")
-    vm = jnp.where(jnp.asarray(m), v, 0.0)
-    out = sum(vm[i : n - k + 1 + i] for i in range(k))
-    ok = np.stack([m[i : n - k + 1 + i] for i in range(k)]).all(axis=0)
-    return jnp.where(jnp.asarray(ok), out, 0.0), ok
-
-
-def identity(
-    values: Array, mask: Array | np.ndarray
-) -> tuple[Array, np.ndarray]:
-    """Return the input unchanged, the default ``ref_time_aggregator``.
-
-    Parameters
-    ----------
-    values : jax.Array
-        Matrix with reference times as rows.
-    mask : jax.Array or numpy.ndarray of bool
-        True where a cell is observed.
-
-    Returns
-    -------
-    tuple
-        ``(values, mask)``.
-    """
-    return jnp.asarray(values), np.asarray(mask, dtype=bool)
-
-
-def row_sums(x: Array) -> Array:
-    """Row sums, the default ``delay_aggregator``.
-
-    Unobserved cells are zero so this equals ``rowSums(na.rm = TRUE)``.
-
-    Parameters
-    ----------
-    x : jax.Array
-        Matrix with reference times as rows.
-
-    Returns
-    -------
-    jax.Array
-        One sum per row.
-    """
-    return jnp.sum(jnp.asarray(x), axis=1)

@@ -21,8 +21,11 @@ GROUPS = [
     ("Studies", ["bdbvhub", "nowcastbdbv", "nowcastgermany"]),
 ]
 PACKAGES = [name for _, group in GROUPS for name in group]
+# bdbvsubmission sits behind the "Hub submission" project link instead.
 ON_DISK = sorted(
-    p.parent.name for p in (ROOT / "packages").glob("*/pyproject.toml")
+    p.parent.name
+    for p in (ROOT / "packages").glob("*/pyproject.toml")
+    if p.parent.name != "bdbvsubmission"
 )
 HOME_PROJECT = re.compile(r"\*\*([\w\- ]+)\*\*\]\(([\w/]+index\.md)\)")
 HOME_PACKAGE = re.compile(r"\| (\w*) \| \[.*?\*\*(\w+)\*\*\]\(([^)\s]+)\)")
@@ -66,8 +69,8 @@ def _packages(where: str) -> list[tuple[str, str, str]]:
 def _target(name: str, home: bool) -> str:
     if name in SITES:
         return f"{name}/" if home else f"{SITE}{name}/"
-    anchor = f"packages/index.md#{name}" if home else f"packages/#{name}"
-    return anchor if home else f"{SITE}{anchor}"
+    # A package without its own site has a page from its README.
+    return f"packages/{name}.md" if home else f"{SITE}packages/{name}/"
 
 
 def test_every_package_is_grouped_once() -> None:

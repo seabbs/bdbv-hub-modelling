@@ -12,7 +12,9 @@ ROOT = Path(__file__).parents[3]
 
 
 def _cut() -> dict:
-    text = (ROOT / "config" / "finetune.toml").read_text()
+    text = (
+        ROOT / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).read_text()
     return tomllib.loads(text)["realdata_bdbv"]
 
 
@@ -27,7 +29,9 @@ def test_the_cut_is_the_last_release_trained_on_with_its_truth_date():
 
 def test_no_training_date_reaches_a_scored_bdbv_target():
     cut = _cut()
-    config = load_config(ROOT / "config" / "backtest.toml")
+    config = load_config(
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    )
     # A later origin's reference week is at least the cut-off's week, and
     # the backtest scores from `min_horizon` weeks before it.
     earliest = epiweek_end(cut["cutoff"]) + dt.timedelta(

@@ -4,6 +4,7 @@ Each former `scripts/` or `tools/` file is a workflow rule, a package
 command, a test helper beside its tests, or gone.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -16,7 +17,7 @@ MOVED = {
     "scripts/check_germany_site.py": "germany-site-check",
     "scripts/germany_ft_store.py": "deleted",
     "scripts/score_history.py": "score-history",
-    "scripts/package_alone.py": "tests/packages/package_alone.py",
+    "scripts/package_alone.py": ".github/scripts/package_alone.py",
     "scripts/baselinenowcast_fixtures.R": (
         "packages/nowcastbaselines/tests/baselinenowcast/r/cases.R"
     ),
@@ -37,9 +38,9 @@ MOVED = {
         "packages/bdbvhub/src/bdbvhub/submission/release.py"
     ),
     "scripts/paper.sh": "workflow/scripts/paper_run.py",
-    "scripts/validate-hub.R": "ci/steps/validate_hub.R",
+    "scripts/validate-hub.R": "packages/bdbvsubmission/steps/validate_hub.R",
     "scripts/validate_with_hubvalidations.R": (
-        "ci/steps/validate_with_hubvalidations.R"
+        "packages/bdbvsubmission/steps/validate_with_hubvalidations.R"
     ),
     "tools/README.md": "deleted",
     "tools/paper_local.sh": "deleted",
@@ -78,13 +79,19 @@ def test_no_path_names_a_moved_helper() -> None:
         *ROOT.glob("workflow/rules/*.smk"),
         *ROOT.glob("packages/*/Taskfile.yml"),
         ROOT / "workflow" / "Taskfile.yml",
-        ROOT / "ci" / "Taskfile.yml",
-        *ROOT.glob("ci/steps/*.sh"),
+        ROOT / "packages" / "bdbvsubmission" / "Taskfile.yml",
+        *ROOT.glob("packages/bdbvsubmission/steps/*.sh"),
         ROOT / "Taskfile.yml",
         ROOT / "mkdocs.yml",
     ]:
         text = path.read_text()
-        hits += [f"{path.name}: {old}" for old in MOVED if old in text]
+        # The old path itself, not the end of a longer one such as
+        # `.github/scripts/package_alone.py`.
+        hits += [
+            f"{path.name}: {old}"
+            for old in MOVED
+            if re.search(rf"(?<![\w./-]){re.escape(old)}", text)
+        ]
     assert hits == []
 
 

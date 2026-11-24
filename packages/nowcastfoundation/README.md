@@ -26,9 +26,31 @@ It is for anyone using our fine-tuned checkpoints on their own data, and for wor
 - The methods are in the [paper](https://samabbott.co.uk/bdbv-hub-modelling/paper/).
 - The hub models built on it: [Foundation models](https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/).
 
+## Install
+
+From a clone of the repository:
+
 ```sh
-uv add nowcastfoundation
+uv sync --package nowcastfoundation             # this package and the ones it needs
 ```
+
+Chronos-2 needs torch, the `chronos` group: `uv sync --group chronos` (a GPU is optional; set `DEVICE` and `forecast.device`).
+
+## Example
+
+```python
+import nowcastfoundation.forecaster  # registers the Chronos-2 models
+from nowcastutils.base import get_model
+
+model = get_model("foundation_zeroshot")
+forecasts = model.forecast(task)
+```
+
+The fine-tuning: [Fine-tuned foundation](https://samabbott.co.uk/bdbv-hub-modelling/foundation/).
+
+## Tasks
+
+`task nowcastfoundation:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

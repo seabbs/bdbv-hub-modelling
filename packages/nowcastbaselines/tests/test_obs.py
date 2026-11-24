@@ -8,7 +8,11 @@ import numpy as np
 import pytest
 
 from nowcastbaselines.baselinenowcast import fit_nb
-from nowcastbaselines.obs import PRIOR_SIZE, fit_sizes, sample_count
+from nowcastbaselines.baselinenowcast.uncertainty import (
+    PRIOR_SIZE,
+    fit_sizes,
+    sample_count,
+)
 
 
 def test_each_week_back_gets_the_ports_nb_fit() -> None:

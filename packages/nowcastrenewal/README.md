@@ -24,9 +24,32 @@ It holds the renewal models fitted to the hub's data and the joint model that si
 - How the fitted models work: [Methods](https://samabbott.co.uk/bdbv-hub-modelling/renewal/methods/) and the [renewal model reference](https://samabbott.co.uk/bdbv-hub-modelling/methods/model/).
 - The simulator's place in the workflow: [simulate](../../workflow/README.md#1-simulate-rulessimulatesmk), with draws from `nowcastfoundation.simulator`.
 
+## Install
+
+From a clone of the repository:
+
 ```sh
-uv add "nowcastrenewal[model]"
+uv sync --package nowcastrenewal             # this package and the ones it needs
 ```
+
+The renewal model itself needs PyRenew, the `model` extra: `uv sync --package nowcastrenewal --extra model`.
+Its live checks against epinowcast and primarycensored need R (CI's r-live job installs it).
+
+## Example
+
+```python
+import nowcastrenewal.zones  # registers the renewal variants
+from nowcastutils.base import get_model
+
+model = get_model("renewal")
+forecasts = model.forecast(task)  # fits with NUTS, then forecasts
+```
+
+How the models work: [Methods](https://samabbott.co.uk/bdbv-hub-modelling/renewal/methods/).
+
+## Tasks
+
+`task nowcastrenewal:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

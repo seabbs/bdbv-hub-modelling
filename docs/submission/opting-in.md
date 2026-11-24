@@ -4,20 +4,20 @@ The steps to start submitting a hub model.
 { .page-subtitle }
 
 There are four hub models.
-Each is opted in on its own in `config/hub.toml`.
+Each is opted in on its own in `packages/bdbvhub/config/hub.toml`.
 
 | hub model | model | falls back to | needs |
 | --- | --- | --- | --- |
 | `seabbs-rwnowcast` | random walk on a nowcast (`randomwalknowcast`) | nothing (round skipped) | nothing more |
 | `seabbs-randomwalk` | the random walk (`randomwalk`) | nothing | nothing more |
-| `seabbs-foundation` | fine-tuned Chronos-2, the model its table in `config/hub.toml` names (`foundation`) | nothing (round skipped) | nothing more |
-| `seabbs-renewal` | the renewal chain | the next model in the chain in `ci/policy.toml` | `[submission] model` in `config/hub.toml` |
+| `seabbs-foundation` | fine-tuned Chronos-2, the model its table in `packages/bdbvhub/config/hub.toml` names (`foundation`) | nothing (round skipped) | nothing more |
+| `seabbs-renewal` | the renewal chain | the next model in the chain in `packages/bdbvsubmission/policy.toml` | `[submission] model` in `packages/bdbvhub/config/hub.toml` |
 
 `DRY_RUN` is the global switch.
 Until it is `false`, a scheduled run builds and checks an opted-in model but pushes nothing.
 A manual dispatch with `dry_run=false` pushes whatever `DRY_RUN` is.
 
-`task ci:preflight` checks every step it can and lists what is missing.
+`task submission:preflight` checks every step it can and lists what is missing.
 Run it after each part, logged in to `gh` as `seabbs`.
 
 ## Once
@@ -45,8 +45,8 @@ Run it after each part, logged in to `gh` as `seabbs`.
 
 ## For each hub model
 
-1. Review its metadata in `hub/model-metadata/<hub model>.yml`, including the contributor list, licence and model name.
-2. Set `submit = true` for it in `config/hub.toml` and push to `main`.
+1. Review its metadata in `packages/bdbvsubmission/model-metadata/<hub model>.yml`, including the contributor list, licence and model name.
+2. Set `submit = true` for it in `packages/bdbvhub/config/hub.toml` and push to `main`.
    For `seabbs-renewal`, also set `[submission] model`.
 3. Dry run, and read the pull request body in the job summary.
    `gh workflow run submit.yml -R seabbs/bdbv-hub-modelling`

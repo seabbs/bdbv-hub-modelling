@@ -10,7 +10,7 @@ Run these before sending a change:
 ```bash
 task lint             # ruff and strict mypy
 task test-all         # every test, the model fit tests included
-task ci:test      # the submission workflow tests
+task submission:test      # the submission workflow tests
 task dry:submit       # the submission workflow dry runs
 task docs             # the site, built in strict mode
 ```
@@ -21,7 +21,7 @@ Any change to `packages/nowcastrenewal/`, the simulator or the renewal forecaste
 
 ## Tasks
 
-Each Taskfile lives beside its code and runs in its own folder: `packages/<package>/Taskfile.yml` for each package (namespace: the package name, for example `task bdbvhub:nowcast`), `workflow/Taskfile.yml` (`workflow`), `ci/Taskfile.yml` (`ci`) and `paper/Taskfile.yml` (`paper`).
+Each Taskfile lives beside its code and runs in its own folder: `packages/<package>/Taskfile.yml` for each package (namespace: the package name, for example `task bdbvhub:nowcast`), `workflow/Taskfile.yml` (`workflow`), `packages/bdbvsubmission/Taskfile.yml` (`ci`) and `paper/Taskfile.yml` (`paper`).
 The root Taskfile only includes them, beside the top-level tasks (setup, test, lint, format, docs, serve, getting-started, paper), so every task is found from the repository root as `task <namespace>:<task>`, or as `task <task>` inside its folder.
 The named dry runs are `task dry:tick`, `task dry:paper`, `task dry:submit` and `task dry:fit-store`.
 
@@ -61,9 +61,9 @@ The tasks' names before the project Taskfiles:
 | `nowcast` | `bdbvhub:nowcast` |
 | `metadata` | `bdbvhub:metadata` |
 | `validate-hub` | `bdbvhub:validate` |
-| `submission-preflight` | `ci:preflight` |
-| `ci-test` | `ci:test` |
-| `ci-dry` | `ci:dry` |
+| `submission-preflight` | `submission:preflight` |
+| `ci-test` | `submission:test` |
+| `ci-dry` | `submission:dry` |
 | `ci-fit` | `bdbvhub:ci-fit` |
 | `fit-store` | `bdbvhub:fit-store` |
 | `fit-store-plan` | `bdbvhub:fit-store-plan` |

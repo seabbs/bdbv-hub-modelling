@@ -523,7 +523,7 @@ def test_silent_zones_follow_the_fit_through_its_importation(
 def test_silent_zones_have_no_onset_in_the_walk_window(
     task: ForecastTask,
 ) -> None:
-    from nowcastbaselines.chain import Settings
+    from nowcastbaselines.baselinenowcast.delays import Settings
     from nowcastutils.dates import epiweek_end
 
     quiet = zr.silent_zones(task)

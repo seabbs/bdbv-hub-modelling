@@ -514,7 +514,7 @@ def test_the_german_panels_take_their_days_from_the_german_config():
     days, ranges, default = nowcasts.horizons(
         {
             "horizons": {
-                "days": "config/germany.toml",
+                "days": "packages/nowcastgermany/config/germany.toml",
                 "ranges": {"all": [None, None], "ahead": [1, None]},
                 "default": "all",
             }

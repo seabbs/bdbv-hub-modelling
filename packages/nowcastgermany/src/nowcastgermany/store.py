@@ -8,7 +8,8 @@ already nowcasts every development date with each released checkpoint.
 directory (`pack_unit`, `write_stored`) as the `ASSET` tarball and
 attaches it to the checkpoint's own release (`nowcastgermany
 unit-publish`). The Pages build downloads the asset of the checkpoint
-config/finetune.toml pins (`pinned_tag`) and loads it (`nowcastgermany
+packages/nowcastfoundation/config/finetune.toml pins (`pinned_tag`) and loads
+it (`nowcastgermany
 ft-load`), so it is scored and shown like every other model; no other
 checkpoint stands in.
 
@@ -47,7 +48,7 @@ __all__ = [
 
 STORED_MODELS: Final = ("foundation",)
 """The models whose German forecasts come from the store: Germany is
-daily only (`config/germany.toml`)."""
+daily only (`packages/nowcastgermany/config/germany.toml`)."""
 
 ASSET: Final = "germany-forecasts.tar.gz"
 """The release asset with a checkpoint's stored German forecasts."""
@@ -89,12 +90,15 @@ def release_tag(label: str) -> str:
 
 
 def pinned_tag(spec: str) -> str:
-    """Return the release of the checkpoint config/finetune.toml pins.
+    """Return the release of the checkpoint the finetune config pins.
+
+    The config is `packages/nowcastfoundation/config/finetune.toml`.
 
     Parameters
     ----------
     spec : str
-        The pin, `slots-<hash>` or a settings hash (`finetuned_spec`).
+        The checkpoint, `slots-<hash>` or a settings hash
+        (`forecaster.finetuned_checkpoint().hash`).
 
     Returns
     -------

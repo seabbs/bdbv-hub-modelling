@@ -7,6 +7,7 @@ The data and notation are on the [Data methods page](data.md#target-and-notation
 `foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the ragged layout.
 The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), the two-step `foundation_twostep` and `foundation_zeroshot_twostep`, and `foundation_real` (fine-tuned on real data alone).
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
+Only `foundation` runs in the Fit store and the submission; the variants are run by the paper's workflow alone.
 Each model reads the cadence from the data: one pass on the daily releases gives the daily counts and the weekly hub target, and a task with weekly releases only gives the weekly target.
 The hub model `seabbs-foundation` is set up to submit `foundation` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
 
@@ -101,14 +102,14 @@ The other fitted models split their provinces across the zones instead ([Health 
 
 The fine-tuned models (`foundation`, `foundation_complete`, `foundation_twostep`) load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
 The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
-The simulator is `nowcastfoundation.simulator` (the design and value draws, then each simulation as the joint PyRenew model in `nowcastrenewal.simulation.outbreak`), run on the grid config `config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `nowcastfoundation.finetune.chronos` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
+The simulator is `nowcastfoundation.simulator` (the design and value draws, then each simulation as the joint PyRenew model in `nowcastrenewal.simulation.outbreak`), run on the grid config `packages/nowcastfoundation/config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `nowcastfoundation.finetune.chronos` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
 The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
 Later releases are trained from the code here, so retraining from it gives the same hash.
-Each checkpoint is published as the repository's release `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
-The models load the newest such release by publish date, unless `config/finetune.toml` pins a hash.
-`source` in `config/finetune.toml` says where the checkpoint is read from: `github` (the release), `huggingface` (a Hugging Face Hub repository at a pinned revision holding the same files) or `local` (a training segment folder).
+Each checkpoint is published as the repository's release `chronos-slots-<hash>` (with the series bias) or `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
+The models load the newest such release by publish date (`hash = "latest"` in `packages/nowcastfoundation/config/finetune.toml`), so each new release, interim or final, is picked up; a settings hash there pins one release instead.
+`source` in `packages/nowcastfoundation/config/finetune.toml` says where the checkpoint is read from: `github` (the release), `huggingface` (a Hugging Face Hub repository at a pinned revision holding the same files) or `local` (a training segment folder).
 A checkpoint read from the Hub is the same checkpoint as its release, so it keys the same stored fits.
 The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the fine-tuned models, and each stored fit records the checkpoint it used.
 The adapter is downloaded once and checked against `sha256sums.txt` and the settings hash.

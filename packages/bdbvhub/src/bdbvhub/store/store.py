@@ -176,15 +176,20 @@ COMMIT_FILE: Final = ".commit"
 def stored_models() -> list[str]:
     """Return the registered models the store fits: those marked fitted.
 
+    Models only the paper's workflow runs (`ModelSpec.paper_only`) are
+    left out.
+
     Returns
     -------
     list of str
         Model names.
     """
-    return [s.name for s in list_models() if s.fitted]
+    return [s.name for s in list_models() if s.fitted and not s.paper_only]
 
 
-def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
+def samplers(
+    policy: Path | str = "packages/bdbvsubmission/policy.toml",
+) -> dict[str, Any]:
     """Return each model's NUTS settings from the CI policy.
 
     A stored fit uses the sampler table of the submission candidate that

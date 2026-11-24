@@ -57,33 +57,35 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert len(model_abbr_for(name)) < 16
 
 
-def test_only_renewalsp_centres_its_rt_walk() -> None:
-    # One place's data pin its Rt walk, so its levels are sampled.
-    # Pooled, the walk's step SD mixes badly centred.
-    centred = {
-        name: rn.model_config(v).centred_rt for name, v in rn.VARIANTS.items()
-    }
-    assert centred == {
-        "renewal": False,
-        "renewalsp": True,
-        "renewalbvd": False,
-    }
+def test_every_renewal_shares_one_rt_process() -> None:
+    # Sam (lead 2026-11-24 12:08, 12:22): one step-SD prior for every
+    # variant and one centring rule, so they differ only in what they
+    # ablate.
+    assert not hasattr(rn, "CENTRED_RT_MIN_CASES")
+    for v in rn.VARIANTS.values():
+        config = rn.model_config(v)
+        assert config.rt_sd_lognormal == (0.12, 0.5)
+        assert not config.centred_rt
+        assert {"rt_sd_lognormal", "centred_rt"}.isdisjoint(v.overrides)
 
 
-def test_renewalsp_centres_only_where_the_data_pin_the_walk() -> None:
-    # Centred, a province with few cases funnels.
-    def data(cases: float) -> SimpleNamespace:
-        known = np.array([[cases - 1.0], [np.nan]])
-        return SimpleNamespace(known=known, imputed=np.array([[1.0], [0.0]]))
+@pytest.mark.parametrize("name", ["renewal", "renewalsp", "renewalbvd"])
+def test_a_walk_is_centred_where_counts_pin_its_weekly_changes(
+    name: str,
+) -> None:
+    # Count noise on a weekly log change, 1/sqrt(weekly cases), against
+    # the prior median step SD, 0.12: centred from 1/0.12^2 = 69.4 cases
+    # a week over the fitted weeks, in every variant.
+    def data(weekly: float) -> SimpleNamespace:
+        known = np.full((10, 3), weekly / 3)
+        return SimpleNamespace(known=known, imputed=np.zeros((10, 3)))
 
-    sp = rn.VARIANTS["renewalsp"]
-    rich = rn.fit_config(sp, data(rn.CENTRED_RT_MIN_CASES))
-    poor = rn.fit_config(sp, data(rn.CENTRED_RT_MIN_CASES - 1))
-    assert rich.centred_rt
-    assert not poor.centred_rt
-    assert poor == replace(rich, centred_rt=False)
-    pooled = rn.fit_config(rn.VARIANTS["renewal"], data(1e6))
-    assert not pooled.centred_rt
+    variant = rn.VARIANTS[name]
+    assert rn.centred_min_weekly_cases(rn.model_config(variant)) == (
+        pytest.approx(1 / 0.12**2)
+    )
+    assert rn.fit_config(variant, data(70.0)).centred_rt
+    assert not rn.fit_config(variant, data(69.0)).centred_rt
 
 
 @pytest.mark.parametrize("name", ["renewal", "renewalsp", "renewalbvd"])
@@ -120,13 +122,10 @@ def test_the_variants_are_ablations_of_renewalbvd() -> None:
     assert full == rn.engine().BVD
     assert full.depletion
     assert dropped("renewal") == {"bvd"}
-    # renewalsp also keeps its centred walk's step SD off 0.
-    assert dropped("renewalsp") == {
-        "bvd",
-        "national",
-        "centred_rt",
-        "rt_sd_lognormal",
-    }
+    assert dropped("renewalsp") == {"bvd", "national"}
+    assert rn.model_config(rn.VARIANTS["renewalsp"]).rt_sd_lognormal == (
+        full.rt_sd_lognormal
+    )
     assert rn.VARIANTS["renewalsp"].per_province
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
@@ -557,27 +556,16 @@ def test_province_workers_fill_the_cores_with_chains(
             rn.province_workers(2, 5)
 
 
-def test_renewalsp_keeps_its_rt_walk_step_sd_off_zero(
-    task: ForecastTask,
+@pytest.mark.parametrize("name", ["renewal", "renewalsp", "renewalbvd"])
+def test_every_renewal_has_the_same_step_sd_prior(
+    task: ForecastTask, name: str
 ) -> None:
-    # The centred walk funnels where the step SD nears 0: at 2026-11-22,
-    # CD-NK alone mixed rt_sd at bulk ESS 29 and E-BFMI 0.27-0.36 under
-    # HalfNormal(0.2), and 72 and 0.49-0.70 under LogNormal(log 0.12, 0.5).
     import numpyro
 
     from nowcastrenewal.model import model_args
     from nowcastrenewal.model.zones import build_model
 
-    priors = {
-        name: rn.model_config(v).rt_sd_lognormal
-        for name, v in rn.VARIANTS.items()
-    }
-    assert priors == {
-        "renewal": None,
-        "renewalsp": (0.12, 0.5),
-        "renewalbvd": None,
-    }
-    variant = rn.VARIANTS["renewalsp"]
+    variant = rn.VARIANTS[name]
     one = replace(task, locations=task.locations[:1], mask=())
     data = rn.vintage_inputs(one, rn.model_config(variant))
     model = build_model(data, rn.fit_config(variant, data))

@@ -11,6 +11,6 @@ def test_every_engine_path_exists():
 
 
 def test_the_grid_id_is_the_file_s_short_sha():
-    grid = "config/finetune/grid.yaml"
+    grid = "packages/nowcastfoundation/config/finetune/grid.yaml"
     digest = hashlib.sha256((simulator.ROOT / grid).read_bytes()).hexdigest()
     assert simulator.grid_id(grid) == digest[:12]

@@ -91,14 +91,15 @@ _ID_PART = re.compile(r"^[A-Za-z0-9_]{1,14}$")
 NATIONAL: Final = "CD"
 """Location code of the whole country."""
 
-SUBMISSION_CONFIG: Final = Path("config/hub.toml")
+SUBMISSION_CONFIG: Final = Path("packages/bdbvhub/config/hub.toml")
 """Where the submitted model abbreviation is set."""
 
 
 def model_abbr_for(model: str, path: Path | str = SUBMISSION_CONFIG) -> str:
     """Return the hub abbreviation a model submits under.
 
-    A model with its own entry under `[models]` in `config/hub.toml` is a
+    A model with its own entry under `[models]` in
+    `packages/bdbvhub/config/hub.toml` is a
     hub model of its own. Every other model submits under the
     `[submission]` abbreviation, one value not derived from a model key,
     so every renewal variant and every fallback submits under one id.
@@ -645,7 +646,7 @@ def write_model_metadata(
     record : mapping
         The metadata record.
     directory : pathlib.Path or str
-        Where to write it, such as `hub/model-metadata/`.
+        Where to write it, such as `packages/bdbvsubmission/model-metadata/`.
 
     Returns
     -------

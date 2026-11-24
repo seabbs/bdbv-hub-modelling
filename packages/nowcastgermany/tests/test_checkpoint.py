@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -326,9 +327,9 @@ def test_a_german_unit_scores_a_run_s_own_segment(
     assert seen == [(tmp_path, "n100", tmp_path / "n100")]
     monkeypatch.delenv(forecaster.FINETUNED_ENV, raising=False)
     ck._pin("n100", tmp_path / "n100")
-    assert forecaster.finetuned_spec() == str(tmp_path / "n100")
+    assert os.environ[forecaster.FINETUNED_ENV] == str(tmp_path / "n100")
     ck._pin("abc")
-    assert forecaster.finetuned_spec() == "abc"
+    assert os.environ[forecaster.FINETUNED_ENV] == "abc"
 
 
 def _saved(train: Path, n: int, **settings) -> Path:
@@ -389,7 +390,7 @@ def test_the_comparison_holds_each_run_and_one_zero_shot() -> None:
 def test_the_german_config_scores_four_weeks_ahead_too() -> None:
     from nowcastgermany.evaluation import load_germany_config
 
-    config = load_germany_config("config/germany.toml")
+    config = load_germany_config("packages/nowcastgermany/config/germany.toml")
     assert config.horizons == tuple(range(28, -29, -1))
 
 
@@ -434,7 +435,9 @@ def test_a_german_unit_forecasts_the_config_s_horizons(
     seen: list = []
     _unit_stubs(monkeypatch, seen)
     ck.germany_unit(tmp_path, "reference")
-    want = load_germany_config("config/germany.toml").horizons
+    want = load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    ).horizons
     assert {h for _, h, _ in seen} == {want}
     out = pd.read_csv(
         tmp_path / ck.GERMANY_UNIT / "reference" / f"{seen[0][0][0]}.csv.gz"
@@ -449,7 +452,9 @@ def test_a_german_unit_redoes_dates_without_the_forecast_days(
     # one that reaches the last horizon is kept.
     from nowcastgermany import evaluation as de
 
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     first, second, *_ = de.nowcast_dates(config, held_out=False)
     root = tmp_path / ck.GERMANY_UNIT / "n100"
     root.mkdir(parents=True)
@@ -509,7 +514,7 @@ def test_the_german_config_gives_both_daily_views() -> None:
     # Germany is shown as daily counts and as the hub's 7-day sums.
     from nowcastgermany.evaluation import load_germany_config
 
-    config = load_germany_config("config/germany.toml")
+    config = load_germany_config("packages/nowcastgermany/config/germany.toml")
     assert config.targets == ("7day", "daily")
 
 
@@ -520,7 +525,9 @@ def test_a_german_unit_forecasts_the_config_s_targets_and_redoes_others(
     # forecast again for its daily counts.
     from nowcastgermany import evaluation as de
 
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     first = de.nowcast_dates(config, held_out=False)[0]
     root = tmp_path / ck.GERMANY_UNIT / "n100"
     root.mkdir(parents=True)
@@ -565,7 +572,7 @@ def test_daily_rows_are_relative_to_the_config_s_daily_reference(
 ) -> None:
     from nowcastgermany.evaluation import load_germany_config
 
-    config = load_germany_config("config/germany.toml")
+    config = load_germany_config("packages/nowcastgermany/config/germany.toml")
     assert config.daily_baseline == "foundation_zeroshot"
     ref, n100 = tmp_path / "reference", tmp_path / "n100"
     _daily_unit(ref, "foundation_zeroshot", 10.0)
@@ -628,7 +635,9 @@ def test_a_german_unit_redoes_dates_forecast_from_other_tasks(
     # record, are forecast again, and each date written is recorded.
     from nowcastgermany import evaluation as de
 
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     old, unrecorded, current, *_ = de.nowcast_dates(config, held_out=False)
     root = tmp_path / ck.GERMANY_UNIT / "n100"
     root.mkdir(parents=True)
@@ -664,7 +673,9 @@ def test_a_reference_unit_redoes_only_the_models_whose_code_changed(
     # rows alone and keeps the others'.
     from nowcastgermany import evaluation as de
 
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     dates = de.nowcast_dates(config)
     seen: list = []
     _unit_stubs(monkeypatch, seen)
@@ -712,7 +723,9 @@ def test_scores_are_the_hub_window_and_plots_start_earlier() -> None:
     # development half; the plots' truth starts at plot_start as context.
     from nowcastgermany import evaluation as de
 
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     assert config.plot_start == "2021-05-10"
     assert not hasattr(de, "development_dates")
     dates = de.nowcast_dates(config)
@@ -727,7 +740,9 @@ def test_a_german_unit_forecasts_only_the_hub_window(
     seen: list = []
     _unit_stubs(monkeypatch, seen)
     ck.germany_unit(tmp_path, "n100")
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     done = [d for dates, *_ in seen for d in dates]
     assert done == de.nowcast_dates(config)
 

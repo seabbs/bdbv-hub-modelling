@@ -144,9 +144,11 @@ def test_the_si_text_states_the_bdbv_cut_in_config() -> None:
     import tomllib
 
     root = Path(__file__).parents[2]
-    cut = tomllib.loads((root / "config" / "finetune.toml").read_text())[
-        "realdata_bdbv"
-    ]
+    cut = tomllib.loads(
+        (
+            root / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+        ).read_text()
+    )["realdata_bdbv"]
     text = (root / "paper" / "si.qmd").read_text()
     for key in ("release", "cutoff", "truth_until"):
         assert cut[key] in text

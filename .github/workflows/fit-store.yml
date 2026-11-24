@@ -44,9 +44,9 @@ on:
       # The backtests' code (`backtest`, `backtests`).
       - 'packages/nowcasteval/src/**'
       - 'packages/nowcastbdbv/src/**'
-      - 'config/backtest.toml'
-      - 'config/finetune.toml'
-      - 'ci/policy.toml'
+      - 'packages/nowcastbdbv/config/backtest.toml'
+      - 'packages/nowcastfoundation/config/finetune.toml'
+      - 'packages/bdbvsubmission/policy.toml'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
@@ -79,9 +79,9 @@ on:
       # The backtests' code (`backtest`, `backtests`).
       - 'packages/nowcasteval/src/**'
       - 'packages/nowcastbdbv/src/**'
-      - 'config/backtest.toml'
-      - 'config/finetune.toml'
-      - 'ci/policy.toml'
+      - 'packages/nowcastbdbv/config/backtest.toml'
+      - 'packages/nowcastfoundation/config/finetune.toml'
+      - 'packages/bdbvsubmission/policy.toml'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
@@ -276,7 +276,8 @@ jobs:
           path: ~/.cache/huggingface
           key: chronos-2-29ec3766d36d6f73f0696f85560a422f50e8498c
       # The fine-tuned models download the LoRA adapter of the newest
-      # chronos-ft-* release (or the one config/finetune.toml pins), kept
+      # chronos-ft-* release (or the one
+      # packages/nowcastfoundation/config/finetune.toml pins), kept
       # by its hash, which keys the cache. A missing adapter is stored as
       # failed.
       - name: Cache the fine-tuned checkpoints

@@ -3,7 +3,7 @@ name: Submit to the BDBV hub
 # Check and submit the week's forecast to the BDBV Modeling Hub as an
 # automated pull request from the bot's fork. Nobody approves it in CI:
 # the gate below decides, and the PR body says what was submitted and
-# why. See ci/SETUP.md and ci/INTEGRATION.md.
+# why. See packages/bdbvsubmission/SETUP.md and packages/bdbvsubmission/INTEGRATION.md.
 #
 #   detect -> prepare -> await-fits -> fit (bvd, renewalsp, main) ->
 #   gate (select + hubValidations) -> submit -> record -> outcome
@@ -36,7 +36,7 @@ on:
     # updates the PR. Runs queue one at a time (hub-submission). The last
     # check, Tuesday 21:17, is 1 h 42 before the close; the fits take
     # about an hour, and each fit's timeout stops 45 minutes short of the
-    # close (ci/policy.toml [timing]).
+    # close (packages/bdbvsubmission/policy.toml [timing]).
     - cron: '17 */3 * * 0-2'
     # Outside the window, only to freeze the pages of merged rounds and
     # release closed rounds.
@@ -81,7 +81,7 @@ env:
   DEVICE: cpu
   CI_DIR: ci
   WORK: output/ci
-  # The model is `[submission] model` in config/hub.toml and the hub id
+  # The model is `[submission] model` in packages/bdbvhub/config/hub.toml and the hub id
   # is set there too (seabbs-renewal). `prepare` resolves both into the
   # run's context.json.
   # Every bdbvhub command reads the tidy data the prepare job
@@ -171,7 +171,7 @@ jobs:
         id: freeze
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ci/steps/freeze.sh
+        run: packages/bdbvsubmission/steps/freeze.sh
       - name: Rebuild the docs with the frozen pages
         if: steps.freeze.outputs.frozen != '0'
         env:
@@ -206,7 +206,7 @@ jobs:
             echo "::error::HUB_SUBMIT_TOKEN is not set in the hub-submission environment"
             exit 1
           fi
-          ci/steps/release.sh
+          packages/bdbvsubmission/steps/release.sh
       # The docs build attaches every model's results to the new releases.
       - name: Rebuild the docs
         if: always() && steps.release.outputs.released != '0'
@@ -240,14 +240,14 @@ jobs:
       - name: Download data and build the random walk baseline
         env:
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
-        run: ci/steps/prepare.sh
+        run: packages/bdbvsubmission/steps/prepare.sh
       # Each hub model runs only when opted in (`submit = true` in
-      # config/hub.toml).
+      # packages/bdbvhub/config/hub.toml).
       - name: Decide which hub models run
         id: tracks
         run: |
-          source ci/steps/lib.sh
-          uv run --project "$CI_DIR" python -m submission_ci.tracks
+          source packages/bdbvsubmission/steps/lib.sh
+          uv run --project "$CI_DIR" python -m bdbvsubmission.tracks
       - name: List the primary fits
         id: matrix
         if: steps.tracks.outputs.renewal == 'true'
@@ -257,9 +257,9 @@ jobs:
         env:
           IGNORE_WINDOW: ${{ inputs.ignore_window }}
         run: |
-          source ci/steps/lib.sh
+          source packages/bdbvsubmission/steps/lib.sh
           # shellcheck disable=SC2046
-          uv run --project "$CI_DIR" python -m submission_ci.policy \
+          uv run --project "$CI_DIR" python -m bdbvsubmission.policy \
             --policy "$CI_DIR/policy.toml" --stage primary \
             --model "$MODEL" $(deadline_args)
       # The fitted candidates' models and how long to wait for them.
@@ -317,7 +317,7 @@ jobs:
           DISPATCH: >-
             ${{ (github.ref == 'refs/heads/main' && inputs.store_branch == '')
             || startsWith(inputs.store_branch, 'fit-store-scratch') }}
-        run: ci/steps/await_fits.sh
+        run: packages/bdbvsubmission/steps/await_fits.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -368,7 +368,7 @@ jobs:
           pattern: candidate-*
           path: ${{ env.WORK }}/candidates
       - name: Lay out the candidates
-        run: ci/steps/unpack_candidates.sh
+        run: packages/bdbvsubmission/steps/unpack_candidates.sh
       # The hub at the commit the data came from, for hubValidations.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -380,21 +380,13 @@ jobs:
             hub-config
             model-metadata
             src
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: ./.github/actions/setup-hub-r
         if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          use-public-rspm: true
-          extra-repositories: https://hubverse-org.r-universe.dev
-      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          packages: any::hubValidations
-          dependencies: '"hard"'
       # Under the submission id, whichever model the chain submits.
       - name: Write the model metadata
         id: meta
         run: |
-          source ci/steps/lib.sh
+          source packages/bdbvsubmission/steps/lib.sh
           resolve_model
           cli metadata --model "$MODEL" --abbr "${MODEL_ID#*-}" --out "$WORK/metadata"
           echo "MODEL_ID=$MODEL_ID" >> "$GITHUB_ENV"
@@ -412,7 +404,7 @@ jobs:
           HUB_PATH: output/hub-clone
           METADATA: ${{ env.WORK }}/metadata/${{ env.MODEL_ID }}.yml
           CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
-        run: ci/steps/select.sh
+        run: packages/bdbvsubmission/steps/select.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -472,7 +464,7 @@ jobs:
           # for a dry run, which only looks up an existing PR.
           GH_TOKEN: ${{ needs.detect.outputs.dry_run == 'false' && secrets.HUB_SUBMIT_TOKEN || github.token }}
           METADATA: ${{ env.WORK }}/metadata/${{ env.MODEL_ID }}.yml
-        run: ci/steps/submit.sh
+        run: packages/bdbvsubmission/steps/submit.sh
       - name: Show the PR body
         if: always()
         run: |
@@ -538,16 +530,8 @@ jobs:
             hub-config
             model-metadata
             src
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: ./.github/actions/setup-hub-r
         if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          use-public-rspm: true
-          extra-repositories: https://hubverse-org.r-universe.dev
-      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          packages: any::hubValidations
-          dependencies: '"hard"'
       - name: Authenticate as the bot
         if: env.DRY_RUN == 'false'
         env:
@@ -568,7 +552,7 @@ jobs:
           R_VALIDATION: ${{ vars.HUB_VALIDATIONS != 'false' }}
           HUB_PATH: output/hub-clone
           CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
-        run: ci/steps/track.sh
+        run: packages/bdbvsubmission/steps/track.sh
       - name: Show the PR body
         if: always()
         run: |
@@ -590,7 +574,7 @@ jobs:
           retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   # chronos: fine-tuned Chronos-2 (`chronos_model`, the
-  # [models.foundation] table of config/hub.toml) under its
+  # [models.foundation] table of packages/bdbvhub/config/hub.toml) under its
   # own hub id, run here with no fit and no fallback. Off until that
   # table sets `submit = true`.
   chronos:
@@ -655,16 +639,8 @@ jobs:
             hub-config
             model-metadata
             src
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: ./.github/actions/setup-hub-r
         if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          use-public-rspm: true
-          extra-repositories: https://hubverse-org.r-universe.dev
-      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          packages: any::hubValidations
-          dependencies: '"hard"'
       - name: Authenticate as the bot
         if: env.DRY_RUN == 'false'
         env:
@@ -686,7 +662,7 @@ jobs:
           HUB_PATH: output/hub-clone
           CHECK_WINDOW: ${{ needs.detect.outputs.dry_run == 'false' }}
           TRACK_MODEL: ${{ needs.prepare.outputs.chronos_model }}
-        run: ci/steps/track.sh
+        run: packages/bdbvsubmission/steps/track.sh
       - name: Show the PR body
         if: always()
         env:
@@ -782,7 +758,7 @@ jobs:
           CHRONOS_PR_URL: ${{ needs.chronos.outputs.pr_url }}
           CHRONOS_PRODUCED_BY: ${{ needs.chronos.outputs.produced_by }}
           CHRONOS_SKIPPED: ${{ needs.chronos.outputs.skipped }}
-        run: ci/steps/record.sh
+        run: packages/bdbvsubmission/steps/record.sh
       - name: Rebuild the docs with this round's page
         env:
           GH_TOKEN: ${{ github.token }}
@@ -815,7 +791,7 @@ jobs:
           AS_OF: ${{ needs.detect.outputs.as_of }}
           # To list releases, such as a fine-tuned model's checkpoint.
           GITHUB_TOKEN: ${{ github.token }}
-        run: ci/steps/archive_candidates.sh
+        run: packages/bdbvsubmission/steps/archive_candidates.sh
 
   outcome:
     name: Submission outcome
@@ -863,7 +839,7 @@ jobs:
             echo
             [ "$RENEWAL" = true ] || [ "$BASELINE" = true ] \
               || [ "$CHRONOS" = true ] \
-              || echo "No hub model is opted in (config/hub.toml)."
+              || echo "No hub model is opted in (packages/bdbvhub/config/hub.toml)."
             [ "$BASELINE" = true ] \
               && echo "baseline: **${BASELINE_BY:-not submitted}**, PR $BASELINE_PR"
             [ "$CHRONOS" = true ] \

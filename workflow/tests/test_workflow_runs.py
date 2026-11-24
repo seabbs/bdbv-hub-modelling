@@ -30,7 +30,9 @@ def test_run_b_trains_with_the_release_layer():
     cfg = runs.load_config()
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
     layer = found["runb"].ft["release_layer"]
-    assert layer == "config/finetune/release-layer.yaml"
+    assert (
+        layer == "packages/nowcastfoundation/config/finetune/release-layer.yaml"
+    )
     assert (runs.CONFIG.parents[1] / layer).is_file()
     assert f"--release-layer {layer}" in runs.trainer_options(found["runb"])
     assert "--release-layer" not in runs.trainer_options(found["runa"])
@@ -140,7 +142,7 @@ def test_the_release_layer_is_passed_only_when_a_run_names_one():
     # fine-tune time; no run takes it until its entry names the file.
     assert runs.load_config()["finetune"]["release_layer"] is None
     assert "--release-layer" not in runs.trainer_options(_run())
-    path = "config/finetune/release-layer.yaml"
+    path = "packages/nowcastfoundation/config/finetune/release-layer.yaml"
     got = runs.trainer_options(_run(release_layer=path))
     assert got == f"--release-layer {path}"
 

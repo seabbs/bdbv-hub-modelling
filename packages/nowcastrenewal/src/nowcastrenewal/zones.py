@@ -36,6 +36,7 @@ from nowcastrenewal.forecaster import (
     bvd_release,
     check_national,
     engine,
+    fit_config,
     horizon_weeks,
     model_config,
     report_cutoffs,
@@ -183,7 +184,7 @@ def silent_zones(task: ForecastTask) -> set[str]:
     set of str
         Zone codes.
     """
-    from nowcastbaselines.chain import Settings
+    from nowcastbaselines.baselinenowcast.delays import Settings
     from nowcastbaselines.introductions import silent_places
     from nowcastutils.dates import epiweek_end
     from nowcastutils.hierarchy import is_zone, province_of
@@ -499,6 +500,8 @@ class ZoneRenewalModel(RenewalModel):
                     used = {**used, "zones": len(zone_rows)}
             self._log(f"variant={self.name} bvd={used['tag'] or 'none'}")
         data = zone_vintage_inputs(task, config, bvd=rows, receivers=quiet)
+        # The same centring rule as every variant (`fit_config`).
+        config = fit_config(self.variant, data)
         model = build_zone_model(data, config)
         self._log(
             f"variant={self.name} zones={data.n_provinces} sampling start"

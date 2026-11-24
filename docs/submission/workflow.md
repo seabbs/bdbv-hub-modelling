@@ -33,7 +33,7 @@ The chain runs from the most to the least complex renewal model, then the random
 4. `randomwalknowcast`: random walk on a nowcast.
 5. `randomwalk`.
 
-`[submission] model` in `config/hub.toml` says where the chain starts.
+`[submission] model` in `packages/bdbvhub/config/hub.toml` says where the chain starts.
 The submission never fits.
 Each fitted candidate reads the stored fit of the same code and data (`fit-store unpack`), so the submitted forecast is the one the docs and the backtest show.
 The Fit store workflow fits a new release's origin first, and runs one at a time, so a release is fitted once.
@@ -41,7 +41,7 @@ A candidate the store lacks when the wait ends, or whose stored fit failed, is r
 A stored fit forecasts one week past its own round, so a round with no new release is forecast from last week's stored fit.
 Every stored fit is 2 chains of 500 warm-up, run in parallel, with no refit.
 Each takes 750 draws, `renewalbvd` at target acceptance 0.95 and the others at 0.9.
-The wait for the store stops against the window's close (`[timing]` in `ci/policy.toml`).
+The wait for the store stops against the window's close (`[timing]` in `packages/bdbvsubmission/policy.toml`).
 
 `randomwalk` and `randomwalknowcast` pair their draws inside their forecast ([Correlated trajectories](../methods/evaluation.md#correlated-trajectories)), so a submission uses the same paired draws as the backtest.
 Each round's $\rho_p$, the pairs behind it and any fall-back to the prior are recorded in the round's `copula.json`.
@@ -49,7 +49,7 @@ Each round's $\rho_p$, the pairs behind it and any fall-back to the prior are re
 ## Checks
 
 An invalid file, a fit past the convergence failure thresholds or a forecast far from the recent data rules a candidate out.
-Thresholds are in `ci/policy.toml`.
+Thresholds are in `packages/bdbvsubmission/policy.toml`.
 
 | check | rules out | warns |
 | --- | --- | --- |
@@ -88,8 +88,8 @@ A round's page is frozen once its pull request merges, and later docs builds do 
 
 | command | what it does |
 | --- | --- |
-| `task ci:dry` | Every path through the workflow on fixture data. |
-| `task ci:test` | Tests of the CI scripts. |
+| `task submission:dry` | Every path through the workflow on fixture data. |
+| `task submission:test` | Tests of the CI scripts. |
 | `task bdbvhub:ci-fit` | Fits and forecasts one config as a candidate does. |
-| `task ci:preflight` | Lists what a live run still needs. |
+| `task submission:preflight` | Lists what a live run still needs. |
 | `gh workflow run submit.yml -R seabbs/bdbv-hub-modelling -f force=true -f ignore_window=true -f reference_date=<date>` | A dry run on a past round. |

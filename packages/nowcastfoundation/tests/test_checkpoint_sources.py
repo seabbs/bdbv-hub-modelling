@@ -191,7 +191,9 @@ def test_an_incomplete_source_is_an_error(
 
 def test_the_repository_s_config_names_a_source() -> None:
     root = Path(__file__).resolve().parents[3]
-    conf = (root / "config" / "finetune.toml").read_text()
+    conf = (
+        root / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).read_text()
     import tomllib
 
     got = tomllib.loads(conf)
@@ -225,3 +227,27 @@ def test_hub_errors_say_what_failed(
     monkeypatch.setattr(huggingface_hub, "hf_hub_download", download)
     with pytest.raises(raised, match="org/m@v1"):
         fc._hub_file("org/m", "v1", "settings.json")
+
+
+def test_the_label_resolves_latest_from_the_listing_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The newest release by publish date, slots releases included; no
+    # checksum file is read for the name.
+    monkeypatch.delenv(fc.FINETUNED_ENV, raising=False)
+    listing = [
+        {"tag_name": t, "published_at": at, "draft": d}
+        for t, at, d in [
+            ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
+            ("chronos-slots-new", "2026-11-20T00:00:00Z", False),
+            ("chronos-slots-draft", "2026-11-22T00:00:00Z", True),
+            ("realdata-ft-de", "2026-11-23T00:00:00Z", False),
+        ]
+    ]
+    monkeypatch.setattr(fc, "finetuned_releases", lambda: listing)
+    conf = _config(tmp_path, 'source = "github"\nhash = "latest"\n')
+    assert fc.latest_spec() == "slots-new"
+    assert fc.finetuned_label(conf) == "slots-new"
+    assert fc.finetuned_label(_config(tmp_path, 'hash = "abc"\n')) == "abc"
+    monkeypatch.setenv(fc.FINETUNED_ENV, "slots-pinned")
+    assert fc.finetuned_label(conf) == "slots-pinned"

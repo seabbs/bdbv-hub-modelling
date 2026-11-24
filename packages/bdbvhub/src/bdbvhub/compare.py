@@ -128,7 +128,9 @@ ATTRIBUTION: Final = (
 
 @dataclass(frozen=True)
 class ComparisonConfig:
-    """Settings for the hub comparison, from `config/hub-comparison.toml`.
+    """Settings for the hub comparison.
+
+    Read from `packages/bdbvhub/config/hub-comparison.toml`.
 
     Attributes
     ----------
@@ -143,7 +145,7 @@ class ComparisonConfig:
         Git ref of the hub to fetch from.
     submissions_table : str
         The ledger's table of each round's submitted model per hub id
-        (`submission_ci.submissions`), fetched by `--fetch`.
+        (`bdbvsubmission.submissions`), fetched by `--fetch`.
     substituted : str
         `apart` scores a week a fallback went out under one of our hub
         ids under its own label (`substituted_label`), so the chain's
@@ -160,7 +162,7 @@ class ComparisonConfig:
 
 
 def load_comparison_config(
-    path: Path | str = "config/hub-comparison.toml",
+    path: Path | str = "packages/bdbvhub/config/hub-comparison.toml",
 ) -> ComparisonConfig:
     """Read the hub comparison settings.
 
@@ -207,7 +209,9 @@ def resolve_baseline(preferred: str) -> str:
     return next(s.name for s in specs if s.baseline)
 
 
-def own_hub_ids(path: Path | str = "config/hub.toml") -> dict[str, str]:
+def own_hub_ids(
+    path: Path | str = "packages/bdbvhub/config/hub.toml",
+) -> dict[str, str]:
     """Return the hub ids of our submitted models.
 
     Parameters

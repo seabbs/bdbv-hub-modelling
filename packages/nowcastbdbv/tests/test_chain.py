@@ -9,20 +9,22 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nowcastbaselines import chain
-from nowcastbaselines.baselinenowcast import log_factors, pair_sums
-from nowcastbaselines.chain import (
+from nowcastbaselines.baselinenowcast import delays, log_factors, pair_sums
+from nowcastbaselines.baselinenowcast import nowcast as chain
+from nowcastbaselines.baselinenowcast.delays import (
     Settings,
     _delay_counts,
-    _walk_spreads,
-    build_origin,
     fit_delay,
     levels,
-    retro_errors,
-    start_weeks,
     weeks_back,
 )
-from nowcastbaselines.obs import MAX_SIZE, PRIOR_SIZE
+from nowcastbaselines.baselinenowcast.nowcast import (
+    _walk_spreads,
+    build_origin,
+    retro_errors,
+    start_weeks,
+)
+from nowcastbaselines.baselinenowcast.uncertainty import MAX_SIZE, PRIOR_SIZE
 from nowcastbaselines.pooling import pool_matrix, source_index
 from nowcastutils.snapshots import SnapshotArrays, snapshot_arrays, weekly_sums
 
@@ -61,7 +63,7 @@ def test_growth_to_final_sums_the_daily_delay(origin24) -> None:
 def test_the_start_week_is_the_latest_week_at_95_per_cent(
     snap24, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from nowcastbaselines import chain
+    from nowcastbaselines.baselinenowcast import nowcast as chain
 
     # Week w is 95.01% complete and every later week 94.99%.
     w = snap24.n_weeks - 3
@@ -239,7 +241,7 @@ def test_there_is_no_clock_shift() -> None:
 def test_no_walk_spread_anywhere_raises(snap24, monkeypatch) -> None:
     # If no place, pool or country has a walk variance above 0, there is
     # no spread to fall back on, so the model gives no forecast.
-    from nowcastbaselines import chain
+    from nowcastbaselines.baselinenowcast import nowcast as chain
     from nowcastutils.base import ModelUnavailableError
 
     def flat(reported, *_):
@@ -467,7 +469,7 @@ def test_the_fallback_fits_through_the_given_delay(daily: pd.DataFrame) -> None:
         r: int,
         settings: Settings,
         longer: bool = False,
-    ) -> chain.DelayFit | None:
+    ) -> delays.DelayFit | None:
         calls.append(longer)
         return fit_delay(snap, r, settings, longer=longer)
 
@@ -502,7 +504,7 @@ def test_every_release_s_fit_compiles_one_shape(snap24, monkeypatch) -> None:
     # so JAX compiles them once a task, not once a release; the counts
     # are those of the releases up to each one alone.
     seen: dict[str, set] = {"rows": set(), "pairs": set()}
-    real_pre, real_pairs = chain.preprocess_negative_values, chain.pair_sums
+    real_pre, real_pairs = delays.preprocess_negative_values, delays.pair_sums
 
     def pre(rows, mask, validate=True):
         seen["rows"].add(np.shape(rows))
@@ -512,8 +514,8 @@ def test_every_release_s_fit_compiles_one_shape(snap24, monkeypatch) -> None:
         seen["pairs"].add(np.shape(first))
         return real_pairs(counts, observed, cut, first, max_delay)
 
-    monkeypatch.setattr(chain, "preprocess_negative_values", pre)
-    monkeypatch.setattr(chain, "pair_sums", pairs)
+    monkeypatch.setattr(delays, "preprocess_negative_values", pre)
+    monkeypatch.setattr(delays, "pair_sums", pairs)
     n_rel = snap24.counts.shape[1]
     for r in range(1, n_rel):
         np.testing.assert_array_equal(

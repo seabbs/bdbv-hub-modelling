@@ -6,12 +6,14 @@
 # state kept with the prefix before and stops once n<N> is saved
 # (`--until N`). Its inputs are the batches that hold the first N
 # outbreaks of the seed list, one spare, and the held-out batches,
-# gathered in <ROOT>/runs/<run>/sims/ from this machine's rounds, the rounds host's
+# gathered in <ROOT>/runs/<run>/sims/ from this machine's rounds, the rounds
+# host's
 # (REMOTE) or the sims-r<N> releases (`fetch_batch`).
 #
 # Targets: `finetune` (every prefix of each run in `train_runs`), or one
 # checkpoint,
-# <ROOT>/runs/<run>/train/n<N>/settings.json. Publishing is the publish module's.
+# <ROOT>/runs/<run>/train/n<N>/settings.json. Publishing is the publish
+# module's.
 #
 # A machine without the rounds takes its batches from the rounds host
 # (`sims_from: remote`, REMOTE and REMOTE_ROOT in config/local.env), as
@@ -194,7 +196,9 @@ rule block_combinations:
 
 # The German benchmark's settings: the real-data window's first scored
 # date and truth delay.
-GERMANY_CONFIG = tomllib.loads(Path("config/germany.toml").read_text())
+GERMANY_CONFIG = tomllib.loads(
+    Path("packages/nowcastgermany/config/germany.toml").read_text()
+)
 
 
 rule real_training_blocks:
@@ -231,7 +235,8 @@ rule finetune:
 
 rule dashboard:
     # A static render of the dashboard for the configured runs, for a
-    # finished run or the record; `task workflow:dashboard` serves it live instead.
+    # finished run or the record; `task workflow:dashboard` serves it live
+    # instead.
     output:
         f"{LOCAL['ROOT']}/reports/dashboard.html",
     log:

@@ -26,10 +26,10 @@ So scores compare fairly although the number of draws differs across models and 
 
 | Forecasts | Draws per forecast | Set by |
 |---|---|---|
-| Models the site runs itself in the release backtest, health zones and leave-one-province-out | 1,000 | `[samples] backtest` in `config/backtest.toml` |
-| Stored fits, the submission, the Nowcast page and our models in the Comparison with the hub | 100 | `[forecast] n_samples` in `config/backtest.toml` |
+| Models the site runs itself in the release backtest, health zones and leave-one-province-out | 1,000 | `[samples] backtest` in `packages/nowcastbdbv/config/backtest.toml` |
+| Stored fits, the submission, the Nowcast page and our models in the Comparison with the hub | 100 | `[forecast] n_samples` in `packages/nowcastbdbv/config/backtest.toml` |
 | Hub teams | 100 | Their submissions |
-| German nowcast benchmark | Quantiles at seven levels, scored by WIS | `config/germany.toml` |
+| German nowcast benchmark | Quantiles at seven levels, scored by WIS | `packages/nowcastgermany/config/germany.toml` |
 
 Every model shares the backtest's seed, so its draws use common random numbers.
 Each page states the counts it scores.
@@ -43,8 +43,8 @@ $$
 Positive bias is overprediction.
 Relative CRPS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
 Relative CRPS on the log scale is the same ratio of mean CRPS on the log scale.
-The baseline is `randomwalknowcast`, set by `[scores] baseline` in `config/site.toml`.
-Of the Chronos-2 models the site shows only `foundation` (`[models]` in `config/site.toml`); the others are still fitted, scored and in the paper.
+The baseline is `randomwalknowcast`, set by `[scores] baseline` in `docs/site.toml`.
+Of the Chronos-2 models the site shows only `foundation` (`[models]` in `docs/site.toml`); the others are still fitted, scored and in the paper.
 The interactive summaries and the checks chart have a Relative to picker that makes any model the baseline, and the overall score tables a baseline filter.
 In the summaries a new baseline changes which forecasts are matched, so $n$ and the means change too.
 A model with every one of the baseline's forecasts has the baseline's $n$, so those rows are read side by side.
@@ -88,7 +88,7 @@ In leave-one-province-out, a week is complete when it ended at least 3 weeks bef
 
 ## Real releases
 
-Each real release with a later release is an origin, except the first, 2026-08-18 (`skip_origins` in `config/backtest.toml`).
+Each real release with a later release is an origin, except the first, 2026-08-18 (`skip_origins` in `packages/nowcastbdbv/config/backtest.toml`).
 That release has no delay file, so the renewal models fell back on their prior delay there.
 It is also 50 days before the next release, and its weeks three or more weeks old hold 88% to 97% of the counts the 2026-11-08 release gives them, against 93% to 102% in the releases between.
 It stays in the data of later origins.
@@ -119,7 +119,7 @@ with the sign carried when $X < R_o$, $q$ kept in $[0, 1]$, and $q = 1$ for a we
 A model with no modelled delay, such as a hub team or a Chronos-2 model ([Foundation models](foundation.md)), is scored on complete weeks only.
 
 **Complete weeks.** Each week's count in the first release whose cut-off is at least the truth delay after the week ends.
-The truth delay is `truth_delay` in `config/backtest.toml`.
+The truth delay is `truth_delay` in `packages/nowcastbdbv/config/backtest.toml`.
 By default it is the age by which 98% of the national count is reported (`truth_level`).
 Each earlier release's national count of a week is set against the latest release's, at the week's age in that release rounded up to whole weeks, and the counts are pooled over releases at each age.
 The first age whose pooled share reaches 98% is the truth delay.
@@ -243,7 +243,7 @@ Our models see only reports made within 40 days of each reference date, so they 
 The backtest scores its complete weeks the same way, on the first release the truth delay after each week ([Real releases](#real-releases)).
 Relative scores divide a model's mean score by `randomwalknowcast`'s on the nowcasts both made.
 The paper's relative scores divide by the hub's own baseline, `KIT-frozen_baseline`.
-Both baselines are set in `config/germany.toml`.
+Both baselines are set in `packages/nowcastgermany/config/germany.toml`.
 `nowcastgermany paper` writes every forecast, with its truth, as the paper's long table.
 
 The teams' nowcasts are those the paper gathered, prospective and retrospective, at the horizons our models give.

@@ -13,7 +13,7 @@ on:
   workflow_call:
     inputs:
       matrix:
-        description: Matrix JSON from `submission_ci.policy` (an `include` list)
+        description: Matrix JSON from `bdbvsubmission.policy` (an `include` list)
         type: string
         required: true
       reference_date:
@@ -36,7 +36,7 @@ env:
   CI_DIR: ci
   WORK: output/ci
   # The model and hub id come from the run's context.json, which
-  # `prepare` resolves from config/hub.toml.
+  # `prepare` resolves from packages/bdbvhub/config/hub.toml.
   # Every bdbvhub command reads the tidy data the prepare job
   # pinned to the hub commit, shipped in the `inputs` artefact.
   BDBV_DATA_DIR: output/ci/inputs/data
@@ -48,7 +48,7 @@ jobs:
     # Reading a stored fit needs no fitting runner.
     runs-on: ubuntu-latest
     # From the matrix: leaves the gate time before the window closes
-    # (ci/policy.toml [timing]).
+    # (packages/bdbvsubmission/policy.toml [timing]).
     timeout-minutes: ${{ fromJSON(matrix.timeout || '350') }}
     strategy:
       fail-fast: false
@@ -78,7 +78,7 @@ jobs:
           FIT_SOURCE: store
           STORE: output/fit-store
           EXPECTED_LOCATIONS: ${{ inputs.expected_locations }}
-        run: ci/steps/candidate.sh
+        run: packages/bdbvsubmission/steps/candidate.sh
       # The candidate's verdicts, file and plot: small, read by the gate.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()

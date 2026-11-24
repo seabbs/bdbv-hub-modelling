@@ -54,7 +54,7 @@ import numpy as np
 import pandas as pd
 
 from nowcastbaselines.baselinenowcast import baselinenowcast, rolling_sum
-from nowcastbaselines.baselinenowcast.triangle import identity
+from nowcastbaselines.baselinenowcast.aggregate import identity
 from nowcastbaselines.walk import random_walks, walk_noise, walk_variance
 from nowcastutils.base import (
     NATIONAL,

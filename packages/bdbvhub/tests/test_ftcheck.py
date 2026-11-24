@@ -37,7 +37,10 @@ def test_the_check_key_moves_with_the_active_zone_rule(tmp_path):
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(src, dst)
-    conf = tmp_path / "config" / "finetune.toml"
+    conf = (
+        tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    )
+    conf.parent.mkdir(parents=True, exist_ok=True)
     conf.write_text('hash = "a"\nactive_zone_cases = 20\n')
     one = scoring.ft_check_key(tmp_path)
     conf.write_text('hash = "b"\nactive_zone_cases = 20\n')

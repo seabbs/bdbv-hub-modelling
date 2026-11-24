@@ -12,7 +12,8 @@ weights), `foundation_complete` and `foundation_zeroshot_complete`
 `foundation_zeroshot_twostep`. For the SI,
 `foundation_real` is the ragged model with the checkpoint fine-tuned on real
 data alone (the German development half and the public BDBV data to date,
-`scripts/finetune_realdata.py`), pinned in `config/finetune.toml` and
+`scripts/finetune_realdata.py`), pinned in
+`packages/nowcastfoundation/config/finetune.toml` and
 released as `realdata-ft-<hash>`, which the latest lookup never takes.
 `hub_triangle` lays out the hub target by place, time and release lag,
 `FoundationModel` gives it to Chronos-2 as one group of series, and
@@ -43,7 +44,7 @@ from typing import Any, ClassVar, Final
 import numpy as np
 import pandas as pd
 
-from nowcastbaselines.chain import start_weeks
+from nowcastbaselines.baselinenowcast.nowcast import start_weeks
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcastfoundation import series_bias
 from nowcastfoundation.backends import Series
@@ -99,11 +100,13 @@ __all__ = [
     "checkpoint_spec",
     "chronos_sampler",
     "finetuned_adapter",
+    "finetuned_checkpoint",
+    "finetuned_label",
     "finetuned_releases",
-    "finetuned_spec",
     "group_key",
     "hub_triangle",
     "lag_count",
+    "latest_spec",
     "layout_block",
     "local_checkpoint",
     "native_sampler",
@@ -151,7 +154,9 @@ PERIODS: Final = {"daily": "rolling7"}
 source (`FoundationModel.period`): the daily source's 7-day rolling sums,
 from which the hub's 7-day target is read."""
 
-FINETUNED_CONFIG: Final = Path("config/finetune.toml")
+FINETUNED_CONFIG: Final = Path(
+    "packages/nowcastfoundation/config/finetune.toml"
+)
 """Which fine-tuned checkpoint the fine-tuned models load: `hash`, `"latest"`
 or a settings hash."""
 
@@ -193,9 +198,7 @@ FINETUNED_CACHE: Final = "~/.cache/bdbv-hub-modelling"
 SLOTS_PREFIX: Final = "slots-"
 """Prefix of the spec of a checkpoint with the series bias
 (`nowcastfoundation.series_bias`). Such a checkpoint is released as
-`chronos-slots-<hash>`, the paper's name for the run, so the `latest`
-lookup, which takes only `chronos-ft-*` releases, never gives it to code
-without the bias."""
+`chronos-slots-<hash>`, the paper's name for the run."""
 
 SLOTS_RELEASE_PREFIX: Final = "chronos-slots"
 """Tag prefix of the releases of checkpoints with the series bias."""
@@ -260,25 +263,6 @@ class Checkpoint:
         return f"{self.prefix}-{self.hash}"
 
 
-def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
-    """Return the checkpoint the fine-tuned models load: `"latest"` or a hash.
-
-    `FINETUNED_ENV`, when set, overrides the file.
-
-    Parameters
-    ----------
-    path : pathlib.Path or str
-        A TOML file with `hash`.
-
-    Returns
-    -------
-    str
-    """
-    if os.environ.get(FINETUNED_ENV):
-        return os.environ[FINETUNED_ENV]
-    return str(tomllib.loads(Path(path).read_text())["hash"])
-
-
 def active_zone_rule(
     path: Path | str = FINETUNED_CONFIG,
 ) -> tuple[int | None, int, int]:
@@ -291,7 +275,7 @@ def active_zone_rule(
     Parameters
     ----------
     path : pathlib.Path or str
-        A TOML file, `config/finetune.toml`.
+        A TOML file, `packages/nowcastfoundation/config/finetune.toml`.
 
     Returns
     -------
@@ -418,10 +402,10 @@ def realdata_spec(path: Path | str = FINETUNED_CONFIG) -> str:
 def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     """Return a fine-tuned checkpoint from its release.
 
-    `"latest"` is the newest published `chronos-ft-*` release by publish
-    date; releases of other prefixes, such as `realdata-ft-*`, are never
-    taken. The release's `SUMS_FILE` gives the SHA-256 of its adapter
-    files. Each process resolves once.
+    `"latest"` is the newest published checkpoint release by publish
+    date, `chronos-ft-*` or `chronos-slots-*`; releases of other prefixes,
+    such as `realdata-ft-*`, are never taken. The release's `SUMS_FILE`
+    gives the SHA-256 of its adapter files. Each process resolves once.
 
     Parameters
     ----------
@@ -449,16 +433,7 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     if spec == "latest" and prefix != FINETUNED_PREFIX:
         raise ValueError(f"Only {FINETUNED_PREFIX} releases resolve latest.")
     if spec == "latest":
-        tags = sorted(
-            (r["published_at"], r["tag_name"])
-            for r in finetuned_releases()
-            if str(r["tag_name"]).startswith(f"{FINETUNED_PREFIX}-")
-            and not r.get("draft")
-            and r.get("published_at")
-        )
-        if not tags:
-            raise LookupError("No chronos-ft-* release holds a checkpoint.")
-        checkpoint = tags[-1][1].removeprefix(f"{FINETUNED_PREFIX}-")
+        checkpoint = latest_spec()
     tag = (
         release_tag(checkpoint)
         if prefix == FINETUNED_PREFIX
@@ -595,7 +570,7 @@ def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
     Parameters
     ----------
     path : pathlib.Path or str
-        A TOML file, `config/finetune.toml`.
+        A TOML file, `packages/nowcastfoundation/config/finetune.toml`.
 
     Returns
     -------
@@ -634,6 +609,64 @@ def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
         f"Unknown checkpoint source {source!r} in {path}: one of "
         f"{FINETUNED_SOURCES}."
     )
+
+
+def latest_spec() -> str:
+    """Return the spec of the newest released checkpoint, by publish date.
+
+    Over the `chronos-ft-*` and `chronos-slots-*` releases (`slots-<hash>`
+    for the latter); drafts and other prefixes are never taken.
+
+    Raises
+    ------
+    ConnectionError
+        If GitHub cannot be reached.
+    LookupError
+        If there is no checkpoint release.
+    """
+    tags = sorted(
+        (r["published_at"], r["tag_name"])
+        for r in finetuned_releases()
+        if str(r["tag_name"]).startswith(
+            (f"{FINETUNED_PREFIX}-", f"{SLOTS_RELEASE_PREFIX}-")
+        )
+        and not r.get("draft")
+        and r.get("published_at")
+    )
+    if not tags:
+        raise LookupError(
+            "No chronos-ft-* or chronos-slots-* release holds a checkpoint."
+        )
+    newest = str(tags[-1][1])
+    if newest.startswith(f"{SLOTS_RELEASE_PREFIX}-"):
+        return SLOTS_PREFIX + newest.removeprefix(f"{SLOTS_RELEASE_PREFIX}-")
+    return newest.removeprefix(f"{FINETUNED_PREFIX}-")
+
+
+def finetuned_label(path: Path | str = FINETUNED_CONFIG) -> str:
+    """Return the spec of the checkpoint `finetuned_checkpoint` loads.
+
+    Its name only (`slots-<hash>` or a settings hash), with `"latest"`
+    resolved from the release listing, no checksum read; a Hub or local
+    source is resolved as `finetuned_checkpoint` does.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file, `packages/nowcastfoundation/config/finetune.toml`.
+
+    Returns
+    -------
+    str
+    """
+    pinned = os.environ.get(FINETUNED_ENV, "")
+    conf = tomllib.loads(Path(path).read_text())
+    if conf.get("source", "github") != "github" or (
+        pinned and Path(pinned).is_dir()
+    ):
+        return finetuned_checkpoint(path).hash
+    spec = pinned or str(conf["hash"])
+    return latest_spec() if spec == "latest" else spec
 
 
 def checkpoint_spec(settings: Mapping[str, Any]) -> str:
@@ -2283,13 +2316,15 @@ def prefetch(
 
 # One model per method the paper compares, each reading its cadence from
 # the task (`FROM_DATA`), so one run gives the daily counts and the 7-day
-# hub target. `foundation` is the hub's model.
+# hub target. `foundation` is the hub's model, the only one the Fit store
+# and the submission run; the others are paper-only (`paper_only`).
 register_model(
     "foundation_zeroshot",
     partial(FoundationModel, "foundation_zeroshot", FROM_DATA, "ragged"),
     "Chronos-2 zero-shot on the hub target's releases, ragged layout, every "
     "target in one block.",
     fitted=True,
+    paper_only=True,
 )
 register_model(
     "foundation",
@@ -2305,6 +2340,7 @@ register_model(
     ),
     "Chronos-2 zero-shot on the hub target's releases, complete layout.",
     fitted=True,
+    paper_only=True,
 )
 # For checkpoints trained on complete counts (the no-delays run).
 register_model(
@@ -2313,6 +2349,7 @@ register_model(
     "Chronos-2 fine-tuned on complete counts, on the hub target's "
     "releases, complete layout.",
     fitted=True,
+    paper_only=True,
 )
 # The two-step sensitivity analysis (#538): baselinenowcast's point
 # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
@@ -2328,6 +2365,7 @@ register_model(
     "baselinenowcast's point nowcast, then Chronos-2 on the corrected "
     "daily counts, complete layout.",
     fitted=True,
+    paper_only=True,
 )
 register_model(
     "foundation_twostep",
@@ -2335,6 +2373,7 @@ register_model(
     "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
     "corrected daily counts, complete layout.",
     fitted=True,
+    paper_only=True,
 )
 
 
@@ -2365,6 +2404,7 @@ def register_realdata_models() -> None:
         "Chronos-2 fine-tuned on real data (German and BDBV), on the hub "
         "target's releases, ragged layout (SI only).",
         fitted=True,
+        paper_only=True,
         replace=True,
     )
 

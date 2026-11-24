@@ -9,11 +9,7 @@ The methods are in the paper's [supporting information](https://samabbott.co.uk/
 
 ::: nowcastbaselines.randomwalk
 
-::: nowcastbaselines.chain
-
 ::: nowcastbaselines.walk
-
-::: nowcastbaselines.obs
 
 ::: nowcastbaselines.pooling
 
@@ -27,14 +23,12 @@ The methods are in the paper's [supporting information](https://samabbott.co.uk/
     options:
       members: false
 
+::: nowcastbaselines.baselinenowcast.delays
+
 ::: nowcastbaselines.baselinenowcast.triangle
 
-::: nowcastbaselines.baselinenowcast.delay
-
-::: nowcastbaselines.baselinenowcast.nowcast
+::: nowcastbaselines.baselinenowcast.aggregate
 
 ::: nowcastbaselines.baselinenowcast.uncertainty
 
-::: nowcastbaselines.baselinenowcast.sample
-
-::: nowcastbaselines.baselinenowcast.snapshots
+::: nowcastbaselines.baselinenowcast.nowcast

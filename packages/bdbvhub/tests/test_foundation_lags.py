@@ -23,7 +23,13 @@ from nowcastfoundation.forecaster import (
 )
 from nowcastutils.base import ForecastTask
 
-ROOT_CONFIG = Path(__file__).parents[3] / "config" / "backtest.toml"
+ROOT_CONFIG = (
+    Path(__file__).parents[3]
+    / "packages"
+    / "nowcastbdbv"
+    / "config"
+    / "backtest.toml"
+)
 D = 112
 """The lags the test triangles hold."""
 
@@ -203,7 +209,8 @@ def test_a_grid_that_ends_before_the_cut_off_is_read_up_to_its_end():
 
 
 def test_the_bdbv_study_config_sets_d_for_every_model(task: ForecastTask):
-    # Sam: for BDBV, D = 40 days in config/backtest.toml, read by the
+    # Sam: for BDBV, D = 40 days in packages/nowcastbdbv/config/backtest.toml,
+    # read by the
     # foundation models and the random walk alike, in place of each
     # model's own rule or default.
     from nowcastbaselines.randomwalk import RandomWalk

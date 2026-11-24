@@ -43,17 +43,18 @@ PyRenew has no delay that varies with time, no Dirichlet-multinomial count and n
 
 ## Baseline models
 
-The baselines are in [`nowcastbaselines.randomwalk`](../../nowcastbaselines/reference/#nowcastbaselines.randomwalk) and [`nowcastbaselines.chain`](../../nowcastbaselines/reference/#nowcastbaselines.chain), on a JAX port of baselinenowcast 0.2.2 in [`nowcastbaselines.baselinenowcast`](../../nowcastbaselines/reference/#nowcastbaselines.baselinenowcast).
-The port is checked live against the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
-The models use the port's chain ladder on snapshots.
-The observation model is in `nowcastbaselines.obs`, and fits and draws its new reports with the port's `fit_by_horizon`, `fit_nb` and `sample_nb`.
+The baselines are in [`nowcastbaselines.randomwalk`](../../nowcastbaselines/reference/#nowcastbaselines.randomwalk) on a JAX port of baselinenowcast 0.2.2 in [`nowcastbaselines.baselinenowcast`](../../nowcastbaselines/reference/#nowcastbaselines.baselinenowcast).
+The port is checked live against the R package.
+Its chain ladder also takes its factors from pairs of consecutive release snapshots, skipping the cells a release does not observe, and fits one daily delay shared by pairs of any gap.
+On daily releases this is the R package's chain ladder.
+The models use it in `baselinenowcast.nowcast`, with the delay in `baselinenowcast.delays` and the observation model in `baselinenowcast.uncertainty`, which fits and draws new reports with the port's `fit_by_horizon`, `fit_nb` and `sample_nb`.
 
 | Part | Where |
 |---|---|
 | Snapshots as arrays `[location, release, day]` | `nowcastutils.snapshots` |
-| Pair sums, the daily delay fit and growth | `baselinenowcast.snapshots`, pair sums `jit` with locations on the leading axis |
+| Pair sums, the daily delay fit and growth | `baselinenowcast.delays`, pair sums `jit` with locations on the leading axis |
 | Own or pooled source of each estimate | `nowcastbaselines.pooling` |
-| New reports on the count to come | `nowcastbaselines.obs` |
+| New reports on the count to come | `baselinenowcast.uncertainty` |
 | One random walk for both models | `nowcastbaselines.walk` |
 | Introductions into places with no recent case | `nowcastbaselines.introductions` |
 | Zone samples that sum to the province samples | `nowcastbaselines.zones` |
@@ -83,9 +84,9 @@ Chains run vectorised unless a fit's settings say otherwise.
 Stored fits run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Each chain starts from its own draw from the prior.
-The [fit store](../development/cli.md#fit-store)'s fits, which the backtest and the submission read, take each model's settings from its candidate in `ci/policy.toml`.
+The [fit store](../development/cli.md#fit-store)'s fits, which the backtest and the submission read, take each model's settings from its candidate in `packages/bdbvsubmission/policy.toml`.
 `renewal` and `renewalbvd` use 2 chains of 500 warm-up and 1500 draws, keeping every other one, and `renewalsp` 2 chains of 500 warm-up and 750 draws, all at target acceptance 0.9 (0.95 for `renewalbvd`).
-Leave-one-province-out fits take theirs from `[sampler]` in `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
+Leave-one-province-out fits take theirs from `[sampler]` in `packages/nowcastbdbv/config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
 The parameterisation is as follows.

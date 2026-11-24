@@ -26,9 +26,26 @@ It imports only the generic packages: the registry and download helper from `now
 - The results: [German nowcast benchmark](https://samabbott.co.uk/bdbv-hub-modelling/germany/).
 - Fine-tuned checkpoints are scored on it in the workflow's [score](../../workflow/README.md#4-score-rulesscoresmk) step.
 
+## Install
+
+From a clone of the repository:
+
 ```sh
-uv add nowcastgermany
+uv sync --package nowcastgermany             # this package and the ones it needs
 ```
+
+## Example
+
+```sh
+uv run nowcastgermany fetch      # the hub's reporting triangles
+task nowcastgermany:benchmark    # run and score the benchmark into results/germany/
+```
+
+The results: [German nowcast benchmark](https://samabbott.co.uk/bdbv-hub-modelling/germany/).
+
+## Tasks
+
+`task nowcastgermany:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

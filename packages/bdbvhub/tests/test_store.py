@@ -77,7 +77,11 @@ def test_code_digest_keeps_its_key_when_modules_move(tmp_path: Path) -> None:
     src = root / "packages/nowcastbaselines/src/nowcastbaselines"
     before = store.code_digest("randomwalk", root)
     (src / "walk.py").rename(src / "steps.py")
-    for name in ("chain.py", "introductions.py", "randomwalk.py"):
+    for name in (
+        "baselinenowcast/nowcast.py",
+        "introductions.py",
+        "randomwalk.py",
+    ):
         path = src / name
         path.write_text(
             path.read_text().replace(
@@ -128,7 +132,7 @@ def test_code_digest_keeps_its_key_when_a_function_moves(
     walk.write_text(
         walk.read_text().replace('"walk_noise", "walk_variance"', "")
     )
-    chain = src / "chain.py"
+    chain = src / "baselinenowcast" / "nowcast.py"
     chain.write_text(
         chain.read_text().replace(
             "nowcastbaselines.walk import walk_noise",
@@ -156,7 +160,11 @@ def test_code_digest_keeps_its_key_when_a_module_moves_package(
         f"from nowcastutils.walks.steps import {', '.join(names)}\n\n"
         f"__all__ = {names!r}\n"
     )
-    for name in ("chain.py", "introductions.py", "randomwalk.py"):
+    for name in (
+        "baselinenowcast/nowcast.py",
+        "introductions.py",
+        "randomwalk.py",
+    ):
         path = base / name
         path.write_text(
             path.read_text().replace(
@@ -478,7 +486,7 @@ def test_renewal_key_has_every_model_module(name: str) -> None:
 
 
 def test_samplers_come_from_the_policy() -> None:
-    table = store.samplers(ROOT / "ci" / "policy.toml")
+    table = store.samplers(ROOT / "packages" / "bdbvsubmission" / "policy.toml")
     assert set(table) == {
         "renewal",
         "renewalbvd",
@@ -584,7 +592,7 @@ def test_the_stored_task_covers_the_submissions_rounds(
     from bdbvhub import cli
     from nowcasteval.backtest import load_config
 
-    config = load_config("config/backtest.toml")
+    config = load_config("packages/nowcastbdbv/config/backtest.toml")
     # With the zone data, as the store's fits read it (`cli._zone_data`).
     zones = cli._zone_data(tasks_json.parents[1])
     tasks = store.origin_tasks(target, delays, config, daily, zones)
@@ -598,7 +606,7 @@ def test_the_stored_task_covers_the_submissions_rounds(
                 vintage=vintage,
                 reference_date=ref.isoformat(),
                 data=str(tasks_json.parents[1]),
-                backtest_config="config/backtest.toml",
+                backtest_config="packages/nowcastbdbv/config/backtest.toml",
             )
             task, _ = cli._task(args)
             assert set(task.target_end_dates) <= set(stored.target_end_dates)
@@ -1173,12 +1181,16 @@ def test_a_model_that_fails_leaves_the_others_archived(
 def test_the_candidate_models_are_the_policy_and_the_stored_models() -> None:
     from bdbvhub.store import archive as store_archive
 
-    models = store_archive.candidate_models(ROOT / "ci/policy.toml")
+    models = store_archive.candidate_models(
+        ROOT / "packages/bdbvsubmission/policy.toml"
+    )
     # A random walk candidate runs its model, as `candidate.sh` does.
     assert models["randomwalk"] is None
     assert models["randomwalknowcast"] is None
     # Any other candidate forecasts with its fit config.
-    policy = tomllib.loads((ROOT / "ci/policy.toml").read_text())
+    policy = tomllib.loads(
+        (ROOT / "packages/bdbvsubmission/policy.toml").read_text()
+    )
     for c in policy["candidates"]:
         if c["kind"] != "randomwalk":
             assert models[c["model"]] == c["config"]
@@ -1291,7 +1303,7 @@ def test_stored_samples_missing_a_week_are_not_archived(
 def test_the_policy_candidates_are_the_policy_models() -> None:
     from bdbvhub.store import archive as store_archive
 
-    policy = ROOT / "ci/policy.toml"
+    policy = ROOT / "packages/bdbvsubmission/policy.toml"
     candidates = store_archive.policy_candidates(policy)
     # Every candidate's model, and the random walk a candidate that names
     # none runs, whatever candidates the policy holds.

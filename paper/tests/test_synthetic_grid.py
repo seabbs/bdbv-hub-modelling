@@ -97,14 +97,16 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
         "heldout_seeds": CONFIG["heldout"]["synthetic_seeds"],
         "development_seeds": CONFIG["development"]["synthetic_seeds"],
     }
-    model = synthetic_grid.model_note(GRID, "config/finetune/grid.yaml")
+    model = synthetic_grid.model_note(
+        GRID, "packages/nowcastfoundation/config/finetune/grid.yaml"
+    )
     for levels in GRID["factors"].values():
         for level in levels:
             assert f"`{level}`" in model
     assert "PyRenew" in model
     assert "enw_simulate" not in model
     assert "epinowcast is pinned" not in model
-    assert "config/finetune/grid.yaml" in model
+    assert "packages/nowcastfoundation/config/finetune/grid.yaml" in model
     assert "finetune_simulate" not in model
     heldout = synthetic_grid.heldout_note(config)
     seeds = config["heldout_seeds"]

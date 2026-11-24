@@ -134,3 +134,59 @@ def test_renewal_code_reads_no_hub_delay_or_places() -> None:
         loaders = _imports_from(module, "nowcastbdbv.data.tidy")
         assert "load_locations" not in loaders, module
     assert "zone_places" in _defs(HUB_ZONES)
+
+
+def test_config_holds_only_machine_settings():
+    # Each other config file lives beside the code that reads it (Sam,
+    # 24 Nov).
+    import subprocess
+
+    root = Path(__file__).parents[1]
+    kept = {"local.env.example", "README.md"}
+    tracked = subprocess.run(
+        ["git", "ls-files", "config"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert {Path(t).parts[1] for t in tracked} <= kept
+    hits = subprocess.run(
+        [
+            "git",
+            "grep",
+            "-hoE",
+            r"[^ \"'(=]*config/[A-Za-z0-9_.-]+",
+            "--",
+            "packages/*/src",
+            "packages/bdbvsubmission",
+            "workflow",
+            "paper/paperpipe",
+            ".github/workflows",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.split()
+    beside = (
+        "bdbvhub/",
+        "nowcastbdbv/",
+        "nowcastgermany/",
+        "nowcastfoundation/",
+    )
+    allowed = {"local.env", "local.env.example"}
+
+    def name(hit: str) -> str:
+        return hit[hit.rfind("config/") + len("config/") :].rstrip(".,;:`)")
+
+    def before(hit: str) -> str:
+        return hit[: hit.rfind("config/")]
+
+    # The hub's own `hub-config/` is its folder, not ours.
+    stray = sorted(
+        h
+        for h in hits
+        if not before(h).endswith((*beside, "-")) and name(h) not in allowed
+    )
+    assert stray == []

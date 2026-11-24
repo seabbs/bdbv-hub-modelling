@@ -27,7 +27,8 @@ from nowcastfoundation.sidecar import HELD_OUT_BLOCKS, SIDECAR
 
 localconfig.check()
 LOCAL = localconfig.read()
-# The German triangle at config/germany.toml's commit (`germany_triangle`),
+# The German triangle at packages/nowcastgermany/config/germany.toml's commit
+# (`germany_triangle`),
 # which the German scoring units and the real-data blocks read.
 GERMANY_TRIANGLE = f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv"
 # The BDBV foundation-model check's folder (rules/report.smk).
@@ -156,11 +157,13 @@ land_tables = SCORING.land_tables
 
 # The Hugging Face Hub upload (rules/publish.smk `publish_hf`).
 def hf_repo():
-    """The Hub repository `publish_hf` uploads to, from config/finetune.toml
+    """The Hub repository `publish_hf` uploads to, from packages/nowcastfoundation/config/finetune.toml
     ([huggingface] repo); empty until one is chosen."""
     import tomllib
 
-    conf = tomllib.loads(Path("config/finetune.toml").read_text())
+    conf = tomllib.loads(
+        Path("packages/nowcastfoundation/config/finetune.toml").read_text()
+    )
     return str(conf.get("huggingface", {}).get("repo", ""))
 
 
@@ -181,11 +184,12 @@ FTC = config["ft_check"]
 
 
 def ft_check_checkpoint():
-    """The fine-tuned checkpoint the check runs: the config's or the pin."""
-    import tomllib
+    """The fine-tuned checkpoint the check runs: the config's, else the one
+    packages/nowcastfoundation/config/finetune.toml names, `latest` resolved to its release (read
+    only when the check is asked for)."""
+    from nowcastfoundation.forecaster import finetuned_label
 
-    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
-    return FTC["checkpoint"] or pin
+    return FTC["checkpoint"] or finetuned_label()
 
 
 def ft_check_key():

@@ -9,11 +9,10 @@ import pandas as pd
 import pytest
 
 from bdbvhub.models import get_model, list_models
-from nowcastbaselines.chain import (
+from nowcastbaselines.baselinenowcast.delays import NoDelayPair, Settings
+from nowcastbaselines.baselinenowcast.nowcast import (
     NoCompleteWeek,
-    NoDelayPair,
     NoWalkSpread,
-    Settings,
 )
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcastbdbv.backtest import make_tasks
@@ -371,7 +370,7 @@ def test_the_walk_forecasts_on_from_each_samples_nowcast(
 def test_the_start_week_search_reaches_back_over_the_nowcast_window(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
-    from nowcastbaselines.chain import build_origin
+    from nowcastbaselines.baselinenowcast.nowcast import build_origin
     from nowcastbaselines.randomwalk import _quiet, _start_weeks, start_window
     from nowcastutils.snapshots import snapshot_arrays
 

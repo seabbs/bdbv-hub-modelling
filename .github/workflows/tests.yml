@@ -4,7 +4,7 @@ name: Tests
 # - the repo checks run on every change;
 # - each package's job (installed alone, ruff, mypy, its own tests), for
 #   the packages the change reaches and those that import them;
-# - the submission scripts' job (ci/), when they change;
+# - the submission scripts' job (packages/bdbvsubmission/), when they change;
 # - the workflow, paper and repo tests (integration);
 # - the slow tiers (model fits and backtests, the torch tests, the live R
 #   checks): nightly, on dispatch, with the `full-tests` label, and on a
@@ -55,8 +55,8 @@ jobs:
       - name: Ruff
         if: ${{ !cancelled() }}
         run: |
-          uv run ruff check tests workflow docs/hooks
-          uv run ruff format --check tests workflow docs/hooks
+          uv run ruff check tests workflow docs/hooks .github/scripts
+          uv run ruff format --check tests workflow docs/hooks .github/scripts
           # The paper, with its own settings (paper/ruff.toml).
           (cd paper && uv run ruff check . && uv run ruff format --check .)
       - name: actionlint
@@ -106,7 +106,7 @@ jobs:
             changed=uv.lock
           fi
           packages=$(printf '%s\n' "$changed" |
-            python3 tests/packages/legs.py)
+            python3 .github/scripts/legs.py)
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
           shared='^(pyproject\.toml|uv\.lock|conftest\.py|\.github/workflows/tests\.yml|\.github/actions/)'
           # Whether the change reaches $1: the output $2.
@@ -117,8 +117,8 @@ jobs:
               echo "$2=false" >> "$GITHUB_OUTPUT"
             fi
           }
-          # The submission scripts (ci/) and the workflows that drive them.
-          reach '^(ci/|codecov\.yml|\.github/workflows/(submit|fit-candidates)\.yml)' submission
+          # The submission scripts (packages/bdbvsubmission/) and the workflows that drive them.
+          reach '^(packages/bdbvsubmission/|codecov\.yml|\.github/workflows/(submit|fit-candidates)\.yml)' submission
           # The workflow, paper and repo tests.
           reach '^(packages/|tests/|workflow/|paper/|config/|results/|hub/|docs/|Taskfile\.yml|\.github/)' integration
           # The slow tiers: every one on the schedule, a dispatch or the
@@ -188,7 +188,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           "$GITHUB_WORKSPACE/alone/bin/python" -I \
-            "$GITHUB_WORKSPACE/tests/packages/package_alone.py" "$PACKAGE" \
+            "$GITHUB_WORKSPACE/.github/scripts/package_alone.py" "$PACKAGE" \
             "$GITHUB_WORKSPACE/packages/$PACKAGE/src/$PACKAGE"
       - name: Ruff and mypy
         if: ${{ !cancelled() }}
@@ -213,22 +213,22 @@ jobs:
           use_oidc: true
           fail_ci_if_error: false
 
-  # The submission CI scripts in ci/, their own uv project.
+  # The submission CI scripts in packages/bdbvsubmission/, their own uv project.
   submission:
-    name: Submission scripts (ci/)
+    name: Submission scripts (packages/bdbvsubmission/)
     needs: plan
     if: ${{ needs.plan.outputs.submission == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: ci
+        working-directory: packages/bdbvsubmission
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           enable-cache: true
-          cache-dependency-glob: ci/uv.lock
+          cache-dependency-glob: packages/bdbvsubmission/uv.lock
       - run: uv sync --frozen
       - name: Ruff and mypy
         run: |
@@ -238,14 +238,14 @@ jobs:
       - name: Tests
         if: ${{ !cancelled() }}
         run: >-
-          uv run pytest -q --cov=submission_ci --cov-report=term
+          uv run pytest -q --cov=bdbvsubmission --cov-report=term
           --cov-report=xml
       - name: Upload coverage to Codecov
         if: ${{ github.ref == 'refs/heads/main' }}
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          files: ci/coverage.xml
-          flags: ci
+          files: packages/bdbvsubmission/coverage.xml
+          flags: submission
           use_oidc: true
           fail_ci_if_error: false
       - name: Dry run of the submission workflow on fixtures
