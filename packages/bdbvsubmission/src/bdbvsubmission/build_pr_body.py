@@ -1,7 +1,8 @@
 """Write the body and title of the hub pull request.
 
 The hub's organisers read the body, so it is short: what was submitted,
-Sam's sign-off, the model in one sentence, a summary of national and
+Sam's sign-off, the model in one sentence, the nowcast plot and, for a
+renewal model, the weekly R_t plot, a summary of national and
 each province with cases against their recent reported level, a checks
 table with one status per check, the round's page in our docs and the
 bot footer. The national weekly table, convergence, posterior predictive
@@ -431,8 +432,13 @@ def build(
     complete_weeks: int = 2,
     dry_run: bool = False,
     docs: str = DOCS,
+    rt_plot_url: str = "",
 ) -> str:
-    """Return the PR body markdown."""
+    """Return the PR body markdown.
+
+    `plot_url` and `rt_plot_url` are shown only when they are published
+    (an http URL), so a dry run's relative paths are left out.
+    """
     fit_path = selected_dir / "fit-summary.json"
     fit = read_json(fit_path) if fit_path.exists() else None
     ppc_path = selected_dir / "ppc-summary.json"
@@ -460,6 +466,11 @@ def build(
     if plot_url.startswith("http"):
         out.append(
             f"![Nowcast and forecast for {reference_date}]({plot_url})\n"
+        )
+    if rt_plot_url.startswith("http"):
+        out.append(
+            f"![Weekly R_t by week of infection for {reference_date}]"
+            f"({rt_plot_url})\n"
         )
     if observed is not None:
         out.append(
@@ -512,6 +523,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--as-of", default="")
     p.add_argument("--plot-url", required=True)
     p.add_argument(
+        "--rt-plot-url", default="", help="the weekly R_t plot, if any"
+    )
+    p.add_argument(
         "--validation",
         default="",
         help="defaults to the selected attempt's result",
@@ -542,6 +556,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         complete_weeks=int(checks_cfg.get("complete_weeks", 2)),
         dry_run=args.dry_run,
         docs=args.docs,
+        rt_plot_url=args.rt_plot_url,
     )
     write_text(args.out / "pr-body.md", body)
     write_text(

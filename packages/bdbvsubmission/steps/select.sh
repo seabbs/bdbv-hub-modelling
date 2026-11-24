@@ -47,5 +47,13 @@ if [ "$status" = 0 ]; then
   done
   # The reported counts, for the PR body's summary against recent weeks.
   cp "$WORK/inputs/time-series.csv" "$WORK/gate/time-series.csv"
+  # The weekly R_t plot for the PR body, when the file has wk R_t rows.
+  sub=$(find "$WORK/gate/selected/submission" -name '*.csv' | sort | head -n 1)
+  if [ -n "$sub" ] && grep -q ',wk R_t,' "$sub"; then
+    cli plot-rt-submission --submission "$sub" \
+      --names "$WORK/gate/time-series.csv" \
+      --out "$WORK/gate/selected/rt.png" \
+      || echo "::warning::the R_t plot failed"
+  fi
 fi
 exit "$status"
