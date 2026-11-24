@@ -329,14 +329,25 @@ def test_randomwalknowcast_config_runs_the_nowcast_model(
 def test_committed_metadata_is_only_for_hub_models() -> None:
     # One file per hub model in packages/bdbvhub/config/hub.toml, written as
     # the CLI does.
-    names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
+    names = sorted(
+        p.stem
+        for p in (ROOT / "packages" / "bdbvsubmission" / "model-metadata").glob(
+            "*"
+        )
+    )
     assert names == [
         "seabbs-foundation",
         "seabbs-renewal",
         "seabbs-rwnowcast",
     ]
     for name in names:
-        text = (ROOT / "hub" / "model-metadata" / f"{name}.yml").read_text()
+        text = (
+            ROOT
+            / "packages"
+            / "bdbvsubmission"
+            / "model-metadata"
+            / f"{name}.yml"
+        ).read_text()
         assert "language model" not in text
         assert "NIHR207404" in text
         # Team seabbs, by name and abbreviation.
@@ -351,7 +362,13 @@ def test_committed_renewal_metadata_is_one_of_the_variants(
     # seabbs-renewal.yml is the metadata of the variant chosen for
     # submission. After a choice, regenerate it (see
     # bdbvhub.submission.metadata).
-    path = ROOT / "hub" / "model-metadata" / "seabbs-renewal.yml"
+    path = (
+        ROOT
+        / "packages"
+        / "bdbvsubmission"
+        / "model-metadata"
+        / "seabbs-renewal.yml"
+    )
     rendered = {}
     for variant in ("renewal", "renewalsp", "renewalbvd"):
         out = tmp_path / variant
@@ -370,7 +387,11 @@ def test_committed_rwnowcast_metadata_is_the_rendered_text(
     assert main(args) == 0
     text = (out / "seabbs-rwnowcast.yml").read_text()
     assert (
-        ROOT / "hub" / "model-metadata" / "seabbs-rwnowcast.yml"
+        ROOT
+        / "packages"
+        / "bdbvsubmission"
+        / "model-metadata"
+        / "seabbs-rwnowcast.yml"
     ).read_text() == text
 
 
@@ -463,7 +484,13 @@ def test_chronos_metadata_names_the_release(
     text = (out / "seabbs-foundation.yml").read_text()
     assert "release chronos-ft-2c2b22a03107 of" in text
     assert "<" not in text
-    committed = ROOT / "hub" / "model-metadata" / "seabbs-foundation.yml"
+    committed = (
+        ROOT
+        / "packages"
+        / "bdbvsubmission"
+        / "model-metadata"
+        / "seabbs-foundation.yml"
+    )
     assert committed.read_text() == text
 
 
