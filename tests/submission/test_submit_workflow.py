@@ -109,3 +109,19 @@ def test_the_hub_submission_environment_is_used_on_main_only() -> None:
         if j.get("environment") == "hub-submission" and n != "release"
     ]
     assert plain == []
+
+
+def test_every_hub_checkout_holds_the_hubs_custom_checks() -> None:
+    """The hub's validations.yml sources its custom checks from src/, so
+    every sparse checkout of the hub that validation reads holds src/."""
+    workflow = ROOT / ".github" / "workflows" / "submit.yml"
+    jobs = yaml.safe_load(workflow.read_text())["jobs"]
+    sparse = [
+        (name, step["with"]["sparse-checkout"].split())
+        for name, job in jobs.items()
+        for step in job.get("steps", [])
+        if "hub-config" in str(step.get("with", {}).get("sparse-checkout", ""))
+    ]
+    assert sparse
+    for name, paths in sparse:
+        assert "src" in paths, (name, paths)
