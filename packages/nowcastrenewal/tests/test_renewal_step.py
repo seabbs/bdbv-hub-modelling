@@ -181,5 +181,7 @@ def test_a_ceiling_bounds_r_smoothly_after_shifts_and_variants() -> None:
     assert (np.diff(rc) > 0).all()
     # No ceiling: R as it was.
     with jax.enable_x64(True):
-        same = run_renewal(start, GT, rt, 1e9, variants=variants, r_ceiling=None)
+        same = run_renewal(
+            start, GT, rt, 1e9, variants=variants, r_ceiling=None
+        )
     np.testing.assert_allclose(np.asarray(same.r), np.asarray(free.r))

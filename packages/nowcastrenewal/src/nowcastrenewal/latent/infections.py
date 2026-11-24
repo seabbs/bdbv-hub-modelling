@@ -70,6 +70,9 @@ class StratifiedInfections(BaseLatentInfectionProcess):
     depletion : Depletion, optional
         `components.renewal.LinearDepletion` (default) or
         `components.renewal.ExponentialDepletion`.
+    r_ceiling : float, optional
+        A smooth ceiling on R after shifts and variants
+        (`components.renewal.soft_ceiling`); None for none.
     """
 
     def __init__(
@@ -88,6 +91,7 @@ class StratifiedInfections(BaseLatentInfectionProcess):
         shifts: Shifts | None = None,
         variants: Variants | None = None,
         depletion: Depletion | None = None,
+        r_ceiling: float | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -105,6 +109,7 @@ class StratifiedInfections(BaseLatentInfectionProcess):
         self.shifts = shifts
         self.variants = variants
         self.depletion = depletion
+        self.r_ceiling = r_ceiling
 
     def sample(
         self,
@@ -149,6 +154,7 @@ class StratifiedInfections(BaseLatentInfectionProcess):
             shifts=self.shifts,
             variants=self.variants,
             depletion=self.depletion,
+            r_ceiling=self.r_ceiling,
         )
         numpyro.deterministic(f"{self.name}::r", run.r)
         numpyro.deterministic(f"{self.name}::reff", run.reff)

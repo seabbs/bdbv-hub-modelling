@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, NamedTuple, Protocol
+from typing import Any, Final, NamedTuple, Protocol
 
 import jax
 import jax.numpy as jnp
@@ -62,6 +62,7 @@ __all__ = [
     "Shifts",
     "Variants",
     "run_renewal",
+    "soft_ceiling",
 ]
 
 # The logistic in shifts and variants runs over `days`, from about 10% to
@@ -138,6 +139,22 @@ DEPLETIONS: dict[str, Depletion] = {
     "exponential": ExponentialDepletion(),
 }
 """The depletions by name."""
+
+
+CEILING_SHARPNESS: Final = 8.0
+"""`soft_ceiling`'s exponent: R of 1.5 under a ceiling of 4 moves 0.04%."""
+
+
+def soft_ceiling(r: ArrayLike, ceiling: float) -> Array:
+    r"""Return R bent smoothly below `ceiling`.
+
+    $(R^{-k} + c^{-k})^{-1/k}$ with $k$ `CEILING_SHARPNESS`: R well below
+    $c$ is kept, R far above it tends to $c$, and the bend is smooth and
+    increasing, so no day jumps.
+    """
+    r = jnp.asarray(r, dtype=float)
+    k = CEILING_SHARPNESS
+    return (r ** (-k) + ceiling ** (-k)) ** (-1.0 / k)
 
 
 def _vec(x: Sequence[float] | ArrayLike) -> Array:
@@ -253,6 +270,7 @@ def run_renewal(
     shifts: Shifts | None = None,
     variants: Variants | None = None,
     depletion: Depletion | None = None,
+    r_ceiling: float | None = None,
 ) -> RenewalRun:
     r"""Run each place's renewal (module docstring).
 
@@ -283,6 +301,9 @@ def run_renewal(
     depletion : Depletion, optional
         `LinearDepletion` (the default), `ExponentialDepletion` or
         `NoDepletion` (`DEPLETIONS`).
+    r_ceiling : float, optional
+        A smooth ceiling on R after shifts and variants
+        (`soft_ceiling`); None for none, as the fitted models.
 
     Returns
     -------
@@ -329,6 +350,8 @@ def run_renewal(
         weight = jax.nn.sigmoid((t - sh["at"]) / (sh["days"] / _SPREAD))
         factor = jnp.where(set_[:, None], 1 + (mult - 1) * weight[:, None], 1.0)
         r = r * jnp.prod(factor, axis=0) * vm
+        if r_ceiling is not None:
+            r = soft_ceiling(r, r_ceiling)
         # Variants: escape once, on the first day at or after `at`.
         go = (~escaped) & (t >= va_at)
         for j in range(va_at.shape[0]):

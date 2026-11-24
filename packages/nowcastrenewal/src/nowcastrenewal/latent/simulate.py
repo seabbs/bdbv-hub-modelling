@@ -281,6 +281,9 @@ def simulate_latent(
             days=_vector(v, "variant_days"),
         ),
         depletion=DEPLETIONS[depletion],
+        r_ceiling=(
+            None if v.get("r_ceiling") is None else float(v["r_ceiling"])
+        ),
     )
     with handlers.trace() as tr:
         sample = process(n_days_post_init=days)

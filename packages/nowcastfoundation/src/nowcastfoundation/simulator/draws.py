@@ -629,4 +629,7 @@ def draw_values(
         for kind in ("reference", "report"):
             v[f"{kind}_dow_profile"] = vec(weekday_pattern(grid, rng))
         v["weekday_noise"] = float(grid["weekday_noise"])
+    # The ceiling on R (`components.renewal.soft_ceiling`), from the grid.
+    if "r_ceiling" in grid["constants"]:
+        v["r_ceiling"] = float(grid["constants"]["r_ceiling"])
     return v
