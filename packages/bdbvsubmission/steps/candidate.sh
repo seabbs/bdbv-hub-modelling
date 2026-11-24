@@ -44,8 +44,9 @@ fit_ok=true
 if $unfitted; then
   : # no fit
 elif [ "${FIT_SOURCE:-fit}" = "store" ]; then
-  # The stored fit of the same code and data: the fit the docs and the
-  # backtest show. A candidate the store lacks, or whose fit failed, has
+  # The stored fit of the current code's key, else this model's newest
+  # stored fit for the origin (each model on its own), as `load` does for
+  # the docs. `store.json` records the key and commit used. A candidate the store lacks, or whose fit failed, has
   # no diagnostics, so the gate rules it out and the chain moves on.
   unpacked=0
   cli fit-store unpack --store "${STORE:-output/fit-store}" --model "$model" \
@@ -54,13 +55,16 @@ elif [ "${FIT_SOURCE:-fit}" = "store" ]; then
     0)
       where=$(python3 -c 'import json, sys
 r = json.load(open(sys.argv[1]))
-print(r["key"], r["commit"][:7], (r["store_commit"] or "unknown")[:7])' \
+print(r["key"], r["commit"][:7], (r["store_commit"] or "unknown")[:7],
+      r.get("current_key", r["key"]))' \
         "$fit/store.json")
-      read -r skey scommit sstore <<< "$where"
+      read -r skey scommit sstore ckey <<< "$where"
       note "Fit read from the fit store: key \`$skey\`, fitted at \`$scommit\`, store commit \`$sstore\`."
+      [ "$skey" = "$ckey" ] \
+        || note "The current code key \`$ckey\` has no stored fit, so the model's newest stored fit is used."
       cp "$fit/store.json" "$out/"
       ;;
-    3) fit_ok=false; note "Not in the fit store for this code and data, so ruled out." ;;
+    3) fit_ok=false; note "Not in the fit store for this model and origin, so ruled out." ;;
     4) fit_ok=false; note "The stored fit for this code and data failed, so ruled out." ;;
     *) fit_ok=false; echo "::warning::fit-store unpack for $CAND_ID exited $unpacked" ;;
   esac

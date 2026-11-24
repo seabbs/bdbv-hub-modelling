@@ -4,10 +4,11 @@ name: Fit candidates
 # chain, one matrix leg per candidate. Called by submit.yml for the
 # primary stage, with every renewal candidate and shadow in parallel.
 #
-# Each leg reads the fit store's fit of the same code and data
-# (`bdbvhub fit-store unpack`, keyed as fit-store.yml stores it),
-# so the submitted forecast is the fit the docs and the backtest show.
-# A candidate the store lacks is ruled out. Nothing is fitted here.
+# Each leg reads the fit store's fit of the current code's key, else
+# its model's newest stored fit for the origin, each model on its own
+# (`bdbvhub fit-store unpack`), so the submitted forecast is a fit the
+# docs and the backtest show.
+# A candidate the store has no fit for is ruled out. Nothing is fitted here.
 
 on:
   workflow_call:
