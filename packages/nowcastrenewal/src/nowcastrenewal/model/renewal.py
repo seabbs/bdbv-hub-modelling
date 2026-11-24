@@ -187,6 +187,44 @@ class MetapopulationInfections(BaseSubpopulationInfections):
         before = jnp.vstack([s0[None, :], run.susceptible[:-1]])
         return run.infections[I0.shape[0] :], rt_raw * before / pool
 
+    def _latent(
+        self,
+        log_rt: ArrayLike,
+        log_rt_baseline: ArrayLike,
+        n_init: int,
+        n_days_post_init: int,
+        pop: PopulationStructure,
+    ) -> LatentSample:
+        """Infections from each place's log Rt, with the Rt sites recorded.
+
+        The seeding and renewal shared by this model and the zones' model
+        (`nowcastrenewal.model.zones.ZoneInfections`).
+        """
+        rt = jnp.exp(log_rt)
+        gen_int = self.gen_int_rv()
+        I0 = self._validate_and_prepare_I0(jnp.asarray(self.I0_rv()), pop)
+        I0_all, seeding = self._initial_infections(I0, n_days_post_init)
+        post, r_eff = self._infections_from_rt(
+            rt[n_init:], I0_all, gen_int, pop, seeding
+        )
+        infections = jnp.vstack([I0_all, post])
+        aggregate = infections @ pop.fractions
+
+        with numpyro.handlers.scope(prefix=self.name, divider="::"):
+            numpyro.deterministic("rt_baseline", jnp.exp(log_rt_baseline))
+            numpyro.deterministic("rt_subpop", rt)
+            numpyro.deterministic(
+                "rt_subpop_adjusted", jnp.vstack([rt[:n_init], r_eff])
+            )
+        if self.rt_observation is not None:
+            self.rt_observation(
+                rt=rt,
+                infections=infections,
+                n_init=n_init,
+                fractions=pop.fractions,
+            )
+        return LatentSample(aggregate=aggregate, all_subpops=infections)
+
     def sample(
         self,
         n_days_post_init: int,
@@ -225,27 +263,6 @@ class MetapopulationInfections(BaseSubpopulationInfections):
             first_day_dow,
             active=self.seeded,
         )
-        rt = jnp.exp(log_rt)
-        gen_int = self.gen_int_rv()
-        I0 = self._validate_and_prepare_I0(jnp.asarray(self.I0_rv()), pop)
-        I0_all, seeding = self._initial_infections(I0, n_days_post_init)
-        post, r_eff = self._infections_from_rt(
-            rt[n_init:], I0_all, gen_int, pop, seeding
+        return self._latent(
+            log_rt, log_rt_baseline, n_init, n_days_post_init, pop
         )
-        infections = jnp.vstack([I0_all, post])
-        aggregate = infections @ pop.fractions
-
-        with numpyro.handlers.scope(prefix=self.name, divider="::"):
-            numpyro.deterministic("rt_baseline", jnp.exp(log_rt_baseline))
-            numpyro.deterministic("rt_subpop", rt)
-            numpyro.deterministic(
-                "rt_subpop_adjusted", jnp.vstack([rt[:n_init], r_eff])
-            )
-        if self.rt_observation is not None:
-            self.rt_observation(
-                rt=rt,
-                infections=infections,
-                n_init=n_init,
-                fractions=pop.fractions,
-            )
-        return LatentSample(aggregate=aggregate, all_subpops=infections)
