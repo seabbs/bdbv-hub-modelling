@@ -299,9 +299,3 @@ disallow_subclassing_any = false
 module = ["nowcastfoundation.series_bias"]
 disallow_subclassing_any = false
 
-[[tool.mypy.overrides]]
-# The fine-tuning trainer is not typed yet; mypy skips it.
-module = [
-  "nowcastfoundation.finetune.stream",
-]
-ignore_errors = true
