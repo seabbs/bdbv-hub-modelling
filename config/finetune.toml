@@ -1,5 +1,14 @@
-# The fine-tuned Chronos-2 checkpoint the `fm_chronos_*_ragged_ft`
-# models load (`forecasters.foundation.resolve_checkpoint`). "latest" is
+# Where the fine-tuned Chronos-2 checkpoint the `fm_chronos_*_ragged_ft`
+# models load is read from (`nowcastfoundation.forecaster.
+# finetuned_checkpoint`): "huggingface" reads [huggingface] `repo` at its
+# pinned `revision`, cached by huggingface_hub; "github" the release `hash`
+# names; "local" the training segment folder `local`. Every source is
+# checked against the adapter's SHA-256. GitHub until a Hub repository is
+# chosen (Sam's pick).
+source = "github"
+
+# The GitHub release of the checkpoint
+# (`nowcastfoundation.forecaster.resolve_checkpoint`). "latest" is
 # the newest `chronos-ft-<hash>` release on seabbs/bdbv-hub-modelling, by
 # publish date, so a new release is picked up and refits those models. A
 # settings hash pins that release instead. Either way the adapter is
@@ -8,6 +17,9 @@
 # cover it. Pinned to Run A's interim checkpoint s48100, the hub
 # submission's (Sam, 2026-11-24): release chronos-slots-72661eb7efaa.
 hash = "slots-72661eb7efaa"
+
+# A training segment folder, `<run>/train/n<N>`, for `source = "local"`.
+local = ""
 
 # The fine-tuned models' blocks: one joint block of the country, every
 # province and the active zones (at least `active_zone_cases` cases in the
@@ -37,3 +49,10 @@ release = "2026-11-08"
 cutoff = "2026-11-05"
 truth_delay = 35
 truth_until = "2026-10-01"
+
+# The Hugging Face Hub repository (`<owner>/<name>`) and the revision (a
+# tag or a commit hash) pinned for `source = "huggingface"`. Empty until
+# the repository is chosen.
+[huggingface]
+repo = ""
+revision = ""

@@ -6,6 +6,7 @@ through `forecaster._hub_file`.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 from pathlib import Path
@@ -13,6 +14,19 @@ from pathlib import Path
 import pytest
 
 from nowcastfoundation import forecaster as fc
+
+
+def _by_spec(seen: list[str] | None = None):
+    """A `resolve_checkpoint` stand-in that gives its spec back."""
+
+    @functools.cache
+    def resolve(spec: str) -> str:
+        if seen is not None:
+            seen.append(spec)
+        return spec
+
+    return resolve
+
 
 ADAPTER = {
     "adapter_config.json": b"{}",
@@ -106,9 +120,7 @@ def test_the_config_picks_the_source(
     )
     assert fc.finetuned_checkpoint(conf).hub == ("org/m", "v2")
     seen = []
-    monkeypatch.setattr(
-        fc, "resolve_checkpoint", lambda spec: seen.append(spec) or spec
-    )
+    monkeypatch.setattr(fc, "resolve_checkpoint", _by_spec(seen))
     conf = _config(
         tmp_path,
         'source = "github"\nhash = "slots-abc"\nlocal = ""\n'
@@ -126,17 +138,22 @@ def test_the_config_picks_the_source(
     assert fc.finetuned_checkpoint(conf).path == str(segment / "finetuned-ckpt")
 
 
-def test_the_environment_overrides_the_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_the_environment_pins_the_checkpoint(
+    hub: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(fc, "resolve_checkpoint", lambda spec: spec)
-    monkeypatch.setenv(fc.FINETUNED_ENV, "slots-pinned")
+    # A run pins the hash it resolved once (BDBV_CHRONOS_FT). The Hub
+    # gives it when its revision holds that checkpoint, else its release.
+    _write(hub / "org" / "m" / "v2", {"hash": "abc"}, ADAPTER)
+    monkeypatch.setattr(fc, "resolve_checkpoint", _by_spec())
     conf = _config(
         tmp_path,
         'source = "huggingface"\nhash = "x"\nlocal = ""\n'
         '[huggingface]\nrepo = "org/m"\nrevision = "v2"\n',
     )
-    assert fc.finetuned_checkpoint(conf) == "slots-pinned"
+    monkeypatch.setenv(fc.FINETUNED_ENV, "abc")
+    assert fc.finetuned_checkpoint(conf).hub == ("org/m", "v2")
+    monkeypatch.setenv(fc.FINETUNED_ENV, "slots-other")
+    assert fc.finetuned_checkpoint(conf) == "slots-other"
 
 
 @pytest.mark.parametrize(
@@ -181,3 +198,30 @@ def test_the_repository_s_config_names_a_source() -> None:
     assert got["source"] in fc.FINETUNED_SOURCES
     # The Hub repository is Sam's pick: empty until he sets it.
     assert set(got["huggingface"]) == {"repo", "revision"}
+
+
+@pytest.mark.parametrize(
+    ("error", "raised"),
+    [
+        ("EntryNotFoundError", FileNotFoundError),
+        ("RevisionNotFoundError", LookupError),
+        ("RepositoryNotFoundError", LookupError),
+        ("LocalEntryNotFoundError", ConnectionError),
+    ],
+)
+def test_hub_errors_say_what_failed(
+    monkeypatch: pytest.MonkeyPatch, error: str, raised: type
+) -> None:
+    errors = pytest.importorskip("huggingface_hub.errors")
+    import huggingface_hub
+
+    cls = getattr(errors, error)
+
+    def download(**kwargs: str) -> str:
+        del kwargs
+        # The HTTP errors want a response; a bare instance is enough here.
+        raise cls.__new__(cls)
+
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", download)
+    with pytest.raises(raised, match="org/m@v1"):
+        fc._hub_file("org/m", "v1", "settings.json")
