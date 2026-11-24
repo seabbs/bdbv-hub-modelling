@@ -39,6 +39,11 @@ EXPLAINERS = ("lossbylevel", "lorabylayer", "lorabykind")
 """The explainer keys (`page/explain.json`) of the three panels, in order."""
 
 
+CARD_WIDTH = 420
+"""Width the three charts are drawn at, about their card's on a wide screen."""
+CARD_HEIGHT = 260
+
+
 def colour_of(key: str, keys: Sequence[str]) -> str:
     """Return a key's colour from the shared map.
 
@@ -272,6 +277,8 @@ def section(
         info=tip("lossbylevel"),
         note="All validation blocks, each level scored with the others masked.",
         legend=legend,
+        width=CARD_WIDTH,
+        height=CARD_HEIGHT,
     )
     # Each run's last checkpoint, in the run's colour.
     layers = []
@@ -288,6 +295,8 @@ def section(
         info=tip("lorabylayer"),
         note="Frobenius norm of the scaled B·A, a layer's attention "
         "modules in quadrature.",
+        width=CARD_WIDTH,
+        height=CARD_HEIGHT,
     )
     kinds, legend = _by_run({r.key: run_kinds(r) for r in run_list}, run_list)
     kind_card = svg.chart(
@@ -298,5 +307,7 @@ def section(
         note="Time attention, group attention and the output layer, "
         "each in quadrature over its modules.",
         legend=legend,
+        width=CARD_WIDTH,
+        height=CARD_HEIGHT,
     )
     return f"<div class=plots3>{level_card}{lora}{kind_card}</div>"

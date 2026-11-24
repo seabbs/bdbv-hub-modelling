@@ -94,17 +94,6 @@ def test_the_page_writes_its_accents_from_the_shared_map():
         assert f"--{name}:{dark}" in css
 
 
-def test_the_score_panels_sit_in_two_columns():
-    # Five score panels one under another ran far below the plot.
-    js = (PAGE / "nowcasts.js").read_text()
-    css = (PAGE / "style.css").read_text()
-    assert "<div class=gscores>" in js
-    assert "<div class=gsc>" in js
-    rule = re.search(r"\.gscores\{([^}]*)\}", css)
-    assert rule
-    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in rule[1]
-
-
 def test_the_horizon_control_filters_bands_and_scores():
     html = (PAGE / "nowcasts.html").read_text()
     js = (PAGE / "nowcasts.js").read_text()

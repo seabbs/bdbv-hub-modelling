@@ -4,8 +4,8 @@ var $=function(i){return document.getElementById(i)};
 var PAIRS=D.pairs,COL=D.col,sel0=null;
 function nice(lo,hi){var st=(hi-lo)/4,m=Math.pow(10,Math.floor(Math.log10(st))),k=[1,2,2.5,5,10].find(function(x){return x*m>=st})*m,o=[];
  for(var v=Math.ceil(lo/k)*k;v<=hi+1e-9;v+=k)o.push(+v.toFixed(6));return o}
-function heat(rows,title,lo,hi){var div=lo<0&&hi>0,amp=Math.max(Math.abs(lo),Math.abs(hi))||1,nr=rows.length,nc=rows[0].length,cw=140/Math.max(nr,nc);
- var h='<svg viewBox="0 0 140 140" width="140" height="140">';
+function heat(rows,title,lo,hi){var div=lo<0&&hi>0,amp=Math.max(Math.abs(lo),Math.abs(hi))||1,nr=rows.length,nc=rows[0].length,cw=180/Math.max(nr,nc);
+ var h='<svg viewBox="0 0 180 180" width="180" height="180">';
  rows.forEach(function(r,i){r.forEach(function(v,j){var col;
   if(div){var a=Math.abs(v)/amp;col=v>0?"rgba(220,38,38,"+a.toFixed(2)+")":"rgba(37,99,235,"+a.toFixed(2)+")"}
   else{var a2=(v-lo)/((hi-lo)||1);col="rgba(37,99,235,"+(0.08+0.92*a2).toFixed(2)+")"}
@@ -16,7 +16,7 @@ function sw(c,d){return '<svg width=22 height=8 viewBox="0 0 22 8"><line x1=0 x2
 // Every selected run on one plot against simulations trained: colour is
 // the relation, line style the run.
 function lineplot(runs,el){
- var f=window.ftFull&&window.ftFull(el),W=f?Math.max(480,el.clientWidth-8):480,H=f?Math.max(280,f.clientHeight-140):280,L=44,R=10,T=8,B=28,all=[];
+ var f=window.ftFull&&window.ftFull(el),W=f?Math.max(480,el.clientWidth-8):Math.max(320,el.clientWidth-20),H=f?Math.max(280,f.clientHeight-140):280,L=44,R=18,T=8,B=28,all=[];
  runs.forEach(function(run){PAIRS.forEach(function(k){(run.pts[k.key]||[]).forEach(function(p){all.push(p)})})});
  if(!all.length)return "";
  var xs=all.map(function(p){return p[0]}),x0=0,x1=Math.max(Math.max.apply(null,xs),1);
@@ -31,11 +31,11 @@ function lineplot(runs,el){
   PAIRS.forEach(function(k){var pts=run.pts[k.key]||[];if(!pts.length)return;var c=COL[k.key];
    var up=pts.map(function(p){return sx(p[0])+","+sy(p[3])}).join(" "),dn=pts.slice().reverse().map(function(p){return sx(p[0])+","+sy(p[2])}).join(" "),mean=pts.map(function(p){return sx(p[0])+","+sy(p[1])}).join(" ");
    s+='<g class=rel><polygon class=band points="'+up+" "+dn+'" fill="'+c+'" /><polyline points="'+mean+'" fill=none stroke="'+c+'" stroke-width=2'+dash+' /><polyline points="'+mean+'" fill=none stroke="transparent" stroke-width=12 />';
-   pts.forEach(function(p){s+='<circle cx="'+sx(p[0])+'" cy="'+sy(p[1])+'" r=2.6 fill="'+c+'"><title>'+run.label+', '+k.label+' at '+Math.round(p[0])+' simulations: mean '+(+p[1].toPrecision(4))+', range '+(+p[2].toPrecision(4))+' to '+(+p[3].toPrecision(4))+'</title></circle>'});
+   pts.forEach(function(p){s+='<circle cx="'+sx(p[0])+'" cy="'+sy(p[1])+'" r=1.6 fill="'+c+'"><title>'+run.label+', '+k.label+' at '+Math.round(p[0])+' simulations: mean '+(+p[1].toPrecision(4))+', range '+(+p[2].toPrecision(4))+' to '+(+p[3].toPrecision(4))+'</title></circle>'});
    s+='</g>'})});
  var used=PAIRS.filter(function(k){return runs.some(function(r){return (r.pts[k.key]||[]).length})});
  var leg='<div class=leg>'+used.map(function(k){return '<span><i style="background:'+COL[k.key]+'"></i>'+k.label+'</span>'}).join("")+(runs.length>1?runs.map(function(r,ri){return '<span>'+sw("var(--fg)",STY[ri%STY.length])+' '+r.label+'</span>'}).join(""):"")+'</div>';
- return leg+s+'</svg>'}
+ return '<h3>Attention bias over training, by relation</h3>'+leg+s+'</svg>'}
 function draw(){
  var on=ftSel.get(),runs=D.runs.filter(function(r){return on.indexOf(r.key)>=0});
  var el=$("biasdyn");
@@ -56,7 +56,7 @@ function draw(){
  if(!card||card.parentNode!==el){el.innerHTML='<div class="card biasline" id=biaslinecard></div><div id=biasmore class=biasmore></div>';card=$("biaslinecard");more=$("biasmore")}
  var btn=card.querySelector(":scope > .expand");
  card.innerHTML='<div class=cardinfo>'+ftInfo("biasline")+'</div>'+lineplot(runs,card)+miss;if(btn)card.insertBefore(btn,card.firstChild);
- more.innerHTML=''+(tabs?'<div class=biastabs>'+tabs+'</div>':"")+(tiles?'<div><div class=tiles4>'+tiles+'</div><div class=mut>'+ftInfo("biasheat")+ftInfo("relations")+' '+run.label+' at '+Math.round(lat.n)+' simulations, colour scale '+(+lo.toPrecision(3))+' to '+(+hi.toPrecision(3))+', shared; rows layers, columns heads</div></div>':"");
+ more.innerHTML=''+(tabs?'<div class=biastabs>'+tabs+'</div>':"")+(tiles?'<div class=biasheat><div class=tiles4>'+tiles+'</div><div class=mut>'+ftInfo("biasheat")+ftInfo("relations")+' '+run.label+' at '+Math.round(lat.n)+' simulations, colour scale '+(+lo.toPrecision(3))+' to '+(+hi.toPrecision(3))+', shared; rows layers, columns heads</div></div>':"");
  var tb=el.querySelector(".sctl");if(tb)tb.onclick=function(e){var b=e.target.closest("button");if(b){sel0=b.dataset.b;draw()}}}
 window.addEventListener("ftsel",draw);
 var rsz=null;window.addEventListener("resize",function(){clearTimeout(rsz);rsz=setTimeout(draw,120)});
