@@ -35,7 +35,7 @@ active_zone_recent_weeks = 4
 
 # The Chronos-2 checkpoint fine-tuned on real data alone, the German
 # development half and the public BDBV data up to the release in
-# config/finetune/realdata.toml on the germany-ft branch
+# packages/nowcastfoundation/config/finetune/realdata.toml on the germany-ft branch
 # (`realdata-ft-<hash>`), that the SI-only `foundation_real` model
 # load. Empty until that release is published.
 realdata = ""

@@ -155,7 +155,9 @@ def build_parser() -> argparse.ArgumentParser:
     gft.add_argument(
         "--config", default="packages/nowcastgermany/config/germany.toml"
     )
-    gft.add_argument("--finetune", default="config/finetune.toml")
+    gft.add_argument(
+        "--finetune", default="packages/nowcastfoundation/config/finetune.toml"
+    )
     gft.add_argument(
         "--store",
         required=True,
@@ -172,10 +174,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     gtg = sub.add_parser(
         "ft-tag",
-        help="Print the release tag of the checkpoint config/finetune.toml "
+        help="Print the release tag of the checkpoint "
+        "packages/nowcastfoundation/config/finetune.toml "
         "pins.",
     )
-    gtg.add_argument("--finetune", default="config/finetune.toml")
+    gtg.add_argument(
+        "--finetune", default="packages/nowcastfoundation/config/finetune.toml"
+    )
 
     gup = sub.add_parser(
         "unit-publish",

@@ -358,7 +358,8 @@ def simulate_batch(
     Parameters
     ----------
     grid_file : str or pathlib.Path
-        The grid config (`config/finetune/grid.yaml`).
+        The grid config
+        (`packages/nowcastfoundation/config/finetune/grid.yaml`).
     seed : int
         The batch's seed.
     n : int

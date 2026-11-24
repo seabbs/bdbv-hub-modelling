@@ -214,7 +214,8 @@ def test_benchmark_commands_run_from_the_repository_root(
     tmp_path: Path,
 ) -> None:
     # The models read config/ relative to the working directory
-    # (config/finetune.toml); the workflow runs from the root.
+    # (packages/nowcastfoundation/config/finetune.toml); the workflow runs from
+    # the root.
     cfg = tmp_path / "real.yaml"
     cfg.write_text(yaml.safe_dump({"results": str(tmp_path / "results")}))
     base = str(PAPER / "workflow" / "config.yaml")

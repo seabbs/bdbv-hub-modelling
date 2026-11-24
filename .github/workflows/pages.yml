@@ -167,7 +167,8 @@ jobs:
           name: inputs
       # The fine-tuned models' German forecasts, as the workflow's German
       # unit made them: the asset germany-forecasts.tar.gz of the release
-      # config/finetune.toml pins (`nowcastgermany ft-tag`), attached by
+      # packages/nowcastfoundation/config/finetune.toml pins (`nowcastgermany
+      # ft-tag`), attached by
       # `publish_germany_unit`. No other checkpoint stands in. Development
       # dates only. `concat-results` below stacks them with the other
       # models, so they are scored on the same cells.

@@ -11,7 +11,14 @@ import pytest
 from nowcastfoundation.simulator import bench
 
 ROOT = Path(__file__).parents[3]
-GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
+GRID_FILE = (
+    ROOT
+    / "packages"
+    / "nowcastfoundation"
+    / "config"
+    / "finetune"
+    / "grid.yaml"
+)
 
 
 @pytest.mark.slow

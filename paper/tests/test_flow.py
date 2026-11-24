@@ -47,10 +47,10 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     germany = tmp_path / "germany.toml"
     split = CONFIG["heldout"]["germany_from"]
     germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "finetune.toml").write_text(
-        '[realdata_bdbv]\nrelease = "2026-08-01"\n'
-    )
+    (tmp_path / "packages" / "nowcastfoundation" / "config").mkdir(parents=True)
+    (
+        tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
     # The final run's newest saved checkpoint, from its own folder.
@@ -80,10 +80,10 @@ def test_with_no_saved_checkpoint_the_fine_tuned_models_are_pending(
     germany = tmp_path / "germany.toml"
     split = CONFIG["heldout"]["germany_from"]
     germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "finetune.toml").write_text(
-        '[realdata_bdbv]\nrelease = "2026-08-01"\n'
-    )
+    (tmp_path / "packages" / "nowcastfoundation" / "config").mkdir(parents=True)
+    (
+        tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
@@ -209,10 +209,10 @@ def test_evidence_from_a_workflow_output_is_read_where_it_is_written(
     germany = tmp_path / "germany.toml"
     split = CONFIG["heldout"]["germany_from"]
     germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "finetune.toml").write_text(
-        '[realdata_bdbv]\nrelease = "2026-08-01"\n'
-    )
+    (tmp_path / "packages" / "nowcastfoundation" / "config").mkdir(parents=True)
+    (
+        tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
     entry = {"file": "$SCORE_CACHE/tables/checkpoint-scores.csv"}
@@ -292,10 +292,10 @@ def test_an_offline_config_leaves_the_workflow_inputs_out(
     germany = tmp_path / "germany.toml"
     split = CONFIG["heldout"]["germany_from"]
     germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "finetune.toml").write_text(
-        '[realdata_bdbv]\nrelease = "2026-08-01"\n'
-    )
+    (tmp_path / "packages" / "nowcastfoundation" / "config").mkdir(parents=True)
+    (
+        tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
     config["germany"]["real"] = False

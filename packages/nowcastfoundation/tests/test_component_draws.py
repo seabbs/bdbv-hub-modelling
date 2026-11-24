@@ -37,7 +37,10 @@ from nowcastrenewal.components.draws import (
 )
 from nowcastrenewal.simulation import outbreak
 
-GRID = read_grid(Path(__file__).parents[3] / "config/finetune/grid.yaml")
+GRID = read_grid(
+    Path(__file__).parents[3]
+    / "packages/nowcastfoundation/config/finetune/grid.yaml"
+)
 RATE = jnp.arange(1.0, 25.0).reshape(2, 3, 4)
 
 

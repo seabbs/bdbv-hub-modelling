@@ -109,7 +109,14 @@ ROOT = Path(__file__).resolve().parents[5]
 module is `packages/nowcastfoundation/src/nowcastfoundation/finetune/`
 under it in the workspace's editable install."""
 
-GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
+GRID_FILE = (
+    ROOT
+    / "packages"
+    / "nowcastfoundation"
+    / "config"
+    / "finetune"
+    / "grid.yaml"
+)
 """The grid file the simulations are drawn from (`use_grid`)."""
 
 SOURCE_SHARES = dict(BLOCK_DESIGN["source_shares"])
@@ -344,7 +351,7 @@ def workflow_finetune(key: str) -> Any:
     return config["finetune"][key]
 
 
-DEFAULT_GRID_FILE = "config/finetune/grid.yaml"
+DEFAULT_GRID_FILE = "packages/nowcastfoundation/config/finetune/grid.yaml"
 """The grid file when there is no workflow config: the package alone."""
 
 

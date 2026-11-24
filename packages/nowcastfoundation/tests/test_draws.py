@@ -16,7 +16,14 @@ from scipy import stats
 from nowcastfoundation.simulator import draws
 
 ROOT = Path(__file__).parents[3]
-GRID_FILE = ROOT / "config" / "finetune" / "grid.yaml"
+GRID_FILE = (
+    ROOT
+    / "packages"
+    / "nowcastfoundation"
+    / "config"
+    / "finetune"
+    / "grid.yaml"
+)
 OPTIONS = tuple(draws.read_grid(GRID_FILE)["max_delay_days"])
 
 

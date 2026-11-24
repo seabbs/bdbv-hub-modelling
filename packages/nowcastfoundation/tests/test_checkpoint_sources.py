@@ -191,7 +191,9 @@ def test_an_incomplete_source_is_an_error(
 
 def test_the_repository_s_config_names_a_source() -> None:
     root = Path(__file__).resolve().parents[3]
-    conf = (root / "config" / "finetune.toml").read_text()
+    conf = (
+        root / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).read_text()
     import tomllib
 
     got = tomllib.loads(conf)
