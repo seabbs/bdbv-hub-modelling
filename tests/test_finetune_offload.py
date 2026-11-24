@@ -247,20 +247,18 @@ def rolling_toy(seed: int) -> dict:
 
 
 @pytest.mark.usefixtures("short_context")
-@pytest.mark.parametrize("kind", ["start", "checkpoint"])
-def test_checkpoints_and_the_start_check_rolling_rows_sum_daily_rows(
-    tmp_path, kind
-):
+def test_a_checkpoint_s_7_day_check_runs_on_its_7_day_blocks(tmp_path):
+    # Lead 00:55: one 7-day check per checkpoint (rule seven_day_check),
+    # not a second one inside the held-out evaluation.
     model = trained()
     where = tmp_path / "step-0000100"
     fs.save_snapshot(model, where, {"step": 100})
     base = tiny_model()
     series_bias.attach(base)
     val = [*blocks(2), rolling_toy(5), rolling_toy(6)]
-    got = fe.evaluate(where / "adapter", base, val, [kind], 100)
-    check = got["held_out_rolling"]
-    assert check["daily+rolling7_n"] == 2 * 3 * val[2]["prediction_length"]
-    for key in ("gap", "rough", "rough_daily_sum", "rough_truth"):
-        assert np.isfinite(check[f"daily+rolling7_{key}"])
-    # Sources without rolling rows have nothing to check.
-    assert not any(k.startswith(("daily_", "weekly_")) for k in check)
+    got = fe.evaluate(where / "adapter", base, val, ["checkpoint"], 100)
+    assert "held_out_rolling" not in got
+    check = fe.seven_day_check(where / "adapter", base, val, 100)
+    assert check["n"] > 0
+    for key in ("ratio", "inside90", "rough", "rough_truth", "rough_ratio"):
+        assert np.isfinite(check[key])

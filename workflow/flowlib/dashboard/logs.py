@@ -18,6 +18,10 @@ from typing import Any
 
 from nowcastfoundation.sidecar import SIDECAR, with_sidecar
 
+SEVEN_DAY = "seven-day.json"
+"""A checkpoint's 7-day check, beside its settings
+(workflow/scripts/evaluate_offloaded.py `SEVEN_DAY`)."""
+
 STEP = re.compile(
     r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] step (\d+): "
     r"loss ([\d.eE+-]+), held-out \([^)]*\) "
@@ -246,6 +250,10 @@ def checkpoints(folder: Path | str) -> list[tuple[str, dict, float | None]]:
         if isinstance(s, dict):
             side = CACHE.get(d / SIDECAR)
             s = with_sidecar(s, side if isinstance(side, dict) else None)
+            # The 7-day check (rule seven_day_check), where scored.
+            check = CACHE.get(d / SEVEN_DAY)
+            if isinstance(check, dict):
+                s = {**s, "seven_day": check.get("seven_day") or {}}
             latest = d / SIDECAR if side else d / "settings.json"
             try:
                 mtime = latest.stat().st_mtime
