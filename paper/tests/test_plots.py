@@ -194,14 +194,15 @@ def test_ribbons_fall_back_to_the_best_chronos_variant() -> None:
         "randomwalknowcast",
         "foundation_zeroshot_complete",
         "foundation_zeroshot",
-        "foundation_zeroshot_complete",
-        "foundation_zeroshot",
         "foundation",
     ]
     assert _ribbon_models(models, "randomwalknowcast") == [
         "randomwalknowcast",
-        "foundation_zeroshot",
         "foundation",
+    ]
+    assert _ribbon_models(models[:3], "randomwalknowcast") == [
+        "randomwalknowcast",
+        "foundation_zeroshot",
     ]
 
 
