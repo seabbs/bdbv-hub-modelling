@@ -83,7 +83,7 @@ resolve_model() {
   # The renewal id's model: `[submission] model` in packages/bdbvhub/config/hub.toml.
   [ -n "$MODEL" ] || MODEL=$(python3 -c 'import sys, tomllib
 print(tomllib.load(open(sys.argv[1], "rb"))["submission"]["model"])' \
-    "${HUB_TOML:-$CI_DIR/../config/hub.toml}")
+    "${HUB_TOML:-$CI_DIR/../packages/bdbvhub/config/hub.toml}")
   [ -n "$MODEL_ID" ] || MODEL_ID=$(cli hub-id)
 }
 

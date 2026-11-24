@@ -477,7 +477,7 @@ chronos_track() {
   model=$(python3 -c 'import sys, tomllib
 models = tomllib.load(open(sys.argv[1], "rb"))["models"]
 print(next(k for k, v in models.items() if v["model_abbr"] == "foundation"))' \
-    "$CI_DIR/../config/hub.toml")
+    "$CI_DIR/../packages/bdbvhub/config/hub.toml")
   export WORK="$ROOT/chronos"
   rm -rf "$WORK" && mkdir -p "$WORK"
   cp -R "$src/inputs" "$WORK/inputs"
@@ -512,7 +512,7 @@ own_model() {
   local got want
   want=$(python3 -c 'import sys, tomllib
 print(tomllib.load(open(sys.argv[1], "rb"))["submission"]["model"])' \
-    "$CI_DIR/../config/hub.toml")
+    "$CI_DIR/../packages/bdbvhub/config/hub.toml")
   got=$(unset MODEL MODEL_ID; export WORK="$ROOT/own-model"; \
     bash -c 'source "$CI_DIR/steps/lib.sh"; resolve_model; echo "$MODEL"')
   [ "$got" = "$want" ] || { echo "FAIL: renewal track resolved $got, not $want"; return 1; }

@@ -140,33 +140,49 @@ def test_config_holds_only_machine_and_fine_tuning_settings():
     # Each other config file lives beside the code that reads it (Sam,
     # 24 Nov). The fine-tuning files stay: the trainer, hashed into every
     # checkpoint, reads config/finetune/grid.yaml by that path.
-    import re
     import subprocess
 
     root = Path(__file__).parents[1]
     kept = {"local.env.example", "finetune.toml", "finetune", "README.md"}
-    assert {p.name for p in (root / "config").iterdir()} <= kept
-    code = subprocess.run(
+    tracked = subprocess.run(
+        ["git", "ls-files", "config"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert {Path(t).parts[1] for t in tracked} <= kept
+    hits = subprocess.run(
         [
             "git",
             "grep",
             "-hoE",
-            r"(^|[^/.\w-])config/[\w.-]+",
+            r"[^ \"'(=]*config/[A-Za-z0-9_.-]+",
             "--",
             "packages/*/src",
-            "ci/src",
+            "ci",
             "workflow",
             "paper/paperpipe",
+            ".github/workflows",
         ],
         cwd=root,
         capture_output=True,
         text=True,
         check=False,
-    ).stdout
-    used = {re.sub(r"^.*config/", "", hit) for hit in code.split()}
-    assert used <= {
-        "local.env",
-        "local.env.example",
-        "finetune.toml",
-        "finetune",
-    }
+    ).stdout.split()
+    beside = ("bdbvhub/", "nowcastbdbv/", "nowcastgermany/")
+    allowed = {"local.env", "local.env.example", "finetune.toml", "finetune"}
+
+    def name(hit: str) -> str:
+        return hit[hit.rfind("config/") + len("config/") :].rstrip(".,;:`)")
+
+    def before(hit: str) -> str:
+        return hit[: hit.rfind("config/")]
+
+    # The hub's own `hub-config/` is its folder, not ours.
+    stray = sorted(
+        h
+        for h in hits
+        if not before(h).endswith((*beside, "-")) and name(h) not in allowed
+    )
+    assert stray == []

@@ -629,7 +629,13 @@ def _outside_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     """Return a working directory with the config and no `data/`."""
     import shutil
 
-    shutil.copytree(ROOT / "config", tmp_path / "config")
+    for config in (
+        "config",
+        "packages/bdbvhub/config",
+        "packages/nowcastbdbv/config",
+        "packages/nowcastgermany/config",
+    ):
+        shutil.copytree(ROOT / config, tmp_path / config)
     env = {**os.environ, "BDBV_DATA_DIR": str(ROOT / "tests/fixtures/data")}
     return tmp_path, env
 
