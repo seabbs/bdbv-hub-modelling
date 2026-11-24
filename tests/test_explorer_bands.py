@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-JS = Path(__file__).parents[2] / "docs" / "javascripts" / "explorer.js"
+JS = Path(__file__).parents[1] / "docs" / "javascripts" / "explorer.js"
 
 
 def test_trajectories_keep_each_model_s_intervals():

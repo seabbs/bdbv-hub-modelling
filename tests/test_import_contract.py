@@ -82,7 +82,7 @@ def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
     from legs import layers, legs
 
     assert legs(["docs/index.md"]) == []
-    assert legs(["tests/workflow/test_workflow_dag.py"]) == []
+    assert legs(["workflow/tests/test_workflow_dag.py"]) == []
     assert legs(["uv.lock"]) == layers()
     assert legs(["packages/bdbvhub/tests/test_zones.py"]) == ["bdbvhub"]
     seen = legs(["packages/nowcastbaselines/src/nowcastbaselines/chain.py"])

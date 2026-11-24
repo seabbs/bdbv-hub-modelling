@@ -1,7 +1,7 @@
 name: Integration
 
-# The root tests (no package's own): the workflow with Snakemake's dry
-# runs, the repo checks and how the packages work together, plus
+# The workflow's tests (with Snakemake's dry runs) and the root tests
+# (the repo checks and how the packages work together), plus
 # the workflow's Snakemake lint and the paper's own tests. The packages'
 # tests run in their CI jobs (ci.yml).
 
@@ -79,7 +79,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           uv run --group paper pytest -q -n auto --dist worksteal \
-            --durations=30 --junitxml=pytest-durations.xml tests
+            --durations=30 --junitxml=pytest-durations.xml tests workflow/tests
       - name: Paper tests
         if: ${{ !cancelled() }}
         working-directory: paper

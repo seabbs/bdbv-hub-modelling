@@ -2,7 +2,7 @@
 
 The bundle drops into `seabbs/bdbv-hub-modelling` as `ci/` plus `.github/`.
 `ci/` is its own small uv project with only the standard library.
-The workflows call the main repo only through the `bdbvhub` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbvhub`), and through `tests/submission/hub_validation/validate_hub.R`, the hub's own checks (hubValidations), which also run as a live test.
+The workflows call the main repo only through the `bdbvhub` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbvhub`), and through `ci/steps/validate_hub.R`, the hub's own checks (hubValidations), which also run as a live test.
 `ci/fixtures/fake_bdbvhubrenewal.py` implements everything below on fixture data.
 It is the reference for the interface, and `ci/run_dry.sh` runs the whole workflow against it.
 
@@ -13,7 +13,7 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 | `bdbvhub data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
 | `bdbvhub nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
 | `bdbvhub metadata --model <model> --out <dir>` | exists | `gate` |
-| `tests/submission/hub_validation/validate_hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
+| `ci/steps/validate_hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
 | `bdbvhub fit ...` | done (`bdbvhub.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the model fitted to each province on its own, `nowcastrenewal.forecaster`) | `fit` |
 | `nowcast --config <c> --fit <dir>` | done | `fit` |
 | `bdbvhub plot-submission ...` | done, `plots.plot_submission` | every candidate |

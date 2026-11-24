@@ -39,6 +39,7 @@ EXAMPLE_HOSTS = ("examplehost",)
 
 SKIP = (
     "tests/",
+    "workflow/tests/",
     "config/local.env.example",
     "uv.lock",
     "ci/uv.lock",

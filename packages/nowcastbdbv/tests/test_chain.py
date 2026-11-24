@@ -322,7 +322,7 @@ def test_no_nowcast_is_below_the_reported_count_at_11_01(
     from nowcastbdbv.data.tidy import load_health_zones  # noqa: F401
     from nowcastbdbv.data.zones import hub_zones
 
-    data = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+    data = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "data"
     zones = hub_zones(data / "hub-config" / "tasks.json")
     provinces = tuple(sorted(set(daily["location"]) - {"CD"}))
     cases = {
