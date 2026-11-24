@@ -29,7 +29,7 @@ SOURCE = "daily+rolling7"
 as the German models lay out the daily releases (`forecaster.PERIODS`)."""
 
 LAGS = (14, 21, 28, 35, 40, 49)
-"""Release lags $D$ in days, taken in turn over the cuts: the ragged
+"""Release lags $D$ in days, taken in turn over the cuts: the cut-off
 models' default (28 days), the German truth delay (40 days) and the
 simulations' range around them."""
 

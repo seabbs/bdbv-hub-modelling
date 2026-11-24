@@ -3,7 +3,7 @@ r"""Score each published Chronos-2 checkpoint.
 
 Each checkpoint (release `chronos-ft-<hash>` or `chronos-slots-<hash>`)
 is a label, run beside `reference` (randomwalknowcast and zero-shot
-Chronos-2, ragged and complete). A label's units forecast and cache;
+Chronos-2, cut-off and complete). A label's units forecast and cache;
 `table` scores the caches into rows of `evidence/checkpoint-scores.csv`
 with `rule` = `RULE`:
 
@@ -137,12 +137,12 @@ def german_models(config: Path = GERMANY_CONFIG) -> tuple[str, ...]:
 
 
 def label_models(
-    label: str, config: Path = GERMANY_CONFIG, layout: str = "ragged"
+    label: str, config: Path = GERMANY_CONFIG, layout: str = "cutoff"
 ) -> tuple[str, ...]:
     """Return the models a label runs, of those the German config lists.
 
     The reference runs the baseline and the zero-shot Chronos-2 models
-    (ragged and complete); a checkpoint runs the ones fine-tuned on
+    (cut-off and complete); a checkpoint runs the ones fine-tuned on
     simulations (`labels.FINETUNED`), `foundation` in the `layout` it was
     trained on (`segment_layout`).
     """
@@ -153,7 +153,7 @@ def label_models(
     return tuple(
         (
             f"foundation_{layout}"
-            if m == "foundation" and layout != "ragged"
+            if m == "foundation" and layout != "cutoff"
             else m
         )
         for m in models
@@ -164,13 +164,13 @@ def label_models(
 def segment_layout(segment: Path | None) -> str:
     """Return the block layout a run's segment trained on.
 
-    From its settings (`layout`, set only when not ragged); a release
-    label, with no segment, is ragged.
+    From its settings (`layout`); a segment without one, or a release
+    label with no segment, is cutoff.
     """
     if segment is None:
-        return "ragged"
+        return "cutoff"
     settings = json.loads((Path(segment) / "settings.json").read_text())
-    return str(settings.get("layout", "ragged"))
+    return str(settings.get("layout", "cutoff"))
 
 
 def run_of(settings: Mapping[str, Any]) -> str:

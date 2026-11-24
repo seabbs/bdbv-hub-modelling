@@ -577,10 +577,10 @@ def training_block(
         `n_targets`, `n_covariates` and `n_future_covariates`, the
         `start` $S$ and `horizon` $H$, `nowcast`, the steps of the
         horizon up to and including the cut-off's, and `reported`, each
-        place's counts as reported at the cut-off, `[L, cut-off + 1]`. None if no release up
-        to the cut has a row for any of `places`, as for strata with no
-        cases, or, for a binned source, if no whole bin ends at the
-        cut-off.
+        place's counts as reported at the cut-off, `[L, cut-off + 1]`.
+        None if no release up to the cut has a row for any of `places`, as
+        for strata with no cases, or, for a binned source, if no whole bin
+        ends at the cut-off.
     """
     cut = cutoffs[-1]
     end = epiweek_end(cut) + dt.timedelta(weeks=ahead_weeks)

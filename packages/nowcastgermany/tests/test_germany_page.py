@@ -137,7 +137,7 @@ def test_nowcast_explorer_shows_development_plot_dates(tmp_path: Path) -> None:
     res = tmp_path / "germany"
     _scores(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    # The site hides the zero-shot ragged model (docs/site.toml).
+    # The site hides the zero-shot cut-off model (docs/site.toml).
     germany_page(
         fig,
         gen,

@@ -43,7 +43,7 @@ forecast_days = 28
 # data: the hub's 7-day rolling sums (`7day`) and each day's count
 # (`daily`), each scored on its truth as reported 40 days after it ends.
 # Daily counts come from the models with their own quantiles of them (the
-# ragged and complete Chronos-2 models and randomwalknowcast).
+# cut-off and complete Chronos-2 models and randomwalknowcast).
 targets = ["7day", "daily"]
 # Germany is scored and shown on daily data only: every model takes the
 # daily releases with real dates (no weekly source or steps) and forecasts
@@ -74,7 +74,7 @@ held_out_models = [
 ]
 # Draws per forecast and their seed, the same for every model. A model's own
 # quantiles at the hub's seven levels are scored where it gives them (the
-# ragged Chronos-2 models); every other forecast is scored from the
+# cut-off Chronos-2 models); every other forecast is scored from the
 # quantiles of its draws.
 n_samples = 1000
 seed = 20261027
@@ -85,7 +85,7 @@ baseline = "randomwalknowcast"
 # The paper's relative scores divide by the hub's own baseline, as
 # Wolffram et al. (2023) compare to it.
 paper_baseline = "KIT-frozen_baseline"
-# Relative scores on daily counts divide by zero-shot Chronos-2 (ragged).
+# Relative scores on daily counts divide by zero-shot Chronos-2 (cut-off).
 daily_baseline = "foundation_zeroshot"
 
 [page]
