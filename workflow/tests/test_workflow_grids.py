@@ -14,8 +14,8 @@ TABLE = CONFIG["grid_rounds"]
 RETIRED = CONFIG["retired_rounds"]
 
 
-def test_the_grid_has_rounds_33_to_38():
-    assert TABLE["rounds"] == [34, 35, 36, 37]
+def test_the_grid_has_rounds_33_to_40():
+    assert TABLE["rounds"] == [34, 35, 36, 37, 39, 40]
     assert TABLE["validation_round"] == 33
     # Never trained on or monitored, and scored only for the final model.
     assert TABLE["test_round"] == 38
@@ -48,8 +48,8 @@ def test_the_grid_s_rounds_are_distinct_and_none_retired():
 def test_a_run_takes_the_grid_s_rounds_unless_set():
     unset = {"rounds": None, "validation_round": None, "sources": None}
     ft = grids.resolve(dict(unset), TABLE)
-    assert ft["rounds"] == [34, 35, 36, 37]
-    assert ft["validation_round"] == 33
+    assert ft["rounds"] == TABLE["rounds"]
+    assert ft["validation_round"] == TABLE["validation_round"]
     assert ft["sources"] == TABLE["sources"]
     ft = grids.resolve(
         {"rounds": [1], "validation_round": 2, "sources": ["a"]}, TABLE
