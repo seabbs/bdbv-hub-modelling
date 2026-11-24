@@ -231,7 +231,7 @@ class ModelConfig:
         "dirichlet-multinomial"
     )
     centred_rt: bool = False
-    rt_sd_lognormal: tuple[float, float] | None = None
+    rt_sd_lognormal: tuple[float, float] | None = (0.12, 0.5)
 
 
 MAIN = ModelConfig()
