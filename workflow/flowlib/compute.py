@@ -251,6 +251,9 @@ def job_env(cfg: Mapping[str, str], worker: Worker) -> dict[str, str]:
             value = worker.root + value[len(root.rstrip("/")) :]
         out[key] = value
     out["COMPUTE"] = "single"
+    # A worker's Snakemake runs one job: it never serves the dashboard
+    # (flowlib.dashboard.serve), which the coordinator's run does.
+    out["WORKFLOW_JOB"] = "1"
     return out
 
 

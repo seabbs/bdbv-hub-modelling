@@ -55,6 +55,8 @@ DEFAULTS = (
     # port.
     ("DASHBOARD_HOST", "127.0.0.1"),
     ("DASHBOARD_PORT", "8765"),
+    # The ROOT whose runs the dashboard shows, from any checkout.
+    ("DASHBOARD_ROOT", "$ROOT"),
     # This machine's budget for workflow/profiles/default
     # (flowlib.machine): its cores and memory less the headroom kept free,
     # unless CORES and MEM_MB set them; simulation batches at once; and
