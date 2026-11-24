@@ -53,7 +53,7 @@ def _expected(design: dict[str, str]) -> np.ndarray:
     )
     model = ReportingExpectation("e", frame, design, VALUES, MAX_DELAY)
     with handlers.seed(rng_seed=0):
-        out = model(np.zeros((1, N_DAYS)))
+        out = model(log_lambda=np.zeros((1, N_DAYS)))
     return np.exp(np.asarray(out))[0]
 
 

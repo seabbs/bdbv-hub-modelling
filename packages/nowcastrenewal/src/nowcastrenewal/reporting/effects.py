@@ -467,7 +467,9 @@ def report_days(
     """Return which days each stratum reports on, or None for every day.
 
     Reports are made on the design's weekdays (`report_weekdays`, ";"
-    separated) unless it reports daily, and not at all over an outage:
+    separated) unless it reports daily, not at all after reporting stops
+    (`report_stop`, from `report_stop_at` of the way through), and not at
+    all over an outage:
     the shocked place's report dates within the shock's window of
     reference dates.
 
@@ -493,9 +495,14 @@ def report_days(
     dow = (frame.day_of_week[0] + np.arange(n)) % 7
     daily = design["report_days"] == "daily"
     outage = design["shocks"] == "outage"
-    if daily and not outage:
+    stop = design.get("report_stop") == "yes"
+    if daily and not outage and not stop:
         return None
     on = np.ones((G, n), dtype=int)
+    if stop:
+        # Reporting stops for good `report_stop_at` of the way through
+        # the reference days: no later report day, so no later reports.
+        on[:, np.arange(n) >= round(float(v["report_stop_at"]) * T)] = 0
     if not daily:
         days = [
             _WEEKDAYS.index(d) for d in design["report_weekdays"].split(";")

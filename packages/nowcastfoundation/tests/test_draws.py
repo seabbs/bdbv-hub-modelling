@@ -434,3 +434,17 @@ def test_unknown_weekday_pattern_parts_are_refused(grid):
         draws.weekday_pattern(
             {**grid, "weekday_patterns": ["holiday"]}, np.random.default_rng(0)
         )
+
+
+def test_some_sims_cap_their_reporting_delay_or_stop_reporting(grid):
+    rng = draws.generator(45)
+    cap, stop = [], []
+    for _ in range(1_500):
+        d = draws.draw_design(grid, rng)
+        v = draws.draw_values(grid, d, rng)
+        cap.append(d["report_cap"] == "yes")
+        stop.append(d["report_stop"] == "yes")
+        assert v["report_cap_days"] > 0
+        assert 0.4 <= v["report_stop_at"] <= 0.95
+    assert abs(np.mean(cap) - 0.25) < 0.05
+    assert abs(np.mean(stop) - 0.1) < 0.04

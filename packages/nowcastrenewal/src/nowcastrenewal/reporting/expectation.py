@@ -114,6 +114,11 @@ class ReportingExpectation(RandomVariable):
             lh = combine_logit_hazards(parametric, non_parametric, report)
             log_p = log_hazard_probs(lh)
         log_p = aggregate_to_report_days(log_p, self.reports)
+        if self.design.get("report_cap") == "yes":
+            # A hard maximum reporting delay: reports later than it never
+            # arrive (the window's last delay otherwise takes the tail).
+            cap = int(self.values["report_cap_days"])
+            log_p = log_p.at[..., cap + 1 :].set(-jnp.inf)
         log_lam = jnp.asarray(log_lambda)
         if by_reference is not None:
             log_lam = log_lam + by_reference
