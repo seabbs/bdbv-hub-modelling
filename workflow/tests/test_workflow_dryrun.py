@@ -255,6 +255,32 @@ def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
     assert jobs["ft_check_page"] == 1
 
 
+def test_finetune_builds_each_trained_run_s_german_report(tmp_path):
+    # The run's report page comes with it: its checkpoints against
+    # zero-shot and randomwalknowcast on the German development half.
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["german_report"] == 1
+
+
+def test_the_trainer_claims_the_cores_it_uses(tmp_path):
+    # The trainer and its block-cutting workers count against the cores,
+    # so the scoring jobs beside it fit in what is left.
+    out = dry_run(
+        tmp_path, "finetune", config=FT, quiet=False, extra=("--cores", "16")
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    trains = re.findall(
+        r"rule train_segment:.*?threads: (\d+).*?--cut-workers (\d+)",
+        out.stdout,
+        re.S,
+    )
+    assert trains
+    workers = yaml.safe_load(
+        (ROOT / "workflow" / "config.yaml").read_text()
+    )["finetune"]["cut_workers"]
+    assert all(t == (str(workers + 1), str(workers)) for t in trains)
+
+
 SMALL = {
     **FT,
     "finetune": {
