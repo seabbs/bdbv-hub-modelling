@@ -46,35 +46,6 @@ def test_the_check_key_moves_with_the_active_zone_rule(tmp_path):
     assert scoring.ft_check_key(tmp_path) != one
 
 
-def test_release_quantiles_take_the_explorer_s_columns():
-    # The release backtest names its 5% quantile `q5`; the explorer reads
-    # `q05` to `q95`.
-    import pandas as pd
-
-    from bdbvhub.ftcheck import explorer_quantiles
-    from nowcasteval.explorer import QUANTILE_COLUMNS
-
-    q = pd.DataFrame(
-        {
-            "model": ["randomwalknowcast"],
-            "target": ["complete"],
-            "origin": ["2026-11-15"],
-            "location": ["CD"],
-            "target_end_date": ["2026-11-08"],
-            "q5": [1.0],
-            "q25": [2.0],
-            "q50": [3.0],
-            "q75": [4.0],
-            "q95": [5.0],
-        }
-    )
-    got = explorer_quantiles(q, {"randomwalknowcast": "Random walk nowcast"})
-    assert list(got[list(QUANTILE_COLUMNS)].iloc[0]) == [1, 2, 3, 4, 5]
-    assert got["model"].iloc[0] == "Random walk nowcast"
-    assert got["reference_date"].iloc[0] == "2026-11-15"
-    assert bool(got["ours"].iloc[0])
-
-
 def _quantiles():
     import pandas as pd
 
@@ -179,6 +150,7 @@ def test_the_page_carries_the_explorer_s_styles_and_data(tmp_path):
             {"model": list(ids.values()), "weeks_back": [0, 0], **skill}
         ),
         "quantiles": q,
+        "samples": _samples(),
         "blocks": pd.DataFrame(),
         "target": target,
     }
@@ -197,22 +169,55 @@ def test_the_page_carries_the_explorer_s_styles_and_data(tmp_path):
     assert len(row) == 4 + len(QUANTILE_COLUMNS)
 
 
-def test_the_explorer_shows_every_forecast_week_once():
-    # Recent weeks are not complete yet but were forecast: the explorer
-    # shows them, once per forecast, though they are scored against
-    # several later releases.
+def _samples():
+    import numpy as np
     import pandas as pd
 
-    from bdbvhub.ftcheck import explorer_quantiles
+    rng = np.random.default_rng(1)
+    rows = []
+    for model in ("randomwalknowcast", "fm_chronos_daily_ragged_ft"):
+        for week in ("2026-11-08", "2026-11-15", "2026-11-22"):
+            for k, v in enumerate(rng.poisson(100, 200)):
+                rows.append(
+                    {
+                        "model": model,
+                        "origin": "2026-11-15",
+                        "location": "CD",
+                        "target_end_date": week,
+                        "sample": k + 1,
+                        "value": float(v),
+                    }
+                )
+    return pd.DataFrame(rows)
 
-    q = _quantiles()
-    recent = q.iloc[:1].assign(target="reported", target_end_date="2026-11-15")
-    again = recent.assign(truth_vintage="2026-11-29")
-    both = pd.concat(
-        [q.assign(truth_vintage="2026-11-22"), recent, again],
-        ignore_index=True,
-    )
-    got = explorer_quantiles(both, {})
+
+def test_the_explorer_shows_each_model_s_final_count_forecast():
+    # Every forecast week, complete or not, once, with the quantiles of
+    # the model's own final-count draws (as the this-round page).
+    import numpy as np
+
+    from bdbvhub.ftcheck import explorer_quantiles
+    from nowcasteval.explorer import QUANTILE_COLUMNS
+
+    s = _samples()
+    got = explorer_quantiles(s, {"randomwalknowcast": "Random walk nowcast"})
     keys = ["model", "reference_date", "location", "target_end_date"]
     assert not got.duplicated(keys).any()
-    assert "2026-11-15" in set(got["target_end_date"])
+    assert set(got["target_end_date"]) == {
+        "2026-11-08",
+        "2026-11-15",
+        "2026-11-22",
+    }
+    one = got.loc[
+        (got["model"] == "Random walk nowcast")
+        & (got["target_end_date"] == "2026-11-22")
+    ].iloc[0]
+    own = s.loc[
+        (s["model"] == "randomwalknowcast")
+        & (s["target_end_date"] == "2026-11-22"),
+        "value",
+    ]
+    assert one["q50"] == np.quantile(own, 0.5)
+    assert set(QUANTILE_COLUMNS) <= set(got.columns)
+    assert bool(one["ours"])
+    assert one["reference_date"] == "2026-11-15"
