@@ -107,3 +107,9 @@ def test_the_reference_unit_reruns_when_its_models_code_changes():
     key = scoring.reference_key("reference")
     assert len(key) == 12
     assert scoring.reference_key("abc123def456") == ""
+
+
+def test_the_german_unit_is_given_its_fetched_triangle():
+    got = scoring.unit_shell("germany")
+    assert "GERMANY_TRIANGLE={input.germany} " in got
+    assert "GERMANY_TRIANGLE" not in scoring.unit_shell("release")

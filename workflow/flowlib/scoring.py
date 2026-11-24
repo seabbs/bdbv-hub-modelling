@@ -116,7 +116,7 @@ def unit_shell(study: str, segment: str = "") -> str:
     triangle = "GERMANY_TRIANGLE={input.germany} " if study == "germany" else ""
     return (
         f"mkdir -p {{params.copy_back}} && "
-        f"env {triangle}{{params.env}} {EVALUATE} {study} {{params.cache}} "
+        f"env {{params.env}} {triangle}{EVALUATE} {study} {{params.cache}} "
         f"{{params.label}} {segment}> {{log}} 2>&1 && touch {{output}}"
     )
 
