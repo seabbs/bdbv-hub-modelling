@@ -7,7 +7,7 @@ nowcast) and `randomwalk` (the random walk baseline, built from the data
 alone). There are no refits.
 
 Stage `primary` candidates are fitted models, read from the fit store
-(`bdbvhubrenewal fit-store unpack`). Stage `baseline` candidates need no
+(`bdbvhub fit-store unpack`). Stage `baseline` candidates need no
 fit.
 
 The wait for the store's fits stops `reserve_minutes` before the window

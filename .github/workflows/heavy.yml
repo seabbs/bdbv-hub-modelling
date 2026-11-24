@@ -72,26 +72,26 @@ jobs:
         # The backtest never fits the fitted models (their forecasts come
         # from the fit store), so this runs random walk only.
         run: |
-          uv run bdbvhubrenewal backtest --models randomwalk \
+          uv run bdbvhub backtest --models randomwalk \
             --data "$BDBV_DATA_DIR" \
             --output output/backtest --results output/results
-          uv run bdbvhubrenewal nowcast --vintage "$VINTAGE" \
+          uv run bdbvhub nowcast --vintage "$VINTAGE" \
             --forecast-date "$VINTAGE"
-          uv run bdbvhubrenewal metadata --out output/metadata
+          uv run bdbvhub metadata --out output/metadata
       - name: Fit and forecast as the submission CI does (a tiny fit)
         run: |
-          uv run bdbvhubrenewal --version
-          uv run bdbvhubrenewal fit --model renewal --config main \
+          uv run bdbvhub --version
+          uv run bdbvhub fit --model renewal --config main \
             --sampler-json '{"num_chains": 1, "num_warmup": 50, "num_samples": 50}' \
             --out output/fits/main
-          uv run bdbvhubrenewal plot-ppc --ppc output/fits/main/ppc.json \
+          uv run bdbvhub plot-ppc --ppc output/fits/main/ppc.json \
             --out output/fits/main/ppc.png
-          uv run bdbvhubrenewal nowcast --config main --fit output/fits/main \
+          uv run bdbvhub nowcast --config main --fit output/fits/main \
             --vintage "$VINTAGE" --forecast-date "$VINTAGE" \
             --out output/candidates/main
-          uv run bdbvhubrenewal plot-submission --out output/candidates/main.png \
+          uv run bdbvhub plot-submission --out output/candidates/main.png \
             --submission "$(ls output/candidates/main/model-output/*/*.csv)"
-          uv run bdbvhubrenewal coherence
+          uv run bdbvhub coherence
 
   # The tests that skip without torch (Chronos-2 inference, the
   # fine-tune's trainer and offloaded evaluation), with the chronos group,

@@ -1006,7 +1006,7 @@ def load_target(data_dir: Path | str | None = None) -> pd.DataFrame:
     ----------
     data_dir : pathlib.Path or str, optional
         Directory holding the tidy tables written by `build_tidy_data`
-        (`bdbvhubrenewal data`). Defaults to `data/`.
+        (`bdbvhub data`). Defaults to `data/`.
 
     Returns
     -------

@@ -84,7 +84,7 @@ env:
   # The model is `[submission] model` in config/hub.toml and the hub id
   # is set there too (seabbs-renewal). `prepare` resolves both into the
   # run's context.json.
-  # Every bdbvhubrenewal command reads the tidy data the prepare job
+  # Every bdbvhub command reads the tidy data the prepare job
   # pinned to the hub commit, shipped in the `inputs` artefact.
   BDBV_DATA_DIR: output/ci/inputs/data
   BDBV_RAW_DIR: output/ci/raw
@@ -622,7 +622,7 @@ jobs:
         id: finetuned
         env:
           GH_TOKEN: ${{ github.token }}
-        run: echo "hash=$(uv run bdbvhubrenewal finetuned-checkpoint)" >> "$GITHUB_OUTPUT"
+        run: echo "hash=$(uv run bdbvhub finetuned-checkpoint)" >> "$GITHUB_OUTPUT"
       - name: Cache the fine-tuned checkpoints
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

@@ -21,7 +21,7 @@ uv sync
 
 Run every command below from the `bdbv-hub-modelling` folder.
 The hub data are not committed.
-`task nowcast-utils:data` (or `uv run bdbvhubrenewal data`) fetches the latest hub data into `data/`, and `task nowcast-utils:data-bvd` caches the BVDOutbreakSize releases that renewalbvd reads.
+`task nowcast-utils:data` (or `uv run bdbvhub data`) fetches the latest hub data into `data/`, and `task nowcast-utils:data-bvd` caches the BVDOutbreakSize releases that renewalbvd reads.
 The tests read a frozen copy in `tests/fixtures/data/`, so they need no download.
 
 ## Work interactively
@@ -115,8 +115,8 @@ The renewal models fit with a sampler and take minutes per task (see [Renewal mo
 | Output | Folder |
 |---|---|
 | The script above | `output/my-forecast/` |
-| `uv run bdbvhubrenewal backtest` | forecasts and scores in `results/` |
-| `uv run bdbvhubrenewal nowcast` | the hub file in `output/submission/` |
-| `uv run bdbvhubrenewal report` | the docs figures and tables in `docs/figures/` and `docs/generated/` |
+| `uv run bdbvhub backtest` | forecasts and scores in `results/` |
+| `uv run bdbvhub nowcast` | the hub file in `output/submission/` |
+| `uv run bdbvhub report` | the docs figures and tables in `docs/figures/` and `docs/generated/` |
 
 `output/` is not committed, so anything there is yours to delete.

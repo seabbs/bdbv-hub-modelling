@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """Hub metadata text for each model that may be submitted.
 
-`bdbvhubrenewal metadata --model <model>` renders it with
+`bdbvhub metadata --model <model>` renders it with
 `bdbvhub.submission.hub.render_model_metadata`.
 """
 
@@ -110,7 +110,7 @@ MODEL_METADATA = {
     # metadata of the model the chain submits (`metadata --model <variant>`).
     # The committed hub/model-metadata/seabbs-renewal.yml is that of
     # `[submission] model` in config/hub.toml: regenerate it with
-    #   bdbvhubrenewal metadata --model <renewal|renewalsp|renewalbvd>
+    #   bdbvhub metadata --model <renewal|renewalsp|renewalbvd>
     # when that changes (tests/submission/test_fitting.py checks it).
     "renewal": {
         "model_name": "Pooled zone renewal model (PyRenew)",

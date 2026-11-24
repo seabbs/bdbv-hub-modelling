@@ -431,7 +431,7 @@ def bvd_release(
         The task.
     cache_dir : pathlib.Path or str, optional
         The release cache. Defaults to `bvd/` in the data directory
-        (`$BDBV_DATA_DIR` or `data/`), filled by `bdbvhubrenewal bvd`.
+        (`$BDBV_DATA_DIR` or `data/`), filled by `bdbvhub bvd`.
 
     Returns
     -------
@@ -694,7 +694,7 @@ def check_national(task: ForecastTask) -> None:
     hub counts nationally but in no province would be lost. No release
     has had any (`data/national-coherence.csv`), so a fit stops rather
     than guess where they belong. The submission's coherence check fails
-    on the same data (`bdbvhubrenewal coherence`).
+    on the same data (`bdbvhub coherence`).
 
     Parameters
     ----------
