@@ -40,7 +40,7 @@ def trained(bias: bool = True):
     model = tiny_model()
     if bias:
         series_bias.attach(model)
-    model = fs.lora_model(model, fs.lora_config(bias), None)
+    model = fs.lora_model(model, fs.lora_config(bias))
     with torch.no_grad():
         for i, p in enumerate(p for p in model.parameters() if p.requires_grad):
             p.add_(0.01 * (i + 1))
