@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Reproduction number estimates published by BVDOutbreakSize.
 
 The `renewalbvd` variant uses the latest posterior estimates of the

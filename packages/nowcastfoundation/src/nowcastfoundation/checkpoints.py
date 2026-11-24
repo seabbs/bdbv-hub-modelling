@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Use our fine-tuned Chronos-2 on your own reporting triangle.
 
 `load` downloads a `chronos-ft-<hash>` release of seabbs/bdbv-hub-modelling,

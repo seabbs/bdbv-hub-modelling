@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The simulator's kernel between strata and its share over time.
 
 `PlaceMixing` builds the kernel $K$ between strata (rows receive, each

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Publish a fine-tuned checkpoint to the Hugging Face Hub.
 
     publish-hf CHECKPOINT OUT [--repo OWNER/NAME] [--scores CSV] [--dry-run]

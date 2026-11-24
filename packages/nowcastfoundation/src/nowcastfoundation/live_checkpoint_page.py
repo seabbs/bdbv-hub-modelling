@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The docs' preliminary summary of the live fine-tuning run.
 
 Only the docs build runs it (the `live-checkpoint` command), so it may use

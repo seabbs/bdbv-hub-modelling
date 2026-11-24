@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Score our models and the hub teams on the German nowcast benchmark.
 
 The benchmark is that of Wolffram et al. (2023): nowcasts of the 7-day

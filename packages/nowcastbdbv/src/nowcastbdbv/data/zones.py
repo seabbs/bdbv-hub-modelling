@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Health zones: the hub's zone codes and zone tables.
 
 Zone codes are `CD-XX-NN`, with `CD-XX` the province

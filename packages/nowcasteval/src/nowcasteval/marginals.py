@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Forecasts as quantiles, with no needless sampling noise.
 
 A model that gives its own quantiles for a task (a `quantiles(task,

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The province renewal model, built on PyRenew (JAX, NumPyro).
 
 - `pooled`: pooled group values and sum-to-zero group deviations.

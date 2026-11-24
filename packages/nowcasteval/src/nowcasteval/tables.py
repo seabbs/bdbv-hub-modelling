@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Site tables: sortable and searchable blocks the page scripts fill.
 
 `docs/javascripts/tablesort.js` makes the headers of a table inside a

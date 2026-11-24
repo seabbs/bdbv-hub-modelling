@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Coherent sample trajectories from any model's quantile forecasts.
 
 A quantile forecast gives each series and step its own marginal and

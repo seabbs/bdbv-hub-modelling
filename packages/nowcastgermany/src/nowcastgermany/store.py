@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Stored German forecasts of the fine-tuned Chronos-2 model.
 
 The Pages build never runs `STORED_MODELS` on the German benchmark. The

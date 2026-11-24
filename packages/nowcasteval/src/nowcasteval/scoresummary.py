@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Per-forecast scores for the in-browser summaries.
 
 The page embeds one row per model, origin, release, place and week, and

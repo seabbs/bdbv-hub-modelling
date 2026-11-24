@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Release cut-offs and the renewal model's report to publication lag.
 
 A release's data cut-off is its latest onset day over all places.
