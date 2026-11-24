@@ -388,20 +388,20 @@ def test_cli_nowcast_forecasts_a_later_round_from_an_older_vintage(
 def test_concat_results_keeps_every_partial(tmp_path: Path) -> None:
     from nowcastutils.files import write_csv
 
-    parts = [tmp_path / "falling", tmp_path / "flat"]
+    parts = [tmp_path / "block-0", tmp_path / "block-1"]
     for part in parts:
         part.mkdir()
         write_csv(
             pd.DataFrame({"model": ["randomwalk", "randomwalknowcast"]}).assign(
-                scenario=part.name
+                part=part.name
             ),
-            part / "scenario-scores.csv.gz",
+            part / "scores.csv.gz",
         )
     write_csv(pd.DataFrame({"truth": [1]}), parts[0] / "only.csv")
     out = tmp_path / "results"
     assert main(["concat-results", "--out", str(out), *map(str, parts)]) == 0
-    scores = pd.read_csv(out / "scenario-scores.csv.gz")
-    assert list(scores["scenario"]) == ["falling"] * 2 + ["flat"] * 2
+    scores = pd.read_csv(out / "scores.csv.gz")
+    assert list(scores["part"]) == ["block-0"] * 2 + ["block-1"] * 2
     assert len(pd.read_csv(out / "only.csv")) == 1
 
 
