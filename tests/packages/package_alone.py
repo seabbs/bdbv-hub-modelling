@@ -30,7 +30,6 @@ KNOWN: dict[str, set[str]] = {
         "nowcasteval.pairing_plots",
         "nowcasteval.plots",
         "nowcasteval.ppc",
-        "nowcasteval.scoresummary",
         "nowcasteval.scoring",
     },
     "nowcastgermany": {
