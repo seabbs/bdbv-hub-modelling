@@ -380,16 +380,8 @@ jobs:
             hub-config
             model-metadata
             src
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: ./.github/actions/setup-hub-r
         if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          use-public-rspm: true
-          extra-repositories: https://hubverse-org.r-universe.dev
-      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          packages: any::hubValidations
-          dependencies: '"hard"'
       # Under the submission id, whichever model the chain submits.
       - name: Write the model metadata
         id: meta
@@ -538,16 +530,8 @@ jobs:
             hub-config
             model-metadata
             src
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: ./.github/actions/setup-hub-r
         if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          use-public-rspm: true
-          extra-repositories: https://hubverse-org.r-universe.dev
-      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          packages: any::hubValidations
-          dependencies: '"hard"'
       - name: Authenticate as the bot
         if: env.DRY_RUN == 'false'
         env:
@@ -655,16 +639,8 @@ jobs:
             hub-config
             model-metadata
             src
-      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      - uses: ./.github/actions/setup-hub-r
         if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          use-public-rspm: true
-          extra-repositories: https://hubverse-org.r-universe.dev
-      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
-        if: vars.HUB_VALIDATIONS != 'false'
-        with:
-          packages: any::hubValidations
-          dependencies: '"hard"'
       - name: Authenticate as the bot
         if: env.DRY_RUN == 'false'
         env:
