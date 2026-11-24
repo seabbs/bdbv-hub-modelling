@@ -1,0 +1,62 @@
+name: Set up R for hub validation
+description: >-
+  Install R and hubValidations for the hub's own checks
+  (ci/steps/validate_hub.R). Packages come from a dated Posit snapshot,
+  so the R library cache key holds between runs. The .deb files apt
+  fetches, for R and for the packages' system requirements, are cached
+  on the runner image, so a warm job downloads nothing from the Ubuntu
+  mirror. On a slow mirror those downloads took 23 of a job's 29 minutes.
+
+inputs:
+  snapshot:
+    description: >-
+      The Posit Package Manager snapshot date. Change it to move to newer
+      packages; that starts a new R library cache.
+    default: '2026-11-23'
+
+runs:
+  using: composite
+  steps:
+    - name: Pin the package snapshot
+      shell: bash
+      run: |
+        codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+        url=https://packagemanager.posit.co/cran/__linux__
+        echo "RSPM=$url/$codename/${{ inputs.snapshot }}" >> "$GITHUB_ENV"
+    - name: Restore the apt packages
+      id: apt
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/hub-r-apt
+        key: hub-r-apt-${{ env.ImageOS }}-${{ env.ImageVersion }}-1
+    - name: Give apt the cached packages
+      if: steps.apt.outputs.cache-hit == 'true'
+      shell: bash
+      run: sudo cp ~/.cache/hub-r-apt/*.deb /var/cache/apt/archives/
+    - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      with:
+        use-public-rspm: true
+        extra-repositories: https://hubverse-org.r-universe.dev
+    - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+      with:
+        packages: any::hubValidations
+        dependencies: '"hard"'
+        # Saved from failed jobs too, so a failing submission still warms
+        # the next one.
+        cache: always
+    - name: Check hubValidations loads
+      shell: Rscript {0}
+      run: library(hubValidations)
+    - name: Keep the apt packages
+      if: steps.apt.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p ~/.cache/hub-r-apt
+        cp /var/cache/apt/archives/*.deb ~/.cache/hub-r-apt/
+        echo "$(ls ~/.cache/hub-r-apt | wc -l) packages kept"
+    - name: Save the apt packages
+      if: steps.apt.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/hub-r-apt
+        key: ${{ steps.apt.outputs.cache-primary-key }}
