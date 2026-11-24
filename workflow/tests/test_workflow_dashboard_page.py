@@ -84,7 +84,7 @@ def _machine(tmp_path):
                 "rule": "R",
                 "study": "germany",
                 "level": "national",
-                "model": "fm_chronos_daily_ragged_ft",
+                "model": "foundation",
                 "checkpoint": "slots-aaaaaa",
                 "outbreaks": 250,
                 "rel_wis": 0.9,
@@ -123,7 +123,7 @@ def _machine(tmp_path):
         ):
             w.writerow(
                 {
-                    "model": "fm_chronos_daily_ragged_ft",
+                    "model": "foundation",
                     "location": "DE",
                     "target_end_date": "2022-02-01",
                     "quantile": q,

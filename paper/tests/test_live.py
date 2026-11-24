@@ -6,7 +6,7 @@ import yaml
 from paperpipe.evidence import EVIDENCE, write_evidence
 
 RULE = "own-quantile-wis_crps-1000-common"
-MODELS = ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged")
+MODELS = ("foundation_zeroshot",)
 
 
 def _scores() -> pd.DataFrame:
@@ -56,7 +56,7 @@ def _scores() -> pd.DataFrame:
                 {
                     "study": "held_out",
                     "level": "all",
-                    "model": "fm_chronos",
+                    "model": "foundation_zeroshot",
                     "checkpoint": ck,
                     "run": run,
                     "outbreaks": n,

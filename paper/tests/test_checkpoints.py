@@ -4,11 +4,11 @@ from paperfigs.checkpoints import checkpoint_of, drop_checkpoints
 
 
 def test_checkpoint_names_split_into_model_and_outbreaks() -> None:
-    assert checkpoint_of("fm_chronos_daily_ragged_ft@4000") == (
-        "fm_chronos_daily_ragged_ft",
+    assert checkpoint_of("foundation@4000") == (
+        "foundation",
         4000,
     )
-    assert checkpoint_of("fm_chronos_daily_ragged_ft") is None
+    assert checkpoint_of("foundation") is None
     assert checkpoint_of("team@x") is None
 
 

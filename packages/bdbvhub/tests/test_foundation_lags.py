@@ -139,7 +139,7 @@ def test_the_bdbv_daily_block_takes_its_release_history(task: ForecastTask):
     # window's onsets, so the block takes every day from the first
     # release to the cut-off: neither the 112-lag cap (the context then
     # ended four months back) nor a fixed 28.
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     rows, places, weeks = model._rows(task)
     tri = model._triangle(rows, places, weeks[-1])
     cut = dt.date.fromisoformat(tri.times[tri.last])
@@ -175,13 +175,13 @@ def _lags_seen(model, task: ForecastTask) -> set[str]:
 def test_a_fixed_lag_count_is_used_as_given(source, task: ForecastTask):
     # The SI compares the estimate with the fixed cap of 28 days or 4 weeks.
     model = dataclasses.replace(
-        get_model(f"fm_chronos_{source}_ragged"), lags=MAX_LAG[source]
+        get_model("foundation_zeroshot"), source=source, lags=MAX_LAG[source]
     )
     assert len(_lags_seen(model, task)) == MAX_LAG[source]
 
 
 def test_the_ragged_block_takes_the_estimated_lag_count(task: ForecastTask):
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     assert model.lags is None
     got = len(_lags_seen(model, task))
     assert got == model.lag_count(task)

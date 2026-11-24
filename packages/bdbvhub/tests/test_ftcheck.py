@@ -10,7 +10,7 @@ def test_chronos_models_take_the_active_zone_rule_and_others_do_not():
     from nowcastfoundation.forecaster import active_zone_rule
 
     cases, weeks, recent = active_zone_rule()
-    zero = check_model("fm_chronos_daily_ragged")
+    zero = check_model("foundation_zeroshot")
     assert (
         zero.active_zone_cases,
         zero.active_zone_weeks,

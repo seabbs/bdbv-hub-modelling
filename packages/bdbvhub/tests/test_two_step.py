@@ -31,17 +31,15 @@ def task():
 def test_both_two_step_variants_are_registered():
     from bdbvhub.models import get_model
 
-    zero = get_model("fm_chronos_daily_complete_2step")
+    zero = get_model("foundation_zeroshot_twostep")
     assert (zero.layout, zero.source, zero.two_step) == (
         "complete",
-        "daily",
+        "data",
         True,
     )
     from nowcastutils.base import list_models
 
-    assert "fm_chronos_daily_complete_2step_ft" in {
-        s.name for s in list_models()
-    }
+    assert "foundation_twostep" in {s.name for s in list_models()}
 
 
 def test_the_context_is_the_point_nowcast_to_the_cut_off(task):
@@ -55,7 +53,7 @@ def test_the_context_is_the_point_nowcast_to_the_cut_off(task):
 
     store: list = []
     model = dataclasses.replace(
-        get_model("fm_chronos_daily_complete_2step"), sample=_capture(store)
+        get_model("foundation_zeroshot_twostep"), sample=_capture(store)
     )
     model.forecast_both(task)
     group = store[-1]

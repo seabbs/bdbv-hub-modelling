@@ -82,7 +82,7 @@ def store(tmp_path):
     _fit(repo, "renewal", "2026-10-25", "b", "2026-11-05T10:00:00+00:00", 9)
     # A fit made after its round closed is never prospective.
     _fit(
-        repo, "fm_chronos_x", "2026-10-25", "c", "2026-11-12T10:00:00+00:00", 1
+        repo, "foundation_x", "2026-10-25", "c", "2026-11-12T10:00:00+00:00", 1
     )
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "refit")

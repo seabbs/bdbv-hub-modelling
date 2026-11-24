@@ -215,7 +215,7 @@ def test_a_model_that_forecasts_the_country_keeps_its_national_rows(
     walk = bt.run_forecasts([get_model("randomwalk")], [task])
     national = walk["location"] == NATIONAL
     own = walk.assign(
-        model="fm_chronos_daily_ragged_ft",
+        model="foundation",
         value=walk["value"].where(~national, 7.0),
     )
     monkeypatch.setattr(
@@ -227,7 +227,7 @@ def test_a_model_that_forecasts_the_country_keeps_its_national_rows(
     tables = hub_tables(
         pd.concat([walk, own]), task, load_daily_zones(DATA), zones
     )
-    chronos = tables["fm_chronos_daily_ragged_ft"]
+    chronos = tables["foundation"]
     assert (chronos.loc[chronos["location"] == NATIONAL, "value"] == 7).all()
     rw = tables["randomwalk"]
     wide = rw.pivot_table(

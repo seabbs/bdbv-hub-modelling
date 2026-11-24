@@ -590,7 +590,7 @@ jobs:
           retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   # chronos: fine-tuned Chronos-2 (`chronos_model`, the
-  # [models.fm_chronos_*_ragged_ft] table of config/hub.toml) under its
+  # [models.foundation] table of config/hub.toml) under its
   # own hub id, run here with no fit and no fallback. Off until that
   # table sets `submit = true`.
   chronos:

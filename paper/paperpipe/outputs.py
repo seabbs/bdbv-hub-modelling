@@ -121,10 +121,10 @@ STUDY_SI_TABLES: Final[dict[str, tuple[str, ...]]] = {
 """Further SI tables of a study: for Germany, Chronos-2 fine-tuned on the
 real data against the simulation-trained model (`real_finetune_table`)."""
 
-REAL_FINETUNE_MODELS: Final = tuple(
-    f"fm_chronos_{source}_ragged{variant}"
-    for source in ("daily", "weekly")
-    for variant in ("", "_ft", "_real")
+REAL_FINETUNE_MODELS: Final = (
+    "foundation_zeroshot",
+    "foundation",
+    "foundation_real",
 )
 """The Chronos-2 models of the German fine-tuning comparison: zero-shot,
 fine-tuned on simulations and fine-tuned on real data."""

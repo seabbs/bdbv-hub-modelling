@@ -47,7 +47,7 @@ CELL = ["origin", "location", "target_end_date", "horizon"]
 PARTS = ("dispersion", "overprediction", "underprediction")
 ZERO_SHOT = "reference"
 BASELINE = "randomwalknowcast"
-FAMILIES = {"fm_chronos_daily_ragged": "Daily ragged"}
+FAMILIES = {"foundation_zeroshot": "Daily ragged"}
 """Model families, each with its zero-shot and fine-tuned models."""
 FORECAST_WEEKS = (7, 14, 21, 28)
 """Horizons of the forecast weeks: the 7-day sums ending 7 to 28 days
@@ -142,7 +142,7 @@ def score_folder(folder: Path) -> pd.DataFrame:
     ).dropna(subset=["truth"])
     if "target" in rows:
         rows = rows[rows["target"].fillna("7day") == "7day"]
-    rows["model"] = rows["model"].str.removesuffix("_ft")
+    rows["model"] = rows["model"].map(labels.base_model)
     out = []
     for scale, f in (("", np.asarray), ("log_", np.log1p)):
         scored = rows.assign(
@@ -240,7 +240,7 @@ def colour(label: str, family: str, ft: Sequence[str]) -> tuple[str, str]:
     else:
         i = list(ft).index(label)
         c = (
-            labels.MODEL_STYLES[f"{family}_ft"][0]
+            labels.MODEL_STYLES[labels.FINETUNED_OF[family]][0]
             if i == len(ft) - 1
             else labels.RUN_SHADES[i % len(labels.RUN_SHADES)]
         )
@@ -417,7 +417,7 @@ def fans(
         key = spec.split_label(label)[0]
         run, _, size = names[label].partition(" n")
         n = int(size) if size.isdigit() else 0
-        c, _ = colour(label, "fm_chronos_daily_ragged", ft)
+        c, _ = colour(label, "foundation_zeroshot", ft)
         run_list.append(
             spec.Run(
                 key=label,

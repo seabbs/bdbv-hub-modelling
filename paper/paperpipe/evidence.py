@@ -25,7 +25,12 @@ import numpy as np
 import pandas as pd
 import yaml
 from matplotlib.figure import Figure
-from nowcasteval.labels import MODEL_LABELS, MODEL_STYLES, model_label
+from nowcasteval.labels import (
+    FINETUNED_OF,
+    MODEL_LABELS,
+    MODEL_STYLES,
+    model_label,
+)
 from nowcastfoundation.live_checkpoint import (
     LIVE_RUN,
     checkpoint_table,
@@ -316,7 +321,8 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
                     ms=3,
                     color=colour,
                     label=MODEL_LABELS.get(
-                        f"{model}_ft", f"{model_label(model)}, fine-tuned"
+                        FINETUNED_OF.get(model, ""),
+                        f"{model_label(model)}, fine-tuned",
                     ),
                 )
             complete = "_complete" in model

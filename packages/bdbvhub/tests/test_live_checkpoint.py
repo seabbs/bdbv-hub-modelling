@@ -15,7 +15,7 @@ def _rows() -> pd.DataFrame:
         ("slots-b", "one-model", 250),
         ("slots-z", "slots-zeroinit", 500),
     ]:
-        for model in ("fm_chronos_daily_ragged", "fm_chronos_weekly_ragged"):
+        for model in ("foundation_zeroshot",):
             rows.append(
                 {
                     "study": "ebola",
@@ -50,7 +50,7 @@ def _rows() -> pd.DataFrame:
                 {
                     "study": "held_out",
                     "level": "all",
-                    "model": "fm_chronos",
+                    "model": "foundation_zeroshot",
                     "checkpoint": ck,
                     "run": run,
                     "outbreaks": n,
@@ -98,7 +98,7 @@ def test_the_checkpoint_table_has_zero_shot_first_then_each_checkpoint() -> (
     t = checkpoint_table(_rows(), "one-model")
     assert list(t["Simulations"]) == ["Zero-shot", "125", "250"]
     assert len(t.columns) <= 5
-    assert t.iloc[1]["German WIS"] == "3.00 / 3.00"
+    assert t.iloc[1]["German WIS"] == "3.00"
     # A checkpoint not yet scored on a study is left blank.
     assert t.iloc[2]["German WIS"] == ""
     assert t.iloc[2]["Validation loss"] == "0.38"
@@ -110,8 +110,8 @@ def test_the_summary_has_zero_shot_and_the_newest_checkpoint() -> None:
 
     t = summary_table(_rows(), "one-model")
     assert len(t) == 2
-    assert t.iloc[1]["German WIS"] == "3.00 / 3.00 (125)"
-    assert t.iloc[1]["BDBV CRPS"] == "1.75 / 1.75 (250)"
+    assert t.iloc[1]["German WIS"] == "3.00 (125)"
+    assert t.iloc[1]["BDBV CRPS"] == "1.75 (250)"
 
 
 def test_the_docs_page_gets_the_label_and_summary(tmp_path) -> None:

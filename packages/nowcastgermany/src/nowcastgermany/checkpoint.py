@@ -48,6 +48,7 @@ from typing import Any, Final
 import numpy as np
 import pandas as pd
 
+from nowcasteval.labels import FINETUNED, FINETUNED_OF, base_model
 from nowcastfoundation.sidecar import SIDECAR, with_sidecar
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
@@ -140,21 +141,22 @@ def label_models(
     """Return the models a label runs, of those the German config lists.
 
     The reference runs the baseline and the zero-shot Chronos-2 models
-    (ragged and complete); a checkpoint runs the fine-tuned (`_ft`) ones,
-    in the `layout` it was trained on (`segment_layout`).
+    (ragged and complete); a checkpoint runs the ones fine-tuned on
+    simulations (`labels.FINETUNED`), `foundation` in the `layout` it was
+    trained on (`segment_layout`).
     """
     models = german_models(config)
     if label == REFERENCE:
-        zero = [
-            m
-            for m in models
-            if m.startswith("fm_chronos_") and not m.endswith(("_ft", "_real"))
-        ]
+        zero = [m for m in models if m in FINETUNED_OF]
         return (BASELINE, *zero)
     return tuple(
-        m.replace("_ragged_ft", f"_{layout}_ft")
+        (
+            f"foundation_{layout}"
+            if m == "foundation" and layout != "ragged"
+            else m
+        )
         for m in models
-        if m.endswith("_ft")
+        if m in FINETUNED
     )
 
 
@@ -221,7 +223,7 @@ def held_out_rows(checkpoint: str, settings: Mapping[str, Any]) -> pd.DataFrame:
     ]
     out = pd.DataFrame(rows).assign(
         study="held_out",
-        model="fm_chronos",
+        model="foundation_zeroshot",
         checkpoint=checkpoint,
         n=settings.get("n_validation", 0),
         n_origins=0,
@@ -236,10 +238,10 @@ def held_out_rows(checkpoint: str, settings: Mapping[str, Any]) -> pd.DataFrame:
 
 
 def tag(rows: pd.DataFrame, label: str) -> pd.DataFrame:
-    """Name a label's rows by checkpoint, the `_ft` suffix dropped."""
+    """Name a label's rows by checkpoint and zero-shot model (`base_model`)."""
     return rows.assign(
         checkpoint="zero-shot" if label == REFERENCE else label,
-        model=rows["model"].str.removesuffix("_ft"),
+        model=rows["model"].map(base_model),
     )
 
 

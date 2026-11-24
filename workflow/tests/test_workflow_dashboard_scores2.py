@@ -72,7 +72,7 @@ def test_rows_carry_target_and_metric_and_old_rows_are_7day():
     rows = [
         _row(
             "germany",
-            "fm_chronos_daily_ragged_ft",
+            "foundation",
             "slots-a1b2c3",
             "250",
             target="daily",
@@ -80,7 +80,7 @@ def test_rows_carry_target_and_metric_and_old_rows_are_7day():
         ),
         _row(
             "ebola",
-            "fm_chronos_weekly_ragged_ft",
+            "foundation",
             "slots-a1b2c3",
             "250",
             crps="1.1",
@@ -101,7 +101,7 @@ def test_rows_carry_target_and_metric_and_old_rows_are_7day():
     assert [
         "ebola",
         "national",
-        "weekly",
+        "daily",
         "s",
         250,
         "a1b2c3",
@@ -118,7 +118,7 @@ def test_a_row_with_both_scores_gives_two_rows():
     rows = [
         _row(
             "ebola",
-            "fm_chronos_daily_ragged_ft",
+            "foundation",
             "slots-a1b2c3",
             "1",
             wis="0.8",
@@ -134,7 +134,7 @@ def test_held_out_rows_are_by_layout():
     rows = [
         _row(
             "held_out",
-            "fm_chronos_daily_ragged_ft",
+            "foundation",
             "slots-a1b2c3",
             "250",
             wis="0.7",
@@ -154,7 +154,7 @@ def test_studies_and_levels_are_ordered_and_labelled_by_config():
     rows = [
         _row(
             st,
-            "fm_chronos_daily_ragged_ft",
+            "foundation",
             "slots-a1b2c3",
             "1",
             wis="1",
@@ -179,7 +179,7 @@ def test_excluded_checkpoints_are_left_out():
     rows = [
         _row(
             "germany",
-            "fm_chronos_daily_ragged_ft",
+            "foundation",
             "slots-a1b2c3",
             "1",
             wis="1",

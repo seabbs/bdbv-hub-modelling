@@ -51,8 +51,8 @@ CANDIDATES = (
     "renewal",
     "randomwalknowcast",
     "randomwalk",
-    "fm_chronos_daily_ragged",
-    "fm_chronos_daily_ragged_ft",
+    "foundation_zeroshot",
+    "foundation",
 )
 """The models shown, in order: the renewal chain, the walks, Chronos-2
 zero-shot and fine-tuned."""

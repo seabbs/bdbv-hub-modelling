@@ -212,13 +212,12 @@ MODEL_METADATA = {
             "provinces and health zones, and the hub's weekly target data."
         ),
     },
-    # Fine-tuned Chronos-2, the hub model seabbs-nowcastfm. `{release}`
+    # Fine-tuned Chronos-2, the hub model seabbs-foundation. `{release}`
     # is the checkpoint release the model loads, filled in by `metadata`.
-    # The committed hub/model-metadata/seabbs-nowcastfm.yml is that of
+    # The committed hub/model-metadata/seabbs-foundation.yml is that of
     # the model in config/hub.toml (bdbvhub's tests/test_fitting.py).
-    "fm_chronos_daily_ragged_ft": {
-        "model_name": "Nowcast foundation (fine-tuned Chronos-2, daily "
-        "releases)",
+    "foundation": {
+        "model_name": "Nowcast foundation (fine-tuned Chronos-2)",
         "methods": (
             "A time series foundation model (Chronos-2) fine-tuned on "
             "simulated outbreaks, forecasting the country, provinces and "
@@ -247,40 +246,6 @@ MODEL_METADATA = {
         ),
         "data_inputs": (
             "The hub's daily onsets by release (observed plus imputed) "
-            "for the country, provinces and health zones."
-        ),
-    },
-    "fm_chronos_weekly_ragged_ft": {
-        "model_name": "Nowcast foundation (fine-tuned Chronos-2, weekly "
-        "releases)",
-        "methods": (
-            "A time series foundation model (Chronos-2) fine-tuned on "
-            "simulated outbreaks, forecasting the country, provinces and "
-            "health zones jointly from the hub's weekly releases."
-        ),
-        "methods_long": (
-            "We forecast the hub target with Chronos-2 (Ansari et al. 2025, "
-            "arXiv:2510.15821) and a LoRA adapter fine-tuned on outbreaks "
-            "simulated with epinowcast's generative model (renewal process, "
-            "drifting reporting delays, day-of-week effects, negative "
-            "binomial noise). "
-            "The adapter is release {release} of "
-            "https://github.com/seabbs/bdbv-hub-modelling, the newest when "
-            "this was written. "
-            "Each weekly release is laid out by onset week and release lag. "
-            "The country, each province and each health zone are target "
-            "series in one block, forecast jointly. "
-            "Each place with cases has its counts at release lags under "
-            "4 weeks as covariates. "
-            "Each of 100 samples draws its own uniform level per series and "
-            "week from Chronos-2's 21 quantiles, rounded to counts. "
-            "The model is not fitted to these data. "
-            "The country, provinces and health zones are each the model's "
-            "own forecast of that series: nothing is summed or split. "
-            "See https://samabbott.co.uk/bdbv-hub-modelling/methods/foundation/."
-        ),
-        "data_inputs": (
-            "The hub's weekly target data by release "
             "for the country, provinces and health zones."
         ),
     },

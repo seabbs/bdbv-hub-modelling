@@ -184,7 +184,7 @@ def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
     for model in (
         "randomwalk",
         "randomwalknowcast",
-        "fm_chronos_weekly_ragged",
+        "foundation_zeroshot",
     ):
         assert zones not in fit_code(model, ROOT)
 

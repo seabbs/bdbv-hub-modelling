@@ -1,14 +1,14 @@
 # Foundation models
 
-Six experimental candidate models that give the hub target's releases to the Chronos-2 time series foundation model[^chronos2].
+The `foundation` model and its comparison variants give the hub target's releases to the Chronos-2 time series foundation model[^chronos2].
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
-The models are named `fm_chronos_<source>_<layout>`, with two sources of the hub target and two layouts.
+`foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the ragged layout.
+The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), the two-step `foundation_twostep` and `foundation_zeroshot_twostep`, and `foundation_real` (fine-tuned on real data alone).
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
-The two `fm_chronos_<source>_ragged_ft` models are the ragged models with Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)).
-Each is a candidate, not submitted.
-The hub model `seabbs-nowcastfm` is set up to submit `fm_chronos_daily_ragged_ft` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
+Each model reads the cadence from the data: one pass on the daily releases gives the daily counts and the weekly hub target, and a task with weekly releases only gives the weekly target.
+The hub model `seabbs-foundation` is set up to submit `foundation` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
 
 In brief, each model:
 
@@ -20,12 +20,12 @@ In brief, each model:
 ## Releases
 
 The target is the hub's: confirmed cases by onset week, known and imputed onsets together.
-Two sources give it with its updates.
+Two sources give it with its updates; a model takes the daily one when the task has daily releases.
 
-- **Weekly** (`fm_chronos_weekly_*`): the weekly counts of each release of the target data, for the country, the provinces and the zones.
-  A step is an onset week.
-- **Daily** (`fm_chronos_daily_*`): the daily counts of each release, known plus imputed onsets.
+- **Daily**: the daily counts of each release, known plus imputed onsets.
   A step is an onset day.
+- **Weekly**: the weekly counts of each release of the target data, for the country, the provinces and the zones.
+  A step is an onset week.
 
 For place $p$, step $t$ and release $r$ with cut-off in step $c_r$, the release lag is $d = c_r - t$.
 $Y_{p,t,d}$ is the count of step $t$ at lag $d$, from the release whose cut-off is $d$ steps after $t$.
@@ -99,7 +99,7 @@ The other fitted models split their provinces across the zones instead ([Health 
 
 ## Fine-tuning
 
-The `_ft` models load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
+The fine-tuned models (`foundation`, `foundation_complete`, `foundation_twostep`) load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
 The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
 The simulator is `nowcastfoundation.simulator` (the design and value draws, then each simulation as the joint PyRenew model in `nowcastrenewal.simulation.outbreak`), run on the grid config `config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `nowcastfoundation.finetune.chronos` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
 
@@ -110,12 +110,12 @@ Each checkpoint is published as the repository's release `chronos-ft-<hash>`, wi
 The models load the newest such release by publish date, unless `config/finetune.toml` pins a hash.
 `source` in `config/finetune.toml` says where the checkpoint is read from: `github` (the release), `huggingface` (a Hugging Face Hub repository at a pinned revision holding the same files) or `local` (a training segment folder).
 A checkpoint read from the Hub is the same checkpoint as its release, so it keys the same stored fits.
-The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the `_ft` models, and each stored fit records the checkpoint it used.
+The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the fine-tuned models, and each stored fit records the checkpoint it used.
 The adapter is downloaded once and checked against `sha256sums.txt` and the settings hash.
 The fit store resolves the release once per run, with the workflow's GitHub token, and passes its hash to every fit in `BDBV_CHRONOS_FT`.
 If GitHub cannot be reached, building a model fails rather than fall back to a checkpoint downloaded before.
 A fit whose adapter cannot be downloaded is stored as failed, and the fit store keeps it until its inputs change.
-Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/bdbv-hub-modelling -f retry_failed=true -f models="fm_chronos_weekly_ragged_ft fm_chronos_daily_ragged_ft"`).
+Such fits are retried by running the Fit store workflow with `retry_failed` (`gh workflow run fit-store.yml -R seabbs/bdbv-hub-modelling -f retry_failed=true -f models="foundation foundation"`).
 
 ## Limitations
 

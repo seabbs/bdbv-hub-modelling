@@ -268,16 +268,16 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
         path.write_text(path.read_text() + "\n_EDITED = 1\n")
 
     before = digests()
-    own = store.code_digest("fm_chronos_weekly_ragged", root)
+    own = store.code_digest("foundation_zeroshot", root)
     edit("packages/nowcastbdbv/src/nowcastbdbv/zones.py")
     assert digests() == before
-    assert store.code_digest("fm_chronos_weekly_ragged", root) == own
+    assert store.code_digest("foundation_zeroshot", root) == own
     edit("packages/nowcastbaselines/src/nowcastbaselines/zones.py")
     split = digests()
     assert all(split[m] != before[m] for m in models)
     # Chronos-2 takes its zones straight from its block, so the split is
     # not its fit code.
-    assert store.code_digest("fm_chronos_weekly_ragged", root) == own
+    assert store.code_digest("foundation_zeroshot", root) == own
     before = split
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("packages/nowcastbaselines/src/nowcastbaselines/introductions.py")
@@ -911,7 +911,7 @@ def test_zone_data_keys_only_the_models_that_read_it(
     sampler = store.samplers()
     # Every stored model reads them: the province models split their
     # zones in their forecast, and Chronos-2 forecasts them.
-    reads = ["renewal", "fm_chronos_weekly_complete"]
+    reads = ["renewal", "foundation_zeroshot_complete"]
     assert store.current_keys(zoned, reads, sampler, "c") != (
         store.current_keys(tasks, reads, sampler, "c")
     )
@@ -950,7 +950,7 @@ def test_a_live_run_forecasts_the_provinces_as_the_stored_fit(
         )[0],
     ]
     model = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged"), sample=_block_size
+        get_model("foundation_zeroshot"), sample=_block_size
     )
 
     def provinces(task: ForecastTask) -> pd.Series:
@@ -1322,7 +1322,7 @@ def test_the_archive_s_store_task_keys_zone_models_as_the_store(
         target, delays, config, daily, latest, zones=zones
     )
     sampler = store.samplers()
-    reads = ["fm_chronos_weekly_complete"]
+    reads = ["foundation_zeroshot_complete"]
     assert store.current_keys({latest: task}, reads, sampler, "c") == (
         store.current_keys({latest: stored}, reads, sampler, "c")
     )

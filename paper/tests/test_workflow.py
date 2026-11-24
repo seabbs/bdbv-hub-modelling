@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 import yaml
+from nowcasteval.labels import FINETUNED
 
 from paperpipe.config import last_release, run_studies
 
@@ -335,7 +336,7 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     assert "--finetuned" not in log
     runner = [line for line in log.splitlines() if "run_synthetic.py" in line]
     assert runner
-    assert all("_ft" not in line for line in runner)
+    assert not {w for line in runner for w in line.split()} & set(FINETUNED)
     # Then they load its newest saved checkpoint.
     segment = run / "train" / "n800"
     (segment / "finetuned-ckpt").mkdir(parents=True)
