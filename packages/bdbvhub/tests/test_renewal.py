@@ -780,3 +780,37 @@ def test_provinces_in_parallel_match_one_after_another(
     parallel = model.forecast_fit(sub)
     pd.testing.assert_frame_equal(parallel.samples, serial.samples)
     assert list(parallel.runs) == list(serial.runs)
+
+
+def test_renewalsp_keeps_its_rt_walk_step_sd_off_zero(
+    task: ForecastTask,
+) -> None:
+    # The centred walk funnels where the step SD nears 0: at 2026-11-22,
+    # CD-NK alone mixed rt_sd at bulk ESS 29 and E-BFMI 0.27-0.36 under
+    # HalfNormal(0.2), and 72 and 0.49-0.70 under LogNormal(log 0.12, 0.5).
+    import numpyro
+
+    from nowcastrenewal.model import model_args
+    from nowcastrenewal.model.zones import build_model
+
+    priors = {
+        name: rn.model_config(v).rt_sd_lognormal
+        for name, v in rn.VARIANTS.items()
+    }
+    assert priors == {
+        "renewal": None,
+        "renewalsp": (0.12, 0.5),
+        "renewalsp_zones": (0.12, 0.5),
+        "renewalbvd": None,
+    }
+    variant = rn.VARIANTS["renewalsp"]
+    one = replace(task, locations=task.locations[:1], mask=())
+    data = rn.vintage_inputs(one, rn.model_config(variant))
+    model = build_model(data, rn.fit_config(variant, data))
+    tr = numpyro.handlers.trace(
+        numpyro.handlers.seed(model.sample, rng_seed=0)
+    ).get_trace(**model_args(model, data))
+    fn = tr["rt_sd"]["fn"]
+    assert type(fn).__name__ == "LogNormal"
+    assert float(fn.loc) == pytest.approx(np.log(0.12))
+    assert float(fn.scale) == pytest.approx(0.5)
