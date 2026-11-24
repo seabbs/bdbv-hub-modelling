@@ -700,6 +700,24 @@ def _add_store_arg(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def apply_sampler(config: bt.BacktestConfig) -> None:
+    """Set the fitted models' NUTS settings from the backtest config.
+
+    The settings go in the `SAMPLER_ENV` environment variable, which the
+    renewal models read when they are built. Settings already there are
+    kept.
+
+    Parameters
+    ----------
+    config : BacktestConfig
+        Gives `sampler`.
+    """
+    from nowcastrenewal.forecaster import SAMPLER_ENV
+
+    if config.sampler and not os.environ.get(SAMPLER_ENV):
+        os.environ[SAMPLER_ENV] = json.dumps(config.sampler)
+
+
 def _models(names: Sequence[str] | None) -> list[str]:
     return list(names) if names else [s.name for s in list_models()]
 
@@ -710,7 +728,7 @@ def _backtest(args: argparse.Namespace) -> int:
     config = bt.load_config(args.config)
     if args.samples is not None:
         config = dataclasses.replace(config, score_samples=args.samples)
-    bdbv_bt.apply_sampler(config)
+    apply_sampler(config)
     host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
@@ -1648,6 +1666,7 @@ def _metadata(args: argparse.Namespace) -> int:
 def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
     from nowcastrenewal import bvd
 
+    config = bt.load_config(args.backtest_config)
     vintages = args.vintages
     if not vintages:
         target = load_target(args.data)
@@ -1658,7 +1677,9 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
         Path(args.data) / "bvd",
         vintages,
         bvd.list_releases(token),
-        max_rhat=bdbv_bt.bvd_max_rhat(args.backtest_config),
+        max_rhat=(
+            bvd.MAX_RHAT if config.bvd_max_rhat is None else config.bvd_max_rhat
+        ),
     )
     for vintage, choice in chosen.items():
         if choice is None:

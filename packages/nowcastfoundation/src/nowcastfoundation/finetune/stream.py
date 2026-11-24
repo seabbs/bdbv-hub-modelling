@@ -1124,6 +1124,11 @@ def held_out_parts(
     return {k: float(np.average(v, weights=weights)) for k, v in losses.items()}
 
 
+def checkpoint_stage(n: int) -> str:
+    """Return the status stage while checkpoint `n<n>` is evaluated."""
+    return f"evaluating checkpoint n{n}"
+
+
 def loss_parts(name: str, parts: dict[str, float]) -> dict[str, float]:
     """Return a loss's nowcast and forecast parts as `<name>_<part>`."""
     return {f"{name}_{k}": parts[k] for k in ("nowcast", "forecast")}
@@ -2475,6 +2480,7 @@ def main(root: Path | None = None) -> None:
                 described = "left to the evaluator"
             else:
                 settings["held_out_loss_start"] = start_loss
+                report(stage=checkpoint_stage(done))
                 parts = held_out_parts(model, val, args.batch_size)
                 settings["held_out_loss"] = parts["loss"]
                 settings |= loss_parts("held_out_loss", parts)

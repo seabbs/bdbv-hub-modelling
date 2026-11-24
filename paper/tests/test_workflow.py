@@ -353,6 +353,20 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     assert "--finetuned abcdef123456" in pinned.stdout + pinned.stderr
 
 
+def test_rules_that_need_the_network_or_git_run_on_the_driver():
+    # On a cluster a non-local rule runs on a node, which may have no
+    # network, git or quarto.
+    import re
+    from pathlib import Path
+
+    text = (Path(__file__).parents[1] / "workflow" / "Snakefile").read_text()
+    blocks = re.split(r"\n(?=\s*rule\b)", text)
+    for block in blocks:
+        shell = block.split("shell:", 1)[-1]
+        if re.search(r"git (clone|fetch)|gh release download|quarto", shell):
+            assert "localrule: True" in block, block.split("\n", 1)[0]
+
+
 def test_every_forecasting_rule_declares_its_threads():
     # A scheduler gives a job the cores its rule declares; a forecasting
     # rule sets FORECAST.threads in its environment, so it declares them.

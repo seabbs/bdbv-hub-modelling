@@ -98,8 +98,12 @@ class BacktestConfig:
         $K$: a truth week counts as complete if it ended at least this
         many weeks before the truth vintage.
     sampler : dict
-        NUTS settings of the fitted models
-        (`nowcastbdbv.backtest.apply_sampler`).
+        NUTS settings of the fitted models (`bdbvhub.cli.apply_sampler`).
+    bvd_max_rhat : float, optional
+        The limit on the joint fit's worst R-hat of a BVDOutbreakSize
+        release the BVD variant may use
+        (`nowcastrenewal.bvd.select_release`). None leaves the BVD
+        module's own default.
     skip_origins : tuple of str
         Real releases that are not backtest origins. They stay in the
         histories of later origins.
@@ -119,6 +123,7 @@ class BacktestConfig:
     seed: int = 0
     complete_after_weeks: int = 0
     sampler: dict[str, Any] = field(default_factory=dict)
+    bvd_max_rhat: float | None = None
     skip_origins: tuple[str, ...] = ()
     truth_delay: int | None = None
     truth_level: float = TRUTH_LEVEL
@@ -192,6 +197,7 @@ def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
         seed=int(fc["seed"]),
         complete_after_weeks=int(sp["complete_after_weeks"]),
         sampler=dict(raw["sampler"]),
+        bvd_max_rhat=float(raw["bvd"]["max_rhat"]),
         skip_origins=tuple(str(d) for d in sp.get("skip_origins", ())),
         truth_delay=_truth_delay(sp.get("truth_delay", "auto")),
         truth_level=_truth_level(sp.get("truth_level", TRUTH_LEVEL)),

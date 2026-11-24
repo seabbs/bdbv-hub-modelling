@@ -9,7 +9,6 @@ import pytest
 
 from bdbvhub.models import get_model
 from nowcastbdbv.backtest import (
-    bvd_max_rhat,
     development_tasks,
     lopo_tasks,
     make_tasks,
@@ -37,7 +36,10 @@ def test_load_config() -> None:
     cfg = load_config(ROOT / "config" / "backtest.toml")
     assert cfg.n_samples == 100
     # A generous convergence gate on BVDOutbreakSize releases.
-    assert bvd_max_rhat(ROOT / "config" / "backtest.toml") == 1.1
+    assert cfg.bvd_max_rhat == 1.1
+    # The generic config knows no BVD default: the caller's is
+    # nowcastrenewal.bvd.MAX_RHAT.
+    assert BacktestConfig().bvd_max_rhat is None
     # The first release is not a backtest origin.
     assert cfg.skip_origins == ("2026-08-18",)
     assert BacktestConfig().skip_origins == ()
@@ -478,7 +480,7 @@ def test_lopo_scores_only_the_masked_province(
 def test_backtest_sampler_comes_from_the_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from nowcastbdbv.backtest import apply_sampler
+    from bdbvhub.cli import apply_sampler
     from nowcastrenewal.forecaster import SAMPLER_ENV, sampler_settings
 
     cfg = load_config(ROOT / "config" / "backtest.toml")

@@ -5,21 +5,15 @@
 the hub's imputation delay and the health zones; `vintage_task` builds
 one release's task, `development_tasks` and `lopo_tasks` the development
 and leave-one-province-out runs, and `run_development` and `run_lopo` run
-them with `nowcasteval.backtest`'s engine. `apply_sampler` passes the
-backtest config's NUTS settings to the renewal models, and
-`bvd_max_rhat` reads the limit on a BVDOutbreakSize release's R-hat.
+them with `nowcasteval.backtest`'s engine.
 """
 
 from __future__ import annotations
 
 import functools
-import json
 import logging
-import os
-import tomllib
 from collections.abc import Sequence
 from dataclasses import replace
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -37,7 +31,6 @@ from nowcasteval.backtest import (
     score_tasks,
 )
 from nowcasteval.nowcast import truth_from_vintage
-from nowcastrenewal.forecaster import SAMPLER_ENV
 from nowcastutils.base import ForecastModel, ForecastTask
 from nowcastutils.dates import reference_date_for_vintage
 from nowcastutils.releases import release_cutoff
@@ -46,8 +39,6 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     "TASK_MIN_HORIZON",
-    "apply_sampler",
-    "bvd_max_rhat",
     "development_tasks",
     "lopo_tasks",
     "make_tasks",
@@ -55,30 +46,6 @@ __all__ = [
     "run_lopo",
     "vintage_task",
 ]
-
-
-def bvd_max_rhat(path: Path | str = "config/backtest.toml") -> float:
-    """Return `[bvd] max_rhat`, the worst R-hat a BVD release may have.
-
-    The BVD variant uses the newest BVDOutbreakSize release within it
-    (`nowcastrenewal.bvd.select_release`).
-    """
-    return float(tomllib.loads(Path(path).read_text())["bvd"]["max_rhat"])
-
-
-def apply_sampler(config: BacktestConfig) -> None:
-    """Set the fitted models' NUTS settings from the backtest config.
-
-    The settings go in the `SAMPLER_ENV` environment variable, which
-    models read when they are built. Settings already there are kept.
-
-    Parameters
-    ----------
-    config : BacktestConfig
-        Gives `sampler`.
-    """
-    if config.sampler and not os.environ.get(SAMPLER_ENV):
-        os.environ[SAMPLER_ENV] = json.dumps(config.sampler)
 
 
 def _imputation_delay(vintage: str) -> np.ndarray:
