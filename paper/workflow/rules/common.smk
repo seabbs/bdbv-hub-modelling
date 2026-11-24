@@ -68,3 +68,13 @@ TOOLS_ENV = "../../workflow/envs/tools.yaml"
 wildcard_constraints:
     mode="|".join(MODES),
     study="|".join(STUDIES),
+
+
+# The release layer of the run the paper reports (`final_run`), if it has
+# one: the grid table's last group.
+def final_release_layer():
+    run = Path(config["final_run"]).name if config.get("final_run") else None
+    entry = (config.get("runs") or {}).get(run) or {}
+    return entry.get(
+        "release_layer", (config.get("finetune") or {}).get("release_layer")
+    )
