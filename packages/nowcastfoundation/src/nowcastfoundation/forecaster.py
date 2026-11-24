@@ -1672,16 +1672,28 @@ class FoundationModel:
         return PERIODS.get(self.source)
 
     def for_task(self, task: ForecastTask) -> FoundationModel:
-        """Return the model with its source for `task`.
+        """Return the model with its source and lags for `task`.
 
         With `FROM_DATA`, the daily releases when the task has them, so one
         pass gives the daily counts and the 7-day target from its 7-day
-        rows, else the weekly releases. A fixed source is kept.
+        rows, else the weekly releases. A fixed source is kept. A task
+        with a study `max_delay` $D$ (days) gives lags 0 to $D$, in the
+        source's steps (weeks rounded up), unless the model fixes `lags`.
         """
-        if self.source != FROM_DATA:
-            return self
-        daily = task.daily_history is not None and not task.daily_history.empty
-        return replace(self, source="daily" if daily else "weekly")
+        run = self
+        if self.source == FROM_DATA:
+            daily = (
+                task.daily_history is not None and not task.daily_history.empty
+            )
+            run = replace(self, source="daily" if daily else "weekly")
+        if task.max_delay is not None and not run.lags:
+            steps = (
+                -(-int(task.max_delay) // 7)
+                if run.source == "weekly"
+                else int(task.max_delay)
+            )
+            run = replace(run, lags=steps + 1)
+        return run
 
     @property
     def needs_snapshots(self) -> bool:

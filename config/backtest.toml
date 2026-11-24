@@ -8,6 +8,10 @@ min_horizon = -4
 max_horizon = 3
 n_samples = 100
 seed = 20261027
+# The longest reporting delay D in days (Ebola), which every model reads:
+# the foundation models' lags (0 to D) and the random walk's max_delay,
+# in place of the lag-count rule and the models' own defaults.
+max_delay = 40
 
 [samples]
 # Draws per forecast of the models the site runs itself: the release
