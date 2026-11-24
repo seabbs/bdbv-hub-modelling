@@ -385,20 +385,6 @@ FTC = config["ft_check"]
 FTC_DIR = f"{HUB}/ft-check"
 
 
-def ft_check_checkpoint():
-    """The fine-tuned checkpoint the check runs: the config's or the pin."""
-    import tomllib
-
-    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
-    return FTC["checkpoint"] or pin
-
-
-def ft_check_folders():
-    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
-        f"{FTC_DIR}/forecasts/ft-{ft_check_checkpoint()}"
-    ]
-
-
 rule ft_check_forecast:
     input:
         rules.hub_data.output,
@@ -432,7 +418,7 @@ rule ft_check_forecast:
 
 rule ft_check:
     input:
-        lambda wc: [f + ".done" for f in ft_check_folders()],
+        lambda wc: [f"{f}.done" for f in ft_check_folders()],
     output:
         f"{FTC_DIR}/bdbv-ft-check.html",
     log:
