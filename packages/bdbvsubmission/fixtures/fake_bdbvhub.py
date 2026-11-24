@@ -27,7 +27,8 @@ quantiles for the reference week and the week before, as the real CLI
 does from the fit's rt.csv.gz.
 
 `fit-store unpack` writes what `fit` would, as the stored fit's
-directory, with `store.json`. `fit-store plan` lists nothing to fit.
+directory, with `store.json`; a walk's has no sampler. `fit-store plan`
+lists nothing to fit.
 `fit-store archive` writes a stored and an unfitted model's hub rows.
 
 Unknown candidates default to `pass`. `randomwalk=implausible` breaks
@@ -235,6 +236,25 @@ def cmd_fit(args: argparse.Namespace, stored: bool = False) -> int:
     return 0
 
 
+def stored_walk(args: argparse.Namespace) -> int:
+    """Write a stored walk's fit directory: records, no sampler."""
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    reason = f"{args.config} has no sampler and no posterior"
+    diag = {
+        "schema_version": 1,
+        "model": args.config,
+        "config": args.config,
+        "sampler": "none",
+        "status": "not-applicable",
+        "reason": reason,
+    }
+    ppc = {"schema_version": 1, "available": False, "reason": reason}
+    (out / "diagnostics.json").write_text(json.dumps(diag))
+    (out / "ppc.json").write_text(json.dumps(ppc))
+    return 0
+
+
 def cmd_fit_store(args: argparse.Namespace) -> int:
     """`fit-store plan` lists nothing; `unpack` writes a stored fit;
     `archive` writes two models' hub rows, a zone's included."""
@@ -302,7 +322,10 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
         config=os.environ.get("CAND_CONFIG", "main"),
         vintage=args.origin,
     )
-    status = cmd_fit(fit, stored=True)
+    if os.environ.get("CAND_KIND") == "randomwalk":
+        status = stored_walk(fit)
+    else:
+        status = cmd_fit(fit, stored=True)
     if status == 0:
         record = {
             "model": args.model,
@@ -600,6 +623,7 @@ def main() -> int:
     fs.add_argument("--reference-date", default=None)
     fs.add_argument("--out", default=None)
     fs.add_argument("--keys", default=None)
+    fs.add_argument("--usable", action="store_true")
     co = sub.add_parser("coherence")
     co.add_argument("--vintage", required=True)
     co.add_argument("--out", required=True)

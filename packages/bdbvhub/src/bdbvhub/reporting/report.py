@@ -1128,22 +1128,29 @@ def _nowcast_forecasts(
 ) -> pd.DataFrame:
     """Forecasts for the Nowcast page, from every source that has them.
 
-    Models that need no fit are run on the latest vintage here. Fitted
-    models are slow, so they are taken from the backtest, at the latest
-    real origin it has.
+    Models the fit store does not hold are run on the latest vintage
+    here. The stored models, the walks among them, are taken from the
+    backtest, which `fit-store load` fills, at the latest real origin it
+    has.
     """
-    specs = list_models()
-    quick = [get_model(s.name) for s in specs if not s.fitted]
-    ran = run_forecasts(quick, tasks)
-    silent = {m.name for m in quick} - set(ran["model"])
-    if silent:
-        raise RuntimeError(
-            f"No forecast from {sorted(silent)} on the latest vintage "
-            f"{latest}, so the Nowcast page would show another model's."
-        )
-    check_distinct(ran)
-    frames = [ran]
-    have = {s.name for s in specs if not s.fitted}
+    stored = set(stored_models())
+    quick = [
+        get_model(s.name)
+        for s in list_models()
+        if not s.fitted and s.name not in stored
+    ]
+    frames = []
+    if quick:
+        ran = run_forecasts(quick, tasks)
+        silent = {m.name for m in quick} - set(ran["model"])
+        if silent:
+            raise RuntimeError(
+                f"No forecast from {sorted(silent)} on the latest vintage "
+                f"{latest}, so the Nowcast page would show another model's."
+            )
+        check_distinct(ran)
+        frames.append(ran)
+    have = {m.name for m in quick}
     backtest = res / "forecasts.csv.gz"
     rows = pd.read_csv(backtest, dtype={"as_of": object})
     if "as_of" in rows:

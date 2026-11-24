@@ -88,3 +88,41 @@ def test_newer_pull_request_runs_do_not_end_the_wait(tmp_path: Path) -> None:
     assert run.returncode == 0, run.stderr
     assert "finished without" not in run.stdout
     assert "stored every candidate's fit" in run.stdout
+
+
+def test_an_older_stored_fit_is_ready_without_a_wait(tmp_path: Path) -> None:
+    # The store has only an older fit of the candidate, which unpack
+    # uses: the plan asked with --usable lacks nothing, so Fit store is
+    # not started.
+    bin_dir = _fake_gh(tmp_path, [])
+    cli = tmp_path / "fake_cli.sh"
+    cli.write_text(
+        "usable=false\n"
+        "while [ $# -gt 0 ]; do\n"
+        '  [ "$1" = --out ] && out=$2; [ "$1" = --usable ] && usable=true\n'
+        "  shift\n"
+        "done\n"
+        'if [ "$usable" = true ]; then echo \'{"include": []}\' > "$out"\n'
+        'else echo \'{"include": [{"model": "renewal"}]}\' > "$out"; fi\n'
+    )
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "WORK": str(tmp_path / "work"),
+        "CI_DIR": str(SCRIPT.parents[1]),
+        "FORECAST_CLI": f"bash {cli}",
+        "SKIP_FETCH": "true",
+        "GITHUB_REPOSITORY": "o/r",
+        "MODELS": "renewal",
+        "AS_OF": "2026-11-15",
+        "DISPATCH": "true",
+        "WAIT_MINUTES": "60",
+        "POLL_SECONDS": "0",
+    }
+    run = subprocess.run(
+        ["bash", str(SCRIPT)], cwd=tmp_path, env=env, capture_output=True,
+        text=True, timeout=60,
+    )  # fmt: skip
+    assert run.returncode == 0, run.stderr
+    assert "is in the fit store" in run.stdout
+    assert "Started Fit store" not in run.stdout

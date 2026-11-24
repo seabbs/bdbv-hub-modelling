@@ -31,7 +31,6 @@ from .common import (
     write_text,
 )
 from .hubdata import quantile, read_observed, read_samples
-from .policy import UNFITTED
 
 MAX_BODY = 60000  # GitHub's limit is 65536 characters
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
@@ -308,28 +307,33 @@ def fit_line(provenance: Mapping[str, Any]) -> str:
     key, else the model's newest stored fit (`run.json` `store`, from
     `fit-store unpack`), which the line says. A fit made in the
     run (`candidate.sh` with `FIT_SOURCE=fit`, a local run) says so.
+    A random walk fits nothing, but its stored forecast is read the same
+    way, and the line names it a forecast.
     """
     run = provenance.get("run") or {}
-    if "store" not in run or run.get("kind") in UNFITTED:
+    if "store" not in run or run.get("kind") == "direct":
         return ""
+    what = "forecast" if run.get("kind") == "randomwalk" else "fit"
+    head = what.capitalize()
+    made = "made" if what == "forecast" else "fitted"
     store = run["store"]
     if not store:
         return (
-            "Fit: made in this run, as the fit store holds no fit for this "
-            "round."
+            f"{head}: made in this run, as the fit store holds no {what} "
+            "for this round."
         )
     where = (store.get("store_commit") or "unknown")[:7]
     current = store.get("current_key")
     if current and current != store["key"]:
         return (
-            f"Fit: `{store['model']}` fit from commit "
-            f"`{store['commit'][:7]}` (key `{store['key']}`, fitted "
+            f"{head}: `{store['model']}` {what} from commit "
+            f"`{store['commit'][:7]}` (key `{store['key']}`, {made} "
             f"{store['fitted_at']}); current code key `{current}`, "
             f"which the fit store lacks (fit-store commit `{where}`)."
         )
     return (
-        f"Fit: read from the fit store, the `{store['model']}` fit at "
-        f"{store['origin']} (key `{store['key']}`, fitted at "
+        f"{head}: read from the fit store, the `{store['model']}` {what} at "
+        f"{store['origin']} (key `{store['key']}`, {made} at "
         f"`{store['commit'][:7]}`, fit-store commit `{where}`)."
     )
 

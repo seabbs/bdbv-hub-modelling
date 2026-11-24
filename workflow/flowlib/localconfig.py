@@ -25,7 +25,6 @@ from pathlib import Path
 from string import Template
 
 ROOT = Path(__file__).parents[2]
-DEFAULT = ROOT / "config" / "local.env"
 KEY = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 USES = re.compile(r"\$(?:\{([A-Z_][A-Z0-9_]*)\}|([A-Z_][A-Z0-9_]*))")
 
@@ -121,6 +120,22 @@ DEFAULTS = (
 """Each setting and its default."""
 
 
+def default_path(checkout: Path | str = ROOT) -> Path:
+    """Return the local config a checkout reads by default.
+
+    Its own `config/local.env`, or in a git worktree without one, the main
+    checkout's, so a host keeps one local config for every worktree.
+    """
+    checkout = Path(checkout)
+    own = checkout / "config" / "local.env"
+    git = checkout / ".git"
+    if own.is_file() or not git.is_file():
+        return own
+    gitdir = git.read_text().partition("gitdir:")[2].strip()
+    # <main>/.git/worktrees/<name>
+    return Path(gitdir).parents[2] / "config" / "local.env"
+
+
 def _unquote(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
         return value[1:-1]
@@ -174,7 +189,7 @@ def check(
     ----------
     path
         The local config; by default `$LOCAL_CONFIG`, else
-        `config/local.env`.
+        `config/local.env` (`default_path`).
     environ
         The environment; by default `os.environ`.
 
@@ -185,7 +200,7 @@ def check(
     """
     env = os.environ if environ is None else environ
     if path is None:
-        path = env.get("LOCAL_CONFIG") or DEFAULT
+        path = env.get("LOCAL_CONFIG") or default_path()
     pairs = _lines(Path(path))
     used = {
         m.group(1) or m.group(2)
@@ -209,7 +224,7 @@ def read(
     ----------
     path
         The local config; by default `$LOCAL_CONFIG`, else
-        `config/local.env`.
+        `config/local.env` (`default_path`).
     environ
         The environment; by default `os.environ`.
 
@@ -225,7 +240,7 @@ def read(
     """
     env = dict(os.environ if environ is None else environ)
     if path is None:
-        path = env.get("LOCAL_CONFIG") or DEFAULT
+        path = env.get("LOCAL_CONFIG") or default_path()
     # Each setting as written, and whether it is filled in: the
     # environment's values and single-quoted ones are kept as they are,
     # as the shell does.
