@@ -1856,8 +1856,10 @@ def _ft_check(args: argparse.Namespace) -> int:
         ftcheck.forecast(args.model, args.data, args.out, args.checkpoint)
         print(f"Forecasts of {args.model} written to {args.out}.")
         return 0
-    tables = ftcheck.skill_tables(args.parts, args.data, args.reference)
-    out = ftcheck.write_report(
+    from bdbvhub.reporting import ftcheck_report
+
+    tables = ftcheck_report.skill_tables(args.parts, args.data, args.reference)
+    out = ftcheck_report.write_report(
         tables,
         args.out,
         args.reference,

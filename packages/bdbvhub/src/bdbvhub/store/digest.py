@@ -40,6 +40,7 @@ REPORT_ONLY: Final = (
     "packages/bdbvhub/src/bdbvhub/reporting/store_note.py",
     "packages/nowcasteval/src/nowcasteval/tables.py",
     "packages/bdbvhub/src/bdbvhub/reporting/zone_nowcast.py",
+    "packages/bdbvhub/src/bdbvhub/reporting/ftcheck_report.py",
 )
 """Modules only the `report` command runs, so no backtest reads them."""
 
