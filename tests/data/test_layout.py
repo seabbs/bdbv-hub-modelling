@@ -67,7 +67,6 @@ def _imports_from(module: str, source: str) -> set[str]:
 def test_generic_helpers_live_in_generic_modules() -> None:
     assert {
         "MAX_PAIR_AGE",
-        "cutoff_lags",
         "latest_onset_days",
         "release_cutoff",
         "release_pairs",

@@ -123,9 +123,8 @@ def test_model_code_covers_what_its_forecasts_run(
     daily: pd.DataFrame,
     config: BacktestConfig,
 ) -> None:
-    from bdbvhub.models import get_model
     from bdbvhub.store.digest import model_code
-    from nowcastbdbv.data.tidy import load_daily_zones, load_health_zones
+    from nowcastbdbv.data.tidy import load_daily_zones
     from nowcastbdbv.data.zones import hub_zones
     from nowcastbdbv.zones import zone_forecasts
     from nowcasteval import backtest as bt
@@ -134,22 +133,13 @@ def test_model_code_covers_what_its_forecasts_run(
     data = ROOT / "tests" / "fixtures" / "data"
     real = target.loc[target["kind"] == "real"]
     tasks = bt.make_tasks(real, delays.assign(kind="real"), config, daily=daily)
-    one = [
-        dataclasses.replace(config, simulated_dates=config.simulated_dates[:1])
-    ]
     calls = [
         lambda: forecast_releases(tasks, target, [model]),
-        lambda: bt.recovery_forecasts([get_model(model)], one[0]),
         lambda: zone_forecasts(
             target, delays, daily, load_daily_zones(data),
             hub_zones(data / "hub-config" / "tasks.json"),
             models=[model], config=config,
             origins=bt.real_vintages(real)[-2:-1],
-        ),
-        lambda: bt.scenario_forecasts(
-            [get_model(model)], config, target, delays,
-            load_health_zones(data), "2026-10-24", ["2026-10-17"],
-            names=["flat"],
         ),
     ]  # fmt: skip
     ran: set[str] = set()

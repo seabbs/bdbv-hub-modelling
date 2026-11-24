@@ -340,7 +340,7 @@ rule ebola_backtest_draws:
         "exec >{log} 2>&1; {params.env} "
         "mkdir -p {params.folder} && "
         "{params.bdbv} backtest --config {params.config} --samples {params.n} "
-        "--models {params.models} --no-recovery "
+        "--models {params.models} "
         "--results {params.folder}/results --output {params.folder}"
 
 
@@ -363,7 +363,7 @@ rule ebola_backtest:
     shell:
         "exec >{log} 2>&1; {params.env} "
         "{params.bdbv} data && "
-        "{params.bdbv} backtest --models {params.models} --no-recovery"
+        "{params.bdbv} backtest --models {params.models}"
 
 
 rule data:

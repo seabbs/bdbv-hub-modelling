@@ -6,7 +6,6 @@ Scoring, and the evaluations.
 ## What is scored
 
 Forecasts from real releases are scored on the count each later release reports, and on each week's count once its reporting is close to complete ([Real releases](#real-releases)).
-Forecasts from simulated vintages are scored against the simulated final counts.
 
 ## Scores
 
@@ -27,7 +26,7 @@ So scores compare fairly although the number of draws differs across models and 
 
 | Forecasts | Draws per forecast | Set by |
 |---|---|---|
-| Models the site runs itself in the release backtest, health zones, leave-one-province-out, scenarios and recovery | 1,000 | `[samples] backtest` in `config/backtest.toml` |
+| Models the site runs itself in the release backtest, health zones and leave-one-province-out | 1,000 | `[samples] backtest` in `config/backtest.toml` |
 | Stored fits, the submission, the Nowcast page and our models in the Comparison with the hub | 100 | `[forecast] n_samples` in `config/backtest.toml` |
 | Hub teams | 100 | Their submissions |
 | German nowcast benchmark | Quantiles at seven levels, scored by WIS | `config/germany.toml` |
@@ -82,12 +81,10 @@ The other models forecast every task.
 | Run | Vintages | Truth |
 |---|---|---|
 | Development backtest | Real, except the latest real vintage | As for real releases |
-| Recovery check | Simulated | Simulated final counts |
-| Simulated scenarios | The four weekly simulated vintages up to the latest real vintage, from outbreaks calibrated to it with Rt after the data scaled by 0.75, 1 or 1.25 | Complete weeks of the simulated final counts, and the counts as reported two weeks after each vintage |
 | Real releases | Every real release with a later release | The count each later release shows, and each week's count in the first release cut off the truth delay after it |
 | Comparison with hub forecasts | Real where one serves the round | The count each later release shows, and the latest release's count for its complete weeks |
 
-In the simulated scenarios and leave-one-province-out, a week is complete when it ended at least 3 weeks before the truth vintage.
+In leave-one-province-out, a week is complete when it ended at least 3 weeks before the truth vintage.
 
 ## Real releases
 

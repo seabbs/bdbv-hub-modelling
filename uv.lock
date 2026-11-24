@@ -2411,7 +2411,6 @@ source = { editable = "packages/nowcastbdbv" }
 dependencies = [
     { name = "nowcastbaselines" },
     { name = "nowcasteval" },
-    { name = "nowcastfoundation" },
     { name = "nowcastrenewal" },
     { name = "nowcastutils" },
     { name = "numpy" },
@@ -2423,7 +2422,6 @@ dependencies = [
 requires-dist = [
     { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
-    { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
     { name = "nowcastrenewal", editable = "packages/nowcastrenewal" },
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },

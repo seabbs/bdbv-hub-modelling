@@ -39,7 +39,7 @@ env:
 
 jobs:
   # The full tier: every test marked slow (model fits, Chronos-2
-  # inference, backtests, the recovery fit) and the smoke runs. Nightly,
+  # inference, backtests) and the smoke runs. Nightly,
   # on dispatch, and on a pull request labelled `full-tests`.
   full:
     runs-on: ubuntu-latest

@@ -30,7 +30,6 @@ MOVED = {
     "data-bvd": "nowcast-utils:data-bvd",
     "backtest": "nowcast-eval:backtest",
     "backtest-lopo": "nowcast-eval:backtest-lopo",
-    "backtest-scenarios": "nowcast-eval:backtest-scenarios",
     "backtest-zones": "nowcast-eval:backtest-zones",
     "results": "nowcast-eval:results",
     "score-history": "nowcast-eval:score-history",

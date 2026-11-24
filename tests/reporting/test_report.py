@@ -243,44 +243,6 @@ def test_forecast_tabs() -> None:
     assert report._forecast_tabs([], {"CD": "DRC"}) == ""
 
 
-def _scenario_scores() -> pd.DataFrame:
-    rows = []
-    for model in ("randomwalk", "randomwalknowcast"):
-        for scenario in ("calibrated_falling", "calibrated_rising"):
-            for location in ("CD", "CD-IT"):
-                for horizon in (0, 1):
-                    for view in ("final", "later"):
-                        rows.append(
-                            {
-                                "model": model,
-                                "scenario": scenario,
-                                "vintage": "2026-10-24",
-                                "location": location,
-                                "level": "national"
-                                if location == "CD"
-                                else "province",
-                                "horizon": horizon,
-                                "crps": 10.0 + horizon,
-                                "log_crps": 0.5,
-                                "coverage_50": 0.5,
-                                "coverage_90": 0.9,
-                                "bias": 0.123,
-                                "complete": view == "final",
-                                "truth_view": view,
-                            }
-                        )
-    return pd.DataFrame(rows)
-
-
-def test_plot_scenarios() -> None:
-    from nowcasteval.plots import plot_scenarios
-
-    fig = plot_scenarios(
-        _scenario_scores(), models=["randomwalk", "randomwalknowcast"]
-    )
-    assert len(fig.axes) == 2  # one panel per scenario
-
-
 def test_dropdown_wraps_and_indents() -> None:
     text = report._dropdown("a\n\nb\n")
     assert text == '??? note "Tables"\n\n    a\n\n    b\n'
@@ -364,79 +326,6 @@ def test_scored_on_counts_pairs_and_forecasts() -> None:
         "cases.\n"
         "The renewal models are not scored at health zones.\n"
     )
-
-
-def _scenario_results(res: Path) -> None:
-    """Write small scenario results for every scenario the page shows."""
-    weeks = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24"]
-    scores, samples, energy, truth = [], [], [], []
-    for scenario in report._SCENARIOS:
-        for loc in ("CD", "CD-IT"):
-            truth += [
-                {
-                    "scenario": scenario,
-                    "location": loc,
-                    "target_end_date": w,
-                    "truth": 5.0,
-                    "truth_vintage": "2027-01-10",
-                }
-                for w in weeks
-            ]
-            for model in ("randomwalk", "randomwalknowcast"):
-                for h, week in enumerate(weeks[2:]):
-                    scores += [
-                        {
-                            "scenario": scenario,
-                            "model": model,
-                            "reference_date": "2026-10-17",
-                            "truth_vintage": "2027-01-10",
-                            "location": loc,
-                            "target_end_date": week,
-                            "horizon": h,
-                            "truth": 5.0,
-                            "crps": 1.0 + h,
-                            "log_crps": 0.1,
-                            "coverage_50": 0.5,
-                            "coverage_90": 0.9,
-                            "bias": 0.0,
-                            "complete": True,
-                            "truth_view": view,
-                        }
-                        for view in ("final", "as of 2 weeks later")
-                    ]
-                    samples += [
-                        {
-                            "scenario": scenario,
-                            "model": model,
-                            "vintage": "2026-10-11",
-                            "reference_date": "2026-10-17",
-                            "location": loc,
-                            "target_end_date": week,
-                            "sample": k,
-                            "value": float(k),
-                            "as_of": None,
-                        }
-                        for k in range(3)
-                    ]
-        energy += [
-            {
-                "scenario": scenario,
-                "model": model,
-                "reference_date": "2026-10-17",
-                "truth_vintage": "2027-01-10",
-                "scale": scale,
-                "energy": 1.0,
-                "log_energy": 0.1,
-                "truth_view": view,
-            }
-            for model in ("randomwalk", "randomwalknowcast")
-            for scale in ("national", "provinces")
-            for view in ("final", "as of 2 weeks later")
-        ]
-    pd.DataFrame(scores).to_csv(res / "scenario-scores.csv.gz", index=False)
-    pd.DataFrame(samples).to_csv(res / "scenario-forecasts.csv.gz", index=False)
-    pd.DataFrame(energy).to_csv(res / "scenario-energy.csv", index=False)
-    pd.DataFrame(truth).to_csv(res / "scenario-truth.csv", index=False)
 
 
 def test_checks_chart_has_a_set_per_baseline() -> None:

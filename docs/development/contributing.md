@@ -7,7 +7,7 @@ Setting up, checking and documenting changes to the package.
 |---|---|
 | `task setup` | Install the package with the dev and docs groups. |
 | `task test` | Run the tests with coverage. |
-| `task test-slow` | Run the parameter recovery fit. |
+| `task test-slow` | Run the tests marked slow (model fits and Chronos-2 inference). |
 | `task lint` | Lint with ruff, check formatting and type-check with mypy. |
 | `task format` | Format and fix lint where safe. |
 | `task docs` | Build the docs strictly into `_site/`. |
