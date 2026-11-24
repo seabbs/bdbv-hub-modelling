@@ -113,3 +113,36 @@ def test_the_german_unit_is_given_its_fetched_triangle():
     got = scoring.unit_shell("germany")
     assert "GERMANY_TRIANGLE={input.germany} " in got
     assert "GERMANY_TRIANGLE" not in scoring.unit_shell("release")
+
+
+def test_a_key_file_changes_only_when_its_key_does(tmp_path):
+    # Every profile reruns on file times only (rerun-triggers: mtime), so
+    # a code key reaches a rule as a file it reads, rewritten only when
+    # the key moves: a checkout reruns nothing, a code change reruns it.
+    import os
+
+    path = tmp_path / "keys" / "reference.key"
+    assert scoring.key_file(path, "abc") == str(path)
+    assert path.read_text() == "abc\n"
+    os.utime(path, (1, 1))
+    scoring.key_file(path, "abc")
+    assert path.stat().st_mtime == 1
+    scoring.key_file(path, "def")
+    assert path.read_text() == "def\n"
+    assert path.stat().st_mtime > 1
+
+
+def test_the_reference_unit_reads_its_code_key_as_a_file(tmp_path):
+    s = _scoring(tmp_path, labels=[])
+    ref = s.reference_key_input(scoring.REFERENCE)
+    assert ref == [f"{tmp_path / 'cache'}/keys/{scoring.REFERENCE}.key"]
+    assert s.reference_key_input("abc123") == []
+
+
+def test_no_rule_keys_code_by_a_param_mtime_never_reads():
+    from pathlib import Path
+
+    rules = Path(__file__).parents[2] / "workflow" / "rules"
+    text = "".join(p.read_text() for p in rules.glob("*.smk"))
+    assert "code=lambda wc: scoring.reference_key" not in text
+    assert "code=lambda wc: scoring.ft_check_key()" not in text
