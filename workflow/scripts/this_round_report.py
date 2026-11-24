@@ -12,7 +12,8 @@ renewal fits' convergence.
 Inputs: the round's hub tables of every candidate (`fit-store archive`),
 the fit store (for the renewal fits' `rt.csv.gz` and `diagnostics.json`),
 the hub data, and the run's `inputs`, `gate` and `baseline-gate`
-artefacts. The page reads `<OUT stem>-data/` beside it.
+artefacts, with the renewal gate's pick's `candidate-<id>` artefact.
+The page reads `<OUT stem>-data/` beside it.
 
     python workflow/scripts/this_round_report.py OUT.html CANDIDATES \
         STORE DATA_DIR RUN_DIR
@@ -26,7 +27,6 @@ import gzip
 import html
 import io
 import json
-import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -36,6 +36,7 @@ import pandas as pd
 
 from bdbvhub import compare as hc
 from bdbvhub.reporting import pages
+from bdbvhub.reporting.warn_plots import warnings_figure
 from bdbvhub.store.store import read_fit
 from nowcastbdbv.data.tidy import load_target
 from nowcasteval.explorer import (
@@ -174,34 +175,54 @@ def gate_section(run: Path) -> str:
     return "\n".join(parts)
 
 
-def warnings_section(run: Path, data: Path) -> str:
-    """Return each gate's plot of the locations its pick warned on.
+def _hub_file(folder: Path) -> Path | None:
+    """Return the first hub file under a candidate's `submission/`."""
+    found = sorted((folder / "submission").glob("**/*.csv"))
+    return found[0] if found else None
 
-    The plots are the stored `warnings.png` of each gate's selected
-    candidate, copied into the page's data folder.
+
+def warnings_section(run: Path, origin: str, data: Path) -> str:
+    """Return the plot of each location the pick's checks warned on.
+
+    The pick is the renewal gate's selected candidate, or its first
+    candidate when the round was skipped. The panels are drawn from the
+    run's files: that candidate's `checks.json` and hub file (its
+    `candidate-<id>` artefact), the round's `time-series.csv` and
+    `previous.csv`, and the random walk nowcast's hub file (`inputs`).
     """
-    parts = []
-    for name, title in (("gate", "seabbs-renewal"),
-                        ("baseline-gate", "seabbs-rwnowcast")):  # fmt: skip
-        found = sorted((run / name).glob("**/selected/warnings.png"))
-        if not found:
-            continue
-        image = data / f"{name}-warnings.png"
-        shutil.copy(found[0], image)
-        parts.append(
-            f"<h3>{title}</h3><img src='{data.name}/{image.name}' "
-            f"alt='Locations the checks warned on for {title}' "
-            "style='max-width:100%'>"
-        )
-    if not parts:
+    found = sorted((run / "gate").glob("**/provenance.json"))
+    prov = json.loads(found[0].read_text()) if found else {}
+    attempts = prov.get("attempts") or [{}]
+    pick = str(prov.get("selected") or attempts[0].get("id", ""))
+    cand = run / "candidates" / pick
+    sub = _hub_file(cand)
+    if not pick or sub is None or not (cand / "checks.json").exists():
+        return "<p class=mut>No stored checks for the pick.</p>"
+    inputs = run / "inputs" / "inputs"
+    previous = inputs / "previous.csv"
+    walk = _hub_file(run / "inputs" / "candidates" / "randomwalknowcast")
+    model = json.loads((cand / "run.json").read_text()).get("model", pick)
+    fig = warnings_figure(
+        cand / "checks.json",
+        sub,
+        inputs / "time-series.csv",
+        origin,
+        previous=previous if previous.exists() else None,
+        randomwalk=walk,
+        label=str(model),
+    )
+    if fig is None:
         return "<p class=mut>No check warned on a location.</p>"
-    note = (
-        "<p class=mut>One panel per location the forecast checks warned "
+    fig.savefig(data / "warnings.png", dpi=100, facecolor="white")
+    return (
+        f"<p class=mut>The checks of {html.escape(pick)} "
+        f"({html.escape(str(model))}): one panel per location they warned "
         "on. Points are the counts reported at the vintage. Lines and "
         "bands are the median and 90% interval of the pick, last week's "
         "submission and the random walk nowcast.</p>"
+        f"<img src='{data.name}/warnings.png' alt='Locations the checks "
+        "warned on' style='max-width:100%'>"
     )
-    return "\n".join([note, *parts])
 
 
 def team_quantiles(round_dir: Path, ref: str) -> pd.DataFrame:
@@ -301,7 +322,7 @@ def build(
         "<h2>What the gate picks</h2>",
         gate_section(run),
         "<h2>Warned locations</h2>",
-        warnings_section(run, data),
+        warnings_section(run, origin, data),
         "<h2>Forecasts and nowcasts</h2>",
         "<p class=mut>Every candidate against the data as of the round, "
         "beside every other team's submission for this round so far, "
