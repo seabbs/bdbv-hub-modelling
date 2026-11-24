@@ -1,7 +1,8 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Fit configurations for the automated submission workflow.
 
-The submission CI (`ci/`, see `ci/INTEGRATION.md`) fits each candidate of
+The submission CI (`packages/bdbvsubmission/`, see
+`packages/bdbvsubmission/INTEGRATION.md`) fits each candidate of
 its fallback chain with `bdbvhub fit --config <name>` and then
 forecasts from the saved fit with `bdbvhub nowcast --config <name>
 --fit <dir>`. A fit configuration says how to do both.
@@ -14,7 +15,8 @@ The renewal configurations run the PyRenew model through
 trajectories and writes `ppc.json`. `randomwalk` needs no fit.
 
 A fit function gets the forecast task, the sampler settings from
-`ci/policy.toml` and the fit directory. It writes whatever the forecast
+`packages/bdbvsubmission/policy.toml` and the fit directory. It writes whatever
+the forecast
 needs into the directory and returns the `diagnostics.json` record. It
 may append progress lines to `progress.log`. The forecast function gets
 the task and the directory and returns province samples (columns
@@ -50,7 +52,8 @@ __all__ = [
 ]
 
 DIAGNOSTICS_SCHEMA_VERSION: Final = 1
-"""Version of the `diagnostics.json` format in `ci/INTEGRATION.md`."""
+"""Version of the `diagnostics.json` format in
+`packages/bdbvsubmission/INTEGRATION.md`."""
 
 FIT_RECORD: Final = "fit.json"
 """File in the fit directory recording what was fitted."""
@@ -265,7 +268,7 @@ def run_fit(
         The forecast task built from the vintage.
     sampler : mapping
         Sampler settings, the candidate's `sampler` table in
-        `ci/policy.toml`.
+        `packages/bdbvsubmission/policy.toml`.
     fit_dir : pathlib.Path or str
         Where to write.
     model : str

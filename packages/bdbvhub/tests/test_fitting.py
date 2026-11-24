@@ -145,7 +145,8 @@ def test_plot_submission_and_validate(tmp_path: Path) -> None:
     assert all(loc.count("-") <= 1 for loc in shown)
     # The committed hub config follows the hub, so it lists the round.
     code = main(["validate", "--hub", str(DATA), "--skip-window",
-                 "--metadata-dir", "hub/model-metadata", str(csv)])  # fmt: skip
+                 "--metadata-dir", "packages/bdbvsubmission/model-metadata",
+                 str(csv)])  # fmt: skip
     assert code == 0
 
 

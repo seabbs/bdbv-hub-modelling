@@ -150,7 +150,7 @@ def test_paper_cores_come_from_the_local_config():
         "Taskfile.yml",
         "paper/Taskfile.yml",
         "workflow/Taskfile.yml",
-        "ci/Taskfile.yml",
+        "packages/bdbvsubmission/Taskfile.yml",
         *(
             str(p.relative_to(ROOT))
             for p in (ROOT / "packages").glob("*/Taskfile.yml")

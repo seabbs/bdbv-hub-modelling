@@ -145,7 +145,7 @@ class ComparisonConfig:
         Git ref of the hub to fetch from.
     submissions_table : str
         The ledger's table of each round's submitted model per hub id
-        (`submission_ci.submissions`), fetched by `--fetch`.
+        (`bdbvsubmission.submissions`), fetched by `--fetch`.
     substituted : str
         `apart` scores a week a fallback went out under one of our hub
         ids under its own label (`substituted_label`), so the chain's

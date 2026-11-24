@@ -646,7 +646,7 @@ def write_model_metadata(
     record : mapping
         The metadata record.
     directory : pathlib.Path or str
-        Where to write it, such as `hub/model-metadata/`.
+        Where to write it, such as `packages/bdbvsubmission/model-metadata/`.
 
     Returns
     -------

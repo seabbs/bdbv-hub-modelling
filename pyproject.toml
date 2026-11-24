@@ -118,6 +118,9 @@ nowcastbdbv = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
+# The hub submission package keeps its own small, dependency-free
+# environment and lock (packages/bdbvsubmission/uv.lock).
+exclude = ["packages/bdbvsubmission"]
 
 [tool.ruff]
 line-length = 80
@@ -189,7 +192,11 @@ convention = "numpy"
 testpaths = ["packages/*/tests", "workflow/tests", "tests"]
 pythonpath = ["tests"]
 # Model fits are slow; `task test-slow` runs them.
-addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not slow"]
+# packages/bdbvsubmission has its own environment and runs its own tests.
+addopts = [
+  "-ra", "--strict-markers", "--strict-config", "-m", "not slow",
+  "--ignore=packages/bdbvsubmission",
+]
 xfail_strict = true
 filterwarnings = [
   # Raised inside pandas by `pd.Timedelta(days=...)` with NumPy 2.4.
@@ -246,6 +253,7 @@ python_version = "3.13"
 strict = true
 warn_unreachable = true
 files = ["packages/*/src"]
+exclude = ["^packages/bdbvsubmission/"]
 
 [[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.

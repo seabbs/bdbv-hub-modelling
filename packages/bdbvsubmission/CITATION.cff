@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+title: "bdbvsubmission: gated submission of forecasts to the BDBV Modeling Hub"
+message: "If you use bdbvsubmission, please cite it as below."
+type: software
+authors:
+  - family-names: Abbott
+    given-names: Sam
+    email: sam.abbott@lshtm.ac.uk
+    affiliation: London School of Hygiene & Tropical Medicine
+    orcid: https://orcid.org/0000-0001-8057-8037
+abstract: >-
+  The hub submission package: the fallback chain, forecast checks, hub validation and the hub pull request for each round of the BDBV Modeling Hub. Standard library only. Part of bdbv-hub-modelling.
+license: MIT
+repository-code: "https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/bdbvsubmission"
+url: "https://samabbott.co.uk/bdbv-hub-modelling/"

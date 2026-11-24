@@ -8,7 +8,11 @@ from typing import Any
 
 BUNDLE = Path(__file__).resolve().parent
 R_VALIDATOR = (
-    BUNDLE.parents[3] / "ci" / "steps" / "validate_with_hubvalidations.R"
+    BUNDLE.parents[3]
+    / "packages"
+    / "bdbvsubmission"
+    / "steps"
+    / "validate_with_hubvalidations.R"
 )
 MANIFEST: dict[str, Any] = json.loads(
     (BUNDLE / "fixtures" / "manifest.json").read_text()

@@ -247,7 +247,8 @@ FIT_VARIANTS: Final[dict[str, str]] = {
     "bvd": "renewalbvd",
 }
 """The variant each fit configuration of the CI runs. The chain is `bvd`,
-`renewalsp`, `main`, then the random walks (`ci/policy.toml`)."""
+`renewalsp`, `main`, then the random walks
+(`packages/bdbvsubmission/policy.toml`)."""
 
 
 def model_config(variant: Variant) -> ModelConfig:
@@ -1583,7 +1584,8 @@ def fit_renewal(
     task : ForecastTask
         The task.
     sampler : mapping
-        The candidate's sampler table from `ci/policy.toml`.
+        The candidate's sampler table from
+        `packages/bdbvsubmission/policy.toml`.
     fit_dir : pathlib.Path or str
         The fit directory.
     variant : str

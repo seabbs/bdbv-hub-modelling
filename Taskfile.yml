@@ -41,9 +41,9 @@ includes:
   workflow:
     taskfile: workflow/Taskfile.yml
     dir: workflow
-  ci:
-    taskfile: ci/Taskfile.yml
-    dir: ci
+  submission:
+    taskfile: packages/bdbvsubmission/Taskfile.yml
+    dir: packages/bdbvsubmission
   paper:
     taskfile: paper/Taskfile.yml
     dir: paper
@@ -147,7 +147,7 @@ tasks:
   dry:submit:
     desc: Dry run of the submission workflow on fixture data
     cmds:
-      - task: ci:dry
+      - task: submission:dry
 
   dry:fit-store:
     desc: List the fits the store lacks for this code and data
