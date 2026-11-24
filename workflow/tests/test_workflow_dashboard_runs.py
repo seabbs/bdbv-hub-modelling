@@ -32,11 +32,11 @@ def test_a_bad_ref_spec_says_what_is_wrong():
 def test_a_checkpoint_label_maps_to_its_run(tmp_path):
     train = tmp_path / "train" / "n250"
     train.mkdir(parents=True)
-    (train / "settings.json").write_text(json.dumps({"hash": "7d7c5d9f247e"}))
+    (train / "settings.json").write_text(json.dumps({"hash": "deadbeef0004"}))
     which = runs.Classifier(runs.load_runs([("slots", tmp_path)]))
-    assert which.run_of("slots-7d7c5d9f247e") == "slots"
-    assert which.run_of("chronos-slots-7d7c5d9f247e") == "slots"
-    assert which.run_of("7d7c5d9f247e") == "slots"
+    assert which.run_of("slots-deadbeef0004") == "slots"
+    assert which.run_of("chronos-slots-deadbeef0004") == "slots"
+    assert which.run_of("deadbeef0004") == "slots"
     assert which.run_of("ffffffffffff") is None
 
 
