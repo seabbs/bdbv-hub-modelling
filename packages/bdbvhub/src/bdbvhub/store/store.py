@@ -61,13 +61,13 @@ import pandas as pd
 from bdbvhub.models import get_model, list_models
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcastbdbv.data.zones import ZoneData, load_zone_data
+from nowcastbdbv.tasks import vintage_task
 from nowcasteval.backtest import (
     BacktestConfig,
     load_config,
     merge_by_model,
     real_vintages,
     run_forecasts,
-    vintage_task,
 )
 from nowcastutils.base import ForecastModel, ForecastTask
 from nowcastutils.files import write_csv

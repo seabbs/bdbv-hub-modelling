@@ -11,7 +11,8 @@ import pytest
 
 from bdbvhub.models import get_model
 from nowcastbdbv.data.zones import ZoneData, hub_zones
-from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastbdbv.tasks import make_tasks
+from nowcasteval.backtest import BacktestConfig
 from nowcastfoundation.forecaster import (
     LAG_QUANTILE,
     MAX_LAG,

@@ -67,11 +67,11 @@ from nowcastbdbv.data.zone_map import (
     zone_names,
 )
 from nowcastbdbv.data.zones import hub_zones, load_zone_data
+from nowcastbdbv.tasks import make_tasks
 from nowcasteval.backtest import (
     BacktestConfig,
     check_distinct,
     load_config,
-    make_tasks,
     run_forecasts,
     truth_changes,
 )

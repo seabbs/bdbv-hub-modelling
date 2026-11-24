@@ -55,6 +55,7 @@ from nowcastbdbv.data.tidy import (
     load_target,
 )
 from nowcasteval import backtest as bt
+from nowcastbdbv.tasks import make_tasks
 from nowcasteval.nowcast import relative_crps, release_backtest
 from nowcastutils.base import NATIONAL
 from nowcastbaselines.chain import Settings
@@ -73,7 +74,7 @@ real = target.loc[target["kind"] == "real"]
 config = dataclasses.replace(
     bt.load_config("config/backtest.toml"), min_horizon=-6, n_samples=N_SAMPLES
 )
-task = bt.make_tasks(
+task = make_tasks(
     real.loc[real["vintage"] == ORIGIN],
     delays_for_vintage(delays, ORIGIN)[0],
     config,

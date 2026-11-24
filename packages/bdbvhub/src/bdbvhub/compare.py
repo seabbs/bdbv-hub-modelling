@@ -52,7 +52,8 @@ import yaml
 from bdbvhub.models import get_model, list_models
 from nowcastbaselines.zones import zone_task
 from nowcastbdbv.data.zones import ZoneData
-from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
+from nowcastbdbv.tasks import make_tasks
+from nowcasteval.backtest import BacktestConfig, run_forecasts
 from nowcasteval.nowcast import release_backtest
 from nowcasteval.scoring import pairwise_skill, summarise_scores
 from nowcastutils.dates import as_date, reference_date_for_vintage

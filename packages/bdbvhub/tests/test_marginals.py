@@ -10,7 +10,8 @@ import pandas as pd
 import pytest
 
 from bdbvhub.models import get_model
-from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastbdbv.tasks import make_tasks
+from nowcasteval.backtest import BacktestConfig
 from nowcasteval.marginals import forecast_quantiles
 from nowcastfoundation import forecaster as foundation
 from nowcastutils.base import ForecastTask

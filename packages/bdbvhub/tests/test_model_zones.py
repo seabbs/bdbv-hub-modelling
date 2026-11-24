@@ -12,7 +12,8 @@ from bdbvhub.models import get_model
 from nowcastbaselines.zones import ZoneAllocator, with_zones
 from nowcastbdbv.data.tidy import load_daily_zones
 from nowcastbdbv.data.zones import hub_zones, load_zone_data
-from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastbdbv.tasks import make_tasks
+from nowcasteval.backtest import BacktestConfig
 from nowcastrenewal import forecaster as rn
 from nowcastutils.base import ForecastTask
 from nowcastutils.hierarchy import is_zone, province_of

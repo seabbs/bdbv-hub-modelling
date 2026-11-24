@@ -7,7 +7,7 @@ The Python API of `bdbvhub`, grouped by task. See [Setup](../setup.md) to instal
 |---|---|---|
 | Data | [Data](data.md) | `load_target`, `load_daily`, `load_delays`, `delays_for_vintage` |
 | Models | [nowcastbaselines](../nowcastbaselines/reference/), [Forecasters](forecasters.md), [Renewal model](model.md) | `get_model`, `list_models`, `ForecastTask`, `ForecastModel.forecast` |
-| Evaluation | [nowcasteval](../nowcasteval/reference/), [Evaluation](evaluation.md) | `make_tasks`, `run_forecasts`, `score_forecasts`, `release_backtest` |
+| Evaluation | [nowcasteval](../nowcasteval/reference/), [Evaluation](evaluation.md) | `run_forecasts`, `score_forecasts`, `release_backtest` (BDBV tasks: `nowcastbdbv.tasks.make_tasks`) |
 | Reporting | [nowcasteval](../nowcasteval/reference/), [Figures and tables](reporting.md), [Submission](submission.md) | `plot_location_grid`, `plot_forecasts`, `to_hub_table`, `write_submission` |
 | CLI | [CLI](cli.md) | `bdbvhub --help` |
 
@@ -28,6 +28,7 @@ from nowcastbdbv.data.tidy import (
     load_target,
 )
 from nowcasteval import backtest as bt
+from nowcastbdbv.tasks import make_tasks
 from nowcasteval.nowcast import release_backtest
 from bdbvhub.models import get_model
 from nowcasteval.plots import plot_location_grid
@@ -41,7 +42,7 @@ config = dataclasses.replace(
     bt.load_config("config/backtest.toml"), min_horizon=-6
 )
 vintage = "2026-10-17"
-task = bt.make_tasks(
+task = make_tasks(
     real.loc[real["vintage"] == vintage],
     delays_for_vintage(delays, vintage)[0],
     config,

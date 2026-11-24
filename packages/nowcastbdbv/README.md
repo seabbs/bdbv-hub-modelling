@@ -14,6 +14,7 @@ It downloads, tidies and loads the BDBV Modeling Hub's data streams, its health 
 - [`data.zones`](src/nowcastbdbv/data/zones.py): the hub's health-zone codes and weekly zone counts.
 - [`data.zone_map`](src/nowcastbdbv/data/zone_map.py): the health-zone map.
 - [`zones`](src/nowcastbdbv/zones.py): health-zone forecasts split from province forecasts, and the zone backtest and its scores.
+- [`tasks`](src/nowcastbdbv/tasks.py): the BDBV release tasks (`make_tasks`, `vintage_task`) and the development and leave-one-province-out backtests built on them.
 - [`data-raw/`](data-raw): how the package's data files are built.
 
 It imports the generic packages: `nowcastutils`, `nowcasteval` and `nowcastbaselines`, and `nowcastrenewal` for the BVD download helper.

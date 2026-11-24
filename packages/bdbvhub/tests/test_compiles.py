@@ -18,7 +18,8 @@ import pytest
 from jax import monitoring
 
 from bdbvhub.models import get_model
-from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastbdbv.tasks import make_tasks
+from nowcasteval.backtest import BacktestConfig
 from nowcastutils.base import ForecastTask
 
 # The walks' draws on a fixed task; #808 (no reported-count floor) and

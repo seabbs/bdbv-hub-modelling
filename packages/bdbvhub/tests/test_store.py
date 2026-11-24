@@ -15,12 +15,8 @@ import pytest
 from bdbvhub.models import get_model
 from bdbvhub.store import store
 from nowcastbdbv.data.zones import ZoneData, load_zone_data
-from nowcasteval.backtest import (
-    BacktestConfig,
-    make_tasks,
-    real_vintages,
-    vintage_task,
-)
+from nowcastbdbv.tasks import make_tasks, vintage_task
+from nowcasteval.backtest import BacktestConfig, real_vintages
 from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS, ForecastTask
 from nowcastutils.forecast import Forecast
 

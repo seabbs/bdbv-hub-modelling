@@ -16,7 +16,8 @@ from nowcastbaselines.chain import (
     Settings,
 )
 from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
-from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
+from nowcastbdbv.tasks import make_tasks
+from nowcasteval.backtest import BacktestConfig, run_forecasts
 from nowcastutils.base import (
     ForecastTask,
     MissingSnapshots,

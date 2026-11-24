@@ -9,12 +9,8 @@ import pytest
 from bdbvhub.models import get_model
 from nowcastbaselines.chain import delay_summary
 from nowcastbaselines.randomwalk import RandomWalkNowcast
-from nowcasteval.backtest import (
-    BacktestConfig,
-    check_distinct,
-    make_tasks,
-    run_forecasts,
-)
+from nowcastbdbv.tasks import make_tasks
+from nowcasteval.backtest import BacktestConfig, check_distinct, run_forecasts
 from nowcasteval.nowcast import (
     complete_weeks,
     delay_curves,

@@ -13,7 +13,8 @@ import pytest
 
 from bdbvhub.models import get_model, list_models
 from bdbvhub.submission.hub import model_abbr_for
-from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastbdbv.tasks import make_tasks
+from nowcasteval.backtest import BacktestConfig
 from nowcastrenewal import forecaster as rn
 from nowcastutils.base import (
     NATIONAL,
@@ -554,7 +555,8 @@ def test_chain_method_defaults_to_vectorized(
 def test_inputs_carry_the_release_pairs_of_earlier_files(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    from nowcasteval.backtest import BacktestConfig, make_tasks
+    from nowcastbdbv.tasks import make_tasks
+    from nowcasteval.backtest import BacktestConfig
     from nowcastrenewal.forecaster import vintage_inputs
     from nowcastrenewal.model import MAIN
 

@@ -14,6 +14,7 @@ from bdbvhub.reporting.hubtables import (
     write_hub_tables,
 )
 from nowcastbaselines.zones import ZoneAllocator
+from nowcastbdbv import tasks as bdbv_tasks
 from nowcastbdbv.data.tidy import load_daily_zones
 from nowcastbdbv.data.zones import hub_zones
 from nowcasteval import backtest as bt
@@ -71,7 +72,7 @@ def test_hub_tables_cover_country_provinces_and_zones(
 ) -> None:
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()
-    task = bt.make_tasks(
+    task = bdbv_tasks.make_tasks(
         real.loc[real["vintage"] == latest],
         delays,
         bt.load_config(ROOT / "config" / "backtest.toml"),
@@ -107,7 +108,7 @@ def test_hub_tables_take_a_zone_fit_s_own_zones(
 ) -> None:
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()
-    task = bt.make_tasks(
+    task = bdbv_tasks.make_tasks(
         real.loc[real["vintage"] == latest],
         delays,
         bt.load_config(ROOT / "config" / "backtest.toml"),
@@ -150,7 +151,7 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
 ) -> None:
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()
-    task = bt.make_tasks(
+    task = bdbv_tasks.make_tasks(
         real.loc[real["vintage"] == latest],
         delays,
         bt.load_config(ROOT / "config" / "backtest.toml"),
@@ -204,7 +205,7 @@ def test_a_model_that_forecasts_the_country_keeps_its_national_rows(
 
     real = target.loc[target["kind"] == "real"]
     latest = real["vintage"].max()
-    task = bt.make_tasks(
+    task = bdbv_tasks.make_tasks(
         real.loc[real["vintage"] == latest],
         delays,
         bt.load_config(ROOT / "config" / "backtest.toml"),
