@@ -30,6 +30,7 @@ import html
 import io
 import sys
 from pathlib import Path
+from typing import Final
 
 import matplotlib
 
@@ -987,6 +988,87 @@ h2{margin-top:2em;border-bottom:1px solid var(--rule)}
 """
 
 
+R_LEVELS: Final = (2, 3, 5)
+"""The R thresholds the report counts days above (`r_levels`)."""
+
+
+def _latent_r(sims: Path) -> pd.DataFrame:
+    """Return a round's latent R on days with at least one infection."""
+    frames = [
+        pd.read_csv(p, usecols=["outbreak", "location", "r", "infections"])
+        for p in sorted(sims.glob("latent-*.csv.gz"))
+    ]
+    if not frames:
+        return pd.DataFrame(columns=["outbreak", "location", "r"])
+    d = pd.concat(frames, ignore_index=True)
+    return d.loc[(d["infections"] >= 1) & d["r"].notna()]
+
+
+def r_levels(dirs: dict) -> pd.DataFrame:
+    """Return each round's R levels over days with an infection.
+
+    Columns `round`, `days`, `above_<k>` (the share of days with R above
+    each of `R_LEVELS`), `p95`, `max` and `outbreaks_above_4`, the share
+    of outbreaks whose R passes 4 on some day.
+    """
+    rows = []
+    for name, sims in dirs.items():
+        d = _latent_r(Path(sims))
+        if d.empty:
+            continue
+        r = d["r"].to_numpy(dtype=float)
+        peak = d.groupby("outbreak")["r"].max()
+        rows.append(
+            {
+                "round": name,
+                "days": len(r),
+                **{f"above_{k}": float((r > k).mean()) for k in R_LEVELS},
+                "p95": float(np.quantile(r, 0.95)),
+                "max": float(r.max()),
+                "outbreaks_above_4": float((peak > 4).mean()),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def r_section(dirs: dict) -> str:
+    """Return the R(t) levels: a table by round and the distribution."""
+    table = r_levels(dirs)
+    if table.empty:
+        return "<h3>R(t)</h3><p>No latent paths.</p>"
+    head = "".join(
+        f"<th>{h}</th>"
+        for h in ["round", "days", *(f"R&gt;{k}" for k in R_LEVELS),
+                  "p95", "max", "outbreaks R&gt;4"]
+    )  # fmt: skip
+    body = "".join(
+        "<tr>"
+        + f"<td>{html.escape(str(row['round']))}</td><td>{row['days']}</td>"
+        + "".join(f"<td>{row[f'above_{k}']:.1%}</td>" for k in R_LEVELS)
+        + f"<td>{row['p95']:.2f}</td><td>{row['max']:.1f}</td>"
+        + f"<td>{row['outbreaks_above_4']:.1%}</td></tr>"
+        for _, row in table.iterrows()
+    )
+    r = np.concatenate(
+        [_latent_r(Path(s))["r"].to_numpy() for s in dirs.values()]
+    )
+    fig, ax = plt.subplots(figsize=(6, 2.6))
+    ax.hist(np.clip(r, 0, 8), bins=80, color=SIM_COLOUR)
+    for k in R_LEVELS:
+        ax.axvline(k, color=MUTED, lw=0.8, ls=":")
+    ax.set_yscale("log")
+    ax.set_xlabel("R on a day with an infection (above 8 shown at 8)", fontsize=8)
+    ax.set_title("R(t) over every outbreak and stratum")
+    _style(ax)
+    return (
+        "<h3>R(t)</h3>"
+        "<p>R after shifts and variants on every day with at least one "
+        "infection, every outbreak and stratum. Days above 2, 3 and 5, so "
+        "implausible R shows in each run.</p>"
+        f"<table><tr>{head}</tr>{body}</table>" + png(fig)
+    )
+
+
 def render(
     out: Path, title: str, refs: Path, de_csv: Path, sources: list[str]
 ) -> None:
@@ -1023,6 +1105,7 @@ def render(
         "<h2>2. Settings and outcomes by layer</h2>",
         germany_table(de, d),
         layers(d, de, ref),
+        r_section(dirs),
         "<h2>3. Flags</h2>",
         flags(d, failures),
     ]

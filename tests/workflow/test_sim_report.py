@@ -179,7 +179,9 @@ def test_r_levels_count_days_with_infections_by_threshold(tmp_path):
             "onsets": 1.0,
             "r": r,
             "reff": r,
-            "date": pd.date_range("2026-01-05", periods=10).strftime("%Y-%m-%d"),
+            "date": pd.date_range("2026-01-05", periods=10).strftime(
+                "%Y-%m-%d"
+            ),
             "location": "all",
             "outbreak": "1-0001",
         }
