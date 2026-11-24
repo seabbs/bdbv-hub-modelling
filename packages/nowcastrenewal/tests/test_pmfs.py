@@ -17,6 +17,7 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
+from model.r_live import run_r
 from pyrenew.deterministic import DeterministicVariable
 from pyrenew.randomvariable import DistributionalVariable
 
@@ -31,8 +32,6 @@ from nowcastrenewal.components.pmfs import (
     delay_pmf,
     generation_time_pmf,
 )
-
-from .r_live import run_r
 
 # Across the simulator grid's ranges and the fitted models' delays: the
 # reporting families by location and scale, the hub's imputation delay (a
@@ -318,8 +317,7 @@ def test_the_families() -> None:
 
 def test_ci_runs_the_pmf_checks() -> None:
     import yaml
-
-    from .r_live import ROOT
+    from model.r_live import ROOT
 
     workflow = yaml.safe_load(
         (ROOT / ".github/workflows/heavy.yml").read_text()
@@ -329,6 +327,6 @@ def test_ci_runs_the_pmf_checks() -> None:
     packages = " ".join(
         s.get("with", {}).get("packages", "") for s in job["steps"]
     )
-    assert "tests/model/test_pmfs.py" in runs
+    assert "packages/nowcastrenewal/tests/test_pmfs.py" in runs
     for pkg in ("primarycensored@", "flexsurv"):
         assert pkg in packages, pkg

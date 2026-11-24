@@ -17,6 +17,7 @@ from typing import Any
 import jax
 import numpy as np
 import pytest
+from model.r_live import run_r
 from numpyro import handlers
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 
@@ -27,8 +28,6 @@ from nowcastrenewal.components.pmfs import (
 )
 from nowcastrenewal.components.reference import ReferenceEvents
 from nowcastrenewal.components.renewal import NoDepletion, run_renewal
-
-from .r_live import run_r
 
 N_DAYS = 90
 GT = generation_time_pmf(Delay.from_mean_cv("gamma", 6.0, 0.5))

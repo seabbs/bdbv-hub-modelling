@@ -14,6 +14,7 @@ from typing import Any
 import jax
 import numpy as np
 import pytest
+from model.r_live import _skip, require_r, run_r
 
 from nowcastrenewal.components.pmfs import (
     Delay,
@@ -21,8 +22,6 @@ from nowcastrenewal.components.pmfs import (
     censored_logit_hazard,
 )
 from nowcastrenewal.reporting.delays import FAMILIES, report_delay_pmf
-
-from .r_live import _skip, require_r, run_r
 
 # Parameters across the grid's ranges (about its 5%, 50% and 95% points):
 # lognormal median and sdlog, gamma mean and shape, exponential mean.
@@ -181,8 +180,7 @@ def test_the_families_are_the_grids() -> None:
 
 def test_ci_runs_the_live_r_checks() -> None:
     import yaml
-
-    from .r_live import ROOT
+    from model.r_live import ROOT
 
     workflow = yaml.safe_load(
         (ROOT / ".github/workflows/heavy.yml").read_text()
@@ -193,7 +191,7 @@ def test_ci_runs_the_live_r_checks() -> None:
     packages = " ".join(
         s.get("with", {}).get("packages", "") for s in job["steps"]
     )
-    assert "tests/model/test_reporting_delays.py" in runs
+    assert "packages/nowcastrenewal/tests/test_reporting_delays.py" in runs
     assert "install_cmdstan" in runs
     for pkg in ("epinowcast/epinowcast@", "primarycensored@", "cmdstanr"):
         assert pkg in packages, pkg

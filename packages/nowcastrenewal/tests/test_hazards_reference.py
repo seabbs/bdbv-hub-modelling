@@ -12,11 +12,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from model.reference_kernels import hazard_to_pmf_reference
 
 from nowcastrenewal.components.hazards import log_hazard_probs
 from nowcastrenewal.components.reference import delayed_events
-
-from .reference_kernels import hazard_to_pmf_reference
 
 
 def test_closed_hazards_are_a_pmf_and_geometric_when_constant() -> None:

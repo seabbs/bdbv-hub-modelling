@@ -19,9 +19,9 @@ The partial means $E[T; T \le t]$ are closed form for every family.
 
 primarycensored has no Python package, so its formulation is written here
 in JAX (differentiable in the parameters, for the fitted models) and
-checked live against the R package (`tests/model/test_pmfs.py`). Fixed
-pmfs are the values of PyRenew `DeterministicPMF` components; `CensoredPMF`
-is the pmf of random parameters, a PyRenew `RandomVariable`.
+checked live against the R package (the package's `tests/test_pmfs.py`).
+Fixed pmfs are the values of PyRenew `DeterministicPMF` components;
+`CensoredPMF` is the pmf of random parameters, a PyRenew `RandomVariable`.
 """
 
 from __future__ import annotations

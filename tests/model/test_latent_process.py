@@ -403,7 +403,7 @@ def test_ci_runs_the_live_latent_checks() -> None:
     packages = " ".join(
         s.get("with", {}).get("packages", "") for s in job["steps"]
     )
-    assert "tests/model/test_latent_epinowcast.py" in runs
+    assert "packages/nowcastrenewal/tests/test_latent_epinowcast.py" in runs
     for pkg in ("epinowcast", "cmdstanr"):
         assert pkg in packages, pkg
     # The real tools only: no package of our own R code.

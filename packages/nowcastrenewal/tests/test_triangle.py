@@ -14,6 +14,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from model.r_live import run_r
 
 from nowcastrenewal.components.hazards import log_hazard_probs
 from nowcastrenewal.components.pmfs import Delay, censored_logit_hazard
@@ -22,8 +23,6 @@ from nowcastrenewal.reporting.triangle import (
     log_expected_counts,
     report_day_groups,
 )
-
-from .r_live import run_r
 
 G, T, D = 2, 9, 6
 REPORT_DAYS = ("Monday", "Thursday")
@@ -219,8 +218,7 @@ def test_report_day_groups_send_each_delay_to_its_next_report() -> None:
 
 def test_ci_runs_the_triangle_checks() -> None:
     import yaml
-
-    from .r_live import ROOT
+    from model.r_live import ROOT
 
     workflow = yaml.safe_load(
         (ROOT / ".github/workflows/heavy.yml").read_text()
@@ -228,7 +226,7 @@ def test_ci_runs_the_triangle_checks() -> None:
     runs = " ".join(
         s.get("run", "") for s in workflow["jobs"]["r-live"]["steps"]
     )
-    assert "tests/model/test_reporting_triangle.py" in runs
+    assert "packages/nowcastrenewal/tests/test_triangle.py" in runs
 
 
 def test_the_triangle_component_composes_its_parts() -> None:

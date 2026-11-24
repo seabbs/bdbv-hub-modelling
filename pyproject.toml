@@ -177,6 +177,7 @@ convention = "numpy"
 "packages/nowcastrenewal/src/nowcastrenewal/components/**" = ["ARG002", "N803", "N806"]
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
+"packages/nowcastrenewal/tests/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 # The port's abort tests check R's conditions, not message text.
 "packages/nowcastbaselines/tests/baselinenowcast/**" = ["PT011"]
 

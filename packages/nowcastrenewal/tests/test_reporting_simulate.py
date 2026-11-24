@@ -13,15 +13,14 @@ import numpy as np
 import pandas as pd
 import pytest
 from numpyro import handlers
+from test_reporting_effects import _design
+from test_reporting_expectation import REPORT_VALUES, _report
 
 from nowcastrenewal.reporting.simulate import (
     COUNT_COLUMNS,
     report_simulation,
     reporting_model,
 )
-
-from .test_reporting_effects import _design
-from .test_reporting_expectation import REPORT_VALUES, _report
 
 T = 42
 PLACES, AGES = ["P01", "P02"], ["A1", "A1"]

@@ -13,7 +13,7 @@ import pytest
 
 from nowcastrenewal import bvd
 
-FIXTURES = Path(__file__).resolve().parent / "bvd"
+FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "data" / "bvd"
 
 RHAT = {
     "results-3169": 1.03,
