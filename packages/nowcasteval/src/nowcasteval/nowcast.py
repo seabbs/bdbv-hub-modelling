@@ -64,6 +64,7 @@ import pandas as pd
 from nowcasteval.scoring import (
     SCORE_COLUMNS,
     energy_scores,
+    pairwise_skill,
     relative_skill,
     score_forecasts,
 )
@@ -1231,7 +1232,12 @@ def relative_crps(
     by: Sequence[str] = ("target",),
     baseline: str = "randomwalk",
 ) -> pd.DataFrame:
-    """Divide each model's mean CRPS by the baseline's on the same forecasts.
+    """Return each model's pairwise relative CRPS and its own mean scores.
+
+    The relative CRPS and log CRPS are `nowcasteval.scoring.pairwise_skill`
+    scaled to the baseline, so models that forecast different cells (a
+    stored model that missed origins) compare fairly. The means are over
+    each model's own forecasts.
 
     Parameters
     ----------
@@ -1240,32 +1246,48 @@ def relative_crps(
     by : sequence of str
         Columns of a cell other than `model`.
     baseline : str
-        The model to divide by.
+        The model the relative scores are scaled to.
 
     Returns
     -------
     pandas.DataFrame
-        One row per cell and model, over the forecasts the baseline also
-        made: `n`, `crps`, `base_crps`, `rel_crps`, `rel_log_crps` (mean
-        CRPS on the log scale over the baseline's), missing where the
-        baseline's mean is 0, the coverage of the 50% and 90% intervals and
-        the mean `bias`.
+        One row per cell and model: `n` (its forecasts), `crps`,
+        `base_crps` (the baseline's mean CRPS in the cell), `rel_crps`,
+        `rel_log_crps` (pairwise; missing for a model that shares no
+        forecast with any other), the coverage of the 50% and 90%
+        intervals and the mean `bias`.
     """
+    by = list(by)
     match = ("target", "origin", "truth_vintage", "location", "target_end_date")
-    rel = relative_skill(
+    rel = pairwise_skill(
         scores,
         baseline,
         by=by,
         metrics=("crps", "log_crps"),
         match_on=match,
-        means=("crps", "coverage_50", "coverage_90", "bias"),
+        rounds="origin",
     )
-    out = rel.rename(
-        columns={
-            "relative_crps": "rel_crps",
-            "relative_log_crps": "rel_log_crps",
-        }
-    ).sort_values([*by, "model"])
+    cols = ["crps", "coverage_50", "coverage_90", "bias"]
+    means = scores.groupby([*by, "model"])[cols].mean().reset_index()
+    base = means.loc[means["model"] == baseline, [*by, "crps"]]
+    base = base.rename(columns={"crps": "base_crps"})
+    out = rel.merge(means, on=[*by, "model"])
+    out = (
+        (
+            out.merge(base, on=by, how="left")
+            if by
+            else out.assign(
+                base_crps=base["crps"].iloc[0] if len(base) else np.nan
+            )
+        )
+        .rename(
+            columns={
+                "relative_crps": "rel_crps",
+                "relative_log_crps": "rel_log_crps",
+            }
+        )
+        .sort_values([*by, "model"])
+    )
     order = [
         "n",
         "crps",

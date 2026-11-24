@@ -172,7 +172,7 @@ def test_relative_crps_is_against_randomwalk(
         assert rel.loc[(tgt, "randomwalk"), "rel_crps"] == pytest.approx(1.0)
 
 
-def test_relative_crps_uses_only_matched_baseline_forecasts() -> None:
+def test_relative_crps_compares_only_the_forecasts_both_made() -> None:
     def row(model: str, week: str, crps: float) -> dict[str, object]:
         return {
             "model": model,
@@ -192,12 +192,13 @@ def test_relative_crps_uses_only_matched_baseline_forecasts() -> None:
         [
             row("randomwalk", "2026-10-17", 2.0),
             row("a", "2026-10-17", 1.0),
-            # No randomwalk forecast for this week, so it is left out.
+            # No randomwalk forecast for this week, so the pair's ratio
+            # leaves it out; it still counts in the model's own n.
             row("a", "2026-10-24", 100.0),
         ]
     )
     rel = relative_crps(scores).set_index("model")
-    assert rel.loc["a", "n"] == 1
+    assert rel.loc["a", "n"] == 2
     assert rel.loc["a", "rel_crps"] == pytest.approx(0.5)
     assert rel.loc["a", "rel_log_crps"] == pytest.approx(0.5)
     assert rel.loc["a", "bias"] == pytest.approx(0.5)
