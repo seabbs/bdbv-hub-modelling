@@ -99,7 +99,7 @@ def test_page_tables_and_summaries(tmp_path: Path) -> None:
     res = tmp_path / "germany"
     _scores(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    germany_page(fig, gen, res, CONFIG, list)
     table = (gen / "germany-scores.md").read_text()
     assert CONFIG.split_date in table
     assert "randomwalknowcast_daily" in table
@@ -125,7 +125,7 @@ def test_hidden_models_start_switched_off(tmp_path: Path) -> None:
     res = tmp_path / "germany"
     _scores(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    germany_page(fig, gen, res, CONFIG, list)
     assert CONFIG.hidden == ("KIT-frozen_baseline",)
     data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
     on = {m["name"]: m["on"] for m in data["models"]}
@@ -137,7 +137,14 @@ def test_nowcast_explorer_shows_development_plot_dates(tmp_path: Path) -> None:
     res = tmp_path / "germany"
     _scores(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    # The site hides the zero-shot ragged model (config/site.toml).
+    germany_page(
+        fig,
+        gen,
+        res,
+        CONFIG,
+        lambda ms: [m for m in ms if m != "fm_chronos_daily_ragged"],
+    )
     assert "explorer-germany.json" in (gen / "germany-nowcasts.md").read_text()
     data = json.loads((fig / "explorer-germany.json").read_text())
     # Every 7th development date from the first; later dates are held out.
@@ -161,7 +168,7 @@ def test_nowcast_explorer_shows_development_plot_dates(tmp_path: Path) -> None:
 
 def test_page_says_when_not_run(tmp_path: Path) -> None:
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, tmp_path / "missing", CONFIG)
+    germany_page(fig, gen, tmp_path / "missing", CONFIG, list)
     assert "Not run yet" in (gen / "germany-scores.md").read_text()
 
 
@@ -211,7 +218,7 @@ def test_the_stored_ft_model_is_scored_on_the_baselines_cells(
     gap = gap.loc[~((gap["pool"] == "national") & (gap["horizon"] == "-7"))]
     pd.concat([teams, gap]).to_csv(res / "teams.csv.gz", index=False)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    germany_page(fig, gen, res, CONFIG, list)
     table = (gen / "germany-scores.md").read_text()
     rows = [
         [c.strip() for c in line.strip("|").split("|")]
@@ -235,7 +242,7 @@ def test_the_page_names_the_ft_checkpoint(tmp_path: Path) -> None:
     _scores(res)
     _with_ft(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    germany_page(fig, gen, res, CONFIG, list)
     note = (gen / "germany-ft.md").read_text()
     assert "chronos-ft-bbb" in note
     assert FT in note
@@ -252,7 +259,7 @@ def test_the_page_says_when_no_ft_checkpoint_is_stored(
     _scores(res)
     _with_ft(res, tag=None)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    germany_page(fig, gen, res, CONFIG, list)
     assert "not stored yet" in (gen / "germany-ft.md").read_text()
 
 
@@ -263,7 +270,7 @@ def test_the_page_writes_no_held_out_date(tmp_path: Path) -> None:
     _scores(res)
     _with_ft(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    germany_page(fig, gen, res, CONFIG, list)
     files = [*fig.glob("*germany*.json"), *gen.glob("germany-*.md")]
     assert len(files) >= 7
     assert held_out_leaks(files, CONFIG.split_date) == []
@@ -304,7 +311,7 @@ def test_the_page_refuses_to_write_a_held_out_date(
     )
     with pytest.raises(ValueError, match="held-out"):
         page.germany_page(
-            tmp_path / "figures", tmp_path / "generated", res, CONFIG
+            tmp_path / "figures", tmp_path / "generated", res, CONFIG, list
         )
 
 
@@ -321,7 +328,7 @@ def test_every_row_scores_the_cells_all_its_models_share(
     gap = gap.loc[~((gap["pool"] == "national") & (gap["horizon"] == "-7"))]
     pd.concat([teams, gap]).to_csv(res / "teams.csv.gz", index=False)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    germany_page(fig, gen, res, CONFIG, list)
     table = (gen / "germany-scores.md").read_text()
     rows = [
         [c.strip() for c in line.strip("|").split("|")]
@@ -349,7 +356,7 @@ def test_the_summary_names_no_truth_vintage(tmp_path: Path) -> None:
     res = tmp_path / "germany"
     _scores(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    germany_page(fig, gen, res, CONFIG)
+    germany_page(fig, gen, res, CONFIG, list)
     data = json.loads((fig / "scoresummary-germany-latest.json").read_text())
     # The truth's report dates fall up to 40 days after the last nowcast
     # date, in the held-out half, so the page names the truth instead.

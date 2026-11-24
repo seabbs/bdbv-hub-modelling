@@ -10,7 +10,7 @@ import pytest
 
 from bdbvhub.compare import load_comparison_config
 from bdbvhub.reporting import report
-from bdbvhub.reporting.site import load_site_config, site_baseline
+from bdbvhub.reporting.site import load_site_config, site_baseline, site_models
 from nowcastbdbv import zones
 from nowcasteval import checks, nowcast_plots, plots, scoresummary
 
@@ -135,7 +135,7 @@ def test_hidden_models_leave_the_germany_page(tmp_path: Path) -> None:
             "origin": ["2021-12-01", "2021-12-01"],
         }
     ).to_csv(tmp_path / "scores.csv.gz", index=False)
-    got = germany._read(tmp_path, ("scores.csv.gz",))
+    got = germany._read(tmp_path, ("scores.csv.gz",), site_models)
     assert got is not None
     assert list(got["model"]) == ["fm_chronos_daily_ragged_ft"]
 

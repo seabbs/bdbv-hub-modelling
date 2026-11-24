@@ -19,7 +19,7 @@ It turns the hub's reporting triangles into forecast tasks, scores our models be
 - [`finetune_blocks`](src/nowcastgermany/finetune_blocks.py): German real-data training blocks, for the real-data ablation.
 - [`reporting`](src/nowcastgermany/reporting.py): the benchmark's docs page.
 
-It imports `bdbvhub` for the model registry, the download helper, and the site's explorer and model list.
+It imports only the generic packages: the registry and download helper from `nowcastutils`, its models from `nowcastbaselines` and `nowcastfoundation`, and the explorer and scores from `nowcasteval`. The site's model list comes from its caller.
 
 ## Next
 
