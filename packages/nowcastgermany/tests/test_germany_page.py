@@ -15,7 +15,9 @@ from nowcastgermany.evaluation import (
 from nowcastgermany.reporting import germany_page
 
 ROOT = Path(__file__).resolve().parents[3]
-CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
+CONFIG = load_germany_config(
+    ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+)
 
 
 def _rows(models: tuple[tuple[str, float], ...]) -> pd.DataFrame:
@@ -137,7 +139,7 @@ def test_nowcast_explorer_shows_development_plot_dates(tmp_path: Path) -> None:
     res = tmp_path / "germany"
     _scores(res)
     fig, gen = tmp_path / "figures", tmp_path / "generated"
-    # The site hides the zero-shot ragged model (config/site.toml).
+    # The site hides the zero-shot ragged model (docs/site.toml).
     germany_page(
         fig,
         gen,

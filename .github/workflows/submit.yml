@@ -81,7 +81,7 @@ env:
   DEVICE: cpu
   CI_DIR: ci
   WORK: output/ci
-  # The model is `[submission] model` in config/hub.toml and the hub id
+  # The model is `[submission] model` in packages/bdbvhub/config/hub.toml and the hub id
   # is set there too (seabbs-renewal). `prepare` resolves both into the
   # run's context.json.
   # Every bdbvhub command reads the tidy data the prepare job
@@ -242,7 +242,7 @@ jobs:
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
         run: ci/steps/prepare.sh
       # Each hub model runs only when opted in (`submit = true` in
-      # config/hub.toml).
+      # packages/bdbvhub/config/hub.toml).
       - name: Decide which hub models run
         id: tracks
         run: |
@@ -590,7 +590,7 @@ jobs:
           retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   # chronos: fine-tuned Chronos-2 (`chronos_model`, the
-  # [models.foundation] table of config/hub.toml) under its
+  # [models.foundation] table of packages/bdbvhub/config/hub.toml) under its
   # own hub id, run here with no fit and no fallback. Off until that
   # table sets `submit = true`.
   chronos:
@@ -863,7 +863,7 @@ jobs:
             echo
             [ "$RENEWAL" = true ] || [ "$BASELINE" = true ] \
               || [ "$CHRONOS" = true ] \
-              || echo "No hub model is opted in (config/hub.toml)."
+              || echo "No hub model is opted in (packages/bdbvhub/config/hub.toml)."
             [ "$BASELINE" = true ] \
               && echo "baseline: **${BASELINE_BY:-not submitted}**, PR $BASELINE_PR"
             [ "$CHRONOS" = true ] \

@@ -34,7 +34,7 @@ REFERENCE_CODE = (
     "packages/nowcastbaselines/src",
     "packages/nowcastfoundation/src",
     "packages/nowcastgermany/src/nowcastgermany/evaluation.py",
-    "config/germany.toml",
+    "packages/nowcastgermany/config/germany.toml",
 )
 """What the reference's forecasts depend on, past their tasks: its models'
 packages, the German forecasting code and config (as
@@ -102,7 +102,7 @@ FT_CHECK_CODE = (
     "packages/nowcastbdbv/src",
     "packages/nowcasteval/src/nowcasteval/nowcast.py",
     "packages/nowcasteval/src/nowcasteval/backtest.py",
-    "config/backtest.toml",
+    "packages/nowcastbdbv/config/backtest.toml",
 )
 """What the BDBV check's forecasts depend on, past the data: the models'
 packages, the release tasks and the backtest config. The active-zone rule

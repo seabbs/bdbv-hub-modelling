@@ -33,7 +33,7 @@ The chain runs from the most to the least complex renewal model, then the random
 4. `randomwalknowcast`: random walk on a nowcast.
 5. `randomwalk`.
 
-`[submission] model` in `config/hub.toml` says where the chain starts.
+`[submission] model` in `packages/bdbvhub/config/hub.toml` says where the chain starts.
 The submission never fits.
 Each fitted candidate reads the stored fit of the same code and data (`fit-store unpack`), so the submitted forecast is the one the docs and the backtest show.
 The Fit store workflow fits a new release's origin first, and runs one at a time, so a release is fitted once.

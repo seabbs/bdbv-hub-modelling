@@ -1,4 +1,4 @@
-"""Which hub models a run submits, from `config/hub.toml`.
+"""Which hub models a run submits, from `packages/bdbvhub/config/hub.toml`.
 
 Each hub model is opted in on its own with `submit = true`. `DRY_RUN`
 stays the global switch: an opted-in model in a dry run builds and
@@ -61,7 +61,11 @@ def _track(abbr: str, model: str, submit: bool) -> Track:
 def main(argv: Sequence[str] | None = None) -> int:
     """Set `<key>=true|false` and `<key>_id` for each hub model."""
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--hub-config", type=Path, default=Path("config/hub.toml"))
+    p.add_argument(
+        "--hub-config",
+        type=Path,
+        default=Path("packages/bdbvhub/config/hub.toml"),
+    )
     args = p.parse_args(argv)
     tracks = load_tracks(args.hub_config)
     outputs: dict[str, object] = {}

@@ -18,7 +18,9 @@ from nowcastgermany.store import (
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
+CONFIG = load_germany_config(
+    ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+)
 SPLIT = CONFIG.split_date
 
 
@@ -137,7 +139,7 @@ def _load(tmp_path: Path, store: Path, spec: str) -> tuple[dict, Path]:
     args = [
         "ft-load",
         "--config",
-        str(ROOT / "config" / "germany.toml"),
+        str(ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"),
         "--finetune",
         str(_pin(tmp_path, spec)),
         "--store",

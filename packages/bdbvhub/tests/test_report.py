@@ -43,7 +43,13 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
                 "--data",
                 str(ROOT / "tests" / "fixtures" / "data"),
                 "--backtest-config",
-                str(ROOT / "config" / "backtest.toml"),
+                str(
+                    ROOT
+                    / "packages"
+                    / "nowcastbdbv"
+                    / "config"
+                    / "backtest.toml"
+                ),
                 "--stored",
                 str(tmp_path / "none.csv.gz"),
                 "--models",
@@ -70,7 +76,9 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     # The page names the comparison's configured draws per forecast.
     from nowcasteval.backtest import load_config
 
-    n = load_config(ROOT / "config" / "backtest.toml").n_samples
+    n = load_config(
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    ).n_samples
     lead = (gen / "comparison-lead.md").read_text()
     assert f"{n:,} draws" in lead
     assert "as submitted" in lead
@@ -370,7 +378,9 @@ def test_complete_target_text_names_models_with_no_complete_score() -> None:
 def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
     from nowcasteval.backtest import load_config
 
-    cfg = load_config(ROOT / "config" / "backtest.toml")
+    cfg = load_config(
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    )
     n, stored = cfg.score_samples, cfg.n_samples
     note = report.draws_note(n, stored)
     assert f"{n:,} draws" in note

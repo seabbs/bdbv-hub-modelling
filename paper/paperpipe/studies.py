@@ -81,7 +81,8 @@ class Sources:
     ebola_data : pathlib.Path, optional
         Main's data folder, whose `target.csv` holds every release.
     ebola_config : pathlib.Path, optional
-        The backtest config, which sets D (`config/backtest.toml`).
+        The backtest config, which sets D
+        (`packages/nowcastbdbv/config/backtest.toml`).
     ebola_backtest : pathlib.Path, optional
         The release backtest's samples (`results/forecasts.csv.gz`).
     ebola_extra : tuple of pathlib.Path

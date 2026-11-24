@@ -317,10 +317,19 @@ def cmd_fit_store(args: argparse.Namespace) -> int:
 
 
 def cmd_hub_id(args: argparse.Namespace) -> int:
-    """Print the hub id from config/hub.toml, as the real CLI does."""
+    """Print the hub id from the hub config, as the real CLI does.
+
+    The hub config is packages/bdbvhub/config/hub.toml.
+    """
     import tomllib
 
-    path = Path(__file__).resolve().parents[2] / "config" / "hub.toml"
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "packages"
+        / "bdbvhub"
+        / "config"
+        / "hub.toml"
+    )
     config = tomllib.loads(path.read_text())
     own = config.get("models", {}).get(args.model, {})
     abbr = own.get("model_abbr") or config["submission"]["model_abbr"]

@@ -8,8 +8,8 @@
 #   WORK           where every output of the run goes (default output/ci)
 #   FORECAST_CLI   the main repo's CLI (default `uv run bdbvhub`)
 #   MODEL          main repo model name (default: `[submission] model` in
-#                  config/hub.toml)
-#   MODEL_ID       hub model id (default: config/hub.toml,
+#                  packages/bdbvhub/config/hub.toml)
+#   MODEL_ID       hub model id (default: packages/bdbvhub/config/hub.toml,
 #                  `bdbvhub hub-id`)
 
 set -euo pipefail
@@ -80,10 +80,10 @@ append_previous() {
 # Before `prepare`: the chosen model and the configured hub id, from the
 # main repo. Called by `prepare` and by the gate's metadata step.
 resolve_model() {
-  # The renewal id's model: `[submission] model` in config/hub.toml.
+  # The renewal id's model: `[submission] model` in packages/bdbvhub/config/hub.toml.
   [ -n "$MODEL" ] || MODEL=$(python3 -c 'import sys, tomllib
 print(tomllib.load(open(sys.argv[1], "rb"))["submission"]["model"])' \
-    "${HUB_TOML:-$CI_DIR/../config/hub.toml}")
+    "${HUB_TOML:-$CI_DIR/../packages/bdbvhub/config/hub.toml}")
   [ -n "$MODEL_ID" ] || MODEL_ID=$(cli hub-id)
 }
 

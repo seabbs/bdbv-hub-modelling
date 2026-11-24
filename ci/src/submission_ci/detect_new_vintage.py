@@ -53,7 +53,15 @@ from .hubdata import TARGET, max_as_of
 from .window import current_window, parse_now, window_for
 
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
-CODE_PATHS = ("src", "config", "ci/policy.toml", "uv.lock", "ci/steps")
+CODE_PATHS = (
+    "src",
+    "config",
+    "packages/bdbvhub/config",
+    "packages/nowcastbdbv/config",
+    "ci/policy.toml",
+    "uv.lock",
+    "ci/steps",
+)
 """Paths of this repo whose change since a round's submission resubmits it."""
 WATCHED = (
     "target-data/time-series.csv",

@@ -19,7 +19,7 @@ tasks:
     dir: ..
     desc: Check every prerequisite of a live submission that can be read, and print what is missing (needs gh as a repo admin)
     vars:
-      # The ids with `submit = true` in config/hub.toml, unless set.
+      # The ids with `submit = true` in packages/bdbvhub/config/hub.toml, unless set.
       MODEL_IDS:
         sh: >-
           echo "{{.MODEL_ID}}" | grep . ||

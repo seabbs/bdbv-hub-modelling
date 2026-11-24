@@ -44,7 +44,7 @@ def hub_weeks(task: ForecastTask) -> ForecastTask:
 
 def germany_sensitivity(
     data: str,
-    config_path: str = "config/germany.toml",
+    config_path: str = "packages/nowcastgermany/config/germany.toml",
     dates: list[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     r"""Score both pairings on the German development half.

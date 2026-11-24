@@ -592,7 +592,7 @@ def test_the_stored_task_covers_the_submissions_rounds(
     from bdbvhub import cli
     from nowcasteval.backtest import load_config
 
-    config = load_config("config/backtest.toml")
+    config = load_config("packages/nowcastbdbv/config/backtest.toml")
     # With the zone data, as the store's fits read it (`cli._zone_data`).
     zones = cli._zone_data(tasks_json.parents[1])
     tasks = store.origin_tasks(target, delays, config, daily, zones)
@@ -606,7 +606,7 @@ def test_the_stored_task_covers_the_submissions_rounds(
                 vintage=vintage,
                 reference_date=ref.isoformat(),
                 data=str(tasks_json.parents[1]),
-                backtest_config="config/backtest.toml",
+                backtest_config="packages/nowcastbdbv/config/backtest.toml",
             )
             task, _ = cli._task(args)
             assert set(task.target_end_dates) <= set(stored.target_end_dates)

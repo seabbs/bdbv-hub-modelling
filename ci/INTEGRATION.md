@@ -31,8 +31,8 @@ bdbvhub fit --model renewal|renewalsp --config main|renewalsp --vintage <as_of> 
   --out <fit dir>
 ```
 
-- `--model` is `[submission] model` in `config/hub.toml`, unless the candidate names its own in `ci/policy.toml` (`model`), as the `renewalsp` fallback and the `bvd` shadow do.
-  The hub id is set apart in `config/hub.toml` (`bdbvhub hub-id`), `seabbs-renewal`.
+- `--model` is `[submission] model` in `packages/bdbvhub/config/hub.toml`, unless the candidate names its own in `ci/policy.toml` (`model`), as the `renewalsp` fallback and the `bvd` shadow do.
+  The hub id is set apart in `packages/bdbvhub/config/hub.toml` (`bdbvhub hub-id`), `seabbs-renewal`.
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.

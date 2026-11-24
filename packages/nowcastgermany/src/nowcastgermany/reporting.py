@@ -496,7 +496,8 @@ def germany_page(
 def check_site(argv: Sequence[str] | None = None) -> int:
     """Check the built site's German page names no held-out nowcast date.
 
-    The `germany-site-check SITE [--config config/germany.toml]` command,
+    The `germany-site-check SITE [--config
+    packages/nowcastgermany/config/germany.toml]` command,
     run from the repo root after `mkdocs build`. Reads the German page
     and its summary and explorer JSON (`held_out_leaks`) and returns 1,
     listing them, if any names a date on or after the split date (or
@@ -507,7 +508,9 @@ def check_site(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=check_site.__doc__)
     parser.add_argument("site", type=Path, nargs="?", default=Path("_site"))
     parser.add_argument(
-        "--config", type=Path, default=Path("config/germany.toml")
+        "--config",
+        type=Path,
+        default=Path("packages/nowcastgermany/config/germany.toml"),
     )
     args = parser.parse_args(argv)
     split = load_germany_config(args.config).split_date

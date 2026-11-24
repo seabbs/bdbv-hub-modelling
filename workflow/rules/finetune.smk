@@ -194,7 +194,7 @@ rule block_combinations:
 
 # The German benchmark's settings: the real-data window's first scored
 # date and truth delay.
-GERMANY_CONFIG = tomllib.loads(Path("config/germany.toml").read_text())
+GERMANY_CONFIG = tomllib.loads(Path("packages/nowcastgermany/config/germany.toml").read_text())
 
 
 rule real_training_blocks:

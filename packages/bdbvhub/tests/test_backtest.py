@@ -33,7 +33,9 @@ pytestmark = pytest.mark.usefixtures("flat_model")
 
 
 def test_load_config() -> None:
-    cfg = load_config(ROOT / "config" / "backtest.toml")
+    cfg = load_config(
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    )
     assert cfg.n_samples == 100
     # A generous convergence gate on BVDOutbreakSize releases.
     assert cfg.bvd_max_rhat == 1.1
@@ -50,7 +52,9 @@ def test_load_config() -> None:
 
 
 def test_load_config_takes_a_fixed_truth_delay(tmp_path: Path) -> None:
-    text = (ROOT / "config" / "backtest.toml").read_text()
+    text = (
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    ).read_text()
     assert 'truth_delay = "auto"' in text
     path = tmp_path / "backtest.toml"
     path.write_text(text.replace('truth_delay = "auto"', "truth_delay = 28"))
@@ -483,7 +487,9 @@ def test_backtest_sampler_comes_from_the_config(
     from bdbvhub.cli import apply_sampler
     from nowcastrenewal.forecaster import SAMPLER_ENV, sampler_settings
 
-    cfg = load_config(ROOT / "config" / "backtest.toml")
+    cfg = load_config(
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    )
     assert cfg.sampler == {
         "num_chains": 2,
         "num_warmup": 500,
@@ -572,9 +578,13 @@ def test_sample_counts_come_from_the_config(
     from bdbvhub.store import store
     from nowcasteval.backtest import for_scoring, tasks_for_scoring
 
-    text = (ROOT / "config" / "backtest.toml").read_text()
+    text = (
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    ).read_text()
     assert "[samples]" in text
-    cfg = load_config(ROOT / "config" / "backtest.toml")
+    cfg = load_config(
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    )
     assert cfg.n_samples == 100
     assert cfg.score_samples == 1000
     assert for_scoring(cfg).n_samples == 1000

@@ -11,8 +11,9 @@ secret's value is never readable) and the hub organisers' approval of
 the bot's first pull request. `render` lists them at the end.
 
 The model and hub id follow the same rule as `submit.yml`:
-`[submission] model` in `config/hub.toml` and the id of the first model
-there with `submit = true`. Only models with `submit = true` need metadata.
+`[submission] model` in `packages/bdbvhub/config/hub.toml` and the id of
+the first there with `submit = true`. Only models with `submit = true` need
+metadata.
 """
 
 from __future__ import annotations
@@ -79,9 +80,9 @@ class Settings:
     other_model_ids: tuple[str, ...] = ()
     """Further hub models, each submitted under its own id."""
     opted_in: tuple[str, ...] = ()
-    """Hub models with `submit = true` in `config/hub.toml`."""
+    """Hub models with `submit = true` in `packages/bdbvhub/config/hub.toml`."""
     configured_model: str = ""
-    """`[submission] model` in `config/hub.toml`."""
+    """`[submission] model` in `packages/bdbvhub/config/hub.toml`."""
 
 
 def _api(runner: Runner, path: str) -> tuple[bool, Any]:
@@ -420,7 +421,9 @@ def check_metadata(metadata_dir: Path, model_id: str) -> Check:
 
 def check_model(model: str) -> Check:
     """The model the renewal track submits, as `submit.yml` resolves it."""
-    return Check("model", "ok", f"submits `{model}` (config/hub.toml)")
+    return Check(
+        "model", "ok", f"submits `{model}` (packages/bdbvhub/config/hub.toml)"
+    )
 
 
 def check_registered(runner: Runner, hub: str, model_id: str) -> Check:
@@ -476,7 +479,10 @@ def check_cron_owner(runner: Runner, workflow_file: Path) -> Check:
 
 
 def other_model_ids(path: Path) -> tuple[str, ...]:
-    """Opted-in hub ids in `config/hub.toml` other than the first."""
+    """Opted-in hub ids in the hub config, other than the first.
+
+    The hub config is `packages/bdbvhub/config/hub.toml`.
+    """
     return opted_in(path)[1:]
 
 
@@ -490,7 +496,10 @@ def submitting_model_id(path: Path) -> str:
 
 
 def opted_in(path: Path) -> tuple[str, ...]:
-    """Hub ids of the models with `submit = true` in `config/hub.toml`."""
+    """Hub ids of the models with `submit = true` in the hub config.
+
+    The hub config is `packages/bdbvhub/config/hub.toml`.
+    """
     return tuple(t.model_id for t in load_tracks(path) if t.submit)
 
 
@@ -528,7 +537,8 @@ def run_checks(runner: Runner, s: Settings) -> list[Check]:
                 "opt-in",
                 "warn",
                 "no hub model is opted in, so nothing is submitted",
-                "Set `submit = true` for the model in config/hub.toml and "
+                "Set `submit = true` for the model in "
+                "packages/bdbvhub/config/hub.toml and "
                 "push to `main`.",
             )
         )
@@ -566,7 +576,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument(
         "--hub-config",
         type=Path,
-        default=Path("config/hub.toml"),
+        default=Path("packages/bdbvhub/config/hub.toml"),
         help="Where the hub id is set ([submission] model_abbr).",
     )
     p.add_argument(

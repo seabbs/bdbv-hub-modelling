@@ -6,14 +6,16 @@ out instead of the chain's start), which candidates were ruled out ahead
 of it and the gate's reason. Our evaluation and the paper score
 substituted weeks apart from chain-start weeks with it, so one model's
 results are never mixed with another's under the same hub id
-(`config/hub-comparison.toml`).
+(`packages/bdbvhub/config/hub-comparison.toml`).
 
 The facts come from the ledger: each hub model's record in `state.json`
 and its gate's `provenance.json` in the round's archive. The chain's
 start is the gate's first attempt, so it is the start at that round,
-whatever `config/hub.toml` says now. A run that left no provenance (a
+whatever `packages/bdbvhub/config/hub.toml` says now. A run that left no
+provenance (a
 manual run) is read from its label, and its chain start is the hub id's
-model in `config/hub.toml` (`--hub-config`), or else the policy's `main`
+model in `packages/bdbvhub/config/hub.toml` (`--hub-config`), or else the
+policy's `main`
 candidate; `source` says which rows were read this way.
 
 `ci/steps/record.sh` writes the table beside `state.json` on the ledger
@@ -127,7 +129,8 @@ def rows(
         The chain's candidates, to map gate ids and labels to models.
     starts : mapping, optional
         Hub id to its chain's first model, for runs with no provenance
-        (`config/hub.toml`). A hub id not in it starts at the policy's
+        (`packages/bdbvhub/config/hub.toml`). A hub id not in it starts at the
+        policy's
         `main` candidate.
 
     Returns
@@ -190,7 +193,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--hub-config",
         type=Path,
         default=None,
-        help="config/hub.toml: each hub id's model, for runs with no gate",
+        help=(
+            "packages/bdbvhub/config/hub.toml: each hub id's model, for runs "
+            "with no gate"
+        ),
     )
     p.add_argument("--out", type=Path, required=True)
     args = p.parse_args(argv)

@@ -44,7 +44,7 @@ on:
       # The backtests' code (`backtest`, `backtests`).
       - 'packages/nowcasteval/src/**'
       - 'packages/nowcastbdbv/src/**'
-      - 'config/backtest.toml'
+      - 'packages/nowcastbdbv/config/backtest.toml'
       - 'config/finetune.toml'
       - 'ci/policy.toml'
       - 'pyproject.toml'
@@ -79,7 +79,7 @@ on:
       # The backtests' code (`backtest`, `backtests`).
       - 'packages/nowcasteval/src/**'
       - 'packages/nowcastbdbv/src/**'
-      - 'config/backtest.toml'
+      - 'packages/nowcastbdbv/config/backtest.toml'
       - 'config/finetune.toml'
       - 'ci/policy.toml'
       - 'pyproject.toml'
