@@ -62,8 +62,8 @@ def test_the_one_machine_caps_hold_on_the_cluster():
 
 
 def test_no_cluster_names_are_committed():
-    # Account and partition go in an untracked profile layered on this
-    # one (SNAKEMAKE_PROFILE).
+    # Account and partition go in a copy of this profile outside the
+    # repository, named by SNAKEMAKE_PROFILE.
     got = _profile()
     values = [*got["default-resources"], *got["set-resources"]]
     for key in ("slurm_partition", "slurm_account"):
