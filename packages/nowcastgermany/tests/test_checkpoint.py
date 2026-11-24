@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -326,9 +327,9 @@ def test_a_german_unit_scores_a_run_s_own_segment(
     assert seen == [(tmp_path, "n100", tmp_path / "n100")]
     monkeypatch.delenv(forecaster.FINETUNED_ENV, raising=False)
     ck._pin("n100", tmp_path / "n100")
-    assert forecaster.finetuned_spec() == str(tmp_path / "n100")
+    assert os.environ[forecaster.FINETUNED_ENV] == str(tmp_path / "n100")
     ck._pin("abc")
-    assert forecaster.finetuned_spec() == "abc"
+    assert os.environ[forecaster.FINETUNED_ENV] == "abc"
 
 
 def _saved(train: Path, n: int, **settings) -> Path:

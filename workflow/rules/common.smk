@@ -181,11 +181,12 @@ FTC = config["ft_check"]
 
 
 def ft_check_checkpoint():
-    """The fine-tuned checkpoint the check runs: the config's or the pin."""
-    import tomllib
+    """The fine-tuned checkpoint the check runs: the config's, else the one
+    config/finetune.toml names, `latest` resolved to its release (read
+    only when the check is asked for)."""
+    from nowcastfoundation.forecaster import finetuned_label
 
-    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
-    return FTC["checkpoint"] or pin
+    return FTC["checkpoint"] or finetuned_label()
 
 
 def ft_check_key():

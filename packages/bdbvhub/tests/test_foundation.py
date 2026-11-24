@@ -1268,7 +1268,6 @@ def test_a_fine_tuned_complete_model_builds_the_complete_block(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # For checkpoints trained on complete counts (the no-delays run).
-    monkeypatch.setattr(foundation, "finetuned_spec", lambda: "abc123")
     import functools
 
     fake = functools.cache(lambda spec, *_: spec)

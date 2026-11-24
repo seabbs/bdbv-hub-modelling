@@ -94,7 +94,8 @@ def pinned_tag(spec: str) -> str:
     Parameters
     ----------
     spec : str
-        The pin, `slots-<hash>` or a settings hash (`finetuned_spec`).
+        The checkpoint, `slots-<hash>` or a settings hash
+        (`forecaster.finetuned_checkpoint().hash`).
 
     Returns
     -------

@@ -99,11 +99,13 @@ __all__ = [
     "checkpoint_spec",
     "chronos_sampler",
     "finetuned_adapter",
+    "finetuned_checkpoint",
+    "finetuned_label",
     "finetuned_releases",
-    "finetuned_spec",
     "group_key",
     "hub_triangle",
     "lag_count",
+    "latest_spec",
     "layout_block",
     "local_checkpoint",
     "native_sampler",
@@ -193,9 +195,7 @@ FINETUNED_CACHE: Final = "~/.cache/bdbv-hub-modelling"
 SLOTS_PREFIX: Final = "slots-"
 """Prefix of the spec of a checkpoint with the series bias
 (`nowcastfoundation.series_bias`). Such a checkpoint is released as
-`chronos-slots-<hash>`, the paper's name for the run, so the `latest`
-lookup, which takes only `chronos-ft-*` releases, never gives it to code
-without the bias."""
+`chronos-slots-<hash>`, the paper's name for the run."""
 
 SLOTS_RELEASE_PREFIX: Final = "chronos-slots"
 """Tag prefix of the releases of checkpoints with the series bias."""
@@ -258,25 +258,6 @@ class Checkpoint:
         if self.prefix == FINETUNED_PREFIX:
             return release_tag(self.hash)
         return f"{self.prefix}-{self.hash}"
-
-
-def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
-    """Return the checkpoint the fine-tuned models load: `"latest"` or a hash.
-
-    `FINETUNED_ENV`, when set, overrides the file.
-
-    Parameters
-    ----------
-    path : pathlib.Path or str
-        A TOML file with `hash`.
-
-    Returns
-    -------
-    str
-    """
-    if os.environ.get(FINETUNED_ENV):
-        return os.environ[FINETUNED_ENV]
-    return str(tomllib.loads(Path(path).read_text())["hash"])
 
 
 def active_zone_rule(
@@ -418,10 +399,10 @@ def realdata_spec(path: Path | str = FINETUNED_CONFIG) -> str:
 def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     """Return a fine-tuned checkpoint from its release.
 
-    `"latest"` is the newest published `chronos-ft-*` release by publish
-    date; releases of other prefixes, such as `realdata-ft-*`, are never
-    taken. The release's `SUMS_FILE` gives the SHA-256 of its adapter
-    files. Each process resolves once.
+    `"latest"` is the newest published checkpoint release by publish
+    date, `chronos-ft-*` or `chronos-slots-*`; releases of other prefixes,
+    such as `realdata-ft-*`, are never taken. The release's `SUMS_FILE`
+    gives the SHA-256 of its adapter files. Each process resolves once.
 
     Parameters
     ----------
@@ -449,16 +430,7 @@ def resolve_checkpoint(spec: str, prefix: str = FINETUNED_PREFIX) -> Checkpoint:
     if spec == "latest" and prefix != FINETUNED_PREFIX:
         raise ValueError(f"Only {FINETUNED_PREFIX} releases resolve latest.")
     if spec == "latest":
-        tags = sorted(
-            (r["published_at"], r["tag_name"])
-            for r in finetuned_releases()
-            if str(r["tag_name"]).startswith(f"{FINETUNED_PREFIX}-")
-            and not r.get("draft")
-            and r.get("published_at")
-        )
-        if not tags:
-            raise LookupError("No chronos-ft-* release holds a checkpoint.")
-        checkpoint = tags[-1][1].removeprefix(f"{FINETUNED_PREFIX}-")
+        checkpoint = latest_spec()
     tag = (
         release_tag(checkpoint)
         if prefix == FINETUNED_PREFIX
@@ -634,6 +606,64 @@ def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
         f"Unknown checkpoint source {source!r} in {path}: one of "
         f"{FINETUNED_SOURCES}."
     )
+
+
+def latest_spec() -> str:
+    """Return the spec of the newest released checkpoint, by publish date.
+
+    Over the `chronos-ft-*` and `chronos-slots-*` releases (`slots-<hash>`
+    for the latter); drafts and other prefixes are never taken.
+
+    Raises
+    ------
+    ConnectionError
+        If GitHub cannot be reached.
+    LookupError
+        If there is no checkpoint release.
+    """
+    tags = sorted(
+        (r["published_at"], r["tag_name"])
+        for r in finetuned_releases()
+        if str(r["tag_name"]).startswith(
+            (f"{FINETUNED_PREFIX}-", f"{SLOTS_RELEASE_PREFIX}-")
+        )
+        and not r.get("draft")
+        and r.get("published_at")
+    )
+    if not tags:
+        raise LookupError(
+            "No chronos-ft-* or chronos-slots-* release holds a checkpoint."
+        )
+    newest = str(tags[-1][1])
+    if newest.startswith(f"{SLOTS_RELEASE_PREFIX}-"):
+        return SLOTS_PREFIX + newest.removeprefix(f"{SLOTS_RELEASE_PREFIX}-")
+    return newest.removeprefix(f"{FINETUNED_PREFIX}-")
+
+
+def finetuned_label(path: Path | str = FINETUNED_CONFIG) -> str:
+    """Return the spec of the checkpoint `finetuned_checkpoint` loads.
+
+    Its name only (`slots-<hash>` or a settings hash), with `"latest"`
+    resolved from the release listing, no checksum read; a Hub or local
+    source is resolved as `finetuned_checkpoint` does.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A TOML file, `config/finetune.toml`.
+
+    Returns
+    -------
+    str
+    """
+    pinned = os.environ.get(FINETUNED_ENV, "")
+    conf = tomllib.loads(Path(path).read_text())
+    if conf.get("source", "github") != "github" or (
+        pinned and Path(pinned).is_dir()
+    ):
+        return finetuned_checkpoint(path).hash
+    spec = pinned or str(conf["hash"])
+    return latest_spec() if spec == "latest" else spec
 
 
 def checkpoint_spec(settings: Mapping[str, Any]) -> str:
