@@ -1,43 +1,36 @@
 // Summarise per-forecast scores for a selection, as relative_crps does in
-// Python: each model over the forecasts the baseline also made (same
-// origin, release, place and week), with n, the mean of every metric and,
-// for relative metrics, the model's mean over the baseline's. Metric
-// columns are used as embedded and only averaged and divided. Each entry
-// has cells, the baseline's n, and partial, whether the model has fewer
-// of the baseline's forecasts (mark_partial in Python), so its row is read
-// apart from the full rows, which all have the baseline's n.
+// Python: each model's n and the mean of every metric over its own
+// forecasts and, for relative metrics, its pairwise relative skill. The
+// skill is computed once in Python (nowcasteval.scoring.pairwise_skill) as
+// each model's geometric mean of ratios, per selection (d.skill, keyed by
+// scoresummary.skill_key); here one model's is divided by the baseline's,
+// which only rescales them. Each entry has cells, the baseline's n, and
+// partial, whether the model has fewer forecasts than the baseline
+// (mark_partial in Python), so its row is read apart from the full rows.
 (function (root) {
   "use strict";
 
   // d.rows: [model, origin, release, place, week, ...one value per metric]
   // d.metrics: [{key, label, ref, relative}]
   // keep(row, index) selects the rows; baseline, a model index, is the
-  // model relative metrics divide by (d.baseline if not given). Returns one
-  // entry per model with rows.
-  function summarise(d, keep, baseline) {
-    if (baseline === undefined) baseline = d.baseline;
+  // model relative metrics are scaled to (d.baseline if not given); group
+  // is the selection's skill key (summarise.key), without which relative
+  // metrics are missing. Returns one entry per model with rows.
+  function summarise(d, keep, baseline, group) {
+    if (baseline === undefined || baseline === null) baseline = d.baseline;
     var nm = d.metrics.length;
-    var base = {};
-    function key(r) { return r[1] + "|" + r[2] + "|" + r[3] + "|" + r[4]; }
-    d.rows.forEach(function (r, i) {
-      if (r[0] === baseline && keep(r, i)) base[key(r)] = r;
-    });
     var acc = {};
     d.rows.forEach(function (r, i) {
       if (!keep(r, i)) return;
-      var b = base[key(r)];
-      if (!b) return;
       var a = acc[r[0]];
       if (!a) {
-        a = acc[r[0]] = { n: 0, sum: [], bsum: [] };
-        for (var j = 0; j < nm; j++) { a.sum.push(0); a.bsum.push(0); }
+        a = acc[r[0]] = { n: 0, sum: [] };
+        for (var j = 0; j < nm; j++) a.sum.push(0);
       }
       a.n += 1;
-      for (var i = 0; i < nm; i++) {
-        a.sum[i] += r[5 + i];
-        a.bsum[i] += b[5 + i];
-      }
+      for (var k = 0; k < nm; k++) a.sum[k] += r[5 + k];
     });
+    var skill = group && d.skill ? d.skill[group] : null;
     var cells = acc[baseline] ? acc[baseline].n : null;
     return Object.keys(acc).map(Number).sort(function (x, y) { return x - y; })
       .map(function (m) {
@@ -46,16 +39,29 @@
           partial: cells !== null && a.n < cells, mean: {}, rel: {} };
         d.metrics.forEach(function (met, i) {
           out.mean[met.key] = a.sum[i] / a.n;
-          // A zero baseline gives no relative score, as in Python.
-          if (met.relative) out.rel[met.key] = a.bsum[i] > 0 ? a.sum[i] / a.bsum[i] : null;
+          if (!met.relative) return;
+          var th = skill ? skill[met.key] : null;
+          var mine = th ? th[m] : null, base = th ? th[baseline] : null;
+          // No skill, or a baseline with none or of 0, gives no relative
+          // score, as in Python.
+          out.rel[met.key] = mine === null || mine === undefined ||
+            base === null || base === undefined || !(base > 0) || !isFinite(base) ?
+            null : mine / base;
         });
         return out;
       });
   }
 
+  // The skill key of a selection (scoresummary.skill_key in Python): one
+  // round index or null for every round, "p<pool>" or "x<place>", and a
+  // horizon or undefined for every horizon.
+  summarise.key = function (round, select, horizon) {
+    return (round === null || round === undefined ? "all" : round) + "|" +
+      select + "|" + (horizon === null || horizon === undefined ? "all" : horizon);
+  };
+
   // A keep function for the rounds (origin indices) given, or every row
-  // for null. Rows of several rounds are summarised together, so each
-  // score is over the union of their cells.
+  // for null.
   summarise.inRounds = function (rounds) {
     if (rounds === null || rounds === undefined) return function () { return true; };
     var on = {};

@@ -1277,7 +1277,7 @@ def relative_crps(
             out.merge(base, on=by, how="left")
             if by
             else out.assign(
-                base_crps=base["crps"].iloc[0] if len(base) else np.nan
+                base_crps=base["base_crps"].iloc[0] if len(base) else np.nan
             )
         )
         .rename(
