@@ -68,7 +68,8 @@ def test_r_live_checks_the_baselinenowcast_port_at_the_pin():
     )
     assert "any::zoo" in text
     runs = [s.get("run", "") for s in steps]
-    assert any("tests/baselinenowcast" in r and '-m ""' in r for r in runs)
+    port = "packages/nowcastbaselines/tests/baselinenowcast"
+    assert any(port in r and '-m ""' in r for r in runs)
     assert not (WORKFLOWS / "baselinenowcast.yml").exists()
     assert not (ROOT / "tests" / "baselinenowcast" / "fixtures").exists()
 

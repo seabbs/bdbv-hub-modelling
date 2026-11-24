@@ -74,7 +74,7 @@ def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
 
     assert legs(["docs/index.md"]) == []
     assert legs(["uv.lock"]) == layers()
-    assert legs(["tests/baselinenowcast/test_delay.py"]) == ["nowcastbaselines"]
+    assert legs(["tests/forecasters/test_zones.py"]) == ["bdbvhub"]
     seen = legs(["packages/nowcastbaselines/src/nowcastbaselines/chain.py"])
     assert {"nowcastbaselines", "nowcastrenewal", "bdbvhub"} <= set(seen)
     assert "nowcastutils" not in seen
@@ -110,7 +110,7 @@ def test_a_package_with_its_own_tests_has_none_left_under_tests() -> None:
     from owners import owners
 
     moved = {p.parent.name for p in ROOT.glob("packages/*/tests")}
-    assert {"nowcastutils", "nowcasteval"} <= moved
+    assert {"nowcastutils", "nowcasteval", "nowcastbaselines"} <= moved
     left = [
         f
         for f, owner in owners().items()
