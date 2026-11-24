@@ -174,7 +174,7 @@ RELEASE_LAYER: dict[str, Any] | None = None
 """The release layer (`finetune.release_layer`, `check_release_layer`),
 drawn per block at fine-tune time from the simulations already made: a
 late start to a share of blocks' releases (`release_start`), a share of
-blocks with no lag series (`complete_block`), a share whose lag count is
+blocks with no lag series (the complete layout), a share whose lag count is
 the rule's times a factor drawn from Normal(1, `sd`) (`lag_jitter`), and
 the release cadences of each step width (`draw_cadence`). None leaves each
 block's releases as the block design draws them."""
@@ -450,38 +450,19 @@ def reported_cases(
 ) -> float:
     """Return a block's cases reported in `days` up to its cut-off.
 
-    Only what is known at the cut-off counts, never the counts after it.
-    Each step counts once, at its latest report: before `start`, the
-    targets' counts; from `start` to the cut-off, each lag series'
-    value at the step's lag from the cut-off (lag series hold a step's
-    count as reported at that lag, so summing them would count a case
-    once per lag). The places are summed within each level (national,
-    intermediate, leaf) and the busiest level counts, so a total does
-    not count its places' cases again, and a block of some places with
-    their country counts the country's cases. `block` is
-    `finetune.training_block`'s, before padding.
+    Only what is known at the cut-off counts, never the counts after it:
+    each place's counts as reported at the cut-off (`reported`). The
+    places are summed within each level (national, intermediate, leaf)
+    and the busiest level counts, so a total does not count its places'
+    cases again, and a block of some places with their country counts
+    the country's cases. `block` is `finetune.training_block`'s, before
+    padding.
     """
-    x, places = block["context"], block["places"]
-    t, n = block["n_targets"], len(places)
-    lags, extra = divmod(block["n_covariates"], n)
-    if extra:
-        raise ValueError(
-            f"{block['n_covariates']} lag series over {n} places: not the "
-            "same number a place"
-        )
-    if block["nowcast"] > lags:
-        raise ValueError(
-            f"nowcast of {block['nowcast']} steps past {lags} lags: it would "
-            "read the next place's rows"
-        )
-    start = block["start"]
-    cut = start + block["nowcast"]
+    reported = block["reported"]
+    cut = reported.shape[1]
     lo = max(cut - -(-days // days_per_step), 0)
-    count = np.nansum(x[:n, lo:start], axis=1)
-    rows = np.arange(n)
-    for step in range(max(lo, start), cut):
-        count += np.nan_to_num(x[t + rows * lags + (cut - 1 - step), step])
-    levels = np.array(target_levels(places))
+    count = np.nansum(reported[:, lo:cut], axis=1)
+    levels = np.array(target_levels(block["places"]))
     return float(max(count[levels == lv].sum() for lv in set(levels)))
 
 
@@ -495,27 +476,10 @@ def quiet(block: dict[str, Any], days_per_step: int, min_cases: int) -> bool:
     return reported_cases(block, days_per_step, QUIET_WINDOW_DAYS) < min_cases
 
 
-LAYOUT = "ragged"
+LAYOUT = "cutoff"
 """The layout of the training blocks (`nowcastfoundation.forecaster.LAYOUTS`):
-`ragged`, the counts to the last complete step and each place's lag
-series; or `complete`, the same blocks without their lag series
-(`complete_block`), so the context ends at the last complete step."""
-
-
-def complete_block(block: dict[str, Any]) -> dict[str, Any]:
-    """Return a block without its lag series: the complete layout.
-
-    The targets keep their counts to the last complete step (`start`) and
-    the truth after it; the nowcast and forecast steps are as before.
-    `block` is `finetune.training_block`'s, before padding.
-    """
-    targets = block["context"][: block["n_targets"]]
-    return block | {
-        "context": targets,
-        "future_covariates": targets[:, block["start"] :].copy(),
-        "n_covariates": 0,
-        "n_future_covariates": 0,
-    }
+`cutoff`, the counts reported to the cut-off and each place's lag series;
+or `complete`, the counts to the last complete step without lag series."""
 
 
 def _pad(
@@ -906,6 +870,7 @@ def outbreak_blocks(
             totals = any("-" in p for p in provinces)
             # A view with the country draws its cases as the whole did.
             country_rng = copy.deepcopy(parent_rng)
+            layout = "complete" if no_lags else LAYOUT
             block = training_block(
                 counts,
                 source,
@@ -916,6 +881,7 @@ def outbreak_blocks(
                 rng=parent_rng,
                 parent_draws=parents,
                 lag_scale=lag_scale,
+                layout=layout,
                 **options,
             )
             if block is None:
@@ -951,6 +917,7 @@ def outbreak_blocks(
                             rng=copy.deepcopy(country_rng),
                             parent_draws=parents,
                             lag_scale=lag_scale,
+                            layout=layout,
                             **options,
                         )
                         if part is None or part["start"] < 2:
@@ -986,8 +953,6 @@ def outbreak_blocks(
                         break
                     cap -= 1
             for part, view, view_mix, how, record in views:
-                if LAYOUT == "complete" or no_lags:
-                    part = complete_block(part)
                 padded = _pad(
                     part, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]
                 )

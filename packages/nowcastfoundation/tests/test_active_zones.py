@@ -89,7 +89,7 @@ def test_the_model_cuts_by_activity_when_configured():
     model = FoundationModel(
         name="m",
         source="daily",
-        layout="ragged",
+        layout="cutoff",
         active_zone_cases=20,
         active_zone_weeks=8,
         active_zone_recent_weeks=4,

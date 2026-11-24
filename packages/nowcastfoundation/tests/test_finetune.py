@@ -264,8 +264,9 @@ def test_three_day_blocks_are_cut_like_daily_ones() -> None:
     assert block["n_targets"] == 1
     assert block["n_covariates"] == 2
     target = block["context"][0]
-    # Every full bin of three days holds 21 cases.
-    assert target[block["start"] - 1] == 21.0
+    # Every full bin of three days holds 21 cases once complete, D = 2
+    # bins before the cut-off's.
+    assert target[block["start"] - 3] == 21.0
 
 
 def test_three_day_block_with_no_whole_bin_by_its_cut_is_none() -> None:
@@ -549,8 +550,9 @@ def test_daily_releases_fill_every_lag_cell_weekly_ones_one_in_seven() -> None:
         cuts = release_days("2026-09-01", "2026-09-30", cadence, rng)
         block = training_block(counts, "daily", places, cuts, max_lag=4)
         n, start = block["n_targets"], block["start"]
-        # Lag d of day t needs a release on day t + d, all in the context.
-        lags = block["context"][n:, 4:start]
+        # Lag d of day t needs a release on day t + d: every lag of the
+        # days at least D = 4 before the cut-off.
+        lags = block["context"][n:, 4 : start - 4]
         fill[cadence] = np.isfinite(lags).mean()
     assert fill["daily"] == 1
     assert fill["weekly"] == pytest.approx(1 / 7, abs=0.05)

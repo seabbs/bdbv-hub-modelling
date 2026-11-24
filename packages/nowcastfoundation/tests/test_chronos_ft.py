@@ -125,7 +125,7 @@ def _triangle(n_rows: int = 6, n_delays: int = 3) -> pd.DataFrame:
     )
 
 
-def test_the_triangle_is_laid_out_as_the_ragged_block(
+def test_the_triangle_is_laid_out_as_the_cutoff_block(
     fake: _FakePipeline,
 ) -> None:
     tri = _triangle()
@@ -133,16 +133,17 @@ def test_the_triangle_is_laid_out_as_the_ragged_block(
     (call,) = fake.calls
     (group,) = call["inputs"]
     counts = tri.to_numpy()
-    # The rows reported at every delay are the context.
-    np.testing.assert_array_equal(group["target"], [counts[:4].sum(axis=1)])
-    # The rest are nowcast (delays - 1 rows) then forecast (horizon rows).
-    assert call["prediction_length"] == 2 + 2
+    # Every row's count reported by the last cut-off is the context.
+    np.testing.assert_array_equal(
+        group["target"], [np.nansum(counts, axis=1)]
+    )
+    # Only the rows after the last are forecast.
+    assert call["prediction_length"] == 2
+    # Row 4 is known at delay 1, row 5 is not; lags are past covariates.
     lag1 = group["past_covariates"]["series_lag_1"]
-    np.testing.assert_array_equal(lag1, counts[:4, :2].sum(axis=1))
-    # Row 4 is known at delay 1, row 5 is not; future rows never are.
-    future = group["future_covariates"]["series_lag_1"]
-    assert future[0] == counts[4, :2].sum()
-    assert np.isnan(future[1:]).all()
+    np.testing.assert_array_equal(lag1[:5], counts[:5, :2].sum(axis=1))
+    assert np.isnan(lag1[5])
+    assert "future_covariates" not in group
     assert set(group["past_covariates"]) == {
         f"series_lag_{d}" for d in range(2)
     }
@@ -161,11 +162,10 @@ def test_forecasts_are_quantiles_of_the_final_count() -> None:
         "quantile_level",
         "value",
     ]
-    assert len(out) == 4 * 3
-    assert sorted(set(out["step"])) == [-1, 0, 1, 2]
+    assert len(out) == 2 * 3
+    assert sorted(set(out["step"])) == [1, 2]
     assert out["reference"].max() == tri.index[-1] + 2 * pd.Timedelta("7D")
-    # The fake gives 0, 1, 2 by level at every step, taken as they are:
-    # the rows still being reported are not raised to their counts.
+    # The fake gives 0, 1, 2 by level at every step, taken as they are.
     for _, rows in out.groupby("step"):
         rows = rows.sort_values("quantile_level")
         np.testing.assert_array_equal(rows["value"], [0.0, 1.0, 2.0])
@@ -177,7 +177,7 @@ def test_places_share_one_block(fake: _FakePipeline) -> None:
         {"north": tri, "south": tri * 2}, horizon=1, model=None
     )
     (group,) = fake.calls[0]["inputs"]
-    assert group["target"].shape == (2, 4)
+    assert group["target"].shape == (2, 6)
     assert "south_lag_1" in group["past_covariates"]
     assert set(out["place"]) == {"north", "south"}
 
@@ -232,7 +232,7 @@ def test_rows_and_delays_must_be_in_order(change, message: str) -> None:
 
 
 @pytest.mark.usefixtures("fake")
-@pytest.mark.parametrize("horizon", [-1, 1.5])
+@pytest.mark.parametrize("horizon", [0, 1.5])
 def test_horizon_must_be_a_whole_number_of_rows(horizon) -> None:
     with pytest.raises(ValueError, match="horizon"):
         chronos_ft.forecast_triangle(_triangle(), horizon=horizon, model=None)

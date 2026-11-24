@@ -115,21 +115,20 @@ def test_views_are_recorded_once_per_block(tmp_path):
     )
 
 
-def test_the_layout_is_ragged_and_out_of_the_settings_until_set():
+def test_the_layout_is_cutoff_and_in_the_settings():
     argv = ["sims", "out", "--held-out-seeds", "1", "2"]
-    assert fs.build_parser().parse_args(argv).layout == "ragged"
+    assert fs.build_parser().parse_args(argv).layout == "cutoff"
     args = fs.build_parser().parse_args([*argv, "--layout", "complete"])
     assert args.layout == "complete"
-    # The default adds nothing, so the settings hash stays as it was.
-    assert fs.layout_settings("ragged") == {}
+    assert fs.layout_settings("cutoff") == {"layout": "cutoff"}
     assert fs.layout_settings("complete") == {"layout": "complete"}
 
 
-def test_a_complete_block_has_its_nowcast_steps_without_lag_series():
+def test_a_block_has_its_nowcast_steps():
     block = {"n_targets": 2, "n_covariates": 0, "places": ("A", "B")}
     assert fs.nowcast_steps(block | {"nowcast": 3}) == 3
-    ragged = {"n_targets": 2, "n_covariates": 6, "places": ("A", "B")}
-    assert fs.nowcast_steps(ragged) == 3
+    cutoff = {"n_targets": 2, "n_covariates": 6, "places": ("A", "B")}
+    assert fs.nowcast_steps(cutoff | {"nowcast": 0}) == 0
 
 
 def test_the_trainer_does_not_publish():

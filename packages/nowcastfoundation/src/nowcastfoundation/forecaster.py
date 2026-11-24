@@ -5,12 +5,12 @@ See the Foundation models methods page for the model.
 One registered model per method the paper compares, each reading its
 cadence from the task (`FROM_DATA`: the daily releases when there are any,
 so one pass gives the daily counts and the 7-day hub target):
-`foundation` (fine-tuned on simulated outbreaks, ragged layout, the hub's
+`foundation` (fine-tuned on simulated outbreaks, cut-off layout, the hub's
 model; `finetuned_checkpoint`), `foundation_zeroshot` (pretrained
 weights), `foundation_complete` and `foundation_zeroshot_complete`
 (complete layout), and the two-step `foundation_twostep` and
 `foundation_zeroshot_twostep`. For the SI,
-`foundation_real` is the ragged model with the checkpoint fine-tuned on real
+`foundation_real` is the cut-off model with the checkpoint fine-tuned on real
 data alone (the German development half and the public BDBV data to date,
 `scripts/finetune_realdata.py`), pinned in
 `packages/nowcastfoundation/config/finetune.toml` and
@@ -127,8 +127,8 @@ FROM_DATA: Final = "data"
 (`FoundationModel.for_task`): the daily releases when the task has them,
 else the weekly ones. Every registered model reads it so."""
 
-LAYOUTS: Final = ("complete", "ragged")
-"""The ways the releases are given to Chronos-2."""
+LAYOUTS: Final = ("complete", "cutoff")
+"""The ways the releases are given to Chronos-2 (`layout_block`)."""
 
 MAX_LAG: Final = {"weekly": 4, "daily": 28}
 """A fixed release lag $D$ in the source's steps, 4 weeks or 28 days: the
@@ -150,7 +150,7 @@ COUPLINGS: Final = ("online", "independent", "comonotone")
 and are the supplement's comparisons."""
 
 PERIODS: Final = {"daily": "rolling7"}
-"""The aggregate row each place has in a block, ragged or complete, by
+"""The aggregate row each place has in a block, of either layout, by
 source (`FoundationModel.period`): the daily source's 7-day rolling sums,
 from which the hub's 7-day target is read."""
 
@@ -723,7 +723,7 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
 
 
 def _finetuned(
-    name: str, layout: str = "ragged", two_step: bool = False
+    name: str, layout: str = "cutoff", two_step: bool = False
 ) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_checkpoint`.
 
@@ -748,7 +748,7 @@ def _real_data(name: str) -> FoundationModel:
     return FoundationModel(
         name,
         FROM_DATA,
-        "ragged",
+        "cutoff",
         resolve_checkpoint(realdata_spec(), REALDATA_PREFIX),
     )
 
@@ -785,6 +785,20 @@ class HubTriangle:
     def n_context(self) -> int:
         """Steps whose count at the latest release is at lag $D$ or more."""
         return self.last - int(self.partial.shape[2]) + 1
+
+
+def layout_start(tri: HubTriangle, layout: str) -> int:
+    """Return the steps of context a block of `layout` takes from `tri`.
+
+    `cutoff` runs to the latest release's cut-off. `complete` stops at the
+    last step complete at it (`n_context`). Training blocks
+    (`nowcastfoundation.finetune.training_block`) and forecasts
+    (`FoundationModel`) split their blocks here; a complete forecast
+    starts from the randomwalk week instead.
+    """
+    if layout not in LAYOUTS:
+        raise ValueError(f"unknown layout {layout!r}; one of {LAYOUTS}")
+    return tri.last + 1 if layout == "cutoff" else tri.n_context
 
 
 def _step(source: str, day: str) -> dt.date:
@@ -1320,28 +1334,27 @@ def layout_block(
     Series
         The targets' context, the places (`places`), the place of each
         target row (`target_places`, indices into `places`), and for
-        `ragged` each place's lag series as past and future covariates.
+        `cutoff` each place's lag series as past covariates.
     """
     target = tri.final[:, :start]
     target_places = list(range(len(places)))
     if period is not None:
         target = np.concatenate([target, period.totals[:, :start]])
         target_places += target_places
-    if layout == "complete":
-        return {
-            "target": target,
-            "places": list(places),
-            "target_places": target_places,
-        }
-    lags = tri.partial.shape[2]
-    names = [f"{p}_lag_{d}" for p in places for d in range(lags)]
-    cells = tri.partial.transpose(0, 2, 1).reshape(len(names), -1)
-    return {
+    block: dict[str, Any] = {
         "target": target,
-        "past_covariates": dict(zip(names, cells[:, :start], strict=True)),
-        "future_covariates": dict(zip(names, cells[:, start:], strict=True)),
         "places": list(places),
         "target_places": target_places,
+    }
+    lags = int(tri.partial.shape[2])
+    if layout == "complete" or lags == 0:
+        return block
+    names = [f"{p}_lag_{d}" for p in places for d in range(lags)]
+    cells = tri.partial[:, :start].transpose(0, 2, 1)
+    return block | {
+        "past_covariates": dict(
+            zip(names, cells.reshape(len(names), start), strict=True)
+        )
     }
 
 
@@ -1788,7 +1801,7 @@ class FoundationModel:
             return out
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
-        start = tri.n_context
+        start = layout_start(tri, self.layout)
         if self.two_step:
             # Chronos-2 forecasts from the day after the cut-off, on the
             # counts baselinenowcast's point nowcast corrects.
@@ -1954,10 +1967,10 @@ class FoundationModel:
 
         With an active-zone rule, `active_views`, else `block_views` under
         `block_limit`. A place's series are its count row, its aggregate
-        row (`period`) and, for `ragged`, its lag series.
+        row (`period`) and, for `cutoff`, its lag series.
         """
         per = 1 + (self.period is not None)
-        if self.layout == "ragged":
+        if self.layout == "cutoff":
             per += int(tri.partial.shape[2])
         cap = max(2, self.block_limit // per) if self.block_limit else None
         if self.active_zone_cases is not None:
@@ -1996,13 +2009,13 @@ class FoundationModel:
             views forecasting the country or a province, else `zones`),
             `places`,
             `forecasts` (the places it forecasts), `target_rows` (count and
-            aggregate rows), `lag_series` (for `ragged`) and `series`.
+            aggregate rows), `lag_series` (for `cutoff`) and `series`.
         """
         if (run := self.for_task(task)) is not self:
             return run.block_sizes(task)
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
-        lags = int(tri.partial.shape[2]) if self.layout == "ragged" else 0
+        lags = int(tri.partial.shape[2]) if self.layout == "cutoff" else 0
         per = 1 + (self.period is not None)
         joint = {p for p in places if p.count("-") < 2}
         out = []
@@ -2320,17 +2333,17 @@ def prefetch(
 # and the submission run; the others are paper-only (`paper_only`).
 register_model(
     "foundation_zeroshot",
-    partial(FoundationModel, "foundation_zeroshot", FROM_DATA, "ragged"),
-    "Chronos-2 zero-shot on the hub target's releases, ragged layout, every "
+    partial(FoundationModel, "foundation_zeroshot", FROM_DATA, "cutoff"),
+    "Chronos-2 zero-shot on the hub target's releases, cut-off layout, every "
     "target in one block.",
     fitted=True,
     paper_only=True,
 )
 register_model(
     "foundation",
-    partial(_finetuned, "foundation", "ragged"),
+    partial(_finetuned, "foundation", "cutoff"),
     "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
-    "releases, ragged layout.",
+    "releases, cut-off layout.",
     fitted=True,
 )
 register_model(
@@ -2402,7 +2415,7 @@ def register_realdata_models() -> None:
         "foundation_real",
         partial(_real_data, "foundation_real"),
         "Chronos-2 fine-tuned on real data (German and BDBV), on the hub "
-        "target's releases, ragged layout (SI only).",
+        "target's releases, cut-off layout (SI only).",
         fitted=True,
         paper_only=True,
         replace=True,

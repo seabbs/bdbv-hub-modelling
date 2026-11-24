@@ -174,16 +174,16 @@ def _references(index: pd.Index, horizon: int) -> list[Any]:
 
 def forecast_triangle(
     triangle: pd.DataFrame | Mapping[str, pd.DataFrame],
-    horizon: int = 0,
+    horizon: int = 1,
     model: str | FineTunedChronos | None = "latest",
     quantile_levels: Sequence[float] | None = None,
 ) -> pd.DataFrame:
-    """Nowcast and forecast a reporting triangle with Chronos-2.
+    """Forecast the rows after a reporting triangle's last with Chronos-2.
 
-    The rows reported at every delay are the context. Each place's count
-    at every delay is a covariate, known up to the last row's cut-off, as
-    in the ragged layout of the `foundation` model; the
-    last delay is taken as final. Our checkpoints were fine-tuned with
+    Each place's counts reported up to the last row's cut-off are the
+    context, and its count at every delay is a past covariate, as in the
+    cut-off layout of the `foundation` model; the last delay is taken as
+    final. Our checkpoints were fine-tuned with
     last delays of 2 to 7 weeks or 14 to 49 days, so triangles whose last
     delay is in those ranges match their training best.
 
@@ -196,7 +196,7 @@ def forecast_triangle(
         cells are ignored and may be NaN. A mapping gives several places,
         each the same rows and delays, forecast as one group.
     horizon : int
-        Rows to forecast past the last.
+        Rows to forecast past the last, at least 1.
     model : str, FineTunedChronos or None
         A checkpoint (`load`), a spec for `load`, or None for the
         pretrained Chronos-2.
@@ -208,9 +208,8 @@ def forecast_triangle(
     pandas.DataFrame
         `place`, `reference` (the row label, extended past the last row
         when the labels are dates or numbers), `step` (rows after the
-        last; 0 is the last, below 0 the rows still being reported),
-        `quantile_level` and `value`, the quantile of the row's final
-        count.
+        last, from 1), `quantile_level` and `value`, the quantile of the
+        row's final count.
 
     Raises
     ------
@@ -219,17 +218,17 @@ def forecast_triangle(
         columns are not the delays 0, 1, ..., a reported cell is NaN,
         places differ in rows or delays, fewer than two rows are reported
         at every delay, there are no places, or `horizon` is not a whole
-        number from 0.
+        number from 1.
     ImportError
         If Chronos-2 is not installed (`uv sync --group chronos`).
     """
     if (
         isinstance(horizon, bool)
         or not isinstance(horizon, int | np.integer)
-        or horizon < 0
+        or horizon < 1
     ):
         raise ValueError(
-            f"horizon must be a whole number of rows from 0, not {horizon!r}."
+            f"horizon must be a whole number of rows from 1, not {horizon!r}."
         )
     triangles = (
         {"series": triangle}
@@ -238,8 +237,8 @@ def forecast_triangle(
     )
     tri, index = _as_triangle(triangles, horizon)
     places = list(triangles)
-    start = tri.n_context
-    group = foundation.layout_block(tri, "ragged", places, start)
+    start = foundation.layout_start(tri, "cutoff")
+    group = foundation.layout_block(tri, "cutoff", places, start)
     if isinstance(model, str):
         model = load(model)
     checkpoint = (

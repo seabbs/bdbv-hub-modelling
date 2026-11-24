@@ -625,99 +625,52 @@ def test_a_loss_horizon_stops_blocks_days_after_the_cut_off(
     assert shorter
 
 
-def _raw(target_past, target_after, lags, places=("P01",)):
-    """A raw block: start 3, nowcast 2, two lag series a place.
-
-    `target_past` and `target_after` are a row a place (or one row for a
-    single place); `lags` are the lag series, place by place, lag 0
-    first, each a step's count as reported at that lag.
-    """
-    past = np.atleast_2d(np.array(target_past, dtype=float))
-    after = np.atleast_2d(np.array(target_after, dtype=float))
+def _reported(rows, places=("P01",)):
+    """A raw block of each place's counts reported at the cut-off."""
     return {
-        "context": np.concatenate(
-            [np.concatenate([past, after], axis=1), np.array(lags, float)]
-        ),
-        "n_targets": len(places),
-        "n_covariates": 2 * len(places),
+        "reported": np.atleast_2d(np.array(rows, dtype=float)),
         "places": tuple(places),
-        "start": past.shape[1],
-        "nowcast": 2,
     }
 
 
 def test_reported_cases_count_what_is_known_at_the_cut_off():
     from nowcastfoundation.finetune.chronos import reported_cases
 
-    nan = np.nan
-    # Daily steps; the cut-off is step 4 (start 3 + nowcast 2 - 1). The
-    # latest report of step 4 is its lag 0 value, of step 3 its lag 1.
-    lags = [[0, 0, 0, 2, 3, nan, nan], [0, 0, 0, 4, nan, nan, nan]]
-    # Each step once, at its latest report: 4 + 3, not 2 + 3 + 4. Cases
-    # after the cut-off, in the target, do not count.
-    assert reported_cases(_raw([0, 0, 0], [0, 0, 9, 9], lags), 1, 28) == 7
-    # The targets' context counts within the window.
-    assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 1, 28) == 13
-    # But not before it: 3 daily steps reach back to step 2.
-    assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 1, 3) == 8
+    # Daily steps to the cut-off, step 4, as reported at it.
+    block = _reported([5, 0, 1, 4, 3])
+    assert reported_cases(block, 1, 28) == 13
+    # Only the window: 3 daily steps reach back to step 2.
+    assert reported_cases(block, 1, 3) == 8
     # The window is in days: 21 days of 7-day steps reach back to step 2,
     # 35 days to step 0.
-    assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 7, 21) == 8
-    assert reported_cases(_raw([5, 0, 1], [0, 0, 0, 0], lags), 7, 35) == 13
+    assert reported_cases(block, 7, 21) == 8
+    assert reported_cases(block, 7, 35) == 13
 
 
 def test_reported_cases_count_each_case_once_at_the_busiest_level():
     from nowcastfoundation.finetune.chronos import NATIONAL, reported_cases
 
-    zeros = [[0] * 7] * 6
     # The country and its two places: the places' cases, not the country's
     # on top.
-    block = _raw(
-        [[0, 0, 10], [0, 0, 4], [0, 0, 6]],
-        [[0] * 4] * 3,
-        zeros,
-        places=(NATIONAL, "P01", "P02"),
+    block = _reported(
+        [[0, 0, 10], [0, 0, 4], [0, 0, 6]], places=(NATIONAL, "P01", "P02")
     )
     assert reported_cases(block, 1, 28) == 10
     # A block of some of the places is not their sum: the country's cases
     # count though the place in the block has none.
-    some = _raw(
-        [[0, 0, 12], [0, 0, 0]],
-        [[0] * 4] * 2,
-        zeros[:4],
-        places=(NATIONAL, "P02"),
-    )
+    some = _reported([[0, 0, 12], [0, 0, 0]], places=(NATIONAL, "P02"))
     assert reported_cases(some, 1, 28) == 12
     # The country alone counts itself.
-    alone = _raw([0, 0, 10], [0, 0, 0, 0], zeros[:2], places=(NATIONAL,))
+    alone = _reported([0, 0, 10], places=(NATIONAL,))
     assert reported_cases(alone, 1, 28) == 10
 
 
-def test_reported_cases_refuse_a_block_whose_lags_do_not_fit():
-    from nowcastfoundation.finetune.chronos import NATIONAL, reported_cases
-
-    block = _raw([0, 0, 0], [0, 0, 0, 0], [[0] * 7] * 2)
-    # Lag series that do not divide over the places would be read across
-    # places.
-    two = _raw(
-        [[0] * 3] * 2, [[0] * 4] * 2, [[0] * 7] * 3, places=(NATIONAL, "P01")
-    )
-    with pytest.raises(ValueError, match="lag series"):
-        reported_cases({**two, "n_covariates": 3}, 1, 28)
-    # A nowcast longer than the lags reads past a place's rows.
-    with pytest.raises(ValueError, match="nowcast"):
-        reported_cases({**block, "nowcast": 3}, 1, 28)
-
-
-def test_a_block_is_quiet_below_the_threshold_whatever_follows():
+def test_a_block_is_quiet_below_the_threshold():
     from nowcastfoundation.finetune.chronos import quiet
 
-    nan = np.nan
-    lags = [[0, 0, 0, 2, 3, nan, nan], [0, 0, 0, 4, nan, nan, nan]]
-    block = _raw([0, 0, 0], [0, 0, 99, 99], lags)
+    block = _reported([0, 0, 0, 4, 3])
     assert quiet(block, 1, 8)
     assert not quiet(block, 1, 7)
-    assert quiet(_raw([0, 0, 0], [9, 9, 9, 9], [[0] * 7] * 2), 1, 1)
 
 
 @pytest.mark.slow
@@ -1395,7 +1348,8 @@ def test_early_cut_offs_take_as_many_lags_as_history_allows(monkeypatch):
         lag = b["n_covariates"] // len(b["places"])
         # Every lag series and two steps of context fit in the history.
         assert 1 <= lag < 63
-        assert b["nowcast"] == lag
+        # The counts run to the cut-off: nothing before it is forecast.
+        assert b["nowcast"] == 0
 
 
 def test_views_of_a_system_over_capacity_cover_every_leaf():
@@ -1513,40 +1467,28 @@ def test_the_grid_file_has_a_default_outside_a_checkout(monkeypatch, tmp_path):
     assert ft.workflow_grid_file() == ft.DEFAULT_GRID_FILE
 
 
-def test_a_complete_block_is_the_ragged_block_without_its_lag_series():
-    from nowcastfoundation.finetune.chronos import complete_block
-
-    nan = np.nan
-    lags = [[0, 0, 0, 2, 3, nan, nan], [0, 0, 0, 4, nan, nan, nan]]
-    raw = _raw([5, 0, 1], [6, 7, 8, 9], lags)
-    out = complete_block(raw)
-    # The counts to the last complete step, then the truth: no lag series,
-    # so the context ends at `start`.
-    np.testing.assert_array_equal(out["context"], raw["context"][:1])
-    assert (out["n_covariates"], out["n_future_covariates"]) == (0, 0)
-    assert (out["start"], out["nowcast"]) == (3, 2)
-
-
 @pytest.mark.slow
-def test_the_complete_layout_cuts_the_ragged_blocks_without_lag_series(
+def test_the_complete_layout_cuts_the_same_blocks_without_lag_series(
     monkeypatch,
 ):
     from nowcastfoundation.finetune.chronos import outbreak_blocks
 
     ft.use_grid()
     counts = _counts_of(["P01", "P02"])
-    ragged = outbreak_blocks(counts, ["P01", "P02"], np.random.default_rng(3))
+    cutoff = outbreak_blocks(counts, ["P01", "P02"], np.random.default_rng(3))
     monkeypatch.setattr(ft, "LAYOUT", "complete")
     complete = outbreak_blocks(counts, ["P01", "P02"], np.random.default_rng(3))
     # The same blocks in the same order, so both runs see the same data.
-    assert len(complete) == len(ragged) > 0
-    for r, c in zip(ragged, complete, strict=True):
+    assert len(complete) == len(cutoff) > 0
+    for r, c in zip(cutoff, complete, strict=True):
         assert (c["source"], c["cut"], c["places"]) == (
             r["source"],
             r["cut"],
             r["places"],
         )
-        np.testing.assert_array_equal(
-            c["context"], r["context"][: r["n_targets"]]
-        )
+        assert c["context"].shape[0] == c["n_targets"] == r["n_targets"]
         assert c["n_covariates"] == c["n_future_covariates"] == 0
+        # The complete context stops before the cut-off; the cut-off
+        # context runs to it.
+        assert c["nowcast"] >= 1
+        assert r["nowcast"] == 0

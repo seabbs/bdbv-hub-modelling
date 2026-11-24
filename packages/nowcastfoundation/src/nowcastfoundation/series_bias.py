@@ -1,7 +1,7 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Attention bias that ties a place's series together and to its parent.
 
-Chronos-2's group attention has no series identity, so in the ragged
+Chronos-2's group attention has no series identity, so in the cut-off
 layout's joint block it cannot tell which place a lag series belongs to.
 This adds learned biases to the group attention scores of every encoder
 layer, per head, one for each kind of row pair (`pair_masks`): a row and
@@ -18,7 +18,7 @@ which each layer's `GroupSelfAttention` adds to its scores. `attach`
 wraps each layer's group attention to add its layer's bias to that mask,
 from the rows' places and parents set by `assigned`, a few time steps at
 a time (`CHUNK_ELEMENTS`), so the `(time, heads, q, k)` sum is never held
-whole. Rows are the ragged
+whole. Rows are the cut-off
 layout's order: the targets, then each place's lags in turn
 (`row_places`); rows that Chronos-2 repeats for long horizons
 repeat their place. The biases train beside the LoRA adapter as one of
@@ -82,7 +82,7 @@ no nearer parent in its block."""
 
 
 def row_places(n_targets: int, n_covariates: int) -> np.ndarray:
-    """Return the place of each row of a ragged block.
+    """Return the place of each row of a cut-off block.
 
     Rows are the `n_targets` targets, then each place's lag series in
     turn, `n_covariates // n_targets` per place.

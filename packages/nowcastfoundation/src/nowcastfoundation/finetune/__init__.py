@@ -20,6 +20,7 @@ from nowcastfoundation.forecaster import (
     HubTriangle,
     hub_triangle,
     layout_block,
+    layout_start,
     rolling_totals,
 )
 from nowcastutils.base import NATIONAL
@@ -518,12 +519,13 @@ def training_block(
     period_end: int | None = None,
     parent_draws: dict[str, dict[str, Any]] | None = None,
     lag_scale: float = 1.0,
+    layout: str = "cutoff",
 ) -> dict[str, Any] | None:
     """Return one training block, cut at the last of `cutoffs`.
 
-    The block is the ragged layout's group of series at the cut-off, from
-    `hub_triangle` and the layout's block, with the target extended over
-    the horizon by the outbreak's final counts.
+    The block is the group of series a forecast at the cut-off builds,
+    from `hub_triangle`, `layout_start` and `layout_block`, with the
+    target extended over the horizon by the outbreak's final counts.
 
     Parameters
     ----------
@@ -561,6 +563,11 @@ def training_block(
         For a source with period totals (`MIXED`), the day its periods
         end on (`period_totals`). Sources with rolling sums (`ROLLING`)
         have a sum on every day instead.
+    layout : str
+        One of `nowcastfoundation.forecaster.LAYOUTS`: `cutoff`, the
+        counts reported to the cut-off with each place's lag series as
+        past covariates, or `complete`, the counts to the last complete
+        step and no lag series.
 
     Returns
     -------
@@ -568,8 +575,9 @@ def training_block(
         Chronos-2's prepared input: `context` `[V, S + H]`, the targets
         first and then the lag series, `future_covariates` `[V, H]`,
         `n_targets`, `n_covariates` and `n_future_covariates`, the
-        `start` $S$ and `horizon` $H$, and `nowcast`, the steps of the
-        horizon up to and including the cut-off's. None if no release up
+        `start` $S$ and `horizon` $H$, `nowcast`, the steps of the
+        horizon up to and including the cut-off's, and `reported`, each
+        place's counts as reported at the cut-off, `[L, cut-off + 1]`. None if no release up
         to the cut has a row for any of `places`, as for strata with no
         cases, or, for a binned source, if no whole bin ends at the
         cut-off.
@@ -632,18 +640,14 @@ def training_block(
             rows, source, places, end.isoformat(), max_lag=max_lag
         )
         truth = final_counts(counts, source, places, tri.times, totals, country)
-    start = tri.n_context
+    start = layout_start(tri, layout)
     horizon = len(tri.times) - start
-    group = layout_block(tri, "ragged", places, start)
-    names = list(group["past_covariates"])
-    lagged = np.stack(
-        [
-            np.concatenate(
-                [group["past_covariates"][n], group["future_covariates"][n]]
-            )
-            for n in names
-        ]
-    )
+    group = layout_block(tri, layout, places, start)
+    past = group.get("past_covariates", {})
+    # The lags are past covariates: none is known after the cut-off.
+    lagged = np.full((len(past), len(tri.times)), np.nan)
+    if past:
+        lagged[:, :start] = np.stack(list(past.values()))
     target = np.concatenate([group["target"], truth[:, start:]], axis=1)
     target_places = list(range(len(places)))
     if window is not None:
@@ -665,11 +669,12 @@ def training_block(
         "context": context,
         "future_covariates": context[:, start:].copy(),
         "n_targets": len(target_places),
-        "n_covariates": len(names),
-        "n_future_covariates": len(names),
+        "n_covariates": len(past),
+        "n_future_covariates": 0,
         "start": start,
         "horizon": horizon,
         "nowcast": tri.last - start + 1,
+        "reported": tri.final[:, : tri.last + 1],
         "places": tuple(places),
         "target_places": target_places,
     }

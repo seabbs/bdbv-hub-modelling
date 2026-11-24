@@ -349,11 +349,8 @@ def record_releases(
 
 
 def layout_settings(layout: str) -> dict[str, Any]:
-    """Return the block layout's entry of a checkpoint's settings.
-
-    The ragged layout, the default, adds nothing, so its hash is as before.
-    """
-    return {} if layout == "ragged" else {"layout": layout}
+    """Return the block layout's entry of a checkpoint's settings."""
+    return {"layout": layout}
 
 
 def quiet_settings(min_cases: int | None) -> dict[str, Any]:
@@ -730,7 +727,7 @@ def init_worker(
     loss_days: int | None = None,
     quiet_min_cases: int | None = None,
     block_limit: int | None = None,
-    layout: str = "ragged",
+    layout: str = "cutoff",
     release_layer: dict[str, Any] | None = None,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
@@ -1042,15 +1039,9 @@ class ByLength:
 def nowcast_steps(block: dict[str, Any]) -> int:
     """Return a block's nowcast steps, from its start to the cut-off.
 
-    A block starts $D$ steps before the release's cut-off, where $D$ is
-    its release lag, and each of its places has one lag series for each
-    of those steps, so $D$ is its lag series over its places.
+    Zero for a cut-off block, whose context runs to the cut-off.
     """
-    if not int(block["n_covariates"]):
-        # A complete block has no lag series; it records its own.
-        return int(block["nowcast"])
-    places = len(block.get("places", ())) or int(block["n_targets"])
-    return int(block["n_covariates"]) // places
+    return int(block["nowcast"])
 
 
 class _LossSplit:
@@ -1684,9 +1675,9 @@ def build_parser() -> argparse.ArgumentParser:
     # daily triangle; one of them trains an adapter for it alone.
     # Every layout of the block design (`ft.BLOCK_DESIGN`) by default.
     parser.add_argument("--sources", nargs="+")
-    # The training blocks' layout: ragged (counts and lag series) or
-    # complete (the same blocks without their lag series).
-    parser.add_argument("--layout", choices=LAYOUTS, default="ragged")
+    # The training blocks' layout: cutoff (counts to the cut-off and lag
+    # series) or complete (counts to the last complete step, no lags).
+    parser.add_argument("--layout", choices=LAYOUTS, default="cutoff")
     # The release layer's YAML file (ft.check_release_layer): late
     # release starts and cadences drawn per block; none by default.
     parser.add_argument("--release-layer", type=Path)

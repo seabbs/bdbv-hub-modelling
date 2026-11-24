@@ -1,4 +1,4 @@
-"""A tiny Chronos-2 and a toy ragged block for the series bias tests."""
+"""A tiny Chronos-2 and a toy block for the series bias tests."""
 
 import numpy as np
 import torch
@@ -41,7 +41,11 @@ def tiny_model(seed: int = 0):
 
 
 def toy_block(seed: int = 0) -> dict:
-    """A ragged block: three places' counts, then each place's two lags."""
+    """A block of three places' counts, then each place's two lags.
+
+    Its context ends `LAG` steps before the cut-off (`nowcast`), with the
+    lags known to it, so the loss splits into nowcast and forecast steps.
+    """
     rng = np.random.default_rng(seed)
     level = np.array([5.0, 50.0, 500.0])[:, None]
     target = rng.poisson(level, (N_PLACES, T + H)).astype(np.float32)
@@ -56,6 +60,7 @@ def toy_block(seed: int = 0) -> dict:
         "n_covariates": N_PLACES * LAG,
         "n_future_covariates": N_PLACES * LAG,
         "prediction_length": H,
+        "nowcast": LAG,
     }
 
 

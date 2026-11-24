@@ -32,11 +32,9 @@ def only_nowcast(block: dict) -> dict:
     return {**block, "context": x}
 
 
-def test_nowcast_steps_are_the_release_lags_of_each_place():
+def test_nowcast_steps_are_the_block_s_own():
     assert fs.nowcast_steps(blocks(1)[0]) == LAG
-    # A block of period totals has two target rows a place.
-    block = {**blocks(1)[0], "n_targets": 2 * N_PLACES}
-    assert fs.nowcast_steps(block) == LAG
+    assert fs.nowcast_steps({**blocks(1)[0], "nowcast": 0}) == 0
 
 
 @pytest.mark.usefixtures("short_context")
