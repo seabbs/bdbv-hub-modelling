@@ -5,7 +5,7 @@ it out, from reports before the first scored German date only
 (`window`), so the real-data run is never scored on what it trained on.
 Run as `python -m nowcastgermany.finetune_blocks TRIANGLE OUT
 --first-date D --truth-delay N`, the window's two settings from
-`config/germany.toml` (rule real_training_blocks).
+`packages/nowcastgermany/config/germany.toml` (rule real_training_blocks).
 """
 
 from __future__ import annotations
@@ -204,7 +204,8 @@ def main() -> None:
     parser.add_argument("triangle", type=Path)
     parser.add_argument("out", type=Path)
     # The first scored German nowcast date and the benchmark's truth
-    # delay (`config/germany.toml` `nowcast.first_date`, `truth.delay`).
+    # delay (`packages/nowcastgermany/config/germany.toml`
+    # `nowcast.first_date`, `truth.delay`).
     parser.add_argument("--first-date", required=True)
     parser.add_argument("--truth-delay", type=int, required=True)
     parser.add_argument("--workers", type=int, default=4)

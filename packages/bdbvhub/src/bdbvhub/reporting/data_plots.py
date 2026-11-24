@@ -544,7 +544,7 @@ def plot_nowcast(
     mode: str = "light",
     complete_after_weeks: int = 3,
     data_dir: Path | str | None = None,
-    config_path: Path | str = "config/backtest.toml",
+    config_path: Path | str = "packages/nowcastbdbv/config/backtest.toml",
     ax: Axes | None = None,
 ) -> Figure:
     """Plot the nowcast and forecast for one location from one vintage.

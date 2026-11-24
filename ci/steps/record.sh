@@ -66,7 +66,7 @@ write_record() {
   # Each round's submitted model and chain start per hub id, from the
   # records and archived gates above (submission_ci.submissions).
   sci submissions-table --state "$ledger/state.json" --ledger "$ledger" \
-    --policy "$POLICY" --hub-config "${HUB_TOML:-$CI_DIR/../config/hub.toml}" \
+    --policy "$POLICY" --hub-config "${HUB_TOML:-$CI_DIR/../packages/bdbvhub/config/hub.toml}" \
     --out "$ledger/submissions.csv"
 }
 

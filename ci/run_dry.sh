@@ -22,7 +22,7 @@ echo "Dry-run outputs: $ROOT"
 export UV_CACHE_DIR=${UV_CACHE_DIR:-${TMPDIR:-/tmp}/uvcache}
 export FORECAST_CLI="python3 $FIX/fake_bdbvhub.py"
 # MODEL and MODEL_ID are left unset, so `prepare` resolves them from
-# config/hub.toml and the fixture CLI (`hub-id`) as the workflow does.
+# packages/bdbvhub/config/hub.toml and the fixture CLI (`hub-id`) as the workflow does.
 unset MODEL MODEL_ID
 export HEARTBEAT_SECONDS=1
 # Fitted candidates read the fit store, as in the workflow; a scenario
@@ -92,7 +92,7 @@ run_scenario() {
   export WORK="$ROOT/$name"
   export FAKE_SCENARIOS=$scenarios
   export FAKE_COHERENCE_GAP=""
-  # As in production, `prepare` resolves the model from config/hub.toml
+  # As in production, `prepare` resolves the model from packages/bdbvhub/config/hub.toml
   # (renewalbvd), so the chain starts at bvd. A scenario may choose
   # another model with MODEL=.
   unset MODEL
@@ -477,7 +477,7 @@ chronos_track() {
   model=$(python3 -c 'import sys, tomllib
 models = tomllib.load(open(sys.argv[1], "rb"))["models"]
 print(next(k for k, v in models.items() if v["model_abbr"] == "foundation"))' \
-    "$CI_DIR/../config/hub.toml")
+    "$CI_DIR/../packages/bdbvhub/config/hub.toml")
   export WORK="$ROOT/chronos"
   rm -rf "$WORK" && mkdir -p "$WORK"
   cp -R "$src/inputs" "$WORK/inputs"
@@ -508,15 +508,15 @@ print(next(k for k, v in models.items() if v["model_abbr"] == "foundation"))' \
 
 own_model() {
   # The renewal track resolves its model from `[submission] model` in
-  # config/hub.toml.
+  # packages/bdbvhub/config/hub.toml.
   local got want
   want=$(python3 -c 'import sys, tomllib
 print(tomllib.load(open(sys.argv[1], "rb"))["submission"]["model"])' \
-    "$CI_DIR/../config/hub.toml")
+    "$CI_DIR/../packages/bdbvhub/config/hub.toml")
   got=$(unset MODEL MODEL_ID; export WORK="$ROOT/own-model"; \
     bash -c 'source "$CI_DIR/steps/lib.sh"; resolve_model; echo "$MODEL"')
   [ "$got" = "$want" ] || { echo "FAIL: renewal track resolved $got, not $want"; return 1; }
-  echo "=== own-model ===" && echo "ok: seabbs-renewal resolves $got from config/hub.toml"
+  echo "=== own-model ===" && echo "ok: seabbs-renewal resolves $got from packages/bdbvhub/config/hub.toml"
 }
 
 failed=0

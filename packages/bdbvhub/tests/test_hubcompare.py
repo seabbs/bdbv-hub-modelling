@@ -218,7 +218,9 @@ def test_attribution_names_the_hub() -> None:
 
 
 def test_load_comparison_config() -> None:
-    cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
+    cfg = load_comparison_config(
+        ROOT / "packages" / "bdbvhub" / "config" / "hub-comparison.toml"
+    )
     assert cfg.baseline == "randomwalknowcast"
     assert "CD" in cfg.locations
     # Substituted weeks are scored apart from chain-start weeks.
@@ -614,10 +616,12 @@ def test_comparison_label_names_our_hub_models() -> None:
 def test_own_hub_ids() -> None:
     from bdbvhub.compare import own_hub_ids
 
-    ids = own_hub_ids(ROOT / "config" / "hub.toml")
+    ids = own_hub_ids(ROOT / "packages" / "bdbvhub" / "config" / "hub.toml")
     assert ids["randomwalknowcast"] == "seabbs-rwnowcast"
     # The renewal track's id carries the model the chain submits first.
-    track = tomllib.loads((ROOT / "config" / "hub.toml").read_text())
+    track = tomllib.loads(
+        (ROOT / "packages" / "bdbvhub" / "config" / "hub.toml").read_text()
+    )
     assert ids[track["submission"]["model"]] == "seabbs-renewal"
     # Only models set to submit have a hub id.
     off = [m for m, t in track.get("models", {}).items() if not t["submit"]]

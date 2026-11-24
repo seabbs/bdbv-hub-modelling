@@ -1,7 +1,8 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Command line interface: `nowcastgermany <command>`.
 
-The German hospitalisation nowcasting benchmark (config/germany.toml):
+The German hospitalisation nowcasting benchmark
+(packages/nowcastgermany/config/germany.toml):
 
 - `fetch`: download the benchmark's data at the config's commits.
 - `backtest`: nowcast and score the benchmark with our models.
@@ -63,14 +64,18 @@ def build_parser() -> argparse.ArgumentParser:
         "fetch",
         help="Download the German hospitalisation benchmark's data.",
     )
-    gfe.add_argument("--config", default="config/germany.toml")
+    gfe.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
     gfe.add_argument("--out", default=data_dir)
 
     gbt = sub.add_parser(
         "backtest",
         help="Nowcast and score the German hospitalisation benchmark.",
     )
-    gbt.add_argument("--config", default="config/germany.toml")
+    gbt.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
     gbt.add_argument("--data", default=data_dir)
     gbt.add_argument(
         "--models",
@@ -99,7 +104,9 @@ def build_parser() -> argparse.ArgumentParser:
         "each, on the development half, with the rho_p of each task.",
     )
     pst.add_argument("--data", default=data_dir)
-    pst.add_argument("--config", default="config/germany.toml")
+    pst.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
     pst.add_argument(
         "--chunk", default=None, help=CHUNK_HELP.format(what="nowcast dates")
     )
@@ -109,7 +116,9 @@ def build_parser() -> argparse.ArgumentParser:
         "teams",
         help="Score the German hospitalisation hub teams' nowcasts.",
     )
-    gtm.add_argument("--config", default="config/germany.toml")
+    gtm.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
     gtm.add_argument("--data", default=data_dir)
     gtm.add_argument("--out", default="results/germany")
     gtm.add_argument(
@@ -123,7 +132,9 @@ def build_parser() -> argparse.ArgumentParser:
         "asof",
         help="Write the German 7-day sums as each development date saw them.",
     )
-    gas.add_argument("--config", default="config/germany.toml")
+    gas.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
     gas.add_argument("--data", default=data_dir)
     gas.add_argument("--out", default="results/germany")
 
@@ -131,7 +142,9 @@ def build_parser() -> argparse.ArgumentParser:
         "paper",
         help="Write the German benchmark's forecasts as the paper's table.",
     )
-    gpp.add_argument("--config", default="config/germany.toml")
+    gpp.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
     gpp.add_argument("--results", default="results/germany")
 
     gft = sub.add_parser(
@@ -139,7 +152,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write the stored German forecasts of the fine-tuned model's "
         "checkpoint, for the Pages build (`nowcastgermany.store`).",
     )
-    gft.add_argument("--config", default="config/germany.toml")
+    gft.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
     gft.add_argument("--finetune", default="config/finetune.toml")
     gft.add_argument(
         "--store",
@@ -169,7 +184,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gup.add_argument("cache", help="The score cache.")
     gup.add_argument("label", help="The checkpoint's label, slots-<hash>.")
-    gup.add_argument("--config", default="config/germany.toml")
+    gup.add_argument(
+        "--config", default="packages/nowcastgermany/config/germany.toml"
+    )
     gup.add_argument("--repo", default="seabbs/bdbv-hub-modelling")
     gup.add_argument(
         "--out", default=None, help="Write the asset here and upload nothing."

@@ -39,7 +39,7 @@ real = target.loc[target["kind"] == "real"]
 
 # 2. Build the task a model sees at one release.
 config = dataclasses.replace(
-    bt.load_config("config/backtest.toml"), min_horizon=-6
+    bt.load_config("packages/nowcastbdbv/config/backtest.toml"), min_horizon=-6
 )
 vintage = "2026-10-17"
 task = make_tasks(

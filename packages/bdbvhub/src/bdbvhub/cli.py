@@ -126,7 +126,8 @@ __all__ = ["build_parser", "chunk", "host_devices", "main"]
 
 _ABBR_HELP = (
     "Hub model abbreviation. Defaults to `randomwalk` for random walk and "
-    "otherwise to the submission abbreviation in config/hub.toml."
+    "otherwise to the submission abbreviation in "
+    "packages/bdbvhub/config/hub.toml."
 )
 
 
@@ -169,7 +170,9 @@ def build_parser() -> argparse.ArgumentParser:
     data.add_argument("--ref", default="main")
 
     back = sub.add_parser("backtest", help="Run the backtest.")
-    back.add_argument("--config", default="config/backtest.toml")
+    back.add_argument(
+        "--config", default="packages/nowcastbdbv/config/backtest.toml"
+    )
     back.add_argument(
         "--samples",
         type=int,
@@ -257,7 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument("--draws-out", default="results/zone-draws.csv.gz")
     zb.add_argument(
         "--backtest-config",
-        default="config/backtest.toml",
+        default="packages/nowcastbdbv/config/backtest.toml",
         help="Gives `[samples] backtest`, the draws per zone forecast.",
     )
 
@@ -271,7 +274,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pst.add_argument("--study", choices=["bdbv"], default="bdbv")
     pst.add_argument("--data", default=None, help="The data directory.")
-    pst.add_argument("--config", default=None, help="config/backtest.toml.")
+    pst.add_argument(
+        "--config",
+        default=None,
+        help="packages/nowcastbdbv/config/backtest.toml.",
+    )
     pst.add_argument(
         "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
     )
@@ -308,7 +315,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Score the forecasts written by --forecast-only runs, every "
         "model together, and write the results as one run would.",
     )
-    sc.add_argument("--config", default="config/backtest.toml")
+    sc.add_argument(
+        "--config", default="packages/nowcastbdbv/config/backtest.toml"
+    )
     sc.add_argument("--data", default=data_dir)
     sc.add_argument("--results", default="results")
     _add_store_arg(sc)
@@ -355,7 +364,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fst.add_argument("--store", default="output/fit-store")
     fst.add_argument("--data", default=data_dir)
-    fst.add_argument("--config", default="config/backtest.toml")
+    fst.add_argument(
+        "--config", default="packages/nowcastbdbv/config/backtest.toml"
+    )
     fst.add_argument("--policy", default="ci/policy.toml")
     fst.add_argument(
         "--model", help="With `fit` or `unpack`: the model to fit or read."
@@ -420,7 +431,9 @@ def build_parser() -> argparse.ArgumentParser:
         "(nowcasteval.nowcast.truth_sensitivity), as a Markdown table.",
     )
     tsn.add_argument("--data", default=data_dir)
-    tsn.add_argument("--config", default="config/backtest.toml")
+    tsn.add_argument(
+        "--config", default="packages/nowcastbdbv/config/backtest.toml"
+    )
     tsn.add_argument(
         "--out", default=None, help="Markdown file; stdout if not given."
     )
@@ -464,7 +477,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Cache the BVDOutbreakSize releases each vintage may use.",
     )
     bvd.add_argument("--data", default=data_dir)
-    bvd.add_argument("--backtest-config", default="config/backtest.toml")
+    bvd.add_argument(
+        "--backtest-config", default="packages/nowcastbdbv/config/backtest.toml"
+    )
     bvd.add_argument(
         "--vintages",
         nargs="*",
@@ -484,14 +499,19 @@ def build_parser() -> argparse.ArgumentParser:
     hid.add_argument(
         "--model",
         default="",
-        help="A model with its own hub id (`[models]` in config/hub.toml).",
+        help="A model with its own hub id (`[models]` in "
+        "packages/bdbvhub/config/hub.toml).",
     )
 
     cmp = sub.add_parser(
         "compare-hub", help="Compare our forecasts with hub submissions."
     )
-    cmp.add_argument("--config", default="config/hub-comparison.toml")
-    cmp.add_argument("--backtest-config", default="config/backtest.toml")
+    cmp.add_argument(
+        "--config", default="packages/bdbvhub/config/hub-comparison.toml"
+    )
+    cmp.add_argument(
+        "--backtest-config", default="packages/nowcastbdbv/config/backtest.toml"
+    )
     cmp.add_argument("--data", default=data_dir)
     cmp.add_argument(
         "--hub-dir",
@@ -607,7 +627,9 @@ def _task_args(p: argparse.ArgumentParser, data_dir: str) -> None:
         "later one forecasts that round from the vintage's data.",
     )
     p.add_argument("--data", default=data_dir)
-    p.add_argument("--backtest-config", default="config/backtest.toml")
+    p.add_argument(
+        "--backtest-config", default="packages/nowcastbdbv/config/backtest.toml"
+    )
 
 
 def _version() -> str:
@@ -1821,7 +1843,7 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     name = f"pairing-{args.study}"
-    config = args.config or "config/backtest.toml"
+    config = args.config or "packages/nowcastbdbv/config/backtest.toml"
     data = args.data or data_dir
     real = load_target(data).query("kind == 'real'")
     origins = bt.real_vintages(real)[:-1]

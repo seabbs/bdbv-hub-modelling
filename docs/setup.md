@@ -72,7 +72,7 @@ target, daily, delays = load_target(), load_daily(), load_delays()
 real = target.loc[target["kind"] == "real"]
 
 config = dataclasses.replace(
-    bt.load_config("config/backtest.toml"), min_horizon=-6, n_samples=N_SAMPLES
+    bt.load_config("packages/nowcastbdbv/config/backtest.toml"), min_horizon=-6, n_samples=N_SAMPLES
 )
 task = make_tasks(
     real.loc[real["vintage"] == ORIGIN],

@@ -36,7 +36,7 @@ env:
   CI_DIR: ci
   WORK: output/ci
   # The model and hub id come from the run's context.json, which
-  # `prepare` resolves from config/hub.toml.
+  # `prepare` resolves from packages/bdbvhub/config/hub.toml.
   # Every bdbvhub command reads the tidy data the prepare job
   # pinned to the hub commit, shipped in the `inputs` artefact.
   BDBV_DATA_DIR: output/ci/inputs/data

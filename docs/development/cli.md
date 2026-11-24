@@ -108,7 +108,7 @@ uv run bdbvhub compare-hub --fetch
 ## Hub files
 
 `bdbvhub nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
-The model id is `seabbs-` plus the model's `model_abbr` in `config/hub.toml`.
+The model id is `seabbs-` plus the model's `model_abbr` in `packages/bdbvhub/config/hub.toml`.
 When the reference date is an open round in `tasks.json`, it checks the file with `submission.validate`, the Python port of the hub's checks:
 
 - column names and order free, no extra columns;

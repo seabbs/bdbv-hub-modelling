@@ -494,7 +494,9 @@ VIEWS = (
 """Chart views: data name, heading and what it draws."""
 
 
-def backtest_samples(path: Path | str = "config/backtest.toml") -> int:
+def backtest_samples(
+    path: Path | str = "packages/nowcastbdbv/config/backtest.toml",
+) -> int:
     """Return the backtest's draws per forecast, `[samples] backtest`."""
     raw = tomllib.loads(Path(path).read_text())
     return int(raw["samples"]["backtest"])
@@ -515,7 +517,8 @@ def page_markdown(hist: pd.DataFrame | None, samples: int | None = None) -> str:
     if samples is not None:
         parts.append(
             f"This build scores the models it runs on {samples:,} draws "
-            "per forecast (`[samples] backtest` in `config/backtest.toml`). "
+            "per forecast (`[samples] backtest` in "
+            "`packages/nowcastbdbv/config/backtest.toml`). "
             "Earlier deploys may have scored fewer. The fair CRPS keeps "
             "scores on different numbers of draws comparable.\n"
         )
@@ -544,7 +547,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--figures", help="Write the chart JSON here")
     parser.add_argument("--current", help="This build's figures directory")
     parser.add_argument("--current-sha", default="HEAD")
-    parser.add_argument("--config", default="config/backtest.toml")
+    parser.add_argument(
+        "--config", default="packages/nowcastbdbv/config/backtest.toml"
+    )
     args = parser.parse_args(argv)
     try:
         deploys = walk(args.ref)

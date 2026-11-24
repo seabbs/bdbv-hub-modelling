@@ -11,7 +11,13 @@ from submission_ci.policy import load_policy
 from submission_ci.submissions import COLUMNS, main, rows
 
 POLICY = Path(__file__).resolve().parents[1] / "policy.toml"
-HUB = Path(__file__).resolve().parents[2] / "config" / "hub.toml"
+HUB = (
+    Path(__file__).resolve().parents[2]
+    / "packages"
+    / "bdbvhub"
+    / "config"
+    / "hub.toml"
+)
 PR = "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/"
 
 
@@ -196,7 +202,7 @@ def test_the_command_writes_the_table(tmp_path: Path) -> None:
 
 def test_a_hub_id_of_its_own_starts_at_its_own_model(tmp_path: Path) -> None:
     """With no gate record, seabbs-rwnowcast's start is its own model in
-    config/hub.toml, not the renewal chain's."""
+    packages/bdbvhub/config/hub.toml, not the renewal chain's."""
     root = ledger(tmp_path)
     state = json.loads((root / "state.json").read_text())
     starts = {

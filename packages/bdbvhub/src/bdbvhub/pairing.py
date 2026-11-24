@@ -30,7 +30,7 @@ __all__ = ["bdbv_candidates", "bdbv_sensitivity"]
 
 def bdbv_sensitivity(
     data: str,
-    config_path: str = "config/backtest.toml",
+    config_path: str = "packages/nowcastbdbv/config/backtest.toml",
     origins: list[str] | None = None,
 ) -> pd.DataFrame:
     """Score both pairings on the BDBV release backtest's origins.
@@ -89,7 +89,7 @@ def bdbv_sensitivity(
 def bdbv_candidates(
     candidates: Sequence[Any],
     data: str,
-    config_path: str = "config/backtest.toml",
+    config_path: str = "packages/nowcastbdbv/config/backtest.toml",
     origins: list[str] | None = None,
 ) -> pd.DataFrame:
     """Score each candidate copula setting on the BDBV release backtest.

@@ -134,7 +134,8 @@ class ForecastTask:
         models with `reads_places` set have it in their fit key.
     max_delay : int or None
         The study's longest reporting delay $D$ in days (BDBV: 40, in
-        `config/backtest.toml`), which the models use in place of their
+        `packages/nowcastbdbv/config/backtest.toml`), which the models use in
+        place of their
         own rule or default. None leaves each model its own.
     """
 

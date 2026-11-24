@@ -47,7 +47,7 @@ __all__ = [
 
 STORED_MODELS: Final = ("foundation",)
 """The models whose German forecasts come from the store: Germany is
-daily only (`config/germany.toml`)."""
+daily only (`packages/nowcastgermany/config/germany.toml`)."""
 
 ASSET: Final = "germany-forecasts.tar.gz"
 """The release asset with a checkpoint's stored German forecasts."""

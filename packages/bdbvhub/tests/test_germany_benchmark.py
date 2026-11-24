@@ -61,7 +61,9 @@ def scores(forecasts: pd.DataFrame) -> pd.DataFrame:
 
 
 def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
-    config = load_germany_config(ROOT / "config" / "germany.toml")
+    config = load_germany_config(
+        ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+    )
     every = nowcast_dates(config, held_out=False) + nowcast_dates(
         config, held_out=True
     )
@@ -86,7 +88,9 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
 
 
 def test_german_trained_models_run_on_the_held_out_half_only() -> None:
-    config = load_germany_config(ROOT / "config" / "germany.toml")
+    config = load_germany_config(
+        ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+    )
     german = ("foundation_real",)
     assert config.held_out_models == german
     # They were fine-tuned on the development half, so never score on it.
@@ -98,7 +102,9 @@ def test_german_trained_models_run_on_the_held_out_half_only() -> None:
 
 
 def test_the_later_half_of_the_dates_is_held_out() -> None:
-    config = load_germany_config(ROOT / "config" / "germany.toml")
+    config = load_germany_config(
+        ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+    )
     assert config.split_date == "2022-02-10"
     development = nowcast_dates(config)
     held = nowcast_dates(config, held_out=True)
@@ -474,7 +480,9 @@ def test_a_sample_model_s_german_quantiles_use_the_draws_given(
 
 
 def test_held_out_models_wait_until_they_are_registered(caplog) -> None:
-    config = load_germany_config(ROOT / "config" / "germany.toml")
+    config = load_germany_config(
+        ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+    )
     config = dataclasses.replace(
         config, held_out_models=("randomwalk", "not_registered_de")
     )
@@ -771,7 +779,9 @@ def test_the_truth_context_runs_from_plot_start_for_both_views(
     from nowcastgermany import evaluation as de
 
     config = dataclasses.replace(
-        load_germany_config(ROOT / "config" / "germany.toml"),
+        load_germany_config(
+            ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+        ),
         plot_start="2021-09-01",
         first_date="2021-10-04",
         truth_delay=10,

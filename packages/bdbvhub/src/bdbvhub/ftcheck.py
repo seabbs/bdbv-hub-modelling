@@ -58,7 +58,8 @@ __all__ = [
 
 
 def release_tasks(
-    data: Path | str, config: Path | str = "config/backtest.toml"
+    data: Path | str,
+    config: Path | str = "packages/nowcastbdbv/config/backtest.toml",
 ) -> tuple[list[ForecastTask], pd.DataFrame, pd.DataFrame, Any]:
     """Return the scored task of every release, the target, daily, config.
 
