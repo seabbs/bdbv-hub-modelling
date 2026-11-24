@@ -53,9 +53,9 @@ The tasks' names before the project Taskfiles:
 | `all` | `nowcast-workflow:all` |
 | `tick` | `nowcast-workflow:tick` |
 | `run` | `nowcast-workflow:run` |
-| `schedule` | `nowcast-workflow:schedule` |
 | `monitor` | `nowcast-workflow:monitor` |
 | `dag` | `nowcast-workflow:dag` |
+| `rulegraph` | `nowcast-workflow:rulegraph` |
 | `progress` | `nowcast-workflow:progress` |
 | `report` | `nowcast-workflow:report` |
 | `workflow:check` | `nowcast-workflow:check` |
