@@ -113,6 +113,8 @@ def test_a_round_renders_one_self_contained_page(tmp_path):
     assert "no cases" in page
     assert "<h3>Odd combinations</h3>" in page
     assert "Fewer than 100 cases" in page
+    # R(t) levels each run, so implausible R shows.
+    assert "<h3>R(t)</h3>" in page
 
 
 def test_shares_count_shifts_and_reactive_ones():
@@ -162,3 +164,34 @@ def test_diseases_give_each_summary_s_range_against_published_values():
     assert (row["sim_q5"], row["sim_q50"], row["sim_q95"]) == (5, 50, 95)
     assert "ebola* 10 to 16.1" in row["published"]
     assert "10.1093/aje/kwu209" in row["sources"].split("; ")
+
+
+def test_r_levels_count_days_with_infections_by_threshold(tmp_path):
+    # Days above 2, 3 and 5 among days with an infection, per round; an
+    # empty stratum's R does not count.
+    sims = tmp_path / "sims"
+    sims.mkdir()
+    r = [1.0] * 6 + [2.5, 3.5, 6.0, 9.0]
+    pd.DataFrame(
+        {
+            "day": range(10),
+            "infections": [5.0] * 9 + [0.0],
+            "onsets": 1.0,
+            "r": r,
+            "reff": r,
+            "date": pd.date_range("2026-01-05", periods=10).strftime("%Y-%m-%d"),
+            "location": "all",
+            "outbreak": "1-0001",
+        }
+    ).to_csv(sims / "latent-1.csv.gz", index=False)
+    table = sr.r_levels({"r1": sims})
+    row = table.set_index("round").loc["r1"]
+    assert row["days"] == 9
+    assert np.isclose(row["above_2"], 3 / 9)
+    assert np.isclose(row["above_3"], 2 / 9)
+    assert np.isclose(row["above_5"], 1 / 9)
+    assert row["max"] == 6.0
+    assert np.isclose(row["outbreaks_above_4"], 1.0)
+    page = sr.r_section({"r1": sims})
+    assert "<h3>R(t)</h3>" in page
+    assert "data:image/png;base64," in page
