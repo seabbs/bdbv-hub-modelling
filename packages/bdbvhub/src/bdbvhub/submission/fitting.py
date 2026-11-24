@@ -12,7 +12,9 @@ fitted to each province on its own), `main` (the `renewal` variant), then the
 random walks.
 The renewal configurations run the PyRenew model through
 `nowcastrenewal.forecaster.fit_renewal`, which samples, draws the
-trajectories and writes `ppc.json`. `randomwalk` needs no fit.
+trajectories and writes `ppc.json`. The random walks need no fit: the
+fit store keeps their forecasts, which `fit-store unpack` writes into
+the fit directory (`STORED_FORECASTS`) for their configurations to read.
 
 A fit function gets the forecast task, the sampler settings from
 `packages/bdbvsubmission/policy.toml` and the fit directory. It writes whatever
@@ -34,11 +36,22 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
-from nowcastutils.base import ForecastTask, check_samples, get_model
+import pandas as pd
+
+from nowcastutils.base import (
+    NATIONAL,
+    SAMPLE_COLUMNS,
+    ForecastTask,
+    check_samples,
+    get_model,
+)
+from nowcastutils.dates import as_date
 from nowcastutils.forecast import Forecast
 
 __all__ = [
+    "COPULA_FILE",
     "DIAGNOSTICS_SCHEMA_VERSION",
+    "STORED_FORECASTS",
     "FitConfig",
     "FitResult",
     "get_config",
@@ -48,6 +61,7 @@ __all__ = [
     "register_config",
     "run_fit",
     "run_forecast",
+    "stored_forecast",
     "write_records",
 ]
 
@@ -57,6 +71,14 @@ DIAGNOSTICS_SCHEMA_VERSION: Final = 1
 
 FIT_RECORD: Final = "fit.json"
 """File in the fit directory recording what was fitted."""
+
+STORED_FORECASTS: Final = "stored-forecasts.csv.gz"
+"""A sample-free model's stored forecasts at the origin, which
+`fit-store unpack` writes into the fit directory."""
+
+COPULA_FILE: Final = "copula.json"
+"""The copula a walk joined its draws by (`copula_fit`), in its fit
+directory."""
 
 
 FitFn = Callable[[ForecastTask, Mapping[str, Any], Path], dict[str, Any]]
@@ -185,8 +207,10 @@ def randomwalk_config(name: str, model: str = "randomwalk") -> FitConfig:
     """Build a fit configuration that runs a registered sample-free model.
 
     There is nothing to fit. `fit` records the task and writes
-    not-applicable diagnostics and posterior predictive checks, and
-    `forecast` runs the model on the task.
+    not-applicable diagnostics and posterior predictive checks.
+    `forecast` reads the stored forecasts in the fit directory
+    (`STORED_FORECASTS`, `stored_forecast`), else runs the model on the
+    task.
 
     Parameters
     ----------
@@ -212,7 +236,10 @@ def randomwalk_config(name: str, model: str = "randomwalk") -> FitConfig:
         return no_sampler_diagnostics(model, name, reason)
 
     def forecast(task: ForecastTask, fit_dir: Path) -> Forecast:
-        del fit_dir
+        stored = fit_dir / STORED_FORECASTS
+        if stored.exists():
+            rows = pd.read_csv(stored, dtype={"target_end_date": str})
+            return stored_forecast(rows, task)
         return Forecast(get_model(model).forecast(task))
 
     return FitConfig(
@@ -222,6 +249,54 @@ def randomwalk_config(name: str, model: str = "randomwalk") -> FitConfig:
         forecast=forecast,
         model=model,
     )
+
+
+def stored_forecast(
+    rows: pd.DataFrame, task: ForecastTask, own: bool = False
+) -> Forecast:
+    """Return a stored forecast for the round's weeks.
+
+    The nowcasts of earlier report dates (`as_of`) are dropped. Stored
+    national rows are the model's own. A model that submits its own
+    national draws (`own`, see `submission.hub.own_national`) keeps them
+    as samples. For any other model, what they hold beyond the sum of the
+    provinces is the national part no province holds
+    (`Forecast.unassigned`), as a fit directory gives it; none if they
+    hold nothing more.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        The stored forecasts (`run_forecasts` output).
+    task : ForecastTask
+        The round's task, whose weeks the stored forecasts cover.
+    own : bool
+        Keep the national rows as samples.
+
+    Returns
+    -------
+    Forecast
+        The province samples and any unassigned national part.
+    """
+    if "as_of" in rows:
+        rows = rows.loc[rows["as_of"].isna()]
+    weeks = set(task.target_end_dates)
+    iso = rows["target_end_date"].map(lambda d: as_date(d).isoformat())
+    rows = rows.assign(target_end_date=iso)
+    rows = rows.loc[rows["target_end_date"].isin(weeks), list(SAMPLE_COLUMNS)]
+    national = rows["location"] == NATIONAL
+    samples = rows.loc[~national].reset_index(drop=True)
+    check_samples(samples, task)
+    if own:
+        return Forecast(rows.reset_index(drop=True))
+    keys = ["target_end_date", "sample"]
+    total = rows.loc[national].set_index(keys)["value"]
+    summed = samples.groupby(keys)["value"].sum()
+    extra = (total - summed.reindex(total.index)).clip(lower=0)
+    unassigned = extra.rename("value").reset_index()
+    if unassigned.empty or not (unassigned["value"] > 0).any():
+        return Forecast(samples)
+    return Forecast(samples, unassigned)
 
 
 def _write_json(path: Path, record: Mapping[str, Any]) -> None:

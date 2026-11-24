@@ -16,8 +16,8 @@
 # origins 2026-10-17 to 2026-11-15, with no draw at the maximum
 # tree depth, and renewalsp about 68 min for 500 + 750. The zone fits
 # grow with the zones fitted, so later origins take longer. Every renewal
-# candidate fits in its own job at the same time, and random walk is
-# built in `prepare`.
+# candidate fits in its own job at the same time, and the random walks
+# are read from the fit store in `prepare`.
 [timing]
 # GitHub's 360-minute job cap, less a margin.
 fit_cap_minutes = 350
@@ -55,8 +55,8 @@ stage = "primary"
 label = "zone renewal model"
 sampler = { num_chains = 2, num_warmup = 500, num_samples = 1500, thinning = 2, target_accept = 0.9, max_tree_depth = 10, seed = 1, chain_method = "parallel" }
 
-# Random walk on a nowcast (no MCMC). Like random walk it needs no fit and
-# is built in `prepare`.
+# Random walk on a nowcast (no MCMC). Like random walk it fits nothing:
+# its forecast is read from the fit store in `prepare`.
 [[candidates]]
 id = "randomwalknowcast"
 kind = "randomwalk"

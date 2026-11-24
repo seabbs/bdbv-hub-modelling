@@ -53,7 +53,12 @@ import pandas as pd
 from bdbvhub.store import archive as store_archive
 from bdbvhub.store import store
 from bdbvhub.store.store import stored_delays
-from bdbvhub.submission.fitting import get_config, run_fit, run_forecast
+from bdbvhub.submission.fitting import (
+    COPULA_FILE,
+    get_config,
+    run_fit,
+    run_forecast,
+)
 from bdbvhub.submission.hub import (
     ROUND_NAME,
     SUBMISSION_CONFIG,
@@ -779,25 +784,27 @@ def _backtest(args: argparse.Namespace) -> int:
     host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
-    if not args.lopo:
-        # Fitted models are never run here: their real forecasts come from
-        # the fit store. To fit one locally, run `fit-store fit --model M
-        # --origin D` for each origin, then `fit-store load`.
-        stored = set(store.stored_models())
-        names = [n for n in names if n not in stored]
-        if not names:
-            print(
-                "ERROR: fitted models come from the fit store: run "
-                "`task bdbvhub:fit-store`.",
-                file=sys.stderr,
-            )
-            return 1
+    # The stored models' origin forecasts come from the fit store, never
+    # from here. To make one locally, run `fit-store fit --model M
+    # --origin D` for each origin, then `fit-store load`. The walks
+    # (`store.SAMPLE_FREE`) still forecast each release's snapshots here,
+    # which the store does not hold.
+    stored = set() if args.lopo else set(store.stored_models())
+    names = [n for n in names if n not in stored or n in store.SAMPLE_FREE]
+    if not names:
+        print(
+            "ERROR: fitted models come from the fit store: run "
+            "`task bdbvhub:fit-store`.",
+            file=sys.stderr,
+        )
+        return 1
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     models = [get_model(n) for n in names]
+    origins = [m for m in models if m.name not in stored]
     if args.forecast_only:
-        return _forecast_parts(args, config, target, delays, models)
+        return _forecast_parts(args, config, target, delays, models, origins)
     fits: list[pd.DataFrame] = []
     if args.lopo:
         lopo_fc, lopo_scores = bdbv_bt.run_lopo(
@@ -814,7 +821,7 @@ def _backtest(args: argparse.Namespace) -> int:
         return 0
     learnt: list[pd.DataFrame] = []
     forecasts = bdbv_bt.run_development(
-        models,
+        origins,
         target,
         delays,
         config,
@@ -840,11 +847,14 @@ def _forecast_parts(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     models: Sequence[ForecastModel],
+    origins: Sequence[ForecastModel],
 ) -> int:
     """Forecast without scoring and write the forecasts to `args.parts`.
 
     The forecasting half of each backtest, so each model can run apart
     and be cached on its own code; `score` scores the parts together.
+    `models` forecast each release's snapshots, and `origins`, the models
+    the store does not hold, each origin.
     """
     parts = Path(args.parts)
     parts.mkdir(parents=True, exist_ok=True)
@@ -852,7 +862,7 @@ def _forecast_parts(
     fits: list[pd.DataFrame] = []
     learnt: list[pd.DataFrame] = []
     forecasts = bdbv_bt.run_development(
-        models, target, delays, config, fits=fits, learnt=learnt,
+        origins, target, delays, config, fits=fits, learnt=learnt,
         daily=daily, zones=_zone_data(args.data),
     )  # fmt: skip
     write_csv(forecasts, parts / "forecasts.csv.gz")
@@ -905,22 +915,25 @@ def _score(args: argparse.Namespace) -> int:
     target, delays = load_target(args.data), load_delays(args.data)
     daily = load_daily(args.data)
     dev = _stack(parts, "forecasts.csv.gz")
-    if dev is not None:
-        order = _order(dev)
+    release = [p for p in parts if (p / "release-runs.csv.gz").exists()]
+    if dev is not None or release:
+        # With no origin forecasts in the parts, every model's come from
+        # the fit store (`fit-store load`).
+        order = [] if dev is None else _order(dev)
         forecasts = bt.merge_by_model(
-            output / "forecasts.csv.gz", bt.joint_order(dev, order)
+            output / "forecasts.csv.gz",
+            pd.DataFrame() if dev is None else bt.joint_order(dev, order),
         )
         for name, path in (
             ("backtest-fits.csv", results / "backtest-fits.csv"),
             (DELAY_SUMMARY_FILE, output / DELAY_SUMMARY_FILE),
         ):
             table = _stack(parts, name)
-            if table is not None:
+            if table is not None and order:
                 write_csv(
                     bt.merge_by_model(path, bt.joint_order(table, order)),
                     path,
                 )
-        release = [p for p in parts if (p / "release-runs.csv.gz").exists()]
         _release_scores(
             args, config, target, delays, results, forecasts,
             ReleaseForecasts.read(release),
@@ -1128,6 +1141,10 @@ def _stored(
         "value",
     ]
     fitted = [s.name for s in list_models() if s.fitted]
+    if "model" not in forecasts:
+        # No origin forecasts at all: the walks' release backtest alone.
+        need = [*cols, "kind", "as_of"]
+        forecasts = pd.DataFrame(columns=need)
     ours = _with_whole_fits(
         forecasts.loc[
             forecasts["model"].isin(fitted)
@@ -1274,6 +1291,10 @@ def _hub_forecast(
         result = forecast
     elif config:
         result = run_forecast(get_config(config), task, fit)
+        # A stored walk's copula, from its fit directory.
+        record = None if fit is None else Path(fit) / COPULA_FILE
+        if record is not None and record.exists():
+            copula = json.loads(record.read_text())
     else:
         loaded = get_model(str(model))
         checkpoint = getattr(loaded, "checkpoint", None)

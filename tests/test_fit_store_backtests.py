@@ -24,10 +24,23 @@ def test_the_walk_backtests_run_under_the_store_s_write_guard() -> None:
             "pairing-bdbv",
             "zones-randomwalk",
             "zones-randomwalknowcast",
-            "development-randomwalk",
-            "development-randomwalknowcast",
+            "releases-randomwalk",
+            "releases-randomwalknowcast",
         ]
     )
+
+
+def test_the_walks_are_stored_before_the_slow_fits() -> None:
+    # The walks' origin forecasts are stored fits (SAMPLE_FREE), in their
+    # own quick stage, so the submission need not wait for the renewals.
+    jobs = _jobs()
+    assert jobs["fit-quick"]["needs"] == "plan"
+    assert "quick" in jobs["fit-quick"]["strategy"]["matrix"]
+    store = "\n".join(
+        str(s.get("run", "")) for s in jobs["store-quick"]["steps"]
+    )
+    assert "push new keys.json quick.json" in store
+    assert "store-quick" in jobs["pages"]["needs"]
 
 
 def test_no_simulated_backtest_is_run() -> None:
@@ -39,8 +52,9 @@ def test_no_simulated_backtest_is_run() -> None:
 
 def test_the_backtests_are_stored_without_waiting_for_the_fits() -> None:
     # The fits take hours; Pages needs the backtests now (main, 24 Nov).
+    # Only the walks' quick stage, which they load, comes first.
     job = _jobs()["backtests"]
-    assert set(job["needs"]) == {"plan", "backtest"}
+    assert set(job["needs"]) == {"plan", "backtest", "store-quick"}
     run = "\n".join(str(s.get("run", "")) for s in job["steps"])
     assert run.index("fit-store load") < run.index("bdbvhub score")
     assert run.index("push-backtests") < run.index("gh workflow run pages.yml")
