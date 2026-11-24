@@ -25,7 +25,6 @@ import gzip
 import html
 import io
 import json
-import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -33,11 +32,8 @@ from typing import Any
 
 import pandas as pd
 
-# The page style and colour scheme of the hub rounds report, beside it
-# (`python` puts the script's folder first on the path).
-from hub_rounds_report import SCHEME, THEME
-
 from bdbvhub import compare as hc
+from bdbvhub.reporting import pages
 from bdbvhub.store.store import read_fit
 from nowcastbdbv.data.tidy import load_target
 from nowcasteval.explorer import (
@@ -66,9 +62,6 @@ RENEWAL = ("renewalbvd", "renewalsp", "renewal")
 
 RT_COLUMNS = {0.05: "q05", 0.25: "q25", 0.5: "q50", 0.75: "q75", 0.95: "q95"}
 """The `wk R_t` levels the explorer draws, as its quantile columns."""
-
-SCRIPTS = ("toggles.js", "zoom.js", "summarise.js", "explorer.js")
-"""The docs scripts the explorer needs, in the docs' load order."""
 
 
 def newest_fit(store: Path, model: str, origin: str) -> Any | None:
@@ -224,10 +217,7 @@ def build(
     if len(teams):
         q = pd.concat([q, teams], ignore_index=True)
 
-    data = out.with_name(out.stem + "-data")
-    if data.exists():
-        shutil.rmtree(data)
-    data.mkdir(parents=True)
+    data = pages.data_dir(out)
     rel = data.name
     write_explorer(
         data / "cases.json",
@@ -259,10 +249,6 @@ def build(
                 data_label="no data (Rt is not observed)",
             ),
         )
-    js = "\n".join(
-        (ROOT / "docs" / "javascripts" / f).read_text() for f in SCRIPTS
-    )
-    css = (ROOT / "docs" / "stylesheets" / "extra.css").read_text()
     note = (
         f"<p class=mut>Not shown, with no good stored fit at {origin}: "
         f"{html.escape(', '.join(missing))}.</p>"
@@ -297,18 +283,9 @@ def build(
         "<h2>Convergence</h2>",
         convergence(store, origin),
     ]
-    doc = (
-        "<!doctype html><html lang=en><meta charset=utf-8>"
-        "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>This round</title><style>{THEME}{css}</style>"
-        f"<body data-md-color-scheme=default><script>{SCHEME}</script>"
-        + "\n".join(parts)
-        + f"<script>{js}</script></body></html>"
+    return pages.write_page(
+        out, pages.page("This round", parts, pages.EXPLORER_SCRIPTS, ROOT)
     )
-    tmp = out.with_name(out.name + ".tmp")
-    tmp.write_text(doc)
-    tmp.rename(out)
-    return out
 
 
 def main(argv: Sequence[str]) -> None:
