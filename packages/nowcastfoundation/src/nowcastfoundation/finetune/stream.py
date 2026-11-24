@@ -1887,7 +1887,6 @@ def main(root: Path | None = None) -> None:
         if args.release_layer
         else None
     )
-    global DRAWS_PER_PASS, SUBSET_SEED
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
     # Read once at start: the worktree may move on while training.
