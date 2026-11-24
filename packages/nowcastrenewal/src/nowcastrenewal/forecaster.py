@@ -207,6 +207,10 @@ class Variant:
         With `per_province`, fit each health zone with a recent case on
         its own instead of each province (`zones.SingleZoneRenewalModel`),
         so provinces are zone sums.
+    sampler_of : str or None
+        A variant staged to replace another runs with that one's sampler
+        table (`bdbvhub.store.store.samplers`), so the two compare like
+        for like.
     """
 
     name: str
@@ -215,6 +219,7 @@ class Variant:
     overrides: Mapping[str, Any] = field(default_factory=dict)
     per_province: bool = False
     zones: bool = False
+    sampler_of: str | None = None
 
 
 VARIANTS: Final[dict[str, Variant]] = {
@@ -247,6 +252,7 @@ VARIANTS: Final[dict[str, Variant]] = {
             overrides={"national": True, "centred_rt": True},
             per_province=True,
             zones=True,
+            sampler_of="renewalsp",
         ),
         Variant(
             "renewalbvd",
