@@ -67,7 +67,7 @@ REFERENCE_VALUES = "paper/data/reference-values.csv"
 
 rule germany_triangle:
     output:
-        f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv",
+        GERMANY_TRIANGLE,
     log:
         f"{LOCAL['ROOT']}/germany/fetch.log",
     localrule: True

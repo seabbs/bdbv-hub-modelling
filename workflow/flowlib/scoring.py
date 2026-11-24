@@ -112,9 +112,11 @@ def unit_shell(study: str, segment: str = "") -> str:
     When it starts is the scheduler's: its rule's `resources` (memory,
     GPU) against the machine's (flowlib.machine).
     """
+    # The German unit reads the triangle its rule takes as input.
+    triangle = "GERMANY_TRIANGLE={input.germany} " if study == "germany" else ""
     return (
         f"mkdir -p {{params.copy_back}} && "
-        f"env {{params.env}} {EVALUATE} {study} {{params.cache}} "
+        f"env {triangle}{{params.env}} {EVALUATE} {study} {{params.cache}} "
         f"{{params.label}} {segment}> {{log}} 2>&1 && touch {{output}}"
     )
 
