@@ -36,10 +36,6 @@ DEFAULTS = (
     ("MAILBOX", ""),
     # The workflow's own settings.
     ("SCORE_CACHE", "$ROOT/scores"),
-    ("JOB_PREFIX", ""),
-    # The prefix every simulation batch runs under, with no cap of its
-    # own (such as one systemd slice they all share; empty: none).
-    ("SIM_PREFIX", ""),
     # The folder simulation batches share their JAX compiles in (empty:
     # none) and the size in GB past which a batch empties it
     # (flowlib.simulator.jax_cache_env).
@@ -112,12 +108,9 @@ DEFAULTS = (
     ("WORKERS", ""),
     ("WORKER_GROUPS", ""),
     ("WORKER_SNAKEMAKE", "uv run --group paper snakemake"),
-    # Memory and disk a job leaves free when it starts (GB).
+    # Memory and disk a tick needs free to start (GB; flowlib.schedule).
     ("MIN_FREE_GB", "20"),
     ("MIN_DISK_GB", "16"),
-    # The load average below which a heavy job starts (empty: the core
-    # count).
-    ("MAX_LOAD", ""),
     # Logs of the paper's detached jobs (paper/scripts).
     ("PAPER_LOGS", "$HOME/paper-jobs"),
 )

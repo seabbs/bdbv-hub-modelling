@@ -56,7 +56,6 @@ rule score_germany:
         mem_mb=SC["mem_mb"],
         gpu=FORECAST.gpu,
     params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
         copy_back=unit_rows(GERMANY_UNIT),
         cache=lambda wc, output: Path(output[0]).parents[1],
@@ -88,7 +87,6 @@ rule score_run_germany:
         mem_mb=SC["mem_mb"],
         gpu=FORECAST.gpu,
     params:
-        prefix=lambda wc, resources: job_prefix(resources.mem_mb),
         env=unit_env,
         copy_back=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}/n{wc.n}/",
         cache=lambda wc, output: Path(output[0]).parents[1],

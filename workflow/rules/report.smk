@@ -410,7 +410,7 @@ rule ft_check_forecast:
         ),
         checkpoint=lambda wc: wc.fmodel[3:] if wc.fmodel.startswith("ft-") else "",
     shell:
-        "nice -n 19 env {params.env} BDBV_DATA_DIR={params.data} "
+        "env {params.env} BDBV_DATA_DIR={params.data} "
         "uv run --group chronos bdbvhub ft-check forecast "
         "--model {params.model} --checkpoint '{params.checkpoint}' "
         "--data {params.data} --out {params.out} > {log} 2>&1"
