@@ -244,6 +244,9 @@ def week_sum(snap: SnapshotArrays, x: np.ndarray) -> np.ndarray:
     numpy.ndarray
         Week sums, shape `[L, W]`.
     """
+    if snap.n_weeks == snap.week.size:
+        # Blocks of one day are the days.
+        return np.asarray(x)
     onehot = np.zeros((snap.week.size, snap.n_weeks))
     onehot[np.arange(snap.week.size), snap.week] = 1.0
     return np.asarray(x @ onehot)
