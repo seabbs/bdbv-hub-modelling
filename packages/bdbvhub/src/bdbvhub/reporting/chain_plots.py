@@ -15,7 +15,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
-from nowcastbaselines.chain import Settings, build_origin
+from nowcastbaselines.baselinenowcast.delays import Settings
+from nowcastbaselines.baselinenowcast.nowcast import build_origin
 from nowcasteval.plots import MODEL_COLOURS, THEMES
 from nowcastutils.snapshots import snapshot_arrays
 

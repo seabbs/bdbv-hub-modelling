@@ -273,7 +273,11 @@ def test_model_code_follows_imports_into_workspace_packages(
     old = tmp_path / "packages/nowcastbaselines/src/nowcastbaselines/walk.py"
     old.rename(pkg / "steps.py")
     (pkg / "__init__.py").write_text("from walkpkg.steps import random_walks\n")
-    for name in ("chain.py", "introductions.py", "randomwalk.py"):
+    for name in (
+        "baselinenowcast/nowcast.py",
+        "introductions.py",
+        "randomwalk.py",
+    ):
         path = (
             tmp_path / "packages/nowcastbaselines/src/nowcastbaselines" / name
         )
