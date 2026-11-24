@@ -107,6 +107,7 @@ __all__ = [
     "stack_parts",
     "summarise",
     "truth_from_vintage",
+    "truth_sensitivity",
     "week_shares",
     "weeks_back_from_cutoff",
 ]
@@ -120,13 +121,30 @@ RANDOM_WALK = "randomwalk"
 """The model scored on its samples as they are, with no delay."""
 
 COMPLETE_WEEKS = 4
-"""Weeks a week must be old at the latest release to count as complete."""
+"""Weeks a week must be old at the latest release to count as complete.
+
+About the age by which 95% of the national count is reported (28 days on
+the hub's releases to 2026-11-22, `truth_sensitivity`). The rule's result
+hardly depends on it: from 3 to 6 weeks, with `COMPLETE_GROWTH` from 1%
+to 5%, 2.8% to 3.7% of the place-weeks an earlier release calls complete
+differ from the latest release by more than 2%, and 1.0% to 1.1% by more
+than 10%."""
 
 COMPLETE_GROWTH = 0.02
-"""Most a complete week may grow between the last two releases."""
+"""Most a complete week may grow between the last two releases.
+
+The size of revision taken as final: a week still growing by more is not
+yet reported in full. See `COMPLETE_WEEKS` for how little the choice
+moves the result."""
 
 TRUTH_LEVEL = 0.98
-"""Share of the national count reported by the estimated truth delay."""
+"""Share of the national count reported by the estimated truth delay.
+
+The truth should be close to final while leaving weeks to score. On the
+hub's releases to 2026-11-22 (`truth_sensitivity`) the delay is 35 days
+at 0.98 and at 0.99, 28 at 0.95 and 21 at 0.9: 0.98 is the lowest level
+that reaches the age where reporting levels off, so a stricter level
+would give the same truth."""
 
 SUMMARY_LEVELS: Final = (0.05, 0.25, 0.5, 0.75, 0.95)
 """Quantile levels of the nowcast summaries, as columns `q5` to `q95`."""
@@ -589,6 +607,113 @@ def reporting_delay(
     share = pooled["reported"] / pooled["final"].where(pooled["final"] > 0)
     reached = share.index[share >= level]
     return int(reached.min()) * 7 if len(reached) else None
+
+
+def truth_sensitivity(
+    target: pd.DataFrame,
+    daily: pd.DataFrame,
+    levels: Sequence[float] = (0.9, 0.95, 0.98, 0.99),
+    weeks: Sequence[int] = (3, 4, 5, 6),
+    growths: Sequence[float] = (0.01, 0.02, 0.05),
+    skip: Collection[str] = (),
+) -> dict[str, pd.DataFrame]:
+    """Return how the truth-final constants move what is scored.
+
+    Two checks on the releases alone, with no model:
+
+    - `delays`: the truth delay $D$ (`reporting_delay`) at each `level`,
+      the share of the national count reported by that age; missing
+      where no age reaches it.
+    - `complete`: for each `weeks` and `growth` of the `"growth"` rule
+      (`complete_weeks`), the weeks each earlier release calls complete
+      against the latest release: the share of place-weeks called
+      complete (`complete`) and, of those, the share whose latest count
+      differs from that release's by more than 2% (`revised_2pct`) and
+      10% (`revised_10pct`) of the latest. `releases` is how many
+      releases were checked (every one before the latest).
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        The tidy target table, with every real release.
+    daily : pandas.DataFrame
+        Daily onsets by release.
+    levels : sequence of float
+        Shares of the national count, each in (0, 1].
+    weeks, growths : sequence
+        The rule's ages and growth limits checked.
+    skip : collection of str
+        Releases left out of the delay, as `reporting_delay` takes them.
+
+    Returns
+    -------
+    dict of str to pandas.DataFrame
+        `delays` (`level`, `truth_delay`) and `complete` (`weeks`,
+        `growth`, `releases`, `complete`, `revised_2pct`,
+        `revised_10pct`).
+
+    Raises
+    ------
+    ValueError
+        If a level is not above 0.
+    """
+    if any(lv <= 0 for lv in levels):
+        raise ValueError(f"Each level must be above 0: {list(levels)}.")
+    real = target.loc[target["kind"] == "real"]
+    delays = pd.DataFrame(
+        {
+            "level": list(levels),
+            "truth_delay": [
+                reporting_delay(real, lv, skip) if lv <= 1 else None
+                for lv in levels
+            ],
+        }
+    )
+    delays["truth_delay"] = delays["truth_delay"].astype("Float64")
+    releases = sorted(real["vintage"].astype(str).unique())
+    keys = ["location", "target_end_date"]
+
+    def counts(v: str) -> pd.Series:
+        rows = real.loc[real["vintage"].astype(str) == v]
+        return rows.assign(
+            target_end_date=rows["target_end_date"].astype(str)
+        ).set_index(keys)["total"]
+
+    latest = counts(releases[-1])
+    out = []
+    for w in weeks:
+        for g in growths:
+            called = 0
+            seen = 0
+            change: list[float] = []
+            for v in releases[:-1]:
+                done = complete_weeks(target, daily, v, "growth", w, g)
+                done = done.assign(
+                    target_end_date=done["target_end_date"].astype(str)
+                )
+                seen += len(done)
+                idx = done.loc[done["complete"]].set_index(keys).index
+                now = counts(v)
+                idx = idx.intersection(now.index).intersection(latest.index)
+                called += len(idx)
+                diff = (latest.loc[idx] - now.loc[idx]).abs()
+                change += list(diff / latest.loc[idx].clip(lower=1))
+            rev = np.asarray(change, dtype=float)
+            out.append(
+                {
+                    "weeks": w,
+                    "growth": g,
+                    "releases": len(releases) - 1,
+                    "complete": called / seen if seen else np.nan,
+                    "revised_2pct": float(np.mean(rev > 0.02))
+                    if rev.size
+                    else np.nan,
+                    "revised_10pct": float(np.mean(rev > 0.1))
+                    if rev.size
+                    else np.nan,
+                }
+            )
+    return {"delays": delays, "complete": pd.DataFrame(out)}
 
 
 def resolve_truth_delay(config: BacktestConfig, target: pd.DataFrame) -> int:
