@@ -1,4 +1,4 @@
-"""The root Taskfile includes one Taskfile per project, by namespace."""
+"""Each Taskfile lives beside its code; the root only includes them."""
 
 import json
 import shutil
@@ -26,55 +26,61 @@ MOVED = {
     "paper": "paper",
     "paper:targets": "paper:targets",
     "paper:render": "paper",
-    "data": "nowcast-utils:data",
-    "data-bvd": "nowcast-utils:data-bvd",
-    "backtest": "nowcast-eval:backtest",
-    "backtest-lopo": "nowcast-eval:backtest-lopo",
-    "backtest-zones": "nowcast-eval:backtest-zones",
-    "results": "nowcast-eval:results",
-    "score-history": "nowcast-eval:score-history",
-    "germany": "nowcast-eval:germany",
-    "compare-hub": "nowcast-eval:compare-hub",
-    "plots": "nowcast-eval:plots",
-    "simulate": "nowcast-foundation:simulate",
-    "push": "nowcast-foundation:push",
-    "release": "nowcast-foundation:release",
-    "finetune": "nowcast-foundation:finetune",
-    "publish": "nowcast-foundation:publish",
-    "score": "nowcast-foundation:score",
-    "land": "nowcast-foundation:land",
-    "dashboard": "nowcast-foundation:dashboard",
-    "dashboard:static": "nowcast-foundation:dashboard-static",
-    "all": "nowcast-workflow:all",
-    "tick": "nowcast-workflow:tick",
-    "run": "nowcast-workflow:run",
-    "monitor": "nowcast-workflow:monitor",
-    "dag": "nowcast-workflow:dag",
-    "rulegraph": "nowcast-workflow:rulegraph",
-    "progress": "nowcast-workflow:progress",
-    "report": "nowcast-workflow:report",
-    "workflow:check": "nowcast-workflow:check",
-    "nowcast": "bdbv-hub:nowcast",
-    "metadata": "bdbv-hub:metadata",
-    "validate-hub": "bdbv-hub:validate",
-    "submission-preflight": "bdbv-hub:preflight",
-    "ci-test": "bdbv-hub:ci-test",
-    "ci-dry": "bdbv-hub:ci-dry",
-    "ci-fit": "bdbv-hub:ci-fit",
-    "fit-store": "bdbv-hub:fit-store",
-    "fit-store-plan": "bdbv-hub:fit-store-plan",
+    "data": "nowcastbdbv:data",
+    "data-bvd": "nowcastbdbv:data-bvd",
+    "backtest": "bdbvhub:backtest",
+    "backtest-lopo": "bdbvhub:backtest-lopo",
+    "backtest-zones": "bdbvhub:backtest-zones",
+    "results": "bdbvhub:results",
+    "score-history": "nowcasteval:score-history",
+    "germany": "nowcastgermany:benchmark",
+    "compare-hub": "bdbvhub:compare-hub",
+    "plots": "bdbvhub:plots",
+    "simulate": "workflow:simulate",
+    "push": "workflow:push",
+    "release": "workflow:release",
+    "finetune": "workflow:finetune",
+    "publish": "workflow:publish",
+    "score": "workflow:score",
+    "land": "workflow:land",
+    "dashboard": "workflow:dashboard",
+    "dashboard:static": "workflow:dashboard-static",
+    "all": "workflow:all",
+    "tick": "workflow:tick",
+    "run": "workflow:run",
+    "monitor": "workflow:monitor",
+    "dag": "workflow:dag",
+    "rulegraph": "workflow:rulegraph",
+    "progress": "workflow:progress",
+    "report": "workflow:report",
+    "workflow:check": "workflow:check",
+    "nowcast": "bdbvhub:nowcast",
+    "metadata": "bdbvhub:metadata",
+    "validate-hub": "bdbvhub:validate",
+    "submission-preflight": "ci:preflight",
+    "ci-test": "ci:test",
+    "ci-dry": "ci:dry",
+    "ci-fit": "bdbvhub:ci-fit",
+    "fit-store": "bdbvhub:fit-store",
+    "fit-store-plan": "bdbvhub:fit-store-plan",
 }
 
 # The named dry runs.
 DRY = ["dry:tick", "dry:paper", "dry:submit", "dry:fit-store"]
 
-# Each project's Taskfile and its short name.
-PROJECTS = {
-    "nowcast-utils": "utils",
-    "nowcast-eval": "eval",
-    "nowcast-foundation": "foundation",
-    "nowcast-workflow": "workflow",
-    "bdbv-hub": "hub",
+# Each included Taskfile's namespace and its folder (Sam, 24 Nov).
+LOCATIONS = {
+    "nowcastutils": "packages/nowcastutils",
+    "nowcasteval": "packages/nowcasteval",
+    "nowcastbaselines": "packages/nowcastbaselines",
+    "nowcastrenewal": "packages/nowcastrenewal",
+    "nowcastfoundation": "packages/nowcastfoundation",
+    "nowcastgermany": "packages/nowcastgermany",
+    "nowcastbdbv": "packages/nowcastbdbv",
+    "bdbvhub": "packages/bdbvhub",
+    "workflow": "workflow",
+    "ci": "ci",
+    "paper": "paper",
 }
 
 
@@ -106,30 +112,40 @@ def test_the_root_keeps_only_top_level_tasks():
     assert top == {new for new in MOVED.values() if ":" not in new}
 
 
-@pytest.mark.parametrize("project", sorted(PROJECTS))
-def test_each_project_has_a_taskfile_by_namespace(project):
-    tasks = _tasks()
-    assert (ROOT / "taskfiles" / f"{project}.yml").is_file()
-    mine = [t for name, t in tasks.items() if name.startswith(f"{project}:")]
+def test_the_root_includes_each_taskfile_from_its_folder():
+    import yaml
+
+    root = yaml.safe_load((ROOT / "Taskfile.yml").read_text())
+    got = {
+        ns: (inc["taskfile"], inc["dir"])
+        for ns, inc in root["includes"].items()
+    }
+    assert got == {
+        ns: (f"{folder}/Taskfile.yml", folder)
+        for ns, folder in LOCATIONS.items()
+    }
+    assert not (ROOT / "taskfiles").exists()
+
+
+@pytest.mark.parametrize("namespace", sorted(LOCATIONS))
+def test_each_taskfile_exists_and_holds_its_namespace(namespace):
+    folder = ROOT / LOCATIONS[namespace]
+    assert (folder / "Taskfile.yml").is_file()
+    mine = [t for n, t in _tasks().items() if n.startswith(f"{namespace}:")]
     assert mine
     for task in mine:
-        assert task["location"]["taskfile"].endswith(f"{project}.yml")
+        assert task["location"]["taskfile"] == str(folder / "Taskfile.yml")
 
 
-def test_a_project_answers_to_its_short_name():
-    for project, short in PROJECTS.items():
-        out = subprocess.run(
-            ["task", "--summary", f"{short}:" + _first(project)],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        )
-        assert out.returncode == 0, out.stderr
-
-
-def _first(project: str) -> str:
-    names = sorted(n for n in _tasks() if n.startswith(f"{project}:"))
-    return names[0].split(":", 1)[1]
+@pytest.mark.parametrize("namespace", sorted(LOCATIONS))
+def test_each_folder_lists_its_tasks_on_its_own(namespace):
+    out = subprocess.run(
+        ["task", "--list-all"],
+        cwd=ROOT / LOCATIONS[namespace],
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, out.stderr
 
 
 def test_contributing_has_the_old_to_new_table():

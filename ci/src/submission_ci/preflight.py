@@ -392,8 +392,8 @@ def check_metadata(metadata_dir: Path, model_id: str) -> Check:
     """`<model_id>.yml` exists and its abbreviations make that id."""
     path = metadata_dir / f"{model_id}.yml"
     fix = (
-        "Write it with `task hub:metadata` and check it with"
-        " `task hub:validate`."
+        "Write it with `task bdbvhub:metadata` and check it with"
+        " `task bdbvhub:validate`."
     )
     if not path.exists():
         return Check("metadata", "missing", f"no {path}", fix)
