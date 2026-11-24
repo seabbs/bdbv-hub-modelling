@@ -46,6 +46,7 @@ shares:
   controlled: 0.5      # early outbreaks brought towards R = 1
   drift: 0.3           # non-endemic settings with a slow drift in R
   reactive: 0.4        # shifts that react to effective R (fewer spikes)
+  weekday_template: 0.5 # weekday effects shaped as a weekend dip and Monday catch-up
   shift_up: 0.5        # non-reactive shifts that raise R
   mixing_switch_on: 0.5
 rates:
@@ -107,6 +108,16 @@ factor_layers:
   report_days: reporting
   shocks: reporting
   revisions: reporting
+# Weekday templates, Monday to Sunday: the mean log weekday profiles of
+# German hospitalisations (2021-10 to 2022-03), by reference date (36
+# place and age series; low Sunday and Monday) and by report date (DE;
+# weekend dip, Monday catch-up). With `weekday_template`, a sim's reference
+# and report weekday effects are the template, scaled to unit sd, plus
+# `weekday_noise` of free standard normal noise, times their drawn sd.
+weekday_templates:
+  reference: [-0.801, 0.112, 0.276, 0.21, 0.139, 0.044, -0.465]
+  report: [-1.096, 0.325, 0.49, 0.364, 0.36, 0.217, -0.66]
+weekday_noise: 0.3
 constants:
   walk_ar: 0.7         # pull of the weekly log R walk back to R = 1
   expected_scale: 1000
@@ -705,10 +716,10 @@ distributions:
     why: weekday effects on counts with a log weekday profile sd of 0.13-0.69 (5-95%), German-strength (0.3-0.4, German hospitalisations by place and age median 0.38) common and BDBV-mild (daily onsets 0.13) kept
   delay_dow_sd:
     dist: lognormal
-    median: 0.08
+    median: 0.1
     sdlog: 0.5
     layer: delays
-    why: the mean delay by reference weekday mostly within 10%
+    why: the mean delay by reference weekday within 4-23% (5-95%), spanning BDBV onsets (log mean delay by weekday sd 0.064) and German hospitalisations (median 0.108 over 36 series)
   shock_at:
     dist: beta
     a: 3.0

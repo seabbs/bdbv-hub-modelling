@@ -357,3 +357,25 @@ def test_places_nest_in_two_to_six_regions(grid):
         assert sizes.min() >= 1
         assert sizes.max() - sizes.min() <= 1
     assert seen == {2, 3, 4, 5, 6}
+
+
+def test_weekday_effects_take_the_german_template_in_a_share(grid):
+    # Half of sims shape their reference and report weekday effects as
+    # German data do (weekend dip, Monday catch-up), not a free profile.
+    shaped = []
+    for i in range(300):
+        design = draws.draw_design(grid, draws.generator(11, i, 1))
+        v = draws.draw_values(grid, design, draws.generator(11, i, 2))
+        shaped.append("reference_dow_profile" in v)
+        if shaped[-1]:
+            ref = np.asarray(v["reference_dow_profile"])
+            rep = np.asarray(v["report_dow_profile"])
+            assert abs(ref.mean()) < 1e-9
+            assert abs(ref.std() - 1) < 1e-9
+            # Low Sunday and Monday by reference date; reports dip at the
+            # weekend and Monday is lowest before the midweek catch-up.
+            assert ref[[0, 6]].max() < ref[1:6].min()
+            assert rep[[0, 6]].max() < rep[1:6].min()
+            assert v["weekday_noise"] == grid["weekday_noise"]
+    assert abs(np.mean(shaped) - grid["shares"]["weekday_template"]) < 0.08
+

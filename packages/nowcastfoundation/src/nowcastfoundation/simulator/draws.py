@@ -567,4 +567,13 @@ def draw_values(
         grid, rep, n_s, "revise_move", rng, probability=True
     )
     v["revise_keep"] = stratum_values(grid, rep, n_s, "revise_keep", rng)
+    # Weekday effects shaped by the grid's templates in a share of sims,
+    # else free (drawn last, so the draws above are unchanged).
+    if sh("weekday_template"):
+        noise = float(grid["weekday_noise"])
+        for kind, t in grid["weekday_templates"].items():
+            t = np.asarray(t, dtype=float)
+            t = (t - t.mean()) / t.std()
+            v[f"{kind}_dow_profile"] = vec(t)
+        v["weekday_noise"] = noise
     return v
