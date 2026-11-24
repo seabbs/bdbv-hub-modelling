@@ -3,10 +3,7 @@ version: "3"
 # The submission CI: its own checks and tests, the preflight and the dry run (ci/).
 # Included by the root Taskfile.yml as `ci`: run `task ci:<task>` from the
 # repository root, or `task <task>` here. Tasks that read or write the
-# repository's data/, results/ or output/ run from its root (REPO).
-
-vars:
-  REPO: '{{.TASKFILE_DIR}}/..'
+# repository's data/, results/ or output/ run from its root (`dir`).
 
 tasks:
   test:
@@ -19,7 +16,7 @@ tasks:
 
 
   preflight:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Check every prerequisite of a live submission that can be read, and print what is missing (needs gh as a repo admin)
     vars:
       # The ids with `submit = true` in config/hub.toml, unless set.
@@ -39,7 +36,7 @@ tasks:
 
 
   dry:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: "Dry run of the submission workflow on fixture data (all scenarios, or one: task ci:dry -- fallback)"
     cmds:
       - ci/run_dry.sh {{.CLI_ARGS}}

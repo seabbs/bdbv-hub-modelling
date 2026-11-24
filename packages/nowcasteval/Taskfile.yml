@@ -3,14 +3,11 @@ version: "3"
 # Evaluation: the score history of each deploy (nowcasteval).
 # Included by the root Taskfile.yml as `nowcasteval`: run `task nowcasteval:<task>` from the
 # repository root, or `task <task>` here. Tasks that read or write the
-# repository's data/, results/ or output/ run from its root (REPO).
-
-vars:
-  REPO: '{{.TASKFILE_DIR}}/../..'
+# repository's data/, results/ or output/ run from its root (`dir`).
 
 tasks:
   score-history:
-    dir: '{{.REPO}}'
+    dir: ../..
     desc: Write results/score-history.csv, the backtest scores of each deploy from main, and print relative CRPS by deploy
     cmds:
       - git fetch -q origin gh-pages
@@ -18,14 +15,14 @@ tasks:
 
 
   test:
-    dir: '{{.REPO}}'
+    dir: ../..
     desc: Run nowcasteval's tests (the fast ones; `-- -m ""` for all)
     cmds:
       - uv run pytest -q packages/nowcasteval/tests {{.CLI_ARGS}}
 
 
   docs:
-    dir: '{{.REPO}}'
+    dir: ../..
     desc: Build nowcasteval's own docs site into _site/nowcasteval/
     cmds:
       - uv run mkdocs build --strict -f packages/nowcasteval/mkdocs.yml -d _site/nowcasteval

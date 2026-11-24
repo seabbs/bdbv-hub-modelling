@@ -3,10 +3,9 @@ version: "3"
 # The workflow: its targets, runs, monitor and checks (workflow/).
 # Included by the root Taskfile.yml as `workflow`: run `task workflow:<task>` from the
 # repository root, or `task <task>` here. Tasks that read or write the
-# repository's data/, results/ or output/ run from its root (REPO).
+# repository's data/, results/ or output/ run from its root (`dir`).
 
 vars:
-  REPO: '{{.TASKFILE_DIR}}/..'
   SNAKEMAKE: uv run --group paper snakemake
 
 tasks:
@@ -18,7 +17,7 @@ tasks:
   # cores and resources less its headroom (flowlib.machine), or with the
   # untracked profile SNAKEMAKE_PROFILE names (see config/profile.example).
   wf:
-    dir: '{{.REPO}}'
+    dir: ..
     internal: true
     vars:
       SNAKEMAKE_PROFILE:
@@ -32,7 +31,7 @@ tasks:
 
 
   all:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Run every workflow target that writes nothing outside this machine (simulate, finetune, score)
     cmds:
       - task: wf
@@ -40,7 +39,7 @@ tasks:
 
 
   monitor:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Serve the workflow monitor (Panoptes), every Snakemake run's jobs as they run, and at /dag/ the MONITOR_DAG targets' rule graphs and job DAGs, on MONITOR_HOST and MONITOR_PORT (config/local.env); runs report to MONITOR_URL
     vars:
       HOST:
@@ -57,49 +56,49 @@ tasks:
 
 
   dag:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: "Build a target's rule graph and job DAG for the monitor's /dag/ page (task workflow:dag -- NAME=TARGET [snakemake options])"
     cmds:
       - uv run --group paper python workflow/flowlib/dag.py {{.CLI_ARGS}}
 
 
   tick:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Run this machine's scheduled workflow targets once (SCHEDULE_TARGETS in config/local.env), with the lock and room checks the coordinator run uses
     cmds:
       - python3 workflow/scripts/tick.py
 
 
   run:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: The persistent coordinator run, one tick after another until `touch output/coordinator.stop` (run it once, under nohup or tmux)
     cmds:
       - python3 workflow/scripts/coordinate.py
 
 
   rulegraph:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Draw the workflow's rule graph (TARGET=all by default) as workflow-dag.svg
     cmds:
       - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --rulegraph | dot -Tsvg > workflow-dag.svg"
 
 
   progress:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Show which workflow outputs exist and which would run (TARGET=all by default)
     cmds:
       - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --summary"
 
 
   report:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Write Snakemake's browsable HTML report of the workflow (workflow-report.html)
     cmds:
       - "{{.SNAKEMAKE}} {{.TARGET | default \"all\"}} --report workflow-report.html"
 
 
   check:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Test the workflow's helpers and dry-run every target, as CI does
     cmds:
       - uv run --group paper pytest -q tests/workflow
@@ -107,7 +106,7 @@ tasks:
 
 
   simulate:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Simulate the rounds in ROUNDS (for example ROUNDS=4 or ROUNDS="4 5"), with QC and manifests
     cmds:
       - task: wf
@@ -116,7 +115,7 @@ tasks:
 
 
   push:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Simulate this host's seeds (SIM_SEEDS) of ROUNDS and push each batch to the rounds host (REMOTE)
     cmds:
       - task: wf
@@ -125,7 +124,7 @@ tasks:
 
 
   release:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Upload each simulated batch of ROUNDS to its sims-r<N> release (writes GitHub releases)
     cmds:
       - task: wf
@@ -134,7 +133,7 @@ tasks:
 
 
   finetune:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Train every checkpoint prefix of the fine-tuning run, one segment at a time on the GPU
     cmds:
       - task: wf
@@ -142,7 +141,7 @@ tasks:
 
 
   publish:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Verify and release every finished checkpoint (writes GitHub releases)
     cmds:
       - task: wf
@@ -150,7 +149,7 @@ tasks:
 
 
   score:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Score every released checkpoint (German, BDBV, held-out), then the slots check and aggregation rows; the releases are listed afresh in a run of their own first
     cmds:
       - task: wf
@@ -160,7 +159,7 @@ tasks:
 
 
   land:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Commit the checkpoint score tables to evidence/ and push (writes to GitHub)
     cmds:
       - task: wf
@@ -168,14 +167,14 @@ tasks:
 
 
   dashboard:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Serve the fine-tuning dashboard alone on DASHBOARD_HOST:DASHBOARD_PORT (config/local.env), for the runs under DASHBOARD_ROOT; `-- --run NAME` for some of them (dashboard.serve serves it with a run instead)
     cmds:
       - uv run --group paper python workflow/scripts/dashboard.py {{.CLI_ARGS}}
 
 
   dashboard-static:
-    dir: '{{.REPO}}'
+    dir: ..
     desc: Write the dashboard once as a static page (<ROOT>/reports/dashboard.html)
     cmds:
       - task: wf

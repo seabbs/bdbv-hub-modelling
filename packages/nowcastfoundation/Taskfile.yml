@@ -3,14 +3,11 @@ version: "3"
 # Chronos-2 forecasting, the simulator and fine-tuning code (nowcastfoundation).
 # Included by the root Taskfile.yml as `nowcastfoundation`: run `task nowcastfoundation:<task>` from the
 # repository root, or `task <task>` here. Tasks that read or write the
-# repository's data/, results/ or output/ run from its root (REPO).
-
-vars:
-  REPO: '{{.TASKFILE_DIR}}/../..'
+# repository's data/, results/ or output/ run from its root (`dir`).
 
 tasks:
   test:
-    dir: '{{.REPO}}'
+    dir: ../..
     desc: Run nowcastfoundation's tests (the fast ones; `-- -m ""` for all)
     cmds:
       - uv run pytest -q packages/nowcastfoundation/tests {{.CLI_ARGS}}

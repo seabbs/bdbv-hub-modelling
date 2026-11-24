@@ -153,3 +153,32 @@ def test_contributing_has_the_old_to_new_table():
     for old, new in MOVED.items():
         if old != new:
             assert f"| `{old}` | `{new}` |" in text, old
+
+
+@pytest.mark.parametrize(
+    ("where", "task"),
+    [
+        (".", "workflow:monitor"),
+        ("workflow", "monitor"),
+        (".", "ci:preflight"),
+        ("ci", "preflight"),
+        (".", "nowcastutils:test"),
+        ("packages/nowcastutils", "test"),
+        (".", "bdbvhub:fit-store-plan"),
+        ("packages/bdbvhub", "fit-store-plan"),
+    ],
+)
+def test_a_task_runs_at_the_repository_root_from_anywhere(where, task):
+    # The commands and the `sh:` vars alike: a dry run resolves the vars
+    # (localconfig.py, the hub config, the ci project) and prints the
+    # commands, and makes no folder of its own.
+    before = {p for p in ROOT.rglob("home") if ".venv" not in p.parts}
+    out = subprocess.run(
+        ["task", "--dry", task],
+        cwd=ROOT / where,
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, out.stderr
+    after = {p for p in ROOT.rglob("home") if ".venv" not in p.parts}
+    assert after == before

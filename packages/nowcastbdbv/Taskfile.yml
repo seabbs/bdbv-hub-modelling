@@ -3,29 +3,26 @@ version: "3"
 # The BDBV study's data: the hub's releases and BVDOutbreakSize (nowcastbdbv).
 # Included by the root Taskfile.yml as `nowcastbdbv`: run `task nowcastbdbv:<task>` from the
 # repository root, or `task <task>` here. Tasks that read or write the
-# repository's data/, results/ or output/ run from its root (REPO).
-
-vars:
-  REPO: '{{.TASKFILE_DIR}}/../..'
+# repository's data/, results/ or output/ run from its root (`dir`).
 
 tasks:
 
   data:
-    dir: '{{.REPO}}'
+    dir: ../..
     desc: Download every hub data vintage and rebuild the tidy tables in data/ (not committed; the tests read tests/fixtures/data/)
     cmds:
       - uv run bdbvhub data
 
 
   data-bvd:
-    dir: '{{.REPO}}'
+    dir: ../..
     desc: Cache the BVDOutbreakSize releases each backtest vintage may use in data/bvd/ (for renewalbvd)
     cmds:
       - uv run bdbvhub bvd {{.CLI_ARGS}}
 
 
   test:
-    dir: '{{.REPO}}'
+    dir: ../..
     desc: Run nowcastbdbv's tests (the fast ones; `-- -m ""` for all)
     cmds:
       - uv run pytest -q packages/nowcastbdbv/tests {{.CLI_ARGS}}
