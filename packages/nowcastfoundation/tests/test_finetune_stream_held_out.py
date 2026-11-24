@@ -92,8 +92,7 @@ def test_each_trainer_constant_has_its_own_docstring():
     names = (
         "HELD_OUT_BLOCKS",
         "HELD_OUT_KEY",
-        "NEXT_CHUNK_BLOCKS",
-        "NEXT_CHUNK_KEY",
+        "CHUNK_SLOTS",
     )
     for i, node in enumerate(body):
         if isinstance(node, ast.Assign) and node.targets[0].id in names:

@@ -26,10 +26,23 @@ def test_a_saved_chunk_loads_under_its_key_only(tmp_path):
     assert fs.load_chunk(tmp_path, key | {"code_sha256": {"a": "y"}}) is None
 
 
-def test_saving_the_next_chunk_replaces_the_last(tmp_path):
+def test_the_chunk_in_training_stays_saved_beside_the_next(tmp_path):
+    # Lead 11:25: Run B's driver restart lost the chunk it was training
+    # (801-900): only the next chunk (901-1000) was saved, so 801-900 was
+    # cut again with the GPU idle. The last two chunks saved stay.
+    pairs, empty = _pairs()
+    for name in ("a", "b", "c"):
+        fs.save_chunk(tmp_path, {"outbreaks": [name]}, pairs, empty)
+    assert fs.load_chunk(tmp_path, {"outbreaks": ["a"]}) is None
+    assert fs.load_chunk(tmp_path, {"outbreaks": ["b"]}) is not None
+    assert fs.load_chunk(tmp_path, {"outbreaks": ["c"]}) is not None
+    assert len(list(tmp_path.glob("chunk-blocks-*.pkl"))) == fs.CHUNK_SLOTS == 2
+
+
+def test_saving_a_chunk_again_keeps_the_other(tmp_path):
     pairs, empty = _pairs()
     fs.save_chunk(tmp_path, {"outbreaks": ["a"]}, pairs, empty)
     fs.save_chunk(tmp_path, {"outbreaks": ["b"]}, pairs, empty)
-    assert fs.load_chunk(tmp_path, {"outbreaks": ["a"]}) is None
+    fs.save_chunk(tmp_path, {"outbreaks": ["b"]}, pairs, empty)
+    assert fs.load_chunk(tmp_path, {"outbreaks": ["a"]}) is not None
     assert fs.load_chunk(tmp_path, {"outbreaks": ["b"]}) is not None
-    assert len(list(tmp_path.glob("next-chunk-blocks*.pkl"))) == 1
