@@ -13,14 +13,12 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
-import textwrap
 from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from pathlib import Path
 from typing import Any, Final, cast
 
 import pandas as pd
-from matplotlib.figure import Figure
 
 from bdbvhub.compare import (
     attribution,
@@ -106,7 +104,6 @@ from nowcasteval.plots import (
     plot_release_counts,
     plot_renewal_delay,
     plot_revisions,
-    plot_scenarios,
     plot_scores,
     plot_scores_by_truth,
     plot_simulation,
@@ -207,7 +204,7 @@ def make_report(
     config_path : pathlib.Path or str
         Backtest settings.
     hub_comparison : pathlib.Path or str
-        Output of `bdbvhubrenewal compare-hub`, if it has been run.
+        Output of `bdbvhub compare-hub`, if it has been run.
     germany : pathlib.Path or str
         Output of `nowcastgermany backtest`, if it has been run.
     germany_config : pathlib.Path or str
@@ -1218,29 +1215,6 @@ _METRIC_TABS: Final = (
 """Score metrics shown as tabs, with their tab label and file suffix."""
 
 
-def _save_metric_figures(
-    fig: Path, stem: str, make: Callable[..., Figure]
-) -> None:
-    """Save `make(metric=...)` in light and dark for each metric tab."""
-    for metric, _, suffix in _METRIC_TABS:
-        save_light_dark(
-            partial(make, metric=metric), fig / f"{stem}{suffix}.svg"
-        )
-
-
-def _metric_tabs(stem: str, alt: str) -> str:
-    """Tabs of one figure per metric, as `_save_metric_figures` saves."""
-    tabs = []
-    for _, label, suffix in _METRIC_TABS:
-        what = alt.replace("CRPS", label)
-        tabs.append(
-            f'=== "{label}"\n\n'
-            f"    ![{what}](figures/{stem}{suffix}.svg#only-light)\n"
-            f"    ![{what}](figures/{stem}{suffix}-dark.svg#only-dark)\n"
-        )
-    return "\n".join(tabs)
-
-
 _RELEASE_MATCH: Final = [
     "origin",
     "truth_vintage",
@@ -1348,31 +1322,6 @@ def _energy_means(energy: pd.DataFrame, by: Sequence[str]) -> str:
     )
 
 
-def _recovery_section(srcs: Mapping[str, str], energy: pd.DataFrame) -> str:
-    """Return the recovery section, with the summaries of `srcs`."""
-    alt = "Mean CRPS by horizon on simulated vintages."
-    views = _summary_views(srcs, "(simulated vintages)")
-    return (
-        "## Recovery on simulated vintages\n\n"
-        "Forecasts from vintages of a [simulated outbreak]"
-        "(methods/data.md#simulated-vintages), scored against the known "
-        "final counts.\n\n"
-        + "### Overall\n\n"
-        + views["overall"]
-        + "\n### By horizon\n\n"
-        + views["horizon"]
-        + "\n### By place\n\n"
-        + views["place"]
-        + "\n"
-        + _dropdown(
-            f"![{alt}](figures/recovery-crps-horizon.svg#only-light)\n"
-            f"![{alt}](figures/recovery-crps-horizon-dark.svg#only-dark)\n\n"
-            + _energy_means(energy, ["scale"]),
-            "Static figure and energy scores",
-        )
-    )
-
-
 def _by_baseline(
     make: Callable[[str], pd.DataFrame], baselines: Sequence[str]
 ) -> pd.DataFrame:
@@ -1394,96 +1343,12 @@ def _without_baseline(
     return rel.loc[rel["model"] != baseline].reset_index(drop=True)
 
 
-def _scenario_scores(path: Path, energy_path: Path) -> str:
-    """Return mean scores on the simulated scenarios."""
-    scores = pd.read_csv(path, low_memory=False)
-    energy = pd.read_csv(energy_path)
-    views = {
-        "final data, complete weeks": (scores["truth_view"] == "final")
-        & scores["complete"],
-        "as of 2 weeks later": scores["truth_view"] != "final",
-    }
-    tables = []
-    for label, keep in views.items():
-        table = (
-            scores.loc[keep]
-            .groupby(["scenario", "level", "model"], sort=False)
-            .agg(
-                crps=("crps", "mean"),
-                log_crps=("log_crps", "mean"),
-                coverage_50=("coverage_50", "mean"),
-                coverage_90=("coverage_90", "mean"),
-                bias=("bias", "mean"),
-            )
-            .reset_index()
-            .rename(
-                columns={
-                    "crps": "mean CRPS",
-                    "log_crps": "mean CRPS on the log scale",
-                    "coverage_50": "50% coverage",
-                    "coverage_90": "90% coverage",
-                    "bias": "mean bias",
-                }
-            )
-        )
-        tables.append(f"**Scored against {label}**\n\n" + _table(table))
-    final = energy["truth_view"] == "final"
-    for label, keep in (
-        ("final data, complete weeks", final),
-        ("the data as of 2 weeks later", ~final),
-    ):
-        tables.append(
-            f"**Energy score against {label}**\n\n"
-            + _energy_means(energy.loc[keep], ["scenario", "scale"])
-        )
-    return "\n".join(tables)
-
-
-def _scenario_figure() -> str:
-    """Return the scenario figure links."""
-    alt = "Mean CRPS by horizon on the simulated scenarios."
-    return _metric_tabs("scenario-crps-horizon", alt)
-
-
 _SCENARIOS: Final = {
     "calibrated_falling": "Rt falls",
     "calibrated_flat": "Rt holds",
     "calibrated_rising": "Rt rises",
 }
 """Simulated scenarios, as their tabs are labelled."""
-
-
-def _simulated_summary(
-    fig: Path,
-    stem: str,
-    frames: Mapping[str, tuple[pd.DataFrame, pd.DataFrame]],
-    names: Sequence[str],
-    labels: Mapping[str, str],
-) -> dict[str, str]:
-    """Write the score summaries of simulated forecasts, by target.
-
-    Rounds are named by their reference date, as on the other pages.
-    """
-    models = [
-        m
-        for m in names
-        if any(m in set(s["model"]) for s, _ in frames.values())
-    ]
-    return _summaries(
-        fig,
-        stem,
-        {
-            target: (
-                scores.assign(origin=scores["reference_date"]),
-                energy.assign(origin=energy["reference_date"]),
-            )
-            for target, (scores, energy) in frames.items()
-        },
-        models,
-        _model_colours(models),
-        labels,
-        default_on=[m for m in models if m != site_baseline()],
-    )
 
 
 def _summary_views(srcs: Mapping[str, str], what: str) -> dict[str, str]:
@@ -1496,96 +1361,6 @@ def _summary_views(srcs: Mapping[str, str], what: str) -> dict[str, str]:
             ("place", "Scores by place"),
         )
     }
-
-
-def _scenario_section(
-    fig: Path,
-    res: Path,
-    names: Sequence[str],
-    labels: Mapping[str, str],
-) -> str:
-    """Return the scenario summaries and explorer, a tab per scenario.
-
-    Forecasts are scored against the final simulated counts of complete
-    weeks, or against the data as of 2 weeks later as the latest release.
-    The explorer draws the weeks of the final counts it shows, all
-    complete.
-    """
-    scores = pd.read_csv(res / "scenario-scores.csv.gz", low_memory=False)
-    energy = pd.read_csv(res / "scenario-energy.csv")
-    final = scores["truth_view"] == "final"
-    views = {
-        "complete": (
-            scores.loc[final & scores["complete"]],
-            energy.loc[energy["truth_view"] == "final"],
-        ),
-        "latest": (
-            scores.loc[~final],
-            energy.loc[energy["truth_view"] != "final"],
-        ),
-    }
-    samples = pd.read_csv(
-        res / "scenario-forecasts.csv.gz", dtype={"as_of": object}
-    )
-    truth = pd.read_csv(res / "scenario-truth.csv")
-    sections: dict[str, list[str]] = {
-        "Overall": [],
-        "By horizon": [],
-        "By place": [],
-        "Forecasts by place": [],
-    }
-    for key, title in _SCENARIOS.items():
-        srcs = _simulated_summary(
-            fig,
-            f"scenario-{key}",
-            {
-                target: (
-                    s.loc[s["scenario"] == key],
-                    e.loc[e["scenario"] == key],
-                )
-                for target, (s, e) in views.items()
-            },
-            names,
-            labels,
-        )
-        shown_views = _summary_views(srcs, f"({title})")
-        drawn = samples.loc[
-            (samples["scenario"] == key) & samples["model"].isin(names)
-        ]
-        shown = [m for m in names if m in set(drawn["model"])]
-        target = (
-            truth.loc[truth["scenario"] == key]
-            .rename(columns={"truth": "total", "truth_vintage": "vintage"})
-            .assign(kind="real")
-        )
-        write_explorer(
-            fig / f"explorer-scenario-{key}.json",
-            explorer_data(
-                forecast_quantiles(drawn.assign(source="ours")).assign(
-                    ours=True
-                ),
-                target,
-                labels,
-                0,
-                _model_colours(shown),
-                samples=drawn,
-            ),
-        )
-        explorer = explorer_html(
-            f"../figures/explorer-scenario-{key}.json",
-            f"Forecasts, {title}",
-            all_rounds=True,
-            summary=srcs,
-        )
-        for section, html in zip(
-            sections, (*shown_views.values(), explorer), strict=True
-        ):
-            body = textwrap.indent(html, "    ")
-            sections[section].append(f'=== "{title}"\n\n{body}')
-    return "\n".join(
-        f"### {section}\n\n" + "\n".join(tabs)
-        for section, tabs in sections.items()
-    )
 
 
 def _fit_settings() -> dict[str, dict[str, Any]]:
@@ -1836,47 +1611,6 @@ def _backtest_page(
         gen / "backtest-sampler.md",
         _sampler_section(pd.read_csv(fits_path), _fit_settings()),
     )
-    rec_path = res / "recovery-scores.csv"
-    rscores = pd.read_csv(rec_path)
-    renergy = pd.read_csv(res / "recovery-energy.csv")
-    _write(
-        gen / "recovery-section.md",
-        _recovery_section(
-            _simulated_summary(
-                fig, "recovery", {"complete": (rscores, renergy)}, names, labels
-            ),
-            renergy,
-        ),
-    )
-    save_light_dark(
-        lambda mode: plot_scores(
-            rscores, by="horizon", models=names, mode=mode
-        ),
-        fig / "recovery-crps-horizon.svg",
-    )
-    scen_path = res / "scenario-scores.csv.gz"
-    _write(
-        gen / "scenario-scores.md",
-        _scenario_scores(scen_path, res / "scenario-energy.csv"),
-    )
-    _write(gen / "scenario-figure.md", _scenario_figure())
-    _write(
-        gen / "scenario-summaries.md",
-        _scenario_section(fig, res, names, labels),
-    )
-    sscores = pd.read_csv(scen_path, low_memory=False)
-    _save_metric_figures(
-        fig,
-        "scenario-crps-horizon",
-        partial(
-            plot_scenarios,
-            sscores,
-            models=[
-                *names,
-                *(m for m in sscores["model"].unique() if m not in names),
-            ],
-        ),
-    )
 
 
 def _checks_section(
@@ -2072,7 +1806,7 @@ def _comparison_page(
 ) -> None:
     summary_path = cmp_dir / "summary.json"
     if not summary_path.exists():
-        missing = "Not run yet: `bdbvhubrenewal compare-hub --fetch`.\n"
+        missing = "Not run yet: `bdbvhub compare-hub --fetch`.\n"
         for name in (
             "comparison-lead.md",
             "comparison-scores.md",

@@ -166,8 +166,9 @@ def draw_cadence(source: str, rng: np.random.Generator) -> str:
 RELEASE_LAYER: dict[str, Any] | None = None
 """The release layer (`finetune.release_layer`, `check_release_layer`),
 drawn per block at fine-tune time from the simulations already made: a
-late start to a share of blocks' releases (`release_start`) and the
-release cadences of each step width (`draw_cadence`). None leaves each
+late start to a share of blocks' releases (`release_start`), a share of
+blocks with no lag series (`complete_block`) and the release cadences of
+each step width (`draw_cadence`). None leaves each
 block's releases as the block design draws them."""
 
 NAMED_PARAMETERS: Final = {
@@ -191,7 +192,8 @@ def check_release_layer(layer: dict[str, Any]) -> None:
     """Raise unless every part of the release layer can be drawn.
 
     `start` needs a `share` from 0 to 1 and a named `delay_days`
-    distribution. Each step width of `cadences` (`NATIVE_CADENCE`) needs
+    distribution; `no_lags` a `share` from 0 to 1. Each step width of
+    `cadences` (`NATIVE_CADENCE`) needs
     shares of that width's cadences (`CADENCES`) summing to one.
 
     Raises
@@ -199,7 +201,7 @@ def check_release_layer(layer: dict[str, Any]) -> None:
     ValueError
         Naming the part that cannot be drawn.
     """
-    extra = set(layer) - {"start", "cadences"}
+    extra = set(layer) - {"start", "cadences", "no_lags"}
     if extra:
         raise ValueError(f"release layer: no part {sorted(extra)}")
     if "start" in layer:
@@ -211,6 +213,10 @@ def check_release_layer(layer: dict[str, Any]) -> None:
         needs = NAMED_PARAMETERS.get(spec.get("dist"))
         if needs is None or any(k not in spec for k in needs):
             raise ValueError(f"release layer: start delay_days {spec!r}")
+    if "no_lags" in layer:
+        share = layer["no_lags"].get("share")
+        if not isinstance(share, (int, float)) or not 0 <= share <= 1:
+            raise ValueError(f"release layer: no_lags share {share!r}")
     for width, mix in layer.get("cadences", {}).items():
         if width not in CADENCES:
             raise ValueError(f"release layer: no step width {width!r}")
@@ -865,11 +871,17 @@ def outbreak_blocks(
             days = release_days(first, cutoffs[cut], cadence, option_rng)
             # A late start to the releases (`RELEASE_LAYER`), from a child
             # generator, so the other draws are as without it.
-            start_days = 0
-            if RELEASE_LAYER is not None and "start" in RELEASE_LAYER:
-                days, start_days = release_start(
-                    days, first, RELEASE_LAYER["start"], option_rng.spawn(1)[0]
-                )
+            start_days, no_lags = 0, False
+            if RELEASE_LAYER is not None:
+                layer_rng = option_rng.spawn(1)[0]
+                if "start" in RELEASE_LAYER:
+                    days, start_days = release_start(
+                        days, first, RELEASE_LAYER["start"], layer_rng
+                    )
+                # Counts alone, as when only the latest data are at hand.
+                if "no_lags" in RELEASE_LAYER:
+                    share = RELEASE_LAYER["no_lags"]["share"]
+                    no_lags = bool(layer_rng.random() < share)
             totals = any("-" in p for p in provinces)
             # A view with the country draws its cases as the whole did.
             country_rng = copy.deepcopy(parent_rng)
@@ -951,7 +963,7 @@ def outbreak_blocks(
                         break
                     cap -= 1
             for part, view, view_mix, how, record in views:
-                if LAYOUT == "complete":
+                if LAYOUT == "complete" or no_lags:
                     part = complete_block(part)
                 padded = _pad(
                     part, CONTEXT, LOSS_HORIZON_DAYS, DAYS_PER_STEP[source]
@@ -968,6 +980,7 @@ def outbreak_blocks(
                 padded["source"] = source
                 padded["cadence"] = cadence
                 padded["release_start_days"] = start_days
+                padded["no_lags"] = no_lags
                 padded["first_release"] = days[0]
                 padded["releases"] = len(days)
                 padded["cut"] = j

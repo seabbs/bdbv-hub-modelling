@@ -10,7 +10,7 @@
 #
 #   TRACK_MODEL   the model (default randomwalknowcast), with a candidate
 #                 in ci/policy.toml
-#   TRACK_ID      its hub id (default: `bdbvhubrenewal hub-id --model`)
+#   TRACK_ID      its hub id (default: `bdbvhub hub-id --model`)
 #   As for select.sh and submit.sh: HUB_PATH, VALIDATE, CHECK_WINDOW,
 #   DRY_RUN, FORK, HUB_REF, DATA_COMMIT, AS_OF, REFERENCE_DATE.
 # Exits 3 when the model is ruled out and the round is skipped.

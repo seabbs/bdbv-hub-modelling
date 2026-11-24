@@ -236,10 +236,10 @@ rule rt_check:
         fit=$(mktemp -d)
         trap 'rm -rf "$fit"' EXIT
         export BDBV_DATA_DIR={params.data}
-        uv run bdbvhubrenewal fit-store unpack --store {params.store} \
+        uv run bdbvhub fit-store unpack --store {params.store} \
             --data {params.data} --model {wildcards.model} \
             --origin {wildcards.origin} --out "$fit"
-        uv run bdbvhubrenewal rt-check --fit "$fit" --data {params.data} \
+        uv run bdbvhub rt-check --fit "$fit" --data {params.data} \
             --out {output}
         if [ -n '{params.review}' ]; then
             mkdir -p '{params.review}'

@@ -35,12 +35,12 @@ from nowcastrenewal.forecaster import (
     bvd_record,
     bvd_release,
     check_national,
-    delay_summary,
     engine,
     horizon_weeks,
     model_config,
     report_cutoffs,
     run_nuts,
+    run_records,
     samples_table,
     task_imputation_delay,
     task_places,
@@ -510,40 +510,8 @@ class ZoneRenewalModel(RenewalModel):
             "insample": {k: v[..., :p] for k, v in traj["insample"].items()},
             "rt": pr.weekly_rt(model, data, seed=task.seed),
         }
-        by_chain = model.mcmc.get_samples(group_by_chain=True)
-        trace = {
-            k: np.asarray(by_chain[k])
-            for k in model.mcmc.last_state.z
-            if k in by_chain
-        }
-        extra = {
-            k: np.asarray(v)
-            for k, v in model.mcmc.get_extra_fields(group_by_chain=True).items()
-        }
-        posterior = model.mcmc.get_samples()
-        n_init = model.latent.n_initialization_points
-        beta = np.asarray(posterior["delay_beta"])
         # Each province's delay, which its zones share, and the shared one.
-        shifts = {
-            name: np.asarray(posterior["delay_shift"])[..., p]
-            for p, name in enumerate(data.parent_names)
-        }
-        if len(shifts) > 1:
-            shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[
-                ..., 0
-            ]
-        delay = pd.concat(
-            [
-                delay_summary(
-                    beta,
-                    shift,
-                    data.start_date - dt.timedelta(days=n_init),
-                    n_init + data.cutoff,
-                ).assign(place=place)
-                for place, shift in shifts.items()
-            ],
-            ignore_index=True,
-        )
+        trace, extra, delay = run_records(model, data, data.parent_names)
         return RenewalRun(
             self.variant,
             data,

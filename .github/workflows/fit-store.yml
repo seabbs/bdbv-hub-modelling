@@ -41,6 +41,9 @@ on:
       - 'packages/bdbvhub/src/bdbvhub/submission/fitting.py'
       - 'packages/bdbvhub/src/bdbvhub/models.py'
       - 'packages/nowcastrenewal/src/**'
+      # The backtests' code (`backtest`, `backtests`).
+      - 'packages/nowcasteval/src/**'
+      - 'packages/nowcastbdbv/src/**'
       - 'config/backtest.toml'
       - 'config/finetune.toml'
       - 'ci/policy.toml'
@@ -73,6 +76,9 @@ on:
       - 'packages/bdbvhub/src/bdbvhub/submission/fitting.py'
       - 'packages/bdbvhub/src/bdbvhub/models.py'
       - 'packages/nowcastrenewal/src/**'
+      # The backtests' code (`backtest`, `backtests`).
+      - 'packages/nowcasteval/src/**'
+      - 'packages/nowcastbdbv/src/**'
       - 'config/backtest.toml'
       - 'config/finetune.toml'
       - 'ci/policy.toml'
@@ -162,8 +168,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          uv run bdbvhubrenewal data
-          uv run bdbvhubrenewal bvd
+          uv run bdbvhub data
+          uv run bdbvhub bvd
       - name: Fetch the store
         run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
       # The fine-tuned models' checkpoint, resolved once for the run so
@@ -174,7 +180,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          hash=$(uv run bdbvhubrenewal finetuned-checkpoint)
+          hash=$(uv run bdbvhub finetuned-checkpoint)
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
           echo "BDBV_CHRONOS_FT=$hash" >> "$GITHUB_ENV"
       - name: Plan
@@ -190,7 +196,7 @@ jobs:
           # shellcheck disable=SC2206
           [ -n "$ORIGINS" ] && args+=(--origins $ORIGINS)
           [ "$RETRY" = true ] && args+=(--retry-failed)
-          uv run bdbvhubrenewal fit-store plan "${args[@]}" \
+          uv run bdbvhub fit-store plan "${args[@]}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
           # Longest fits first, so the short ones fill in behind them and
           # the run takes as long as its longest fit: by model (slowest
@@ -214,8 +220,9 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           done
           echo "count=$(jq '.include | length' matrix.json)" >> "$GITHUB_OUTPUT"
+      # The fits and the backtests read the same data.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: steps.guard.outputs.write == 'true' && steps.plan.outputs.count != '0'
+        if: steps.guard.outputs.write == 'true'
         with:
           name: data
           path: |
@@ -289,7 +296,7 @@ jobs:
           KEY: ${{ matrix.key }}
           BDBV_CHRONOS_FT: ${{ needs.plan.outputs.chronos_ft }}
         run: |
-          if ! uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
+          if ! uv run bdbvhub fit-store fit --model "$MODEL" \
             --origin "$ORIGIN" --store new; then
             echo "::warning::$MODEL at $ORIGIN failed; stored as failed"
           fi
@@ -364,13 +371,166 @@ jobs:
           name: plan
       - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json rest.json
 
+  # The BDBV backtests of the models that fit nothing (the walks'
+  # development and zone backtests and the pairing sensitivity), one job
+  # per cell, beside the fits and under the same write guard. Each only
+  # forecasts (`--forecast-only`), cached under a hash of the code and
+  # data it reads (`bdbvhub digest --model`), so a change to one
+  # model reruns only its cells. `backtests` scores them with the stored
+  # fits and stores the results; Pages only loads them.
+  backtest:
+    name: Backtest (${{ matrix.cell }})
+    needs: plan
+    if: needs.plan.outputs.write == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # How much the walk models' pairing matters (docs/pairing.md):
+          # one forecast per origin gives every pairing variant.
+          - cell: pairing-bdbv
+            model: randomwalknowcast
+            with: >-
+              packages/nowcasteval/src/nowcasteval/pairing.py
+              packages/nowcasteval/src/nowcasteval/scoring.py
+              packages/bdbvhub/src/bdbvhub/store/store.py
+            run: >-
+              uv run bdbvhub pairing-sensitivity --study bdbv
+              --out output/parts/pairing
+          - cell: zones-randomwalknowcast
+            model: randomwalknowcast
+            run: >-
+              uv run bdbvhub zone-backtest --forecast-only --models randomwalknowcast
+          - cell: zones-randomwalk
+            model: randomwalk
+            run: >-
+              uv run bdbvhub zone-backtest --forecast-only --models randomwalk
+          - cell: development-randomwalknowcast
+            model: randomwalknowcast
+            run: >-
+              uv run bdbvhub backtest --forecast-only --models randomwalknowcast
+          - cell: development-randomwalk
+            model: randomwalk
+            run: >-
+              uv run bdbvhub backtest --forecast-only --models randomwalk
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: backtest-${{ matrix.model }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: data
+          path: data
+      - name: Hash what this job reads
+        id: key
+        env:
+          CELL: ${{ matrix.cell }}
+          MODEL: ${{ matrix.model }}
+          RUN: ${{ matrix.run }}
+          WITH: >-
+            ${{ matrix.with || '' }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          digest=$(uv run bdbvhub digest --model "$MODEL" --text "$RUN" \
+            --with $WITH)
+          if [ -z "$digest" ]; then
+            echo "::error::digest printed nothing; refusing to key the cache"
+            exit 1
+          fi
+          echo "key=backtest-$CELL-$digest" >> "$GITHUB_OUTPUT"
+      - name: Restore the outputs
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: output/parts
+          key: ${{ steps.key.outputs.key }}
+      - name: Run
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ${{ matrix.run }}
+      - name: Save the outputs
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: output/parts
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parts-${{ matrix.cell }}
+          path: output/parts
+          if-no-files-found: error
+          retention-days: 3
+
+  # The backtests scored with the stored fits once the fits are stored,
+  # one process per backtest (all at once ran a runner out of memory),
+  # then stored on the store branch as backtests/latest.tar.gz, which
+  # Pages unpacks.
+  backtests:
+    name: Score and store the backtests
+    needs: [plan, backtest, store-current, store-rest]
+    if: >-
+      !cancelled() && needs.plan.outputs.write == 'true'
+      && needs.backtest.result == 'success'
+      && needs.store-current.result != 'failure'
+      && needs.store-rest.result != 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          save-jax: 'false'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: data
+          path: data
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: parts-*
+          path: output/parts
+      - name: Load the stored fits
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BDBV_CHRONOS_FT: ${{ needs.plan.outputs.chronos_ft }}
+        run: |
+          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
+          uv run bdbvhub fit-store load --store "$STORE"
+      - name: Score
+        run: |
+          p=output/parts/parts
+          uv run bdbvhub score "$p"-development-{randomwalk,randomwalknowcast}
+          uv run bdbvhub score "$p"-zones-{randomwalk,randomwalknowcast}
+          # The pairing sensitivity's blocks, for docs/pairing.md.
+          mkdir -p results/pairing
+          cp "$p"-pairing-bdbv/pairing/*.csv.gz results/pairing/
+      - name: Store
+        run: |
+          # Only what this job made or changed, never a committed file,
+          # so Pages keeps its own checkout's results.
+          git ls-files --others --modified -- results output \
+            | grep -v -e '^output/fit-store/' -e '^output/parts/' \
+            > "$RUNNER_TEMP/backtests.txt"
+          tar -czf "$RUNNER_TEMP/backtests.tar.gz" -T "$RUNNER_TEMP/backtests.txt"
+          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py \
+            push-backtests "$RUNNER_TEMP/backtests.tar.gz" "$GITHUB_SHA"
+
   pages:
     name: Rebuild the docs from the store
-    needs: [plan, store-current, store-rest]
+    needs: [plan, store-current, store-rest, backtests]
     if: >-
       always() && needs.plan.result == 'success'
       && (needs.store-current.result == 'success'
-      || needs.store-rest.result == 'success')
+      || needs.store-rest.result == 'success'
+      || needs.backtests.result == 'success')
       && github.ref == 'refs/heads/main' && inputs.store_branch == ''
     runs-on: ubuntu-latest
     timeout-minutes: 5

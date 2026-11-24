@@ -1,6 +1,4 @@
-"""Scheduled workflow runs: what a tick runs, and the timer that runs it."""
-
-import plistlib
+"""Scheduled workflow runs: what a tick runs."""
 
 import pytest
 from flowlib import schedule
@@ -121,65 +119,6 @@ def test_runs_never_overlap(tmp_path):
             assert not second
     with schedule.locked(lock) as again:
         assert again
-
-
-def test_the_interval_becomes_a_cron_line(tmp_path):
-    assert schedule.cron_spec(30) == "*/30 * * * *"
-    assert schedule.cron_spec(120) == "7 */2 * * *"
-    assert schedule.cron_spec(60) == "7 * * * *"
-    line = schedule.cron_line(tmp_path, 30)
-    assert line.startswith("*/30 * * * * cd ")
-    assert str(tmp_path) in line
-    assert line.endswith(schedule.MARK)
-
-
-def test_installing_cron_keeps_other_lines_and_replaces_its_own(tmp_path):
-    old = "0 1 * * * backup\n*/5 * * * * cd /x && tick " + schedule.MARK + "\n"
-    new = schedule.merge_crontab(old, schedule.cron_line(tmp_path, 30))
-    assert "0 1 * * * backup" in new
-    assert new.count(schedule.MARK) == 1
-    assert schedule.merge_crontab(new, None).count(schedule.MARK) == 0
-
-
-def test_systemd_user_units(tmp_path):
-    service, timer = schedule.systemd_units(tmp_path, 45)
-    assert f"WorkingDirectory={tmp_path}" in service
-    assert "workflow/scripts/tick.py" in service
-    assert "OnUnitActiveSec=45min" in timer
-    assert "Persistent=true" in timer
-
-
-def test_installing_makes_the_log_folder(tmp_path):
-    # systemd cannot open the log, and so never runs the tick, without it.
-    schedule.systemd_units(tmp_path / "a", 45)
-    schedule.launchd_plist(tmp_path / "b", 60)
-    schedule.cron_line(tmp_path / "c", 30)
-    for root in "abc":
-        assert (tmp_path / root / "output").is_dir()
-
-
-def test_a_launchd_agent(tmp_path):
-    data = plistlib.loads(schedule.launchd_plist(tmp_path, 60))
-    assert data["StartInterval"] == 3600
-    assert data["WorkingDirectory"] == str(tmp_path)
-    assert data["ProgramArguments"][-1] == "workflow/scripts/tick.py"
-
-
-def test_the_timer_kind_follows_the_platform():
-    assert schedule.timer_kind({"SCHEDULE_KIND": "cron"}, "linux") == "cron"
-    assert schedule.timer_kind({}, "darwin") == "launchd"
-    assert schedule.timer_kind({}, "linux", has_systemd=True) == "systemd"
-    assert schedule.timer_kind({}, "linux", has_systemd=False) == "cron"
-
-
-def test_timers_run_with_the_installing_path(tmp_path):
-    assert "PATH=/opt/uv/bin:/usr/bin python3" in schedule.cron_line(
-        tmp_path, 30, "/opt/uv/bin:/usr/bin"
-    )
-    service, _ = schedule.systemd_units(tmp_path, 30, "/opt/uv/bin")
-    assert "Environment=PATH=/opt/uv/bin" in service
-    data = plistlib.loads(schedule.launchd_plist(tmp_path, 30, "/opt/uv/bin"))
-    assert data["EnvironmentVariables"]["PATH"] == "/opt/uv/bin"
 
 
 def test_the_listings_are_refreshed_in_a_run_of_their_own():

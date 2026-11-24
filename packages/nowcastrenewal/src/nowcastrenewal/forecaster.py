@@ -12,6 +12,7 @@ This module owns everything around it:
 - `samples_table`: trajectories as the hub sample table;
 - `ppc_rows`, `parameter_diagnostics`, `chain_diagnostics`: the CI's
   `ppc.json` and `diagnostics.json`;
+- `run_records`: a fitted model's chain trace, sampler fields and delays;
 - `delay_summary` and `fit_delays`: each fit's learnt delay, written as
   `delay-summary.csv` beside its forecasts;
 - `fit_renewal` and `forecast_renewal`: the `fit` and `forecast` of the
@@ -33,7 +34,7 @@ import json
 import multiprocessing
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 from functools import partial
@@ -98,6 +99,7 @@ __all__ = [
     "report_cutoffs",
     "rt_quantiles",
     "run_nuts",
+    "run_records",
     "sampler_settings",
     "samples_table",
     "vintage_inputs",
@@ -431,7 +433,7 @@ def bvd_release(
         The task.
     cache_dir : pathlib.Path or str, optional
         The release cache. Defaults to `bvd/` in the data directory
-        (`$BDBV_DATA_DIR` or `data/`), filled by `bdbvhubrenewal bvd`.
+        (`$BDBV_DATA_DIR` or `data/`), filled by `bdbvhub bvd`.
 
     Returns
     -------
@@ -694,7 +696,7 @@ def check_national(task: ForecastTask) -> None:
     hub counts nationally but in no province would be lost. No release
     has had any (`data/national-coherence.csv`), so a fit stops rather
     than guess where they belong. The submission's coherence check fails
-    on the same data (`bdbvhubrenewal coherence`).
+    on the same data (`bdbvhub coherence`).
 
     Parameters
     ----------
@@ -883,6 +885,61 @@ def delay_summary(
         ],
         ignore_index=True,
     )
+
+
+def run_records(
+    model: Any, data: Any, places: Sequence[str]
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], pd.DataFrame]:
+    """Return a fitted model's chain trace, sampler fields and delays.
+
+    Parameters
+    ----------
+    model : Any
+        The fitted model, with its `mcmc` and `latent`.
+    data : Any
+        The vintage it was fitted to (`start_date`, `cutoff`).
+    places : Sequence[str]
+        The places of the delay's groups, in order.
+
+    Returns
+    -------
+    tuple
+        The unconstrained sites' draws by chain, the sampler's extra
+        fields by chain, and the `delay_summary` rows of each place's
+        delay (column `place`), with the shared delay of several places.
+    """
+    by_chain = model.mcmc.get_samples(group_by_chain=True)
+    trace = {
+        k: np.asarray(by_chain[k])
+        for k in model.mcmc.last_state.z
+        if k in by_chain
+    }
+    extra = {
+        k: np.asarray(v)
+        for k, v in model.mcmc.get_extra_fields(group_by_chain=True).items()
+    }
+    posterior = model.mcmc.get_samples()
+    n_init = model.latent.n_initialization_points
+    beta = np.asarray(posterior["delay_beta"])
+    shifts = {
+        name: np.asarray(posterior["delay_shift"])[..., p]
+        for p, name in enumerate(places)
+    }
+    if len(shifts) > 1:
+        shifts["shared"] = np.asarray(posterior["delay_shared_shift"])[..., 0]
+    delay = pd.concat(
+        [
+            delay_summary(
+                beta,
+                shift,
+                data.start_date - dt.timedelta(days=n_init),
+                n_init + data.cutoff,
+            ).assign(place=place)
+            for place, shift in shifts.items()
+        ],
+        ignore_index=True,
+    )
+    return trace, extra, delay
 
 
 def fit_delays(fit: RenewalFit, task: ForecastTask) -> pd.DataFrame:
@@ -1251,36 +1308,7 @@ class RenewalModel:
             ),
             "rt": pr.weekly_rt(model, data, seed=task.seed),
         }
-        by_chain = model.mcmc.get_samples(group_by_chain=True)
-        trace = {
-            k: np.asarray(by_chain[k])
-            for k in model.mcmc.last_state.z
-            if k in by_chain
-        }
-        extra = {
-            k: np.asarray(v)
-            for k, v in model.mcmc.get_extra_fields(group_by_chain=True).items()
-        }
-        posterior = model.mcmc.get_samples()
-        n_init = model.latent.n_initialization_points
-        beta = np.asarray(posterior["delay_beta"])
-        # Each fit has one province and so one delay.
-        shifts = {
-            name: np.asarray(posterior["delay_shift"])[..., p]
-            for p, name in enumerate(data.names)
-        }
-        delay = pd.concat(
-            [
-                delay_summary(
-                    beta,
-                    shift,
-                    data.start_date - dt.timedelta(days=n_init),
-                    n_init + data.cutoff,
-                ).assign(place=place)
-                for place, shift in shifts.items()
-            ],
-            ignore_index=True,
-        )
+        trace, extra, delay = run_records(model, data, data.names)
         return RenewalRun(
             self.variant,
             data,

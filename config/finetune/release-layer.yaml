@@ -12,6 +12,11 @@
 start:
   share: 0.3
   delay_days: {dist: beta, a: 1, b: 3, lower: 7, upper: 182}
+# no_lags: the share of blocks trained on their counts alone, with no lag
+# series, as when only the latest data are at hand (lead 02:00, Sam): the
+# complete layout's blocks (counts to the last complete step).
+no_lags:
+  share: 0.05
 # cadences: the release cadences of each step width and their shares, in
 # place of the block design's (finetune.chronos.BLOCK_DESIGN). Daily-step
 # blocks are 60% of all blocks, so a weekly share of 0.25 releases 15% of
