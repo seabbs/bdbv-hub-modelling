@@ -203,7 +203,10 @@ Each fit also gives the hub's `wk R_t` target, the weekly effective reproduction
 For place $p$ and week $w$ it is the daily effective Rt (Rt times the susceptible share) weighted by that day's infections,
 $$R_{p,w} = \frac{\sum_{t \in w} I_p(t) R^{\text{eff}}_p(t)}{\sum_{t \in w} I_p(t)}.$$
 A province above fitted zones and the country pool their fitted places in the same way, weighting each by $\sum_{t \in w} I_p(t)$, draw by draw.
+Rt is given for the fitted zones, the provinces above them and the country.
+A zone is fitted if it had a case in the 9 weeks to the cut-off, the random walks' walk window ([Baseline models](baselines.md)).
 Places outside the fit have no Rt and add nothing to their province or the country.
+We submit every location in `rt.csv.gz`, for the week before the reference date and the reference week.
 Fits of provinces on their own (`renewalsp`) pair draws by index, as their trajectories do.
 The quantiles are taken over every posterior draw, not the 100 trajectories, and weeks after the data take the forecast Rt.
 The fit directory holds them as `rt.csv.gz` (`location`, `target_end_date`, `output_type_id`, `value`).
