@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Location hierarchies read from ISO 3166-2 style codes.
 
 A code is its parent's code with one more part after a hyphen: a

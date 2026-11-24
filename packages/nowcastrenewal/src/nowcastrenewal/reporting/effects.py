@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Reference-date effects on the reporting delay, as numpyro sites.
 
 The delay of a report from reference day $t$ in stratum $g$ has a

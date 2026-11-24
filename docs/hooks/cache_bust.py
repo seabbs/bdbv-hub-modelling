@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """MkDocs hook: version the site's own scripts and styles by content.
 
 GitHub Pages lets browsers keep a file for ten minutes, so after a deploy

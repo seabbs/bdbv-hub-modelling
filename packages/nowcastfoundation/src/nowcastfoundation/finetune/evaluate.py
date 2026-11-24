@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Score adapter snapshots and checkpoints of an offloaded run.
 
 Scores the trainer's saved held-out blocks with its own loss functions,

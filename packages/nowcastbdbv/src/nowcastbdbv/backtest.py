@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The BDBV backtest's tasks, from the hub's releases.
 
 `make_tasks` builds a forecast task per release from the hub data, with

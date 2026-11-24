@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Check that a fine-tuned checkpoint's hash recomputes from its commit.
 
 A checkpoint's `settings.json` holds the sha256 of each file it depends

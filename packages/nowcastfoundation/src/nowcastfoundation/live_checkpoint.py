@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The live fine-tuning run's newest checkpoints, as preliminary results.
 
 The checkpoint scorer lands each checkpoint's scores in

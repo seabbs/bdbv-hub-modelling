@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Fine-tune Chronos-2 in one pass while the outbreaks are simulated.
 
 The training outbreaks are taken in order of seed and index, in chunks of

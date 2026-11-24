@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Discrete-time hazards of report to probabilities.
 
 $$p_d = h_d \prod_{j < d} (1 - h_j),$$

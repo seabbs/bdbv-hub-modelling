@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Double interval censored delay pmfs, for every delay in the models.
 
 The generation time, the incubation period, the delay from infection to
