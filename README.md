@@ -45,17 +45,19 @@ The three projects:
 
 The packages they are built from:
 
+<!-- packages table -->
 <table>
 <tr><th>Group</th><th>Package</th><th>What it is</th></tr>
 <tr><td rowspan="2">Shared</td><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastutils/logo-mark-dark.svg"><img src="assets/logos/nowcastutils/logo-mark.svg" alt="nowcastutils" width="24" height="24"></picture> <b>nowcastutils</b></a></td><td>Releases, snapshots, location hierarchies, the forecast task and sample trajectories.</td></tr>
 <tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/nowcasteval/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcasteval/logo-mark-dark.svg"><img src="assets/logos/nowcasteval/logo-mark.svg" alt="nowcasteval" width="24" height="24"></picture> <b>nowcasteval</b></a></td><td>Scores, backtests and trajectory pairing.</td></tr>
 <tr><td rowspan="3">Models</td><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastbaselines/logo-mark-dark.svg"><img src="assets/logos/nowcastbaselines/logo-mark.svg" alt="nowcastbaselines" width="24" height="24"></picture> <b>nowcastbaselines</b></a></td><td>The random walk and the random walk nowcast, the baselines.</td></tr>
-<tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/#nowcastfoundation"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastfoundation/logo-mark-dark.svg"><img src="assets/logos/nowcastfoundation/logo-mark.svg" alt="nowcastfoundation" width="24" height="24"></picture> <b>nowcastfoundation</b></a></td><td>Chronos-2 forecasts, the simulation grid and fine-tuning on simulated outbreaks.</td></tr>
-<tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/#nowcastrenewal"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastrenewal/logo-mark-dark.svg"><img src="assets/logos/nowcastrenewal/logo-mark.svg" alt="nowcastrenewal" width="24" height="24"></picture> <b>nowcastrenewal</b></a></td><td>The renewal models and the joint model that simulates outbreaks.</td></tr>
-<tr><td rowspan="3">Studies</td><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/#bdbvhub"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/bdbvhub/logo-mark-dark.svg"><img src="assets/logos/bdbvhub/logo-mark.svg" alt="bdbvhub" width="24" height="24"></picture> <b>bdbvhub</b></a></td><td>The BDBV hub's data, the fit store, the hub file and the submission.</td></tr>
-<tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/#nowcastbdbv"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastbdbv/logo-mark-dark.svg"><img src="assets/logos/nowcastbdbv/logo-mark.svg" alt="nowcastbdbv" width="24" height="24"></picture> <b>nowcastbdbv</b></a></td><td>The BDBV outbreak as a case study: the hub's data streams, health zones and delays.</td></tr>
-<tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/#nowcastgermany"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastgermany/logo-mark-dark.svg"><img src="assets/logos/nowcastgermany/logo-mark.svg" alt="nowcastgermany" width="24" height="24"></picture> <b>nowcastgermany</b></a></td><td>The German COVID-19 hospitalisation nowcasting hub as a case study.</td></tr>
+<tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/nowcastfoundation/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastfoundation/logo-mark-dark.svg"><img src="assets/logos/nowcastfoundation/logo-mark.svg" alt="nowcastfoundation" width="24" height="24"></picture> <b>nowcastfoundation</b></a></td><td>Chronos-2 forecasts, the simulation grid and fine-tuning on simulated outbreaks.</td></tr>
+<tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/nowcastrenewal/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastrenewal/logo-mark-dark.svg"><img src="assets/logos/nowcastrenewal/logo-mark.svg" alt="nowcastrenewal" width="24" height="24"></picture> <b>nowcastrenewal</b></a></td><td>The renewal models and the joint model that simulates outbreaks.</td></tr>
+<tr><td rowspan="3">Studies</td><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/bdbvhub/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/bdbvhub/logo-mark-dark.svg"><img src="assets/logos/bdbvhub/logo-mark.svg" alt="bdbvhub" width="24" height="24"></picture> <b>bdbvhub</b></a></td><td>The BDBV hub's data, the fit store, the hub file and the submission.</td></tr>
+<tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/nowcastbdbv/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastbdbv/logo-mark-dark.svg"><img src="assets/logos/nowcastbdbv/logo-mark.svg" alt="nowcastbdbv" width="24" height="24"></picture> <b>nowcastbdbv</b></a></td><td>The BDBV outbreak as a case study: the hub's data streams, health zones and delays.</td></tr>
+<tr><td><a href="https://samabbott.co.uk/bdbv-hub-modelling/packages/nowcastgermany/"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/logos/nowcastgermany/logo-mark-dark.svg"><img src="assets/logos/nowcastgermany/logo-mark.svg" alt="nowcastgermany" width="24" height="24"></picture> <b>nowcastgermany</b></a></td><td>The German COVID-19 hospitalisation nowcasting hub as a case study.</td></tr>
 </table>
+<!-- /packages table -->
 
 ## Status
 
@@ -84,19 +86,23 @@ The packages they are built from:
 
 </details>
 
-## Installation
-
-Install the packages and their dependencies with [uv](https://docs.astral.sh/uv/).
+## Getting started
 
 ```bash
 git clone https://github.com/seabbs/bdbv-hub-modelling
 cd bdbv-hub-modelling
-uv sync
+uv sync                                    # every package (uv: https://docs.astral.sh/uv/)
+cp config/local.env.example config/local.env   # this machine's settings, then edit
+task --list-all                            # every task
 ```
 
-## Usage
+- Run the tests and checks: `task test` and `task lint`.
+- Try the models: the [Getting started](https://samabbott.co.uk/bdbv-hub-modelling/getting-started/) page forecasts with both baselines and a stored renewal fit, then scores them.
+- Run the workflow (simulate, fine-tune, score): `task workflow:all`; see [workflow/](workflow/README.md).
+- Watch a fine-tuning run: `task workflow:dashboard`.
+- Extras: the renewal model needs PyRenew (`uv sync --extra model`), Chronos-2 needs torch (`uv sync --group chronos`, a GPU is optional), and the live R checks need R.
 
-The [Getting started](https://samabbott.co.uk/bdbv-hub-modelling/getting-started/) page forecasts with both baselines, `randomwalknowcast` and `randomwalk`, loads the stored `renewal` fit at the same origin, and plots and scores all three in Python.
+The repository holds the [packages](packages/README.md), the [workflow](workflow/README.md), the hub [submission CI](ci/README.md), the [paper](paper/README.md), the [docs site](docs/README.md), the [config](config/README.md) and the [data](data/README.md).
 
 ## Data
 

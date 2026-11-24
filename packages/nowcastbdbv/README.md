@@ -20,9 +20,27 @@ It downloads, tidies and loads the BDBV Modeling Hub's data streams, its health 
 It imports the generic packages: `nowcastutils`, `nowcasteval` and `nowcastbaselines`, and `nowcastrenewal` for the BVD download helper.
 More of the BDBV study moves here from `bdbvhub` (BVD inputs, reports), so that the generic packages import no outbreak.
 
+## Install
+
+From a clone of the repository:
+
 ```sh
-uv add nowcastbdbv
+uv sync --package nowcastbdbv             # this package and the ones it needs
 ```
+
+## Example
+
+```python
+from nowcastbdbv.data.tidy import load_target
+
+target = load_target()  # data/ after `uv run bdbvhub data`
+```
+
+The data: [Data](https://samabbott.co.uk/bdbv-hub-modelling/data/).
+
+## Tasks
+
+`task nowcastbdbv:test` runs its tests; `task --list-all` lists every task, `task nowcastbdbv:<task>` from the root or `task <task>` in this folder.
 
 ## Citation
 

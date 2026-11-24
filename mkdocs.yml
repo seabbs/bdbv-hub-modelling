@@ -15,6 +15,7 @@ site_dir: _site
 hooks:
   - docs/hooks/cache_bust.py
   - docs/hooks/citations.py
+  - docs/hooks/readmes.py
 
 exclude_docs: |
   hooks/*
@@ -53,6 +54,11 @@ nav:
           - Submission log: submission/rounds/index.md
   - Packages:
       - packages/index.md
+      - nowcastrenewal: packages/nowcastrenewal.md
+      - nowcastfoundation: packages/nowcastfoundation.md
+      - nowcastgermany: packages/nowcastgermany.md
+      - nowcastbdbv: packages/nowcastbdbv.md
+      - bdbvhub: packages/bdbvhub.md
       - Setup: setup.md
       - Getting started: getting-started.ipynb
       - Development:

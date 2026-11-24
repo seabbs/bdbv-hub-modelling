@@ -2,6 +2,15 @@
 
 One Snakemake workflow simulates outbreaks, fine-tunes Chronos-2 on them, publishes the checkpoints, scores them and builds the paper.
 The paper's rules (`paper/workflow/Snakefile`) are a module of it, with their settings in `paper/workflow/config.yaml`.
+
+In short:
+
+- Entry point: `Snakefile`, run through `task workflow:<target>` (`Taskfile.yml`) with a profile from `profiles/`.
+- Shared rules any study uses: `rules/` (simulate, finetune, evaluate, publish, score, monitor, report).
+- Their Python: `flowlib/` (settings, scheduling, scoring units, the dashboard) and `scripts/`.
+- Study modules: the paper's rules in [`paper/workflow/`](../paper/workflow/), with their own config.
+- Tests: `tests/`.
+
 This page walks through it in order, with the command for each piece, from a whole target down to one file.
 
 ## Running it
@@ -255,3 +264,5 @@ The fine-tuning dashboard shows the science (losses, scores, nowcasts, views), n
 | `release`, `publish`, `land` | never | outward-facing |
 
 `all` is the default target.
+
+Back to the [repository README](../README.md).
