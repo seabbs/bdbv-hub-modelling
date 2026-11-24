@@ -109,7 +109,7 @@ def test_development_writes_main_and_si_outputs(development: Path) -> None:
     assert (development / "tables" / "main" / "synthetic-grid.csv").is_file()
     joint = development / "tables" / "main" / "synthetic-joint.md"
     assert "rel_energy_log" in joint.read_text()
-    design = development / "tables" / "si" / "grid-epidemic.md"
+    design = development / "tables" / "si" / "grid.md"
     assert "Infections" in design.read_text()
     assert (development / "figures" / "si" / "sim-examples.png").is_file()
 
