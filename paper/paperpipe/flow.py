@@ -340,7 +340,11 @@ class PaperFlow:
         return "--models " + " ".join(m for m in MODELS if "_ft" not in m)
 
     def synthetic_simulations(self, mode: str) -> list[str]:
-        """Return a run's simulation files, or [] if any is missing."""
+        """Return a run's simulation files and its round's READY file.
+
+        The simulate rules make whatever is missing, so a run asks for its
+        round through the DAG rather than skipping it.
+        """
         folder = self.synthetic["simulations"][mode]
         seeds = run_settings(self.config, mode).synthetic_seeds
         files = [
@@ -348,7 +352,7 @@ class PaperFlow:
             for seed in seeds
             for kind, ext in (("counts", "csv.gz"), ("settings", "csv"))
         ]
-        return files if all(Path(f).exists() for f in files) else []
+        return [*files, f"{Path(folder).parent}/READY"]
 
     def example_files(self) -> dict[str, list[str]]:
         """Return the SI examples' simulation files, by kind.
@@ -431,10 +435,11 @@ class PaperFlow:
                 target,
                 ebola["backtest"],
                 *self.ebola_extra(),
+                *(ebola["candidates"] or []),
                 *draws,
                 *stored,
             ]
-        if w.study == "synthetic" and self.synthetic_simulations(w.mode):
+        if w.study == "synthetic":
             return [self.synthetic["forecasts"][w.mode]]
         return []
 

@@ -27,7 +27,6 @@ def run(tmp_path, monkeypatch):
     monkeypatch.setattr(paper_run.subprocess, "run", fake)
     monkeypatch.setattr(paper_run.localconfig, "read", lambda: cfg)
     monkeypatch.setattr(paper_run, "say", lambda text, _cfg: lines.append(text))
-    monkeypatch.setattr(paper_run, "missing", lambda: codes.get("missing", []))
     return calls, lines, codes
 
 
@@ -57,14 +56,6 @@ def test_the_cores_come_from_the_machine_s_budget(monkeypatch):
     monkeypatch.setattr(paper_run.subprocess, "run", fake)
     paper_run.main(["development"])
     assert seen["CORES"] == "6"
-
-
-def test_the_paper_waits_for_its_held_out_inputs_without_failing(run):
-    calls, lines, codes = run
-    codes["missing"] = ["paper/sims/READY"]
-    assert paper_run.main(["paper"]) == 0
-    assert calls == []
-    assert lines == ["waiting for: paper/sims/READY"]
 
 
 def test_a_failed_run_is_reported_with_its_first_error(run):
