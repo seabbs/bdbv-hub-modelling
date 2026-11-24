@@ -5,8 +5,8 @@ How to cite the software and the data, the funding and the licence.
 
 ## Citing this software
 
-The citation metadata are in [CITATION.cff](https://github.com/seabbs/bdbv-hub-modelling/blob/main/CITATION.cff).
-GitHub turns it into the "Cite this repository" button on the repository page.
+Each subproject has its own citation, with its own authors and abstract: cite the one you used.
+The entry below is the repository as a whole ([CITATION.cff](https://github.com/seabbs/bdbv-hub-modelling/blob/main/CITATION.cff), the "Cite this repository" button on GitHub).
 
 ```bibtex
 @software{abbott_bdbv_hub_modelling,
@@ -18,6 +18,10 @@ GitHub turns it into the "Cite this repository" button on the repository page.
   url = {https://doi.org/10.5281/zenodo.23942616}
 }
 ```
+
+## Each subproject
+
+<!-- subproject citations -->
 
 ## Archived results
 

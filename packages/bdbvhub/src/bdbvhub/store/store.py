@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The fit store: one stored fit per fitted model and real origin.
 
 The fitted models are slow, so the docs never fit them.
@@ -189,8 +189,6 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
 
     A stored fit uses the sampler table of the submission candidate that
     runs the same model, so the docs show the fits the submission makes.
-    A staged variant (`Variant.sampler_of`) takes the table of the model
-    it may replace, so the two are compared like for like.
 
     Parameters
     ----------
@@ -217,11 +215,6 @@ def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
             msg = f"Two candidates in {policy} run {c['model']}."
             raise ValueError(msg)
         out[c["model"]] = dict(c["sampler"])
-    from nowcastrenewal.forecaster import VARIANTS
-
-    for name, variant in VARIANTS.items():
-        if variant.sampler_of in out and name not in out:
-            out[name] = dict(out[variant.sampler_of])
     return out
 
 

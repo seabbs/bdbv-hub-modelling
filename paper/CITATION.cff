@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+title: "The bdbv-hub-modelling paper: fine-tuned Chronos-2 and joint-model-informed renewal nowcasts for the BDBV Modeling Hub"
+message: "If you use the paper's analysis, please cite it as below. Its title is to be chosen."
+type: software
+authors:
+  - family-names: Abbott
+    given-names: Sam
+    email: sam.abbott@lshtm.ac.uk
+    affiliation: London School of Hygiene & Tropical Medicine
+    orcid: https://orcid.org/0000-0001-8057-8037
+  - family-names: Holt
+    given-names: Charlotte
+    affiliation: London School of Hygiene & Tropical Medicine
+abstract: >-
+  The paper's analysis and its reproducible workflow: the Ebola study of the
+  BDBV Modeling Hub and the German hospitalisation benchmark, comparing
+  fine-tuned Chronos-2 foundation models, the joint-model-informed renewal
+  model and baselines. Charlotte Holt contributed the foundation-model
+  (fine-tuned Chronos-2) part.
+license: MIT
+repository-code: "https://github.com/seabbs/bdbv-hub-modelling/tree/main/paper"
+url: "https://samabbott.co.uk/bdbv-hub-modelling/"

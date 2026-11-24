@@ -89,7 +89,7 @@ def couplings(monkeypatch: pytest.MonkeyPatch) -> list:
 
 
 def test_the_models_choose_their_coupling_online():
-    assert get_model("fm_chronos_daily_ragged_ft").coupling == "online"
+    assert get_model("foundation").coupling == "online"
     assert set(trajectories.METHODS) >= {"independent", "comonotone"}
 
 
@@ -126,7 +126,7 @@ def test_the_coupling_is_chosen_from_the_model_s_earlier_forecasts(
         )
 
     monkeypatch.setattr(foundation, "choose_coupling", spy)
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     model.forecast(task)
     # The task's block and the same block at earlier releases.
     assert pipe.groups > 1
@@ -163,7 +163,7 @@ def test_the_si_couplings_need_no_earlier_forecasts(
     pipe = _Pipeline()
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
     model = dataclasses.replace(
-        get_model("fm_chronos_daily_ragged"), coupling=method
+        get_model("foundation_zeroshot"), coupling=method
     )
     model.forecast(task)
     assert pipe.groups == 1
@@ -175,7 +175,7 @@ def test_prefetch_holds_the_earlier_forecasts_too(
 ):
     pipe = _Pipeline()
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     alone = model.forecast(task)
     ready = foundation.prefetch(model, [task])
     pipe.groups = 0
@@ -186,7 +186,7 @@ def test_prefetch_holds_the_earlier_forecasts_too(
 def test_an_unknown_coupling_is_an_error_when_the_model_is_made():
     with pytest.raises(ValueError, match="unknown coupling"):
         dataclasses.replace(
-            get_model("fm_chronos_daily_ragged"), coupling="nonesuch"
+            get_model("foundation_zeroshot"), coupling="nonesuch"
         )
 
 
@@ -196,7 +196,7 @@ def test_with_no_earlier_release_the_history_couples(
     pipe = _Pipeline()
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
     monkeypatch.setattr(foundation, "coupling_releases", lambda *_: [])
-    out = get_model("fm_chronos_daily_ragged").forecast(task)
+    out = get_model("foundation_zeroshot").forecast(task)
     assert not out.empty
     assert pipe.groups == 1
     method, fit = couplings[-1]
@@ -212,7 +212,7 @@ def test_earlier_blocks_are_scored_on_what_is_final_now(
     monkeypatch: pytest.MonkeyPatch, task: ForecastTask
 ):
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     calls = []
     past_blocks = foundation.FoundationModel._past_blocks
 
@@ -225,7 +225,7 @@ def test_earlier_blocks_are_scored_on_what_is_final_now(
     model.forecast(task)
     ((tri, start, horizon, past),) = calls
     assert past
-    period = model._period(tri)
+    period = model.for_task(task)._period(tri)
     now = np.concatenate([tri.final, period.totals])
     final = []
     for block, seen, _, _ in past:
@@ -265,14 +265,14 @@ def test_earlier_blocks_raise_errors_other_than_no_rows(
 
     monkeypatch.setattr(foundation, "hub_triangle", broken)
     with pytest.raises(ValueError, match="malformed"):
-        get_model("fm_chronos_daily_ragged").forecast(task)
+        get_model("foundation_zeroshot").forecast(task)
 
 
 def test_a_block_over_the_limit_is_coupled_as_one_block(
     monkeypatch: pytest.MonkeyPatch, couplings: list, task: ForecastTask
 ):
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     per = 2 + model.lag_count(task)
     cut = dataclasses.replace(model, block_limit=3 * per)
     assert len(cut._views(*_places_and_triangle(cut, task))) > 1

@@ -27,3 +27,16 @@ It is for anyone scoring forecasts of counts that are revised as later releases 
 ```sh
 uv add nowcasteval
 ```
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../../CITATION.cff).
+
+```bibtex
+@software{abbott_nowcasteval,
+  author = {Abbott, Sam},
+  title = {{nowcasteval: evaluation of nowcasts and forecasts: proper scores by level, backtests over releases, trajectory pairing, model checks and score figures}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcasteval}
+}
+```

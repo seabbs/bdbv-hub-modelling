@@ -13,7 +13,7 @@ Germany uses quantiles; synthetic and Ebola use samples.
 | Column | Type | Meaning |
 |---|---|---|
 | `study` | str | One of `synthetic`, `germany` or `ebola`. |
-| `model` | str | Model name, such as `randomwalknowcast` or `fm_chronos_daily_ragged_ft`. |
+| `model` | str | Model name, such as `randomwalknowcast` or `foundation`. |
 | `location` | str | Location code within the study. |
 | `stratum` | str | Optional. Subgroup within a location, such as a German age group (`00-04`, ..., `80+`). Defaults to `all` when the column is absent. |
 | `origin_date` | date | Date the forecast was made, using data as of this date. |

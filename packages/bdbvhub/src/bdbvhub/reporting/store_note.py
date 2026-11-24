@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Say where the fitted models' results on a page come from.
 
 Every page with fitted-model results includes `fit-store.md`, written

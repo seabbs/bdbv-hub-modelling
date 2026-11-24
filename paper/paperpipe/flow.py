@@ -335,9 +335,11 @@ class PaperFlow:
         """Return the synthetic runner's models option."""
         if self.config.get("finetuned"):
             return ""
+        from nowcasteval.labels import FINETUNED
+
         from paperdata.synthetic_runner import MODELS
 
-        return "--models " + " ".join(m for m in MODELS if "_ft" not in m)
+        return "--models " + " ".join(m for m in MODELS if m not in FINETUNED)
 
     def synthetic_simulations(self, mode: str) -> list[str]:
         """Return a run's simulation files and its round's READY file.
@@ -436,7 +438,8 @@ class PaperFlow:
                 *stored,
             ]
         if w.study == "synthetic":
-            return [self.synthetic["forecasts"][w.mode]]
+            fc = self.synthetic["forecasts"][w.mode]
+            return [fc] if fc else []
         return []
 
     def limits(self, w: Wildcards) -> str:

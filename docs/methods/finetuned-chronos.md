@@ -46,7 +46,7 @@ The last delay is taken as final.
 
 The rows reported at every delay are Chronos-2's context.
 Each count at each earlier delay is a covariate, known up to the last cut-off.
-This is the ragged layout of the `fm_chronos_*_ragged_ft` models ([Layouts](foundation.md#layouts)).
+This is the ragged layout of the `foundation` model ([Layouts](foundation.md#layouts)).
 Our checkpoints were fine-tuned with last delays of 2 to 7 weeks or 14 to 49 days, so triangles in those ranges match their training best.
 
 The output has one row per place, reference time and quantile level:

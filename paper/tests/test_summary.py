@@ -111,7 +111,7 @@ def test_summary_quotes_each_model_against_randomwalknowcast() -> None:
             "model": [
                 "KIT-frozen_baseline",
                 "randomwalknowcast",
-                "fm_chronos_daily_twostep",
+                "foundation_zeroshot_twostep",
             ],
             "rel_score": [1.0, 1.2, 0.9],
             "rel_log_score": [1.0, 1.1, 0.95],
@@ -119,18 +119,18 @@ def test_summary_quotes_each_model_against_randomwalknowcast() -> None:
         }
     )
     out = study_summary({"study": "germany", "source": "real"}, scores)
-    assert out["models"]["fm_chronos_daily_twostep"] == 0.75
+    assert out["models"]["foundation_zeroshot_twostep"] == 0.75
     # A quoted model without scores yet reads as pending.
-    assert out["models"]["fm_chronos_daily_twostep_ft"] == "pending"
+    assert out["models"]["foundation_twostep"] == "pending"
 
 
 def test_with_randomwalknowcast_the_baseline_its_scores_are_quoted() -> None:
     scores = pd.DataFrame(
         {
-            "model": ["randomwalknowcast", "fm_chronos_daily_ragged_ft"],
+            "model": ["randomwalknowcast", "foundation"],
             "rel_score": [1.0, 0.8],
             "rel_log_score": [1.0, 0.9],
         }
     )
     out = study_summary({"study": "synthetic", "source": "dummy"}, scores)
-    assert out["models"]["fm_chronos_daily_ragged_ft"] == 0.8
+    assert out["models"]["foundation"] == 0.8

@@ -15,7 +15,7 @@ set -eu
 out=$1 data=$2 run_file=$3
 repo=${REPO:-seabbs/bdbv-hub-modelling}
 models=(renewalbvd renewalsp renewal randomwalknowcast randomwalk
-  fm_chronos_daily_ragged fm_chronos_daily_ragged_ft)
+  foundation_zeroshot foundation)
 run=$(awk '{print $1; exit}' "$run_file")
 rm -rf "$out/run" && mkdir -p "$out/run"
 for name in inputs gate baseline-gate; do

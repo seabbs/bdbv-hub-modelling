@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Score our models and the hub teams on the German nowcast benchmark.
 
 The benchmark is that of Wolffram et al. (2023): nowcasts of the 7-day
@@ -240,7 +240,7 @@ class GermanyConfig:
     held_out_models: tuple[str, ...] = ()
     horizons: tuple[int, ...] = HORIZONS
     targets: tuple[str, ...] = ("7day",)
-    daily_baseline: str = "fm_chronos_daily_ragged"
+    daily_baseline: str = "foundation_zeroshot"
     plot_start: str = ""
 
     def __post_init__(self) -> None:
@@ -320,7 +320,7 @@ def load_germany_config(
         ),
         targets=tuple(now.get("targets", ("7day",))),
         daily_baseline=raw["scoring"].get(
-            "daily_baseline", "fm_chronos_daily_ragged"
+            "daily_baseline", "foundation_zeroshot"
         ),
         plot_start=now.get("plot_start", ""),
     )

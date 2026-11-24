@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The pairing sensitivity page: how much the walk models' copula matters.
 
 `pairing_page` reads the `pairing-sensitivity` results and writes one

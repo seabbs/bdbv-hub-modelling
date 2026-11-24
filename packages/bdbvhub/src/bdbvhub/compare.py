@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Compare our forecasts with the forecasts submitted to the hub.
 
 `fetch_hub_submissions` downloads every team's metadata and its sample

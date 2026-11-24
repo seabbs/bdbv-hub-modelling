@@ -192,3 +192,22 @@ def hf_args():
     if hf["dry_run"] or not repo:
         args.append("--dry-run")
     return " ".join(args)
+
+
+# The BDBV foundation-model check (report.smk's ft_check rules).
+FTC = config["ft_check"]
+
+
+def ft_check_checkpoint():
+    """The fine-tuned checkpoint the check runs: the config's or the pin."""
+    import tomllib
+
+    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
+    return FTC["checkpoint"] or pin
+
+
+def ft_check_folders(ckpt):
+    """The forecast folders of the check's models and the checkpoint's."""
+    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
+        f"{FTC_DIR}/forecasts/ft-{ckpt}"
+    ]

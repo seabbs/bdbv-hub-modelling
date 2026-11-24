@@ -1,7 +1,7 @@
 team_name: seabbs
 team_abbr: seabbs
-model_name: Nowcast foundation (fine-tuned Chronos-2, daily releases)
-model_abbr: nowcastfm
+model_name: Nowcast foundation (fine-tuned Chronos-2)
+model_abbr: foundation
 model_contributors:
 - name: Sam Abbott
   affiliation: London School of Hygiene & Tropical Medicine

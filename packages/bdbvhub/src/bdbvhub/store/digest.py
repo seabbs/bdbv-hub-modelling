@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Hash what a backtest run reads, to key its cached outputs.
 
 The Pages workflow runs the backtests that fit no model as separate
@@ -40,6 +40,7 @@ REPORT_ONLY: Final = (
     "packages/bdbvhub/src/bdbvhub/reporting/store_note.py",
     "packages/nowcasteval/src/nowcasteval/tables.py",
     "packages/bdbvhub/src/bdbvhub/reporting/zone_nowcast.py",
+    "packages/bdbvhub/src/bdbvhub/reporting/ftcheck_report.py",
 )
 """Modules only the `report` command runs, so no backtest reads them."""
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""A Gaussian copula that pairs the walk models' province draws.
 
 `randomwalk` and `randomwalknowcast` draw each province on its own, so

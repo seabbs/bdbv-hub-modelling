@@ -1,5 +1,5 @@
-# Where the fine-tuned Chronos-2 checkpoint the `fm_chronos_*_ragged_ft`
-# models load is read from (`nowcastfoundation.forecaster.
+# Where the fine-tuned Chronos-2 checkpoint the fine-tuned models
+# (`foundation` and the other `_ft` ones) load is read from (`nowcastfoundation.forecaster.
 # finetuned_checkpoint`): "huggingface" reads [huggingface] `repo` at its
 # pinned `revision`, cached by huggingface_hub; "github" the release `hash`
 # names; "local" the training segment folder `local`. Every source is
@@ -35,7 +35,7 @@ active_zone_recent_weeks = 4
 # The Chronos-2 checkpoint fine-tuned on real data alone, the German
 # development half and the public BDBV data up to the release in
 # config/finetune/realdata.toml on the germany-ft branch
-# (`realdata-ft-<hash>`), that the SI-only `fm_chronos_*_ragged_real` models
+# (`realdata-ft-<hash>`), that the SI-only `foundation_real` model
 # load. Empty until that release is published.
 realdata = ""
 

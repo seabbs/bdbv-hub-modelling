@@ -126,14 +126,14 @@ def test_the_lags_never_exceed_the_history() -> None:
     rows = _releases(15, reported=reported)
     last = rows["cutoff"].max()
     assert delay_lags(rows, "daily", ("A",), last) == 13
-    model = dataclasses.replace(get_model("fm_chronos_daily_ragged"), lags=40)
+    model = dataclasses.replace(get_model("foundation_zeroshot"), lags=40)
     assert model._triangle(rows, ("A",), last).partial.shape[2] == 13
 
 
 def test_a_fixed_lag_count_overrides_the_rule() -> None:
     rows = _releases(200)
     last = rows["cutoff"].max()
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     assert model.lags is None
     assert model._triangle(rows, ("A",), last).partial.shape[2] == 4
     fixed = dataclasses.replace(model, lags=7)

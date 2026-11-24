@@ -437,10 +437,12 @@ jobs:
         run: >-
           Rscript -e 'if (length(Sys.glob("~/.cmdstan/cmdstan-*")) == 0)
           cmdstanr::install_cmdstan(cores = 4)'
-      # Each file runs its R cases once, so files go to workers whole.
+      # One at a time: each file compiles epinowcast's Stan functions with
+      # Rcpp, and parallel builds failed ("Error 1 occurred building shared
+      # library").
       - name: Live R checks
         run: >-
-          uv run pytest -q -n auto --dist loadfile --durations=20
+          uv run pytest -q --durations=20
           packages/nowcastrenewal/tests/test_pmfs.py
           packages/nowcastrenewal/tests/test_latent_epinowcast.py
           packages/nowcastrenewal/tests/test_reporting_delays.py

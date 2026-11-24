@@ -53,13 +53,13 @@ targets = ["7day", "daily"]
 # checkpoint units run the models listed here.
 models = [
   "randomwalknowcast_daily",
-  "fm_chronos_daily_complete",
-  "fm_chronos_daily_ragged",
-  "fm_chronos_daily_ragged_ft",
+  "foundation_zeroshot_complete",
+  "foundation_zeroshot",
+  "foundation",
   # The two-step sensitivity analysis (#538): baselinenowcast's point
   # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
-  "fm_chronos_daily_complete_2step",
-  "fm_chronos_daily_complete_2step_ft",
+  "foundation_zeroshot_twostep",
+  "foundation_twostep",
 ]
 # Chronos-2 fine-tuned on real data alone (the German development half and
 # BDBV to date), run on the held-out half only, for the SI's comparison
@@ -70,7 +70,7 @@ models = [
 # different: `runs.realdata` in workflow/config.yaml mixes German real-data
 # blocks into Run A's simulations.
 held_out_models = [
-  "fm_chronos_daily_ragged_real",
+  "foundation_real",
 ]
 # Draws per forecast and their seed, the same for every model. A model's own
 # quantiles at the hub's seven levels are scored where it gives them (the
@@ -86,7 +86,7 @@ baseline = "randomwalknowcast_daily"
 # Wolffram et al. (2023) compare to it.
 paper_baseline = "KIT-frozen_baseline"
 # Relative scores on daily counts divide by zero-shot Chronos-2 (ragged).
-daily_baseline = "fm_chronos_daily_ragged"
+daily_baseline = "foundation_zeroshot"
 
 [page]
 # Models switched off on the page until the reader switches them on. Both

@@ -81,7 +81,7 @@ def test_forecasts_take_their_lags_from_the_same_rule(monkeypatch):
             for d in range(1, 40)
         ],
     )
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     tri = model._triangle(rows, ("A", "B"), rows["cutoff"].max())
     assert calls, "the forecaster did not call forecaster.lag_count"
     assert tri.partial.shape[2] == calls[-1]

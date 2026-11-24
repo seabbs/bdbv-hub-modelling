@@ -1,14 +1,17 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The Chronos-2 foundation model on the hub target's releases.
 
 See the Foundation models methods page for the model.
-Each pair of a source (`SOURCES`) and a layout (`LAYOUTS`) is one
-registered model, `fm_chronos_<source>_<layout>`, and each source's
-ragged model with a fine-tuned checkpoint (`resolve_checkpoint`, the
-latest release unless `config/finetune.toml` pins one) is
-`fm_chronos_<source>_ragged_ft`. For the SI, `fm_chronos_<source>_ragged_real`
-is the ragged model with the checkpoint fine-tuned on real data alone
-(the German development half and the public BDBV data to date,
+One registered model per method the paper compares, each reading its
+cadence from the task (`FROM_DATA`: the daily releases when there are any,
+so one pass gives the daily counts and the 7-day hub target):
+`foundation` (fine-tuned on simulated outbreaks, ragged layout, the hub's
+model; `finetuned_checkpoint`), `foundation_zeroshot` (pretrained
+weights), `foundation_complete` and `foundation_zeroshot_complete`
+(complete layout), and the two-step `foundation_twostep` and
+`foundation_zeroshot_twostep`. For the SI,
+`foundation_real` is the ragged model with the checkpoint fine-tuned on real
+data alone (the German development half and the public BDBV data to date,
 `scripts/finetune_realdata.py`), pinned in `config/finetune.toml` and
 released as `realdata-ft-<hash>`, which the latest lookup never takes.
 `hub_triangle` lays out the hub target by place, time and release lag,
@@ -115,6 +118,11 @@ SOURCES: Final = ("weekly", "daily")
 """The hub target's releases by onset week (`target.csv`) or onset day
 (`daily.csv`)."""
 
+FROM_DATA: Final = "data"
+"""The source of a model that reads its cadence from each task
+(`FoundationModel.for_task`): the daily releases when the task has them,
+else the weekly ones. Every registered model reads it so."""
+
 LAYOUTS: Final = ("complete", "ragged")
 """The ways the releases are given to Chronos-2."""
 
@@ -138,7 +146,7 @@ source (`FoundationModel.period`): the daily source's 7-day rolling sums,
 from which the hub's 7-day target is read."""
 
 FINETUNED_CONFIG: Final = Path("config/finetune.toml")
-"""Which fine-tuned checkpoint the `_ft` models load: `hash`, `"latest"`
+"""Which fine-tuned checkpoint the fine-tuned models load: `hash`, `"latest"`
 or a settings hash."""
 
 FINETUNED_URL: Final = (
@@ -187,7 +195,7 @@ SLOTS_RELEASE_PREFIX: Final = "chronos-slots"
 """Tag prefix of the releases of checkpoints with the series bias."""
 
 FINETUNED_SOURCES: Final = ("huggingface", "github", "local")
-"""Where the `_ft` models' checkpoint is read from (`source` in
+"""Where the fine-tuned models' checkpoint is read from (`source` in
 `FINETUNED_CONFIG`, `finetuned_checkpoint`): a Hugging Face Hub repository
 at a pinned revision, a GitHub release, or a training segment's folder."""
 
@@ -247,7 +255,7 @@ class Checkpoint:
 
 
 def finetuned_spec(path: Path | str = FINETUNED_CONFIG) -> str:
-    """Return the checkpoint the `_ft` models load: `"latest"` or a hash.
+    """Return the checkpoint the fine-tuned models load: `"latest"` or a hash.
 
     `FINETUNED_ENV`, when set, overrides the file.
 
@@ -372,7 +380,7 @@ def finetuned_releases() -> list[dict[str, Any]]:
 
 
 def realdata_spec(path: Path | str = FINETUNED_CONFIG) -> str:
-    """Return the settings hash the `_real` models load.
+    """Return the settings hash `foundation_real` load.
 
     No environment variable overrides it, so a run that pins the
     simulation-trained checkpoint leaves it as it is.
@@ -567,7 +575,7 @@ def hub_checkpoint(repo: str, revision: str) -> Checkpoint:
 
 
 def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
-    """Return the checkpoint the `_ft` models load, from its source.
+    """Return the checkpoint the fine-tuned models load, from its source.
 
     `source` in `path` is one of `FINETUNED_SOURCES`: `huggingface`
     reads `[huggingface] repo` at `revision` (`hub_checkpoint`), `github`
@@ -636,7 +644,7 @@ def newest_segment(train: Path | str) -> Path | None:
 
     The largest `n<N>` under the run's `train` folder whose settings and
     adapter files (`ADAPTER_FILES`) are saved; a segment still training
-    has neither. The paper's `_ft` models load it (`paperpipe.flow`).
+    has neither. The paper's fine-tuned models load it (`paperpipe.flow`).
     """
     saved = [
         d
@@ -676,19 +684,17 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
 
 
 def _finetuned(
-    name: str, source: str, layout: str = "ragged", two_step: bool = False
+    name: str, layout: str = "ragged", two_step: bool = False
 ) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_checkpoint`.
 
-    The weekly and daily models share the checkpoint. Each builds the
-    block its zero-shot model of `layout` builds (`PERIODS` rows in both);
-    only the weights differ. The complete layout is for checkpoints
-    trained on complete counts (the no-delays run).
+    It builds the block its zero-shot model of `layout` builds, with the
+    cadence read from each task (`FROM_DATA`); only the weights differ.
     """
     cases, weeks, recent = active_zone_rule()
     return FoundationModel(
         name,
-        source,
+        FROM_DATA,
         layout,
         finetuned_checkpoint(),
         two_step=two_step,
@@ -698,11 +704,11 @@ def _finetuned(
     )
 
 
-def _real_data(name: str, source: str) -> FoundationModel:
+def _real_data(name: str) -> FoundationModel:
     """Build a model with the real-data checkpoint `realdata_spec`."""
     return FoundationModel(
         name,
-        source,
+        FROM_DATA,
         "ragged",
         resolve_checkpoint(realdata_spec(), REALDATA_PREFIX),
     )
@@ -1560,7 +1566,8 @@ class FoundationModel:
     name : str
         Model name.
     source : str
-        One of `SOURCES`.
+        One of `SOURCES`, or `FROM_DATA` to read it from each task
+        (`for_task`).
     layout : str
         One of `LAYOUTS`.
     checkpoint : Checkpoint or None
@@ -1647,9 +1654,8 @@ class FoundationModel:
             raise ValueError(
                 f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
             )
-        if self.two_step and (self.layout, self.source) != (
-            "complete",
-            "daily",
+        if self.two_step and (
+            self.layout != "complete" or self.source not in ("daily", FROM_DATA)
         ):
             raise ValueError("two_step needs the complete layout, daily")
         if self.block_limit is None and os.environ.get(BLOCK_LIMIT_ENV):
@@ -1664,6 +1670,18 @@ class FoundationModel:
         are read; None for the weekly source.
         """
         return PERIODS.get(self.source)
+
+    def for_task(self, task: ForecastTask) -> FoundationModel:
+        """Return the model with its source for `task`.
+
+        With `FROM_DATA`, the daily releases when the task has them, so one
+        pass gives the daily counts and the 7-day target from its 7-day
+        rows, else the weekly releases. A fixed source is kept.
+        """
+        if self.source != FROM_DATA:
+            return self
+        daily = task.daily_history is not None and not task.daily_history.empty
+        return replace(self, source="daily" if daily else "weekly")
 
     @property
     def needs_snapshots(self) -> bool:
@@ -1711,6 +1729,11 @@ class FoundationModel:
         ValueError
             If the release holds another checkpoint or adapter.
         """
+        run = self.for_task(task)
+        if run is not self:
+            out = run.forecast_both(task)
+            self.copula_fit = run.copula_fit
+            return out
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
@@ -1787,11 +1810,12 @@ class FoundationModel:
                     ),
                 )
             parts = sample(groups, horizon, task.n_samples, seed)
-            # Chronos-2's sampler puts the views back together itself; a
-            # model's own sampler draws each view.
+            # Chronos-2's sampler puts the views back together itself, so
+            # it returns one part; any sampler that returns one part per
+            # view has them put together here.
             draws = (
                 parts[0]
-                if whole or self.sample is None
+                if len(parts) == 1
                 else _owned(parts, views, places, period is not None)
             )
             # Counts are not negative; Chronos-2's output is otherwise kept
@@ -1900,6 +1924,8 @@ class FoundationModel:
 
     def lag_count(self, task: ForecastTask) -> int:
         """Return the lag count the model gives `task`'s block."""
+        if (run := self.for_task(task)) is not self:
+            return run.lag_count(task)
         rows, places, weeks = self._rows(task)
         return int(self._triangle(rows, places, weeks[-1]).partial.shape[2])
 
@@ -1920,6 +1946,8 @@ class FoundationModel:
             `forecasts` (the places it forecasts), `target_rows` (count and
             aggregate rows), `lag_series` (for `ragged`) and `series`.
         """
+        if (run := self.for_task(task)) is not self:
+            return run.block_sizes(task)
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
         lags = int(tri.partial.shape[2]) if self.layout == "ragged" else 0
@@ -2124,7 +2152,7 @@ class FoundationModel:
             Columns `location`, `date`, `quantile` and `value`, or None
             for the weekly source, which has no daily counts.
         """
-        if self.source != "daily":
+        if self.for_task(task).source != "daily":
             return None
         at = np.asarray(levels, dtype=float)
         run = replace(
@@ -2234,39 +2262,47 @@ def prefetch(
     return replace(model, known=known, collect=None)
 
 
-for _source in SOURCES:
-    for _layout in LAYOUTS:
-        _name = f"fm_chronos_{_source}_{_layout}"
-        register_model(
-            _name,
-            partial(
-                FoundationModel,
-                _name,
-                _source,
-                _layout,
-            ),
-            f"Chronos-2 on the hub target's {_source} releases, {_layout} "
-            "layout, every target in one block.",
-            fitted=True,
-        )
-    for _layout in LAYOUTS:
-        _name = f"fm_chronos_{_source}_{_layout}_ft"
-        register_model(
-            _name,
-            partial(_finetuned, _name, _source, _layout),
-            "Chronos-2 fine-tuned on simulated outbreaks, on the hub "
-            f"target's {_source} releases, {_layout} layout.",
-            fitted=True,
-        )
-
+# One model per method the paper compares, each reading its cadence from
+# the task (`FROM_DATA`), so one run gives the daily counts and the 7-day
+# hub target. `foundation` is the hub's model.
+register_model(
+    "foundation_zeroshot",
+    partial(FoundationModel, "foundation_zeroshot", FROM_DATA, "ragged"),
+    "Chronos-2 zero-shot on the hub target's releases, ragged layout, every "
+    "target in one block.",
+    fitted=True,
+)
+register_model(
+    "foundation",
+    partial(_finetuned, "foundation", "ragged"),
+    "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
+    "releases, ragged layout.",
+    fitted=True,
+)
+register_model(
+    "foundation_zeroshot_complete",
+    partial(
+        FoundationModel, "foundation_zeroshot_complete", FROM_DATA, "complete"
+    ),
+    "Chronos-2 zero-shot on the hub target's releases, complete layout.",
+    fitted=True,
+)
+# For checkpoints trained on complete counts (the no-delays run).
+register_model(
+    "foundation_complete",
+    partial(_finetuned, "foundation_complete", "complete"),
+    "Chronos-2 fine-tuned on complete counts, on the hub target's "
+    "releases, complete layout.",
+    fitted=True,
+)
 # The two-step sensitivity analysis (#538): baselinenowcast's point
 # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
 register_model(
-    "fm_chronos_daily_complete_2step",
+    "foundation_zeroshot_twostep",
     partial(
         FoundationModel,
-        "fm_chronos_daily_complete_2step",
-        "daily",
+        "foundation_zeroshot_twostep",
+        FROM_DATA,
         "complete",
         two_step=True,
     ),
@@ -2275,14 +2311,8 @@ register_model(
     fitted=True,
 )
 register_model(
-    "fm_chronos_daily_complete_2step_ft",
-    partial(
-        _finetuned,
-        "fm_chronos_daily_complete_2step_ft",
-        "daily",
-        "complete",
-        two_step=True,
-    ),
+    "foundation_twostep",
+    partial(_finetuned, "foundation_twostep", "complete", two_step=True),
     "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
     "corrected daily counts, complete layout.",
     fitted=True,
@@ -2305,21 +2335,19 @@ def realdata_pinned(path: Path | str = FINETUNED_CONFIG) -> bool:
 
 
 def register_realdata_models() -> None:
-    """Register the `_real` models, fine-tuned on real data alone.
+    """Register `foundation_real`, fine-tuned on real data alone.
 
     The module registers them only once `realdata_pinned`, so while the
     pin is pending no store plan or backtest resolves their checkpoint.
     """
-    for source in SOURCES:
-        name = f"fm_chronos_{source}_ragged_real"
-        register_model(
-            name,
-            partial(_real_data, name, source),
-            f"Chronos-2 fine-tuned on real data (German and BDBV), on the "
-            f"hub target's {source} releases, ragged layout (SI only).",
-            fitted=True,
-            replace=True,
-        )
+    register_model(
+        "foundation_real",
+        partial(_real_data, "foundation_real"),
+        "Chronos-2 fine-tuned on real data (German and BDBV), on the hub "
+        "target's releases, ragged layout (SI only).",
+        fitted=True,
+        replace=True,
+    )
 
 
 if Path(FINETUNED_CONFIG).exists() and realdata_pinned():

@@ -124,3 +124,58 @@ def test_custom_checks_run_with_their_scripts_and_source(
         text=True,
     )
     assert status.stdout == ""
+
+
+def test_custom_checks_run_on_a_partial_sparse_hub_checkout(
+    hub_path: Path, tmp_path: Path
+) -> None:
+    # The CI checks the hub out with actions/checkout's sparse-checkout: a
+    # blob-less partial clone. A `git clone --shared` of it dies on the
+    # missing blobs, which left the custom check without its source
+    # (main dry run 45379275554, 2026-11-24).
+    full = tmp_path / "full"
+    shutil.copytree(hub_path, full)
+    custom = BUNDLE / "fixtures" / "custom-check"
+    shutil.copy(custom / "hub-config" / "validations.yml", full / "hub-config")
+    shutil.copytree(custom / "src", full / "src")
+    (full / "model-output" / "other").mkdir(parents=True, exist_ok=True)
+    (full / "model-output" / "other" / "x.csv").write_text("a\n")
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+    for args in (
+        ["init", "-q"],
+        ["add", "-A"],
+        ["commit", "-qm", "hub"],
+        ["config", "uploadpack.allowFilter", "true"],
+    ):
+        subprocess.run([*git, "-C", str(full), *args], check=True)
+    hub = tmp_path / "hub"
+    subprocess.run(
+        [*git, "clone", "-q", "--filter=blob:none", "--no-checkout",
+         f"file://{full}", str(hub)],
+        check=True,
+    )  # fmt: skip
+    for args in (
+        ["sparse-checkout", "set", "hub-config", "model-metadata", "src"],
+        ["checkout", "-q"],
+    ):
+        subprocess.run([*git, "-C", str(hub), *args], check=True)
+    assert not (hub / "model-output" / "other" / "x.csv").exists()
+    out = tmp_path / "r.json"
+    sub = (
+        BUNDLE
+        / "fixtures/constructed/valid_basic/testteam-testmodel"
+        / "2026-10-31-testteam-testmodel.csv"
+    )
+    md = [a for d in METADATA_DIRS for a in ("--metadata-dir", str(d))]
+    r = subprocess.run(
+        ["Rscript", str(R_VALIDATOR), "--hub", str(hub), *md,
+         "--skip-window", "--json", str(out), str(sub)],
+        check=False, capture_output=True, text=True, timeout=900,
+    )  # fmt: skip
+    checks = {x["check"]: x["status"] for x in json.loads(out.read_text())}
+    assert checks["probe"] == "pass", (checks, r.stderr[-2000:])
+    listed = subprocess.run(
+        ["git", "-C", str(hub), "worktree", "list"],
+        check=True, capture_output=True, text=True,
+    ).stdout  # fmt: skip
+    assert len(listed.strip().splitlines()) == 1

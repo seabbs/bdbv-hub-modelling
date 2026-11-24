@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Score adapter snapshots and checkpoints of an offloaded run.
 
 Scores the trainer's saved held-out blocks with its own loss functions,
@@ -178,7 +178,7 @@ def _predictions(
     )
     accepted = inspect.signature(Chronos2Model.forward).parameters
     with torch.no_grad():
-        for indices in data.indices():  # type: ignore[no-untyped-call]
+        for indices in data.indices():
             batch = data._build_batch(indices)
             out = fs.forward(model, batch, accepted)
             raw = out.quantile_preds.float().cpu().numpy()

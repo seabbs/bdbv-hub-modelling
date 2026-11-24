@@ -56,10 +56,10 @@ SCENARIOS=(
   # wk R_t quantiles the hub would reject rule the candidate out too.
   "badrt|bvd=badrt|renewalsp||was ruled out (rt: "
   "latestream|bvd=latestream|bvd"
-  "fallback|bvd=fail|renewalsp||Model: single-patch province renewal models"
+  "fallback|bvd=fail|renewalsp||Model: single-patch zone renewal models"
   # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are
   # cut so the gate still runs in time.
-  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Model: single-patch province renewal models"
+  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Model: single-patch zone renewal models"
   "randomwalknowcast|bvd=fail,renewalsp=fail,main=fail|randomwalknowcast||Model: random walk on a nowcast"
   "randomwalk|bvd=fail,renewalsp=crash,main=fail,randomwalknowcast=negative|randomwalk"
   "skip|bvd=fail,renewalsp=fail,main=fail,randomwalknowcast=negative,randomwalk=negative|skip"
@@ -68,7 +68,7 @@ SCENARIOS=(
   "storefailed|bvd=storefailed,renewalsp=missing|main"
   # A chosen model further down the chain starts it there; the
   # candidates before it are shadows.
-  "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch province renewal models"
+  "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch zone renewal models"
   "nospatialfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Model: zone renewal model"
   "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Model: zone renewal model"
   "chosenrenewalfallback|main=fail|randomwalknowcast|MODEL=renewal|Model: random walk on a nowcast"
@@ -468,7 +468,7 @@ no_new_data() {
 }
 
 chronos_track() {
-  # track.sh for seabbs-nowcastfm, as the workflow's chronos job runs it
+  # track.sh for seabbs-foundation, as the workflow's chronos job runs it
   # once its submit flag is on: the configured model, run with no fit,
   # checked against the random walk, with zones, under its own id.
   local src="$ROOT/main" status selected model
@@ -476,7 +476,7 @@ chronos_track() {
   echo "=== chronos ==="
   model=$(python3 -c 'import sys, tomllib
 models = tomllib.load(open(sys.argv[1], "rb"))["models"]
-print(next(k for k, v in models.items() if v["model_abbr"] == "nowcastfm"))' \
+print(next(k for k, v in models.items() if v["model_abbr"] == "foundation"))' \
     "$CI_DIR/../config/hub.toml")
   export WORK="$ROOT/chronos"
   rm -rf "$WORK" && mkdir -p "$WORK"
@@ -491,11 +491,11 @@ print(next(k for k, v in models.items() if v["model_abbr"] == "nowcastfm"))' \
   local gate="$WORK/track-$model/gate"
   [ "$status" = 0 ] || { echo "FAIL: chronos exited $status"; cat "$WORK/track.log"; return 1; }
   selected=$(python3 -c "import json;print(json.load(open('$gate/provenance.json'))['selected'])")
-  [[ "$selected" = nowcastfm_* ]] \
+  [[ "$selected" = foundation ]] \
     || { echo "FAIL: chronos selected $selected"; return 1; }
   grep -q "CD-IT-01" "$(find "$gate/selected/submission" -name '*.csv' | head -n 1)" \
     || { echo "FAIL: chronos file has no zones"; return 1; }
-  grep -q "bdbv-submission:seabbs-nowcastfm:" "$gate/pr-body.md" \
+  grep -q "bdbv-submission:seabbs-foundation:" "$gate/pr-body.md" \
     || { echo "FAIL: chronos id"; return 1; }
   if grep -q "^Fit:" "$gate/pr-body.md"; then
     echo "FAIL: chronos body names a fit"; return 1
@@ -503,7 +503,7 @@ print(next(k for k, v in models.items() if v["model_abbr"] == "nowcastfm"))' \
   if grep -v '^pr list' "$WORK/gh.log" 2> /dev/null; then
     echo "FAIL: chronos dry run wrote to GitHub"; return 1
   fi
-  echo "ok: seabbs-nowcastfm submits $model with zones, with no fit and no fallback"
+  echo "ok: seabbs-foundation submits $model with zones, with no fit and no fallback"
 }
 
 own_model() {

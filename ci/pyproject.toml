@@ -3,6 +3,8 @@ name = "submission-ci"
 version = "0.1.0"
 description = "Automated, gated submission of forecasts to the BDBV Modeling Hub"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
 # Standard library only, so the CI steps start in seconds and never
 # depend on the model's environment.
 dependencies = []

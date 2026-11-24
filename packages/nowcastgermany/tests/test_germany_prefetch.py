@@ -25,7 +25,7 @@ FIXTURE = (
     / "germany_covid19_hosp.csv.gz"
 )
 DATES = ["2021-10-04", "2021-10-05", "2021-10-06", "2021-10-09"]
-MODELS = ["fm_chronos_daily_ragged", "fm_chronos_weekly_ragged"]
+MODELS = ["foundation_zeroshot"]
 
 
 class _Pipeline:
@@ -73,9 +73,10 @@ def test_dates_share_chronos_passes(monkeypatch: pytest.MonkeyPatch) -> None:
         .reset_index(drop=True),
     )
     # Dates whose tasks share a schema share passes. Each date's lags
-    # come from its own reporting delay (#548), so the schemas, and so
-    # the passes, need not be the same for every date.
-    assert max(calls) <= pipe.calls < sum(calls)
+    # come from its own reporting delay (#548) and each daily block its
+    # own context, so the schemas, and so the passes, need not be shared:
+    # never more passes than the dates alone.
+    assert max(calls) <= pipe.calls <= sum(calls)
 
 
 def test_tasks_are_built_once_and_reused(

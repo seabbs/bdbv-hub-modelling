@@ -286,6 +286,26 @@ def test_our_forecasts_have_every_hub_zone_the_submission_has(
     assert got == want
 
 
+def test_the_daily_walk_reruns_over_zones_with_no_recent_cases(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    """Every hub zone is rerun (#996), including zones whose recent days
+    are all 0: the daily walk gives them a forecast (0) rather than
+    stopping the comparison (main Site, run 45393528009)."""
+    config = BacktestConfig(n_samples=20, seed=1)
+    fc = our_forecasts(
+        ["2026-10-31"], target, delays, config,
+        ["randomwalknowcast_daily"], daily, ZONE_DATA, min_horizon=-2,
+    )  # fmt: skip
+    from nowcastutils.hierarchy import province_of
+
+    provinces = set(fc.loc[fc["location"].str.count("-") == 1, "location"])
+    want = {z for z in ZONE_DATA.codes if province_of(z) in provinces}
+    zones = fc.loc[fc["location"].str.count("-") == 2]
+    assert set(zones["location"]) == want
+    assert (fc["value"] >= 0).all()
+
+
 def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
     stored = pd.DataFrame(
         {

@@ -24,3 +24,16 @@ It is for anyone who needs a simple, well-tested forecast of weekly counts revis
 ```sh
 uv add nowcastbaselines
 ```
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../../CITATION.cff).
+
+```bibtex
+@software{abbott_nowcastbaselines,
+  author = {Abbott, Sam},
+  title = {{nowcastbaselines: baseline nowcasts and forecasts: random walks on the log scale, a JAX port of baselinenowcast, introductions, and a copula pairing places}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastbaselines}
+}
+```

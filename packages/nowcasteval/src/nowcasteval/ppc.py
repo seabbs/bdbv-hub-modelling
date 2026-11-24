@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Posterior predictive checks: the `ppc.json` a fit writes, and its plot.
 
 `bdbvhub fit` writes `<fit dir>/ppc.json` beside

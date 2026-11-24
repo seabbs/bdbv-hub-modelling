@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The Hugging Face model card of a fine-tuned Chronos-2 checkpoint.
 
 `model_card` writes the card, `README.md` in a Hub repository, from the

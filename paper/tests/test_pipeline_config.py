@@ -168,18 +168,18 @@ def test_fine_tuned_rows_wait_for_a_checkpoint_of_the_final_run() -> None:
         {
             "model": [
                 "randomwalknowcast",
-                "fm_chronos_daily_ragged",
-                "fm_chronos_daily_ragged_ft",
-                "fm_chronos_weekly_ragged_ft_n1000",
-                "fm_chronos_daily_ragged_real",
+                "foundation_zeroshot",
+                "foundation",
+                "foundation_n1000",
+                "foundation_real",
             ]
         }
     )
     pending = keep_finetuned(fc, {"finetuned": None})
     assert list(pending["model"]) == [
         "randomwalknowcast",
-        "fm_chronos_daily_ragged",
-        "fm_chronos_daily_ragged_real",
+        "foundation_zeroshot",
+        "foundation_real",
     ]
     pinned = keep_finetuned(fc, {"finetuned": "abcdef123456"})
     assert len(pinned) == len(fc)
@@ -231,7 +231,7 @@ def test_the_daily_reference_is_the_german_configs_daily_baseline(
     from paperpipe.config import daily_baseline
 
     toml = tmp_path / "germany.toml"
-    toml.write_text('[scoring]\ndaily_baseline = "fm_chronos_daily_ragged"\n')
+    toml.write_text('[scoring]\ndaily_baseline = "foundation_zeroshot"\n')
     assert daily_baseline({"germany": {"config": str(toml)}}) == (
-        "fm_chronos_daily_ragged"
+        "foundation_zeroshot"
     )

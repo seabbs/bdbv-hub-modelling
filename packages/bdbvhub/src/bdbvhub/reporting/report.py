@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Build the docs figures and tables from the data and backtest results.
 
 `make_report` writes light and dark SVGs to `docs/figures/` and Markdown

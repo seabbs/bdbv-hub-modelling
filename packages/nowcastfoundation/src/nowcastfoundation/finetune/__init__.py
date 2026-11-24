@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Training blocks for fine-tuning Chronos-2 on simulated outbreaks.
 
 The simulator (nowcastfoundation.simulator) simulates the outbreaks'
