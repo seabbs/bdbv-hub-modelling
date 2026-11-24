@@ -146,6 +146,19 @@ def test_dry_run_note_and_no_relative_plot(tmp_path: Path) -> None:
     assert "nowcast.png" not in text
 
 
+def test_rt_plot_follows_the_nowcast_plot(tmp_path: Path) -> None:
+    url = "https://raw.githubusercontent.com/o/r/sha/rt.png"
+    shown = visible(body(gate(tmp_path), rt_plot_url=url))
+    assert shown[3].startswith("![Nowcast and forecast")
+    assert shown[4] == f"![Weekly R_t by week of infection for {REF}]({url})"
+
+
+def test_no_rt_plot_without_a_published_url(tmp_path: Path) -> None:
+    assert "R_t by week" not in body(gate(tmp_path))
+    text = body(gate(tmp_path), dry_run=True, rt_plot_url="rt.png")
+    assert "rt.png" not in text
+
+
 def test_cascade_model_named_with_why(tmp_path: Path) -> None:
     g = gate(tmp_path, produced_by="single-patch zone renewal models")
     prov = read_json(g / "provenance.json")
@@ -212,7 +225,8 @@ def test_cli(tmp_path: Path) -> None:
     g = gate(tmp_path)
     args = [
         "--gate", str(g), "--reference-date", REF, "--model-id", "m",
-        "--plot-url", "p.png", "--docs", "https://example.org/docs/",
+        "--plot-url", "p.png",
+        "--rt-plot-url", "https://example.org/rt.png", "--docs", "https://example.org/docs/",
         "--observed", str(HUB / "time-series.csv"),
         "--policy", str(POLICY_PATH), "--as-of", "2026-10-31",
         "--out", str(tmp_path / "o"),
@@ -225,6 +239,7 @@ def test_cli(tmp_path: Path) -> None:
     assert "| Hub validation | PASS |" in out
     assert f"https://example.org/docs/submission/rounds/{REF}/" in out
     assert "forecast / reported" in out
+    assert "(https://example.org/rt.png)" in out
 
 
 def test_data_coherence_status(tmp_path: Path) -> None:
