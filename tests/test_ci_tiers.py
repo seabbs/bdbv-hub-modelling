@@ -191,13 +191,13 @@ def test_the_full_tier_has_the_workflow_s_tools():
 
 def test_repo_checks_run_on_every_pull_request():
     # The import contract, the lint of what no package holds and the
-    # workflows' own lint, in one short job; lint.yml keeps only ci/.
+    # workflows' own lint, in one short job.
     job = _workflow("ci.yml")["jobs"]["repo"]
     assert "if" not in job
     runs = " ".join(s.get("run", "") for s in job["steps"])
     for check in ("lint-imports", "ruff check tests", "actionlint"):
         assert check in runs, check
-    assert set(_workflow("lint.yml")["jobs"]) == {"lint-ci"}
+    assert not (WORKFLOWS / "lint.yml").exists()
 
 
 def test_the_heavy_tiers_are_opt_in_in_their_own_workflow():
@@ -206,3 +206,23 @@ def test_the_heavy_tiers_are_opt_in_in_their_own_workflow():
     workflow = _workflow("heavy.yml")
     assert set(workflow["jobs"]) == {"full", "chronos", "r-live"}
     assert "push" not in _triggers(workflow)
+
+
+def test_the_submission_ci_has_its_own_ci_job():
+    # ci/, its own uv project: lint, types, tests with coverage and the
+    # dry run, when ci/ or the workflows it drives change.
+    assert not (WORKFLOWS / "submission-ci-tests.yml").exists()
+    job = _workflow("ci.yml")["jobs"]["submission"]
+    assert job["defaults"]["run"]["working-directory"] == "ci"
+    assert "submission" in job["if"]
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    for check in (
+        "ruff check",
+        "ruff format --check",
+        "mypy",
+        "pytest",
+        "run_dry.sh",
+    ):
+        assert check in runs, check
+    flags = [s["with"]["flags"] for s in job["steps"] if "codecov" in str(s)]
+    assert flags == ["ci"]
