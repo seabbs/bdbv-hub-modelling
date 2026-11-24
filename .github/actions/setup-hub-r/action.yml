@@ -1,7 +1,7 @@
 name: Set up R for hub validation
 description: >-
   Install R and hubValidations for the hub's own checks
-  (ci/steps/validate_hub.R). Packages come from a dated Posit snapshot,
+  (packages/bdbvsubmission/steps/validate_hub.R). Packages come from a dated Posit snapshot,
   so the R library cache key holds between runs. The .deb files apt
   fetches, for R and for the packages' system requirements, are cached
   on the runner image, so a warm job downloads nothing from the Ubuntu
