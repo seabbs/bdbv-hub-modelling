@@ -195,3 +195,24 @@ def test_the_page_carries_the_explorer_s_styles_and_data(tmp_path):
     assert len(data["models"]) == 2
     row = data["rows"][0] if "rows" in data else data["q"][0]
     assert len(row) == 4 + len(QUANTILE_COLUMNS)
+
+
+def test_the_explorer_shows_every_forecast_week_once():
+    # Recent weeks are not complete yet but were forecast: the explorer
+    # shows them, once per forecast, though they are scored against
+    # several later releases.
+    import pandas as pd
+
+    from bdbvhub.ftcheck import explorer_quantiles
+
+    q = _quantiles()
+    recent = q.iloc[:1].assign(target="reported", target_end_date="2026-11-15")
+    again = recent.assign(truth_vintage="2026-11-29")
+    both = pd.concat(
+        [q.assign(truth_vintage="2026-11-22"), recent, again],
+        ignore_index=True,
+    )
+    got = explorer_quantiles(both, {})
+    keys = ["model", "reference_date", "location", "target_end_date"]
+    assert not got.duplicated(keys).any()
+    assert "2026-11-15" in set(got["target_end_date"])
