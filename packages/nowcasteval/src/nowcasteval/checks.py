@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import pandas as pd
 
-from bdbvhub.reporting.site import site_baseline
 from nowcastbaselines.chain import Settings
 from nowcasteval.scoring import summarise_scores
 
@@ -150,7 +149,7 @@ def check_summary(
     scores: pd.DataFrame,
     types: pd.DataFrame,
     flagged: pd.DataFrame,
-    baseline: str | None = None,
+    baseline: str,
 ) -> pd.DataFrame:
     """Average the scores by scale, model and place type, and by flag.
 
@@ -174,7 +173,6 @@ def check_summary(
         Columns `scale`, `split` (`place type` or `flag`), `group`,
         `model`, `n`, the mean of each metric and `relative CRPS`.
     """
-    baseline = baseline or site_baseline()
     keyed = scores.merge(types, on=["origin", "location"], how="left").merge(
         flagged, on=["model", "origin", "location"], how="left"
     )

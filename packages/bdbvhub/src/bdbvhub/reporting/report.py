@@ -690,6 +690,7 @@ def _release_section(
             plot_relative_overall,
             reported,
             [n for n in names if n in set(reported["model"])],
+            site_baseline(),
             metrics={**OVERALL_METRICS, **ENERGY_METRICS},
         ),
         fig / "relative-overall.svg",

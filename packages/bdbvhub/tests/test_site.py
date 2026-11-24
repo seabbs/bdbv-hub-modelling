@@ -6,6 +6,7 @@ import inspect
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from bdbvhub.compare import load_comparison_config
 from bdbvhub.reporting import report
@@ -28,17 +29,23 @@ def test_a_site_config_sets_the_baseline(tmp_path: Path) -> None:
 
 
 def test_reporting_defaults_follow_the_site_baseline() -> None:
+    # The site's report defaults to the site's baseline; nowcasteval reads
+    # no site config, so its callers name the baseline.
     for fn in (
         report._summaries,
         report._scored_on,
         report._without_baseline,
         report._checks_chart,
+    ):
+        default = inspect.signature(fn).parameters["baseline"].default
+        assert default is None, fn.__qualname__
+    for fn in (
         scoresummary.summary_rows,
         nowcast_plots.plot_relative_overall,
         checks.check_summary,
     ):
         default = inspect.signature(fn).parameters["baseline"].default
-        assert default is None, fn.__qualname__
+        assert default is inspect.Parameter.empty, fn.__qualname__
     rel = pd.DataFrame({"model": ["randomwalk", "randomwalknowcast"]})
     assert list(report._without_baseline(rel)["model"]) == ["randomwalk"]
 
@@ -58,11 +65,13 @@ def test_scored_on_names_the_site_baseline() -> None:
     )
 
 
-def test_axis_labels_name_the_site_baseline() -> None:
-    assert plots._metric_label("relative_crps") == (
+def test_axis_labels_name_the_baseline() -> None:
+    assert plots._metric_label("relative_crps", site_baseline()) == (
         "CRPS relative to randomwalknowcast"
     )
-    assert plots._metric_label("crps") == "Mean CRPS"
+    assert plots._metric_label("crps", None) == "Mean CRPS"
+    with pytest.raises(ValueError, match="needs the baseline"):
+        plots._metric_label("relative_crps", None)
 
 
 def test_comparisons_zones_and_history_use_randomwalknowcast() -> None:

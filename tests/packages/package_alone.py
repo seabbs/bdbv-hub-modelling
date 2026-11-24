@@ -30,7 +30,6 @@ KNOWN: dict[str, set[str]] = {
         "nowcasteval.pairing_plots",
         "nowcasteval.plots",
         "nowcasteval.ppc",
-        "nowcasteval.scoresummary",
         "nowcasteval.scoring",
     },
     "nowcastgermany": {
@@ -45,6 +44,7 @@ KNOWN: dict[str, set[str]] = {
         "bdbvhub.cli",
         "bdbvhub.compare",
         "bdbvhub.ftcheck",
+        "bdbvhub.pairing",
         "bdbvhub.reporting.hubtables",
         "bdbvhub.reporting.report",
         "bdbvhub.reporting.store_note",
