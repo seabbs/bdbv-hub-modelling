@@ -760,6 +760,7 @@ distributions:
     b: 2.0
     lower: 0.4
     upper: 0.95
+    layer: reporting
     why: reporting stops in the second half of the series, rarely at its very end
   delay_jitter_sd:
     dist: lognormal
