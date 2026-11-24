@@ -589,6 +589,29 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument("--out", required=True)
     live.add_argument("--run", default=None, help="Defaults to LIVE_RUN.")
 
+    ftc = sub.add_parser(
+        "ft-check",
+        help="The BDBV foundation-model check (bdbvhub.ftcheck): forecast "
+        "every release with one model, or score the models and write the "
+        "page.",
+    )
+    ftc.add_argument("action", choices=["forecast", "report"])
+    ftc.add_argument("--data", default=data_dir)
+    ftc.add_argument("--model", help="forecast: the registered model.")
+    ftc.add_argument(
+        "--checkpoint",
+        default="",
+        help="The fine-tuned checkpoint (settings hash) the _ft model "
+        "loads; config/finetune.toml's if empty.",
+    )
+    ftc.add_argument(
+        "--out", required=True, help="forecast: the folder; report: the page."
+    )
+    ftc.add_argument("--reference", default="randomwalknowcast")
+    ftc.add_argument(
+        "parts", nargs="*", help="report: the models' forecast folders."
+    )
+
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
     rep.add_argument("--figures", default="docs/figures")
     rep.add_argument("--generated", default="docs/generated")
@@ -1975,6 +1998,35 @@ def _data_root() -> Path:
     return Path(os.environ.get("BDBV_DATA_DIR") or "data")
 
 
+def _ft_check(args: argparse.Namespace) -> int:
+    from bdbvhub import ftcheck
+    from nowcastfoundation.forecaster import finetuned_spec
+
+    if args.action == "forecast":
+        if not args.model:
+            print("ERROR: forecast needs --model.", file=sys.stderr)
+            return 1
+        ftcheck.forecast(args.model, args.data, args.out, args.checkpoint)
+        print(f"Forecasts of {args.model} written to {args.out}.")
+        return 0
+    tables = ftcheck.skill_tables(args.parts, args.data, args.reference)
+    root = Path(__file__).resolve().parents[4]
+    scripts = [
+        root / "docs" / "javascripts" / f
+        for f in ("toggles.js", "zoom.js", "explorer.js")
+        if (root / "docs" / "javascripts" / f).exists()
+    ]
+    out = ftcheck.write_report(
+        tables,
+        args.out,
+        args.reference,
+        args.checkpoint or finetuned_spec(),
+        scripts,
+    )
+    print(f"Wrote {out}.")
+    return 0
+
+
 def _live_checkpoint(args: argparse.Namespace) -> int:
     from nowcastfoundation.live_checkpoint import LIVE_RUN
     from nowcastfoundation.live_checkpoint_page import docs_page
@@ -2069,6 +2121,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _pairing_sensitivity(args, str(_data_root()))
     if args.command == "live-checkpoint":
         return _live_checkpoint(args)
+    if args.command == "ft-check":
+        return _ft_check(args)
     if args.command == "digest":
         from bdbvhub.store.digest import backtest_digest, model_digest
 

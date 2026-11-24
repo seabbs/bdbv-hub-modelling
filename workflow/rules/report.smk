@@ -372,3 +372,87 @@ rule hub_rounds:
         "cp {input} '{params.review}/hub-rounds.html.tmp' && "
         "mv '{params.review}/hub-rounds.html.tmp' "
         "'{params.review}/hub-rounds.html'; fi > {log} 2>&1"
+
+
+# The BDBV foundation-model check (bdbvhub.ftcheck): each model forecasts
+# every hub release into its own folder, keyed by the code it depends on
+# (scoring.ft_check_key), so the reference models are made once; the
+# fine-tuned model's folder is named by its checkpoint, so a new one
+# reruns only it. `ft_check` scores them together and copies the page to
+# REVIEW_DIR as bdbv-ft-check.html. Not part of `all`.
+
+FTC = config["ft_check"]
+FTC_DIR = f"{HUB}/ft-check"
+
+
+def ft_check_checkpoint():
+    """The fine-tuned checkpoint the check runs: the config's or the pin."""
+    import tomllib
+
+    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
+    return FTC["checkpoint"] or pin
+
+
+def ft_check_folders():
+    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
+        f"{FTC_DIR}/forecasts/ft-{ft_check_checkpoint()}"
+    ]
+
+
+rule ft_check_forecast:
+    input:
+        rules.hub_data.output,
+    output:
+        touch(f"{FTC_DIR}/forecasts/{{fmodel}}.done"),
+    log:
+        f"{FTC_DIR}/logs/{{fmodel}}.log",
+    benchmark:
+        f"{FTC_DIR}/benchmarks/{{fmodel}}.tsv"
+    conda:
+        TOOLS_ENV
+    threads: UNIT_THREADS
+    resources:
+        mem_mb=SC["mem_mb"],
+        gpu=FORECAST.gpu,
+    params:
+        env=unit_env,
+        code=lambda wc: scoring.ft_check_key(),
+        data=lambda wc, input: Path(input[0]).parent,
+        out=lambda wc: f"{FTC_DIR}/forecasts/{wc.fmodel}",
+        model=lambda wc: (
+            FTC["finetuned"] if wc.fmodel.startswith("ft-") else wc.fmodel
+        ),
+        checkpoint=lambda wc: wc.fmodel[3:] if wc.fmodel.startswith("ft-") else "",
+    shell:
+        "nice -n 19 env {params.env} BDBV_DATA_DIR={params.data} "
+        "uv run --group chronos bdbvhub ft-check forecast "
+        "--model {params.model} --checkpoint '{params.checkpoint}' "
+        "--data {params.data} --out {params.out} > {log} 2>&1"
+
+
+rule ft_check:
+    input:
+        lambda wc: [f + ".done" for f in ft_check_folders()],
+    output:
+        f"{FTC_DIR}/bdbv-ft-check.html",
+    log:
+        f"{FTC_DIR}/logs/report.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        data=lambda wc: f"{HUB}/data",
+        folders=lambda wc: " ".join(ft_check_folders()),
+        checkpoint=lambda wc: ft_check_checkpoint(),
+        reference=FTC["reference"],
+        review=LOCAL["REVIEW_DIR"],
+    shell:
+        "(BDBV_DATA_DIR={params.data} uv run bdbvhub ft-check report "
+        "--data {params.data} --reference {params.reference} "
+        "--checkpoint {params.checkpoint} --out {output} {params.folders} "
+        "&& if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
+        "rm -rf '{params.review}/bdbv-ft-check-data' && "
+        "cp -r $(dirname {output})/bdbv-ft-check-data '{params.review}/' && "
+        "cp {output} '{params.review}/bdbv-ft-check.html.tmp' && "
+        "mv '{params.review}/bdbv-ft-check.html.tmp' "
+        "'{params.review}/bdbv-ft-check.html'; fi) > {log} 2>&1"

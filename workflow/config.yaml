@@ -199,6 +199,18 @@ hub_rounds:
   # that round (`compare-hub --models`), beside what we submitted.
   models: [randomwalknowcast]
 
+ft_check:
+  # The BDBV foundation-model check (rules/report.smk, bdbvhub.ftcheck):
+  # every hub release forecast by each model, scored together with
+  # pairwise relative skill scaled to `reference`. `models` are made once
+  # per code change and reused; `finetuned` reruns alone for each
+  # checkpoint, `checkpoint` (a settings hash), or config/finetune.toml's
+  # when empty.
+  reference: randomwalknowcast
+  models: [randomwalknowcast, fm_chronos_daily_ragged]
+  finetuned: fm_chronos_daily_ragged_ft
+  checkpoint: ""
+
 dashboard:
   # The fine-tuning dashboard (task nowcast-foundation:dashboard; workflow/flowlib/dashboard).
   # It shows the workflow's runs (`runs` above), each in <ROOT>/runs/<run>,
