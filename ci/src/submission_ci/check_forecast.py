@@ -92,6 +92,9 @@ class Check:
     status: str
     summary: str
     details: list[str] = field(default_factory=list)
+    locations: list[str] = field(default_factory=list)
+    """The locations a failing check is tied to, when every failure is
+    tied to one; empty when any failure is about the whole file."""
 
 
 def _level(ratio: float, warn: float) -> str:
@@ -270,6 +273,7 @@ def check_values(s: Samples) -> Check:
     found: list[tuple[str, str]] = [
         ("fail", f"unparsable value at {u}") for u in s.unparsable
     ]
+    at: set[str] = set()
     for loc in s.locations:
         vals = [v for traj in s.values[loc].values() for v in traj.values()]
         nan = sum(math.isnan(v) for v in vals)
@@ -278,16 +282,22 @@ def check_values(s: Samples) -> Check:
         for n, what in ((nan, "NaN"), (inf, "infinite"), (neg, "negative")):
             if n:
                 found.append(("fail", f"{loc}: {n} {what} values"))
-    return _result("values", found, "all values finite and non-negative")
+                at.add(loc)
+    out = _result("values", found, "all values finite and non-negative")
+    if not s.unparsable:
+        out.locations = sorted(at)
+    return out
 
 
 def check_samples(s: Samples, n: int) -> Check:
     """Exactly `n` samples per location, each covering the same weeks."""
     found: list[tuple[str, str]] = []
+    at: set[str] = set()
     for loc in s.locations:
         trajs = s.values[loc]
         if len(trajs) != n:
             found.append(("fail", f"{loc}: {len(trajs)} samples, not {n}"))
+            at.add(loc)
         weeks = set(s.weeks(loc))
         short = [sid for sid, t in trajs.items() if set(t) != weeks]
         if short:
@@ -298,7 +308,10 @@ def check_samples(s: Samples, n: int) -> Check:
                     f"(e.g. sample {short[0]})",
                 )
             )
-    return _result("samples", found, f"{n} full trajectories per location")
+            at.add(loc)
+    out = _result("samples", found, f"{n} full trajectories per location")
+    out.locations = sorted(at)
+    return out
 
 
 def check_coverage(

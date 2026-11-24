@@ -128,9 +128,9 @@ def test_a_merged_file_failing_hub_validation_falls_through(
     def validate(sub: Path, log: Path) -> str:
         seen.append(sub)
         log.write_text("")
-        return "fail" if "merged" in str(sub) else "pass"
+        return "fail" if "merged" in sub.parts else "pass"
 
     prov = run_select(POLICY, root, out, validate)
     assert prov["selected"] == "renewalsp"
     assert not prov.get("locations_substituted")
-    assert any("merged" in str(p) for p in seen)
+    assert any("merged" in p.parts for p in seen)
