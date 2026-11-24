@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from bdbvhub.reporting import chain_plots
+from bdbvhub.reporting import chain_plots, data_plots
 from nowcasteval import plots
 
 WEEKS = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
@@ -108,7 +108,7 @@ def test_plot_downward_updates_has_three_scales() -> None:
     zones = target.loc[target["location"] == "CD-IT"].assign(
         location="CD-IT-01"
     )
-    fig = plots.plot_downward_updates(target, zones, mode="dark")
+    fig = data_plots.plot_downward_updates(target, zones, mode="dark")
     titles = [ax.get_title() for ax in fig.axes[:3]]
     assert titles == ["Country", "Provinces", "Health zones"]
     assert fig.legends[0].get_texts()[0].get_text() == (
@@ -119,14 +119,14 @@ def test_plot_downward_updates_has_three_scales() -> None:
 
 def test_plot_imputed_by_release_one_line_per_place() -> None:
     target = _target(["2026-10-24", "2026-10-31"]).assign(imputed=2)
-    fig = plots.plot_imputed_by_release(target)
+    fig = data_plots.plot_imputed_by_release(target)
     assert len(fig.axes[0].lines) == 1
     plt.close(fig)
 
 
 def test_plot_release_counts_one_line_per_recent_week() -> None:
     target = _target(["2026-10-24", "2026-10-31"])
-    fig = plots.plot_release_counts(target, locations=["CD"], weeks=3)
+    fig = data_plots.plot_release_counts(target, locations=["CD"], weeks=3)
     ax = fig.axes[0]
     assert len(ax.lines) == 3
     labels = [t.get_text() for t in ax.texts]
@@ -137,7 +137,9 @@ def test_plot_release_counts_one_line_per_recent_week() -> None:
 def test_plot_cutoff_days_labels_each_week_total(
     daily: pd.DataFrame,
 ) -> None:
-    fig = plots.plot_cutoff_days(daily, ["2026-11-08"], weeks=2, mode="dark")
+    fig = data_plots.plot_cutoff_days(
+        daily, ["2026-11-08"], weeks=2, mode="dark"
+    )
     ax = fig.axes[0]
     assert ax.get_title() == "Release 2026-11-08, cut-off 2026-11-05"
     labels = [t.get_text() for t in ax.texts]

@@ -249,8 +249,6 @@ ignore_imports = [
   "nowcasteval.backtest -> nowcastrenewal.bvd",
   "nowcasteval.backtest -> nowcastrenewal.forecaster",
   "nowcasteval.nowcast -> nowcastrenewal.forecaster",
-  "nowcasteval.plots -> nowcastbdbv.data.delays",
-  "nowcasteval.plots -> nowcastbdbv.data.tidy",
   "nowcastrenewal.zones -> nowcastbdbv.data.tidy",
 ]
 
@@ -265,6 +263,7 @@ files = ["packages/*/src"]
 module = [
   "nowcasteval.plots",
   "nowcasteval.nowcast_plots",
+  "bdbvhub.reporting.data_plots",
 ]
 disallow_untyped_calls = false
 

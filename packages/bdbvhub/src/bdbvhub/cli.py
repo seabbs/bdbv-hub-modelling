@@ -1536,7 +1536,7 @@ def _write_national_sidecar(
 
 
 def _plot_submission(args: argparse.Namespace) -> int:
-    from nowcasteval.plots import plot_submission
+    from bdbvhub.reporting.data_plots import plot_submission
 
     target = load_target(args.data)
     real = target.loc[target["kind"] == "real"]
