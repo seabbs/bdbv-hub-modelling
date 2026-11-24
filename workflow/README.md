@@ -128,6 +128,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
 - `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`).
 - `publish_germany_unit`: opt-in, attaches a released checkpoint's German unit (`<SCORE_CACHE>/germany-days/slots-<hash>`) to its release as `germany-forecasts.tar.gz` (`nowcastgermany unit-publish`), which the Pages build loads for the checkpoint `config/finetune.toml` pins.
+- `publish_hf`: opt-in and named by its output only (`<ck>/huggingface.json`), uploads a verified checkpoint to the Hugging Face Hub repository `[huggingface] repo` in `config/finetune.toml`: its adapter, settings, `sha256sums.txt` and model card (`publish-hf`, `nowcastfoundation.hubpublish`), as the revision tagged with its spec. The token is `HF_TOKEN` from the environment. With `huggingface.dry_run` in the config, or no repository, it only writes the folder `<ck>/huggingface/`.
 - `publish`: every checkpoint.
 
 ## 4. Score (`rules/score.smk`)

@@ -170,3 +170,25 @@ def ft_check_folders():
     return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
         f"{FTC_DIR}/forecasts/ft-{ft_check_checkpoint()}"
     ]
+
+
+# The Hugging Face Hub upload (rules/publish.smk `publish_hf`).
+def hf_repo():
+    """The Hub repository `publish_hf` uploads to, from config/finetune.toml
+    ([huggingface] repo); empty until one is chosen."""
+    import tomllib
+
+    conf = tomllib.loads(Path("config/finetune.toml").read_text())
+    return str(conf.get("huggingface", {}).get("repo", ""))
+
+
+def hf_args():
+    """`publish-hf`'s options: the repository, the scores, the dry run."""
+    hf = config["huggingface"]
+    repo = hf_repo()
+    args = [f"--repo {repo}"] if repo else []
+    if hf["scores"]:
+        args.append(f"--scores {hf['scores']}")
+    if hf["dry_run"] or not repo:
+        args.append("--dry-run")
+    return " ".join(args)

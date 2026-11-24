@@ -52,7 +52,8 @@ truth_until = "2026-10-01"
 
 # The Hugging Face Hub repository (`<owner>/<name>`) and the revision (a
 # tag or a commit hash) pinned for `source = "huggingface"`. Empty until
-# the repository is chosen.
+# the repository is chosen. `publish_hf` (rules/publish.smk) uploads to
+# `repo`.
 [huggingface]
 repo = ""
 revision = ""
