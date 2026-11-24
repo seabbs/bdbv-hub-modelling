@@ -112,7 +112,7 @@ def _run(**ft):
         "prefixes": [100, 200],
         "series_bias": False,
         "bias_lr": 0.001,
-        "layout": "ragged",
+        "layout": "cutoff",
         "real_training": None,
     }
     return runs.Run("r", base | ft, "/x/r")
@@ -151,7 +151,7 @@ def test_the_no_delays_run_is_run_a_on_complete_counts():
     cfg = runs.load_config()
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
     a, b = found["runa"].ft, found["nodelays"].ft
-    assert (a["layout"], b["layout"]) == ("ragged", "complete")
+    assert (a["layout"], b["layout"]) == ("cutoff", "complete")
     assert {k: v for k, v in a.items() if k != "layout"} == {
         k: v for k, v in b.items() if k != "layout"
     }
