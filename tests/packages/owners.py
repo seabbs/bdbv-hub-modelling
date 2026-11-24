@@ -2,10 +2,11 @@
 
 A package owns its own `packages/<name>/tests`. A test file still under
 the root `tests/` belongs to the highest package (in the import-linter
-layers of pyproject.toml) it imports, so each file runs in one package's
-CI job: the job of the package whose change it checks last. Root files
-that import no workspace package (the workflow, the paper, the repo
-checks) belong to none and run in the integration job.
+layers of pyproject.toml) it imports whose tests have not moved yet, so
+each file runs in one package's CI job: the job of the package whose
+change it checks last. Root files with no such package (the workflow,
+the paper, the repo checks, and tests of how moved packages work
+together) belong to none and run in the integration job.
 
 `legs` gives the packages a change touches: those whose files changed
 and every package that imports one of them (declared dependencies and
@@ -66,8 +67,13 @@ def owners() -> dict[str, str | None]:
             (ROOT / "packages" / name).glob("tests/**/test_*.py")
         ):
             out[path.relative_to(ROOT).as_posix()] = name
+    # Packages whose tests have moved own no root test: what is left
+    # imports them to check how packages work together (integration).
+    unmoved = {
+        n for n in order if not (ROOT / "packages" / n / "tests").is_dir()
+    }
     for path in sorted(TESTS.rglob("test_*.py")):
-        found = imported(path, set(order))
+        found = imported(path, unmoved)
         top = max(found, key=rank.__getitem__) if found else None
         out[path.relative_to(ROOT).as_posix()] = top
     return out

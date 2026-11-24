@@ -8,7 +8,7 @@ from pathlib import Path
 from nowcasteval.backtest import load_config
 from nowcastutils.dates import epiweek_end
 
-ROOT = Path(__file__).parents[2]
+ROOT = Path(__file__).parents[3]
 
 
 def _cut() -> dict:

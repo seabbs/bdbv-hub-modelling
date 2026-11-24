@@ -110,7 +110,7 @@ def test_a_package_with_its_own_tests_has_none_left_under_tests() -> None:
     from owners import owners
 
     moved = {p.parent.name for p in ROOT.glob("packages/*/tests")}
-    assert "nowcastutils" in moved
+    assert {"nowcastutils", "nowcasteval"} <= moved
     left = [
         f
         for f, owner in owners().items()

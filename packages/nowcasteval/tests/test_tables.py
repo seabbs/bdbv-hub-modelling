@@ -56,7 +56,7 @@ def test_sortable_table_is_a_wrapped_markdown_table() -> None:
 
 
 def test_the_site_loads_the_sort_script_before_its_users() -> None:
-    config = (Path(__file__).parents[2] / "mkdocs.yml").read_text()
+    config = (Path(__file__).parents[3] / "mkdocs.yml").read_text()
     scripts = [
         line.strip().removeprefix("- ")
         for line in config.splitlines()

@@ -12,7 +12,7 @@ from nowcasteval.nowcast import relative_crps, relative_energy
 from nowcasteval.scoresummary import summary_html, summary_rows
 from nowcasteval.scoring import relative_skill
 
-SUMMARISE = Path(__file__).parents[2] / "docs" / "javascripts" / "summarise.js"
+SUMMARISE = Path(__file__).parents[3] / "docs" / "javascripts" / "summarise.js"
 MODELS = ["randomwalk", "a", "b"]
 COLOURS = dict.fromkeys(MODELS, ("#000000", "#ffffff", ""))
 
