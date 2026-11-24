@@ -87,7 +87,11 @@ def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
     assert legs(["workflow/tests/test_workflow_dag.py"]) == []
     assert legs(["uv.lock"]) == layers()
     assert legs(["packages/bdbvhub/tests/test_zones.py"]) == ["bdbvhub"]
-    seen = legs(["packages/nowcastbaselines/src/nowcastbaselines/chain.py"])
+    seen = legs(
+        [
+            "packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/nowcast.py"
+        ]
+    )
     assert {"nowcastbaselines", "nowcastrenewal", "bdbvhub"} <= set(seen)
     assert "nowcastutils" not in seen
 

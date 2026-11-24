@@ -184,7 +184,7 @@ def silent_zones(task: ForecastTask) -> set[str]:
     set of str
         Zone codes.
     """
-    from nowcastbaselines.chain import Settings
+    from nowcastbaselines.baselinenowcast.delays import Settings
     from nowcastbaselines.introductions import silent_places
     from nowcastutils.dates import epiweek_end
     from nowcastutils.hierarchy import is_zone, province_of

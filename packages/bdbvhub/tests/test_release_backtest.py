@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from bdbvhub.models import get_model
-from nowcastbaselines.chain import delay_summary
+from nowcastbaselines.baselinenowcast.nowcast import delay_summary
 from nowcastbaselines.randomwalk import RandomWalkNowcast
 from nowcastbdbv.backtest import make_tasks
 from nowcasteval.backtest import BacktestConfig, check_distinct, run_forecasts

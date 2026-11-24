@@ -43,17 +43,18 @@ PyRenew has no delay that varies with time, no Dirichlet-multinomial count and n
 
 ## Baseline models
 
-The baselines are in [`nowcastbaselines.randomwalk`](../../nowcastbaselines/reference/#nowcastbaselines.randomwalk) and [`nowcastbaselines.chain`](../../nowcastbaselines/reference/#nowcastbaselines.chain), on a JAX port of baselinenowcast 0.2.2 in [`nowcastbaselines.baselinenowcast`](../../nowcastbaselines/reference/#nowcastbaselines.baselinenowcast).
-The port is checked live against the R package, and has one named extension, the chain ladder of release snapshots, which skips unobserved cells and fits one daily delay shared by pairs of any gap.
-The models use the port's chain ladder on snapshots.
-The observation model is in `nowcastbaselines.obs`, and fits and draws its new reports with the port's `fit_by_horizon`, `fit_nb` and `sample_nb`.
+The baselines are in [`nowcastbaselines.randomwalk`](../../nowcastbaselines/reference/#nowcastbaselines.randomwalk) on a JAX port of baselinenowcast 0.2.2 in [`nowcastbaselines.baselinenowcast`](../../nowcastbaselines/reference/#nowcastbaselines.baselinenowcast).
+The port is checked live against the R package.
+Its chain ladder also takes its factors from pairs of consecutive release snapshots, skipping the cells a release does not observe, and fits one daily delay shared by pairs of any gap.
+On daily releases this is the R package's chain ladder.
+The models use it in `baselinenowcast.nowcast`, with the delay in `baselinenowcast.delays` and the observation model in `baselinenowcast.uncertainty`, which fits and draws new reports with the port's `fit_by_horizon`, `fit_nb` and `sample_nb`.
 
 | Part | Where |
 |---|---|
 | Snapshots as arrays `[location, release, day]` | `nowcastutils.snapshots` |
-| Pair sums, the daily delay fit and growth | `baselinenowcast.snapshots`, pair sums `jit` with locations on the leading axis |
+| Pair sums, the daily delay fit and growth | `baselinenowcast.delays`, pair sums `jit` with locations on the leading axis |
 | Own or pooled source of each estimate | `nowcastbaselines.pooling` |
-| New reports on the count to come | `nowcastbaselines.obs` |
+| New reports on the count to come | `baselinenowcast.uncertainty` |
 | One random walk for both models | `nowcastbaselines.walk` |
 | Introductions into places with no recent case | `nowcastbaselines.introductions` |
 | Zone samples that sum to the province samples | `nowcastbaselines.zones` |
