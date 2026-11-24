@@ -241,6 +241,6 @@ def test_the_status_names_a_checkpoint_s_evaluation():
     assert fs.checkpoint_stage(100) == "evaluating checkpoint n100"
     source = inspect.getsource(fs.main)
     named = source.index("report(stage=checkpoint_stage(done))")
-    assert named < source.index(
-        "parts = held_out_parts(model, val", named - 2000
-    )
+    # Just before the checkpoint's held-out evaluation.
+    gap = source.index("parts = held_out_parts(model, val", named) - named
+    assert gap < 400
