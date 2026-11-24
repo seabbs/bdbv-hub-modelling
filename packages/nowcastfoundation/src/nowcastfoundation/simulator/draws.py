@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 import yaml
@@ -338,6 +338,62 @@ def _sample(rng: np.random.Generator, x: Sequence[int], k: int) -> list[int]:
     return [int(x[i]) for i in rng.choice(len(x), k, replace=False)]
 
 
+WEEKDAY_PARTS: Final = (
+    "weekend_dip",
+    "first_day_catch_up",
+    "friday_surge",
+    "quiet_day",
+    "weekdays_high",
+)
+"""The parts a structured weekday pattern draws from (`weekday_pattern`)."""
+
+
+def weekday_pattern(grid: Grid, rng: np.random.Generator) -> np.ndarray:
+    """Return a structured log weekday profile, Monday to Sunday, unit sd.
+
+    Each of the grid's `weekday_patterns` parts is in with
+    `weekday_pattern_part` (at least one), each with its own size from
+    `weekday_pattern_size`: a weekend dip (Saturday, Sunday or both low),
+    a catch-up on the first day after the low days (Monday without a
+    dip), a Friday surge, one quiet day, or Monday to Friday above the
+    weekend. The sum is centred and scaled to unit sd.
+
+    Raises
+    ------
+    ValueError
+        If the grid names a part not in `WEEKDAY_PARTS`.
+    """
+    names = list(grid["weekday_patterns"])
+    unknown = set(names) - set(WEEKDAY_PARTS)
+    if unknown:
+        raise ValueError(f"unknown weekday pattern parts {sorted(unknown)}")
+    share = float(grid["shares"]["weekday_pattern_part"])
+    chosen: list[str] = []
+    while not chosen:
+        chosen = [n for n in names if rng.random() < share]
+    p = np.zeros(7)
+    low: list[int] = []
+    for name in names:
+        if name not in chosen:
+            continue
+        size = float(draw_setting(grid, "weekday_pattern_size", rng))
+        if name == "weekend_dip":
+            low = [[5], [6], [5, 6]][int(rng.integers(3))]
+            p[low] -= size
+        elif name == "first_day_catch_up":
+            p[(max(low) + 1) % 7 if low else 0] += size
+        elif name == "friday_surge":
+            p[4] += size
+        elif name == "quiet_day":
+            p[int(rng.integers(7))] -= size
+        else:
+            p[:5] += size / 2
+            p[5:] -= size / 2
+    if p.std() == 0:
+        p = rng.standard_normal(7)
+    return (p - p.mean()) / p.std()
+
+
 def draw_values(
     grid: Grid, design: Mapping[str, Any], rng: np.random.Generator
 ) -> dict[str, Any]:
@@ -567,13 +623,10 @@ def draw_values(
         grid, rep, n_s, "revise_move", rng, probability=True
     )
     v["revise_keep"] = stratum_values(grid, rep, n_s, "revise_keep", rng)
-    # Weekday effects shaped by the grid's templates in a share of sims,
-    # else free (drawn last, so the draws above are unchanged).
-    if sh("weekday_template"):
-        noise = float(grid["weekday_noise"])
-        for kind, t in grid["weekday_templates"].items():
-            t = np.asarray(t, dtype=float)
-            t = (t - t.mean()) / t.std()
-            v[f"{kind}_dow_profile"] = vec(t)
-        v["weekday_noise"] = noise
+    # Weekday effects with a structured pattern in a share of sims, else
+    # free (drawn last, so the draws above are unchanged).
+    if sh("weekday_pattern"):
+        for kind in ("reference", "report"):
+            v[f"{kind}_dow_profile"] = vec(weekday_pattern(grid, rng))
+        v["weekday_noise"] = float(grid["weekday_noise"])
     return v

@@ -558,11 +558,11 @@ class ReportEffects(RandomVariable):
         return report, reference
 
     def _shaped(self, z: Any, kind: str) -> Any:
-        """Return the weekday draws `z`, or a template plus their noise.
+        """Return the weekday draws `z`, or a pattern plus their noise.
 
-        A sim with a `<kind>_dow_profile` (Monday to Sunday, unit sd) takes
-        it plus `weekday_noise` times `z`: a weekend dip and Monday
-        catch-up rather than a free profile.
+        A sim with a `<kind>_dow_profile` (Monday to Sunday, unit sd;
+        `simulator.draws.weekday_pattern`) takes it plus `weekday_noise`
+        times `z`, a structured pattern rather than a free profile.
         """
         profile = self.values.get(f"{kind}_dow_profile")
         if profile is None:
