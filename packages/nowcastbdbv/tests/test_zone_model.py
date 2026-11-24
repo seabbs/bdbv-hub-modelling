@@ -301,12 +301,12 @@ def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
         table,
         imputation_delay=hub_delay_pmf(vintage),
     )
-    alone = dataclasses.replace(MAIN, national=True)
+    centred = dataclasses.replace(MAIN, national=True, centred_rt=True)
     _, params = _params(build_zone_model(zone_vintage), zone_vintage)
     for name in ("rt_sd", "rt_dev_sd", "rt_zone_dev_sd"):
         assert f"{name}_half_life" in params, name
     # One province has no deviations, so its trend is its only Rt walk.
-    for config in (MAIN, alone):
+    for config in (MAIN, centred):
         _, params = _params(build_model(province, config), province)
         assert "rt_sd_half_life" in params
 

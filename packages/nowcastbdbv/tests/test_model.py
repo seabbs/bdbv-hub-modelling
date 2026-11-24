@@ -317,6 +317,18 @@ def test_unseeded_provinces_sample_no_seed_or_deviation(latest_vintage):
     )
 
 
+def test_centred_rt_samples_the_baseline_levels(latest_vintage):
+    plain = trace(build_model(latest_vintage), latest_vintage)
+    assert "log_rt_baseline_z" in plain and "log_rt_baseline_x" not in plain
+    model = build_model(latest_vintage, ModelConfig(centred_rt=True))
+    tr = trace(model, latest_vintage)
+    assert "log_rt_baseline_x" in tr and "log_rt_baseline_z" not in tr
+    assert (
+        tr["log_rt_baseline_x"]["value"].size
+        == plain["log_rt_baseline_z"]["value"].size
+    )
+
+
 def _prior_draws(model, data, n=4):
     """Prior draws of every site, as `mcmc.get_samples` holds them."""
     return Predictive(model.sample, num_samples=n)(

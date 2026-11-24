@@ -4,6 +4,7 @@ import datetime as dt
 import json
 from dataclasses import fields, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -76,16 +77,34 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 
 def test_every_renewal_shares_one_rt_process() -> None:
-    # Sam (lead 2026-11-24 12:08): one Rt process for every variant, so
-    # they differ only in what they ablate. No centred switch, no
-    # case-count rule, and one step-SD prior.
+    # Sam (lead 2026-11-24 12:08, 12:22): one step-SD prior for every
+    # variant and one centring rule, so they differ only in what they
+    # ablate.
     assert not hasattr(rn, "CENTRED_RT_MIN_CASES")
-    assert not hasattr(rn, "fit_config")
     for v in rn.VARIANTS.values():
         config = rn.model_config(v)
-        assert not hasattr(config, "centred_rt")
         assert config.rt_sd_lognormal == (0.12, 0.5)
-        assert "rt_sd_lognormal" not in v.overrides
+        assert not config.centred_rt
+        assert {"rt_sd_lognormal", "centred_rt"}.isdisjoint(v.overrides)
+
+
+@pytest.mark.parametrize("name", ["renewal", "renewalsp", "renewalbvd"])
+def test_a_walk_is_centred_where_counts_pin_its_weekly_changes(
+    name: str,
+) -> None:
+    # Count noise on a weekly log change, 1/sqrt(weekly cases), against
+    # the prior median step SD, 0.12: centred from 1/0.12^2 = 69.4 cases
+    # a week over the fitted weeks, in every variant.
+    def data(weekly: float) -> SimpleNamespace:
+        known = np.full((10, 3), weekly / 3)
+        return SimpleNamespace(known=known, imputed=np.zeros((10, 3)))
+
+    variant = rn.VARIANTS[name]
+    assert rn.centred_min_weekly_cases(rn.model_config(variant)) == (
+        pytest.approx(1 / 0.12**2)
+    )
+    assert rn.fit_config(variant, data(70.0)).centred_rt
+    assert not rn.fit_config(variant, data(69.0)).centred_rt
 
 
 @pytest.mark.parametrize("name", ["renewal", "renewalbvd"])
@@ -123,6 +142,9 @@ def test_the_variants_are_ablations_of_renewalbvd() -> None:
     assert full.depletion
     assert dropped("renewal") == {"bvd"}
     assert dropped("renewalsp") == {"bvd", "national"}
+    assert rn.model_config(rn.VARIANTS["renewalsp"]).rt_sd_lognormal == (
+        full.rt_sd_lognormal
+    )
     assert rn.VARIANTS["renewalsp"].per_province
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
@@ -773,11 +795,9 @@ def test_provinces_in_parallel_match_one_after_another(
 
 
 @pytest.mark.parametrize("name", ["renewal", "renewalsp", "renewalbvd"])
-def test_every_renewal_samples_the_same_non_centred_walk(
+def test_every_renewal_has_the_same_step_sd_prior(
     task: ForecastTask, name: str
 ) -> None:
-    # The step SD has LogNormal(log 0.12, 0.5), off 0, and the walk is
-    # sampled by its standardised steps in every variant.
     import numpyro
 
     from nowcastrenewal.model import model_args
@@ -786,7 +806,7 @@ def test_every_renewal_samples_the_same_non_centred_walk(
     variant = rn.VARIANTS[name]
     one = replace(task, locations=task.locations[:1], mask=())
     data = rn.vintage_inputs(one, rn.model_config(variant))
-    model = build_model(data, rn.model_config(variant))
+    model = build_model(data, rn.fit_config(variant, data))
     tr = numpyro.handlers.trace(
         numpyro.handlers.seed(model.sample, rng_seed=0)
     ).get_trace(**model_args(model, data))
@@ -794,4 +814,3 @@ def test_every_renewal_samples_the_same_non_centred_walk(
     assert type(fn).__name__ == "LogNormal"
     assert float(fn.loc) == pytest.approx(np.log(0.12))
     assert float(fn.scale) == pytest.approx(0.5)
-    assert "log_rt_baseline_x" not in tr
