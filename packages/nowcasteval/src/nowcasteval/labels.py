@@ -118,7 +118,7 @@ on light and dark backgrounds. Every pair of distinct colours differs by
 a CIEDE2000 of 5 or more under normal vision and the three
 colour-blindness simulations, and the main models' colours have a
 contrast of 3 or more on light and dark backgrounds
-(tests/evaluation/test_labels.py)."""
+(the package's tests/test_labels.py)."""
 
 WIS_PART_STACK: Final = ("underprediction", "dispersion", "overprediction")
 """Order of WIS parts in a stacked bar, from the bottom (or left) up."""

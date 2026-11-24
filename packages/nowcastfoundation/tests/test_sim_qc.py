@@ -7,8 +7,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-ROOT = Path(__file__).parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+ROOT = Path(__file__).parents[3]
 from sim_rounds import sim_dir  # noqa: E402
 
 # The grid sets no sim QC thresholds: the round's QC records each

@@ -197,7 +197,7 @@ def _bvd_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     data = tmp_path / "data"
     shutil.copytree(ROOT / "tests" / "fixtures" / "data", data)
-    fixtures = ROOT / "tests" / "data" / "bvd"
+    fixtures = ROOT / "tests" / "fixtures" / "bvd"
     releases = bvd.parse_releases(
         json.loads((fixtures / "releases.json").read_text())
     )
