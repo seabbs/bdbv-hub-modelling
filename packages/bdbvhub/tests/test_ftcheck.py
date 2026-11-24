@@ -73,3 +73,71 @@ def test_release_quantiles_take_the_explorer_s_columns():
     assert got["model"].iloc[0] == "Random walk nowcast"
     assert got["reference_date"].iloc[0] == "2026-11-15"
     assert bool(got["ours"].iloc[0])
+
+
+def _quantiles():
+    import pandas as pd
+
+    rows = []
+    for model, med in (("a", 10.0), ("b", 20.0)):
+        for loc in ("CD", "CD-IT"):
+            for wb in (-1, 0):
+                for k, week in enumerate(("2026-11-01", "2026-11-08")):
+                    rows.append(
+                        {
+                            "model": model,
+                            "target": "complete",
+                            "origin": "2026-11-15",
+                            "location": loc,
+                            "target_end_date": week,
+                            "weeks_back": wb,
+                            "q5": med / 2,
+                            "q25": med * 0.8,
+                            "q50": med + k,
+                            "q75": med * 1.2,
+                            "q95": med * 2,
+                            "reported": 5.0,
+                            "truth": 10.0 + 2 * k,
+                        }
+                    )
+    return pd.DataFrame(rows)
+
+
+def test_calibration_gives_median_over_truth_and_reported_and_coverage():
+    from bdbvhub.ftcheck import calibration
+
+    got = calibration(_quantiles()).set_index(["model", "level", "weeks_back"])
+    a = got.loc[("a", "national", 0)]
+    # Medians 10 and 11 against truth 10 and 12, reported 5 each week.
+    assert a["median_over_truth"] == pytest.approx(21 / 22)
+    assert a["median_over_reported"] == pytest.approx(21 / 10)
+    assert a["coverage_90"] == 1.0
+    b = got.loc[("b", "province", -1)]
+    # The 90% interval, 10 to 40, covers truth 10 and 12.
+    assert b["coverage_90"] == 1.0
+    assert b["median_over_truth"] == pytest.approx(41 / 22)
+    assert set(got.index.get_level_values("level")) == {"national", "province"}
+
+
+def test_roughness_compares_week_to_week_changes_with_the_truth_s():
+    import numpy as np
+
+    from bdbvhub.ftcheck import roughness
+
+    got = roughness(_quantiles()).set_index(["model", "level"])
+    # log1p(11) - log1p(10) for the medians, log1p(12) - log1p(10) for truth.
+    med = np.log1p(11) - np.log1p(10)
+    truth = np.log1p(12) - np.log1p(10)
+    assert got.loc[("a", "national"), "median"] == pytest.approx(med)
+    assert got.loc[("a", "national"), "truth"] == pytest.approx(truth)
+
+
+def test_weeks_with_nothing_reported_have_no_ratio_to_it():
+    import numpy as np
+
+    from bdbvhub.ftcheck import calibration
+
+    q = _quantiles().assign(reported=0.0)
+    got = calibration(q)
+    assert got["median_over_reported"].isna().all()
+    assert np.isfinite(got["median_over_truth"]).all()
