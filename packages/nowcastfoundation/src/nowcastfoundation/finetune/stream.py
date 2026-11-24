@@ -1729,9 +1729,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
-    # Cut the held-out blocks and the first chunk, save them under the
-    # keys training looks up, and stop: a fresh run's cuts on the CPU
-    # before it takes the GPU (lead 13:00), so the GPU never waits.
+    # Cut the held-out blocks and the next chunk (a fresh run's first, a
+    # resumed run's after the one it trains), save them under the keys
+    # training looks up, and stop: cuts on the CPU before the trainer
+    # (re)starts on the GPU (lead 13:00, 15:08), so the GPU never waits.
     parser.add_argument("--cut-only", action="store_true")
     # The series bias (nowcastfoundation.series_bias): learned
     # group attention bias for same-place and parent-child pairs.
@@ -1876,7 +1877,21 @@ def check_cadence(eval_every: int, by_source_every: int) -> None:
         )
 
 
-def cut_first_chunk(
+def cut_after(state_dir: Path) -> list[str]:
+    """Return the outbreaks a run will have trained at its chunk's end.
+
+    Its saved state's trained outbreaks and the chunk it is training
+    (`chunk`); none for a fresh run.
+    """
+    path = state_dir / "state.json"
+    if not path.is_file():
+        return []
+    state = json.loads(path.read_text())
+    done = int(state.get("done", 0))
+    return [*state.get("trained", [])[:done], *state.get("chunk", [])]
+
+
+def cut_next_chunk(
     out: Path,
     sim_dir: Path,
     seeds: Sequence[int],
@@ -1885,16 +1900,24 @@ def cut_first_chunk(
     key_of: Callable[[Sequence[str]], dict[str, Any]],
     report: Callable[..., None],
 ) -> None:
-    """Cut a fresh run's first chunk and save it under its key.
+    """Cut the chunk a run trains next and save it under its key.
 
-    Waits for its simulations, as training does; the trainer then loads
-    the saved blocks (`load_chunk`) instead of cutting them.
+    A fresh run's first chunk, or a resumed run's chunk after the one it
+    is training (`cut_after`), so a restart at that chunk's end loads the
+    saved blocks (`load_chunk`). Waits for its simulations, as training
+    does.
     """
-    size = min(CHUNK, args.outbreaks)
-    report(stage=f"cut only: waiting for outbreaks 1-{size}")
-    while (ids := next_chunk(sim_dir, seeds, [], size)) is None:
+    after = cut_after(out / "state")
+    size = min(CHUNK, args.outbreaks - len(after))
+    if size <= 0:
+        log("cut only: no chunk left to cut")
+        report(stage="cut only: done")
+        return
+    span = f"{len(after) + 1}-{len(after) + size}"
+    report(stage=f"cut only: waiting for outbreaks {span}")
+    while (ids := next_chunk(sim_dir, seeds, after, size)) is None:
         time.sleep(POLL)
-    report(stage=f"cut only: cutting outbreaks 1-{size}")
+    report(stage=f"cut only: cutting outbreaks {span}")
     pairs, empty = _join(
         submit_cut(
             pool,
@@ -1906,7 +1929,7 @@ def cut_first_chunk(
         )
     )
     save_chunk(out, key_of(ids), pairs, empty)
-    log(f"cut only: held-out blocks and outbreaks 1-{size} saved")
+    log(f"cut only: held-out blocks and outbreaks {span} saved")
     report(stage="cut only: done")
 
 
@@ -1943,10 +1966,6 @@ def main(root: Path | None = None) -> None:
     global DRAWS_PER_PASS, SUBSET_SEED
     DRAWS_PER_PASS, SUBSET_SEED = args.draws_per_simulation, args.subset_seed
     out, sim_dir = args.out, args.sim_dir
-    if args.cut_only and (out / "state" / "state.json").exists():
-        parser.error(
-            "--cut-only cuts a fresh run's first chunk; this run has a state"
-        )
     # Read once at start: the worktree may move on while training.
     commit = code_commit()
     out.mkdir(parents=True, exist_ok=True)
@@ -2062,7 +2081,7 @@ def main(root: Path | None = None) -> None:
 
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
     if args.cut_only:
-        cut_first_chunk(
+        cut_next_chunk(
             out, sim_dir, training_seeds(), args, pool, chunk_key, report
         )
         return
