@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import tempfile
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -69,7 +70,9 @@ def key_file(folder: Path | str, name: str, key: str) -> str:
         return str(path)
     folder.mkdir(parents=True, exist_ok=True)
     first = not any(folder.glob(f"{name}-*.key"))
-    tmp = folder / f".{path.name}.{os.getpid()}"
+    fd, name_ = tempfile.mkstemp(dir=folder, prefix=f".{path.name}.")
+    os.close(fd)
+    tmp = Path(name_)
     tmp.write_text(f"{key}\n")
     if first:
         os.utime(tmp, (0, 0))
