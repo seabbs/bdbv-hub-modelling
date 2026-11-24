@@ -109,6 +109,7 @@ factor_layers:
   report_days: reporting
   shocks: reporting
   revisions: reporting
+  delay_jitter: delays
 # Structured weekday patterns: with `weekday_pattern`, a sim's reference
 # and report weekday effects each take a pattern drawn from these parts
 # (each in with `weekday_pattern_part`, at least one; which days and the
@@ -254,6 +255,12 @@ factors:
     shared: 1
     pooled: 1
     independent: 1
+  # Week-to-week jitter of every delay parameter (location and scale, or
+  # a non-parametric delay's level and shape), on top of the other delay
+  # settings, with no trend, in a third of sims.
+  delay_jitter:
+    'no': 2
+    'yes': 1
 distributions:
   quiet:
     dist: beta
@@ -649,12 +656,13 @@ distributions:
     why: lognormal delays with medians of about half a day to 10 days
   delay_sdlog:
     dist: lognormal
-    median: 1.5
+    median: 1.1
     sdlog: 0.25
     layer: delays
-    why: from moderate to heavy tails (0.9 to 2.4); with a short median, a
-      fast head and a long tail, as Germany's 22-26% on day 0 and 99%
-      delay of 61-81 days
+    why: from moderate to heavy tails (0.7 to 1.7); with a short median, a
+      fast head and a long tail, the per-sim 99th centile delay over all
+      families at a median of about 35 days (16% of sims at 90 days or
+      more, 17% within 14 days)
   delay_shape:
     dist: lognormal
     median: 0.5
@@ -727,6 +735,12 @@ distributions:
     sdlog: 0.4
     layer: reporting
     why: each part of a structured weekday pattern, relative to the others (the pattern is scaled to unit sd)
+  delay_jitter_sd:
+    dist: lognormal
+    median: 0.1
+    sdlog: 0.5
+    layer: delays
+    why: week-to-week jitter of the delay's parameters of about 4% to 23% (5-95%) on their log scale
   delay_dow_sd:
     dist: lognormal
     median: 0.1
