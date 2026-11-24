@@ -1338,3 +1338,22 @@ def test_a_new_machine_fetches_the_german_triangle_before_scoring(tmp_path):
     jobs = dry(tmp_path, "score", config=config)
     assert jobs["germany_triangle"] == 1
     assert jobs["score_germany"] >= 1
+
+
+def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
+    # Lead 10:55 (#969): publish_hf is opt-in and uploads only with a
+    # repository in config/finetune.toml and dry_run off; the repository
+    # is empty until Sam picks it, so it writes the folder only.
+    where = tmp_path / "runs" / "runa" / "train" / "interim" / "s48100"
+    (where / "finetuned-ckpt").mkdir(parents=True)
+    (where / "settings.json").write_text("{}")
+    (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
+    out = dry_run(tmp_path, f"{where}/huggingface.json", config=FT, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "rule publish_hf:" in out.stdout
+    assert "rule verify_checkpoint:" in out.stdout
+    (command,) = [
+        line for line in out.stdout.splitlines() if "publish-hf" in line
+    ]
+    assert "--dry-run" in command
+    assert "--repo" not in command
