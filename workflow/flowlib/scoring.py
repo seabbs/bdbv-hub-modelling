@@ -8,6 +8,7 @@ what `score.smk`, `evaluate.smk` and the report rules ask of the units;
 
 from __future__ import annotations
 
+import os
 import shlex
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
@@ -51,12 +52,34 @@ def reference_code(label: str, root: Path | str = ".") -> list[str]:
     return out
 
 
+def key_file(path: Path | str, key: str) -> str:
+    """Write `key` to `path` unless it holds it already; return the path.
+
+    Every profile reruns a job on file times only (`rerun-triggers:
+    mtime`), so a code key reaches a rule as an input file, rewritten only
+    when the key moves: a checkout reruns nothing, a code change reruns
+    the rule. A first key is dated from the epoch, so outputs made before
+    it existed stay current. Written while the DAG is built.
+    """
+    path = Path(path)
+    want = f"{key}\n"
+    if path.is_file() and path.read_text() == want:
+        return str(path)
+    new = not path.is_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(want)
+    if new:
+        # A key seen for the first time dates from the epoch, so outputs
+        # made before this file existed are not taken as stale.
+        os.utime(path, (0, 0))
+    return str(path)
+
+
 def reference_key(label: str, root: Path | str = ".") -> str:
     """Return a digest of `reference_code`'s contents ("" for a checkpoint).
 
-    A rule parameter: Snakemake reruns the unit when it changes (not on
-    file times, so a checkout reruns nothing), and the unit redoes only
-    the rows of the models whose own key moved.
+    The reference unit reads it as a file (`Scoring.reference_key_input`),
+    and redoes only the rows of the models whose own key moved.
     """
     import hashlib
 
@@ -85,8 +108,8 @@ checkpoint pinned there reruns only the fine-tuned model."""
 def ft_check_key(root: Path | str = ".") -> str:
     """Return a digest of `FT_CHECK_CODE` and the active-zone rule.
 
-    A rule parameter of the check's forecasts: Snakemake reruns them when
-    it changes, not on file times.
+    The check's forecasts read it as a file (`key_file`), so they rerun
+    when it changes, not on a checkout.
     """
     import hashlib
     import tomllib
@@ -216,6 +239,16 @@ class Scoring:
         """Return the German units of the run's saved checkpoints."""
         unit = f"{self.run_scores_dir(run)}/{GERMANY_UNIT}"
         return [f"{unit}/n{n}.done" for n in self.saved_prefixes(run)]
+
+    def reference_key_input(self, label: str) -> list[str]:
+        """Return the reference unit's code-key file (`key_file`).
+
+        None for a checkpoint, whose own files are its inputs.
+        """
+        key = reference_key(label)
+        if not key:
+            return []
+        return [key_file(f"{self.cache}/keys/{label}.key", key)]
 
     def references(self) -> list[str]:
         """Return the reference labels' German units, shared by every run."""

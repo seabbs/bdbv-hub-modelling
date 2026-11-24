@@ -39,11 +39,10 @@ TARGETS = (
     "land",
     "finetune",
     "publish",
-    "dashboard",
 )
 """The targets a tick may run, each with workflow/profiles/default."""
 
-POOL = ("simulate", "push", "finetune", "score", "dashboard")
+POOL = ("simulate", "push", "finetune", "score")
 """Targets that share one Snakemake run and the machine's budget."""
 
 NEEDS_POOL = {"land", "release"}

@@ -210,7 +210,7 @@ The workflow updates itself as results come in. Each machine runs its own target
 | the machine that trains (GPU) | `finetune publish` | trains the next segment once its batches are there, and releases each new checkpoint |
 | a simulating machine | `simulate release` | simulates the configured rounds and releases each batch |
 
-A tick (`task nowcast-workflow:tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`, `dashboard`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
+A tick (`task nowcast-workflow:tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
 When jobs compete, the trainer goes first (priority 20), then simulation (15), then checkpoint scoring (10 and below).
 Before it, the lists the pool plans from (the checkpoint releases, and on a machine without the rounds the batches it can have) are refreshed in a run of their own.
 A failed refresh leaves the last lists, and the pool still runs.

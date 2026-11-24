@@ -124,6 +124,8 @@ def test_a_key_file_changes_only_when_its_key_does(tmp_path):
     path = tmp_path / "keys" / "reference.key"
     assert scoring.key_file(path, "abc") == str(path)
     assert path.read_text() == "abc\n"
+    # A first key is older than any output made before it existed.
+    assert path.stat().st_mtime == 0
     os.utime(path, (1, 1))
     scoring.key_file(path, "abc")
     assert path.stat().st_mtime == 1
