@@ -30,7 +30,6 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from bdbvhub.reporting.site import site_baseline
 from nowcastbdbv.data.delays import delay_summary
 from nowcastbdbv.data.tidy import (
     cutoff_window,
@@ -1985,6 +1984,7 @@ def plot_scores(
     models: Sequence[str] | None = None,
     mode: str = "light",
     colours: Mapping[str, tuple[str, str, str]] | None = None,
+    baseline: str | None = None,
 ) -> Figure:
     """Plot mean scores by horizon or location, one panel per vintage kind.
 
@@ -2004,6 +2004,10 @@ def plot_scores(
     colours : mapping of str to (str, str, str), optional
         Model to its light colour, dark colour and dash. Defaults to
         `model_style`.
+
+    baseline : str, optional
+        The model relative metrics are relative to, named in the axis
+        label; needed for a `relative_` metric.
 
     Returns
     -------
@@ -2061,7 +2065,7 @@ def plot_scores(
             f"{kind}: {s[['vintage']].nunique().iloc[0]} vintages, n {len(s)}"
         )
         ax.set_xlabel(by.capitalize())
-    axes[0].set_ylabel(_metric_label(metric))
+    axes[0].set_ylabel(_metric_label(metric, baseline))
     axes[0].legend()
     return fig
 
@@ -2071,6 +2075,7 @@ def plot_scores_by_truth(
     metric: str = "crps",
     models: Sequence[str] | None = None,
     mode: str = "light",
+    baseline: str | None = None,
 ) -> Figure:
     """Plot how each forecast's mean score moves as the truth is revised.
 
@@ -2084,6 +2089,10 @@ def plot_scores_by_truth(
         Models in registry order, one panel each.
     mode : str
         `"light"` or `"dark"`.
+
+    baseline : str, optional
+        The model relative metrics are relative to, named in the axis
+        label; needed for a `relative_` metric.
 
     Returns
     -------
@@ -2113,7 +2122,7 @@ def plot_scores_by_truth(
         ax.set_title(m)
         ax.set_xlabel("Truth vintage")
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    axes[0].set_ylabel(_metric_label(metric))
+    axes[0].set_ylabel(_metric_label(metric, baseline))
     axes[0].legend(fontsize=7)
     return fig
 
@@ -2127,9 +2136,12 @@ _METRIC_LABELS: Final[dict[str, str]] = {
 }
 
 
-def _metric_label(metric: str) -> str:
-    """Return a metric's axis label; relative ones name the site baseline."""
-    base = site_baseline()
+def _metric_label(metric: str, baseline: str | None) -> str:
+    """Return a metric's axis label; relative ones name the baseline."""
+    if metric.startswith("relative_") and baseline is None:
+        msg = f"{metric} needs the baseline it is relative to"
+        raise ValueError(msg)
+    base = baseline
     return {
         **_METRIC_LABELS,
         "relative_crps": f"CRPS relative to {base}",

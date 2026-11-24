@@ -18,7 +18,6 @@ from collections.abc import Callable, Mapping, Sequence
 
 import pandas as pd
 
-from bdbvhub.reporting.site import site_baseline
 from nowcastutils.base import NATIONAL
 
 __all__ = [
@@ -105,7 +104,7 @@ def summary_rows(
     models: Sequence[str],
     colours: Mapping[str, tuple[str, str, str]],
     names: Mapping[str, str],
-    baseline: str | None = None,
+    baseline: str,
     metrics: Sequence[tuple[str, str, float | None, bool]] = SUMMARY_METRICS,
     default_on: Sequence[str] | None = None,
     energy: pd.DataFrame | None = None,
@@ -148,7 +147,6 @@ def summary_rows(
         label) and `rows` of model, origin, release and pool indices, then
         each energy score.
     """
-    baseline = baseline or site_baseline()
     shown = [m for m in models if m in set(scores["model"])]
     s = scores.loc[scores["model"].isin(shown)]
     origins = sorted(set(s["origin"].astype(str)))

@@ -143,7 +143,9 @@ def test_check_summary_averages_by_place_type_and_flag() -> None:
             "flag": ["collapse", "blow-up"],
         }
     )
-    got = check_summary(scores, types, flagged).set_index(["split", "group"])
+    got = check_summary(
+        scores, types, flagged, baseline="randomwalknowcast"
+    ).set_index(["split", "group"])
     assert got.loc[("place type", "larger"), "CRPS"] == 3.0
     assert got.loc[("place type", "larger"), "n"] == 2
     assert got.loc[("flag", "blow-up"), "90% coverage"] == 0.0
