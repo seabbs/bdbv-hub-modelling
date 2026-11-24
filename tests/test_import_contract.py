@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -42,15 +43,41 @@ def test_the_packages_keep_the_contract() -> None:
     assert "No matches for ignored import" not in run.stdout + run.stderr
 
 
-def test_ci_installs_and_imports_every_package_alone() -> None:
+def test_ci_checks_each_package_in_its_own_job() -> None:
+    # One CI job per package: installed alone with every module imported,
+    # ruff, format, mypy and the tests it owns (tests/packages/owners.py).
     import yaml
 
-    workflow = yaml.safe_load(
-        (ROOT / ".github" / "workflows" / "packages.yml").read_text()
-    )
-    matrix = workflow["jobs"]["alone"]["strategy"]["matrix"]["package"]
+    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    from owners import layers
+
     packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
-    assert set(matrix) == packages
+    assert set(layers()) == packages
+    workflows = ROOT / ".github" / "workflows"
+    job = yaml.safe_load((workflows / "ci.yml").read_text())["jobs"]["package"]
+    runs = " ".join(s.get("run", "") for s in job["steps"])
+    for check in (
+        "package_alone.py",
+        "ruff check",
+        "ruff format --check",
+        "mypy",
+        "owners.py",
+        "pytest",
+    ):
+        assert check in runs, check
+    assert not (workflows / "packages.yml").exists()
+
+
+def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
+    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    from owners import layers, legs
+
+    assert legs(["docs/index.md"]) == []
+    assert legs(["uv.lock"]) == layers()
+    assert legs(["tests/baselinenowcast/test_delay.py"]) == ["nowcastbaselines"]
+    seen = legs(["packages/nowcastbaselines/src/nowcastbaselines/chain.py"])
+    assert {"nowcastbaselines", "nowcastrenewal", "bdbvhub"} <= set(seen)
+    assert "nowcastutils" not in seen
 
 
 STUDIES = ("nowcastgermany",)
