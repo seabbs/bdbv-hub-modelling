@@ -30,6 +30,31 @@ LOCAL = localconfig.read()
 # The German triangle at config/germany.toml's commit (`germany_triangle`),
 # which the German scoring units and the real-data blocks read.
 GERMANY_TRIANGLE = f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv"
+# The BDBV foundation-model check's folder (rules/report.smk).
+FTC_DIR = f"{LOCAL['ROOT']}/hub/ft-check"
+
+
+def ft_check_page(ckpt):
+    """The BDBV check page of one fine-tuned checkpoint."""
+    return f"{FTC_DIR}/{ckpt}/bdbv-ft-check-{ckpt}.html"
+
+
+def ft_check_released(wc=None):
+    """The BDBV check page of every released checkpoint of the trained
+    runs: each segment or interim checkpoint with a published.json."""
+    import glob
+
+    pages = []
+    for run in TRAINING.trained_runs():
+        for path in sorted(
+            glob.glob(f"{TRAINING.dir}/{run}/train/**/published.json", recursive=True)
+        ):
+            tag = json.loads(Path(path).read_text()).get("hash")
+            if tag:
+                pages.append(ft_check_page(f"slots-{tag}"))
+    return pages
+
+
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"

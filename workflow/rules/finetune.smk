@@ -225,6 +225,8 @@ rule finetune:
         # Its own scoring (lead 10:15, Sam): each checkpoint's German unit
         # and the references, on the forecasting device.
         finetune_scores,
+        # And each released checkpoint's BDBV check page (lead 10:50).
+        ft_check_released,
 
 
 rule dashboard:
