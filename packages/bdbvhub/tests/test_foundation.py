@@ -1030,9 +1030,8 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
 def test_slots_checkpoints_have_their_own_releases(
     releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
 ) -> None:
-    # A checkpoint with per-series slots is released as chronos-slots-<hash>,
-    # so code without slots, taking the latest chronos-ft-* release, never
-    # loads it; it is pinned as "slots-<hash>".
+    # A checkpoint with per-series slots is released as chronos-slots-<hash>
+    # and named "slots-<hash>".
     assert foundation.release_tag("abc") == "chronos-ft-abc"
     assert foundation.release_tag("slots-abc") == "chronos-slots-abc"
     write_release(releases, "abc", _ADAPTER, "abc")
@@ -1043,7 +1042,9 @@ def test_slots_checkpoints_have_their_own_releases(
         ("chronos-slots-abc", "2026-11-20T00:00:00Z", False),
     )
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
-    assert foundation.resolve_checkpoint("latest") == _checkpoint("old")
+    # The newest released checkpoint, slots releases included (Sam,
+    # 12:36): the submission is never a hand pin that goes stale.
+    assert foundation.resolve_checkpoint("latest") == _checkpoint("slots-abc")
     pinned = foundation.resolve_checkpoint("slots-abc")
     assert pinned == _checkpoint("slots-abc")
     adapter = foundation.finetuned_adapter(pinned)
@@ -1278,17 +1279,14 @@ def test_a_fine_tuned_complete_model_builds_the_complete_block(
     assert (model.layout, model.period) == (zero.layout, zero.period)
 
 
-def test_the_hub_models_load_the_interim_hub_checkpoint(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The `_ft` models submitted to the hub load the interim checkpoint
-    s48100 of Run A (Sam, 2026-11-24), pinned by its settings hash, not
-    the newest release."""
-    monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
+def test_the_hub_model_loads_the_latest_released_checkpoint() -> None:
+    """`foundation` loads the newest released checkpoint by config, not a
+    hand pin that goes stale (Sam, 2026-11-24 12:36)."""
+    import tomllib
+
     root = Path(__file__).resolve().parents[3]
-    spec = foundation.finetuned_spec(root / "config" / "finetune.toml")
-    assert spec == "slots-72661eb7efaa"
-    assert foundation.release_tag(spec) == "chronos-slots-72661eb7efaa"
+    conf = tomllib.loads((root / "config" / "finetune.toml").read_text())
+    assert (conf["source"], conf["hash"]) == ("github", "latest")
 
 
 def _own_last(seen: list):
