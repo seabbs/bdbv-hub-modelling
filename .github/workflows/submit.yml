@@ -375,9 +375,11 @@ jobs:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
           path: output/hub-clone
+          # src/: the custom checks hub-config/validations.yml sources.
           sparse-checkout: |
             hub-config
             model-metadata
+            src
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         if: vars.HUB_VALIDATIONS != 'false'
         with:
@@ -531,9 +533,11 @@ jobs:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
           path: output/hub-clone
+          # src/: the custom checks hub-config/validations.yml sources.
           sparse-checkout: |
             hub-config
             model-metadata
+            src
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         if: vars.HUB_VALIDATIONS != 'false'
         with:
@@ -646,9 +650,11 @@ jobs:
           repository: ${{ env.HUB }}
           ref: ${{ env.HUB_REF }}
           path: output/hub-clone
+          # src/: the custom checks hub-config/validations.yml sources.
           sparse-checkout: |
             hub-config
             model-metadata
+            src
       - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         if: vars.HUB_VALIDATIONS != 'false'
         with:
