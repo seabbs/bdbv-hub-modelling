@@ -68,7 +68,7 @@ A dict of triangles, one per place with the same rows and delays, is forecast as
 --8 < --"chronos_ft.py"
 ```
 
-The test suite runs this example with a stand-in for Chronos-2 (`tests/test_chronos_ft.py`).
+The test suite runs this example with a stand-in for Chronos-2 (`packages/nowcastfoundation/tests/test_chronos_ft.py`).
 
 ## Limits
 

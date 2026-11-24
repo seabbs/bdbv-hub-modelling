@@ -1,7 +1,6 @@
 """Evaluation offloaded from the trainer (`finetune.stream --eval offload`)."""
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -11,7 +10,6 @@ torch = pytest.importorskip("torch")
 pytest.importorskip("chronos")
 pytest.importorskip("peft")
 
-sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
 from chronos_toy import tiny_model, toy_block  # noqa: E402
 
 from nowcastfoundation import series_bias  # noqa: E402
@@ -172,7 +170,7 @@ def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
 
     spec = importlib.util.spec_from_file_location(
         "evaluate_offloaded",
-        Path(__file__).parents[1] / "workflow/scripts/evaluate_offloaded.py",
+        Path(__file__).parents[3] / "workflow/scripts/evaluate_offloaded.py",
     )
     runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runner)

@@ -6,7 +6,7 @@ import pandas as pd
 
 from nowcastfoundation import finetune, forecaster
 
-ROOT = Path(__file__).parents[2]
+ROOT = Path(__file__).parents[3]
 
 
 def _counts(days: int = 60) -> pd.DataFrame:

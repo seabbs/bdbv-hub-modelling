@@ -1,15 +1,12 @@
 """Leading context patches with no observation are cut from a batch."""
 
 import inspect
-import sys
-from pathlib import Path
 
 import pytest
 
 torch = pytest.importorskip("torch")
 pytest.importorskip("chronos")
 
-sys.path.insert(0, str(Path(__file__).parent / "forecasters"))
 from chronos_toy import batch_of, tiny_model, toy_block  # noqa: E402
 from test_series_bias import toy_rows  # noqa: E402
 

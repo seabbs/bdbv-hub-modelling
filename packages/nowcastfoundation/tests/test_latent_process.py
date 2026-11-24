@@ -15,6 +15,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from model.r_live import ROOT
 from numpyro import handlers
 
 from nowcastfoundation.simulator import batch as sb
@@ -32,8 +33,6 @@ from nowcastrenewal.latent.simulate import (
     simulate_latent_batch,
 )
 from nowcastrenewal.latent.start import InitializeStrata
-
-from .r_live import ROOT
 
 
 def gt_pmf(mean: float, family: str, cv: float) -> np.ndarray:
