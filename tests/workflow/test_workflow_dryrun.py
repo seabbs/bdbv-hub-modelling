@@ -83,13 +83,11 @@ def _sim_commands(out):
     ]
 
 
-def test_batches_run_by_count_under_the_shared_prefix_not_a_cap(tmp_path):
+def test_batches_run_by_count_not_a_cap(tmp_path):
     # SIM_SLOTS alone sets how many batches run at once: a batch claims
-    # no memory and has no cap of its own, only the machine's SIM_PREFIX
-    # (such as one systemd slice all batches share).
+    # no memory and runs under no prefix.
     (tmp_path / "local.env").write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
-        "JOB_PREFIX='percap {mem}'\nSIM_PREFIX='inslice'\n"
     )
     out = dry_run(tmp_path, "simulate", config={"rounds": [4]}, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
@@ -101,16 +99,6 @@ def test_batches_run_by_count_under_the_shared_prefix_not_a_cap(tmp_path):
     assert len(claims) == 40
     assert all("sim_slots=1" in c for c in claims)
     assert not any(re.search(r"mem_mb=[1-9]", c) for c in claims)
-    shared = re.compile(r"eigen=false\s+inslice\s+workflow/scripts/timed\.sh")
-    assert all(shared.search(x) for x in lines)
-    assert not any("percap" in x for x in lines)
-
-
-def test_with_no_sim_prefix_a_batch_runs_bare(tmp_path):
-    out = dry_run(tmp_path, "simulate", config={"rounds": [4]}, quiet=False)
-    assert out.returncode == 0, out.stderr + out.stdout
-    lines = _sim_commands(out)
-    assert lines
     bare = re.compile(r"eigen=false\s+workflow/scripts/timed\.sh")
     assert all(bare.search(x) for x in lines)
 
@@ -643,14 +631,13 @@ def test_score_runs_each_unit_for_a_checkpoint_and_the_reference(tmp_path):
     assert "land" not in jobs
 
 
-def test_units_wait_below_the_load_ceiling(tmp_path):
-    blocks = score_jobs(
-        tmp_path, {"score": {"labels": ["aaa"]}}, "MAX_LOAD=12\n"
-    )
+def test_units_start_by_their_resources_alone(tmp_path):
+    blocks = score_jobs(tmp_path, {"score": {"labels": ["aaa"]}})
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert units
     for block in units:
-        assert f"wait_for_room.sh 20 16 {tmp_path}/scores 12 " in block
+        for gone in ("wait_for_room", "nice -n"):
+            assert gone not in block, gone
 
 
 def test_units_run_the_shared_checkpoint_evaluation(tmp_path):
