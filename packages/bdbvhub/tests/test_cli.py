@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -765,22 +765,27 @@ def test_cli_fit_store_archives_what_each_model_submits(
     assert set(pd.read_csv(out)["model"]) == {"flat"}
 
 
-def _stored_fit(store: Path, weeks: list[str]) -> None:
+def _stored_fit(
+    store: Path, weeks: list[str], locations: Sequence[str] = ("CD",)
+) -> None:
     from bdbvhub.store import store as st
 
-    rows = pd.DataFrame(
-        {
-            "model": "renewal",
-            "kind": "real",
-            "vintage": "2026-10-17",
-            "reference_date": "2026-10-24",
-            "location": "CD",
-            "target_end_date": weeks,
-            "sample": 1,
-            "value": 5.0,
-            "as_of": None,
-            "horizon": range(len(weeks)),
-        }
+    rows = pd.concat(
+        pd.DataFrame(
+            {
+                "model": "renewal",
+                "kind": "real",
+                "vintage": "2026-10-17",
+                "reference_date": "2026-10-24",
+                "location": loc,
+                "target_end_date": weeks,
+                "sample": 1,
+                "value": 5.0,
+                "as_of": None,
+                "horizon": range(len(weeks)),
+            }
+        )
+        for loc in locations
     )
     meta = {"model": "renewal", "origin": "2026-10-17", "key": "k1"}
     st.write_fit(
@@ -848,6 +853,35 @@ def test_stored_samples_take_every_week_of_the_stored_fit(
     args.store = str(tmp_path / "missing")
     stored, _ = _stored(args, load_target(DATA), trimmed)
     assert sorted(stored["target_end_date"].astype(str)) == weeks[2:]
+
+
+def test_stored_samples_leave_out_the_stored_fits_zones(
+    tmp_path: Path,
+) -> None:
+    # A stored fit holds its zones too, as many rows as every province
+    # over. The release backtest scores the provinces and the nation only,
+    # so the zones are left out as the fits are read.
+    import argparse
+    import json
+
+    from bdbvhub.cli import _stored
+    from nowcastbdbv.data.tidy import load_target
+
+    store = tmp_path / "store"
+    _stored_fit(store, ["2026-10-03"], ["CD", "CD-BC", "CD-BC-01"])
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / "fit-store.json").write_text(
+        json.dumps([{"model": "renewal", "origin": "2026-10-17", "used": "k1"}])
+    )
+    args = argparse.Namespace(
+        data=str(DATA), results=str(results), store=str(store)
+    )
+    cols = ["model", "kind", "vintage", "location", "target_end_date"]
+    empty = pd.DataFrame(columns=[*cols, "sample", "value", "as_of"])
+    stored, _ = _stored(args, load_target(DATA), empty)
+    ours = stored.loc[stored["model"] == "renewal"]
+    assert sorted(ours["location"]) == ["CD", "CD-BC"]
 
 
 def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
