@@ -49,10 +49,10 @@ SCENARIOS=(
   "ppcwarn|bvd=ppcwarn|bvd||Posterior predictive checks | WARN"
   "ppcfail|bvd=ppcfail|bvd||Posterior predictive checks"
   "noppc|bvd=noppc|bvd||Posterior predictive checks"
-  # A wildly high forecast is ruled out by the plausibility check, and
-  # the chain moves on.
-  "implausible|bvd=implausible|renewalsp||was ruled out (plausible: "
-  "wild|bvd=implausible,renewalsp=implausible|main||Model: zone renewal model"
+  # A wildly high forecast only warns: plausibility never rules a
+  # candidate out, and its numbers go in the PR body.
+  "implausible|bvd=implausible|bvd||plausible"
+  "wild|bvd=implausible,renewalsp=implausible|bvd"
   # wk R_t quantiles the hub would reject rule the candidate out too.
   "badrt|bvd=badrt|renewalsp||was ruled out (rt: "
   "latestream|bvd=latestream|bvd"
