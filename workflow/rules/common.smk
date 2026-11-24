@@ -27,7 +27,8 @@ from nowcastfoundation.sidecar import HELD_OUT_BLOCKS, SIDECAR
 
 localconfig.check()
 LOCAL = localconfig.read()
-# The German triangle at packages/nowcastgermany/config/germany.toml's commit (`germany_triangle`),
+# The German triangle at packages/nowcastgermany/config/germany.toml's commit
+# (`germany_triangle`),
 # which the German scoring units and the real-data blocks read.
 GERMANY_TRIANGLE = f"{LOCAL['ROOT']}/germany/COVID-19_hospitalizations.csv"
 # The BDBV foundation-model check's folder (rules/report.smk).
@@ -160,7 +161,9 @@ def hf_repo():
     ([huggingface] repo); empty until one is chosen."""
     import tomllib
 
-    conf = tomllib.loads(Path("packages/nowcastfoundation/config/finetune.toml").read_text())
+    conf = tomllib.loads(
+        Path("packages/nowcastfoundation/config/finetune.toml").read_text()
+    )
     return str(conf.get("huggingface", {}).get("repo", ""))
 
 

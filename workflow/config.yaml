@@ -122,12 +122,14 @@ finetune:
   layout: ragged
   # The release layer's file (null: none): late release starts and the
   # release cadences, drawn per block at fine-tune time from the
-  # simulations already made (packages/nowcastfoundation/config/finetune/release-layer.yaml, a
+  # simulations already made
+  # (packages/nowcastfoundation/config/finetune/release-layer.yaml, a
   # proposal). Unset adds nothing to the settings hash.
   release_layer: null
   # Real-data blocks mixed into the training stream, spread over its
   # chunks (null: none). `germany`: the German triangle's reports before
-  # the first scored German date (packages/nowcastgermany/config/germany.toml), so no scored
+  # the first scored German date (packages/nowcastgermany/config/germany.toml),
+  # so no scored
   # target is trained on (rule real_training_blocks). Unset adds nothing
   # to the settings hash.
   real_training: null
@@ -204,7 +206,8 @@ ft_check:
   # every hub release forecast by each model, scored together with
   # pairwise relative skill scaled to `reference`. `models` are made once
   # per code change and reused; `finetuned` reruns alone for each
-  # checkpoint, `checkpoint`, or packages/nowcastfoundation/config/finetune.toml's when empty. A
+  # checkpoint, `checkpoint`, or
+  # packages/nowcastfoundation/config/finetune.toml's when empty. A
   # checkpoint is its release's settings hash as `slots-<hash>` (the
   # release chronos-slots-<hash>), for example slots-08f3982239a3.
   reference: randomwalknowcast
@@ -213,7 +216,8 @@ ft_check:
   checkpoint: ""
 
 dashboard:
-  # The fine-tuning dashboard (task workflow:dashboard; workflow/flowlib/dashboard).
+  # The fine-tuning dashboard (task workflow:dashboard;
+  # workflow/flowlib/dashboard).
   # serve: true serves it with a run whose targets include finetune
   # (flowlib.dashboard.serve), on DASHBOARD_HOST:DASHBOARD_PORT, for as
   # long as the coordinator (or that Snakemake run) lives.
@@ -282,7 +286,8 @@ dashboard:
       truth: >-
         black, each day's value as reported 40 days after it (the truth
         scored); over time, the latest release
-      # Germany is daily only (packages/nowcastgermany/config/germany.toml): its models take the
+      # Germany is daily only (packages/nowcastgermany/config/germany.toml): its
+      # models take the
       # daily releases and forecast the hub's 7-day rolling sums.
       sources: [daily]
       # The horizon control. days: every model is drawn and scored over
@@ -322,7 +327,8 @@ rt_check:
 
 huggingface:
   # `publish_hf` (rules/publish.smk): the Hub repository is
-  # [huggingface] repo in packages/nowcastfoundation/config/finetune.toml. `dry_run` writes the
+  # [huggingface] repo in packages/nowcastfoundation/config/finetune.toml.
+  # `dry_run` writes the
   # repository folder without uploading; it is also a dry run while the
   # repository is empty. `scores` is a CSV of the checkpoint's scores
   # relative to reference models for the model card
