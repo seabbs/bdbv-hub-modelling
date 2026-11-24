@@ -126,7 +126,8 @@ def test_the_coupling_is_chosen_from_the_model_s_earlier_forecasts(
         )
 
     monkeypatch.setattr(foundation, "choose_coupling", spy)
-    model = get_model("foundation_zeroshot")
+    # Two lags, so the earlier releases' forecasts have steps final now.
+    model = dataclasses.replace(get_model("foundation_zeroshot"), lags=2)
     model.forecast(task)
     # The task's block and the same block at earlier releases.
     assert pipe.groups > 1
@@ -212,7 +213,8 @@ def test_earlier_blocks_are_scored_on_what_is_final_now(
     monkeypatch: pytest.MonkeyPatch, task: ForecastTask
 ):
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Pipeline())
-    model = get_model("foundation_zeroshot")
+    # Two lags, so the earlier releases' forecasts have steps final now.
+    model = dataclasses.replace(get_model("foundation_zeroshot"), lags=2)
     calls = []
     past_blocks = foundation.FoundationModel._past_blocks
 

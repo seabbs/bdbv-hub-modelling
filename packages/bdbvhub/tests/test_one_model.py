@@ -208,13 +208,13 @@ def test_weekly_forecasts_are_read_from_the_total_rows(
     group = store[-1]
     n_places = len(group["places"])
     assert np.atleast_2d(group["target"]).shape[0] == 2 * n_places
-    # Weeks whose Saturday is past the context come from the totals,
+    # Weeks whose Saturday is past the cut-off come from the totals,
     # which are summed from the same daily releases.
     tri = foundation.hub_triangle(
         task.daily_history, "daily", group["places"], task.target_end_dates[-1]
     )
     future = [
-        w for w in task.target_end_dates if tri.times.index(w) >= tri.n_context
+        w for w in task.target_end_dates if tri.times.index(w) > tri.last
     ]
     assert future
     for i, place in enumerate(group["places"]):
@@ -254,7 +254,7 @@ def test_one_forecast_gives_daily_draws_from_the_count_rows_too(
     tri = foundation.hub_triangle(
         task.daily_history, "daily", group["places"], task.target_end_dates[-1]
     )
-    future = set(tri.times[tri.n_context :])
+    future = set(tri.times[tri.last + 1 :])
     late = daily.loc[daily["date"].isin(future)]
     assert not late.empty
     # The count rows drew 1, the total rows 1000 and up: daily values come
@@ -339,7 +339,7 @@ def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
     ft: FoundationModel, task: ForecastTask, monkeypatch
 ) -> None:
     # No draws and no rounding: the 7-day
-    # sum of a week past the context is its aggregate row's own quantile.
+    # sum of a week past the cut-off is its aggregate row's own quantile.
     pytest.importorskip("torch")
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _LevelPipeline())
     levels = [0.1, 0.5, 0.9]
@@ -347,7 +347,7 @@ def test_daily_7_day_sums_are_the_aggregate_rows_native_quantiles(
     out = ft.quantiles(task, levels)
     assert out is not None
     tri = seen[-1]
-    start = tri.last - ft.lag_count(task) + 1
+    start = tri.last + 1
     future = [w for w in task.target_end_dates if tri.times.index(w) >= start]
     rows = out[out["target_end_date"].isin(future)]
     step = rows["target_end_date"].map(lambda w: tri.times.index(w) - start)
@@ -385,7 +385,7 @@ def test_daily_counts_are_the_count_rows_native_quantiles(
     ft: FoundationModel, task: ForecastTask, monkeypatch
 ) -> None:
     # Path k of the native sampler is the quantile at level k: each day
-    # past the context takes its count row's own quantile, from the same
+    # past the cut-off takes its count row's own quantile, from the same
     # block as the 7-day sums.
     store: list = []
 
@@ -411,7 +411,7 @@ def test_daily_counts_are_the_count_rows_native_quantiles(
     tri = foundation.hub_triangle(
         task.daily_history, "daily", group["places"], task.target_end_dates[-1]
     )
-    late = out.loc[out["date"].isin(set(tri.times[tri.n_context :]))]
+    late = out.loc[out["date"].isin(set(tri.times[tri.last + 1 :]))]
     assert not late.empty
     want = late["quantile"].map({q: k + 1.0 for k, q in enumerate(levels)})
     np.testing.assert_array_equal(late["value"], want)

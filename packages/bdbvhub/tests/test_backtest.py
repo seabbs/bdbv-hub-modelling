@@ -214,9 +214,10 @@ def test_each_scored_week_is_the_truth_of_its_own_week() -> None:
     from nowcastfoundation.forecaster import FoundationModel
     from nowcastutils.base import ForecastTask
 
-    # Weekly totals rise by a known step and each week is reported one
-    # week on, so the last week and the weeks ahead are forecast. A week
-    # out of place is off by one step. The weeks cross ISO 2020's week 53.
+    # Weekly totals rise by a known step and each week is reported in full
+    # at its own release, so the weeks after the cut-off are forecast. A
+    # week out of place is off by one step. The weeks cross ISO 2020's
+    # week 53.
     weeks = pd.date_range("2020-09-05", "2021-02-27", freq="7D")
     total = pd.Series(10.0 + 4 * np.arange(len(weeks)), index=weeks)
     ref = pd.Timestamp("2020-12-19")
@@ -226,11 +227,8 @@ def test_each_scored_week_is_the_truth_of_its_own_week() -> None:
                 "kind": "real",
                 "vintage": v.strftime("%Y-%m-%d"),
                 "location": loc,
-                "target_end_date": total.loc[
-                    : v - pd.Timedelta(days=7)
-                ].index.strftime("%Y-%m-%d"),
-                "total": share
-                * total.loc[: v - pd.Timedelta(days=7)].to_numpy(),
+                "target_end_date": total.loc[:v].index.strftime("%Y-%m-%d"),
+                "total": share * total.loc[:v].to_numpy(),
                 "cutoff": v.strftime("%Y-%m-%d"),
             }
         )
@@ -262,7 +260,7 @@ def test_each_scored_week_is_the_truth_of_its_own_week() -> None:
         return out
 
     model = FoundationModel(
-        "chronos_extrapolate", "weekly", "ragged", None, sample=extrapolate
+        "chronos_extrapolate", "weekly", "cutoff", None, sample=extrapolate
     )
     forecasts = run_forecasts([model], [task])
     truth = pd.DataFrame(

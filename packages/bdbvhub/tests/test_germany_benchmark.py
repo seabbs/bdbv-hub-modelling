@@ -397,8 +397,8 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
 ) -> None:
     from nowcastfoundation import forecaster as foundation
 
-    # Counts rise by a known step a day and are reported in full three
-    # days on, so the last three days are forecast and a sum one day out
+    # Counts rise by a known step a day and are reported in full on the
+    # day, so the days after the cut-off are forecast and a sum one day out
     # of place is off by seven steps. The weeks cross ISO 2020's week 53.
     # Long enough for the lag rule to read complete steps (`lag_count`).
     first, last = pd.Timestamp("2020-06-01"), pd.Timestamp("2021-01-20")
@@ -411,7 +411,7 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
         ("DE", "00-04"): 20 + i,
         ("DE", "05-14"): 40 + 4 * i,
     }
-    report = days + pd.Timedelta(days=3)
+    report = days
     triangle = pd.concat(
         pd.DataFrame(
             {

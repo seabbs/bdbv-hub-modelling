@@ -177,7 +177,7 @@ def _lags_seen(model, task: ForecastTask) -> set[str]:
         ]
 
     dataclasses.replace(model, sample=sample).forecast(task)
-    names = store[0][0]["future_covariates"]
+    names = store[0][0]["past_covariates"]
     return {name.rsplit("_lag_", 1)[1] for name in names}
 
 
@@ -190,7 +190,7 @@ def test_a_fixed_lag_count_is_used_as_given(source, task: ForecastTask):
     assert len(_lags_seen(model, task)) == MAX_LAG[source]
 
 
-def test_the_ragged_block_takes_the_estimated_lag_count(task: ForecastTask):
+def test_the_cutoff_block_takes_the_estimated_lag_count(task: ForecastTask):
     model = get_model("foundation_zeroshot")
     assert model.lags is None
     got = len(_lags_seen(model, task))

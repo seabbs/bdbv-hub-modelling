@@ -52,7 +52,7 @@ MODELS = (
     *FINETUNED_MODELS,
 )
 BY_LAYOUT = {
-    "ragged": "foundation_zeroshot",
+    "cutoff": "foundation_zeroshot",
     "complete": "foundation_zeroshot_complete",
 }
 """The zero-shot model of each layout."""
@@ -164,7 +164,7 @@ def test_only_the_hub_model_is_fitted_by_the_store() -> None:
 
 
 @pytest.mark.parametrize(("source", "steps"), [("daily", 28), ("weekly", 4)])
-def test_ragged_lags_stop_below_the_truth_delay(
+def test_cutoff_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
 ) -> None:
     # With the fixed cap, the lag series stop at 28 days or 4 weeks, short
@@ -180,7 +180,7 @@ def test_ragged_lags_stop_below_the_truth_delay(
     )
     model.forecast(task)
     groups, _ = store[0]
-    names = groups[0]["future_covariates"]
+    names = groups[0]["past_covariates"]
     assert len({name.rsplit("_lag_", 1)[1] for name in names}) == steps
     assert MAX_LAG[source] == steps
 
@@ -261,15 +261,17 @@ def test_draws_are_kept_as_drawn_at_zero_or_above(
         }
         values = out["value"].to_numpy()
         assert (values >= 0).all()
-    # A draw of 3.5 stays 3.5 where it is read, a draw below what is
-    # reported stays below it.
+    # A draw of 3.5 stays 3.5 where it is read.
     out = dataclasses.replace(get_model(name), sample=_constant(3.5)).forecast(
         task
     )
     assert (out["value"] % 1 != 0).any()
+    # The weeks after the cut-off are the draws.
     low = dataclasses.replace(get_model(name), sample=_constant(0.0))
     out = low.forecast(task)
-    assert (out["value"].to_numpy() < _reported(task, out)).any()
+    late = out["target_end_date"] > str(task.cutoff)[:10]
+    assert late.any()
+    assert (out.loc[late, "value"] == 0).all()
     # Draws above the reported counts raise the forecast past them.
     high = dataclasses.replace(get_model(name), sample=_constant(1e4))
     out = high.forecast(task)
@@ -308,23 +310,24 @@ def test_one_block_holds_every_target(source: str, task: ForecastTask) -> None:
     complete, _ = seen["complete"]
     assert complete["target"].shape[0] == rows * n_places
     assert "future_covariates" not in complete
-    ragged, horizon = seen["ragged"]
-    # The lag series are covariates of every place, those with no cases
-    # too, as the fine-tuned model has.
-    assert ragged["target"].shape[0] == rows * n_places
-    future = ragged["future_covariates"]
-    assert ragged["past_covariates"].keys() == future.keys()
-    lagged = {name.rsplit("_lag_", 1)[0] for name in future}
-    assert lagged == set(ragged["places"])
+    cutoff, horizon = seen["cutoff"]
+    # The lag series are past covariates of every place, those with no
+    # cases too, as the fine-tuned model has.
+    assert cutoff["target"].shape[0] == rows * n_places
+    assert "future_covariates" not in cutoff
+    past = cutoff["past_covariates"]
+    lagged = {name.rsplit("_lag_", 1)[0] for name in past}
+    assert lagged == set(cutoff["places"])
     assert _with_cases(task) < lagged
-    assert len(future) == len(lagged) * lags
-    for name, values in future.items():
+    assert len(past) == len(lagged) * lags
+    width = cutoff["target"].shape[1]
+    for name, values in past.items():
         d = int(name.rsplit("_", 1)[1])
-        assert len(values) == horizon
-        # Lag d of a step after the context is known only if it is no
-        # later than the cut-off, the last `lags` steps of the context.
-        assert np.isnan(values[lags - d :]).all()
-    assert any(not np.isnan(v).all() for v in future.values())
+        assert len(values) == width
+        # Lag d of a step is known only if it is no later than the
+        # cut-off, the last step of the context.
+        assert np.isnan(values[width - d :]).all()
+    assert any(not np.isnan(v).all() for v in past.values())
 
 
 @pytest.mark.parametrize("source", SOURCES)
@@ -351,7 +354,7 @@ def test_complete_starts_from_the_random_walk_week(
     assert n_context == (week - first).days // step + 1
 
 
-def test_weekly_ragged_needs_no_daily_releases(task: ForecastTask) -> None:
+def test_weekly_cutoff_needs_no_daily_releases(task: ForecastTask) -> None:
     bare = dataclasses.replace(task, daily_history=None)
     model = dataclasses.replace(
         _model("foundation_zeroshot", "weekly"), sample=_constant(0.0)
@@ -470,7 +473,7 @@ def test_chronos_missing_fails() -> None:
 
 
 @pytest.mark.parametrize("name", FINETUNED_MODELS)
-def test_finetuned_models_are_the_ragged_models_with_the_checkpoint(
+def test_finetuned_models_are_the_cutoff_models_with_the_checkpoint(
     name: str, fake_checkpoint
 ) -> None:
     model = get_model(name)
@@ -478,7 +481,7 @@ def test_finetuned_models_are_the_ragged_models_with_the_checkpoint(
     assert model.checkpoint == foundation.resolve_checkpoint("latest")
     assert model.checkpoint.hash == fake_checkpoint
     assert zero_shot.checkpoint is None
-    assert (model.source, model.layout) == (zero_shot.source, "ragged")
+    assert (model.source, model.layout) == (zero_shot.source, "cutoff")
     # The resolved checkpoint is in the repr, so it keys the stored fit.
     assert fake_checkpoint in repr(model)
     assert model.checkpoint.sha256[1][1] in repr(model)
@@ -972,8 +975,7 @@ def test_zone_releases_without_a_target_release_add_no_lag_cells(
     )
     model.forecast(task)
     group = store[0][0][0]
-    for name, past in group["past_covariates"].items():
-        cells = np.concatenate([past, group["future_covariates"][name]])
+    for name, cells in group["past_covariates"].items():
         # One release gives each lag one cell.
         assert np.sum(~np.isnan(cells)) <= 1, name
 
@@ -1095,11 +1097,11 @@ def test_realdata_models_load_their_pinned_release(
     # The simulation checkpoint's override does not reach them.
     monkeypatch.setenv(foundation.FINETUNED_ENV, "other")
     model = get_model(name)
-    ragged = get_model("foundation_zeroshot")
+    cutoff = get_model("foundation_zeroshot")
     assert model.checkpoint.hash == "de"
     assert model.checkpoint.tag == "realdata-ft-de"
     assert model.checkpoint.sha256 == _checkpoint("de").sha256
-    assert (model.source, model.layout) == (ragged.source, "ragged")
+    assert (model.source, model.layout) == (cutoff.source, "cutoff")
     assert "'de'" in repr(model)
     adapter = foundation.finetuned_adapter(model.checkpoint)
     assert adapter.name == "realdata-ft-de"
