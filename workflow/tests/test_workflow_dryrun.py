@@ -219,6 +219,29 @@ def test_each_checkpoint_has_its_own_ft_check_page(tmp_path):
     assert jobs["ft_check_forecast"] == "3"
 
 
+def test_ft_check_forecasts_are_keyed_by_their_code(tmp_path):
+    # Lead 14:25: a forecast folder made by older code is never reused:
+    # every model's folder, the fine-tuned one too, carries the code key.
+    import sys
+
+    sys.path.insert(0, str(ROOT / "workflow"))
+    from flowlib import scoring
+
+    _hub(tmp_path)
+    old = tmp_path / "hub" / "ft-check" / "forecasts"
+    old.mkdir(parents=True)
+    for name in ("randomwalknowcast", "ft-slots-abcdef"):
+        (old / f"{name}.done").write_text("")
+    config = {"ft_check": {"checkpoint": "slots-abcdef"}}
+    out = dry_run(tmp_path, "ft_check", config=config, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    key = scoring.ft_check_key(ROOT)
+    assert f"forecasts/ft-slots-abcdef@{key}.done" in out.stdout
+    assert f"forecasts/randomwalknowcast@{key}.done" in out.stdout
+    jobs = dict(re.findall(r"^(\w+)\s+(\d+)$", out.stdout, re.M))
+    assert jobs["ft_check_forecast"] == "3"
+
+
 def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
     # Lead 10:50: each released checkpoint (its published.json) gets its
     # BDBV check page.
