@@ -158,8 +158,9 @@ def test_a_host_can_take_whole_rounds(tmp_path):
 
 def test_only_generic_profiles_ship():
     profiles = (ROOT / "workflow" / "profiles").iterdir()
-    # ssh names no machine: its workers are in the local config.
-    assert sorted(p.name for p in profiles) == ["ci", "default", "ssh"]
+    # ssh and slurm name no machine: ssh's workers are in the local
+    # config, slurm's partition and account in the submit environment.
+    assert sorted(p.name for p in profiles) == ["ci", "default", "slurm", "ssh"]
 
 
 FT = {
