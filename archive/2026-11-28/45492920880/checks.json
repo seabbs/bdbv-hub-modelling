@@ -1,0 +1,105 @@
+{
+  "checks": [
+    {
+      "details": [],
+      "locations": [],
+      "name": "schema",
+      "status": "pass",
+      "summary": "format matches the hub's round"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "values",
+      "status": "pass",
+      "summary": "all values finite and non-negative"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "rt",
+      "status": "pass",
+      "summary": "wk R_t: 128 location-weeks of quantiles"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "samples",
+      "status": "pass",
+      "summary": "100 full trajectories per location"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "coverage",
+      "status": "pass",
+      "summary": "546 locations, weeks 2026-11-07 to 2026-12-19"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "zones",
+      "status": "pass",
+      "summary": "519 zones in 26 provinces"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "national_sum",
+      "status": "pass",
+      "summary": "CD is the exact sum (national.json: 26 modelled provinces)"
+    },
+    {
+      "details": [
+        "WARN: CD-NK-29: 95th centile 128 is 5.13 times the bound base 25"
+      ],
+      "locations": [],
+      "name": "bounds",
+      "status": "warn",
+      "summary": "CD-NK-29: 95th centile 128 is 5.13 times the bound base 25"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "plausible",
+      "status": "pass",
+      "summary": "within range of the recent data"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "growth",
+      "status": "pass",
+      "summary": "forecast growth within the cap"
+    },
+    {
+      "details": [],
+      "locations": [],
+      "name": "observed",
+      "status": "pass",
+      "summary": "close to observed (2026-11-22)"
+    },
+    {
+      "details": [
+        "WARN: CD-HU-02: median 31.5 against random walk baseline 3 over 2026-12-05 to 2026-12-19 (ratio 4.56)",
+        "WARN: CD-IT-05: median 3 against random walk baseline 36.5 over 2026-12-05 to 2026-12-19 (ratio 0.193)"
+      ],
+      "locations": [],
+      "name": "baseline",
+      "status": "warn",
+      "summary": "CD-HU-02: median 31.5 against random walk baseline 3 over 2026-12-05 to 2026-12-19 (ratio 4.56) (and 1 more)"
+    },
+    {
+      "details": [
+        "WARN: CD-HU-13: median 49 against last week's submission 0 over 2026-10-17 to 2026-12-12 (ratio 10.8)",
+        "WARN: CD-IT-26: median 481 against last week's submission 162 over 2026-10-17 to 2026-12-12 (ratio 2.9)"
+      ],
+      "locations": [],
+      "name": "previous",
+      "status": "warn",
+      "summary": "CD-HU-13: median 49 against last week's submission 0 over 2026-10-17 to 2026-12-12 (ratio 10.8) (and 1 more)"
+    }
+  ],
+  "id": "bvd",
+  "status": "warn"
+}

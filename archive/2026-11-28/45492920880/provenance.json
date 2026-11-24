@@ -1,0 +1,126 @@
+{
+  "attempts": [
+    {
+      "checks": "warn",
+      "fit": "pass",
+      "handled": [],
+      "id": "bvd",
+      "kind": "main",
+      "label": "BVDOutbreakSize-informed renewal model",
+      "ppc": "pass",
+      "reasons": [],
+      "source": "",
+      "status": "warn",
+      "substituted": {},
+      "validation": "pass",
+      "warnings": [
+        "bounds: CD-NK-29: 95th centile 128 is 5.13 times the bound base 25",
+        "baseline: CD-HU-02: median 31.5 against random walk baseline 3 over 2026-12-05 to 2026-12-19 (ratio 4.56) (and 1 more)",
+        "previous: CD-HU-13: median 49 against last week's submission 0 over 2026-10-17 to 2026-12-12 (ratio 10.8) (and 1 more)"
+      ]
+    },
+    {
+      "checks": "n/a",
+      "fit": "n/a",
+      "handled": [],
+      "id": "renewalsp",
+      "kind": "fallback",
+      "label": "single-patch zone renewal models",
+      "ppc": "n/a",
+      "reasons": [],
+      "source": "",
+      "status": "not needed",
+      "substituted": {},
+      "validation": "not run",
+      "warnings": []
+    },
+    {
+      "checks": "n/a",
+      "fit": "n/a",
+      "handled": [],
+      "id": "main",
+      "kind": "fallback",
+      "label": "zone renewal model",
+      "ppc": "n/a",
+      "reasons": [],
+      "source": "",
+      "status": "not needed",
+      "substituted": {},
+      "validation": "not run",
+      "warnings": []
+    },
+    {
+      "checks": "n/a",
+      "fit": "n/a",
+      "handled": [],
+      "id": "randomwalknowcast",
+      "kind": "randomwalk",
+      "label": "random walk on a nowcast",
+      "ppc": "n/a",
+      "reasons": [],
+      "source": "",
+      "status": "not needed",
+      "substituted": {},
+      "validation": "not run",
+      "warnings": []
+    },
+    {
+      "checks": "n/a",
+      "fit": "n/a",
+      "handled": [],
+      "id": "randomwalk",
+      "kind": "randomwalk",
+      "label": "random walk baseline",
+      "ppc": "n/a",
+      "reasons": [],
+      "source": "",
+      "status": "not needed",
+      "substituted": {},
+      "validation": "not run",
+      "warnings": []
+    }
+  ],
+  "handled": [],
+  "kind": "main",
+  "locations_substituted": {},
+  "produced_by": "BVDOutbreakSize-informed renewal model",
+  "reason": "The BVDOutbreakSize-informed renewal model cleared every check, with warnings.",
+  "run": {
+    "as_of": "2026-11-22",
+    "candidate": "bvd",
+    "checkpoint": null,
+    "config": "bvd",
+    "kind": "main",
+    "label": "BVDOutbreakSize-informed renewal model",
+    "model": "renewalbvd",
+    "package_version": "0.1.0",
+    "reference_date": "2026-11-28",
+    "sampler": {
+      "chain_method": "parallel",
+      "max_tree_depth": 10,
+      "num_chains": 2,
+      "num_samples": 1500,
+      "num_warmup": 500,
+      "seed": 1,
+      "target_accept": 0.95,
+      "thinning": 2
+    },
+    "store": {
+      "commit": "f4935197d658a7bc519ecd75c317883430d836ec",
+      "current_key": "37c3aad5f4f4677d",
+      "fitted_at": "2026-11-24T16:21:49+00:00",
+      "key": "5ccfd626b29862fb",
+      "model": "renewalbvd",
+      "origin": "2026-11-22",
+      "store_commit": "a26e82957bd28d37d8721fae1cf32be6fb52a3a9"
+    }
+  },
+  "selected": "bvd",
+  "shadows": [],
+  "status": "warn",
+  "warnings": [
+    "bounds: CD-NK-29: 95th centile 128 is 5.13 times the bound base 25",
+    "baseline: CD-HU-02: median 31.5 against random walk baseline 3 over 2026-12-05 to 2026-12-19 (ratio 4.56) (and 1 more)",
+    "previous: CD-HU-13: median 49 against last week's submission 0 over 2026-10-17 to 2026-12-12 (ratio 10.8) (and 1 more)"
+  ]
+}

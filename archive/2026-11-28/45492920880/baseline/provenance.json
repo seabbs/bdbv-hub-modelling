@@ -1,0 +1,51 @@
+{
+  "attempts": [
+    {
+      "checks": "warn",
+      "fit": "skip",
+      "handled": [],
+      "id": "randomwalknowcast",
+      "kind": "randomwalk",
+      "label": "random walk on a nowcast",
+      "ppc": "skip",
+      "reasons": [],
+      "source": "",
+      "status": "warn",
+      "substituted": {},
+      "validation": "pass",
+      "warnings": [
+        "zones: 519 zones; 5875 province sample-weeks differ from the sum of their zones",
+        "bounds: CD-IT-26: 95th centile 1.35e+03 is 17.1 times the bound base 79",
+        "plausible: CD-IT-26 2026-12-05: 97.5% quantile 1.55e+03 is over 15 times 92.9, the upper limit of the recent maximum 74 (and 2 more)",
+        "previous: CD-BU: median 7 against last week's submission 0 over 2026-10-17 to 2026-12-12 (ratio 2.4) (and 9 more)"
+      ]
+    }
+  ],
+  "handled": [],
+  "kind": "randomwalk",
+  "locations_substituted": {},
+  "produced_by": "random walk on a nowcast",
+  "reason": "The random walk on a nowcast cleared every check, with warnings.",
+  "run": {
+    "as_of": "2026-11-22",
+    "candidate": "randomwalknowcast",
+    "checkpoint": null,
+    "config": "randomwalknowcast",
+    "kind": "randomwalk",
+    "label": "random walk on a nowcast",
+    "model": "randomwalknowcast",
+    "package_version": "0.1.0",
+    "reference_date": "2026-11-28",
+    "sampler": {},
+    "store": null
+  },
+  "selected": "randomwalknowcast",
+  "shadows": [],
+  "status": "warn",
+  "warnings": [
+    "zones: 519 zones; 5875 province sample-weeks differ from the sum of their zones",
+    "bounds: CD-IT-26: 95th centile 1.35e+03 is 17.1 times the bound base 79",
+    "plausible: CD-IT-26 2026-12-05: 97.5% quantile 1.55e+03 is over 15 times 92.9, the upper limit of the recent maximum 74 (and 2 more)",
+    "previous: CD-BU: median 7 against last week's submission 0 over 2026-10-17 to 2026-12-12 (ratio 2.4) (and 9 more)"
+  ]
+}

@@ -123,6 +123,48 @@
       "run": "https://github.com/seabbs/BDBVHubRenewal/actions/runs/44169712191",
       "status": "submitted",
       "updated": "2026-11-17T22:27:24.126624+00:00"
+    },
+    "2026-11-28": {
+      "as_of": "2026-11-22",
+      "code_commit": "31182f572a80ad51b400456eea8a00d6ce286eb6",
+      "data_commit": "5725dc6fcbf9d5ea16f8b5f1607be0a5b4951f88",
+      "history": [
+        {
+          "as_of": "2026-11-22",
+          "code_commit": "31182f572a80ad51b400456eea8a00d6ce286eb6",
+          "data_commit": "5725dc6fcbf9d5ea16f8b5f1607be0a5b4951f88",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/154",
+          "produced_by": "BVDOutbreakSize-informed renewal model",
+          "run": "https://github.com/seabbs/bdbv-hub-modelling/actions/runs/45492920880",
+          "status": "submitted",
+          "updated": "2026-11-24T21:52:05.138362+00:00"
+        }
+      ],
+      "models": {
+        "seabbs-renewal": {
+          "archive": "archive/2026-11-28/45492920880",
+          "code_commit": "31182f572a80ad51b400456eea8a00d6ce286eb6",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/154",
+          "produced_by": "BVDOutbreakSize-informed renewal model",
+          "run": "https://github.com/seabbs/bdbv-hub-modelling/actions/runs/45492920880",
+          "status": "submitted",
+          "updated": "2026-11-24T21:52:05.306620+00:00"
+        },
+        "seabbs-rwnowcast": {
+          "archive": "archive/2026-11-28/45492920880/baseline",
+          "code_commit": "31182f572a80ad51b400456eea8a00d6ce286eb6",
+          "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/153",
+          "produced_by": "random walk on a nowcast",
+          "run": "https://github.com/seabbs/bdbv-hub-modelling/actions/runs/45492920880",
+          "status": "submitted",
+          "updated": "2026-11-24T21:52:05.375016+00:00"
+        }
+      },
+      "pr_url": "https://github.com/InsightNet-US/BDBV-Modeling-Hub/pull/154",
+      "produced_by": "BVDOutbreakSize-informed renewal model",
+      "run": "https://github.com/seabbs/bdbv-hub-modelling/actions/runs/45492920880",
+      "status": "submitted",
+      "updated": "2026-11-24T21:52:05.138362+00:00"
     }
   },
   "schema_version": 1

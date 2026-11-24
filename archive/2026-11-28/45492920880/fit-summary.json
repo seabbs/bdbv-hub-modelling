@@ -1,0 +1,61 @@
+{
+  "applicable": true,
+  "bvd": {
+    "as_of": "2026-11-18",
+    "joint_max_rhat": 1.087,
+    "max_rhat": 1.1,
+    "skipped": [],
+    "tag": "results-3541",
+    "zones": 52
+  },
+  "chains": [
+    {
+      "chain": 0,
+      "divergences": 0,
+      "draws": 750,
+      "ebfmi": 1.4549819411907619,
+      "mean_accept": 0.9562845230102539,
+      "step_size": 0.009797224774956703,
+      "tree_depth_hits": 0,
+      "tree_depth_share": 0.0
+    },
+    {
+      "chain": 1,
+      "divergences": 0,
+      "draws": 750,
+      "ebfmi": 1.429686370677688,
+      "mean_accept": 0.9544212818145752,
+      "step_size": 0.009761509485542774,
+      "tree_depth_hits": 0,
+      "tree_depth_share": 0.0
+    }
+  ],
+  "failures": [],
+  "families": [],
+  "headline": {
+    "divergent_fraction": 0.0,
+    "max_rhat": 1.0105891845566106,
+    "min_ess_bulk": 522.0772103740949,
+    "min_ess_tail": 598.1224884701779,
+    "n_divergent": 0.0,
+    "n_draws": 1500.0
+  },
+  "id": "bvd",
+  "status": "pass",
+  "thresholds": {
+    "fail": {
+      "divergent_fraction": 0.05,
+      "ess_bulk": 25,
+      "ess_tail": 25,
+      "rhat": 1.1
+    },
+    "warn": {
+      "divergent_fraction": 0.01,
+      "ess_bulk": 100,
+      "ess_tail": 100,
+      "rhat": 1.05
+    }
+  },
+  "warnings": [],
+  "worst": []
+}
