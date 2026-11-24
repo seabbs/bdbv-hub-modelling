@@ -252,10 +252,6 @@ ignore_imports = [
   "nowcasteval.nowcast -> nowcastrenewal.forecaster",
   "nowcasteval.plots -> nowcastbdbv.data.delays",
   "nowcasteval.plots -> nowcastbdbv.data.tidy",
-  "nowcastgermany.evaluation -> nowcastbdbv.data.tidy",
-  "nowcastgermany.evaluation -> bdbvhub.models",
-  "nowcastgermany.reporting -> bdbvhub.reporting.explorer",
-  "nowcastgermany.reporting -> bdbvhub.reporting.site",
   "nowcastrenewal.zones -> nowcastbdbv.data.tidy",
 ]
 

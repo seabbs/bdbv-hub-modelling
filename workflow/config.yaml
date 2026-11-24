@@ -204,8 +204,9 @@ ft_check:
   # every hub release forecast by each model, scored together with
   # pairwise relative skill scaled to `reference`. `models` are made once
   # per code change and reused; `finetuned` reruns alone for each
-  # checkpoint, `checkpoint` (a settings hash), or config/finetune.toml's
-  # when empty.
+  # checkpoint, `checkpoint`, or config/finetune.toml's when empty. A
+  # checkpoint is its release's settings hash as `slots-<hash>` (the
+  # release chronos-slots-<hash>), for example slots-08f3982239a3.
   reference: randomwalknowcast
   models: [randomwalknowcast, fm_chronos_daily_ragged]
   finetuned: fm_chronos_daily_ragged_ft

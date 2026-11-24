@@ -2484,6 +2484,7 @@ name = "nowcastgermany"
 version = "0.1.0"
 source = { editable = "packages/nowcastgermany" }
 dependencies = [
+    { name = "nowcastbaselines" },
     { name = "nowcasteval" },
     { name = "nowcastfoundation" },
     { name = "nowcastutils" },
@@ -2494,6 +2495,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "nowcastbaselines", editable = "packages/nowcastbaselines" },
     { name = "nowcasteval", editable = "packages/nowcasteval" },
     { name = "nowcastfoundation", editable = "packages/nowcastfoundation" },
     { name = "nowcastutils", editable = "packages/nowcastutils" },

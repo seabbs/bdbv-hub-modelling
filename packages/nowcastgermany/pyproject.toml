@@ -12,6 +12,7 @@ dependencies = [
   "scipy>=1.11,<2",
   "nowcastutils",
   "nowcasteval",
+  "nowcastbaselines",
   "nowcastfoundation",
 ]
 
@@ -23,6 +24,7 @@ germany-ft-store = "nowcastgermany.ft_store:main"
 [tool.uv.sources]
 nowcastutils = { workspace = true }
 nowcasteval = { workspace = true }
+nowcastbaselines = { workspace = true }
 nowcastfoundation = { workspace = true }
 
 [build-system]
