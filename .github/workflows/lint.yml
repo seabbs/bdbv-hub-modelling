@@ -35,46 +35,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-      - run: uv sync --frozen
-      # The packages are checked in their own CI jobs (ci.yml).
-      - name: Ruff
-        run: |
-          uv run ruff check tests workflow docs/hooks
-          uv run ruff format --check tests workflow docs/hooks
-          # The paper, with its own settings (paper/ruff.toml).
-          (cd paper && uv run ruff check . && uv run ruff format --check .)
-      # The packages import one way (pyproject.toml's import-linter
-      # contract).
-      - name: Import contract
-        run: uv run lint-imports --no-logo
-
-  # Snakemake style and lint of the workflow and the paper's workflow.
-  workflow-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          enable-cache: true
-      - run: uv sync --frozen --group paper
-      - name: snakefmt
-        run: uv run snakefmt --check workflow paper/workflow
-      - name: snakemake --lint
-        if: ${{ !cancelled() }}
-        run: |
-          printf 'ROOT=%s\nHOST_NAME=ci\n' "$RUNNER_TEMP" > "$RUNNER_TEMP/local.env"
-          export LOCAL_CONFIG="$RUNNER_TEMP/local.env"
-          status=0
-          uv run snakemake -s workflow/Snakefile --lint || status=1
-          exit $status
-
   # The submission CI scripts in ci/, their own uv project.
   lint-ci:
     runs-on: ubuntu-latest

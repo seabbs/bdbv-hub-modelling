@@ -4,30 +4,17 @@ name: CI
 # module imported, ruff, ruff format, mypy and the tests it owns
 # (tests/packages/owners.py). A pull request runs the jobs of the
 # packages its change can reach; a push to main or next, and a dispatch,
-# run them all.
+# run them all. The repo checks run on every change.
 
 on:
   push:
     branches: [main, next]
-    paths:
-      - 'packages/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.github/workflows/ci.yml'
-      - '.github/actions/setup-forecast-env/**'
   pull_request:
-    paths:
-      - 'packages/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - '.github/workflows/ci.yml'
-      - '.github/actions/setup-forecast-env/**'
   workflow_dispatch:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,6 +24,30 @@ concurrency:
     ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/next' }}
 
 jobs:
+  # What no package holds: the import contract between the packages, the
+  # lint of the tests, workflow, docs hooks and paper, and the workflows.
+  repo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Import contract
+        run: uv run lint-imports --no-logo
+      - name: Ruff
+        if: ${{ !cancelled() }}
+        run: |
+          uv run ruff check tests workflow docs/hooks
+          uv run ruff format --check tests workflow docs/hooks
+          # The paper, with its own settings (paper/ruff.toml).
+          (cd paper && uv run ruff check . && uv run ruff format --check .)
+      - name: actionlint
+        if: ${{ !cancelled() }}
+        run: uvx --from actionlint-py actionlint
+
   # The packages a change reaches.
   plan:
     runs-on: ubuntu-latest
@@ -111,11 +122,21 @@ jobs:
           uv run ruff check "packages/$PACKAGE"
           uv run ruff format --check "packages/$PACKAGE"
           uv run mypy "packages/$PACKAGE/src"
-      # Every owned test not marked slow, across the runner's cores.
+      # Every owned test not marked slow, across the runner's cores, with
+      # coverage on main only (tracing about doubles the tests' time).
       - name: Tests
         if: ${{ !cancelled() }}
         run: |
           mapfile -t files < <(python3 tests/packages/owners.py "$PACKAGE")
           [ "${#files[@]}" -gt 0 ] || exit 0
           uv run --group paper pytest -q -n auto --dist worksteal \
-            --durations=10 "${files[@]}"
+            --durations=10 "${files[@]}" \
+            ${{ github.ref == 'refs/heads/main' && '--cov="$PACKAGE" --cov-report=xml' || '' }}
+      - name: Upload coverage to Codecov
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage.xml
+          flags: package
+          use_oidc: true
+          fail_ci_if_error: false
