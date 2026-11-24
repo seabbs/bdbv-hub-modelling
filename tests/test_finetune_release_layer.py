@@ -190,3 +190,35 @@ def test_each_block_s_releases_are_recorded_under_a_layer(tmp_path):
     table = pd.read_csv(tmp_path / fs.RELEASES_FILE)
     assert len(table) == len(pairs)
     assert set(table["release_start_days"]) == {40}
+
+
+def test_a_share_of_blocks_has_no_lag_rows():
+    # Lead 02:00 (Sam): a small share of blocks trains on counts alone, as
+    # when only the latest data are available: no lag series at all.
+    none = _blocks({"no_lags": {"share": 1.0}})
+    assert none
+    assert all(b["n_covariates"] == 0 and b["no_lags"] for b in none)
+    off = _blocks(None)
+    some = _blocks({"no_lags": {"share": 0.0}})
+    for a, b in zip(off, some, strict=True):
+        np.testing.assert_array_equal(a["context"], b["context"])
+        assert not b["no_lags"]
+
+
+def test_no_lag_rows_combine_with_a_late_start():
+    both = _blocks({**START_ALL, "no_lags": {"share": 1.0}})
+    assert all(b["release_start_days"] == 40 for b in both)
+    assert all(b["n_covariates"] == 0 for b in both)
+
+
+@pytest.mark.parametrize("bad", [{"no_lags": {"share": -0.1}}, {"no_lags": {}}])
+def test_a_no_lags_share_outside_0_to_1_is_refused(bad):
+    with pytest.raises(ValueError, match="release layer"):
+        ft.check_release_layer(bad)
+
+
+def test_the_proposed_layer_trains_5_percent_without_lag_rows():
+    layer = ft.read_release_layer(
+        ft.ROOT / "config" / "finetune" / "release-layer.yaml"
+    )
+    assert layer["no_lags"]["share"] == 0.05
