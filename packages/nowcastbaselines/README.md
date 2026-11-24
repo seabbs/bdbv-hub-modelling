@@ -14,7 +14,7 @@ It is for anyone who needs a simple, well-tested forecast of weekly counts revis
 - [`baselinenowcast`](src/nowcastbaselines/baselinenowcast/): a JAX port of the baselinenowcast R package, with the chain ladder on release snapshots, in `delays`, `triangle`, `aggregate`, `uncertainty` and `nowcast`.
 - [`walk`](src/nowcastbaselines/walk.py): random walks on the log scale.
 - [`pairing`](src/nowcastbaselines/pairing.py): the walk models' forecasts under each pairing of their draws, for the pairing sensitivity.
-- [`pooling`](src/nowcastbaselines/pooling.py), [`introductions`](src/nowcastbaselines/introductions.py), [`copula`](src/nowcastbaselines/copula.py), [`zones`](src/nowcastbaselines/zones.py): pooling over a hierarchy, introductions into silent places, a copula pairing places, and splitting places into zones.
+- [`pooling`](src/nowcastbaselines/pooling.py), [`introductions`](src/nowcastbaselines/introductions.py), [`copula`](src/nowcastbaselines/copula.py), [`zones`](src/nowcastbaselines/zones.py): pooling over a hierarchy, introductions into silent places, a copula pairing places, and zone-level forecasts.
 
 ## Next
 

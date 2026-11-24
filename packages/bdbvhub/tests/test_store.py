@@ -260,10 +260,9 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
         before = after
 
 
-def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
-    # A province model splits its zones in its forecast (`with_zones`), and
-    # the zone fits of renewal and renewalbvd call its zone_task, so the
-    # split is fit code. The zone backtest is not.
+def test_the_zone_module_keys_the_zone_fits(tmp_path: Path) -> None:
+    # The zone fits of renewal and renewalbvd call its zone_task, so the
+    # zone module is fit code. The zone backtest is not.
     root = _copy_repo(tmp_path)
     models = ("renewal",)
 
@@ -280,12 +279,12 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     assert digests() == before
     assert store.code_digest("foundation_zeroshot", root) == own
     edit("packages/nowcastbaselines/src/nowcastbaselines/zones.py")
-    split = digests()
-    assert all(split[m] != before[m] for m in models)
-    # Chronos-2 takes its zones straight from its block, so the split is
-    # not its fit code.
+    zoned = digests()
+    assert all(zoned[m] != before[m] for m in models)
+    # Chronos-2 takes its zones straight from its block, so the zone
+    # module is not its fit code.
     assert store.code_digest("foundation_zeroshot", root) == own
-    before = split
+    before = zoned
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("packages/nowcastbaselines/src/nowcastbaselines/introductions.py")
     after = digests()
@@ -1450,3 +1449,50 @@ def test_the_backtest_takes_its_draws_from_the_config_unless_given() -> None:
     assert cli.build_parser().parse_args(["backtest"]).samples is None
     got = cli.build_parser().parse_args(["backtest", "--samples", "7"])
     assert got.samples == 7
+
+
+@pytest.mark.parametrize("name", ["randomwalk", "randomwalknowcast"])
+def test_the_walks_are_stored_and_forecast_from_the_store(
+    name: str,
+    tasks: dict[str, ForecastTask],
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    """The submission reads a walk's stored forecast, as a fitted model's."""
+    from bdbvhub.submission import fitting
+
+    assert name in store.stored_models()
+    origin = sorted(tasks)[-1]
+    stored = store.fit(name, tasks[origin], {}, "c")
+    assert stored.meta["status"] == "ok"
+    assert {"diagnostics.json", "fit.json", "ppc.json"} <= set(stored.files)
+    root = tmp_path / "store"
+    store.write_fit(root, stored)
+    keys = store.current_keys({origin: tasks[origin]}, [name], {}, "c")
+    out = tmp_path / "fit"
+    state, found = store.unpack(root, keys, name, origin, out)
+    assert state == "ok"
+    assert found is not None
+    assert (out / fitting.STORED_FORECASTS).exists()
+    diag = json.loads((out / "diagnostics.json").read_text())
+    assert diag["sampler"] == "none"
+    # The round's task: the origin's weeks, which the stored task covers.
+    zones = load_zone_data(DATA)
+    task = vintage_task(target, delays, config, origin, daily, zones=zones)[0]
+    got = fitting.run_forecast(fitting.get_config(name), task, out)
+    rows = stored.forecasts
+    rows = rows.loc[
+        rows["as_of"].isna()
+        & (rows["location"] != NATIONAL)
+        & rows["target_end_date"].astype(str).isin(task.target_end_dates)
+    ]
+    want = rows.set_index(["location", "target_end_date", "sample"])["value"]
+    have = got.samples.set_index(["location", "target_end_date", "sample"])
+    assert len(have) == len(want)
+    assert np.allclose(
+        have["value"].sort_index().to_numpy(),
+        want.rename(index=str, level=1).sort_index().to_numpy(),
+    )

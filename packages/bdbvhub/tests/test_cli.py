@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pandas as pd
@@ -707,18 +707,32 @@ def test_cli_fit_store_archives_what_each_model_submits(
     flat_model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from bdbvhub.store import store
-    from nowcastbaselines.zones import with_zones
     from nowcastutils import base
+    from nowcastutils.hierarchy import province_of
 
     flat = base._REGISTRY[flat_model].factory
 
     class Zoned(flat):  # type: ignore[misc, valid-type]
-        """A province model, which splits its zones in its forecast."""
+        """A model with zone samples of its own: each province's first."""
 
         reads_zones = True
 
         def forecast(self, task):  # type: ignore[no-untyped-def]
-            return with_zones(super().forecast(task), task)
+            out = super().forecast(task)
+            final = out
+            if "as_of" in final:
+                final = final.loc[final["as_of"].isna()]
+            first: dict[str, str] = {}
+            rows = [out]
+            for zone in task.zone_codes:
+                prov = final.loc[final["location"] == province_of(zone)]
+                if prov.empty:
+                    continue
+                keep = first.setdefault(province_of(zone), zone) == zone
+                rows.append(
+                    prov.assign(location=zone, value=prov["value"] * keep)
+                )
+            return pd.concat(rows, ignore_index=True)
 
     monkeypatch.setitem(
         base._REGISTRY,
@@ -728,8 +742,10 @@ def test_cli_fit_store_archives_what_each_model_submits(
     monkeypatch.setattr(store, "code_digest", lambda *_: "c")
     origin, ref = "2026-10-24", "2026-10-31"
     root = tmp_path / "store"
-    fit = ["fit-store", "fit", "--store", str(root), "--model", "flat"]
-    assert main([*fit, "--origin", origin]) == 0
+    fit = ["fit-store", "fit", "--store", str(root), "--origin", origin]
+    # The store holds the random walk as it holds a fitted model.
+    for model in ("flat", "randomwalknowcast"):
+        assert main([*fit, "--model", model]) == 0
     out = tmp_path / "archive" / "candidates.csv.gz"
     args = ["fit-store", "archive", "--store", str(root), "--out", str(out)]
     when = ["--origin", origin, "--reference-date", ref]
@@ -743,10 +759,19 @@ def test_cli_fit_store_archives_what_each_model_submits(
     # Health zones, as each model would submit them.
     zones = table.loc[table["location"].str.count("-") == 2]
     assert set(zones["model"]) == {"flat", "randomwalknowcast"}
-    # The random walk on a nowcast is the file the submission writes.
+    # The random walk on a nowcast is the file the submission writes from
+    # its stored forecast, as `candidate.sh` does.
+    walk = ["--model", "randomwalknowcast", "--origin", origin]
+    fit_dir = tmp_path / "fit"
+    unpack = ["fit-store", "unpack", "--store", str(root), *walk]
+    assert main([*unpack, "--out", str(fit_dir)]) == 0
     sub = tmp_path / "sub"
-    nowcast = ["nowcast", "--model", "randomwalknowcast", "--vintage", origin]
-    assert main([*nowcast, "--reference-date", ref, "--out", str(sub)]) == 0
+    nowcast = [
+        "nowcast", "--model", "randomwalknowcast",
+        "--config", "randomwalknowcast", "--fit", str(fit_dir),
+        "--vintage", origin, "--reference-date", ref,
+    ]  # fmt: skip
+    assert main([*nowcast, "--out", str(sub)]) == 0
     submitted = _written(sub)
     archived = table.loc[table["model"] == "randomwalknowcast"]
     pd.testing.assert_frame_equal(
@@ -765,22 +790,27 @@ def test_cli_fit_store_archives_what_each_model_submits(
     assert set(pd.read_csv(out)["model"]) == {"flat"}
 
 
-def _stored_fit(store: Path, weeks: list[str]) -> None:
+def _stored_fit(
+    store: Path, weeks: list[str], locations: Sequence[str] = ("CD",)
+) -> None:
     from bdbvhub.store import store as st
 
-    rows = pd.DataFrame(
-        {
-            "model": "renewal",
-            "kind": "real",
-            "vintage": "2026-10-17",
-            "reference_date": "2026-10-24",
-            "location": "CD",
-            "target_end_date": weeks,
-            "sample": 1,
-            "value": 5.0,
-            "as_of": None,
-            "horizon": range(len(weeks)),
-        }
+    rows = pd.concat(
+        pd.DataFrame(
+            {
+                "model": "renewal",
+                "kind": "real",
+                "vintage": "2026-10-17",
+                "reference_date": "2026-10-24",
+                "location": loc,
+                "target_end_date": weeks,
+                "sample": 1,
+                "value": 5.0,
+                "as_of": None,
+                "horizon": range(len(weeks)),
+            }
+        )
+        for loc in locations
     )
     meta = {"model": "renewal", "origin": "2026-10-17", "key": "k1"}
     st.write_fit(
@@ -848,6 +878,35 @@ def test_stored_samples_take_every_week_of_the_stored_fit(
     args.store = str(tmp_path / "missing")
     stored, _ = _stored(args, load_target(DATA), trimmed)
     assert sorted(stored["target_end_date"].astype(str)) == weeks[2:]
+
+
+def test_stored_samples_leave_out_the_stored_fits_zones(
+    tmp_path: Path,
+) -> None:
+    # A stored fit holds its zones too, as many rows as every province
+    # over. The release backtest scores the provinces and the nation only,
+    # so the zones are left out as the fits are read.
+    import argparse
+    import json
+
+    from bdbvhub.cli import _stored
+    from nowcastbdbv.data.tidy import load_target
+
+    store = tmp_path / "store"
+    _stored_fit(store, ["2026-10-03"], ["CD", "CD-BC", "CD-BC-01"])
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / "fit-store.json").write_text(
+        json.dumps([{"model": "renewal", "origin": "2026-10-17", "used": "k1"}])
+    )
+    args = argparse.Namespace(
+        data=str(DATA), results=str(results), store=str(store)
+    )
+    cols = ["model", "kind", "vintage", "location", "target_end_date"]
+    empty = pd.DataFrame(columns=[*cols, "sample", "value", "as_of"])
+    stored, _ = _stored(args, load_target(DATA), empty)
+    ours = stored.loc[stored["model"] == "renewal"]
+    assert sorted(ours["location"]) == ["CD", "CD-BC"]
 
 
 def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:

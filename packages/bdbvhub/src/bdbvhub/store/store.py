@@ -1,7 +1,9 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
-"""The fit store: one stored fit per fitted model and real origin.
+"""The fit store: one stored fit per stored model and real origin.
 
-The fitted models are slow, so the docs never fit them.
+The fitted models are slow, so the docs never fit them. The random
+walks (`SAMPLE_FREE`) are stored the same way, so the submission, the
+backtest and the docs read one forecast of each at each origin.
 The Fit store workflow (`.github/workflows/fit-store.yml`) fits each
 (model, origin) pair once and commits the result to the `fit-store`
 branch, one file per fit:
@@ -26,7 +28,9 @@ models that run it, and no other.
 writes the stored forecasts where the backtest and the docs read them.
 A submission candidate's fit also holds its fit directory (`fit_files`),
 which `unpack` writes out for the submission to forecast from, so the
-submission uses the stored fit rather than fitting again.
+submission uses the stored fit rather than fitting again. A walk's fit
+directory holds its records, and `unpack` adds its stored forecasts
+(`fitting.STORED_FORECASTS`).
 Where the store has no fit for the current key, `load` uses the newest
 stored fit of that pair and says so (`StoreStatus`).
 `command` runs `bdbvhub fit-store`.
@@ -77,6 +81,7 @@ __all__ = [
     "FIT_FUNCTIONS",
     "KEY_PACKAGES",
     "KEY_SKIP",
+    "SAMPLE_FREE",
     "STATUS_FILE",
     "STORE_DATA",
     "UNPACKED_FILE",
@@ -169,22 +174,31 @@ PLACE_FIELDS: Final = ("imputation_delay", "places")
 """Task fields in the fit key of a model only if it reads them
 (`reads_places`)."""
 
+SAMPLE_FREE: Final = ("randomwalk", "randomwalknowcast")
+"""The models the store holds that fit nothing: the random walks. Each is
+a submission candidate whose fit directory holds no samples of its own,
+so `unpack` writes its stored forecasts there."""
+
 COMMIT_FILE: Final = ".commit"
 """The store branch commit, written by `scripts/fit-store.sh fetch`."""
 
 
 def stored_models() -> list[str]:
-    """Return the registered models the store fits: those marked fitted.
+    """Return the registered models the store holds.
 
-    Models only the paper's workflow runs (`ModelSpec.paper_only`) are
-    left out.
+    Those marked fitted and the random walks (`SAMPLE_FREE`). Models only
+    the paper's workflow runs (`ModelSpec.paper_only`) are left out.
 
     Returns
     -------
     list of str
         Model names.
     """
-    return [s.name for s in list_models() if s.fitted and not s.paper_only]
+    return [
+        s.name
+        for s in list_models()
+        if (s.fitted or s.name in SAMPLE_FREE) and not s.paper_only
+    ]
 
 
 def samplers(
@@ -381,8 +395,9 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     The import closure of the model's module, with any other model's
     module it builds on (`bdbvhub.store.digest.model_code`), and the
     package's data files (`STORE_DATA`), without the loader, IO and report
-    modules in `KEY_SKIP`. A model with a fit directory also holds the
-    code that writes its fit records (`RECORD_CODE`). The store's and the
+    modules in `KEY_SKIP`. A model with a fit directory (a renewal
+    variant or a walk) also holds the code that writes its fit records
+    (`RECORD_CODE`). The store's and the
     backtest's own code is keyed by function (`FIT_FUNCTIONS`), not by
     file.
 
@@ -402,7 +417,7 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     from nowcastrenewal.forecaster import FIT_VARIANTS
 
     code = model_code(model, root, (), cli=False, skip=KEY_SKIP)
-    if model in FIT_VARIANTS.values():
+    if model in FIT_VARIANTS.values() or model in SAMPLE_FREE:
         code = sorted({*code, RECORD_CODE})
     data = [p.relative_to(root).as_posix() for p in Path(root).glob(STORE_DATA)]
     return sorted([*code, *data])
@@ -870,8 +885,10 @@ def fit_files(
 
     The directory `bdbvhub fit --config` would write: the model's
     `write_fit_dir` (samples and `ppc.json`), with `diagnostics.json`
-    and `fit.json` (`write_records`). A model that is no candidate's
-    (`renewal.FIT_VARIANTS`) has none.
+    and `fit.json` (`write_records`). A walk (`SAMPLE_FREE`) writes its
+    configuration's records and the copula it joined its draws by
+    (`fitting.COPULA_FILE`); `unpack` adds its forecasts. A model that is
+    no candidate's (`renewal.FIT_VARIANTS`) has none.
 
     Parameters
     ----------
@@ -889,16 +906,31 @@ def fit_files(
     dict
         File name to base64 contents, or empty.
     """
-    from bdbvhub.submission.fitting import get_config, write_records
+    from bdbvhub.submission.fitting import (
+        COPULA_FILE,
+        get_config,
+        write_records,
+    )
     from nowcastrenewal.forecaster import FIT_VARIANTS
 
     write = getattr(model, "write_fit_dir", None)
     names = [c for c, v in FIT_VARIANTS.items() if v == model.name]
-    if write is None or not names:
+    if model.name in SAMPLE_FREE:
+        names = [model.name]
+    elif write is None or not names:
         return {}
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp)
-        diag = write(task, out, config_name=names[0])
+        if write is None:
+            config = get_config(names[0])
+            diag = config.fit(task, sampler.get(model.name, {}), out)
+            copula = getattr(model, "copula_fit", None)
+            if copula is not None:
+                (out / COPULA_FILE).write_text(
+                    json.dumps(copula, default=str) + "\n"
+                )
+        else:
+            diag = write(task, out, config_name=names[0])
         write_records(
             get_config(names[0]),
             task,
@@ -947,8 +979,10 @@ def unpack(
     The fit of the current key is used when stored (same code and data,
     same fit), else the newest stored fit of the model and origin
     (`_choose`), chosen for each model on its own. Writes the fit's
-    files and `UNPACKED_FILE`, which says which fit they came from (its
-    key and commit, and the current key) and at which store commit.
+    files, a walk's stored forecasts (`SAMPLE_FREE`,
+    `fitting.STORED_FORECASTS`) and `UNPACKED_FILE`, which says which fit
+    they came from (its key and commit, and the current key) and at which
+    store commit.
 
     Parameters
     ----------
@@ -979,6 +1013,10 @@ def unpack(
     target.mkdir(parents=True, exist_ok=True)
     for name, body in stored.files.items():
         (target / name).write_bytes(base64.b64decode(body))
+    if model in SAMPLE_FREE:
+        from bdbvhub.submission.fitting import STORED_FORECASTS
+
+        write_csv(stored.forecasts, target / STORED_FORECASTS)
     commit = Path(store) / COMMIT_FILE
     record = {
         "model": model,

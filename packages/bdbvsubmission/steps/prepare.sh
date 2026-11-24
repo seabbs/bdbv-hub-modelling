@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Pin the inputs every candidate shares, then build the baseline
-# candidates, which need no fit: random walk first, since every other
-# candidate is checked against it, then random walk on a nowcast.
+# Pin the inputs every candidate shares. baselines.sh builds the
+# baseline candidates from them.
 #
 #   HUB_REF         hub commit to read the data at (from the data check)
 #   AS_OF           data vintage
@@ -75,19 +74,3 @@ if ! cli coherence --vintage "$AS_OF" --out "$inputs/coherence.json"; then
   rm -f "$inputs/coherence.json"
 fi
 sci check-coherence --coherence "$inputs/coherence.json" --out "$inputs"
-
-sci python -m bdbvsubmission.policy --policy "$POLICY" --stage baseline \
-  --model "$MODEL" \
-  > "$WORK/matrix-baseline.json"
-python3 - "$WORK/matrix-baseline.json" << 'EOF' > "$WORK/legs-baseline.txt"
-import json, sys
-legs = json.load(open(sys.argv[1]))["include"]
-for e in sorted(legs, key=lambda e: e["id"] != "randomwalk"):
-    print("\t".join([e["id"], e["kind"], e["config"], e["label"],
-                     e["model"] or "-"]))
-EOF
-while IFS=$'\t' read -r id kind config label cmodel; do
-  [ "$cmodel" = - ] && cmodel=""
-  CAND_ID=$id CAND_KIND=$kind CAND_CONFIG=$config CAND_LABEL=$label \
-    CAND_MODEL=$cmodel CAND_SAMPLER='{}' "$(dirname "$0")/candidate.sh"
-done < "$WORK/legs-baseline.txt"

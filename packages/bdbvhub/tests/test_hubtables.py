@@ -13,14 +13,12 @@ from bdbvhub.reporting.hubtables import (
     hub_tables,
     write_hub_tables,
 )
-from nowcastbaselines.zones import ZoneAllocator
 from nowcastbdbv import backtest as bdbv_bt
 from nowcastbdbv.data.tidy import load_daily_zones
 from nowcastbdbv.data.zones import hub_zones
 from nowcasteval import backtest as bt
 from nowcastutils.base import NATIONAL
 from nowcastutils.hierarchy import is_zone, province_of
-from nowcastutils.snapshots import weekly_counts
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
@@ -141,8 +139,8 @@ def test_hub_tables_take_a_zone_fit_s_own_zones(
         mine.set_index(keys)["value"].sort_index(),
         check_names=False,
     )
-    # Without its zone fit, a model's zones are those in its own forecast
-    # (`with_zones`); these province-only samples have none.
+    # Without its zone fit, a model's zones are those in its own forecast;
+    # these province-only samples have none.
     split = hub_tables(forecasts, task, daily_zones, zones)["renewal"]
     assert not set(split["location"]) & set(zones)
 
@@ -168,14 +166,22 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
     zones = hub_zones(DATA / "hub-config" / "tasks.json")
     mine = tuple(z for z in zones if province_of(z) in task.locations)
     provinces = walk.loc[walk["location"].isin(set(task.locations))]
-    # A model with zone samples of its own that sum to its provinces.
+    # A model with zone samples of its own that sum to its provinces:
+    # each province's first zone holds it and the others are zero.
     daily_zones = load_daily_zones(DATA)
-    split = ZoneAllocator().allocate(
-        provinces, task, weekly_counts(daily_zones, task.vintage), mine
-    )
-    own = pd.concat(
-        [walk, split.assign(**walk.iloc[0][["kind", "vintage"]].to_dict())]
-    ).assign(model="own")
+    first: dict[str, str] = {}
+    for zone in mine:
+        first.setdefault(province_of(zone), zone)
+    final = provinces
+    if "as_of" in final:
+        final = final.loc[final["as_of"].isna()]
+    rows = []
+    for zone in mine:
+        prov = final.loc[final["location"] == province_of(zone)]
+        keep = first[province_of(zone)] == zone
+        rows.append(prov.assign(location=zone, value=prov["value"] * keep))
+    split = pd.concat(rows, ignore_index=True)
+    own = pd.concat([walk, split]).assign(model="own")
     tables = hub_tables(pd.concat([walk, own]), task, daily_zones, zones)
     keys = ["location", "target_end_date", "output_type_id"]
 

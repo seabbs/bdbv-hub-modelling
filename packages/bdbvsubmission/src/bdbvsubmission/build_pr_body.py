@@ -1,7 +1,8 @@
 """Write the body and title of the hub pull request.
 
 The hub's organisers read the body, so it is short: what was submitted,
-Sam's sign-off, the model in one sentence, a summary of national and
+Sam's sign-off, the model in one sentence, the nowcast plot and, for a
+renewal model, the weekly R_t plot, a summary of national and
 each province with cases against their recent reported level, a checks
 table with one status per check, the round's page in our docs and the
 bot footer. The national weekly table, convergence, posterior predictive
@@ -30,7 +31,6 @@ from .common import (
     write_text,
 )
 from .hubdata import quantile, read_observed, read_samples
-from .policy import UNFITTED
 
 MAX_BODY = 60000  # GitHub's limit is 65536 characters
 HUB = "InsightNet-US/BDBV-Modeling-Hub"
@@ -307,28 +307,33 @@ def fit_line(provenance: Mapping[str, Any]) -> str:
     key, else the model's newest stored fit (`run.json` `store`, from
     `fit-store unpack`), which the line says. A fit made in the
     run (`candidate.sh` with `FIT_SOURCE=fit`, a local run) says so.
+    A random walk fits nothing, but its stored forecast is read the same
+    way, and the line names it a forecast.
     """
     run = provenance.get("run") or {}
-    if "store" not in run or run.get("kind") in UNFITTED:
+    if "store" not in run or run.get("kind") == "direct":
         return ""
+    what = "forecast" if run.get("kind") == "randomwalk" else "fit"
+    head = what.capitalize()
+    made = "made" if what == "forecast" else "fitted"
     store = run["store"]
     if not store:
         return (
-            "Fit: made in this run, as the fit store holds no fit for this "
-            "round."
+            f"{head}: made in this run, as the fit store holds no {what} "
+            "for this round."
         )
     where = (store.get("store_commit") or "unknown")[:7]
     current = store.get("current_key")
     if current and current != store["key"]:
         return (
-            f"Fit: `{store['model']}` fit from commit "
-            f"`{store['commit'][:7]}` (key `{store['key']}`, fitted "
+            f"{head}: `{store['model']}` {what} from commit "
+            f"`{store['commit'][:7]}` (key `{store['key']}`, {made} "
             f"{store['fitted_at']}); current code key `{current}`, "
             f"which the fit store lacks (fit-store commit `{where}`)."
         )
     return (
-        f"Fit: read from the fit store, the `{store['model']}` fit at "
-        f"{store['origin']} (key `{store['key']}`, fitted at "
+        f"{head}: read from the fit store, the `{store['model']}` {what} at "
+        f"{store['origin']} (key `{store['key']}`, {made} at "
         f"`{store['commit'][:7]}`, fit-store commit `{where}`)."
     )
 
@@ -431,8 +436,13 @@ def build(
     complete_weeks: int = 2,
     dry_run: bool = False,
     docs: str = DOCS,
+    rt_plot_url: str = "",
 ) -> str:
-    """Return the PR body markdown."""
+    """Return the PR body markdown.
+
+    `plot_url` and `rt_plot_url` are shown only when they are published
+    (an http URL), so a dry run's relative paths are left out.
+    """
     fit_path = selected_dir / "fit-summary.json"
     fit = read_json(fit_path) if fit_path.exists() else None
     ppc_path = selected_dir / "ppc-summary.json"
@@ -460,6 +470,11 @@ def build(
     if plot_url.startswith("http"):
         out.append(
             f"![Nowcast and forecast for {reference_date}]({plot_url})\n"
+        )
+    if rt_plot_url.startswith("http"):
+        out.append(
+            f"![Weekly R_t by week of infection for {reference_date}]"
+            f"({rt_plot_url})\n"
         )
     if observed is not None:
         out.append(
@@ -512,6 +527,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--as-of", default="")
     p.add_argument("--plot-url", required=True)
     p.add_argument(
+        "--rt-plot-url", default="", help="the weekly R_t plot, if any"
+    )
+    p.add_argument(
         "--validation",
         default="",
         help="defaults to the selected attempt's result",
@@ -542,6 +560,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         complete_weeks=int(checks_cfg.get("complete_weeks", 2)),
         dry_run=args.dry_run,
         docs=args.docs,
+        rt_plot_url=args.rt_plot_url,
     )
     write_text(args.out / "pr-body.md", body)
     write_text(

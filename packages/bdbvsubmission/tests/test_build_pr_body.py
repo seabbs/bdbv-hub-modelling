@@ -146,6 +146,19 @@ def test_dry_run_note_and_no_relative_plot(tmp_path: Path) -> None:
     assert "nowcast.png" not in text
 
 
+def test_rt_plot_follows_the_nowcast_plot(tmp_path: Path) -> None:
+    url = "https://raw.githubusercontent.com/o/r/sha/rt.png"
+    shown = visible(body(gate(tmp_path), rt_plot_url=url))
+    assert shown[3].startswith("![Nowcast and forecast")
+    assert shown[4] == f"![Weekly R_t by week of infection for {REF}]({url})"
+
+
+def test_no_rt_plot_without_a_published_url(tmp_path: Path) -> None:
+    assert "R_t by week" not in body(gate(tmp_path))
+    text = body(gate(tmp_path), dry_run=True, rt_plot_url="rt.png")
+    assert "rt.png" not in text
+
+
 def test_cascade_model_named_with_why(tmp_path: Path) -> None:
     g = gate(tmp_path, produced_by="single-patch zone renewal models")
     prov = read_json(g / "provenance.json")
@@ -212,7 +225,8 @@ def test_cli(tmp_path: Path) -> None:
     g = gate(tmp_path)
     args = [
         "--gate", str(g), "--reference-date", REF, "--model-id", "m",
-        "--plot-url", "p.png", "--docs", "https://example.org/docs/",
+        "--plot-url", "p.png",
+        "--rt-plot-url", "https://example.org/rt.png", "--docs", "https://example.org/docs/",
         "--observed", str(HUB / "time-series.csv"),
         "--policy", str(POLICY_PATH), "--as-of", "2026-10-31",
         "--out", str(tmp_path / "o"),
@@ -225,6 +239,7 @@ def test_cli(tmp_path: Path) -> None:
     assert "| Hub validation | PASS |" in out
     assert f"https://example.org/docs/submission/rounds/{REF}/" in out
     assert "forecast / reported" in out
+    assert "(https://example.org/rt.png)" in out
 
 
 def test_data_coherence_status(tmp_path: Path) -> None:
@@ -355,12 +370,33 @@ def test_says_when_the_fit_was_made_in_the_run(tmp_path: Path) -> None:
     assert visible(body(g, provenance=prov))[3] == (
         "Fit: made in this run, as the fit store holds no fit for this round."
     )
-    for kind in ("randomwalk", "direct"):
-        prov["run"].update(kind=kind)
-        assert not any(
-            line.startswith("Fit:")
-            for line in visible(body(g, provenance=prov))
-        )
+    prov["run"].update(kind="direct")
+    assert not any(
+        line.startswith(("Fit:", "Forecast:"))
+        for line in visible(body(g, provenance=prov))
+    )
+
+
+def test_says_which_stored_walk_forecast_it_read(tmp_path: Path) -> None:
+    # A walk fits nothing, but its forecast comes from the fit store too.
+    g = gate(tmp_path)
+    prov = read_json(g / "provenance.json")
+    prov["run"].update(
+        kind="randomwalk",
+        store={
+            "model": "randomwalk",
+            "origin": "2026-10-31",
+            "key": "0123456789abcdef",
+            "commit": "c0ffee0" * 5 + "c",
+            "fitted_at": "2026-11-01T08:00:00+00:00",
+            "store_commit": "5707e00" * 5 + "5",
+        },
+    )
+    assert visible(body(g, provenance=prov))[3] == (
+        "Forecast: read from the fit store, the `randomwalk` forecast at "
+        "2026-10-31 (key `0123456789abcdef`, made at `c0ffee0`, fit-store "
+        "commit `5707e00`)."
+    )
 
 
 def test_names_the_checkpoint_a_model_loaded(tmp_path: Path) -> None:

@@ -255,6 +255,40 @@ def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
     assert jobs["ft_check_page"] == 1
 
 
+def test_finetune_builds_each_trained_run_s_german_report(tmp_path):
+    # The run's report page comes with it: its checkpoints against
+    # zero-shot and randomwalknowcast on the German development half.
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["german_report"] == 1
+
+
+def test_a_run_table_pulls_its_checkpoints_and_their_scores(tmp_path):
+    # One graph: asking for a run's table (as the paper does) trains and
+    # scores every checkpoint in reach, not only those already saved.
+    table = tmp_path / "runs" / "runa" / "reports" / "checkpoint-scores.csv"
+    jobs = dry(tmp_path, str(table), config=FT)
+    assert jobs["train_segment"] == 2
+    assert jobs["score_run_germany"] == 2
+
+
+def test_the_trainer_claims_the_cores_it_uses(tmp_path):
+    # The trainer and its block-cutting workers count against the cores,
+    # so the scoring jobs beside it fit in what is left.
+    out = dry_run(
+        tmp_path, "finetune", config=FT, quiet=False, extra=("--cores", "16")
+    )
+    assert out.returncode == 0, out.stderr + out.stdout
+    trains = re.findall(
+        r"rule train_segment:.*?threads: (\d+).*?--cut-workers (\d+)",
+        out.stdout,
+        re.S,
+    )
+    assert trains
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    workers = config["finetune"]["cut_workers"]
+    assert all(t == (str(workers + 1), str(workers)) for t in trains)
+
+
 SMALL = {
     **FT,
     "finetune": {

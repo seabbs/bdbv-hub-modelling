@@ -209,7 +209,7 @@ def test_a_grid_that_ends_before_the_cut_off_is_read_up_to_its_end():
 
 
 def test_the_bdbv_study_config_sets_d_for_every_model(task: ForecastTask):
-    # Sam: for BDBV, D = 40 days in packages/nowcastbdbv/config/backtest.toml,
+    # Sam: for BDBV, D = 42 days in packages/nowcastbdbv/config/backtest.toml,
     # read by the
     # foundation models and the random walk alike, in place of each
     # model's own rule or default.
@@ -217,13 +217,13 @@ def test_the_bdbv_study_config_sets_d_for_every_model(task: ForecastTask):
     from nowcasteval.backtest import load_config
 
     config = load_config(ROOT_CONFIG)
-    assert config.max_delay == 40
+    assert config.max_delay == 42
     study = dataclasses.replace(task, max_delay=config.max_delay)
     # Lags 0 to D, as baselinenowcast's max_delay.
-    assert get_model("foundation_zeroshot").lag_count(study) == 41
+    assert get_model("foundation_zeroshot").lag_count(study) == 43
     walk = get_model("randomwalknowcast")
     assert isinstance(walk, RandomWalk)
-    assert walk.settings_for(study).max_delay == 40
+    assert walk.settings_for(study).max_delay == 42
     # Without it, each model keeps its own.
     assert walk.settings_for(task).max_delay == walk.settings.max_delay
 

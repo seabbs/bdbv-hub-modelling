@@ -33,6 +33,7 @@ __all__ = [
     "bvd_rt",
     "count_bands",
     "plot_rt_check",
+    "plot_submitted_rt",
     "rt_bands",
     "rt_check_from_fit",
     "rt_check_page",
@@ -302,6 +303,84 @@ def plot_rt_check(
     low.legend(loc="upper left", ncols=3)
     low.xaxis.set_major_locator(mdates.MonthLocator())  # type: ignore[no-untyped-call]
     low.xaxis.set_major_formatter(mdates.DateFormatter("%b"))  # type: ignore[no-untyped-call]
+    return fig
+
+
+def plot_submitted_rt(
+    submission: Path | str, names: Mapping[str, str] | None = None
+) -> Figure:
+    """Draw the `wk R_t` quantiles of a hub file, for the hub PR.
+
+    One panel for the country and one for each province the file has
+    `wk R_t` rows for (the renewal fit gives Rt only where there are
+    cases). Each shows the median and 50% and 90% intervals by week of
+    infection, with a line at Rt = 1. A resubmission's file holds the
+    rows of earlier forecast dates too; only the newest are drawn. Light
+    mode, as `data_plots.plot_submission`.
+
+    Parameters
+    ----------
+    submission : pathlib.Path or str
+        The hub file.
+    names : mapping, optional
+        Location code to name, for the panel titles.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        A grid with one panel per location.
+
+    Raises
+    ------
+    ValueError
+        If the file has no `wk R_t` rows.
+    """
+    table = pd.read_csv(
+        submission,
+        dtype={"output_type_id": str, "target_end_date": str},
+    )
+    rows = table.loc[table["target"] == "wk R_t"]
+    if rows.empty:
+        raise ValueError(f"{submission} has no wk R_t rows.")
+    rows = rows.loc[rows["forecast_date"] == rows["forecast_date"].max()]
+    bands = rt_bands(rows)
+    codes = [
+        c for c in _order(sorted(set(bands["location"]))) if not is_zone(c)
+    ]
+    names = names or {}
+    ncol = min(len(codes), 4)
+    nrow = -(-len(codes) // ncol)
+    with theme("light"):
+        ink = THEMES["light"]
+        ours = model_colour("renewalbvd", ["renewalbvd"], "light")
+        fig, axes = plt.subplots(
+            nrow,
+            ncol,
+            figsize=(4 * ncol, 3.2 * nrow),
+            sharey=True,
+            layout="constrained",
+            squeeze=False,
+        )
+        flat = list(axes.ravel())
+        for code, ax in zip(codes, flat, strict=False):
+            mine = bands.loc[bands["location"] == code].sort_values(
+                "target_end_date"
+            )
+            x = _dates(mine["target_end_date"])
+            ax.vlines(x, mine["q05"], mine["q95"], color=ours, lw=2, alpha=0.5)
+            ax.vlines(x, mine["q25"], mine["q75"], color=ours, lw=6)
+            ax.plot(x, mine["q50"], "o-", color=ours, mec="white", ms=6)
+            ax.axhline(1.0, color=ink["muted"], lw=0.8, ls="--")
+            ax.set_title(f"{names.get(code, code)} ({code})", loc="left")
+            ax.set_xticks(x, [d.strftime("%d %b") for d in x])
+            ax.set_xlim(
+                x.min() - pd.Timedelta(days=5), x.max() + pd.Timedelta(days=5)
+            )
+        for ax in flat[len(codes) :]:
+            ax.set_visible(False)
+        for ax in axes[:, 0]:
+            ax.set_ylabel("Rt (median, 50%, 90%)")
+        fig.supxlabel("Week of infection (week ending)")
     return fig
 
 

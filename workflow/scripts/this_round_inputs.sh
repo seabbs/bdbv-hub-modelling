@@ -8,7 +8,8 @@
 #
 # RUN_FILE holds the run id first (workflow/scripts/hub_watch.sh writes
 # it). Writes OUT_DIR/run/ (the run's `inputs`, `gate` and
-# `baseline-gate` artefacts and run.json), OUT_DIR/store/ and
+# `baseline-gate` artefacts, the renewal gate's pick's `candidate-<id>`
+# artefact under candidates/<id>/ and run.json), OUT_DIR/store/ and
 # OUT_DIR/candidates.csv.gz. A model with no good stored fit at the
 # round's origin, such as a failed Chronos-2 fit, is left out.
 set -eu
@@ -22,6 +23,19 @@ for name in inputs gate baseline-gate; do
   gh run download "$run" -R "$repo" -n "$name" -D "$out/run/$name" ||
     echo "no $name artefact in run $run yet"
 done
+# The renewal gate's pick, or its first candidate when the round was
+# skipped: its checks and hub file, for the warned-location plot.
+pick=$(python3 -c 'import json, sys
+from pathlib import Path
+found = sorted(Path(sys.argv[1]).glob("**/provenance.json"))
+p = json.loads(found[0].read_text()) if found else {}
+print(p.get("selected") or (p.get("attempts") or [{}])[0].get("id", ""))' \
+  "$out/run/gate")
+if [ -n "$pick" ]; then
+  gh run download "$run" -R "$repo" -n "candidate-$pick" \
+    -D "$out/run/candidates/$pick" ||
+    echo "no candidate-$pick artefact in run $run"
+fi
 gh run view "$run" -R "$repo" --json databaseId,headSha,status,conclusion \
   --jq '{run: .databaseId, sha: .headSha, mode: (.status + " " + .conclusion)}' \
   > "$out/run/run.json"

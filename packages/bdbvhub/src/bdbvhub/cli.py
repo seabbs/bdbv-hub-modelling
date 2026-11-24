@@ -18,6 +18,7 @@ Commands:
   load the stored fits into the results (`bdbvhub.store.store`), or archive
   every candidate's forecasts for a round (`bdbvhub.store.archive`).
 - `plot-submission`: plot a submitted hub file.
+- `plot-rt-submission`: plot the `wk R_t` rows of a submitted hub file.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
 - `rt-check`: write the Rt sense-check page of a renewal fit directory
@@ -53,7 +54,12 @@ import pandas as pd
 from bdbvhub.store import archive as store_archive
 from bdbvhub.store import store
 from bdbvhub.store.store import stored_delays
-from bdbvhub.submission.fitting import get_config, run_fit, run_forecast
+from bdbvhub.submission.fitting import (
+    COPULA_FILE,
+    get_config,
+    run_fit,
+    run_forecast,
+)
 from bdbvhub.submission.hub import (
     ROUND_NAME,
     SUBMISSION_CONFIG,
@@ -424,6 +430,18 @@ def build_parser() -> argparse.ArgumentParser:
     plot.add_argument("--data", default=data_dir)
     plot.add_argument("--out", required=True)
 
+    prt = sub.add_parser(
+        "plot-rt-submission",
+        help="Plot the wk R_t rows of a submitted hub file.",
+    )
+    prt.add_argument("--submission", required=True)
+    prt.add_argument(
+        "--names",
+        default=None,
+        help="A CSV with `location` and `location_name`, for the titles.",
+    )
+    prt.add_argument("--out", required=True)
+
     ppc = sub.add_parser(
         "plot-ppc", help="Plot a fit's posterior predictive checks."
     )
@@ -779,25 +797,27 @@ def _backtest(args: argparse.Namespace) -> int:
     host_devices(int(sampler_settings()["num_chains"]))
     target, delays = load_target(args.data), load_delays(args.data)
     names = _models(args.models)
-    if not args.lopo:
-        # Fitted models are never run here: their real forecasts come from
-        # the fit store. To fit one locally, run `fit-store fit --model M
-        # --origin D` for each origin, then `fit-store load`.
-        stored = set(store.stored_models())
-        names = [n for n in names if n not in stored]
-        if not names:
-            print(
-                "ERROR: fitted models come from the fit store: run "
-                "`task bdbvhub:fit-store`.",
-                file=sys.stderr,
-            )
-            return 1
+    # The stored models' origin forecasts come from the fit store, never
+    # from here. To make one locally, run `fit-store fit --model M
+    # --origin D` for each origin, then `fit-store load`. The walks
+    # (`store.SAMPLE_FREE`) still forecast each release's snapshots here,
+    # which the store does not hold.
+    stored = set() if args.lopo else set(store.stored_models())
+    names = [n for n in names if n not in stored or n in store.SAMPLE_FREE]
+    if not names:
+        print(
+            "ERROR: fitted models come from the fit store: run "
+            "`task bdbvhub:fit-store`.",
+            file=sys.stderr,
+        )
+        return 1
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     models = [get_model(n) for n in names]
+    origins = [m for m in models if m.name not in stored]
     if args.forecast_only:
-        return _forecast_parts(args, config, target, delays, models)
+        return _forecast_parts(args, config, target, delays, models, origins)
     fits: list[pd.DataFrame] = []
     if args.lopo:
         lopo_fc, lopo_scores = bdbv_bt.run_lopo(
@@ -814,7 +834,7 @@ def _backtest(args: argparse.Namespace) -> int:
         return 0
     learnt: list[pd.DataFrame] = []
     forecasts = bdbv_bt.run_development(
-        models,
+        origins,
         target,
         delays,
         config,
@@ -840,11 +860,14 @@ def _forecast_parts(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     models: Sequence[ForecastModel],
+    origins: Sequence[ForecastModel],
 ) -> int:
     """Forecast without scoring and write the forecasts to `args.parts`.
 
     The forecasting half of each backtest, so each model can run apart
     and be cached on its own code; `score` scores the parts together.
+    `models` forecast each release's snapshots, and `origins`, the models
+    the store does not hold, each origin.
     """
     parts = Path(args.parts)
     parts.mkdir(parents=True, exist_ok=True)
@@ -852,7 +875,7 @@ def _forecast_parts(
     fits: list[pd.DataFrame] = []
     learnt: list[pd.DataFrame] = []
     forecasts = bdbv_bt.run_development(
-        models, target, delays, config, fits=fits, learnt=learnt,
+        origins, target, delays, config, fits=fits, learnt=learnt,
         daily=daily, zones=_zone_data(args.data),
     )  # fmt: skip
     write_csv(forecasts, parts / "forecasts.csv.gz")
@@ -905,22 +928,25 @@ def _score(args: argparse.Namespace) -> int:
     target, delays = load_target(args.data), load_delays(args.data)
     daily = load_daily(args.data)
     dev = _stack(parts, "forecasts.csv.gz")
-    if dev is not None:
-        order = _order(dev)
+    release = [p for p in parts if (p / "release-runs.csv.gz").exists()]
+    if dev is not None or release:
+        # With no origin forecasts in the parts, every model's come from
+        # the fit store (`fit-store load`).
+        order = [] if dev is None else _order(dev)
         forecasts = bt.merge_by_model(
-            output / "forecasts.csv.gz", bt.joint_order(dev, order)
+            output / "forecasts.csv.gz",
+            pd.DataFrame() if dev is None else bt.joint_order(dev, order),
         )
         for name, path in (
             ("backtest-fits.csv", results / "backtest-fits.csv"),
             (DELAY_SUMMARY_FILE, output / DELAY_SUMMARY_FILE),
         ):
             table = _stack(parts, name)
-            if table is not None:
+            if table is not None and order:
                 write_csv(
                     bt.merge_by_model(path, bt.joint_order(table, order)),
                     path,
                 )
-        release = [p for p in parts if (p / "release-runs.csv.gz").exists()]
         _release_scores(
             args, config, target, delays, results, forecasts,
             ReleaseForecasts.read(release),
@@ -1031,11 +1057,14 @@ def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
     )
 
 
-def _fit_store_forecasts(args: argparse.Namespace) -> pd.DataFrame:
+def _fit_store_forecasts(
+    args: argparse.Namespace, zones: bool = True
+) -> pd.DataFrame:
     """Return the real forecasts of every whole fit in the results' status.
 
     The fits are read from `--store` by the keys `fit-store load` wrote
-    to `STATUS_FILE`. Empty if either is missing.
+    to `STATUS_FILE`. Empty if either is missing. Without `zones`, each
+    fit's zone rows, most of its rows, are dropped as it is read.
     """
     status = Path(args.results) / store.STATUS_FILE
     root = Path(args.store)
@@ -1051,7 +1080,10 @@ def _fit_store_forecasts(args: argparse.Namespace) -> pd.DataFrame:
         if not path.exists():
             continue
         fc = store.read_fit(path).forecasts
-        frames.append(fc.loc[(fc["kind"] == "real") & fc["as_of"].isna()])
+        keep = (fc["kind"] == "real") & fc["as_of"].isna()
+        if not zones:
+            keep &= ~fc["location"].map(is_zone)
+        frames.append(fc.loc[keep])
     frames = [f for f in frames if not f.empty]
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
@@ -1108,7 +1140,8 @@ def _stored(
     or from the backtest forecasts if no store is checked out. Their
     delays from the delay summaries `fit-store load` writes to the
     results, none if it loaded no fits. Hub teams' forecasts are matched
-    to the real vintage serving their round, and have no delay.
+    to the real vintage serving their round, and have no delay. Zones are
+    left out, as the release backtest scores provinces and the nation.
     """
     from bdbvhub import compare as hc
 
@@ -1121,6 +1154,10 @@ def _stored(
         "value",
     ]
     fitted = [s.name for s in list_models() if s.fitted]
+    if "model" not in forecasts:
+        # No origin forecasts at all: the walks' release backtest alone.
+        need = [*cols, "kind", "as_of"]
+        forecasts = pd.DataFrame(columns=need)
     ours = _with_whole_fits(
         forecasts.loc[
             forecasts["model"].isin(fitted)
@@ -1128,7 +1165,7 @@ def _stored(
             & forecasts["as_of"].isna()
             & ~forecasts["location"].map(is_zone)
         ],
-        _fit_store_forecasts(args),
+        _fit_store_forecasts(args, zones=False),
         "vintage",
     )
     data = Path(args.data)
@@ -1267,6 +1304,10 @@ def _hub_forecast(
         result = forecast
     elif config:
         result = run_forecast(get_config(config), task, fit)
+        # A stored walk's copula, from its fit directory.
+        record = None if fit is None else Path(fit) / COPULA_FILE
+        if record is not None and record.exists():
+            copula = json.loads(record.read_text())
     else:
         loaded = get_model(str(model))
         checkpoint = getattr(loaded, "checkpoint", None)
@@ -1613,6 +1654,23 @@ def _plot_submission(args: argparse.Namespace) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     # The light theme is transparent, which is unreadable in dark mode PRs.
+    fig.savefig(out, dpi=100, facecolor="white", transparent=False)
+    print(f"Wrote {out}.")
+    return 0
+
+
+def _plot_rt_submission(args: argparse.Namespace) -> int:
+    from bdbvhub.reporting.rtcheck import plot_submitted_rt
+
+    names = None
+    if args.names:
+        table = pd.read_csv(args.names, dtype=str)
+        names = dict(
+            zip(table["location"], table["location_name"], strict=True)
+        )
+    fig = plot_submitted_rt(args.submission, names)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=100, facecolor="white", transparent=False)
     print(f"Wrote {out}.")
     return 0
@@ -2003,6 +2061,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         out.write_text(rt_check_from_fit(args.fit, args.data))
         print(f"Wrote {out}")
         return 0
+    if args.command == "plot-rt-submission":
+        return _plot_rt_submission(args)
     if args.command == "plot-ppc":
         return _plot_ppc(args)
     if args.command == "backtest":

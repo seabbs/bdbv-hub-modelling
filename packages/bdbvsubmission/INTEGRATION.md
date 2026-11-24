@@ -11,7 +11,7 @@ It is the reference for the interface, and `packages/bdbvsubmission/run_dry.sh` 
 | command | status in the main repo | used by |
 | --- | --- | --- |
 | `bdbvhub data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
-| `bdbvhub nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
+| `bdbvhub fit-store unpack --model randomwalk --origin <as_of> --out <fit>`, then `bdbvhub nowcast --config randomwalk --fit <fit> --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline), from the walk's stored forecast |
 | `bdbvhub metadata --model <model> --out <dir>` | exists | `gate` |
 | `packages/bdbvsubmission/steps/validate_hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `packages/bdbvsubmission/steps/validate_hub.sh` |
 | `bdbvhub fit ...` | done (`bdbvhub.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the model fitted to each province on its own, `nowcastrenewal.forecaster`) | `fit` |

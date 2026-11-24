@@ -98,8 +98,8 @@ jobs:
         run: |
           uv run bdbvhub data
           uv run bdbvhub bvd
-      # The BDBV backtests (the walks' development and zone backtests and
-      # the pairing sensitivity) and their scores, as Fit store ran and
+      # The BDBV backtests (the walks' release snapshot and zone backtests
+      # and the pairing sensitivity) and their scores, as Fit store ran and
       # scored them (`backtests` there), unpacked before the stored fits
       # are loaded so the newest fits win. Pages forecasts and scores
       # nothing.

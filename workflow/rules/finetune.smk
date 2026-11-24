@@ -89,6 +89,8 @@ rule train_segment:
     priority: TRAIN_PRIORITY
     conda:
         TOOLS_ENV
+    # The trainer and its block-cutting workers.
+    threads: lambda wc: run_of(wc).ft["cut_workers"] + 1
     resources:
         gpu=1,
     params:
@@ -120,6 +122,7 @@ rule train_segment:
         univariate_share=ft("univariate_share"),
         note=ft("note"),
         chunk=ft("chunk"),
+        cut_workers=lambda wc, threads: max(1, threads - 1),
         eval_every=ft("eval_every"),
         by_source_every=ft("by_source_every"),
         eval_mode=ft("eval"),
@@ -146,6 +149,7 @@ rule train_segment:
             --sources {params.sources} \
             --univariate-share {params.univariate_share} \
             --note "{params.note}" --chunk {params.chunk} \
+            --cut-workers {params.cut_workers} \
             --eval-every {params.eval_every} \
             --by-source-every {params.by_source_every} \
             --eval {params.eval_mode} \
@@ -226,10 +230,12 @@ rule real_training_blocks:
 rule finetune:
     input:
         finetune_inputs,
-        # Its own scoring (lead 10:15, Sam): each checkpoint's German unit
-        # and the references, on the forecasting device.
+        # Its own scoring: each checkpoint's German unit and the
+        # references, on the forecasting device, and each trained run's
+        # German report.
         finetune_scores,
-        # And each released checkpoint's BDBV check page (lead 10:50).
+        run_scores,
+        # Each released checkpoint's BDBV check page.
         ft_check_released,
 
 

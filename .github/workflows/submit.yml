@@ -8,8 +8,9 @@ name: Submit to the BDBV hub
 #   detect -> prepare -> await-fits -> fit (bvd, renewalsp, main) ->
 #   gate (select + hubValidations) -> submit -> record -> outcome
 #
-# The fitted candidates come from the fit store (fit-store.yml), keyed on
-# the same code and data, so the submission is the fit the docs show.
+# The fitted candidates and the random walks come from the fit store
+# (fit-store.yml), keyed on the same code and data, so the submission is
+# the forecast the docs show. `prepare` waits for the walks.
 # `await-fits` starts Fit store when the round's fits are missing and
 # waits for them, at most the [timing] fit timeout. Only Fit store fits,
 # so a release is fitted once. A stored fit forecasts one week past its
@@ -214,12 +215,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
 
+  # The walks' forecasts at each origin are in the fit store, like the
+  # fitted candidates' fits. Fit store stores them first, in minutes, so
+  # this waits at most an hour for a new release's.
   prepare:
-    name: Pin inputs and build the random walk candidate
+    name: Pin inputs and read the random walks from the fit store
     needs: detect
     if: needs.detect.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       renewal: ${{ steps.tracks.outputs.renewal }}
@@ -237,10 +244,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-forecast-env
-      - name: Download data and build the random walk baseline
+      - name: Download and pin the data
+        run: packages/bdbvsubmission/steps/prepare.sh
+      - name: Read the random walk candidates from the fit store
         env:
           EXPECTED_LOCATIONS: ${{ vars.EXPECTED_LOCATIONS }}
-        run: packages/bdbvsubmission/steps/prepare.sh
+          FIT_SOURCE: store
+          STORE: output/fit-store
+          WAIT_MINUTES: '60'
+          FIT_REF: ${{ github.ref_name }}
+          DISPATCH: >-
+            ${{ (github.ref == 'refs/heads/main' && inputs.store_branch == '')
+            || startsWith(inputs.store_branch, 'fit-store-scratch') }}
+        run: packages/bdbvsubmission/steps/baselines.sh
       # Each hub model runs only when opted in (`submit = true` in
       # packages/bdbvhub/config/hub.toml).
       - name: Decide which hub models run
@@ -486,9 +502,9 @@ jobs:
           # dry run.
           retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
-  # baseline: random walk on a nowcast, falling back to plain
-  # random walk, under its own hub id. Apart from the renewal chain; both
-  # candidates were built in `prepare`.
+  # baseline: random walk on a nowcast under its own hub id, checked
+  # against plain random walk. Apart from the renewal chain; both read
+  # from the fit store.
   baseline:
     name: Submit baseline
     needs: [detect, prepare]
@@ -544,10 +560,15 @@ jobs:
           gh auth setup-git
           git config --global user.name "seabbs-bot"
           git config --global user.email "signin@samabbott.co.uk"
+      # The walks' stored forecasts, which `prepare` waited for.
+      - name: Fetch the fit store
+        run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
       - name: Check and submit
         id: track
         env:
           GH_TOKEN: ${{ needs.detect.outputs.dry_run == 'false' && secrets.HUB_SUBMIT_TOKEN || github.token }}
+          FIT_SOURCE: store
+          STORE: output/fit-store
           VALIDATE: 'true'
           R_VALIDATION: ${{ vars.HUB_VALIDATIONS != 'false' }}
           HUB_PATH: output/hub-clone
@@ -653,10 +674,15 @@ jobs:
           gh auth setup-git
           git config --global user.name "seabbs-bot"
           git config --global user.email "signin@samabbott.co.uk"
+      # The walks' stored forecasts, which `prepare` waited for.
+      - name: Fetch the fit store
+        run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
       - name: Check and submit
         id: track
         env:
           GH_TOKEN: ${{ needs.detect.outputs.dry_run == 'false' && secrets.HUB_SUBMIT_TOKEN || github.token }}
+          FIT_SOURCE: store
+          STORE: output/fit-store
           VALIDATE: 'true'
           R_VALIDATION: ${{ vars.HUB_VALIDATIONS != 'false' }}
           HUB_PATH: output/hub-clone

@@ -622,8 +622,7 @@ class ZoneRenewalModel(RenewalModel):
         zone_samples = samples_table(zt, run.places, run.draws)
         later = _as_reported(zt, run)
         # The samples hold the zones too, so the forecast, the store and
-        # the scores read the zone fit's own zones, not a split
-        # (`nowcastbaselines.zones.with_zones` leaves them as they are).
+        # the scores read the zone fit's own zones.
         return ZoneRenewalFit(
             runs,
             pd.concat(

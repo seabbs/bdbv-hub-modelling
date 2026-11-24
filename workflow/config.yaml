@@ -54,7 +54,6 @@ finetune:
   # fine-tuned setting trains on the same 3,200 simulations, its grid's
   # four training rounds, so they compare fairly, with checkpoints
   # doubling from 100.
-  # Run A's and Run B's checkpoints, then the end (lead 19:20/19:24).
   prefixes: [100, 200, 400, 800, 1600, 3200, 4800]
   outbreaks: 4800
   # Training seeds: the rounds' batches in seed order, or a fixed list
@@ -105,6 +104,10 @@ finetune:
   # (null: keep every block).
   quiet_min_cases: 10
   chunk: 100
+  # Processes cutting blocks beside the trainer. The trainer claims them
+  # and itself as cores, so jobs beside it fit in what is left. Speed
+  # only: the steps and the hash stay.
+  cut_workers: 3
   # Steps between the trainer's held-out evaluations: the monitor on the
   # first 100 held-out blocks, and by source (100 blocks a source) on a
   # multiple of it. They only score: the steps trained are the same.
