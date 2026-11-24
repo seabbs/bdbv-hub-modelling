@@ -1,7 +1,6 @@
 """The fine-tuning trainer modules are type-checked (#631).
 
-Each module leaves the mypy override in pyproject.toml once it is typed,
-one module per PR.
+Every trainer module is typed, so none is left in a mypy override.
 """
 
 import tomllib
@@ -24,5 +23,6 @@ def test_the_typed_trainer_modules_are_checked():
         "nowcastfoundation.finetune.verify",
         "nowcastfoundation.finetune.evaluate",
         "nowcastfoundation.finetune.chronos",
+        "nowcastfoundation.finetune.stream",
     }
     assert not typed & _untyped()
