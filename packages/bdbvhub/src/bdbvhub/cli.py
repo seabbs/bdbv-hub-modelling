@@ -735,7 +735,10 @@ def apply_sampler(config: bt.BacktestConfig) -> None:
 
 
 def _models(names: Sequence[str] | None) -> list[str]:
-    return list(names) if names else [s.name for s in list_models()]
+    """Return the named models, else every model but the paper-only ones."""
+    if names:
+        return list(names)
+    return [s.name for s in list_models() if not s.paper_only]
 
 
 def _backtest(args: argparse.Namespace) -> int:

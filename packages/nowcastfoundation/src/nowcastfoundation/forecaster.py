@@ -2283,13 +2283,15 @@ def prefetch(
 
 # One model per method the paper compares, each reading its cadence from
 # the task (`FROM_DATA`), so one run gives the daily counts and the 7-day
-# hub target. `foundation` is the hub's model.
+# hub target. `foundation` is the hub's model, the only one the Fit store
+# and the submission run; the others are paper-only (`paper_only`).
 register_model(
     "foundation_zeroshot",
     partial(FoundationModel, "foundation_zeroshot", FROM_DATA, "ragged"),
     "Chronos-2 zero-shot on the hub target's releases, ragged layout, every "
     "target in one block.",
     fitted=True,
+    paper_only=True,
 )
 register_model(
     "foundation",
@@ -2305,6 +2307,7 @@ register_model(
     ),
     "Chronos-2 zero-shot on the hub target's releases, complete layout.",
     fitted=True,
+    paper_only=True,
 )
 # For checkpoints trained on complete counts (the no-delays run).
 register_model(
@@ -2313,6 +2316,7 @@ register_model(
     "Chronos-2 fine-tuned on complete counts, on the hub target's "
     "releases, complete layout.",
     fitted=True,
+    paper_only=True,
 )
 # The two-step sensitivity analysis (#538): baselinenowcast's point
 # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
@@ -2328,6 +2332,7 @@ register_model(
     "baselinenowcast's point nowcast, then Chronos-2 on the corrected "
     "daily counts, complete layout.",
     fitted=True,
+    paper_only=True,
 )
 register_model(
     "foundation_twostep",
@@ -2335,6 +2340,7 @@ register_model(
     "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
     "corrected daily counts, complete layout.",
     fitted=True,
+    paper_only=True,
 )
 
 
@@ -2365,6 +2371,7 @@ def register_realdata_models() -> None:
         "Chronos-2 fine-tuned on real data (German and BDBV), on the hub "
         "target's releases, ragged layout (SI only).",
         fitted=True,
+        paper_only=True,
         replace=True,
     )
 

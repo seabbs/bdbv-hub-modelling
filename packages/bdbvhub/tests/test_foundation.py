@@ -147,6 +147,23 @@ def test_registered_as_fitted_models() -> None:
         assert "0x" not in repr(model)
 
 
+def test_only_the_hub_model_is_fitted_by_the_store() -> None:
+    # Sam, 12:36: one Chronos-2 model in the Fit store and the submission;
+    # the zero-shot and layout comparisons run only in the paper's
+    # workflow, which names them.
+    from bdbvhub.cli import _models
+    from bdbvhub.store import store
+
+    specs = {s.name: s for s in list_models()}
+    chronos = {n for n, s in specs.items() if n.startswith("foundation")}
+    assert not specs["foundation"].paper_only
+    assert all(specs[n].paper_only for n in chronos - {"foundation"})
+    assert chronos & set(store.stored_models()) == {"foundation"}
+    assert chronos & set(_models(None)) == {"foundation"}
+    # Named, a paper model still runs.
+    assert _models(["foundation_zeroshot"]) == ["foundation_zeroshot"]
+
+
 @pytest.mark.parametrize(("source", "steps"), [("daily", 28), ("weekly", 4)])
 def test_ragged_lags_stop_below_the_truth_delay(
     source: str, steps: int, task: ForecastTask
