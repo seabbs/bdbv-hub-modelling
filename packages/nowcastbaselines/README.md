@@ -21,9 +21,29 @@ It is for anyone who needs a simple, well-tested forecast of weekly counts revis
 - [How it is used in the workflow](https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/workflow/).
 - The baselines in the hub submission: [Baseline models](https://samabbott.co.uk/bdbv-hub-modelling/methods/baselines/).
 
+## Install
+
+From a clone of the repository:
+
 ```sh
-uv add nowcastbaselines
+uv sync --package nowcastbaselines             # this package and the ones it needs
 ```
+
+## Example
+
+```python
+import nowcastbaselines.randomwalk  # registers the walks
+from nowcastutils.base import get_model
+
+model = get_model("randomwalknowcast")
+forecasts = model.forecast(task)  # a nowcastutils.base.ForecastTask
+```
+
+More recipes: [how-to](https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/how-to/).
+
+## Tasks
+
+`task nowcastbaselines:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

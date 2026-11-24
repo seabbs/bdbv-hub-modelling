@@ -24,9 +24,28 @@ It is for anyone scoring forecasts of counts that are revised as later releases 
 - [How it is used in the workflow](https://samabbott.co.uk/bdbv-hub-modelling/nowcasteval/workflow/).
 - The scores in use: [Evaluation](https://samabbott.co.uk/bdbv-hub-modelling/methods/evaluation/) and [Backtest](https://samabbott.co.uk/bdbv-hub-modelling/backtest/).
 
+## Install
+
+From a clone of the repository:
+
 ```sh
-uv add nowcasteval
+uv sync --package nowcasteval             # this package and the ones it needs
 ```
+
+## Example
+
+```python
+from nowcasteval.scoring import relative_skill, score_forecasts
+
+scores = score_forecasts(forecasts, truth)  # sample forecasts against truth
+relative_skill(scores, baseline="randomwalk")
+```
+
+A runnable version: [how-to](https://samabbott.co.uk/bdbv-hub-modelling/nowcasteval/how-to/).
+
+## Tasks
+
+`task nowcasteval:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 
