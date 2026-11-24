@@ -17,7 +17,6 @@ from bdbvhub.models import get_model, list_models
 from nowcastbaselines.baselinenowcast.nowcast import NoWalkSpread
 from nowcastbaselines.randomwalk import RandomWalk
 from nowcastbaselines.zones import (
-    ZoneAllocator,
     check_zone_coherence,
     zones_for_model,
 )
@@ -878,9 +877,6 @@ def test_zone_samples_come_straight_from_the_block(
     keys = ["location", "target_end_date", "sample"]
     a = split.set_index(keys)["value"].sort_index()
     pd.testing.assert_series_equal(a, own.set_index(keys)["value"].sort_index())
-    allocated = ZoneAllocator().allocate(provinces, task, counts, zones)
-    b = allocated.set_index(keys)["value"].sort_index()
-    assert not a.equals(b)
 
 
 @pytest.mark.parametrize("layout", LAYOUTS)

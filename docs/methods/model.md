@@ -421,35 +421,8 @@ Zones do not enter the national value.
 `renewal` and `renewalbvd` forecast the zones themselves, and their provinces are the zone sums ([above](#provinces-and-the-country)).
 `randomwalk` and `randomwalknowcast` forecast each zone from its own data ([Baseline models](baselines.md#health-zones)).
 The foundation models take their zones straight from their joint block, as their provinces and country, so their zones need not sum to the provinces either ([Foundation models](foundation.md#health-zones)).
-Every other province-level model, `renewalsp` included, splits its province samples across the zones in its own forecast, so its zone samples sum to its province's samples, sample by sample and week by week.
+`renewalsp` fits each zone on its own, and its provinces are the zone sums too.
 The stored fits, the scores, the site and the submission all read these zone samples.
-
-### Split of province samples
-
-For province $p$ with zones $z$, let $o_z(w)$ be zone $z$'s published count for week $w$ and $O(w) = \sum_z o_z(w)$.
-Each province sample $i$ draws its zone shares once, for all weeks,
-
-$$
-\theta^{(i)} \sim \text{Dirichlet}(\chi),
-\qquad
-\chi_z = r_z + n_0\, \frac{l_z + \chi_0}{\sum_{z'} (l_{z'} + \chi_0)}.
-$$
-
-$r_z$ is the zone's onsets over the 2 weeks before the vintage and $l_z$ those over the 16 weeks before it.
-Recent shares are shrunk towards longer-run shares by $n_0 = 100$ pseudo-cases.
-The floor $\chi_0 = 1/2$ gives a zone with no recent cases a small share, if the zone has had a case.
-A zone with no case at the vintage has a tenth of the floor, $\chi_0 = 1/20$.
-These models have no zone-level transmission, so a province sample holds no information on which new zones its cases reach.
-New zones in a province with cases are still reached, 6 in the 8 weeks to 10-03, and the small floor lets a province's cases reach them at about that rate.
-In a province with no case in any zone, every zone has $\chi_0 = 1/2$ and the zones share equally.
-Province samples are rounded.
-Each zone keeps its published count and the rest of the province sample $Y^{(i)}(w)$ is split,
-
-$$
-\big(y^{(i)}_z(w)\big)_z = \big(o_z(w)\big)_z + \text{Multinomial}\big(Y^{(i)}(w) - O(w),\ \theta^{(i)}\big).
-$$
-
-A sample below the published total is drawn from the published zone counts without replacement instead.
 
 [^pcens]: Abbott S, Brand S, Azam J, Pearson C, Funk S, Charniga K. primarycensored: Primary Event Censored Distributions. [doi:10.5281/zenodo.13632838](https://doi.org/10.5281/zenodo.13632838).
 

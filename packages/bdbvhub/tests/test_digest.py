@@ -170,13 +170,13 @@ def test_model_code_leaves_out_other_models() -> None:
     )
 
 
-def test_a_fit_key_holds_the_zone_split_only_where_its_model_calls_it() -> None:
+def test_a_fit_key_holds_the_zone_module_only_where_its_model_calls_it() -> (
+    None
+):
     from bdbvhub.store.store import fit_code
 
     zones = "packages/nowcastbaselines/src/nowcastbaselines/zones.py"
-    # The province-level models split their zones in their own forecast
-    # (`with_zones`), and the zone fits call its zone_task, so
-    # their keys hold the split.
+    # The zone fits call its zone_task, so their keys hold it.
     for model in ("renewal", "renewalbvd", "renewalsp"):
         assert zones in fit_code(model, ROOT)
     # Models whose modules do not import it leave it out: the walks, and

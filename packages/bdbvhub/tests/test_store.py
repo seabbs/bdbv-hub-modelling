@@ -260,10 +260,9 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
         before = after
 
 
-def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
-    # A province model splits its zones in its forecast (`with_zones`), and
-    # the zone fits of renewal and renewalbvd call its zone_task, so the
-    # split is fit code. The zone backtest is not.
+def test_the_zone_module_keys_the_zone_fits(tmp_path: Path) -> None:
+    # The zone fits of renewal and renewalbvd call its zone_task, so the
+    # zone module is fit code. The zone backtest is not.
     root = _copy_repo(tmp_path)
     models = ("renewal",)
 
@@ -280,12 +279,12 @@ def test_the_zone_split_keys_the_province_models_fits(tmp_path: Path) -> None:
     assert digests() == before
     assert store.code_digest("foundation_zeroshot", root) == own
     edit("packages/nowcastbaselines/src/nowcastbaselines/zones.py")
-    split = digests()
-    assert all(split[m] != before[m] for m in models)
-    # Chronos-2 takes its zones straight from its block, so the split is
-    # not its fit code.
+    zoned = digests()
+    assert all(zoned[m] != before[m] for m in models)
+    # Chronos-2 takes its zones straight from its block, so the zone
+    # module is not its fit code.
     assert store.code_digest("foundation_zeroshot", root) == own
-    before = split
+    before = zoned
     # Introductions are drawn in the fit, for provinces with no recent case.
     edit("packages/nowcastbaselines/src/nowcastbaselines/introductions.py")
     after = digests()

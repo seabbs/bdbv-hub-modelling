@@ -58,7 +58,7 @@ The key hashes:
 - the model as built, including its variant and sampler settings;
 - the BVDOutbreakSize release, for `renewalbvd`;
 - the code the model's fit can run (its import closure with `bdbvhub/store/store.py` and `nowcasteval/backtest.py`), without docstrings or comments;
-  the zone split (`nowcastbaselines/zones.py`, `nowcastbdbv/zones.py`) is left out, as a stored fit holds national and province samples only and its zones are split from them at load;
+  the zone backtest (`nowcastbdbv/zones.py`) is left out, as a fit does not run it;
   so are the key's own helper (`bdbvhub/store/digest.py`) and the plots (`nowcasteval/plots.py`), which a fit does not run;
 - the package's data files (`packages/nowcastbdbv/src/nowcastbdbv/data/*.csv`), such as the province centres of the gravity kernel;
 - the runtime dependencies in `uv.lock`.
