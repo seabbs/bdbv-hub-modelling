@@ -110,12 +110,20 @@ stage_forecast_source <- function(hub, file, model_dir) {
     stdout = TRUE, stderr = FALSE
   ))
   if (length(head) != 1L) return(NULL)
+  # A detached worktree with nothing checked out: the CI's hub checkout is
+  # a sparse, blob-less partial clone, which `git clone --shared` cannot
+  # check out (it dies on the missing blobs, leaving the check without
+  # FORECAST_SOURCE_HUB). The check needs only the file and the commit.
   src <- tempfile("hub-source-")
   status <- system2(
-    "git", c("clone", "--quiet", "--shared", shQuote(hub), shQuote(src)),
+    "git", c("-C", shQuote(hub), "worktree", "add", "--quiet", "--detach",
+             "--no-checkout", shQuote(src), head),
     stdout = FALSE, stderr = FALSE
   )
-  if (status != 0L) return(NULL)
+  if (status != 0L) {
+    warning("could not stage the hub's forecast source at ", head)
+    return(NULL)
+  }
   dest <- file.path(src, "model-output", model_dir)
   dir.create(dest, recursive = TRUE, showWarnings = FALSE)
   file.copy(file, file.path(dest, basename(file)), overwrite = TRUE)
@@ -198,6 +206,9 @@ validate_one <- function(file, opts) {
     if (!is.null(src)) {
       on.exit(
         {
+          system2("git", c("-C", shQuote(hub), "worktree", "remove",
+                           "--force", shQuote(src)),
+                  stdout = FALSE, stderr = FALSE)
           unlink(src, recursive = TRUE)
           Sys.unsetenv(c("FORECAST_SOURCE_HUB", "PR_BASE_SHA"))
         },
