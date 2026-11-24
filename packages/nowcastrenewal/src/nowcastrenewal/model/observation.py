@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Known and hub-imputed onsets by province, with right truncation.
 
 Let $\lambda_p(s)$ be expected confirmed cases with onset on day $s$,

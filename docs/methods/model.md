@@ -12,7 +12,7 @@ How the models are built in code and sampled is on the [Implementation](implemen
 `renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
 `renewalbvd` fits the same zones ([`zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/zones.py), [`model/zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/model/zones.py)).
 Their provinces are the sums of their zones, and the country is the sum of the provinces.
-`renewalsp` fits the place model to each province on its own, with no pooling or importation.
+`renewalsp` fits the place model to each health zone on its own, with no pooling or importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `seabbs-renewal` submits the first of `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk`, in that order, to pass its checks ([Submission workflow](../submission/workflow.md#renewal-chain)).
 The sections below give the model of each place, then what `renewal` adds to pool and link the zones, then how `renewalsp` and `renewalbvd` differ.
@@ -24,11 +24,11 @@ flowchart TD
     PM["<b>Place model</b><br/>Rt walk<br/>generation interval<br/>onsets and delay<br/>missing onsets<br/>three data streams"]
     RN["<b>renewal</b><br/>zones with recent cases<br/>fitted together<br/>+ pooled log R walk<br/>+ province and zone<br/>sum-to-zero AR(1) deviations<br/>+ importation between zones<br/>+ share at risk<br/>+ delay pooled by province<br/>+ silent zones by the<br/>fitted importation<br/>provinces are zone sums"]
     BV["<b>renewalbvd</b><br/>+ BVDOutbreakSize Rt,<br/>down-weighted (ζ = 0.5)"]
-    SP["<b>renewalsp</b><br/>each province fitted alone<br/>no pooling or importation<br/>+ share at risk"]
+    SP["<b>renewalsp</b><br/>each zone fitted alone<br/>no pooling or importation<br/>+ share at risk"]
 
     PM -- "nest zones in provinces" --> RN
     RN -- "add external Rt" --> BV
-    PM -- "fit each province alone" --> SP
+    PM -- "fit each zone alone" --> SP
 ```
 
 ## Place model { #province-model }
@@ -348,20 +348,15 @@ The national trajectory is the sum of the provinces ([Forecasts](#forecasts)).
 
 ## Single patch (`renewalsp`) { #single-patch }
 
-`renewalsp` fits the [place model](#province-model) to each province's series on its own, one fit after another with the same code.
-Nothing is pooled or shared between provinces: each has its own Rt walk, delay, missing-onset share and ascertainment.
+`renewalsp` fits the [place model](#province-model) to each health zone's series on its own, one fit after another with the same code.
+Nothing is pooled or shared between zones: each has its own Rt walk, delay, missing-onset share and ascertainment.
 It keeps the share at risk and depletion of the zone models, so the three models differ only in what each removes.
 One series barely informs $\nu$, so it stays close to its prior.
 Its Rt walk's step SD has a LogNormal(log 0.12, 0.5) prior in place of HalfNormal(0.2): a walk centred where one series pins it funnels where the step SD nears 0, which HalfNormal allows.
-Every province with a case in the random walks' walk window is fitted, however few its cases.
-A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
-National is the sum of the provinces.
-A province is fitted only on its own data, so `renewalsp` cannot forecast a province left out.
-Its zones are split from its provinces ([Health zones](#health-zones)).
-
-`renewalsp_zones`, staged beside it, fits the same model to each health zone with a case in the walk window on its own instead.
-Silent zones take the random walk's introductions, and provinces and the country are zone sums, so no province sample is split across zones.
-It replaces `renewalsp` only if it scores at least as well.
+Every zone with a case in the random walks' walk window is fitted, however few its cases.
+A zone with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
+Provinces and the country are zone sums, sample by sample, so no province sample is split across zones.
+A zone is fitted only on its own data, so `renewalsp` cannot forecast a province left out.
 
 ## BVDOutbreakSize-informed (`renewalbvd`) { #bvdoutbreaksize-informed }
 

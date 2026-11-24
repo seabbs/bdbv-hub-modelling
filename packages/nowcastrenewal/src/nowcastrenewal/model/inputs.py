@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Model inputs from the tidy tables of a task.
 
 - `vintage_from_tables` builds the model's `Vintage` for one data vintage.

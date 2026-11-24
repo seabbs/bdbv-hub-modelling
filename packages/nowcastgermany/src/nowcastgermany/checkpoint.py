@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Score each published Chronos-2 checkpoint.
 
 Each checkpoint (release `chronos-ft-<hash>` or `chronos-slots-<hash>`)

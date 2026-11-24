@@ -56,10 +56,10 @@ SCENARIOS=(
   # wk R_t quantiles the hub would reject rule the candidate out too.
   "badrt|bvd=badrt|renewalsp||was ruled out (rt: "
   "latestream|bvd=latestream|bvd"
-  "fallback|bvd=fail|renewalsp||Model: single-patch province renewal models"
+  "fallback|bvd=fail|renewalsp||Model: single-patch zone renewal models"
   # Tuesday 21:00 UTC, two hours before the close: the fit timeouts are
   # cut so the gate still runs in time.
-  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Model: single-patch province renewal models"
+  "late|bvd=fail|renewalsp|NOW=2026-11-03T21:00:00+00:00|Model: single-patch zone renewal models"
   "randomwalknowcast|bvd=fail,renewalsp=fail,main=fail|randomwalknowcast||Model: random walk on a nowcast"
   "randomwalk|bvd=fail,renewalsp=crash,main=fail,randomwalknowcast=negative|randomwalk"
   "skip|bvd=fail,renewalsp=fail,main=fail,randomwalknowcast=negative,randomwalk=negative|skip"
@@ -68,7 +68,7 @@ SCENARIOS=(
   "storefailed|bvd=storefailed,renewalsp=missing|main"
   # A chosen model further down the chain starts it there; the
   # candidates before it are shadows.
-  "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch province renewal models"
+  "nospatial|bvd=pass|renewalsp|MODEL=renewalsp|Model: single-patch zone renewal models"
   "nospatialfallback|bvd=pass,renewalsp=fail|main|MODEL=renewalsp|Model: zone renewal model"
   "chosenrenewal|bvd=pass,renewalsp=pass|main|MODEL=renewal|Model: zone renewal model"
   "chosenrenewalfallback|main=fail|randomwalknowcast|MODEL=renewal|Model: random walk on a nowcast"

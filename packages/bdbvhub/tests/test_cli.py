@@ -172,7 +172,7 @@ def test_plot_scores_by_truth() -> None:
 @pytest.mark.slow
 @pytest.mark.usefixtures("in_root", "flat_model")
 def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
-    from evaluation.test_backtest import _MaskAware
+    from test_backtest import _MaskAware
 
     from nowcastutils.base import _REGISTRY, register_model
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Mixing of transmission between places or strata.
 
 A kernel $K$ has rows that receive: $K_{pq}$ is the weight of origin $q$

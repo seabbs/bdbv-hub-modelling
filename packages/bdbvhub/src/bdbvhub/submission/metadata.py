@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Hub metadata text for each model that may be submitted.
 
 `bdbvhub metadata --model <model>` renders it with
@@ -62,13 +62,6 @@ _ZONE_SUMS = (
     "provinces, sample by sample. "
     "Zone WorldPop populations and the centroids of each zone's largest "
     "polygon set the importation kernel between zones. "
-)
-_ZONE_SPLIT = (
-    "The national value is the sum of the provinces plus the national cases "
-    "in no province. "
-    "Health zones are not fitted. Each province sample is split across its "
-    "zones by shares drawn once per sample from a Dirichlet on recent and "
-    "longer-run zone counts, keeping each zone's published count. "
 )
 _RENEWAL_INPUTS = (
     "Hub target data (weekly confirmed cases by onset week, observed plus "
@@ -134,21 +127,21 @@ MODEL_METADATA = {
         "data_inputs": _RENEWAL_INPUTS,
     },
     "renewalsp": {
-        "model_name": "Single-province renewal models (PyRenew)",
+        "model_name": "Single-zone renewal models (PyRenew)",
         "methods": (
-            "A renewal model fitted to each province on its own, with no "
+            "A renewal model fitted to each health zone on its own, with no "
             "pooling or importation, to known and imputed onsets with "
-            "modelled delays. Silent provinces wait for an introduction."
+            "modelled delays. Provinces are zone sums."
         ),
         "methods_long": (
-            "We fit a renewal process in PyRenew to each province's series "
-            "on its own. "
+            "We fit a renewal process in PyRenew to each health zone's "
+            "series on its own. "
             "Each has its own weekly AR(1) on log Rt and susceptible "
             "depletion, with no pooling or importation. "
-            "A province with no case in the last nine weeks is zero until an "
+            "A zone with no case in the last nine weeks is zero until an "
             "introduction, then a random walk. "
-            + _ZONE_SPLIT
-            + _RENEWAL_OBSERVATION
+            "Each province is the sum of its zones and national is the sum "
+            "of the provinces, sample by sample. " + _RENEWAL_OBSERVATION
         ),
         "data_inputs": _RENEWAL_INPUTS,
     },

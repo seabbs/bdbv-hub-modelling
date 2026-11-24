@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Health-zone nowcasts at the latest release, for the Nowcast page.
 
 The random walk models are run on each zone (`zone_forecast`), as in

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Keep the hub pages current (rules/report.smk): `hub_rounds` when the
 # hub's data change, `this_round` when they change, when the latest
-# Submit run on main or its status changes, or when the fit store moves.
+# Submit run on main or its status changes, when the fit store moves or
+# when a team's submission lands on the hub.
 # Every POLL seconds (default 600) it writes what changed under
 # <ROOT>/hub/ (head.txt: the hub's time-series.csv commit; round/run.txt:
-# the run id and status; round/store.txt: the fit-store branch commit),
+# the run id and status; round/store.txt: the fit-store branch commit;
+# round/submissions.txt: the hub's newest model-output commit),
 # which reruns the rules that read it, and builds the targets. Run it
 # from the workflow's worktree, for example under nohup; it never stops
 # by itself.
@@ -42,11 +44,14 @@ while :; do
     --jq '.[0] | "\(.databaseId) \(.status) \(.conclusion)"' 2>/dev/null)")
   store=$(update "$root/hub/round/store.txt" \
     "$(git ls-remote origin fit-store 2>/dev/null | cut -f1)")
+  subs=$(update "$root/hub/round/submissions.txt" "$(gh api \
+    "repos/$hub/commits?path=model-output&per_page=1" \
+    --jq '.[0].sha' 2>/dev/null)")
   if [ -n "$data" ]; then
     echo "$(date -u '+%F %T') hub data moved: building hub_rounds"
     build hub_rounds
   fi
-  if [ -n "$data$run$store" ]; then
+  if [ -n "$data$run$store$subs" ]; then
     echo "$(date -u '+%F %T') round inputs moved: building this_round"
     build this_round
   fi

@@ -38,6 +38,11 @@ def _offline(tmp: Path, **extra) -> Path:
         "build": str(tmp / "build"),
         "germany": {"real": False},
         "ebola": {"hub": None},
+        # Dummy synthetic data: no simulations are made for the run.
+        "synthetic": {
+            **CONFIG["synthetic"],
+            "forecasts": {"development": None, "paper": None},
+        },
         # The workflow's runs and rounds are left out, as each is pending.
         "final_run": None,
         "rounds_dir": None,
@@ -230,12 +235,18 @@ def test_benchmark_commands_run_from_the_repository_root(
         assert "--data data/raw/germany" in line
 
 
-def test_the_synthetic_runner_runs_once_the_simulations_exist(
+def test_the_synthetic_runner_runs_on_its_round_s_simulations(
     tmp_path: Path,
 ) -> None:
-    sims = tmp_path / "sims"
-    sims.mkdir()
+    # The runner asks for its round's simulations and READY file through
+    # the DAG (the simulate rules make missing ones in a real run).
+    sims = tmp_path / "r38" / "sims"
+    sims.mkdir(parents=True)
     seeds = CONFIG["development"]["synthetic_seeds"]
+    for seed in seeds:
+        (sims / f"counts-{seed}.csv.gz").write_text("")
+        (sims / f"settings-{seed}.csv").write_text("")
+    (sims.parent / "READY").write_text("")
     extra = {
         "synthetic": {
             **CONFIG["synthetic"],
@@ -247,18 +258,6 @@ def test_the_synthetic_runner_runs_once_the_simulations_exist(
         }
     }
     base = str(PAPER / "workflow" / "config.yaml")
-    absent = _snakemake(
-        "development",
-        "-n",
-        "--configfile",
-        base,
-        str(_offline(tmp_path, **extra)),
-    )
-    assert absent.returncode == 0, absent.stderr
-    assert "rule synthetic_forecasts" not in absent.stdout + absent.stderr
-    for seed in seeds:
-        (sims / f"counts-{seed}.csv.gz").write_text("")
-        (sims / f"settings-{seed}.csv").write_text("")
     present = _snakemake(
         "development",
         "-n",
@@ -307,6 +306,8 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     for seed in CONFIG["development"]["synthetic_seeds"]:
         (sims / f"counts-{seed}.csv.gz").write_text("")
         (sims / f"settings-{seed}.csv").write_text("")
+    # The round's READY file, which the runner asks for with its sims.
+    (sims.parent / "READY").write_text("")
     synthetic = {
         **CONFIG["synthetic"],
         "simulations": {"development": str(sims), "paper": str(sims)},

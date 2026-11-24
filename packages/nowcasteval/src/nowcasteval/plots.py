@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Figures for the data, the forecasts and the scores.
 
 Every function returns a matplotlib `Figure` and takes `theme`, `"light"`
@@ -127,7 +127,6 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "renewal": (2, "solid"),
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),
-    "renewalsp_zones": (4, "dashed"),
     "fm_chronos_weekly_complete": (6, "solid"),
     "fm_chronos_weekly_ragged": (6, "dashed"),
     "fm_chronos_daily_complete": (6, "dotted"),

@@ -221,7 +221,7 @@ def test_ci_runs_the_triangle_checks() -> None:
     from model.r_live import ROOT
 
     workflow = yaml.safe_load(
-        (ROOT / ".github/workflows/heavy.yml").read_text()
+        (ROOT / ".github/workflows/tests.yml").read_text()
     )
     runs = " ".join(
         s.get("run", "") for s in workflow["jobs"]["r-live"]["steps"]

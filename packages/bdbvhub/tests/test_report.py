@@ -21,7 +21,7 @@ read it only as page input."""
 
 @pytest.mark.slow
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
-    from evaluation.test_hubcompare import _write_hub
+    from test_hubcompare import _write_hub
 
     from bdbvhub.cli import main
 

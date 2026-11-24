@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Command line interface: `bdbvhub <command>`.
 
 Commands:
@@ -576,9 +576,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ftc.add_argument("--reference", default="randomwalknowcast")
     ftc.add_argument(
-        "--docs",
-        default="docs",
-        help="report: the repository's docs folder (stylesheet, scripts).",
+        "--root",
+        default=".",
+        help="report: the repository root, holding docs/.",
     )
     ftc.add_argument(
         "parts", nargs="*", help="report: the models' forecast folders."
@@ -1862,7 +1862,7 @@ def _ft_check(args: argparse.Namespace) -> int:
         args.out,
         args.reference,
         args.checkpoint or finetuned_spec(),
-        args.docs,
+        args.root,
     )
     print(f"Wrote {out}.")
     return 0

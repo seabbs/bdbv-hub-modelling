@@ -22,7 +22,6 @@ from __future__ import annotations
 import datetime as dt
 import html
 import json
-import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -30,7 +29,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from bdbvhub.reporting.page import standalone, write_page
+from bdbvhub.reporting import pages
 from nowcastbdbv.data.tidy import load_target
 from nowcasteval.explorer import (
     explorer_data,
@@ -218,10 +217,7 @@ def build(
     reference = f"{REFERENCE} (submitted)"
     models = [*ours, *current, *teams]
 
-    data = out.with_name(out.stem + "-data")
-    if data.exists():
-        shutil.rmtree(data)
-    data.mkdir(parents=True)
+    data = pages.data_dir(out)
     rel = data.name
     srcs = {}
     for key, kind in (("complete", "complete"), ("latest", "reported")):
@@ -292,7 +288,9 @@ def build(
         "included, scaled so seabbs-rwnowcast is 1. Complete weeks.</p>",
         small_table(tab) if len(tab) else "<p>Nothing scored yet.</p>",
     ]
-    return write_page(out, standalone("Hub rounds", parts, ROOT / "docs"))
+    return pages.write_page(
+        out, pages.page("Hub rounds", parts, pages.SCORE_SCRIPTS, ROOT)
+    )
 
 
 def main(argv: Sequence[str]) -> None:

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Fit configurations for the automated submission workflow.
 
 The submission CI (`ci/`, see `ci/INTEGRATION.md`) fits each candidate of

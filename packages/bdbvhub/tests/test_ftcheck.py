@@ -155,7 +155,7 @@ def test_the_page_carries_the_explorer_s_styles_and_data(tmp_path):
         "target": target,
     }
     out = write_report(
-        tables, tmp_path / "p.html", "a", "slots-abcdef", root / "docs"
+        tables, tmp_path / "p.html", "randomwalknowcast", "slots-abcdef", root
     )
     page = out.read_text()
     css = (root / "docs" / "stylesheets" / "extra.css").read_text()

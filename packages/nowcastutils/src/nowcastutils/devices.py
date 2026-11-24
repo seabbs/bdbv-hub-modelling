@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Host devices: the CPUs a process may use, and XLA's device count.
 
 Apart from the CLI, so the fit store can set them without the CLI being

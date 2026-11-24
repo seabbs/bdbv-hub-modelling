@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Backtest scores over time, one point per deploy of the site from main.
 
 The gh-pages branch keeps every deploy. A deploy from main is the commit

@@ -34,7 +34,6 @@ import datetime as dt
 import html
 import json
 import os
-import shutil
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -44,7 +43,8 @@ import pandas as pd
 
 from bdbvhub.compare import forecast_quantiles
 from bdbvhub.models import get_model
-from bdbvhub.reporting.page import html_table, standalone, write_page
+from bdbvhub.reporting import pages
+from bdbvhub.reporting.pages import html_table
 from bdbvhub.store import store
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcastbdbv.data.zones import load_zone_data
@@ -435,12 +435,12 @@ def write_report(
     out: Path | str,
     reference: str,
     checkpoint: str,
-    docs: Path | str = "docs",
+    root: Path | str = ".",
 ) -> Path:
     """Write the page and its data folder `<stem>-data/`; return the page.
 
     Built from the same parts as the hub rounds and this-round pages
-    (`bdbvhub.reporting.page`): a three-line summary; the score summary
+    (`bdbvhub.reporting.pages`): a three-line summary; the score summary
     of relative CRPS by horizon (`nowcasteval.scoresummary`, natural and
     log scale); the forecast explorer (`nowcasteval.explorer`) by
     national, province and zone with each round's data and the later
@@ -456,8 +456,8 @@ def write_report(
         The reference model.
     checkpoint : str
         The fine-tuned checkpoint shown.
-    docs : pathlib.Path or str
-        The repository's `docs` folder (stylesheet and scripts).
+    root : pathlib.Path or str
+        The repository root, holding `docs/` (stylesheet and scripts).
 
     Returns
     -------
@@ -465,10 +465,7 @@ def write_report(
         The page.
     """
     out = Path(out)
-    data = out.with_name(out.stem + "-data")
-    if data.exists():
-        shutil.rmtree(data)
-    data.mkdir(parents=True)
+    data = pages.data_dir(out)
     models = list(dict.fromkeys(tables["overall"]["model"]))
     names = {m: model_label(m) for m in models}
     colours = comparison_colours({names[m]: m for m in models}, {}, [])
@@ -631,4 +628,7 @@ def write_report(
             default=str,
         )
     )
-    return write_page(out, standalone(f"BDBV check {checkpoint}", parts, docs))
+    title = f"BDBV check {checkpoint}"
+    return pages.write_page(
+        out, pages.page(title, parts, pages.SCORE_SCRIPTS, root)
+    )
