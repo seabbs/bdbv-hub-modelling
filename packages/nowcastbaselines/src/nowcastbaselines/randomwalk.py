@@ -371,7 +371,7 @@ class RandomWalk:
 
         Needs `keep_variants`. The draws are the forecast's own, so only
         their pairing differs, as the release backtest compares them
-        (`nowcasteval.pairing.bdbv_candidates`).
+        (`bdbvhub.pairing.bdbv_candidates`).
 
         Parameters
         ----------

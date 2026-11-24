@@ -16,7 +16,7 @@ It is for anyone scoring forecasts of counts that are revised as later releases 
 - [`nowcast`](src/nowcasteval/nowcast.py): nowcast tasks and their truth.
 - [`coupling`](src/nowcasteval/coupling.py): trajectories coupled across places and scored on what was reported.
 - [`marginals`](src/nowcasteval/marginals.py), [`ppc`](src/nowcasteval/ppc.py), [`checks`](src/nowcasteval/checks.py): marginal summaries, predictive checks and model checks.
-- [`pairing`](src/nowcasteval/pairing.py): how trajectories are paired across places.
+- [`pairing`](src/nowcasteval/pairing.py): scores of the walk models' draws under each pairing.
 - [`labels`](src/nowcasteval/labels.py), [`plots`](src/nowcasteval/plots.py), [`tables`](src/nowcasteval/tables.py), [`scorechart`](src/nowcasteval/scorechart.py), [`scoresummary`](src/nowcasteval/scoresummary.py), [`nowcast_plots`](src/nowcasteval/nowcast_plots.py), [`pairing_plots`](src/nowcasteval/pairing_plots.py): display names, figures and tables of scores.
 
 ## Next

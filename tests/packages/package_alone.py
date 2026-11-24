@@ -45,6 +45,7 @@ KNOWN: dict[str, set[str]] = {
         "bdbvhub.cli",
         "bdbvhub.compare",
         "bdbvhub.ftcheck",
+        "bdbvhub.pairing",
         "bdbvhub.reporting.hubtables",
         "bdbvhub.reporting.report",
         "bdbvhub.reporting.store_note",
