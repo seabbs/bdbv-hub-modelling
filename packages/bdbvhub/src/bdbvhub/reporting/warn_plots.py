@@ -6,11 +6,10 @@ submitted model's median and 90% interval, last week's submission's and
 the random walk nowcast's, from `WEEKS_BEFORE` weeks before the vintage
 to the last horizon. Its title is the location and the warnings.
 
-Built in the submission run from the candidate's `checks.json`, its hub
-file, the hub's `time-series.csv`, `previous.csv` and the random walk
-nowcast candidate's hub file, and kept as `warnings.png` beside the
-candidate's other files. The round page and the this-round report show
-that stored plot.
+The this-round report (`workflow/scripts/this_round_report.py`) draws
+it from the round's stored files: the pick's `checks.json` and hub file,
+the hub's `time-series.csv`, `previous.csv` and the random walk nowcast
+candidate's hub file.
 """
 
 from __future__ import annotations

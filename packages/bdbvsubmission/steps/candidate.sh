@@ -164,20 +164,6 @@ if [ -n "$sub" ]; then
     --out "$out/nowcast.png" || echo "::warning::plot for $CAND_ID failed"
 fi
 
-# One panel per location the checks warned on, beside last week's
-# submission and the random walk nowcast. No warnings, no plot.
-rwnowcast=$(find "$WORK/candidates/randomwalknowcast/submission" -name '*.csv' \
-  2> /dev/null | sort | head -n 1)
-if [ -n "$sub" ] && [ -f "$out/checks.json" ]; then
-  warn_args=(--checks "$out/checks.json" --submission "$sub"
-    --observed "$inputs/time-series.csv" --as-of "$AS_OF" --label "$model"
-    --out "$out/warnings.png")
-  [ -f "$inputs/previous.csv" ] && warn_args+=(--previous "$inputs/previous.csv")
-  [ -n "$rwnowcast" ] && warn_args+=(--randomwalk "$rwnowcast")
-  cli plot-warnings "${warn_args[@]}" \
-    || echo "::warning::warned-locations plot for $CAND_ID failed"
-fi
-
 store="null"
 [ -f "$out/store.json" ] && store=$(cat "$out/store.json")
 # The fine-tuned checkpoint the nowcast loaded, if any.
