@@ -187,3 +187,47 @@ def test_cut_only_is_for_a_fresh_run(tmp_path, monkeypatch):
     )
     with pytest.raises(SystemExit):
         fs.main()
+
+
+def test_the_status_names_the_model_load_after_saved_held_out_blocks(
+    tmp_path, monkeypatch
+):
+    # Lead 03:20: Run B loaded its saved held-out blocks and went on to
+    # the model, but its status still said it waited for held-out
+    # simulations.
+    import chronos
+
+    out = tmp_path / "train"
+    seen = {}
+
+    def load(*_args, **_kwargs):
+        seen.update(json.loads((out / "stream-status.json").read_text()))
+        raise CutError
+
+    monkeypatch.setattr(fs, "ready_outbreaks", lambda *_: ["3-0001", "3-0002"])
+    monkeypatch.setattr(fs, "sims_sha256", lambda *_: {})
+    monkeypatch.setattr(fs, "code_commit", lambda: "c")
+    monkeypatch.setattr(fs, "checkpoint_large_batches", lambda *_: None)
+    monkeypatch.setattr(fs, "ProcessPoolExecutor", lambda *_, **__: None)
+    monkeypatch.setattr(fs, "held_out_blocks", lambda *_: [])
+    monkeypatch.setattr(chronos.Chronos2Pipeline, "from_pretrained", load)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "finetune_stream",
+            str(tmp_path / "sims"),
+            str(out),
+            "--train-seeds",
+            "1",
+            "2",
+            "--held-out-seeds",
+            "3",
+            "4",
+            "--holdout",
+            "2",
+        ],
+    )
+    with pytest.raises(CutError):
+        fs.main()
+    assert seen["stage"] == "loading the model"
