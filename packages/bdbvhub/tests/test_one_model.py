@@ -16,7 +16,8 @@ import pandas as pd
 import pytest
 
 from bdbvhub.models import get_model
-from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcastbdbv.backtest import make_tasks
+from nowcasteval.backtest import BacktestConfig
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation import series_bias
 from nowcastfoundation.backends import chronos2

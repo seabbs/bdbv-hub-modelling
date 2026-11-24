@@ -21,8 +21,9 @@ from nowcastbaselines.zones import (
     check_zone_coherence,
     zones_for_model,
 )
+from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.zones import ZoneData, hub_zones
-from nowcasteval.backtest import BacktestConfig, make_tasks
+from nowcasteval.backtest import BacktestConfig
 from nowcastfoundation import forecaster as foundation
 from nowcastfoundation.forecaster import (
     LAYOUTS,

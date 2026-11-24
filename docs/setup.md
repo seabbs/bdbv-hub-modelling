@@ -48,6 +48,7 @@ It forecasts with the random walk nowcast from one release, scores the forecast 
 import dataclasses
 from pathlib import Path
 
+from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.tidy import (
     delays_for_vintage,
     load_daily,
@@ -73,7 +74,7 @@ real = target.loc[target["kind"] == "real"]
 config = dataclasses.replace(
     bt.load_config("config/backtest.toml"), min_horizon=-6, n_samples=N_SAMPLES
 )
-task = bt.make_tasks(
+task = make_tasks(
     real.loc[real["vintage"] == ORIGIN],
     delays_for_vintage(delays, ORIGIN)[0],
     config,

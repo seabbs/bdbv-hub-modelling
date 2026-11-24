@@ -77,6 +77,7 @@ from bdbvhub.submission.validate import (
 )
 from bdbvhub.submission.validate import main as validate_main
 from nowcastbaselines.zones import zones_for_model
+from nowcastbdbv import backtest as bdbv_bt
 from nowcastbdbv.data import tidy
 from nowcastbdbv.data.tidy import (
     build_tidy_data,
@@ -651,13 +652,15 @@ def _round_task(
     """
     real = target.loc[target["kind"] == "real"]
     vintage = _vintage([str(v) for v in real["vintage"].unique()], vintage)
-    task, note = bt.vintage_task(
+    task, note = bdbv_bt.vintage_task(
         target, delays, config, vintage, daily, zones=zones, places=places
     )
     notes = [note] if note else []
     if reference_date and as_date(reference_date) != task.reference_date:
         ref = as_date(reference_date)
-        weeks = dataclasses.replace(config, min_horizon=bt.TASK_MIN_HORIZON)
+        weeks = dataclasses.replace(
+            config, min_horizon=bdbv_bt.TASK_MIN_HORIZON
+        )
         task = dataclasses.replace(
             task,
             reference_date=ref,
@@ -750,7 +753,7 @@ def _backtest(args: argparse.Namespace) -> int:
         return _forecast_parts(args, config, target, delays, models)
     fits: list[pd.DataFrame] = []
     if args.lopo:
-        lopo_fc, lopo_scores = bt.run_lopo(
+        lopo_fc, lopo_scores = bdbv_bt.run_lopo(
             models,
             target,
             delays,
@@ -763,7 +766,7 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"Leave one province out: {len(lopo_scores)} scored forecasts.")
         return 0
     learnt: list[pd.DataFrame] = []
-    forecasts = bt.run_development(
+    forecasts = bdbv_bt.run_development(
         models,
         target,
         delays,
@@ -801,7 +804,7 @@ def _forecast_parts(
     daily = load_daily(args.data)
     fits: list[pd.DataFrame] = []
     learnt: list[pd.DataFrame] = []
-    forecasts = bt.run_development(
+    forecasts = bdbv_bt.run_development(
         models, target, delays, config, fits=fits, learnt=learnt,
         daily=daily, zones=_zone_data(args.data),
     )  # fmt: skip

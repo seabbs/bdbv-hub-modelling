@@ -584,7 +584,8 @@ def plot_nowcast(
         Observed, imputed and total cases by onset week, and each model's
         sample trajectories, 50% and 90% intervals and median.
     """
-    from nowcasteval.backtest import load_config, make_tasks, run_forecasts
+    from nowcastbdbv.backtest import make_tasks
+    from nowcasteval.backtest import load_config, run_forecasts
     from nowcastutils.base import get_model
 
     target = load_target(data_dir) if target is None else target
