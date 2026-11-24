@@ -15,7 +15,7 @@ from nowcastutils.snapshots import snapshot_arrays, weekly_sums
 VINTAGES = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
 
 
-DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+DATA = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture(scope="module")

@@ -10,7 +10,7 @@ import pytest
 
 from nowcastutils.devices import usable_cpus
 
-ROOT = Path(__file__).parents[1]
+ROOT = Path(__file__).parents[3]
 
 
 def test_usable_cpus_follow_the_affinity_where_there_is_one(
@@ -41,7 +41,7 @@ def test_only_the_helper_reads_the_affinity() -> None:
             "-l",
             "sched_getaffinity",
             "--",
-            "packages",
+            ":(glob)packages/*/src/**",
             "workflow",
         ],
         cwd=ROOT,

@@ -1,10 +1,11 @@
 """List the test files each workspace package owns.
 
-A test file belongs to the highest package (in the import-linter layers
-of pyproject.toml) it imports, so each file runs in one package's CI
-job: the job of the package whose change it checks last. Files that
-import no workspace package (the workflow, the paper, the repo checks)
-belong to none and run in the integration job.
+A package owns its own `packages/<name>/tests`. A test file still under
+the root `tests/` belongs to the highest package (in the import-linter
+layers of pyproject.toml) it imports, so each file runs in one package's
+CI job: the job of the package whose change it checks last. Root files
+that import no workspace package (the workflow, the paper, the repo
+checks) belong to none and run in the integration job.
 
 `legs` gives the packages a change touches: those whose files changed
 and every package that imports one of them (declared dependencies and
@@ -60,6 +61,11 @@ def owners() -> dict[str, str | None]:
     order = layers()
     rank = {name: i for i, name in enumerate(order)}
     out: dict[str, str | None] = {}
+    for name in order:
+        for path in sorted(
+            (ROOT / "packages" / name).glob("tests/**/test_*.py")
+        ):
+            out[path.relative_to(ROOT).as_posix()] = name
     for path in sorted(TESTS.rglob("test_*.py")):
         found = imported(path, set(order))
         top = max(found, key=rank.__getitem__) if found else None
@@ -70,7 +76,7 @@ def owners() -> dict[str, str | None]:
 SHARED = (
     "pyproject.toml",
     "uv.lock",
-    "tests/conftest.py",
+    "conftest.py",
     "tests/packages/",
     ".github/workflows/ci.yml",
 )
@@ -104,9 +110,12 @@ def legs(changed: list[str]) -> list[str]:
         return order
     owned = owners()
     touched = {
-        f.split("/")[1]
+        parts[1]
         for f in changed
-        if f.startswith("packages/") and f.split("/")[1] in order
+        if (parts := f.split("/"))[0] == "packages"
+        and len(parts) > 2
+        and parts[1] in order
+        and parts[2] != "tests"
     }
     by = importers()
     todo = list(touched)
