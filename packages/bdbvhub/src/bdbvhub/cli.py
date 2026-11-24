@@ -18,7 +18,6 @@ Commands:
   load the stored fits into the results (`bdbvhub.store.store`), or archive
   every candidate's forecasts for a round (`bdbvhub.store.archive`).
 - `plot-submission`: plot a submitted hub file.
-- `plot-warnings`: plot each location the forecast checks warned on.
 - `plot-ppc`: plot a fit's posterior predictive checks (`ppc.json`).
 - `coherence`: compare the national data with the sum of the provinces.
 - `rt-check`: write the Rt sense-check page of a renewal fit directory
@@ -418,21 +417,6 @@ def build_parser() -> argparse.ArgumentParser:
     plot.add_argument("--vintage", default="latest")
     plot.add_argument("--data", default=data_dir)
     plot.add_argument("--out", required=True)
-
-    warn = sub.add_parser(
-        "plot-warnings",
-        help="Plot each location a candidate's forecast checks warned on.",
-    )
-    warn.add_argument("--checks", required=True, help="A checks.json file.")
-    warn.add_argument("--submission", required=True)
-    warn.add_argument("--observed", required=True, help="time-series.csv")
-    warn.add_argument("--as-of", required=True)
-    warn.add_argument("--previous", default=None, help="previous.csv")
-    warn.add_argument(
-        "--randomwalk", default=None, help="The random walk nowcast's file."
-    )
-    warn.add_argument("--label", default="submitted")
-    warn.add_argument("--out", required=True)
 
     ppc = sub.add_parser(
         "plot-ppc", help="Plot a fit's posterior predictive checks."
@@ -1635,28 +1619,6 @@ def _plot_submission(args: argparse.Namespace) -> int:
     return 0
 
 
-def _plot_warnings(args: argparse.Namespace) -> int:
-    from bdbvhub.reporting.warn_plots import warnings_figure
-
-    fig = warnings_figure(
-        args.checks,
-        args.submission,
-        args.observed,
-        args.as_of,
-        previous=args.previous,
-        randomwalk=args.randomwalk,
-        label=args.label,
-    )
-    if fig is None:
-        print("No location warned on: no plot.")
-        return 0
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, dpi=100, facecolor="white", transparent=False)
-    print(f"Wrote {out}.")
-    return 0
-
-
 def _plot_ppc(args: argparse.Namespace) -> int:
     from nowcasteval.ppc import plot_ppc, read_ppc
 
@@ -2012,8 +1974,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return store.command(args)
     if args.command == "plot-submission":
         return _plot_submission(args)
-    if args.command == "plot-warnings":
-        return _plot_warnings(args)
     if args.command == "coherence":
         return _coherence(args)
     if args.command == "truth-sensitivity":

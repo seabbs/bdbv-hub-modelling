@@ -4,7 +4,7 @@
 The submission workflow records every live round on the
 `submission-ledger` branch: `state.json` holds each round's outcome, and
 `archive/<reference_date>/<run>/` holds the files of each run (the hub
-file, the plots, the provenance and the pull request body).
+file, the plot, the provenance and the pull request body).
 
 Each round records every hub model it submitted under `models`, keyed by
 hub model id, with the folder of that model's archived files.
@@ -156,21 +156,6 @@ def _model_section(
             "Bars are the published counts by onset week in the data used. "
             "Lines and bands are the submitted median, sample trajectories "
             "and 50% and 90% intervals.",
-            "",
-        ]
-    if (f["dir"] / "warnings.png").exists():
-        image = f"{ref}-{model_id}-warnings.png"
-        shutil.copy(f["dir"] / "warnings.png", out / image)
-        lines += [
-            "**Warned locations**",
-            "",
-            f"![Locations the checks warned on for {model_id} in {ref}]"
-            f"({image})",
-            "",
-            "One panel per location the forecast checks warned on. Points "
-            "are the counts reported at the vintage. Lines and bands are "
-            "the median and 90% interval of the submission, last week's "
-            "submission and the random walk nowcast.",
             "",
         ]
     csvs = sorted(f["dir"].glob(f"*-{model_id}.csv"))
