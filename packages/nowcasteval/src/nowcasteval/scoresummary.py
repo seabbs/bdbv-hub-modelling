@@ -22,7 +22,6 @@ from collections.abc import Callable, Mapping, Sequence
 import numpy as np
 import pandas as pd
 
-from nowcasteval.scoring import pairwise_skill
 from nowcastutils.base import NATIONAL
 
 __all__ = [
@@ -255,6 +254,10 @@ def _skill(
     """
     if not keys:
         return {}
+    # Imported here: nowcasteval.scoring needs scoringrules, which the
+    # page modules do not otherwise import.
+    from nowcasteval.scoring import pairwise_skill
+
     t = scores.assign(
         _round=scores["origin"].astype(str).map(idx["origin"]),
         _pool=scores["location"]
