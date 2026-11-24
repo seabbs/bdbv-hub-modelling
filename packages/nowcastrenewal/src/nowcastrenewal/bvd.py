@@ -39,6 +39,7 @@ from __future__ import annotations
 import datetime as dt
 import io
 import json
+import os
 import re
 import tomllib
 import urllib.request
@@ -214,13 +215,17 @@ def list_releases(
     Parameters
     ----------
     token : str, optional
-        A GitHub token, for the API rate limit.
+        A GitHub token, for the API rate limit; by default
+        `GITHUB_TOKEN` or `GH_TOKEN` from the environment.
 
     Returns
     -------
     pandas.DataFrame
         See `parse_releases`.
     """
+    token = (
+        token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    )
     payload: list[Mapping[str, Any]] = []
     page = 1
     while True:

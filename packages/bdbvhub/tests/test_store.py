@@ -217,10 +217,9 @@ def test_code_digest_follows_each_models_own_code(tmp_path: Path) -> None:
     hub = "packages/bdbvhub/src/bdbvhub"
     renewal = "packages/nowcastrenewal/src/nowcastrenewal"
     before = digests()
-    # The zone variants share a module, so share a key, and renewalsp,
-    # in the province module they build on, has its own.
-    assert before["renewal"] == before["renewalbvd"]
-    assert before["renewal"] != before["renewalsp"]
+    # Every renewal variant is built in the zone module, so they share a
+    # code digest. Their fit keys differ by their built model (`fit_key`).
+    assert before["renewal"] == before["renewalbvd"] == before["renewalsp"]
     assert before["renewal"] != before["randomwalknowcast"]
     edit(f"{renewal}/forecaster.py")
     after = digests()

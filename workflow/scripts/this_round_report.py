@@ -82,10 +82,12 @@ def fit_file(fit: Any, name: str) -> bytes | None:
     return None if data is None else base64.b64decode(data)
 
 
-def rt_quantiles(store: Path, origin: str, ref: str) -> pd.DataFrame:
-    """Return the renewal candidates' `wk R_t` as the explorer's quantiles."""
+def rt_quantiles(
+    store: Path, origin: str, ref: str, shown: Sequence[str]
+) -> pd.DataFrame:
+    """Return the shown renewal candidates' `wk R_t` as quantiles."""
     rows = []
-    for model in RENEWAL:
+    for model in (m for m in RENEWAL if m in shown):
         fit = newest_fit(store, model, origin)
         raw = fit_file(fit, "rt.csv.gz") if fit else None
         if raw is None:
@@ -232,7 +234,7 @@ def build(
             data_label=f"data as of {origin}",
         ),
     )
-    rt = rt_quantiles(store, origin, ref)
+    rt = rt_quantiles(store, origin, ref, shown)
     if len(rt):
         empty = asof.iloc[0:0].assign(vintage=origin)
         write_explorer(

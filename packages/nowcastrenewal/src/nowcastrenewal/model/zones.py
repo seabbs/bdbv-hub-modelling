@@ -92,7 +92,7 @@ with at least 30 cases. Fewer cases cannot inform a zone's own Rt path."""
 
 ANCHORED = ("rt_sd", "rt_dev_sd", "rt_zone_dev_sd", "pi_sd", "pi_dev_sd")
 """Walks anchored at their mean level over the fit axis
-(`MeanAnchoredWalk`)."""
+(`MeanAnchoredWalk`) when they are non-centred."""
 
 
 @dataclass
@@ -270,16 +270,14 @@ def _zone_walk(
 ) -> TemporalProcess:
     """`model._named_walk`, anchored at the mean for `ANCHORED` walks.
 
-    Raises
-    ------
-    ValueError
-        If a centred walk would be anchored.
+    Only a non-centred walk is anchored. The anchor removes the ridge
+    between a non-centred walk's start and its steps. A centred walk
+    samples its levels, which the data fix directly, so it has no such
+    ridge.
     """
     from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 
-    anchored_walk = anchor and name in ANCHORED
-    if centred and anchored_walk:
-        raise ValueError(f"{name} is anchored, so it cannot be centred.")
+    anchored_walk = anchor and name in ANCHORED and not centred
     process = _named_walk(name, sd, n_weeks, ar, centred, sd_prior)
     if not anchored_walk:
         return process
