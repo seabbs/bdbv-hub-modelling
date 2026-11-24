@@ -126,6 +126,7 @@ FACTORS: Final = (
     "delay_family",
     "delay_form",
     "delay_change",
+    "delay_jitter",
     "reporting",
     "report_days",
     "report_dow",
