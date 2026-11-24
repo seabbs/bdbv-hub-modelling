@@ -28,3 +28,16 @@ It reads the hub's data (`nowcastbdbv`), fits and stores the models, writes and 
 ```sh
 uv add bdbvhub
 ```
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../../CITATION.cff).
+
+```bibtex
+@software{abbott_bdbvhub,
+  author = {Abbott, Sam},
+  title = {{bdbvhub: nowcasts and forecasts for the BDBV Modeling Hub: hub data, the model registry, the fit store, submission and reports}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/bdbvhub}
+}
+```

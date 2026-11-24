@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 title: "bdbv-hub-modelling: renewal-model nowcasts and forecasts for the BDBV Modeling Hub"
-message: "If you use this software, please cite it as below."
+message: "Cite this entry for the repository as a whole. Each package (packages/<name>/CITATION.cff) and the paper (paper/CITATION.cff) has its own citation; cite those for one part."
 type: software
 authors:
   - family-names: Abbott
