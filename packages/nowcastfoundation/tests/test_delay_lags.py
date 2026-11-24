@@ -141,8 +141,8 @@ def test_a_fixed_lag_count_overrides_the_rule() -> None:
 
 
 def test_the_block_takes_the_largest_place_delay() -> None:
-    # Place A reports within 4 days, place B within 21: the block takes
-    # B's, so neither loses its late reports.
+    # Place A reports within 4 days, place B 98% within 18: the block
+    # takes B's, so neither loses its late reports.
     a = _releases(200)
 
     def slow(d):
@@ -152,4 +152,4 @@ def test_the_block_takes_the_largest_place_delay() -> None:
     rows = pd.concat([a, b], ignore_index=True)
     last = rows["cutoff"].max()
     assert delay_lags(a, "daily", ("A",), last) == 4
-    assert delay_lags(rows, "daily", ("A", "B"), last) == 21
+    assert delay_lags(rows, "daily", ("A", "B"), last) == 18
