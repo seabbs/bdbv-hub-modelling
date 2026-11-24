@@ -1,57 +1,37 @@
-name: Tests
+name: Heavy
+
+# The heavy tiers: slow fits and backtests (full), the torch-gated tests
+# (chronos) and the live R checks (r-live). Opt-in: nightly, on dispatch
+# and on a pull request labelled `full-tests`. The fast tier runs in CI
+# and Integration.
 
 on:
   schedule:
-    # Nightly, 05:17 UTC: the full tier (model fits, R replays, smoke runs).
+    # Nightly, 05:17 UTC.
     - cron: '17 5 * * *'
   workflow_dispatch:
-  # A push to next too: the merge loop deletes a PR's branch, which
-  # cancels its runs, so each merge into next gets a fast-tier run here.
-  push:
-    branches: [main, next]
-    paths:
-      - 'packages/**'
-      - 'tests/**'
-      - 'workflow/**'
-      - 'paper/**'
-      - 'config/**'
-      - 'results/**'
-      - 'hub/**'
-      - 'Taskfile.yml'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'codecov.yml'
-      - '.github/workflows/test.yml'
-      - '.github/actions/setup-forecast-env/**'
   pull_request:
-    # `labeled`: the `full-tests` label runs the full tier on a PR.
-    types: [opened, synchronize, reopened, labeled]
+    # A labelled pull request runs again on each push.
+    types: [synchronize, labeled]
     paths:
       - 'packages/**'
       - 'tests/**'
       - 'workflow/**'
       - 'paper/**'
       - 'config/**'
-      - 'results/**'
-      - 'hub/**'
-      - 'Taskfile.yml'
       - 'pyproject.toml'
       - 'uv.lock'
-      - 'codecov.yml'
-      - '.github/workflows/test.yml'
+      - '.github/workflows/heavy.yml'
       - '.github/actions/setup-forecast-env/**'
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Off main and next, a newer push cancels the running run. On main and
-  # next the running run finishes and only the newest queued run waits,
-  # so a merge is never left without a verdict by the next one.
-  cancel-in-progress: >-
-    ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/next' }}
+  # Off main, a newer push cancels the running run. On main the running
+  # run finishes and only the newest queued run waits.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   # Chronos-2 runs on the device named here, never a detected one.

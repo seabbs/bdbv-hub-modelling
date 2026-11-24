@@ -395,7 +395,9 @@ def test_the_fitted_models_do_not_import_the_latent_process() -> None:
 def test_ci_runs_the_live_latent_checks() -> None:
     import yaml
 
-    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/heavy.yml").read_text()
+    )
     job = workflow["jobs"]["r-live"]
     runs = " ".join(s.get("run", "") for s in job["steps"])
     packages = " ".join(
