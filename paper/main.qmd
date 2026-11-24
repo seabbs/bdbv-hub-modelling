@@ -110,11 +110,12 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.
 - The other is one block per province, of the province and all its zones, cut into views as in training when over the block limit.
 - The country, provinces and active zones take their forecast from the joint block, and every other zone from its province's block (SI).
-- The number of lag rows, $D$, is set from the data, in training and at prediction alike (SI).
+- At forecast time the number of lag rows, $D$, is set from the data by default, for the zero-shot and fine-tuned models alike (SI).
 - Each onset day first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
 - $D$ is one more than the 98th percentile of these settling lags, using only days seen for at least $1.5D$ lags.
 - With no such day, $D$ is the release history.
-- Training blocks use this $D$ in 90% of blocks and $D$ scaled by a factor drawn from Normal(1, 0.05) in the other 10%, so the model is robust to $D$ set slightly differently.
+- A study can set a fixed $D$ instead.
+- Training blocks use the same rule for $D$ in 90% of blocks and $D$ scaled by a factor drawn from Normal(1, 0.05) in the other 10%, so the model is robust to $D$ set slightly differently.
 - We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.
 - We plot each checkpoint's scores, with both as reference lines (SI).
 - Figure 1 shows the simulation, the ragged series, training and forecasting.
@@ -204,7 +205,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - We compare models by pairwise relative skill on the forecasts each pair shares, as scoringutils does, with WIS on the natural and log scales side by side [@Bosse2023-sx; @bosse2022scoringutils].
 - We score only the hub's own targets and horizons.
 - The hub's releases are few, weekly and begin with a backfill, so too few onset days have settled to estimate $D$.
-- We therefore set $D = 40$ days, as the random walk nowcast does, for the fine-tuned and zero-shot models alike.
+- We therefore set $D = 40$ days at forecast time, as the random walk nowcast does, for the fine-tuned and zero-shot models alike.
 - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
 - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, taking the hub teams' quantiles from their samples.
