@@ -365,3 +365,14 @@ def test_rules_that_need_the_network_or_git_run_on_the_driver():
         shell = block.split("shell:", 1)[-1]
         if re.search(r"git (clone|fetch)|gh release download|quarto", shell):
             assert "localrule: True" in block, block.split("\n", 1)[0]
+
+
+def test_every_forecasting_rule_declares_its_threads():
+    # A scheduler gives a job the cores its rule declares; a forecasting
+    # rule sets FORECAST.threads in its environment, so it declares them.
+    from pathlib import Path
+
+    text = (Path(__file__).parents[1] / "workflow" / "Snakefile").read_text()
+    assert text.count("gpu=FORECAST.gpu") == text.count(
+        "threads: FORECAST.threads"
+    )
