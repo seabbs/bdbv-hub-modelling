@@ -14,7 +14,6 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 
-from bdbvhub.reporting.site import site_baseline
 from nowcasteval.plots import (
     THEMES,
     _date_axis,
@@ -142,7 +141,7 @@ def plot_release_nowcasts(
 def plot_relative_overall(
     table: pd.DataFrame,
     models: Sequence[str],
-    baseline: str | None = None,
+    baseline: str,
     mode: str = "light",
     x: str = "pool",
     metrics: Mapping[str, tuple[str, float | None]] = OVERALL_METRICS,
@@ -175,7 +174,6 @@ def plot_relative_overall(
         A panel of bars grouped by pool per metric, each with a dotted line
         at its reference.
     """
-    baseline = baseline or site_baseline()
     ink = THEMES[mode]
     pick = 0 if mode == "light" else 1
     have_pools = set(table[x])

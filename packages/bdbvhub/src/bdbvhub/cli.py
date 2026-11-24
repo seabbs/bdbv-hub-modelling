@@ -265,7 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Score randomwalk and randomwalknowcast with no pairing and "
         "with their provinces paired by the rolling rho_p, from one "
         "forecast each, on the BDBV release backtest "
-        "(`nowcasteval.pairing`); the German study is `nowcastgermany "
+        "(`bdbvhub.pairing`); the German study is `nowcastgermany "
         "pairing-sensitivity`.",
     )
     pst.add_argument("--study", choices=["bdbv"], default="bdbv")
@@ -279,7 +279,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--candidates",
         action="store_true",
         help="Score every copula.CANDIDATES setting instead, and print "
-        "them best first (`nowcasteval.pairing.bdbv_candidates`).",
+        "them best first (`bdbvhub.pairing.bdbv_candidates`).",
     )
 
     dig = sub.add_parser(
@@ -1477,8 +1477,8 @@ def _write_zone_results(
 ) -> None:
     """Write the zone backtest's tables."""
     from bdbvhub.compare import forecast_quantiles
-    from bdbvhub.reporting.explorer import draw_subset
     from nowcastbdbv.zones import zone_relative_skill
+    from nowcasteval.explorer import draw_subset
 
     out.parent.mkdir(parents=True, exist_ok=True)
     write_csv(scores, out)
@@ -1673,7 +1673,7 @@ def _bvd(args: argparse.Namespace) -> int:  # pragma: no cover - network
 
 def _compare_hub(args: argparse.Namespace) -> int:
     from bdbvhub import compare as hc
-    from bdbvhub.reporting.explorer import TRAJECTORY_DRAWS
+    from nowcasteval.explorer import TRAJECTORY_DRAWS
 
     cfg = hc.load_comparison_config(args.config)
     hub_dir, cache = Path(args.hub_dir), Path(args.cache_dir)
@@ -1774,7 +1774,8 @@ def _compare_hub(args: argparse.Namespace) -> int:
 
 
 def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
-    from nowcasteval import pairing
+    from bdbvhub import pairing
+    from nowcasteval.pairing import best_candidate
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1790,7 +1791,7 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
         from nowcastbaselines.copula import CANDIDATES
 
         scores = pairing.bdbv_candidates(CANDIDATES, data, config, origins)
-        print(pairing.best_candidate(scores).to_string(index=False))
+        print(best_candidate(scores).to_string(index=False))
     else:
         scores = pairing.bdbv_sensitivity(data, config, origins)
     if args.chunk:

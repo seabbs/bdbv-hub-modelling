@@ -90,6 +90,7 @@ paper = [
   "snakefmt>=0.10",
   "snakemake>=9.27,<10",
   "snakemake-executor-plugin-cluster-generic>=1.0.9",
+  "snakemake-executor-plugin-slurm>=2.8,<3",
   "snakemake-logger-plugin-panoptes>=0.3,<0.4",
 ]
 
@@ -248,22 +249,9 @@ ignore_imports = [
   "nowcasteval.backtest -> nowcastbdbv.data.zones",
   "nowcasteval.backtest -> nowcastrenewal.bvd",
   "nowcasteval.backtest -> nowcastrenewal.forecaster",
-  "nowcasteval.checks -> bdbvhub.reporting.site",
-  "nowcasteval.checks -> nowcastbaselines.chain",
   "nowcasteval.nowcast -> nowcastrenewal.forecaster",
-  "nowcasteval.nowcast_plots -> bdbvhub.reporting.site",
-  "nowcasteval.pairing -> nowcastbdbv.data.tidy",
-  "nowcasteval.pairing -> bdbvhub.store.store",
-  "nowcasteval.pairing -> nowcastbaselines.randomwalk",
   "nowcasteval.plots -> nowcastbdbv.data.delays",
   "nowcasteval.plots -> nowcastbdbv.data.tidy",
-  "nowcasteval.plots -> bdbvhub.reporting.site",
-  "nowcasteval.plots -> nowcastbaselines.chain",
-  "nowcasteval.scoresummary -> bdbvhub.reporting.site",
-  "nowcastgermany.evaluation -> nowcastbdbv.data.tidy",
-  "nowcastgermany.evaluation -> bdbvhub.models",
-  "nowcastgermany.reporting -> bdbvhub.reporting.explorer",
-  "nowcastgermany.reporting -> bdbvhub.reporting.site",
   "nowcastrenewal.zones -> nowcastbdbv.data.tidy",
 ]
 

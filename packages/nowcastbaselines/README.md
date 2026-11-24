@@ -13,6 +13,7 @@ It is for anyone who needs a simple, well-tested forecast of weekly counts revis
 - [`randomwalk`](src/nowcastbaselines/randomwalk.py): the random walk forecaster and its nowcasting variant.
 - [`chain`](src/nowcastbaselines/chain.py), [`walk`](src/nowcastbaselines/walk.py), [`obs`](src/nowcastbaselines/obs.py): the chain-ladder delay fit, random walks on the log scale, and the observation model.
 - [`baselinenowcast`](src/nowcastbaselines/baselinenowcast/): a JAX port of the baselinenowcast R package.
+- [`pairing`](src/nowcastbaselines/pairing.py): the walk models' forecasts under each pairing of their draws, for the pairing sensitivity.
 - [`pooling`](src/nowcastbaselines/pooling.py), [`introductions`](src/nowcastbaselines/introductions.py), [`copula`](src/nowcastbaselines/copula.py), [`zones`](src/nowcastbaselines/zones.py): pooling over a hierarchy, introductions into silent places, a copula pairing places, and splitting places into zones.
 
 ## Next

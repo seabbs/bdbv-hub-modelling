@@ -5,14 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+from nowcastbaselines.pairing import VARIANTS, variant_forecasts
 from nowcasteval.backtest import BacktestConfig, make_tasks
 from nowcasteval.nowcast import rolling_truth
-from nowcasteval.pairing import (
-    VARIANTS,
-    summarise_pairing,
-    variant_forecasts,
-    variant_scores,
-)
+from nowcasteval.pairing import summarise_pairing, variant_scores
 from nowcastutils.base import NATIONAL
 
 

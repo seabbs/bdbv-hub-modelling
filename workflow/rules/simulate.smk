@@ -48,9 +48,8 @@ rule simulate_batch:
         TOOLS_ENV
     threads: 1
     # Batches are run by count, not by memory: at most
-    # `--resources sim_slots=N` at once (SIM_SLOTS, 2 by default). A batch
-    # claims no memory and has no cap of its own; SIM_PREFIX (such as one
-    # systemd slice all batches share) guards the rest of the machine.
+    # `--resources sim_slots=N` at once (SIM_SLOTS, 2 by default), which
+    # the scheduler starts as slots free up.
     resources:
         mem_mb=0,
         sim_slots=1,
@@ -60,13 +59,9 @@ rule simulate_batch:
         draws=SIM["draws"],
         grid=GRID_FILE,
         engine=" ".join(simulator.ENGINE),
-        prefix=LOCAL["SIM_PREFIX"],
         jax_cache=LOCAL["JAX_CACHE"],
         jax_cache_gb=LOCAL["JAX_CACHE_GB"],
         jax_env=simulator.jax_cache_env(LOCAL["JAX_CACHE"]),
-        min_free=LOCAL["MIN_FREE_GB"],
-        min_disk=LOCAL["MIN_DISK_GB"],
-        max_load=LOCAL["MAX_LOAD"],
     shell:
         # The simulator (its code and the grid) must be the committed one,
         # as the manifest records the commit. A retry keeps the first
@@ -79,8 +74,6 @@ rule simulate_batch:
             echo "the simulator or its grid differs from HEAD" >{log}
             exit 1
         fi
-        workflow/scripts/wait_for_room.sh {params.min_free} {params.min_disk} \
-            {params.sims} {params.max_load}
         [ -s {log} ] && mv {log} {params.sims}/logs/{wildcards.seed}.first.log
         tmp={params.sims}/tmp/{wildcards.seed}
         rm -rf "$tmp" && mkdir -p "$tmp"
@@ -89,8 +82,8 @@ rule simulate_batch:
         uv=$(command -v uv)
         TMPDIR="$tmp" ENW_DRAWS={params.draws} JAX_PLATFORMS=cpu {params.jax_env} \
             XLA_FLAGS=--xla_cpu_multi_thread_eigen=false \
-            {params.prefix} workflow/scripts/timed.sh \
-            nice -n 19 "$uv" run --frozen python -m nowcastfoundation.simulator \
+            workflow/scripts/timed.sh \
+            "$uv" run --frozen python -m nowcastfoundation.simulator \
             {params.grid} {params.batch} {wildcards.seed} {params.sims} >{log} 2>&1
         gzip -t {output.counts}
         """
@@ -111,6 +104,9 @@ rule simulator_benchmark:
     conda:
         TOOLS_ENV
     threads: 1
+    # A cuda benchmark takes a GPU, as a scheduler must know.
+    resources:
+        gpu=lambda wc: int(wc.device == "cuda"),
     params:
         draws=SIM["draws"],
         grid=GRID_FILE,

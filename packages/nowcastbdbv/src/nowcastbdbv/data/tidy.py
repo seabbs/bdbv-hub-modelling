@@ -41,7 +41,6 @@ import io
 import json
 import os
 import re
-import urllib.request
 from collections.abc import Mapping, Sequence
 from importlib.resources import files
 from itertools import pairwise
@@ -54,6 +53,7 @@ import pandas as pd
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.files import write_csv
 from nowcastutils.releases import latest_onset_days
+from nowcastutils.web import download
 
 __all__ = [
     "COHERENCE_HANDLING",
@@ -275,23 +275,13 @@ def province_places(locations: Sequence[str]) -> pd.DataFrame:
 # --------------------------------------------------------------------------
 
 
-def _request(url: str, token: str | None) -> bytes:
-    headers = {"User-Agent": "bdbvhubrenewal"}
-    if token and url.startswith("https://api.github.com"):
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        data: bytes = resp.read()
-    return data
-
-
 def _api(path: str, token: str | None) -> Any:
-    return json.loads(_request(f"https://api.github.com/{path}", token))
+    return json.loads(download(f"https://api.github.com/{path}", token))
 
 
 def _raw(sha: str, path: str, token: str | None) -> bytes:
     url = f"https://raw.githubusercontent.com/{HUB_REPO}/{sha}/{path}"
-    return _request(url, token)
+    return download(url, token)
 
 
 def _delay_as_of(content: bytes, path: str) -> str:

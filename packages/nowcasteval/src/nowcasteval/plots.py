@@ -30,7 +30,6 @@ import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from bdbvhub.reporting.site import site_baseline
 from nowcastbdbv.data.delays import delay_summary
 from nowcastbdbv.data.tidy import (
     cutoff_window,
@@ -49,7 +48,6 @@ __all__ = [
     "MODEL_STYLE",
     "THEMES",
     "bar_style",
-    "baseline_share",
     "comparison_colours",
     "comparison_label",
     "hub_styles",
@@ -58,7 +56,6 @@ __all__ = [
     "model_dash",
     "model_style",
     "plot_cutoff_days",
-    "plot_delay_check",
     "plot_delay_distribution",
     "plot_delays_over_time",
     "plot_downward_updates",
@@ -945,49 +942,6 @@ def plot_delays_over_time(
     return fig
 
 
-def baseline_share(
-    daily: pd.DataFrame, vintage: str, locations: Sequence[str]
-) -> pd.DataFrame:
-    """Return randomwalknowcast's share reported by age at one release.
-
-    The share is one over the growth to final of `plot_delay_check`.
-
-    Parameters
-    ----------
-    daily : pandas.DataFrame
-        Daily onsets by release, as for `make_tasks`.
-    vintage : str
-        The release.
-    locations : sequence of str
-        Places.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Columns `location`, `age` (days since onset) and `share`.
-    """
-    from nowcastbaselines.chain import Settings, build_origin
-    from nowcastutils.snapshots import snapshot_arrays
-
-    snap = snapshot_arrays(daily, vintage, tuple(locations))
-    origin = build_origin(snap, Settings(), errors=False)
-    age = int(snap.cut[origin.o]) - np.arange(snap.week.size)
-    seen = (age >= 0) & (age < origin.settings.max_delay)
-    return pd.concat(
-        [
-            pd.DataFrame(
-                {
-                    "location": loc,
-                    "age": age[seen],
-                    "share": 1 / origin.growth[j, seen],
-                }
-            ).sort_values("age")
-            for j, loc in enumerate(snap.locations)
-        ],
-        ignore_index=True,
-    )
-
-
 def plot_renewal_delay(
     summary: pd.DataFrame,
     baseline: pd.DataFrame,
@@ -1312,83 +1266,6 @@ def plot_location_grid(
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
     axes[0].set_ylabel("Cases by onset week")
     _legend_below(fig, axes[0])
-    return fig
-
-
-def plot_delay_check(
-    daily: pd.DataFrame,
-    vintage: str,
-    locations: Sequence[str],
-    mode: str = "light",
-) -> Figure:
-    r"""Plot the delay and spread each place uses at one release.
-
-    Parameters
-    ----------
-    daily : pandas.DataFrame
-        Daily onsets by release, as for `make_tasks`.
-    vintage : str
-        The release, the origin of the nowcast.
-    locations : sequence of str
-        Places to show.
-    mode : str
-        `"light"` or `"dark"`.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        Left, the growth $G$ from each age in days to final, chained over
-        the release gap, on a log scale. Middle, the dispersion
-        $1 / \phi_k$ of the new reports by weeks back, with the number of
-        errors behind it.
-        A place's label says at how many ages it uses its own delay
-        factor and not its parent's.
-    """
-    from nowcastbaselines.chain import Settings, build_origin
-    from nowcastutils.snapshots import snapshot_arrays
-
-    snap = snapshot_arrays(daily, vintage, tuple(locations))
-    origin = build_origin(snap, Settings(), errors=True)
-    assert origin.size is not None
-    assert origin.obs_n is not None
-    ink = THEMES[mode]
-    palette = MODEL_COLOURS[mode]
-    age = int(snap.cut[origin.o]) - np.arange(snap.week.size)
-    seen = (age >= 0) & (age < origin.settings.max_delay)
-    fig, (left, mid) = plt.subplots(
-        1, 2, figsize=(6.4, 3.2), layout="constrained"
-    )
-    drawn: set[tuple[float, ...]] = set()
-    for i, loc in enumerate(locations):
-        j = snap.locations.index(loc)
-        own = origin.fit.own[j]
-        kind = f"own at {int(own.sum())} of {own.size} ages"
-        colour = palette[i % len(palette)]
-        order = np.argsort(age[seen])
-        left.plot(
-            age[seen][order],
-            origin.growth[j, seen][order],
-            color=colour,
-            lw=1.2,
-            label=f"{loc} ({kind})",
-        )
-        row = tuple(np.round(origin.size[j], 6))
-        if row not in drawn:
-            drawn.add(row)
-            k = np.arange(origin.size.shape[1])
-            style = {"color": colour, "ms": 3, "lw": 1}
-            label = f"{loc} and places using it"
-            mid.plot(k, 1 / origin.size[j], "o-", label=label, **style)
-    left.set_yscale("log")
-    left.set_xlabel("Age of the onset day (days)")
-    left.set_ylabel("Growth to final")
-    mid.set_xlabel("Weeks back")
-    mid.set_ylabel("Dispersion of new reports, 1 / size")
-    n_err = int(origin.obs_n.max())
-    mid.set_title(f"At most {n_err} errors behind a fit", fontsize=8)
-    mid.legend(fontsize=7, frameon=False)
-    left.axhline(1, color=ink["muted"], lw=0.8, ls=":")
-    left.legend(fontsize=7, frameon=False)
     return fig
 
 
@@ -1985,6 +1862,7 @@ def plot_scores(
     models: Sequence[str] | None = None,
     mode: str = "light",
     colours: Mapping[str, tuple[str, str, str]] | None = None,
+    baseline: str | None = None,
 ) -> Figure:
     """Plot mean scores by horizon or location, one panel per vintage kind.
 
@@ -2004,6 +1882,10 @@ def plot_scores(
     colours : mapping of str to (str, str, str), optional
         Model to its light colour, dark colour and dash. Defaults to
         `model_style`.
+
+    baseline : str, optional
+        The model relative metrics are relative to, named in the axis
+        label; needed for a `relative_` metric.
 
     Returns
     -------
@@ -2061,7 +1943,7 @@ def plot_scores(
             f"{kind}: {s[['vintage']].nunique().iloc[0]} vintages, n {len(s)}"
         )
         ax.set_xlabel(by.capitalize())
-    axes[0].set_ylabel(_metric_label(metric))
+    axes[0].set_ylabel(_metric_label(metric, baseline))
     axes[0].legend()
     return fig
 
@@ -2071,6 +1953,7 @@ def plot_scores_by_truth(
     metric: str = "crps",
     models: Sequence[str] | None = None,
     mode: str = "light",
+    baseline: str | None = None,
 ) -> Figure:
     """Plot how each forecast's mean score moves as the truth is revised.
 
@@ -2084,6 +1967,10 @@ def plot_scores_by_truth(
         Models in registry order, one panel each.
     mode : str
         `"light"` or `"dark"`.
+
+    baseline : str, optional
+        The model relative metrics are relative to, named in the axis
+        label; needed for a `relative_` metric.
 
     Returns
     -------
@@ -2113,7 +2000,7 @@ def plot_scores_by_truth(
         ax.set_title(m)
         ax.set_xlabel("Truth vintage")
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    axes[0].set_ylabel(_metric_label(metric))
+    axes[0].set_ylabel(_metric_label(metric, baseline))
     axes[0].legend(fontsize=7)
     return fig
 
@@ -2127,9 +2014,12 @@ _METRIC_LABELS: Final[dict[str, str]] = {
 }
 
 
-def _metric_label(metric: str) -> str:
-    """Return a metric's axis label; relative ones name the site baseline."""
-    base = site_baseline()
+def _metric_label(metric: str, baseline: str | None) -> str:
+    """Return a metric's axis label; relative ones name the baseline."""
+    if metric.startswith("relative_") and baseline is None:
+        msg = f"{metric} needs the baseline it is relative to"
+        raise ValueError(msg)
+    base = baseline
     return {
         **_METRIC_LABELS,
         "relative_crps": f"CRPS relative to {base}",
