@@ -273,13 +273,13 @@ def heldout_note(config: dict) -> str:
     lines = [
         "#### The held-out synthetic set",
         "",
-        f"The held-out set is simulated on grid `{config['grid']}` with"
-        f" {_seeds(seeds)}, {n} simulations each.",
+        f"The held-out set is simulated from the grid config"
+        f" `{config['grid_file']}` with {_seeds(seeds)}, {n} simulations"
+        " each.",
         f"We evaluate draw {DRAW} of each simulation, so the"
         " outbreaks are independent.",
         "The fine-tune never trains on these seeds.",
-        f"The simulations are written to `{config['simulations']['paper']}`,"
-        " and the workflow config records them.",
+        "The workflow config records the seeds.",
         "The synthetic runner runs the models on the set.",
         "",
         "The held-out set was reserved for the final evaluation.",
