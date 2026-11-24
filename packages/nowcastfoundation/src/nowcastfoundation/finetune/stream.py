@@ -47,6 +47,7 @@ import numpy as np
 import pandas as pd
 
 from nowcastfoundation import series_bias, sidecar
+from nowcastfoundation.backends.chronos2 import torch_device
 from nowcastfoundation.finetune import chronos as ft
 from nowcastfoundation.finetune import combinations, simulations, verify
 from nowcastfoundation.forecaster import (
@@ -54,7 +55,6 @@ from nowcastfoundation.forecaster import (
     CHRONOS_REVISION,
     LAYOUTS,
     release_tag,
-    torch_device,
 )
 
 CHUNK = 500
@@ -130,7 +130,7 @@ def load_blocks(path: Path) -> list[dict[str, Any]]:
         If a block lacks one of `BLOCK_KEYS`.
     """
     with path.open("rb") as f:
-        blocks = pickle.load(f)
+        blocks: list[dict[str, Any]] = pickle.load(f)
     for i, block in enumerate(blocks):
         missing = [k for k in BLOCK_KEYS if k not in block]
         if missing:
@@ -545,7 +545,7 @@ def batch_outbreaks(sim_dir: Path, seed: int) -> list[str] | None:
     return _READY[sim_dir, seed]
 
 
-def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
+def ready_outbreaks(sim_dir: Path, seeds: Sequence[int]) -> list[str]:
     """Return the outbreaks of the finished batches, in order.
 
     The batches are read in seed order up to the first not yet finished.
@@ -561,7 +561,7 @@ def ready_outbreaks(sim_dir: Path, seeds: range) -> list[str]:
 
 def next_chunk(
     sim_dir: Path,
-    seeds: range,
+    seeds: Sequence[int],
     trained: list[str],
     size: int,
 ) -> list[str] | None:
@@ -595,7 +595,7 @@ def snapshots(
     rng: np.random.Generator,
     n_draws: int | None = None,
     subset_seed: int = 0,
-) -> list[tuple[Any, ...]]:
+) -> list[tuple]:
     """Return the draws cut at each of `CUTS` snapshots, with a source each.
 
     Every observation draw is cut once at each snapshot, so a simulation
@@ -628,7 +628,7 @@ def cut(
     seed: int,
     per_simulation: int,
     empty: list[str] | None = None,
-) -> list[tuple[str, dict[str, Any]]]:
+) -> list[tuple[str, dict]]:
     """Return a sample of blocks of each simulation, with its draw.
 
     A simulation's candidate blocks are each of its observation draws
@@ -645,7 +645,7 @@ def cut(
         [pd.read_csv(sim_dir / f"settings-{s}.csv") for s in seeds]
     ).set_index("outbreak")
     by = dict(tuple(counts.groupby("simulation")))
-    out: list[Any] = []
+    out = []
     for simulation in ids:
         row = settings.loc[simulation]
         days = row.get("max_delay", np.nan)
@@ -685,7 +685,9 @@ def cut_code_sha256() -> dict[str, str]:
     cut from sims already on disk, whose own files the key hashes
     (`sims_sha256`), so a simulator edit re-keys only new sims.
     """
-    sources = {f"stream.{f.__name__}": f for f in (snapshots, cut)}
+    sources: dict[str, Callable[..., Any]] = {
+        f"stream.{f.__name__}": f for f in (snapshots, cut)
+    }
     sources |= {f"foundation.{f.__name__}": f for f in ft.FOUNDATION_CODE}
     simulator = set(ft.SIMULATOR)
     return {
@@ -1058,7 +1060,7 @@ class _LossSplit:
     """
 
     def __init__(self) -> None:
-        self.steps = None
+        self.steps: Any = None
         self.parts: dict[str, float] = {}
 
     def __enter__(self) -> Any:
@@ -1234,11 +1236,12 @@ def publish(where: Path, key: str, run: Any = subprocess.run) -> None:
     files.append(sums)
 
     def gh(*command: str) -> subprocess.CompletedProcess[str]:
-        return run(
+        done: subprocess.CompletedProcess[str] = run(
             ["gh", "release", *command, "-R", REPO],
             capture_output=True,
             text=True,
         )
+        return done
 
     view = gh("view", tag, "--json", "assets")
     if view.returncode != 0:
@@ -1628,7 +1631,8 @@ def load_state(
     )
     # A state saved without the random state resumes without it.
     load_rng(where)
-    return json.loads((where / "state.json").read_text())
+    state: dict[str, Any] = json.loads((where / "state.json").read_text())
+    return state
 
 
 def code_commit() -> str:
@@ -2178,8 +2182,9 @@ def main(root: Path | None = None) -> None:
     # The outbreaks trained on, in order, and those of the current chunk.
     trained: list[str] = []
     chunk: list[str] = []
-    seen = {"blocks": 0, "series": 0}
+    seen: dict[str, Any] = {"blocks": 0, "series": 0}
     losses: list[float] = []
+    history: list[dict[str, Any]]
 
     def request(kinds: list[str], **extra: Any) -> dict[str, Any]:
         """Return what an offloaded evaluation of the model now scores."""
@@ -2292,7 +2297,12 @@ def main(root: Path | None = None) -> None:
     stop = args.outbreaks if args.until is None else args.until
     while done < stop:
         hi = min(done + CHUNK, args.outbreaks)
-        split = {"wait_s": 0.0, "cut_s": 0.0, "train_s": 0.0, "eval_s": 0.0}
+        split: dict[str, float] = {
+            "wait_s": 0.0,
+            "cut_s": 0.0,
+            "train_s": 0.0,
+            "eval_s": 0.0,
+        }
         tick = time.perf_counter()
         report(
             stage=f"waiting for outbreaks {done + 1}-{hi}",
@@ -2400,12 +2410,12 @@ def main(root: Path | None = None) -> None:
             if step % 10 == 0:
                 cut_ahead(trained + chunk)
                 # Save the next chunk once its cut is done, for a restart.
-                for ids, futures in ahead.items():
-                    if ids not in saved_ahead and all(
+                for ahead_ids, futures in ahead.items():
+                    if ahead_ids not in saved_ahead and all(
                         f.done() for f in futures
                     ):
-                        save_chunk(out, chunk_key(ids), *_join(futures))
-                        saved_ahead.add(ids)
+                        save_chunk(out, chunk_key(ahead_ids), *_join(futures))
+                        saved_ahead.add(ahead_ids)
                 history.append({"step": step, "loss": value})
                 report(
                     stage="training", step=step, outbreaks=done, gpu=memory()
@@ -2418,7 +2428,10 @@ def main(root: Path | None = None) -> None:
                 save_snapshot(
                     model, out / "evals" / f"step-{step:07d}", request(kinds)
                 )
-                entry = {"step": step, "lr": group_rates(optimiser)}
+                entry: dict[str, Any] = {
+                    "step": step,
+                    "lr": group_rates(optimiser),
+                }
                 bias = bias_summary(model)
                 if bias:
                     entry["bias"] = bias
@@ -2498,7 +2511,7 @@ def main(root: Path | None = None) -> None:
                 json.dumps(seen.get("combinations", {}))
             )
             model.save_pretrained(where / "finetuned-ckpt")
-            settings = {
+            settings: dict[str, Any] = {
                 **base,
                 "n_outbreaks": done,
                 "outbreaks_sha256": ft._sha256(where / "outbreaks.txt"),
@@ -2513,8 +2526,8 @@ def main(root: Path | None = None) -> None:
                 "checkpoint_above": args.checkpoint_above,
             }
             # Memory settings (checkpoint_above) are outside the hash.
-            key = verify.settings_hash(settings)
-            settings["hash"] = key
+            settings_key = verify.settings_hash(settings)
+            settings["hash"] = settings_key
             # The commit the trainer ran from, outside the hash: the
             # checkpoint is rebuilt from it to the same hash.
             settings["code_commit"] = commit
@@ -2544,16 +2557,16 @@ def main(root: Path | None = None) -> None:
                     f"{parts['loss']:.4f}{_described(parts)} "
                     f"(start {start_loss:.4f})"
                 )
-            entry["hash"] = key
+            entry["hash"] = settings_key
             settings["seconds"] = time.perf_counter() - t0
             (where / "settings.json").write_text(json.dumps(settings, indent=1))
             history.append(entry)
             (out / "history.json").write_text(json.dumps(history))
             log(
-                f"checkpoint n{done}: hash {key}, held-out loss {described}; "
-                f"{memory()}"
+                f"checkpoint n{done}: hash {settings_key}, "
+                f"held-out loss {described}; {memory()}"
             )
-            report(last_checkpoint=f"n{done} {key}")
+            report(last_checkpoint=f"n{done} {settings_key}")
             # From `stop_from` on, go on only while the last doubling cut
             # held-out loss by more than `min_gain`; an offloaded run never
             # reaches `stop_from` (`check_offload`).

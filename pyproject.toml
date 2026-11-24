@@ -248,6 +248,15 @@ warn_unreachable = true
 files = ["packages/*/src"]
 
 [[tool.mypy.overrides]]
+# The trainer is typed but for `snapshots` and `cut`, whose source keys
+# the saved training blocks (`cut_code_sha256`): typing them re-cuts the
+# blocks, so it waits for the next re-cut (#631).
+module = [
+  "nowcastfoundation.finetune.stream",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
 # matplotlib's date locators and formatters are untyped.
 module = [
   "nowcasteval.plots",
@@ -301,4 +310,3 @@ disallow_subclassing_any = false
 # The series biases subclass torch's untyped `nn.Module` (torch is optional).
 module = ["nowcastfoundation.series_bias"]
 disallow_subclassing_any = false
-
