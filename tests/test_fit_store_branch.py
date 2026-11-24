@@ -135,3 +135,37 @@ def test_fetch_fails_when_the_remote_cannot_be_read(tmp_path: Path) -> None:
     assert out.returncode != 0
     assert "could not read" in out.stderr
     assert not any((tmp_path / "got").iterdir())
+
+
+def test_push_backtests_stores_the_bundle_beside_the_fits(
+    tmp_path: Path,
+) -> None:
+    _git("init", "-q", "--bare", "remote.git", cwd=tmp_path)
+    _git("clone", "-q", "remote.git", "clone", cwd=tmp_path)
+    clone = tmp_path / "clone"
+    for key, value in (("user.name", "t"), ("user.email", "t@t")):
+        _git("config", key, value, cwd=clone)
+    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=clone)
+    _git("push", "-q", "origin", "HEAD:main", cwd=clone)
+    keys, plan = tmp_path / "keys.json", tmp_path / "plan.json"
+    keys.write_text(json.dumps(["m/o/cur"]))
+    plan.write_text(
+        json.dumps({"include": [{"model": "m", "origin": "o", "key": "cur"}]})
+    )
+    _fit(tmp_path / "new", "m/o/cur", "ok", "2026-11-05")
+    out = _run("push", str(tmp_path / "new"), str(keys), str(plan), cwd=clone)
+    assert out.returncode == 0, out.stderr
+    bundle = tmp_path / "backtests.tar.gz"
+    bundle.write_bytes(b"bundle")
+    out = _run("push-backtests", str(bundle), "abc123", cwd=clone)
+    assert out.returncode == 0, out.stderr
+    # A later fit push prunes fits only, never the backtests.
+    out = _run("push", str(tmp_path / "new"), str(keys), str(plan), cwd=clone)
+    assert out.returncode == 0, out.stderr
+
+    got = tmp_path / "got"
+    assert _run("fetch", str(got), cwd=clone).returncode == 0
+    assert (got / "backtests" / "latest.tar.gz").read_bytes() == b"bundle"
+    meta = json.loads((got / "backtests" / "latest.json").read_text())
+    assert meta["commit"] == "abc123"
+    assert (got / "m/o/cur.json.gz").is_file()
