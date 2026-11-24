@@ -77,10 +77,10 @@ def test_backtest_code_never_imports_report_only_modules() -> None:
         if rel in REPORT_ONLY:
             continue
         used = {report_only[m] for m in _imports(path) if m in report_only}
-        # The `report` and `live-checkpoint` commands, which no backtest
-        # runs.
+        # The `report`, `live-checkpoint` and `ft-check report` commands,
+        # which no backtest runs.
         if rel == "packages/bdbvhub/src/bdbvhub/cli.py":
-            used -= {"report", "live_checkpoint_page"}
+            used -= {"report", "live_checkpoint_page", "ftcheck_report"}
         assert not used, f"{rel} imports {used}"
 
 

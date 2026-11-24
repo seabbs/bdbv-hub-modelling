@@ -75,7 +75,7 @@ def _quantiles():
 
 
 def test_calibration_gives_median_over_truth_and_reported_and_coverage():
-    from bdbvhub.ftcheck import calibration
+    from bdbvhub.reporting.ftcheck_report import calibration
 
     got = calibration(_quantiles()).set_index(["model", "level", "weeks_back"])
     a = got.loc[("a", "national", 0)]
@@ -93,7 +93,7 @@ def test_calibration_gives_median_over_truth_and_reported_and_coverage():
 def test_roughness_compares_week_to_week_changes_with_the_truth_s():
     import numpy as np
 
-    from bdbvhub.ftcheck import roughness
+    from bdbvhub.reporting.ftcheck_report import roughness
 
     got = roughness(_quantiles()).set_index(["model", "level"])
     # log1p(11) - log1p(10) for the medians, log1p(12) - log1p(10) for truth.
@@ -106,7 +106,7 @@ def test_roughness_compares_week_to_week_changes_with_the_truth_s():
 def test_weeks_with_nothing_reported_have_no_ratio_to_it():
     import numpy as np
 
-    from bdbvhub.ftcheck import calibration
+    from bdbvhub.reporting.ftcheck_report import calibration
 
     q = _quantiles().assign(reported=0.0)
     got = calibration(q)
@@ -122,7 +122,7 @@ def test_the_page_carries_the_explorer_s_styles_and_data(tmp_path):
 
     import pandas as pd
 
-    from bdbvhub.ftcheck import write_report
+    from bdbvhub.reporting.ftcheck_report import write_report
     from nowcasteval.explorer import QUANTILE_COLUMNS
 
     root = Path(__file__).parents[3]
@@ -196,7 +196,7 @@ def test_the_explorer_shows_each_model_s_final_count_forecast():
     # the model's own final-count draws (as the this-round page).
     import numpy as np
 
-    from bdbvhub.ftcheck import explorer_quantiles
+    from bdbvhub.reporting.ftcheck_report import explorer_quantiles
     from nowcasteval.explorer import QUANTILE_COLUMNS
 
     s = _samples()
