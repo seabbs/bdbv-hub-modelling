@@ -66,8 +66,8 @@ def _packages(where: str) -> list[tuple[str, str, str]]:
 def _target(name: str, home: bool) -> str:
     if name in SITES:
         return f"{name}/" if home else f"{SITE}{name}/"
-    anchor = f"packages/index.md#{name}" if home else f"packages/#{name}"
-    return anchor if home else f"{SITE}{anchor}"
+    # A package without its own site has a page from its README.
+    return f"packages/{name}.md" if home else f"{SITE}packages/{name}/"
 
 
 def test_every_package_is_grouped_once() -> None:

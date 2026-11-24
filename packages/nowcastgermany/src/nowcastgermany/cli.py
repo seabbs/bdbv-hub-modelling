@@ -336,7 +336,7 @@ def _paper(args: argparse.Namespace) -> int:
 
 def _ft_load(args: argparse.Namespace) -> int:
     config = de.load_germany_config(args.config)
-    tag = gs.pinned_tag(foundation.finetuned_spec(args.finetune))
+    tag = gs.pinned_tag(foundation.finetuned_label(args.finetune))
     stored = gs.stored_tags(args.store)
     note = Path(args.note)
     note.parent.mkdir(parents=True, exist_ok=True)
@@ -357,7 +357,7 @@ def _ft_load(args: argparse.Namespace) -> int:
 
 
 def _ft_tag(args: argparse.Namespace) -> int:
-    print(gs.pinned_tag(foundation.finetuned_spec(args.finetune)))
+    print(gs.pinned_tag(foundation.finetuned_label(args.finetune)))
     return 0
 
 

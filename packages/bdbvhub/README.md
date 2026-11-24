@@ -25,9 +25,27 @@ It reads the hub's data (`nowcastbdbv`), fits and stores the models, writes and 
 - The command's reference: [CLI](https://samabbott.co.uk/bdbv-hub-modelling/development/cli/).
 - Adding a model: [Adding a model](https://samabbott.co.uk/bdbv-hub-modelling/development/adding-a-model/).
 
+## Install
+
+From a clone of the repository:
+
 ```sh
-uv add bdbvhub
+uv sync --package bdbvhub             # this package and the ones it needs
 ```
+
+## Example
+
+```sh
+uv run bdbvhub data        # download and tidy the hub's data
+task bdbvhub:nowcast       # forecast from the latest release, a checked hub file
+uv run bdbvhub --help      # every step
+```
+
+How a week's submission runs: [Submission workflow](https://samabbott.co.uk/bdbv-hub-modelling/submission/workflow/).
+
+## Tasks
+
+`task bdbvhub:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 

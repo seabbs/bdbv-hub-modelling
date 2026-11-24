@@ -235,6 +235,10 @@ class ModelSpec:
     fitted : bool
         Whether the model is fitted by MCMC for each task, so is slow.
         The docs report and the smoke tests run only models that are not.
+    paper_only : bool
+        Whether only the paper's workflow runs the model, by name: the
+        fit store, the default backtest models and the submission leave
+        it out.
     """
 
     name: str
@@ -242,6 +246,7 @@ class ModelSpec:
     description: str
     baseline: bool = False
     fitted: bool = False
+    paper_only: bool = False
 
 
 _REGISTRY: dict[str, ModelSpec] = {}
@@ -254,6 +259,7 @@ def register_model(
     *,
     baseline: bool = False,
     fitted: bool = False,
+    paper_only: bool = False,
     replace: bool = False,
 ) -> ModelSpec:
     """Add a model to the registry used by the backtest, CLI and docs.
@@ -270,6 +276,8 @@ def register_model(
         Mark the model as the baseline for relative skill.
     fitted : bool
         Mark the model as fitted by MCMC for each task.
+    paper_only : bool
+        Mark the model as run only by the paper's workflow (`ModelSpec`).
     replace : bool
         Allow replacing an existing entry.
 
@@ -296,7 +304,7 @@ def register_model(
     """
     if name in _REGISTRY and not replace:
         raise ValueError(f"Model {name!r} is already registered.")
-    spec = ModelSpec(name, factory, description, baseline, fitted)
+    spec = ModelSpec(name, factory, description, baseline, fitted, paper_only)
     _REGISTRY[name] = spec
     return spec
 

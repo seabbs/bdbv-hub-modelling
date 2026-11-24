@@ -7,6 +7,7 @@ The data and notation are on the [Data methods page](data.md#target-and-notation
 `foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the ragged layout.
 The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), the two-step `foundation_twostep` and `foundation_zeroshot_twostep`, and `foundation_real` (fine-tuned on real data alone).
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
+Only `foundation` runs in the Fit store and the submission; the variants are run by the paper's workflow alone.
 Each model reads the cadence from the data: one pass on the daily releases gives the daily counts and the weekly hub target, and a task with weekly releases only gives the weekly target.
 The hub model `seabbs-foundation` is set up to submit `foundation` and is off until it is opted in ([Opting in](../submission/opting-in.md)).
 
@@ -106,8 +107,8 @@ The simulator is `nowcastfoundation.simulator` (the design and value draws, then
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.
 The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
 Later releases are trained from the code here, so retraining from it gives the same hash.
-Each checkpoint is published as the repository's release `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
-The models load the newest such release by publish date, unless `config/finetune.toml` pins a hash.
+Each checkpoint is published as the repository's release `chronos-slots-<hash>` (with the series bias) or `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
+The models load the newest such release by publish date (`hash = "latest"` in `config/finetune.toml`), so each new release, interim or final, is picked up; a settings hash there pins one release instead.
 `source` in `config/finetune.toml` says where the checkpoint is read from: `github` (the release), `huggingface` (a Hugging Face Hub repository at a pinned revision holding the same files) or `local` (a training segment folder).
 A checkpoint read from the Hub is the same checkpoint as its release, so it keys the same stored fits.
 The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the fine-tuned models, and each stored fit records the checkpoint it used.

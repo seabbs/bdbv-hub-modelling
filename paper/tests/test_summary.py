@@ -134,3 +134,16 @@ def test_with_randomwalknowcast_the_baseline_its_scores_are_quoted() -> None:
     )
     out = study_summary({"study": "synthetic", "source": "dummy"}, scores)
     assert out["models"]["foundation"] == 0.8
+
+
+def test_every_quoted_model_score_is_one_the_summary_writes() -> None:
+    import re
+    from pathlib import Path
+
+    from paperpipe.summary import QUOTED_MODELS
+
+    here = Path(__file__).parents[1]
+    for name in ("main.qmd", "si.qmd"):
+        text = (here / name).read_text()
+        for model in re.findall(r"results\.\w+\.models\.(\w+) >", text):
+            assert model in QUOTED_MODELS, (name, model)

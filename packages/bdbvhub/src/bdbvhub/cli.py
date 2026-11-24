@@ -757,7 +757,10 @@ def apply_sampler(config: bt.BacktestConfig) -> None:
 
 
 def _models(names: Sequence[str] | None) -> list[str]:
-    return list(names) if names else [s.name for s in list_models()]
+    """Return the named models, else every model but the paper-only ones."""
+    if names:
+        return list(names)
+    return [s.name for s in list_models() if not s.paper_only]
 
 
 def _backtest(args: argparse.Namespace) -> int:
@@ -1869,7 +1872,7 @@ def _data_root() -> Path:
 
 def _ft_check(args: argparse.Namespace) -> int:
     from bdbvhub import ftcheck
-    from nowcastfoundation.forecaster import finetuned_spec
+    from nowcastfoundation.forecaster import finetuned_label
 
     if args.action == "forecast":
         if not args.model:
@@ -1885,7 +1888,7 @@ def _ft_check(args: argparse.Namespace) -> int:
         tables,
         args.out,
         args.reference,
-        args.checkpoint or finetuned_spec(),
+        args.checkpoint or finetuned_label(),
         args.root,
     )
     print(f"Wrote {out}.")
