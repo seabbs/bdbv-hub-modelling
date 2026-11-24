@@ -219,8 +219,7 @@ In those blocks each release but the last is missed with chance 0.2.
 In 30% of blocks the releases start late, 7 to 182 days after the outbreak's first report, with the delay drawn from a Beta(1, 3) on that range, so short delays are most common.
 The releases before the start are dropped, so the first kept release fills in the earlier onsets, as the Ebola hub's first release held onsets from months before.
 Lag series start at that release, and the counts keep the whole history.
-In 5% of blocks there are no lag series, and the block holds counts to the last complete step, as the complete layout does.
-Release starts, cadences and blocks without lag series are drawn per block at fine-tuning time from the simulated releases, and every view of a block shares them.
+Release starts and cadences are drawn per block at fine-tuning time from the simulated releases, and every view of a block shares them.
 Each simulation gives one observation draw, cut at 14 cut-offs, one drawn at random within each of 14 equal stretches of its weekly cut-offs, so one simulation gives up to 14 blocks.
 Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
 A block with fewer than 10 cases reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.

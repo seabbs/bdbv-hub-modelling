@@ -30,7 +30,7 @@ SETTINGS = {
     "n_outbreaks": 3100,
     "steps": 71844,
     "code_commit": "014a2bac52a0a1f6af77b2c64ac548d0fda0245c",
-    "release_layer": {"late_start": 0.3, "no_lags": 0.05},
+    "release_layer": {"late_start": 0.3},
 }
 SUMS = (
     ("adapter_config.json", "a" * 64),

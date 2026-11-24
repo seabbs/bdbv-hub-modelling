@@ -306,13 +306,13 @@ def record_releases(
     """Add each block's releases to `RELEASES_FILE`, under a release layer.
 
     One row a block: the outbreak, the part of the run, source, cut,
-    cadence, the drawn release-start delay in days, whether it has no
-    lag series, the first kept release, the number of releases and the
-    cut's date. Returns a line for the log, empty without a layer.
+    cadence, the drawn release-start delay in days, the first kept
+    release, the number of releases and the cut's date. Returns a line
+    for the log, empty without a layer.
     """
     if ft.RELEASE_LAYER is None or not pairs:
         return ""
-    cols = ("source", "cut", "cadence", "release_start_days", "no_lags")
+    cols = ("source", "cut", "cadence", "release_start_days")
     frame = pd.DataFrame(
         [
             {
@@ -343,8 +343,7 @@ def record_releases(
     )
     return (
         f"{late.mean():.0%} of {len(frame)} blocks start their releases "
-        f"late (median {median} days), {weekly:.0%} released weekly, "
-        f"{frame['no_lags'].mean():.0%} without lag series"
+        f"late (median {median} days), {weekly:.0%} released weekly"
     )
 
 

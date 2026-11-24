@@ -75,7 +75,6 @@ TABLE_HEADERS: Final = {
 RELEASE_WHY: Final = {
     "start": "releases that begin after the outbreak, so the first kept"
     " release fills in earlier onsets, as the Ebola hub's first release did",
-    "no_lags": "counts alone, as when only the latest data are at hand",
     "lag_jitter": "lag counts near the rule's, so the model does not rely on"
     " its exact value",
     "cadences": "release cadences of the daily blocks",
@@ -180,14 +179,6 @@ def release_rows(release: dict[str, Any]) -> list[dict[str, str]]:
                 "values": f"{start['share']:.0%} of blocks; delay "
                 f"{distribution(start['delay_days'])} days",
                 "why": RELEASE_WHY["start"],
-            }
-        )
-    if no_lags := release.get("no_lags"):
-        out.append(
-            {
-                "setting": "`no_lags`",
-                "values": f"{no_lags['share']:.0%} of blocks",
-                "why": RELEASE_WHY["no_lags"],
             }
         )
     if jitter := release.get("lag_jitter"):

@@ -97,7 +97,6 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - A block is daily, 3-day or weekly.
 - A daily block can also have one extra row per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
 - In 30% of blocks the releases start late, so the first release fills in earlier onsets, as the Ebola hub's first release did.
-- 5% of blocks have no lag series, as when only the latest data are at hand.
 - Most blocks are multivariate, and one in five blocks from outbreaks with more than one stratum is univariate.
 - We save checkpoints at 100, 200, 400, 800, 1,600 and 3,200 simulations.
 - At each checkpoint we check that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (SI).

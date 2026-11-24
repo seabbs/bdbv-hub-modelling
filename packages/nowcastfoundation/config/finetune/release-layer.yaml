@@ -12,11 +12,6 @@
 start:
   share: 0.15
   delay_days: {dist: beta, a: 1, b: 3, lower: 7, upper: 182}
-# no_lags: the share of blocks trained on their counts alone, with no lag
-# series, as when only the latest data are at hand (lead 02:00, Sam): the
-# complete layout's blocks (counts to the last complete step).
-no_lags:
-  share: 0.05
 # lag_jitter: the share of blocks whose lag count is the rule's times a
 # factor drawn from Normal(1, sd), rounded, at least 1 and within the
 # block's history (lead 15:08, Sam); the rest use the rule's exactly.
