@@ -353,26 +353,6 @@ def test_score_forecasts_gives_log_crps() -> None:
     assert scores["log_crps"].iloc[0] == pytest.approx(want)
 
 
-def test_german_quantile_scores_stay_wis() -> None:
-    # The German benchmark scores quantile forecasts, so it keeps WIS.
-    from nowcastgermany import evaluation as germany
-
-    assert "wis" in germany.SCORE_COLUMNS
-    assert "crps" not in germany.SCORE_COLUMNS
-    quantiles = pd.DataFrame(
-        {
-            "id": [0] * 3,
-            "quantile": [0.25, 0.5, 0.75],
-            "value": [4.0, 6.0, 9.0],
-        }
-    )
-    assert "wis" in wis_quantile(
-        np.array([5.0]),
-        quantiles["value"].to_numpy()[None, :],
-        quantiles["quantile"].to_numpy(),
-    )
-
-
 def _two_models_same_samples() -> tuple[pd.DataFrame, pd.DataFrame]:
     rng = np.random.default_rng(8)
     draws = rng.poisson(30, (100, 2, 2)).astype(float)

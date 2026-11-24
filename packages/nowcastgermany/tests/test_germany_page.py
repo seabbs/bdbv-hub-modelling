@@ -14,7 +14,7 @@ from nowcastgermany.evaluation import (
 )
 from nowcastgermany.reporting import germany_page
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
 
 

@@ -11,7 +11,7 @@ import pytest
 from nowcastgermany.cli import main
 from nowcastgermany.evaluation import load_germany_config
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _germany_data(tmp_path: Path) -> tuple[Path, Path]:

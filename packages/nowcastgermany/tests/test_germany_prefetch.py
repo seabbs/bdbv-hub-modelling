@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 FIXTURE = (
-    Path(__file__).resolve().parents[2]
+    Path(__file__).resolve().parents[3]
     / "tests"
     / "fixtures"
     / "germany"
