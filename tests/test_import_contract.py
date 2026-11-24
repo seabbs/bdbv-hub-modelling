@@ -48,7 +48,7 @@ def test_ci_checks_each_package_in_its_own_job() -> None:
     # ruff, format, mypy and its own tests (packages/<name>/tests).
     import yaml
 
-    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    sys.path.insert(0, str(ROOT / ".github" / "scripts"))
     from legs import layers
 
     packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
@@ -71,16 +71,16 @@ def test_ci_checks_each_package_in_its_own_job() -> None:
 
 
 def test_every_package_has_its_own_tests() -> None:
-    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    sys.path.insert(0, str(ROOT / ".github" / "scripts"))
     from legs import layers
 
     for name in layers():
         assert list((ROOT / "packages" / name / "tests").glob("test_*.py"))
-    assert not (ROOT / "tests" / "packages" / "owners.py").exists()
+    assert not (ROOT / ".github" / "scripts" / "owners.py").exists()
 
 
 def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
-    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    sys.path.insert(0, str(ROOT / ".github" / "scripts"))
     from legs import layers, legs
 
     assert legs(["docs/index.md"]) == []
