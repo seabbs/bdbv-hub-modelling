@@ -10,29 +10,40 @@ env:
   MPLCONFIGDIR: '{{.MPLCONFIGDIR | default (printf "%s/mplconfig" (env "TMPDIR" | default "/tmp"))}}'
 
 
-# One Taskfile per project, run from the repository root: `task
-# nowcast-foundation:finetune` or `task foundation:finetune`.
+# Each Taskfile lives beside its code and runs in its own folder; this one
+# only includes them, so every task is found from here: `task
+# <namespace>:<task>`, or `task <task>` inside that folder.
 includes:
-  nowcast-utils:
-    taskfile: taskfiles/nowcast-utils.yml
-    dir: .
-    aliases: [utils]
-  nowcast-eval:
-    taskfile: taskfiles/nowcast-eval.yml
-    dir: .
-    aliases: [eval]
-  nowcast-foundation:
-    taskfile: taskfiles/nowcast-foundation.yml
-    dir: .
-    aliases: [foundation]
-  nowcast-workflow:
-    taskfile: taskfiles/nowcast-workflow.yml
-    dir: .
-    aliases: [workflow]
-  bdbv-hub:
-    taskfile: taskfiles/bdbv-hub.yml
-    dir: .
-    aliases: [hub]
+  nowcastutils:
+    taskfile: packages/nowcastutils/Taskfile.yml
+    dir: packages/nowcastutils
+  nowcasteval:
+    taskfile: packages/nowcasteval/Taskfile.yml
+    dir: packages/nowcasteval
+  nowcastbaselines:
+    taskfile: packages/nowcastbaselines/Taskfile.yml
+    dir: packages/nowcastbaselines
+  nowcastrenewal:
+    taskfile: packages/nowcastrenewal/Taskfile.yml
+    dir: packages/nowcastrenewal
+  nowcastfoundation:
+    taskfile: packages/nowcastfoundation/Taskfile.yml
+    dir: packages/nowcastfoundation
+  nowcastgermany:
+    taskfile: packages/nowcastgermany/Taskfile.yml
+    dir: packages/nowcastgermany
+  nowcastbdbv:
+    taskfile: packages/nowcastbdbv/Taskfile.yml
+    dir: packages/nowcastbdbv
+  bdbvhub:
+    taskfile: packages/bdbvhub/Taskfile.yml
+    dir: packages/bdbvhub
+  workflow:
+    taskfile: workflow/Taskfile.yml
+    dir: workflow
+  ci:
+    taskfile: ci/Taskfile.yml
+    dir: ci
   paper:
     taskfile: paper/Taskfile.yml
     dir: paper
@@ -82,7 +93,7 @@ tasks:
   getting-started:
     desc: Run the Getting started notebook again and save its outputs
     cmds:
-      - task: bdbv-hub:fit-store
+      - task: bdbvhub:fit-store
       - >-
         uv run --group docs jupytext --to ipynb --execute --run-path .
         docs/getting-started.py
@@ -97,8 +108,8 @@ tasks:
   docs:
     desc: Build the docs site into _site/
     cmds:
-      - task: nowcast-eval:results
-      - task: nowcast-eval:plots
+      - task: bdbvhub:results
+      - task: bdbvhub:plots
       - task: getting-started
       - task: paper
       - uv run mkdocs build --strict
@@ -117,9 +128,9 @@ tasks:
 
 
   serve:
-    desc: Serve the docs locally (run `task nowcast-eval:results` once first)
+    desc: Serve the docs locally (run `task bdbvhub:results` once first)
     cmds:
-      - task: nowcast-eval:plots
+      - task: bdbvhub:plots
       - uv run mkdocs serve
 
   # Named dry runs: what each would run, without running it.
@@ -136,9 +147,9 @@ tasks:
   dry:submit:
     desc: Dry run of the submission workflow on fixture data
     cmds:
-      - task: bdbv-hub:ci-dry
+      - task: ci:dry
 
   dry:fit-store:
     desc: List the fits the store lacks for this code and data
     cmds:
-      - task: bdbv-hub:fit-store-plan
+      - task: bdbvhub:fit-store-plan

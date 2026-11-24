@@ -26,7 +26,7 @@ wildcard_constraints:
 
 
 checkpoint release_list:
-    # Lists the releases to score; `task nowcast-foundation:score` reruns it.
+    # Lists the releases to score; `task workflow:score` reruns it.
     output:
         f"{CACHE}/releases.json",
     log:

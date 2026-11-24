@@ -10,7 +10,7 @@ Run these before sending a change:
 ```bash
 task lint             # ruff and strict mypy
 task test-all         # every test, the model fit tests included
-task hub:ci-test      # the submission workflow tests
+task ci:test      # the submission workflow tests
 task dry:submit       # the submission workflow dry runs
 task docs             # the site, built in strict mode
 ```
@@ -21,8 +21,8 @@ Any change to `packages/nowcastrenewal/`, the simulator or the renewal forecaste
 
 ## Tasks
 
-The root Taskfile keeps the top-level tasks (setup, test, lint, format, docs, serve, getting-started, paper) and includes one Taskfile per project from `taskfiles/`, by namespace: `nowcast-utils` (`utils`), `nowcast-eval` (`eval`), `nowcast-foundation` (`foundation`), `nowcast-workflow` (`workflow`), `bdbv-hub` (`hub`) and `paper` (`paper/Taskfile.yml`).
-The short names work too: `task foundation:finetune` is `task nowcast-foundation:finetune`.
+Each Taskfile lives beside its code and runs in its own folder: `packages/<package>/Taskfile.yml` for each package (namespace: the package name, for example `task bdbvhub:nowcast`), `workflow/Taskfile.yml` (`workflow`), `ci/Taskfile.yml` (`ci`) and `paper/Taskfile.yml` (`paper`).
+The root Taskfile only includes them, beside the top-level tasks (setup, test, lint, format, docs, serve, getting-started, paper), so every task is found from the repository root as `task <namespace>:<task>`, or as `task <task>` inside its folder.
 The named dry runs are `task dry:tick`, `task dry:paper`, `task dry:submit` and `task dry:fit-store`.
 
 The tasks' names before the project Taskfiles:
@@ -30,43 +30,43 @@ The tasks' names before the project Taskfiles:
 | Old | New |
 |---|---|
 | `paper:render` | `paper` |
-| `data` | `nowcast-utils:data` |
-| `data-bvd` | `nowcast-utils:data-bvd` |
-| `backtest` | `nowcast-eval:backtest` |
-| `backtest-lopo` | `nowcast-eval:backtest-lopo` |
-| `backtest-zones` | `nowcast-eval:backtest-zones` |
-| `results` | `nowcast-eval:results` |
-| `score-history` | `nowcast-eval:score-history` |
-| `germany` | `nowcast-eval:germany` |
-| `compare-hub` | `nowcast-eval:compare-hub` |
-| `plots` | `nowcast-eval:plots` |
-| `simulate` | `nowcast-foundation:simulate` |
-| `push` | `nowcast-foundation:push` |
-| `release` | `nowcast-foundation:release` |
-| `finetune` | `nowcast-foundation:finetune` |
-| `publish` | `nowcast-foundation:publish` |
-| `score` | `nowcast-foundation:score` |
-| `land` | `nowcast-foundation:land` |
-| `dashboard` | `nowcast-foundation:dashboard` |
-| `dashboard:static` | `nowcast-foundation:dashboard-static` |
-| `all` | `nowcast-workflow:all` |
-| `tick` | `nowcast-workflow:tick` |
-| `run` | `nowcast-workflow:run` |
-| `monitor` | `nowcast-workflow:monitor` |
-| `dag` | `nowcast-workflow:dag` |
-| `rulegraph` | `nowcast-workflow:rulegraph` |
-| `progress` | `nowcast-workflow:progress` |
-| `report` | `nowcast-workflow:report` |
-| `workflow:check` | `nowcast-workflow:check` |
-| `nowcast` | `bdbv-hub:nowcast` |
-| `metadata` | `bdbv-hub:metadata` |
-| `validate-hub` | `bdbv-hub:validate` |
-| `submission-preflight` | `bdbv-hub:preflight` |
-| `ci-test` | `bdbv-hub:ci-test` |
-| `ci-dry` | `bdbv-hub:ci-dry` |
-| `ci-fit` | `bdbv-hub:ci-fit` |
-| `fit-store` | `bdbv-hub:fit-store` |
-| `fit-store-plan` | `bdbv-hub:fit-store-plan` |
+| `data` | `nowcastbdbv:data` |
+| `data-bvd` | `nowcastbdbv:data-bvd` |
+| `backtest` | `bdbvhub:backtest` |
+| `backtest-lopo` | `bdbvhub:backtest-lopo` |
+| `backtest-zones` | `bdbvhub:backtest-zones` |
+| `results` | `bdbvhub:results` |
+| `score-history` | `nowcasteval:score-history` |
+| `germany` | `nowcastgermany:benchmark` |
+| `compare-hub` | `bdbvhub:compare-hub` |
+| `plots` | `bdbvhub:plots` |
+| `simulate` | `workflow:simulate` |
+| `push` | `workflow:push` |
+| `release` | `workflow:release` |
+| `finetune` | `workflow:finetune` |
+| `publish` | `workflow:publish` |
+| `score` | `workflow:score` |
+| `land` | `workflow:land` |
+| `dashboard` | `workflow:dashboard` |
+| `dashboard:static` | `workflow:dashboard-static` |
+| `all` | `workflow:all` |
+| `tick` | `workflow:tick` |
+| `run` | `workflow:run` |
+| `monitor` | `workflow:monitor` |
+| `dag` | `workflow:dag` |
+| `rulegraph` | `workflow:rulegraph` |
+| `progress` | `workflow:progress` |
+| `report` | `workflow:report` |
+| `workflow:check` | `workflow:check` |
+| `nowcast` | `bdbvhub:nowcast` |
+| `metadata` | `bdbvhub:metadata` |
+| `validate-hub` | `bdbvhub:validate` |
+| `submission-preflight` | `ci:preflight` |
+| `ci-test` | `ci:test` |
+| `ci-dry` | `ci:dry` |
+| `ci-fit` | `bdbvhub:ci-fit` |
+| `fit-store` | `bdbvhub:fit-store` |
+| `fit-store-plan` | `bdbvhub:fit-store-plan` |
 
 ## Commits
 

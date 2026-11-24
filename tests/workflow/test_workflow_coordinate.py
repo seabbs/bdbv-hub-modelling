@@ -47,7 +47,7 @@ def test_a_stop_file_before_it_starts_runs_nothing(passes):
 
 
 def test_the_taskfile_runs_the_coordinator():
-    text = (ROOT / "taskfiles" / "nowcast-workflow.yml").read_text()
+    text = (ROOT / "workflow" / "Taskfile.yml").read_text()
     assert "workflow/scripts/coordinate.py" in text
 
 
@@ -73,10 +73,15 @@ def test_no_timer_runs_ticks_and_each_task_is_named_once():
     # The coordinator run replaced the timer (schedule.py), and a task
     # named twice in a Taskfile silently loses its first definition.
     assert not (ROOT / "workflow" / "scripts" / "schedule.py").exists()
-    for path in (ROOT / "taskfiles").glob("*.yml"):
+    for path in [
+        *(ROOT / d / "Taskfile.yml" for d in (".", "workflow", "ci", "paper")),
+        *ROOT.glob("packages/*/Taskfile.yml"),
+    ]:
+        # The tasks only: an include may share a task's name.
+        tasks = path.read_text().split("\ntasks:\n", 1)[-1]
         names = [
             line.strip().rstrip(":")
-            for line in path.read_text().splitlines()
+            for line in tasks.splitlines()
             if line.startswith("  ")
             and not line.startswith("   ")
             and line.rstrip().endswith(":")

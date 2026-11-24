@@ -1,0 +1,24 @@
+version: "3"
+
+# The German hospitalisation nowcast benchmark (nowcastgermany).
+# Included by the root Taskfile.yml as `nowcastgermany`: run `task nowcastgermany:<task>` from the
+# repository root, or `task <task>` here. Tasks that read or write the
+# repository's data/, results/ or output/ run from its root (`dir`).
+
+tasks:
+  benchmark:
+    dir: ../..
+    desc: Run and score the German hospitalisation nowcast benchmark and its hub teams (writes results/germany/)
+    cmds:
+      - uv run nowcastgermany fetch
+      - uv run nowcastgermany backtest {{.CLI_ARGS}}
+      - uv run nowcastgermany teams
+      - uv run nowcastgermany asof
+      - uv run nowcastgermany paper
+
+
+  test:
+    dir: ../..
+    desc: Run nowcastgermany's tests (the fast ones; `-- -m ""` for all)
+    cmds:
+      - uv run pytest -q packages/nowcastgermany/tests {{.CLI_ARGS}}

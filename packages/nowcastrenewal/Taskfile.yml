@@ -1,0 +1,13 @@
+version: "3"
+
+# The renewal model (nowcastrenewal).
+# Included by the root Taskfile.yml as `nowcastrenewal`: run `task nowcastrenewal:<task>` from the
+# repository root, or `task <task>` here. Tasks that read or write the
+# repository's data/, results/ or output/ run from its root (`dir`).
+
+tasks:
+  test:
+    dir: ../..
+    desc: Run nowcastrenewal's tests (the fast ones; `-- -m ""` for all)
+    cmds:
+      - uv run pytest -q packages/nowcastrenewal/tests {{.CLI_ARGS}}

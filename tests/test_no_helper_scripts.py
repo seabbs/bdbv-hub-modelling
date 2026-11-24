@@ -76,7 +76,9 @@ def test_no_path_names_a_moved_helper() -> None:
     for path in [
         *ROOT.glob(".github/workflows/*.yml"),
         *ROOT.glob("workflow/rules/*.smk"),
-        *ROOT.glob("taskfiles/*.yml"),
+        *ROOT.glob("packages/*/Taskfile.yml"),
+        ROOT / "workflow" / "Taskfile.yml",
+        ROOT / "ci" / "Taskfile.yml",
         *ROOT.glob("ci/steps/*.sh"),
         ROOT / "Taskfile.yml",
         ROOT / "mkdocs.yml",

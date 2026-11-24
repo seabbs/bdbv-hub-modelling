@@ -78,6 +78,9 @@ _BANDS: Final = dict(
 )
 """The explorer's interval columns and the hub's levels they show."""
 
+NOT_RUN = "Not run yet: `task nowcastgermany:benchmark`.\n"
+"""What a page says before the benchmark has run."""
+
 _PAGES: Final = (
     "germany-nowcasts.md",
     "germany-scores.md",
@@ -395,7 +398,9 @@ def germany_page(
     _write(gen / "germany-ft.md", _ft_note(results))
     if not (results / "scores.csv.gz").exists():
         for name in _PAGES[:-1]:
-            _write(gen / name, "Not run yet: `task eval:germany`.\n")
+            _write(
+                gen / name, "Not run yet: `task nowcastgermany:benchmark`.\n"
+            )
         return
     scores = _read(results, ("scores.csv.gz", "teams.csv.gz"), shown)
     assert scores is not None
@@ -445,7 +450,8 @@ def germany_page(
     )
     if forecasts is None:
         _write(
-            gen / "germany-nowcasts.md", "Not run yet: `task eval:germany`.\n"
+            gen / "germany-nowcasts.md",
+            "Not run yet: `task nowcastgermany:benchmark`.\n",
         )
     else:
         forecasts = _development(forecasts, config)
