@@ -167,7 +167,7 @@ It is one process: the page is rebuilt in the background and a client that leave
 
 It runs two ways, through the one script (`flowlib.dashboard.serve`):
 
-- with the run: `dashboard.serve: true` in the workflow config, and a run whose targets include `finetune`, starts it from the run's own checkout when the run starts (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task nowcast-workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
+- with the run: `dashboard.serve: true` in the workflow config, on a machine whose targets (`TARGETS`) include `finetune`, starts it from the run's own checkout when the run starts (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task nowcast-workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
 - alone: `task nowcast-foundation:dashboard`, from any checkout, in the foreground.
 
 Either shows the runs under `DASHBOARD_ROOT` (default `ROOT`), so a checkout can watch another machine folder's runs.

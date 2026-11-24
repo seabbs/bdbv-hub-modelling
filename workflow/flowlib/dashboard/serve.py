@@ -47,6 +47,28 @@ def alive(pid: int) -> bool:
     return True
 
 
+def serving(pid: int, script: Path | str) -> bool:
+    """Return whether `pid` is alive and running `script`.
+
+    A pid the system has since given to another process is not ours.
+    Where there is no /proc (macOS), alive is enough.
+    """
+    if not alive(pid):
+        return False
+    cmdline = Path(f"/proc/{pid}/cmdline")
+    if cmdline.is_file():
+        return Path(script).name.encode() in cmdline.read_bytes()
+    return True
+
+
+def _recorded(path: Path) -> int:
+    """Return the pid a pid file holds, 0 if none or unreadable."""
+    try:
+        return int(path.read_text().split()[0])
+    except (OSError, IndexError, ValueError):
+        return 0
+
+
 JOB_ENV = "WORKFLOW_JOB"
 """Set in a worker's job (flowlib.compute.job_env), which serves nothing."""
 
@@ -87,10 +109,9 @@ def ensure(
         The pid of the dashboard serving `root(local)`.
     """
     path = pidfile(local)
-    if path.is_file():
-        old = int(path.read_text().split()[0] or 0)
-        if old and alive(old):
-            return old
+    old = _recorded(path)
+    if old and serving(old, script):
+        return old
     path.parent.mkdir(parents=True, exist_ok=True)
     with (path.parent / "serve.log").open("ab") as log:
         proc = subprocess.Popen(

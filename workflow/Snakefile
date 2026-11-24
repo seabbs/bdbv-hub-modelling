@@ -59,7 +59,11 @@ onstart:
     from flowlib.dashboard import serve
 
     if serve.wanted(config, TARGETS):
-        serve.ensure(LOCAL, serve.driver_pid())
+        # A side process: never the reason a run fails.
+        try:
+            serve.ensure(LOCAL, serve.driver_pid())
+        except Exception as e:
+            say(f"dashboard not served: {e}")
 
 
 onerror:

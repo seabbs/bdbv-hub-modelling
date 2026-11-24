@@ -119,3 +119,28 @@ def test_a_worker_job_is_marked_as_one():
     worker = compute.Worker("w", "host", "/w", "/c")
     got = compute.job_env({"ROOT": "/r"}, worker)
     assert got[serve.JOB_ENV] == "1"
+
+
+def test_an_empty_or_reused_pid_file_still_starts_a_server(tmp_path):
+    local, script = _local(tmp_path), _script(tmp_path)
+    serve.pidfile(local).parent.mkdir(parents=True)
+    driver = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"]
+    )
+    try:
+        serve.pidfile(local).write_text("")
+        got = serve.ensure(local, driver.pid, script=script)
+        assert serve.alive(got)
+        # A live pid that is not the dashboard (here the driver itself).
+        serve.pidfile(local).write_text(f"{driver.pid}\n")
+        again = serve.ensure(local, driver.pid, script=script)
+        assert again != driver.pid
+    finally:
+        driver.kill()
+        driver.wait()
+
+
+def test_the_run_never_fails_because_the_dashboard_did():
+    text = (ROOT / "workflow" / "Snakefile").read_text()
+    hook = text.split("onstart:", 1)[1].split("\nonerror:", 1)[0]
+    assert "except Exception" in hook
