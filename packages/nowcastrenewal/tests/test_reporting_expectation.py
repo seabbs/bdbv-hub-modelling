@@ -18,14 +18,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from model.r_live import run_r
 from numpyro import handlers
-
-from nowcastrenewal.components.pmfs import Delay
-from nowcastrenewal.reporting.effects import ReferenceFrame, report_days
-from nowcastrenewal.reporting.expectation import ReportingExpectation
-
-from .r_live import run_r
-from .test_reporting_effects import (
+from test_reporting_effects import (
     DAYS,
     FIRST,
     MAX_DELAY,
@@ -36,6 +31,10 @@ from .test_reporting_effects import (
     _names,
     _sites,
 )
+
+from nowcastrenewal.components.pmfs import Delay
+from nowcastrenewal.reporting.effects import ReferenceFrame, report_days
+from nowcastrenewal.reporting.expectation import ReportingExpectation
 
 REPORT_VALUES = {**VALUES, "dow_sd": 0.2, "reference_dow_sd": 0.15}
 
@@ -244,8 +243,7 @@ def test_the_expectation_samples_forward() -> None:
 
 def test_ci_runs_the_reporting_expectation_checks() -> None:
     import yaml
-
-    from .r_live import ROOT
+    from model.r_live import ROOT
 
     workflow = yaml.safe_load(
         (ROOT / ".github/workflows/heavy.yml").read_text()
@@ -253,5 +251,5 @@ def test_ci_runs_the_reporting_expectation_checks() -> None:
     steps = workflow["jobs"]["r-live"]["steps"]
     runs = " ".join(s.get("run", "") for s in steps)
     packages = " ".join(s.get("with", {}).get("packages", "") for s in steps)
-    assert "tests/model/test_reporting_expectation.py" in runs
+    assert "packages/nowcastrenewal/tests/test_reporting_expectation.py" in runs
     assert "posterior" in packages

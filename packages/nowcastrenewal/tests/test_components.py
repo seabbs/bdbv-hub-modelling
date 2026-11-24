@@ -4,6 +4,13 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import pytest
+from model.numpy_reference import (
+    expected_imputed_onsets,
+    expected_known_onsets,
+    expected_missing_by_report,
+    renewal,
+)
+from model.reference_kernels import backsample
 from pyrenew.deterministic import DeterministicPMF, DeterministicVariable
 from pyrenew.latent.temporal_processes import WeeklyTemporalProcess
 from pyrenew.randomvariable import DistributionalVariable
@@ -27,14 +34,6 @@ from nowcastrenewal.model import (
     onset_expectations,
     pooled_walk,
 )
-
-from .numpy_reference import (
-    expected_imputed_onsets,
-    expected_known_onsets,
-    expected_missing_by_report,
-    renewal,
-)
-from .reference_kernels import backsample
 
 
 def _hazard(name, time_process, n_groups=1):
@@ -293,7 +292,7 @@ def test_fixed_inputs_pad_with_last_row():
 
 def test_fast_kernels_match_reference_values_and_gradients():
 
-    from .reference_kernels import onset_expectations_reference
+    from model.reference_kernels import onset_expectations_reference
 
     rng = np.random.default_rng(5)
     n, dmax, p, cutoff = 50, 12, 3, 40

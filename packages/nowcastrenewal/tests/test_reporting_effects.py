@@ -17,12 +17,11 @@ from typing import Any
 import jax
 import numpy as np
 import pytest
+from model.r_live import run_r
 from numpyro import handlers
 
 from nowcastrenewal.components.pmfs import Delay, censored_log_pmf
 from nowcastrenewal.reporting.effects import ReferenceEffects, ReferenceFrame
-
-from .r_live import run_r
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
 DAYS = (*DAYS, "Sunday")
@@ -302,8 +301,7 @@ def test_the_effects_sample_forward() -> None:
 
 def test_ci_runs_the_reporting_effect_checks() -> None:
     import yaml
-
-    from .r_live import ROOT
+    from model.r_live import ROOT
 
     workflow = yaml.safe_load(
         (ROOT / ".github/workflows/heavy.yml").read_text()
@@ -311,7 +309,7 @@ def test_ci_runs_the_reporting_effect_checks() -> None:
     runs = " ".join(
         s.get("run", "") for s in workflow["jobs"]["r-live"]["steps"]
     )
-    assert "tests/model/test_reporting_effects.py" in runs
+    assert "packages/nowcastrenewal/tests/test_reporting_effects.py" in runs
 
 
 def test_a_weekday_pattern_shapes_the_weekday_draws() -> None:

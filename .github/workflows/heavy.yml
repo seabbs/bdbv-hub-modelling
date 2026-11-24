@@ -171,13 +171,13 @@ jobs:
         run: Rscript -e 'cmdstanr::install_cmdstan(cores = 2)'
       - name: Live R checks
         run: >-
-          uv run pytest -q tests/model/test_pmfs.py
-          tests/model/test_latent_epinowcast.py
-          tests/model/test_reporting_delays.py
+          uv run pytest -q packages/nowcastrenewal/tests/test_pmfs.py
+          packages/nowcastrenewal/tests/test_latent_epinowcast.py
+          packages/nowcastrenewal/tests/test_reporting_delays.py
           tests/model/test_hub_imputation_delays.py
-          tests/model/test_reporting_triangle.py
-          tests/model/test_reporting_effects.py
-          tests/model/test_reporting_expectation.py
+          packages/nowcastrenewal/tests/test_triangle.py
+          packages/nowcastrenewal/tests/test_reporting_effects.py
+          packages/nowcastrenewal/tests/test_reporting_expectation.py
           packages/nowcasteval/tests/test_pairwise_skill.py
       # The paper's scores against scoringutils, scored live.
       - name: Live scoringutils check (paper)
