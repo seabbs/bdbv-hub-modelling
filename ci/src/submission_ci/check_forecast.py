@@ -421,6 +421,59 @@ def check_bounds(s: Samples, obs: Observed, floor: float, warn: float) -> Check:
     return _result("bounds", found, "trajectories within the bounds")
 
 
+def _poisson_cdf(k: int, mean: float) -> float:
+    """Return P(X <= k) for X ~ Poisson(mean)."""
+    if k < 0:
+        return 0.0
+    term = total = math.exp(-mean)
+    for i in range(1, k + 1):
+        term *= mean / i
+        total += term
+    return min(total, 1.0)
+
+
+def poisson_limits(count: float, level: float) -> tuple[float, float]:
+    r"""Return the exact limits of a Poisson mean given one count.
+
+    The lower limit $L$ has $P(X \ge k \mid L) = 1 - \text{level}$ (0
+    for a count of 0) and the upper $U$ has $P(X \le k \mid U) = 1 -
+    \text{level}$, so with `level` 0.975 they are the 95% interval.
+
+    Parameters
+    ----------
+    count : float
+        The count, rounded to the nearest whole number.
+    level : float
+        One-sided level, in (0.5, 1).
+
+    Returns
+    -------
+    tuple of float
+        `(L, U)`.
+    """
+    k = max(round(count), 0)
+    alpha = 1.0 - level
+
+    def solve(f: Any, lo: float, hi: float) -> float:
+        while f(hi) > 0:
+            hi *= 2
+        for _ in range(200):
+            mid = (lo + hi) / 2
+            if f(mid) > 0:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
+
+    upper = solve(lambda m: _poisson_cdf(k, m) - alpha, 0.0, k + 10.0)
+    lower = (
+        0.0
+        if k == 0
+        else solve(lambda m: alpha - (1 - _poisson_cdf(k - 1, m)), 0.0, k)
+    )
+    return lower, upper
+
+
 def check_plausible(
     s: Samples,
     obs: Observed,
@@ -431,17 +484,19 @@ def check_plausible(
     """Rule out a forecast far from the recent data, at each location.
 
     The base is the largest of the last `plausible_recent_weeks` observed
-    weeks, floored at `plausible_floor`. For each week from the nowcast
-    to the last horizon, the median must lie within
-    `plausible_median_ratio` times the base, the 97.5% quantile within
-    `plausible_q975_ratio` times it, and, where the recent maximum is at
-    least the floor, the median above the maximum over
-    `plausible_low_ratio` unless it is at least the count already
-    observed for that week. Locations without observed data (the health
-    zones) are skipped. Any breach fails, so the chain moves on.
+    weeks, $m$, with the exact Poisson limits $(L, U)$ of a mean given
+    $m$ (`poisson_limits` at `plausible_poisson_level`) in place of a
+    fixed floor: small counts are noisy, so their limits are wide. For
+    each week from the nowcast to the last horizon, the median must lie
+    within `plausible_median_ratio` times $U$ and the 97.5% quantile
+    within `plausible_q975_ratio` times $U$. The median must be at least
+    $L$ over `plausible_low_ratio` where that is a case or more, unless
+    it is at least the count already observed for that week. Locations
+    without observed data are skipped. Any breach fails, so the chain
+    moves on.
     """
     n_recent = int(c["plausible_recent_weeks"])
-    floor = float(c["plausible_floor"])
+    level = float(c["plausible_poisson_level"])
     hi, tail, lo = (
         float(c["plausible_median_ratio"]),
         float(c["plausible_q975_ratio"]),
@@ -455,7 +510,8 @@ def check_plausible(
             continue
         recent = [series[w] for w in sorted(series)[-n_recent:]]
         top = max(recent, default=0.0)
-        base = max(top, floor)
+        low, base = poisson_limits(top, level)
+        least = low / lo
         for w in weeks:
             values = s.week_values(loc, w)
             if not values:
@@ -466,7 +522,8 @@ def check_plausible(
                     (
                         "fail",
                         f"{loc} {w}: median {fmt(med)} is over {fmt(hi)} "
-                        f"times the recent maximum {fmt(base)}",
+                        f"times {fmt(base)}, the upper limit of the recent "
+                        f"maximum {fmt(top)}",
                     )
                 )
             elif q975 > tail * base:
@@ -474,19 +531,17 @@ def check_plausible(
                     (
                         "fail",
                         f"{loc} {w}: 97.5% quantile {fmt(q975)} is over "
-                        f"{fmt(tail)} times the recent maximum {fmt(base)}",
+                        f"{fmt(tail)} times {fmt(base)}, the upper limit of "
+                        f"the recent maximum {fmt(top)}",
                     )
                 )
-            elif (
-                top >= floor
-                and med < top / lo
-                and med < series.get(w, math.inf)
-            ):
+            elif least >= 1 and med < least and med < series.get(w, math.inf):
                 found.append(
                     (
                         "fail",
                         f"{loc} {w}: median {fmt(med)} is under 1/"
-                        f"{fmt(lo)} of the recent maximum {fmt(top)}",
+                        f"{fmt(lo)} of {fmt(low)}, the lower limit of the "
+                        f"recent maximum {fmt(top)}",
                     )
                 )
     return _result("plausible", found, "within range of the recent data")
