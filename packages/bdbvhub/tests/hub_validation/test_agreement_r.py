@@ -89,6 +89,10 @@ def test_custom_checks_run_with_their_scripts_and_source(
     custom = BUNDLE / "fixtures" / "custom-check"
     shutil.copy(custom / "hub-config" / "validations.yml", hub / "hub-config")
     shutil.copytree(custom / "src", hub / "src")
+    # A file outside the sparse paths, as the hub's model-output.
+    other = hub / "model-output" / "other-team" / "2026-10-24-other-team.csv"
+    other.parent.mkdir(parents=True)
+    other.write_text("reference_date\n2026-10-24\n")
     for args in (
         ["init", "-q"],
         ["add", "-A"],
@@ -108,6 +112,8 @@ def test_custom_checks_run_with_their_scripts_and_source(
         _git("-C", str(clone), "sparse-checkout", "set", "--no-cone",
              "hub-config", "model-metadata", "src")  # fmt: skip
         _git("-C", str(clone), "checkout", "-q", "FETCH_HEAD")
+        # Objects outside the sparse paths cannot be fetched later either.
+        shutil.rmtree(hub)
         hub = clone
     out = tmp_path / "r.json"
     sub = (
