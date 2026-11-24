@@ -1,13 +1,68 @@
 """Two-step Chronos-2: baselinenowcast's point nowcast, then Chronos-2."""
 
 import dataclasses
+import datetime as dt
 
 import numpy as np
+import pandas as pd
 import pytest
 
-pytest.importorskip("jax")
+from nowcastgermany.data import ALL_AGES, GERMANY
 
-from test_daily_walk import HORIZONS, NOWCAST, _triangle
+NOWCAST = "2021-11-22"
+HORIZONS = tuple(range(-28, 29))
+
+
+def _triangle(
+    days: int = 200, delay: int = 40, weekday: float = 0.0
+) -> pd.DataFrame:
+    # Two states and Germany their sum, each day's count reported over
+    # `delay` days with a geometric delay, as cumulative report rows.
+    rng = np.random.default_rng(1)
+    last = dt.date.fromisoformat(NOWCAST)
+    share = 0.85 ** np.arange(delay + 1)
+    share /= share.sum()
+    rows = []
+    totals: dict[tuple[str, str], int] = {}
+    for state, level in (("DE-BB", 40.0), ("DE-BE", 90.0)):
+        for i in range(days):
+            day = last - dt.timedelta(days=days - 1 - i)
+            # `weekday`: weekends report that share fewer cases, as
+            # German hospitalisations by report date do.
+            dip = 1 - weekday * (day.weekday() >= 5)
+            final = rng.poisson(level * dip * (1 + 0.2 * np.sin(i / 9)))
+            seen = np.cumsum(rng.multinomial(final, share))
+            for d in range(delay + 1):
+                report = day + dt.timedelta(days=d)
+                if report > last:
+                    break
+                key = (day.isoformat(), report.isoformat())
+                totals[key] = totals.get(key, 0) + int(seen[d])
+                rows.append((day.isoformat(), state, report, int(seen[d])))
+    out = [
+        {
+            "reference_date": r,
+            "location": s,
+            "age_group": ALL_AGES,
+            "report_date": rep.isoformat(),
+            "confirm": c,
+        }
+        for r, s, rep, c in rows
+    ]
+    out += [
+        {
+            "reference_date": r,
+            "location": GERMANY,
+            "age_group": ALL_AGES,
+            "report_date": rep,
+            "confirm": c,
+        }
+        for (r, rep), c in totals.items()
+    ]
+    return pd.DataFrame(out)
+
+
+pytest.importorskip("jax")
 
 
 def _capture(store):
