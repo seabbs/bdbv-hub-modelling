@@ -321,7 +321,9 @@ def test_ci_runs_the_pmf_checks() -> None:
 
     from .r_live import ROOT
 
-    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/heavy.yml").read_text()
+    )
     job = workflow["jobs"]["r-live"]
     runs = " ".join(s.get("run", "") for s in job["steps"])
     packages = " ".join(

@@ -34,7 +34,7 @@ def test_the_fast_tier_runs_no_slow_tests(name, job):
 
 @pytest.mark.parametrize("job", ["full", "r-live", "chronos"])
 def test_fits_and_replays_run_nightly_on_dispatch_or_when_labelled(job):
-    workflow = _workflow("test.yml")
+    workflow = _workflow("heavy.yml")
     when = workflow["jobs"][job]["if"]
     for case in ("schedule", "workflow_dispatch", OPT_IN):
         assert case in when
@@ -44,7 +44,7 @@ def test_fits_and_replays_run_nightly_on_dispatch_or_when_labelled(job):
 def test_the_chronos_job_runs_every_torch_gated_test_with_torch():
     # Tests that skip without torch run in a job that has it: the chronos
     # group, CPU only, every file gated on it found, not listed.
-    steps = _workflow("test.yml")["jobs"]["chronos"]["steps"]
+    steps = _workflow("heavy.yml")["jobs"]["chronos"]["steps"]
     runs = " ".join(s.get("run", "") for s in steps)
     assert "--group chronos" in runs
     assert "importorskip" in runs
@@ -60,7 +60,7 @@ def test_backtests_are_opt_in_on_pull_requests():
 def test_r_live_checks_the_baselinenowcast_port_at_the_pin():
     # R baselinenowcast runs live in r-live, slow sampler checks too; no
     # fixtures or workflow of their own.
-    steps = _workflow("test.yml")["jobs"]["r-live"]["steps"]
+    steps = _workflow("heavy.yml")["jobs"]["r-live"]["steps"]
     text = yaml.safe_dump(steps)
     assert (
         "epinowcast/baselinenowcast@999d1ad50e27921a4078175d6315bbd655878888"
@@ -88,7 +88,7 @@ def test_runs_off_main_are_superseded_and_main_keeps_its_running_run(path):
     if not isinstance(group, dict) or "cancel-in-progress" not in group:
         pytest.skip("no cancellable concurrency group")
     keep = "${{ github.ref != 'refs/heads/main' }}"
-    if path.name in ("test.yml", "ci.yml", "integration.yml"):
+    if path.name in ("ci.yml", "integration.yml"):
         # These keep next's runs too (every merge gets a verdict).
         keep = (
             "${{ github.ref != 'refs/heads/main' && "
@@ -103,7 +103,7 @@ def test_integration_runs_the_tests_of_no_package_in_15_minutes():
     # tests run in their own CI jobs, so Tests has no fast tier.
     assert not (WORKFLOWS / "workflow.yml").exists()
     assert not (WORKFLOWS / "paper-tests.yml").exists()
-    assert "test" not in _workflow("test.yml")["jobs"]
+    assert "test" not in _workflow("heavy.yml")["jobs"]
     job = _workflow("integration.yml")["jobs"]["integration"]
     assert job["timeout-minutes"] <= 15
     runs = " ".join(s.get("run", "") for s in job["steps"])
@@ -118,11 +118,11 @@ def test_integration_runs_the_tests_of_no_package_in_15_minutes():
 
 
 def test_no_test_runs_in_both_the_full_and_the_chronos_job():
-    steps = _workflow("test.yml")["jobs"]["full"]["steps"]
+    steps = _workflow("heavy.yml")["jobs"]["full"]["steps"]
     full = " ".join(s.get("run", "") for s in steps)
     chronos = " ".join(
         s.get("run", "")
-        for s in _workflow("test.yml")["jobs"]["chronos"]["steps"]
+        for s in _workflow("heavy.yml")["jobs"]["chronos"]["steps"]
     )
     grep = "(importorskip|find_spec)"
     assert grep in full
@@ -142,7 +142,7 @@ def test_every_merge_into_next_gets_a_fast_tier_run(name):
 
 
 def test_the_r_live_job_installs_what_the_live_r_tests_call():
-    steps = _workflow("test.yml")["jobs"]["r-live"]["steps"]
+    steps = _workflow("heavy.yml")["jobs"]["r-live"]["steps"]
     packages = " ".join(
         str(s.get("with", {}).get("packages", "")) for s in steps
     )
@@ -184,7 +184,7 @@ def test_only_main_measures_coverage_and_workers_steal_work():
 
 def test_the_full_tier_has_the_workflow_s_tools():
     # Slow workflow tests (the compute runs) skip without Snakemake.
-    steps = _workflow("test.yml")["jobs"]["full"]["steps"]
+    steps = _workflow("heavy.yml")["jobs"]["full"]["steps"]
     runs = " ".join(s.get("run", "") for s in steps)
     assert "--group paper pytest -q -m slow" in runs
 
@@ -198,3 +198,11 @@ def test_repo_checks_run_on_every_pull_request():
     for check in ("lint-imports", "ruff check tests", "actionlint"):
         assert check in runs, check
     assert set(_workflow("lint.yml")["jobs"]) == {"lint-ci"}
+
+
+def test_the_heavy_tiers_are_opt_in_in_their_own_workflow():
+    # Nightly, dispatch or the label: no push runs them, and Tests is gone.
+    assert not (WORKFLOWS / "test.yml").exists()
+    workflow = _workflow("heavy.yml")
+    assert set(workflow["jobs"]) == {"full", "chronos", "r-live"}
+    assert "push" not in _triggers(workflow)

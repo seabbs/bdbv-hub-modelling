@@ -247,7 +247,9 @@ def test_ci_runs_the_reporting_expectation_checks() -> None:
 
     from .r_live import ROOT
 
-    workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/heavy.yml").read_text()
+    )
     steps = workflow["jobs"]["r-live"]["steps"]
     runs = " ".join(s.get("run", "") for s in steps)
     packages = " ".join(s.get("with", {}).get("packages", "") for s in steps)
