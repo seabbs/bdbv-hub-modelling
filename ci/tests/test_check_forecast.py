@@ -295,7 +295,7 @@ def test_randomwalk_skips_baseline(tmp_path: Path) -> None:
 
 
 def test_cli_writes_report(tmp_path: Path) -> None:
-    path = sub(tmp_path, growth=5.0)
+    path = sub(tmp_path, mutate=lambda rows: rows[0].__setitem__(6, -1.0))
     side = tmp_path / "national.json"
     side.write_text(json.dumps(_sidecar()))
     args = [
@@ -490,11 +490,11 @@ def test_low_median_at_the_reported_count_passes() -> None:
     assert _mandima_check(_mandima_medians(2.0)).status == "pass"
 
 
-def test_low_median_below_the_reported_count_is_ruled_out() -> None:
+def test_low_median_below_the_reported_count_warns() -> None:
     # 10-31 was reported as 39; a median of 1 is under 1/20 of 54.
     medians = {**_mandima_medians(2.0), "2026-10-31": 1.0}
     check = _mandima_check(medians)
-    assert check.status == "fail"
+    assert check.status == "warn"
     assert "2026-10-31" in " ".join(check.details)
 
 

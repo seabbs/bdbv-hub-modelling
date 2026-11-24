@@ -4,11 +4,11 @@ Each candidate directory (`<candidates>/<id>/`) holds what its matrix
 job produced: `fit-summary.json` and `ppc-summary.json` (none for
 random walk), `checks.json`, `run.json` and the hub file under
 `submission/`. A candidate is ruled out when its fit is past the
-convergence failure thresholds, its forecast is far from the recent data
-(`plausible`), or its file would be invalid on the hub (forecast format
-checks, then the hub's own rules through the `--validate-cmd` hook,
-hubValidations in CI). Posterior predictive checks are reported, never
-gated.
+convergence failure thresholds or its file would be invalid on the hub
+(forecast format checks, then the hub's own rules through the
+`--validate-cmd` hook, hubValidations in CI). Plausibility (how far the
+forecast is from the recent data) and the posterior predictive checks
+are reported, never gated.
 
 If nothing is left the round is skipped.
 
