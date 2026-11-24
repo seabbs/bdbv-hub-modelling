@@ -59,7 +59,7 @@ The workflow uses:
 
 Nothing in the workflow needs a notes file. As an optional local extra, setting both `NOTIFY` and `MAILBOX` appends a one-line note to the file `MAILBOX` when a round is ready, a checkpoint is saved or published, the checked checkpoint misses zero-shot, scores land or a run fails. Both are empty by default, a note that cannot be written is only a warning, and no rule's output or success depends on it. The optional detached-job helpers in `tools/` use the same switch.
 
-Task reads `config/local.env` itself, not `$LOCAL_CONFIG`.
+`LOCAL_CONFIG` names a local config outside the checkout in place of `config/local.env`, for the tasks, the tick and Snakemake alike.
 
 Every target runs with one profile, `workflow/profiles/default`, and this machine's cores, memory and GPU less its headroom (`workflow/flowlib/machine.py`, through `workflow/flowlib/compute.py`, which the Taskfile and the tick call; `python3 workflow/flowlib/machine.py device` prints the device). `workflow/profiles/ci` is for CI.
 
@@ -128,7 +128,8 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `block_combinations`: the share of each combination of block layout and options over a run's training, from its final checkpoint's tally (`<run>/train/block-combinations.csv`, the SI table).
 - `real_training_blocks`: a run's real-data training blocks when `finetune.real_training` is set (`<run>/real-training.pkl`): the German triangle's reports before the first scored German date, cut as the German tasks lay it out (`nowcastgermany.finetune_blocks`).
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
-- `finetune`: every prefix, and its scoring: each checkpoint's German unit (`score_run_germany`) and the reference units (`score_germany`), kept when up to date.
+- `finetune`: every prefix, and its scoring: each checkpoint's German unit (`score_run_germany`), the reference units (`score_germany`), each trained run's German report (`german_report`) and each released checkpoint's BDBV check page (`ft_check_page`), kept when up to date.
+  The trainer claims `finetune.cut_workers` plus one cores, its block-cutting workers and itself, so scoring and simulation beside it share what is left of the machine's budget.
 
 Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
@@ -209,6 +210,36 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
 - Evidence read from git (`evidence_checkpoint_scores`), gathered by `evidence`.
 - Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `pairing_germany`, `pairing_synthetic` and `si_copula` (the walks' scores with and without pairing, and their German rolling $\rho_p$, on development data), `grid_tables`, `summary` and `publish_paper`.
+
+## A fine-tuning run
+
+One run of the configured `train_runs` on the grid's rounds (`grid_rounds`), on a machine with a GPU, is one coordinator run of the `finetune` target.
+Each tick simulates the batches the next segment needs, trains that segment, releases the checkpoint, and brings its German scores, the references (zero-shot Chronos-2 and randomwalknowcast), the German report and the BDBV check page up to date.
+
+Its local config, kept outside the checkout, sets the run's folder and the machine's budget:
+
+```sh
+ROOT=$HOME/<run folder>
+SCHEDULE_TARGETS=finetune
+PUBLISH=1
+SIMS_FROM=local
+DEVICE=cuda
+FORECAST_DEVICE=cpu
+HEADROOM_CORES=<cores kept free>
+HEADROOM_GB=<GB kept free>
+SIM_SLOTS=<batches at once>
+```
+
+`HEADROOM_CORES` and `HEADROOM_GB` keep cores and memory free for the machine's user; the trainer, the scoring units (`forecast.threads` each) and the simulation batches share the rest.
+Check the plan, then start the coordinator from a driver checkout at the commit to run:
+
+```sh
+LOCAL_CONFIG=<run folder>/local.env python3 workflow/scripts/tick.py --dry-run
+LOCAL_CONFIG=<run folder>/local.env nohup task workflow:run > <run folder>/coordinator.log 2>&1 &
+```
+
+Stop it with `touch output/coordinator.stop` in the driver checkout, which ends it after the running tick.
+`task workflow:dashboard` with the same `LOCAL_CONFIG` serves the run's dashboard.
 
 ## Scheduled runs
 
