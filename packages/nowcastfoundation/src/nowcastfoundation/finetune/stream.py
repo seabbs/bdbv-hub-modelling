@@ -435,25 +435,11 @@ def check_pairs(model: Any, pairs: tuple[str, ...], source: Any) -> None:
         )
 
 
-def lora_model(base: Any, config: Any, init: Path | None) -> Any:
-    """Return `base` with a LoRA adapter to train.
+def lora_model(base: Any, config: Any) -> Any:
+    """Return `base` with a fresh LoRA adapter from `config` to train."""
+    from peft import get_peft_model
 
-    A fresh adapter from `config`, or, to continue a round, the adapter
-    saved at `init`, still trainable. A base with the series bias
-    continues only from an adapter that holds it.
-    """
-    from peft import PeftModel, get_peft_model
-
-    if init is None:
-        model = get_peft_model(base, config)
-    else:
-        if series_bias.has_bias(base) and not series_bias.adapter_has_bias(
-            init
-        ):
-            raise ValueError(f"{init} holds no series bias to continue")
-        check_pairs(base, series_bias.adapter_pairs(init), init)
-        model = PeftModel.from_pretrained(base, init, is_trainable=True)
-    return model
+    return get_peft_model(base, config)
 
 
 def learning_rate(sims: float, base: float, outbreaks: int) -> float:
@@ -476,13 +462,15 @@ def sims_done(done: int, size: int, position: int, steps: int) -> float:
     return done + size * position / steps
 
 
-def should_stop(
-    losses: list[float], done: int, stop_from: int, min_gain: float
-) -> bool:
-    """Return whether the last doubling cut held-out loss by too little."""
+MIN_GAIN = 0.01
+"""Share of held-out loss a doubling must cut, from `--stop-from` on."""
+
+
+def should_stop(losses: list[float], done: int, stop_from: int) -> bool:
+    """Return whether the last doubling cut held-out loss under `MIN_GAIN`."""
     if done < stop_from or len(losses) < 2:
         return False
-    return losses[-2] - losses[-1] < min_gain * losses[-2]
+    return losses[-2] - losses[-1] < MIN_GAIN * losses[-2]
 
 
 def quarantine(sim_dir: Path, seed: int, reason: str) -> None:
@@ -1664,13 +1652,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("sim_dir", type=Path)
     parser.add_argument("out", type=Path)
     parser.add_argument("--train-seeds", type=int, nargs=2)
-    # A round: its training seeds, one a line, in place of --train-seeds,
-    # and the adapter it continues from.
+    # The training seeds, one a line, in place of --train-seeds.
     parser.add_argument("--seed-list", type=Path)
-    parser.add_argument("--init-adapter", type=Path)
-    # The seed list grows as rounds land: wait for more seeds rather than
-    # stop when every listed seed is done.
-    parser.add_argument("--wait-for-seeds", action="store_true")
     # Outbreaks per chunk: training starts once this many have landed.
     parser.add_argument("--chunk", type=int, default=CHUNK)
     # Real-data training blocks (for example the German data's first 40%,
@@ -1721,7 +1704,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--prefixes", type=int, nargs="+", default=list(ft.PREFIXES)
     )
-    parser.add_argument("--min-gain", type=float, default=0.01)
     parser.add_argument("--stop-from", type=int, default=8000)
     # Series above which a step recomputes activations in backward.
     # Memory only: the steps and blocks are the same.
@@ -1732,11 +1714,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     # Processes cutting blocks a chunk ahead; they do not change the blocks.
     parser.add_argument("--cut-workers", type=int, default=3)
-    # Cut the held-out blocks and the next chunk (a fresh run's first, a
-    # resumed run's after the one it trains), save them under the keys
-    # training looks up, and stop: cuts on the CPU before the trainer
-    # (re)starts on the GPU (lead 13:00, 15:08), so the GPU never waits.
-    parser.add_argument("--cut-only", action="store_true")
     # The series bias (nowcastfoundation.series_bias): learned
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
@@ -1880,62 +1857,6 @@ def check_cadence(eval_every: int, by_source_every: int) -> None:
         )
 
 
-def cut_after(state_dir: Path) -> list[str]:
-    """Return the outbreaks a run will have trained at its chunk's end.
-
-    Its saved state's trained outbreaks and the chunk it is training
-    (`chunk`); none for a fresh run.
-    """
-    path = state_dir / "state.json"
-    if not path.is_file():
-        return []
-    state = json.loads(path.read_text())
-    done = int(state.get("done", 0))
-    return [*state.get("trained", [])[:done], *state.get("chunk", [])]
-
-
-def cut_next_chunk(
-    out: Path,
-    sim_dir: Path,
-    seeds: Sequence[int],
-    args: argparse.Namespace,
-    pool: ProcessPoolExecutor,
-    key_of: Callable[[Sequence[str]], dict[str, Any]],
-    report: Callable[..., None],
-) -> None:
-    """Cut the chunk a run trains next and save it under its key.
-
-    A fresh run's first chunk, or a resumed run's chunk after the one it
-    is training (`cut_after`), so a restart at that chunk's end loads the
-    saved blocks (`load_chunk`). Waits for its simulations, as training
-    does.
-    """
-    after = cut_after(out / "state")
-    size = min(CHUNK, args.outbreaks - len(after))
-    if size <= 0:
-        log("cut only: no chunk left to cut")
-        report(stage="cut only: done")
-        return
-    span = f"{len(after) + 1}-{len(after) + size}"
-    report(stage=f"cut only: waiting for outbreaks {span}")
-    while (ids := next_chunk(sim_dir, seeds, after, size)) is None:
-        time.sleep(POLL)
-    report(stage=f"cut only: cutting outbreaks {span}")
-    pairs, empty = _join(
-        submit_cut(
-            pool,
-            sim_dir,
-            ids,
-            args.seed,
-            args.blocks_per_simulation,
-            args.cut_workers,
-        )
-    )
-    save_chunk(out, key_of(ids), pairs, empty)
-    log(f"cut only: held-out blocks and outbreaks {span} saved")
-    report(stage="cut only: done")
-
-
 def main(root: Path | None = None) -> None:
     """Train on the chunks as they are simulated.
 
@@ -1983,8 +1904,6 @@ def main(root: Path | None = None) -> None:
         status.update(kwargs, time=time.strftime("%Y-%m-%d %H:%M:%S"))
         status_file.write_text(json.dumps(status))
 
-    extended = out / "train-last.txt"
-
     if (args.seed_list is None) == (args.train_seeds is None):
         parser.error("give one of --train-seeds and --seed-list")
     try:
@@ -1997,11 +1916,7 @@ def main(root: Path | None = None) -> None:
     def training_seeds() -> range | list[int]:
         if args.seed_list is not None:
             return read_seed_list(args.seed_list)
-        # The driver adds seeds by writing the last one to `extended`.
-        last = args.train_seeds[1]
-        if extended.exists():
-            last = max(last, int(extended.read_text()))
-        return range(args.train_seeds[0], last + 1)
+        return range(args.train_seeds[0], args.train_seeds[1] + 1)
 
     held_seeds = range(args.held_out_seeds[0], args.held_out_seeds[1] + 1)
     prefixes = [p for p in args.prefixes if p < args.outbreaks]
@@ -2083,11 +1998,6 @@ def main(root: Path | None = None) -> None:
         }
 
     log(f"{len(held)} held-out outbreaks, {len(val)} blocks")
-    if args.cut_only:
-        cut_next_chunk(
-            out, sim_dir, training_seeds(), args, pool, chunk_key, report
-        )
-        return
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = torch_device(args.device)
@@ -2099,7 +2009,7 @@ def main(root: Path | None = None) -> None:
     if args.series_bias:
         series_bias.attach(pipeline.model)
     lora = lora_config(args.series_bias)
-    model = lora_model(pipeline.model, lora, args.init_adapter)
+    model = lora_model(pipeline.model, lora)
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
     optimiser = make_optimiser(model, args.learning_rate, args.bias_lr)
@@ -2155,15 +2065,6 @@ def main(root: Path | None = None) -> None:
         },
         **bias_settings(args.series_bias, args.bias_lr),
         "learning_rate": args.learning_rate,
-        **(
-            {
-                "init_adapter_sha256": ft._sha256(
-                    args.init_adapter / "adapter_model.safetensors"
-                )
-            }
-            if args.init_adapter
-            else {}
-        ),
         **(
             {"seed_list_sha256": ft._sha256(args.seed_list)}
             if args.seed_list
@@ -2337,7 +2238,7 @@ def main(root: Path | None = None) -> None:
                 chunk = ids
                 break
             done_all = all(seed_done(sim_dir, s) for s in training_seeds())
-            if done_all and not args.wait_for_seeds:
+            if done_all:
                 raise RuntimeError(f"fewer than {hi} training outbreaks")
             time.sleep(POLL)
         split["wait_s"] = time.perf_counter() - tick
@@ -2590,12 +2491,12 @@ def main(root: Path | None = None) -> None:
             )
             report(last_checkpoint=f"n{done} {settings_key}")
             # From `stop_from` on, go on only while the last doubling cut
-            # held-out loss by more than `min_gain`; an offloaded run never
+            # held-out loss by more than `MIN_GAIN`; an offloaded run never
             # reaches `stop_from` (`check_offload`).
             if not offload:
                 losses.append(settings["held_out_loss"])
-                if should_stop(losses, done, args.stop_from, args.min_gain):
-                    log(f"held-out loss gained under {args.min_gain:.0%}: stop")
+                if should_stop(losses, done, args.stop_from):
+                    log(f"held-out loss gained under {MIN_GAIN:.0%}: stop")
                     break
         split["eval_s"] += time.perf_counter() - tick
         log(
