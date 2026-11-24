@@ -32,6 +32,8 @@ REPORTS = {
     "hub_rounds_report",
     "hub_rounds",
     "rt_check",
+    "ft_check_forecast",
+    "ft_check",
 }
 
 
