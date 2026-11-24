@@ -71,9 +71,9 @@ def test_renewal_skips_without_opt_in(
 
 def test_chronos_track_is_set_up_but_not_submitted() -> None:
     tracks = {t.name: t for t in load_tracks(HUB_TOML)}
-    ft = tracks["nowcastfm"]
-    assert ft.model_id == "seabbs-nowcastfm"
-    assert ft.model == "fm_chronos_daily_ragged_ft"
+    ft = tracks["foundation"]
+    assert ft.model_id == "seabbs-foundation"
+    assert ft.model == "foundation"
     assert not ft.submit
     assert not ft.runs
     assert ft.reason == "not opted in (`submit = false`)"
@@ -84,24 +84,24 @@ def test_chronos_track_runs_once_submit_is_on(
 ) -> None:
     # Switching `submit` on is the only change it needs.
     text = HUB_TOML.read_text()
-    block = text[text.index("[models.fm_chronos_daily_ragged_ft]") :]
+    block = text[text.index("[models.foundation]") :]
     flipped = block.replace("submit = false", "submit = true", 1)
     on = text.replace(block, flipped)
     cfg = tmp_path / "hub.toml"
     cfg.write_text(on)
     before = {t.name: t for t in load_tracks(HUB_TOML)}
     after = {t.name: t for t in load_tracks(cfg)}
-    assert after["nowcastfm"].runs
-    assert {n: t.runs for n, t in after.items() if n != "nowcastfm"} == {
-        n: t.runs for n, t in before.items() if n != "nowcastfm"
+    assert after["foundation"].runs
+    assert {n: t.runs for n, t in after.items() if n != "foundation"} == {
+        n: t.runs for n, t in before.items() if n != "foundation"
     }
     out = tmp_path / "out"
     monkeypatch.setenv("GITHUB_OUTPUT", str(out))
     assert main(["--hub-config", str(cfg)]) == 0
     lines = out.read_text().splitlines()
     assert "chronos=true" in lines
-    assert "chronos_id=seabbs-nowcastfm" in lines
-    assert "chronos_model=fm_chronos_daily_ragged_ft" in lines
+    assert "chronos_id=seabbs-foundation" in lines
+    assert "chronos_model=foundation" in lines
     monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "off"))
     assert main(["--hub-config", str(HUB_TOML)]) == 0
     assert "chronos=false" in (tmp_path / "off").read_text().splitlines()

@@ -1,0 +1,462 @@
+name: Tests
+
+# Every test, in one workflow. `plan` decides what a change reaches:
+# - the repo checks run on every change;
+# - each package's job (installed alone, ruff, mypy, its own tests), for
+#   the packages the change reaches and those that import them;
+# - the submission scripts' job (ci/), when they change;
+# - the workflow, paper and repo tests (integration);
+# - the slow tiers (model fits and backtests, the torch tests, the live R
+#   checks): nightly, on dispatch, with the `full-tests` label, and on a
+#   pull request whose change reaches them.
+
+on:
+  push:
+    branches: [main, next]
+  pull_request:
+    # `labeled`: the `full-tests` label runs every slow tier.
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    # Nightly, 05:17 UTC: every slow tier.
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Off main and next, a newer push cancels the running run. On main and
+  # next the running run finishes and only the newest queued run waits,
+  # so a merge is never left without a verdict by the next one.
+  cancel-in-progress: >-
+    ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/next' }}
+
+env:
+  # Chronos-2 runs on the device named here, never a detected one.
+  DEVICE: cpu
+
+jobs:
+  # What no package holds: the import contract between the packages, the
+  # lint of the tests, workflow, docs hooks and paper, and the workflows.
+  repo:
+    name: Repo checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Import contract
+        run: uv run lint-imports --no-logo
+      - name: Ruff
+        if: ${{ !cancelled() }}
+        run: |
+          uv run ruff check tests workflow docs/hooks
+          uv run ruff format --check tests workflow docs/hooks
+          # The paper, with its own settings (paper/ruff.toml).
+          (cd paper && uv run ruff check . && uv run ruff format --check .)
+      - name: actionlint
+        if: ${{ !cancelled() }}
+        run: uvx --from actionlint-py actionlint
+      # Any block of 10 or more lines (comments, docstrings, imports and
+      # signatures aside) found twice in the packages' source fails.
+      - name: Duplicate code
+        if: ${{ !cancelled() }}
+        run: |
+          mapfile -t files < <(find packages -path '*/src/*.py' | sort)
+          uvx --from pylint==3.3.7 symilar -d 10 --ignore-comments \
+            --ignore-docstrings --ignore-imports --ignore-signatures \
+            "${files[@]}" | tee symilar.txt
+          grep -q 'duplicates=0 ' symilar.txt
+
+  # What a change reaches: the packages' jobs (and the packages that
+  # import them), the submission scripts, the workflow and paper tests,
+  # and each slow tier. Pushes and dispatches run the fast jobs, the
+  # schedule and dispatches every slow tier; a pull request labelled
+  # `full-tests` runs every slow tier.
+  plan:
+    name: Plan the jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.reach.outputs.packages }}
+      submission: ${{ steps.reach.outputs.submission }}
+      integration: ${{ steps.reach.outputs.integration }}
+      full: ${{ steps.reach.outputs.full }}
+      chronos: ${{ steps.reach.outputs.chronos }}
+      r-live: ${{ steps.reach.outputs.r-live }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: What the change reaches
+        id: reach
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-tests') }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            changed=$(git diff --name-only "$BASE"...HEAD)
+          else
+            changed=uv.lock
+          fi
+          packages=$(printf '%s\n' "$changed" |
+            python3 tests/packages/legs.py)
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          shared='^(pyproject\.toml|uv\.lock|conftest\.py|\.github/workflows/tests\.yml|\.github/actions/)'
+          # Whether the change reaches $1: the output $2.
+          reach() {
+            if printf '%s\n' "$changed" | grep -qE "$shared|$1"; then
+              echo "$2=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$2=false" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          # The submission scripts (ci/) and the workflows that drive them.
+          reach '^(ci/|codecov\.yml|\.github/workflows/(submit|fit-candidates)\.yml)' submission
+          # The workflow, paper and repo tests.
+          reach '^(packages/|tests/|workflow/|paper/|config/|results/|hub/|docs/|Taskfile\.yml|\.github/)' integration
+          # The slow tiers: every one on the schedule, a dispatch or the
+          # `full-tests` label, none on a push, and on a pull request the
+          # ones its change reaches.
+          if [ "$EVENT" = schedule ] || [ "$EVENT" = workflow_dispatch ] ||
+            [ "$LABELLED" = true ]; then
+            changed=uv.lock
+          fi
+          tier() {
+            if [ "$EVENT" = push ]; then
+              echo "$2=false" >> "$GITHUB_OUTPUT"
+            else
+              reach "$1" "$2"
+            fi
+          }
+          # The fits, backtests and smoke runs: any code.
+          tier '^(packages/|workflow/|paper/|config/|tests/)' full
+          # Chronos-2 and the trainer, and any torch-gated test file.
+          mapfile -t gated < <(grep -rlE \
+            '(importorskip|find_spec)\("(torch|chronos|peft|transformers)"' \
+            tests packages/*/tests | sort)
+          torch=$(printf '%s|' "${gated[@]}" | sed 's/|$//; s/\./\\./g')
+          tier "^(packages/nowcastfoundation/|${torch})" chronos
+          # The code R checks live, the R cases and the live tests.
+          tier '(\.R$|^tests/model/|r_live|^packages/nowcastrenewal/src/nowcastrenewal/(components|reporting|latent)/|^packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/|^packages/nowcastbaselines/tests/baselinenowcast/|^packages/nowcasteval/src/nowcasteval/scoring\.py|^packages/nowcastbdbv/src/nowcastbdbv/data/delays\.py|^paper/.*scor)' r-live
+          cat "$GITHUB_OUTPUT"
+
+  package:
+    name: Package ${{ matrix.package }}
+    needs: plan
+    if: ${{ needs.plan.outputs.packages != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.plan.outputs.packages) }}
+    env:
+      PACKAGE: ${{ matrix.package }}
+      # The tests read the frozen data in tests/fixtures/data, never the
+      # live hub data.
+      BDBV_DATA_DIR: tests/fixtures/data
+      DEVICE: cpu
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: package-${{ matrix.package }}
+      # With only the dependencies its pyproject.toml declares, at the
+      # locked versions; the workspace packages it needs from their wheels.
+      - name: Install the package alone
+        run: |
+          uv build --all-packages --out-dir dist
+          uv venv alone
+          uv export --frozen --package "$PACKAGE" --no-dev --all-extras \
+            --no-hashes --no-header --no-annotate > requirements.txt
+          grep -v '^-e ' requirements.txt > third-party.txt
+          uv pip install --python alone -r third-party.txt
+          wheels=()
+          while read -r name; do
+            wheels+=(dist/"$name"-*.whl)
+          done < <(sed -n 's#^-e \./packages/##p' requirements.txt)
+          uv pip install --python alone --no-deps "${wheels[@]}"
+      - name: Import every module
+        # Outside the checkout, so the modules come from the wheels.
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$GITHUB_WORKSPACE/alone/bin/python" -I \
+            "$GITHUB_WORKSPACE/tests/packages/package_alone.py" "$PACKAGE" \
+            "$GITHUB_WORKSPACE/packages/$PACKAGE/src/$PACKAGE"
+      - name: Ruff and mypy
+        if: ${{ !cancelled() }}
+        run: |
+          uv run ruff check "packages/$PACKAGE"
+          uv run ruff format --check "packages/$PACKAGE"
+          uv run mypy "packages/$PACKAGE/src"
+      # The package's tests not marked slow, across the runner's cores,
+      # with coverage on main only (tracing about doubles the tests' time).
+      - name: Tests
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --group paper pytest -q -n auto --dist worksteal \
+            --durations=10 "packages/$PACKAGE/tests" \
+            ${{ github.ref == 'refs/heads/main' && '--cov="$PACKAGE" --cov-report=xml' || '' }}
+      - name: Upload coverage to Codecov
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage.xml
+          flags: package
+          use_oidc: true
+          fail_ci_if_error: false
+
+  # The submission CI scripts in ci/, their own uv project.
+  submission:
+    name: Submission scripts (ci/)
+    needs: plan
+    if: ${{ needs.plan.outputs.submission == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: ci/uv.lock
+      - run: uv sync --frozen
+      - name: Ruff and mypy
+        run: |
+          uv run ruff check src tests fixtures
+          uv run ruff format --check src tests fixtures
+          uv run mypy
+      - name: Tests
+        if: ${{ !cancelled() }}
+        run: >-
+          uv run pytest -q --cov=submission_ci --cov-report=term
+          --cov-report=xml
+      - name: Upload coverage to Codecov
+        if: ${{ github.ref == 'refs/heads/main' }}
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: ci/coverage.xml
+          flags: ci
+          use_oidc: true
+          fail_ci_if_error: false
+      - name: Dry run of the submission workflow on fixtures
+        if: ${{ !cancelled() }}
+        run: ./run_dry.sh
+
+  integration:
+    name: Workflow, paper and repo tests
+    needs: plan
+    if: ${{ needs.plan.outputs.integration == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The tests read the frozen data in tests/fixtures/data, never the
+    # live hub data.
+    env:
+      BDBV_DATA_DIR: tests/fixtures/data
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: integration
+      - run: uv sync --frozen --group paper
+      - name: snakefmt
+        run: uv run snakefmt --check workflow paper/workflow
+      - name: snakemake --lint
+        if: ${{ !cancelled() }}
+        run: |
+          printf 'ROOT=%s\nHOST_NAME=ci\n' "$RUNNER_TEMP" > "$RUNNER_TEMP/local.env"
+          export LOCAL_CONFIG="$RUNNER_TEMP/local.env"
+          uv run snakemake -s workflow/Snakefile --lint
+      # Workers steal queued tests, so a slow one does not hold up the end.
+      - name: Tests
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --group paper pytest -q -n auto --dist worksteal \
+            --durations=30 --junitxml=pytest-durations.xml tests workflow/tests
+      - name: Paper tests
+        if: ${{ !cancelled() }}
+        working-directory: paper
+        run: uv run --group paper pytest -q -n auto --dist worksteal --durations=10 tests
+      # Every test's time, to find the slow ones.
+      - name: Keep the test durations
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pytest-durations
+          path: pytest-durations.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The full tier: every test marked slow (model fits, Chronos-2
+  # inference, backtests) and the smoke runs. Nightly,
+  # on dispatch, and on a pull request labelled `full-tests`.
+  full:
+    name: Slow fits and backtests
+    runs-on: ubuntu-latest
+    needs: plan
+    if: ${{ needs.plan.outputs.full == 'true' }}
+    env:
+      BDBV_DATA_DIR: tests/fixtures/data
+      # The fixture's latest vintage. The nowcasts below forecast from it
+      # and date their files by it, so the hub's check that the forecast
+      # date is on or before the reference date holds whatever the day.
+      VINTAGE: '2026-11-08'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: test
+      # The torch-gated files run in the chronos job, slow tests and all,
+      # so they are left out here and no test runs twice.
+      - name: Model fits and other slow tests
+        run: |
+          mapfile -t gated < <(grep -rlE \
+            '(importorskip|find_spec)\("(torch|chronos|peft|transformers)"' \
+            tests packages/*/tests | sort)
+          uv run --group paper pytest -q -m slow -n 2 --durations=30 \
+            "${gated[@]/#/--ignore=}"
+      - name: Backtest and nowcast smoke test
+        timeout-minutes: 15
+        # The backtest never fits the fitted models (their forecasts come
+        # from the fit store), so this runs random walk only.
+        run: |
+          uv run bdbvhub backtest --models randomwalk \
+            --data "$BDBV_DATA_DIR" \
+            --output output/backtest --results output/results
+          uv run bdbvhub nowcast --vintage "$VINTAGE" \
+            --forecast-date "$VINTAGE"
+          uv run bdbvhub metadata --out output/metadata
+      - name: Fit and forecast as the submission CI does (a tiny fit)
+        run: |
+          uv run bdbvhub --version
+          uv run bdbvhub fit --model renewal --config main \
+            --sampler-json '{"num_chains": 1, "num_warmup": 50, "num_samples": 50}' \
+            --out output/fits/main
+          uv run bdbvhub plot-ppc --ppc output/fits/main/ppc.json \
+            --out output/fits/main/ppc.png
+          uv run bdbvhub nowcast --config main --fit output/fits/main \
+            --vintage "$VINTAGE" --forecast-date "$VINTAGE" \
+            --out output/candidates/main
+          uv run bdbvhub plot-submission --out output/candidates/main.png \
+            --submission "$(ls output/candidates/main/model-output/*/*.csv)"
+          uv run bdbvhub coherence
+
+  # The tests that skip without torch (Chronos-2 inference, the
+  # fine-tune's trainer and offloaded evaluation), with the chronos group,
+  # on the runner's CPU. Every test file gated on torch, Chronos, PEFT or
+  # transformers is found, so a new one joins without a list to edit.
+  chronos:
+    name: Chronos-2 and the trainer (torch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: plan
+    if: ${{ needs.plan.outputs.chronos == 'true' }}
+    env:
+      BDBV_DATA_DIR: tests/fixtures/data
+      CUDA_VISIBLE_DEVICES: ''
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          sync: 'false'
+          jax-scope: chronos
+      - name: Install the chronos group
+        run: uv sync --frozen --group chronos
+      # Chronos-2's weights, downloaded once.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-chronos-2
+      - name: Torch-gated tests
+        run: |
+          mapfile -t files < <(grep -rlE \
+            '(importorskip|find_spec)\("(torch|chronos|peft|transformers)"' \
+            tests packages/*/tests | sort)
+          printf '%s\n' "${files[@]}"
+          uv run --no-sync pytest -q -m "" -n auto --dist loadfile \
+            --durations=30 "${files[@]}"
+
+  # Live checks against the R packages our code stands in for
+  # (tests/model/r_live.py): epinowcast's own Stan functions and
+  # primarycensored for the simulator's PyRenew components, and
+  # baselinenowcast for its port. R_LIVE_REQUIRED makes a missing package
+  # fail rather than skip.
+  r-live:
+    name: Live checks against R packages
+    runs-on: ubuntu-latest
+    needs: plan
+    if: ${{ needs.plan.outputs.r-live == 'true' }}
+    env:
+      R_LIVE_REQUIRED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          jax-scope: r-live
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          use-public-rspm: true
+          extra-repositories: https://stan-dev.r-universe.dev
+      # epinowcast at the commit the simulator's reporting ports, and
+      # baselinenowcast 0.2.2 (not on CRAN yet: the commit that set it).
+      # fitdistrplus: primarycensored's fitdistdoublecens needs it (a
+      # Suggests), for nowcastbdbv's test_hub_imputation_delays.py.
+      # scoringutils 2.3.0: nowcasteval's test_pairwise_skill.py and
+      # paper/tests/test_scoringutils.py. No comments inside `packages`:
+      # pak reads every line as a package.
+      - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
+        with:
+          packages: |
+            epinowcast/epinowcast@e084b080
+            epinowcast/baselinenowcast@999d1ad50e27921a4078175d6315bbd655878888
+            any::zoo
+            primarycensored@1.6.0
+            any::cmdstanr
+            any::jsonlite
+            any::data.table
+            any::flexsurv
+            any::fitdistrplus
+            any::posterior
+            scoringutils@2.3.0
+          dependencies: '"hard"'
+      # CmdStan, built once and kept.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cmdstan
+          key: cmdstan-${{ runner.os }}-v1
+      - name: Install CmdStan
+        run: >-
+          Rscript -e 'if (length(Sys.glob("~/.cmdstan/cmdstan-*")) == 0)
+          cmdstanr::install_cmdstan(cores = 4)'
+      # One at a time: each file compiles epinowcast's Stan functions with
+      # Rcpp, and parallel builds failed ("Error 1 occurred building shared
+      # library").
+      - name: Live R checks
+        run: >-
+          uv run pytest -q --durations=20
+          packages/nowcastrenewal/tests/test_pmfs.py
+          packages/nowcastrenewal/tests/test_latent_epinowcast.py
+          packages/nowcastrenewal/tests/test_reporting_delays.py
+          packages/nowcastbdbv/tests/test_hub_imputation_delays.py
+          packages/nowcastrenewal/tests/test_triangle.py
+          packages/nowcastrenewal/tests/test_reporting_effects.py
+          packages/nowcastrenewal/tests/test_reporting_expectation.py
+          packages/nowcasteval/tests/test_pairwise_skill.py
+      # The paper's scores against scoringutils, scored live.
+      - name: Live scoringutils check (paper)
+        working-directory: paper
+        run: uv run --group paper pytest -q tests/test_scoringutils.py
+      # With the slow sampler checks.
+      - name: Live baselinenowcast checks
+        run: >-
+          uv run pytest -q -m "" -n auto --dist loadfile --durations=20
+          packages/nowcastbaselines/tests/baselinenowcast

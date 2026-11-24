@@ -203,9 +203,9 @@ def test_references_take_their_line_style_from_the_shared_map():
     # Zero-shot dotted, complete data dashed, as in the paper.
     from flowlib.dashboard import paperstyle
 
-    assert paperstyle.model_dash("fm_chronos_daily_ragged") == "dotted"
-    assert paperstyle.model_dash("fm_chronos_daily_complete") == "dashed"
-    assert paperstyle.model_dash("fm_chronos_daily_ragged_ft") == "solid"
+    assert paperstyle.model_dash("foundation_zeroshot") == "dotted"
+    assert paperstyle.model_dash("foundation_zeroshot_complete") == "dashed"
+    assert paperstyle.model_dash("foundation") == "solid"
 
 
 def test_the_machine_may_point_the_dashboard_at_another_root(tmp_path):

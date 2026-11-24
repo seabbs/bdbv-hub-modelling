@@ -25,7 +25,12 @@ import numpy as np
 import pandas as pd
 import yaml
 from matplotlib.figure import Figure
-from nowcasteval.labels import MODEL_LABELS, MODEL_STYLES, model_label
+from nowcasteval.labels import (
+    FINETUNED_OF,
+    MODEL_LABELS,
+    MODEL_STYLES,
+    model_label,
+)
 from nowcastfoundation.live_checkpoint import (
     LIVE_RUN,
     checkpoint_table,
@@ -165,7 +170,7 @@ def comparison_rows(
         )
     ]
     case = rows.loc[rows["study"] == "germany"]
-    source = case["model"].str.extract(r"_(daily|weekly)_")[0]
+    source = case["model"].map(_source_of)
     out.append(
         pd.DataFrame(
             {
@@ -257,11 +262,15 @@ PLANNED_CHECKPOINTS: Final = (1000, 2000, 4000, 8400)
 
 
 def _source_of(model: str) -> str:
-    """Return the model's source (daily or weekly), which sets its colour."""
+    """Return the model's source (daily or weekly), which sets its colour.
+
+    The `foundation` models read the daily releases; scores stored under
+    the old names keep the source their name says.
+    """
     for source in ("daily", "weekly"):
         if f"_{source}_" in model:
             return source
-    return model
+    return "daily" if model.startswith("foundation") else model
 
 
 def checkpoint_figure(scores: pd.DataFrame) -> Figure:
@@ -316,7 +325,8 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
                     ms=3,
                     color=colour,
                     label=MODEL_LABELS.get(
-                        f"{model}_ft", f"{model_label(model)}, fine-tuned"
+                        FINETUNED_OF.get(model, ""),
+                        f"{model_label(model)}, fine-tuned",
                     ),
                 )
             complete = "_complete" in model

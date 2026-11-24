@@ -335,9 +335,11 @@ class PaperFlow:
         """Return the synthetic runner's models option."""
         if self.config.get("finetuned"):
             return ""
+        from nowcasteval.labels import FINETUNED
+
         from paperdata.synthetic_runner import MODELS
 
-        return "--models " + " ".join(m for m in MODELS if "_ft" not in m)
+        return "--models " + " ".join(m for m in MODELS if m not in FINETUNED)
 
     def synthetic_simulations(self, mode: str) -> list[str]:
         """Return a run's simulation files and its round's READY file.
@@ -403,9 +405,6 @@ class PaperFlow:
                 models = " ".join(ebola["backtest_models"])
                 args.append(f"--ebola-draws {self.ebola_draws}")
                 args.append(f"--ebola-draws-models {models}")
-            if ebola["candidates"]:
-                files = " ".join(shlex.quote(c) for c in ebola["candidates"])
-                args.append(f"--candidates {files}")
             history = self.store_history()
             if history:
                 args.append(f"--store-history {history}")
@@ -435,12 +434,12 @@ class PaperFlow:
                 target,
                 ebola["backtest"],
                 *self.ebola_extra(),
-                *(ebola["candidates"] or []),
                 *draws,
                 *stored,
             ]
         if w.study == "synthetic":
-            return [self.synthetic["forecasts"][w.mode]]
+            fc = self.synthetic["forecasts"][w.mode]
+            return [fc] if fc else []
         return []
 
     def limits(self, w: Wildcards) -> str:

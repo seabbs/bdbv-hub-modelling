@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The reporting triangle's expectation.
 
 For group $g$, reference day $t$ and delay $d$ the logit hazard of a

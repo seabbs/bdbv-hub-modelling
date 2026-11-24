@@ -75,7 +75,7 @@ def _forecasts(models: tuple[str, ...]) -> pd.DataFrame:
 
 def _scores(path: Path) -> None:
     path.mkdir(parents=True)
-    ours = ("fm_chronos_daily_ragged", "randomwalknowcast_daily")
+    ours = ("foundation_zeroshot", "randomwalknowcast_daily")
     _forecasts(ours).to_csv(path / "forecasts.csv.gz", index=False)
     teams = ("KIT", "KIT-frozen_baseline")
     _forecasts(teams).to_csv(path / "teams-forecasts.csv.gz", index=False)
@@ -88,7 +88,7 @@ def _scores(path: Path) -> None:
         }
     ).to_csv(path / "asof.csv.gz", index=False)
     ours = _rows(
-        (("fm_chronos_daily_ragged", 10.0), ("randomwalknowcast_daily", 5.0))
+        (("foundation_zeroshot", 10.0), ("randomwalknowcast_daily", 5.0))
     )
     held = ours.assign(origin="2022-03-01")
     pd.concat([ours, held]).to_csv(path / "scores.csv.gz", index=False)
@@ -143,7 +143,7 @@ def test_nowcast_explorer_shows_development_plot_dates(tmp_path: Path) -> None:
         gen,
         res,
         CONFIG,
-        lambda ms: [m for m in ms if m != "fm_chronos_daily_ragged"],
+        lambda ms: [m for m in ms if m != "foundation_zeroshot"],
     )
     assert "explorer-germany.json" in (gen / "germany-nowcasts.md").read_text()
     data = json.loads((fig / "explorer-germany.json").read_text())
@@ -183,7 +183,7 @@ def test_every_model_has_its_own_colour_and_dash() -> None:
     assert len(set(pairs)) == len(models)
 
 
-FT = "fm_chronos_daily_ragged_ft"
+FT = "foundation"
 
 
 def _with_ft(res: Path, tag: str | None = "chronos-ft-bbb") -> None:
@@ -201,7 +201,7 @@ def _with_ft(res: Path, tag: str | None = "chronos-ft-bbb") -> None:
     meta = {
         "tag": tag,
         "pinned": "chronos-ft-bbb",
-        "models": [FT, "fm_chronos_weekly_ragged_ft"],
+        "models": [FT, "foundation"],
     }
     (res / "ft-checkpoint.json").write_text(json.dumps(meta))
 
@@ -246,7 +246,7 @@ def test_the_page_names_the_ft_checkpoint(tmp_path: Path) -> None:
     note = (gen / "germany-ft.md").read_text()
     assert "chronos-ft-bbb" in note
     assert FT in note
-    assert "fm_chronos_weekly_ragged_ft" in note
+    assert "foundation" in note
     # The checkpoint is named once for both models.
     assert note.count("chronos-ft-bbb") == 2  # link text and URL
     assert "releases/tag/chronos-ft-bbb" in note

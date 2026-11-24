@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The held-out synthetic evaluation of the paper.
 
 The held-out outbreaks are simulations of the paper's synthetic grid
@@ -79,15 +79,12 @@ log = logging.getLogger(__name__)
 MODELS: Final = (
     "randomwalknowcast",
     "randomwalk",
-    "fm_chronos_weekly_complete",
-    "fm_chronos_daily_complete",
-    "fm_chronos_weekly_ragged",
-    "fm_chronos_daily_ragged",
-    "fm_chronos_weekly_ragged_ft",
-    "fm_chronos_daily_ragged_ft",
+    "foundation_zeroshot_complete",
+    "foundation_zeroshot",
+    "foundation",
 )
-"""The baseline, the random walk, the zero-shot Chronos-2 models on complete
-data and on the ragged releases, and the fine-tuned ragged ones."""
+"""The baseline, the random walk, zero-shot Chronos-2 on complete data and
+on the ragged releases, and the fine-tuned ragged model."""
 
 MIN_RELEASES: Final = 6
 """Releases up to the first origin: two weeks of context past the

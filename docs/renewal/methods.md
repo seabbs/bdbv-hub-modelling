@@ -78,7 +78,7 @@ Its delay and missing-onset share are its own, and its log Rt is a single weekly
 It keeps the share at risk and its depletion, though one place's series barely informs it.
 Its other parts and priors are those of `renewal`.
 In code it is the same model builder as the zone fits, with each place as its own patch.
-We fit it to each province with a case, and split each province's forecast into its zones by their recent share of cases ([Renewal models](../methods/model.md#health-zones)).
+We fit it to each health zone with a recent case, and provinces and the country are zone sums ([Renewal models](../methods/model.md#single-patch)).
 We call this model `renewalsp`.
 Comparing it with `renewal` and `renewalbvd` shows what pooling, transmission between places and the external Rt add.
 It is also a fallback in the submission chain that does not share the zone fits' failure modes.
@@ -107,7 +107,7 @@ The main priors are below, and the rest are on the [Renewal models](../methods/m
 
 We fit each model with the No-U-Turn sampler[^nuts] in NumPyro[^numpyro], through PyRenew[^pyrenew].
 Each zone fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other draw, with target acceptance 0.9 (0.95 for `renewalbvd`) and maximum tree depth 10 (`ci/policy.toml`).
-`renewalsp` runs 2 chains of 500 warm-up and 750 draws per province.
+`renewalsp` runs 2 chains of 500 warm-up and 750 draws per zone.
 Each chain starts from its own draw from the prior.
 The walks are sampled non-centred and anchored at their mean over the fit, which removes a ridge between a walk's level and its first steps.
 In `renewalsp` the log Rt AR(1) is the only Rt process.

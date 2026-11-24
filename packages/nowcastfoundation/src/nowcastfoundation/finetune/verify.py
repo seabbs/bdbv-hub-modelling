@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Check that a fine-tuned checkpoint's hash recomputes from its commit.
 
 A checkpoint's `settings.json` holds the sha256 of each file it depends
@@ -23,8 +23,9 @@ from pathlib import Path
 from typing import Any
 
 FOUNDATION = "src/bdbvhubrenewal/forecasters/foundation.py"
-"""The module whose functions `code_sha256` names `foundation.<name>`,
-for settings with no `code_paths`."""
+"""Where the module whose functions `code_sha256` names `foundation.<name>`
+was at the commits of checkpoints whose settings record no `code_paths`:
+the layout before the packages split, which those commits still have."""
 
 NOT_HASHED = (
     "hash",

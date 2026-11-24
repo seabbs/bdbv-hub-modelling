@@ -11,8 +11,12 @@ def test_numbers_read_as_floats_and_the_rest_as_none():
 
 
 def test_a_model_s_source_is_daily_or_weekly_else_both():
-    assert rows.source("fm_chronos_daily_ragged") == "daily"
-    assert rows.source("fm_chronos_weekly_ragged_ft") == "weekly"
+    # The foundation models read the daily releases; rows stored under the
+    # old names keep their source.
+    assert rows.source("foundation_zeroshot") == "daily"
+    assert rows.source("foundation") == "daily"
+    assert rows.source("fm_chronos_weekly_ragged") == "weekly"
+    assert rows.source("randomwalknowcast_daily") == "daily"
     assert rows.source("randomwalknowcast") is None
-    assert rows.sources("fm_chronos_weekly_ragged") == ["weekly"]
+    assert rows.sources("foundation") == ["daily"]
     assert rows.sources("randomwalknowcast") == ["daily", "weekly"]

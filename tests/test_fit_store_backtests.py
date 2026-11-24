@@ -37,12 +37,12 @@ def test_no_simulated_backtest_is_run() -> None:
         assert word not in text, word
 
 
-def test_the_backtests_are_scored_after_the_fits_and_stored() -> None:
+def test_the_backtests_are_stored_without_waiting_for_the_fits() -> None:
+    # The fits take hours; Pages needs the backtests now (main, 24 Nov).
     job = _jobs()["backtests"]
-    assert {"plan", "backtest", "store-current", "store-rest"} <= set(
-        job["needs"]
-    )
+    assert set(job["needs"]) == {"plan", "backtest"}
     run = "\n".join(str(s.get("run", "")) for s in job["steps"])
     assert run.index("fit-store load") < run.index("bdbvhub score")
-    assert "push-backtests" in run
-    assert "backtests" in _jobs()["pages"]["needs"]
+    assert run.index("push-backtests") < run.index("gh workflow run pages.yml")
+    assert job["permissions"]["actions"] == "write"
+    assert "backtests" not in _jobs()["pages"]["needs"]

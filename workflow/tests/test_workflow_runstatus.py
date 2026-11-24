@@ -21,9 +21,9 @@ Finished jobid: 0 (Rule: release_list)
 
 [Wed Nov 18 01:11:46 2026]
 localrule score_bdbv:
-    output: cache/bdbv/slots-f23ac5d03d45.done
+    output: cache/bdbv/slots-deadbeef0003.done
     jobid: 18
-    wildcards: label=slots-f23ac5d03d45
+    wildcards: label=slots-deadbeef0003
     resources: tmpdir=/tmp, mem_mb=6144, mem=6.14 GB, gpu=1
 
 [Wed Nov 18 01:11:47 2026]
@@ -66,7 +66,7 @@ def test_a_job_started_and_not_finished_is_running():
     jobs = jobs_by_id(LOG)
     assert jobs[18]["state"] == "running"
     assert jobs[18]["rule"] == "score_bdbv"
-    assert jobs[18]["wildcards"] == "label=slots-f23ac5d03d45"
+    assert jobs[18]["wildcards"] == "label=slots-deadbeef0003"
     assert jobs[18]["started"] == "2026-11-18T01:11:46"
 
 

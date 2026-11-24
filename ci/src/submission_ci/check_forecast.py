@@ -28,10 +28,10 @@ Handled (warn or pass):
                  `national_source = "own"`: the model forecast the
                  country itself, and the hub does not require the sum.
 
-Plausibility (`plausible` fails; the others warn):
+Plausibility (every check only warns):
   `plausible`    each location's forecast near its recent data: median
                  and 97.5% quantile under set multiples of the last 4
-                 weeks' maximum, and the median not collapsed. Fails.
+                 weeks' maximum, and the median not collapsed.
   `bounds`       the 95th centile of each week is not far above the
                  largest weekly count the location has had.
   `growth`       week-on-week growth of the median over the forecast.
@@ -92,6 +92,9 @@ class Check:
     status: str
     summary: str
     details: list[str] = field(default_factory=list)
+    locations: list[str] = field(default_factory=list)
+    """The locations a failing check is tied to, when every failure is
+    tied to one; empty when any failure is about the whole file."""
 
 
 def _level(ratio: float, warn: float) -> str:
@@ -270,6 +273,7 @@ def check_values(s: Samples) -> Check:
     found: list[tuple[str, str]] = [
         ("fail", f"unparsable value at {u}") for u in s.unparsable
     ]
+    at: set[str] = set()
     for loc in s.locations:
         vals = [v for traj in s.values[loc].values() for v in traj.values()]
         nan = sum(math.isnan(v) for v in vals)
@@ -278,16 +282,22 @@ def check_values(s: Samples) -> Check:
         for n, what in ((nan, "NaN"), (inf, "infinite"), (neg, "negative")):
             if n:
                 found.append(("fail", f"{loc}: {n} {what} values"))
-    return _result("values", found, "all values finite and non-negative")
+                at.add(loc)
+    out = _result("values", found, "all values finite and non-negative")
+    if not s.unparsable:
+        out.locations = sorted(at)
+    return out
 
 
 def check_samples(s: Samples, n: int) -> Check:
     """Exactly `n` samples per location, each covering the same weeks."""
     found: list[tuple[str, str]] = []
+    at: set[str] = set()
     for loc in s.locations:
         trajs = s.values[loc]
         if len(trajs) != n:
             found.append(("fail", f"{loc}: {len(trajs)} samples, not {n}"))
+            at.add(loc)
         weeks = set(s.weeks(loc))
         short = [sid for sid, t in trajs.items() if set(t) != weeks]
         if short:
@@ -298,7 +308,10 @@ def check_samples(s: Samples, n: int) -> Check:
                     f"(e.g. sample {short[0]})",
                 )
             )
-    return _result("samples", found, f"{n} full trajectories per location")
+            at.add(loc)
+    out = _result("samples", found, f"{n} full trajectories per location")
+    out.locations = sorted(at)
+    return out
 
 
 def check_coverage(
@@ -481,7 +494,7 @@ def check_plausible(
     horizon: int,
     c: Mapping[str, Any],
 ) -> Check:
-    """Rule out a forecast far from the recent data, at each location.
+    """Warn of a forecast far from the recent data, at each location.
 
     The base is the largest of the last `plausible_recent_weeks` observed
     weeks, $m$, with the exact Poisson limits $(L, U)$ of a mean given
@@ -492,8 +505,9 @@ def check_plausible(
     within `plausible_q975_ratio` times $U$. The median must be at least
     $L$ over `plausible_low_ratio` where that is a case or more, unless
     it is at least the count already observed for that week. Locations
-    without observed data are skipped. Any breach fails, so the chain
-    moves on.
+    without observed data are skipped. A breach only warns: the numbers
+    go in the PR body for a human to read, and never rule a model out
+    (Sam, 2026-11-24).
     """
     n_recent = int(c["plausible_recent_weeks"])
     level = float(c["plausible_poisson_level"])
@@ -520,7 +534,7 @@ def check_plausible(
             if med > hi * base:
                 found.append(
                     (
-                        "fail",
+                        "warn",
                         f"{loc} {w}: median {fmt(med)} is over {fmt(hi)} "
                         f"times {fmt(base)}, the upper limit of the recent "
                         f"maximum {fmt(top)}",
@@ -529,7 +543,7 @@ def check_plausible(
             elif q975 > tail * base:
                 found.append(
                     (
-                        "fail",
+                        "warn",
                         f"{loc} {w}: 97.5% quantile {fmt(q975)} is over "
                         f"{fmt(tail)} times {fmt(base)}, the upper limit of "
                         f"the recent maximum {fmt(top)}",
@@ -538,7 +552,7 @@ def check_plausible(
             elif least >= 1 and med < least and med < series.get(w, math.inf):
                 found.append(
                     (
-                        "fail",
+                        "warn",
                         f"{loc} {w}: median {fmt(med)} is under 1/"
                         f"{fmt(lo)} of {fmt(low)}, the lower limit of the "
                         f"recent maximum {fmt(top)}",

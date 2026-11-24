@@ -21,7 +21,7 @@ read it only as page input."""
 
 @pytest.mark.slow
 def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
-    from evaluation.test_hubcompare import _write_hub
+    from test_hubcompare import _write_hub
 
     from bdbvhub.cli import main
 
@@ -348,7 +348,7 @@ def test_fit_settings_skip_models_with_no_sampler(
     monkeypatch.chdir(ROOT)
     settings = report._fit_settings()
     assert "renewal" in settings
-    assert not any(name.startswith("fm_chronos_") for name in settings)
+    assert not any(name.startswith("foundation") for name in settings)
 
 
 def test_complete_target_text_names_models_with_no_complete_score() -> None:
@@ -383,3 +383,33 @@ def test_backtest_and_nowcast_pages_name_the_backtest_draws() -> None:
     assert "2026-11-08" in meta
     lead = report._release_intro(n, stored)
     assert f"{n:,} draws" in lead
+
+
+def test_sections_not_stored_yet_say_so(tmp_path: Path) -> None:
+    # Before the fit store holds the backtests, every snippet the docs
+    # include but nothing wrote says it is not stored yet, so the site
+    # still builds; one already written is kept.
+    docs = tmp_path / "docs"
+    gen = docs / "generated"
+    gen.mkdir(parents=True)
+    (docs / "backtest.md").write_text(
+        '--8<-- "release-headline.md"\n--8<-- "vintages.md"\n'
+    )
+    (docs / "examples").mkdir()
+    (docs / "examples" / "example.md").write_text("x\n")
+    (docs / "other.md").write_text('--8<-- "example.md"\n')
+    (gen / "vintages.md").write_text("table\n")
+    filled = report._not_stored(gen)
+    assert filled == ["release-headline.md"]
+    assert (gen / "release-headline.md").read_text() == report.NOT_STORED
+    assert (gen / "vintages.md").read_text() == "table\n"
+    assert not (gen / "example.md").exists()
+
+
+def test_no_docs_page_embeds_a_backtest_figure_directly() -> None:
+    # A figure only the stored backtests make goes through a snippet, so
+    # the site builds (mkdocs --strict) before they are stored.
+    root = Path(__file__).parents[3]
+    text = (root / "docs" / "backtest.md").read_text()
+    assert "](figures/scores-by-truth" not in text
+    assert '--8<-- "scores-by-truth-figure.md"' in text

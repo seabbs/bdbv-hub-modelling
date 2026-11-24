@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """A sense check of a renewal fit's `wk R_t` quantiles before submission.
 
 For the country, each province and each fitted health zone, the page

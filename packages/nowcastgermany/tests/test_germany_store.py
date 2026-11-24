@@ -22,7 +22,7 @@ CONFIG = load_germany_config(ROOT / "config" / "germany.toml")
 SPLIT = CONFIG.split_date
 
 
-DAILY, WEEKLY = "fm_chronos_daily_ragged_ft", "fm_chronos_weekly_ragged_ft"
+DAILY = "foundation"
 
 
 def _cache(origins: tuple[str, ...], model: str = DAILY) -> pd.DataFrame:
@@ -59,7 +59,7 @@ RELEASES = [
 
 
 def test_release_tag_maps_scorer_labels() -> None:
-    assert release_tag("7962fd718a47") == "chronos-ft-7962fd718a47"
+    assert release_tag("deadbeef0005") == "chronos-ft-deadbeef0005"
     assert release_tag("slots-1234abcd") == "chronos-slots-1234abcd"
     for bad in ("reference", "", "slots-", "../x", "chronos-ft-abc"):
         with pytest.raises(ValueError, match="label"):
@@ -70,8 +70,7 @@ def test_development_rows_keep_the_model_before_the_split() -> None:
     frame = pd.concat(
         [
             _cache(("2021-11-22", "2022-02-09")),
-            _cache(("2021-11-22",), model=WEEKLY),
-            _cache(("2021-11-22",), model="fm_chronos_daily_ragged"),
+            _cache(("2021-11-22",), model="foundation_zeroshot"),
         ]
     )
     out = development_rows(frame, SPLIT)

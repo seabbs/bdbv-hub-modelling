@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The Hugging Face model card of a fine-tuned Chronos-2 checkpoint.
 
 `model_card` writes the card, `README.md` in a Hub repository, from the
@@ -131,7 +131,7 @@ def citation_bibtex(path: Path | str) -> str:
         "url": f"https://doi.org/{doi}" if doi else cff["repository-code"],
     }
     body = ",\n".join(f"  {k} = {{{v}}}" for k, v in fields.items() if v)
-    return f"@software{{abbott_bdbvhubrenewal,\n{body}\n}}"
+    return f"@software{{abbott_bdbv_hub_modelling,\n{body}\n}}"
 
 
 def _front_matter() -> str:

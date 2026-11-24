@@ -124,10 +124,7 @@ _RW = ModelSkill(-0.1, 1.3, 1.2)
 _HUB_BASE = ModelSkill(-0.05, 1.1, 1.3)
 _FM = ModelSkill(0.08, 1.15, 0.7)
 _FM_COMPLETE = ModelSkill(-0.12, 1.3, 0.9)
-_FM_WEEKLY_COMPLETE = ModelSkill(-0.15, 1.35, 0.95)
 _FM_FT = ModelSkill(0.0, 0.75, 1.0)
-_FM_WEEKLY = ModelSkill(-0.05, 1.25, 0.8)
-_FM_WEEKLY_FT = ModelSkill(0.02, 0.85, 1.05)
 
 STUDY_SETUP: Final[dict[str, StudySetup]] = {
     "synthetic": StudySetup(
@@ -145,18 +142,13 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         models={
             "randomwalk": _RW,
             "randomwalknowcast": _BASE,
-            "fm_chronos_daily_complete": _FM_COMPLETE,
-            "fm_chronos_daily_ragged": _FM,
-            "fm_chronos_daily_ragged_ft": _FM_FT,
-            "fm_chronos_weekly_complete": _FM_WEEKLY_COMPLETE,
-            "fm_chronos_weekly_ragged": _FM_WEEKLY,
-            "fm_chronos_weekly_ragged_ft": _FM_WEEKLY_FT,
+            "foundation_zeroshot_complete": _FM_COMPLETE,
+            "foundation_zeroshot": _FM,
+            "foundation": _FM_FT,
             "epinowcast": ModelSkill(0.0, 0.65, 1.05),
             # Checkpoints of the fine-tune, improving with its outbreaks.
             **{
-                f"fm_chronos_daily_ragged_ft@{n}": ModelSkill(
-                    0.0, 0.75 + 0.05 * i, 1.0
-                )
+                f"foundation@{n}": ModelSkill(0.0, 0.75 + 0.05 * i, 1.0)
                 for i, n in enumerate((16000, 8000, 4000, 2000, 1000))
             },
         },
@@ -186,9 +178,9 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         models={
             "randomwalk": _RW,
             "randomwalknowcast": _BASE,
-            "fm_chronos_daily_complete": _FM_COMPLETE,
-            "fm_chronos_daily_ragged": _FM,
-            "fm_chronos_daily_ragged_ft": _FM_FT,
+            "foundation_zeroshot_complete": _FM_COMPLETE,
+            "foundation_zeroshot": _FM,
+            "foundation": _FM_FT,
             "KIT-frozen_baseline": _HUB_BASE,
             "hub_ensemble": ModelSkill(0.03, 0.8, 1.1),
             "hub_team_a": ModelSkill(0.15, 0.9, 0.9),
@@ -213,12 +205,9 @@ STUDY_SETUP: Final[dict[str, StudySetup]] = {
         models={
             "randomwalk": _RW,
             "randomwalknowcast": _BASE,
-            "fm_chronos_daily_complete": _FM_COMPLETE,
-            "fm_chronos_daily_ragged": _FM,
-            "fm_chronos_daily_ragged_ft": _FM_FT,
-            "fm_chronos_weekly_complete": _FM_WEEKLY_COMPLETE,
-            "fm_chronos_weekly_ragged": _FM_WEEKLY,
-            "fm_chronos_weekly_ragged_ft": _FM_WEEKLY_FT,
+            "foundation_zeroshot_complete": _FM_COMPLETE,
+            "foundation_zeroshot": _FM,
+            "foundation": _FM_FT,
             "BDBVHub-baseline": _HUB_BASE,
             "hub_ensemble": ModelSkill(0.05, 0.85, 1.0),
             "hub_team_a": ModelSkill(0.2, 1.0, 0.8),

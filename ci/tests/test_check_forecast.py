@@ -295,7 +295,7 @@ def test_randomwalk_skips_baseline(tmp_path: Path) -> None:
 
 
 def test_cli_writes_report(tmp_path: Path) -> None:
-    path = sub(tmp_path, growth=5.0)
+    path = sub(tmp_path, mutate=lambda rows: rows[0].__setitem__(6, -1.0))
     side = tmp_path / "national.json"
     side.write_text(json.dumps(_sidecar()))
     args = [
@@ -421,9 +421,9 @@ def test_plausible_forecast_passes(tmp_path: Path) -> None:
     assert statuses(sub(tmp_path))["plausible"] == "pass"
 
 
-def test_wildly_high_median_is_ruled_out(tmp_path: Path) -> None:
-    # Far above the last 4 observed weeks' maximum: the candidate fails.
-    assert statuses(sub(tmp_path, growth=8.0))["plausible"] == "fail"
+def test_wildly_high_median_warns(tmp_path: Path) -> None:
+    # Far above the last 4 observed weeks' maximum: a warning.
+    assert statuses(sub(tmp_path, growth=8.0))["plausible"] == "warn"
 
 
 def test_heavy_upper_tail_is_ruled_out(tmp_path: Path) -> None:
@@ -438,7 +438,7 @@ def test_heavy_upper_tail_is_ruled_out(tmp_path: Path) -> None:
         settings=POLICY.checks, national_sidecar=_sidecar(),
         observed=read_observed(HUB / "time-series.csv"),
     )}  # fmt: skip
-    assert checks["plausible"].status == "fail"
+    assert checks["plausible"].status == "warn"
     assert "97.5%" in " ".join(checks["plausible"].details)
 
 
@@ -449,7 +449,7 @@ def test_collapse_to_near_zero_is_ruled_out(tmp_path: Path) -> None:
         settings=POLICY.checks, national_sidecar=_sidecar(),
         observed=read_observed(HUB / "time-series.csv"),
     )}  # fmt: skip
-    assert checks["plausible"].status == "fail"
+    assert checks["plausible"].status == "warn"
     assert "CD-IT" in checks["plausible"].summary
 
 
@@ -490,11 +490,11 @@ def test_low_median_at_the_reported_count_passes() -> None:
     assert _mandima_check(_mandima_medians(2.0)).status == "pass"
 
 
-def test_low_median_below_the_reported_count_is_ruled_out() -> None:
+def test_low_median_below_the_reported_count_warns() -> None:
     # 10-31 was reported as 39; a median of 1 is under 1/20 of 54.
     medians = {**_mandima_medians(2.0), "2026-10-31": 1.0}
     check = _mandima_check(medians)
-    assert check.status == "fail"
+    assert check.status == "warn"
     assert "2026-10-31" in " ".join(check.details)
 
 
@@ -681,11 +681,22 @@ def test_poisson_limits_of_the_recent_maximum_replace_the_floor() -> None:
     # A place with no recent case may forecast an introduction ...
     assert _place_check(none, 0.0, 5.0).status == "pass"
     # ... but not a median over 5 times its upper limit, 3.69.
-    assert _place_check(none, 30.0, 40.0).status == "fail"
+    assert _place_check(none, 30.0, 40.0).status == "warn"
     one = {"2026-10-31": 1.0, "2026-11-07": 0.0, "2026-11-14": 0.0}
     # A median of 0 is plausible after a recent maximum of 1.
     assert _place_check(one, 0.0, 18.5).status == "pass"
     big = {"2026-10-31": 54.0, "2026-11-07": 40.0, "2026-11-14": 30.0}
     # Under 1/20 of the lower limit, 40.6, once that is a case or more.
-    assert _place_check(big, 1.0, 10.0).status == "fail"
+    assert _place_check(big, 1.0, 10.0).status == "warn"
     assert _place_check(big, 3.0, 10.0).status == "pass"
+
+
+def test_plausibility_only_warns_and_never_rules_a_candidate_out(
+    tmp_path: Path,
+) -> None:
+    """Plausibility is for a human to read in the PR body (Sam,
+    2026-11-24): a wildly high forecast warns, and every other check is
+    unchanged."""
+    s = statuses(sub(tmp_path, growth=8.0))
+    assert s["plausible"] == "warn"
+    assert "fail" not in {s[n] for n in ("schema", "values", "samples")}

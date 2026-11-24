@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Display names, colours and line styles of the models.
 
 The paper, SI, dashboard and site show models by these names and colours,
@@ -37,18 +37,34 @@ __all__ = [
     "model_label",
 ]
 
+FINETUNED: Final[dict[str, str]] = {
+    "foundation": "foundation_zeroshot",
+    "foundation_complete": "foundation_zeroshot_complete",
+    "foundation_twostep": "foundation_zeroshot_twostep",
+}
+"""Each Chronos-2 model fine-tuned on simulations and its zero-shot
+counterpart, the same block with the pretrained weights. A checkpoint's
+scores are named by the zero-shot name (`base_model`), the checkpoint
+telling them apart."""
+
+FINETUNED_OF: Final[dict[str, str]] = {z: f for f, z in FINETUNED.items()}
+"""Each zero-shot Chronos-2 model's fine-tuned counterpart."""
+
+
+def base_model(name: str) -> str:
+    """Return a model's zero-shot counterpart if it is fine-tuned, else it."""
+    return FINETUNED.get(name, name)
+
+
 MODEL_LABELS: Final[dict[str, str]] = {
-    "fm_chronos_daily_ragged_ft": "Fine-tuned (delays)",
-    "fm_chronos_daily_ragged": "Zero-shot (delays)",
-    "fm_chronos_daily_complete": "Zero-shot (complete data only)",
-    "fm_chronos_daily_complete_2step": "Two-step zero-shot (point nowcast)",
-    "fm_chronos_daily_complete_2step_ft": "Two-step fine-tuned (point nowcast)",
+    "foundation": "Fine-tuned (delays)",
+    "foundation_zeroshot": "Zero-shot (delays)",
+    "foundation_zeroshot_complete": "Zero-shot (complete data only)",
+    "foundation_zeroshot_twostep": "Two-step zero-shot (point nowcast)",
+    "foundation_twostep": "Two-step fine-tuned (point nowcast)",
     "randomwalknowcast": "Random walk nowcast",
     "randomwalknowcast_daily": "Random walk nowcast (daily)",
     "randomwalk": "Random walk",
-    "fm_chronos_weekly_ragged_ft": "Fine-tuned (delays, weekly)",
-    "fm_chronos_weekly_ragged": "Zero-shot (delays, weekly)",
-    "fm_chronos_weekly_complete": "Zero-shot (complete data only, weekly)",
     "KIT-frozen_baseline": "Hub baseline (KIT)",
     "BDBVHub-baseline": "Hub baseline",
     "hub_ensemble": "Hub ensemble",
@@ -96,14 +112,11 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
     "randomwalknowcast": (_SLOT_ORANGE, "solid"),
     "randomwalknowcast_daily": (_SLOT_ORANGE, "dashed"),
     "randomwalk": (_SLOT_RED, "solid"),
-    "fm_chronos_daily_complete": (_COMPLETE_PURPLE, "dashed"),
-    "fm_chronos_daily_ragged": (_ZERO_SHOT_GREEN, "dotted"),
-    "fm_chronos_daily_ragged_ft": (_SLOT_BLUE, "solid"),
-    "fm_chronos_daily_complete_2step": (_COMPLETE_PURPLE, "dotted"),
-    "fm_chronos_daily_complete_2step_ft": (_SLOT_BLUE, "dashed"),
-    "fm_chronos_weekly_complete": (_SLOT_VIOLET, "dashed"),
-    "fm_chronos_weekly_ragged": (_SLOT_VIOLET, "dotted"),
-    "fm_chronos_weekly_ragged_ft": (_SLOT_VIOLET, "solid"),
+    "foundation_zeroshot_complete": (_COMPLETE_PURPLE, "dashed"),
+    "foundation_zeroshot": (_ZERO_SHOT_GREEN, "dotted"),
+    "foundation": (_SLOT_BLUE, "solid"),
+    "foundation_zeroshot_twostep": (_COMPLETE_PURPLE, "dotted"),
+    "foundation_twostep": (_SLOT_BLUE, "dashed"),
     "epinowcast": (_BROWN, "solid"),
     "hub_ensemble": (_SLOT_YELLOW, "solid"),
 }

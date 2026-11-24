@@ -22,7 +22,7 @@ Set `GH_TOKEN` or `GITHUB_TOKEN` to a GitHub token if you list releases often, a
 ## Load a checkpoint
 
 `chronos_ft.load` takes `"latest"`, the newest `chronos-ft-*` release by publish date, or a settings hash, which pins that release.
-It downloads the adapter once to `~/.cache/bdbvhubrenewal/chronos-ft-<hash>`.
+It downloads the adapter once to `~/.cache/bdbv-hub-modelling/chronos-ft-<hash>`.
 It checks each adapter file against the release's `sha256sums.txt`, on download and on every later use, and fails if one differs.
 The check catches a damaged download, not a release whose files were replaced, as the sums come from the same release.
 Pin a hash for reproducible work, and record the SHA-256 in `model.checkpoint.sha256` with your results.
@@ -46,7 +46,7 @@ The last delay is taken as final.
 
 The rows reported at every delay are Chronos-2's context.
 Each count at each earlier delay is a covariate, known up to the last cut-off.
-This is the ragged layout of the `fm_chronos_*_ragged_ft` models ([Layouts](foundation.md#layouts)).
+This is the ragged layout of the `foundation` model ([Layouts](foundation.md#layouts)).
 Our checkpoints were fine-tuned with last delays of 2 to 7 weeks or 14 to 49 days, so triangles in those ranges match their training best.
 
 The output has one row per place, reference time and quantile level:

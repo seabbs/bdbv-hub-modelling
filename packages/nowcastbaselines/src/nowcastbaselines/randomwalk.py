@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The random walk baselines.
 
 Both models run on the hub's daily release snapshots (`chain`), at
@@ -50,6 +50,7 @@ within the delay window.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import logging
 from dataclasses import dataclass, field, replace
@@ -424,6 +425,16 @@ class RandomWalk:
         )
         return scores, None
 
+    def settings_for(self, task: ForecastTask) -> Settings:
+        """Return the settings for `task`: its study `max_delay`, if any.
+
+        A task's `max_delay` (`ForecastTask.max_delay`, BDBV's study $D$)
+        replaces the settings' own.
+        """
+        if task.max_delay is None:
+            return self.settings
+        return dataclasses.replace(self.settings, max_delay=int(task.max_delay))
+
     def snapshots(self, task: ForecastTask) -> SnapshotArrays:
         """Return the task's release snapshots as arrays.
 
@@ -471,7 +482,9 @@ class RandomWalk:
         MissingSnapshots
             If the task has no release snapshots.
         """
-        return build_origin(self.snapshots(task), self.settings, errors)
+        return build_origin(
+            self.snapshots(task), self.settings_for(task), errors
+        )
 
     def rows(self, origin: Origin, task: ForecastTask) -> list[int]:
         """Return the origin's row of each of the task's places.

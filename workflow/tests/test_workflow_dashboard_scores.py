@@ -55,18 +55,18 @@ def _which():
 def test_rows_go_to_their_run_or_reference():
     rs, refs = _which()
     rows = [
-        _row("fm_chronos_daily_ragged_ft", "slots-aaaaaa", n="250"),
+        _row("foundation", "slots-aaaaaa", n="250"),
         _row(
-            "fm_chronos_weekly_ragged_ft",
+            "foundation",
             "realdata-ft-bbbbbb",
             "ebola",
             n="0",
             value="1.1",
         ),
-        _row("fm_chronos_daily_ragged", "zero-shot"),
+        _row("foundation_zeroshot", "zero-shot"),
         _row("randomwalknowcast", "zero-shot"),
-        _row("fm_chronos_daily_ragged_ft", "cccccc"),  # no run claims it
-        _row("fm_chronos_daily_ragged_ft", "slots-aaaaaa", rule="other"),
+        _row("foundation", "cccccc"),  # no run claims it
+        _row("foundation", "slots-aaaaaa", rule="other"),
     ]
     got = scores.payload(rows, rs, refs, RULE, local=[])
     series = {(r[0], r[3]) for r in got["rows"]}
@@ -98,7 +98,7 @@ def test_series_are_the_runs_then_the_references_with_their_colours():
 
 def test_checkpoints_saved_but_not_yet_scored_are_pending():
     rs, refs = _which()
-    rows = [_row("fm_chronos_daily_ragged_ft", "slots-aaaaaa", n="250")]
+    rows = [_row("foundation", "slots-aaaaaa", n="250")]
     local = [("slots", 250, "aaaaaa"), ("slots", 500, "dddddd")]
     got = scores.payload(rows, rs, refs, RULE, local=local)
     assert got["pending"] == [{"run": "slots", "n": 500, "hash": "dddddd"}]
@@ -106,7 +106,7 @@ def test_checkpoints_saved_but_not_yet_scored_are_pending():
 
 def test_the_first_scored_run_and_the_references_are_shown_first():
     rs, refs = _which()
-    rows = [_row("fm_chronos_daily_ragged_ft", "realdata-ft-bbbbbb", n="0")]
+    rows = [_row("foundation", "realdata-ft-bbbbbb", n="0")]
     got = scores.payload(rows, rs, refs, RULE, local=[])
     assert got["defaults"] == ["realdata", "zero", "rw"]
 

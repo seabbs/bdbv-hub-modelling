@@ -385,37 +385,21 @@ rule hub_rounds:
 # REVIEW_DIR as bdbv-ft-check.html too; `finetune` asks for the page of
 # every released checkpoint (`ft_check_released`). Not part of `all`.
 
-FTC = config["ft_check"]
-
-
-def ft_check_checkpoint():
-    """The fine-tuned checkpoint the check runs: the config's or the pin."""
-    import tomllib
-
-    pin = tomllib.loads(Path("config/finetune.toml").read_text())["hash"]
-    return FTC["checkpoint"] or pin
-
-
-def ft_check_folders(ckpt):
-    return [f"{FTC_DIR}/forecasts/{m}" for m in FTC["models"]] + [
-        f"{FTC_DIR}/forecasts/ft-{ckpt}"
-    ]
-
 
 rule ft_check_forecast:
+    # Each folder carries the code key (`ft_check_folders`): the models'
+    # code, the release tasks, the backtest config and the active-zone
+    # rule, so other code makes its own folder and none is reused.
     input:
         data=rules.hub_data.output,
-        # Reruns when its code or the active-zone rule changes (a key
-        # file, as reruns follow file times).
-        code=lambda wc: scoring.key_file(
-            f"{FTC_DIR}/keys", "forecast", scoring.ft_check_key()
-        ),
     output:
-        touch(f"{FTC_DIR}/forecasts/{{fmodel}}.done"),
+        touch(f"{FTC_DIR}/forecasts/{{fmodel}}@{{key}}.done"),
     log:
-        f"{FTC_DIR}/logs/{{fmodel}}.log",
+        f"{FTC_DIR}/logs/{{fmodel}}@{{key}}.log",
     benchmark:
-        f"{FTC_DIR}/benchmarks/{{fmodel}}.tsv"
+        f"{FTC_DIR}/benchmarks/{{fmodel}}@{{key}}.tsv"
+    wildcard_constraints:
+        key=r"[0-9a-f]{12}",
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -425,7 +409,7 @@ rule ft_check_forecast:
     params:
         env=unit_env,
         data=lambda wc, input: Path(input.data[0]).parent,
-        out=lambda wc: f"{FTC_DIR}/forecasts/{wc.fmodel}",
+        out=lambda wc: f"{FTC_DIR}/forecasts/{wc.fmodel}@{wc.key}",
         model=lambda wc: (
             FTC["finetuned"] if wc.fmodel.startswith("ft-") else wc.fmodel
         ),
@@ -490,9 +474,10 @@ rule ft_check:
 # round the latest Submit run on main targeted, against the data as of
 # the round, with the wk R_t quantiles, the gate's pick and the renewal
 # fits' convergence (workflow/scripts/this_round_report.py). No scores.
-# It reruns when <ROOT>/hub/round/run.txt (the run and its status) or
-# <ROOT>/hub/round/store.txt (the fit store's commit) changes, which
-# workflow/scripts/hub_watch.sh writes. Not part of `all`.
+# It reruns when <ROOT>/hub/round/run.txt (the run and its status),
+# <ROOT>/hub/round/store.txt (the fit store's commit) or
+# <ROOT>/hub/round/submissions.txt (the hub's newest model-output commit)
+# changes, which workflow/scripts/hub_watch.sh writes. Not part of `all`.
 
 
 rule this_round_inputs:
@@ -500,6 +485,7 @@ rule this_round_inputs:
         target=rules.hub_data.output,
         run=f"{HUB}/round/run.txt",
         store=f"{HUB}/round/store.txt",
+        submissions=f"{HUB}/round/submissions.txt",
     output:
         candidates=f"{HUB}/round/candidates.csv.gz",
         run=f"{HUB}/round/run/run.json",

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Downloads of the data the studies read (hub data, benchmark files)."""
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ def download(url: str, token: str | None = None) -> bytes:
     -------
     bytes
     """
-    headers = {"User-Agent": "bdbvhubrenewal"}
+    headers = {"User-Agent": "bdbv-hub-modelling"}
     if token and url.startswith("https://api.github.com"):
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers)

@@ -44,8 +44,8 @@ def test_baselines_have_their_own_colours() -> None:
 
 def test_fine_tuned_and_zero_shot_differ_in_colour_and_dash() -> None:
     # Bars show no dashes, so the main models differ in colour.
-    ft = model_style("fm_chronos_daily_ragged_ft", [])
-    zs = model_style("fm_chronos_daily_ragged", [])
+    ft = model_style("foundation", [])
+    zs = model_style("foundation_zeroshot", [])
     assert ft[0] != zs[0]
     assert ft[1] != zs[1]
 
@@ -123,17 +123,14 @@ def test_synthetic_panel_shows_factors_and_weekly_horizons() -> None:
     plt.close(fig)
 
 
-@pytest.mark.parametrize("family", ["daily", "weekly"])
-def test_chronos_variants_have_distinct_styles(family) -> None:
+def test_chronos_variants_have_distinct_styles() -> None:
     names = [
-        f"fm_chronos_{family}_complete",
-        f"fm_chronos_{family}_ragged",
-        f"fm_chronos_{family}_ragged_ft",
+        "foundation_zeroshot_complete",
+        "foundation_zeroshot",
+        "foundation",
     ]
     styles = [model_style(n, []) for n in names]
-    # The daily models are the main figures' and differ in colour; the
-    # weekly ones (SI only) share one.
-    assert len({c for c, _ in styles}) == (3 if family == "daily" else 1)
+    assert len({c for c, _ in styles}) == 3
     # Complete data dashed, with delays dotted, fine-tuned solid.
     assert [d for _, d in styles] == ["dashed", "dotted", "solid"]
     # Bars are filled with the model's colour, never hatched.
@@ -195,16 +192,17 @@ def test_ribbons_fall_back_to_the_best_chronos_variant() -> None:
 
     models = [
         "randomwalknowcast",
-        "fm_chronos_daily_complete",
-        "fm_chronos_daily_ragged",
-        "fm_chronos_weekly_complete",
-        "fm_chronos_weekly_ragged",
-        "fm_chronos_weekly_ragged_ft",
+        "foundation_zeroshot_complete",
+        "foundation_zeroshot",
+        "foundation",
     ]
     assert _ribbon_models(models, "randomwalknowcast") == [
         "randomwalknowcast",
-        "fm_chronos_daily_ragged",
-        "fm_chronos_weekly_ragged_ft",
+        "foundation",
+    ]
+    assert _ribbon_models(models[:3], "randomwalknowcast") == [
+        "randomwalknowcast",
+        "foundation_zeroshot",
     ]
 
 
@@ -289,7 +287,7 @@ def test_nowcast_panels_have_a_column_per_model_and_a_row_per_origin_or_place():
     fc, obs = dummy_study("germany", seed=1, n_samples=5)
     truth = rolling_truth(obs, delay_days=40)
     origins = [pd.Timestamp(o) for o in sorted(fc["origin_date"].unique())[:2]]
-    models = ["randomwalknowcast", "fm_chronos_daily_ragged_ft"]
+    models = ["randomwalknowcast", "foundation"]
     rows = [(o, "DE", "all", f"origin {o:%Y-%m-%d}") for o in origins]
     rows.append((origins[0], "DE", "80+", "DE, 80+"))
     fig = nowcast_panels(
@@ -367,7 +365,7 @@ def test_crps_bars_are_drawn_from_one(study) -> None:
 
 def test_results_panel_shows_only_the_given_models(germany) -> None:
     fc, obs, scores, _ = germany
-    keep = ["randomwalknowcast", "fm_chronos_daily_ragged_ft"]
+    keep = ["randomwalknowcast", "foundation"]
     fig = results_panel(fc, obs, scores, split=None, models=keep)
     rel_ax = next(ax for ax in fig.axes if ax.get_title() == "Relative WIS")
     # The two models and the study's baseline, three parts each.

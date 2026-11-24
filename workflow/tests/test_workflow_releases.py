@@ -7,7 +7,7 @@ LISTING = [
     {"tagName": "chronos-ft-aaa", "publishedAt": "2026-11-16T12:00:00Z"},
     {"tagName": "chronos-slots-bbb", "publishedAt": "2026-11-16T15:00:00Z"},
     {"tagName": "chronos-slots-ccc", "publishedAt": "2026-11-16T10:00:00Z"},
-    {"tagName": "sims-r4", "publishedAt": "2026-11-16T11:00:00Z"},
+    {"tagName": "sims-r90", "publishedAt": "2026-11-16T11:00:00Z"},
     {"tagName": "germany-ft-de", "publishedAt": "2026-11-16T11:00:00Z"},
 ]
 
@@ -60,7 +60,7 @@ def test_only_r7_checkpoints_are_scored():
     )["score"]
     assert config["labels"] is None
     last_r6 = {
-        "tagName": "chronos-slots-3ee94e5195e0",
+        "tagName": "chronos-slots-deadbeef0002",
         "publishedAt": "2026-11-19T14:12:48Z",
     }
     assert releases.labels([*LISTING, last_r6], config["published_from"]) == []
@@ -70,17 +70,17 @@ def test_a_release_s_batches_and_none_before_it_is_made(monkeypatch):
     import json
     import subprocess
 
-    assets = ["counts-901.csv.gz", "settings-901.csv", "counts-902.csv.gz"]
+    assets = ["counts-9801.csv.gz", "settings-9801.csv", "counts-9802.csv.gz"]
 
     def view(args, **_):
-        if "sims-r9" not in args:
+        if "sims-r98" not in args:
             return subprocess.CompletedProcess(args, 1, "", "not found")
         out = json.dumps({"assets": [{"name": a} for a in assets]})
         return subprocess.CompletedProcess(args, 0, out, "")
 
     monkeypatch.setattr(releases.subprocess, "run", view)
-    assert releases.release_seeds("o/r", 9) == {901}
-    assert releases.release_seeds("o/r", 8) == set()
+    assert releases.release_seeds("o/r", 98) == {9801}
+    assert releases.release_seeds("o/r", 97) == set()
 
 
 def _cfg(**over):

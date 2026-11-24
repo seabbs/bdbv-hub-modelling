@@ -360,11 +360,11 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 - The lag count against a fixed cap and the joint block against each level alone and the sum of the lowest level have no SI section yet, and get a paragraph when they do.
 :::
 
-Against `randomwalknowcast`, zero-shot Chronos-2 on the two-step input scored {{< meta results.synthetic.models.fm_chronos_daily_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.fm_chronos_daily_twostep >}} on the German {{< meta results.germany.scope >}}.
-The fine-tuned model on the same input scored {{< meta results.synthetic.models.fm_chronos_daily_twostep_ft >}} and {{< meta results.germany.models.fm_chronos_daily_twostep_ft >}}, and on the ragged layout {{< meta results.synthetic.models.fm_chronos_daily_ragged_ft >}} and {{< meta results.germany.models.fm_chronos_daily_ragged_ft >}}.
+Against `randomwalknowcast`, zero-shot Chronos-2 on the two-step input scored {{< meta results.synthetic.models.chronos_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.chronos_twostep >}} on the German {{< meta results.germany.scope >}}.
+The fine-tuned model on the same input scored {{< meta results.synthetic.models.chronos_twostep_ft >}} and {{< meta results.germany.models.chronos_twostep_ft >}}, and on the ragged layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
 
 ::: {.content-visible when-meta="results.ebola.shown"}
-On the Ebola {{< meta results.ebola.scope >}}, zero-shot Chronos-2 and the fine-tuned model on the two-step input and the fine-tuned model on the ragged layout scored {{< meta results.ebola.models.fm_chronos_daily_twostep >}}, {{< meta results.ebola.models.fm_chronos_daily_twostep_ft >}} and {{< meta results.ebola.models.fm_chronos_daily_ragged_ft >}}.
+On the Ebola {{< meta results.ebola.scope >}}, zero-shot Chronos-2 and the fine-tuned model on the two-step input and the fine-tuned model on the ragged layout scored {{< meta results.ebola.models.chronos_twostep >}}, {{< meta results.ebola.models.chronos_twostep_ft >}} and {{< meta results.ebola.models.foundation >}}.
 :::
 
 We score the model fine-tuned on real data on the German held-out half and on Ebola rounds after its last training release, {{< meta results.realdata_after >}}, against the model fine-tuned on simulations (SI, Real-data fine-tune against synthetic).
@@ -405,6 +405,9 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - We used one layout, daily counts and daily lag series, with an aggregate row per place in both models with delays, and could also have included weekly lag series in the block.
   - We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.
   - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
+  - We simulate and fine-tune on counts only.
+  - Other common nowcasting targets are proportions, such as influenza-like illness as a share of visits, variant or sequence proportions, and wastewater samples [@Bracher2026; @placeholder].
+  - Extending the simulator and fine-tuning to these targets is future work.
   - We cut systems too large for one block into views (Methods).
   - Zones in different subtrees then inform each other only through the aggregated totals.
   - For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.

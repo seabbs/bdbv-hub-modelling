@@ -1,10 +1,10 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Use our fine-tuned Chronos-2 on your own reporting triangle.
 
 `load` downloads a `chronos-ft-<hash>` release of seabbs/bdbv-hub-modelling,
 the newest or a pinned one, and checks each adapter file against the
 release's `sha256sums.txt`. `forecast_triangle` gives a reporting
-triangle to Chronos-2 as the `fm_chronos_*_ragged_ft` models do and
+triangle to Chronos-2 as the `foundation` model does and
 returns quantiles of each row's final count, for the rows still being
 reported and for rows ahead.
 See the "Using the fine-tuned Chronos-2" docs page.
@@ -182,7 +182,7 @@ def forecast_triangle(
 
     The rows reported at every delay are the context. Each place's count
     at every delay is a covariate, known up to the last row's cut-off, as
-    in the ragged layout of the `fm_chronos_*_ragged_ft` models; the
+    in the ragged layout of the `foundation` model; the
     last delay is taken as final. Our checkpoints were fine-tuned with
     last delays of 2 to 7 weeks or 14 to 49 days, so triangles whose last
     delay is in those ranges match their training best.

@@ -62,9 +62,9 @@ def test_the_lags_hold_the_quantile_of_the_reports(quantile, lags) -> None:
     assert delay_lags(rows, "daily", ("A",), last, quantile) == lags
 
 
-def test_the_default_is_the_99th_percentile() -> None:
+def test_the_default_is_the_98th_percentile() -> None:
     rows = _releases(200)
-    assert LAG_QUANTILE == 0.99
+    assert LAG_QUANTILE == 0.98
     assert delay_lags(rows, "daily", ("A",), rows["cutoff"].max()) == 4
 
 
@@ -126,14 +126,14 @@ def test_the_lags_never_exceed_the_history() -> None:
     rows = _releases(15, reported=reported)
     last = rows["cutoff"].max()
     assert delay_lags(rows, "daily", ("A",), last) == 13
-    model = dataclasses.replace(get_model("fm_chronos_daily_ragged"), lags=40)
+    model = dataclasses.replace(get_model("foundation_zeroshot"), lags=40)
     assert model._triangle(rows, ("A",), last).partial.shape[2] == 13
 
 
 def test_a_fixed_lag_count_overrides_the_rule() -> None:
     rows = _releases(200)
     last = rows["cutoff"].max()
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     assert model.lags is None
     assert model._triangle(rows, ("A",), last).partial.shape[2] == 4
     fixed = dataclasses.replace(model, lags=7)
@@ -141,8 +141,8 @@ def test_a_fixed_lag_count_overrides_the_rule() -> None:
 
 
 def test_the_block_takes_the_largest_place_delay() -> None:
-    # Place A reports within 4 days, place B within 21: the block takes
-    # B's, so neither loses its late reports.
+    # Place A reports within 4 days, place B 98% within 18: the block
+    # takes B's, so neither loses its late reports.
     a = _releases(200)
 
     def slow(d):
@@ -152,4 +152,4 @@ def test_the_block_takes_the_largest_place_delay() -> None:
     rows = pd.concat([a, b], ignore_index=True)
     last = rows["cutoff"].max()
     assert delay_lags(a, "daily", ("A",), last) == 4
-    assert delay_lags(rows, "daily", ("A", "B"), last) == 21
+    assert delay_lags(rows, "daily", ("A", "B"), last) == 18

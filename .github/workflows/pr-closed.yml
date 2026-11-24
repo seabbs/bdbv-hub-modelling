@@ -1,4 +1,4 @@
-name: Pull request closed
+name: Clean up after a PR
 
 # When a pull request closes or merges, stops its running workflows,
 # deletes its Actions caches and main's superseded ones, and removes its
@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   cancel:
+    name: Cancel its runs
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
@@ -31,6 +32,7 @@ jobs:
             xargs -r -n 1 gh run cancel -R "$GITHUB_REPOSITORY" || true
 
   caches:
+    name: Delete its caches
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
@@ -61,6 +63,7 @@ jobs:
             xargs -r -n 1 gh cache delete -R "$GITHUB_REPOSITORY" || true
 
   remove:
+    name: Remove its preview
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # The preview deploy's group, so a removal waits for a deploy to end.

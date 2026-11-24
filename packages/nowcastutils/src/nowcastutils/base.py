@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The forecast task, the model interface and the model registry.
 
 A model is anything with a `name` and a `forecast(task)` method that
@@ -132,6 +132,10 @@ class ForecastTask:
         Each location's `population`, `latitude` and `longitude`, by
         `location`, covering the task's locations and their zones. Only
         models with `reads_places` set have it in their fit key.
+    max_delay : int or None
+        The study's longest reporting delay $D$ in days (BDBV: 40, in
+        `config/backtest.toml`), which the models use in place of their
+        own rule or default. None leaves each model its own.
     """
 
     vintage: str
@@ -154,6 +158,7 @@ class ForecastTask:
     zone_codes: tuple[str, ...] = ()
     imputation_delay: np.ndarray | None = None
     places: pd.DataFrame | None = None
+    max_delay: int | None = None
 
     def rng(self, *keys: str) -> np.random.Generator:
         """Return a random generator seeded from the task.

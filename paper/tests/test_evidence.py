@@ -124,7 +124,7 @@ def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
         {
             "study": ["ebola"] * 3 + ["germany"] * 3,
             "level": "national",
-            "model": "fm_chronos_daily_ragged",
+            "model": "foundation_zeroshot",
             "outbreaks": [0, 1000, 2000] * 2,
             "n": [1] * 3 + [400] * 3,
             "rel_wis": [2.0, 1.5, 1.2] * 2,
@@ -140,7 +140,7 @@ def test_checkpoint_panels_show_n_and_grey_thin_ones() -> None:
     assert not axes[1].texts
     numbers = checkpoint_numbers(rows)
     assert numbers["germany"]["national"]["n"] == 400
-    assert numbers["ebola"]["national"]["fm_chronos_daily_ragged"] == {
+    assert numbers["ebola"]["national"]["foundation_zeroshot"] == {
         "zero-shot": 2.0,
         "n1000": 1.5,
         "n2000": 1.2,
@@ -197,7 +197,7 @@ def test_checkpoint_models_keep_one_colour_across_panels() -> None:
 def test_checkpoint_rows_keep_one_grid_and_the_current_rule() -> None:
     from paperpipe.evidence import CHECKPOINT_RULE, checkpoint_rows
 
-    base = {"level": "national", "model": "fm_chronos_daily_ragged", "n": 9}
+    base = {"level": "national", "model": "foundation_zeroshot", "n": 9}
     rows = pd.DataFrame(
         [
             {
@@ -287,8 +287,8 @@ def test_checkpoint_rows_of_other_runs_leave_only_zero_shot() -> None:
         {
             "study": ["germany", "germany"],
             "level": "national",
-            "model": "fm_chronos_daily_ragged",
-            "checkpoint": ["zero-shot", "6b7aaa8d4f55"],
+            "model": "foundation_zeroshot",
+            "checkpoint": ["zero-shot", "deadbeef0006"],
             "outbreaks": [0, 1000],
             "n": 9,
             "rel_wis": [2.0, 1.5],
@@ -305,7 +305,7 @@ def test_checkpoint_rows_keep_only_the_live_run() -> None:
         {
             "study": "germany",
             "level": "national",
-            "model": "fm_chronos_daily_ragged",
+            "model": "foundation_zeroshot",
             "checkpoint": ["a", "b", "c"],
             "outbreaks": [1000, 2000, 4000],
             "n": 9,
@@ -329,10 +329,10 @@ def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
             "study": "germany",
             "level": "national",
             "model": [
-                "fm_chronos_daily_ragged",
-                "fm_chronos_daily_ragged",
-                "fm_chronos_daily_ragged",
-                "fm_chronos_daily_complete",
+                "foundation_zeroshot",
+                "foundation_zeroshot",
+                "foundation_zeroshot",
+                "foundation_zeroshot_complete",
             ],
             "checkpoint": ["zero-shot", "a", "b", "zero-shot"],
             "outbreaks": [0, 1000, 2000, 0],

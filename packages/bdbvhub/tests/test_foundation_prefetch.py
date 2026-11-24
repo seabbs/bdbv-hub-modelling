@@ -166,9 +166,7 @@ def tasks(
     return out
 
 
-@pytest.mark.parametrize(
-    "name", ["fm_chronos_daily_ragged", "fm_chronos_weekly_ragged"]
-)
+@pytest.mark.parametrize("name", ["foundation_zeroshot"])
 def test_prefetch_draws_as_one_task_at_a_time(
     monkeypatch: pytest.MonkeyPatch, tasks: list[ForecastTask], name: str
 ) -> None:
@@ -192,7 +190,7 @@ def test_prefetch_serves_native_quantiles(
 ) -> None:
     pipe = _Pipeline()
     monkeypatch.setattr(foundation, "_chronos", lambda *_: pipe)
-    model = get_model("fm_chronos_weekly_ragged")
+    model = get_model("foundation_zeroshot")
     levels = [0.25, 0.5, 0.75]
     alone = [model.quantiles(t, levels) for t in tasks]
     pipe.calls.clear()

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The random walk nowcast on a daily reporting triangle.
 
 `DailyWalkNowcast` (`randomwalknowcast_daily`) nowcasts each place's
@@ -24,13 +24,19 @@ baselinenowcast does with an aggregator:
 - Daily counts (`daily_quantiles`): the same triangle, errors fitted on
   daily counts.
 
+A place with too few cases for baselinenowcast to estimate its delay or
+its errors, such as a health zone with no recent case, keeps the counts
+reported (0 for a zone with no case) and does not walk.
+
 Days after the cut-off are a random walk on $\log(1 + y)$ with daily steps
-(`walk.random_walks`) on the same view: each sample walks on from its own
-nowcast of the cut-off day. Its spread is the standard deviation of the
-daily changes of $\log(1 + y)$ in the point nowcast over the last
-`walk_days` days, net of their Poisson noise (`walk.walk_variance`); a
-place whose net variance is 0 or below does not walk. German counts have
-weekday effects, which the daily view's spread holds.
+(`walk.random_walks`) on the level of the view: the 7-day sums, or for
+daily counts their 7-day mean (`LEVEL_DAYS`), since day-to-day changes of
+daily counts are mostly weekday swings, which walked forward would compound
+into growth. Each sample walks on from its own level at the cut-off. The
+spread is the standard deviation of the daily changes of $\log(1 + y)$ in
+that level of the point nowcast over the last `walk_days` days, net of
+their Poisson noise (`walk.walk_variance`); a place whose net variance is
+0 or below does not walk.
 
 National is the sum of the places by sample.
 """
@@ -40,6 +46,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 from functools import partial
+from typing import Final
 
 import jax
 import jax.numpy as jnp
@@ -113,6 +120,17 @@ def daily_triangle(
     return np.where(mask, counts, 0.0), mask
 
 
+NO_RECENT_CASES: Final = ("only contain 0s", "Errors occurred in all")
+"""baselinenowcast's refusals when a place's triangle holds too few cases
+to estimate: no case in the delay-estimation rows, or none of the
+retrospective triangles the uncertainty is fitted on usable."""
+
+
+LEVEL_DAYS: Final = 7
+"""Days the daily counts' level is averaged over, for the walk's step and
+start: a week, so weekday swings cancel."""
+
+
 @dataclass
 class DailyWalkNowcast:
     """baselinenowcast on the daily triangle, then a daily random walk.
@@ -166,7 +184,8 @@ class DailyWalkNowcast:
         cutoff = as_date(task.cutoff)
         first = as_date(str(task.daily_history["onset_date"].min()))
         have = (cutoff - first).days + 1
-        delay = min(self.max_delay, int(have // self.scale_factor))
+        own = self.max_delay if task.max_delay is None else task.max_delay
+        delay = min(int(own), int(have // self.scale_factor))
         if delay < 3:
             raise MissingSnapshots(f"{self.name}: {have} days of data")
         ends = sorted(task.target_end_dates)
@@ -187,25 +206,50 @@ class DailyWalkNowcast:
             tri, mask = daily_triangle(
                 task.daily_history, place, cutoff, rows, delay
             )
-            draws = baselinenowcast(
-                tri,
-                mask,
-                key=keys[i],
-                draws=task.n_samples,
-                ref_time_aggregator=agg,
-            )
+            try:
+                draws = baselinenowcast(
+                    tri,
+                    mask,
+                    key=keys[i],
+                    draws=task.n_samples,
+                    ref_time_aggregator=agg,
+                )
+            except ValueError as err:
+                if not any(m in str(err) for m in NO_RECENT_CASES):
+                    raise
+                # Too few cases to estimate (a health zone with no or few
+                # recent cases): the place keeps what is reported, as k-day
+                # sums, and does not walk.
+                reported = (np.asarray(tri) * np.asarray(mask)).sum(axis=1)
+                sums = np.convolve(reported, np.ones(k), "valid")
+                nowcast.append(np.tile(sums, (task.n_samples, 1)))
+                sigma.append(0.0)
+                continue
             nowcast.append(np.asarray(draws, np.float64))
             point = np.asarray(
                 baselinenowcast(tri, mask, output_type="point"), np.float64
             )
-            y = np.convolve(point, np.ones(k), "valid")[-self.walk_days :]
+            # The walk's step is that of the level: the 7-day mean for
+            # daily counts, as their day-to-day changes are mostly weekday
+            # swings that would compound into growth when walked.
+            width = max(k, LEVEL_DAYS)
+            y = np.convolve(point, np.ones(width), "valid")[-self.walk_days :]
+            y = y * k / width
             var = walk_variance(np.diff(np.log1p(y)), walk_noise(y))
             sigma.append(np.sqrt(var) if var > 0 else 0.0)
         x = np.stack(nowcast)  # [L, S, rows - k + 1], last is the cut-off
         if ahead:
+            # Each sample walks on from its own level at the cut-off: its
+            # k-day sum there, or for daily counts its mean of the last
+            # `LEVEL_DAYS` days.
+            start = (
+                x[:, :, -1]
+                if k >= LEVEL_DAYS
+                else x[:, :, -LEVEL_DAYS:].mean(axis=2)
+            )
             _, walk = random_walks(
                 keys[len(places) :],
-                jnp.asarray(x[:, :, -1], jnp.float32),
+                jnp.asarray(start, jnp.float32),
                 jnp.asarray(sigma, jnp.float32),
                 ahead,
             )

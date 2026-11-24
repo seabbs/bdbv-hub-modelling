@@ -73,11 +73,11 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
     # Germany is daily only: no weekly model.
     assert config.models == (
         "randomwalknowcast_daily",
-        "fm_chronos_daily_complete",
-        "fm_chronos_daily_ragged",
-        "fm_chronos_daily_ragged_ft",
-        "fm_chronos_daily_complete_2step",
-        "fm_chronos_daily_complete_2step_ft",
+        "foundation_zeroshot_complete",
+        "foundation_zeroshot",
+        "foundation",
+        "foundation_zeroshot_twostep",
+        "foundation_twostep",
     )
     assert config.truth_delay == 40
     assert config.submissions
@@ -87,7 +87,7 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
 
 def test_german_trained_models_run_on_the_held_out_half_only() -> None:
     config = load_germany_config(ROOT / "config" / "germany.toml")
-    german = ("fm_chronos_daily_ragged_real",)
+    german = ("foundation_real",)
     assert config.held_out_models == german
     # They were fine-tuned on the development half, so never score on it.
     assert not set(german) & set(run_models(config, held_out=False))
@@ -348,7 +348,7 @@ def test_a_quantile_model_s_german_scores_do_not_depend_on_the_seed(
     monkeypatch.setattr(foundation, "_chronos", lambda *_: Pipeline())
     runs = [
         germany_forecasts(
-            ["fm_chronos_weekly_ragged"],
+            ["foundation_zeroshot"],
             triangle,
             ["2021-10-04"],
             n_samples=30,
@@ -421,7 +421,7 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
     monkeypatch.setattr(foundation, "_chronos", lambda *_: _Extrapolate())
     # Germany is daily only: every model forecasts every target day.
     drawn = germany_forecasts(
-        ["fm_chronos_daily_ragged"],
+        ["foundation_zeroshot"],
         triangle,
         ["2021-01-06"],
         n_samples=10,
@@ -443,7 +443,7 @@ def test_each_scored_row_is_the_sum_of_its_own_seven_days(
         count[p].loc[e - pd.Timedelta(days=6) : e].sum()
         for p, e in zip(scores["location"], end, strict=True)
     ]
-    assert set(scores["model"]) == {"fm_chronos_daily_ragged"}
+    assert set(scores["model"]) == {"foundation_zeroshot"}
     assert set(scores["horizon"]) == set(HORIZONS)
     assert (
         end

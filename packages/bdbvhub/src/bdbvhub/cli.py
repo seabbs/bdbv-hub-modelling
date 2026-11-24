@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Command line interface: `bdbvhub <command>`.
 
 Commands:
@@ -576,6 +576,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ftc.add_argument("--reference", default="randomwalknowcast")
     ftc.add_argument(
+        "--root",
+        default=".",
+        help="report: the repository root, holding docs/.",
+    )
+    ftc.add_argument(
         "parts", nargs="*", help="report: the models' forecast folders."
     )
 
@@ -607,7 +612,7 @@ def _task_args(p: argparse.ArgumentParser, data_dir: str) -> None:
 
 def _version() -> str:
     try:
-        return version("BDBVHubRenewal")
+        return version("bdbvhub")
     except PackageNotFoundError:  # pragma: no cover
         return "unknown"
 
@@ -1751,11 +1756,10 @@ def _compare_hub(args: argparse.Namespace) -> int:
         stored, _fit_store_forecasts(args), rounds, live
     )
     hub_ids = hc.own_hub_ids()
-    forecasts = hc.with_submissions(
+    forecasts = hc.as_submitted(
         pd.concat(
             [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
         ),
-        hc.load_hub_submissions(cfg.submitted),
         hub_ids,
     )
     table_file = Path(args.submissions_table or cfg.submissions_table)
@@ -1852,19 +1856,15 @@ def _ft_check(args: argparse.Namespace) -> int:
         ftcheck.forecast(args.model, args.data, args.out, args.checkpoint)
         print(f"Forecasts of {args.model} written to {args.out}.")
         return 0
-    tables = ftcheck.skill_tables(args.parts, args.data, args.reference)
-    root = Path(__file__).resolve().parents[4]
-    scripts = [
-        root / "docs" / "javascripts" / f
-        for f in ("toggles.js", "zoom.js", "explorer.js")
-        if (root / "docs" / "javascripts" / f).exists()
-    ]
-    out = ftcheck.write_report(
+    from bdbvhub.reporting import ftcheck_report
+
+    tables = ftcheck_report.skill_tables(args.parts, args.data, args.reference)
+    out = ftcheck_report.write_report(
         tables,
         args.out,
         args.reference,
         args.checkpoint or finetuned_spec(),
-        scripts,
+        args.root,
     )
     print(f"Wrote {out}.")
     return 0

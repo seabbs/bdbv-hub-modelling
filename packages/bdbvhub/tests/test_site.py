@@ -95,17 +95,16 @@ def test_the_site_shows_one_chronos_model() -> None:
     names = [
         "randomwalk",
         "renewal",
-        "fm_chronos_daily_ragged_ft",
-        "fm_chronos_weekly_ragged_ft",
-        "fm_chronos_daily_ragged",
-        "fm_chronos_daily_complete",
+        "foundation",
+        "foundation_zeroshot",
+        "foundation_zeroshot_complete",
         # A Chronos model added later is hidden too.
-        "fm_chronos_daily_ragged_de",
+        "foundation_de",
     ]
     assert site_models(names) == [
         "randomwalk",
         "renewal",
-        "fm_chronos_daily_ragged_ft",
+        "foundation",
     ]
 
 
@@ -122,7 +121,7 @@ def test_a_site_config_sets_the_shown_models(tmp_path: Path) -> None:
 
 
 def test_the_pages_list_only_shown_models() -> None:
-    assert "fm_chronos_daily_ragged" not in report._page_models()
+    assert "foundation_zeroshot" not in report._page_models()
     assert "randomwalknowcast" in report._page_models()
 
 
@@ -131,19 +130,19 @@ def test_hidden_models_leave_the_germany_page(tmp_path: Path) -> None:
 
     pd.DataFrame(
         {
-            "model": ["fm_chronos_daily_ragged", "fm_chronos_daily_ragged_ft"],
+            "model": ["foundation_zeroshot", "foundation"],
             "origin": ["2021-12-01", "2021-12-01"],
         }
     ).to_csv(tmp_path / "scores.csv.gz", index=False)
     got = germany._read(tmp_path, ("scores.csv.gz",), site_models)
     assert got is not None
-    assert list(got["model"]) == ["fm_chronos_daily_ragged_ft"]
+    assert list(got["model"]) == ["foundation"]
 
 
 def test_hidden_models_leave_the_comparison_rows() -> None:
     rows = pd.DataFrame(
         {
-            "model": ["fm_chronos_weekly_ragged", "renewal", "teamA-weekly"],
+            "model": ["foundation_zeroshot", "renewal", "teamA-weekly"],
             "source": ["real", "real", "hub"],
         }
     )
@@ -170,18 +169,18 @@ def test_hidden_models_leave_the_store_note(tmp_path: Path) -> None:
         }
 
     (tmp_path / "fit-store.json").write_text(
-        json.dumps([row("fm_chronos_weekly_ragged"), row("renewal")])
+        json.dumps([row("foundation_zeroshot"), row("renewal")])
     )
     write_store_note(tmp_path, tmp_path / "gen")
     text = (tmp_path / "gen" / "fit-store.md").read_text()
     assert "`renewal`" in text
-    assert "fm_chronos_weekly_ragged" not in text
+    assert "foundation_zeroshot" not in text
 
 
 def test_hidden_models_leave_the_backtest_explorer() -> None:
     forecasts = pd.DataFrame(
         {
-            "model": ["fm_chronos_daily_complete", "randomwalknowcast"] * 2,
+            "model": ["foundation_zeroshot_complete", "randomwalknowcast"] * 2,
             "kind": ["real", "real", "simulated", "simulated"],
         }
     )

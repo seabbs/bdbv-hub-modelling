@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+title: "nowcastbaselines: baseline nowcasts and forecasts: random walks on the log scale, a JAX port of baselinenowcast, introductions, and a copula pairing places"
+message: "If you use nowcastbaselines, please cite it as below."
+type: software
+authors:
+  - family-names: Abbott
+    given-names: Sam
+    email: sam.abbott@lshtm.ac.uk
+    affiliation: London School of Hygiene & Tropical Medicine
+    orcid: https://orcid.org/0000-0001-8057-8037
+abstract: >-
+  Baseline nowcasts and forecasts: random walks on the log scale, a JAX port of baselinenowcast, introductions, and a copula pairing places. Part of bdbv-hub-modelling, a workspace of separate packages.
+license: MIT
+repository-code: "https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastbaselines"
+url: "https://samabbott.co.uk/bdbv-hub-modelling/"

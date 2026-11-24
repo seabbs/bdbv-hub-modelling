@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Command line interface: `nowcastgermany <command>`.
 
 The German hospitalisation nowcasting benchmark (config/germany.toml):
@@ -71,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Nowcast and score the German hospitalisation benchmark.",
     )
     gbt.add_argument("--config", default="config/germany.toml")
-    gbt.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gbt.add_argument("--data", default=data_dir)
     gbt.add_argument(
         "--models",
         nargs="*",
@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Score the German hospitalisation hub teams' nowcasts.",
     )
     gtm.add_argument("--config", default="config/germany.toml")
-    gtm.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gtm.add_argument("--data", default=data_dir)
     gtm.add_argument("--out", default="results/germany")
     gtm.add_argument(
         "--held-out",
@@ -124,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write the German 7-day sums as each development date saw them.",
     )
     gas.add_argument("--config", default="config/germany.toml")
-    gas.add_argument("--data", default=f"{data_dir}/raw/germany")
+    gas.add_argument("--data", default=data_dir)
     gas.add_argument("--out", default="results/germany")
 
     gpp = sub.add_parser(

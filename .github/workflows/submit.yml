@@ -590,7 +590,7 @@ jobs:
           retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   # chronos: fine-tuned Chronos-2 (`chronos_model`, the
-  # [models.fm_chronos_*_ragged_ft] table of config/hub.toml) under its
+  # [models.foundation] table of config/hub.toml) under its
   # own hub id, run here with no fit and no fallback. Off until that
   # table sets `submit = true`.
   chronos:
@@ -639,7 +639,7 @@ jobs:
       - name: Cache the fine-tuned checkpoints
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/bdbvhubrenewal
+          path: ~/.cache/bdbv-hub-modelling
           key: chronos-ft-${{ steps.finetuned.outputs.hash }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

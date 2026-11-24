@@ -69,7 +69,7 @@ def fake_chronos(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_a_quantile_model_s_quantiles_do_not_depend_on_the_seed(
     task: ForecastTask,
 ) -> None:
-    model = get_model("fm_chronos_weekly_ragged")
+    model = get_model("foundation_zeroshot")
     one = forecast_quantiles(model, task, LEVELS, seed=1)
     two = forecast_quantiles(model, task, LEVELS, seed=2)
     pd.testing.assert_frame_equal(one, two)
@@ -81,7 +81,7 @@ def test_a_quantile_model_s_quantiles_do_not_depend_on_the_seed(
 def test_native_quantiles_are_interpolated_to_the_levels(
     task: ForecastTask,
 ) -> None:
-    model = get_model("fm_chronos_weekly_ragged")
+    model = get_model("foundation_zeroshot")
     out = forecast_quantiles(model, task, LEVELS, seed=1)
     # Steps after the reported counts: no floor lifts them, so each is
     # the native quantile read at the level (0.025 between 0.01 and 0.05).
@@ -97,8 +97,8 @@ def test_native_quantiles_are_interpolated_to_the_levels(
 def test_sums_use_the_same_draws_for_every_model(
     task: ForecastTask,
 ) -> None:
-    model = get_model("fm_chronos_daily_ragged")
-    other = dataclasses.replace(model, name="fm_chronos_other")
+    model = get_model("foundation_zeroshot")
+    other = dataclasses.replace(model, name="foundation_other")
     one = forecast_quantiles(model, task, LEVELS, n_draws=200, seed=4)
     two = forecast_quantiles(other, task, LEVELS, n_draws=200, seed=4)
     np.testing.assert_array_equal(one["value"], two["value"])
@@ -111,7 +111,7 @@ def test_daily_sums_are_native_quantiles_whatever_the_seed(
 ) -> None:
     # The daily 7-day sums are read from the rolling rows' own quantiles,
     # so no draws are made and the seed changes nothing.
-    model = get_model("fm_chronos_daily_ragged")
+    model = get_model("foundation_zeroshot")
     one = forecast_quantiles(model, task, LEVELS, n_draws=200, seed=4)
     other = forecast_quantiles(model, task, LEVELS, n_draws=200, seed=5)
     pd.testing.assert_frame_equal(one, other)
@@ -142,6 +142,8 @@ def test_a_sample_model_gives_the_quantiles_of_its_draws(
 @needs_torch
 @pytest.mark.usefixtures("fake_chronos")
 def test_an_unavailable_quantile_model_has_no_rows(task: ForecastTask) -> None:
-    no_history = dataclasses.replace(task, target_history=None)
-    model = get_model("fm_chronos_weekly_ragged")
+    no_history = dataclasses.replace(
+        task, target_history=None, daily_history=None
+    )
+    model = get_model("foundation_zeroshot")
     assert forecast_quantiles(model, no_history, LEVELS).empty

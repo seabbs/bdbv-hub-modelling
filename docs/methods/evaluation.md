@@ -44,7 +44,7 @@ Positive bias is overprediction.
 Relative CRPS is a ratio of means against a baseline $b$ over the forecasts both made, and below 1 beats it.
 Relative CRPS on the log scale is the same ratio of mean CRPS on the log scale.
 The baseline is `randomwalknowcast`, set by `[scores] baseline` in `config/site.toml`.
-Of the Chronos-2 models the site shows only `fm_chronos_daily_ragged_ft` (`[models]` in `config/site.toml`); the others are still fitted, scored and in the paper.
+Of the Chronos-2 models the site shows only `foundation` (`[models]` in `config/site.toml`); the others are still fitted, scored and in the paper.
 The interactive summaries and the checks chart have a Relative to picker that makes any model the baseline, and the overall score tables a baseline filter.
 In the summaries a new baseline changes which forecasts are matched, so $n$ and the means change too.
 A model with every one of the baseline's forecasts has the baseline's $n$, so those rows are read side by side.

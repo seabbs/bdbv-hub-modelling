@@ -38,18 +38,18 @@ def test_each_label_runs_the_german_config_s_models(tmp_path):
     config.write_text(
         "[nowcast]\n"
         'models = ["randomwalk", "randomwalknowcast",'
-        ' "fm_chronos_daily_complete", "fm_chronos_daily_ragged",'
-        ' "fm_chronos_daily_ragged_ft"]\n'
+        ' "foundation_zeroshot_complete", "foundation_zeroshot",'
+        ' "foundation"]\n'
     )
     assert ck.label_models("reference", config) == (
         "randomwalknowcast_daily",
-        "fm_chronos_daily_complete",
-        "fm_chronos_daily_ragged",
+        "foundation_zeroshot_complete",
+        "foundation_zeroshot",
     )
-    assert ck.label_models("abc123", config) == ("fm_chronos_daily_ragged_ft",)
+    assert ck.label_models("abc123", config) == ("foundation",)
     # A checkpoint trained on complete counts runs the complete `_ft` model.
     assert ck.label_models("abc123", config, "complete") == (
-        "fm_chronos_daily_complete_ft",
+        "foundation_complete",
     )
 
 
@@ -119,7 +119,7 @@ def _scores(models, checkpoints, levels, base=1.0):
 
 def test_relative_divides_by_the_baseline_by_level():
     rows = _scores(
-        ["randomwalknowcast_daily", "fm_chronos_daily_ragged"],
+        ["randomwalknowcast_daily", "foundation_zeroshot"],
         ["zero-shot", "abc"],
         ["national", "zones"],
     )
@@ -138,7 +138,7 @@ def test_coverage_is_50_and_90_but_95_for_the_german_hub_levels():
     assert ck.COVERAGE == (50, 90)
     assert ck.GERMANY_COVERAGE == (50, 95)
     rows = _scores(
-        ["randomwalknowcast_daily", "fm_chronos_daily_ragged"],
+        ["randomwalknowcast_daily", "foundation_zeroshot"],
         ["zero-shot", "abc"],
         ["national"],
     )
@@ -277,7 +277,7 @@ def test_cached_draws_keep_the_7day_target(tmp_path):
 
 def test_relative_rows_mean_the_wis_components():
     rows = _scores(
-        ["randomwalknowcast_daily", "fm_chronos_daily_ragged"],
+        ["randomwalknowcast_daily", "foundation_zeroshot"],
         ["zero-shot", "abc"],
         ["national"],
     ).assign(wis=3.0, dispersion=1.0, overprediction=0.5, underprediction=1.5)
@@ -566,10 +566,10 @@ def test_daily_rows_are_relative_to_the_config_s_daily_reference(
     from nowcastgermany.evaluation import load_germany_config
 
     config = load_germany_config("config/germany.toml")
-    assert config.daily_baseline == "fm_chronos_daily_ragged"
+    assert config.daily_baseline == "foundation_zeroshot"
     ref, n100 = tmp_path / "reference", tmp_path / "n100"
-    _daily_unit(ref, "fm_chronos_daily_ragged", 10.0)
-    _daily_unit(n100, "fm_chronos_daily_ragged_ft", 40.0)
+    _daily_unit(ref, "foundation_zeroshot", 10.0)
+    _daily_unit(n100, "foundation", 40.0)
     rows = ck.germany_rows(
         {ck.REFERENCE: ref, "n100": n100},
         target="daily",
@@ -599,7 +599,7 @@ def test_a_run_s_daily_table_holds_both_views_by_checkpoint(
         seen.append((target, baseline, sorted(folders)))
         return pd.DataFrame(
             [{"checkpoint": c, "level": "national", "target": target,
-              "model": "fm_chronos_daily_ragged",
+              "model": "foundation_zeroshot",
               "rel_wis": {"zero-shot": 1.0, "n100": 0.8, "n200": 0.6}[c]}
              for c in ("zero-shot", "n100", "n200")]
         ).reindex(columns=ck.COLUMNS)  # fmt: skip
@@ -608,7 +608,7 @@ def test_a_run_s_daily_table_holds_both_views_by_checkpoint(
     got = ck.daily_table(train, scores, tmp_path / "r", "runa")
     assert {(t, b) for t, b, _ in seen} == {
         ("7day", "randomwalknowcast_daily"),
-        ("daily", "fm_chronos_daily_ragged"),
+        ("daily", "foundation_zeroshot"),
     }
     assert list(got.columns) == ["set", "run", "outbreaks", "score"]
     assert sorted(got["set"].unique()) == [
@@ -730,3 +730,20 @@ def test_a_german_unit_forecasts_only_the_hub_window(
     config = de.load_germany_config("config/germany.toml")
     done = [d for dates, *_ in seen for d in dates]
     assert done == de.nowcast_dates(config)
+
+
+def test_units_sharing_a_cache_write_through_their_own_temporary_files(
+    tmp_path,
+):
+    # Two units in one cache both write the shared truth file; a fixed
+    # temporary name let one rename away the other's (FileNotFoundError).
+    # Another writer's temporary file in the way does not stop this one.
+    import pandas as pd
+
+    from nowcastgermany.checkpoint import _write
+
+    path = tmp_path / "truth.csv.gz"
+    (tmp_path / "truth.csv.gz.tmp").mkdir()
+    _write(pd.DataFrame({"a": [1]}), path)
+    assert pd.read_csv(path)["a"].tolist() == [1]
+    assert [p.name for p in tmp_path.iterdir() if p.is_file()] == [path.name]

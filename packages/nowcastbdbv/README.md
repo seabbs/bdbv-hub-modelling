@@ -23,3 +23,16 @@ More of the BDBV study moves here from `bdbvhub` (BVD inputs, reports), so that 
 ```sh
 uv add nowcastbdbv
 ```
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../../CITATION.cff).
+
+```bibtex
+@software{abbott_nowcastbdbv,
+  author = {Abbott, Sam},
+  title = {{nowcastbdbv: the BDBV outbreak as a case study: the hub's data streams, health zones and onset-to-report delays}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastbdbv}
+}
+```

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""A simulated outbreak's latent side, assembled from the components.
 
 `simulate_latent` builds the outbreak's PyRenew components from a

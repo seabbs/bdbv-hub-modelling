@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """The BDBV backtest's tasks, from the hub's releases.
 
 `make_tasks` builds a forecast task per release from the hub data, with
@@ -166,6 +166,7 @@ def make_tasks(
                 target_end_dates=forecast_weeks(ref, config),
                 n_samples=config.n_samples,
                 seed=config.seed,
+                max_delay=config.max_delay,
                 report_by={
                     d: release_cutoff(source.loc[mine], d).isoformat()
                     for d in sorted(report_by)

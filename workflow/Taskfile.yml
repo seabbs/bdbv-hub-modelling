@@ -15,7 +15,7 @@ tasks:
   # `task workflow:score -- -n` for a dry run or a file to build one output.
   # Every target runs with workflow/profiles/default and this machine's
   # cores and resources less its headroom (flowlib.machine), or with the
-  # untracked profile SNAKEMAKE_PROFILE names (see config/profile.example).
+  # profile SNAKEMAKE_PROFILE names, kept outside the repository.
   wf:
     dir: ..
     internal: true

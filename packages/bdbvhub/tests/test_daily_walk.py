@@ -15,7 +15,9 @@ NOWCAST = "2021-11-22"
 HORIZONS = tuple(range(-28, 29))
 
 
-def _triangle(days: int = 200, delay: int = 40) -> pd.DataFrame:
+def _triangle(
+    days: int = 200, delay: int = 40, weekday: float = 0.0
+) -> pd.DataFrame:
     # Two states and Germany their sum, each day's count reported over
     # `delay` days with a geometric delay, as cumulative report rows.
     rng = np.random.default_rng(1)
@@ -27,7 +29,10 @@ def _triangle(days: int = 200, delay: int = 40) -> pd.DataFrame:
     for state, level in (("DE-BB", 40.0), ("DE-BE", 90.0)):
         for i in range(days):
             day = last - dt.timedelta(days=days - 1 - i)
-            final = rng.poisson(level * (1 + 0.2 * np.sin(i / 9)))
+            # `weekday`: weekends report that share fewer cases, as
+            # German hospitalisations by report date do.
+            dip = 1 - weekday * (day.weekday() >= 5)
+            final = rng.poisson(level * dip * (1 + 0.2 * np.sin(i / 9)))
             seen = np.cumsum(rng.multinomial(final, share))
             for d in range(delay + 1):
                 report = day + dt.timedelta(days=d)
@@ -151,3 +156,21 @@ def test_a_short_history_still_gives_every_target_day():
     model = get_model("randomwalknowcast_daily")
     out = model.forecast(short[0])
     assert set(out["target_end_date"]) == set(short[0].target_end_dates)
+
+
+@pytest.mark.slow
+def test_the_daily_forecast_median_stays_flat_with_weekday_effects(model):
+    # Daily counts swing by weekday, but the walk is on their level: the
+    # national median of forecast days neither grows nor shrinks, as a
+    # random walk's should.
+    tasks = nowcast_tasks(
+        _triangle(weekday=0.7), NOWCAST, 200, 7, horizons=HORIZONS
+    )
+    q = model.daily_quantiles(tasks[0], (0.5,))
+    from nowcastutils.base import NATIONAL
+
+    # The model's national row is the sum of the states.
+    nat = q.loc[q["location"] == NATIONAL].set_index("date")["value"]
+    cutoff = dt.date.fromisoformat(NOWCAST)
+    ahead = [nat[(cutoff + dt.timedelta(days=d)).isoformat()] for d in (1, 28)]
+    assert 0.7 < ahead[1] / ahead[0] < 1.4

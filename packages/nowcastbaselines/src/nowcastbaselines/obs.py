@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Observation model: new reports on the count still to come.
 
 For a week with count $Y$ reported so far and a nowcast mean $\mu$, the

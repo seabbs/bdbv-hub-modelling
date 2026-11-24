@@ -22,7 +22,7 @@ from . import runs as spec
 from .page import Context
 from .sources import Sources
 
-RUN_MODEL = "fm_chronos_daily_ragged_ft"
+RUN_MODEL = "foundation"
 """The model a run's checkpoints are, for their display name and colour."""
 
 

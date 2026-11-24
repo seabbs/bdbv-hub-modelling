@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Write hub submissions and model metadata.
 
 A submission is a CSV with columns `reference_date`, `forecast_date`,

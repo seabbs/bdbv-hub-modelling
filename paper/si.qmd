@@ -303,7 +303,7 @@ Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quanti
 - A user can set a fixed count instead.
 :::
 
-To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`fm_chronos_daily_ragged_real`).
+To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`foundation_real`).
 It was trained on the German data and the BDBV data together.
 The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later.
 German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03.
@@ -656,7 +656,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 ::: {#tbl-real-finetune}
 {{< include build/tables/si/real-finetune.md >}}
 
-Chronos-2 zero-shot (`_ragged`), fine-tuned on simulations (`_ft`) and fine-tuned on real data (`_real`), by level: WIS on the German held-out half and on held-out Ebola rounds after the real-data model's last training release, relative to `randomwalknowcast`. Blank cells have no scores yet.
+Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundation`) and fine-tuned on real data (`foundation_real`), by level: WIS on the German held-out half and on held-out Ebola rounds after the real-data model's last training release, relative to `randomwalknowcast`. Blank cells have no scores yet.
 :::
 
 ### Daily nowcasts

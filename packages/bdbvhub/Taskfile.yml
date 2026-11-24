@@ -37,7 +37,7 @@ tasks:
     cmds:
       - uv run bdbvhub metadata --model randomwalk --out hub/model-metadata
       - uv run bdbvhub metadata --model randomwalknowcast --out hub/model-metadata
-      - uv run bdbvhub metadata --model fm_chronos_daily_ragged_ft --out hub/model-metadata
+      - uv run bdbvhub metadata --model foundation --out hub/model-metadata
 
 
   validate:

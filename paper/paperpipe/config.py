@@ -276,7 +276,9 @@ def check_no_heldout(forecasts: pd.DataFrame, settings: RunSettings) -> None:
         raise ValueError(f"Synthetic rows from held-out seeds: {bad}.")
 
 
-_FINETUNED = re.compile(r"_ft(_|$)")
+_FINETUNED = re.compile(r"^foundation(?:_complete|_twostep)?(?:_n\d+)?$")
+"""The models fine-tuned on simulations (`nowcasteval.labels.FINETUNED`),
+also at a checkpoint size (`_n<outbreaks>`)."""
 
 
 def keep_finetuned(

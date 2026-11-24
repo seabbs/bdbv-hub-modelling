@@ -4,7 +4,6 @@ import gzip
 import json
 import subprocess
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -26,25 +25,6 @@ def test_hub_samples_keep_latest_forecast_date(hub):
     s = ebola.hub_samples(hub)
     assert len(s) == 200
     assert s["value"].max() == 200
-
-
-def test_load_adds_candidates(hub, tmp_path):
-    cand = tmp_path / "candidates.csv.gz"
-    pd.DataFrame(
-        {
-            "model": "renewal",
-            "kind": "real",
-            "vintage": "2026-10-25",
-            "reference_date": "2026-10-31",
-            "location": "CD",
-            "target_end_date": "2026-11-07",
-            "sample": np.arange(1, 101),
-            "value": 50.0,
-            "as_of": None,
-        }
-    ).to_csv(cand, index=False)
-    table = ebola.load(hub, candidates=[cand])
-    assert set(table["model"]) == {"team-a", "renewal"}
 
 
 def _git(repo, *args):
@@ -102,7 +82,7 @@ def store(tmp_path):
     _fit(repo, "renewal", "2026-10-25", "b", "2026-11-05T10:00:00+00:00", 9)
     # A fit made after its round closed is never prospective.
     _fit(
-        repo, "fm_chronos_x", "2026-10-25", "c", "2026-11-12T10:00:00+00:00", 1
+        repo, "foundation_x", "2026-10-25", "c", "2026-11-12T10:00:00+00:00", 1
     )
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "refit")

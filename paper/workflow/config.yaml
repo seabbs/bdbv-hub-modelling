@@ -107,7 +107,6 @@ ebola:
   n_samples: 1000
   hub: data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
-  candidates: [data/candidate-forecasts.csv.gz]
   # Our stored forecasts made before each round closed: the fit store's
   # history, published as a release asset (rule publish_fit_store_history)
   # and fetched with its checksum (rule fit_store_history).
@@ -138,9 +137,9 @@ nowcasts:
     # ragged layout, and the fine-tuned ragged model, all daily. Every other model is in the SI only.
     synthetic: &main_models
       - randomwalknowcast
-      - fm_chronos_daily_complete
-      - fm_chronos_daily_ragged
-      - fm_chronos_daily_ragged_ft
+      - foundation_zeroshot_complete
+      - foundation_zeroshot
+      - foundation
     germany: *main_models
     ebola: *main_models
 

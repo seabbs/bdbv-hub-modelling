@@ -103,7 +103,13 @@ def _prepared(case: Case) -> tuple[jax.Array, jax.Array]:
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.slow
-def test_sample_nowcasts_match_r_in_distribution(case: Case, mode: str) -> None:
+def test_sample_nowcasts_match_r_in_distribution(
+    small: Case, mode: str
+) -> None:
+    # The small cases only: the hub case's R sampler runs past half an
+    # hour a mode, and its paths are checked exactly by the retrospective
+    # nowcasts, sizes and point nowcast (test_uncertainty, test_nowcast).
+    case = small
     n_r = case.draws
     r = read(case.name, f"samples_{mode}")
     kwargs: dict[str, object] = {}

@@ -1,4 +1,4 @@
-# Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
+# Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""Reproduction number paths for simulated outbreaks, by place and stratum.
 
 - `RtPath`: a deterministic log R path of one of `KINDS`.

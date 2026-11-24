@@ -11,9 +11,9 @@ from paperpipe.outputs import real_finetune_table, score_tables
 SPLIT = pd.Timestamp("2022-02-10")
 MODELS = {
     "randomwalknowcast": 2.0,
-    "fm_chronos_daily_ragged": 3.0,
-    "fm_chronos_daily_ragged_ft": 1.5,
-    "fm_chronos_daily_ragged_real": 1.0,
+    "foundation_zeroshot": 3.0,
+    "foundation": 1.5,
+    "foundation_real": 1.0,
 }
 
 
@@ -49,10 +49,8 @@ def _scores() -> pd.DataFrame:
 
 
 def test_real_data_models_are_dropped_from_the_other_outputs() -> None:
-    df = pd.DataFrame(
-        {"model": ["fm_chronos_daily_ragged_real", "fm_chronos_daily_ragged"]}
-    )
-    assert drop_real_data(df)["model"].tolist() == ["fm_chronos_daily_ragged"]
+    df = pd.DataFrame({"model": ["foundation_real", "foundation_zeroshot"]})
+    assert drop_real_data(df)["model"].tolist() == ["foundation_zeroshot"]
 
 
 def test_the_comparison_is_on_the_held_out_half_by_level() -> None:
@@ -60,8 +58,7 @@ def test_the_comparison_is_on_the_held_out_half_by_level() -> None:
     assert set(table["level"]) == {"all", "national", "states", "age groups"}
     assert set(table["model"]) == set(MODELS)
     de = table.loc[
-        (table["model"] == "fm_chronos_daily_ragged_real")
-        & (table["level"] == "all")
+        (table["model"] == "foundation_real") & (table["level"] == "all")
     ]
     # Held-out scores only: 1.0 against randomwalknowcast's 2.0.
     assert de["rel_score"].item() == 0.5
@@ -86,7 +83,7 @@ def test_german_score_tables_add_the_comparison_and_leave_it_out_elsewhere(
     for path in written:
         if path != table:
             models = set(pd.read_csv(path)["model"])
-            assert "fm_chronos_daily_ragged_real" not in models
+            assert "foundation_real" not in models
 
 
 def _ebola_scores() -> pd.DataFrame:
@@ -118,8 +115,7 @@ def test_bdbv_scores_only_rounds_after_the_last_release_trained_on() -> None:
     table = real_finetune_table(_ebola_scores(), None, after="2026-11-08")
     assert set(table["level"]) == {"all", "national", "provinces", "zones"}
     real = table.loc[
-        (table["model"] == "fm_chronos_daily_ragged_real")
-        & (table["level"] == "all")
+        (table["model"] == "foundation_real") & (table["level"] == "all")
     ]
     assert real["rel_score"].item() == 0.5
     assert real["n"].item() == 3
@@ -191,8 +187,8 @@ def test_one_real_data_table_has_germany_and_bdbv_as_columns() -> None:
     def rows(study: str, levels: list[str], value: float) -> pd.DataFrame:
         out = []
         for model in (
-            "fm_chronos_daily_ragged_ft",
-            "fm_chronos_daily_ragged_real",
+            "foundation",
+            "foundation_real",
         ):
             for level in ["all", *levels]:
                 out.append(
