@@ -326,8 +326,8 @@ jobs:
             "${gated[@]/#/--ignore=}"
       - name: Backtest and nowcast smoke test
         timeout-minutes: 15
-        # The backtest never fits the fitted models (their forecasts come
-        # from the fit store), so this runs random walk only.
+        # The stored models' origin forecasts, the walks' included, come
+        # from the fit store, so this runs random walk's release backtest.
         run: |
           uv run bdbvhub backtest --models randomwalk \
             --data "$BDBV_DATA_DIR" \

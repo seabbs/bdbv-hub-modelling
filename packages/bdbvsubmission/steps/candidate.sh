@@ -21,9 +21,10 @@ CAND_LABEL=${CAND_LABEL:-$CAND_ID}
 # one.
 model=${CAND_MODEL:-$MODEL}
 [ "$CAND_KIND" = randomwalk ] && model=${CAND_MODEL:-randomwalk}
-# A random walk or a `direct` model runs here, with no fit.
+# A `direct` model runs here, with no fit. A random walk fits nothing,
+# but its forecast is stored like a fit (`fit-store unpack`).
 unfitted=false
-case "$CAND_KIND" in randomwalk | direct) unfitted=true ;; esac
+[ "$CAND_KIND" = direct ] && unfitted=true
 inputs="$WORK/inputs"
 [ -f "$inputs/context.json" ] || { echo "::error::run prepare.sh first"; exit 1; }
 ctx() { python3 -c "import json,sys; print(json.load(open('$inputs/context.json'))['$1'])"; }

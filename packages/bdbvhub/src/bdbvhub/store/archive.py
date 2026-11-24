@@ -23,19 +23,15 @@ from typing import Any, Final
 import pandas as pd
 
 from bdbvhub.store import store
+from bdbvhub.submission.fitting import stored_forecast
 from bdbvhub.submission.hub import HUB_COLUMNS, own_national
 from nowcastbdbv.backtest import vintage_task
 from nowcastbdbv.data.zones import ZoneData
 from nowcasteval.backtest import BacktestConfig
 from nowcastrenewal.zones import ZONES_FILE
 from nowcastutils.base import (
-    NATIONAL,
-    SAMPLE_COLUMNS,
     ForecastTask,
-    check_samples,
 )
-from nowcastutils.dates import as_date
-from nowcastutils.forecast import Forecast
 
 __all__ = [
     "COLUMNS",
@@ -166,37 +162,6 @@ def _unpack(files: Mapping[str, str], fit_dir: Path) -> None:
         (fit_dir / name).write_bytes(base64.b64decode(body))
 
 
-def _stored_forecast(
-    rows: pd.DataFrame, task: ForecastTask, own: bool = False
-) -> Forecast:
-    """Return a stored fit's forecast for the round's weeks.
-
-    The nowcasts of earlier report dates (`as_of`) are dropped. Stored
-    national rows are the model's own. A model that submits its own
-    national draws (`own`, see `submission.hub.own_national`) keeps them
-    as samples. For any other model, what they hold beyond the sum of the
-    provinces is the national part no province holds
-    (`Forecast.unassigned`), as a fit directory gives it.
-    """
-    if "as_of" in rows:
-        rows = rows.loc[rows["as_of"].isna()]
-    weeks = set(task.target_end_dates)
-    iso = rows["target_end_date"].map(lambda d: as_date(d).isoformat())
-    rows = rows.assign(target_end_date=iso)
-    rows = rows.loc[rows["target_end_date"].isin(weeks), list(SAMPLE_COLUMNS)]
-    national = rows["location"] == NATIONAL
-    samples = rows.loc[~national].reset_index(drop=True)
-    check_samples(samples, task)
-    if own:
-        return Forecast(rows.reset_index(drop=True))
-    keys = ["target_end_date", "sample"]
-    total = rows.loc[national].set_index(keys)["value"]
-    summed = samples.groupby(keys)["value"].sum()
-    extra = (total - summed.reindex(total.index)).clip(lower=0)
-    unassigned = extra.rename("value").reset_index()
-    return Forecast(samples, None if unassigned.empty else unassigned)
-
-
 def _stored(
     root: Path,
     model: str,
@@ -222,7 +187,7 @@ def _stored(
             _unpack(fit.files, Path(fit_dir))
             table = hub(model, config=config, fit_dir=Path(fit_dir))
     else:
-        forecast = _stored_forecast(fit.forecasts, task, own_national(model))
+        forecast = stored_forecast(fit.forecasts, task, own_national(model))
         if ZONES_FILE in (fit.files or {}):
             # A zone fit's own zones, as it submits them.
             with tempfile.TemporaryDirectory() as fit_dir:

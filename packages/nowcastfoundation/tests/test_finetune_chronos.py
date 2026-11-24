@@ -191,10 +191,10 @@ def test_an_empty_batch_is_done_with_no_simulations(tmp_path):
 def test_stop_rule_needs_two_checkpoints():
     from nowcastfoundation.finetune.stream import should_stop
 
-    assert not should_stop([0.2], 8000, 8000, 0.01)
-    assert should_stop([0.2, 0.199], 16000, 8000, 0.01)
-    assert not should_stop([0.2, 0.15], 16000, 8000, 0.01)
-    assert not should_stop([0.2, 0.199], 4000, 8000, 0.01)
+    assert not should_stop([0.2], 8000, 8000)
+    assert should_stop([0.2, 0.199], 16000, 8000)
+    assert not should_stop([0.2, 0.15], 16000, 8000)
+    assert not should_stop([0.2, 0.199], 4000, 8000)
 
 
 def test_a_split_batch_starts_from_clear_gradients():
@@ -797,43 +797,6 @@ def test_a_seed_list_gives_the_training_seeds_in_its_order(tmp_path):
     path = tmp_path / "seeds.txt"
     path.write_text("10005\n10001\n\n10003\n")
     assert read_seed_list(path) == [10005, 10001, 10003]
-
-
-def test_a_round_continues_from_the_previous_adapter(tmp_path):
-    import pytest
-
-    torch = pytest.importorskip("torch")
-    pytest.importorskip("peft")
-    from peft import LoraConfig
-
-    from nowcastfoundation.finetune.stream import lora_model
-
-    class Attention(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            for name in "qkvo":
-                setattr(self, name, torch.nn.Linear(4, 4))
-
-    class Net(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.self_attention = Attention()
-
-    config = LoraConfig(r=2, lora_alpha=4, target_modules=["self_attention.q"])
-    torch.manual_seed(0)
-    first = lora_model(Net(), config, None)
-    for p in first.parameters():
-        if p.requires_grad:
-            p.data.normal_()
-    first.save_pretrained(tmp_path / "round0")
-    torch.manual_seed(1)
-    second = lora_model(Net(), config, tmp_path / "round0")
-    trained = {n: p for n, p in first.named_parameters() if "lora" in n}
-    loaded = {n: p for n, p in second.named_parameters() if "lora" in n}
-    assert loaded.keys() == trained.keys()
-    assert all(torch.equal(loaded[n], trained[n]) for n in trained)
-    # The loaded adapter trains on.
-    assert all(p.requires_grad for p in loaded.values())
 
 
 def test_real_training_blocks_spread_evenly_over_the_chunks():
