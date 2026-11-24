@@ -181,6 +181,9 @@ jobs:
   release:
     name: Release closed rounds
     needs: detect
+    # Main only: GitHub refuses the hub-submission environment to any
+    # other branch, and the release needs its bot token to tag.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The bot's token tags the round's commit. The workflow token cannot:
@@ -426,8 +429,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # The environment holds the bot's token. It has no required
-    # reviewers: the gate is the approval. Restrict it to `main`.
-    environment: hub-submission
+    # reviewers: the gate is the approval. It is restricted to `main`, so
+    # other branches take no environment and their dry runs use the
+    # workflow token.
+    environment: ${{ github.ref == 'refs/heads/main' && 'hub-submission' || '' }}
     outputs:
       action: ${{ steps.pr.outputs.action }}
       pr_url: ${{ steps.pr.outputs.pr_url }}
@@ -498,7 +503,9 @@ jobs:
       needs.prepare.outputs.baseline == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: hub-submission
+    # The bot's token on main only: GitHub refuses the environment to
+    # other branches, whose dry runs use the workflow token.
+    environment: ${{ github.ref == 'refs/heads/main' && 'hub-submission' || '' }}
     outputs:
       action: ${{ steps.track.outputs.action }}
       pr_url: ${{ steps.track.outputs.pr_url }}
@@ -590,7 +597,9 @@ jobs:
       needs.prepare.outputs.chronos == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    environment: hub-submission
+    # The bot's token on main only: GitHub refuses the environment to
+    # other branches, whose dry runs use the workflow token.
+    environment: ${{ github.ref == 'refs/heads/main' && 'hub-submission' || '' }}
     outputs:
       action: ${{ steps.track.outputs.action }}
       pr_url: ${{ steps.track.outputs.pr_url }}
