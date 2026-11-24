@@ -33,11 +33,8 @@ from typing import Any
 
 import pandas as pd
 
-# The page style and colour scheme of the hub rounds report, beside it
-# (`python` puts the script's folder first on the path).
-from hub_rounds_report import SCHEME, THEME
-
 from bdbvhub import compare as hc
+from bdbvhub.reporting.page import standalone, write_page
 from bdbvhub.store.store import read_fit
 from nowcastbdbv.data.tidy import load_target
 from nowcasteval.explorer import (
@@ -235,10 +232,6 @@ def build(
                 data_label="no data (Rt is not observed)",
             ),
         )
-    js = "\n".join(
-        (ROOT / "docs" / "javascripts" / f).read_text() for f in SCRIPTS
-    )
-    css = (ROOT / "docs" / "stylesheets" / "extra.css").read_text()
     note = (
         f"<p class=mut>Not shown, with no good stored fit at {origin}: "
         f"{html.escape(', '.join(missing))}.</p>"
@@ -271,18 +264,9 @@ def build(
         "<h2>Convergence</h2>",
         convergence(store, origin),
     ]
-    doc = (
-        "<!doctype html><html lang=en><meta charset=utf-8>"
-        "<meta name=viewport content='width=device-width,initial-scale=1'>"
-        f"<title>This round</title><style>{THEME}{css}</style>"
-        f"<body data-md-color-scheme=default><script>{SCHEME}</script>"
-        + "\n".join(parts)
-        + f"<script>{js}</script></body></html>"
+    return write_page(
+        out, standalone("This round", parts, ROOT / "docs", SCRIPTS)
     )
-    tmp = out.with_name(out.name + ".tmp")
-    tmp.write_text(doc)
-    tmp.rename(out)
-    return out
 
 
 def main(argv: Sequence[str]) -> None:

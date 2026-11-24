@@ -141,3 +141,57 @@ def test_weeks_with_nothing_reported_have_no_ratio_to_it():
     got = calibration(q)
     assert got["median_over_reported"].isna().all()
     assert np.isfinite(got["median_over_truth"]).all()
+
+
+def test_the_page_carries_the_explorer_s_styles_and_data(tmp_path):
+    # The explorer needs the docs stylesheet (legend swatches, the shaded
+    # incomplete weeks) and its data in the shape it reads.
+    import json
+    from pathlib import Path
+
+    import pandas as pd
+
+    from bdbvhub.ftcheck import write_report
+    from nowcasteval.explorer import QUANTILE_COLUMNS
+
+    root = Path(__file__).parents[3]
+    ids = {"a": "randomwalknowcast", "b": "fm_chronos_daily_ragged_ft"}
+    q = _quantiles().replace({"model": ids})
+    target = pd.DataFrame(
+        {
+            "kind": "real",
+            "vintage": "2026-11-22",
+            "location": ["CD", "CD-IT"] * 2,
+            "target_end_date": ["2026-11-01"] * 2 + ["2026-11-08"] * 2,
+            "total": [10, 5, 12, 6],
+            "location_name": ["DRC", "Ituri"] * 2,
+        }
+    )
+    skill = {
+        "relative_crps": [1.0, 0.9],
+        "relative_log_crps": [1.0, 0.9],
+        "n": [8, 8],
+        "rounds": [1, 1],
+    }
+    tables = {
+        "overall": pd.DataFrame({"model": list(ids.values()), **skill}),
+        "by_weeks_back": pd.DataFrame(
+            {"model": list(ids.values()), "weeks_back": [0, 0], **skill}
+        ),
+        "quantiles": q,
+        "blocks": pd.DataFrame(),
+        "target": target,
+    }
+    out = write_report(
+        tables, tmp_path / "p.html", "a", "slots-abcdef", root / "docs"
+    )
+    page = out.read_text()
+    css = (root / "docs" / "stylesheets" / "extra.css").read_text()
+    assert ".explorer" in css
+    assert css in page
+    assert "data-md-color-scheme" in page
+    assert "bdbvExplorer" in page or "explorer" in page
+    data = json.loads((tmp_path / "p-data" / "explorer.json").read_text())
+    assert len(data["models"]) == 2
+    row = data["rows"][0] if "rows" in data else data["q"][0]
+    assert len(row) == 4 + len(QUANTILE_COLUMNS)
