@@ -139,9 +139,9 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `score_run_germany`: a run's own saved checkpoint `n<N>`, loaded from `<ROOT>/runs/<run>/train/n<N>` with no release, cached in `<ROOT>/runs/<run>/scores/`.
 - `run_scores`: every trained run's saved checkpoints and report; `score` includes it.
 - `run_table`: a run's saved checkpoints as table rows, German relative scores and held-out losses under the run's name (`<run>/reports/checkpoint-scores.csv`).
-- `comparison`: every run's `run_table` in one table (`<ROOT>/runs/comparison.csv`), for the paper's fine-tuning comparisons.
+- `comparison`: the paper's live run's and comparison runs' `run_table` in one table (`<ROOT>/runs/comparison.csv`), for the paper's fine-tuning comparisons.
 - `daily_table`: a run's saved checkpoints on both German views, daily counts and 7-day sums, relative to the German config's references (`<run>/reports/compare-daily.csv`).
-- `compare_daily`: every run's `daily_table` in one table (`<ROOT>/runs/compare-daily.csv`), the paper's `compare_daily`.
+- `compare_daily`: the paper's live run's and comparison runs' `daily_table` in one table (`<ROOT>/runs/compare-daily.csv`), the paper's `compare_daily`.
 - `coupling_germany`: a checkpoint's German forecasts' coupling scores and summary (`nowcasteval.coupling`), from its German unit, in `<SCORE_CACHE>/coupling/`: each coupling against independent draws, the foundation model's online step (`online`) among them.
 - `score_table`: the rows of every checkpoint in `<SCORE_CACHE>/tables/`, keeping other rules' rows of the committed tables (BDBV rows already there stay).
 - `land`: opt-in, commit the tables to `evidence/` and push, only from the evidence branch (`score.branch`), never main.
