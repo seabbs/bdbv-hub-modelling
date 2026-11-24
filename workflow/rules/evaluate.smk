@@ -109,6 +109,39 @@ rule evaluate_checkpoint:
         "> {log} 2>&1"
 
 
+rule seven_day_check:
+    # Lead 00:55 (Sam): each checkpoint's 7-day row against the 7-day sums
+    # of its daily rows (median ratio, sums in its 90% interval) and the
+    # roughness of its median against the truth's, on the run's held-out
+    # blocks (nowcastfoundation.finetune.evaluate.seven_day_check), on the
+    # forecasting device beside the trainer, however the run evaluates.
+    input:
+        settings=f"{TRAIN}/n{{n}}/settings.json",
+        adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+    output:
+        f"{TRAIN}/n{{n}}/seven-day.json",
+    log:
+        f"{TRAIN}/logs/seven-day-n{{n}}.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/seven_day_check/n{{n}}.tsv"
+    priority: newest_first(EVALUATE_PRIORITY)
+    conda:
+        TOOLS_ENV
+    threads: UNIT_THREADS
+    resources:
+        gpu=FORECAST.gpu,
+    params:
+        where=lambda wc, input: Path(input.settings).parent,
+        env=unit_env,
+        device=FORECAST.device,
+        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
+        copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
+    shell:
+        "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
+        f"{EVALUATE_PY} seven-day {{params.where}} --device {{params.device}} "
+        "> {log} 2>&1"
+
+
 rule validation_curve:
     # The run's validation loss by level at the start and at each
     # checkpoint, against simulations trained: the paper's fine-tune

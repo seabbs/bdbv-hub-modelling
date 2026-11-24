@@ -4,9 +4,11 @@
         --eval-every K [--prev TRAIN/n<M>]
     python workflow/scripts/evaluate_offloaded.py base TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
+    python workflow/scripts/evaluate_offloaded.py seven-day TRAIN/n<N>
 
 `steps` scores segment n<N>'s step snapshots, `base` step 0 alone (base
-Chronos-2, the start loss), `checkpoint` its adapter, with
+Chronos-2, the start loss), `checkpoint` its adapter, `seven-day` its
+7-day check (`SEVEN_DAY`, beside its settings), with
 the trainer's own losses (nowcastfoundation.finetune.evaluate); the files are as
 `flowlib.evaluations` says.
 """
@@ -25,6 +27,7 @@ sys.path.insert(0, str(ROOT / "workflow"))
 
 from flowlib import evaluations  # noqa: E402
 
+from nowcastfoundation import series_bias  # noqa: E402
 from nowcastfoundation.backends.chronos2 import torch_device  # noqa: E402
 from nowcastfoundation.finetune import evaluate as fe  # noqa: E402
 from nowcastfoundation.finetune import stream as fs  # noqa: E402
@@ -125,10 +128,36 @@ def checkpoint(where: Path, device: str) -> None:
     fs.log(f"{where.name}: held-out loss {got['held_out_loss']:.4f}")
 
 
+SEVEN_DAY = "seven-day.json"
+"""A checkpoint's 7-day check (`seven_day`), beside its settings."""
+
+
+def seven_day(where: Path, device: str) -> None:
+    """Write a checkpoint's 7-day check on its run's held-out blocks."""
+    import time
+
+    settings = json.loads((where / "settings.json").read_text())
+    blocks = fe.load_blocks(
+        where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
+    )
+    base = fe.load_base(device)
+    series_bias.attach_for(base, where / "finetuned-ckpt")
+    t0 = time.perf_counter()
+    check = fe.seven_day_check(
+        where / "finetuned-ckpt", base, blocks, settings.get("batch_size", 256)
+    )
+    seconds = time.perf_counter() - t0
+    fe.write_json(
+        where / SEVEN_DAY,
+        {"seven_day": check, "device": device, "seconds": seconds},
+    )
+    fs.log(f"{where.name}: 7-day check {check} in {seconds:.0f} s")
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Run `steps` or `checkpoint`."""
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("what", choices=("steps", "base", "checkpoint"))
+    p.add_argument("what", choices=("steps", "base", "checkpoint", "seven-day"))
     p.add_argument("where", type=Path)
     p.add_argument("--prev", type=Path)
     # The rule passes `forecast.device` (flowlib.forecast); never detected.
@@ -146,6 +175,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         steps(args.where, args.prev, device, args.eval_every)
     elif args.what == "base":
         base_step(args.where, device)
+    elif args.what == "seven-day":
+        seven_day(args.where, device)
     else:
         checkpoint(args.where, device)
 
