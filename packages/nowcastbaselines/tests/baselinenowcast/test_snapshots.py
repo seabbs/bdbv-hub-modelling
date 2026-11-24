@@ -17,6 +17,8 @@ from nowcastbaselines.baselinenowcast import (
     pair_sums,
     window_pairs,
 )
+from nowcastbaselines.baselinenowcast.delays import Settings, fit_delay
+from nowcastutils.snapshots import snapshot_arrays
 
 
 def test_hub_week_matrix_uses_sunday_to_saturday_weeks() -> None:
@@ -212,3 +214,45 @@ def test_fill_row_matches_r_apply_delay_on_zero_rows() -> None:
             for b in range(a, cdf.size)
         ]
         np.testing.assert_allclose(got, want[row, a:], rtol=1e-12)
+
+
+def _weekly_releases() -> pd.DataFrame:
+    """Weekly releases where province B's newest days report nothing first.
+
+    Province A's days report 2 cases at ages 0 to 2 and 4 from age 3, and
+    B's report 0 and then 2, as small places' newest days often do.
+    """
+    start = pd.Timestamp("2026-09-06")
+    rows = []
+    for cut in (35, 42, 49, 56):
+        vintage = (start + pd.Timedelta(days=cut + 1)).date().isoformat()
+        cutoff = (start + pd.Timedelta(days=cut)).date().isoformat()
+        for t in range(cut + 1):
+            onset = (start + pd.Timedelta(days=t)).date().isoformat()
+            young = cut - t < 3
+            a, b = (2, 0) if young else (4, 2)
+            for loc, n in (("CD", a + b), ("CD-A", a), ("CD-B", b)):
+                rows.append((vintage, loc, onset, n, 0, cutoff))
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "vintage", "location", "onset_date", "observed", "imputed",
+            "cutoff",
+        ],
+    )  # fmt: skip
+
+
+def test_a_place_whose_pairs_miss_new_reports_uses_parent_delay() -> None:
+    daily = _weekly_releases()
+    snap = snapshot_arrays(daily, "2026-11-01", ("CD-A", "CD-B"))
+    fit = fit_delay(snap, len(snap.releases) - 1, Settings())
+    assert fit is not None
+    b = snap.locations.index("CD-B")
+    a = snap.locations.index("CD-A")
+    # B has 14 cases a week, but its own pairs see none of its new
+    # reports: every one lands on a day it first reported as 0.
+    assert fit.level[b] >= Settings().min_level
+    assert fit.source[a] == a
+    assert not fit.own[b].any()
+    # So its newest day is still expected to grow, as its parent's does.
+    assert growth(fit.g, 0, Settings().max_delay)[b] > 1.5
