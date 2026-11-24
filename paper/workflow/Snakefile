@@ -46,6 +46,8 @@ for name, entry in FLOW.pinned().items():
             FLOW.evidence_file(name),
         log:
             f"{R}/logs/evidence_{name}.log",
+        # git fetch: runs on the driver's host.
+        localrule: True
         conda:
             TOOLS_ENV
         params:
@@ -161,6 +163,8 @@ rule render:
         "paper/si.pdf",
     log:
         f"{R}/logs/render.log",
+    # Needs the network, git or quarto: runs on the driver's host.
+    localrule: True
     conda:
         TOOLS_ENV
     shell:
@@ -172,6 +176,8 @@ rule germany_fetch:
         TRIANGLE,
     log:
         f"{R}/logs/germany_fetch.log",
+    # Needs the network, git or quarto: runs on the driver's host.
+    localrule: True
     conda:
         TOOLS_ENV
     params:
@@ -247,6 +253,8 @@ rule ebola_hub:
     log:
         f"{R}/logs/ebola_hub.log",
     # Snakemake makes the output's folders first, so clone beside them.
+    # Needs the network, git or quarto: runs on the driver's host.
+    localrule: True
     conda:
         TOOLS_ENV
     params:
@@ -268,6 +276,8 @@ if FLOW.store_history():
             FLOW.store_history(),
         log:
             f"{R}/logs/fit_store_history.log",
+        # gh release download: runs on the driver's host.
+        localrule: True
         conda:
             TOOLS_ENV
         params:
@@ -785,6 +795,8 @@ rule publish_paper:
         touch(f"{R}/{{mode}}/published"),
     log:
         f"{R}/{{mode}}/logs/publish.log",
+    # Needs the network, git or quarto: runs on the driver's host.
+    localrule: True
     conda:
         TOOLS_ENV
     params:

@@ -13,6 +13,10 @@
 # UV_OFFLINE=1 for offline nodes) and HF_HOME on the shared filesystem
 # in the submit environment, which Slurm passes to each job; DEVICE and
 # forecast.device set outright (cuda), not detected on the login node.
+# Nodes need git and this checkout (its .git included) on the shared
+# filesystem: each simulation batch checks the simulator is the
+# committed one. HF_HUB_OFFLINE=1 in the submit environment keeps
+# offline nodes off the Hugging Face Hub once HF_HOME holds Chronos-2.
 executor: slurm
 jobs: 100
 rerun-triggers: [mtime]
