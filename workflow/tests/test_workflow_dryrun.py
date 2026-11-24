@@ -262,6 +262,15 @@ def test_finetune_builds_each_trained_run_s_german_report(tmp_path):
     assert jobs["german_report"] == 1
 
 
+def test_a_run_table_pulls_its_checkpoints_and_their_scores(tmp_path):
+    # One graph: asking for a run's table (as the paper does) trains and
+    # scores every checkpoint in reach, not only those already saved.
+    table = tmp_path / "runs" / "runa" / "reports" / "checkpoint-scores.csv"
+    jobs = dry(tmp_path, str(table), config=FT)
+    assert jobs["train_segment"] == 2
+    assert jobs["score_run_germany"] == 2
+
+
 def test_the_trainer_claims_the_cores_it_uses(tmp_path):
     # The trainer and its block-cutting workers count against the cores,
     # so the scoring jobs beside it fit in what is left.
