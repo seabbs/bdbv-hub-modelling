@@ -222,6 +222,9 @@ rule real_training_blocks:
 rule finetune:
     input:
         finetune_inputs,
+        # Its own scoring (lead 10:15, Sam): each checkpoint's German unit
+        # and the references, on the forecasting device.
+        finetune_scores,
 
 
 rule dashboard:

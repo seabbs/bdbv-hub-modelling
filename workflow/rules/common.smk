@@ -123,6 +123,7 @@ run_units = SCORING.run_units
 references = SCORING.references
 report_names = SCORING.report_names
 run_scores = SCORING.run_scores
+finetune_scores = SCORING.finetune_scores
 table_inputs = SCORING.table_inputs
 unit_stamps = SCORING.unit_stamps
 land_tables = SCORING.land_tables
