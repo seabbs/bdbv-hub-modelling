@@ -34,6 +34,7 @@ REPORTS = {
     "rt_check",
     "ft_check_forecast",
     "ft_check",
+    "ft_check_page",
     "this_round_inputs",
     "this_round_report",
     "this_round",

@@ -419,7 +419,7 @@ def lr_card(
     run: str,
     sims: Callable[[float], float] | None = None,
 ) -> str:
-    """Return a small chart of every group's learning rate.
+    """Return a chart of every group's learning rate.
 
     Against simulations trained for a run whose rate falls over its
     simulations (`sims`, `Context.sims`), else against step.
@@ -427,8 +427,8 @@ def lr_card(
     if not params["groups"]:
         return ""
     by_sims = bool(params["lr_outbreaks"] and sims)
-    width, height = 190, 150
-    left, right, top, bottom = 34, 6, 6, 18
+    width, height = 440, 260
+    left, right, top, bottom = 44, 10, 8, 30
     decays = params["lr_outbreaks"] if by_sims else 0
 
     def x_of(s: float) -> float:
@@ -449,8 +449,8 @@ def lr_card(
         return top + (1 - frac) * (height - top - bottom)
 
     o = [
-        f'<svg viewBox="0 0 {width} {height}" width="{width}" '
-        f'height="{height}">'
+        f'<svg class=srv viewBox="0 0 {width} {height}" width="100%" '
+        'role="img">'
     ]
     for e in range(math.ceil(lo), math.floor(hi) + 1):
         o.append(
@@ -458,10 +458,16 @@ def lr_card(
             f'y2="{sy(10**e):.1f}" class=grid /><text x="{left - 3}" '
             f'y="{sy(10**e) + 3:.1f}" text-anchor=end class=ax>1e{e}</text>'
         )
+    for t in svg.nice(0, xmax, 4):
+        if t <= xmax:
+            o.append(
+                f'<text x="{sx(t):.1f}" y="{height - bottom + 14}" '
+                f"text-anchor=middle class=ax>{t:g}</text>"
+            )
     o.append(
-        f'<text x="{left}" y="{height - 4}" class=ax>0</text><text '
-        f'x="{width - right}" y="{height - 4}" text-anchor=end '
-        f"class=ax>{xmax:.0f}</text>"
+        f'<text x="{(left + width - right) / 2}" y="{height - 2}" '
+        f"text-anchor=middle class=ax>"
+        f"{'simulations trained' if by_sims else 'step'}</text>"
     )
     legend = []
     for i, (g, base) in enumerate(params["groups"].items()):
@@ -490,12 +496,10 @@ def lr_card(
         )
     o.append("</svg>")
     return (
-        f'<div class=card id=lrcard data-run="{html.escape(run, quote=True)}" '
-        f'style="padding:4px;line-height:1.2"><div class=mut '
-        f'style="font-size:11px">learning rate vs '
-        f"{'simulations trained' if by_sims else 'step'}{tip('lr')}</div>"
-        f'{"".join(o)}<div class=leg style="font-size:11px">'
-        f"{''.join(legend)}</div></div>"
+        f'<div class=card id=lrcard data-run="{html.escape(run, quote=True)}">'
+        f"<h3>Learning rate vs "
+        f"{'simulations trained' if by_sims else 'step'}{tip('lr')}</h3>"
+        f"<div class=leg>{''.join(legend)}</div>{''.join(o)}</div>"
     )
 
 
@@ -564,7 +568,7 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
         f"{modebar}<div id=lossrefs class=refnote></div>"
         "<div class=plots3 id=lossplots></div>"
         f'<script type="application/json" id=ldata>{data}</script>'
-        f"<script>{_asset('loss.js')}</script>"
+        f"<script>{_asset('axes.js')}\n{_asset('loss.js')}</script>"
     )
 
 

@@ -219,3 +219,26 @@ def test_one_real_data_table_has_germany_and_bdbv_as_columns() -> None:
     # BDBV cells are blank until it has scored rounds.
     t = real_finetune_combined(germany, None)
     assert (t["BDBV"] == "").all()
+
+
+def test_score_tables_give_pairwise_skill_on_both_scales(
+    tmp_path: Path,
+) -> None:
+    score_tables(
+        "germany",
+        _scores(),
+        pd.DataFrame(),
+        tmp_path / "main",
+        tmp_path / "si",
+        split=SPLIT,
+        baseline="randomwalknowcast",
+    )
+    for path in (
+        tmp_path / "main" / "germany-scores.csv",
+        tmp_path / "si" / "germany-scores-by-horizon.csv",
+        tmp_path / "si" / "germany-scores-by-location.csv",
+    ):
+        table = pd.read_csv(path)
+        assert {"pair_score", "pair_log_score"} <= set(table.columns), path
+        ref = table.loc[table["model"] == "randomwalknowcast"]
+        assert (ref["pair_score"] == 1).all()
