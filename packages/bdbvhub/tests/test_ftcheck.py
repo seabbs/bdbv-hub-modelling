@@ -126,7 +126,7 @@ def test_the_page_carries_the_explorer_s_styles_and_data(tmp_path):
     from nowcasteval.explorer import QUANTILE_COLUMNS
 
     root = Path(__file__).parents[3]
-    ids = {"a": "randomwalknowcast", "b": "fm_chronos_daily_ragged_ft"}
+    ids = {"a": "randomwalknowcast", "b": "foundation"}
     q = _quantiles().replace({"model": ids})
     target = pd.DataFrame(
         {
@@ -175,7 +175,7 @@ def _samples():
 
     rng = np.random.default_rng(1)
     rows = []
-    for model in ("randomwalknowcast", "fm_chronos_daily_ragged_ft"):
+    for model in ("randomwalknowcast", "foundation"):
         for week in ("2026-11-08", "2026-11-15", "2026-11-22"):
             for k, v in enumerate(rng.poisson(100, 200)):
                 rows.append(

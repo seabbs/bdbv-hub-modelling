@@ -1371,7 +1371,7 @@ def test_a_sampler_s_parts_are_put_back_together_by_view(
 
     monkeypatch.setattr(foundation, "chronos_sampler", per_view)
     model = dataclasses.replace(
-        get_model("fm_chronos_weekly_ragged"),
+        _model("foundation_zeroshot", "weekly"),
         active_zone_cases=10**9,
         coupling="independent",
     )
