@@ -1,5 +1,7 @@
 """Scoring units' commands and the German report's arguments."""
 
+from pathlib import Path
+
 from flowlib import scoring
 
 
@@ -113,3 +115,38 @@ def test_the_german_unit_is_given_its_fetched_triangle():
     got = scoring.unit_shell("germany")
     assert "GERMANY_TRIANGLE={input.germany} " in got
     assert "GERMANY_TRIANGLE" not in scoring.unit_shell("release")
+
+
+def test_no_rule_keys_code_by_a_param_mtime_never_reads():
+    from pathlib import Path
+
+    rules = Path(__file__).parents[2] / "workflow" / "rules"
+    text = "".join(p.read_text() for p in rules.glob("*.smk"))
+    assert "code=lambda wc: scoring.reference_key" not in text
+    assert "code=lambda wc: scoring.ft_check_key()" not in text
+
+
+def test_a_key_is_a_file_made_once_per_code(tmp_path):
+    # Every profile reruns on file times only (rerun-triggers: mtime), so
+    # a code key reaches a rule as a file named by the key.
+    folder = tmp_path / "keys"
+    first = scoring.key_file(folder, "reference", "abc")
+    assert first == str(folder / "reference-abc.key")
+    # The first key is older than any output made before keys existed.
+    assert Path(first).stat().st_mtime == 0
+    assert scoring.key_file(folder, "reference", "abc") == first
+    # Changed code: a new file, dated now, so the rule reruns once.
+    changed = scoring.key_file(folder, "reference", "def")
+    assert Path(changed).stat().st_mtime > 0
+    # Checkouts with either code share the folder without rewriting it.
+    assert scoring.key_file(folder, "reference", "abc") == first
+    assert Path(first).stat().st_mtime == 0
+    assert not list(folder.glob(".*"))
+
+
+def test_the_reference_unit_reads_its_code_key_as_a_file(tmp_path):
+    s = _scoring(tmp_path, labels=[])
+    (ref,) = s.reference_key_input(scoring.REFERENCE)
+    assert Path(ref).parent == tmp_path / "cache" / "keys"
+    assert Path(ref).name.startswith(f"{scoring.REFERENCE}-")
+    assert s.reference_key_input("abc123") == []

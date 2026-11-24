@@ -8,7 +8,9 @@ what `score.smk`, `evaluate.smk` and the report rules ask of the units;
 
 from __future__ import annotations
 
+import os
 import shlex
+import tempfile
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -51,12 +53,38 @@ def reference_code(label: str, root: Path | str = ".") -> list[str]:
     return out
 
 
+def key_file(folder: Path | str, name: str, key: str) -> str:
+    """Return the file that stands for `key`, made once; `folder/name-key`.
+
+    Every profile reruns a job on file times only (`rerun-triggers:
+    mtime`), so a code key reaches a rule as an input file named by the
+    key. The first key in `folder` is dated from the epoch, so outputs
+    made before keys existed stay current; a later one (the code changed)
+    is dated now, so the rule reruns once. Checkouts with other code each
+    keep their own file, so two sharing one ROOT never rerun each other's
+    work back and forth. Written at DAG build, atomically.
+    """
+    folder = Path(folder)
+    path = folder / f"{name}-{key}.key"
+    if path.is_file():
+        return str(path)
+    folder.mkdir(parents=True, exist_ok=True)
+    first = not any(folder.glob(f"{name}-*.key"))
+    fd, name_ = tempfile.mkstemp(dir=folder, prefix=f".{path.name}.")
+    os.close(fd)
+    tmp = Path(name_)
+    tmp.write_text(f"{key}\n")
+    if first:
+        os.utime(tmp, (0, 0))
+    tmp.replace(path)
+    return str(path)
+
+
 def reference_key(label: str, root: Path | str = ".") -> str:
     """Return a digest of `reference_code`'s contents ("" for a checkpoint).
 
-    A rule parameter: Snakemake reruns the unit when it changes (not on
-    file times, so a checkout reruns nothing), and the unit redoes only
-    the rows of the models whose own key moved.
+    The reference unit reads it as a file (`Scoring.reference_key_input`),
+    and redoes only the rows of the models whose own key moved.
     """
     import hashlib
 
@@ -85,8 +113,8 @@ checkpoint pinned there reruns only the fine-tuned model."""
 def ft_check_key(root: Path | str = ".") -> str:
     """Return a digest of `FT_CHECK_CODE` and the active-zone rule.
 
-    A rule parameter of the check's forecasts: Snakemake reruns them when
-    it changes, not on file times.
+    The check's forecasts read it as a file (`key_file`), so they rerun
+    when it changes, not on a checkout.
     """
     import hashlib
     import tomllib
@@ -216,6 +244,16 @@ class Scoring:
         """Return the German units of the run's saved checkpoints."""
         unit = f"{self.run_scores_dir(run)}/{GERMANY_UNIT}"
         return [f"{unit}/n{n}.done" for n in self.saved_prefixes(run)]
+
+    def reference_key_input(self, label: str) -> list[str]:
+        """Return the reference unit's code-key file (`key_file`).
+
+        None for a checkpoint, whose own files are its inputs.
+        """
+        key = reference_key(label)
+        if not key:
+            return []
+        return [key_file(f"{self.cache}/keys", label, key)]
 
     def references(self) -> list[str]:
         """Return the reference labels' German units, shared by every run."""

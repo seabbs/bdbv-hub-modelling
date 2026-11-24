@@ -170,3 +170,17 @@ def test_a_tick_without_finetune_sets_no_config():
 def test_a_step_says_whether_it_is_the_pool():
     got = schedule.plan({"SCHEDULE_TARGETS": "score land publish"})
     assert [pool for _, _, pool in got] == [True, True, False, False]
+
+
+def test_a_tick_does_not_build_the_dashboard():
+    # The static page has no inputs, so a tick on file times built it once
+    # and never again; a run serves it live (dashboard.serve) and
+    # `task nowcast-foundation:dashboard-static` writes the page.
+    assert "dashboard" not in schedule.TARGETS
+    assert "dashboard" not in schedule.POOL
+
+
+def test_a_machine_still_listing_the_dashboard_keeps_ticking(capsys):
+    steps = schedule.plan({"SCHEDULE_TARGETS": "score dashboard"})
+    assert all("dashboard" not in step[1] for step in steps)
+    assert "no longer a tick target" in capsys.readouterr().err

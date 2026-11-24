@@ -387,7 +387,12 @@ FTC_DIR = f"{HUB}/ft-check"
 
 rule ft_check_forecast:
     input:
-        rules.hub_data.output,
+        data=rules.hub_data.output,
+        # Reruns when its code or the active-zone rule changes (a key
+        # file, as reruns follow file times).
+        code=lambda wc: scoring.key_file(
+            f"{FTC_DIR}/keys", "forecast", scoring.ft_check_key()
+        ),
     output:
         touch(f"{FTC_DIR}/forecasts/{{fmodel}}.done"),
     log:
@@ -402,8 +407,7 @@ rule ft_check_forecast:
         gpu=FORECAST.gpu,
     params:
         env=unit_env,
-        code=lambda wc: scoring.ft_check_key(),
-        data=lambda wc, input: Path(input[0]).parent,
+        data=lambda wc, input: Path(input.data[0]).parent,
         out=lambda wc: f"{FTC_DIR}/forecasts/{wc.fmodel}",
         model=lambda wc: (
             FTC["finetuned"] if wc.fmodel.startswith("ft-") else wc.fmodel
