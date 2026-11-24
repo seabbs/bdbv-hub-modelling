@@ -15,6 +15,7 @@ from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.zones import ZoneData, hub_zones
 from nowcasteval.backtest import BacktestConfig
 from nowcastfoundation.forecaster import (
+    LAG_GUARD,
     LAG_QUANTILE,
     MAX_LAG,
     HubTriangle,
@@ -59,8 +60,9 @@ def _triangle(last: int, share, final: float = 100.0) -> HubTriangle:
     return HubTriangle(times, np.full((1, n), final), partial, last)
 
 
-def test_the_lag_count_is_the_delay_s_99_point_in_steps():
-    assert LAG_QUANTILE == 0.99
+def test_the_lag_count_is_the_delay_s_98_point_in_steps():
+    assert LAG_QUANTILE == 0.98
+    assert LAG_GUARD == 1.5
     # A tenth more of each count at each lag: complete at lag 9, so
     # lags 0 to 9, ten of them, include it.
     tri = _triangle(200, lambda _t, d: min(1.0, (d + 1) / 10))
@@ -217,3 +219,16 @@ def test_the_bdbv_study_config_sets_d_for_every_model(task: ForecastTask):
     assert walk.settings_for(study).max_delay == 40
     # Without it, each model keeps its own.
     assert walk.settings_for(task).max_delay == walk.settings.max_delay
+
+
+def test_a_step_counts_once_seen_for_one_and_a_half_d():
+    # Releases began 8 days before the cut-off; steps settle at lag 4, so
+    # D = 5. A step 8 days old has been seen for 1.5D = 7.5 lags, enough;
+    # under a 2D guard none would be, and D would be the history (9).
+    last = 300
+    first_release = last - 8
+
+    def share(t, d):
+        return np.nan if t + d < first_release else min(1.0, (d + 1) / 5)
+
+    assert lag_count(_triangle(last, share), "daily") == 5

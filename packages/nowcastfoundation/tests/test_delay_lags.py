@@ -62,9 +62,9 @@ def test_the_lags_hold_the_quantile_of_the_reports(quantile, lags) -> None:
     assert delay_lags(rows, "daily", ("A",), last, quantile) == lags
 
 
-def test_the_default_is_the_99th_percentile() -> None:
+def test_the_default_is_the_98th_percentile() -> None:
     rows = _releases(200)
-    assert LAG_QUANTILE == 0.99
+    assert LAG_QUANTILE == 0.98
     assert delay_lags(rows, "daily", ("A",), rows["cutoff"].max()) == 4
 
 
