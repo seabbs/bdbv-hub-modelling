@@ -181,10 +181,10 @@ def make_report(
     data_dir: Path | str = "data",
     results: Path | str = "results",
     output: Path | str = "results",
-    config_path: Path | str = "config/backtest.toml",
+    config_path: Path | str = "packages/nowcastbdbv/config/backtest.toml",
     hub_comparison: Path | str = "results/hub-comparison",
     germany: Path | str = "results/germany",
-    germany_config: Path | str = "config/germany.toml",
+    germany_config: Path | str = "packages/nowcastgermany/config/germany.toml",
 ) -> None:
     """Write every docs figure and table.
 
@@ -530,14 +530,14 @@ def _model_colours(models: Sequence[str]) -> dict[str, tuple[str, str, str]]:
 
 
 def _page_models() -> list[str]:
-    """Return the registered models the site shows (`config/site.toml`)."""
+    """Return the registered models the site shows (`docs/site.toml`)."""
     return site_models(s.name for s in list_models())
 
 
 def _site_rows(frame: pd.DataFrame) -> pd.DataFrame:
     """Drop the rows of models the site hides, before any scoring.
 
-    Hub teams' rows pass, as no pattern of `config/site.toml` matches
+    Hub teams' rows pass, as no pattern of `docs/site.toml` matches
     them. Filtering first keeps hidden models from deciding which cells
     the shown ones are scored on.
     """
@@ -575,11 +575,12 @@ def draws_note(n: int, stored: int) -> str:
 
     `n` is `[samples] backtest`, the draws of the models run here, and
     `stored` is `[forecast] n_samples`, the stored fits' draws, both from
-    `config/backtest.toml`.
+    `packages/nowcastbdbv/config/backtest.toml`.
     """
     return (
         f"The models run here are scored on {n:,} draws per forecast "
-        "(`[samples] backtest` in `config/backtest.toml`) and the stored "
+        "(`[samples] backtest` in "
+        "`packages/nowcastbdbv/config/backtest.toml`) and the stored "
         f"fits on their {stored:,} (`[forecast] n_samples`), with common "
         "random numbers. " + _FAIR_NOTE
     )
@@ -589,7 +590,8 @@ def comparison_draws_note(n: int) -> str:
     """Say how many draws per forecast the hub comparison scores."""
     return (
         f"Our models are scored on their {n:,} draws per forecast "
-        "(`[forecast] n_samples` in `config/backtest.toml`) and the hub "
+        "(`[forecast] n_samples` in "
+        "`packages/nowcastbdbv/config/backtest.toml`) and the hub "
         "teams on their samples as submitted. " + _FAIR_NOTE
     )
 
@@ -611,7 +613,8 @@ def _nowcast_meta(latest: str, shown: Sequence[str], samples: int) -> str:
         f"Latest vintage **{latest}**, models "
         f"{', '.join(f'`{n}`' for n in shown)}.\n"
         f"Each forecast has {samples:,} draws "
-        "(`[forecast] n_samples` in `config/backtest.toml`).\n"
+        "(`[forecast] n_samples` in "
+        "`packages/nowcastbdbv/config/backtest.toml`).\n"
     )
 
 

@@ -58,8 +58,8 @@ rule grid_figures:
 # over every round in `rounds`, the science of the simulated outbreaks
 # against the German development half and the paper's reference values.
 # Target `sim_reports`. The German triangle is the hub's, at
-# config/germany.toml's commit; no BDBV data.
-GERMANY_SPLIT = tomllib.loads(Path("config/germany.toml").read_text())["nowcast"][
+# packages/nowcastgermany/config/germany.toml's commit; no BDBV data.
+GERMANY_SPLIT = tomllib.loads(Path("packages/nowcastgermany/config/germany.toml").read_text())["nowcast"][
     "split_date"
 ]
 REFERENCE_VALUES = "paper/data/reference-values.csv"
@@ -296,7 +296,7 @@ rule hub_submissions_table:
         "mkdir -p {params.ledger} && git archive origin/submission-ledger "
         "| tar -x -C {params.ledger} && uv run --quiet --project ci "
         "submissions-table --state {params.ledger}/state.json "
-        "--policy ci/policy.toml --hub-config config/hub.toml "
+        "--policy ci/policy.toml --hub-config packages/bdbvhub/config/hub.toml "
         "--out {output}) > {log} 2>&1"
 
 

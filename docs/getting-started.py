@@ -63,7 +63,7 @@ sorted(real["vintage"].unique())
 # %%
 ORIGIN, LATER = bt.real_vintages(target)[-2:]
 
-config = bt.load_config("config/backtest.toml")
+config = bt.load_config("packages/nowcastbdbv/config/backtest.toml")
 task = store.origin_tasks(target, delays, config, daily)[ORIGIN]
 print(task.vintage, task.reference_date, len(task.locations), "provinces")
 print(task.target_end_dates[0], "to", task.target_end_dates[-1])

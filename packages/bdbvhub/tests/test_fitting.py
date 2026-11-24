@@ -240,7 +240,7 @@ def test_nowcast_notes_what_it_handled(tmp_path: Path, plain: Path) -> None:
 def test_submission_id_is_one_config_value(tmp_path: Path) -> None:
     from bdbvhub.submission.hub import model_abbr_for
 
-    hub_toml = ROOT / "config" / "hub.toml"
+    hub_toml = ROOT / "packages" / "bdbvhub" / "config" / "hub.toml"
     assert model_abbr_for("renewalbvd", hub_toml) == "renewal"
     cfg = tmp_path / "hub.toml"
     cfg.write_text('[submission]\nmodel_abbr = "other"\n')
@@ -276,14 +276,17 @@ def test_randomwalknowcast_has_its_own_hub_id(
     # hub's abbreviations allow no hyphen and fewer than 16 characters.
     from bdbvhub.submission.hub import model_abbr_for
 
-    abbr = model_abbr_for("randomwalknowcast", ROOT / "config" / "hub.toml")
+    abbr = model_abbr_for(
+        "randomwalknowcast",
+        ROOT / "packages" / "bdbvhub" / "config" / "hub.toml",
+    )
     assert abbr == "rwnowcast"
     assert abbr.isalnum()
     assert len(abbr) < 16
     # Models without their own id submit under the renewal id.
-    assert model_abbr_for("renewalsp", ROOT / "config" / "hub.toml") == (
-        "renewal"
-    )
+    assert model_abbr_for(
+        "renewalsp", ROOT / "packages" / "bdbvhub" / "config" / "hub.toml"
+    ) == ("renewal")
     assert main(["hub-id", "--model", "randomwalknowcast"]) == 0
     assert capsys.readouterr().out.strip() == "seabbs-rwnowcast"
     assert main(["metadata", "--model", "randomwalknowcast", "--out",
@@ -323,7 +326,8 @@ def test_randomwalknowcast_config_runs_the_nowcast_model(
 
 
 def test_committed_metadata_is_only_for_hub_models() -> None:
-    # One file per hub model in config/hub.toml, written as the CLI does.
+    # One file per hub model in packages/bdbvhub/config/hub.toml, written as
+    # the CLI does.
     names = sorted(p.stem for p in (ROOT / "hub" / "model-metadata").glob("*"))
     assert names == [
         "seabbs-foundation",

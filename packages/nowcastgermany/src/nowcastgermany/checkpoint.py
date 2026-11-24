@@ -8,7 +8,8 @@ Chronos-2, ragged and complete). A label's units forecast and cache;
 with `rule` = `RULE`:
 
 - `germany`: the development half of the German benchmark
-  (config/germany.toml), quantile WIS and log WIS on each model's own
+  (packages/nowcastgermany/config/germany.toml), quantile WIS and log WIS on
+  each model's own
   quantiles (`nowcastgermany.evaluation.germany_forecasts`), by level.
 - `held_out`: the trainer's held-out loss from the release's
   settings.json (unit `release`).
@@ -58,7 +59,7 @@ BASELINE: Final = "randomwalknowcast_daily"
 REFERENCE: Final = "reference"
 REFERENCE_PIN: Final = "e8a1f5ae338b"
 """The checkpoint the reference pins, which its models never load."""
-GERMANY_CONFIG: Final = Path("config/germany.toml")
+GERMANY_CONFIG: Final = Path("packages/nowcastgermany/config/germany.toml")
 """The German evaluation's config, whose `nowcast.models` the units run."""
 GERMANY_UNIT: Final = "germany-days"
 """The cache folder of the German units, which score every one of the
@@ -513,7 +514,9 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     from nowcastgermany.data import hub_triangle
 
     _pin(label, segment)
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     path = triangle_path(config)
     triangle = hub_triangle(path)
     # Built once for every checkpoint, then read back.
@@ -677,7 +680,9 @@ def germany_rows(
     """
     from nowcastgermany import evaluation as de
 
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     parts = []
     for label, folder in folders.items():
         fc = _cached(folder, target)
@@ -786,7 +791,9 @@ def daily_table(
     """
     from nowcastgermany import evaluation as de
 
-    config = de.load_germany_config("config/germany.toml")
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
     folders = {REFERENCE: Path(reference)} | {
         d.name: Path(scores) / d.name
         for d in _segments(train)

@@ -115,7 +115,8 @@ def make_tasks(
     >>> target = load_target()
     >>> real = target.loc[target["kind"] == "real"]
     >>> config = dataclasses.replace(
-    ...     bt.load_config("config/backtest.toml"), min_horizon=-6
+    ...     bt.load_config("packages/nowcastbdbv/config/backtest.toml"),
+    ...     min_horizon=-6,
     ... )
     >>> vintage = "2026-10-17"
     >>> task = bt.make_tasks(

@@ -101,7 +101,7 @@ def test_the_reference_unit_reruns_when_its_models_code_changes():
     # The reference's forecasts are shared by every run and depend only on
     # its models' code and the German config, so those are its inputs.
     files = scoring.reference_code("reference")
-    assert "config/germany.toml" in files
+    assert "packages/nowcastgermany/config/germany.toml" in files
     assert any(f.endswith("nowcastbaselines/randomwalk.py") for f in files)
     assert any(f.endswith("nowcastfoundation/forecaster.py") for f in files)
     assert scoring.reference_code("abc123def456") == []

@@ -8,7 +8,9 @@ import pytest
 
 from submission_ci.tracks import load_tracks, main
 
-HUB_TOML = Path(__file__).parents[2] / "config" / "hub.toml"
+HUB_TOML = (
+    Path(__file__).parents[2] / "packages" / "bdbvhub" / "config" / "hub.toml"
+)
 
 
 def write(path: Path, renewal: bool, baseline: bool) -> Path:

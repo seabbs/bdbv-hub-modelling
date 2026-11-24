@@ -6,7 +6,7 @@ from nowcastgermany.evaluation import load_germany_config
 from nowcastgermany.reporting import check_site as main
 
 ROOT = Path(__file__).resolve().parents[3]
-CONFIG = ROOT / "config" / "germany.toml"
+CONFIG = ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
 SPLIT = load_germany_config(CONFIG).split_date
 
 

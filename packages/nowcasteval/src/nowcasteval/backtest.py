@@ -80,7 +80,9 @@ _FORECAST_DTYPES = {
 
 @dataclass(frozen=True)
 class BacktestConfig:
-    """Backtest settings, usually read from `config/backtest.toml`.
+    """Backtest settings.
+
+    Usually read from `packages/nowcastbdbv/config/backtest.toml`.
 
     Attributes
     ----------
@@ -177,7 +179,9 @@ def tasks_for_scoring(
     return [replace(t, n_samples=config.score_samples) for t in tasks]
 
 
-def load_config(path: Path | str = "config/backtest.toml") -> BacktestConfig:
+def load_config(
+    path: Path | str = "packages/nowcastbdbv/config/backtest.toml",
+) -> BacktestConfig:
     """Read the backtest settings.
 
     Parameters

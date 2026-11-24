@@ -31,10 +31,10 @@ Everything from forecasting on runs in this workflow, locally or on CI.
 
 - **Held-out synthetic outbreaks**: the simulations of each run's seeds ([`paperdata/synthetic.py`](paperdata/synthetic.py)) and the models' forecasts of them, which the synthetic runner writes.
   Sample forecasts are scored by CRPS relative to `randomwalknowcast`, with D each outbreak's 98% delay.
-- **German nowcast hub**: the benchmark of Wolffram et al. (2023), run with `nowcastgermany backtest`, `nowcastgermany teams` and `nowcastgermany paper` ([`config/germany.toml`](../config/germany.toml), [German benchmark page](../docs/germany.md)).
+- **German nowcast hub**: the benchmark of Wolffram et al. (2023), run with `nowcastgermany backtest`, `nowcastgermany teams` and `nowcastgermany paper` ([`packages/nowcastgermany/config/germany.toml`](../config/germany.toml), [German benchmark page](../docs/germany.md)).
   Quantiles are scored by WIS relative to `KIT-frozen_baseline` and to `randomwalknowcast`, with D 40 days.
 - **Ebola**: the release backtest's samples from every past release, with the stored fits' ([`paperdata/ebola.py`](paperdata/ebola.py)).
-  The truth and D are the backtest's (`config/backtest.toml`).
+  The truth and D are the backtest's (`packages/nowcastbdbv/config/backtest.toml`).
   Samples are scored by CRPS relative to `randomwalknowcast` until the hub's baseline has a forecast with known truth.
   From then the hub teams' forecasts join from a clone of the BDBV Modeling Hub, and scores are relative to `BDBVHub-baseline`.
 

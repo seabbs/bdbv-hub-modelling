@@ -85,7 +85,7 @@ Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with 
 Each chain starts from its own draw from the prior.
 The [fit store](../development/cli.md#fit-store)'s fits, which the backtest and the submission read, take each model's settings from its candidate in `ci/policy.toml`.
 `renewal` and `renewalbvd` use 2 chains of 500 warm-up and 1500 draws, keeping every other one, and `renewalsp` 2 chains of 500 warm-up and 750 draws, all at target acceptance 0.9 (0.95 for `renewalbvd`).
-Leave-one-province-out fits take theirs from `[sampler]` in `config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
+Leave-one-province-out fits take theirs from `[sampler]` in `packages/nowcastbdbv/config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
 The parameterisation is as follows.

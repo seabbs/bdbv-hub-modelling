@@ -261,7 +261,9 @@ def test_metadata_abbr_too_long_is_missing(settings: Settings) -> None:
 def test_configured_model_is_what_submits(settings: Settings) -> None:
     check = {c.name: c for c in run_checks(ready_runner(), settings)}["model"]
     assert check.status == "ok"
-    assert check.detail == "submits `renewal` (config/hub.toml)"
+    assert (
+        check.detail == "submits `renewal` (packages/bdbvhub/config/hub.toml)"
+    )
 
 
 def test_unregistered_model_id_is_reported(settings: Settings) -> None:

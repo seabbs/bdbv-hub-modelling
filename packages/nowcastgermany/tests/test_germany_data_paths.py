@@ -19,7 +19,9 @@ def test_the_unit_reads_the_triangle_it_is_given(monkeypatch, tmp_path):
     from nowcastgermany.checkpoint import triangle_path
     from nowcastgermany.evaluation import load_germany_config
 
-    config = load_germany_config(ROOT / "config" / "germany.toml")
+    config = load_germany_config(
+        ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+    )
     name = Path(config.triangle).name
     monkeypatch.delenv("GERMANY_TRIANGLE", raising=False)
     assert triangle_path(config) == Path("data/raw/germany") / name

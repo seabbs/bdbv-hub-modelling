@@ -1,4 +1,4 @@
-"""The docs site's settings (`config/site.toml`): the score baseline."""
+"""The docs site's settings (`docs/site.toml`): the score baseline."""
 
 from __future__ import annotations
 

@@ -75,7 +75,9 @@ def test_hub_tables_cover_country_provinces_and_zones(
     task = bdbv_bt.make_tasks(
         real.loc[real["vintage"] == latest],
         delays,
-        bt.load_config(ROOT / "config" / "backtest.toml"),
+        bt.load_config(
+            ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+        ),
         history=real,
         daily=daily,
     )[0]
@@ -111,7 +113,9 @@ def test_hub_tables_take_a_zone_fit_s_own_zones(
     task = bdbv_bt.make_tasks(
         real.loc[real["vintage"] == latest],
         delays,
-        bt.load_config(ROOT / "config" / "backtest.toml"),
+        bt.load_config(
+            ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+        ),
         history=real,
         daily=daily,
     )[0]
@@ -154,7 +158,9 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
     task = bdbv_bt.make_tasks(
         real.loc[real["vintage"] == latest],
         delays,
-        bt.load_config(ROOT / "config" / "backtest.toml"),
+        bt.load_config(
+            ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+        ),
         history=real,
         daily=daily,
     )[0]
@@ -208,7 +214,9 @@ def test_a_model_that_forecasts_the_country_keeps_its_national_rows(
     task = bdbv_bt.make_tasks(
         real.loc[real["vintage"] == latest],
         delays,
-        bt.load_config(ROOT / "config" / "backtest.toml"),
+        bt.load_config(
+            ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+        ),
         history=real,
         daily=daily,
     )[0]

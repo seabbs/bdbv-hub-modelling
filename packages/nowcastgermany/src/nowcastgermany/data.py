@@ -228,7 +228,8 @@ def within_delay(triangle: pd.DataFrame, days: int) -> pd.DataFrame:
     """Return the counts reported at most `days` days after their Meldedatum.
 
     A count's latest row is then its count `days` days on: the 40-day
-    truth's count of a sum's last day (`config/germany.toml`, `[truth]`).
+    truth's count of a sum's last day
+    (`packages/nowcastgermany/config/germany.toml`, `[truth]`).
 
     Parameters
     ----------

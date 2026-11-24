@@ -44,6 +44,15 @@ REPORT_ONLY: Final = (
 )
 """Modules only the `report` command runs, so no backtest reads them."""
 
+CONFIG: Final = (
+    "config",
+    "packages/bdbvhub/config",
+    "packages/nowcastbdbv/config",
+    "packages/nowcastgermany/config",
+)
+"""The config a run may read: the machine-independent files beside their
+packages, and config/ (the fine-tuning grid and settings)."""
+
 BACKTEST_INPUTS: Final = (
     "packages/nowcastutils/src",
     "packages/nowcasteval/src",
@@ -52,7 +61,7 @@ BACKTEST_INPUTS: Final = (
     "packages/nowcastrenewal/src",
     "packages/nowcastgermany/src",
     "packages/bdbvhub/src",
-    "config",
+    *CONFIG,
     "data",
 )
 """What every backtest run reads, relative to the repository root."""
@@ -375,5 +384,5 @@ def model_digest(
         SHA-256 hex digest.
     """
     return _digest(
-        Path(root), (*model_code(model, root), "config", "data", *extra), text
+        Path(root), (*model_code(model, root), *CONFIG, "data", *extra), text
     )

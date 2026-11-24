@@ -36,7 +36,9 @@ def _germany_data(tmp_path: Path) -> tuple[Path, Path]:
     wide.reset_index().rename(columns={"reference_date": "date"}).to_csv(
         data / "COVID-19_hospitalizations.csv", index=False
     )
-    text = (ROOT / "config" / "germany.toml").read_text()
+    text = (
+        ROOT / "packages" / "nowcastgermany" / "config" / "germany.toml"
+    ).read_text()
     text = text.replace('"2021-11-22"', '"2021-10-04"')
     text = text.replace('"2022-04-29"', '"2021-10-05"')
     text = text.replace("delay = 40", "delay = 10")

@@ -134,3 +134,39 @@ def test_renewal_code_reads_no_hub_delay_or_places() -> None:
         loaders = _imports_from(module, "nowcastbdbv.data.tidy")
         assert "load_locations" not in loaders, module
     assert "zone_places" in _defs(HUB_ZONES)
+
+
+def test_config_holds_only_machine_and_fine_tuning_settings():
+    # Each other config file lives beside the code that reads it (Sam,
+    # 24 Nov). The fine-tuning files stay: the trainer, hashed into every
+    # checkpoint, reads config/finetune/grid.yaml by that path.
+    import re
+    import subprocess
+
+    root = Path(__file__).parents[1]
+    kept = {"local.env.example", "finetune.toml", "finetune", "README.md"}
+    assert {p.name for p in (root / "config").iterdir()} <= kept
+    code = subprocess.run(
+        [
+            "git",
+            "grep",
+            "-hoE",
+            r"(^|[^/.\w-])config/[\w.-]+",
+            "--",
+            "packages/*/src",
+            "ci/src",
+            "workflow",
+            "paper/paperpipe",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    used = {re.sub(r"^.*config/", "", hit) for hit in code.split()}
+    assert used <= {
+        "local.env",
+        "local.env.example",
+        "finetune.toml",
+        "finetune",
+    }

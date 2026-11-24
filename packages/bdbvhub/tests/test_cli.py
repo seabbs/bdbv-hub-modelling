@@ -196,7 +196,9 @@ def test_cli_lopo_writes_scores_for_mask_aware_models(tmp_path: Path) -> None:
     # LOPO runs its models here, on `[samples] backtest` draws.
     from nowcasteval.backtest import load_config
 
-    cfg = load_config(ROOT / "config" / "backtest.toml")
+    cfg = load_config(
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    )
     assert set(scores["n_samples"]) == {cfg.score_samples}
     assert (tmp_path / "out" / "lopo-forecasts.csv.gz").exists()
     # The development backtest is not rerun.
@@ -252,7 +254,7 @@ def test_cli_fit_task_carries_the_delay_files_for_the_lag() -> None:
         vintage="latest",
         reference_date=None,
         data=str(DATA),
-        backtest_config="config/backtest.toml",
+        backtest_config="packages/nowcastbdbv/config/backtest.toml",
     )
     task, _ = _task(args)
     assert task.delay_history is not None
@@ -464,7 +466,7 @@ def test_backtest_scores_the_complete_target_on_the_truth_delay(
     args = ["backtest", "--data", str(DATA)]
     with pytest.raises(SystemExit):
         main([*args, "--models", "randomwalk", *out])
-    config = bt.load_config("config/backtest.toml")
+    config = bt.load_config("packages/nowcastbdbv/config/backtest.toml")
     target = pd.read_csv(DATA / "target.csv")
     assert seen["truth_delay"] == resolve_truth_delay(config, target)
 
@@ -496,7 +498,7 @@ def test_score_scores_the_complete_target_on_the_truth_delay(
         cli, "_stored", lambda *_: (pd.DataFrame(), pd.DataFrame())
     )
     monkeypatch.setattr(cli, "score_releases", scored)
-    config = bt.load_config("config/backtest.toml")
+    config = bt.load_config("packages/nowcastbdbv/config/backtest.toml")
     target = pd.read_csv(DATA / "target.csv")
     args = argparse.Namespace(data=str(DATA), results=str(tmp_path))
     empty = ReleaseForecasts(*(pd.DataFrame() for _ in range(4)))

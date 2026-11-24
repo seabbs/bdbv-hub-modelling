@@ -171,7 +171,9 @@ _KEYS = ("model", "target", "origin", "truth_vintage", "location")
 
 @dataclass(frozen=True)
 class GermanyConfig:
-    """The benchmark's source and settings (`config/germany.toml`).
+    """The benchmark's source and settings.
+
+    From `packages/nowcastgermany/config/germany.toml`.
 
     Attributes
     ----------
@@ -280,7 +282,7 @@ def run_models(config: GermanyConfig, held_out: bool) -> tuple[str, ...]:
 
 
 def load_germany_config(
-    path: Path | str = "config/germany.toml",
+    path: Path | str = "packages/nowcastgermany/config/germany.toml",
 ) -> GermanyConfig:
     """Read the benchmark settings.
 
