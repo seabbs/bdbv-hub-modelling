@@ -73,7 +73,10 @@ def test_the_release_layer_is_the_last_group() -> None:
     assert f"{start['share']:.0%} of blocks" in rows.loc["`start`", "values"]
     assert "Beta(1, 3) on [7, 182] days" in rows.loc["`start`", "values"]
     assert "Normal(1, 0.05)" in rows.loc["`lag_jitter`", "values"]
-    assert "`weekly` (25%)" in rows.loc["`cadences` (daily)", "values"]
+    weekly = RELEASE["cadences"]["daily"]["weekly"]
+    assert (
+        f"`weekly` ({weekly:.0%})" in rows.loc["`cadences` (daily)", "values"]
+    )
     assert synthetic_grid.grid_table(GRID, None)["header"].tolist()[-1] != (
         synthetic_grid.RELEASE_NAME
     )
@@ -161,7 +164,7 @@ def test_the_held_out_note_names_the_grid_file_and_no_machine_path() -> None:
     # It named a retired grid label and printed the simulations' folder.
     config = {
         **CONFIG["synthetic"],
-        "simulations": {"paper": "/home/someone/rounds/r38/sims"},
+        "simulations": {"paper": "$ROUNDS/r38/sims"},
         "heldout_seeds": CONFIG["heldout"]["synthetic_seeds"],
         "development_seeds": CONFIG["development"]["synthetic_seeds"],
     }

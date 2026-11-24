@@ -657,6 +657,9 @@ def test_plan_fit_and_load(
     store.write_fit(root, store.failed(meta, RuntimeError("x")))
     left = {m["origin"] for m in store.plan(keys, root)}
     assert left == set(origins) - {newest, oldest, broken}
+    # The submission's view: an older fit of the pair is not lacking.
+    usable = {m["origin"] for m in store.plan(keys, root, usable=True)}
+    assert usable == left - {stale}
     again = {m["origin"] for m in store.plan(keys, root, retry_failed=True)}
     assert again == left | {broken}
 
@@ -780,13 +783,72 @@ def test_a_candidate_fit_carries_what_the_submission_reads(
     assert where["key"] == keys[(candidate_flat, newest)]
     assert where["store_commit"] == "abc123"
     assert where["commit"] == stored.meta["commit"]
-    # No fit at the current key, or one that failed.
+    assert where["current_key"] == where["key"]
+    # No fit at all, or one that failed.
     assert store.unpack(root, keys, candidate_flat, older, tmp_path / "a")[
         0
     ] == ("missing")
     assert store.unpack(root, keys, candidate_flat, broken, tmp_path / "b")[
         0
     ] == ("failed")
+
+
+def test_unpack_takes_the_newest_stored_fit_when_the_key_changed(
+    candidate_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "store"
+    origin = sorted(tasks)[-1]
+    stale = store.fit(candidate_flat, tasks[origin], {}, "old")
+    for key, at in (("k1", "2026-11-01"), ("k2", "2026-11-02")):
+        meta = {**stale.meta, "key": key, "fitted_at": at, "commit": key}
+        store.write_fit(root, dataclasses.replace(stale, meta=meta))
+    keys = store.current_keys(tasks, [candidate_flat], {}, "new")
+    state, found = store.unpack(
+        root, keys, candidate_flat, origin, tmp_path / "out"
+    )
+    assert state == "ok"
+    assert found is not None
+    assert found.meta["key"] == "k2"
+    where = json.loads((tmp_path / "out" / store.UNPACKED_FILE).read_text())
+    assert where["key"] == "k2"
+    assert where["commit"] == "k2"
+    assert where["current_key"] == keys[(candidate_flat, origin)]
+    # Each model chooses on its own: one with a current-key fit keeps it.
+    current = store.fit(candidate_flat, tasks[origin], {}, "new")
+    store.write_fit(root, current)
+    state, found = store.unpack(
+        root, keys, candidate_flat, origin, tmp_path / "again"
+    )
+    assert found is not None
+    assert found.meta["key"] == keys[(candidate_flat, origin)]
+
+
+def test_unpack_chooses_per_model(
+    candidate_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "store"
+    origin = sorted(tasks)[-1]
+    fitted = store.fit(candidate_flat, tasks[origin], {}, "new")
+    keys = {
+        (candidate_flat, origin): fitted.meta["key"],
+        ("other", origin): "current-other",
+        ("empty", origin): "current-empty",
+    }
+    store.write_fit(root, fitted)
+    old = {**fitted.meta, "model": "other", "key": "older", "commit": "o"}
+    store.write_fit(root, dataclasses.replace(fitted, meta=old))
+    own = store.unpack(root, keys, candidate_flat, origin, tmp_path / "a")
+    other = store.unpack(root, keys, "other", origin, tmp_path / "b")
+    assert own[1] is not None
+    assert own[1].meta["key"] == fitted.meta["key"]
+    assert other[1] is not None
+    assert other[1].meta["key"] == "older"
+    none = store.unpack(root, keys, "empty", origin, tmp_path / "c")
+    assert none[0] == "missing"
 
 
 def test_a_model_with_no_config_stores_no_files(

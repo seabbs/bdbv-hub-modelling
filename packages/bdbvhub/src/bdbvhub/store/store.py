@@ -773,12 +773,18 @@ def _meta(model: ForecastModel, origin: str, key: str) -> dict[str, Any]:
 
 
 def plan(
-    keys: Keys, store: Path | str, retry_failed: bool = False
+    keys: Keys,
+    store: Path | str,
+    retry_failed: bool = False,
+    usable: bool = False,
 ) -> list[dict[str, str]]:
     """List the fits the store lacks.
 
     A fit that failed is stored as failed and is not planned again until
     its inputs change, unless `retry_failed`.
+    With `usable`, a pair is not lacking when `unpack` can use a fit
+    (`_choose`: the current key's, else the newest good one), as the
+    submission asks.
 
     Parameters
     ----------
@@ -788,6 +794,8 @@ def plan(
         The store root.
     retry_failed : bool
         Plan the fits stored as failed again.
+    usable : bool
+        Count an older stored fit of the pair as present.
 
     Returns
     -------
@@ -803,6 +811,8 @@ def plan(
         redo = retry_failed and path.exists()
         if redo:
             redo = read_fit(path).meta["status"] != "ok"
+        if usable and _choose(Path(store), model, origin, key)[0]:
+            continue
         if not path.exists() or redo:
             to_fit.append({"model": model, "origin": origin, "key": key})
     return to_fit
@@ -934,9 +944,11 @@ def unpack(
 ) -> tuple[str, StoredFit | None]:
     """Write a stored candidate fit's directory for the submission.
 
-    Only the fit of the current key is used: same code and data, same
-    fit. Writes the fit's files and `UNPACKED_FILE`, which says which
-    fit they came from and at which store commit.
+    The fit of the current key is used when stored (same code and data,
+    same fit), else the newest stored fit of the model and origin
+    (`_choose`), chosen for each model on its own. Writes the fit's
+    files and `UNPACKED_FILE`, which says which fit they came from (its
+    key and commit, and the current key) and at which store commit.
 
     Parameters
     ----------
@@ -955,13 +967,12 @@ def unpack(
         `"ok"`, `"missing"` (no fit, or one with no fit directory) or
         `"failed"`, and the stored fit if there is one.
     """
-    key = keys[(model, origin)]
-    path = store_path(store, model, origin, key)
-    if not path.exists():
+    current = keys[(model, origin)]
+    stored, bad = _choose(Path(store), model, origin, current)
+    if bad:
+        return "failed", read_fit(store_path(store, model, origin, current))
+    if stored is None:
         return "missing", None
-    stored = read_fit(path)
-    if stored.meta["status"] != "ok":
-        return "failed", stored
     if not stored.files:
         return "missing", stored
     target = Path(out)
@@ -972,7 +983,8 @@ def unpack(
     record = {
         "model": model,
         "origin": origin,
-        "key": key,
+        "key": stored.meta["key"],
+        "current_key": current,
         "commit": stored.meta["commit"],
         "fitted_at": stored.meta["fitted_at"],
         "store_commit": (
@@ -1290,7 +1302,9 @@ def command(args: argparse.Namespace) -> int:
             args.store, keys, args.model, args.origin, args.out
         )
         key = keys[(args.model, args.origin)]
-        print(f"{args.model} at {args.origin} ({key}): {state}.")
+        used = "" if found is None else found.meta["key"]
+        older = f", older fit {used} used" if used not in ("", key) else ""
+        print(f"{args.model} at {args.origin} ({key}): {state}{older}.")
         if state == "failed" and found is not None:
             print(f"ERROR: {found.meta.get('error')}", file=sys.stderr)
         return {"ok": 0, "missing": 3, "failed": 4}[state]
@@ -1306,7 +1320,7 @@ def command(args: argparse.Namespace) -> int:
         tasks = {o: t for o, t in tasks.items() if o in set(args.origins)}
     keys = current_keys(tasks, models, sampler, code)
     if args.action == "plan":
-        to_fit = plan(keys, args.store, args.retry_failed)
+        to_fit = plan(keys, args.store, args.retry_failed, args.usable)
         for t in to_fit:
             print(f"To fit: {t['model']} at {t['origin']} ({t['key']}).")
         print(f"{len(to_fit)} of {len(keys)} fits to make.")
