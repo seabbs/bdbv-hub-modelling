@@ -28,3 +28,16 @@ It is for anyone writing a model or a scorer that should see the same releases a
 ```sh
 uv add nowcastutils
 ```
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../../CITATION.cff).
+
+```bibtex
+@software{abbott_nowcastutils,
+  author = {Abbott, Sam},
+  title = {{nowcastutils: shared pieces for nowcasting and forecasting: release dates, snapshot arrays, location hierarchies, the forecast task and model registry, and quantile-to-trajectory coupling}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastutils}
+}
+```

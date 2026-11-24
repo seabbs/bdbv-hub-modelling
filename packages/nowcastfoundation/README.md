@@ -29,3 +29,16 @@ It is for anyone using our fine-tuned checkpoints on their own data, and for wor
 ```sh
 uv add nowcastfoundation
 ```
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../../CITATION.cff).
+
+```bibtex
+@software{abbott_nowcastfoundation,
+  author = {Abbott, Sam and Holt, Charlotte},
+  title = {{nowcastfoundation: foundation-model nowcasts and forecasts: Chronos-2 forecasters, fine-tuning helpers and checkpoint scoring}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastfoundation}
+}
+```

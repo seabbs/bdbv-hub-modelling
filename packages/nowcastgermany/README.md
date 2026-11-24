@@ -29,3 +29,16 @@ It imports only the generic packages: the registry and download helper from `now
 ```sh
 uv add nowcastgermany
 ```
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../../CITATION.cff).
+
+```bibtex
+@software{abbott_nowcastgermany,
+  author = {Abbott, Sam},
+  title = {{nowcastgermany: the German hospitalisation nowcasting hub as a case study: its data as tasks, the benchmark, its store and its page}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastgermany}
+}
+```

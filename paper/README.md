@@ -118,3 +118,16 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - [`tests/`](tests): `task test`.
 
 </details>
+
+## Citation
+
+Cite it with [CITATION.cff](CITATION.cff); the repository as a whole has [its own](../CITATION.cff).
+
+```bibtex
+@software{abbott_paper,
+  author = {Abbott, Sam and Holt, Charlotte},
+  title = {{The bdbv-hub-modelling paper: fine-tuned Chronos-2 and joint-model-informed renewal nowcasts for the BDBV Modeling Hub}},
+  year = {2026},
+  url = {https://github.com/seabbs/bdbv-hub-modelling/tree/main/paper}
+}
+```
