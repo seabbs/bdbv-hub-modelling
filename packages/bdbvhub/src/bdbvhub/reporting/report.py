@@ -106,7 +106,6 @@ from nowcasteval.plots import (
     plot_revisions,
     plot_scores,
     plot_scores_by_truth,
-    plot_simulation,
     plot_target,
     save_light_dark,
 )
@@ -123,7 +122,6 @@ from nowcasteval.scoresummary import (
 )
 from nowcasteval.scoring import summarise_scores
 from nowcasteval.tables import filter_table, markdown_table, sortable_table
-from nowcastfoundation.simulate import simulate_outbreak
 from nowcastgermany.evaluation import load_germany_config
 from nowcastgermany.reporting import germany_page
 from nowcastrenewal.bvd import BVD_REPO, bvd_for_vintage
@@ -309,11 +307,6 @@ def make_report(
     new = newly_missing(real)
     new = new.loc[new["location"] == NATIONAL]
     _write(gen / "newly-missing.md", _table(new.drop(columns=["kind"])))
-    outbreak = simulate_outbreak()
-    save_light_dark(
-        lambda mode: plot_simulation(outbreak.parameters, mode=mode),
-        fig / "simulation.svg",
-    )
 
     # Backtest and comparison pages: the models the site shows.
     names = _page_models()
@@ -1208,13 +1201,6 @@ def _with_horizon(scores: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-_METRIC_TABS: Final = (
-    ("crps", "CRPS", ""),
-    ("log_crps", "CRPS on the log scale", "-log-crps"),
-)
-"""Score metrics shown as tabs, with their tab label and file suffix."""
-
-
 _RELEASE_MATCH: Final = [
     "origin",
     "truth_vintage",
@@ -1298,30 +1284,6 @@ def _forecast_tabs(
     )
 
 
-def _energy_means(energy: pd.DataFrame, by: Sequence[str]) -> str:
-    """Tabulate the mean energy scores, with $n$ the vectors scored."""
-    table = (
-        energy.groupby([*by, "model"], sort=False)
-        .agg(
-            n=("energy", "size"),
-            energy=("energy", "mean"),
-            log_energy=("log_energy", "mean"),
-        )
-        .reset_index()
-        .rename(
-            columns={
-                "energy": "mean energy score",
-                "log_energy": "mean energy score on the log scale",
-            }
-        )
-    )
-    return (
-        "Mean [energy score](methods/evaluation.md#energy-score), each "
-        "scale's places and weeks scored as one forecast per vintage.\n\n"
-        + _table(table)
-    )
-
-
 def _by_baseline(
     make: Callable[[str], pd.DataFrame], baselines: Sequence[str]
 ) -> pd.DataFrame:
@@ -1341,26 +1303,6 @@ def _without_baseline(
     """Drop the baseline's own rows, whose relative scores are all 1."""
     baseline = baseline or site_baseline()
     return rel.loc[rel["model"] != baseline].reset_index(drop=True)
-
-
-_SCENARIOS: Final = {
-    "calibrated_falling": "Rt falls",
-    "calibrated_flat": "Rt holds",
-    "calibrated_rising": "Rt rises",
-}
-"""Simulated scenarios, as their tabs are labelled."""
-
-
-def _summary_views(srcs: Mapping[str, str], what: str) -> dict[str, str]:
-    """Return the Overall, By horizon and By place summaries of `srcs`."""
-    return {
-        view: summary_html(srcs, f"{label} {what}", view=view)
-        for view, label in (
-            ("overall", "Overall scores"),
-            ("horizon", "Scores by horizon"),
-            ("place", "Scores by place"),
-        )
-    }
 
 
 def _fit_settings() -> dict[str, dict[str, Any]]:

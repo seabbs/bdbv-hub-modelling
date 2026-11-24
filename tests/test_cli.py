@@ -385,34 +385,6 @@ def test_cli_nowcast_forecasts_a_later_round_from_an_older_vintage(
     assert "round 2026-11-07 forecast from the 2026-10-24 release" in handled
 
 
-@pytest.mark.usefixtures("in_root")
-def test_backtest_runs_only_the_named_scenarios(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    seen: dict[str, object] = {}
-
-    def run(*args: object, **kwargs: object) -> tuple[pd.DataFrame, ...]:
-        del args
-        seen.update(kwargs)
-        table = pd.DataFrame({"model": ["randomwalk"], "scenario": ["flat"]})
-        return table, table, table, table
-
-    monkeypatch.setattr("nowcasteval.backtest.run_scenarios", run)
-    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = [
-        "backtest",
-        "--data",
-        str(DATA),
-        "--scenarios-only",
-        "--models",
-        "randomwalk",
-    ]
-    assert main([*args, "--scenarios", "flat", *out]) == 0
-    assert seen["names"] == ["flat"]
-    with pytest.raises(SystemExit):
-        main([*args, "--scenarios", "sideways", *out])
-
-
 def test_concat_results_keeps_every_partial(tmp_path: Path) -> None:
     from nowcastutils.files import write_csv
 
@@ -457,83 +429,10 @@ def test_chunk_splits_in_order_into_contiguous_blocks() -> None:
             chunk(items, bad)
 
 
-@pytest.mark.usefixtures("in_root")
-def test_backtest_runs_recovery_apart_by_chunk(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from nowcasteval import backtest as bt
-
-    dates: list[tuple[str, ...]] = []
-
-    def recovery(
-        models: object, config: bt.BacktestConfig, **kw: object
-    ) -> tuple[pd.DataFrame, ...]:
-        del models, kw
-        dates.append(config.simulated_dates)
-        table = pd.DataFrame({"model": ["randomwalk"]})
-        return table, table, table
-
-    def development(*args: object, **kwargs: object) -> pd.DataFrame:
-        del args, kwargs
-        raise AssertionError("ran the development backtest")
-
-    monkeypatch.setattr(bt, "run_recovery", recovery)
-    monkeypatch.setattr(bt, "run_development", development)
-    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = [
-        "backtest",
-        "--data",
-        str(DATA),
-        "--recovery-only",
-        "--models",
-        "randomwalk",
-        *out,
-    ]
-    assert main([*args, "--chunk", "1/2"]) == 0
-    everything = bt.load_config("config/backtest.toml").simulated_dates
-    assert dates == [tuple(chunk_of(everything, 1, 2))]
-    assert (tmp_path / "recovery-scores.csv").exists()
-
-
 def chunk_of(items: tuple[str, ...], k: int, n: int) -> list[str]:
     from bdbvhub.cli import chunk
 
     return chunk(items, f"{k}/{n}")
-
-
-@pytest.mark.usefixtures("in_root")
-def test_backtest_without_recovery_never_runs_it(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    from bdbvhub import cli
-    from nowcasteval import backtest as bt
-
-    def recovery(*args: object, **kwargs: object) -> None:
-        del args, kwargs
-        raise AssertionError("ran the recovery check")
-
-    monkeypatch.setattr(bt, "run_recovery", recovery)
-
-    def development(*args: object, **kwargs: object) -> pd.DataFrame:
-        del args, kwargs
-        return pd.DataFrame({"model": []})
-
-    def release(*args: object, **kwargs: object) -> None:
-        del args, kwargs
-
-    monkeypatch.setattr(bt, "run_development", development)
-    monkeypatch.setattr(cli, "_release_backtest", release)
-    out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = [
-        "backtest",
-        "--data",
-        str(DATA),
-        "--no-recovery",
-        "--models",
-        "randomwalk",
-        *out,
-    ]
-    assert main(args) == 0
 
 
 @pytest.mark.usefixtures("in_root")
@@ -561,7 +460,7 @@ def test_backtest_scores_the_complete_target_on_the_truth_delay(
     )
     monkeypatch.setattr(cli, "release_backtest", release)
     out = ["--results", str(tmp_path), "--output", str(tmp_path)]
-    args = ["backtest", "--data", str(DATA), "--no-recovery"]
+    args = ["backtest", "--data", str(DATA)]
     with pytest.raises(SystemExit):
         main([*args, "--models", "randomwalk", *out])
     config = bt.load_config("config/backtest.toml")

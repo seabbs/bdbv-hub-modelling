@@ -20,20 +20,17 @@ one vector, from the same drawn samples.
 
 from __future__ import annotations
 
-import datetime as dt
 import logging
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 
 import pandas as pd
 
-from nowcastbaselines.zones import ZoneAllocator, zone_draws, zone_task
+from nowcastbaselines.zones import zone_draws, zone_task
 from nowcasteval.backtest import (
     BacktestConfig,
-    energy_tasks,
     make_tasks,
     real_vintages,
-    score_tasks,
 )
 from nowcasteval.nowcast import (
     ForecastParts,
@@ -43,9 +40,7 @@ from nowcasteval.nowcast import (
     stack_parts,
 )
 from nowcasteval.scoring import energy_scores, relative_skill, score_forecasts
-from nowcastfoundation.simulate import SimulatedOutbreak
 from nowcastutils.base import ForecastTask, ModelUnavailableError, get_model
-from nowcastutils.dates import as_date
 from nowcastutils.snapshots import weekly_counts
 
 log = logging.getLogger(__name__)
@@ -53,10 +48,7 @@ log = logging.getLogger(__name__)
 __all__ = [
     "ZONE_BASELINE",
     "ZoneForecasts",
-    "scenario_zone_scores",
-    "score_zone_allocations",
     "score_zones",
-    "zone_allocations",
     "zone_backtest",
     "zone_forecasts",
     "zone_relative_skill",
@@ -456,147 +448,4 @@ def _zone_truth(
         .reindex(grid, fill_value=0)
         .rename("truth")
         .reset_index()
-    )
-
-
-def scenario_zone_scores(
-    outbreak: SimulatedOutbreak,
-    tasks: Sequence[ForecastTask],
-    models: Sequence[str],
-    end: str,
-    later_weeks: int,
-    complete_after_weeks: int = 0,
-    allocator: ZoneAllocator | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Score allocated zone forecasts on a scenario.
-
-    As `zone_backtest`, with the simulated zone counts
-    (`SimulatedOutbreak.zone_vintage`) in place of the real ones, scored
-    against the final simulated counts and as reported `later_weeks`
-    after each forecast date. Scenarios have no zone snapshots, so there
-    is no zone random walk.
-
-    Parameters
-    ----------
-    outbreak : SimulatedOutbreak
-        The scenario.
-    tasks : sequence of ForecastTask
-        Its province tasks.
-    models : sequence of str
-        Registered province models whose samples are allocated.
-    end : str
-        Date of the final simulated data.
-    later_weeks : int
-        Weeks after each date for the as-of scores.
-    complete_after_weeks : int
-        As for `score_tasks`.
-    allocator : ZoneAllocator, optional
-        The split. Defaults to `ZoneAllocator()`.
-
-    Returns
-    -------
-    tuple of pandas.DataFrame
-        `score_tasks` output with `truth_view`, and `energy_tasks` output
-        with `truth_view`.
-    """
-    forecasts = zone_allocations(outbreak, tasks, models, allocator)
-    return score_zone_allocations(
-        outbreak,
-        [t.vintage for t in tasks],
-        forecasts,
-        end,
-        later_weeks,
-        complete_after_weeks,
-    )
-
-
-def zone_allocations(
-    outbreak: SimulatedOutbreak,
-    tasks: Sequence[ForecastTask],
-    models: Sequence[str],
-    allocator: ZoneAllocator | None = None,
-) -> pd.DataFrame:
-    """Split each model's province forecasts of a scenario across zones.
-
-    The forecasting half of `scenario_zone_scores`, with its parameters.
-
-    Returns
-    -------
-    pandas.DataFrame
-        The zone samples, with the columns `score_tasks` matches on.
-    """
-    allocator = allocator or ZoneAllocator()
-    zones = tuple(sorted({z for _, z, _ in outbreak.settings.zone_shares}))
-    frames = []
-    for task in tasks:
-        lag = (as_date(task.vintage) - as_date(task.cutoff)).days
-        counts = outbreak.zone_vintage(task.vintage, cutoff_lag=lag)
-        for name in models:
-            try:
-                prov = get_model(name).forecast(task)
-            except ModelUnavailableError as err:
-                log.warning("%s skipped %s: %s", name, task.vintage, err)
-                continue
-            frames.append(
-                _frame(
-                    allocator.allocate(prov, task, counts, zones), task, name
-                )
-            )
-    return pd.concat(frames, ignore_index=True)
-
-
-def score_zone_allocations(
-    outbreak: SimulatedOutbreak,
-    dates: Sequence[str],
-    forecasts: pd.DataFrame,
-    end: str,
-    later_weeks: int,
-    complete_after_weeks: int = 0,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Score zone forecasts of a scenario.
-
-    The scoring half of `scenario_zone_scores`.
-
-    Parameters
-    ----------
-    outbreak : SimulatedOutbreak
-        The scenario.
-    dates : sequence of str
-        Its forecast dates, in order.
-    forecasts : pandas.DataFrame
-        Output of `zone_allocations`.
-    end, later_weeks, complete_after_weeks
-        As for `scenario_zone_scores`.
-
-    Returns
-    -------
-    tuple of pandas.DataFrame
-        As `scenario_zone_scores`.
-    """
-    final = _zone_truth(outbreak.zone_vintage(end), forecasts, end)
-    scores = [
-        score_tasks(forecasts, final, end, complete_after_weeks).assign(
-            truth_view="final"
-        )
-    ]
-    energy = [
-        energy_tasks(forecasts, final, end, complete_after_weeks).assign(
-            truth_view="final"
-        )
-    ]
-    view = f"as of {later_weeks} weeks later"
-    for date in dates:
-        later = (as_date(date) + dt.timedelta(weeks=later_weeks)).isoformat()
-        rows = forecasts.loc[forecasts["vintage"] == date]
-        truth = _zone_truth(outbreak.zone_vintage(later), rows, later)
-        scores.append(
-            score_tasks(rows, truth, later, complete_after_weeks).assign(
-                truth_view=view
-            )
-        )
-        energy.append(energy_tasks(rows, truth, later).assign(truth_view=view))
-    out = pd.concat(scores, ignore_index=True)
-    return (
-        out.loc[out["scoring"] == "as reported"].reset_index(drop=True),
-        pd.concat(energy, ignore_index=True),
     )

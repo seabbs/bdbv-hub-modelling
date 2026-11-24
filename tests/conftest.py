@@ -183,11 +183,7 @@ def schema_json() -> Path:
 
 @pytest.fixture
 def config() -> BacktestConfig:
-    return BacktestConfig(
-        n_samples=100,
-        seed=1,
-        simulated_dates=("2026-08-01", "2026-09-05"),
-    )
+    return BacktestConfig(n_samples=100, seed=1)
 
 
 @pytest.fixture(scope="session")
