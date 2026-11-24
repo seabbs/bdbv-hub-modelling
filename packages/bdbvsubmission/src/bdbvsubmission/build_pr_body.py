@@ -303,8 +303,9 @@ def model_line(provenance: Mapping[str, Any]) -> str:
 def fit_line(provenance: Mapping[str, Any]) -> str:
     """Where the submitted model's fit came from, or "" for no fit.
 
-    A fitted candidate reads the fit store's fit of the same code and
-    data (`run.json` `store`, from `fit-store unpack`). A fit made in the
+    A fitted candidate reads the fit store's fit of the current code's
+    key, else the model's newest stored fit (`run.json` `store`, from
+    `fit-store unpack`), which the line says. A fit made in the
     run (`candidate.sh` with `FIT_SOURCE=fit`, a local run) says so.
     """
     run = provenance.get("run") or {}
@@ -317,6 +318,14 @@ def fit_line(provenance: Mapping[str, Any]) -> str:
             "round."
         )
     where = (store.get("store_commit") or "unknown")[:7]
+    current = store.get("current_key")
+    if current and current != store["key"]:
+        return (
+            f"Fit: `{store['model']}` fit from commit "
+            f"`{store['commit'][:7]}` (key `{store['key']}`, fitted "
+            f"{store['fitted_at']}); current code key `{current}`, "
+            f"which the fit store lacks (fit-store commit `{where}`)."
+        )
     return (
         f"Fit: read from the fit store, the `{store['model']}` fit at "
         f"{store['origin']} (key `{store['key']}`, fitted at "
