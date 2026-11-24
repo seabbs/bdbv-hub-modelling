@@ -9,6 +9,8 @@
         cannot be read
     fit-store-branch push DIR KEYS PLAN
         add DIR's planned fits to the branch, prune it and push
+    fit-store-branch push-backtests BUNDLE COMMIT
+        store BUNDLE as backtests/latest.tar.gz, made at COMMIT, and push
 
 KEYS is the JSON list of current keys, `<model>/<origin>/<key>`, and
 PLAN the matrix of planned fits, as `fit-store plan --keys --out` write
@@ -33,7 +35,7 @@ import sys
 import tarfile
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 SCRATCH_PREFIX = "fit-store-scratch"
@@ -141,14 +143,13 @@ def prune(
     return stored
 
 
-def push(new: Path, keys_file: Path, plan_file: Path) -> int:
-    """Add NEW's planned fits to the branch, prune it and push it."""
+def _commit(stage: Callable[[Path], str]) -> int:
+    """Stage files on the branch with STAGE, commit and push them.
+
+    STAGE changes a checkout of the branch's tip and returns the commit
+    message. A push that loses a race refetches and stages again.
+    """
     branch = _branch()
-    new, keys_file, plan_file = (
-        p.resolve() for p in (new, keys_file, plan_file)
-    )
-    keys = json.loads(keys_file.read_text())
-    plan = json.loads(plan_file.read_text())["include"]
     for attempt in range(1, PUSH_TRIES + 1):
         work = Path(tempfile.mkdtemp(prefix="fit-store."))
         work.rmdir()
@@ -158,7 +159,7 @@ def push(new: Path, keys_file: Path, plan_file: Path) -> int:
             _git("worktree", "add", "-q", "--detach", str(work))
             _git("switch", "-q", "--orphan", f"{branch}-new", cwd=work)
         try:
-            msg = "Store " + " ".join(prune(work, new, keys, plan))
+            msg = stage(work)
             _git("add", "-A", cwd=work)
             if (
                 _git(
@@ -185,9 +186,42 @@ def push(new: Path, keys_file: Path, plan_file: Path) -> int:
     return _error(f"could not push to {branch}")
 
 
+def push(new: Path, keys_file: Path, plan_file: Path) -> int:
+    """Add NEW's planned fits to the branch, prune it and push it."""
+    new, keys_file, plan_file = (
+        p.resolve() for p in (new, keys_file, plan_file)
+    )
+    keys = json.loads(keys_file.read_text())
+    plan = json.loads(plan_file.read_text())["include"]
+    return _commit(
+        lambda work: "Store " + " ".join(prune(work, new, keys, plan))
+    )
+
+
+BACKTESTS = "backtests"
+"""The branch folder of the stored backtests, which `prune` never
+touches: `latest.tar.gz` (their results and outputs, as Pages unpacks
+them) and `latest.json` (the commit that made them)."""
+
+
+def push_backtests(bundle: Path, commit: str) -> int:
+    """Store BUNDLE as the branch's backtests, made at COMMIT."""
+    bundle = bundle.resolve()
+
+    def stage(work: Path) -> str:
+        folder = work / BACKTESTS
+        folder.mkdir(exist_ok=True)
+        shutil.copyfile(bundle, folder / "latest.tar.gz")
+        meta = {"commit": commit}
+        (folder / "latest.json").write_text(json.dumps(meta) + "\n")
+        return f"Store the backtests of {commit}"
+
+    return _commit(stage)
+
+
 USAGE = (
     "usage: fit-store-branch guard EVENT REF SCRATCH | fetch DIR"
-    " | push DIR KEYS PLAN"
+    " | push DIR KEYS PLAN | push-backtests BUNDLE COMMIT"
 )
 
 
@@ -201,6 +235,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return fetch(Path(rest[0]))
     if action == "push" and len(rest) == 3:
         return push(*(Path(r) for r in rest))
+    if action == "push-backtests" and len(rest) == 2:
+        return push_backtests(Path(rest[0]), rest[1])
     print(USAGE, file=sys.stderr)
     return 2
 
