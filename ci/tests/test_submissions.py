@@ -98,7 +98,7 @@ def ledger(tmp_path: Path) -> Path:
                 "models": {
                     "seabbs-renewal": model(
                         136,
-                        "single-patch province renewal models",
+                        "single-patch zone renewal models",
                         "archive/2026-11-21/2",
                     ),
                 },

@@ -1,14 +1,13 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""`renewal` and `renewalbvd`, fitted on health zones.
+"""`renewal`, `renewalbvd` and `renewalsp`, fitted on health zones.
 
 `ZoneRenewalModel` fits the zones with a case in the random walks' walk
 window in one model, nested in their provinces (`model.zones`), draws
 the silent zones with them from its posterior through its fitted
 importation (`model.zones.extend_vintage`), and sums the zones to the
 provinces, sample by sample. National is the sum of the
-provinces. Importing this module registers it as `renewal` and
-`renewalbvd`; `nowcastrenewal.forecaster` registers only the per-province
-`renewalsp`.
+provinces. `SingleZoneRenewalModel` fits each zone with a recent case on
+its own (`renewalsp`). Importing this module registers all three.
 """
 
 from __future__ import annotations
@@ -667,12 +666,12 @@ class SingleZoneRenewalModel(ZoneRenewalModel):
 
     Each zone with a case in the random walks' walk window is fitted with
     the single-patch model on its own series (`RenewalModel.run` on the
-    zone), as `renewalsp` fits each province. The silent zones take
+    zone). The silent zones take
     `randomwalknowcast`'s introductions (`_silent_walk`), as in
     `renewalsp`. Provinces are the sums of their zones, sample by sample,
     and national is their sum, so no province sample is split across
     zones. Zone fits pair draws by index, as `renewalsp`'s provinces do.
-    Staged beside `renewalsp` (#768 item 9).
+    It is `renewalsp` (Sam, 2026-11-24; #768 item 9).
     """
 
     def run(self, task: ForecastTask) -> RenewalRun:
@@ -747,7 +746,7 @@ for _name in ZONE_VARIANTS:
     )
 
 for _variant in VARIANTS.values():
-    if _variant.zones:
+    if _variant.per_province:
         register_model(
             _variant.name,
             partial(SingleZoneRenewalModel, _variant),

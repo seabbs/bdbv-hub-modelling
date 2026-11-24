@@ -115,7 +115,8 @@ def test_renewal_and_renewalbvd_fit_zones() -> None:
     assert isinstance(model, zr.ZoneRenewalModel)
     assert model.variant.base == "BVD"
     assert isinstance(get_model("renewal"), zr.ZoneRenewalModel)
-    assert type(get_model("renewalsp")) is rn.RenewalModel
+    # renewalsp fits each zone on its own.
+    assert type(get_model("renewalsp")) is zr.SingleZoneRenewalModel
     # The zone fit's representation differs, so it keys a stored fit.
     assert repr(model) != repr(rn.RenewalModel(rn.VARIANTS["renewalbvd"]))
 
@@ -295,8 +296,9 @@ def test_zone_inputs_take_the_zone_counts_and_province_delays(
 @pytest.mark.parametrize(
     ("rel", "moved"),
     [
-        # The zone fits' forecaster keys only them.
-        ("zones.py", ("renewal", "renewalbvd")),
+        # The zone forecaster keys every renewal model, renewalsp's
+        # per-zone fits included.
+        ("zones.py", ("renewal", "renewalbvd", "renewalsp")),
         # The model builder is every renewal model's, renewalsp one place
         # a patch.
         ("model/zones.py", ("renewal", "renewalbvd", "renewalsp")),
@@ -595,3 +597,99 @@ def test_renewalsp_fits_each_zone_on_its_own(
         summed.sort_index(),
         check_names=False,
     )
+
+
+@pytest.fixture
+def sp_quiet(task: ForecastTask, monkeypatch: pytest.MonkeyPatch) -> set[str]:
+    """renewalsp's silent zones: all but the three with most cases."""
+    zones = zr.task_zones(task)
+    counts = zr.zone_target(task).groupby("location")["total"].sum()
+    busy = set(counts.sort_values().index[-3:])
+    silent = {z for z in zones if z not in busy}
+    rows = pd.DataFrame(
+        [
+            (z, date, k, 0.0)
+            for z in sorted(silent)
+            for date in task.target_end_dates
+            for k in range(1, task.n_samples + 1)
+        ],
+        columns=["location", "target_end_date", "sample", "value"],
+    )
+    monkeypatch.setattr(zr, "_silent_walk", lambda _: (rows, silent))
+    return silent
+
+
+def test_fit_renewal_writes_renewalsps_ci_contract(
+    task: ForecastTask,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    sp_quiet: set[str],
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def fake(self: rn.RenewalModel, t: ForecastTask) -> rn.RenewalRun:
+        calls.append(dict(self.sampler))
+        run = _fake_run(t, self.variant)
+        draws = {**run.draws, "draw": np.arange(t.n_samples)[::-1]}
+        return replace(run, draws=draws)
+
+    monkeypatch.setattr(rn.RenewalModel, "run", fake)
+    sampler = {"num_chains": 2, "num_samples": 50, "seed": 7}
+    record = rn.fit_renewal(
+        task, sampler, tmp_path, variant="renewalsp", config_name="renewalsp"
+    )
+    fitted = sorted(set(zr.task_zones(task)) - sp_quiet)
+    assert calls[0]["num_chains"] == 2
+    assert record["config"] == "renewalsp"
+    # Two chains for each zone fitted on its own, labelled by zone.
+    assert record["num_chains"] == 2 * len(fitted)
+    assert {c["location"] for c in record["chains"]} == set(fitted)
+    # The posterior draw behind each trajectory, by zone fitted.
+    pairs = pd.read_csv(tmp_path / rn.TRAJECTORY_DRAW_FILE)
+    assert set(pairs["location"]) == set(fitted)
+    zones = pd.read_csv(tmp_path / zr.ZONES_FILE)
+    assert set(zones["location"]) == set(zr.task_zones(task))
+    result = rn.forecast_renewal(task, tmp_path)
+    assert set(result.samples["target_end_date"]) == set(task.target_end_dates)
+
+
+def test_renewalsp_gives_counts_as_reported_later_and_a_summary_per_zone(
+    task: ForecastTask,
+    monkeypatch: pytest.MonkeyPatch,
+    sp_quiet: set[str],
+) -> None:
+    monkeypatch.setattr(
+        rn.RenewalModel, "run", lambda self, t: _fake_run(t, self.variant)
+    )
+    model = get_model("renewalsp")
+    task = replace(task, report_by={"2026-10-24": "2026-10-24"})
+    samples = model.forecast(task)
+    later = samples.loc[samples["as_of"] == "2026-10-24"]
+    assert not later.empty
+    assert later["target_end_date"].max() <= "2026-10-24"
+    final = samples.loc[samples["as_of"].isna()]
+    assert set(final["target_end_date"]) == set(task.target_end_dates)
+    # One summary row per zone fitted, largest first.
+    fitted = set(zr.task_zones(task)) - sp_quiet
+    assert {r["fit"] for r in model.fit_diagnostics} == fitted
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("sp_quiet")
+def test_renewalsp_zones_in_parallel_match_one_after_another(
+    task: ForecastTask, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tiny = {
+        "num_chains": 1,
+        "num_warmup": 4,
+        "num_samples": 4,
+        "target_accept": 0.8,
+        "max_tree_depth": 2,
+        "seed": 1,
+    }
+    model = zr.SingleZoneRenewalModel(rn.VARIANTS["renewalsp"], sampler=tiny)
+    serial = model.forecast_fit(task)
+    monkeypatch.setenv(rn.PROVINCE_WORKERS_ENV, "2")
+    parallel = model.forecast_fit(task)
+    pd.testing.assert_frame_equal(parallel.samples, serial.samples)
+    assert list(parallel.runs) == list(serial.runs)
