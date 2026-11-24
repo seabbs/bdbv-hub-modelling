@@ -156,7 +156,7 @@ def _inputs(case: str, samples: bool) -> dict[str, Any]:
 def live(case: str, samples: bool = False) -> dict[str, np.ndarray]:
     """Run R baselinenowcast on a case; the samples are a separate run."""
     out = run_r(
-        'source("tests/baselinenowcast/r/cases.R")\nbnc_run(input)',
+        'source("packages/nowcastbaselines/tests/baselinenowcast/r/cases.R")\nbnc_run(input)',
         _inputs(case, samples),
         packages=["baselinenowcast", "zoo"],
         na_as_null=True,

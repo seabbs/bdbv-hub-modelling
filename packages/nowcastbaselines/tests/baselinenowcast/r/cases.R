@@ -1,5 +1,6 @@
 # The pinned baselinenowcast on the test cases, for the live checks in
-# tests/baselinenowcast (through tests/model/r_live.py).
+# packages/nowcastbaselines/tests/baselinenowcast (through
+# tests/model/r_live.py).
 #
 # `bnc_run(input)` returns, for one case, the named matrices the tests
 # compare with (vectors as one-column matrices, NA where unobserved).
