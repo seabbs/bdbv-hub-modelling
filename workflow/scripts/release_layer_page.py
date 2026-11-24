@@ -481,7 +481,7 @@ img{{max-width:100%;height:auto;border:1px solid var(--line)}} td,th{{padding:3p
 table{{border-collapse:collapse;font-size:13px}} .muted{{color:var(--muted);font-size:13px}} code{{font-size:12px}}
 </style></head><body>
 <h1>What the release layer does to training blocks</h1>
-<p>The release layer (PR #883, <code>config/finetune/release-layer.yaml</code>) acts when blocks are cut, on the simulations already made.
+<p>The release layer (PR #883, <code>packages/nowcastfoundation/config/finetune/release-layer.yaml</code>) acts when blocks are cut, on the simulations already made.
 A share of blocks ({start.get("share", 0):.0%}) has its releases start late: every release before the drawn start day is dropped and the cut's is kept.
 The first kept release then holds every onset reported before it, the lag rows start there and the counts row keeps the whole history, as in the BDBV hub's data.
 Its cadences set the share of daily-step blocks released weekly ({layer.get("cadences", {}).get("daily", {}).get("weekly", 0.2):.0%}).</p>

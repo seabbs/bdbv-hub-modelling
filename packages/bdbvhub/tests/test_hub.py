@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).resolve().parent / "hub_validation" / "fixtures"
 HUB = Hub.load(FIXTURES / "hub-snapshot")
 """The pinned hub config, in which the round of 2026-10-31 is open."""
-METADATA = ROOT / "hub" / "model-metadata"
+METADATA = ROOT / "packages" / "bdbvsubmission" / "model-metadata"
 MID = "seabbs-renewal"
 
 FORECAST_DATE = "2026-10-20"

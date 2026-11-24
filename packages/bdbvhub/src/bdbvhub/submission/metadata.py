@@ -101,7 +101,8 @@ MODEL_METADATA = {
     },
     # The PyRenew models, submitted as seabbs-renewal. The gate writes the
     # metadata of the model the chain submits (`metadata --model <variant>`).
-    # The committed hub/model-metadata/seabbs-renewal.yml is that of
+    # The committed packages/bdbvsubmission/model-metadata/seabbs-renewal.yml is
+    # that of
     # `[submission] model` in packages/bdbvhub/config/hub.toml: regenerate it
     # with
     #   bdbvhub metadata --model <renewal|renewalsp|renewalbvd>
@@ -215,7 +216,8 @@ MODEL_METADATA = {
     },
     # Fine-tuned Chronos-2, the hub model seabbs-foundation. `{release}`
     # is the checkpoint release the model loads, filled in by `metadata`.
-    # The committed hub/model-metadata/seabbs-foundation.yml is that of
+    # The committed packages/bdbvsubmission/model-metadata/seabbs-foundation.yml
+    # is that of
     # the model in packages/bdbvhub/config/hub.toml (bdbvhub's
     # tests/test_fitting.py).
     "foundation": {

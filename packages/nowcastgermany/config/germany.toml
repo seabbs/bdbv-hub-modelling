@@ -64,7 +64,7 @@ models = [
 # Chronos-2 fine-tuned on real data alone (the German development half and
 # BDBV to date), run on the held-out half only, for the SI's comparison
 # with the models fine-tuned on simulations. Its checkpoint is released as
-# realdata-ft-<hash> and pinned by `realdata` in config/finetune.toml; the
+# realdata-ft-<hash> and pinned by `realdata` in packages/nowcastfoundation/config/finetune.toml; the
 # model is registered only once that pin is set (it is empty now), and its
 # training is not a workflow rule. The workflow's real-data run is
 # different: `runs.realdata` in workflow/config.yaml mixes German real-data

@@ -14,7 +14,8 @@ rounds: []
 # twice (flowlib.grids): the grid validates on round 33, trains on 34 to
 # 37 and tests on 38.
 grid_rounds:
-  rounds: [34, 35, 36, 37]
+  # Six rounds of 800 for 4,800 simulations, not the test round (38).
+  rounds: [34, 35, 36, 37, 39, 40]
   validation_round: 33
   test_round: 38
   topup_round: null
@@ -35,7 +36,7 @@ simulate:
   # The grid the simulator runs: its factors, sampling distributions,
   # shares, floors and sim QC thresholds (nowcastfoundation.simulator
   # reads it).
-  grid_file: config/finetune/grid.yaml
+  grid_file: packages/nowcastfoundation/config/finetune/grid.yaml
   # Round r is `batches` batches from seed `seed_base` + 100 r, each
   # `batch` outbreaks with exactly `draws` observation draws, each drawn
   # independently from the grid: 40 of 20, 800 simulations. A simulation
@@ -53,8 +54,9 @@ finetune:
   # fine-tuned setting trains on the same 3,200 simulations, its grid's
   # four training rounds, so they compare fairly, with checkpoints
   # doubling from 100.
-  prefixes: [100, 200, 400, 800, 1600, 3200]
-  outbreaks: 3200
+  # Run A's and Run B's checkpoints, then the end (lead 19:20/19:24).
+  prefixes: [100, 200, 400, 800, 1600, 3200, 4800]
+  outbreaks: 4800
   # Training seeds: the rounds' batches in seed order, or a fixed list
   # from `seed_file` (one seed a line, in order). The validation round is
   # one whole grid block, and the grid's training rounds the blocks
@@ -73,7 +75,7 @@ finetune:
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
   draws: 1
-  cuts: 14
+  cuts: 32
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
@@ -122,17 +124,19 @@ finetune:
   layout: ragged
   # The release layer's file (null: none): late release starts and the
   # release cadences, drawn per block at fine-tune time from the
-  # simulations already made (config/finetune/release-layer.yaml, a
+  # simulations already made
+  # (packages/nowcastfoundation/config/finetune/release-layer.yaml, a
   # proposal). Unset adds nothing to the settings hash.
   release_layer: null
   # Real-data blocks mixed into the training stream, spread over its
   # chunks (null: none). `germany`: the German triangle's reports before
-  # the first scored German date (packages/nowcastgermany/config/germany.toml), so no scored
+  # the first scored German date (packages/nowcastgermany/config/germany.toml),
+  # so no scored
   # target is trained on (rule real_training_blocks). Unset adds nothing
   # to the settings hash.
   real_training: null
   # Part of the settings hash: changing it changes every checkpoint's hash.
-  note: 3,200 simulations
+  note: 4,800 simulations, 32 cuts
   # The checkpoint checked against zero-shot on the held-out simulations.
   check_at: 800
 
@@ -153,7 +157,7 @@ runs:
   realdata: {real_training: germany}
   # Run B: Run A's recipe on the grid's new simulations with the release
   # layer (late release starts and the weekly-release share).
-  runb: {release_layer: config/finetune/release-layer.yaml}
+  runb: {release_layer: packages/nowcastfoundation/config/finetune/release-layer.yaml}
 
 # The runs `finetune` trains (null: every run in `runs`). The variants
 # train after Run A, so they never take its GPU.
@@ -204,7 +208,8 @@ ft_check:
   # every hub release forecast by each model, scored together with
   # pairwise relative skill scaled to `reference`. `models` are made once
   # per code change and reused; `finetuned` reruns alone for each
-  # checkpoint, `checkpoint`, or config/finetune.toml's when empty. A
+  # checkpoint, `checkpoint`, or
+  # packages/nowcastfoundation/config/finetune.toml's when empty. A
   # checkpoint is its release's settings hash as `slots-<hash>` (the
   # release chronos-slots-<hash>), for example slots-08f3982239a3.
   reference: randomwalknowcast
@@ -213,7 +218,8 @@ ft_check:
   checkpoint: ""
 
 dashboard:
-  # The fine-tuning dashboard (task workflow:dashboard; workflow/flowlib/dashboard).
+  # The fine-tuning dashboard (task workflow:dashboard;
+  # workflow/flowlib/dashboard).
   # serve: true serves it with a run whose targets include finetune
   # (flowlib.dashboard.serve), on DASHBOARD_HOST:DASHBOARD_PORT, for as
   # long as the coordinator (or that Snakemake run) lives.
@@ -281,7 +287,8 @@ dashboard:
       truth: >-
         black, each day's value as reported 40 days after it (the truth
         scored); over time, the latest release
-      # Germany is daily only (packages/nowcastgermany/config/germany.toml): its models take the
+      # Germany is daily only (packages/nowcastgermany/config/germany.toml): its
+      # models take the
       # daily releases and forecast the hub's 7-day rolling sums.
       sources: [daily]
       # The horizon control. days: every model is drawn and scored over
@@ -321,7 +328,8 @@ rt_check:
 
 huggingface:
   # `publish_hf` (rules/publish.smk): the Hub repository is
-  # [huggingface] repo in config/finetune.toml. `dry_run` writes the
+  # [huggingface] repo in packages/nowcastfoundation/config/finetune.toml.
+  # `dry_run` writes the
   # repository folder without uploading; it is also a dry run while the
   # repository is empty. `scores` is a CSV of the checkpoint's scores
   # relative to reference models for the model card

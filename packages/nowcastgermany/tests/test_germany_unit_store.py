@@ -2,7 +2,8 @@
 
 A released checkpoint's German unit (`score_germany`) is packed into the
 store layout and attached to its own release; Pages downloads the asset
-of the checkpoint config/finetune.toml pins. No side branch, no fallback
+of the checkpoint packages/nowcastfoundation/config/finetune.toml pins. No side
+branch, no fallback
 to another checkpoint.
 """
 

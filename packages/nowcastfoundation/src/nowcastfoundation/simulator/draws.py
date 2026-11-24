@@ -2,7 +2,7 @@
 """Draw a simulation's design and values from the grid config.
 
 Each setting, name, sampling distribution and share is read from the
-grid file (`config/finetune/grid.yaml`).
+grid file (`packages/nowcastfoundation/config/finetune/grid.yaml`).
 A design holds the categorical settings and the structure they imply; the
 values hold every continuous setting, by layer.
 Vectors are lists, and place indices count from 1 as in R, so a design and
@@ -72,7 +72,10 @@ trajectory's rising counterpart."""
 
 
 def read_grid(path: str | Path) -> dict[str, Any]:
-    """Read a grid config file (YAML), as `config/finetune/grid.yaml`."""
+    """Read a grid config file (YAML).
+
+    As `packages/nowcastfoundation/config/finetune/grid.yaml`.
+    """
     grid: dict[str, Any] = yaml.safe_load(Path(path).read_text())
     return grid
 
@@ -632,4 +635,8 @@ def draw_values(
     # Week-to-week delay jitter (`delay_jitter`), drawn last so the draws
     # above are unchanged.
     v["delay_jitter_sd"] = ds("delay_jitter_sd")
+    # Reporting cut-offs (`report_cap`, `report_stop`), drawn last so the
+    # draws above are unchanged.
+    v["report_cap_days"] = ds("report_cap_days")
+    v["report_stop_at"] = ds("report_stop_at")
     return v

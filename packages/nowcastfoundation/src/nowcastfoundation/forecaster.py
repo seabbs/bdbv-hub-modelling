@@ -12,7 +12,8 @@ weights), `foundation_complete` and `foundation_zeroshot_complete`
 `foundation_zeroshot_twostep`. For the SI,
 `foundation_real` is the ragged model with the checkpoint fine-tuned on real
 data alone (the German development half and the public BDBV data to date,
-`scripts/finetune_realdata.py`), pinned in `config/finetune.toml` and
+`scripts/finetune_realdata.py`), pinned in
+`packages/nowcastfoundation/config/finetune.toml` and
 released as `realdata-ft-<hash>`, which the latest lookup never takes.
 `hub_triangle` lays out the hub target by place, time and release lag,
 `FoundationModel` gives it to Chronos-2 as one group of series, and
@@ -153,7 +154,9 @@ PERIODS: Final = {"daily": "rolling7"}
 source (`FoundationModel.period`): the daily source's 7-day rolling sums,
 from which the hub's 7-day target is read."""
 
-FINETUNED_CONFIG: Final = Path("config/finetune.toml")
+FINETUNED_CONFIG: Final = Path(
+    "packages/nowcastfoundation/config/finetune.toml"
+)
 """Which fine-tuned checkpoint the fine-tuned models load: `hash`, `"latest"`
 or a settings hash."""
 
@@ -272,7 +275,7 @@ def active_zone_rule(
     Parameters
     ----------
     path : pathlib.Path or str
-        A TOML file, `config/finetune.toml`.
+        A TOML file, `packages/nowcastfoundation/config/finetune.toml`.
 
     Returns
     -------
@@ -567,7 +570,7 @@ def finetuned_checkpoint(path: Path | str = FINETUNED_CONFIG) -> Checkpoint:
     Parameters
     ----------
     path : pathlib.Path or str
-        A TOML file, `config/finetune.toml`.
+        A TOML file, `packages/nowcastfoundation/config/finetune.toml`.
 
     Returns
     -------
@@ -650,7 +653,7 @@ def finetuned_label(path: Path | str = FINETUNED_CONFIG) -> str:
     Parameters
     ----------
     path : pathlib.Path or str
-        A TOML file, `config/finetune.toml`.
+        A TOML file, `packages/nowcastfoundation/config/finetune.toml`.
 
     Returns
     -------

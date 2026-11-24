@@ -42,7 +42,7 @@ SKIP = (
     "workflow/tests/",
     "config/local.env.example",
     "uv.lock",
-    "ci/uv.lock",
+    "packages/bdbvsubmission/uv.lock",
     # Vendored browser libraries, kept byte for byte (static/README.md):
     # Emscripten's virtual /home/web_user in viz-global.js is no machine's.
     "workflow/flowlib/static/",

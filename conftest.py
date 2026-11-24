@@ -79,7 +79,7 @@ def _fake_checkpoint_releases(
     No test reaches GitHub. The latest `chronos-ft-*` release is
     `FAKE_CHECKPOINT`, with its `sha256sums.txt` only, and the models take
     the latest release (`BDBV_CHRONOS_FT=latest`), whatever
-    config/finetune.toml pins.
+    packages/nowcastfoundation/config/finetune.toml pins.
     """
     from nowcastfoundation import forecaster as foundation
 

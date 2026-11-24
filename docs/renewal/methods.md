@@ -106,7 +106,7 @@ The main priors are below, and the rest are on the [Renewal models](../methods/m
 ## Inference
 
 We fit each model with the No-U-Turn sampler[^nuts] in NumPyro[^numpyro], through PyRenew[^pyrenew].
-Each zone fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other draw, with target acceptance 0.9 (0.95 for `renewalbvd`) and maximum tree depth 10 (`ci/policy.toml`).
+Each zone fit runs 2 chains of 500 warm-up and 1500 draws, keeping every other draw, with target acceptance 0.9 (0.95 for `renewalbvd`) and maximum tree depth 10 (`packages/bdbvsubmission/policy.toml`).
 `renewalsp` runs 2 chains of 500 warm-up and 750 draws per zone.
 Each chain starts from its own draw from the prior.
 The walks are sampled non-centred and anchored at their mean over the fit, which removes a ridge between a walk's level and its first steps.

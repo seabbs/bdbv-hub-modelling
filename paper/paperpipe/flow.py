@@ -47,9 +47,7 @@ HELD_OUT_INCLUDES: Final = (
 """The tables main.qmd and si.qmd include for every case study."""
 
 DESIGN_TABLES: Final = (
-    "grid-epidemic",
-    "grid-reporting",
-    "grid-distributions",
+    "grid",
     "epinowcast-model",
     "heldout-set",
 )
@@ -107,7 +105,8 @@ class PaperFlow:
         evidence : mapping
             Each evidence entry that is set, with its `ref` or `file`.
         root : pathlib.Path
-            The repository root, holding `config/finetune.toml`.
+            The repository root, holding
+            `packages/nowcastfoundation/config/finetune.toml`.
         expand : callable
             Expands machine settings such as `$ROOT` in a folder.
 
@@ -151,7 +150,9 @@ class PaperFlow:
         )
         if segment is not None:
             os.environ.update(BDBV_CHRONOS_FT=str(segment))
-        with (root / "config" / "finetune.toml").open("rb") as f:
+        with (
+            root / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+        ).open("rb") as f:
             after = tomllib.load(f)["realdata_bdbv"]["release"]
         evidence = {
             name: {**entry, "file": expand(entry["file"])}
