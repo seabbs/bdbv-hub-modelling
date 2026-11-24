@@ -6,13 +6,11 @@ readme = "README.md"
 license = "MIT"
 authors = [{ name = "Sam Abbott", email = "sam.abbott@lshtm.ac.uk" }]
 requires-python = ">=3.13"
-# scoringrules is imported by `scoring` but is still a development
-# dependency of the workspace: declaring it here adds it to the runtime
-# export every fit key holds, so it is added with the next refit.
 dependencies = [
   "matplotlib>=3.8,<4",
   "numpy>=1.26,<3",
   "pandas>=2.1,<4",
+  "scoringrules>=0.7",
   "nowcastutils",
 ]
 

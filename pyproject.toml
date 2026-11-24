@@ -67,7 +67,6 @@ dev = [
   "pytest-cov>=5",
   "pytest-xdist>=3.6",
   "ruff>=0.6",
-  "scoringrules>=0.7",
   "types-PyYAML",
 ]
 # Chronos-2 for the foundation models (`nowcastfoundation.forecaster`).
