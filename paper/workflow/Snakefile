@@ -3,7 +3,7 @@
 A module of the project workflow (`workflow/Snakefile`), run from the
 repository root with `task paper` or `snakemake <target>`; its settings
 are `paper/workflow/config.yaml`, with paths from the root. Every step is
-`python -m paperpipe <step>` or the `bdbvhubrenewal` command line, run
+`python -m paperpipe <step>` or the `bdbvhub` command line, run
 with the Python that runs the workflow. Outputs go to
 `<results>/<mode>/`, so development and paper runs never share a file,
 and `publish_paper` copies a run's figures, tables and numbers to
@@ -340,7 +340,7 @@ rule ebola_backtest_draws:
         "exec >{log} 2>&1; {params.env} "
         "mkdir -p {params.folder} && "
         "{params.bdbv} backtest --config {params.config} --samples {params.n} "
-        "--models {params.models} --no-recovery "
+        "--models {params.models} "
         "--results {params.folder}/results --output {params.folder}"
 
 
@@ -363,7 +363,7 @@ rule ebola_backtest:
     shell:
         "exec >{log} 2>&1; {params.env} "
         "{params.bdbv} data && "
-        "{params.bdbv} backtest --models {params.models} --no-recovery"
+        "{params.bdbv} backtest --models {params.models}"
 
 
 rule data:

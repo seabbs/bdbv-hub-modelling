@@ -68,6 +68,42 @@ def reference_key(label: str, root: Path | str = ".") -> str:
     return h.hexdigest()[:12] if files else ""
 
 
+FT_CHECK_CODE = (
+    "packages/nowcastbaselines/src",
+    "packages/nowcastfoundation/src",
+    "packages/nowcastbdbv/src",
+    "packages/nowcasteval/src/nowcasteval/nowcast.py",
+    "packages/nowcasteval/src/nowcasteval/backtest.py",
+    "config/backtest.toml",
+)
+"""What the BDBV check's forecasts depend on, past the data: the models'
+packages, the release tasks and the backtest config. The active-zone rule
+in config/finetune.toml is keyed by its values (`ft_check_key`), so a new
+checkpoint pinned there reruns only the fine-tuned model."""
+
+
+def ft_check_key(root: Path | str = ".") -> str:
+    """Return a digest of `FT_CHECK_CODE` and the active-zone rule.
+
+    A rule parameter of the check's forecasts: Snakemake reruns them when
+    it changes, not on file times.
+    """
+    import hashlib
+    import tomllib
+
+    h = hashlib.sha256()
+    for part in FT_CHECK_CODE:
+        path = Path(root) / part
+        files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
+        for f in files:
+            h.update(str(f.relative_to(root)).encode())
+            h.update(f.read_bytes())
+    conf = tomllib.loads((Path(root) / "config/finetune.toml").read_text())
+    rule = {k: v for k, v in conf.items() if k.startswith("active_zone")}
+    h.update(repr(sorted(rule.items())).encode())
+    return h.hexdigest()[:12]
+
+
 def unit_shell(study: str, room: str, segment: str = "") -> str:
     """Return a unit's shell command, as a rule's `shell:` template.
 

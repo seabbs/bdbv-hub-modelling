@@ -6,17 +6,17 @@
 #
 #   CI_DIR         this ci/ directory (the submission-ci uv project)
 #   WORK           where every output of the run goes (default output/ci)
-#   FORECAST_CLI   the main repo's CLI (default `uv run bdbvhubrenewal`)
+#   FORECAST_CLI   the main repo's CLI (default `uv run bdbvhub`)
 #   MODEL          main repo model name (default: `[submission] model` in
 #                  config/hub.toml)
 #   MODEL_ID       hub model id (default: config/hub.toml,
-#                  `bdbvhubrenewal hub-id`)
+#                  `bdbvhub hub-id`)
 
 set -euo pipefail
 
 CI_DIR=${CI_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 WORK=${WORK:-output/ci}
-FORECAST_CLI=${FORECAST_CLI:-uv run bdbvhubrenewal}
+FORECAST_CLI=${FORECAST_CLI:-uv run bdbvhub}
 MODEL=${MODEL:-}
 # The main repo's CLI reads and writes the tidy data here, so the data
 # the prepare job pins travel with the `inputs` artefact.

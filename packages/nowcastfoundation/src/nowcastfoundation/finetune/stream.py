@@ -48,7 +48,7 @@ import pandas as pd
 
 from nowcastfoundation import series_bias, sidecar
 from nowcastfoundation.finetune import chronos as ft
-from nowcastfoundation.finetune import combinations, simulations
+from nowcastfoundation.finetune import combinations, simulations, verify
 from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
@@ -303,13 +303,14 @@ def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
     """Add each block's releases to `RELEASES_FILE`, under a release layer.
 
     One row a block: the outbreak, the part of the run, source, cut,
-    cadence, the drawn release-start delay in days, the first kept
+    cadence, the drawn release-start delay in days, whether it has no
+    lag series, the first kept
     release and the number of releases. Returns a line for the log, empty
     without a layer.
     """
     if ft.RELEASE_LAYER is None or not pairs:
         return ""
-    cols = ("source", "cut", "cadence", "release_start_days")
+    cols = ("source", "cut", "cadence", "release_start_days", "no_lags")
     frame = pd.DataFrame(
         [
             {
@@ -339,7 +340,8 @@ def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
     )
     return (
         f"{late.mean():.0%} of {len(frame)} blocks start their releases "
-        f"late (median {median} days), {weekly:.0%} released weekly"
+        f"late (median {median} days), {weekly:.0%} released weekly, "
+        f"{frame['no_lags'].mean():.0%} without lag series"
     )
 
 
@@ -2454,7 +2456,8 @@ def main(root: Path | None = None) -> None:
                 "tokens": seen.get("tokens", 0),
                 "checkpoint_above": args.checkpoint_above,
             }
-            key = ft._settings_hash(settings)
+            # Memory settings (checkpoint_above) are outside the hash.
+            key = verify.settings_hash(settings)
             settings["hash"] = key
             # The commit the trainer ran from, outside the hash: the
             # checkpoint is rebuilt from it to the same hash.

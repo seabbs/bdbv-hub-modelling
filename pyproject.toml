@@ -96,8 +96,8 @@ paper = [
 [tool.uv]
 default-groups = ["dev"]
 # The workspace root holds no code of its own: the packages are in
-# packages/, and `bdbvhub` installs the `bdbvhub` and `bdbvhubrenewal`
-# commands.
+# packages/, and `bdbvhub` installs the `bdbvhub`
+# command.
 package = false
 
 [[tool.uv.index]]
@@ -165,6 +165,7 @@ convention = "numpy"
 [tool.ruff.lint.per-file-ignores]
 # Test functions are named for what they check; docstrings would repeat it.
 "tests/**" = ["D", "PD101"]
+"packages/*/tests/**" = ["D", "PD101"]
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
 # The small config classes and helpers carry no docstrings.
@@ -176,11 +177,16 @@ convention = "numpy"
 "packages/nowcastrenewal/src/nowcastrenewal/components/**" = ["ARG002", "N803", "N806"]
 # The model's tests, from the prototype.
 "tests/model/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
+"packages/nowcastrenewal/tests/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
+"packages/nowcastbdbv/tests/**" = ["D", "PT018", "PD008", "N806", "ARG001"]
 # The port's abort tests check R's conditions, not message text.
-"tests/baselinenowcast/**" = ["PT011"]
+"packages/nowcastbaselines/tests/baselinenowcast/**" = ["PT011"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Each package's own tests, then the rest. `tests/` is on the path for
+# the shared test helpers (such as `model.r_live`).
+testpaths = ["packages/*/tests", "tests"]
+pythonpath = ["tests"]
 # Model fits are slow; `task test-slow` runs them.
 addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not slow"]
 xfail_strict = true
@@ -240,8 +246,6 @@ ignore_imports = [
   "nowcasteval.backtest -> nowcastbdbv.data.delays",
   "nowcasteval.backtest -> nowcastbdbv.data.tidy",
   "nowcasteval.backtest -> nowcastbdbv.data.zones",
-  "nowcasteval.backtest -> nowcastbdbv.zones",
-  "nowcasteval.backtest -> nowcastfoundation.simulate",
   "nowcasteval.backtest -> nowcastrenewal.bvd",
   "nowcasteval.backtest -> nowcastrenewal.forecaster",
   "nowcasteval.checks -> bdbvhub.reporting.site",
@@ -256,8 +260,6 @@ ignore_imports = [
   "nowcasteval.plots -> bdbvhub.reporting.site",
   "nowcasteval.plots -> nowcastbaselines.chain",
   "nowcasteval.scoresummary -> bdbvhub.reporting.site",
-  "nowcastfoundation.simulate -> nowcastbdbv.data.delays",
-  "nowcastfoundation.simulate -> nowcastbdbv.data.tidy",
   "nowcastgermany.evaluation -> nowcastbdbv.data.tidy",
   "nowcastgermany.evaluation -> bdbvhub.models",
   "nowcastgermany.reporting -> bdbvhub.reporting.explorer",

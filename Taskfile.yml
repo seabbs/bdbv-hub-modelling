@@ -51,7 +51,7 @@ tasks:
 
 
   test-slow:
-    desc: Run the parameter recovery fit (marked slow)
+    desc: Run the tests marked slow (model fits and Chronos-2 inference)
     cmds:
       - uv run pytest -q -m slow
 

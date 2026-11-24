@@ -1,5 +1,6 @@
 # Reference-date effects of a simulation's reporting delay through the
-# pinned epinowcast's own model, for tests/model/test_reporting_effects.py.
+# pinned epinowcast's own model, for
+# packages/nowcastrenewal/tests/test_reporting_effects.py.
 #
 # For a design and values (as the simulator draws them), builds
 # epinowcast's reference module with the simulator engine's formulas and

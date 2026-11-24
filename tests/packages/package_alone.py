@@ -33,8 +33,6 @@ KNOWN: dict[str, set[str]] = {
         "nowcasteval.scoresummary",
         "nowcasteval.scoring",
     },
-    # Upward imports of bdbvhub.
-    "nowcastfoundation": {"nowcastfoundation.simulate"},
     "nowcastgermany": {
         "nowcastgermany.cli",
         "nowcastgermany.evaluation",
@@ -46,6 +44,7 @@ KNOWN: dict[str, set[str]] = {
     "bdbvhub": {
         "bdbvhub.cli",
         "bdbvhub.compare",
+        "bdbvhub.ftcheck",
         "bdbvhub.reporting.hubtables",
         "bdbvhub.reporting.report",
         "bdbvhub.reporting.store_note",

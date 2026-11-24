@@ -1,0 +1,604 @@
+from __future__ import annotations
+
+from dataclasses import replace
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from bdbvhub.models import get_model
+from nowcasteval.backtest import (
+    BacktestConfig,
+    development_tasks,
+    energy_tasks,
+    forecast_weeks,
+    load_config,
+    lopo_tasks,
+    make_tasks,
+    run_development,
+    run_forecasts,
+    run_lopo,
+    score_tasks,
+    truth_changes,
+)
+from nowcasteval.nowcast import resolve_truth_delay
+
+ROOT = Path(__file__).resolve().parents[3]
+DATA = ROOT / "tests" / "fixtures" / "data"
+
+pytestmark = pytest.mark.usefixtures("flat_model")
+
+
+def test_load_config() -> None:
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    assert cfg.n_samples == 100
+    # A generous convergence gate on BVDOutbreakSize releases.
+    assert cfg.bvd_max_rhat == 1.1
+    assert BacktestConfig().bvd_max_rhat == 1.1
+    # The first release is not a backtest origin.
+    assert cfg.skip_origins == ("2026-08-18",)
+    assert BacktestConfig().skip_origins == ()
+    # The truth delay is estimated from the data unless fixed.
+    assert cfg.truth_delay is None
+    assert cfg.truth_level == 0.98
+    assert BacktestConfig().truth_delay is None
+
+
+def test_load_config_takes_a_fixed_truth_delay(tmp_path: Path) -> None:
+    text = (ROOT / "config" / "backtest.toml").read_text()
+    assert 'truth_delay = "auto"' in text
+    path = tmp_path / "backtest.toml"
+    path.write_text(text.replace('truth_delay = "auto"', "truth_delay = 28"))
+    assert load_config(path).truth_delay == 28
+    path.write_text(text.replace('truth_delay = "auto"', 'truth_delay = "x"'))
+    with pytest.raises(ValueError, match="truth_delay"):
+        load_config(path)
+    path.write_text(text.replace("truth_level = 0.98", "truth_level = 2"))
+    with pytest.raises(ValueError, match="truth_level"):
+        load_config(path)
+
+
+def test_truth_delay_is_fixed_or_estimated_from_the_releases() -> None:
+    def rows(vintage: str, counts: list[int]) -> list[dict[str, object]]:
+        weeks = ["2026-09-05", "2026-09-12"]
+        return [
+            {
+                "kind": "real",
+                "vintage": vintage,
+                "location": "CD",
+                "target_end_date": w,
+                "total": n,
+            }
+            for w, n in zip(weeks, counts, strict=True)
+        ]
+
+    target = pd.DataFrame(
+        [
+            # 7 and 0 days after the weeks end: 90 and 10 of 100.
+            *rows("2026-09-12", [90, 10]),
+            # 14 and 7 days: 100 and 90.
+            *rows("2026-09-19", [100, 90]),
+            # A revision, left out as a skipped origin.
+            *rows("2026-09-15", [1, 1]),
+            *rows("2026-09-26", [100, 100]),
+        ]
+    )
+    cfg = BacktestConfig(skip_origins=("2026-09-15",))
+    # 180 of 200 at 7 days, all 100 at 14 days.
+    assert resolve_truth_delay(cfg, target) == 14
+    assert resolve_truth_delay(replace(cfg, truth_level=0.9), target) == 7
+    assert resolve_truth_delay(replace(cfg, truth_delay=28), target) == 28
+    with pytest.raises(ValueError, match="truth_level"):
+        resolve_truth_delay(BacktestConfig(), target)
+
+
+def test_forecast_weeks() -> None:
+    weeks = forecast_weeks("2026-10-31", BacktestConfig())
+    assert weeks[0] == "2026-10-03"
+    assert weeks[-1] == "2026-11-21"
+    assert len(weeks) == 8
+
+
+def test_development_uses_every_real_vintage_but_the_latest(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    vintages: list[str],
+) -> None:
+    forecasts = run_development([get_model("flat")], target, delays, config)
+    # Vintages after the model choice date are backtested too.
+    real = forecasts.loc[forecasts["kind"] == "real"]
+    assert set(real["vintage"]) == set(vintages[:-1])
+    assert max(real["vintage"]) > "2026-10-10"
+
+
+def _forecast_rows(as_of: str | None) -> pd.DataFrame:
+    weeks = ["2026-09-26", "2026-10-03", "2026-10-10"]
+    return pd.DataFrame(
+        {
+            "model": "m",
+            "kind": "real",
+            "vintage": "2026-10-09",
+            "reference_date": "2026-10-17",
+            "location": "CD",
+            "target_end_date": weeks * 2,
+            "horizon": [-3, -2, -1] * 2,
+            "sample": [1, 1, 1, 2, 2, 2],
+            "value": [10.0, 20.0, 30.0, 12.0, 22.0, 32.0],
+            "as_of": as_of,
+        }
+    )
+
+
+def test_score_tasks_marks_complete_weeks() -> None:
+    truth = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": ["2026-09-26", "2026-10-03", "2026-10-10"],
+            "truth": [11.0, 21.0, 25.0],
+        }
+    )
+    forecasts = _forecast_rows(None)
+    scores = score_tasks(forecasts, truth, "2026-10-24", complete_after_weeks=3)
+    # Weeks that ended at least 3 weeks before the truth vintage.
+    done = dict(zip(scores["target_end_date"], scores["complete"], strict=True))
+    assert done == {"2026-09-26": True, "2026-10-03": True, "2026-10-10": False}
+    assert set(scores["scoring"]) == {"as reported"}
+
+
+def test_energy_tasks_score_complete_weeks_as_one_vector() -> None:
+    truth = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": ["2026-09-26", "2026-10-03", "2026-10-10"],
+            "truth": [11.0, 21.0, 25.0],
+        }
+    )
+    forecasts = _forecast_rows(None)
+    every = energy_tasks(forecasts, truth, "2026-10-24")
+    done = energy_tasks(forecasts, truth, "2026-10-24", complete_after_weeks=3)
+    assert list(every["n_cells"]) == [3]
+    assert list(done["n_cells"]) == [2]
+    # Two samples (10, 20) and (12, 22) against (11, 21).
+    spread = np.hypot(2.0, 2.0) / 2
+    assert done["energy"].iloc[0] == pytest.approx(np.hypot(1, 1) - spread)
+
+
+def test_score_tasks_scores_vintage_matched_rows() -> None:
+    truth = pd.DataFrame(
+        {
+            "location": "CD",
+            "target_end_date": ["2026-09-26", "2026-10-03", "2026-10-10"],
+            "truth": [11.0, 21.0, 25.0],
+        }
+    )
+    forecasts = pd.concat(
+        [
+            _forecast_rows(None),
+            _forecast_rows("2026-10-17").assign(value=0.0),
+            _forecast_rows("2026-10-24").assign(value=25.0),
+        ],
+        ignore_index=True,
+    )
+    scores = score_tasks(forecasts, truth, "2026-10-24", complete_after_weeks=3)
+    # Final rows against the truth as reported, and the rows predicting
+    # this truth vintage against it. Rows for other vintages are left out.
+    assert sorted(scores["scoring"].unique()) == [
+        "as reported",
+        "vintage-matched",
+    ]
+    matched = scores.loc[scores["scoring"] == "vintage-matched"]
+    assert len(matched) == 3
+    week = matched.loc[matched["target_end_date"] == "2026-10-10"]
+    assert week["ae_median"].iloc[0] == 0.0
+    # Forecasts without an as_of column are all final counts.
+    plain = score_tasks(
+        _forecast_rows(None).drop(columns="as_of"), truth, "2026-10-24"
+    )
+    assert set(plain["scoring"]) == {"as reported"}
+    assert plain["complete"].all()
+
+
+def test_each_scored_week_is_the_truth_of_its_own_week() -> None:
+    import datetime as dt
+
+    from nowcastfoundation.forecaster import FoundationModel
+    from nowcastutils.base import ForecastTask
+
+    # Weekly totals rise by a known step and each week is reported one
+    # week on, so the last week and the weeks ahead are forecast. A week
+    # out of place is off by one step. The weeks cross ISO 2020's week 53.
+    weeks = pd.date_range("2020-09-05", "2021-02-27", freq="7D")
+    total = pd.Series(10.0 + 4 * np.arange(len(weeks)), index=weeks)
+    ref = pd.Timestamp("2020-12-19")
+    releases = [
+        pd.DataFrame(
+            {
+                "kind": "real",
+                "vintage": v.strftime("%Y-%m-%d"),
+                "location": loc,
+                "target_end_date": total.loc[
+                    : v - pd.Timedelta(days=7)
+                ].index.strftime("%Y-%m-%d"),
+                "total": share
+                * total.loc[: v - pd.Timedelta(days=7)].to_numpy(),
+                "cutoff": v.strftime("%Y-%m-%d"),
+            }
+        )
+        for v in weeks[weeks <= ref]
+        for loc, share in (("CD", 2.0), ("CD-KN", 1.0), ("CD-NK", 1.0))
+    ]
+    history = pd.concat(releases, ignore_index=True)
+    ahead = [ref + pd.Timedelta(days=7 * h) for h in range(-1, 8)]
+    task = ForecastTask(
+        vintage=ref.strftime("%Y-%m-%d"),
+        reference_date=ref.date(),
+        kind="real",
+        cutoff=ref.strftime("%Y-%m-%d"),
+        target=history.loc[history["vintage"] == ref.strftime("%Y-%m-%d")],
+        delays=None,
+        locations=("CD-KN", "CD-NK"),
+        target_end_dates=tuple(w.strftime("%Y-%m-%d") for w in ahead),
+        n_samples=5,
+        target_history=history,
+    )
+
+    def extrapolate(groups, horizon, n, _seed):
+        out = []
+        for g in groups:
+            t = np.atleast_2d(g["target"])
+            step = np.arange(1, horizon + 1)
+            path = t[:, -1:] + step * (t[:, -1:] - t[:, -2:-1])
+            out.append(np.broadcast_to(path, (n, *path.shape)))
+        return out
+
+    model = FoundationModel(
+        "chronos_extrapolate", "weekly", "ragged", None, sample=extrapolate
+    )
+    forecasts = run_forecasts([model], [task])
+    truth = pd.DataFrame(
+        {
+            "location": np.repeat(["CD", "CD-KN", "CD-NK"], len(weeks)),
+            "target_end_date": np.tile(weeks.strftime("%Y-%m-%d"), 3),
+            "truth": np.concatenate([2 * total, total, total]),
+        }
+    )
+    scores = score_tasks(forecasts, truth, "2021-03-06")
+    end = pd.to_datetime(scores["target_end_date"])
+    assert set(scores["horizon"]) == set(range(-1, 8))
+    assert (end == ref + pd.to_timedelta(7 * scores["horizon"], "D")).all()
+    share = scores["location"].map({"CD": 2.0, "CD-KN": 1.0, "CD-NK": 1.0})
+    np.testing.assert_array_equal(
+        scores["truth"], share * total.loc[end].to_numpy()
+    )
+    np.testing.assert_array_equal(scores["ae_median"], 0)
+    np.testing.assert_array_equal(scores["wis"], 0)
+    assert dt.date(2021, 1, 2) in set(end.dt.date)
+
+
+def test_make_tasks_asks_for_later_vintages(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    vintages = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
+    tasks = make_tasks(target, delays, config, report_by=vintages)
+    by = {t.vintage: t.report_by for t in tasks}
+    # Each later release with its cut-off, its latest onset day.
+    assert by["2026-08-18"] == {
+        "2026-10-09": "2026-10-07",
+        "2026-10-17": "2026-10-16",
+        "2026-10-24": "2026-10-24",
+    }
+    assert by["2026-10-24"] == {}
+
+
+def test_truth_changes(target: pd.DataFrame, vintages: list[str]) -> None:
+    changes = truth_changes(target, locations=("CD",))
+    week = changes.loc[changes["target_end_date"] == "2026-10-10"]
+    # Every real release from the one that first reports the week.
+    assert (
+        list(week["truth_vintage"]) == vintages[vintages.index("2026-10-09") :]
+    )
+    last = week.iloc[-1]
+    assert last["change"] == 0
+    assert (week["change"] == week["truth"] - last["truth"]).all()
+
+
+class _MaskAware:
+    """RandomWalk that forecasts masked provinces from the others."""
+
+    name = "mask_aware"
+    supports_mask = True
+
+    def forecast(self, task):  # type: ignore[no-untyped-def]
+        from dataclasses import replace
+
+        seen = task.target.loc[~task.target["location"].isin(task.mask)]
+        # Fill masked provinces with the mean of the visible ones.
+        mean = (
+            seen.loc[seen["location"] != "CD"]
+            .groupby("target_end_date", as_index=False)["total"]
+            .mean()
+        )
+        filled = pd.concat(
+            [seen]
+            + [mean.assign(location=p, location_name=p) for p in task.mask],
+            ignore_index=True,
+        )
+        return get_model("flat").forecast(replace(task, target=filled))
+
+
+def test_tasks_carry_an_empty_mask(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    tasks = make_tasks(
+        target.loc[target["vintage"] == "2026-10-09"], delays, config
+    )
+    assert tasks[0].mask == ()
+
+
+def test_lopo_masks_one_province_at_a_time(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+    vintages: list[str],
+) -> None:
+    models = [get_model("flat"), _MaskAware()]
+    forecasts, scores = run_lopo(
+        models, target, delays, config, provinces=("CD-IT", "CD-NK")
+    )
+    # Random walk cannot honour a mask, so it is skipped.
+    assert set(forecasts["model"]) == {"mask_aware"}
+    # Only the masked province is kept, from development vintages only.
+    assert (forecasts["location"] == forecasts["masked"]).all()
+    assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
+    assert set(forecasts["vintage"]) == set(vintages[:-1])
+    assert set(scores["location"]) == {"CD-IT", "CD-NK"}
+    assert set(scores["truth_vintage"]) == {vintages[-1]}
+
+
+def test_lopo_without_mask_aware_models_is_empty(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    forecasts, scores = run_lopo([get_model("flat")], target, delays, config)
+    assert forecasts.empty
+    assert scores.empty
+
+
+def test_tasks_carry_earlier_delay_files_for_the_publication_lag(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    tasks = {
+        t.vintage: t
+        for t in make_tasks(
+            target.loc[target["kind"] == "real"],
+            delays.assign(kind="real"),
+            config,
+        )
+    }
+    history = tasks["2026-10-17"].delay_history
+    assert history is not None
+    assert set(history["vintage"]) == {"2026-10-09", "2026-10-17"}
+    assert tasks["2026-08-18"].delay_history is None
+
+
+def test_tasks_carry_earlier_target_vintages(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    real = target.loc[target["kind"] == "real"]
+    tasks = {t.vintage: t for t in make_tasks(real, delays, config)}
+    history = tasks["2026-10-17"].target_history
+    assert history is not None
+    assert set(history["vintage"]) == {"2026-08-18", "2026-10-09", "2026-10-17"}
+    # One vintage's rows can take their history from a fuller table.
+    rows = real.loc[real["vintage"] == "2026-10-09"]
+    (task,) = make_tasks(rows, delays, config, history=real)
+    assert task.target_history is not None
+    assert set(task.target_history["vintage"]) == {"2026-08-18", "2026-10-09"}
+
+
+class _Counting:
+    name = "randomwalk"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def forecast(self, task):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        return get_model("flat").forecast(task)
+
+
+class _Fitted(_Counting):
+    def forecast(self, task):  # type: ignore[no-untyped-def]
+        self.fit_diagnostics = [{"fit": "all", "max_rhat": 1.01}]
+        return super().forecast(task)
+
+
+def test_run_forecasts_collects_fit_summaries(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    tasks = make_tasks(
+        target.loc[target["vintage"] >= "2026-10-17"], delays, config
+    )
+    fits: list[pd.DataFrame] = []
+    run_forecasts([_Fitted()], tasks, fits=fits)
+    table = pd.concat(fits)
+    assert set(table["vintage"]) == {t.vintage for t in tasks}
+    assert (table["max_rhat"] == 1.01).all()
+
+
+class _LearntDelay(_Counting):
+    def forecast(self, task):  # type: ignore[no-untyped-def]
+        self.delay_summary = pd.DataFrame(
+            {"kind": ["cumulative", "onset_week"], "vintage": task.vintage}
+        )
+        return super().forecast(task)
+
+
+def test_run_forecasts_keeps_the_learnt_delay_kind(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    tasks = make_tasks(
+        target.loc[target["vintage"] >= "2026-10-17"], delays, config
+    )
+    learnt: list[pd.DataFrame] = []
+    run_forecasts([_LearntDelay()], tasks, learnt=learnt)
+    table = pd.concat(learnt)
+    assert set(table["kind"]) == {"cumulative", "onset_week"}
+
+
+class _Masking(_Counting):
+    supports_mask = True
+
+
+def test_lopo_scores_only_the_masked_province(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    config: BacktestConfig,
+) -> None:
+    model = _Masking()
+    kwargs = {"provinces": ("CD-IT",)}
+    again, scores = run_lopo([model], target, delays, config, **kwargs)
+    calls = model.calls
+    assert calls > 0
+    assert set(again["masked"]) == {"CD-IT"}
+    assert set(again["location"]) == {"CD-IT"}
+    assert len(scores) > 0
+    tasks = lopo_tasks(target, delays, config, **kwargs)
+    assert all(t.mask == ("CD-IT",) for t in tasks)
+    assert len(tasks) == calls
+
+
+def test_backtest_sampler_comes_from_the_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from nowcasteval.backtest import apply_sampler
+    from nowcastrenewal.forecaster import SAMPLER_ENV, sampler_settings
+
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    assert cfg.sampler == {
+        "num_chains": 2,
+        "num_warmup": 500,
+        "num_samples": 750,
+        "target_accept": 0.8,
+        "max_tree_depth": 10,
+        "chain_method": "parallel",
+    }
+    # setenv, not delenv, so the variable apply_sampler writes is undone.
+    monkeypatch.setenv(SAMPLER_ENV, "")
+    apply_sampler(cfg)
+    assert sampler_settings()["num_warmup"] == 500
+    # Settings already in the environment win.
+    monkeypatch.setenv(SAMPLER_ENV, '{"num_warmup": 50}')
+    apply_sampler(cfg)
+    assert sampler_settings()["num_warmup"] == 50
+
+
+def test_tasks_carry_the_daily_releases_up_to_their_vintage(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from nowcastbdbv.data.tidy import load_daily
+
+    daily = load_daily()
+    real = target.loc[target["kind"] == "real"]
+    rows = real.loc[real["vintage"] == "2026-10-17"]
+    task = make_tasks(
+        rows, delays, BacktestConfig(seed=3), history=real, daily=daily
+    )[0]
+    assert task.daily_history is not None
+    assert set(task.daily_history["vintage"]) == {
+        "2026-08-18",
+        "2026-10-09",
+        "2026-10-17",
+    }
+    assert {"location", "onset_date", "observed", "imputed"} <= set(
+        task.daily_history.columns
+    )
+    # Without daily data, or for another kind, there is none.
+    assert make_tasks(rows, delays, BacktestConfig())[0].daily_history is None
+    other = make_tasks(
+        rows.assign(kind="simulated"), delays, BacktestConfig(), daily=daily
+    )[0]
+    assert other.daily_history is None
+
+
+def test_skipped_origins_stay_in_the_later_tasks(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    every = development_tasks(target, delays, BacktestConfig(), daily=daily)
+    skip = BacktestConfig(skip_origins=("2026-08-18",))
+    kept = development_tasks(target, delays, skip, daily=daily)
+    assert [t.vintage for t in kept] == [
+        t.vintage for t in every if t.vintage != "2026-08-18"
+    ]
+    # Its rows are still in the later tasks' histories.
+    later = kept[0]
+    assert "2026-08-18" in set(later.target_history["vintage"])
+    assert "2026-08-18" in set(later.daily_history["vintage"])
+
+
+def test_development_tasks_pass_the_daily_releases(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    from nowcastbdbv.data.tidy import load_daily
+
+    tasks = development_tasks(
+        target, delays, BacktestConfig(), daily=load_daily(),
+    )  # fmt: skip
+    assert all(t.daily_history is not None for t in tasks)
+
+
+def _stack(parts: list[pd.DataFrame]) -> pd.DataFrame:
+    return pd.concat(parts, ignore_index=True)
+
+
+def test_sample_counts_come_from_the_config(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    # The models run here draw `[samples] backtest`; the fit store and the
+    # submission keep `[forecast] n_samples`, so their fit keys do not
+    # move with it.
+    from bdbvhub.store import store
+    from nowcasteval.backtest import for_scoring, tasks_for_scoring
+
+    text = (ROOT / "config" / "backtest.toml").read_text()
+    assert "[samples]" in text
+    cfg = load_config(ROOT / "config" / "backtest.toml")
+    assert cfg.n_samples == 100
+    assert cfg.score_samples == 1000
+    assert for_scoring(cfg).n_samples == 1000
+    assert replace(for_scoring(cfg), n_samples=100) == cfg
+    path = tmp_path / "backtest.toml"
+    path.write_text(text.replace("backtest = 1000", "backtest = 7"))
+    assert load_config(path).score_samples == 7
+    tasks = store.origin_tasks(target, delays, cfg, daily)
+    assert tasks
+    assert {t.n_samples for t in tasks.values()} == {100}
+    drawn = tasks_for_scoring(list(tasks.values()), cfg)
+    assert {t.n_samples for t in drawn} == {1000}
+    # The same seed, so each model draws from the same stream.
+    assert [t.seed for t in drawn] == [t.seed for t in tasks.values()]
+
+
+def test_tasks_carry_the_imputation_delay_and_places(
+    target: pd.DataFrame, delays: pd.DataFrame, config: BacktestConfig
+) -> None:
+    from nowcastbdbv.data.delays import hub_delay_pmf
+
+    task = make_tasks(
+        target.loc[target["vintage"] == "2026-10-09"], delays, config
+    )[0]
+    assert task.imputation_delay is not None
+    np.testing.assert_allclose(
+        task.imputation_delay, hub_delay_pmf("2026-10-09")
+    )
+    assert task.places is not None
+    assert {"population", "latitude", "longitude"} <= set(task.places)
+    assert set(task.locations) <= set(task.places["location"])

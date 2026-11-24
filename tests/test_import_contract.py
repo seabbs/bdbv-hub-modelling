@@ -45,11 +45,11 @@ def test_the_packages_keep_the_contract() -> None:
 
 def test_ci_checks_each_package_in_its_own_job() -> None:
     # One CI job per package: installed alone with every module imported,
-    # ruff, format, mypy and the tests it owns (tests/packages/owners.py).
+    # ruff, format, mypy and its own tests (packages/<name>/tests).
     import yaml
 
     sys.path.insert(0, str(ROOT / "tests" / "packages"))
-    from owners import layers
+    from legs import layers
 
     packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
     assert set(layers()) == packages
@@ -61,20 +61,30 @@ def test_ci_checks_each_package_in_its_own_job() -> None:
         "ruff check",
         "ruff format --check",
         "mypy",
-        "owners.py",
+        'packages/$PACKAGE/tests"',
         "pytest",
     ):
         assert check in runs, check
     assert not (workflows / "packages.yml").exists()
 
 
+def test_every_package_has_its_own_tests() -> None:
+    sys.path.insert(0, str(ROOT / "tests" / "packages"))
+    from legs import layers
+
+    for name in layers():
+        assert list((ROOT / "packages" / name / "tests").glob("test_*.py"))
+    assert not (ROOT / "tests" / "packages" / "owners.py").exists()
+
+
 def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
     sys.path.insert(0, str(ROOT / "tests" / "packages"))
-    from owners import layers, legs
+    from legs import layers, legs
 
     assert legs(["docs/index.md"]) == []
+    assert legs(["tests/workflow/test_workflow_dag.py"]) == []
     assert legs(["uv.lock"]) == layers()
-    assert legs(["tests/baselinenowcast/test_delay.py"]) == ["nowcastbaselines"]
+    assert legs(["packages/bdbvhub/tests/test_zones.py"]) == ["bdbvhub"]
     seen = legs(["packages/nowcastbaselines/src/nowcastbaselines/chain.py"])
     assert {"nowcastbaselines", "nowcastrenewal", "bdbvhub"} <= set(seen)
     assert "nowcastutils" not in seen

@@ -29,7 +29,7 @@ which `unpack` writes out for the submission to forecast from, so the
 submission uses the stored fit rather than fitting again.
 Where the store has no fit for the current key, `load` uses the newest
 stored fit of that pair and says so (`StoreStatus`).
-`command` runs `bdbvhubrenewal fit-store`.
+`command` runs `bdbvhub fit-store`.
 """
 
 from __future__ import annotations
@@ -853,7 +853,7 @@ def fit_files(
 ) -> dict[str, str]:
     """Return a submission candidate's fit directory, after its forecast.
 
-    The directory `bdbvhubrenewal fit --config` would write: the model's
+    The directory `bdbvhub fit --config` would write: the model's
     `write_fit_dir` (samples and `ppc.json`), with `diagnostics.json`
     and `fit.json` (`write_records`). A model that is no candidate's
     (`renewal.FIT_VARIANTS`) has none.
@@ -1183,7 +1183,7 @@ def _merge(path: Path, frames: Iterable[pd.DataFrame]) -> None:
 
 
 def command(args: argparse.Namespace) -> int:
-    """Run `bdbvhubrenewal fit-store plan|fit|load|unpack`.
+    """Run `bdbvhub fit-store plan|fit|load|unpack`.
 
     `plan` prints the fits to make and writes them as a GitHub Actions
     matrix (`--out`), with every current key (`--keys`) for pruning;

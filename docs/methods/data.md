@@ -57,35 +57,6 @@ The [Baseline models](baselines.md#daily-release-snapshots) page compares the co
 The hub imputes an onset for each case reported without one by subtracting a delay drawn from a fit to its published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), [Renewal models](model.md#hub-imputation)).
 So the share of cases without an onset is measured at every vintage.
 
-## Simulated vintages
-
-Simulated vintages come from the model's own renewal with known parameters.
-The default scenario uses:
-
-- expected onsets from the model's renewal and generation interval, with a national Rt that turns from 1.6 to 0.85 around day 120, fixed province offsets, gravity-kernel importation ($\varepsilon = 0.01$) and susceptible depletion;
-- Poisson confirmed cases, with ascertainment rising from 0.5 to 0.75;
-- a missing-onset share by report day rising from 5% to 25% and falling to 12%;
-- a double censored Gamma delay whose mean falls from 12 to 6 days;
-- a lag from report to publication, 85% uniform on 0 to 3 days and 15% uniform on 4 to 60 days, as late entries in the real delay files;
-- 30% of cases reported with no onset get one 7 to 42 days after publication, so imputed counts of past weeks fall and known counts rise, as between real vintages.
-
-Vintages are published as the hub does, with missing onsets imputed from the hub's delay fit.
-Daily releases are published on Tuesdays, Wednesdays, Fridays and Saturdays.
-Their weekly sums are the weekly target.
-Each is cut off by the lag of the latest real release on that weekday, or the median lag of the real releases where none fell on that weekday.
-The truth is every confirmed case by its true onset week.
-
-The calibrated scenarios copy one real vintage.
-Each province with cases has expected infections that follow its real weekly onset totals, spread over the days, smoothed over 7 days and moved earlier by the mean incubation period, up to 4 weeks before the vintage.
-Rt is the ratio of infections to the force of infection, capped at 3, and infections above what it explains are seeds.
-From 4 weeks before the vintage, Rt is the mean of its last 3 weeks times 0.75, 1 or 1.25 (falling, flat or rising), for 10 weeks past the vintage.
-Ascertainment is 1, there is no importation and the whole population is at risk.
-The delay is the real delay by onset week, completed for right truncation from weeks with full follow-up.
-The missing-onset share is the real national imputed share by onset week, $(I + 1)/(Y + 2)$, averaged over 5 weeks and moved later by the mean delay.
-Zones take the real share of each province's cases.
-Late entries and onset backfill are as in the default, and 2% of cases are removed 7 to 42 days after publication.
-Their truth is the last simulated vintage.
-
 ## BVDOutbreakSize estimates
 
 `renewalbvd` uses the Rt estimates in the public `results-<run>` releases of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) (MIT licence, [Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).

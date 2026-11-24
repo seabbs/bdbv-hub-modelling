@@ -1253,3 +1253,14 @@ def test_rt_check_is_one_job_per_model_and_origin(tmp_path):
         config={"rt_check": {"store": "s", "data": "d", "out_dir": str(out)}},
     )
     assert jobs == {"rt_check": 1}
+
+
+def test_each_checkpoint_gets_its_7_day_check(tmp_path):
+    # Lead 00:55 (Sam): the 7-day check is a workflow rule per checkpoint,
+    # on the held-out blocks, whichever way the run evaluates.
+    where = tmp_path / "runs" / "runa" / "train" / "n250"
+    (where / "finetuned-ckpt").mkdir(parents=True)
+    (where / "settings.json").write_text("{}")
+    (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
+    jobs = dry(tmp_path, f"{where}/seven-day.json", config=FT)
+    assert jobs == {"seven_day_check": 1}

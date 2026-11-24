@@ -67,7 +67,6 @@ def _imports_from(module: str, source: str) -> set[str]:
 def test_generic_helpers_live_in_generic_modules() -> None:
     assert {
         "MAX_PAIR_AGE",
-        "cutoff_lags",
         "latest_onset_days",
         "release_cutoff",
         "release_pairs",
@@ -89,7 +88,7 @@ def test_generic_modules_import_only_generic_modules() -> None:
         own = {
             m
             for m in _imported(module)
-            if m.split(".")[0] in ("bdbvhubrenewal", "bdbvhub")
+            if m.split(".")[0] in ("bdbvhub", "bdbvhub")
         }
         assert not own, (module, own)
 

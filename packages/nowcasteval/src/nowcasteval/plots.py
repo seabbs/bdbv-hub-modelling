@@ -74,7 +74,6 @@ __all__ = [
     "plot_revisions",
     "plot_scores",
     "plot_scores_by_truth",
-    "plot_simulation",
     "plot_target",
     "point_style",
     "save_light_dark",
@@ -1089,49 +1088,6 @@ def plot_renewal_delay(
     return fig
 
 
-def plot_simulation(parameters: pd.DataFrame, mode: str = "light") -> Figure:
-    """Plot the true parameters of a simulated outbreak.
-
-    Parameters
-    ----------
-    parameters : pandas.DataFrame
-        `SimulatedOutbreak.parameters`.
-    mode : str
-        `"light"` or `"dark"`.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        Panels for onsets, Rt, susceptible fraction, ascertainment,
-        missing fraction and mean delay.
-    """
-    panels = [
-        ("onsets", "Daily onsets"),
-        ("rt", "Rt"),
-        ("susceptible_fraction", "Susceptible fraction"),
-        ("ascertainment", "Ascertainment"),
-        ("missing", "Share missing onset"),
-        ("delay_mean", "Mean delay (days)"),
-    ]
-    fig, axes = _grid(len(panels), 3, width=3.0, height=2.2)
-    palette = MODEL_COLOURS[mode]
-    locs = list(parameters["location"].unique())
-    for ax, (col, title) in zip(axes, panels, strict=True):
-        shared = col in ("ascertainment", "missing", "delay_mean")
-        for i, loc in enumerate(locs[:1] if shared else locs):
-            p = parameters.loc[parameters["location"] == loc]
-            ax.plot(p["date"], p[col], color=palette[i], lw=1.5, label=loc)
-        ax.set_title(title)
-        _date_axis(ax)
-    axes[0].legend()
-    return fig
-
-
-# --------------------------------------------------------------------------
-# Forecasts
-# --------------------------------------------------------------------------
-
-
 def _bands(samples: pd.DataFrame) -> pd.DataFrame:
     grp = samples.groupby("target_end_date")["value"]
     out = grp.quantile(np.array([0.05, 0.25, 0.5, 0.75, 0.95])).unstack()
@@ -2107,67 +2063,6 @@ def plot_scores(
         ax.set_xlabel(by.capitalize())
     axes[0].set_ylabel(_metric_label(metric))
     axes[0].legend()
-    return fig
-
-
-def plot_scenarios(
-    scores: pd.DataFrame,
-    models: Sequence[str] | None = None,
-    mode: str = "light",
-    metric: str = "crps",
-) -> Figure:
-    """Plot mean CRPS by horizon on the simulated scenarios.
-
-    Parameters
-    ----------
-    scores : pandas.DataFrame
-        Scenario scores with `scenario`, `location`, `model`, `horizon`,
-        `crps`, `truth_view` and `complete`.
-    models : sequence of str, optional
-        Models in registry order.
-    mode : str
-        `"light"` or `"dark"`.
-
-    Returns
-    -------
-    matplotlib.figure.Figure
-        One panel per scenario, scored against the final data on complete
-        weeks. National is solid, provinces dashed and zones dotted.
-    """
-    models = list(models or scores["model"].unique())
-    final = scores.loc[(scores["truth_view"] == "final") & scores["complete"]]
-    scenarios = list(final["scenario"].unique())
-    fig, axes = _grid(len(scenarios), 3, width=3.6, height=2.6)
-    for ax, scenario in zip(axes, scenarios, strict=True):
-        s = final.loc[final["scenario"] == scenario]
-        levels = (
-            s["level"]
-            if "level" in s
-            else np.where(s["location"] == "CD", "national", "province")
-        )
-        for level, style in (
-            ("national", "-"),
-            ("province", "--"),
-            ("zone", ":"),
-        ):
-            part = s.loc[levels == level]
-            mean = part.groupby(["model", "horizon"])[metric].mean().unstack(0)
-            for m in models:
-                if m not in mean.columns:
-                    continue
-                ax.plot(
-                    mean.index,
-                    mean[m],
-                    color=model_colour(m, models, mode),
-                    ls=style,
-                    marker="o",
-                    ms=4,
-                    label=f"{m}, {level}",
-                )
-        ax.set_title(scenario.removeprefix("calibrated_"))
-        ax.set_xlabel("Horizon")
-    axes[0].set_ylabel(_metric_label(metric))
-    axes[0].legend(fontsize=7)
     return fig
 
 

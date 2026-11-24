@@ -306,7 +306,7 @@ class Training:
         )
 
     def finetune_inputs(self, wc: Any) -> list[str]:  # noqa: ARG002
-        """Return each trained run's checkpoints, held-out losses, check."""
+        """Return each trained run's checkpoints, held-out losses, checks."""
         out = []
         for run in self.trained_runs():
             there, train, ns = (
@@ -317,6 +317,8 @@ class Training:
             out += [f"{train}/n{n}/settings.json" for n in ns]
             # An offloaded run's held-out losses, scored after each segment.
             out += [f for n in ns for f in self.offloaded(run, n)]
+            # Each checkpoint's 7-day check (rule seven_day_check).
+            out += [f"{train}/n{n}/seven-day.json" for n in ns]
             # A machine that publishes as it trains (PUBLISH in local.env).
             if self.local["PUBLISH"]:
                 out += [f"{train}/n{n}/published.json" for n in ns]
