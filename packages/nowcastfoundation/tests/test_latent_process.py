@@ -395,7 +395,7 @@ def test_ci_runs_the_live_latent_checks() -> None:
     import yaml
 
     workflow = yaml.safe_load(
-        (ROOT / ".github/workflows/heavy.yml").read_text()
+        (ROOT / ".github/workflows/tests.yml").read_text()
     )
     job = workflow["jobs"]["r-live"]
     runs = " ".join(s.get("run", "") for s in job["steps"])
