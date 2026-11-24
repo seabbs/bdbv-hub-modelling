@@ -1,9 +1,9 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
 """How much pairing the walk models' draws matters on the German benchmark.
 
-The German study of the sensitivity page: `nowcasteval.pairing` gives the
-variants and their scores, and this forecasts the German development
-half with them (`germany_sensitivity`).
+The German study of the sensitivity page: `nowcastbaselines.pairing`
+gives the variants and `nowcasteval.pairing` their scores, and this
+forecasts the German development half with them (`germany_sensitivity`).
 """
 
 from __future__ import annotations
@@ -14,14 +14,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nowcastbaselines.pairing import MODELS, variant_forecasts
 from nowcasteval.nowcast import rolling_truth
-from nowcasteval.pairing import (
-    MODELS,
-    RHO_COLUMNS,
-    SCORE_COLUMNS,
-    variant_forecasts,
-    variant_scores,
-)
+from nowcasteval.pairing import RHO_COLUMNS, SCORE_COLUMNS, variant_scores
 from nowcastgermany import evaluation as de
 from nowcastgermany.data import (
     AGE_GROUPS,
