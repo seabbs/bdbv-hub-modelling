@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-TABLESORT = Path(__file__).parents[1] / "docs" / "javascripts" / "tablesort.js"
+TABLESORT = Path(__file__).parents[3] / "docs" / "javascripts" / "tablesort.js"
 
 
 def _order(keys: list[str], direction: int) -> list[int]:

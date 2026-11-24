@@ -55,8 +55,8 @@ jobs:
       - name: Ruff
         if: ${{ !cancelled() }}
         run: |
-          uv run ruff check tests workflow docs/hooks
-          uv run ruff format --check tests workflow docs/hooks
+          uv run ruff check tests workflow docs/hooks .github/scripts
+          uv run ruff format --check tests workflow docs/hooks .github/scripts
           # The paper, with its own settings (paper/ruff.toml).
           (cd paper && uv run ruff check . && uv run ruff format --check .)
       - name: actionlint
@@ -106,7 +106,7 @@ jobs:
             changed=uv.lock
           fi
           packages=$(printf '%s\n' "$changed" |
-            python3 tests/packages/legs.py)
+            python3 .github/scripts/legs.py)
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
           shared='^(pyproject\.toml|uv\.lock|conftest\.py|\.github/workflows/tests\.yml|\.github/actions/)'
           # Whether the change reaches $1: the output $2.
@@ -188,7 +188,7 @@ jobs:
         working-directory: ${{ runner.temp }}
         run: |
           "$GITHUB_WORKSPACE/alone/bin/python" -I \
-            "$GITHUB_WORKSPACE/tests/packages/package_alone.py" "$PACKAGE" \
+            "$GITHUB_WORKSPACE/.github/scripts/package_alone.py" "$PACKAGE" \
             "$GITHUB_WORKSPACE/packages/$PACKAGE/src/$PACKAGE"
       - name: Ruff and mypy
         if: ${{ !cancelled() }}

@@ -41,7 +41,7 @@ import zlib
 from collections.abc import Callable, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -595,7 +595,7 @@ def snapshots(
     rng: np.random.Generator,
     n_draws: int | None = None,
     subset_seed: int = 0,
-) -> list[tuple]:
+) -> list[tuple[str, str, int]]:
     """Return the draws cut at each of `CUTS` snapshots, with a source each.
 
     Every observation draw is cut once at each snapshot, so a simulation
@@ -608,9 +608,9 @@ def snapshots(
     simulation = draws[0].rsplit("-", 1)[0] if draws else ""
     shares = np.array([ft.SOURCE_SHARES[s] for s in ft.SOURCES])
     shares = shares / shares.sum()
-    out = []
+    out: list[tuple[str, str, int]] = []
     for j in range(ft.CUTS):
-        chosen = range(len(draws))
+        chosen: Sequence[int] = range(len(draws))
         if n_draws is not None and n_draws < len(draws):
             chosen = sorted(
                 np.random.default_rng(
@@ -628,7 +628,7 @@ def cut(
     seed: int,
     per_simulation: int,
     empty: list[str] | None = None,
-) -> list[tuple[str, dict]]:
+) -> list[tuple[str, dict[str, Any]]]:
     """Return a sample of blocks of each simulation, with its draw.
 
     A simulation's candidate blocks are each of its observation draws
@@ -645,12 +645,15 @@ def cut(
         [pd.read_csv(sim_dir / f"settings-{s}.csv") for s in seeds]
     ).set_index("outbreak")
     by = dict(tuple(counts.groupby("simulation")))
-    out = []
+    out: list[tuple[str, dict[str, Any]]] = []
     for simulation in ids:
-        row = settings.loc[simulation]
-        days = row.get("max_delay", np.nan)
+        row = cast(pd.Series, settings.loc[simulation])
+        days = cast(float, row.get("max_delay", np.nan))
         weeks = ft.SIM_DELAY_WEEKS if pd.isna(days) else int(days) // 7
-        draws = dict(tuple(by[simulation].groupby("outbreak")))
+        draws = cast(
+            dict[str, pd.DataFrame],
+            dict(tuple(by[simulation].groupby("outbreak"))),
+        )
         rng = np.random.default_rng([seed, zlib.crc32(simulation.encode())])
         candidates = snapshots(sorted(draws), rng, DRAWS_PER_PASS, SUBSET_SEED)
         k = min(per_simulation, len(candidates))

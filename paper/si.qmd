@@ -34,7 +34,7 @@ The nowcast uses our port of the baselinenowcast method [@Johnson2025], with one
 **Data.**
 $C_{p,r}(t)$ is the count of place $p$ with onset on day $t$ at release $r$, and $Y_{p,r}(w)$ its sum over week $w$.
 Release $r$ has cut-off $c_r$, its latest onset day, and the forecast's latest release is $o$.
-Two consecutive releases are $s = c_{r+1} - c_r$ days apart, and only pairs with $1 \le s \le D$, $D = 42$ days, inform the delay.
+Two consecutive releases are $s = c_{r+1} - c_r$ days apart, and only pairs with $1 \le s \le D$, $D = 40$ days, inform the delay.
 
 **Delay.**
 With $\Delta_p(j) \ge 0$ the daily log growth at age $j$, and $\Delta_p(j) = 0$ for $j \ge D$, for each gap $s$ and age $x < D$,
@@ -291,15 +291,18 @@ Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quanti
 ::: {.callout-note title="Plan"}
 - Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
 - Each block or task has one lag count.
-- Each step first published after releases began settles at the first lag at which its reported count reaches 99% of its latest count.
-- The lag count less one is the 99th percentile of these settling lags over the block's steps and places with a count.
-- Only steps seen for at least twice the lag count enter, so their latest count stands for their final one and right truncation does not bias the count short.
+- Each step first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
+- The lag count less one is the 98th percentile of these settling lags over the block's steps and places with a count.
+- Only steps seen for at least 1.5 times the lag count enter, so their latest count stands for their final one and right truncation does not bias the count short.
 - Steps before the first release are left out, as a first release that fills in earlier onsets measures when releases began, not a delay.
 - A lag on which no release fell carries the count of the lag before, as with weekly releases of daily data.
 - The estimate reads no release after the cut-off.
 - In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
 - The lag count is capped only by the history, keeping two steps of context before the longest lag.
 - With no step old enough to have settled, the block takes its whole release history, every step from the first release to the cut-off.
+- Training blocks use this lag count in 90% of blocks and the count scaled by a factor drawn from Normal(1, 0.05) in the other 10%.
+- At forecast time a study can fix the lag count instead, for the zero-shot and fine-tuned models alike.
+- The Ebola case study fixes it at 40 days, as the random walk nowcast uses, because too few onset days in the hub's releases have settled to estimate it.
 - A user can set a fixed count instead.
 :::
 
