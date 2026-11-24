@@ -49,6 +49,7 @@ import argparse
 import datetime as dt
 import itertools
 import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -83,6 +84,9 @@ from .policy import load_policy
 
 MAX_DETAILS = 8
 
+_LOCATION = re.compile(r"(CD(?:-[A-Z0-9]+)*)[ :]")
+"""A hub location code at the start of a finding."""
+
 
 @dataclass
 class Check:
@@ -95,6 +99,9 @@ class Check:
     locations: list[str] = field(default_factory=list)
     """The locations a failing check is tied to, when every failure is
     tied to one; empty when any failure is about the whole file."""
+    warnings: dict[str, list[str]] = field(default_factory=dict)
+    """Each warned location's warnings, in full, for the plot of the
+    warned locations."""
 
 
 def _level(ratio: float, warn: float) -> str:
@@ -110,6 +117,16 @@ def _medians(s: Samples, loc: str, weeks: Sequence[str]) -> list[float]:
     return [quantile(s.week_values(loc, w), 0.5) for w in weeks]
 
 
+def _warned(found: list[tuple[str, str]]) -> dict[str, list[str]]:
+    """Each warning tied to a location, by the location it starts with."""
+    out: dict[str, list[str]] = {}
+    for st, msg in found:
+        at = _LOCATION.match(msg)
+        if st == "warn" and at:
+            out.setdefault(at.group(1), []).append(msg)
+    return out
+
+
 def _result(name: str, found: list[tuple[str, str]], ok: str) -> Check:
     """Fold per-item findings into one check."""
     status = worst(st for st, _ in found)
@@ -120,7 +137,13 @@ def _result(name: str, found: list[tuple[str, str]], ok: str) -> Check:
     first = next(msg for st, msg in found if st == status)
     summary = first if n == 1 else f"{first} (and {n - 1} more)"
     extra = [f"... and {n - MAX_DETAILS} more"] if n > MAX_DETAILS else []
-    return Check(name, status, summary, shown[:MAX_DETAILS] + extra)
+    return Check(
+        name,
+        status,
+        summary,
+        shown[:MAX_DETAILS] + extra,
+        warnings=_warned(found),
+    )
 
 
 def _forecast_date_problems(s: Samples, ref: str) -> list[tuple[str, str]]:

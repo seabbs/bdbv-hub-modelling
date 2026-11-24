@@ -70,7 +70,7 @@ write_record() {
     --out "$ledger/submissions.csv"
 }
 
-# The gate's small files: provenance, PR body, the selected file and plot.
+# The gate's small files: provenance, PR body, the selected file and plots.
 archive_gate() {
   local gate=$1 dest=$2 f
   [ -d "$gate" ] || return 0
@@ -79,7 +79,7 @@ archive_gate() {
     [ -f "$gate/$f" ] && cp "$gate/$f" "$dest/"
   done
   if [ -d "$gate/selected" ]; then
-    for f in run.json checks.json fit-summary.json nowcast.png; do
+    for f in run.json checks.json fit-summary.json nowcast.png warnings.png; do
       [ -f "$gate/selected/$f" ] && cp "$gate/selected/$f" "$dest/"
     done
     find "$gate/selected/submission" -name '*.csv' -exec cp {} "$dest/" \;

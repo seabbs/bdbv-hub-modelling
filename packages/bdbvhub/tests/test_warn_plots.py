@@ -98,8 +98,9 @@ def test_one_panel_per_warned_location(tmp_path: Path) -> None:
     assert fig is not None
     axes = [ax for ax in fig.axes if ax.get_visible()]
     assert len(axes) == 2
-    titles = [ax.get_title() for ax in axes]
-    assert titles[0].startswith("CD-IT") and "median 20" in titles[0]
+    titles = [ax.get_title(loc="left") for ax in axes]
+    assert titles[0].startswith("CD-IT")
+    assert "median 20" in titles[0]
     assert titles[1].startswith("CD-NK-29")
     # Data, the submission, last week's and the random walk nowcast.
     labels = axes[0].get_legend_handles_labels()[1]
@@ -109,7 +110,7 @@ def test_one_panel_per_warned_location(tmp_path: Path) -> None:
         "last week's submission",
         "random walk nowcast",
     ]
-    lo, hi = axes[0].get_xlim()
+    lo, _ = axes[0].get_xlim()
     assert pd.Timestamp(AS_OF) - pd.Timedelta(weeks=15) < pd.Timestamp(
         pd.to_datetime(lo, unit="D")
     )

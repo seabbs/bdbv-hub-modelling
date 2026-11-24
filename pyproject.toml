@@ -282,6 +282,7 @@ module = [
   "nowcasteval.plots",
   "nowcasteval.nowcast_plots",
   "bdbvhub.reporting.data_plots",
+  "bdbvhub.reporting.warn_plots",
 ]
 disallow_untyped_calls = false
 

@@ -533,6 +533,14 @@ def cmd_plot(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_plot_warnings(args: argparse.Namespace) -> int:
+    """Write a plot only when a check warned on a location."""
+    checks = json.loads(Path(args.checks).read_text())["checks"]
+    if any(c.get("warnings") for c in checks if c["status"] == "warn"):
+        return cmd_plot(args)
+    return 0
+
+
 def cmd_metadata(args: argparse.Namespace) -> int:
     """Write a minimal metadata file named after the hub id."""
     out = Path(args.out)
@@ -576,6 +584,11 @@ def main() -> int:
     pl.add_argument("--submission", required=True)
     pl.add_argument("--vintage", required=True)
     pl.add_argument("--out", required=True)
+    pw = sub.add_parser("plot-warnings")
+    for flag in ("--checks", "--submission", "--observed", "--as-of", "--out"):
+        pw.add_argument(flag, required=True)
+    for flag in ("--previous", "--randomwalk", "--label"):
+        pw.add_argument(flag, default=None)
     pp = sub.add_parser("plot-ppc")
     pp.add_argument("--ppc", required=True)
     pp.add_argument("--out", required=True)
@@ -614,6 +627,7 @@ def main() -> int:
         "nowcast": cmd_nowcast,
         "plot-submission": cmd_plot,
         "plot-ppc": cmd_plot,
+        "plot-warnings": cmd_plot_warnings,
         "coherence": cmd_coherence,
         "bvd": lambda _a: 0,
         "hub-id": cmd_hub_id,
