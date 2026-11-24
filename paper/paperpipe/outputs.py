@@ -47,6 +47,7 @@ from paperfigs.plots import (
 )
 from paperfigs.scores import (
     STUDY_BASELINES,
+    pairwise_scores,
     relative_scores,
     summarise_scores,
 )
@@ -420,7 +421,12 @@ model, such as a hub's point-forecast baseline."""
 def _table(scores: pd.DataFrame, by: list[str], baseline: str) -> pd.DataFrame:
     keys = ["study", "model", *by]
     rel = relative_scores(scores, by=by, baseline=baseline).drop(columns="n")
-    out = summarise_scores(scores, by=by).merge(rel, on=keys, how="left")
+    pair = pairwise_scores(scores, by=by, baseline=baseline)
+    out = (
+        summarise_scores(scores, by=by)
+        .merge(rel, on=keys, how="left")
+        .merge(pair, on=keys, how="left")
+    )
     if baseline != REFERENCE and REFERENCE in set(scores["model"]):
         ref = relative_scores(scores, by=by, baseline=REFERENCE)
         ref = ref.drop(columns="n").rename(
@@ -605,7 +611,9 @@ def score_tables(
     Each table has the mean scores, coverage and number of forecasts of
     each model, with `rel_score` and `rel_log_score` relative to the
     study's baseline, and to `REFERENCE` as well when the baseline is
-    another model. With a `split`, every table is split by `period`.
+    another model, and `pair_score` and `pair_log_score`, the pairwise
+    relative skill on the natural and log scales (`pairwise_scores`).
+    With a `split`, every table is split by `period`.
 
     Parameters
     ----------
