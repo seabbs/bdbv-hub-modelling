@@ -187,7 +187,9 @@ def stored_models() -> list[str]:
     return [s.name for s in list_models() if s.fitted and not s.paper_only]
 
 
-def samplers(policy: Path | str = "ci/policy.toml") -> dict[str, Any]:
+def samplers(
+    policy: Path | str = "packages/bdbvsubmission/policy.toml",
+) -> dict[str, Any]:
     """Return each model's NUTS settings from the CI policy.
 
     A stored fit uses the sampler table of the submission candidate that

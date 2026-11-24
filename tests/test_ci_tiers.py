@@ -236,12 +236,15 @@ def test_every_test_runs_in_one_tests_workflow():
     assert all("name" in job for job in workflow["jobs"].values())
 
 
-def test_the_submission_ci_has_its_own_ci_job():
-    # ci/, its own uv project: lint, types, tests with coverage and the
-    # dry run, when ci/ or the workflows it drives change.
+def test_the_bdbvsubmission_has_its_own_ci_job():
+    # packages/bdbvsubmission/, its own uv project: lint, types, tests with
+    # coverage and the
+    # dry run, when packages/bdbvsubmission/ or the workflows it drives change.
     assert not (WORKFLOWS / "submission-ci-tests.yml").exists()
     job = _workflow("tests.yml")["jobs"]["submission"]
-    assert job["defaults"]["run"]["working-directory"] == "ci"
+    assert (
+        job["defaults"]["run"]["working-directory"] == "packages/bdbvsubmission"
+    )
     assert "submission" in job["if"]
     runs = " ".join(s.get("run", "") for s in job["steps"])
     for check in (
@@ -253,7 +256,7 @@ def test_the_submission_ci_has_its_own_ci_job():
     ):
         assert check in runs, check
     flags = [s["with"]["flags"] for s in job["steps"] if "codecov" in str(s)]
-    assert flags == ["ci"]
+    assert flags == ["submission"]
 
 
 def test_r_live_scores_the_paper_against_scoringutils_live():

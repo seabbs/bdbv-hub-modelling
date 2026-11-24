@@ -57,9 +57,9 @@ MOVED = {
     "nowcast": "bdbvhub:nowcast",
     "metadata": "bdbvhub:metadata",
     "validate-hub": "bdbvhub:validate",
-    "submission-preflight": "ci:preflight",
-    "ci-test": "ci:test",
-    "ci-dry": "ci:dry",
+    "submission-preflight": "submission:preflight",
+    "ci-test": "submission:test",
+    "ci-dry": "submission:dry",
     "ci-fit": "bdbvhub:ci-fit",
     "fit-store": "bdbvhub:fit-store",
     "fit-store-plan": "bdbvhub:fit-store-plan",
@@ -79,7 +79,7 @@ LOCATIONS = {
     "nowcastbdbv": "packages/nowcastbdbv",
     "bdbvhub": "packages/bdbvhub",
     "workflow": "workflow",
-    "ci": "ci",
+    "submission": "packages/bdbvsubmission",
     "paper": "paper",
 }
 
@@ -160,8 +160,8 @@ def test_contributing_has_the_old_to_new_table():
     [
         (".", "workflow:monitor"),
         ("workflow", "monitor"),
-        (".", "ci:preflight"),
-        ("ci", "preflight"),
+        (".", "submission:preflight"),
+        ("packages/bdbvsubmission", "preflight"),
         (".", "nowcastutils:test"),
         ("packages/nowcastutils", "test"),
         (".", "bdbvhub:fit-store-plan"),

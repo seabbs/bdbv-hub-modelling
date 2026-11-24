@@ -16,8 +16,18 @@ def _contract() -> dict:
     return CONFIG["tool"]["importlinter"]
 
 
+def _workspace_packages() -> set[str]:
+    """Packages under packages/ in the workspace (not `exclude`d)."""
+    out = set(CONFIG["tool"]["uv"]["workspace"].get("exclude", []))
+    return {
+        p.name
+        for p in ROOT.glob("packages/*/src/*")
+        if p.is_dir() and str(p.parents[1].relative_to(ROOT)) not in out
+    }
+
+
 def test_the_contract_covers_every_workspace_package() -> None:
-    packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
+    packages = _workspace_packages()
     contract = _contract()
     assert set(contract["root_packages"]) == packages
     layers = {
@@ -51,7 +61,7 @@ def test_ci_checks_each_package_in_its_own_job() -> None:
     sys.path.insert(0, str(ROOT / ".github" / "scripts"))
     from legs import layers
 
-    packages = {p.name for p in ROOT.glob("packages/*/src/*") if p.is_dir()}
+    packages = _workspace_packages()
     assert set(layers()) == packages
     workflows = ROOT / ".github" / "workflows"
     job = yaml.safe_load((workflows / "tests.yml").read_text())["jobs"][

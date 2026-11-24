@@ -486,7 +486,7 @@ def test_renewal_key_has_every_model_module(name: str) -> None:
 
 
 def test_samplers_come_from_the_policy() -> None:
-    table = store.samplers(ROOT / "ci" / "policy.toml")
+    table = store.samplers(ROOT / "packages" / "bdbvsubmission" / "policy.toml")
     assert set(table) == {
         "renewal",
         "renewalbvd",
@@ -1181,12 +1181,16 @@ def test_a_model_that_fails_leaves_the_others_archived(
 def test_the_candidate_models_are_the_policy_and_the_stored_models() -> None:
     from bdbvhub.store import archive as store_archive
 
-    models = store_archive.candidate_models(ROOT / "ci/policy.toml")
+    models = store_archive.candidate_models(
+        ROOT / "packages/bdbvsubmission/policy.toml"
+    )
     # A random walk candidate runs its model, as `candidate.sh` does.
     assert models["randomwalk"] is None
     assert models["randomwalknowcast"] is None
     # Any other candidate forecasts with its fit config.
-    policy = tomllib.loads((ROOT / "ci/policy.toml").read_text())
+    policy = tomllib.loads(
+        (ROOT / "packages/bdbvsubmission/policy.toml").read_text()
+    )
     for c in policy["candidates"]:
         if c["kind"] != "randomwalk":
             assert models[c["model"]] == c["config"]
@@ -1299,7 +1303,7 @@ def test_stored_samples_missing_a_week_are_not_archived(
 def test_the_policy_candidates_are_the_policy_models() -> None:
     from bdbvhub.store import archive as store_archive
 
-    policy = ROOT / "ci/policy.toml"
+    policy = ROOT / "packages/bdbvsubmission/policy.toml"
     candidates = store_archive.policy_candidates(policy)
     # Every candidate's model, and the random walk a candidate that names
     # none runs, whatever candidates the policy holds.

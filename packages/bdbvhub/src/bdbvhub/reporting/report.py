@@ -1347,7 +1347,8 @@ def _without_baseline(
 def _fit_settings() -> dict[str, dict[str, Any]]:
     """Return each stored model's sampler settings.
 
-    The renewal variants use their table in `ci/policy.toml`; a model with
+    The renewal variants use their table in
+    `packages/bdbvsubmission/policy.toml`; a model with
     none uses its own. A model with no sampler, such as the Chronos-2
     models, has none.
     """

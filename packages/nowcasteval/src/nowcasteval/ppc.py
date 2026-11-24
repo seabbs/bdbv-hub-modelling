@@ -2,9 +2,11 @@
 """Posterior predictive checks: the `ppc.json` a fit writes, and its plot.
 
 `bdbvhub fit` writes `<fit dir>/ppc.json` beside
-`diagnostics.json`, and the submission gate (`ci/`) reads it to check
+`diagnostics.json`, and the submission gate (`packages/bdbvsubmission/`) reads
+it to check
 interval coverage and calibration in sample.
-The schema (version 1) is documented in `ci/INTEGRATION.md`.
+The schema (version 1) is documented in
+`packages/bdbvsubmission/INTEGRATION.md`.
 It has one row per location, stream and in-sample onset week, with the
 observed count, the predictive median, the central intervals and the
 randomised probability integral transform (PIT) of the observation.
