@@ -200,6 +200,38 @@ def test_finetune_asks_for_its_scores(tmp_path):
     assert jobs["score_germany"] == len(config["score"]["reference"])
 
 
+def _hub(tmp_path):
+    """The hub data's head, which the BDBV check's forecasts depend on."""
+    (tmp_path / "hub").mkdir(exist_ok=True)
+    (tmp_path / "hub" / "head.txt").write_text("abc\n")
+
+
+def test_each_checkpoint_has_its_own_ft_check_page(tmp_path):
+    # Lead 08:00: a new checkpoint is a new page, so it is built without
+    # forcing; the reference models' forecasts are shared.
+    _hub(tmp_path)
+    config = {"ft_check": {"checkpoint": "slots-abcdef"}}
+    out = dry_run(tmp_path, "ft_check", config=config, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    assert "ft-check/slots-abcdef/bdbv-ft-check-slots-abcdef.html" in out.stdout
+    jobs = dict(re.findall(r"^(\w+)\s+(\d+)$", out.stdout, re.M))
+    assert jobs["ft_check_page"] == "1"
+    assert jobs["ft_check_forecast"] == "3"
+
+
+def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
+    # Lead 10:50: each released checkpoint (its published.json) gets its
+    # BDBV check page.
+    _hub(tmp_path)
+    seg = tmp_path / "runs" / "runa" / "train" / "n250"
+    seg.mkdir(parents=True)
+    (seg / "published.json").write_text(
+        '{"tag": "chronos-slots-abcdef", "hash": "abcdef"}'
+    )
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["ft_check_page"] == 1
+
+
 SMALL = {
     **FT,
     "finetune": {
