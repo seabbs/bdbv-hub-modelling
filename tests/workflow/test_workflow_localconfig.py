@@ -15,8 +15,10 @@ def test_with_no_file_everything_is_on_this_machine(tmp_path):
     cfg = localconfig.read(tmp_path / "none.env", env)
     assert cfg["ROOT"] == f"{tmp_path}/bdbv-rounds"
     assert cfg["MAILBOX"] == ""
-    assert cfg["JOB_PREFIX"] == ""
-    assert cfg["SIM_PREFIX"] == ""
+    # No job prefixes or room waits: the scheduler starts jobs by their
+    # rules' resources.
+    for gone in ("JOB_PREFIX", "SIM_PREFIX", "MAX_LOAD"):
+        assert gone not in cfg
     assert cfg["HOST_NAME"]
 
 
@@ -37,14 +39,11 @@ def test_the_file_is_read_and_the_environment_wins(tmp_path):
 def test_later_lines_see_earlier_ones_and_quotes_are_dropped(tmp_path):
     path = tmp_path / "local.env"
     path.write_text(
-        "ROOT=/data/rounds\nRUN=$ROOT/checkpoints/slots\n"
-        "JOB_PREFIX='systemd-run --user --scope -p MemoryMax={mem}'\n"
+        "ROOT=/data/rounds\nRUN=$ROOT/checkpoints/slots\nNOTIFY='a b'\n"
     )
     cfg = localconfig.read(path, {"HOME": str(tmp_path)})
     assert cfg["RUN"] == "/data/rounds/checkpoints/slots"
-    assert cfg["JOB_PREFIX"] == (
-        "systemd-run --user --scope -p MemoryMax={mem}"
-    )
+    assert cfg["NOTIFY"] == "a b"
 
 
 def test_a_line_may_use_a_later_one(tmp_path):

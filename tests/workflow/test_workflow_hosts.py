@@ -8,7 +8,6 @@ import pytest
 from flowlib import hosts, manifest
 
 ROOT = Path(__file__).parents[2]
-CAP = ROOT / "workflow" / "scripts" / "mem_cap.sh"
 TIMED = ROOT / "workflow" / "scripts" / "timed.sh"
 
 
@@ -83,30 +82,6 @@ def test_the_row_of_a_pushed_batch_hashes_its_files(tmp_path):
         finished="now",
     )
     assert row.split(",")[7] == hashlib.sha256(b"counts").hexdigest()
-
-
-def test_the_memory_cap_kills_a_job_over_it():
-    out = subprocess.run(
-        ["bash", str(CAP), "1K", "sleep", "30"],
-        env={"PATH": "/usr/bin:/bin", "CAP_POLL": "1"},
-        capture_output=True,
-        text=True,
-        timeout=20,
-    )
-    assert out.returncode != 0
-    assert "over the" in out.stderr
-
-
-def test_the_memory_cap_passes_on_a_job_under_it():
-    out = subprocess.run(
-        ["bash", str(CAP), "1024M", "bash", "-c", "echo hi; exit 3"],
-        env={"PATH": "/usr/bin:/bin", "CAP_POLL": "1"},
-        capture_output=True,
-        text=True,
-        timeout=20,
-    )
-    assert out.returncode == 3
-    assert out.stdout == "hi\n"
 
 
 def test_timing_writes_the_gnu_time_line_on_any_os():

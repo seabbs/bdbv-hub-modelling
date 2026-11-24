@@ -3,9 +3,9 @@
 from flowlib import scoring
 
 
-def test_a_unit_waits_for_room_then_scores_and_stamps():
-    got = scoring.unit_shell("germany", "wait && ", "{params.segment} ")
-    assert got.startswith("mkdir -p {params.copy_back} && wait && ")
+def test_a_unit_scores_and_stamps():
+    got = scoring.unit_shell("germany", "{params.segment} ")
+    assert got.startswith("mkdir -p {params.copy_back} && env {params.env} ")
     assert (
         f"{scoring.EVALUATE} germany {{params.cache}} {{params.label}} " in got
     )
@@ -41,7 +41,6 @@ def _scoring(tmp_path, labels=None, listing=None):
         "SCORE_CACHE": str(tmp_path / "cache"),
         "MIN_FREE_GB": "1",
         "MIN_DISK_GB": "2",
-        "MAX_LOAD": "",
         "FORECAST_THREADS": "",
     }
     trained = training.Training(cfg, local, rounds.Rounds(cfg, local, None))
@@ -76,15 +75,13 @@ def test_unlisted_labels_come_from_the_release_listing(tmp_path, monkeypatch):
     assert seen == ["releases.json"]
 
 
-def test_a_unit_waits_for_this_machine_s_room(tmp_path):
+def test_a_unit_runs_its_evaluation_with_no_wait_or_prefix(tmp_path):
     s = _scoring(tmp_path, labels=[])
-    assert s.room == (
-        f"workflow/scripts/wait_for_room.sh 1 2 {tmp_path / 'cache'}  && "
-    )
     assert s.unit_threads == 2
-    assert s.unit_shell("germany").startswith(
-        f"mkdir -p {{params.copy_back}} && {s.room}"
-    )
+    shell = s.unit_shell("germany")
+    assert shell.startswith("mkdir -p {params.copy_back} && env {params.env} ")
+    for gone in ("wait_for_room", "nice", "{params.prefix}"):
+        assert gone not in shell, gone
 
 
 def test_a_run_is_scored_on_its_saved_checkpoints(tmp_path):

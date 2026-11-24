@@ -104,15 +104,16 @@ def ft_check_key(root: Path | str = ".") -> str:
     return h.hexdigest()[:12]
 
 
-def unit_shell(study: str, room: str, segment: str = "") -> str:
+def unit_shell(study: str, segment: str = "") -> str:
     """Return a unit's shell command, as a rule's `shell:` template.
 
-    The unit of `study` caches under {params.cache} as {params.label}
-    once `room` (a wait-for-room prefix ending `&& `, or empty) passes;
+    The unit of `study` caches under {params.cache} as {params.label};
     `segment`, if given, is the run's own checkpoint folder it loads.
+    When it starts is the scheduler's: its rule's `resources` (memory,
+    GPU) against the machine's (flowlib.machine).
     """
     return (
-        f"mkdir -p {{params.copy_back}} && {room}{{params.prefix}} nice -n 19 "
+        f"mkdir -p {{params.copy_back}} && "
         f"env {{params.env}} {EVALUATE} {study} {{params.cache}} "
         f"{{params.label}} {segment}> {{log}} 2>&1 && touch {{output}}"
     )
@@ -144,8 +145,8 @@ class Scoring:
     config : mapping
         The workflow config (`score`).
     local : mapping
-        This machine's settings (`localconfig.read`): SCORE_CACHE, the
-        room to wait for and FORECAST_DEVICE/FORECAST_THREADS, which
+        This machine's settings (`localconfig.read`): SCORE_CACHE and
+        FORECAST_DEVICE/FORECAST_THREADS, which
         override the config's `forecast` (`flowlib.forecast`).
     training : Training
         The fine-tuning runs whose checkpoints are scored.
@@ -166,10 +167,6 @@ class Scoring:
         self.training = training
         self.checkpoints = checkpoints
         self.cache = local["SCORE_CACHE"]
-        self.room = (
-            f"workflow/scripts/wait_for_room.sh {local['MIN_FREE_GB']} "
-            f"{local['MIN_DISK_GB']} {self.cache} {local['MAX_LOAD']} && "
-        )
         # Every forecasting job's device and threads (`forecast` in the
         # config, which the machine may override).
         self.forecast = forecast.settings(config, local)
@@ -202,7 +199,7 @@ class Scoring:
 
     def unit_shell(self, study: str, segment: str = "") -> str:
         """Return a unit's shell command (`unit_shell`)."""
-        return unit_shell(study, self.room, segment)
+        return unit_shell(study, segment)
 
     def run_scores_dir(self, run: str) -> str:
         """Return the run's score cache: its own checkpoints' units."""
