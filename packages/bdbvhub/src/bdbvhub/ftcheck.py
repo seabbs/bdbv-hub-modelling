@@ -330,8 +330,9 @@ def explorer_quantiles(
 ) -> pd.DataFrame:
     """Return the release quantiles as the forecast explorer reads them.
 
-    Complete weeks only, models by their display names, each origin as
-    the round, and the 5% quantile (`q5`) as `q05`.
+    Every forecast week once (complete or not), models by their display
+    names, each origin as the round, and the 5% quantile (`q5`) as
+    `q05`.
 
     Parameters
     ----------
@@ -346,9 +347,10 @@ def explorer_quantiles(
         Columns `model`, `ours`, `reference_date`, `location`,
         `target_end_date` and `QUANTILE_COLUMNS`.
     """
-    q = quantiles
-    if "target" in q:
-        q = q.loc[q["target"] == "complete"]
+    # Every forecast week, complete or not, once: a forecast is scored
+    # against several releases, with the same quantiles each time.
+    keys = ["model", "origin", "location", "target_end_date"]
+    q = quantiles.drop_duplicates(keys)
     q = _named(q.rename(columns={"q5": "q05"}), names)
     return q.assign(ours=True, reference_date=q["origin"])
 
