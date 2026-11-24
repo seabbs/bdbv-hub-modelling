@@ -111,3 +111,11 @@ def test_these_packages_import_no_study() -> None:
                 ):
                     found.append(f"{path.relative_to(ROOT)}:{n}")
     assert found == []
+
+
+def test_the_layers_contract_lists_no_exceptions() -> None:
+    # Every upward import was moved to the package that owns the code; a
+    # new one is a layering bug to fix, not an exception to list.
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    for contract in config["tool"]["importlinter"]["contracts"]:
+        assert "ignore_imports" not in contract, contract["name"]

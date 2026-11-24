@@ -239,12 +239,6 @@ layers = [
   "nowcasteval",
   "nowcastutils",
 ]
-# Imports against the order as of 2026-11-22. Each moves to the package
-# that owns the code, or out of the import. A new upward import is a
-# layering bug to fix, not to list here.
-ignore_imports = [
-  "nowcastrenewal.zones -> nowcastbdbv.data.tidy",
-]
 
 [tool.mypy]
 python_version = "3.13"
