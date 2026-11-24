@@ -1,0 +1,5 @@
+default:
+  validate_model_file:
+    probe:
+      fn: check_probe
+      source: src/validations/probe.R
