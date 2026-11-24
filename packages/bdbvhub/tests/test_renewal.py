@@ -139,7 +139,13 @@ def test_the_variants_are_ablations_of_renewalbvd() -> None:
     assert full == rn.engine().BVD
     assert full.depletion
     assert dropped("renewal") == {"bvd"}
-    assert dropped("renewalsp") == {"bvd", "national", "centred_rt"}
+    # renewalsp also keeps its centred walk's step SD off 0.
+    assert dropped("renewalsp") == {
+        "bvd",
+        "national",
+        "centred_rt",
+        "rt_sd_lognormal",
+    }
     assert rn.VARIANTS["renewalsp"].per_province
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 

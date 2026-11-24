@@ -266,6 +266,7 @@ def _zone_walk(
     ar: bool = False,
     anchor: bool = True,
     centred: bool = False,
+    sd_prior: dist.Distribution | None = None,
 ) -> TemporalProcess:
     """`model._named_walk`, anchored at the mean for `ANCHORED` walks.
 
@@ -279,7 +280,7 @@ def _zone_walk(
     anchored_walk = anchor and name in ANCHORED
     if centred and anchored_walk:
         raise ValueError(f"{name} is anchored, so it cannot be centred.")
-    process = _named_walk(name, sd, n_weeks, ar, centred)
+    process = _named_walk(name, sd, n_weeks, ar, centred, sd_prior)
     if not anchored_walk:
         return process
     inner = process.inner
@@ -877,8 +878,9 @@ def build_zone_model(
         n_weeks: int,
         ar: bool = False,
         centred: bool = False,
+        sd_prior: dist.Distribution | None = None,
     ) -> TemporalProcess:
-        return _zone_walk(name, sd, n_weeks, ar, anchor, centred)
+        return _zone_walk(name, sd, n_weeks, ar, anchor, centred, sd_prior)
 
     if data.parents is None:
         raise ValueError("A zone model needs each zone's province.")
@@ -948,6 +950,11 @@ def build_zone_model(
             fit_weeks(data, config),
             ar=True,
             centred=config.centred_rt,
+            sd_prior=None
+            if config.rt_sd_lognormal is None
+            else dist.LogNormal(
+                np.log(config.rt_sd_lognormal[0]), config.rt_sd_lognormal[1]
+            ),
         ),
         subpop_rt_deviation_process=_zone_walk_a(
             "rt_dev_sd", 0.1, fit_weeks(data, config), ar=True

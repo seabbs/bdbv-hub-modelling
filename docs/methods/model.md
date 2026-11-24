@@ -352,6 +352,7 @@ The national trajectory is the sum of the provinces ([Forecasts](#forecasts)).
 Nothing is pooled or shared between provinces: each has its own Rt walk, delay, missing-onset share and ascertainment.
 It keeps the share at risk and depletion of the zone models, so the three models differ only in what each removes.
 One series barely informs $\nu$, so it stays close to its prior.
+Its Rt walk's step SD has a LogNormal(log 0.12, 0.5) prior in place of HalfNormal(0.2): a walk centred where one series pins it funnels where the step SD nears 0, which HalfNormal allows.
 Every province with a case in the random walks' walk window is fitted, however few its cases.
 A province with none takes the introduction layer of `randomwalknowcast` ([Baseline models](baselines.md)): exactly 0 until an introduction, then its walk.
 National is the sum of the provinces.
