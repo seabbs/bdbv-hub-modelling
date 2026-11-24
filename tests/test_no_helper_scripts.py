@@ -14,7 +14,7 @@ MOVED = {
     "scripts/finetune_verify.py": "finetune-verify",
     "scripts/sim_qc.py": "sim-qc",
     "scripts/check_germany_site.py": "germany-site-check",
-    "scripts/germany_ft_store.py": "germany-ft-store",
+    "scripts/germany_ft_store.py": "deleted",
     "scripts/score_history.py": "score-history",
     "scripts/package_alone.py": "tests/packages/package_alone.py",
     "scripts/baselinenowcast_fixtures.R": (

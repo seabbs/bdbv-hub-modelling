@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from nowcastgermany.checkpoint import GERMANY_UNIT
 from nowcastgermany.evaluation import load_germany_config
 from nowcastgermany.store import (
     STORED_MODELS,
-    choose_checkpoint,
     development_rows,
     load_stored,
     release_tag,
@@ -70,65 +66,6 @@ def test_release_tag_maps_scorer_labels() -> None:
             release_tag(bad)
 
 
-def test_a_slots_pin_names_its_slots_release() -> None:
-    """config/finetune.toml may pin a series-bias checkpoint
-    (`slots-<hash>`), whose release is `chronos-slots-<hash>`."""
-    releases = [
-        *RELEASES,
-        _release("chronos-slots-ddd", "2026-11-17T10:00:00Z"),
-    ]
-    assert choose_checkpoint(set(), releases, "slots-ddd")[1] == (
-        "chronos-slots-ddd"
-    )
-
-
-def test_latest_pin_takes_the_newest_ft_release() -> None:
-    stored = {"chronos-ft-aaa", "chronos-ft-bbb"}
-    assert choose_checkpoint(stored, RELEASES, "latest") == (
-        "chronos-ft-bbb",
-        "chronos-ft-bbb",
-    )
-
-
-def test_a_hash_pin_takes_its_release() -> None:
-    stored = {"chronos-ft-aaa", "chronos-ft-bbb"}
-    assert choose_checkpoint(stored, RELEASES, "aaa") == (
-        "chronos-ft-aaa",
-        "chronos-ft-aaa",
-    )
-
-
-def test_the_newest_stored_slots_checkpoint_wins() -> None:
-    releases = [
-        *RELEASES,
-        _release("chronos-slots-s1", "2026-11-17T10:00:00Z"),
-        _release("chronos-slots-s2", "2026-11-18T10:00:00Z"),
-        _release("chronos-slots-s3", "2026-11-19T10:00:00Z", draft=True),
-    ]
-    # s2 is newer but has no stored forecasts yet; s3 is a draft.
-    stored = {"chronos-ft-bbb", "chronos-slots-s1", "chronos-slots-s3"}
-    assert choose_checkpoint(stored, releases, "latest") == (
-        "chronos-slots-s1",
-        "chronos-ft-bbb",
-    )
-    stored |= {"chronos-slots-s2"}
-    assert choose_checkpoint(stored, releases, "latest")[0] == (
-        "chronos-slots-s2"
-    )
-
-
-def test_an_unstored_pin_falls_back_to_the_newest_stored_ft() -> None:
-    # The pinned release is out but the scorer has not stored it yet.
-    assert choose_checkpoint({"chronos-ft-aaa"}, RELEASES, "latest") == (
-        "chronos-ft-aaa",
-        "chronos-ft-bbb",
-    )
-    assert choose_checkpoint(set(), RELEASES, "latest") == (
-        None,
-        "chronos-ft-bbb",
-    )
-
-
 def test_development_rows_keep_the_model_before_the_split() -> None:
     frame = pd.concat(
         [
@@ -178,211 +115,67 @@ def test_load_refuses_a_store_with_held_out_dates(tmp_path: Path) -> None:
         load_stored(tmp_path / "store", "chronos-ft-bbb", SPLIT)
 
 
-def test_the_store_script_writes_a_label_from_the_cache(
-    tmp_path: Path,
-) -> None:
-    cache = tmp_path / "cache"
-    day = cache / GERMANY_UNIT / "abcdef123456"
-    day.mkdir(parents=True)
-    for origin in ("2021-11-22", "2021-11-23"):
-        pd.concat(
-            [
-                _cache((origin,)),
-                _cache((origin,), model=WEEKLY),
-                _cache((origin,), model="randomwalknowcast"),
-            ]
-        ).to_csv(day / f"{origin}.csv.gz", index=False)
-    out = tmp_path / "out"
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "nowcastgermany.ft_store",
-            str(cache),
-            "abcdef123456",
-            "--no-push",
-            "--partial",
-            "--out",
-            str(out),
-            "--config",
-            str(ROOT / "config" / "germany.toml"),
-        ],
-        check=True,
-    )
-    stored = load_stored(out, "chronos-ft-abcdef123456", SPLIT)
-    assert set(stored["model"]) == {DAILY}
-    assert sorted(set(stored["origin"])) == ["2021-11-22", "2021-11-23"]
+def test_the_daily_fine_tuned_model_is_stored() -> None:
+    # Germany is daily only: no weekly model is stored.
+    assert STORED_MODELS == (DAILY,)
 
 
-def test_the_store_script_refuses_a_partial_label(tmp_path: Path) -> None:
-    day = tmp_path / "cache" / GERMANY_UNIT / "abcdef123456"
-    day.mkdir(parents=True)
-    _cache(("2021-11-22",)).to_csv(day / "2021-11-22.csv.gz", index=False)
-    run = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "nowcastgermany.ft_store",
-            str(tmp_path / "cache"),
-            "abcdef123456",
-            "--no-push",
-            "--out",
-            str(tmp_path / "out"),
-            "--config",
-            str(ROOT / "config" / "germany.toml"),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    assert run.returncode != 0
-    assert "79 development dates missing" in run.stderr
-
-
-def _latest_pin(tmp_path: Path) -> Path:
-    """A config/finetune.toml that takes the latest release, as these
-    tests choose among fake releases whatever the committed file pins."""
+def _pin(tmp_path: Path, spec: str) -> Path:
     path = tmp_path / "finetune.toml"
-    path.write_text('hash = "latest"\nrealdata = ""\n')
+    path.write_text(f'hash = "{spec}"\nrealdata = ""\n')
     return path
 
 
-def test_the_load_command_writes_the_chosen_checkpoint(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def _load(tmp_path: Path, store: Path, spec: str) -> tuple[dict, Path]:
+    import os
+
     from nowcastfoundation import forecaster as foundation
     from nowcastgermany import cli
 
-    store = tmp_path / "store"
-    for tag in ("chronos-ft-aaa", "chronos-ft-bbb"):
-        write_stored(store, tag, _cache(("2021-11-22",)), SPLIT, label=tag)
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: RELEASES)
-    monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
+    os.environ.pop(foundation.FINETUNED_ENV, None)
     out = tmp_path / "parts" / "germany"
     note = tmp_path / "results" / "ft-checkpoint.json"
-    assert (
-        cli.main(
-            [
-                "ft-load",
-                "--config",
-                str(ROOT / "config" / "germany.toml"),
-                "--finetune",
-                str(_latest_pin(tmp_path)),
-                "--store",
-                str(store),
-                "--out",
-                str(out),
-                "--note",
-                str(note),
-            ]
-        )
-        == 0
-    )
-    meta = json.loads(note.read_text())
-    assert meta["tag"] == "chronos-ft-bbb"
-    assert meta["pinned"] == "chronos-ft-bbb"
-    assert meta["models"] == list(STORED_MODELS)
-    scores = pd.read_csv(out / "scores.csv.gz")
-    assert set(scores["model"]) == {DAILY}
-    assert (scores["origin"] < SPLIT).all()
-    assert (out / "forecasts.csv.gz").exists()
-
-
-def test_the_load_command_writes_nothing_without_a_stored_checkpoint(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from nowcastfoundation import forecaster as foundation
-    from nowcastgermany import cli
-
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: RELEASES)
-    monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
-    out = tmp_path / "parts" / "germany"
-    note = tmp_path / "ft-checkpoint.json"
     args = [
         "ft-load",
         "--config",
         str(ROOT / "config" / "germany.toml"),
         "--finetune",
-        str(_latest_pin(tmp_path)),
+        str(_pin(tmp_path, spec)),
         "--store",
-        str(tmp_path / "missing"),
+        str(store),
         "--out",
         str(out),
         "--note",
         str(note),
     ]
     assert cli.main(args) == 0
-    assert not (out / "forecasts.csv.gz").exists()
-    assert json.loads(note.read_text())["tag"] is None
+    return json.loads(note.read_text()), out
 
 
-def test_the_daily_fine_tuned_model_is_stored() -> None:
-    # Germany is daily only: no weekly model is stored.
-    assert STORED_MODELS == (DAILY,)
-
-
-def test_only_the_live_run_s_checkpoints_are_shown() -> None:
-    releases = [
-        *RELEASES,
-        _release("chronos-slots-live1", "2026-11-17T10:00:00Z"),
-        _release("chronos-slots-other", "2026-11-18T10:00:00Z"),
-    ]
-    stored = {"chronos-ft-bbb", "chronos-slots-live1", "chronos-slots-other"}
-    live = {"chronos-slots-live1", "chronos-slots-live2"}
-    # The other run is newer but not live, so the live checkpoint wins.
-    assert choose_checkpoint(stored, releases, "latest", live) == (
-        "chronos-slots-live1",
-        "chronos-ft-bbb",
-    )
-    # With no live checkpoint stored, nothing is shown, not the pin.
-    assert choose_checkpoint(
-        stored - {"chronos-slots-live1"}, releases, "latest", live
-    ) == (None, "chronos-ft-bbb")
-
-
-def test_the_load_command_shows_the_live_run_with_its_label(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from nowcastfoundation import forecaster as foundation
-    from nowcastgermany import cli
-
-    releases = [
-        *RELEASES,
-        _release("chronos-slots-abcdef", "2026-11-17T10:00:00Z"),
-        _release("chronos-slots-fedcba", "2026-11-18T10:00:00Z"),
-    ]
+def test_the_load_command_writes_the_pinned_checkpoint(tmp_path: Path) -> None:
+    # A newer stored checkpoint does not stand in for the pin.
     store = tmp_path / "store"
-    for tag in ("chronos-slots-abcdef", "chronos-slots-fedcba"):
+    for tag in ("chronos-slots-aaaaaa", "chronos-slots-bbbbbb"):
         write_stored(store, tag, _cache(("2021-11-22",)), SPLIT, label=tag)
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: releases)
-    monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
-    scores = tmp_path / "checkpoint-scores.csv"
-    pd.DataFrame(
-        {
-            "checkpoint": ["slots-abcdef", "slots-fedcba"],
-            "run": ["one-model", "slots-zeroinit"],
-            "outbreaks": [500, 750],
-        }
-    ).to_csv(scores, index=False)
-    note = tmp_path / "results" / "ft-checkpoint.json"
-    args = [
-        "ft-load",
-        "--config",
-        str(ROOT / "config" / "germany.toml"),
-        "--finetune",
-        str(_latest_pin(tmp_path)),
-        "--store",
-        str(store),
-        "--out",
-        str(tmp_path / "parts" / "germany"),
-        "--note",
-        str(note),
-        "--checkpoint-scores",
-        str(scores),
-    ]
-    assert cli.main(args) == 0
-    meta = json.loads(note.read_text())
-    # The newer checkpoint is another run's, so the live one is shown.
-    assert meta["tag"] == "chronos-slots-abcdef"
-    assert meta["label"] == (
-        "Preliminary: fine-tuned on 500 of 8,000 simulations."
+    meta, out = _load(tmp_path, store, "slots-aaaaaa")
+    assert meta == {
+        "tag": "chronos-slots-aaaaaa",
+        "pinned": "chronos-slots-aaaaaa",
+        "models": list(STORED_MODELS),
+    }
+    scores = pd.read_csv(out / "scores.csv.gz")
+    assert set(scores["model"]) == {DAILY}
+    assert (scores["origin"] < SPLIT).all()
+
+
+def test_the_load_command_writes_nothing_when_the_pin_is_not_stored(
+    tmp_path: Path,
+) -> None:
+    store = tmp_path / "store"
+    write_stored(
+        store, "chronos-slots-bbbbbb", _cache(("2021-11-22",)), SPLIT, label="b"
     )
+    meta, out = _load(tmp_path, store, "slots-aaaaaa")
+    assert meta["tag"] is None
+    assert meta["pinned"] == "chronos-slots-aaaaaa"
+    assert not (out / "forecasts.csv.gz").exists()

@@ -244,8 +244,7 @@ def _ft_note(results: Path) -> str:
     note = (
         f"{models} show the fine-tuned checkpoint [`{tag}`]"
         f"({_RELEASES}/{tag}). Their forecasts are those the checkpoint "
-        "scoring run made, stored on the `germany-ft-forecasts` branch, "
-        "not rerun here."
+        "scoring run made, attached to its release, not rerun here."
     )
     if meta.get("label"):
         note = f"**{meta['label']}** " + note
