@@ -32,6 +32,9 @@ REPORTS = {
     "hub_rounds_report",
     "hub_rounds",
     "rt_check",
+    "this_round_inputs",
+    "this_round_report",
+    "this_round",
 }
 
 
