@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The inputs of the this-round page (`this_round`, rules/report.smk):
 # the latest Submit run on main's artefacts, the fit store, and every
-# candidate's hub table for the run's round (`fit-store archive`).
+# candidate's hub table for the run's round (`fit-store archive`), and
+# every hub team's submitted files.
 #
 #   this_round_inputs.sh OUT_DIR DATA_DIR RUN_FILE
 #
@@ -34,3 +35,10 @@ BDBV_DATA_DIR=$data uv run bdbvhub fit-store archive --store "$out/store" \
   --models "${models[@]}" --out "$out/candidates.csv.gz" ||
   echo "some candidates have no good stored fit at $origin"
 test -s "$out/candidates.csv.gz"
+# Every hub team's files (read-only from the hub repo), for the round's
+# submissions beside ours: openly licensed ones in hub/, others in
+# hub-raw/ (`bdbvhub.compare.fetch_hub_submissions`).
+rm -rf "$out/hub" "$out/hub-raw"
+uv run python -c 'import sys
+from bdbvhub.compare import fetch_hub_submissions
+fetch_hub_submissions(sys.argv[1], sys.argv[2])' "$out/hub" "$out/hub-raw"

@@ -177,6 +177,26 @@ def gate_section(run: Path) -> str:
     return "\n".join(parts)
 
 
+def team_quantiles(round_dir: Path, ref: str) -> pd.DataFrame:
+    """Return every hub team's submission for the round, as quantiles.
+
+    Read from the hub's files `this_round_inputs` fetched (`hub/`, openly
+    licensed, and `hub-raw/`), as each team submitted them. Our own hub
+    ids are left out: our candidates are shown instead.
+    """
+    roots = [round_dir / "hub", round_dir / "hub-raw"]
+    if not any(r.exists() for r in roots):
+        return pd.DataFrame()
+    subs = hc.load_hub_submissions(*[r for r in roots if r.exists()])
+    subs = subs.loc[
+        (subs["reference_date"].astype(str) == ref)
+        & ~subs["model"].astype(str).str.startswith("seabbs-")
+    ]
+    if subs.empty:
+        return pd.DataFrame()
+    return hc.forecast_quantiles(subs).assign(ours=False)
+
+
 def build(
     out: Path, candidates: Path, store: Path, data_dir: Path, run: Path
 ) -> Path:
@@ -198,7 +218,11 @@ def build(
     q = q.loc[q["model"].isin(shown)]
     q = q.iloc[q["model"].map(shown.index).argsort(kind="stable")]
     missing = [m for m in CANDIDATES if m not in shown]
-    colours = comparison_colours({m: m for m in shown}, {}, [])
+    teams = team_quantiles(candidates.parent, ref)
+    names_t = sorted(set(teams["model"])) if len(teams) else []
+    colours = comparison_colours({m: m for m in shown}, {}, names_t)
+    if len(teams):
+        q = pd.concat([q, teams], ignore_index=True)
 
     data = out.with_name(out.stem + "-data")
     if data.exists():
@@ -257,9 +281,11 @@ def build(
         "<h2>What the gate picks</h2>",
         gate_section(run),
         "<h2>Forecasts and nowcasts</h2>",
-        "<p class=mut>Every candidate against the data as of the round. "
-        "Pick the location (grouped by national, province and zone), "
-        "the models and the view.</p>",
+        "<p class=mut>Every candidate against the data as of the round, "
+        "beside every other team's submission for this round so far, "
+        "as each submitted it (read from the hub; toggle each in the "
+        "key). Pick the location (grouped by national, province and "
+        "zone), the models and the view.</p>",
         note,
         explorer_html(f"{rel}/cases.json", "Candidate forecasts"),
         "<h2>wk R_t</h2>",
