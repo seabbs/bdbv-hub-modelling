@@ -8,7 +8,7 @@ tasks:
     desc: Run the development backtest, the real-release evaluation, with the fitted models from the fit store
     cmds:
       - task: :bdbv-hub:fit-store
-      - uv run bdbvhubrenewal backtest {{.CLI_ARGS}}
+      - uv run bdbvhub backtest {{.CLI_ARGS}}
 
 
   score-history:
@@ -24,19 +24,19 @@ tasks:
     desc: Make every derived file in results/ as the Pages build does (the backtest and zone runs)
     cmds:
       - task: backtest
-      - uv run bdbvhubrenewal zone-backtest
+      - uv run bdbvhub zone-backtest
 
 
   backtest-lopo:
     desc: Leave one province out on the development vintages, for the variants that take a mask
     cmds:
-      - uv run bdbvhubrenewal backtest --lopo {{.CLI_ARGS}}
+      - uv run bdbvhub backtest --lopo {{.CLI_ARGS}}
 
 
   backtest-zones:
     desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
     cmds:
-      - uv run bdbvhubrenewal zone-backtest {{.CLI_ARGS}}
+      - uv run bdbvhub zone-backtest {{.CLI_ARGS}}
 
 
   germany:
@@ -52,15 +52,15 @@ tasks:
   compare-hub:
     desc: Fetch the hub's weekly-round forecasts and score them with ours
     cmds:
-      - uv run bdbvhubrenewal compare-hub --fetch
+      - uv run bdbvhub compare-hub --fetch
 
 
   plots:
     desc: Make the docs figures and tables from the backtest results
     cmds:
       - task: :bdbv-hub:fit-store
-      - uv run bdbvhubrenewal compare-hub
-      - uv run bdbvhubrenewal report
+      - uv run bdbvhub compare-hub
+      - uv run bdbvhub report
       - >-
         uv run score-history --docs docs/generated
         --figures docs/figures --current docs/figures

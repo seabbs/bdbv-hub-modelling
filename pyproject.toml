@@ -96,8 +96,8 @@ paper = [
 [tool.uv]
 default-groups = ["dev"]
 # The workspace root holds no code of its own: the packages are in
-# packages/, and `bdbvhub` installs the `bdbvhub` and `bdbvhubrenewal`
-# commands.
+# packages/, and `bdbvhub` installs the `bdbvhub`
+# command.
 package = false
 
 [[tool.uv.index]]

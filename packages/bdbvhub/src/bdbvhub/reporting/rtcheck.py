@@ -7,7 +7,7 @@ by week of infection, with BVDOutbreakSize's Rt overlaid where the
 release has one, and under it the cases by week of onset: reported,
 imputed and the fit's nowcast of the final count. The weeks the round
 submits are marked. It lists the zones with cases that the fit has no Rt
-for. `bdbvhubrenewal rt-check` writes it from a fit directory.
+for. `bdbvhub rt-check` writes it from a fit directory.
 """
 
 from __future__ import annotations

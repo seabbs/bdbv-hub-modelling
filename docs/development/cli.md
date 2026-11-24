@@ -1,10 +1,10 @@
 # CLI
 
-The `bdbvhubrenewal` command.
+The `bdbvhub` command.
 { .page-subtitle }
 
 Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
-`bdbvhubrenewal <command> --help` lists each command's options.
+`bdbvhub <command> --help` lists each command's options.
 
 | Command | What it does |
 |---|---|
@@ -95,19 +95,19 @@ A new release adds 4 fits: about 40 minutes and 1.3 runner-hours.
 To fit a model locally, for example a new variant:
 
 ```bash
-uv run bdbvhubrenewal fit-store fit --model renewal --origin 2026-10-24 --store output/fit-store
-uv run bdbvhubrenewal fit-store load --store output/fit-store
+uv run bdbvhub fit-store fit --model renewal --origin 2026-10-24 --store output/fit-store
+uv run bdbvhub fit-store load --store output/fit-store
 ```
 
 The comparison with hub forecasts downloads other teams' files, so it is run on its own:
 
 ```bash
-uv run bdbvhubrenewal compare-hub --fetch
+uv run bdbvhub compare-hub --fetch
 ```
 
 ## Hub files
 
-`bdbvhubrenewal nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
+`bdbvhub nowcast` writes `model-output/<model_id>/<reference_date>-<model_id>.csv` under `output/submission/`.
 The model id is `seabbs-` plus the model's `model_abbr` in `config/hub.toml`.
 When the reference date is an open round in `tasks.json`, it checks the file with `submission.validate`, the Python port of the hub's checks:
 
@@ -118,12 +118,12 @@ When the reference date is an open round in `tasks.json`, it checks the file wit
 - exactly 100 samples per location, and every sample covers the same weeks;
 - integer sample ids, finite non-negative values, no duplicate rows.
 
-It skips the submission window and the model metadata, which `bdbvhubrenewal metadata` checks.
+It skips the submission window and the model metadata, which `bdbvhub metadata` checks.
 For any other reference date it prints a note and skips the checks.
 
 `task bdbv-hub:validate` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 
-`bdbvhubrenewal metadata` writes `hub/model-metadata/<model id>.yml` and checks it against the hub's schema.
+`bdbvhub metadata` writes `hub/model-metadata/<model id>.yml` and checks it against the hub's schema.
 
 !!! note "Sample ids"
     Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.

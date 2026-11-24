@@ -81,8 +81,7 @@ DEFAULTS = (
     ("TARGETS", "simulate finetune score"),
     ("SIMS_FROM", ""),
     # Scheduled runs (workflow/scripts/tick.py): the targets each tick runs
-    # (empty: none; flowlib.schedule), every how many minutes, and the timer
-    # (cron, systemd or launchd; empty: by platform).
+    # (empty: none; flowlib.schedule).
     ("SCHEDULE_TARGETS", ""),
     # Where `hub_rounds` copies the hub rounds report (empty: nowhere).
     ("REVIEW_DIR", ""),
@@ -100,12 +99,10 @@ DEFAULTS = (
     ("MONITOR_DAG", ""),
     ("MONITOR_DAG_OPTIONS", ""),
     ("MONITOR_DAG_EVERY", "900"),
-    ("SCHEDULE_EVERY", "60"),
     # The coordinator run's pause between ticks, and after a failed one
     # (seconds; workflow/scripts/coordinate.py).
     ("COORDINATE_PAUSE", "60"),
     ("COORDINATE_BACKOFF", "600"),
-    ("SCHEDULE_KIND", ""),
     # Where jobs run (flowlib.compute): single (this machine) or ssh
     # (this machine coordinates its WORKERS, name=host:ROOT:CHECKOUT,
     # with rule groups placed on them, group=worker; not GROUPS, which

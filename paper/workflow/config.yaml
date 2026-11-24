@@ -68,7 +68,7 @@ synthetic:
     development: output/paper/synthetic-dev.csv.gz
     paper: output/paper/synthetic.csv.gz
 
-# The German benchmark, run with the `bdbvhubrenewal` command line
+# The German benchmark, run with the `bdbvhub` command line
 # (config/germany.toml). Its models are the config's `models`.
 # `real: false` runs the study on dummy data.
 germany:
@@ -86,7 +86,7 @@ germany:
   extra: []
 
 # The Ebola study: samples of the release backtest of `backtest_models`
-# from every past release, with the stored fits' (`bdbvhubrenewal
+# from every past release, with the stored fits' (`bdbvhub
 # backtest`, after `fit-store load` on CI), the hub's releases, and once
 # the hub's baseline has a forecast with known truth, every team's
 # forecasts, our stored forecasts and the fit store. `hub: null` runs the

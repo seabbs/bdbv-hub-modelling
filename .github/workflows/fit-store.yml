@@ -168,8 +168,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          uv run bdbvhubrenewal data
-          uv run bdbvhubrenewal bvd
+          uv run bdbvhub data
+          uv run bdbvhub bvd
       - name: Fetch the store
         run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
       # The fine-tuned models' checkpoint, resolved once for the run so
@@ -180,7 +180,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          hash=$(uv run bdbvhubrenewal finetuned-checkpoint)
+          hash=$(uv run bdbvhub finetuned-checkpoint)
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
           echo "BDBV_CHRONOS_FT=$hash" >> "$GITHUB_ENV"
       - name: Plan
@@ -196,7 +196,7 @@ jobs:
           # shellcheck disable=SC2206
           [ -n "$ORIGINS" ] && args+=(--origins $ORIGINS)
           [ "$RETRY" = true ] && args+=(--retry-failed)
-          uv run bdbvhubrenewal fit-store plan "${args[@]}" \
+          uv run bdbvhub fit-store plan "${args[@]}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
           # Longest fits first, so the short ones fill in behind them and
           # the run takes as long as its longest fit: by model (slowest
@@ -296,7 +296,7 @@ jobs:
           KEY: ${{ matrix.key }}
           BDBV_CHRONOS_FT: ${{ needs.plan.outputs.chronos_ft }}
         run: |
-          if ! uv run bdbvhubrenewal fit-store fit --model "$MODEL" \
+          if ! uv run bdbvhub fit-store fit --model "$MODEL" \
             --origin "$ORIGIN" --store new; then
             echo "::warning::$MODEL at $ORIGIN failed; stored as failed"
           fi
@@ -375,7 +375,7 @@ jobs:
   # development and zone backtests and the pairing sensitivity), one job
   # per cell, beside the fits and under the same write guard. Each only
   # forecasts (`--forecast-only`), cached under a hash of the code and
-  # data it reads (`bdbvhubrenewal digest --model`), so a change to one
+  # data it reads (`bdbvhub digest --model`), so a change to one
   # model reruns only its cells. `backtests` scores them with the stored
   # fits and stores the results; Pages only loads them.
   backtest:
@@ -397,24 +397,24 @@ jobs:
               packages/nowcasteval/src/nowcasteval/scoring.py
               packages/bdbvhub/src/bdbvhub/store/store.py
             run: >-
-              uv run bdbvhubrenewal pairing-sensitivity --study bdbv
+              uv run bdbvhub pairing-sensitivity --study bdbv
               --out output/parts/pairing
           - cell: zones-randomwalknowcast
             model: randomwalknowcast
             run: >-
-              uv run bdbvhubrenewal zone-backtest --forecast-only --models randomwalknowcast
+              uv run bdbvhub zone-backtest --forecast-only --models randomwalknowcast
           - cell: zones-randomwalk
             model: randomwalk
             run: >-
-              uv run bdbvhubrenewal zone-backtest --forecast-only --models randomwalk
+              uv run bdbvhub zone-backtest --forecast-only --models randomwalk
           - cell: development-randomwalknowcast
             model: randomwalknowcast
             run: >-
-              uv run bdbvhubrenewal backtest --forecast-only --models randomwalknowcast
+              uv run bdbvhub backtest --forecast-only --models randomwalknowcast
           - cell: development-randomwalk
             model: randomwalk
             run: >-
-              uv run bdbvhubrenewal backtest --forecast-only --models randomwalk
+              uv run bdbvhub backtest --forecast-only --models randomwalk
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -437,7 +437,7 @@ jobs:
         run: |
           set -euo pipefail
           # shellcheck disable=SC2086
-          digest=$(uv run bdbvhubrenewal digest --model "$MODEL" --text "$RUN" \
+          digest=$(uv run bdbvhub digest --model "$MODEL" --text "$RUN" \
             --with $WITH)
           if [ -z "$digest" ]; then
             echo "::error::digest printed nothing; refusing to key the cache"
@@ -503,12 +503,12 @@ jobs:
           BDBV_CHRONOS_FT: ${{ needs.plan.outputs.chronos_ft }}
         run: |
           python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
-          uv run bdbvhubrenewal fit-store load --store "$STORE"
+          uv run bdbvhub fit-store load --store "$STORE"
       - name: Score
         run: |
           p=output/parts/parts
-          uv run bdbvhubrenewal score "$p"-development-{randomwalk,randomwalknowcast}
-          uv run bdbvhubrenewal score "$p"-zones-{randomwalk,randomwalknowcast}
+          uv run bdbvhub score "$p"-development-{randomwalk,randomwalknowcast}
+          uv run bdbvhub score "$p"-zones-{randomwalk,randomwalknowcast}
           # The pairing sensitivity's blocks, for docs/pairing.md.
           mkdir -p results/pairing
           cp "$p"-pairing-bdbv/pairing/*.csv.gz results/pairing/

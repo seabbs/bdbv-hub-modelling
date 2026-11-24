@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Sam Abbott. MIT licence, see LICENSE.
-"""Command line interface: `bdbvhubrenewal <command>`.
+"""Command line interface: `bdbvhub <command>`.
 
 Commands:
 
@@ -153,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
     argparse.ArgumentParser
         The parser.
     """
-    parser = argparse.ArgumentParser(prog="bdbvhubrenewal")
+    parser = argparse.ArgumentParser(prog="bdbvhub")
     parser.add_argument(
         "--version", action="store_true", help="Print the version and exit."
     )
@@ -584,7 +584,7 @@ def _vintage(target_vintages: Sequence[str], vintage: str | None) -> str:
     if vintage not in target_vintages:
         raise ValueError(
             f"No real data for vintage {vintage}; latest is "
-            f"{max(target_vintages)}. Run `bdbvhubrenewal data` first."
+            f"{max(target_vintages)}. Run `bdbvhub data` first."
         )
     return vintage
 
@@ -1815,9 +1815,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     From the shell, download the data, forecast with the random walk
     nowcast and write its hub file under `output/submission/`:
 
-        bdbvhubrenewal data
-        bdbvhubrenewal nowcast --model randomwalknowcast --vintage latest
-        bdbvhubrenewal <command> --help
+        bdbvhub data
+        bdbvhub nowcast --model randomwalknowcast --vintage latest
+        bdbvhub <command> --help
 
     The same from Python:
 

@@ -16,7 +16,7 @@ SAY_PREFIX="paper: CI gather (run $run)"
 # shellcheck source=workflow/scripts/notify.sh
 source "$root/workflow/scripts/notify.sh"
 repo=seabbs/bdbv-hub-modelling
-bdbv="$root/.venv/bin/bdbvhubrenewal"
+bdbv="$root/.venv/bin/bdbvhub"
 germany="$root/.venv/bin/nowcastgermany"
 cd "$root"
 jobs() {
