@@ -172,7 +172,7 @@ ADAPTER_FILES: Final = ("adapter_config.json", "adapter_model.safetensors")
 """The LoRA adapter's files. A checkpoint's release holds them and its
 `settings.json`."""
 
-FINETUNED_CACHE: Final = "~/.cache/bdbvhubrenewal"
+FINETUNED_CACHE: Final = "~/.cache/bdbv-hub-modelling"
 """Directory each downloaded checkpoint is kept in, as
 `chronos-ft-<hash>`."""
 
