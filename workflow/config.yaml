@@ -238,7 +238,9 @@ dashboard:
       checkpoint: zero-shot
     - key: rw
       paper_model: randomwalknowcast
-      model: "^randomwalknowcast(_daily)?$"
+      # The daily series only: a 7-day sum for every date. The weekly-step
+      # randomwalknowcast (every 7th date) is not drawn.
+      model: "^randomwalknowcast_daily$"
       role: baseline
   # Score studies in selector order with their labels, the order of their
   # levels, and the target, score, source and level shown first.
