@@ -4,7 +4,6 @@ import datetime as dt
 import json
 from dataclasses import fields, replace
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -76,34 +75,17 @@ def test_variants_are_registered_as_fitted_models() -> None:
         assert len(model_abbr_for(name)) < 16
 
 
-def test_only_renewalsp_centres_its_rt_walk() -> None:
-    # One place's data pin its Rt walk, so its levels are sampled.
-    # Pooled, the walk's step SD mixes badly centred.
-    centred = {
-        name: rn.model_config(v).centred_rt for name, v in rn.VARIANTS.items()
-    }
-    assert centred == {
-        "renewal": False,
-        "renewalsp": True,
-        "renewalsp_zones": True,
-        "renewalbvd": False,
-    }
-
-
-def test_renewalsp_centres_only_where_the_data_pin_the_walk() -> None:
-    # Centred, a province with few cases funnels.
-    def data(cases: float) -> SimpleNamespace:
-        known = np.array([[cases - 1.0], [np.nan]])
-        return SimpleNamespace(known=known, imputed=np.array([[1.0], [0.0]]))
-
-    sp = rn.VARIANTS["renewalsp"]
-    rich = rn.fit_config(sp, data(rn.CENTRED_RT_MIN_CASES))
-    poor = rn.fit_config(sp, data(rn.CENTRED_RT_MIN_CASES - 1))
-    assert rich.centred_rt
-    assert not poor.centred_rt
-    assert poor == replace(rich, centred_rt=False)
-    pooled = rn.fit_config(rn.VARIANTS["renewal"], data(1e6))
-    assert not pooled.centred_rt
+def test_every_renewal_shares_one_rt_process() -> None:
+    # Sam (lead 2026-11-24 12:08): one Rt process for every variant, so
+    # they differ only in what they ablate. No centred switch, no
+    # case-count rule, and one step-SD prior.
+    assert not hasattr(rn, "CENTRED_RT_MIN_CASES")
+    assert not hasattr(rn, "fit_config")
+    for v in rn.VARIANTS.values():
+        config = rn.model_config(v)
+        assert not hasattr(config, "centred_rt")
+        assert config.rt_sd_lognormal == (0.12, 0.5)
+        assert "rt_sd_lognormal" not in v.overrides
 
 
 @pytest.mark.parametrize("name", ["renewal", "renewalbvd"])
@@ -140,13 +122,7 @@ def test_the_variants_are_ablations_of_renewalbvd() -> None:
     assert full == rn.engine().BVD
     assert full.depletion
     assert dropped("renewal") == {"bvd"}
-    # renewalsp also keeps its centred walk's step SD off 0.
-    assert dropped("renewalsp") == {
-        "bvd",
-        "national",
-        "centred_rt",
-        "rt_sd_lognormal",
-    }
+    assert dropped("renewalsp") == {"bvd", "national"}
     assert rn.VARIANTS["renewalsp"].per_province
     assert rn.model_config(rn.VARIANTS["renewal"]) == rn.engine().MAIN
 
@@ -796,31 +772,21 @@ def test_provinces_in_parallel_match_one_after_another(
     assert list(parallel.runs) == list(serial.runs)
 
 
-def test_renewalsp_keeps_its_rt_walk_step_sd_off_zero(
-    task: ForecastTask,
+@pytest.mark.parametrize("name", ["renewal", "renewalsp", "renewalbvd"])
+def test_every_renewal_samples_the_same_non_centred_walk(
+    task: ForecastTask, name: str
 ) -> None:
-    # The centred walk funnels where the step SD nears 0: at 2026-11-22,
-    # CD-NK alone mixed rt_sd at bulk ESS 29 and E-BFMI 0.27-0.36 under
-    # HalfNormal(0.2), and 72 and 0.49-0.70 under LogNormal(log 0.12, 0.5).
+    # The step SD has LogNormal(log 0.12, 0.5), off 0, and the walk is
+    # sampled by its standardised steps in every variant.
     import numpyro
 
     from nowcastrenewal.model import model_args
     from nowcastrenewal.model.zones import build_model
 
-    priors = {
-        name: rn.model_config(v).rt_sd_lognormal
-        for name, v in rn.VARIANTS.items()
-    }
-    assert priors == {
-        "renewal": None,
-        "renewalsp": (0.12, 0.5),
-        "renewalsp_zones": (0.12, 0.5),
-        "renewalbvd": None,
-    }
-    variant = rn.VARIANTS["renewalsp"]
+    variant = rn.VARIANTS[name]
     one = replace(task, locations=task.locations[:1], mask=())
     data = rn.vintage_inputs(one, rn.model_config(variant))
-    model = build_model(data, rn.fit_config(variant, data))
+    model = build_model(data, rn.model_config(variant))
     tr = numpyro.handlers.trace(
         numpyro.handlers.seed(model.sample, rng_seed=0)
     ).get_trace(**model_args(model, data))
@@ -828,3 +794,4 @@ def test_renewalsp_keeps_its_rt_walk_step_sd_off_zero(
     assert type(fn).__name__ == "LogNormal"
     assert float(fn.loc) == pytest.approx(np.log(0.12))
     assert float(fn.scale) == pytest.approx(0.5)
+    assert "log_rt_baseline_x" not in tr
