@@ -14,7 +14,8 @@ rounds: []
 # twice (flowlib.grids): the grid validates on round 33, trains on 34 to
 # 37 and tests on 38.
 grid_rounds:
-  rounds: [34, 35, 36, 37]
+  # Six rounds of 800 for 4,800 simulations, not the test round (38).
+  rounds: [34, 35, 36, 37, 39, 40]
   validation_round: 33
   test_round: 38
   topup_round: null
@@ -53,8 +54,9 @@ finetune:
   # fine-tuned setting trains on the same 3,200 simulations, its grid's
   # four training rounds, so they compare fairly, with checkpoints
   # doubling from 100.
-  prefixes: [100, 200, 400, 800, 1600, 3200]
-  outbreaks: 3200
+  # Run A's and Run B's checkpoints, then the end (lead 19:20/19:24).
+  prefixes: [100, 200, 400, 800, 1600, 3200, 4800]
+  outbreaks: 4800
   # Training seeds: the rounds' batches in seed order, or a fixed list
   # from `seed_file` (one seed a line, in order). The validation round is
   # one whole grid block, and the grid's training rounds the blocks
@@ -73,7 +75,7 @@ finetune:
   # cut-offs, the learning rate falling linearly to zero over the
   # `outbreaks` simulations, and the series bias at its own rate `bias_lr`.
   draws: 1
-  cuts: 14
+  cuts: 32
   subset_seed: 1
   learning_rate: 1.0e-5
   bias_lr: 1.0e-3
@@ -134,7 +136,7 @@ finetune:
   # to the settings hash.
   real_training: null
   # Part of the settings hash: changing it changes every checkpoint's hash.
-  note: 3,200 simulations
+  note: 4,800 simulations, 32 cuts
   # The checkpoint checked against zero-shot on the held-out simulations.
   check_at: 800
 
