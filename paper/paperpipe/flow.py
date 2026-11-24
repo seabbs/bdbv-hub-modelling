@@ -403,9 +403,6 @@ class PaperFlow:
                 models = " ".join(ebola["backtest_models"])
                 args.append(f"--ebola-draws {self.ebola_draws}")
                 args.append(f"--ebola-draws-models {models}")
-            if ebola["candidates"]:
-                files = " ".join(shlex.quote(c) for c in ebola["candidates"])
-                args.append(f"--candidates {files}")
             history = self.store_history()
             if history:
                 args.append(f"--store-history {history}")
@@ -435,7 +432,6 @@ class PaperFlow:
                 target,
                 ebola["backtest"],
                 *self.ebola_extra(),
-                *(ebola["candidates"] or []),
                 *draws,
                 *stored,
             ]

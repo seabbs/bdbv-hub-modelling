@@ -100,7 +100,6 @@ def _sources(a: argparse.Namespace) -> Sources:
         ebola_extra=tuple(a.ebola_extra),
         ebola_draws=a.ebola_draws,
         ebola_draws_models=tuple(a.ebola_draws_models),
-        candidates=tuple(a.candidates),
         store_history=a.store_history,
     )
 
@@ -298,7 +297,6 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--ebola-extra", type=Path, nargs="*", default=[])
     p.add_argument("--ebola-draws", type=Path, default=None)
     p.add_argument("--ebola-draws-models", nargs="*", default=[])
-    p.add_argument("--candidates", type=Path, nargs="*", default=[])
     p.add_argument("--store-history", type=Path, default=None)
 
 

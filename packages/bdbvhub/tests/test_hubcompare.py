@@ -220,7 +220,6 @@ def test_attribution_names_the_hub() -> None:
 def test_load_comparison_config() -> None:
     cfg = load_comparison_config(ROOT / "config" / "hub-comparison.toml")
     assert cfg.baseline == "randomwalknowcast"
-    assert cfg.submitted == "data/our-submissions"
     assert "CD" in cfg.locations
     # Substituted weeks are scored apart from chain-start weeks.
     assert cfg.substituted == "apart"
@@ -525,8 +524,8 @@ def test_plot_hub_round(
     )
 
 
-def test_with_submissions_keeps_main_builds_beside_submissions() -> None:
-    from bdbvhub.compare import with_submissions
+def test_the_hub_copy_of_our_submissions_is_marked_submitted() -> None:
+    from bdbvhub.compare import as_submitted
 
     def rows(model: str, source: str, ref: str, value: float) -> pd.DataFrame:
         return pd.DataFrame(
@@ -544,20 +543,20 @@ def test_with_submissions_keeps_main_builds_beside_submissions() -> None:
     ids = {"randomwalknowcast": "seabbs-rwnowcast"}
     forecasts = pd.concat(
         [
-            rows("randomwalknowcast", "real", "2026-10-31", 1.0),
             rows("randomwalknowcast", "real", "2026-11-07", 2.0),
             rows("seabbs-rwnowcast", "hub", "2026-11-07", 3.0),
+            rows("seabbs-rwnowcast", "hub", "2026-11-14", 5.0),
             rows("teamA", "hub", "2026-11-07", 4.0),
         ]
     )
-    submitted = rows("seabbs-rwnowcast", "hub", "2026-11-07", 5.0)
-    out = with_submissions(forecasts, submitted, ids)
+    out = as_submitted(forecasts, ids)
     got = out.groupby(["model", "source", "reference_date"])["value"].first()
-    # The hub's copy of our file goes, and the main build stays.
+    # Every round of ours the hub holds is ours as submitted; the main
+    # build and the other teams stay as they are.
     assert got.to_dict() == {
-        ("randomwalknowcast", "real", "2026-10-31"): 1.0,
         ("randomwalknowcast", "real", "2026-11-07"): 2.0,
-        ("seabbs-rwnowcast", "submitted", "2026-11-07"): 5.0,
+        ("seabbs-rwnowcast", "submitted", "2026-11-07"): 3.0,
+        ("seabbs-rwnowcast", "submitted", "2026-11-14"): 5.0,
         ("teamA", "hub", "2026-11-07"): 4.0,
     }
 
@@ -750,24 +749,6 @@ def test_an_unknown_substituted_mode_stops() -> None:
 
     with pytest.raises(ValueError, match="substituted"):
         split_substituted(_submitted("x", "2026-11-21"), SUBMISSIONS, "mix")
-
-
-def test_with_submissions_keeps_the_hub_copy_of_rounds_not_held_here() -> None:
-    """data/our-submissions holds some rounds only: the hub's copy of our
-    other rounds is scored, not dropped."""
-    from bdbvhub.compare import with_submissions
-
-    ids = {"renewalbvd": "seabbs-renewal"}
-    forecasts = pd.concat(
-        [
-            _submitted("seabbs-renewal", "2026-11-07", source="hub"),
-            _submitted("seabbs-renewal", "2026-11-14", source="hub"),
-        ]
-    )
-    held = _submitted("seabbs-renewal", "2026-11-07", source="hub")
-    out = with_submissions(forecasts, held, ids)
-    got = set(zip(out["source"], out["reference_date"], strict=True))
-    assert got == {("submitted", "2026-11-07"), ("hub", "2026-11-14")}
 
 
 def _git(cwd: Path, *args: str) -> None:

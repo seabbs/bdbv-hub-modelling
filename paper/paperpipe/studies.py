@@ -91,8 +91,6 @@ class Sources:
         number of draws, whose rows replace theirs in `ebola_backtest`.
     ebola_draws_models : tuple of str
         The models of `ebola_draws`.
-    candidates : tuple of pathlib.Path
-        Files of our stored Ebola forecasts.
     store_history : pathlib.Path, optional
         The fit store's history (`ebola.history_samples`).
     """
@@ -107,7 +105,6 @@ class Sources:
     ebola_extra: tuple[Path, ...] = ()
     ebola_draws: Path | None = None
     ebola_draws_models: tuple[str, ...] = ()
-    candidates: tuple[Path, ...] = ()
     store_history: Path | None = None
 
 
@@ -304,7 +301,7 @@ def _ebola_forecasts(
     The backtest's table holds our models' forecasts from every past
     release, the stored fits' among them; `ebola_extra` adds further
     models' samples in its layout. The prospective rounds' forecasts (the
-    hub's, our stored and candidate forecasts, by round) join once the
+    hub's and our stored forecasts, by round) join once the
     hub's baseline can be scored, and from `split` on in any case, as
     they are the scored part. Release-backtest forecasts are kept by the
     round their release feeds (`_by_round`), and rounds before `before`.
@@ -324,7 +321,6 @@ def _ebola_forecasts(
     if (with_hub or split is not None) and sources.hub is not None:
         rounds = ebola.load(
             sources.hub,
-            candidates=sources.candidates,
             history=sources.store_history,
         )
         rounds = _before(rounds, "origin_date", before)
