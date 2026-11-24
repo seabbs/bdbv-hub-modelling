@@ -148,7 +148,8 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
   Units run on the forecasting device with its threads (`forecast` in the config; `FORECAST_DEVICE`/`FORECAST_THREADS` override it per machine), beside the trainer: `train_segment` takes the `gpu` resource, with the highest priority, so the next segment starts the moment the previous ends. With `forecast.device: cuda`, `forecast.gpu: exclusive` makes forecasting jobs take it too (they wait for the GPU) and `share` runs them beside the trainer on it.
   BDBV is held out for the paper, so no BDBV unit runs.
 - `score_run_germany`: a run's own saved checkpoint `n<N>`, loaded from `<ROOT>/runs/<run>/train/n<N>` with no release, cached in `<ROOT>/runs/<run>/scores/`.
-- `run_scores`: every trained run's saved checkpoints and report; `score` includes it.
+- `run_scores`: every trained run's checkpoints and report; `score` includes it.
+  On a machine that trains (`finetune` in `TARGETS`), a run's table, report or comparison asks for every checkpoint in reach, so asking for the paper trains and scores what it needs; on a machine that only scores, the checkpoints already saved.
 - `run_table`: a run's saved checkpoints as table rows, German relative scores and held-out losses under the run's name (`<run>/reports/checkpoint-scores.csv`).
 - `comparison`: the paper's live run's and comparison runs' `run_table` in one table (`<ROOT>/runs/comparison.csv`), for the paper's fine-tuning comparisons.
 - `daily_table`: a run's saved checkpoints on both German views, daily counts and 7-day sums, relative to the German config's references (`<run>/reports/compare-daily.csv`).

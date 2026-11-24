@@ -284,9 +284,8 @@ def test_the_trainer_claims_the_cores_it_uses(tmp_path):
         re.S,
     )
     assert trains
-    workers = yaml.safe_load(
-        (ROOT / "workflow" / "config.yaml").read_text()
-    )["finetune"]["cut_workers"]
+    config = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
+    workers = config["finetune"]["cut_workers"]
     assert all(t == (str(workers + 1), str(workers)) for t in trains)
 
 
