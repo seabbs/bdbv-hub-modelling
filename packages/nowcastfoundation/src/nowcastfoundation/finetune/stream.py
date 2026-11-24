@@ -2015,6 +2015,8 @@ def main(root: Path | None = None) -> None:
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)  # noqa: NPY002
     device = torch_device(args.device)
+    # Saved held-out blocks load in seconds: say so, not still waiting.
+    report(stage="loading the model")
     pipeline = Chronos2Pipeline.from_pretrained(
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
@@ -2148,6 +2150,7 @@ def main(root: Path | None = None) -> None:
         log("held-out loss at the start left to the evaluator")
     elif state is None:
         consumed.write_text("")
+        report(stage="validation at the start (base Chronos-2)")
         start_parts = held_out_parts(model, val, args.batch_size)
         start_loss = start_parts["loss"]
         by_level = held_out_by_level(model, val, LEVEL_BLOCKS)
