@@ -12,6 +12,9 @@ source "$(dirname "$0")/lib.sh"
 
 args=(--policy "$POLICY" --candidates "$WORK/candidates" --model "$MODEL"
   --out "$WORK/gate")
+if [ -f "$WORK/inputs/tasks.json" ]; then
+  args+=(--tasks "$WORK/inputs/tasks.json")
+fi
 if [ "${NO_SHADOWS:-false}" = "true" ]; then
   args+=(--no-shadows)
 fi
