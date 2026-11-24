@@ -773,12 +773,18 @@ def _meta(model: ForecastModel, origin: str, key: str) -> dict[str, Any]:
 
 
 def plan(
-    keys: Keys, store: Path | str, retry_failed: bool = False
+    keys: Keys,
+    store: Path | str,
+    retry_failed: bool = False,
+    usable: bool = False,
 ) -> list[dict[str, str]]:
     """List the fits the store lacks.
 
     A fit that failed is stored as failed and is not planned again until
     its inputs change, unless `retry_failed`.
+    With `usable`, a pair is not lacking when `unpack` can use a fit
+    (`_choose`: the current key's, else the newest good one), as the
+    submission asks.
 
     Parameters
     ----------
@@ -788,6 +794,8 @@ def plan(
         The store root.
     retry_failed : bool
         Plan the fits stored as failed again.
+    usable : bool
+        Count an older stored fit of the pair as present.
 
     Returns
     -------
@@ -803,6 +811,8 @@ def plan(
         redo = retry_failed and path.exists()
         if redo:
             redo = read_fit(path).meta["status"] != "ok"
+        if usable and _choose(Path(store), model, origin, key)[0]:
+            continue
         if not path.exists() or redo:
             to_fit.append({"model": model, "origin": origin, "key": key})
     return to_fit
@@ -1310,7 +1320,7 @@ def command(args: argparse.Namespace) -> int:
         tasks = {o: t for o, t in tasks.items() if o in set(args.origins)}
     keys = current_keys(tasks, models, sampler, code)
     if args.action == "plan":
-        to_fit = plan(keys, args.store, args.retry_failed)
+        to_fit = plan(keys, args.store, args.retry_failed, args.usable)
         for t in to_fit:
             print(f"To fit: {t['model']} at {t['origin']} ({t['key']}).")
         print(f"{len(to_fit)} of {len(keys)} fits to make.")

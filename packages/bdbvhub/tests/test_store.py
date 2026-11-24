@@ -655,6 +655,9 @@ def test_plan_fit_and_load(
     store.write_fit(root, store.failed(meta, RuntimeError("x")))
     left = {m["origin"] for m in store.plan(keys, root)}
     assert left == set(origins) - {newest, oldest, broken}
+    # The submission's view: an older fit of the pair is not lacking.
+    usable = {m["origin"] for m in store.plan(keys, root, usable=True)}
+    assert usable == left - {stale}
     again = {m["origin"] for m in store.plan(keys, root, retry_failed=True)}
     assert again == left | {broken}
 

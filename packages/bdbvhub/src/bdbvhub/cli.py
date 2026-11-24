@@ -407,6 +407,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="With `plan`: plan the fits stored as failed again.",
     )
     fst.add_argument(
+        "--usable",
+        action="store_true",
+        help="With `plan`: a pair with an older stored fit that `unpack` "
+        "can use is not lacking.",
+    )
+    fst.add_argument(
         "--keys",
         default=None,
         help="With `plan`: write every current key here, for pruning.",
