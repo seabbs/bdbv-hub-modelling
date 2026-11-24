@@ -66,17 +66,6 @@ RELATIONS = ("shared", "independent", "correlated", "lagged", "nested")
 _HALF_LIFE = math.log(0.5) / math.log(0.8)
 
 
-def place_innovation_sd(noise_scale: float, place_sd: float) -> float:
-    r"""Return the weekly innovations' sd that gives places' deviations sd.
-
-    The weekly AR(1) (`WeeklyNoise`, coefficient 0.8) has a long-run sd of
-    its innovations' over $\sqrt{1 - 0.8^2}$, so the innovations are
-    scaled down by that: places' log R deviations then have sd
-    `noise_scale * place_sd` (daily growth deviations of `place_sd`).
-    """
-    return noise_scale * place_sd * math.sqrt(1 - 0.8**2)
-
-
 def daily_walk(
     days: ArrayLike | Sequence[float], walk: ArrayLike | Sequence[float]
 ) -> np.ndarray:
@@ -407,7 +396,7 @@ class PlaceRt(RandomVariable):
             ]
             return [shared, *own]
         if self.relation == "correlated":
-            sd = place_innovation_sd(self.noise_scale, self.place_sd)
+            sd = self.noise_scale * self.place_sd
             common = self.noise(n=n, sd=sd, noise_name=f"{self.name}_common")
             rho = self.place_rho
             return [
@@ -440,7 +429,7 @@ class PlaceRt(RandomVariable):
                 f"nested R paths need a region for each of {n_places} "
                 f"places, got {len(region)}"
             )
-        sd = place_innovation_sd(self.noise_scale, self.place_sd)
+        sd = self.noise_scale * self.place_sd
         common = [
             self.noise(n=n, sd=sd, noise_name=f"{self.name}_region_{r}")
             for r in range(1, max(region[:n_places]) + 1)
