@@ -161,3 +161,25 @@ def test_a_variant_raises_r_and_returns_immune_people_once() -> None:
     assert m[0] == pytest.approx(1.0, abs=1e-4)
     assert m[-1] == pytest.approx(2.0, abs=1e-4)
     assert m[9] == pytest.approx(1.5)
+
+
+def test_a_ceiling_bounds_r_smoothly_after_shifts_and_variants() -> None:
+    # Variants multiply R; with a ceiling of 4, R stays below it, values
+    # near 1 are kept and the ceiling bends R smoothly (no kink).
+    start = np.full((len(GT), 1), 2.0)
+    rt = np.linspace(0.5, 12.0, 60)[:, None]
+    variants = Variants(at=[1.0], escape=[0.0], multiplier=[1.0], days=[1.0])
+    with jax.enable_x64(True):
+        free = run_renewal(start, GT, rt, 1e9, variants=variants)
+        capped = run_renewal(
+            start, GT, rt, 1e9, variants=variants, r_ceiling=4.0
+        )
+    r, rc = np.asarray(free.r)[:, 0], np.asarray(capped.r)[:, 0]
+    assert rc.max() < 4.0
+    near = r < 1.5
+    np.testing.assert_allclose(rc[near], r[near], rtol=1e-3)
+    assert (np.diff(rc) > 0).all()
+    # No ceiling: R as it was.
+    with jax.enable_x64(True):
+        same = run_renewal(start, GT, rt, 1e9, variants=variants, r_ceiling=None)
+    np.testing.assert_allclose(np.asarray(same.r), np.asarray(free.r))
