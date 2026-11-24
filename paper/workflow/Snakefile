@@ -127,7 +127,8 @@ for _mode in MODES:
             gpu=FORECAST.gpu,
         params:
             python=PYTHON,
-            sims=SYNTHETIC["simulations"][_mode],
+            # The simulations folder, from its first file.
+            sims=lambda w, input: str(Path(input[0]).parent),
             seeds=FLOW.seeds(_mode),
             # The fine-tuned models wait for the final run's checkpoint.
             models=FLOW.synthetic_models_arg(),
@@ -684,7 +685,7 @@ if GERMANY["real"]:
         params:
             env=FORECAST.env,
             python=PYTHON,
-            sims=SYNTHETIC["simulations"]["development"],
+            sims=lambda w, input: str(Path(input[0]).parent),
             seeds=FLOW.seeds("development"),
             samples=config["synthetic"]["samples"],
         shell:
