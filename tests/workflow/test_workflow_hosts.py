@@ -102,6 +102,23 @@ def test_timing_writes_the_gnu_time_line_on_any_os():
     float(last[3])
 
 
+def test_timing_without_a_time_program_gives_the_wall_time(tmp_path):
+    # A cluster node may have neither GNU nor BSD time: the batch still
+    # runs, with its wall time and no peak memory.
+    got = subprocess.run(
+        ["bash", str(TIMED), "bash", "-c", "echo hi >&2; exit 3"],
+        env={"PATH": "/usr/bin:/bin", "TIMED_TIME": str(tmp_path / "none")},
+        capture_output=True,
+        text=True,
+    )
+    assert got.returncode == 3
+    assert "hi" in got.stderr
+    assert "peak_rss_kb" not in got.stderr
+    last = got.stderr.strip().splitlines()[-1].split()
+    assert last[0] == "wall_s"
+    float(last[1])
+
+
 def test_a_mirrored_round_counts_once_its_qc_ran(tmp_path):
     there, here = tmp_path / "there", tmp_path / "here"
     there.mkdir()
