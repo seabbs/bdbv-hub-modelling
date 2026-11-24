@@ -106,7 +106,7 @@ def read_ids(path: Path) -> pd.Series:
         return pd.Series([], dtype=str)
 
 
-def real_share(real: list, chunk: int, chunks: int) -> list:
+def real_share(real: list[Any], chunk: int, chunks: int) -> list[Any]:
     """Return the real-data blocks trained with chunk `chunk` of `chunks`.
 
     The blocks are spread evenly and in order over the round's chunks, so
@@ -198,7 +198,7 @@ def lora_config(bias: bool):
     )
 
 
-def bias_settings(bias: bool, lr: float = 0.0) -> dict:
+def bias_settings(bias: bool, lr: float = 0.0) -> dict[str, Any]:
     """Return the series bias's entry of a checkpoint's settings."""
     if not bias:
         return {}
@@ -218,7 +218,7 @@ def bias_settings(bias: bool, lr: float = 0.0) -> dict:
     }
 
 
-def horizon_settings(loss_days: int | None) -> dict:
+def horizon_settings(loss_days: int | None) -> dict[str, Any]:
     """Return the loss horizon's entries of a checkpoint's settings.
 
     Unset, only the prediction length is stated.
@@ -235,7 +235,7 @@ def horizon_settings(loss_days: int | None) -> dict:
     }
 
 
-def view_settings(limit: int | None) -> dict:
+def view_settings(limit: int | None) -> dict[str, Any]:
     """Return the block limit's entry of a checkpoint's settings."""
     if limit is None:
         return {}
@@ -247,7 +247,7 @@ VIEWS_FILE = "views.csv"
 run's training folder (`record_views`)."""
 
 
-def record_views(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
+def record_views(out: Path, pairs: list[tuple[str, dict[str, Any]]], part: str) -> str:
     """Add each view of a system over the block limit to `VIEWS_FILE`.
 
     One row a block: the outbreak, the part of the run (`held-out` or the
@@ -286,7 +286,7 @@ def record_views(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
     )
 
 
-def release_settings(layer: dict | None) -> dict:
+def release_settings(layer: dict[str, Any] | None) -> dict[str, Any]:
     """Return the release layer's entry of a checkpoint's settings.
 
     No layer, the default, adds nothing, so its hash is as before.
@@ -299,7 +299,7 @@ RELEASES_FILE = "releases.csv"
 outbreak, in the run's train folder (`record_releases`)."""
 
 
-def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
+def record_releases(out: Path, pairs: list[tuple[str, dict[str, Any]]], part: str) -> str:
     """Add each block's releases to `RELEASES_FILE`, under a release layer.
 
     One row a block: the outbreak, the part of the run, source, cut,
@@ -345,7 +345,7 @@ def record_releases(out: Path, pairs: list[tuple[str, dict]], part: str) -> str:
     )
 
 
-def layout_settings(layout: str) -> dict:
+def layout_settings(layout: str) -> dict[str, Any]:
     """Return the block layout's entry of a checkpoint's settings.
 
     The ragged layout, the default, adds nothing, so its hash is as before.
@@ -353,7 +353,7 @@ def layout_settings(layout: str) -> dict:
     return {} if layout == "ragged" else {"layout": layout}
 
 
-def quiet_settings(min_cases: int | None) -> dict:
+def quiet_settings(min_cases: int | None) -> dict[str, Any]:
     """Return the quiet cut-off rule's entry of a checkpoint's settings."""
     if min_cases is None:
         return {}
@@ -398,7 +398,7 @@ def make_optimiser(model, lr: float, bias_lr: float = 0.0):
     return torch.optim.AdamW(param_groups(model, lr, bias_lr), weight_decay=0.0)
 
 
-def group_rates(optimiser) -> dict:
+def group_rates(optimiser) -> dict[str, Any]:
     """Return each optimiser group's current rate by its name."""
     return {g["name"]: g["lr"] for g in optimiser.param_groups}
 
@@ -622,7 +622,7 @@ def cut(
     seed: int,
     per_simulation: int,
     empty: list[str] | None = None,
-) -> list[tuple[str, dict]]:
+) -> list[tuple[str, dict[str, Any]]]:
     """Return a sample of blocks of each simulation, with its draw.
 
     A simulation's candidate blocks are each of its observation draws
@@ -720,7 +720,7 @@ def init_worker(
     quiet_min_cases: int | None = None,
     block_limit: int | None = None,
     layout: str = "ragged",
-    release_layer: dict | None = None,
+    release_layer: dict[str, Any] | None = None,
 ) -> None:
     """Give a cutting worker the trainer's block settings."""
     global DRAWS_PER_PASS, SUBSET_SEED
@@ -737,7 +737,7 @@ def init_worker(
 
 def _cut_part(
     sim_dir: Path, ids: list[str], seed: int, per_simulation: int
-) -> tuple[list[tuple[str, dict]], list[str]]:
+) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
     """Return `cut` of some simulations and the empty blocks skipped."""
     empty: list[str] = []
     return cut(sim_dir, ids, seed, per_simulation, empty), empty
@@ -750,7 +750,7 @@ def cut_in_workers(
     seed: int,
     per_simulation: int,
     parts: int,
-) -> tuple[list[tuple[str, dict]], list[str]]:
+) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
     """Return `cut` of the simulations `ids`, in `parts` run by `pool`.
 
     Each simulation's blocks are seeded by it alone, so the parts, joined
@@ -774,7 +774,7 @@ def submit_cut(
     for part in split:
         args = (sim_dir, [ids[i] for i in part], seed, per_simulation)
         if pool is None:
-            future: Future = Future()
+            future: Future[Any] = Future()
             future.set_result(_cut_part(*args))
         else:
             future = pool.submit(_cut_part, *args)
@@ -784,9 +784,9 @@ def submit_cut(
 
 def _join(
     futures: list[Future],
-) -> tuple[list[tuple[str, dict]], list[str]]:
+) -> tuple[list[tuple[str, dict[str, Any]]], list[str]]:
     """Return the blocks and empty blocks of cut parts, in order."""
-    pairs: list[tuple[str, dict]] = []
+    pairs: list[tuple[str, dict[str, Any]]] = []
     empty: list[str] = []
     for future in futures:
         part, skipped = future.result()
@@ -795,7 +795,7 @@ def _join(
     return pairs, empty
 
 
-def forward(model, batch: dict, accepted, device=None):
+def forward(model, batch: dict[str, Any], accepted, device=None):
     """Run the model on a batch, its rows given their places if any."""
     import torch
 
@@ -808,7 +808,7 @@ def forward(model, batch: dict, accepted, device=None):
         return model(**inputs)
 
 
-def train_step(model, batch: dict, accepted, device, share: float) -> float:
+def train_step(model, batch: dict[str, Any], accepted, device, share: float) -> float:
     """Accumulate a batch's gradients, scaled by `share`; return its loss.
 
     Forward and backward both run with the rows' places assigned, so a
@@ -821,7 +821,7 @@ def train_step(model, batch: dict, accepted, device, share: float) -> float:
     return float(loss.detach())
 
 
-def bias_summary(model) -> dict:
+def bias_summary(model) -> dict[str, Any]:
     """Return each series bias pair's values, by layer and head, and range.
 
     Empty for a model without the bias.
@@ -843,7 +843,7 @@ def bias_summary(model) -> dict:
     return out
 
 
-def _bias_range(summary: dict) -> str:
+def _bias_range(summary: dict[str, Any]) -> str:
     """Describe the bias pairs' means and ranges for the log."""
     return ", ".join(
         f"{k} {v['mean']:+.3f} [{v['min']:+.3f}, {v['max']:+.3f}]"
@@ -871,7 +871,7 @@ def block_rows(blocks: list[dict]) -> np.ndarray:
     )
 
 
-def block_parents(block: dict) -> list[int]:
+def block_parents(block: dict[str, Any]) -> list[int]:
     """Return each place's parent in a block (`series_bias.parents_of`).
 
     A block without place names links every place to the country, when
@@ -884,7 +884,7 @@ def block_parents(block: dict) -> list[int]:
     return [-1 if i == root else root for i in range(len(levels))]
 
 
-def tensors(block: dict) -> dict:
+def tensors(block: dict[str, Any]) -> dict[str, Any]:
     """Return a block with its arrays as the tensors Chronos-2 reads."""
     import torch
 
@@ -928,7 +928,7 @@ INPUT_PATCH = 16
 """Steps in one of Chronos-2's input patches."""
 
 
-def trim_context(batch: dict) -> dict:
+def trim_context(batch: dict[str, Any]) -> dict[str, Any]:
     """Return a batch without its leading context patches that no row observes.
 
     Blocks are left-padded to `ft.CONTEXT` with missing values, and early in
@@ -992,7 +992,7 @@ class ByLength:
                 ),
             )
 
-    def _build_batch(self, indices: list[int]) -> dict:
+    def _build_batch(self, indices: list[int]) -> dict[str, Any]:
         """Return the batch of blocks `indices`, all of one length."""
         length = self.lengths[indices[0]]
         batch = self.data[length]._build_batch([self.local[i] for i in indices])
@@ -1024,7 +1024,7 @@ class ByLength:
             yield self._build_batch(indices)
 
 
-def nowcast_steps(block: dict) -> int:
+def nowcast_steps(block: dict[str, Any]) -> int:
     """Return a block's nowcast steps, from its start to the cut-off.
 
     A block starts $D$ steps before the release's cut-off, where $D$ is
@@ -1221,7 +1221,7 @@ def publish(where: Path, key: str, run=subprocess.run) -> None:
     sums.write_text("".join(f"{ft._sha256(f)}  {f.name}\n" for f in files))
     files.append(sums)
 
-    def gh(*command: str) -> subprocess.CompletedProcess:
+    def gh(*command: str) -> subprocess.CompletedProcess[str]:
         return run(
             ["gh", "release", *command, "-R", REPO],
             capture_output=True,
@@ -1298,7 +1298,7 @@ def accumulate(
         training, so the run stops (lower the checkpoint threshold).
     """
     parts = [indices]
-    retried: dict = {}
+    retried: dict[str, Any] = {}
     retry = False
     while True:
         if retry:
@@ -1333,7 +1333,7 @@ def accumulate(
                 wait(runs)
 
 
-def finite_step(params: list, optimiser, value: float) -> bool:
+def finite_step(params: list[Any], optimiser, value: float) -> bool:
     """Clip and apply the gradients unless any is not finite.
 
     The step is skipped if the loss or a gradient is not finite, and the
@@ -1362,7 +1362,7 @@ def finite_step(params: list, optimiser, value: float) -> bool:
 
 def held_out_by_source(
     model, blocks: list[dict], batch_size: int, n: int | None = None
-) -> dict:
+) -> dict[str, Any]:
     """Return held-out loss by source (weekly, daily, 3day).
 
     Each source's loss is on its first `n` blocks, or all of them, so a
@@ -1377,12 +1377,12 @@ def held_out_by_source(
     }
 
 
-def _by_source(losses: dict) -> str:
+def _by_source(losses: dict[str, Any]) -> str:
     """Describe losses by source for the log."""
     return ", ".join(f"{s} {v:.4f}" for s, v in losses.items())
 
 
-def held_out_by_level(model, blocks: list[dict], n: int) -> dict:
+def held_out_by_level(model, blocks: list[dict], n: int) -> dict[str, Any]:
     """Return held-out loss by level (national, intermediate, leaf).
 
     Each of the first `n` blocks is scored once per level it holds, with
@@ -1496,7 +1496,7 @@ def load_rng(where: Path) -> bool:
     return True
 
 
-def save_state(where: Path, model, optimiser, state: dict) -> None:
+def save_state(where: Path, model, optimiser, state: dict[str, Any]) -> None:
     """Save the trainer's state: adapter, optimiser and position."""
     import torch
     from peft import get_peft_model_state_dict
@@ -1565,7 +1565,7 @@ def pending_checkpoints(train: Path, prefixes: Sequence[int]) -> list[Path]:
     return out
 
 
-def resume_progress(where: Path, until: int | None, outbreaks: int) -> dict:
+def resume_progress(where: Path, until: int | None, outbreaks: int) -> dict[str, Any]:
     """Return the step and outbreaks a run resumes from, and its segment.
 
     Read from the saved state (`save_state`) without loading it, so the
@@ -1585,7 +1585,7 @@ def resume_progress(where: Path, until: int | None, outbreaks: int) -> dict:
     }
 
 
-def load_state(where: Path, model, optimiser) -> dict | None:
+def load_state(where: Path, model, optimiser) -> dict[str, Any] | None:
     """Load the trainer's saved state into the model and optimiser.
 
     If a save stopped between its renames, the last state is in `.old`.
@@ -1739,7 +1739,7 @@ def check_offload(mode: str, stop_from: int, outbreaks: int) -> None:
         )
 
 
-def save_snapshot(model, where: Path, request: dict) -> None:
+def save_snapshot(model, where: Path, request: dict[str, Any]) -> None:
     """Save the adapter (and series bias) and what to evaluate on it.
 
     For `finetune.evaluate`. Written beside `where` and then
@@ -1763,7 +1763,7 @@ def save_blocks(blocks: list[dict], path: Path) -> None:
 
 
 def save_chunk(
-    out: Path, key: dict[str, Any], pairs: list, empty: list[str]
+    out: Path, key: dict[str, Any], pairs: list[Any], empty: list[str]
 ) -> None:
     """Save a cut chunk's blocks with their key, replacing the last.
 
@@ -1779,7 +1779,7 @@ def save_chunk(
     saved.write_text(json.dumps(json.loads(json.dumps(key))))
 
 
-def load_chunk(out: Path, key: dict[str, Any]) -> tuple[list, list] | None:
+def load_chunk(out: Path, key: dict[str, Any]) -> tuple[list, list[Any]] | None:
     """Return a saved chunk's blocks and skipped blocks if `key` matches."""
     path, saved = out / NEXT_CHUNK_BLOCKS, out / NEXT_CHUNK_KEY
     if not (path.is_file() and saved.is_file()):
@@ -2136,7 +2136,7 @@ def main(root: Path | None = None) -> None:
     seen = {"blocks": 0, "series": 0}
     losses: list[float] = []
 
-    def request(kinds: list[str], **extra) -> dict:
+    def request(kinds: list[str], **extra) -> dict[str, Any]:
         """Return what an offloaded evaluation of the model now scores."""
         return {
             "step": step,
