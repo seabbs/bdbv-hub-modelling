@@ -165,10 +165,39 @@ def test_cut_only_saves_the_held_out_and_first_chunk_without_the_gpu(
     assert saved[0][0][0] == "1-0001-1"
 
 
-def test_cut_only_is_for_a_fresh_run(tmp_path, monkeypatch):
+def test_cut_only_on_a_resumed_run_cuts_the_chunk_after_the_one_training(
+    tmp_path, monkeypatch
+):
+    # Lead 15:08: Run B takes the lag jitter from its saved state; its
+    # held-out blocks and the chunk after the one it trains are cut on
+    # the CPU first, so the restart at that chunk's end loads them.
     out = tmp_path / "train"
     (out / "state").mkdir(parents=True)
-    (out / "state" / "state.json").write_text(json.dumps({"step": 5}))
+    state = {
+        "step": 24100,
+        "done": 2,
+        "trained": ["1-0001", "1-0002", "1-0009"],
+        "chunk": ["1-0003", "1-0004"],
+    }
+    (out / "state" / "state.json").write_text(json.dumps(state))
+    view = {"kind": "whole"}
+    held = ([("3-0001-1", {"source": "daily", "cut": 0, "view": view})], [])
+    later = ([("1-0005-1", {"source": "daily"})], [])
+    asked = []
+
+    def chunk_after(_sims, _seeds, after, size):
+        asked.append((list(after), size))
+        return ["1-0005", "1-0006"]
+
+    monkeypatch.setattr(fs, "ready_outbreaks", lambda *_: ["3-0001", "3-0002"])
+    monkeypatch.setattr(fs, "code_commit", lambda: "c")
+    monkeypatch.setattr(fs, "checkpoint_large_batches", lambda *_: None)
+    monkeypatch.setattr(fs, "ProcessPoolExecutor", lambda *_, **__: None)
+    monkeypatch.setattr(fs, "cut_in_workers", lambda *_a, **_k: held)
+    monkeypatch.setattr(fs, "sims_sha256", lambda _d, ids: {"n": len(ids)})
+    monkeypatch.setattr(fs, "next_chunk", chunk_after)
+    monkeypatch.setattr(fs, "submit_cut", lambda *_a, **_k: "futures")
+    monkeypatch.setattr(fs, "_join", lambda _f: later)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -182,11 +211,20 @@ def test_cut_only_is_for_a_fresh_run(tmp_path, monkeypatch):
             "--held-out-seeds",
             "3",
             "4",
+            "--holdout",
+            "2",
+            "--outbreaks",
+            "10",
             "--cut-only",
         ],
     )
-    with pytest.raises(SystemExit):
-        fs.main()
+    fs.main()
+    assert asked == [(["1-0001", "1-0002", "1-0003", "1-0004"], 6)]
+    key = json.loads((out / fs.HELD_OUT_KEY).read_text())
+    saved = fs.load_chunk(
+        out, key | {"outbreaks": ["1-0005", "1-0006"], "sims_sha256": {"n": 2}}
+    )
+    assert saved is not None
 
 
 def test_the_status_names_the_model_load_after_saved_held_out_blocks(
