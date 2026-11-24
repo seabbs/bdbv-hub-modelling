@@ -346,3 +346,18 @@ def test_seeding_stays_within_the_pool_under_the_prior(zone_vintage):
     # Every zone, the smallest included, keeps its seed within its
     # at-risk pool in at least 99.9% of prior draws.
     assert within.min() >= 0.999, within.min()
+
+
+def test_a_centred_zone_model_samples_its_pooled_rt_levels(zone_vintage):
+    # `fit_config` centres the walk wherever the counts pin it (#1041).
+    # Centring, like the mean anchor, removes the start-step ridge, so
+    # the centred pooled walk is not also anchored. The deviations stay
+    # anchored and non-centred.
+    centred = dataclasses.replace(MAIN, centred_rt=True)
+    model = build_zone_model(zone_vintage, centred)
+    _, params = _params(model, zone_vintage)
+    assert np.isfinite(_density(model, zone_vintage, params))
+    levels = [k for k in params if k.endswith("_x")]
+    assert levels and all("baseline" in k for k in levels), levels
+    _, anchored = _params(build_zone_model(zone_vintage), zone_vintage)
+    assert not any(k.endswith("_x") for k in anchored)
