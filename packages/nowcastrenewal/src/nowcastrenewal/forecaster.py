@@ -37,7 +37,6 @@ import time
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
-from functools import partial
 from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, ClassVar, Final
@@ -46,13 +45,11 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from nowcastbaselines.zones import with_zones
 from nowcastutils.base import (
     NATIONAL,
     SAMPLE_COLUMNS,
     ForecastTask,
     get_model,
-    register_model,
 )
 from nowcastutils.dates import epiweek_end
 from nowcastutils.devices import usable_cpus
@@ -201,16 +198,9 @@ class Variant:
     overrides : mapping
         `ModelConfig` fields to change.
     per_province : bool
-        Fit each province on its own series, in a loop, with the same
-        model code and no pooling or coupling across provinces.
-    zones : bool
-        With `per_province`, fit each health zone with a recent case on
-        its own instead of each province (`zones.SingleZoneRenewalModel`),
-        so provinces are zone sums.
-    sampler_of : str or None
-        A variant staged to replace another runs with that one's sampler
-        table (`bdbvhub.store.store.samplers`), so the two compare like
-        for like.
+        Fit each health zone with a recent case on its own, in a loop,
+        with the same model code and no pooling or coupling across places
+        (`zones.SingleZoneRenewalModel`); provinces are zone sums.
     """
 
     name: str
@@ -218,8 +208,6 @@ class Variant:
     base: str = "MAIN"
     overrides: Mapping[str, Any] = field(default_factory=dict)
     per_province: bool = False
-    zones: bool = False
-    sampler_of: str | None = None
 
 
 VARIANTS: Final[dict[str, Variant]] = {
@@ -233,34 +221,18 @@ VARIANTS: Final[dict[str, Variant]] = {
         ),
         Variant(
             "renewalsp",
-            "Single patch: renewal fitted to each province's series on its "
-            "own, with no pooling or coupling; national is their sum.",
-            # Each province alone drops pooling and importation; depletion
-            # and the Rt process are those of the zone models. One series
-            # pins its Rt walk, whose levels are then sampled.
+            "Single patch: renewal fitted to each health zone with a recent "
+            "case on its own, with no pooling or coupling; silent zones take "
+            "the random walk's introductions, and provinces are zone sums.",
+            # Each zone alone drops pooling and importation; depletion and
+            # the Rt process are those of the zone models (Sam, 2026-11-24:
+            # it replaces the fit of each province on its own).
             overrides={
                 "national": True,
                 "centred_rt": True,
                 "rt_sd_lognormal": (0.12, 0.5),
             },
             per_province=True,
-        ),
-        Variant(
-            "renewalsp_zones",
-            "Single patch by zone: renewal fitted to each health zone with a "
-            "recent case on its own, with no pooling or coupling; silent "
-            "zones take the random walk's introductions, and provinces are "
-            "zone sums.",
-            # renewalsp's model on each zone's series (#768 item 9, staged
-            # beside renewalsp until it is at least as good).
-            overrides={
-                "national": True,
-                "centred_rt": True,
-                "rt_sd_lognormal": (0.12, 0.5),
-            },
-            per_province=True,
-            zones=True,
-            sampler_of="renewalsp",
         ),
         Variant(
             "renewalbvd",
@@ -1352,55 +1324,20 @@ class RenewalModel:
         )
 
     def forecast_fit(self, task: ForecastTask) -> RenewalFit:
-        """Fit each province on its own and return the samples.
+        """Fit the variant to a task and return the samples.
 
-        The provinces the random walks find silent (no case in their walk
-        window) take `randomwalknowcast`'s draws: exactly 0 until an
-        introduction, then its walk. National is the sum of the provinces
-        (`check_national`). The pooled variants, `renewal` and `renewalbvd`,
-        fit health zones (`nowcastrenewal.zones.ZoneRenewalModel`).
-
-        Parameters
-        ----------
-        task : ForecastTask
-            The task.
-
-        Returns
-        -------
-        RenewalFit
-            The runs and province samples.
+        Every variant is fitted on health zones, by
+        `nowcastrenewal.zones.ZoneRenewalModel` (pooled) or
+        `SingleZoneRenewalModel` (each zone on its own), which implement
+        this.
 
         Raises
         ------
-        ValueError
-            For a pooled variant, which `ZoneRenewalModel` fits.
+        NotImplementedError
+            Here.
         """
-        if not self.variant.per_province:
-            raise ValueError(
-                f"{self.name} pools provinces, so it is fitted on health "
-                "zones by ZoneRenewalModel."
-            )
-        check_national(task)
-        walk, silent = _silent_walk(task)
-        frames = [walk]
-        later = [
-            walk.loc[walk["target_end_date"] <= d].assign(as_of=d)
-            for d in task.report_by
-        ]
-        tasks = {
-            loc: replace(task, locations=(loc,), mask=())
-            for loc in task.locations
-            if loc not in silent
-        }
-        runs = self._run_all(tasks)
-        for key, run in runs.items():
-            frames.append(samples_table(tasks[key], run.data, run.draws))
-            later.extend(_as_reported(tasks[key], run))
-        samples = pd.concat(frames, ignore_index=True)
-        return RenewalFit(
-            runs,
-            samples,
-            as_reported=pd.concat(later, ignore_index=True) if later else None,
+        raise NotImplementedError(
+            f"{self.name} is fitted on health zones (nowcastrenewal.zones)."
         )
 
     def _run_all(self, tasks: Mapping[str, ForecastTask]) -> dict[str, Any]:
@@ -1460,8 +1397,6 @@ class RenewalModel:
         >>> model.fit_diagnostics  # divergences and R-hat of the fit
         """
         fit = self.forecast_fit(task)
-        # The zones are split from the provinces as part of the forecast.
-        fit = replace(fit, samples=with_zones(fit.samples, task))
         self.last_fit = fit
         self.delay_summary = fit_delays(fit, task)
         self.fit_diagnostics = [
@@ -1655,12 +1590,6 @@ def fit_renewal(
         raise TypeError(f"{variant} is not a renewal model.")
     model = replace(registered, sampler=settings, progress=out / "progress.log")
     model.forecast(seeded)
-    fit = model.last_fit
-    if fit is not None and getattr(fit, "zones", None) is None:
-        # A province fit's zones are split with the task's own seed, as
-        # `forecast` does. A zone fit's zones are its own.
-        provinces = fit.samples.loc[~fit.samples["location"].map(is_zone)]
-        model.last_fit = replace(fit, samples=with_zones(provinces, task))
     return model.write_fit_dir(seeded, out, config_name)
 
 
@@ -1806,18 +1735,4 @@ def forecast_renewal(task: ForecastTask, fit_dir: Path | str) -> Forecast:
     )
 
 
-def _factory(variant: Variant) -> RenewalModel:
-    return RenewalModel(variant)
-
-
-# The pooled variants are registered by `nowcastrenewal.zones`.
-# The zone variants are registered by `nowcastrenewal.zones`.
-for _variant in VARIANTS.values():
-    if not _variant.per_province or _variant.zones:
-        continue
-    register_model(
-        _variant.name,
-        partial(_factory, _variant),
-        _variant.description,
-        fitted=True,
-    )
+# Every variant is registered by `nowcastrenewal.zones`.
