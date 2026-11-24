@@ -74,7 +74,10 @@ def test_no_timer_runs_ticks_and_each_task_is_named_once():
     # named twice in a Taskfile silently loses its first definition.
     assert not (ROOT / "workflow" / "scripts" / "schedule.py").exists()
     for path in [
-        *(ROOT / d / "Taskfile.yml" for d in (".", "workflow", "ci", "paper")),
+        *(
+            ROOT / d / "Taskfile.yml"
+            for d in (".", "workflow", "packages/bdbvsubmission", "paper")
+        ),
         *ROOT.glob("packages/*/Taskfile.yml"),
     ]:
         # The tasks only: an include may share a task's name.

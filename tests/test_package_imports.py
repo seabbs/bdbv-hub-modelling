@@ -9,11 +9,15 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+OWN_ENV = {"bdbvsubmission"}
+"""Packages outside the workspace, with their own environment and tests."""
 
 
 def _modules() -> list[str]:
     names = []
     for src in sorted(ROOT.glob("packages/*/src")):
+        if src.parent.name in OWN_ENV:
+            continue
         for path in sorted(src.rglob("*.py")):
             parts = path.relative_to(src).with_suffix("").parts
             if parts[-1] == "__init__":

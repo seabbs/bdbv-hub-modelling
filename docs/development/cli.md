@@ -63,7 +63,7 @@ The key hashes:
 - the package's data files (`packages/nowcastbdbv/src/nowcastbdbv/data/*.csv`), such as the province centres of the gravity kernel;
 - the runtime dependencies in `uv.lock`.
 
-The renewal variants use the sampler table of the submission candidate that runs them, in `ci/policy.toml`.
+The renewal variants use the sampler table of the submission candidate that runs them, in `packages/bdbvsubmission/policy.toml`.
 A model code or sampler change refits every origin.
 A new hub release adds one fit per model.
 The task at each origin is the submission's (`nowcastbdbv.backtest.vintage_task`): weeks from 6 before the reference date to one week past `[forecast] max_horizon`, so the next round can be forecast from the same fit when no new release comes, and the latest earlier delays for a release with none of its own.
@@ -123,7 +123,7 @@ For any other reference date it prints a note and skips the checks.
 
 `task bdbvhub:validate` then runs the hub's own `hubValidations::validate_submission()` in R against a fresh clone of the hub.
 
-`bdbvhub metadata` writes `hub/model-metadata/<model id>.yml` and checks it against the hub's schema.
+`bdbvhub metadata` writes `packages/bdbvsubmission/model-metadata/<model id>.yml` and checks it against the hub's schema.
 
 !!! note "Sample ids"
     Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.

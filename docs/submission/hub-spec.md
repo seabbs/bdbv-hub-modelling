@@ -171,7 +171,7 @@ Since 2026-11-23 (hub tasks.json at b7e6842f5, InsightNet-US/BDBV-Modeling-Hub#1
 - `target_end_date`: the reference week and the week before only (horizon 0 or negative).
 - `output_type`: `quantile`, `is_required: false`, with `output_type_id` required at the 23 levels 0.01, 0.025, 0.05, 0.1 to 0.9 by 0.05, 0.95, 0.975 and 0.99; `value` a double of at least 0.
 - It shares the file with the count samples: one `reference_date` and `forecast_date`.
-- We give it from the renewal fit that is submitted (`rt.csv.gz` of the fit, `bdbvhub.submission.hub.rt_table`), for the weeks the round takes (`rt_end_dates`). The submission check `rt` fails quantiles the hub would reject (`ci/src/submission_ci/check_forecast.py`).
+- We give it from the renewal fit that is submitted (`rt.csv.gz` of the fit, `bdbvhub.submission.hub.rt_table`), for the weeks the round takes (`rt_end_dates`). The submission check `rt` fails quantiles the hub would reject (`packages/bdbvsubmission/src/bdbvsubmission/check_forecast.py`).
 
 ## 5. Submission window
 

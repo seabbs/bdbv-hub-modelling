@@ -11,11 +11,24 @@ sys.path.insert(0, str(ROOT / "docs" / "hooks"))
 
 import readmes  # noqa: E402
 
-PACKAGES = sorted(p.parent.name for p in ROOT.glob("packages/*/pyproject.toml"))
+# The workspace packages; packages/bdbvsubmission has its own environment
+# and lock, so it is not installed with `uv sync --package`.
+PACKAGES = sorted(
+    p.parent.name
+    for p in ROOT.glob("packages/*/pyproject.toml")
+    if p.parent.name != "bdbvsubmission"
+)
 
 # Folders with no README: tests/ and .github/ are read with the code they
 # test or run, and assets/ holds only logos.
-FOLDERS = ["packages", "workflow", "ci", "paper", "docs", "data", "hub"]
+FOLDERS = [
+    "packages",
+    "packages/bdbvsubmission",
+    "workflow",
+    "paper",
+    "docs",
+    "data",
+]
 
 
 @pytest.mark.parametrize(

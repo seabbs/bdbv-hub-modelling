@@ -79,7 +79,7 @@ def _hub_failures(path: Path) -> list[str]:
     rep = validate_submission(
         path,
         HUB,
-        metadata_dirs=[ROOT / "hub" / "model-metadata"],
+        metadata_dirs=[ROOT / "packages" / "bdbvsubmission" / "model-metadata"],
         skip_window=True,
     )
     return [f"{c.check}: {c.message}" for c in rep.failed]

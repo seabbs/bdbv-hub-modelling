@@ -53,7 +53,7 @@ FILE: Final = "candidates.csv.gz"
 
 RANDOM_WALK: Final = "randomwalk"
 """The model of a `randomwalk` candidate that names none, as in
-`ci/steps/candidate.sh`."""
+`packages/bdbvsubmission/steps/candidate.sh`."""
 
 COLUMNS: Final = (
     "model",
@@ -73,14 +73,14 @@ with the model and `config`, `fit_dir` or `forecast` by keyword."""
 
 
 def policy_candidates(
-    policy: Path | str = "ci/policy.toml",
+    policy: Path | str = "packages/bdbvsubmission/policy.toml",
 ) -> dict[str, str | None]:
     """Return every submission candidate's model, with its config.
 
     A candidate's model is its `model`, and a `randomwalk` candidate that
     names none runs `RANDOM_WALK`. A candidate forecasts with its fit
     configuration, except a `randomwalk` one, which runs its model as
-    `ci/steps/candidate.sh` does.
+    `packages/bdbvsubmission/steps/candidate.sh` does.
 
     Parameters
     ----------
@@ -103,7 +103,7 @@ def policy_candidates(
 
 
 def candidate_models(
-    policy: Path | str = "ci/policy.toml",
+    policy: Path | str = "packages/bdbvsubmission/policy.toml",
 ) -> dict[str, str | None]:
     """Return every candidate's model and every stored model.
 
