@@ -14,8 +14,8 @@ import pytest
 from bdbvhub.cli import main
 from nowcasteval import plots
 
-ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "tests" / "reporting" / "fixtures"
+ROOT = Path(__file__).resolve().parents[3]
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
 DATA = ROOT / "tests" / "fixtures" / "data"
 
 

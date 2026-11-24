@@ -13,7 +13,7 @@ from nowcastutils.hierarchy import is_zone, parent
 
 pytest.importorskip("nowcastrenewal")
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
 LEVELS = (
     0.01,

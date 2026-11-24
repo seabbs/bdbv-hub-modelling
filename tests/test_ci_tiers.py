@@ -112,7 +112,8 @@ def test_integration_runs_the_tests_of_no_package_in_15_minutes():
     job = _workflow("integration.yml")["jobs"]["integration"]
     assert job["timeout-minutes"] <= 15
     runs = " ".join(s.get("run", "") for s in job["steps"])
-    assert "owners.py --none" in runs
+    (tests,) = [s for s in job["steps"] if s.get("name") == "Tests"]
+    assert tests["run"].split()[-1] == "tests"
     assert "snakefmt --check" in runs
     assert "snakemake -s workflow/Snakefile --lint" in runs
     assert "--group paper pytest" in runs

@@ -1,7 +1,7 @@
 name: Integration
 
-# The tests no package owns (tests/packages/owners.py --none): the
-# workflow with Snakemake's dry runs, the paper and the repo checks, plus
+# The root tests (no package's own): the workflow with Snakemake's dry
+# runs, the repo checks and how the packages work together, plus
 # the workflow's Snakemake lint and the paper's own tests. The packages'
 # tests run in their CI jobs (ci.yml).
 
@@ -78,9 +78,8 @@ jobs:
       - name: Tests
         if: ${{ !cancelled() }}
         run: |
-          mapfile -t files < <(python3 tests/packages/owners.py --none)
           uv run --group paper pytest -q -n auto --dist worksteal \
-            --durations=30 --junitxml=pytest-durations.xml "${files[@]}"
+            --durations=30 --junitxml=pytest-durations.xml tests
       - name: Paper tests
         if: ${{ !cancelled() }}
         working-directory: paper

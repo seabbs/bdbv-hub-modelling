@@ -17,7 +17,7 @@ from nowcastutils.base import ForecastTask
 from nowcastutils.snapshots import weekly_counts
 
 MODELS = ("randomwalk", "randomwalknowcast")
-DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+DATA = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture(scope="module")

@@ -9,7 +9,7 @@ from nowcastbdbv.data.tidy import load_daily, load_daily_zones
 from nowcastbdbv.data.zones import hub_zones
 from nowcastbdbv.zones import ZONE_BASELINE, zone_backtest, zone_relative_skill
 
-DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
+DATA = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture(scope="module")

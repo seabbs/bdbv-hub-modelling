@@ -1,8 +1,8 @@
 name: CI
 
 # One job per workspace package: built and installed alone with every
-# module imported, ruff, ruff format, mypy and the tests it owns
-# (tests/packages/owners.py). A pull request runs the jobs of the
+# module imported, ruff, ruff format, mypy and its own tests
+# (packages/<name>/tests). A pull request runs the jobs of the
 # packages its change can reach; a push to main or next, and a dispatch,
 # run them all. The repo checks run on every change.
 
@@ -81,7 +81,7 @@ jobs:
             changed=uv.lock
           fi
           packages=$(printf '%s\n' "$changed" |
-            python3 tests/packages/owners.py --legs)
+            python3 tests/packages/legs.py)
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
           echo "Packages: $packages"
           # The submission CI (ci/) and the workflows that drive it.
@@ -140,15 +140,13 @@ jobs:
           uv run ruff check "packages/$PACKAGE"
           uv run ruff format --check "packages/$PACKAGE"
           uv run mypy "packages/$PACKAGE/src"
-      # Every owned test not marked slow, across the runner's cores, with
-      # coverage on main only (tracing about doubles the tests' time).
+      # The package's tests not marked slow, across the runner's cores,
+      # with coverage on main only (tracing about doubles the tests' time).
       - name: Tests
         if: ${{ !cancelled() }}
         run: |
-          mapfile -t files < <(python3 tests/packages/owners.py "$PACKAGE")
-          [ "${#files[@]}" -gt 0 ] || exit 0
           uv run --group paper pytest -q -n auto --dist worksteal \
-            --durations=10 "${files[@]}" \
+            --durations=10 "packages/$PACKAGE/tests" \
             ${{ github.ref == 'refs/heads/main' && '--cov="$PACKAGE" --cov-report=xml' || '' }}
       - name: Upload coverage to Codecov
         if: ${{ github.ref == 'refs/heads/main' }}

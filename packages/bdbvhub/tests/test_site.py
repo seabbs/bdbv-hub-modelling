@@ -13,7 +13,7 @@ from bdbvhub.reporting.site import load_site_config, site_baseline
 from nowcastbdbv import zones
 from nowcasteval import checks, nowcast_plots, plots, scoresummary
 
-ROOT = Path(__file__).parents[2]
+ROOT = Path(__file__).parents[3]
 
 
 def test_the_site_scores_against_randomwalknowcast() -> None:

@@ -1272,7 +1272,7 @@ def test_the_hub_models_load_the_interim_hub_checkpoint(
     s48100 of Run A (Sam, 2026-11-24), pinned by its settings hash, not
     the newest release."""
     monkeypatch.delenv(foundation.FINETUNED_ENV, raising=False)
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     spec = foundation.finetuned_spec(root / "config" / "finetune.toml")
     assert spec == "slots-72661eb7efaa"
     assert foundation.release_tag(spec) == "chronos-slots-72661eb7efaa"

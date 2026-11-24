@@ -25,7 +25,7 @@ def test_the_check_key_moves_with_the_active_zone_rule(tmp_path):
     import sys
     from pathlib import Path
 
-    root = Path(__file__).parents[2]
+    root = Path(__file__).parents[3]
     sys.path.insert(0, str(root / "workflow"))
     from flowlib import scoring
 

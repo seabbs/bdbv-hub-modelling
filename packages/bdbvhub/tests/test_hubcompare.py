@@ -29,7 +29,7 @@ from nowcasteval.backtest import BacktestConfig
 from nowcasteval.plots import comparison_colours, plot_hub_round
 from nowcastutils.dates import reference_date_for_vintage
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]

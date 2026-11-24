@@ -8,7 +8,7 @@ import pytest
 
 from bdbvhub.reporting import report
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).parent / "fixtures"
 # nowcast-scores.csv and zone-scores.csv there are score tables without
 # samples. Their `log_crps` column is a stand-in set equal to `log_wis`,
