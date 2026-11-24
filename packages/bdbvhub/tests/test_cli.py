@@ -742,8 +742,10 @@ def test_cli_fit_store_archives_what_each_model_submits(
     monkeypatch.setattr(store, "code_digest", lambda *_: "c")
     origin, ref = "2026-10-24", "2026-10-31"
     root = tmp_path / "store"
-    fit = ["fit-store", "fit", "--store", str(root), "--model", "flat"]
-    assert main([*fit, "--origin", origin]) == 0
+    fit = ["fit-store", "fit", "--store", str(root), "--origin", origin]
+    # The store holds the random walk as it holds a fitted model.
+    for model in ("flat", "randomwalknowcast"):
+        assert main([*fit, "--model", model]) == 0
     out = tmp_path / "archive" / "candidates.csv.gz"
     args = ["fit-store", "archive", "--store", str(root), "--out", str(out)]
     when = ["--origin", origin, "--reference-date", ref]
@@ -757,10 +759,19 @@ def test_cli_fit_store_archives_what_each_model_submits(
     # Health zones, as each model would submit them.
     zones = table.loc[table["location"].str.count("-") == 2]
     assert set(zones["model"]) == {"flat", "randomwalknowcast"}
-    # The random walk on a nowcast is the file the submission writes.
+    # The random walk on a nowcast is the file the submission writes from
+    # its stored forecast, as `candidate.sh` does.
+    walk = ["--model", "randomwalknowcast", "--origin", origin]
+    fit_dir = tmp_path / "fit"
+    unpack = ["fit-store", "unpack", "--store", str(root), *walk]
+    assert main([*unpack, "--out", str(fit_dir)]) == 0
     sub = tmp_path / "sub"
-    nowcast = ["nowcast", "--model", "randomwalknowcast", "--vintage", origin]
-    assert main([*nowcast, "--reference-date", ref, "--out", str(sub)]) == 0
+    nowcast = [
+        "nowcast", "--model", "randomwalknowcast",
+        "--config", "randomwalknowcast", "--fit", str(fit_dir),
+        "--vintage", origin, "--reference-date", ref,
+    ]  # fmt: skip
+    assert main([*nowcast, "--out", str(sub)]) == 0
     submitted = _written(sub)
     archived = table.loc[table["model"] == "randomwalknowcast"]
     pd.testing.assert_frame_equal(
