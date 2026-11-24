@@ -86,6 +86,7 @@ required:
   - forecast
   - score
   - hub_rounds
+  - ft_check
   - dashboard
 properties:
   rounds: {$ref: "#/$defs/rounds"}
@@ -226,6 +227,21 @@ properties:
       models:
         type: array
         items: {type: string}
+  ft_check:
+    type: object
+    additionalProperties: false
+    required:
+      - reference
+      - models
+      - finetuned
+      - checkpoint
+    properties:
+      reference: {type: string}
+      models:
+        type: array
+        items: {type: string}
+      finetuned: {type: string}
+      checkpoint: {type: string}
   dashboard:
     type: object
     additionalProperties: false
