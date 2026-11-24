@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from bdbvhub.reporting import chain_plots
 from nowcasteval import plots
 
 WEEKS = ["2026-10-03", "2026-10-10", "2026-10-17", "2026-10-24", "2026-10-31"]
@@ -91,7 +92,7 @@ def test_backtest_panels_are_titled_by_origin() -> None:
 def test_delay_check_draws_growth_and_dispersion(
     daily: pd.DataFrame,
 ) -> None:
-    fig = plots.plot_delay_check(daily, "2026-10-24", ["CD", "CD-NK"])
+    fig = chain_plots.plot_delay_check(daily, "2026-10-24", ["CD", "CD-NK"])
     left, mid = fig.axes
     assert left.get_yscale() == "log"
     assert len(left.get_lines()) >= 2
