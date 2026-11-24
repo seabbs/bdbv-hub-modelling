@@ -17,18 +17,22 @@ inputs:
 runs:
   using: composite
   steps:
+    # The runner image's name and version are shell variables on the
+    # runner, not in the `env` context, so the key is built here.
     - name: Pin the package snapshot
+      id: pin
       shell: bash
       run: |
         codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
         url=https://packagemanager.posit.co/cran/__linux__
         echo "RSPM=$url/$codename/${{ inputs.snapshot }}" >> "$GITHUB_ENV"
+        echo "apt-key=hub-r-apt-$ImageOS-$ImageVersion-1" >> "$GITHUB_OUTPUT"
     - name: Restore the apt packages
       id: apt
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/hub-r-apt
-        key: hub-r-apt-${{ env.ImageOS }}-${{ env.ImageVersion }}-1
+        key: ${{ steps.pin.outputs.apt-key }}
     - name: Give apt the cached packages
       if: steps.apt.outputs.cache-hit == 'true'
       shell: bash
