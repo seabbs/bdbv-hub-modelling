@@ -155,3 +155,18 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
     # One sentence per line.
     for note in (model, heldout):
         assert all(line.count(". ") == 0 for line in note.splitlines() if line)
+
+
+def test_the_held_out_note_names_the_grid_file_and_no_machine_path() -> None:
+    # It named a retired grid label and printed the simulations' folder.
+    config = {
+        **CONFIG["synthetic"],
+        "simulations": {"paper": "/home/someone/rounds/r38/sims"},
+        "heldout_seeds": CONFIG["heldout"]["synthetic_seeds"],
+        "development_seeds": CONFIG["development"]["synthetic_seeds"],
+    }
+    note = synthetic_grid.heldout_note(config)
+    assert f"`{CONFIG['synthetic']['grid_file']}`" in note
+    assert "/home/" not in note
+    assert "on grid `" not in note
+    assert "grid" not in CONFIG["synthetic"]
