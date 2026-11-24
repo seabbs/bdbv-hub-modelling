@@ -273,7 +273,7 @@ def archive(
     root : pathlib.Path or str
         The store root.
     task : ForecastTask
-        The round's task, as `bdbvhubrenewal nowcast` builds it.
+        The round's task, as `bdbvhub nowcast` builds it.
     origin_task : ForecastTask or None
         The store's task at the same origin (`store.origin_tasks`), for
         the stored fits' keys; None if the store fits no such origin.

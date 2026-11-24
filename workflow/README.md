@@ -32,7 +32,7 @@ uv run --group paper snakemake <SCORE_CACHE>/germany-days/slots-<hash>.done    #
 The settings in `workflow/config.yaml`, with any `--configfile` or `--config` on top, are checked against `workflow/schemas/config.schema.yaml` when the workflow loads, so a misspelt or unknown setting is an error before any job runs.
 A run in `runs` takes any `finetune` setting and no other.
 
-Helpers: `task nowcast-workflow:dag` draws the rule graph, `task nowcast-workflow:progress` lists what exists and what would run, `task nowcast-workflow:report` writes Snakemake's HTML report, and `task nowcast-workflow:check` runs the tests and dry runs CI runs.
+Helpers: `task nowcast-workflow:rulegraph` draws the rule graph, `task nowcast-workflow:progress` lists what exists and what would run, `task nowcast-workflow:report` writes Snakemake's HTML report, and `task nowcast-workflow:check` runs the tests and dry runs CI runs.
 
 ## Machine settings
 
@@ -157,6 +157,7 @@ Reports read the other steps' outputs back for people, each with one script.
 - `hub_rounds`: our last `hub_rounds.rounds` hub rounds against every hub team on the hub's latest data, `<ROOT>/hub/hub-rounds.html` (`hub_rounds_report`, `workflow/scripts/hub_rounds_report.py`), copied to `REVIEW_DIR` when set. `hub_data` tidies the hub's data, `hub_submissions_table` reads which chain model went out from the ledger branch, and `hub_comparison` scores the hub's files as submitted beside `hub_rounds.models` rerun on current code for each round (`compare-hub --models`). They rerun when `<ROOT>/hub/head.txt` changes, which `workflow/scripts/hub_watch.sh` writes when the hub's data commit moves before it builds the target. Not part of `all`.
 - `ft_check`: the BDBV foundation-model check, `<ROOT>/hub/ft-check/bdbv-ft-check.html` (`bdbvhub ft-check`, `bdbvhub.ftcheck`), copied to `REVIEW_DIR` when set. `ft_check_forecast` forecasts every hub release with one model into `<ROOT>/hub/ft-check/forecasts/<model>`: `ft_check.models` once per change of the code they depend on (`flowlib.scoring.ft_check_key`), and `ft_check.finetuned` as `ft-<checkpoint>`, so a new checkpoint (`ft_check.checkpoint`, else `config/finetune.toml`'s) reruns only it. Chronos-2 models build the active-zone and by-province blocks. The page gives each model's pairwise relative skill on the CRPS and log CRPS, scaled to `ft_check.reference`, overall and by weeks back, with the forecasts and their 50% and 90% intervals. Not part of `all`.
 - `rt_check`: the Rt sense check of a stored renewal fit before its `wk R_t` is submitted, `<rt_check.out_dir>/<model>-<origin>.html` (`bdbvhubrenewal rt-check`, `bdbvhub.reporting.rtcheck`): Rt by country, province and fitted zone over their cases, with BVDOutbreakSize's Rt. It reads the fit the store (`rt_check.store`) holds for the current code and is copied to `REVIEW_DIR` as `rt-check.html` when set. Not part of `all`.
+- `this_round`: this week's round, `<ROOT>/hub/this-round.html` (`this_round_report`, `workflow/scripts/this_round_report.py`), copied to `REVIEW_DIR` when set: every candidate's forecasts and nowcasts against the data as of the round, the renewal candidates' wk R_t, the gate's pick and why, and the renewal fits' convergence; no scores. `this_round_inputs` downloads the latest Submit run on main's artefacts, fetches the fit store and archives every candidate's hub table for the round (`workflow/scripts/this_round_inputs.sh`). It reruns when `<ROOT>/hub/round/run.txt` or `round/store.txt` changes, which `workflow/scripts/hub_watch.sh` writes. Not part of `all`.
 - `benchmarks`: opt-in, the seconds and peak memory of every forecast and score job and the seconds by model and date, as one CSV in `<SCORE_CACHE>/` (`flowlib.benchmarks`).
 
 ## 6. Dashboard (`workflow/flowlib/dashboard/`)
@@ -214,7 +215,6 @@ Snakemake locks the worktree it runs in, so each machine has one driver worktree
 A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
 `task nowcast-workflow:run` (`workflow/scripts/coordinate.py`) is the coordinator run: it runs a tick, and as soon as one ends starts the next, after `COORDINATE_PAUSE` seconds (60), or `COORDINATE_BACKOFF` (600) after a failed tick. No timer runs it: start it once, under nohup or a service manager, and stop it with `touch output/coordinator.stop` (it ends after the running tick) or by its pid.
-The timer that ran ticks before is not installed any more; `task nowcast-workflow:schedule` shows an old one (`ACTION=show`) and removes it (`ACTION=uninstall`).
 
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
 

@@ -81,7 +81,6 @@ function panel(d,loc,ds,eff,small,W,FH){
  var fs=[];
  eff.forEach(function(e){ds.forEach(function(o,di){var s=((d.series[e.id]||{})[TGT()]||{})[S.src],f=s&&s[o];
   f=f&&cut(f,o);if(f){fs.push({e:e,f:f,di:di,o:o});f.q.forEach(function(q){ymax=Math.max(ymax,q[HI])})}})});
- var runBands=eff.some(function(e){return e.run!="ref"&&fs.some(function(z){return z.e===e})});
  ymax*=1.06;
  // y from the data shown, not from zero
  var ylo=Infinity;pts.concat(lat).forEach(function(p){ylo=Math.min(ylo,p[1])});fs.forEach(function(z){z.f.q.forEach(function(q){ylo=Math.min(ylo,q[LO])})});
@@ -103,9 +102,9 @@ function panel(d,loc,ds,eff,small,W,FH){
  ds.forEach(function(o){h+='<line x1="'+sx(ms(o))+'" x2="'+sx(ms(o))+'" y1="'+T+'" y2="'+(H-B)+'" class=mark />'});
  var PP=function(f,k){return f.t.map(function(d,j){return sx(ms(d))+","+sy(f.q[j][k])})};
  if(S.bands<2)fs.forEach(function(z){var e=z.e,f=z.f,c=colour(e.id);
-  if(e.rank==0&&(e.run!="ref"||!runBands)){var op=ds.length>1?.5:1;
-   if(S.bands==0)h+='<polygon points="'+PP(f,0).concat(PP(f,6).reverse()).join(" ")+'" fill="'+c+'" opacity="'+.08*op+'" />';
-   h+='<polygon points="'+PP(f,2).concat(PP(f,4).reverse()).join(" ")+'" fill="'+c+'" opacity="'+.16*op+'" />'}});
+  var op=ds.length>1?.5:1;
+  if(S.bands==0)h+='<polygon points="'+PP(f,0).concat(PP(f,6).reverse()).join(" ")+'" fill="'+c+'" opacity="'+.08*op+'" />';
+  h+='<polygon points="'+PP(f,2).concat(PP(f,4).reverse()).join(" ")+'" fill="'+c+'" opacity="'+.16*op+'" />'});
  fs.forEach(function(z){var e=z.e,f=z.f,c=colour(e.id);
   var P=function(k){return PP(f,k)};
   h+='<polyline points="'+P(3).join(" ")+'" fill=none stroke="var(--bg)" stroke-width=4 opacity=.85 />';

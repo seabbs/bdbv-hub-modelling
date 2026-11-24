@@ -168,7 +168,6 @@
         });
       });
       rows.forEach(function (r) {
-        if (asTraj(r[0])) return;
         var slot = models.indexOf(r[0]) * rounds.length + rounds.indexOf(r[1]);
         var t0 = day(r[3]) + (slot - (slots - 1) / 2) * width;
         var xx = X(t0);

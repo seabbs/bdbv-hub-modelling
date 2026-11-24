@@ -39,7 +39,7 @@ env:
 
 jobs:
   # The full tier: every test marked slow (model fits, Chronos-2
-  # inference, backtests, the recovery fit) and the smoke runs. Nightly,
+  # inference, backtests) and the smoke runs. Nightly,
   # on dispatch, and on a pull request labelled `full-tests`.
   full:
     runs-on: ubuntu-latest
@@ -72,26 +72,26 @@ jobs:
         # The backtest never fits the fitted models (their forecasts come
         # from the fit store), so this runs random walk only.
         run: |
-          uv run bdbvhubrenewal backtest --models randomwalk \
+          uv run bdbvhub backtest --models randomwalk \
             --data "$BDBV_DATA_DIR" \
             --output output/backtest --results output/results
-          uv run bdbvhubrenewal nowcast --vintage "$VINTAGE" \
+          uv run bdbvhub nowcast --vintage "$VINTAGE" \
             --forecast-date "$VINTAGE"
-          uv run bdbvhubrenewal metadata --out output/metadata
+          uv run bdbvhub metadata --out output/metadata
       - name: Fit and forecast as the submission CI does (a tiny fit)
         run: |
-          uv run bdbvhubrenewal --version
-          uv run bdbvhubrenewal fit --model renewal --config main \
+          uv run bdbvhub --version
+          uv run bdbvhub fit --model renewal --config main \
             --sampler-json '{"num_chains": 1, "num_warmup": 50, "num_samples": 50}' \
             --out output/fits/main
-          uv run bdbvhubrenewal plot-ppc --ppc output/fits/main/ppc.json \
+          uv run bdbvhub plot-ppc --ppc output/fits/main/ppc.json \
             --out output/fits/main/ppc.png
-          uv run bdbvhubrenewal nowcast --config main --fit output/fits/main \
+          uv run bdbvhub nowcast --config main --fit output/fits/main \
             --vintage "$VINTAGE" --forecast-date "$VINTAGE" \
             --out output/candidates/main
-          uv run bdbvhubrenewal plot-submission --out output/candidates/main.png \
+          uv run bdbvhub plot-submission --out output/candidates/main.png \
             --submission "$(ls output/candidates/main/model-output/*/*.csv)"
-          uv run bdbvhubrenewal coherence
+          uv run bdbvhub coherence
 
   # The tests that skip without torch (Chronos-2 inference, the
   # fine-tune's trainer and offloaded evaluation), with the chronos group,
@@ -149,7 +149,8 @@ jobs:
       # baselinenowcast 0.2.2 (not on CRAN yet: the commit that set it).
       # fitdistrplus: primarycensored's fitdistdoublecens needs it (a
       # Suggests), for tests/model/test_hub_imputation_delays.py.
-      # scoringutils 2.3.0: tests/evaluation/test_pairwise_skill.py. No
+      # scoringutils 2.3.0: tests/evaluation/test_pairwise_skill.py and
+      # paper/tests/test_scoringutils.py. No
       # comments inside `packages`: pak reads every line as a package.
       - uses: r-lib/actions/setup-r-dependencies@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2.14.0
         with:
@@ -178,6 +179,10 @@ jobs:
           tests/model/test_reporting_effects.py
           tests/model/test_reporting_expectation.py
           tests/evaluation/test_pairwise_skill.py
+      # The paper's scores against scoringutils, scored live.
+      - name: Live scoringutils check (paper)
+        working-directory: paper
+        run: uv run --group paper pytest -q tests/test_scoringutils.py
       # With the slow sampler checks.
       - name: Live baselinenowcast checks
         run: uv run pytest -q -m "" tests/baselinenowcast

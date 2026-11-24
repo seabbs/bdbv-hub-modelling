@@ -236,10 +236,10 @@ rule rt_check:
         fit=$(mktemp -d)
         trap 'rm -rf "$fit"' EXIT
         export BDBV_DATA_DIR={params.data}
-        uv run bdbvhubrenewal fit-store unpack --store {params.store} \
+        uv run bdbvhub fit-store unpack --store {params.store} \
             --data {params.data} --model {wildcards.model} \
             --origin {wildcards.origin} --out "$fit"
-        uv run bdbvhubrenewal rt-check --fit "$fit" --data {params.data} \
+        uv run bdbvhub rt-check --fit "$fit" --data {params.data} \
             --out {output}
         if [ -n '{params.review}' ]; then
             mkdir -p '{params.review}'
@@ -456,3 +456,76 @@ rule ft_check:
         "cp {output} '{params.review}/bdbv-ft-check.html.tmp' && "
         "mv '{params.review}/bdbv-ft-check.html.tmp' "
         "'{params.review}/bdbv-ft-check.html'; fi) > {log} 2>&1"
+
+
+# The this-round page: every candidate's forecasts and nowcasts for the
+# round the latest Submit run on main targeted, against the data as of
+# the round, with the wk R_t quantiles, the gate's pick and the renewal
+# fits' convergence (workflow/scripts/this_round_report.py). No scores.
+# It reruns when <ROOT>/hub/round/run.txt (the run and its status) or
+# <ROOT>/hub/round/store.txt (the fit store's commit) changes, which
+# workflow/scripts/hub_watch.sh writes. Not part of `all`.
+
+
+rule this_round_inputs:
+    input:
+        target=rules.hub_data.output,
+        run=f"{HUB}/round/run.txt",
+        store=f"{HUB}/round/store.txt",
+    output:
+        candidates=f"{HUB}/round/candidates.csv.gz",
+        run=f"{HUB}/round/run/run.json",
+    log:
+        f"{HUB}/logs/this-round-inputs.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        out=lambda wc, output: Path(output.candidates).parent,
+        data=lambda wc, input: Path(input.target[0]).parent,
+    shell:
+        "workflow/scripts/this_round_inputs.sh {params.out} {params.data} "
+        "{input.run} > {log} 2>&1"
+
+
+rule this_round_report:
+    input:
+        script="workflow/scripts/this_round_report.py",
+        target=rules.hub_data.output,
+        candidates=rules.this_round_inputs.output.candidates,
+        run=rules.this_round_inputs.output.run,
+    output:
+        f"{HUB}/this-round.html",
+    log:
+        f"{HUB}/logs/this-round.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        store=lambda wc, input: Path(input.candidates).parent / "store",
+        data=lambda wc, input: Path(input.target[0]).parent,
+        run=lambda wc, input: Path(input.run).parent,
+    shell:
+        "uv run python {input.script} {output} {input.candidates} "
+        "{params.store} {params.data} {params.run} > {log} 2>&1"
+
+
+rule this_round:
+    # The page, copied to REVIEW_DIR (config/local.env) when it is set.
+    input:
+        rules.this_round_report.output,
+    log:
+        f"{HUB}/logs/this-round-publish.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        review=LOCAL["REVIEW_DIR"],
+        data=lambda wc, input: Path(input[0]).with_name("this-round-data"),
+    shell:
+        "if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
+        "rm -rf '{params.review}/this-round-data' && "
+        "cp -r {params.data} '{params.review}/this-round-data' && "
+        "cp {input} '{params.review}/this-round.html.tmp' && "
+        "mv '{params.review}/this-round.html.tmp' "
+        "'{params.review}/this-round.html'; fi > {log} 2>&1"

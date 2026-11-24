@@ -2,7 +2,7 @@
 
 The bundle drops into `seabbs/bdbv-hub-modelling` as `ci/` plus `.github/`.
 `ci/` is its own small uv project with only the standard library.
-The workflows call the main repo only through the `bdbvhubrenewal` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbvhubrenewal`), and through `tests/submission/hub_validation/validate_hub.R`, the hub's own checks (hubValidations), which also run as a live test.
+The workflows call the main repo only through the `bdbvhub` CLI, whose command is set by `FORECAST_CLI` (default `uv run bdbvhub`), and through `tests/submission/hub_validation/validate_hub.R`, the hub's own checks (hubValidations), which also run as a live test.
 `ci/fixtures/fake_bdbvhubrenewal.py` implements everything below on fixture data.
 It is the reference for the interface, and `ci/run_dry.sh` runs the whole workflow against it.
 
@@ -10,29 +10,29 @@ It is the reference for the interface, and `ci/run_dry.sh` runs the whole workfl
 
 | command | status in the main repo | used by |
 | --- | --- | --- |
-| `bdbvhubrenewal data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
-| `bdbvhubrenewal nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
-| `bdbvhubrenewal metadata --model <model> --out <dir>` | exists | `gate` |
+| `bdbvhub data --ref <hub sha>` | exists. Reads `GITHUB_TOKEN`. | `prepare` |
+| `bdbvhub nowcast --model random walk --vintage <as_of> --out <dir>` | exists | `prepare` (random walk candidate and baseline) |
+| `bdbvhub metadata --model <model> --out <dir>` | exists | `gate` |
 | `tests/submission/hub_validation/validate_hub.R <hub> <csv> <yml>`, with `CHECK_WINDOW=true` | exists | `gate`, through `ci/steps/validate_hub.sh` |
-| `bdbvhubrenewal fit ...` | done (`bdbvhub.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the model fitted to each province on its own, `nowcastrenewal.forecaster`) | `fit` |
+| `bdbvhub fit ...` | done (`bdbvhub.submission.fitting`; `main` runs the chosen renewal model and `renewalsp` the model fitted to each province on its own, `nowcastrenewal.forecaster`) | `fit` |
 | `nowcast --config <c> --fit <dir>` | done | `fit` |
-| `bdbvhubrenewal plot-submission ...` | done, `plots.plot_submission` | every candidate |
-| `bdbvhubrenewal plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
-| `bdbvhubrenewal --version` | done | `run.json`, the PR body |
-| `bdbvhubrenewal coherence --vintage <as_of> --out <json>` | done | `prepare` (data coherence check) |
-| `bdbvhubrenewal fit-store archive --store <dir> --origin <as_of> --reference-date <date> --out <csv.gz>` | done, `evaluation.store_archive` | `record`, after the ledger push and the docs (`archive_candidates.sh`): the hub file every candidate would submit, for the ledger |
+| `bdbvhub plot-submission ...` | done, `plots.plot_submission` | every candidate |
+| `bdbvhub plot-ppc --ppc <ppc.json> --out <png>` | done, a thin wrapper on `ppc.plot_ppc` | candidates whose `ppc.json` is available |
+| `bdbvhub --version` | done | `run.json`, the PR body |
+| `bdbvhub coherence --vintage <as_of> --out <json>` | done | `prepare` (data coherence check) |
+| `bdbvhub fit-store archive --store <dir> --origin <as_of> --reference-date <date> --out <csv.gz>` | done, `evaluation.store_archive` | `record`, after the ledger push and the docs (`archive_candidates.sh`): the hub file every candidate would submit, for the ledger |
 
-### `bdbvhubrenewal fit`
+### `bdbvhub fit`
 
 ```sh
-bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <as_of> \
+bdbvhub fit --model renewal|renewalsp --config main|renewalsp --vintage <as_of> \
   --sampler-json '{"num_chains": 4, "num_warmup": 1000, "num_samples": 1000,
                    "target_accept": 0.8, "max_tree_depth": 10, "seed": 1}' \
   --out <fit dir>
 ```
 
 - `--model` is `[submission] model` in `config/hub.toml`, unless the candidate names its own in `ci/policy.toml` (`model`), as the `renewalsp` fallback and the `bvd` shadow do.
-  The hub id is set apart in `config/hub.toml` (`bdbvhubrenewal hub-id`), `seabbs-renewal`.
+  The hub id is set apart in `config/hub.toml` (`bdbvhub hub-id`), `seabbs-renewal`.
   `epiforecasts-renewal` is already a different hub model.
 - `--config` selects the model configuration.
   `main` is the full model.
@@ -53,7 +53,7 @@ bdbvhubrenewal fit --model renewal|renewalsp --config main|renewalsp --vintage <
 ### `nowcast` with a fit
 
 ```sh
-bdbvhubrenewal nowcast --model renewal --config main --fit <fit dir> \
+bdbvhub nowcast --model renewal --config main --fit <fit dir> \
   --vintage <as_of> --out <candidate dir>/submission
 ```
 
@@ -85,7 +85,7 @@ bdbvhubrenewal nowcast --model renewal --config main --fit <fit dir> \
 ### `plot-submission`
 
 ```sh
-bdbvhubrenewal plot-submission --submission <csv> --vintage <as_of> --out <png>
+bdbvhub plot-submission --submission <csv> --vintage <as_of> --out <png>
 ```
 
 Draw what was **submitted**, the samples in `<csv>`, not a re-run of the model.
@@ -109,7 +109,7 @@ It renders inline in the PR body from a raw URL pinned to a commit.
 ### `coherence`
 
 ```sh
-bdbvhubrenewal coherence --vintage <as_of> --out <inputs>/coherence.json
+bdbvhub coherence --vintage <as_of> --out <inputs>/coherence.json
 ```
 
 Compare the national count with the sum of the provinces in the data vintage, for each stream and week:
@@ -134,7 +134,7 @@ Compare the national count with the sum of the provinces in the data vintage, fo
 ### `plot-ppc`
 
 ```sh
-bdbvhubrenewal plot-ppc --ppc <candidate>/ppc.json --out <candidate>/ppc.png
+bdbvhub plot-ppc --ppc <candidate>/ppc.json --out <candidate>/ppc.png
 ```
 
 `candidate.sh` calls it only when `ppc.json` has `available: true`.

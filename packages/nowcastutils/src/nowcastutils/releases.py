@@ -6,8 +6,6 @@ The last day or two before extraction are thin, as new reports take time
 to reach the line list. `latest_onset_days` derives the cut-off from the
 data, whatever the label, and every tidy table carries it as a `cutoff`
 column, which `release_cutoff` reads.
-`cutoff_lags` gives the days from a release to its cut-off by weekday,
-for simulated releases.
 `release_pairs` tabulates, for each pair of consecutive delay files, which
 rows of the later file were already in the earlier one, the data the
 renewal models learn their report to publication lag from.
@@ -25,7 +23,6 @@ from nowcastutils.dates import as_date
 
 __all__ = [
     "MAX_PAIR_AGE",
-    "cutoff_lags",
     "latest_onset_days",
     "release_cutoff",
     "release_pairs",
@@ -71,29 +68,6 @@ def release_cutoff(rows: pd.DataFrame, release: str) -> dt.date:
     """
     cut = rows.loc[rows["vintage"] == release, "cutoff"]
     return as_date(str(cut.iloc[0]))
-
-
-def cutoff_lags(daily: pd.DataFrame) -> dict[int, int]:
-    """Days from release to data cut-off, by release weekday.
-
-    A weekday with no real release takes the median over the releases.
-
-    Parameters
-    ----------
-    daily : pandas.DataFrame
-        Real daily rows with `vintage` and `cutoff`.
-
-    Returns
-    -------
-    dict of int to int
-        Lag in days for every weekday, 0 (Monday) to 6.
-    """
-    cut = daily.groupby("vintage")["cutoff"].first().sort_index()
-    label = pd.to_datetime(pd.Series(cut.index, index=cut.index))
-    lag = (label - pd.to_datetime(cut)).dt.days
-    seen = lag.groupby(label.dt.day_of_week).last()
-    fill = int(np.median(lag.to_numpy()))
-    return {w: int(seen.get(w, fill)) for w in range(7)}
 
 
 MAX_PAIR_AGE = 60

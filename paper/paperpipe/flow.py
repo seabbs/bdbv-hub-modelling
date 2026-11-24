@@ -579,7 +579,7 @@ class PaperFlow:
 PYTHON: Final = f"PYTHONPATH=paper {shlex.quote(sys.executable)}"
 """Each step's Python: the one running the workflow, with paper/ on its path."""
 
-BDBV: Final = shlex.quote(str(Path(sys.executable).parent / "bdbvhubrenewal"))
+BDBV: Final = shlex.quote(str(Path(sys.executable).parent / "bdbvhub"))
 """The project's command line, beside that Python."""
 
 GERMANY_CLI: Final = shlex.quote(

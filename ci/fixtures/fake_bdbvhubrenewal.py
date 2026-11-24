@@ -1,4 +1,4 @@
-"""Stand-in for the main repo's `bdbvhubrenewal` CLI, for the dry run.
+"""Stand-in for the main repo's `bdbvhub` CLI, for the dry run.
 
 It implements the interface in INTEGRATION.md on fixture data, so the
 step scripts run end to end without the model. Behaviour per candidate
@@ -544,7 +544,7 @@ def cmd_freeze(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(prog="bdbvhubrenewal")
+    p = argparse.ArgumentParser(prog="bdbvhub")
     p.add_argument("--version", action="store_true")
     sub = p.add_subparsers(dest="command")
     d = sub.add_parser("data")

@@ -104,7 +104,7 @@ baselines.groupby("model")["sample"].nunique()
 # %% [markdown]
 # ## Load the stored renewal fit
 #
-# `bdbvhubrenewal fit-store load` (`task bdbv-hub:fit-store`) fetches the store and records the fit it uses for each model and origin in `results/fit-store.json`.
+# `bdbvhub fit-store load` (`task bdbv-hub:fit-store`) fetches the store and records the fit it uses for each model and origin in `results/fit-store.json`.
 # That is the fit for this code and data, or, until that fit is made, the newest fit of older code.
 # Each stored fit is a gzipped JSON file, which `read_fit` reads into tables.
 # Its `forecasts` table has the same columns as the baselines' forecasts, and its `delays` table holds the fit's modelled delay.
