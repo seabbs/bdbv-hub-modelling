@@ -24,7 +24,7 @@ def _unit(cache: Path, label: str, dates: list[str]) -> None:
             {
                 "model": [
                     "foundation",
-                    "randomwalknowcast_daily",
+                    "randomwalknowcast",
                 ],
                 "target": ["7day", "7day"],
                 "origin": [d, d],

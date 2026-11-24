@@ -1491,12 +1491,12 @@ def point_nowcast(
     """Return `tri` with each place's days to the cut-off nowcast.
 
     Each place's daily triangle at the cut-off (`round(3 * D)` days,
-    $D$ = `TWO_STEP_DELAY` capped by the history, as
-    `randomwalknowcast_daily`) is filled by baselinenowcast's point
-    nowcast, and those days of the place's counts are replaced by it.
+    $D$ = `TWO_STEP_DELAY` capped by the history) is filled by
+    baselinenowcast's point nowcast, and those days of the place's counts
+    are replaced by it.
     """
     from nowcastbaselines.baselinenowcast import baselinenowcast
-    from nowcastbaselines.daily import daily_triangle
+    from nowcastbaselines.baselinenowcast.triangle import daily_triangle
 
     history = task.daily_history
     if history is None or history.empty:

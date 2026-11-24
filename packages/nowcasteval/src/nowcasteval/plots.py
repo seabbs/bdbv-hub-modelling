@@ -123,7 +123,6 @@ DASHES: Final[dict[str, str]] = {
 MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "randomwalk": (0, "solid"),
     "randomwalknowcast": (1, "solid"),
-    "randomwalknowcast_daily": (1, "dashed"),
     "renewal": (2, "solid"),
     "renewalbvd": (3, "solid"),
     "renewalsp": (4, "solid"),

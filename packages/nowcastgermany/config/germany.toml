@@ -43,16 +43,16 @@ forecast_days = 28
 # data: the hub's 7-day rolling sums (`7day`) and each day's count
 # (`daily`), each scored on its truth as reported 40 days after it ends.
 # Daily counts come from the models with their own quantiles of them (the
-# ragged and complete Chronos-2 models and randomwalknowcast_daily).
+# ragged and complete Chronos-2 models and randomwalknowcast).
 targets = ["7day", "daily"]
 # Germany is scored and shown on daily data only: every model takes the
 # daily releases with real dates (no weekly source or steps) and forecasts
-# every day. randomwalknowcast_daily is baselinenowcast on the daily
-# triangle with a daily random walk: its 7-day sums have their errors
-# fitted on 7-day rolling sums, its daily counts on daily counts. The
-# checkpoint units run the models listed here.
+# every day. randomwalknowcast is the baselinenowcast port's chain ladder
+# on the daily releases: its 7-day sums have their errors fitted on 7-day
+# sums ending each day, its daily counts on daily counts. The checkpoint
+# units run the models listed here.
 models = [
-  "randomwalknowcast_daily",
+  "randomwalknowcast",
   "foundation_zeroshot_complete",
   "foundation_zeroshot",
   "foundation",
@@ -81,7 +81,7 @@ seed = 20261027
 
 [scoring]
 # Relative scores on the page divide by this model.
-baseline = "randomwalknowcast_daily"
+baseline = "randomwalknowcast"
 # The paper's relative scores divide by the hub's own baseline, as
 # Wolffram et al. (2023) compare to it.
 paper_baseline = "KIT-frozen_baseline"

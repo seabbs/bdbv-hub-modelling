@@ -48,7 +48,7 @@ def test_the_context_is_the_point_nowcast_to_the_cut_off(task):
     # the day after it.
     from bdbvhub.models import get_model
     from nowcastbaselines.baselinenowcast import baselinenowcast
-    from nowcastbaselines.daily import daily_triangle
+    from nowcastbaselines.baselinenowcast.triangle import daily_triangle
     from nowcastutils.dates import as_date
 
     store: list = []

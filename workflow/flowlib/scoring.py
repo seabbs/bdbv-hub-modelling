@@ -23,7 +23,7 @@ EVALUATE = "uv run --group chronos python -m nowcastgermany.checkpoint"
 
 REFERENCE_NAMES = {
     "reference": "Zero-shot",
-    "randomwalknowcast_daily": "Random walk nowcast (daily)",
+    "randomwalknowcast": "Random walk nowcast",
 }
 """The German report's names of the reference unit's models."""
 

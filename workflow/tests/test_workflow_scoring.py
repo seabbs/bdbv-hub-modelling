@@ -18,7 +18,7 @@ def test_the_report_names_the_references_and_saved_checkpoints():
     got = scoring.report_args("runa", [100, 200], ["reference"], "/c/g")
     assert got == (
         "reference=Zero-shot "
-        "'randomwalknowcast_daily=Random walk nowcast (daily)' "
+        "'randomwalknowcast=Random walk nowcast' "
         "'n100=runa n100' 'n200=runa n200' --from reference=/c/g/reference"
     )
 

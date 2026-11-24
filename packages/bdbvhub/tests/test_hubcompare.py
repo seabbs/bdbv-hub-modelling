@@ -297,7 +297,7 @@ def test_the_daily_walk_reruns_over_zones_with_no_recent_cases(
     config = BacktestConfig(n_samples=20, seed=1)
     fc = our_forecasts(
         ["2026-10-31"], target, delays, config,
-        ["randomwalknowcast_daily"], daily, ZONE_DATA, min_horizon=-2,
+        ["randomwalknowcast"], daily, ZONE_DATA, min_horizon=-2,
     )  # fmt: skip
     from nowcastutils.hierarchy import province_of
 
