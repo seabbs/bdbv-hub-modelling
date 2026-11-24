@@ -5,7 +5,9 @@
 #
 # `verify_checkpoint` checks that a checkpoint's hash recomputes from its
 # commit (`finetune-verify`); `publish_checkpoint` releases a
-# verified one (workflow/scripts/publish_checkpoint.py), and
+# verified one (workflow/scripts/publish_checkpoint.py); `publish_hf`
+# uploads a verified one to the Hugging Face Hub (opt-in, named by its
+# output only); and
 # `publish_germany_unit` attaches a released checkpoint's German unit to
 # its release for the Pages build. Publishing writes
 # GitHub releases, so it is the opt-in target `publish`, never part of
@@ -55,6 +57,30 @@ rule publish_checkpoint:
         uv run python workflow/scripts/notify.py "checkpoint {wildcards.ck} published:" \
             "$(cat {output})" || true
         """
+
+
+rule publish_hf:
+    # A verified checkpoint's Hub repository folder: its adapter, settings,
+    # sha256sums.txt and model card (nowcastfoundation.hubpublish), in
+    # <ck>/huggingface/, uploaded as the revision tagged with its spec to
+    # [huggingface] repo in config/finetune.toml. A dry run
+    # (`huggingface.dry_run`, or no repo) writes the folder only. The
+    # token is HF_TOKEN from the environment, never logged. Opt-in: no
+    # target asks for it; name its output to run it.
+    input:
+        rules.verify_checkpoint.output,
+    output:
+        f"{TRAIN}/{{ck}}/huggingface.json",
+    log:
+        f"{TRAIN}/{{ck}}/huggingface.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        where=lambda wc, output: Path(output[0]).parent,
+        args=lambda wc: hf_args(),
+    shell:
+        "uv run publish-hf {params.where} {output} {params.args} > {log} 2>&1"
 
 
 rule publish_germany_unit:

@@ -88,6 +88,7 @@ required:
   - hub_rounds
   - ft_check
   - dashboard
+  - huggingface
 properties:
   rounds: {$ref: "#/$defs/rounds"}
 
@@ -227,6 +228,16 @@ properties:
       models:
         type: array
         items: {type: string}
+  huggingface:
+    description: >-
+      publish_hf (rules/publish.smk): dry_run writes the Hub folder without
+      uploading; scores is a CSV of relative scores for the model card.
+    type: object
+    additionalProperties: false
+    required: [dry_run, scores]
+    properties:
+      dry_run: {type: boolean}
+      scores: {type: string}
   ft_check:
     type: object
     additionalProperties: false

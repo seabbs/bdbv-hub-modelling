@@ -317,3 +317,13 @@ rt_check:
   store: output/fit-store
   data: data
   out_dir: results/rt-check
+
+huggingface:
+  # `publish_hf` (rules/publish.smk): the Hub repository is
+  # [huggingface] repo in config/finetune.toml. `dry_run` writes the
+  # repository folder without uploading; it is also a dry run while the
+  # repository is empty. `scores` is a CSV of the checkpoint's scores
+  # relative to reference models for the model card
+  # (nowcastfoundation.modelcard.SCORE_COLUMNS); empty leaves them out.
+  dry_run: true
+  scores: ""
