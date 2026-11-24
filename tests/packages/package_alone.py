@@ -25,11 +25,8 @@ KNOWN: dict[str, set[str]] = {
         "nowcasteval.coupling",
         "nowcasteval.marginals",
         "nowcasteval.nowcast",
-        "nowcasteval.nowcast_plots",
         "nowcasteval.pairing",
         "nowcasteval.pairing_plots",
-        "nowcasteval.plots",
-        "nowcasteval.ppc",
         "nowcasteval.scoring",
     },
     "nowcastgermany": {
