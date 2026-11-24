@@ -156,7 +156,9 @@ def _validate(a: Attempt, cdir: Path, validate: Validator | None) -> bool:
         return True
     a.validation = validate(sub, cdir / "hub-validation.log")
     if a.validation != "pass":
-        a.reasons.append("hub validation failed (see hub-validation.log)")
+        a.reasons.append(
+            f"hub validation failed (see gate/validation/{a.id}.log)"
+        )
         a.status = "fail"
         return False
     return True
