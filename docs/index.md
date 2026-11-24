@@ -33,6 +33,18 @@ Every model is scored the same way, against the two random walk baselines, and c
 The baselines and the fine-tuned model are also scored on the German benchmark.
 The [backtest](backtest.md), [comparison with hub forecasts](comparison.md) and [German benchmark](germany.md) pages show the results.
 
+## Getting started
+
+```bash
+git clone https://github.com/seabbs/bdbv-hub-modelling && cd bdbv-hub-modelling
+uv sync                                        # every package
+cp config/local.env.example config/local.env   # this machine's settings
+task --list-all                                # every task
+```
+
+Then [Getting started](getting-started.ipynb) makes and scores forecasts in Python, and [Setup](setup.md) covers the extras (PyRenew, torch, R) and a machine's settings.
+Each package below has a page or its own site, and a README on GitHub with how to install it, an example and its tasks.
+
 ## Quick links
 
 The three projects:
@@ -60,11 +72,11 @@ The packages they are built from:
 | Shared | [![](assets/logos/nowcastutils/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastutils/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastutils**](nowcastutils/) | Releases, snapshots, location hierarchies, the forecast task and sample trajectories. |
 |  | [![](assets/logos/nowcasteval/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcasteval/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcasteval**](nowcasteval/) | Scores, backtests and trajectory pairing. |
 | Models | [![](assets/logos/nowcastbaselines/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastbaselines/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastbaselines**](nowcastbaselines/) | The random walk and the random walk nowcast, the baselines. |
-|  | [![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastfoundation**](packages/index.md#nowcastfoundation) | Chronos-2 forecasts, the simulation grid and fine-tuning on simulated outbreaks. |
-|  | [![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastrenewal**](packages/index.md#nowcastrenewal) | The renewal models and the joint model that simulates outbreaks. |
-| Studies | [![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="24" height="24" } **bdbvhub**](packages/index.md#bdbvhub) | The BDBV hub's data, the fit store, the hub file and the submission. |
-|  | [![](assets/logos/nowcastbdbv/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastbdbv/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastbdbv**](packages/index.md#nowcastbdbv) | The BDBV outbreak as a case study: the hub's data streams, health zones and delays. |
-|  | [![](assets/logos/nowcastgermany/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastgermany/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastgermany**](packages/index.md#nowcastgermany) | The German COVID-19 hospitalisation nowcasting hub as a case study. |
+|  | [![](assets/logos/nowcastfoundation/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastfoundation/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastfoundation**](packages/nowcastfoundation.md) | Chronos-2 forecasts, the simulation grid and fine-tuning on simulated outbreaks. |
+|  | [![](assets/logos/nowcastrenewal/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastrenewal/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastrenewal**](packages/nowcastrenewal.md) | The renewal models and the joint model that simulates outbreaks. |
+| Studies | [![](assets/logos/bdbvhub/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/bdbvhub/logo-mark-dark.svg#only-dark){ width="24" height="24" } **bdbvhub**](packages/bdbvhub.md) | The BDBV hub's data, the fit store, the hub file and the submission. |
+|  | [![](assets/logos/nowcastbdbv/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastbdbv/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastbdbv**](packages/nowcastbdbv.md) | The BDBV outbreak as a case study: the hub's data streams, health zones and delays. |
+|  | [![](assets/logos/nowcastgermany/logo-mark.svg#only-light){ width="24" height="24" }![](assets/logos/nowcastgermany/logo-mark-dark.svg#only-dark){ width="24" height="24" } **nowcastgermany**](packages/nowcastgermany.md) | The German COVID-19 hospitalisation nowcasting hub as a case study. |
 
 ## Data credit
 

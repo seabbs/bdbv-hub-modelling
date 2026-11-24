@@ -25,9 +25,28 @@ It is for anyone writing a model or a scorer that should see the same releases a
 - [How it is used in the workflow](https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/workflow/).
 - The packages built on it: [nowcasteval](../nowcasteval/README.md) and [nowcastbaselines](../nowcastbaselines/README.md).
 
+## Install
+
+From a clone of the repository:
+
 ```sh
-uv add nowcastutils
+uv sync --package nowcastutils             # this package and the ones it needs
 ```
+
+## Example
+
+```python
+from nowcastutils.hierarchy import depth, parent
+
+parent("A-1")  # "A"
+depth("A-1-07")  # 2
+```
+
+More recipes: [how-to](https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/how-to/).
+
+## Tasks
+
+`task nowcastutils:test` runs its tests (`task --list-all` lists the rest).
 
 ## Citation
 
