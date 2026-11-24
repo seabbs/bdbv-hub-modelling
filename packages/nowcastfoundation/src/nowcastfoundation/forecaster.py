@@ -723,7 +723,10 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
 
 
 def _finetuned(
-    name: str, layout: str = "ragged", two_step: bool = False
+    name: str,
+    layout: str = "ragged",
+    two_step: bool = False,
+    from_cutoff: bool = False,
 ) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_checkpoint`.
 
@@ -737,6 +740,7 @@ def _finetuned(
         layout,
         finetuned_checkpoint(),
         two_step=two_step,
+        from_cutoff=from_cutoff,
         active_zone_cases=cases,
         active_zone_weeks=weeks,
         active_zone_recent_weeks=recent,
@@ -1646,6 +1650,12 @@ class FoundationModel:
         day after the cut-off on those corrected counts. The nowcast days
         are the point nowcast, with no uncertainty. Complete layout, daily
         source only.
+    from_cutoff : bool
+        Each place's count row runs to the cut-off, its latest steps the
+        counts reported so far, with the lag rows as past covariates only,
+        and Chronos-2 forecasts from the step after the cut-off. False
+        (the default): the count row stops $D$ steps before the cut-off
+        and the lag rows carry the steps after it (`n_context`).
     block_limit : int or None
         Most series in one block Chronos-2 predicts, the machine's block
         capacity; a task's block over it is cut into views
@@ -1683,6 +1693,7 @@ class FoundationModel:
     )
     block_limit: int | None = None
     two_step: bool = False
+    from_cutoff: bool = False
     active_zone_cases: int | None = None
     active_zone_weeks: int = 8
     active_zone_recent_weeks: int = 4
@@ -1788,7 +1799,7 @@ class FoundationModel:
             return out
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
-        start = tri.n_context
+        start = tri.last + 1 if self.from_cutoff else tri.n_context
         if self.two_step:
             # Chronos-2 forecasts from the day after the cut-off, on the
             # counts baselinenowcast's point nowcast corrects.
@@ -2332,6 +2343,30 @@ register_model(
     "Chronos-2 fine-tuned on simulated outbreaks, on the hub target's "
     "releases, ragged layout.",
     fitted=True,
+)
+# Context to the cut-off on the counts reported so far, lag rows as past
+# covariates (`FoundationModel.from_cutoff`), zero-shot and fine-tuned.
+register_model(
+    "foundation_zeroshot_fromcutoff",
+    partial(
+        FoundationModel,
+        "foundation_zeroshot_fromcutoff",
+        FROM_DATA,
+        "ragged",
+        from_cutoff=True,
+    ),
+    "Chronos-2 zero-shot, count rows to the cut-off, lag rows as past "
+    "covariates.",
+    fitted=True,
+    paper_only=True,
+)
+register_model(
+    "foundation_fromcutoff",
+    partial(_finetuned, "foundation_fromcutoff", "ragged", from_cutoff=True),
+    "Chronos-2 fine-tuned, count rows to the cut-off, lag rows as past "
+    "covariates.",
+    fitted=True,
+    paper_only=True,
 )
 register_model(
     "foundation_zeroshot_complete",
