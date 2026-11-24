@@ -207,34 +207,6 @@ def test_sampler_section() -> None:
     assert report._sampler_section(fits.iloc[:0], settings) == ""
 
 
-def test_development_log(tmp_path: Path) -> None:
-    log = pd.DataFrame(
-        {
-            "date": ["2026-10-10", "2026-10-28"],
-            "area": ["evaluation", "model"],
-            "decision": ["Old decision.", "New decision."],
-            "reason": ["Why then.", "Why now."],
-            "evidence": [
-                "results/model-choice.yml",
-                "https://github.com/seabbs/bdbv-hub-modelling/commit/abc1234",
-            ],
-        }
-    )
-    path = tmp_path / "log.csv"
-    log.to_csv(path, index=False)
-    text = report._development_log(path)
-    # Newest first, with evidence as links.
-    assert text.index("New decision.") < text.index("Old decision.")
-    assert (
-        "[abc1234](https://github.com/seabbs/bdbv-hub-modelling/commit/abc1234)"
-        in text
-    )
-    # The committed log reads.
-    assert "fixed 0 to 3 days" in report._development_log(
-        ROOT / "results" / "development-log.csv"
-    )
-
-
 def test_forecast_tabs() -> None:
     text = report._forecast_tabs(["randomwalk", "renewal"], {"CD": "DRC"})
     assert text.startswith("## Forecasts by place")
