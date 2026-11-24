@@ -56,9 +56,13 @@ def serving(pid: int, script: Path | str) -> bool:
     if not alive(pid):
         return False
     cmdline = Path(f"/proc/{pid}/cmdline")
-    if cmdline.is_file():
+    if not cmdline.parent.is_dir():
+        return True
+    try:
         return Path(script).name.encode() in cmdline.read_bytes()
-    return True
+    except OSError:
+        # It ended between the two checks.
+        return False
 
 
 def _recorded(path: Path) -> int:
