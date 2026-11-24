@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as dt
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,7 @@ from nowcastfoundation.forecaster import (
 )
 from nowcastutils.base import ForecastTask
 
+ROOT_CONFIG = Path(__file__).parents[3] / "config" / "backtest.toml"
 D = 112
 """The lags the test triangles hold."""
 
@@ -196,3 +198,22 @@ def test_a_grid_that_ends_before_the_cut_off_is_read_up_to_its_end():
         tri.times[:150], tri.final[:, :150], tri.partial[:, :150], tri.last
     )
     assert lag_count(short, "daily") == 10
+
+
+def test_the_bdbv_study_config_sets_d_for_every_model(task: ForecastTask):
+    # Sam: for BDBV, D = 40 days in config/backtest.toml, read by the
+    # foundation models and the random walk alike, in place of each
+    # model's own rule or default.
+    from nowcastbaselines.randomwalk import RandomWalk
+    from nowcasteval.backtest import load_config
+
+    config = load_config(ROOT_CONFIG)
+    assert config.max_delay == 40
+    study = dataclasses.replace(task, max_delay=config.max_delay)
+    # Lags 0 to D, as baselinenowcast's max_delay.
+    assert get_model("foundation_zeroshot").lag_count(study) == 41
+    walk = get_model("randomwalknowcast")
+    assert isinstance(walk, RandomWalk)
+    assert walk.settings_for(study).max_delay == 40
+    # Without it, each model keeps its own.
+    assert walk.settings_for(task).max_delay == walk.settings.max_delay
