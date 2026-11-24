@@ -1233,7 +1233,10 @@ def test_the_comparison_scores_every_run_s_checkpoints(tmp_path):
 def test_the_comparisons_ask_only_for_the_paper_s_runs(tmp_path, table, report):
     # The paper's live run and the runs it is compared with, not every run
     # the workflow config names.
-    config = {**FT, "live_run": "runa", "comparisons": {"slots": "noslots"}}
+    # The overlay merges into the paper config's comparisons, so each names
+    # the same run here.
+    pairs = dict.fromkeys(("slots", "delays", "realdata"), "noslots")
+    config = {**FT, "live_run": "runa", "comparisons": pairs}
     out = dry_run(
         tmp_path, f"{tmp_path}/runs/{table}", config=config, quiet=False
     )
