@@ -285,7 +285,6 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "scoringrules" },
     { name = "types-pyyaml" },
 ]
 docs = [
@@ -342,7 +341,6 @@ dev = [
     { name = "pytest-cov", specifier = ">=5" },
     { name = "pytest-xdist", specifier = ">=3.6" },
     { name = "ruff", specifier = ">=0.6" },
-    { name = "scoringrules", specifier = ">=0.7" },
     { name = "types-pyyaml" },
 ]
 docs = [
@@ -2440,6 +2438,7 @@ dependencies = [
     { name = "nowcastutils" },
     { name = "numpy" },
     { name = "pandas" },
+    { name = "scoringrules" },
 ]
 
 [package.metadata]
@@ -2448,6 +2447,7 @@ requires-dist = [
     { name = "nowcastutils", editable = "packages/nowcastutils" },
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "pandas", specifier = ">=2.1,<4" },
+    { name = "scoringrules", specifier = ">=0.7" },
 ]
 
 [[package]]
