@@ -1057,7 +1057,9 @@ def r_section(dirs: dict) -> str:
     for k in R_LEVELS:
         ax.axvline(k, color=MUTED, lw=0.8, ls=":")
     ax.set_yscale("log")
-    ax.set_xlabel("R on a day with an infection (above 8 shown at 8)", fontsize=8)
+    ax.set_xlabel(
+        "R on a day with an infection (above 8 shown at 8)", fontsize=8
+    )
     ax.set_title("R(t) over every outbreak and stratum")
     _style(ax)
     return (
