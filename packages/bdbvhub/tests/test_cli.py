@@ -872,9 +872,7 @@ def test_stored_samples_leave_out_the_stored_fits_zones(
     results = tmp_path / "results"
     results.mkdir()
     (results / "fit-store.json").write_text(
-        json.dumps(
-            [{"model": "renewal", "origin": "2026-10-17", "used": "k1"}]
-        )
+        json.dumps([{"model": "renewal", "origin": "2026-10-17", "used": "k1"}])
     )
     args = argparse.Namespace(
         data=str(DATA), results=str(results), store=str(store)

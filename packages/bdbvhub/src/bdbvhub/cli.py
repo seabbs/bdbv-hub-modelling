@@ -1025,11 +1025,14 @@ def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
     )
 
 
-def _fit_store_forecasts(args: argparse.Namespace) -> pd.DataFrame:
+def _fit_store_forecasts(
+    args: argparse.Namespace, zones: bool = True
+) -> pd.DataFrame:
     """Return the real forecasts of every whole fit in the results' status.
 
     The fits are read from `--store` by the keys `fit-store load` wrote
-    to `STATUS_FILE`. Empty if either is missing.
+    to `STATUS_FILE`. Empty if either is missing. Without `zones`, each
+    fit's zone rows, most of its rows, are dropped as it is read.
     """
     status = Path(args.results) / store.STATUS_FILE
     root = Path(args.store)
@@ -1045,7 +1048,10 @@ def _fit_store_forecasts(args: argparse.Namespace) -> pd.DataFrame:
         if not path.exists():
             continue
         fc = store.read_fit(path).forecasts
-        frames.append(fc.loc[(fc["kind"] == "real") & fc["as_of"].isna()])
+        keep = (fc["kind"] == "real") & fc["as_of"].isna()
+        if not zones:
+            keep &= ~fc["location"].map(is_zone)
+        frames.append(fc.loc[keep])
     frames = [f for f in frames if not f.empty]
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
@@ -1102,7 +1108,8 @@ def _stored(
     or from the backtest forecasts if no store is checked out. Their
     delays from the delay summaries `fit-store load` writes to the
     results, none if it loaded no fits. Hub teams' forecasts are matched
-    to the real vintage serving their round, and have no delay.
+    to the real vintage serving their round, and have no delay. Zones are
+    left out, as the release backtest scores provinces and the nation.
     """
     from bdbvhub import compare as hc
 
@@ -1122,7 +1129,7 @@ def _stored(
             & forecasts["as_of"].isna()
             & ~forecasts["location"].map(is_zone)
         ],
-        _fit_store_forecasts(args),
+        _fit_store_forecasts(args, zones=False),
         "vintage",
     )
     data = Path(args.data)
