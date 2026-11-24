@@ -1,6 +1,6 @@
 # Gate: validate a submission and its model metadata with hubValidations.
 #
-# Usage: Rscript tests/submission/hub_validation/validate_hub.R <hub_path> <submission.csv> <metadata.yml>
+# Usage: Rscript ci/steps/validate_hub.R <hub_path> <submission.csv> <metadata.yml>
 #
 # Runs validate_with_hubvalidations.R (beside this file), which copies the hub's
 # `hub-config/` into a temporary hub, places each file there and runs

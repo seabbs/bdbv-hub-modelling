@@ -53,7 +53,7 @@ tasks:
         $(ls output/submission/model-output/{{.ID}}/*.csv | tail -n 1)
         hub/model-metadata/{{.ID}}.yml
       - >-
-        Rscript tests/submission/hub_validation/validate_hub.R output/hub
+        Rscript ci/steps/validate_hub.R output/hub
         $(ls output/submission/model-output/{{.ID}}/*.csv | tail -n 1)
         hub/model-metadata/{{.ID}}.yml
 

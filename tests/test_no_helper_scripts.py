@@ -37,9 +37,9 @@ MOVED = {
         "packages/bdbvhub/src/bdbvhub/submission/release.py"
     ),
     "scripts/paper.sh": "workflow/scripts/paper_run.py",
-    "scripts/validate-hub.R": "tests/submission/hub_validation/validate_hub.R",
+    "scripts/validate-hub.R": "ci/steps/validate_hub.R",
     "scripts/validate_with_hubvalidations.R": (
-        "tests/submission/hub_validation/validate_with_hubvalidations.R"
+        "ci/steps/validate_with_hubvalidations.R"
     ),
     "tools/README.md": "deleted",
     "tools/paper_local.sh": "deleted",
