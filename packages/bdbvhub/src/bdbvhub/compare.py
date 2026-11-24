@@ -54,7 +54,7 @@ from nowcastbaselines.zones import zone_task
 from nowcastbdbv.data.zones import ZoneData
 from nowcasteval.backtest import BacktestConfig, make_tasks, run_forecasts
 from nowcasteval.nowcast import release_backtest
-from nowcasteval.scoring import relative_skill, summarise_scores
+from nowcasteval.scoring import pairwise_skill, summarise_scores
 from nowcastutils.dates import as_date, reference_date_for_vintage
 from nowcastutils.hierarchy import is_zone
 from nowcastutils.snapshots import weekly_counts
@@ -928,9 +928,10 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         Columns `reference_date`, `target`, `model`, `source`, `n`,
         `hub_cells` (the cells the hub teams forecast that are scored, so
         `n` below it is a model that missed some), `crps`, `log_crps`,
-        `rel_crps` and `rel_log_crps` (on the weeks shared with
-        the baseline; missing if none), `coverage_50`, `coverage_90` and
-        `bias`.
+        `rel_crps` and `rel_log_crps` (pairwise relative skill,
+        `nowcasteval.scoring.pairwise_skill`, scaled to the baseline;
+        missing for a model that shares no week with any other),
+        `coverage_50`, `coverage_90` and `bias`.
     """
     by = ("reference_date", "target")
     out = summarise_scores(scores, by=(*by, "model", "source"))
@@ -941,9 +942,9 @@ def summarise_comparison(scores: pd.DataFrame, baseline: str) -> pd.DataFrame:
         on=list(by),
         how="left",
     )
-    rel = relative_skill(
+    rel = pairwise_skill(
         scores,
-        baseline=baseline,
+        baseline,
         by=by,
         metrics=("crps", "log_crps"),
         match_on=(*by, "truth_vintage", "location", "target_end_date"),
