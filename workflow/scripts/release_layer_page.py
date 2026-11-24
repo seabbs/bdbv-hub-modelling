@@ -128,7 +128,8 @@ def table(pairs: list[tuple[str, dict]], part: str) -> pd.DataFrame:
                 "start_days": b["release_start_days"],
                 "releases": b["releases"],
                 "steps": len(counts),
-                "D": lag_rows.shape[0],
+                "no_lags": bool(b.get("no_lags", False)),
+                "D": lag_rows.shape[0] if b["n_covariates"] else np.nan,
                 "history_D": max(1, (cut - first).days // width),
                 "fill": fill(lag_rows),
             }
@@ -146,7 +147,7 @@ def bdbv(daily: Path) -> dict:
         "daily",
         (NATIONAL,),
         last,
-        max_lag=foundation.LAG_WINDOW["daily"][1],
+        all_lags=True,
     )
     d = foundation.lag_count(tri, "daily")
     lag_rows = tri.partial[0, : tri.last + 1, :d].T
@@ -347,6 +348,57 @@ def distributions(t, real, de):
     return png(fig)
 
 
+def lag_counts(t: pd.DataFrame, real: dict, de: pd.DataFrame) -> str:
+    """Return the figure of each source's lag count D after the layer.
+
+    By source, blocks starting on time and late; D against the release
+    history (cut-off minus first kept release, in steps), as the lag rule
+    caps D at the history it has.
+    """
+    after = t[(t.part == "after") & t.D.notna()]
+    fig, ax = plt.subplots(1, 3, figsize=(13, 3.6))
+    for a, src in zip(ax, PLAIN, strict=True):
+        p = after[after.source == src]
+        hi = max(float(p["D"].max()) if len(p) else 1, 1)
+        bins = np.linspace(0, hi + 1, 31)
+        for late, colour, name in (
+            (False, BEFORE, "on time"),
+            (True, AFTER, "late start"),
+        ):
+            q = p[(p.start_days > 0) == late]
+            a.hist(
+                q["D"],
+                bins=bins,
+                histtype="step",
+                lw=2,
+                color=colour,
+                label=f"{name} (n={len(q)})",
+            )
+        if src == "daily":
+            a.axvline(real["D"], color=REAL, lw=2, label=f"BDBV D {real['D']}")
+            if len(de):
+                a.axvline(
+                    de["D"].median(),
+                    color=INK,
+                    ls="--",
+                    lw=1.5,
+                    label=f"Germany D {de['D'].median():.0f}",
+                )
+        unit = {"daily": "days", "weekly": "weeks", "3day": "3-day steps"}[src]
+        capped = (p["D"] >= p["history_D"] - 1).mean() if len(p) else np.nan
+        a.set_title(
+            f"{src}: lag count D ({unit}); {capped:.0%} at the release history",
+            fontsize=9,
+            loc="left",
+        )
+        a.legend(fontsize=7, frameon=False)
+        a.tick_params(labelsize=7, colors=MUTED)
+        for s in ("top", "right"):
+            a.spines[s].set_visible(False)
+    fig.tight_layout()
+    return png(fig)
+
+
 def main() -> None:
     """Cut the blocks both ways and write the page."""
     p = argparse.ArgumentParser(description=__doc__)
@@ -368,6 +420,7 @@ def main() -> None:
     )
     ex = examples(cuts["before"], cuts["after"], real)
     dist = distributions(t, real, de)
+    lags = lag_counts(t, real, de)
     summary = t.groupby(["part", "source"]).agg(
         blocks=("fill", "size"),
         late=("start_days", lambda s: (s > 0).mean()),
@@ -384,13 +437,22 @@ def main() -> None:
     )
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(
-        page(layer, ids, ex, dist, summary, breakdown, real, de, len(t))
+        page(layer, ids, ex, dist, lags, summary, breakdown, real, de, len(t))
     )
     t.to_csv(a.out.with_suffix(".csv"), index=False)
     print("wrote", a.out, file=sys.stderr)
 
 
-def page(layer, ids, ex, dist, summary, breakdown, real, de, n) -> str:
+def commit() -> str:
+    """Return the checkout's short commit, for the page's footer."""
+    import subprocess
+
+    return subprocess.run(
+        ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True
+    ).stdout.strip()
+
+
+def page(layer, ids, ex, dist, lags, summary, breakdown, real, de, n) -> str:
     """Return the page's HTML."""
 
     def pct(v):
@@ -435,11 +497,11 @@ Its cadences set the share of daily-step blocks released weekly ({layer.get("cad
 <p>BDBV hub (CD, daily onsets, releases {real["first_release"]} to {real["cut"]}): {real["releases"]} releases, lag 0 row filled on {real["filled"]} of {real["steps"]} days, fill {pct(real["fill"])}, D {real["D"]}.
 Germany (national, daily releases, cuts {", ".join(de["cut"]) if len(de) else "none"}): median fill {pct(de["fill"].median()) if len(de) else "n/a"}, median D {de["D"].median() if len(de) else "n/a"}.</p>
 <h2>3. Lag count</h2>
-<p>D on this page is next's lag rule (<code>forecaster.lag_count</code>), which the blocks are cut with.
-Investigate's corrected rule (lead 10:25/10:45, no PR yet) differs where no step is informative: there D is the release history, from the first release to the cut-off, and a backfilled first release is not delay evidence.
-The dotted line is that release history for the late blocks, so it is the corrected rule's D for those of them with no informative step.
-Once lag-count-history lands this page is rebuilt from it.</p>
-<p class="muted">Built by <code>workflow/scripts/release_layer_page.py</code> on branch train-ragged. Per-block table beside this page (release-layer.csv).</p>
+<p>D is next's lag rule (<code>forecaster.lag_count</code>, #889), which the blocks are cut with: the largest of the places' 99% settling delays over the release history, capped by that history, or the history itself where no step has settled.
+Blocks with no lag series (the layer's no-lag share) have no D and are left out.
+Each panel's title gives the share of blocks whose D is at their release history (cut-off minus first kept release), where the cap or the no-settled-step rule sets it rather than a delay.</p>
+<img src="data:image/png;base64,{lags}" alt="Lag count D by source, on-time and late-start blocks, with BDBV and Germany">
+<p class="muted">Built by <code>workflow/scripts/release_layer_page.py</code> at next {commit()}. Per-block table beside this page (release-layer.csv).</p>
 </body></html>"""
 
 
