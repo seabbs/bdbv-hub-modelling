@@ -16,6 +16,7 @@ from nowcastbaselines.baselinenowcast.delays import (
     _delay_counts,
     fit_delay,
     levels,
+    missed_share,
     weeks_back,
 )
 from nowcastbaselines.baselinenowcast.nowcast import (
@@ -91,15 +92,19 @@ def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
     )
 
 
-def test_provinces_use_own_delay_with_10_cases_a_week(origin24) -> None:
+def test_provinces_use_own_delay_where_their_pairs_see_their_reports(
+    origin24,
+) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
         [206.7, 181.3, 282.6, 253.1], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
         [105.7, 149.5, 154.6, 214.2], abs=0.06
     )
+    # HU's pairs miss over a third of its new reports, so it takes the
+    # country's delay.
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [10.3, 33.0, 26.5, 29.7], abs=0.06
+        [17.8, 31.5, 28.4, 30.5], abs=0.06
     )
 
 
@@ -163,7 +168,7 @@ def test_no_errors_take_the_prior_size(daily: pd.DataFrame) -> None:
     np.testing.assert_allclose(origin.size, PRIOR_SIZE, rtol=1e-6)
 
 
-def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
+def test_a_delay_is_own_where_it_sees_its_reports_else_the_parents(
     daily: pd.DataFrame, daily_zones: pd.DataFrame
 ) -> None:
     both = pd.concat([daily, daily_zones])
@@ -187,14 +192,21 @@ def test_a_delay_is_own_with_10_cases_a_week_else_the_pooled_parents(
     level = levels(snap, 3, settings)
     pool = pool_matrix(level, snap.parent)
     own_g = log_factors(num, den, gaps)
-    pooled_g = log_factors(
-        np.einsum("nm,mpa->npa", pool, num),
-        np.einsum("nm,mpa->npa", pool, den),
-        gaps,
-    )
-    # The same rule as the walk spread: own with 10 cases a week, else
-    # the pooled estimate of the nearest parent that has them.
-    src = source_index(level, snap.parent)
+    pooled_num = np.einsum("nm,mpa->npa", pool, num)
+    pooled_den = np.einsum("nm,mpa->npa", pool, den)
+    pooled_g = log_factors(pooled_num, pooled_den, gaps)
+    # The same rule as the walk spread: own with 10 cases a week and
+    # pairs that miss at most `max_missed` of the new reports, else the
+    # pooled estimate of the nearest parent that has both.
+    cap = settings.max_missed
+    src = source_index(
+        level,
+        snap.parent,
+        (missed_share(num, den, gaps) <= cap).astype(int)[:, None],
+        (missed_share(pooled_num, pooled_den, gaps) <= cap).astype(int)[
+            :, None
+        ],
+    )[:, 0]
     np.testing.assert_allclose(fit.g, np.concatenate([own_g, pooled_g])[src])
     assert (src < len(level)).any()
     assert (src >= len(level)).any()

@@ -27,6 +27,9 @@ A place with at least 10 cases a week uses its own $g$, and otherwise
 the pooled $g$ of its nearest parent with them, fitted to the summed
 pair sums of that parent's places with 10 cases a week (`pooling`), as
 for the walk spread and the nowcast size.
+A place, or parent, whose pairs miss more than `Settings.max_missed` of
+its new reports, on days first reported as 0 (`missed_share`), has no
+own or pooled $g$ either.
 Only onset days within `Settings.history_delay` (63 for $D = 42$) of the
 latest cut-off are summed, and downward revisions are first moved onto
 earlier releases of the day, as baselinenowcast does.

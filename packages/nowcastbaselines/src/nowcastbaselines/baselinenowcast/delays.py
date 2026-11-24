@@ -9,7 +9,8 @@ take releases that are batched or that begin after the onsets they report
 (left-truncated, as BDBV's).
 On daily releases the two give the same delay.
 `fit_delay` fits each place's factors at a release, pooled to its parent
-below `MIN_LEVEL` cases a week.
+below `MIN_LEVEL` cases a week or where its own pairs miss more than
+`Settings.max_missed` of its new reports (`missed_share`).
 """
 
 from __future__ import annotations
@@ -51,6 +52,7 @@ __all__ = [
     "growth",
     "levels",
     "log_factors",
+    "missed_share",
     "pair_sums",
     "weeks_back",
     "window_pairs",
@@ -415,6 +417,39 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
     return g
 
 
+def missed_share(num: Any, den: Any, gaps: Any) -> np.ndarray:
+    """Share of a place's new reports its pair sums miss (extension E1).
+
+    `log_factors` has no equation for a gap and age whose summed
+    denominator is 0, so the reports its numerator adds are not in the
+    delay. Small places' newest days are often first reported as 0, so
+    their own delay misses much of the growth of their newest days.
+
+    Parameters
+    ----------
+    num, den : array_like
+        ``(n_loc, n_pair, max_delay)``, from `pair_sums`.
+    gaps : array_like of int
+        Each pair's gap in days.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(n_loc,)``, the new reports at a gap and age with a denominator
+        of 0 over all new reports, 0 with none.
+    """
+    num, den = np.asarray(num, float), np.asarray(den, float)
+    gaps = np.asarray(gaps, int)
+    member = (gaps[:, None] == np.unique(gaps)[None, :]).astype(float)
+    n_sum = np.einsum("lpa,ps->lsa", num, member)
+    d_sum = np.einsum("lpa,ps->lsa", den, member)
+    new = np.clip(n_sum - d_sum, 0.0, None)
+    missed = np.where(d_sum == 0, new, 0.0).sum(axis=(1, 2))
+    total = new.sum(axis=(1, 2))
+    out: np.ndarray = missed / np.maximum(total, 1e-12)
+    return out
+
+
 def growth(g: Any, start: Any, stop: Any) -> np.ndarray:
     r"""Growth $\exp \sum_{j=\mathrm{start}}^{\mathrm{stop}-1} g(j)$.
 
@@ -493,6 +528,11 @@ class Settings:
     start_count : float
         Cases reported in a week for `randomwalknowcast` to start its walk
         from the week's nowcast.
+    max_missed : float
+        Largest share of a place's new reports its own release pairs may
+        miss (`missed_share`) for it to use its own delay. A place's or
+        parent's delay that misses more is no estimate, and the place
+        takes its nearest parent's that does not (`pooling`).
     """
 
     max_delay: int = 42
@@ -502,6 +542,7 @@ class Settings:
     walk_weeks: int = 9
     start_share: float = 0.05
     start_count: float = 5.0
+    max_missed: float = 0.15
 
     @property
     def history_delay(self) -> int:
@@ -717,13 +758,20 @@ def fit_delay(
     pairs, num, den, gaps = sums
     level = levels(snap, r, settings)
     pool = pool_matrix(level, snap.parent, settings.min_level)
+    pooled_num = np.einsum("nm,mpa->npa", pool, num)
+    pooled_den = np.einsum("nm,mpa->npa", pool, den)
     own_g = log_factors(num, den, gaps)
-    pooled_g = log_factors(
-        np.einsum("nm,mpa->npa", pool, num),
-        np.einsum("nm,mpa->npa", pool, den),
-        gaps,
-    )
-    source = source_index(level, snap.parent, min_level=settings.min_level)
+    pooled_g = log_factors(pooled_num, pooled_den, gaps)
+    cap = settings.max_missed
+    source = source_index(
+        level,
+        snap.parent,
+        (missed_share(num, den, gaps) <= cap).astype(int)[:, None],
+        (missed_share(pooled_num, pooled_den, gaps) <= cap).astype(int)[
+            :, None
+        ],
+        settings.min_level,
+    )[:, 0]
     g = np.concatenate([own_g, pooled_g])[source]
     own = np.broadcast_to((source == np.arange(level.size))[:, None], g.shape)
     return DelayFit(pairs, g, level, source, np.array(own))
