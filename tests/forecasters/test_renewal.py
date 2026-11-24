@@ -690,21 +690,20 @@ def test_single_patch_fits_each_province_on_its_own(
     assert (walk["value"] == 0).all()
 
 
-def test_a_simulated_release_is_cut_at_its_stored_cut_off() -> None:
-    import datetime as dt
-
-    from nowcastfoundation.simulate import simulate_outbreak
-
-    outbreak = simulate_outbreak()
-    # A Sunday release one day after its cut-off, as in the scenarios.
-    target, delays = outbreak.vintages(["2026-09-06"], {6: 1})
-    task = make_tasks(target, delays, BacktestConfig(n_samples=20, seed=3))[0]
-    assert task.cutoff == "2026-09-05"
+def test_a_release_is_cut_at_its_stored_cut_off(
+    target: pd.DataFrame, delays: pd.DataFrame
+) -> None:
+    # The 2026-11-08 release holds onsets up to its cut-off, three days
+    # before it.
+    rows = target.loc[target["vintage"] == "2026-11-08"]
+    task = make_tasks(rows, delays, BacktestConfig(n_samples=20, seed=3))[0]
+    assert task.cutoff == "2026-11-05"
     data = rn.vintage_inputs(task, rn.model_config(rn.VARIANTS["renewal"]))
     cut = data.start_date + dt.timedelta(days=data.cutoff)
     end = data.start_date + dt.timedelta(days=7 * data.n_weeks - 1)
-    assert cut == dt.date(2026, 9, 5)
-    assert end == dt.date(2026, 9, 5)
+    assert cut == dt.date(2026, 11, 5)
+    # The grid ends with the week holding the cut-off.
+    assert end == epiweek_end("2026-11-05")
 
 
 def test_province_workers_fill_the_cores_with_chains(

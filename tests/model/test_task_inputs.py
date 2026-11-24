@@ -117,3 +117,20 @@ def test_an_imputation_delay_with_no_mass_is_an_error() -> None:
 
     with pytest.raises(ValueError, match="no mass"):
         imputation_pmf(np.array([0.0, 0.0, 1.0]), 1)
+
+
+def test_the_kernel_can_normalise_over_more_receivers_than_it_lists() -> None:
+    places = pd.DataFrame(
+        {
+            "location": ["A", "B", "C", "D"],
+            "population": [1.0, 2.0, 3.0, 4.0],
+            "latitude": [0.0, 1.0, 2.0, 3.0],
+            "longitude": [0.0, 0.0, 0.0, 0.0],
+        }
+    )
+    full = gravity_kernel(("A", "B", "C", "D"), places)
+    sub = gravity_kernel(("A", "B", "C"), places, receivers=("D",))
+    # The listed places' block of the kernel over all four: what goes
+    # to D is left out, so columns sum to less than 1.
+    np.testing.assert_allclose(sub, full[:3, :3])
+    assert np.all(sub.sum(axis=0) < 1)

@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from bdbvhub import zones
 from bdbvhub.compare import load_comparison_config
 from bdbvhub.reporting import report
 from bdbvhub.reporting.site import load_site_config, site_baseline
+from nowcastbdbv import zones
 from nowcasteval import checks, nowcast_plots, plots, scoresummary
 
 ROOT = Path(__file__).parents[2]

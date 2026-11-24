@@ -180,6 +180,7 @@ def _figures(
     nowcasts: Mapping,
     baseline: str,
     crps_scores: pd.DataFrame | None = None,
+    daily_baseline: str | None = None,
 ) -> dict[str, Figure]:
     # The main text and the other SI figures score the hub's target.
     hub = HUB_TARGETS.get(study)
@@ -282,8 +283,8 @@ def _figures(
                 daily_sc,
                 split=split,
                 target=None,
-                # Hub teams give no daily rows, so the reference model.
-                **{**shown, "baseline": REFERENCE},
+                # Hub teams give no daily rows, so the config's daily one.
+                **{**shown, "baseline": daily_baseline or REFERENCE},
             )
             if not daily_fc.empty
             else _pending("Daily-target rows are pending.")
@@ -329,6 +330,7 @@ def write_figures(
     nowcasts: Mapping,
     baseline: str,
     crps_scores: pd.DataFrame | None = None,
+    daily_baseline: str | None = None,
 ) -> list[Path]:
     """Write a study's figures as `<study>-<name>.png` and return the paths.
 
@@ -356,6 +358,9 @@ def write_figures(
     crps_scores : pandas.DataFrame, optional
         `score_forecasts(..., samples="crps")` of the forecasts, for the
         sample studies' `si-results-crps`.
+    daily_baseline : str, optional
+        The model the German daily scores are relative to
+        (`paperpipe.config.daily_baseline`), `REFERENCE` if not given.
 
     Returns
     -------
@@ -381,6 +386,7 @@ def write_figures(
             nowcasts,
             baseline,
             crps_scores,
+            daily_baseline,
         )
         for part, folder in dirs.items():
             folder.mkdir(parents=True, exist_ok=True)

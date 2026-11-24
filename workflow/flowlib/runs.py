@@ -124,7 +124,8 @@ def trainer_options(run: Run) -> str:
     """Return the run's optional trainer arguments, each only when set.
 
     The series bias and its rate, the loss horizon, the quiet-block
-    floor, a layout other than ragged and the real-data blocks.
+    floor, a layout other than ragged, the release layer and the real-data
+    blocks.
     """
     f = run.ft
     bias = f"--series-bias --bias-lr {f['bias_lr']}" if f["series_bias"] else ""
@@ -135,6 +136,7 @@ def trainer_options(run: Run) -> str:
             option("--quiet-min-cases", f.get("quiet_min_cases")),
             bias,
             "" if f["layout"] == "ragged" else f"--layout {f['layout']}",
+            option("--release-layer", f.get("release_layer")),
             option(
                 "--real-training",
                 real_training_blocks(run) if f["real_training"] else None,

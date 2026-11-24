@@ -255,12 +255,12 @@ def test_earlier_blocks_raise_errors_other_than_no_rows(
     hub_triangle = foundation.hub_triangle
     calls = []
 
-    def broken(rows, source, places, last_time, max_lag=None):
+    def broken(rows, source, places, last_time, max_lag=None, **kwargs):
         calls.append(last_time)
         # The task's own triangle is built first; earlier ones break.
         if len(calls) > 1:
             raise ValueError("a malformed release")
-        return hub_triangle(rows, source, places, last_time, max_lag)
+        return hub_triangle(rows, source, places, last_time, max_lag, **kwargs)
 
     monkeypatch.setattr(foundation, "hub_triangle", broken)
     with pytest.raises(ValueError, match="malformed"):

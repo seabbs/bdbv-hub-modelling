@@ -71,7 +71,10 @@ def imputation_pmf(pmf: np.ndarray, dmax: int) -> np.ndarray:
 
 
 def gravity_kernel(
-    locations: tuple[str, ...], table: pd.DataFrame, decay_km: float = 300.0
+    locations: tuple[str, ...],
+    table: pd.DataFrame,
+    decay_km: float = 300.0,
+    receivers: tuple[str, ...] = (),
 ) -> np.ndarray:
     r"""Gravity kernel between places, rows receive.
 
@@ -89,11 +92,15 @@ def gravity_kernel(
         (`ForecastTask.places`).
     decay_km : float, default 300.0
         Distance scale of the decay.
+    receivers : tuple of str
+        More places the kernel is normalised over but does not list, so
+        an origin's columns sum to its share sent to `locations`.
 
     Returns
     -------
     numpy.ndarray
-        Columns (origins) sum to one, zero diagonal.
+        `(len(locations), len(locations))`, zero diagonal. Columns
+        (origins) sum to one without `receivers`.
 
     Raises
     ------
@@ -101,16 +108,19 @@ def gravity_kernel(
         If a place has no centre or population, or the kernel is not
         finite.
     """
-    rows = table.set_index("location").reindex(list(locations))
+    every = (*locations, *receivers)
+    rows = table.set_index("location").reindex(list(every))
     missing = rows.index[rows["population"].isna()].tolist()
     if missing:
         raise ValueError(f"Missing population for {missing}.")
     dist = great_circle_km(
         rows["latitude"].to_numpy(float), rows["longitude"].to_numpy(float)
     )
-    return distance_kernel(
+    kernel = distance_kernel(
         dist, decay_km, "origin", weights=rows["population"].to_numpy(float)
     )
+    n = len(locations)
+    return kernel[:n, :n]
 
 
 BVD_PROVINCES = {

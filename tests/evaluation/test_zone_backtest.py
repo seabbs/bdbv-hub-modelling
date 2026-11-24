@@ -5,9 +5,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from bdbvhub.zones import ZONE_BASELINE, zone_backtest, zone_relative_skill
 from nowcastbdbv.data.tidy import load_daily, load_daily_zones
 from nowcastbdbv.data.zones import hub_zones
+from nowcastbdbv.zones import ZONE_BASELINE, zone_backtest, zone_relative_skill
 
 DATA = Path(__file__).resolve().parents[1] / "fixtures" / "data"
 
@@ -159,7 +159,7 @@ def test_zone_forecasts_made_apart_by_model_score_as_one_run(
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
     tmp_path: Path,
 ) -> None:
-    from bdbvhub.zones import ZoneForecasts, score_zones, zone_forecasts
+    from nowcastbdbv.zones import ZoneForecasts, score_zones, zone_forecasts
 
     args = (
         target,
@@ -179,7 +179,7 @@ def test_zone_forecasts_made_apart_by_model_score_as_one_run(
 
 
 def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
-    from bdbvhub.zones import ZoneForecasts
+    from nowcastbdbv.zones import ZoneForecasts
 
     empty = pd.DataFrame(columns=["origin", "model"])
     ZoneForecasts(empty, empty, empty).write(tmp_path / "a")
@@ -196,7 +196,7 @@ def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:
 def test_zone_forecasts_read_keeps_text_that_looks_missing(
     tmp_path: Path,
 ) -> None:
-    from bdbvhub.zones import ZoneForecasts
+    from nowcastbdbv.zones import ZoneForecasts
 
     empty = pd.DataFrame(columns=["origin", "model"])
     runs = pd.DataFrame({"origin": ["2026-10-24"], "model": ["NA"]})

@@ -1270,7 +1270,7 @@ def run_scenarios(
         `truth_view` and `level` (national, province or zone). Zone
         scores split each model's province samples across zones
         (`ZoneAllocator`) and add zone random walk
-        (`bdbvhub.zones.scenario_zone_scores`).
+        (`nowcastbdbv.zones.scenario_zone_scores`).
         Then the energy scores (`energy_tasks`) of every scale, with
         `scenario` and `truth_view`. Then the final simulated counts of
         the country and provinces, `location`, `target_end_date`, `truth`,
@@ -1330,10 +1330,10 @@ def scenario_forecasts(
     -------
     tuple of pandas.DataFrame
         The province forecasts and the zone forecasts allocated from
-        them (`bdbvhub.zones.zone_allocations`), each with `scenario`.
+        them (`nowcastbdbv.zones.zone_allocations`), each with `scenario`.
     """
     # Local import: the zone backtest builds on this module.
-    from bdbvhub.zones import zone_allocations
+    from nowcastbdbv.zones import zone_allocations
 
     lags = None if daily is None else cutoff_lags(daily)
     all_forecasts, all_zones = [], []
@@ -1391,7 +1391,7 @@ def score_scenarios(
     tuple of pandas.DataFrame
         The scores, the energy scores and the truth, as `run_scenarios`.
     """
-    from bdbvhub.zones import score_zone_allocations
+    from nowcastbdbv.zones import score_zone_allocations
 
     del daily
     k = config.complete_after_weeks
