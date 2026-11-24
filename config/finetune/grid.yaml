@@ -284,7 +284,7 @@ distributions:
     median: 0.017
     sdlog: 0.35
     layer: strata
-    why: daily growth deviations of 0.01 to 0.03 between places
+    why: daily growth deviations of 0.01 to 0.03 between places, the long-run sd of their weekly AR(1)
   mixing_range:
     dist: lognormal
     median: 0.16
