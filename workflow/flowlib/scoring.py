@@ -231,6 +231,20 @@ class Scoring:
             f"{self.cache}/{GERMANY_UNIT}",
         )
 
+    def finetune_scores(self, wc: Any = None) -> list[str]:  # noqa: ARG002
+        """Return what fine-tuning scores: its checkpoints' German units.
+
+        Each trained run's German unit of every checkpoint `finetune`
+        asks for, and the reference labels' units they are compared
+        with; Snakemake keeps those that are up to date.
+        """
+        units = [
+            f"{self.run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done"
+            for run in self.training.trained_runs()
+            for n in self.training.to_train(run)
+        ]
+        return units + self.references()
+
     def run_scores(self, wc: Any = None) -> list[str]:  # noqa: ARG002
         """Return each trained run's German report."""
         return [

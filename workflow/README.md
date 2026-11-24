@@ -119,7 +119,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `block_combinations`: the share of each combination of block layout and options over a run's training, from its final checkpoint's tally (`<run>/train/block-combinations.csv`, the SI table).
 - `real_training_blocks`: a run's real-data training blocks when `finetune.real_training` is set (`<run>/real-training.pkl`): the German triangle's reports before the first scored German date, cut as the German tasks lay it out (`nowcastgermany.finetune_blocks`).
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
-- `finetune`: every prefix.
+- `finetune`: every prefix, and its scoring: each checkpoint's German unit (`score_run_germany`) and the reference units (`score_germany`), kept when up to date.
 
 Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 

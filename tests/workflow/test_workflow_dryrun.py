@@ -188,6 +188,18 @@ def test_finetune_trains_one_segment_per_prefix(tmp_path):
     assert jobs["simulate_batch"] == 66
 
 
+def test_finetune_asks_for_its_scores(tmp_path):
+    # Lead 10:15 (Sam): fine-tuning produces its own scoring through the
+    # DAG: each checkpoint's German unit and the reference units, cached
+    # when unchanged, with no separate TARGETS entry or driver.
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["score_run_germany"] == jobs["train_segment"] == 2
+    config = yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    )
+    assert jobs["score_germany"] == len(config["score"]["reference"])
+
+
 SMALL = {
     **FT,
     "finetune": {
