@@ -9,26 +9,39 @@ from __future__ import annotations
 
 import os
 
-__all__ = ["host_devices", "usable_cpus"]
+__all__ = ["allowed_cpus", "host_devices", "usable_cpus"]
+
+
+def allowed_cpus() -> list[int]:
+    """Return the ids of the CPUs this process may run on, sorted.
+
+    The process's CPU affinity where the platform has it (Linux), so a
+    `taskset` or a container's CPU set is respected. Elsewhere (macOS,
+    Windows) every CPU the host reports, and at least CPU 0.
+
+    Returns
+    -------
+    list[int]
+        The usable CPU ids, in increasing order.
+    """
+    # Looked up, not named: mypy checks `os` as each platform has it.
+    affinity = getattr(os, "sched_getaffinity", None)
+    if affinity is not None:
+        return sorted(affinity(0))
+    return list(range(os.cpu_count() or 1))
 
 
 def usable_cpus() -> int:
     """Return the number of CPUs this process may run on.
 
-    The process's CPU affinity where the platform has it (Linux), so a
-    `taskset` or a container's CPU set is respected. Elsewhere (macOS,
-    Windows) every CPU the host reports, and at least 1.
+    The count of `allowed_cpus`.
 
     Returns
     -------
     int
         The number of usable CPUs.
     """
-    # Looked up, not named: mypy checks `os` as each platform has it.
-    affinity = getattr(os, "sched_getaffinity", None)
-    if affinity is not None:
-        return len(affinity(0))
-    return os.cpu_count() or 1
+    return len(allowed_cpus())
 
 
 def host_devices(n: int) -> None:
