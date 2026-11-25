@@ -511,6 +511,9 @@ class Origin:
         Errors behind each fit, `[L, K]`.
     obs_source : numpy.ndarray or None
         Index of the estimate behind each fit, `[L, K]`.
+    step_sigma : numpy.ndarray or None
+        For blocks of one day, the spread of the walk's step into each
+        weekday, Monday 0, `[L, 7]`; None where every step has `sigma`.
     """
 
     snap: SnapshotArrays
@@ -530,6 +533,7 @@ class Origin:
     size: np.ndarray | None = None
     obs_n: np.ndarray | None = None
     obs_source: np.ndarray | None = None
+    step_sigma: np.ndarray | None = None
 
     @property
     def start_nowcast(self) -> int:

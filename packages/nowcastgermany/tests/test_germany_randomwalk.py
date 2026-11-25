@@ -2,9 +2,10 @@
 
 The 7-day sums after the cut-off walk on from each sample's sum ending
 on the cut-off in daily steps, the target's own resolution, so they
-carry no weekday cycle. The daily counts walk in daily steps too, and
-include the country as the sum of the states. `randomwalk` returns the
-sums to its start as reported and walks on in daily steps.
+carry no weekday cycle. The daily counts walk in daily steps too, each
+into its weekday with that weekday's spread, and include the country as
+the sum of the states. `randomwalk` returns the sums to its start as
+reported and walks on in daily steps.
 """
 
 from __future__ import annotations
@@ -117,25 +118,6 @@ def test_randomwalk_sums_to_its_start_are_as_reported() -> None:
         assert cell["value"].iloc[0] == week["observed"].sum(), (loc, day)
         fixed += 1
     assert fixed > 0
-
-
-def test_daily_counts_walk_with_the_sums_spread(
-    task: ForecastTask, draws: pd.DataFrame
-) -> None:
-    # The walk's spread is one estimate, scaled to the step: a day's walk
-    # spreads as the 7-day sums' does, not by the weekday swings of the
-    # daily counts.
-    day = (pd.Timestamp(DATE) + dt.timedelta(days=21)).date().isoformat()
-    q = RandomWalkNowcast().daily_quantiles(task, (0.1, 0.9))
-    q = q.loc[(q["location"] == "CD-BY") & (q["date"].astype(str) == day)]
-    daily = np.log1p(q["value"].to_numpy())
-    sums = draws.loc[
-        (draws["location"] == "CD-BY")
-        & (draws["target_end_date"] == pd.Timestamp(day)),
-        "value",
-    ]
-    weekly = np.log1p(sums.quantile([0.1, 0.9]).to_numpy())
-    assert np.ptp(daily) < 1.5 * np.ptp(weekly)
 
 
 def test_daily_walk_steps_into_each_weekday_with_its_own_spread(

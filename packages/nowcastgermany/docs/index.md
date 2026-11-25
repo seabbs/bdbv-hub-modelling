@@ -49,7 +49,11 @@ from nowcastgermany.data import hub_triangle
 
 triangle = hub_triangle("COVID-19_hospitalizations.csv")
 assert list(triangle.columns) == [
-    "reference_date", "location", "age_group", "confirm", "report_date"
+    "reference_date",
+    "location",
+    "age_group",
+    "confirm",
+    "report_date",
 ]
 ```
 

@@ -39,7 +39,13 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
-__all__ = ["random_walk", "random_walks", "walk_noise", "walk_variance"]
+__all__ = [
+    "random_walk",
+    "random_walks",
+    "walk_noise",
+    "walk_variance",
+    "weekday_variances",
+]
 
 
 def walk_noise(y: np.ndarray) -> np.ndarray:
@@ -84,6 +90,40 @@ def walk_variance(changes: np.ndarray, noise: np.ndarray) -> float:
     return float(np.var(changes, ddof=1)) - float(np.mean(noise))
 
 
+def weekday_variances(y: np.ndarray, weekday: np.ndarray) -> np.ndarray:
+    """Return the walk variance of the daily steps into each weekday.
+
+    The changes of log(1 + y) into each weekday, from the day before,
+    pooled over the series, net of their Poisson noise
+    (`walk_variance`). A fixed weekday effect, the same change into a
+    weekday every week, adds no variance.
+
+    Parameters
+    ----------
+    y : numpy.ndarray
+        Daily counts of one or more series, `[N, T]`.
+    weekday : numpy.ndarray
+        Weekday of each change's later day, Monday 0, `[T - 1]`.
+
+    Returns
+    -------
+    numpy.ndarray
+        The variance of each weekday's steps, `[7]`, as
+        `walk_variance` gives it.
+    """
+    y = np.asarray(y, dtype=float)
+    changes = np.diff(np.log1p(y), axis=1)
+    noise = np.stack([walk_noise(row) for row in y])
+    return np.array(
+        [
+            walk_variance(
+                changes[:, weekday == d].ravel(), noise[:, weekday == d].ravel()
+            )
+            for d in range(7)
+        ]
+    )
+
+
 def random_walk(
     key: Array, x0: Array, sigma: Array | float, h: int
 ) -> tuple[Array, Array]:
@@ -96,9 +136,9 @@ def random_walk(
     x0 : jax.Array
         Start value of each sample, shape `[S]`.
     sigma : float or jax.Array
-        Standard deviation of a weekly step.
+        Standard deviation of a step, or of each step, `[h]`.
     h : int
-        Weeks to draw.
+        Steps to draw.
 
     Returns
     -------
@@ -125,9 +165,10 @@ def random_walks(
     x0 : jax.Array
         Start values, `[L, S]`.
     sigma : jax.Array
-        Step standard deviation of each place, `[L]`.
+        Step standard deviation of each place, `[L]`, or of each place's
+        each step, `[L, h]`.
     h : int
-        Weeks to draw.
+        Steps to draw.
 
     Returns
     -------
