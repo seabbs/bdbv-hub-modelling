@@ -5,7 +5,7 @@ var $=function(i){return document.getElementById(i)};
 // does not name takes the categorical colour at its position.
 var STY=["","6 3","8 3 2 3","2 3"],SPAL=D.categorical||[];
 var PARTS=[["nowcast","nowcast steps","6 3"],["forecast","forecast steps","2 3"]];
-var SRCS=[];D.runs.forEach(function(r){Object.keys(r.bysrc).concat(Object.keys(r.src0||{})).forEach(function(k){if(SRCS.indexOf(k)<0)SRCS.push(k)})});SRCS.sort();
+var SRCS=[];D.runs.forEach(function(r){Object.keys(r.ck_src||{}).concat(Object.keys(r.src0||{})).forEach(function(k){if(SRCS.indexOf(k)<0)SRCS.push(k)})});SRCS.sort();
 var SRC={};SRCS.forEach(function(k,i){SRC[k]=(D.layouts||{})[k]||SPAL[i%SPAL.length]});
 var LVLS=[];D.runs.forEach(function(r){Object.keys(r.ck_lvl||{}).concat(Object.keys(r.lvl0||{})).forEach(function(k){if(LVLS.indexOf(k)<0)LVLS.push(k)})});
 var LVL={};LVLS.forEach(function(k,i){LVL[k]=(D.levels||{})[k]||SPAL[i%SPAL.length]});
@@ -68,22 +68,19 @@ function draw(){
   var p=r.train;if(rel&&r.tr0)p=p.map(function(q){return [q[0],q[1]/r.tr0]});
   if(r.live)tr.push({color:r.color,pts:p,kind:"dots"});
   tr.push({label:r.label,color:r.color,pts:roll(p,20),kind:r.live?"line":"faint"});
-  // The held-out loss of the chosen type (Loss type): the subset monitor
-  // at each evaluation as a line, the full set at step 0 and at each
-  // checkpoint as points. The subset has no step-0 value, so relative to
-  // start is to its first evaluation; it has no base Chronos-2 value.
+  // The validation loss of the chosen type (Loss type): the full
+  // held-out set at step 0 and at each checkpoint, joined by a line.
   function scaled(pts,d){return d?pts.map(function(q){return [q[0],q[1]/d]}):[]}
-  function add(lab,colour,dash,sub,z,bz,ck,shape,key){
-   if(sub&&sub.length&&mode!="base"){var s=mode=="start"?scaled(sub,sub[0][1]):sub;
-    held.push({label:r.label+" "+lab+" subset",color:colour,pts:s,kind:"line",dash:dash,sub:1,key:key})}
+  function add(lab,colour,dash,z,bz,ck,shape,key){
    var f=(z!=null?[[0,z]]:[]).concat(ck||[]);if(!f.length)return;
-   if(rel)f=scaled(f,mode=="start"?z:bz);
-   if(f.length)held.push({label:r.label+" "+lab+" full set",color:colour,pts:f,kind:"marks",shape:shape,key:key})}
+   if(rel)f=scaled(f,mode=="start"?z:bz);if(!f.length)return;
+   held.push({label:r.label+" "+lab,color:colour,pts:f,kind:"line",dash:dash,key:key});
+   held.push({label:r.label+" "+lab,color:colour,pts:f,kind:"marks",shape:shape,key:key})}
   var dash=STY[i%4];
-  if(LT=="total")add("all steps",r.color,"",r.held,r.full0,r.bfull,r.ck,"o");
-  else if(LT=="nowcast"||LT=="forecast")add(LT+" steps",r.color,"",(r.held_parts||{})[LT],(r.parts0||{})[LT],(r.bparts0||{})[LT],(r.ck_parts||{})[LT],"o");
-  else if(LT=="layout")SRCS.forEach(function(s){add(s,SRC[s],dash,(r.bysrc||{})[s],(r.src0||{})[s],(r.bsrc||{})[s],(r.ck_src||{})[s],"o",s);if(held.some(function(h){return h.key==s})&&byRuns.indexOf(r)<0)byRuns.push(r)});
-  else LVLS.forEach(function(l){add(l,LVL[l],dash,null,(r.lvl0||{})[l],(r.blvl0||{})[l],(r.ck_lvl||{})[l],"o",l);if(held.some(function(h){return h.key==l})&&byRuns.indexOf(r)<0)byRuns.push(r)})});
+  if(LT=="total")add("all steps",r.color,dash,r.full0,r.bfull,r.ck,"o");
+  else if(LT=="nowcast"||LT=="forecast")add(LT+" steps",r.color,dash,(r.parts0||{})[LT],(r.bparts0||{})[LT],(r.ck_parts||{})[LT],"o");
+  else if(LT=="layout")SRCS.forEach(function(s){add(s,SRC[s],dash,(r.src0||{})[s],(r.bsrc||{})[s],(r.ck_src||{})[s],"o",s);if(held.some(function(h){return h.key==s})&&byRuns.indexOf(r)<0)byRuns.push(r)});
+  else LVLS.forEach(function(l){add(l,LVL[l],dash,(r.lvl0||{})[l],(r.blvl0||{})[l],(r.ck_lvl||{})[l],"o",l);if(held.some(function(h){return h.key==l})&&byRuns.indexOf(r)<0)byRuns.push(r)})});
  // Run colours are in the shared selector at the top; each legend names
  // only its own encodings. By layout or level, colour is the layout or
  // level and line style the run.
@@ -91,13 +88,9 @@ function draw(){
  var keyed=LT=="layout"?SRCS.map(function(s){return [s,SRC[s]]}):LT=="level"?LVLS.map(function(l){return [l,LVL[l]]}):[];
  var heldLeg=keyed.filter(function(k){return has(function(h){return h.key==k[0]})}).map(function(k){return '<span><i style="background:'+k[1]+'"></i>'+k[0]+'</span>'}).join("")
   +(keyed.length?byRuns.map(function(r){return '<span>'+sw("var(--fg)",STY[D.runs.indexOf(r)%4])+' '+r.label+'</span>'}).join(""):"")
-  +(has(function(h){return h.sub})?'<span>'+sw("var(--fg)","")+' subset (first 100 blocks), each evaluation</span>':"")
-  +(has(function(h){return !h.sub})?'<span>'+msw("o")+' full set, step 0 and each checkpoint</span>':"")
-  +(LT=="level"?'<span class=mut>by level: step 0 and checkpoints only (the trainer logs no level loss in between)</span>':"")
-  +(mode=="base"&&runs.some(function(r){return r.held.length})?'<span class=mut>subset: no base Chronos-2 value</span>':"")
-  +(mode=="start"&&has(function(h){return h.sub})?'<span class=mut>subset: relative to its first evaluation</span>':"");
+  +(held.length?'<span>'+msw("o")+' step 0 and each checkpoint</span>':"");
  var trLeg=(runs.some(function(r){return r.live})?'<span><svg width=12 height=10><circle cx=6 cy=5 r=1.8 fill="var(--fg)" opacity=".3"/></svg> logged values (live run)</span>':"")+'<span>'+sw("var(--fg)","")+' rolling mean of 20</span>';
- var ttl="Validation loss, "+{total:"all steps",nowcast:"nowcast steps",forecast:"forecast steps",layout:"by layout",level:"by level"}[LT]+", subset and full set";
+ var ttl="Validation loss on the full held-out set, "+{total:"all steps",nowcast:"nowcast steps",forecast:"forecast steps",layout:"by layout",level:"by level"}[LT];
  cards([{title:"Training loss"+suf,info:"train",series:tr,xmax:xmax,hl:hl,leg:trLeg},{title:ttl+suf,info:"held",series:held,xmax:xmax,hl:hl,leg:heldLeg}]);
  [].forEach.call(document.querySelectorAll("[data-lt]"),function(b){b.classList.toggle("on",b.dataset.lt==LT)});
  var refs=ftSel.refsOn();

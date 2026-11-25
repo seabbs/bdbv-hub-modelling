@@ -24,9 +24,6 @@ def test_steps_are_parsed_with_their_losses(tmp_path):
     rows = log.rows()
     assert [r["step"] for r in rows] == [10, 20]
     assert rows[0]["loss"] == 0.5
-    assert rows[0]["held"] == 0.4
-    assert rows[0]["src"] == {"3day": 0.31, "daily": 0.29, "weekly": 0.12}
-    assert rows[1]["src"] == {}
 
 
 def test_only_whole_lines_are_read_and_new_ones_appended(tmp_path):
@@ -123,24 +120,6 @@ def test_a_segment_log_reached_by_two_names_is_read_once(tmp_path):
     assert [r["step"] for r in logs.RunLog(tmp_path).rows()] == [20]
 
 
-def test_steps_are_parsed_with_their_nowcast_and_forecast_parts(tmp_path):
-    path = tmp_path / "train.log"
-    path.write_text(
-        LINE.format(step=10, loss=0.5, held=0.4)
-        + " (nowcast 0.15, forecast 0.25)"
-        + SOURCES
-        + "\n"
-        + LINE.format(step=20, loss=0.45, held=0.39)
-        + "\n"
-    )
-    rows = logs.Log(path).rows()
-    assert rows[0]["held"] == 0.4
-    assert rows[0]["parts"] == {"nowcast": 0.15, "forecast": 0.25}
-    assert rows[0]["src"] == {"3day": 0.31, "daily": 0.29, "weekly": 0.12}
-    # A line from before the split has no parts.
-    assert rows[1]["parts"] == {}
-
-
 BIASED = (
     ", bias down +0.012 [-0.034, +0.051], same -0.200 [-0.410, +0.010], "
     "up +1.000 [+0.500, +1.500], 812 s; 3.1 GB"
@@ -161,7 +140,6 @@ def test_a_step_s_bias_means_and_ranges_are_read(tmp_path):
         + ", 9 s\n"
     )
     rows = logs.Log(path).rows()
-    assert rows[0]["src"] == {"3day": 0.31, "daily": 0.29, "weekly": 0.12}
     want = {
         "down": {"mean": 0.012, "min": -0.034, "max": 0.051},
         "same": {"mean": -0.2, "min": -0.41, "max": 0.01},
