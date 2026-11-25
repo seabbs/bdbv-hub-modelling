@@ -161,9 +161,8 @@ def test_the_quick_check_scores_a_fixed_subset(tmp_path):
         val[i]["context"][0, 0] for i in (0, 2, 4)
     ]
     assert fe.quick_blocks(val, 10) == val
-    base = tiny_model()
-    series_bias.attach(base)
-    got = fe.quick_check(where, base, val, 100, 3)
+    # Base Chronos-2: the check attaches the adapter's series bias.
+    got = fe.quick_check(where, tiny_model(), val, 100, 3)
     assert got["blocks"] == 3
     assert got["loss"] == pytest.approx(
         fs.held_out_loss(model, picked, 100), rel=1e-5
@@ -266,9 +265,11 @@ def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
     # Step snapshots other than step 0 are left unscored.
     assert not (train / "evals" / "step-0000200.json").exists()
     sidecar = json.loads((where / "held-out.json").read_text())
-    assert sidecar["held_out_loss"] == fs.held_out_loss(model, val, 100)
-    assert sidecar["held_out_loss_by_source"] == fs.held_out_by_source(
-        model, val, 100
+    assert sidecar["held_out_loss"] == pytest.approx(
+        fs.held_out_loss(model, val, 100), rel=1e-5
+    )
+    assert sidecar["held_out_loss_by_source"] == pytest.approx(
+        fs.held_out_by_source(model, val, 100), rel=1e-5
     )
     start = json.loads((train / "evals" / "step-0000000.json").read_text())
     assert sidecar["held_out_loss_start"] == start["held_out_loss"]
