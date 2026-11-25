@@ -1,8 +1,14 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The random walk baselines.
 
-Both models run on the hub's daily release snapshots (`chain`), at
-province and zone level, from one random walk (`walk.random_walk`).
+Both models run on the hub's daily release snapshots (`chain`), from one
+random walk (`walk.random_walk`).
+The places form a hierarchy read from their codes
+(`nowcastutils.hierarchy`), so a task may be one series or places of any
+depth below a root, such as provinces and zones or age groups. A place
+with no rows of its own is the sum of its children
+(`nowcastutils.snapshots.snapshot_arrays`), and a task with no places
+gives no samples.
 
 `RandomWalk` (`randomwalk`) starts from the reported count of the latest
 week judged complete, $\pi \ge 0.95$, where
@@ -90,6 +96,7 @@ from nowcastutils.base import (
     register_model,
 )
 from nowcastutils.dates import as_date
+from nowcastutils.hierarchy import depth
 from nowcastutils.snapshots import SnapshotArrays, blocks, snapshot_arrays
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
@@ -269,7 +276,12 @@ def _start_weeks(origin: Origin) -> np.ndarray:
 def frame(
     task: ForecastTask, weeks: list[str], values: np.ndarray, rows: list[int]
 ) -> pd.DataFrame:
-    """Return sample rows from `values` of shape `[S, L, H]`."""
+    """Return sample rows from `values` of shape `[S, L, H]`.
+
+    A task with no places gives no rows.
+    """
+    if not task.locations:
+        return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
     col = {w: i for i, w in enumerate(weeks)}
     targets = list(task.target_end_dates)
     n = values.shape[0]
@@ -340,13 +352,14 @@ class RandomWalk:
         rho_p is estimated from the normal scores of the model's own
         nowcasts at earlier releases (`copula.error_scores`), shrunk to the
         prior (`copula.estimate_rho`), and the draws are paired by it
-        (`copula.pair_walks`). A task of zones is left unpaired.
+        (`copula.pair_walks`). A task with no province, a place one level
+        below its root, is left unpaired.
         """
         if self.keep_variants:
             self._unpaired = values
             self._kept_origin = origin
         locations = tuple(origin.snap.locations)
-        if all(c.count("-") >= 2 for c in task.locations):
+        if not any(depth(c) == 1 for c in task.locations):
             self.copula_fit = None
             return values
         scores, reason = self._error_scores(origin, task)
@@ -570,6 +583,8 @@ class RandomWalk:
         >>> samples = get_model("randomwalk").forecast(task)
         >>> samples.groupby(["location", "target_end_date"])["value"].median()
         """
+        if not task.locations:
+            return frame(task, [], np.zeros((task.n_samples, 0, 0)), [])
         origin = self.origin_at(task, errors=False)
         weeks = _timeline(origin, task)
         n_all, n = len(weeks), task.n_samples
@@ -661,6 +676,8 @@ class RandomWalkNowcast(RandomWalk):
             If the task has no snapshots, or no pair of releases within
             the delay window.
         """
+        if not task.locations:
+            return frame(task, [], np.zeros((task.n_samples, 0, 0)), [])
         ends = pd.to_datetime(list(task.target_end_dates))
         if self.error_days != 7 or (ends.weekday != HUB_WEEKDAY).any():
             return self._rolling(task)
