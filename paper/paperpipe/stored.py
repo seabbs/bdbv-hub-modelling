@@ -54,12 +54,16 @@ STORED = {
     "sim-realism.csv": ("stored", "sim_realism"),
     "pairing-germany.csv.gz": ("stored", "pairing_germany"),
     "pairing-germany-rho.csv.gz": ("stored", "copula_rho"),
+    "germany-forecasts.csv.gz": ("stored", "germany_forecasts"),
     "comparison.csv": ("evidence", "checkpoint_scores"),
     "compare-daily.csv": ("evidence", "compare_daily"),
     "block-combinations.csv": ("evidence", "block_combinations"),
 }
 
-DATE_COLUMNS = ("origin_date", "target_date", "nowcast_date", "as_of_date")
+# The dates a German row is held out by, as the table guard reads them
+# (`paperpipe.config.check_no_heldout`): a development origin's targets
+# may run past the split.
+DATE_COLUMNS = ("origin_date", "nowcast_date")
 
 
 def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
@@ -113,6 +117,10 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             ),
             "pairing-germany-rho.csv.gz": (
                 f"{results}/evidence/pairing/pairing-germany-rho.csv.gz"
+            ),
+            # The German benchmark's development table, every model.
+            "germany-forecasts.csv.gz": (
+                f"{config['germany']['results']}/paper-forecasts.csv.gz"
             ),
         },
         "simulations": {

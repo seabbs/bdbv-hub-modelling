@@ -231,9 +231,7 @@ def _figures(
 
     # Without a shown model's forecasts there is no origin to draw, and
     # the nowcast panels say what they wait on.
-    waiting = (
-        f"Waiting on forecasts of {', '.join(nowcasts['models'][study])}."
-    )
+    waiting = f"Waiting on forecasts of {', '.join(nowcasts['models'][study])}."
 
     def over_time(location: str) -> dict:
         # Panel A of the main results: the shown origins overlaid at one

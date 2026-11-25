@@ -391,6 +391,9 @@ class PaperFlow:
         results = self.germany["results"]
         halves = [""] if mode == "development" else ["", "held-out/"]
         tables = [f"{results}/{h}paper-forecasts.csv.gz" for h in halves]
+        # Pages reads the host's development table (`paperpipe.stored`).
+        if not self.host_outputs and self.stored.get("germany_forecasts"):
+            tables[0] = self.stored["germany_forecasts"]
         extra = [
             f"{self.results}/evidence/germany-extra-{i}.csv.gz"
             for i in range(len(self.germany.get("extra") or []))
