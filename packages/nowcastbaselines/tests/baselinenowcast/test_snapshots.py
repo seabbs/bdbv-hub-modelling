@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pandas as pd
+import pytest
 from bnc_helpers import RECON, ZEROS, ZEROS_PMF, read, read_vec
 
 from nowcastbaselines.baselinenowcast import (
@@ -17,6 +18,8 @@ from nowcastbaselines.baselinenowcast import (
     pair_sums,
     window_pairs,
 )
+from nowcastbaselines.baselinenowcast.delays import Settings, fit_delay
+from nowcastutils.snapshots import snapshot_arrays
 
 
 def test_hub_week_matrix_uses_sunday_to_saturday_weeks() -> None:
@@ -160,14 +163,20 @@ def test_chain_vmaps_over_locations() -> None:
     counts, observed, cut = _toy()
     both = np.concatenate([counts, 2 * counts])
     pairs, _ = window_pairs(cut, 4)
-    num, den = pair_sums(both, observed, cut, pairs, 4)
-    g = log_factors(num, den, [2, 3])
-    # Doubling every count leaves every ratio, so the delay, the same.
-    np.testing.assert_allclose(g[0], g[1], atol=1e-12)
+    num, _ = pair_sums(both, observed, cut, pairs, 4)
     single = jax.vmap(
         lambda c: pair_sums(c[None], observed, cut, pairs, 4)[0][0]
     )(jnp.asarray(both))
     np.testing.assert_allclose(single, np.asarray(num))
+
+
+def test_doubling_counts_shown_above_0_leaves_the_delay() -> None:
+    num = np.array([[[10.0, 6.0, 5.0], [8.0, 4.0, 3.0]]])
+    den = np.array([[[5.0, 4.0, 5.0], [4.0, 4.0, 3.0]]])
+    g = log_factors(
+        np.concatenate([num, 2 * num]), np.concatenate([den, 2 * den]), [1, 2]
+    )
+    np.testing.assert_allclose(g[0], g[1], rtol=1e-6, atol=1e-9)
 
 
 def test_gaps_7_8_and_9_recover_one_daily_delay() -> None:
@@ -212,3 +221,58 @@ def test_fill_row_matches_r_apply_delay_on_zero_rows() -> None:
             for b in range(a, cdf.size)
         ]
         np.testing.assert_allclose(got, want[row, a:], rtol=1e-12)
+
+
+def test_new_reports_on_days_first_shown_as_0_add_to_the_delay() -> None:
+    # Gaps of 1 and 2 days. The gap 2 pair shows 0 at age 0 and 6 at
+    # age 2, so its new reports say more of a day comes after age 0
+    # than the gap 1 pair alone does.
+    num = np.array([[[4.0, 6.0], [0.0, 0.0], [0.0, 0.0]]])
+    den = np.array([[[2.0, 4.0], [0.0, 0.0], [0.0, 0.0]]])
+    without = growth(log_factors(num, den, [1, 2, 2]), 0, 2)[0]
+    num[0, 1, 0] = 6.0
+    with_zero = growth(log_factors(num, den, [1, 2, 2]), 0, 2)[0]
+    assert with_zero > without
+
+
+def test_a_place_whose_newest_days_show_0_keeps_their_new_reports() -> None:
+    daily = _weekly_releases()
+    snap = snapshot_arrays(daily, "2026-11-01", ("CD-A", "CD-B"))
+    fit = fit_delay(snap, len(snap.releases) - 1, Settings())
+    assert fit is not None
+    b = snap.locations.index("CD-B")
+    # B has 14 cases a week, so uses its own delay. Its days show 0
+    # until age 3 and 2 from then. Its two pairs add 4 cases at each of
+    # ages 0 to 2 on days shown as 0, which count as 1 shown, as
+    # baselinenowcast's chain ladder divides by at least 1, so a day of
+    # age 0 grows 5-fold, and one of age 3 is final.
+    assert fit.level[b] >= Settings().min_level
+    assert fit.own[b].all()
+    assert growth(fit.g, 0, Settings().max_delay)[b] == pytest.approx(5.0)
+    assert growth(fit.g, 3, Settings().max_delay)[b] == pytest.approx(1.0)
+
+
+def _weekly_releases() -> pd.DataFrame:
+    """Weekly releases where province B's newest days show nothing first.
+
+    Province A's days show 2 cases at ages 0 to 2 and 4 from age 3, and
+    B's show 0 and then 2, as small places' newest days often do.
+    """
+    start = pd.Timestamp("2026-09-06")
+    rows = []
+    for cut in (35, 42, 49, 56):
+        vintage = (start + pd.Timedelta(days=cut + 1)).date().isoformat()
+        cutoff = (start + pd.Timedelta(days=cut)).date().isoformat()
+        for t in range(cut + 1):
+            onset = (start + pd.Timedelta(days=t)).date().isoformat()
+            young = cut - t < 3
+            a, b = (2, 0) if young else (4, 2)
+            for loc, n in (("CD", a + b), ("CD-A", a), ("CD-B", b)):
+                rows.append((vintage, loc, onset, n, 0, cutoff))
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "vintage", "location", "onset_date", "observed", "imputed",
+            "cutoff",
+        ],
+    )  # fmt: skip

@@ -82,24 +82,24 @@ def test_10_24_point_nowcasts_use_one_daily_delay(origin24) -> None:
     # Downward revisions are moved onto earlier releases before the sums.
     # The 10-09 release is cut at 10-07, its latest onset day.
     assert _weeks(origin24, "CD") == pytest.approx(
-        [368.5, 373.4, 488.4, 515.9], abs=0.06
+        [369.8, 374.6, 489.9, 516.6], abs=0.06
     )
     # Tshopo has under 10 cases a week, so uses the delay pooled over the
     # provinces that have them.
     assert _weeks(origin24, "CD-TO") == pytest.approx(
-        [9.9, 11.5, 21.3, 18.5], abs=0.06
+        [9.9, 11.6, 21.4, 18.6], abs=0.06
     )
 
 
 def test_provinces_use_own_delay_with_10_cases_a_week(origin24) -> None:
     assert _weeks(origin24, "CD-IT") == pytest.approx(
-        [206.7, 181.3, 282.6, 253.1], abs=0.06
+        [214.3, 182.9, 282.9, 254.7], abs=0.06
     )
     assert _weeks(origin24, "CD-NK") == pytest.approx(
-        [105.7, 149.5, 154.6, 214.2], abs=0.06
+        [117.8, 152.7, 155.1, 213.8], abs=0.06
     )
     assert _weeks(origin24, "CD-HU") == pytest.approx(
-        [10.3, 33.0, 26.5, 29.7], abs=0.06
+        [13.2, 33.3, 25.9, 29.2], abs=0.06
     )
 
 
