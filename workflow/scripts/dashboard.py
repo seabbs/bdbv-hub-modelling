@@ -22,7 +22,7 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -32,7 +32,8 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from flowlib import localconfig
-from flowlib.dashboard import context, nowcasts, page, serve, sims
+from flowlib.dashboard import context, nowcasts, page, serve, sims, validation
+from flowlib.dashboard.runs import Run
 
 CHECKOUT = Path(__file__).parents[2]
 CONFIG = CHECKOUT / "workflow" / "config.yaml"
@@ -188,6 +189,49 @@ def sims_handler(
     return Handler
 
 
+def validation_answer(
+    run_list: Sequence[Run], path: str
+) -> tuple[int, bytes, str]:
+    """Return the answer to a request under /validation/.
+
+    A run's validation forecasts' models and blocks
+    (`/validation/<run>/index.json`) and one block
+    (`/validation/<run>/<block>.json`), from `flowlib.dashboard.validation`.
+    """
+    run_key, _, name = path.removeprefix("/validation/").partition("/")
+    run = next((r for r in run_list if r.key == run_key), None)
+    if run is None or not name.endswith(".json"):
+        return NOT_FOUND
+    name = name.removesuffix(".json")
+    if name == "index":
+        return 200, page._json(validation.index(run)).encode(), JSON
+    if not name.isdigit():
+        return NOT_FOUND
+    found = validation.block(run, int(name))
+    if found is None:
+        return NOT_FOUND
+    return 200, page._json(found).encode(), JSON
+
+
+def validation_handler(
+    run_list: Sequence[Run],
+) -> type[BaseHTTPRequestHandler]:
+    """Return a request handler for the validation forecasts alone."""
+
+    class Handler(_Sending):
+        def do_GET(self) -> None:
+            path = unquote(urlsplit(self.path).path)
+            try:
+                if path.startswith("/validation/"):
+                    self._send(*validation_answer(run_list, path))
+                else:
+                    self._send(404, b"not found", "text/plain")
+            except CLIENT_GONE:
+                return
+
+    return Handler
+
+
 def handler(
     ctx: page.Context,
     pages: Pages | None = None,
@@ -208,7 +252,10 @@ def handler(
             path = unquote(urlsplit(self.path).path)
             try:
                 sims_path = path == "/sims" or path.startswith("/sims/")
-                if simulations is not None and sims_path:
+                if path.startswith("/validation/"):
+                    # The runs of the last build: a new run shows.
+                    self._send(*validation_answer(pages.ctx.runs, path))
+                elif simulations is not None and sims_path:
                     self._send(*sims_answer(*simulations, path))
                 elif path == "/sections.json":
                     query = parse_qs(urlsplit(self.path).query)

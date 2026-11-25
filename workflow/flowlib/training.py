@@ -307,6 +307,10 @@ class Training:
             out += [f for n in ns for f in self.offloaded(run, n)]
             # Each checkpoint's 7-day check (rule seven_day_check).
             out += [f"{train}/n{n}/seven-day.json" for n in ns]
+            # Its validation forecasts and base Chronos-2's, for the
+            # dashboard (rules validation_forecasts, _base).
+            out += [f"{train}/n{n}/{evaluations.VALIDATION_FILE}" for n in ns]
+            out += [f"{train}/{evaluations.VALIDATION_BASE}"] if ns else []
             # A machine that publishes as it trains (PUBLISH in local.env):
             # each release, a saved checkpoint's BDBV check, and its
             # held-out losses once scored.

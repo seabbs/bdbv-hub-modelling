@@ -205,6 +205,7 @@ Clicking a level, a histogram bin or a table row filters or selects; a deep dive
 `task workflow:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a mailbox) and Tables. Every chart has an info marker (`page/explain.json`).
+The loss section also sets each checkpoint's and base Chronos-2's forecasts of a fixed sample of the run's held-out blocks against the truth, one block and row at a time (rules `validation_forecasts` and `validation_forecasts_base`, on the checkpoint scoring device below every other job; `flowlib.dashboard.validation`).
 
 Settings:
 

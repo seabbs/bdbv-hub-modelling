@@ -3,10 +3,15 @@
     python workflow/scripts/evaluate_offloaded.py base TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py seven-day TRAIN/n<N>
+    python workflow/scripts/evaluate_offloaded.py validation TRAIN/n<N>
+    python workflow/scripts/evaluate_offloaded.py validation-base TRAIN/n<N>
 
 `base` scores step 0 alone (base Chronos-2, the start loss), `checkpoint`
 segment n<N>'s adapter, `seven-day` its 7-day check (`SEVEN_DAY`, beside
-its settings), with the trainer's own losses
+its settings), `validation` its forecasts of a sample of the held-out
+blocks and `validation-base` base Chronos-2's of the same blocks
+(`evaluations.VALIDATION_FILE`, `VALIDATION_BASE`), with the trainer's
+own losses
 (nowcastfoundation.finetune.evaluate); the files are as
 `flowlib.evaluations` says. The step snapshots between are not scored.
 """
@@ -119,10 +124,59 @@ def seven_day(where: Path, device: str) -> None:
     fs.log(f"{where.name}: 7-day check {check} in {seconds:.0f} s")
 
 
+def validation(where: Path, device: str, base_only: bool = False) -> None:
+    """Write a checkpoint's (or base Chronos-2's) validation forecasts.
+
+    Of the sample of the run's held-out blocks that
+    `fe.validation_sample` picks; `where` is a checkpoint's folder, whose
+    settings give the run's batch size and validation blocks.
+    """
+    import gzip
+
+    settings = json.loads((where / "settings.json").read_text())
+    blocks = fe.load_blocks(
+        where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
+    )
+    model = fe.load_base(device)
+    if base_only:
+        out, label = where.parent / evaluations.VALIDATION_BASE, "base"
+    else:
+        from peft import PeftModel
+
+        series_bias.attach_for(model, where / "finetuned-ckpt")
+        model = PeftModel.from_pretrained(model, where / "finetuned-ckpt")
+        out, label = where / evaluations.VALIDATION_FILE, where.name
+    model.eval()
+    t0 = time.perf_counter()
+    with logging_batches(f"{label} validation forecasts"):
+        records = fe.validation_forecasts(
+            model, blocks, settings.get("batch_size", 256)
+        )
+    seconds = time.perf_counter() - t0
+    tmp = out.with_suffix(".tmp")
+    with gzip.open(tmp, "wt") as f:
+        json.dump(
+            {
+                "model": label,
+                "n_outbreaks": 0 if base_only else settings.get("n_outbreaks"),
+                "device": device,
+                "seconds": seconds,
+                "blocks": records,
+            },
+            f,
+        )
+    tmp.replace(out)
+    fs.log(f"{label}: {len(records)} validation forecasts in {seconds:.0f} s")
+
+
+WHAT = ("base", "checkpoint", "seven-day", "validation", "validation-base")
+"""The subcommands."""
+
+
 def main(argv: Sequence[str] | None = None) -> None:
-    """Run `base`, `checkpoint` or `seven-day`."""
+    """Run one of `WHAT`."""
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("what", choices=("base", "checkpoint", "seven-day"))
+    p.add_argument("what", choices=WHAT)
     p.add_argument("where", type=Path)
     # The rule passes its scoring device (flowlib.compute); never detected.
     p.add_argument("--device", required=True)
@@ -132,6 +186,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         base_step(args.where, device)
     elif args.what == "seven-day":
         seven_day(args.where, device)
+    elif args.what in ("validation", "validation-base"):
+        validation(args.where, device, args.what == "validation-base")
     else:
         checkpoint(args.where, device)
 
