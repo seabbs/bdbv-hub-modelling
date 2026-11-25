@@ -284,12 +284,13 @@ also at a checkpoint size (`_n<outbreaks>`)."""
 def keep_finetuned(
     forecasts: pd.DataFrame, config: Mapping[str, Any]
 ) -> pd.DataFrame:
-    """Leave out the fine-tuned models until a checkpoint is pinned.
+    """Leave out the fine-tuned models while there is no final run.
 
-    The paper's fine-tuned models are the final run's (`finetuned` in the
-    config). While it has no published checkpoint, their rows are pending.
+    The paper's fine-tuned models load the final run's final checkpoint,
+    whose release record is `finetuned_record` in the config. With no
+    final run, their rows are pending.
     """
-    if config.get("finetuned"):
+    if config.get("finetuned_record"):
         return forecasts
     fine = forecasts["model"].astype(str).str.contains(_FINETUNED)
     return forecasts.loc[~fine].reset_index(drop=True)

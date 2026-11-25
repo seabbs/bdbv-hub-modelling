@@ -58,7 +58,7 @@ from paperpipe.studies import (
     run_forecasts,
     study_baseline,
 )
-from paperpipe.summary import study_summary, write_summary
+from paperpipe.summary import finetuned_spec, study_summary, write_summary
 
 log = logging.getLogger(__name__)
 
@@ -253,7 +253,9 @@ def _summary(a: argparse.Namespace) -> None:
         a.out,
         a.mode,
         studies,
-        finetuned=a.finetuned,
+        finetuned=finetuned_spec(a.finetuned_record)
+        if a.finetuned_record
+        else None,
         realdata_after=a.realdata_after,
     )
 
@@ -437,7 +439,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--meta", type=Path, nargs="+", required=True)
     p.add_argument("--scores", type=Path, nargs="+", required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--finetuned", default=None)
+    p.add_argument("--finetuned-record", type=Path, default=None)
     p.add_argument(
         "--realdata-after",
         default=None,

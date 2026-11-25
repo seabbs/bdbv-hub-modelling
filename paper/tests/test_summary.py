@@ -3,7 +3,7 @@ import yaml
 
 from paperpipe.meta import DUMMY_LABEL, read_meta, write_meta
 from paperpipe.outputs import to_markdown
-from paperpipe.summary import study_summary, write_summary
+from paperpipe.summary import finetuned_spec, study_summary, write_summary
 
 
 def _scores(**extra) -> pd.DataFrame:
@@ -147,3 +147,15 @@ def test_every_quoted_model_score_is_one_the_summary_writes() -> None:
         text = (here / name).read_text()
         for model in re.findall(r"results\.\w+\.models\.(\w+) >", text):
             assert model in QUOTED_MODELS, (name, model)
+
+
+def test_the_checkpoint_spec_is_read_beside_its_release_record(
+    tmp_path,
+) -> None:
+    segment = tmp_path / "n3200"
+    segment.mkdir()
+    (segment / "settings.json").write_text(
+        '{"hash": "e8a1f5ae338b", "series_bias": true}'
+    )
+    (segment / "published.json").write_text('{"tag": "t", "hash": "x"}')
+    assert finetuned_spec(segment / "published.json") == "slots-e8a1f5ae338b"

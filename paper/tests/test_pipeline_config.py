@@ -175,13 +175,13 @@ def test_fine_tuned_rows_wait_for_a_checkpoint_of_the_final_run() -> None:
             ]
         }
     )
-    pending = keep_finetuned(fc, {"finetuned": None})
+    pending = keep_finetuned(fc, {"finetuned_record": None})
     assert list(pending["model"]) == [
         "randomwalknowcast",
         "foundation_zeroshot",
         "foundation_real",
     ]
-    pinned = keep_finetuned(fc, {"finetuned": "abcdef123456"})
+    pinned = keep_finetuned(fc, {"finetuned_record": "n9/published.json"})
     assert len(pinned) == len(fc)
 
 

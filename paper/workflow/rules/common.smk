@@ -40,6 +40,13 @@ FORECAST = forecast.settings(config, localconfig.read())
 R = FLOW.results
 
 
+# The final run's final checkpoint, which every rule running an `_ft`
+# model takes as an input and loads (`PaperFlow.finetuned_env`); empty
+# while the fine-tuned models are pending.
+FINETUNED = FLOW.finetuned_inputs()
+FT_EXPORT = f"export {FLOW.finetuned_env()};" if FINETUNED else ""
+
+
 BUILD = FLOW.build
 
 

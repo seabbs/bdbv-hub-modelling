@@ -678,23 +678,6 @@ def checkpoint_spec(settings: Mapping[str, Any]) -> str:
     return f"{SLOTS_PREFIX}{key}" if settings.get("series_bias") else key
 
 
-def newest_segment(train: Path | str) -> Path | None:
-    """Return a run's newest saved segment folder, or None before any.
-
-    The largest `n<N>` under the run's `train` folder whose settings and
-    adapter files (`ADAPTER_FILES`) are saved; a segment still training
-    has neither. The paper's fine-tuned models load it (`paperpipe.flow`).
-    """
-    saved = [
-        d
-        for d in Path(train).glob("n*")
-        if d.name[1:].isdigit()
-        and (d / "settings.json").is_file()
-        and all((d / "finetuned-ckpt" / f).is_file() for f in ADAPTER_FILES)
-    ]
-    return max(saved, key=lambda d: int(d.name[1:]), default=None)
-
-
 def local_checkpoint(segment: Path | str) -> Checkpoint:
     """Return a training segment's checkpoint, read from its folder.
 
