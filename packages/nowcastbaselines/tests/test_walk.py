@@ -6,7 +6,12 @@ import jax
 import numpy as np
 import pytest
 
-from nowcastbaselines.walk import random_walk, walk_noise, walk_variance
+from nowcastbaselines.walk import (
+    random_walk,
+    walk_noise,
+    walk_variance,
+    weekday_variances,
+)
 
 
 def test_steps_are_cumulative_within_a_sample() -> None:
@@ -95,3 +100,21 @@ def test_a_walk_on_small_counts_loses_most_of_the_poisson_noise() -> None:
 
 def test_fewer_than_two_changes_give_no_variance() -> None:
     assert np.isnan(walk_variance(np.array([0.7]), np.array([0.1])))
+
+
+def test_each_weekday_has_the_variance_of_the_changes_into_it() -> None:
+    # Large counts, so Poisson noise is small. Only the steps into
+    # weekday 0 vary; the others carry a fixed weekday effect.
+    rng = np.random.default_rng(1)
+    t = 7 * 40 + 1
+    weekday = np.arange(1, t) % 7
+    step = np.where(weekday == 0, rng.normal(0.0, 0.3, t - 1), 0.0)
+    effect = np.where(weekday == 3, 0.5, np.where(weekday == 4, -0.5, 0.0))
+    y = np.expm1(
+        np.log1p(1e5) + np.concatenate([[0.0], np.cumsum(step + effect)])
+    )
+    var = weekday_variances(y[None, :], weekday)
+    assert var.shape == (7,)
+    assert np.sqrt(var[0]) == pytest.approx(0.3, abs=0.06)
+    # A fixed weekday effect is no walk step.
+    assert (var[1:] < 0.001).all()

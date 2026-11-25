@@ -16,7 +16,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
+from nowcastbaselines.randomwalk import (
+    RandomWalk,
+    RandomWalkNowcast,
+    _step_sigma,
+)
 from nowcastgermany.data import nowcast_tasks, read_triangle
 from nowcastutils.base import NATIONAL, ForecastTask
 
@@ -132,3 +136,21 @@ def test_daily_counts_walk_with_the_sums_spread(
     ]
     weekly = np.log1p(sums.quantile([0.1, 0.9]).to_numpy())
     assert np.ptp(daily) < 1.5 * np.ptp(weekly)
+
+
+def test_daily_walk_steps_into_each_weekday_with_its_own_spread(
+    task: ForecastTask,
+) -> None:
+    # The daily walk's step into each day takes that day's weekday's
+    # spread, from the daily nowcast's changes into that weekday.
+    model = RandomWalkNowcast()
+    model._start(task)
+    origin, _ = model._block_draws(task, 1, weekdays=True)
+    assert origin.step_sigma is not None
+    assert origin.step_sigma.shape == (len(origin.snap.locations), 7)
+    cut = origin.snap.cut_week(origin.o)
+    first = np.full(len(origin.snap.locations), cut)
+    steps = _step_sigma(origin, first, 14)
+    day = pd.Timestamp(DATE) + pd.to_timedelta(np.arange(1, 15), unit="D")
+    want = origin.step_sigma[:, day.weekday]
+    np.testing.assert_allclose(steps, want)
