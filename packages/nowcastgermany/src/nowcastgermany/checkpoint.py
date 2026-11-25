@@ -16,6 +16,10 @@ with `rule` = `RULE`:
 
 BDBV is held out for the paper, so no BDBV rows are scored here.
 
+A German unit splits its chunks of dates over `SCORE_WORKERS` worker
+processes (`score_workers`), its rule's threads; each chunk is forecast
+as one process would, so the rows are the same.
+
 Relative scores divide by randomwalknowcast's on the cells every model
 and checkpoint of a level made. Every score comes from
 `nowcasteval.scoring`, as the paper's and the dashboard's do. Rows are
@@ -656,10 +660,10 @@ def _chunk_results(
     from concurrent.futures import ProcessPoolExecutor, as_completed
 
     threads = int(os.environ.get("TORCH_THREADS") or workers)
+    workers = min(workers, len(chunks))
     # The workers take their environment from this process's.
     for var in THREAD_VARS:
         os.environ[var] = str(worker_threads(threads, workers))
-    workers = min(workers, len(chunks))
     context = multiprocessing.get_context(START_METHOD)
     counter = context.Value("i", 0)
     with ProcessPoolExecutor(
