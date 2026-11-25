@@ -1,4 +1,5 @@
-"""The usable CPU count (`nowcastutils.devices.usable_cpus`)."""
+"""The CPUs a process may use (`nowcastutils.devices.allowed_cpus` and
+`usable_cpus`)."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from nowcastutils.devices import usable_cpus
+from nowcastutils.devices import allowed_cpus, usable_cpus
 
 ROOT = Path(__file__).parents[3]
 
@@ -32,6 +33,25 @@ def test_usable_cpus_fall_back_to_the_host_without_affinity(
     assert usable_cpus() == 6
     monkeypatch.setattr(os, "cpu_count", lambda: None)
     assert usable_cpus() == 1
+
+
+def test_allowed_cpus_are_the_sorted_affinity_where_there_is_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        os, "sched_getaffinity", lambda _pid: {5, 0, 3}, raising=False
+    )
+    assert allowed_cpus() == [0, 3, 5]
+
+
+def test_allowed_cpus_fall_back_to_every_host_cpu_without_affinity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(os, "sched_getaffinity", raising=False)
+    monkeypatch.setattr(os, "cpu_count", lambda: 4)
+    assert allowed_cpus() == [0, 1, 2, 3]
+    monkeypatch.setattr(os, "cpu_count", lambda: None)
+    assert allowed_cpus() == [0]
 
 
 def test_only_the_helper_reads_the_affinity() -> None:

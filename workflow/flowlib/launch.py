@@ -43,6 +43,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from flowlib import localconfig, machine
+from nowcastutils.devices import allowed_cpus
 
 
 def claims_dir() -> Path:
@@ -197,7 +198,7 @@ def main(argv: Sequence[str]) -> None:
         if mem_mb:
             headroom = int(cfg.get("HEADROOM_GB") or 0) * 1024
             wait_for_memory(mem_mb, headroom)
-        allowed = sorted(os.sched_getaffinity(0))
+        allowed = allowed_cpus()
         each, kept = kept_cores(cfg)
         if trainer:
             n, mine = each, reserved(allowed, kept) or allowed
