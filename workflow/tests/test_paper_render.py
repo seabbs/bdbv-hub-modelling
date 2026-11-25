@@ -124,9 +124,17 @@ def test_pages_reads_its_own_config(repo: Path) -> None:
     # pages.yaml); `task paper` reads the paper config alone.
     out = _run(repo, "development", "--pages")
     assert out.returncode == 0, out.stderr
-    (snake,) = [c for c in _calls(repo) if "snakemake" in c]
-    assert "--configfile paper/workflow/pages.yaml" in snake
+    calls = _calls(repo)
+    (snake,) = [c for c in calls if "snakemake" in c]
+    assert (
+        "--configfile paper/workflow/pages.yaml output/paper-stored/pages.yaml"
+        in snake
+    )
     assert "--config render=development " in snake
+    # The host's published outputs are fetched first, as inputs.
+    (fetch,) = [c for c in calls if "paperpipe.stored fetch" in c]
+    assert calls.index(fetch) < calls.index(snake)
+    assert "--overlay output/paper-stored/pages.yaml" in fetch
 
 
 def test_an_unknown_target_fails(repo: Path) -> None:
