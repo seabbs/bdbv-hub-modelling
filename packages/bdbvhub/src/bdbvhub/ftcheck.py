@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -130,8 +131,10 @@ def forecast(
 ) -> ReleaseForecasts:
     """Forecast every release with one model and write its folder.
 
-    Also writes `blocks.csv`, the block sizes of a Chronos-2 model at
-    each release (`FoundationModel.block_sizes`).
+    Each release's forecasts go to their own folder as they are made
+    (`RELEASES`), and a run resumes from those there. Also writes
+    `blocks.csv`, the block sizes of a Chronos-2 model at each release
+    (`FoundationModel.block_sizes`).
 
     Parameters
     ----------
@@ -164,6 +167,37 @@ def forecast(
         pd.concat(sizes, ignore_index=True).to_csv(
             out / "blocks.csv", index=False
         )
-    run = forecast_releases(tasks, target, [model])
+    parts = [
+        _release_part(out / RELEASES / t.vintage, t, target, model)
+        for t in sorted(tasks, key=lambda t: t.vintage)
+    ]
+    run = ReleaseForecasts.read(parts)
     run.write(out)
     return run
+
+
+RELEASES = "releases"
+"""Where a check forecast keeps each release's forecasts as it goes, so a
+restart resumes from the releases written (`_release_part`)."""
+
+
+def _release_part(
+    where: Path,
+    task: ForecastTask,
+    target: pd.DataFrame,
+    model: ForecastModel,
+) -> Path:
+    """Return the folder of one release's forecasts, made if missing.
+
+    Written beside it and moved into place, so a folder there is whole;
+    one left by a run that stopped part way is made again. The forecast
+    folder is named by its code key (`flowlib.scoring.ft_check_key`), so
+    a kept release is from the same code.
+    """
+    if where.is_dir():
+        return where
+    tmp = where.with_name(f".{where.name}.tmp")
+    shutil.rmtree(tmp, ignore_errors=True)
+    forecast_releases([task], target, [model]).write(tmp)
+    tmp.rename(where)
+    return where

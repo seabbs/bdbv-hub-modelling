@@ -109,6 +109,7 @@ def test_the_blocks_file_is_the_trainer_s():
     from nowcastfoundation.finetune import stream as fs
 
     assert sidecar.HELD_OUT_BLOCKS == fs.HELD_OUT_BLOCKS
+    assert sidecar.HELD_OUT_KEY == fs.HELD_OUT_KEY
     assert segments.EVAL_MODES == fs.EVAL_MODES
 
 

@@ -1,3 +1,0 @@
-# nowcastfoundation
-
-<!-- readme: packages/nowcastfoundation -->

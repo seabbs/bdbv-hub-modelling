@@ -7,8 +7,10 @@ optionally `target` and `score`. A row with no target is the 7-day
 target.
 
 Every row goes to the configured reference it matches, else, in a
-reference folder, to its model by name (`model:<name>`, such as a hub
-team), else to the checkpoint of a folder a run claims; excluded and
+reference folder, to its model (`model:<name>`) if `nowcasteval.labels`
+names it (`known`; others, such as hub teams or a model's name before a
+rename, are left out), else to the checkpoint of a folder a run claims;
+excluded and
 unclaimed checkpoints are left out. The page draws `levels`; coverage,
 bias and the WIS use the seven cached levels.
 
@@ -23,6 +25,7 @@ import csv
 import functools
 import gzip
 import json
+import logging
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -57,8 +60,28 @@ TRUTH_FILE = "truth.csv.gz"
 
 TARGET = "7day"
 
+LOG = logging.getLogger(__name__)
+
 RUN_MODEL = "foundation"
 """The model a run's checkpoint is in its score files."""
+
+
+_UNKNOWN: set[str] = set()
+"""Model names already logged as unknown."""
+
+
+def known(model: str) -> bool:
+    """Return whether `nowcasteval.labels` names a model; log it if not.
+
+    A model with no name of its own (an old name in files written before a
+    rename, a hub team) is not shown; it is logged once.
+    """
+    if model in labels.MODEL_LABELS:
+        return True
+    if model not in _UNKNOWN:
+        _UNKNOWN.add(model)
+        LOG.info("not shown, not a model nowcasteval.labels names: %s", model)
+    return False
 
 
 def variant_id(model: str, run_hash: str) -> str:
@@ -188,7 +211,8 @@ def read_file(
                     {"model": model, "checkpoint": checkpoint}
                 )
                 if series is None and ref_folder:
-                    series = f"model:{model}"
+                    # Only models nowcasteval.labels names are shown.
+                    series = f"model:{model}" if known(model) else None
                 elif series is not None and series not in refs:
                     # A checkpoint's own model, or one of its variants as
                     # a series of its own; any other model is not shown.
@@ -739,13 +763,15 @@ def meta(
                 }
             )
         elif s.startswith("model:"):
+            model = s.removeprefix("model:")
             out.append(
                 {
                     "id": s,
-                    "label": s.removeprefix("model:"),
+                    "label": labels.model_label(model),
                     "run": "ref",
                     "n": 1,
-                    "color": labels.NEUTRAL,
+                    "color": paperstyle.model_colour(model),
+                    "dash": paperstyle.model_dash(model),
                 }
             )
         elif variant_of(s):

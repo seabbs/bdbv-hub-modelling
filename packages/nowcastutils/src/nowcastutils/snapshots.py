@@ -113,7 +113,8 @@ def snapshot_arrays(
     locations : tuple of str
         Locations to include. Each location's ancestors
         (`nowcastutils.hierarchy.parent`) are added, so the root
-        is always the first node.
+        is always the first node. A node with no rows in `daily` is
+        the sum of its children.
 
     Returns
     -------
@@ -173,6 +174,11 @@ def snapshot_arrays(
         ],
         dtype=np.int64,
     )
+    # A node with no rows is the sum of its children, deepest first.
+    given = set(take["location"])
+    for i in reversed(range(len(nodes_t))):
+        if nodes_t[i] not in given:
+            counts[i] = counts[parent == i].sum(axis=0)
     return SnapshotArrays(
         nodes_t, releases, days, counts, observed, cut, week,
         week_ends, parent,

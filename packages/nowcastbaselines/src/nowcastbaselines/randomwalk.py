@@ -1,8 +1,14 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 r"""The random walk baselines.
 
-Both models run on the hub's daily release snapshots (`chain`), at
-province and zone level, from one random walk (`walk.random_walk`).
+Both models run on the hub's daily release snapshots (`chain`), from one
+random walk (`walk.random_walk`).
+The places form a hierarchy read from their codes
+(`nowcastutils.hierarchy`), so a task may be one series or places of any
+depth below a root, such as provinces and zones or age groups. A place
+with no rows of its own is the sum of its children
+(`nowcastutils.snapshots.snapshot_arrays`), and a task with no places
+gives no samples.
 
 `RandomWalk` (`randomwalk`) starts from the reported count of the latest
 week judged complete, $\pi \ge 0.95$, where
@@ -15,6 +21,11 @@ is the share of the week's final count reported, under the delay
 estimate of `chain`.
 Weeks up to the start are returned as reported.
 Later weeks are walk draws.
+A task whose targets are not all hub weeks has 7-day sums ending on each
+target date: the weeks are the blocks of 7 days ending on the cut-off's
+weekday, sums to the end of a place's start block are as reported, and
+later sums walk in daily steps from it (`_day_walks`), as
+`randomwalknowcast`'s sums after the cut-off do.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
 negative binomial new reports on the remaining count (`obs`).
@@ -81,14 +92,22 @@ from nowcastbaselines.copula import (
     pair_walks,
 )
 from nowcastbaselines.introductions import silent_trajectories
-from nowcastbaselines.walk import random_walks
+from nowcastbaselines.pooling import pool_matrix, source_index
+from nowcastbaselines.walk import (
+    DailySteps,
+    random_walks,
+    same_weekday_variance,
+    weekday_means,
+)
 from nowcastutils.base import (
     SAMPLE_COLUMNS,
     ForecastTask,
     MissingSnapshots,
+    add_national,
     register_model,
 )
 from nowcastutils.dates import as_date
+from nowcastutils.hierarchy import depth
 from nowcastutils.snapshots import SnapshotArrays, blocks, snapshot_arrays
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
@@ -144,31 +163,107 @@ def _timeline(origin: Origin, task: ForecastTask) -> list[str]:
     return weeks
 
 
-def _between_weeks(
-    walk: dict[str, np.ndarray], cut: dt.date, days: list[str]
-) -> dict[str, np.ndarray]:
-    """Return each sample's 7-day sums ending after the cut-off.
-
-    The sums ending on the cut-off's weekday are the walk's; one ending
-    $r$ days after such a sum $W_k$ is
-    $(1 - r/7) W_k + (r/7) W_{k+1}$, the next sum's days at its rate.
-    """
-    out = {}
-    for d in days:
-        k, r = divmod((as_date(d) - cut).days, 7)
-        lo = walk[(cut + dt.timedelta(days=7 * k)).isoformat()]
-        if r == 0:
-            out[d] = lo
-            continue
-        hi = walk[(cut + dt.timedelta(days=7 * (k + 1))).isoformat()]
-        out[d] = lo + (hi - lo) * r / 7
-    return out
-
-
 def _label(origin: Origin, i: int) -> str:
     n = len(origin.snap.locations)
     kind = "own" if i < n else "pooled"
     return f"{kind}:{origin.snap.locations[i % n]}"
+
+
+def _daily_steps(
+    y: np.ndarray, day0: int, end: np.ndarray, origin: Origin
+) -> DailySteps:
+    """Return a walk in days' steps, estimated from the daily series `y`.
+
+    Each place's series `y` `[L, T]`, whose day 0 is weekday `day0`, is
+    read over the `walk_weeks` weeks to its day `end` `[L]`, from its
+    first value that is not NaN. The mean step into each weekday
+    (`walk.weekday_means`) is centred to sum to 0 over the week, and the
+    spread is that of the changes over 7 days
+    (`walk.same_weekday_variance`). A place uses its own estimates where
+    it has `min_level` cases a week and, for the spread, an estimate
+    above 0, and otherwise the pooled ones of the nearest parent that
+    does (`pooling.source_index`, with the pool of `origin`). A place
+    with no spread anywhere steps with spread 0, its Poisson counts
+    alone.
+    """
+    settings, snap = origin.settings, origin.snap
+    n_loc = y.shape[0]
+    first = int(np.argmax(~np.isnan(y).any(axis=0)))
+    windows = []
+    for n in range(n_loc):
+        lo = max(int(end[n]) - 7 * settings.walk_weeks, first)
+        windows.append((lo, y[n, lo : int(end[n]) + 1]))
+
+    def moments(members: np.ndarray) -> tuple[np.ndarray, float]:
+        if members.size == 0:
+            return np.full(7, np.nan), np.nan
+        changes, days = [], []
+        for m in members:
+            lo, own = windows[m]
+            changes.append(np.diff(np.log1p(own)))
+            days.append((day0 + lo + 1 + np.arange(own.size - 1)) % 7)
+        mean = weekday_means(np.concatenate(changes), np.concatenate(days))
+        var = same_weekday_variance([windows[m][1] for m in members])
+        return mean, var
+
+    pool = pool_matrix(origin.fit.level, snap.parent, settings.min_level) > 0
+    own = [moments(np.array([n])) for n in range(n_loc)]
+    pooled = [moments(np.flatnonzero(pool[n])) for n in range(n_loc)]
+    var_own = np.array([v for _, v in own])
+    var_pooled = np.array([v for _, v in pooled])
+    source = source_index(
+        origin.fit.level,
+        snap.parent,
+        (var_own > 0).astype(int)[:, None],
+        (var_pooled > 0).astype(int)[:, None],
+        settings.min_level,
+        1,
+    )[:, 0]
+    var = np.concatenate([var_own, var_pooled])[source]
+    means = np.stack([m for m, _ in own] + [m for m, _ in pooled])
+    mean = np.nan_to_num(means[source])
+    return DailySteps(
+        mean - mean.mean(axis=1, keepdims=True),
+        np.sqrt(np.where(var > 0, var, 0.0)),
+    )
+
+
+def _rolling_sums(y: np.ndarray) -> np.ndarray:
+    """Return the 7-day sums ending each day of daily counts `[L, T]`.
+
+    The first 6 days, with fewer than 7 days to sum, are NaN.
+    """
+    c = np.concatenate(
+        [np.zeros((y.shape[0], 1)), np.cumsum(y, axis=1)], axis=1
+    )
+    out = np.full(y.shape, np.nan)
+    out[:, 6:] = c[:, 7:] - c[:, :-7]
+    return out
+
+
+def _walk(
+    keys: jax.Array,
+    x0: np.ndarray,
+    sigma: np.ndarray,
+    h: int,
+    steps: DailySteps | None,
+    first: np.ndarray | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return `walk.random_walks` in weeks (`sigma`) or in days (`steps`)."""
+    x = jnp.asarray(x0, jnp.float32)
+    if steps is None:
+        lam, drawn = random_walks(keys, x, jnp.asarray(sigma, jnp.float32), h)
+    else:
+        assert first is not None
+        mean, spread = steps.at(first, h)
+        lam, drawn = random_walks(
+            keys,
+            x,
+            jnp.asarray(spread, jnp.float32),
+            h,
+            jnp.asarray(mean, jnp.float32),
+        )
+    return np.asarray(lam), np.asarray(drawn)
 
 
 def _walks(
@@ -178,22 +273,21 @@ def _walks(
     start: np.ndarray,
     h: int,
     quiet: np.ndarray,
+    steps: DailySteps | None = None,
+    first: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return `h` weeks of walk rates and counts after `start` from `x0`.
+    """Return `h` steps of walk rates and counts after `start` from `x0`.
 
     Places in `quiet` `[L]` draw their introductions
     (`silent_trajectories`), and the others walk from `x0` `[L, S]`. The
     rates `[L, S, h]` are the walk's, also for places drawing
-    introductions, whose counts do not use them.
+    introductions, whose counts do not use them. A walk in weeks steps
+    with `Origin.sigma`; one in days with `steps`, from the weekday
+    `first` `[L]` of each place's first step's day (`DailySteps.at`).
     """
     k_walk, k_silent = jax.random.split(key)
     keys = jax.random.split(k_walk, x0.shape[0])
-    lam, drawn = random_walks(
-        keys,
-        jnp.asarray(x0, jnp.float32),
-        jnp.asarray(origin.sigma, jnp.float32),
-        h,
-    )
+    lam, drawn = _walk(keys, x0, origin.sigma, h, steps, first)
     silent = silent_trajectories(
         k_silent,
         quiet,
@@ -208,6 +302,97 @@ def _walks(
         quiet[:, None, None], silent, np.asarray(drawn, np.float64)
     )
     return np.asarray(lam, np.float64), counts
+
+
+def _day_walks(
+    key: jax.Array,
+    start: np.ndarray,
+    origin: Origin,
+    h: int,
+    quiet: np.ndarray,
+    steps: DailySteps,
+    first: int,
+) -> np.ndarray:
+    r"""Return `h` daily steps of walk counts from `start` `[S, L]`.
+
+    The walk (`_walks`) steps at a 7-day sum's own resolution, a day,
+    with `steps` (`_daily_steps`), the first into weekday `first`. A
+    place in `quiet` `[L]` draws introductions with the weekly
+    probability $q$ of `origin` as $1 - (1 - q)^{1/7}$ a day, every day
+    after the start counted as wholly unreported.
+
+    Returns
+    -------
+    numpy.ndarray
+        Counts `[S, L, h]`.
+    """
+    daily = replace(
+        origin,
+        sigma=steps.sigma,
+        intro=1.0 - (1.0 - origin.intro) ** (1.0 / 7.0),
+    )
+    n_loc = start.shape[1]
+    after = np.full(n_loc, origin.complete.shape[1])
+    _, counts = _walks(
+        key, start.T, daily, after, h, quiet, steps, np.full(n_loc, first)
+    )
+    out: np.ndarray = counts.transpose(1, 0, 2)
+    return out
+
+
+def _nowcast_steps(day: Origin, rolling: bool = False) -> DailySteps:
+    """Return a walk in days' steps from the daily nowcast of `day`.
+
+    `day` is the fit of blocks of one day. The series is its nowcast
+    (`Origin.point`) of each day's count, or with `rolling` of each 7-day
+    sum, to the cut-off (`_daily_steps`).
+    """
+    y = _rolling_sums(day.point) if rolling else day.point
+    snap = day.snap
+    end = np.full(y.shape[0], snap.cut_week(day.o))
+    return _daily_steps(y, as_date(snap.week_ends[0]).weekday(), end, day)
+
+
+def _complete_start(origin: Origin) -> np.ndarray:
+    """Return each place's latest complete week, `[L]`.
+
+    Raises
+    ------
+    NoCompleteWeek
+        If a place has no week at `Settings.completeness`.
+    """
+    good = origin.complete >= origin.settings.completeness
+    if not good.any(axis=1).all():
+        has = good.any(axis=1)
+        none = [
+            x
+            for x, ok in zip(origin.snap.locations, has, strict=True)
+            if not ok
+        ]
+        raise NoCompleteWeek(
+            f"No week reaches {origin.settings.completeness:.0%} "
+            f"complete at {origin.snap.releases[origin.o]} for "
+            f"{', '.join(none)}, so the walk has no start week."
+        )
+    return np.asarray(origin.start)
+
+
+def _reported_sums(snap: SnapshotArrays, days: list[str]) -> np.ndarray:
+    """Return each place's 7-day sum ending on each day, `[L, D]`.
+
+    The sums are of the counts the latest release reports.
+    """
+    counts = snap.counts[:, -1, :]
+    c = np.concatenate(
+        [np.zeros((counts.shape[0], 1)), np.cumsum(counts, axis=1)], axis=1
+    )
+    index = {d.date().isoformat(): i for i, d in enumerate(snap.days)}
+    out = np.zeros((counts.shape[0], len(days)))
+    for j, d in enumerate(days):
+        if d in index:
+            i = index[d]
+            out[:, j] = c[:, i + 1] - c[:, max(i - 6, 0)]
+    return out
 
 
 def start_window(settings: Settings, period: int = 7) -> int:
@@ -289,7 +474,12 @@ def _start_weeks(origin: Origin) -> np.ndarray:
 def frame(
     task: ForecastTask, weeks: list[str], values: np.ndarray, rows: list[int]
 ) -> pd.DataFrame:
-    """Return sample rows from `values` of shape `[S, L, H]`."""
+    """Return sample rows from `values` of shape `[S, L, H]`.
+
+    A task with no places gives no rows.
+    """
+    if not task.locations:
+        return pd.DataFrame(columns=list(SAMPLE_COLUMNS))
     col = {w: i for i, w in enumerate(weeks)}
     targets = list(task.target_end_dates)
     n = values.shape[0]
@@ -348,6 +538,10 @@ class RandomWalk:
         init=False, default=None, repr=False
     )
     needs_snapshots: ClassVar[bool] = True
+    _snap: SnapshotArrays | None = field(init=False, default=None, repr=False)
+    _fits: dict[tuple[int, bool], DelayFit | None] = field(
+        init=False, default_factory=dict, repr=False
+    )
 
     def pair(
         self,
@@ -360,13 +554,14 @@ class RandomWalk:
         rho_p is estimated from the normal scores of the model's own
         nowcasts at earlier releases (`copula.error_scores`), shrunk to the
         prior (`copula.estimate_rho`), and the draws are paired by it
-        (`copula.pair_walks`). A task of zones is left unpaired.
+        (`copula.pair_walks`). A task with no province, a place one level
+        below its root, is left unpaired.
         """
         if self.keep_variants:
             self._unpaired = values
             self._kept_origin = origin
         locations = tuple(origin.snap.locations)
-        if all(c.count("-") >= 2 for c in task.locations):
+        if not any(depth(c) == 1 for c in task.locations):
             self.copula_fit = None
             return values
         scores, reason = self._error_scores(origin, task)
@@ -590,24 +785,16 @@ class RandomWalk:
         >>> samples = get_model("randomwalk").forecast(task)
         >>> samples.groupby(["location", "target_end_date"])["value"].median()
         """
+        if not task.locations:
+            return frame(task, [], np.zeros((task.n_samples, 0, 0)), [])
+        ends = pd.to_datetime(list(task.target_end_dates))
+        if (ends.day_of_week != HUB_WEEKDAY).any():
+            return self._rolling(task)
         origin = self.origin_at(task, errors=False)
         weeks = _timeline(origin, task)
         n_all, n = len(weeks), task.n_samples
         n_loc = len(origin.snap.locations)
-        good = origin.complete >= origin.settings.completeness
-        if not good.any(axis=1).all():
-            has = good.any(axis=1)
-            none = [
-                x
-                for x, ok in zip(origin.snap.locations, has, strict=True)
-                if not ok
-            ]
-            raise NoCompleteWeek(
-                f"No week reaches {origin.settings.completeness:.0%} "
-                f"complete at {origin.snap.releases[origin.o]} for "
-                f"{', '.join(none)}, so the walk has no start week."
-            )
-        start = origin.start
+        start = _complete_start(origin)
         x0 = origin.reported[np.arange(n_loc), start]
         _, y = _walks(
             _key(task),
@@ -628,6 +815,91 @@ class RandomWalk:
         self._diagnostics(origin, task, start)
         self._kept_frame = (weeks, self.rows(origin, task), task)
         return frame(task, weeks, values, self.rows(origin, task))
+
+    def _block_origin(
+        self, task: ForecastTask, period: int, end: int, errors: bool
+    ) -> Origin:
+        """Return the fit of the blocks of `period` days ending `end`."""
+        snap = self._snap
+        assert snap is not None
+        return build_origin(
+            blocks(snap, period, end),
+            self.settings_for(task),
+            errors,
+            self._shared_delay,
+        )
+
+    def _shared_delay(
+        self,
+        snap: SnapshotArrays,  # noqa: ARG002 - the blocks, as `DelayFn` gives
+        r: int,
+        settings: Settings,
+        longer: bool = False,
+    ) -> DelayFit | None:
+        """Fit the delay on the hub weeks' snapshots, once per release."""
+        key = (r, longer)
+        if key not in self._fits:
+            assert self._snap is not None
+            self._fits[key] = fit_delay(self._snap, r, settings, longer)
+        return self._fits[key]
+
+    def _start(self, task: ForecastTask) -> None:
+        """Hold the task's snapshots and clear the delay fits."""
+        self._snap = self.snapshots(task)
+        self._fits = {}
+
+    def _rolling(self, task: ForecastTask) -> pd.DataFrame:
+        """Return draws of the 7-day sums ending on each target date.
+
+        The weeks are the blocks of 7 days ending on the cut-off's weekday,
+        with the delay fitted on the hub weeks (`_shared_delay`). A sum
+        ending on or before the end of a place's latest complete block is
+        as reported. Later sums walk in daily steps from that block's
+        reported sum (`_day_walks`), with the steps of the reported 7-day
+        sums ending each day to each place's start (`_daily_steps`).
+        """
+        self._start(task)
+        snap = self._snap
+        assert snap is not None
+        cut = snap.days[snap.cut[-1]].date()
+        origin = self._block_origin(task, 7, cut.weekday(), False)
+        start = _complete_start(origin)
+        n_loc, n = len(snap.locations), task.n_samples
+        targets = list(task.target_end_dates)
+        x0 = origin.reported[np.arange(n_loc), start]
+        lag = np.array(
+            [
+                [(as_date(d) - as_date(origin.snap.week_ends[s])).days
+                 for d in targets]
+                for s in start
+            ]
+        )  # fmt: skip
+        days = origin.snap.days
+        ends = np.array(
+            [(as_date(origin.snap.week_ends[s]) - days[0].date()).days
+             for s in start]
+        )  # fmt: skip
+        sums = _rolling_sums(origin.snap.counts[:, origin.o, :])
+        steps = _daily_steps(sums, days[0].weekday(), ends, origin)
+        y = _day_walks(
+            _key(task),
+            np.repeat(x0[None, :], n, axis=0),
+            origin,
+            max(int(lag.max()), 1),
+            origin.silent,
+            steps,
+            (cut.weekday() + 1) % 7,
+        )
+        sums = _reported_sums(snap, targets)
+        values = np.empty((n, n_loc, len(targets)))
+        for loc in range(n_loc):
+            for j, k in enumerate(lag[loc]):
+                values[:, loc, j] = sums[loc, j] if k <= 0 else y[:, loc, k - 1]
+        values = self.pair(origin, task, values)
+        self._diagnostics(origin, task, start)
+        rows = self.rows(origin, task)
+        self._kept_frame = (targets, rows, task)
+        return frame(task, targets, values, rows)
 
 
 @dataclass
@@ -656,10 +928,6 @@ class RandomWalkNowcast(RandomWalk):
     delay_summary: pd.DataFrame | None = field(
         init=False, default=None, repr=False
     )
-    _snap: SnapshotArrays | None = field(init=False, default=None, repr=False)
-    _fits: dict[tuple[int, bool], DelayFit | None] = field(
-        init=False, default_factory=dict, repr=False
-    )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
         """Return random walk trajectories from a nowcast for a task.
@@ -681,6 +949,8 @@ class RandomWalkNowcast(RandomWalk):
             If the task has no snapshots, or no pair of releases within
             the delay window.
         """
+        if not task.locations:
+            return frame(task, [], np.zeros((task.n_samples, 0, 0)), [])
         ends = pd.to_datetime(list(task.target_end_dates))
         if self.error_days != 7 or (ends.weekday != HUB_WEEKDAY).any():
             return self._rolling(task)
@@ -697,44 +967,25 @@ class RandomWalkNowcast(RandomWalk):
         return frame(task, weeks, values, self.rows(origin, task))
 
     def _block_draws(
-        self, task: ForecastTask, period: int, end: int = HUB_WEEKDAY
+        self,
+        task: ForecastTask,
+        period: int,
+        end: int = HUB_WEEKDAY,
+        weekdays: bool = False,
     ) -> tuple[Origin, dict[str, np.ndarray]]:
         """Return the draws of each block of `period` days ending `end`.
 
         The delay is fitted once, on the hub weeks' snapshots, and shared
         by every block (`_shared_delay`); the observation model, the walk
-        and the copula are fitted on the blocks.
+        and the copula are fitted on the blocks. With `weekdays`, blocks
+        of one day walk in days (`_nowcast_steps`).
         """
-        snap = self._snap
-        assert snap is not None
-        origin = build_origin(
-            blocks(snap, period, end),
-            self.settings_for(task),
-            True,
-            self._shared_delay,
-        )
+        origin = self._block_origin(task, period, end, True)
+        if weekdays:
+            origin = replace(origin, steps=_nowcast_steps(origin))
         values, labels = self.trajectories(origin, task, origin.point)
         values = self.pair(origin, task, values)
         return origin, {w: values[:, :, i] for i, w in enumerate(labels)}
-
-    def _shared_delay(
-        self,
-        snap: SnapshotArrays,  # noqa: ARG002 - the blocks, as `DelayFn` gives
-        r: int,
-        settings: Settings,
-        longer: bool = False,
-    ) -> DelayFit | None:
-        """Fit the delay on the hub weeks' snapshots, once per release."""
-        key = (r, longer)
-        if key not in self._fits:
-            assert self._snap is not None
-            self._fits[key] = fit_delay(self._snap, r, settings, longer)
-        return self._fits[key]
-
-    def _start(self, task: ForecastTask) -> None:
-        """Hold the task's snapshots and clear the delay fits."""
-        self._snap = self.snapshots(task)
-        self._fits = {}
 
     def _rolling(self, task: ForecastTask) -> pd.DataFrame:
         """Return draws of the 7-day sums ending on each target date.
@@ -742,9 +993,9 @@ class RandomWalkNowcast(RandomWalk):
         With `error_days` 7 each sum to the cut-off is a block of 7 days
         ending on its weekday, with its own observation model, as
         baselinenowcast's `ref_time_aggregator` of 7-day rolling sums.
-        The sums after the cut-off come from the walk of the blocks ending
-        on the cut-off's weekday, whose last block is whole at the cut-off
-        (`_between_weeks`), so they carry no weekday cycle. With 1, the
+        The sums after the cut-off walk on in daily steps from each
+        sample's sum ending on the cut-off (`_walk_days`), so they carry
+        no weekday cycle. With 1, the
         sums are of draws of daily counts, whose observation model is
         fitted on days.
         """
@@ -752,7 +1003,7 @@ class RandomWalkNowcast(RandomWalk):
         targets = list(task.target_end_dates)
         draws: dict[str, np.ndarray] = {}
         if self.error_days == 1:
-            origin, days = self._block_draws(task, 1)
+            origin, days = self._block_draws(task, 1, weekdays=True)
             labels = list(days)
             x = np.stack([days[d] for d in labels], axis=-1)
             c = np.concatenate(
@@ -772,7 +1023,12 @@ class RandomWalkNowcast(RandomWalk):
             origin, walk = self._block_draws(task, 7, cut.weekday())
             draws.update({d: walk[d] for d in past if d in walk})
             ahead = [d for d in targets if as_date(d) > cut]
-            draws.update(_between_weeks(walk, cut, ahead))
+            if ahead:
+                draws.update(
+                    self._walk_days(
+                        origin, task, walk[cut.isoformat()], cut, ahead
+                    )
+                )
         self.delay_summary = delay_summary(origin, self.name, task.vintage)
         rows = self.rows(origin, task)
         n = task.n_samples
@@ -784,13 +1040,61 @@ class RandomWalkNowcast(RandomWalk):
         self._kept_frame = (targets, rows, task)
         return frame(task, targets, values, rows)
 
+    def _walk_days(
+        self,
+        origin: Origin,
+        task: ForecastTask,
+        start: np.ndarray,
+        cut: dt.date,
+        days: list[str],
+    ) -> dict[str, np.ndarray]:
+        """Walk each sample's 7-day sum ending on the cut-off in daily steps.
+
+        The walk is `_day_walks`, and the draws are paired as the weekly
+        ones (`pair`).
+
+        Parameters
+        ----------
+        origin : Origin
+            The fit of the 7-day blocks ending on the cut-off's weekday.
+        task : ForecastTask
+            The task.
+        start : numpy.ndarray
+            Each sample's sum ending on the cut-off, `[S, L]`.
+        cut : datetime.date
+            The cut-off.
+        days : list of str
+            The days after the cut-off to return, ISO format.
+
+        Returns
+        -------
+        dict
+            Each day's draws, `[S, L]`.
+        """
+        h = max((as_date(d) - cut).days for d in days)
+        day = self._block_origin(task, 1, HUB_WEEKDAY, False)
+        counts = _day_walks(
+            jax.random.fold_in(_key(task), 7),
+            start,
+            origin,
+            h,
+            _quiet(origin),
+            _nowcast_steps(day, rolling=True),
+            (cut.weekday() + 1) % 7,
+        )
+        values = self.pair(origin, task, counts)
+        return {d: values[:, :, (as_date(d) - cut).days - 1] for d in days}
+
     def daily_quantiles(
         self, task: ForecastTask, levels: tuple[float, ...]
     ) -> pd.DataFrame:
         """Return quantiles of each target date's count, by place.
 
         The draws are of blocks of one day, with the observation model
-        fitted on daily counts.
+        fitted on daily counts, and the walk steps a day, into each
+        weekday with its mean and the spread of `_nowcast_steps`. The
+        country is
+        the sum of the provinces by sample (`add_national`).
 
         Parameters
         ----------
@@ -805,7 +1109,7 @@ class RandomWalkNowcast(RandomWalk):
             Columns `location`, `date`, `quantile` and `value`.
         """
         self._start(task)
-        origin, days = self._block_draws(task, 1)
+        origin, days = self._block_draws(task, 1, weekdays=True)
         targets = list(task.target_end_dates)
         n = task.n_samples
         values = np.stack(
@@ -813,7 +1117,9 @@ class RandomWalkNowcast(RandomWalk):
              for d in targets],
             axis=-1,
         )  # fmt: skip
-        draws = frame(task, targets, values, self.rows(origin, task))
+        draws = add_national(
+            frame(task, targets, values, self.rows(origin, task))
+        )
         q = (
             draws.groupby(["location", "target_end_date"])["value"]
             .quantile(np.asarray(levels))
@@ -881,7 +1187,18 @@ class RandomWalkNowcast(RandomWalk):
         x0 = nowcast[:, rows, w0].T
         low = quiet & ~origin.silent
         x0[low] = _level(origin)[low, None]
-        lam, y = _walks(key_walk, x0, origin, w0, n_all, origin.silent)
+        # A walk in days steps into each day's weekday (`Origin.steps`).
+        day0 = as_date(snap.week_ends[0]).weekday()
+        lam, y = _walks(
+            key_walk,
+            x0,
+            origin,
+            w0,
+            n_all,
+            origin.silent,
+            origin.steps,
+            (day0 + w0 + 1) % 7,
+        )
         # Days of the cut-off week after the cut-off are drawn from the
         # walk's rate that week. A partial cut-off week's start week is the
         # week before it when that week meets the start rule, so the rate
@@ -903,11 +1220,13 @@ class RandomWalkNowcast(RandomWalk):
         # after it, from which the walk goes on.
         done = nowcast[:, rows, cw].T + np.where(miss > 0, part, 0.0)
         h = n_all - cw - 1
-        _, ahead = random_walks(
+        _, ahead = _walk(
             jax.random.split(key_ahead, n_loc),
-            jnp.asarray(done, jnp.float32),
-            jnp.asarray(origin.sigma, jnp.float32),
+            done,
+            origin.sigma,
             max(h, 1),
+            origin.steps,
+            np.full(n_loc, (day0 + cw + 1) % 7),
         )
         ahead = np.asarray(ahead, np.float64)[:, :, :h]
         values = np.zeros((n, n_loc, n_all))

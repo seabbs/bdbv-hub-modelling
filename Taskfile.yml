@@ -77,8 +77,8 @@ tasks:
   lint:
     desc: Lint, check formatting and type-check
     cmds:
-      - uv run ruff check packages tests workflow docs/hooks
-      - uv run ruff format --check packages tests workflow docs/hooks
+      - uv run ruff check packages tests workflow experiments docs/hooks
+      - uv run ruff format --check packages tests workflow experiments docs/hooks
       - uv run mypy
       - uv run lint-imports --no-logo
 
@@ -86,8 +86,8 @@ tasks:
   format:
     desc: Format and fix lint where safe
     cmds:
-      - uv run ruff format packages tests workflow docs/hooks
-      - uv run ruff check --fix packages tests workflow docs/hooks
+      - uv run ruff format packages tests workflow experiments docs/hooks
+      - uv run ruff check --fix packages tests workflow experiments docs/hooks
 
 
   getting-started:

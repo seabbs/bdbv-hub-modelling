@@ -111,7 +111,8 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
 # A run with no forecasts file (`synthetic.forecasts.<mode>: null`) uses the
 # dummy synthetic study, as `germany.real: false` does.
 for _mode in MODES:
-    if not SYNTHETIC["forecasts"][_mode]:
+    # Without the simulations the forecasts file is a stored input.
+    if not SYNTHETIC["forecasts"][_mode] or not SYNTHETIC["simulations"][_mode]:
         continue
 
     rule:
@@ -179,53 +180,57 @@ rule render:
         "exec >{log} 2>&1; cd paper && quarto render main.qmd && quarto render si.qmd"
 
 
-rule germany_fetch:
-    output:
-        TRIANGLE,
-    log:
-        f"{R}/logs/germany_fetch.log",
-    # Needs the network, git or quarto: runs on the driver's host.
-    localrule: True
-    conda:
-        TOOLS_ENV
-    params:
-        germany=GERMANY_CLI,
-        germany_config=GERMANY["config"],
-        germany_data=lambda w, output: Path(output[0]).parent,
-    shell:
-        "exec >{log} 2>&1; "
-        "{params.germany} fetch --config {params.germany_config} "
-        "--out {params.germany_data}"
+# The German benchmark: its data and its development forecasts. Pages
+# makes neither (`host_outputs: false`); its Site build fetches the data
+# and stacks the stored forecasts before the paper runs.
+if FLOW.host_outputs:
 
+    rule germany_fetch:
+        output:
+            TRIANGLE,
+        log:
+            f"{R}/logs/germany_fetch.log",
+        # Needs the network, git or quarto: runs on the driver's host.
+        localrule: True
+        conda:
+            TOOLS_ENV
+        params:
+            germany=GERMANY_CLI,
+            germany_config=GERMANY["config"],
+            germany_data=lambda w, output: Path(output[0]).parent,
+        shell:
+            "exec >{log} 2>&1; "
+            "{params.germany} fetch --config {params.germany_config} "
+            "--out {params.germany_data}"
 
-rule germany_development:
-    input:
-        TRIANGLE,
-        FINETUNED,
-    output:
-        f"{GERMANY['results']}/paper-forecasts.csv.gz",
-    log:
-        f"{R}/logs/germany_development.log",
-    benchmark:
-        f"{R}/benchmarks/germany_development/germany_development.tsv"
-    conda:
-        TOOLS_ENV
-    threads: FORECAST.threads
-    resources:
-        gpu=FORECAST.gpu,
-    params:
-        env=FORECAST.env,
-        ft=FT_EXPORT,
-        germany=GERMANY_CLI,
-        germany_root_config=GERMANY["config"],
-        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-        out=lambda w, output: Path(output[0]).parent,
-    shell:
-        "exec >{log} 2>&1; {params.ft} {params.env} "
-        "{params.germany} backtest {params.args} --out {params.out} && "
-        "{params.germany} teams {params.args} --out {params.out} && "
-        "{params.germany} paper --config {params.germany_root_config} "
-        "--results {params.out}"
+    rule germany_development:
+        input:
+            TRIANGLE,
+            FINETUNED,
+        output:
+            f"{GERMANY['results']}/paper-forecasts.csv.gz",
+        log:
+            f"{R}/logs/germany_development.log",
+        benchmark:
+            f"{R}/benchmarks/germany_development/germany_development.tsv"
+        conda:
+            TOOLS_ENV
+        threads: FORECAST.threads
+        resources:
+            gpu=FORECAST.gpu,
+        params:
+            env=FORECAST.env,
+            ft=FT_EXPORT,
+            germany=GERMANY_CLI,
+            germany_root_config=GERMANY["config"],
+            args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+            out=lambda w, output: Path(output[0]).parent,
+        shell:
+            "exec >{log} 2>&1; {params.ft} {params.env} "
+            "{params.germany} backtest {params.args} --out {params.out} && "
+            "{params.germany} teams {params.args} --out {params.out} && "
+            "{params.germany} paper --config {params.germany_root_config} "
+            "--results {params.out}"
 
 
 # Only a paper run asks for this, so development never runs it.
@@ -630,7 +635,7 @@ rule sim_examples:
 # forecasts them. `si_copula` summarises both for the SI's copula figure.
 # A dummy German benchmark leaves them out, and null development
 # simulations the synthetic half and `si_copula`.
-if GERMANY["real"]:
+if GERMANY["real"] and FLOW.host_outputs:
 
     rule pairing_germany:
         input:
@@ -684,10 +689,14 @@ if GERMANY["real"] and SYNTHETIC["simulations"]["development"]:
             "{params.python} paper/scripts/pairing_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples {params.samples}"
 
+
+# The synthetic half made above, or the stored one (`stored`).
+if GERMANY["real"] and FLOW.pairing_germany_file() and FLOW.pairing_synthetic_file():
+
     rule si_copula:
         input:
-            rules.pairing_germany.output.scores,
-            rules.pairing_synthetic.output,
+            FLOW.pairing_germany_file(),
+            FLOW.pairing_synthetic_file(),
         output:
             FLOW.workflow_evidence()["si_copula"],
         log:
@@ -804,6 +813,59 @@ rule summary:
         "{params.python} -m paperpipe summary --mode {wildcards.mode} "
         "--meta {input.meta} --scores {input.scores} --out {output} "
         "{params.args}"
+
+
+# The host-made development outputs the Site build reads, each set
+# released once per contents as paper-<set>-<hash> (`paperpipe.stored`):
+# the synthetic forecasts and pairing scores, the final run's validation
+# curve and the runs' checkpoint tables, and the simulation summaries and
+# example seeds. Each set's rule exists on a host that makes its inputs.
+# Writes releases, so it is the opt-in target `paper_inputs`.
+STORED_SETS = {
+    name: files
+    for name, files in stored.sets(
+        {**FLOW.config, "evidence": FLOW.evidence}, R
+    ).items()
+    if {
+        "synthetic": SYNTHETIC["simulations"]["development"],
+        "finetune": config.get("final_run"),
+        "simulations": FLOW.rounds_dir,
+        "germany": GERMANY["real"] and FLOW.host_outputs,
+    }[name]
+}
+
+
+for _set, _files in STORED_SETS.items():
+
+    rule:
+        name:
+            f"release_paper_{_set}"
+        input:
+            list(_files.values()),
+        output:
+            f"{R}/released/{_set}.json",
+        log:
+            f"{R}/logs/release_paper_{_set}.log",
+        # gh: runs on the driver's host.
+        localrule: True
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+            files=" ".join(
+                shlex.quote(f"{name}={path}") for name, path in _files.items()
+            ),
+            heldout=shlex.quote(json.dumps(config["heldout"])),
+        shell:
+            "exec >{log} 2>&1; "
+            f"{{params.python}} -m paperpipe.stored publish {_set} "
+            "--heldout {params.heldout} --record {output} "
+            "--file {params.files}"
+
+
+rule paper_inputs:
+    input:
+        [f"{R}/released/{name}.json" for name in STORED_SETS],
 
 
 # The paper reads `build`, so it shows the last run published.

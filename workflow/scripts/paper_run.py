@@ -16,7 +16,8 @@ error line (mailbox lines when NOTIFY is set, `flowlib.notify`). The
 third form is the one command Pages CI runs for the paper (`render`),
 in the foreground with no log or notes. `--pages` adds the Pages config
 (paper/workflow/pages.yaml), which leaves out what the workflow's hosts
-make: simulations, fine-tuning runs and their scores.
+make, and reads instead the outputs they published
+(`paperpipe.stored`).
 """
 
 from __future__ import annotations
@@ -49,6 +50,12 @@ PAPER_OUTPUTS = (
 PAGES_CONFIG = "paper/workflow/pages.yaml"
 """The paper workflow's settings on Pages CI, over its config."""
 
+STORED_DIR = "output/paper-stored"
+"""Where Pages unpacks the host's published paper outputs."""
+
+STORED_CONFIG = f"{STORED_DIR}/pages.yaml"
+"""The overlay pointing the paper workflow at them (`paperpipe.stored`)."""
+
 
 def render(target: str, cfg: Mapping[str, str], *, pages: bool = False) -> int:
     """Run the paper's workflow for TARGET and copy the paper into docs/.
@@ -61,7 +68,8 @@ def render(target: str, cfg: Mapping[str, str], *, pages: bool = False) -> int:
     docs/paper/ for the site. The chronos group is installed too, as the
     German rule runs the Chronos-2 models. Needs uv, git and Quarto, and a
     GitHub token (GITHUB_TOKEN, GH_TOKEN or a gh login). With `pages`
-    the workflow also reads PAGES_CONFIG.
+    the workflow also reads PAGES_CONFIG, and the host's published outputs
+    are fetched first and read through STORED_CONFIG.
     """
     if target not in RENDERS:
         print(
@@ -80,14 +88,25 @@ def render(target: str, cfg: Mapping[str, str], *, pages: bool = False) -> int:
             ).stdout.strip()
         env["GITHUB_TOKEN"] = token
     cores = env.get("CORES") or cfg.get("CORES") or "4"
+    if pages:
+        # The host's newest published outputs, as inputs (paperpipe.stored).
+        subprocess.run(
+            [
+                "uv", "run", "--group", "paper", "python", "-m",
+                "paperpipe.stored", "fetch", STORED_DIR,
+                "--overlay", STORED_CONFIG,
+            ],
+            cwd=ROOT, env={**env, "PYTHONPATH": "paper"}, check=True,
+        )  # fmt: skip
     subprocess.run(
         [
             "uv", "run", "--group", "paper", "--group", "chronos",
             "snakemake", "-s", "workflow/Snakefile", "render",
             "--config", f"render={target}",
-            *(["--configfile", PAGES_CONFIG] if pages else []),
+            *(["--configfile", PAGES_CONFIG, STORED_CONFIG] if pages else []),
             "--cores", cores,
             "--resources", "heavy=1", "--rerun-triggers", "mtime",
+            "--show-failed-logs",
             *monitor.args(cfg),
         ],
         cwd=ROOT, env=env, check=True,

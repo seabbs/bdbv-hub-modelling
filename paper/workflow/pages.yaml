@@ -1,9 +1,11 @@
 # The paper workflow's settings on Pages CI, over config.yaml
 # (`paper_run.py --render development --pages`). Pages runs the German
-# benchmark, the figures and tables and the render. It leaves out what the
-# workflow's hosts make (simulations, fine-tuning runs and their scores),
-# so the synthetic study runs on dummy data and the fine-tuning and
-# simulation results in the SI say what they wait on.
+# benchmark, the figures and tables and the render. It never runs what the
+# workflow's hosts make (simulations, fine-tuning runs and their scores):
+# the newest of what they published is fetched and read through a second
+# overlay (`paperpipe.stored`), and what is not published yet says what it
+# waits on.
+host_outputs: false
 final_run: null
 rounds_dir: null
 synthetic:

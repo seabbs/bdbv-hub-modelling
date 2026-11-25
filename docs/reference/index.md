@@ -5,11 +5,11 @@ The Python API of `bdbvhub`, grouped by task. See [Setup](../setup.md) to instal
 
 | Task | Pages | Start with |
 |---|---|---|
-| Data | [Data](data.md) | `load_target`, `load_daily`, `load_delays`, `delays_for_vintage` |
-| Models | [nowcastbaselines](../nowcastbaselines/reference/), [Forecasters](forecasters.md), [Renewal model](model.md) | `get_model`, `list_models`, `ForecastTask`, `ForecastModel.forecast` |
-| Evaluation | [nowcasteval](../nowcasteval/reference/), [Evaluation](evaluation.md) | `run_forecasts`, `score_forecasts`, `release_backtest`; the BDBV tasks are `nowcastbdbv.backtest.make_tasks` |
-| Reporting | [nowcasteval](../nowcasteval/reference/), [Figures and tables](reporting.md), [Submission](submission.md) | `plot_location_grid`, `plot_forecasts`, `to_hub_table`, `write_submission` |
-| CLI | [CLI](cli.md) | `bdbvhub --help` |
+| Data | [nowcastbdbv](../nowcastbdbv/reference/), [nowcastgermany](../nowcastgermany/reference/) | `load_target`, `load_daily`, `load_delays`, `delays_for_vintage` |
+| Models | [nowcastbaselines](../nowcastbaselines/reference/), [nowcastfoundation](../nowcastfoundation/reference/), [nowcastrenewal](../nowcastrenewal/reference/), [bdbvhub](../bdbvhub/reference/) | `get_model`, `list_models`, `ForecastTask`, `ForecastModel.forecast` |
+| Evaluation | [nowcasteval](../nowcasteval/reference/), [bdbvhub](../bdbvhub/reference/) | `run_forecasts`, `score_forecasts`, `release_backtest`; the BDBV tasks are `nowcastbdbv.backtest.make_tasks` |
+| Reporting | [nowcasteval](../nowcasteval/reference/), [bdbvhub](../bdbvhub/reference/) | `plot_location_grid`, `plot_forecasts`, `to_hub_table`, `write_submission` |
+| CLI | [bdbvhub](../bdbvhub/reference/) | `bdbvhub --help` |
 
 The task, the registry, releases and snapshots come from the [nowcastutils](../nowcastutils/reference/) package.
 Scores, backtests and score figures are in [nowcasteval](../nowcasteval/reference/), and the random walk baselines in [nowcastbaselines](../nowcastbaselines/reference/).

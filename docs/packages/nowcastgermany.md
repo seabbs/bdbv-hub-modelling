@@ -1,3 +1,0 @@
-# nowcastgermany
-
-<!-- readme: packages/nowcastgermany -->

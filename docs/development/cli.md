@@ -128,4 +128,4 @@ For any other reference date it prints a note and skips the checks.
 !!! note "Sample ids"
     Sample ids run from 1 to 100 and are shared across locations, so `hubValidations` reads samples as joint across locations.
 
-The [CLI reference](../reference/cli.md) documents `main` and `build_parser`.
+The [bdbvhub API reference](../bdbvhub/reference/) documents `main` and `build_parser`.

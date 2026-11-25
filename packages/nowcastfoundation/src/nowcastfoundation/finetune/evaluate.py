@@ -15,7 +15,7 @@ import copy
 import inspect
 import json
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -54,44 +54,473 @@ def evaluate(
     """Return the losses `kinds` ask for of `base` with `adapter`.
 
     `base` is a base Chronos-2 model, with the series bias attached if
-    the adapter holds one.
+    the adapter holds one. One forward pass over the blocks the kinds
+    need (`held_out_pass`) gives every loss and the coverage, each as the
+    trainer's own functions give it (`finetune.stream`).
     """
-    from peft import PeftModel
-
     unknown = set(kinds) - set(KINDS)
     if unknown:
         raise ValueError(f"unknown kinds: {sorted(unknown)}")
-    model = PeftModel.from_pretrained(base, adapter)
-    model.eval()
+    model = merged(base, adapter)
     val = list(blocks)
+    full = "start" in kinds or "checkpoint" in kinds
+    need = range(len(val)) if full else _subset_needs(val, kinds)
+    device = str(next(model.parameters()).device)
+    scored = dict(
+        zip(
+            need,
+            held_out_pass(
+                model,
+                [val[i] for i in need],
+                batch_size,
+                eval_budget(device),
+            ),
+            strict=True,
+        )
+    )
+    got = [scored.get(i) for i in range(len(val))]
     out: dict[str, Any] = {}
-    if "start" in kinds or "checkpoint" in kinds:
-        parts = fs.held_out_parts(model, val, batch_size)
-        out["held_out_loss"] = parts["loss"]
-        out |= fs.loss_parts("held_out_loss", parts)
-    if "start" in kinds or "checkpoint" in kinds:
-        out["held_out_coverage"] = held_out_coverage(model, val, batch_size)
+    if full:
+        out |= _losses("held_out_loss", got)
+        out["held_out_coverage"] = summarise_coverage(
+            [row for r in got if r for row in r["cover"]]
+        )
     if "start" in kinds:
-        out["by_level"] = fs.held_out_by_level(model, val, fs.LEVEL_BLOCKS)
-        out["by_source"] = fs.held_out_by_source(
-            model, val, batch_size, ft.EVAL_BLOCKS
-        )
+        out["by_level"] = _by_level(val, got, fs.LEVEL_BLOCKS)
+        out["by_source"] = _by_source(val, got, ft.EVAL_BLOCKS)
     if "monitor" in kinds:
-        parts = fs.held_out_parts(model, val[: ft.EVAL_BLOCKS], batch_size)
-        out["eval_loss"] = parts["loss"]
-        out |= fs.loss_parts("eval_loss", parts)
+        out |= _losses("eval_loss", got[: ft.EVAL_BLOCKS])
     if "by_source" in kinds:
-        out["by_source"] = fs.held_out_by_source(
-            model, val, batch_size, ft.EVAL_BLOCKS
-        )
+        out["by_source"] = _by_source(val, got, ft.EVAL_BLOCKS)
     if "checkpoint" in kinds:
-        out["held_out_loss_by_level"] = fs.held_out_by_level(
-            model, val, fs.LEVEL_BLOCKS
-        )
-        out["held_out_loss_by_source"] = fs.held_out_by_source(
-            model, val, batch_size
+        out["held_out_loss_by_level"] = _by_level(val, got, fs.LEVEL_BLOCKS)
+        out["held_out_loss_by_source"] = _by_source(val, got, None)
+    if full:
+        check = precision_check(model, val, batch_size, device)
+        if check is not None:
+            out["precision_check"] = check
+    return out
+
+
+def _subset_needs(
+    val: Sequence[dict[str, Any]], kinds: Sequence[str]
+) -> list[int]:
+    """Return the blocks `monitor` and `by_source` score, in order."""
+    need = set(range(min(len(val), ft.EVAL_BLOCKS)))
+    if "by_source" in kinds:
+        for idx in _source_blocks(val, ft.EVAL_BLOCKS).values():
+            need |= set(idx)
+    return sorted(need)
+
+
+def _source_blocks(
+    val: Sequence[dict[str, Any]], n: int | None
+) -> dict[str, list[int]]:
+    """Return each source's first `n` blocks (all with None), by source."""
+    by: dict[str, list[int]] = {}
+    for i, block in enumerate(val):
+        by.setdefault(block["source"], []).append(i)
+    return {k: v[:n] for k, v in sorted(by.items())}
+
+
+def _losses(
+    name: str, got: Sequence[dict[str, Any] | None]
+) -> dict[str, float]:
+    """Return loss `name` and its nowcast and forecast parts over `got`.
+
+    Chronos-2's loss is a mean over rows, so the loss of many batches is
+    their rows' sum over their count, as the trainer's weighted mean.
+    """
+    rows = sum(r["n"] for r in got if r)
+    out = {name: sum(float(r["loss"].sum()) for r in got if r) / rows}
+    for part in ("nowcast", "forecast"):
+        out[f"{name}_{part}"] = (
+            sum(float(r[part].sum()) for r in got if r) / rows
         )
     return out
+
+
+def _by_source(
+    val: Sequence[dict[str, Any]],
+    got: Sequence[dict[str, Any] | None],
+    n: int | None,
+) -> dict[str, float]:
+    """Return the loss of each source's first `n` blocks (all with None)."""
+    return {
+        source: _losses("loss", [got[i] for i in idx])["loss"]
+        for source, idx in _source_blocks(val, n).items()
+    }
+
+
+def _by_level(
+    val: Sequence[dict[str, Any]],
+    got: Sequence[dict[str, Any] | None],
+    n: int,
+) -> dict[str, float]:
+    """Return the loss by level of the first `n` blocks.
+
+    As `finetune.stream.held_out_by_level`: a block's loss at a level is
+    its rows of that level's, the other rows' targets masked, over all
+    its rows; the levels' losses are means over blocks.
+    """
+    losses: dict[str, list[float]] = {}
+    for block, r in zip(val[:n], got[:n], strict=False):
+        if r is None:
+            continue
+        levels = np.array(block["levels"])
+        mine = r["loss"][: len(levels)]
+        for level in sorted(set(levels)):
+            losses.setdefault(level, []).append(
+                float(mine[levels == level].sum()) / r["n"]
+            )
+    return {k: float(np.mean(v)) for k, v in losses.items()}
+
+
+def merged(base: Any, adapter: Path) -> Any:
+    """Return `base` with `adapter`'s LoRA merged into its weights.
+
+    For scoring: the same outputs as the adapter on top, to float
+    rounding, without LoRA's extra low-rank products in every layer
+    (about an eighth of a pass on a CPU). The series bias, saved whole,
+    stays as a module. `base` is changed in place.
+    """
+    from peft import PeftModel
+
+    model = PeftModel.from_pretrained(base, adapter).merge_and_unload()
+    model.eval()
+    return model
+
+
+def row_losses(
+    model: Any,
+    quantile_preds: Any,
+    future_target: Any,
+    future_target_mask: Any,
+    patched_future_covariates_mask: Any,
+    loc_scale: Any,
+    num_output_patches: int,
+) -> Any:
+    """Return Chronos-2's loss of each row, whose mean is its batch loss.
+
+    `Chronos2Model._compute_loss` stopped before its mean over the batch:
+    each row's quantile loss, masked, mean over the horizon and summed
+    over the quantile levels.
+    """
+    import torch
+    from einops import rearrange
+
+    batch = future_target.shape[0]
+    patch = model.chronos_config.output_patch_size
+    target, _ = model.instance_norm(future_target, loc_scale)
+    target = target.unsqueeze(1).to(model.device)
+    mask = (
+        future_target_mask.unsqueeze(1).to(model.device)
+        if future_target_mask is not None
+        else ~torch.isnan(target)
+    )
+    target = torch.where(mask > 0.0, target, 0.0)
+    if quantile_preds.shape[-1] > target.shape[-1]:
+        pad = (*target.shape[:-1], quantile_preds.shape[-1] - target.shape[-1])
+        target = torch.cat([target, torch.zeros(pad).to(target)], dim=-1)
+        mask = torch.cat([mask, torch.zeros(pad).to(mask)], dim=-1)
+    quantiles = rearrange(model.quantiles, "q -> 1 q 1")
+    loss = 2 * torch.abs(
+        (target - quantile_preds)
+        * ((target <= quantile_preds).float() - quantiles)
+    )
+    known = rearrange(
+        patched_future_covariates_mask,
+        "b n p -> b 1 (n p)",
+        b=batch,
+        n=num_output_patches,
+        p=patch,
+    )
+    loss = loss * (mask.float() * (1 - known))
+    return loss.mean(dim=-1).sum(dim=-1)
+
+
+class _RowLosses:
+    """Chronos-2's loss by row, and its nowcast and forecast parts.
+
+    While open, each loss Chronos-2 computes is also kept by row
+    (`row_losses`): over every step, the steps before `steps[row]`
+    (nowcast) and those from it (forecast), as
+    `finetune.stream._LossSplit` splits it.
+    """
+
+    def __init__(self) -> None:
+        self.steps: Any = None
+        self.rows: dict[str, np.ndarray] = {}
+
+    def __enter__(self) -> Any:
+        import torch
+        from chronos.chronos2.model import Chronos2Model
+
+        self.original = original = Chronos2Model._compute_loss
+
+        def compute(model: Any, **kwargs: Any) -> Any:
+            loss = original(model, **kwargs)
+            target = kwargs["future_target"]
+            mask = kwargs["future_target_mask"]
+            mask = ~torch.isnan(target) if mask is None else mask > 0
+            at = torch.arange(target.shape[-1], device=mask.device)
+            steps = torch.as_tensor(self.steps, device=mask.device)
+            now = at[None, :] < steps[:, None]
+            kind = target.device.type
+            for part, keep in (
+                ("loss", torch.ones_like(now)),
+                ("nowcast", now),
+                ("forecast", ~now),
+            ):
+                kwargs["future_target_mask"] = (mask & keep).float()
+                with torch.autocast(device_type=kind, enabled=False):
+                    got = row_losses(
+                        model,
+                        **{
+                            **kwargs,
+                            "quantile_preds": kwargs["quantile_preds"].float(),
+                        },
+                    )
+                self.rows[part] = got.double().cpu().numpy()
+            return loss
+
+        Chronos2Model._compute_loss = compute
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        from chronos.chronos2.model import Chronos2Model
+
+        Chronos2Model._compute_loss = self.original
+
+
+def block_cost(block: dict[str, Any]) -> int:
+    """Return a block's series x tokens at most, before trimming.
+
+    Its rows over the context patches, the reg token and the output
+    patches, as `stream.batch_tokens` counts a batch's.
+    """
+    tokens = (
+        -(-ft.CONTEXT // fs.INPUT_PATCH)
+        + 1
+        + -(-int(block["prediction_length"]) // ft.OUTPUT_PATCH)
+    )
+    return int(block["context"].shape[0]) * tokens
+
+
+def pack(data: Any, budget: int) -> list[list[int]]:
+    """Return batches of blocks of one length within `budget` each.
+
+    Within each prediction length (`stream.ByLength`), the largest blocks
+    first, each batch filled while its series x tokens (`block_cost`)
+    stay within `budget`; a block over it runs alone.
+    """
+    groups: list[list[int]] = []
+    for length in data.data:
+        idx = [i for i, n in enumerate(data.lengths) if n == length]
+        costs = {
+            i: block_cost(
+                {
+                    "context": data.inputs[i]["context"],
+                    "prediction_length": length,
+                }
+            )
+            for i in idx
+        }
+        group: list[int] = []
+        used = 0
+        for i in sorted(idx, key=lambda k: -costs[k]):
+            if group and used + costs[i] > budget:
+                groups.append(group)
+                group, used = [], 0
+            group.append(i)
+            used += costs[i]
+        if group:
+            groups.append(group)
+    return groups
+
+
+def eval_budget(device: str) -> int | None:
+    """Return a held-out batch's series x tokens on `device`, or None.
+
+    On CUDA the backend's pass budget (`backends.chronos2.pass_budget`),
+    so a batch fills the device; elsewhere None, for the trainer's
+    batches (`stream.ByLength`), as larger ones gain nothing on a CPU.
+    """
+    from nowcastfoundation.backends.chronos2 import pass_budget
+
+    if not device.startswith("cuda"):
+        return None
+    return pass_budget(device)[1]
+
+
+def _each_batch(
+    model: Any,
+    blocks: Sequence[dict[str, Any]],
+    batch_size: int,
+    use: Callable[[list[int], dict[str, Any], Any], None],
+    budget: int | None = None,
+    precision: str | None = None,
+    before: Callable[[list[int]], None] | None = None,
+) -> None:
+    """Run each batch of held-out blocks through the model once.
+
+    Batches are the trainer's (`stream.ByLength`) without a `budget`,
+    else blocks packed to it (`pack`); a batch that runs out of memory is
+    split in two. Each forward runs at the inference precision
+    (`precision`, by default `PRECISION`;
+    `backends.chronos2.inference_precision`), after `before(indices)`,
+    and `use(indices, batch, output)` takes its result.
+    """
+    import torch
+    from chronos.chronos2.dataset import DatasetMode
+    from chronos.chronos2.model import Chronos2Model
+
+    from nowcastfoundation.backends.chronos2 import autocast
+
+    data = fs.ByLength(
+        list(blocks),
+        batch_size,
+        DatasetMode.VALIDATION,
+        series_bias.has_bias(model),
+    )
+    groups = list(data.indices()) if budget is None else pack(data, budget)
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    device = str(next(model.parameters()).device)
+    training = model.training
+    model.eval()
+
+    def run(indices: list[int]) -> None:
+        batch = data._build_batch(indices)
+        if before is not None:
+            before(indices)
+        try:
+            with autocast(device, precision):
+                got = fs.forward(model, batch, accepted)
+        except torch.OutOfMemoryError:
+            if len(indices) == 1:
+                raise
+            del batch
+            fs.free_memory()
+            half = len(indices) // 2
+            run(indices[:half])
+            run(indices[half:])
+            return
+        use(indices, batch, got)
+
+    with torch.no_grad():
+        for k, indices in enumerate(groups, start=1):
+            run(list(indices))
+            if budget is not None:
+                fs.report_batch(k, len(groups))
+    model.train(training)
+
+
+def held_out_pass(
+    model: Any,
+    blocks: Sequence[dict[str, Any]],
+    batch_size: int,
+    budget: int | None = None,
+    precision: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return each block's row losses and interval hits, from one pass.
+
+    Each batch (`_each_batch`) is run through the model once: its loss by
+    row (`row_losses`, in fp32) over every step, the nowcast steps and
+    the forecast steps, and its target rows' 50% and 90% interval hits
+    (`_block_hits`). A block's entry holds `n`, its rows, `loss`,
+    `nowcast` and `forecast`, by row, and `cover`. Row losses are means
+    over rows, so the batching changes no result.
+    """
+    blocks = list(blocks)
+    at = at_levels(model, INTERVAL_LEVELS)
+    out: list[dict[str, Any]] = [{} for _ in blocks]
+    with _RowLosses() as split:
+
+        def before(indices: list[int]) -> None:
+            split.steps = np.concatenate(
+                [
+                    np.full(
+                        int(blocks[i]["context"].shape[0]),
+                        fs.nowcast_steps(blocks[i]),
+                    )
+                    for i in indices
+                ]
+            )
+
+        def use(indices: list[int], batch: dict[str, Any], got: Any) -> None:
+            raw = got.quantile_preds.float().cpu().numpy()
+            target = batch["future_target"].float().cpu().numpy()
+            start = 0
+            for i, (lo, hi) in zip(
+                indices, batch["target_idx_ranges"], strict=True
+            ):
+                n = int(blocks[i]["context"].shape[0])
+                if lo != start:
+                    raise ValueError("a block's rows are not where expected")
+                out[i] = {
+                    "n": n,
+                    **{k: v[start : start + n] for k, v in split.rows.items()},
+                    "cover": _block_hits(
+                        blocks[i], at(raw[lo:hi]), target[lo:hi]
+                    ),
+                }
+                start += n
+
+        _each_batch(model, blocks, batch_size, use, budget, precision, before)
+    return out
+
+
+PRECISION_BLOCKS = 20
+"""Held-out blocks `precision_check` scores at fp32 too."""
+
+PRECISION_TOLERANCE = 0.005
+"""The relative difference in held-out loss between half precision and
+fp32 that `precision_check` accepts (0.5%)."""
+
+
+def spread(blocks: Sequence[dict[str, Any]], n: int) -> list[dict[str, Any]]:
+    """Return `n` blocks spread evenly over `blocks`, or all of them."""
+    blocks = list(blocks)
+    if n >= len(blocks):
+        return blocks
+    return [blocks[i * len(blocks) // n] for i in range(n)]
+
+
+def precision_check(
+    model: Any,
+    blocks: Sequence[dict[str, Any]],
+    batch_size: int,
+    device: str,
+) -> dict[str, Any] | None:
+    """Return the held-out loss at half precision against fp32, or None.
+
+    On `PRECISION_BLOCKS` blocks spread over the set, when the inference
+    precision on `device` is not fp32; `rel` is their relative
+    difference, which `PRECISION_TOLERANCE` bounds.
+    """
+    from nowcastfoundation.backends.chronos2 import inference_precision
+
+    precision = inference_precision(device)
+    if precision == "fp32":
+        return None
+    sample = spread(blocks, PRECISION_BLOCKS)
+    half = _losses("loss", held_out_pass(model, sample, batch_size))["loss"]
+    full = _losses(
+        "loss", held_out_pass(model, sample, batch_size, precision="fp32")
+    )["loss"]
+    rel = abs(half - full) / full
+    if rel > PRECISION_TOLERANCE:
+        fs.log(
+            f"held-out loss at {precision} is {rel:.2%} off fp32, over"
+            f" {PRECISION_TOLERANCE:.1%}"
+        )
+    return {
+        "precision": precision,
+        "blocks": len(sample),
+        "loss": half,
+        "loss_fp32": full,
+        "rel": rel,
+    }
 
 
 INTERVAL_LEVELS = (0.05, 0.25, 0.75, 0.95)
@@ -110,23 +539,35 @@ def _covered(
     at = at_levels(model, INTERVAL_LEVELS)
     rows: list[dict[str, Any]] = []
     for block, raw, target in _predictions(model, blocks, batch_size):
-        preds = at(raw)
-        n_steps = int(block["prediction_length"])
-        d = fs.nowcast_steps(block)
-        names = block.get("levels", ())
-        for r in range(len(raw)):
-            y = target[r, :n_steps]
-            q = preds[r, :, :n_steps]
-            ok = ~np.isnan(y)
-            rows.append(
-                {
-                    "source": block.get("source", ""),
-                    "level": names[r] if r < len(names) else "",
-                    "nowcast": np.arange(n_steps)[ok] < d,
-                    "in50": ((y >= q[1]) & (y <= q[2]))[ok],
-                    "in90": ((y >= q[0]) & (y <= q[3]))[ok],
-                }
-            )
+        rows += _block_hits(block, at(raw), target)
+    return rows
+
+
+def _block_hits(
+    block: dict[str, Any], preds: np.ndarray, target: np.ndarray
+) -> list[dict[str, Any]]:
+    """Return a block's target rows' interval hits (`_covered`).
+
+    `preds` are its rows' quantiles at `INTERVAL_LEVELS`, `target` their
+    future values.
+    """
+    rows = []
+    n_steps = int(block["prediction_length"])
+    d = fs.nowcast_steps(block)
+    names = block.get("levels", ())
+    for r in range(len(preds)):
+        y = target[r, :n_steps]
+        q = preds[r, :, :n_steps]
+        ok = ~np.isnan(y)
+        rows.append(
+            {
+                "source": block.get("source", ""),
+                "level": names[r] if r < len(names) else "",
+                "nowcast": np.arange(n_steps)[ok] < d,
+                "in50": ((y >= q[1]) & (y <= q[2]))[ok],
+                "in90": ((y >= q[0]) & (y <= q[3]))[ok],
+            }
+        )
     return rows
 
 
@@ -158,34 +599,30 @@ def at_levels(
 
 
 def _predictions(
-    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
-) -> Iterator[tuple[dict[str, Any], np.ndarray, np.ndarray]]:
-    """Yield each held-out block, its quantiles and its future targets.
+    model: Any,
+    blocks: Sequence[dict[str, Any]],
+    batch_size: int,
+    budget: int | None = None,
+) -> list[tuple[dict[str, Any], np.ndarray, np.ndarray]]:
+    """Return each held-out block, its quantiles and its future targets.
 
-    The quantiles are the model's own levels, `[rows, Q, steps]`, and
-    the targets `[rows, steps]`, for the block's target rows.
+    In the blocks' order, however they are batched (`_each_batch`). The
+    quantiles are the model's own levels, `[rows, Q, steps]`, and the
+    targets `[rows, steps]`, for the block's target rows.
     """
-    import torch
-    from chronos.chronos2.dataset import DatasetMode
-    from chronos.chronos2.model import Chronos2Model
-
     blocks = list(blocks)
-    data = fs.ByLength(
-        blocks,
-        batch_size,
-        DatasetMode.VALIDATION,
-        series_bias.has_bias(model),
-    )
-    accepted = inspect.signature(Chronos2Model.forward).parameters
-    with torch.no_grad():
-        for indices in data.indices():
-            batch = data._build_batch(indices)
-            out = fs.forward(model, batch, accepted)
-            raw = out.quantile_preds.float().cpu().numpy()
-            target = batch["future_target"].float().cpu().numpy()
-            ranges = batch["target_idx_ranges"]
-            for i, (lo, hi) in zip(indices, ranges, strict=True):
-                yield blocks[i], raw[lo:hi], target[lo:hi]
+    out: list[Any] = [None] * len(blocks)
+
+    def use(indices: list[int], batch: dict[str, Any], got: Any) -> None:
+        raw = got.quantile_preds.float().cpu().numpy()
+        target = batch["future_target"].float().cpu().numpy()
+        for i, (lo, hi) in zip(
+            indices, batch["target_idx_ranges"], strict=True
+        ):
+            out[i] = (blocks[i], raw[lo:hi], target[lo:hi])
+
+    _each_batch(model, blocks, batch_size, use, budget)
+    return out
 
 
 def held_out_coverage(
@@ -196,7 +633,11 @@ def held_out_coverage(
     Over every step, then the nowcast and forecast steps, then by source
     and by level (`<prefix>cover50`, `<prefix>cover90`, `<prefix>n`).
     """
-    rows = _covered(model, blocks, batch_size)
+    return summarise_coverage(_covered(model, blocks, batch_size))
+
+
+def summarise_coverage(rows: Sequence[dict[str, Any]]) -> dict[str, float]:
+    """Return the coverage of target rows' interval hits (`_covered`)."""
     groups: dict[str, list[tuple[np.ndarray, np.ndarray]]] = {}
     for row in rows:
         for part in ("nowcast", "forecast"):
@@ -332,19 +773,124 @@ def seven_day_check(
     `base` and `adapter`, as `evaluate` loads them; the levels are read
     as `at_levels` gives them.
     """
-    from peft import PeftModel
-
     rolling = [b for b in blocks if b.get("source") in ROLLING][:most]
     if not rolling:
         return {}
-    model = PeftModel.from_pretrained(base, adapter)
-    model.eval()
+    model = merged(base, adapter)
     at = at_levels(model, SEVEN_DAY_LEVELS)
     parts = []
-    for block, raw, _ in _predictions(model, rolling, batch_size):
+    budget = eval_budget(str(next(model.parameters()).device))
+    for block, raw, _ in _predictions(model, rolling, batch_size, budget):
         q = at(raw)
         parts.append(seven_day_parts(block, q[:, 1], q[:, 0], q[:, 2]))
     return summarise_seven_day(parts)
+
+
+VALIDATION_LEVELS = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
+"""The levels a validation forecast keeps, the dashboard's seven."""
+
+VALIDATION_BLOCKS = 20
+"""Held-out blocks in a run's validation forecasts (`validation_sample`)."""
+
+VALIDATION_ROWS = 12
+"""Target rows a validation forecast keeps of a block, national first."""
+
+VALIDATION_TAIL = 28
+"""Context steps before the horizon a validation forecast keeps."""
+
+
+def validation_sample(
+    n_blocks: int, most: int = VALIDATION_BLOCKS
+) -> list[int]:
+    """Return the held-out blocks a run's validation forecasts show.
+
+    `most` indices spread evenly over the blocks, the first included;
+    the same for every checkpoint of a run.
+    """
+    if n_blocks <= most:
+        return list(range(n_blocks))
+    return sorted({int(i * n_blocks / most) for i in range(most)})
+
+
+def _values(x: np.ndarray) -> list[float | None]:
+    return [float(v) if np.isfinite(v) else None for v in x]
+
+
+def forecast_record(
+    index: int,
+    block: dict[str, Any],
+    q: np.ndarray,
+    target: np.ndarray,
+    tail: int = VALIDATION_TAIL,
+) -> dict[str, Any]:
+    """Return one held-out block's forecast, for the dashboard.
+
+    `q` is the block's quantiles at `VALIDATION_LEVELS`, `[rows, 7,
+    steps]`, and `target` its truth, `[rows, steps]`. Each kept row
+    (`VALIDATION_ROWS`, national rows first) has its name and level, its
+    last `tail` context steps before the horizon, its truth and its
+    quantiles over the block's prediction length.
+    """
+    h = int(block["prediction_length"])
+    n = int(block["n_targets"])
+    context = np.asarray(block["context"], dtype=float)
+    past = context[:n, context.shape[1] - h - tail : context.shape[1] - h]
+    levels = list(block.get("levels", ()))
+    places = list(block.get("places", ()))
+    targets = list(block.get("target_places", range(n)))
+
+    def name(r: int) -> str:
+        i = targets[r] if r < len(targets) else r
+        return str(places[i]) if i < len(places) else f"row {r}"
+
+    def level(r: int) -> str:
+        return str(levels[r]) if r < len(levels) else ""
+
+    order = sorted(range(n), key=lambda r: level(r) != "national")
+    return {
+        "block": int(index),
+        "source": str(block.get("source", "")),
+        "cut": block.get("cut_date"),
+        "mix": str(block.get("mix", "")),
+        "nowcast": int(block.get("nowcast", 0)),
+        "rows": [
+            {
+                "name": name(r),
+                "level": level(r),
+                "history": _values(past[r]),
+                "truth": _values(target[r, :h]),
+                "q": [_values(q[r, k, :h]) for k in range(q.shape[1])],
+            }
+            for r in order[:VALIDATION_ROWS]
+        ],
+    }
+
+
+def validation_forecasts(
+    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+) -> list[dict[str, Any]]:
+    """Return `model`'s forecasts of the run's sampled held-out blocks.
+
+    The blocks `validation_sample` picks, each as `forecast_record`
+    gives it. `model` is base Chronos-2, with an adapter for a
+    checkpoint.
+    """
+    picks = validation_sample(len(blocks))
+    chosen = [blocks[i] for i in picks]
+    at = at_levels(model, VALIDATION_LEVELS)
+    out = []
+    for i, (block, raw, target) in zip(
+        picks,
+        _predictions(
+            model,
+            chosen,
+            batch_size,
+            eval_budget(str(next(model.parameters()).device)),
+        ),
+        strict=True,
+    ):
+        out.append(forecast_record(i, block, at(raw), target))
+    return out
 
 
 def load_base(device: str) -> Any:

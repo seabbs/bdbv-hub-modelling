@@ -29,9 +29,13 @@ def _build_script() -> str:
     return "\n".join(str(s.get("run", "")) for s in steps)
 
 
-def test_the_stored_ft_model_is_not_forecast_by_pages() -> None:
-    # Its forecasts are the pinned release's asset.
-    run = _build_script()
+def test_the_stored_ft_model_is_not_forecast() -> None:
+    # Its forecasts are the pinned release's asset, stacked with the
+    # others where the site's results are made (Fit store).
+    fit_store = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "fit-store.yml").read_text()
+    )["jobs"]["site-results"]
+    run = "\n".join(str(s.get("run", "")) for s in fit_store["steps"])
     load = run.index("nowcastgermany ft-load")
     assert "germany-forecasts.tar.gz" in run
     assert load < run.index("concat-results --out results/germany")

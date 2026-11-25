@@ -21,7 +21,6 @@ def test_chronos_models_take_the_active_zone_rule_and_others_do_not():
 
 
 def test_the_check_key_moves_with_the_active_zone_rule(tmp_path):
-    import shutil
     import sys
     from pathlib import Path
 
@@ -29,14 +28,6 @@ def test_the_check_key_moves_with_the_active_zone_rule(tmp_path):
     sys.path.insert(0, str(root / "workflow"))
     from flowlib import scoring
 
-    for part in scoring.FT_CHECK_CODE:
-        src = root / part
-        dst = tmp_path / part
-        if src.is_dir():
-            shutil.copytree(src, dst)
-        else:
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(src, dst)
     conf = (
         tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
     )
@@ -47,6 +38,10 @@ def test_the_check_key_moves_with_the_active_zone_rule(tmp_path):
     assert scoring.ft_check_key(tmp_path) == one
     conf.write_text('hash = "b"\nactive_zone_cases = 10\n')
     assert scoring.ft_check_key(tmp_path) != one
+    # The check's code is what bdbvhub.ftcheck imports, with the config.
+    files = scoring.ft_check_code()
+    assert "packages/nowcastbdbv/config/backtest.toml" in files
+    assert any(f.endswith("nowcastfoundation/forecaster.py") for f in files)
 
 
 def _quantiles():
@@ -250,3 +245,54 @@ def test_the_forecast_reads_the_backtest_config_it_is_given(monkeypatch):
             ]
         )
     assert seen["config"] == "ablation.toml"
+
+
+def test_a_check_forecast_resumes_from_the_releases_it_wrote(
+    tmp_path, monkeypatch
+):
+    # A restart loses at most the release in hand (#1182).
+    from types import SimpleNamespace
+
+    import pandas as pd
+
+    from bdbvhub import ftcheck
+    from nowcasteval.nowcast import ReleaseForecasts
+
+    tasks = [
+        SimpleNamespace(vintage=v, kind="real")
+        for v in ("2026-10-01", "2026-10-08", "2026-10-15")
+    ]
+    monkeypatch.setattr(
+        ftcheck, "release_tasks", lambda *_: (tasks, pd.DataFrame(), None, None)
+    )
+    monkeypatch.setattr(ftcheck, "check_model", lambda *_: object())
+    done = []
+
+    def forecast_releases(some, _target, _models):
+        (task,) = some
+        if task.vintage == "2026-10-08" and "killed" not in done:
+            done.append("killed")
+            raise KeyboardInterrupt
+        done.append(task.vintage)
+        row = {"model": "m", "origin": task.vintage}
+        return ReleaseForecasts(
+            pd.DataFrame([{**row, "status": "forecast", "reason": ""}]),
+            pd.DataFrame([{**row, "value": 1.0}]),
+            pd.DataFrame(columns=["model", "origin"]),
+            pd.DataFrame(columns=["model", "origin"]),
+        )
+
+    monkeypatch.setattr(ftcheck, "forecast_releases", forecast_releases)
+    out = tmp_path / "m@key"
+    with pytest.raises(KeyboardInterrupt):
+        ftcheck.forecast("m", tmp_path, out)
+    got = ftcheck.forecast("m", tmp_path, out)
+    # The first release was kept; the run went on from the second.
+    assert done == ["2026-10-01", "killed", "2026-10-08", "2026-10-15"]
+    assert list(got.runs["origin"]) == [
+        "2026-10-01",
+        "2026-10-08",
+        "2026-10-15",
+    ]
+    back = ReleaseForecasts.read([out])
+    assert list(back.samples["origin"]) == list(got.samples["origin"])

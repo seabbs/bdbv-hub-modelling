@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from flowlib import compute
 
 pytest.importorskip("snakemake")
 
@@ -804,7 +805,8 @@ def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # trainer (the run's critical path) goes first, then the simulations
     # it trains on, then checkpoint scoring (score.smk, 10 and below).
     got = priorities(tmp_path, "finetune", config=FT)
-    assert 100 <= got["train_segment"] < 101
+    trainer = compute.TRAIN_PRIORITY
+    assert trainer <= got["train_segment"] < trainer + 1
     assert 15 <= got["simulate_batch"] < 16
 
 
@@ -1517,33 +1519,24 @@ def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
     assert "--repo" not in command
 
 
-def test_the_ebola_ablation_runs_each_variant_and_model(tmp_path):
-    # The ablation target (#1123): each variant's data, each model's
-    # forecasts of it, its summary, and one page.
-    _hub(tmp_path)
-    sims = tmp_path / "sims"
-    sims.mkdir()
-    for seed in (33300, 33301):
-        (sims / f"counts-{seed}.csv.gz").write_text("")
-    config = {
-        "ablation": {
-            "sims": str(sims),
-            "seeds": [33300, 33301],
-            "sim_variants": ["few", "fresh"],
-            "bdbv_variants": ["as_is"],
-            "models": ["randomwalknowcast", "foundation_pseudoweeks"],
-        }
-    }
-    out = dry_run(tmp_path, "ablation", config=config, quiet=False)
-    assert out.returncode == 0, out.stderr + out.stdout
-    jobs = dict(re.findall(r"^(\w+)\s+(\d+)$", out.stdout, re.M))
-    assert jobs["ablation_data"] == "3"
-    assert jobs["ablation_forecast"] == "6"
-    assert jobs["ablation_summary"] == "3"
-    assert jobs["ablation_report"] == "1"
-    assert (
-        "--model foundation_pseudoweeks --checkpoint 'slots-c44bbe122e6c'"
-        in out.stdout
-    )
-    assert "--model randomwalknowcast --checkpoint ''" in out.stdout
-    assert "ablation/ebola-ablation.html" in out.stdout
+def test_a_scored_step_0_is_kept(tmp_path):
+    # runa's step 0 was scored once on the laptop and copied in: a later
+    # run never scores it again, the evaluator's code key and the
+    # held-out set being older than it.
+    import os
+
+    for n in (250, 500):
+        _checkpoint(tmp_path, n)
+    train = tmp_path / "runs" / "runa" / "train"
+    (train / "held-out-blocks.json").write_text('{"outbreaks": []}')
+    (train / "evals").mkdir(exist_ok=True)
+    step0 = train / "evals" / "step-0000000.json"
+    step0.write_text('{"step": 0, "held_out_loss": 0.5}')
+    for path in (
+        train / "held-out-blocks.json",
+        *train.glob("n*/settings.json"),
+    ):
+        os.utime(path, (1, 1))
+    jobs = dry(tmp_path, "finetune", config=OFFLOAD)
+    assert "evaluate_base" not in jobs
+    assert jobs["evaluate_checkpoint"] == 2

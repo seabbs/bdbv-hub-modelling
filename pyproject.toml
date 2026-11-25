@@ -169,6 +169,7 @@ convention = "numpy"
 # Test functions are named for what they check; docstrings would repeat it.
 "tests/**" = ["D", "PD101"]
 "workflow/tests/**" = ["D", "PD101"]
+"experiments/*/tests/**" = ["D", "PD101"]
 "packages/*/tests/**" = ["D", "PD101"]
 # Ported from the hub validation bundle, whose checks are named after
 # hubValidations' and are documented in docs/submission/hub-spec.md.
@@ -199,6 +200,7 @@ testpaths = [
   "packages/nowcastbdbv/tests",
   "packages/bdbvhub/tests",
   "workflow/tests",
+  "experiments/ebola-ablation/tests",
   "tests",
 ]
 pythonpath = ["tests"]
@@ -308,6 +310,8 @@ module = [
   "safetensors.*",
   "huggingface_hub",
   "huggingface_hub.*",
+  "einops",
+  "einops.*",
 ]
 ignore_missing_imports = true
 

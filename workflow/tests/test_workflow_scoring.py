@@ -150,3 +150,36 @@ def test_the_reference_unit_reads_its_code_key_as_a_file(tmp_path):
     assert Path(ref).parent == tmp_path / "cache" / "keys"
     assert Path(ref).name.startswith(f"{scoring.REFERENCE}-")
     assert s.reference_key_input("abc123") == []
+
+
+def test_evaluation_runs_below_every_other_job():
+    from types import SimpleNamespace
+
+    from flowlib import compute, scoring
+
+    s = scoring.Scoring.__new__(scoring.Scoring)
+    new, old = SimpleNamespace(n="800"), SimpleNamespace(n="400")
+    assert s.evaluation_priority(new) > s.evaluation_priority(old)
+    assert s.evaluation_priority(new) < compute.BATCH_PRIORITY
+    # Step 0 first, which every checkpoint's evaluation needs.
+    assert s.evaluation_priority(SimpleNamespace()) > s.evaluation_priority(new)
+    assert not hasattr(compute, "BOUNDARY_PRIORITY")
+
+
+def test_code_keys_ignore_modules_the_jobs_never_import():
+    # A change to the trainer must not rerun the German reference or the
+    # BDBV check, which never import it (#1114).
+    from flowlib import scoring
+
+    from nowcastutils import codekey
+
+    for files in (
+        scoring.reference_code("reference"),
+        scoring.ft_check_code(),
+    ):
+        assert not any(f.endswith("finetune/stream.py") for f in files)
+        assert not any(f.endswith("finetune/evaluate.py") for f in files)
+    assert any(
+        f.endswith("finetune/evaluate.py") for f in scoring.evaluator_code()
+    )
+    assert codekey.digest(scoring.evaluator_code())

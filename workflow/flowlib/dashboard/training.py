@@ -334,11 +334,12 @@ def loss_run(
 ) -> dict[str, Any]:
     """Return one run's loss plot data, against simulations trained.
 
-    Training losses from the history, else the log rows; held-out losses
-    from the log rows and the checkpoints; held-out loss by source from
-    the history's evaluations, else the log rows. `sims` gives the
-    simulations trained by a step (`sims_at`); checkpoints are at their
-    own simulations. `base` is the step-0
+    Training losses from the history, else the log rows. Validation is
+    the full held-out set at step 0 (the history's, or a checkpoint's
+    start loss) and at each checkpoint: its loss, nowcast and forecast
+    parts and losses by layout and level. No subset or step snapshot is
+    read. `sims` gives the simulations trained by a step (`sims_at`);
+    checkpoints are at their own simulations. `base` is the step-0
     references (`full0`, `src0`) of the run that stands for base
     Chronos-2, or None for the run's own.
     """
@@ -368,25 +369,6 @@ def loss_run(
         for h in hist
         if isinstance(h, dict) and "loss" in h and "step" in h
     ] or [(r["step"], r["loss"]) for r in rows]
-    evals = [
-        (h["step"], h["by_source"])
-        for h in hist
-        if isinstance(h, dict)
-        and h.get("step")
-        and isinstance(h.get("by_source"), dict)
-    ] or [(r["step"], r["src"]) for r in rows if r.get("src")]
-
-    # The subset held-out loss by step: the offloaded evaluations' (the
-    # merged history), else the trainer's log lines.
-    held = [
-        (h["step"], h["eval_loss"], _parts(h, "eval_loss"))
-        for h in hist
-        if isinstance(h, dict) and h.get("eval_loss") is not None
-    ] or [
-        (r["step"], r["held"], r.get("parts") or {})
-        for r in rows
-        if r["held"] is not None
-    ]
 
     def x(step: float) -> float:
         return round(sims(step), 2)
@@ -394,10 +376,6 @@ def loss_run(
     def at(name: str, s: Mapping[str, Any]) -> int:
         return int(s.get("n_outbreaks") or _size(name))
 
-    by: dict[str, list[list[float]]] = {}
-    for st, src in sorted(evals, key=lambda e: e[0]):
-        for k, v in src.items():
-            by.setdefault(k, []).append([x(st), round(v, 5)])
     lvl0 = h0.get("by_level") or next(
         (
             s.get("held_out_loss_by_level_start")
@@ -429,16 +407,11 @@ def loss_run(
         "tr0": sum(v for _, v in train[:20]) / len(train[:20])
         if train
         else None,
-        "held": [[x(st), round(v, 5)] for st, v, _ in held],
         "ck": [
             [at(nm, s), s["held_out_loss"]]
             for nm, s, _ in checkpoints
             if s.get("held_out_loss")
         ],
-        "held_parts": {
-            p: [[x(st), round(parts[p], 5)] for st, _, parts in held if parts]
-            for p in PARTS
-        },
         "ck_parts": {
             p: [
                 [at(nm, s), parts[p]]
@@ -453,7 +426,6 @@ def loss_run(
         "bfull": base["full0"],
         "src0": src0,
         "bsrc": base["src0"],
-        "bysrc": by,
         # Checkpoints' full-set loss by layout and by level, and the level
         # losses at step 0; the trainer logs no level losses in between.
         "ck_src": by_key("held_out_loss_by_source"),

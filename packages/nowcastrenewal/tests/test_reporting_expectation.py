@@ -27,6 +27,7 @@ from test_reporting_effects import (
     N_DAYS,
     VALUES,
     _design,
+    _dmax,
     _frame,
     _names,
     _sites,
@@ -112,6 +113,46 @@ CASES: list[dict[str, Any]] = [
 ]
 
 
+CASES += [
+    # Hazards with a parametric delay only: both weekday effects, by age.
+    {
+        "design": {
+            **_design(delay_family="exponential", delay_change="drift"),
+            **_report(report_dow="yes", reference_dow="yes"),
+        },
+        "n_places": 1,
+        "n_ages": 2,
+    },
+    # Weekly reports with the reference weekday's effect and a weekday
+    # effect on the delay, over a two-week window.
+    {
+        "design": {
+            **_design(
+                delay_form="hybrid", delay_family="gamma", delay_dow="yes"
+            ),
+            **_report(
+                report_days="weekly",
+                report_weekdays="Friday",
+                reference_dow="yes",
+            ),
+        },
+        "n_places": 2,
+        "n_ages": 1,
+        "max_delay": 14,
+    },
+    # A weekday effect on the delay by place and a report weekday effect.
+    {
+        "design": {
+            **_design(delay_places="independent", delay_dow="yes"),
+            **_report(report_dow="yes"),
+        },
+        "n_places": 3,
+        "n_ages": 1,
+        "max_delay": 12,
+    },
+]
+
+
 def _log_lambda(i: int, n_strata: int) -> np.ndarray:
     rng = np.random.default_rng(500 + i)
     trend = np.log(np.linspace(2.0, 40.0, N_DAYS))
@@ -127,7 +168,7 @@ def _input(i: int, case: dict[str, Any]) -> dict[str, Any]:
         **case,
         "values": REPORT_VALUES,
         "seed": 300 + i,
-        "max_delay": MAX_DELAY,
+        "max_delay": _dmax(case),
         "n_days": N_DAYS,
         "first_date": FIRST,
         "mean_int": float(delay.mu),
@@ -176,12 +217,11 @@ def test_log_expected_reports_match_epinowcast(i: int) -> None:
     out = _epinowcast()[i]
     frame = _frame(out)
     design = CASES[i]["design"]
-    model = ReportingExpectation(
-        "expected", frame, design, REPORT_VALUES, MAX_DELAY
-    )
+    D = _dmax(CASES[i])
+    model = ReportingExpectation("expected", frame, design, REPORT_VALUES, D)
     assert int(model.as_log_probs) == out["ref_as_p"]
     sites = {
-        **_sites(out, frame, "expected::reference"),
+        **_sites(out, frame, "expected::reference", D),
         **_report_sites(out, "expected::report"),
     }
     log_lambda = _log_lambda(i, len(frame.place))

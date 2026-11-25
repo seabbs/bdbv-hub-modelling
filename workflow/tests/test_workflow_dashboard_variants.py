@@ -2,14 +2,16 @@
 
 A checkpoint's file holds `foundation` and its variants (on
 baselinenowcast's point nowcast, which has no spread at horizons up to
-0, and on pseudo weeks); the reference folder holds the zero-shot forms
+0, and on complete counts); the reference folder holds the zero-shot forms
 and `randomwalknowcast`.
 """
 
 import csv
 import gzip
+from datetime import date, timedelta
 from pathlib import Path
 
+import pytest
 import yaml
 from flowlib.dashboard import context, nowcasts, runs
 
@@ -74,7 +76,7 @@ def _build(tmp_path):
         {
             "foundation": (4, 1),
             "foundation_baselinenowcast": (60, 0),
-            "foundation_pseudoweeks": (70, 1),
+            "foundation_complete": (70, 1),
         },
     )
     rs = [runs.make_run("runa", str(run), live=True)]
@@ -105,7 +107,7 @@ def test_the_variants_are_their_own_series(tmp_path):
     built, rs, refs = _build(tmp_path)
     assert _median(built, "zero_baselinenowcast") == 50
     assert _median(built, "foundation_baselinenowcast:abc123def456") == 60
-    assert _median(built, "foundation_pseudoweeks:abc123def456") == 73
+    assert _median(built, "foundation_complete:abc123def456") == 73
     got = {
         m["id"]: m
         for m in nowcasts.meta(built, rs, refs, {"abc123def456": 100})
@@ -133,3 +135,71 @@ def test_every_series_carries_its_interval_quantiles(tmp_path):
                     if "baselinenowcast" not in sid:
                         q = entry["q"][0]
                         assert q[0] < q[1] < q[2] < q[3] < q[4], sid
+
+
+def _days(path, models, origin, offsets):
+    """Write each model's quantiles on days around `origin`.
+
+    A model is (base, step): its median moves with the day, its spread is
+    `step` a level.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cols = [
+        "model",
+        "location",
+        "target_end_date",
+        "quantile",
+        "value",
+        "truth",
+        "truth_vintage",
+    ]
+    day0 = date.fromisoformat(origin)
+    with gzip.open(path, "wt") as f:
+        w = csv.DictWriter(f, cols)
+        w.writeheader()
+        for model, (base, step) in models.items():
+            for k in offsets:
+                day = (day0 + timedelta(days=k)).isoformat()
+                for i, q in enumerate(SEVEN):
+                    w.writerow(
+                        {
+                            "model": model,
+                            "location": "DE",
+                            "target_end_date": day,
+                            "quantile": q,
+                            "value": base + 2 * k + (i - 3) * step,
+                            "truth": 20,
+                            "truth_vintage": "2022-03-01",
+                        }
+                    )
+
+
+def test_wis_by_horizon_is_the_checkpoint_s_own(tmp_path):
+    # The dashboard's WIS at each day from the nowcast date matches WIS
+    # computed straight from the checkpoint's own rows, with a variant's
+    # rows (no spread) in the same file.
+    origin, offsets = "2022-02-09", range(-3, 4)
+    cache = tmp_path / "cache" / "germany-days"
+    _days(
+        cache / "reference" / f"{origin}.csv.gz",
+        {"randomwalknowcast": (18, 1)},
+        origin,
+        offsets,
+    )
+    run = tmp_path / "run"
+    (run / "train" / "n100").mkdir(parents=True)
+    (run / "train" / "n100" / "settings.json").write_text(
+        '{"hash": "abc123def456", "n_outbreaks": 100}'
+    )
+    _days(
+        run / "scores" / "germany-days" / "n100" / f"{origin}.csv.gz",
+        {"foundation": (15, 2), "foundation_baselinenowcast": (40, 0)},
+        origin,
+        offsets,
+    )
+    rs = [runs.make_run("runa", str(run), live=True)]
+    built = nowcasts.build(cache, rs, _refs(), unit="germany-days")
+    got = built["byday"]["DE"]["abc123def456"]["7day"]["daily"][origin]
+    for k in offsets:
+        q = [15 + 2 * k + (i - 3) * 2 for i in range(7)]
+        assert got[str(k)] == pytest.approx(nowcasts.wis(q, 20), abs=1e-3)

@@ -10,6 +10,8 @@ import pytest
 from dashboard_helpers import saved_run
 from flowlib.dashboard import nowcasts, runs
 
+from nowcasteval import labels
+
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
 PAGE = (0.025, 0.25, 0.5, 0.75, 0.975)
 
@@ -144,14 +146,36 @@ def test_a_file_score_wins_over_wis(tmp_path):
     assert built["score"]["DE"]["zero"]["7day"]["daily"]["2022-02-09"] == 3.25
 
 
-def test_other_reference_models_are_shown_under_their_name(tmp_path):
-    _quantiles(tmp_path / "reference" / "2022-02-09.csv.gz", "KIT-nowcast")
+def test_other_known_reference_models_are_shown_under_their_label(tmp_path):
+    model = "foundation_zeroshot_baselinenowcast"
+    _quantiles(tmp_path / "reference" / "2022-02-09.csv.gz", model)
     rs, refs = _setup()
+    # Not the fixture's zero-shot, which takes any foundation model.
+    refs = [r for r in refs if r.key == "rw"]
     built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
-    assert "model:KIT-nowcast" in built["sets"]
+    assert f"model:{model}" in built["sets"]
     meta = {m["id"]: m for m in nowcasts.meta(built, rs, refs, {})}
-    assert meta["model:KIT-nowcast"]["label"] == "KIT-nowcast"
-    assert meta["model:KIT-nowcast"]["run"] == "ref"
+    assert meta[f"model:{model}"]["label"] == labels.model_label(model)
+    assert meta[f"model:{model}"]["run"] == "ref"
+
+
+def test_unknown_reference_models_are_left_out_with_a_log_line(
+    tmp_path, caplog
+):
+    # Only models nowcasteval.labels names are shown: an old name in files
+    # written before a rename, or a hub team, is not.
+    for day, name in (
+        ("2022-02-09", "foundation_zeroshot_twostep"),
+        ("2022-02-10", "KIT-nowcast"),
+    ):
+        _quantiles(tmp_path / "reference" / f"{day}.csv.gz", name)
+    rs, refs = _setup()
+    refs = [r for r in refs if r.key == "rw"]
+    with caplog.at_level("INFO"):
+        built = nowcasts.build(tmp_path, rs, refs, levels=PAGE)
+    assert not [s for s in built["sets"] if s.startswith("model:")]
+    assert "foundation_zeroshot_twostep" in caplog.text
+    assert "KIT-nowcast" in caplog.text
 
 
 def test_excluded_and_unclaimed_checkpoints_are_left_out(tmp_path):

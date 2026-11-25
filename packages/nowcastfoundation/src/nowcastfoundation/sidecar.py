@@ -17,6 +17,10 @@ HELD_OUT_BLOCKS: Final = "held-out-blocks.pkl"
 """The held-out blocks an offloaded run saves for its evaluator; must
 match `HELD_OUT_BLOCKS` in nowcastfoundation.finetune.stream (tested)."""
 
+HELD_OUT_KEY: Final = "held-out-blocks.json"
+"""What the saved held-out blocks were cut from; must match `HELD_OUT_KEY`
+in nowcastfoundation.finetune.stream (tested)."""
+
 SIDECAR: Final = "held-out.json"
 """The sidecar's file name, beside `settings.json` and in the release."""
 

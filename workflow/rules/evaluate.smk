@@ -1,27 +1,33 @@
 # Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
-# score step 0 and each checkpoint, not the step snapshots between, in
-# the `evaluate` group (WORKER_GROUPS places it), on the forecasting
-# device (`forecast` in the config, flowlib.forecast) beside the trainer,
-# newest segment first, below every other job (EVALUATION_PRIORITY): no
-# release or check waits for it. Files and readers:
-# workflow/flowlib/evaluations.py.
+# score step 0 and each checkpoint, in the `evaluate` group
+# (WORKER_GROUPS places it). With the 7-day check and the validation
+# forecasts, each runs on the checkpoint scoring device
+# (`compute.scoring_forecast`): the CPU with the cores the trainer leaves
+# while a run trains, a whole GPU once none does, below every other job
+# (`Scoring.evaluation_priority`). It never pauses training, and no
+# release or check waits for it.
+# Files and readers: workflow/flowlib/evaluations.py.
 
 
 rule evaluate_base:
     # Step 0 (base Chronos-2) on every held-out block: the start loss
-    # each checkpoint's sidecar needs.
+    # each checkpoint's sidecar needs. Kept in the score cache by model,
+    # held-out set, evaluator and precision, so it is scored once.
     input:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
         ),
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/evals/step-0000000.json",
     log:
         f"{TRAIN}/logs/evaluate-base.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_base.tsv"
-    # Above every checkpoint's evaluation, which needs it.
-    priority: EVALUATION_PRIORITY + 1
+    priority: evaluation_priority
     conda:
         TOOLS_ENV
     threads: EVALUATE_THREADS
@@ -36,10 +42,11 @@ rule evaluate_base:
             f"{train_dir(wc.run)}/evals/step-0000000/",
             f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
         ],
+        cache=f"{CACHE}/held-out-base",
     shell:
         "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} base {{params.where}} --device {{params.device}} "
-        "> {log} 2>&1"
+        "--cache {params.cache} > {log} 2>&1"
 
 
 rule evaluate_checkpoint:
@@ -52,13 +59,17 @@ rule evaluate_checkpoint:
         # Earlier checkpoints' settings: `evaluations.start_loss` reads their
         # held_out_loss_start when the run evaluated them in the trainer.
         earlier=earlier_settings,
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/n{{n}}/{SIDECAR}",
     log:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv"
-    priority: newest_first(EVALUATION_PRIORITY)
+    priority: evaluation_priority
     conda:
         TOOLS_ENV
     threads: EVALUATE_THREADS
@@ -85,13 +96,17 @@ rule seven_day_check:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/n{{n}}/seven-day.json",
     log:
         f"{TRAIN}/logs/seven-day-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/seven_day_check/n{{n}}.tsv"
-    priority: newest_first(CHECKPOINT_PRIORITY)
+    priority: evaluation_priority
     conda:
         TOOLS_ENV
     threads: EVALUATE_THREADS
@@ -107,6 +122,79 @@ rule seven_day_check:
         "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} seven-day {{params.where}} --device {{params.device}} "
         "> {log} 2>&1"
+
+
+rule validation_forecasts:
+    # Each checkpoint's forecasts of a fixed sample of the run's held-out
+    # (validation) blocks, with their history and truth, which the
+    # dashboard sets against the truth
+    # (nowcastfoundation.finetune.evaluate.validation_forecasts), on the
+    # checkpoint scoring device, below every other job: nothing waits for
+    # them.
+    input:
+        settings=f"{TRAIN}/n{{n}}/settings.json",
+        adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
+    output:
+        f"{TRAIN}/n{{n}}/{evaluations.VALIDATION_FILE}",
+    log:
+        f"{TRAIN}/logs/validation-forecasts-n{{n}}.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/validation_forecasts/n{{n}}.tsv"
+    priority: evaluation_priority
+    conda:
+        TOOLS_ENV
+    threads: EVALUATE_THREADS
+    resources:
+        gpu=CHECKPOINT_FORECAST.gpu,
+    params:
+        where=lambda wc, input: Path(input.settings).parent,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
+        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
+        copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
+    shell:
+        "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
+        f"{EVALUATE_PY} validation {{params.where}} --device {{params.device}} "
+        "> {log} 2>&1"
+
+
+rule validation_forecasts_base:
+    # Base Chronos-2's forecasts of the same blocks, once a run, for the
+    # dashboard's zero-shot line beside the checkpoints'.
+    input:
+        settings=lambda wc: (
+            f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
+        ),
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
+    output:
+        f"{TRAIN}/{evaluations.VALIDATION_BASE}",
+    log:
+        f"{TRAIN}/logs/validation-forecasts-base.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/validation_forecasts_base.tsv"
+    priority: evaluation_priority
+    conda:
+        TOOLS_ENV
+    threads: EVALUATE_THREADS
+    resources:
+        gpu=CHECKPOINT_FORECAST.gpu,
+    params:
+        where=lambda wc, input: Path(input.settings).parent,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
+        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
+        copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
+    shell:
+        "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
+        f"{EVALUATE_PY} validation-base {{params.where}} "
+        "--device {params.device} > {log} 2>&1"
 
 
 rule validation_curve:

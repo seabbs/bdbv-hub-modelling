@@ -1,0 +1,11 @@
+INHERIT: ../mkdocs-base.yml
+site_name: bdbvhub
+site_description: The BDBV hub's data, the fit store, the hub file and the submission.
+site_url: https://samabbott.co.uk/bdbv-hub-modelling/bdbvhub/
+edit_uri: edit/main/packages/bdbvhub/docs/
+
+nav:
+  - Getting started: index.md
+  - How to: how-to.md
+  - Reference: reference.md
+  - How it is used in the workflow: workflow.md
