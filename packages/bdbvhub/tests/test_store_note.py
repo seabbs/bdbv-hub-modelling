@@ -46,14 +46,14 @@ def test_no_record_says_no_fits(tmp_path: Path) -> None:
 
 
 def test_the_site_results_are_made_on_main_with_no_preview_head() -> None:
-    # Fit store's site-results job writes the note from main's store, so
+    # Site results writes the note from main's store, so
     # a preview shows main's results and names no pull request head.
     import yaml
 
     workflows = Path(__file__).parents[3] / ".github" / "workflows"
-    job = yaml.safe_load((workflows / "fit-store.yml").read_text())["jobs"][
-        "site-results"
-    ]
+    job = yaml.safe_load((workflows / "site-results.yml").read_text())[
+        "jobs"
+    ]["site-results"]
     runs = "\n".join(s.get("run", "") for s in job["steps"])
     assert "bdbvhub report" in runs
     for step in job["steps"]:

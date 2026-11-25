@@ -1,0 +1,176 @@
+name: Site results
+
+# What the site shows from the stored fits and backtests, made from what
+# the fit store holds now and stored on the store branch (`site/`), so
+# the Site build only unpacks it: the comparison with the hub teams'
+# forecasts, the German benchmark's tables with its teams scored, and the
+# docs figures and tables (`bdbvhub report`). A fit not yet stored is
+# shown as not yet fitted (`fit-store load`'s status file), so this never
+# waits on a fit. Fit store starts it each time it stores fits or
+# backtests; a dispatch makes the site's results at once. Skipped when
+# its inputs (the store's fits and backtests, the submission ledger, the
+# hub data, the code and the fine-tuned German forecasts) are those it
+# was last made from. Then Site is rebuilt.
+#
+# Writes fit-store from main only. A dispatch from another branch must
+# name a scratch store branch (`store_branch`), for testing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      store_branch:
+        description: >-
+          Store branch to read and write (blank for fit-store, from main
+          only; any other name is a scratch store for testing a branch)
+        type: string
+        default: ''
+
+# A running run on main finishes; a newer dispatch replaces a queued one,
+# which reads the store when it starts.
+concurrency:
+  group: site-results-${{ inputs.store_branch || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  DEVICE: cpu
+  STORE: output/fit-store
+  FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
+
+jobs:
+  site-results:
+    name: Make and store the site's results
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Decide whether this run may write a store
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SCRATCH: ${{ inputs.store_branch }}
+        run: |
+          write=$(python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py guard "$EVENT" "$REF" "$SCRATCH")
+          if [ "$write" != true ]; then
+            echo "::error::only main writes fit-store; name a scratch store_branch"
+            exit 1
+          fi
+      - uses: ./.github/actions/setup-forecast-env
+        with:
+          sync: 'false'
+          jax-scope: pages-report
+          save-jax: 'false'
+      - run: uv sync --frozen --all-groups
+      # The latest hub releases, as the Fit store workflow fits them, and
+      # the fine-tuned checkpoint its fits are keyed by.
+      - name: Refresh the hub data
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run bdbvhub data
+          uv run bdbvhub bvd
+          echo "BDBV_CHRONOS_FT=$(uv run bdbvhub finetuned-checkpoint)" \
+            >> "$GITHUB_ENV"
+      - name: Fetch the store and the ledger, and hash them
+        id: key
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
+          mkdir -p output/ledger
+          ledger=none
+          if git fetch -q --depth 1 origin submission-ledger; then
+            git archive FETCH_HEAD | tar -x -C output/ledger
+            ledger=$(git rev-parse FETCH_HEAD)
+          fi
+          tag=$(uv run nowcastgermany ft-tag)
+          key=$( {
+            find "$STORE" -path "$STORE/site" -prune -o -type f \
+              ! -name .commit -print0 | sort -z | xargs -0 sha256sum
+            find data -type f -print0 | sort -z | xargs -0 sha256sum
+            git rev-parse 'HEAD^{tree}'
+            echo "$ledger $tag"
+          } | sha256sum | cut -c1-16)
+          last=$(jq -r '.key // ""' "$STORE/site/latest.json" 2>/dev/null || true)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          if [ "$key" = "$last" ]; then
+            echo "make=false" >> "$GITHUB_OUTPUT"
+            echo "Site results: unchanged ($key)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "make=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Load the stored backtests and fits
+        if: steps.key.outputs.make == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          bundle="$STORE/backtests/latest.tar.gz"
+          if [ -f "$bundle" ]; then tar -xzf "$bundle"; fi
+          uv run bdbvhub fit-store load --store "$STORE"
+      # The fine-tuned models' German forecasts, as the workflow's German
+      # unit made them: the asset germany-forecasts.tar.gz of the release
+      # packages/nowcastfoundation/config/finetune.toml pins (`nowcastgermany
+      # ft-tag`), attached by `publish_germany_unit`. Development dates
+      # only. `concat-results` stacks them with the other models, so they
+      # are scored on the same cells.
+      - name: Load the stored fine-tuned German forecasts
+        if: steps.key.outputs.make == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p output/germany-ft-store
+          tag=$(uv run nowcastgermany ft-tag)
+          if gh release download "$tag" -R "$GITHUB_REPOSITORY" \
+            -p germany-forecasts.tar.gz -D output/germany-ft-store; then
+            tar -xzf output/germany-ft-store/germany-forecasts.tar.gz \
+              -C output/germany-ft-store
+          fi
+          uv run nowcastgermany ft-load \
+            --store output/germany-ft-store \
+            --out output/parts/parts-germany-ft-store/germany \
+            --note results/germany/ft-checkpoint.json
+      - name: Compare with hub forecasts, then the docs figures and tables
+        if: steps.key.outputs.make == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The hub's forecasts come over the network, which times out
+          # now and then; three tries, a minute apart.
+          for try in 1 2 3; do
+            uv run bdbvhub compare-hub --fetch && break
+            if [ "$try" = 3 ]; then exit 1; fi
+            echo "::warning::compare-hub --fetch failed (try $try); retrying"
+            sleep 60
+          done
+          uv run bdbvhub concat-results --out results/germany \
+            output/parts/parts-germany-*/germany
+          # The hub teams' nowcasts are read, not run, so they are scored
+          # here.
+          uv run nowcastgermany fetch
+          uv run nowcastgermany teams --out results/germany
+          uv run nowcastgermany asof --out results/germany
+          uv run nowcastgermany paper --results results/germany
+          uv run bdbvhub report --ledger output/ledger
+      - name: Store the site results
+        if: steps.key.outputs.make == 'true'
+        env:
+          KEY: ${{ steps.key.outputs.key }}
+        run: |
+          # Only what this job made or changed, never a committed file.
+          git ls-files --others --modified -- results docs \
+            > "$RUNNER_TEMP/site.txt"
+          tar -czf "$RUNNER_TEMP/site.tar.gz" -T "$RUNNER_TEMP/site.txt"
+          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py \
+            push-site "$RUNNER_TEMP/site.tar.gz" "$GITHUB_SHA" "$KEY"
+      - name: Rebuild the docs from the store
+        if: github.ref == 'refs/heads/main' && inputs.store_branch == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"
