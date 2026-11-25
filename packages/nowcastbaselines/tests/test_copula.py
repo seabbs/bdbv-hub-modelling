@@ -83,6 +83,17 @@ def test_zones_and_the_country_are_not_paired() -> None:
     np.testing.assert_array_equal(_pair(only, 0.9, locations=zones), only)
 
 
+def test_the_root_of_any_hierarchy_is_not_paired() -> None:
+    places = ("XX", "XX-A", "XX-B", "XX-A-1")
+    draws = _draws(places=4)
+    out = _pair(draws, 0.9, locations=places)
+    for loc in (0, 3):
+        np.testing.assert_array_equal(out[:, loc], draws[:, loc])
+    assert _rank_corr(out[:, 1, 0], out[:, 2, 0]) == pytest.approx(
+        _spearman(0.9), abs=0.05
+    )
+
+
 @pytest.mark.parametrize("rho", [-0.1, 1.0])
 def test_rho_must_be_in_zero_to_one(rho: float) -> None:
     with pytest.raises(ValueError, match="between 0 and 1"):
