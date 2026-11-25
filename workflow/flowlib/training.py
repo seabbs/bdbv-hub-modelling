@@ -285,6 +285,14 @@ class Training:
             lambda s: self.outbreaks_or_full(run, s),
         )
 
+    def still_training(self) -> list[str]:
+        """Return the trained runs with a segment in reach left to train."""
+        return [
+            run
+            for run in self.trained_runs()
+            if any(not self.saved(run, n) for n in self.trainable(run))
+        ]
+
     def finetune_inputs(self, wc: Any) -> list[str]:  # noqa: ARG002
         """Return each trained run's checkpoints, held-out losses, checks."""
         out = []

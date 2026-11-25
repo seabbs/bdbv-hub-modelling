@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from flowlib import forecast, machine, notify, releases
+from flowlib import compute, forecast, machine, notify, releases
 from flowlib.training import Training
 
 EVALUATE = "uv run --group chronos python -m nowcastgermany.checkpoint"
@@ -206,6 +206,23 @@ class Scoring:
         # config, which the machine may override).
         self.forecast = forecast.settings(config, local)
         self.unit_threads = self.forecast.threads
+        # A checkpoint's scoring takes a GPU no run trains on, if any.
+        self.checkpoint_forecast = compute.scoring_forecast(
+            self.forecast, *self._gpus_and_training()
+        )
+
+    def _gpus_and_training(self) -> tuple[int, int]:
+        """Return this machine's CUDA GPUs and its runs left to train.
+
+        No GPUs where jobs may run elsewhere (`COMPUTE` other than
+        single), whose GPUs this machine cannot count.
+        """
+        if compute.mode(self.local) != "single":
+            return 0, 0
+        gpus = len(machine.gpu_ids(self.local))
+        if not gpus:
+            return 0, 0
+        return gpus, len(self.training.still_training())
 
     def checkpoint_labels(self, wc: Any = None) -> list[str]:  # noqa: ARG002
         """Return the checkpoints to score, less `score.skip`."""
@@ -257,9 +274,17 @@ class Scoring:
         A unit taking the `gpu` resource runs through `machine.CLAIM`
         first, on a GPU of its own.
         """
-        env = machine.torch_env(self.local, threads, self.forecast.device)
-        env["JAX_PLATFORMS"] = forecast.JAX_PLATFORM[self.forecast.device]
-        claim = f"{machine.CLAIM} " if self.forecast.gpu else ""
+        return self._env(self.forecast, threads)
+
+    def checkpoint_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
+        """Return `unit_env` for a checkpoint's scoring (its own device)."""
+        return self._env(self.checkpoint_forecast, threads)
+
+    def _env(self, fc: forecast.Forecast, threads: int) -> str:
+        """Return a job's environment on `fc`'s device with `threads`."""
+        env = machine.torch_env(self.local, threads, fc.device)
+        env["JAX_PLATFORMS"] = forecast.JAX_PLATFORM[fc.device]
+        claim = f"{machine.CLAIM} " if fc.gpu else ""
         return claim + machine.shell_env(env)
 
     def unit_rows(self, study: str) -> Callable[[Any], str]:

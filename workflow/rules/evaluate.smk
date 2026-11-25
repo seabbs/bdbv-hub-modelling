@@ -26,11 +26,11 @@ rule evaluate_base:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        gpu=FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=unit_env,
-        device=FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [
             f"{train_dir(wc.run)}/evals/step-0000000/",
@@ -63,11 +63,11 @@ rule evaluate_checkpoint:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        gpu=FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=unit_env,
-        device=FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=evaluate_inputs_from,
     shell:
@@ -96,11 +96,11 @@ rule seven_day_check:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        gpu=FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=unit_env,
-        device=FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
     shell:
