@@ -323,7 +323,15 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     for rule, wildcards, priority in _job_priorities(out.stdout):
         if rule == "train_segment":
             tiers["train"].append(priority)
-        elif rule in ("fetch_batch", "verify_checkpoint", "publish_checkpoint"):
+        elif rule in (
+            "fetch_batch",
+            "verify_checkpoint",
+            "publish_checkpoint",
+            # Quick jobs a released checkpoint's BDBV check waits on, which
+            # at priority 0 queued behind every CPU job (archie, 25 Nov).
+            "hub_data",
+            "ft_check_page",
+        ):
             tiers["fetch"].append(priority)
         elif rule == "score_germany" or (
             rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards
@@ -339,6 +347,8 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
         elif rule == "simulate_batch":
             tiers["batch"].append(priority)
     assert all(tiers.values()), tiers
+    seen = {rule for rule, _, _ in _job_priorities(out.stdout)}
+    assert {"hub_data", "ft_check_page"} <= seen
     assert min(tiers["train"]) > max(tiers["fetch"])
     assert min(tiers["fetch"]) > max(tiers["reference"])
     assert min(tiers["reference"]) > max(tiers["checkpoint"])
