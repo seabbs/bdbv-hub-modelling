@@ -27,6 +27,8 @@ from nowcastfoundation.sidecar import (
 )
 
 __all__ = [
+    "VALIDATION_BASE",
+    "VALIDATION_FILE",
     "checkpoint_settings",
     "level_points",
     "merged_history",
@@ -37,6 +39,15 @@ __all__ = [
     "validation_curve",
     "write_validation_curve",
 ]
+
+
+VALIDATION_FILE = "validation-forecasts.json.gz"
+"""A checkpoint's forecasts of a sample of its run's held-out blocks
+(rule validation_forecasts), beside its settings."""
+
+VALIDATION_BASE = "validation-forecasts-base.json.gz"
+"""Base Chronos-2's forecasts of the same blocks, in the run's train
+folder (rule validation_forecasts_base)."""
 
 
 def _read(path: Path) -> Any:
