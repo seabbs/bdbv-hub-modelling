@@ -80,11 +80,12 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
     It has been used in a wide range of applications, including nowcasting COVID-19 hospitalisations in the German nowcast hub [@Wolffram2023], and as a check in nowcasts of mpox and norovirus in England [@Overton2023-dk; @Mellor2025].
     The same form of model has been used to nowcast the effective reproduction number from line list data [@lison2024].
     This makes it a natural basis for simulating training data, and our simulations follow its structure.
+  - PyRenew is a newer Python framework from the US CDC for building renewal models of infectious disease from modular components, such as infection processes, delays and observation models, using JAX and NumPyro [@pyrenew; @Phan2019].
+    It can express marginal generative nowcasting models of the same form as epinowcast, but does not yet support many of its reporting patterns, such as delays that change over time.
 
 - **What we did.**
   - We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.
   - epinowcast is written in R and Stan [@RCoreTeam; @Carpenter2017], while Chronos-2 is written in Python.
-    PyRenew is a Python framework for building renewal models of infectious disease from modular components, such as infection processes, delays and observation models, using JAX and NumPyro [@pyrenew; @Phan2019].
     We ported the epinowcast model to Python on top of PyRenew, reusing its components and adding components where it had none, such as delays that change over time.
     We did this for modularity, so each part of the surveillance process can be swapped or extended on its own, and so the simulator and the foundation model share one language.
   - We gave the model the reporting triangle as one series per place and reporting delay.
