@@ -113,9 +113,13 @@ exclusive` on CUDA take `gpu` too. Placed on a worker by its group,
 a GPU rule also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""
 
-TRAIN_PRIORITY = 100
-"""The trainer's job priority, above every other job's, so the next
-segment starts the moment the previous ends."""
+TRAIN_PRIORITY = 10**6
+"""The trainer's job priority, so the next segment starts the moment the
+previous ends. Snakemake's scheduler picks the ready jobs whose
+priorities sum highest, so it is above the sum of as many other jobs as
+a machine has cores (up to 10,000), each at most `HANDOFF_PRIORITY` + 2:
+a finished segment's freed cores never go to its checkpoint's release
+and scoring instead of the next segment."""
 
 HANDOFF_PRIORITY = 90
 """The quick jobs that unblock others: a batch's copy into a run

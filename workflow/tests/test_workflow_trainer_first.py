@@ -64,3 +64,14 @@ def test_the_trainer_outweighs_a_machine_full_of_other_jobs():
     ]
     trainer = _job("train", compute.TRAIN_PRIORITY, cores, gpu=1)
     assert _select([trainer, *others], cores=cores) == {"train"}
+
+
+def test_the_bound_covers_every_band_below_the_trainer():
+    others = max(
+        compute.HANDOFF_PRIORITY,
+        compute.REFERENCE_PRIORITY,
+        compute.CHECKPOINT_PRIORITY,
+        compute.BATCH_PRIORITY,
+        compute.EVALUATION_PRIORITY,
+    )
+    assert 10_000 * (others + 2) < compute.TRAIN_PRIORITY
