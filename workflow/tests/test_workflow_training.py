@@ -121,3 +121,19 @@ def test_released_batches_are_listed_once_per_run(
     assert len(calls) == asked
     record = Path(t.runs["x"].dir) / "available-batches.txt"
     assert record.read_text().split() == [str(s) for s in sorted(first)]
+
+
+def test_a_run_trains_while_a_segment_in_reach_is_unsaved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    t = _training(tmp_path)
+    monkeypatch.setattr(t, "trainable", lambda _run: [100, 200])
+    assert t.still_training() == ["x"]
+    for n in (100, 200):
+        where = Path(t.train_dir("x")) / f"n{n}"
+        where.mkdir(parents=True)
+        (where / "settings.json").write_text("{}")
+    assert t.still_training() == []
+    # Nothing in reach (no batches yet): no trainer is planned either.
+    monkeypatch.setattr(t, "trainable", lambda _run: [])
+    assert t.still_training() == []
