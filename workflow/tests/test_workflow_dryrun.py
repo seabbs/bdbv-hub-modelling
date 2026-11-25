@@ -566,6 +566,15 @@ def test_offloaded_evaluation_is_planned_after_each_segment(tmp_path):
     assert not any(k.startswith("evaluate_steps") for k in jobs)
 
 
+def test_each_checkpoint_has_a_quick_check_first_on_the_gpu(tmp_path):
+    # Sam, 25 Nov: a few minutes on the GPU after each checkpoint, ahead of
+    # the next segment, and base Chronos-2 once for the reference line.
+    jobs = dry(tmp_path, "finetune", config=OFFLOAD)
+    assert jobs["quick_check"] == jobs["train_segment"] == 2
+    assert jobs["quick_check_base"] == 1
+    assert compute.QUICK_PRIORITY > compute.TRAIN_PRIORITY + 1
+
+
 def test_local_evaluation_plans_no_evaluation_rules(tmp_path):
     jobs = dry(tmp_path, "finetune", config=FT)
     assert not any(k.startswith("evaluate") for k in jobs)

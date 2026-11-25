@@ -132,3 +132,28 @@ def test_evaluation_logs_each_batch(tmp_path, fake, monkeypatch, capsys):
     # Outside an evaluation nothing is logged.
     mod.fs.report_batch(1, 2)
     assert "batch" not in capsys.readouterr().out
+
+
+def test_the_quick_check_writes_beside_each_checkpoint_and_the_base(
+    tmp_path, fake, monkeypatch
+):
+    mod, _ = fake
+    train = tmp_path / "train"
+    snapshot(train, 0, ["start"])
+    where = checkpoint_at(train, 250, 200)
+    seen = []
+
+    def quick_check(adapter, _base, blocks, _batch, n):
+        seen.append((Path(adapter).name, len(blocks), n))
+        return {"loss": 0.3, "blocks": n, "seconds": 1.0}
+
+    monkeypatch.setattr(mod.fe, "quick_check", quick_check)
+    mod.main(["quick", str(where), "--device", "cpu", "--blocks", "7"])
+    mod.main(["quick-base", str(where), "--device", "cpu", "--blocks", "7"])
+    got = json.loads((where / "quick-check.json").read_text())
+    assert got["loss"] == 0.3
+    assert got["device"] == "cpu"
+    base = json.loads((train / "evals" / "quick-check-base.json").read_text())
+    assert base["loss"] == 0.3
+    # The checkpoint's adapter, then step 0's (base Chronos-2).
+    assert seen == [("finetuned-ckpt", 2, 7), ("adapter", 2, 7)]
