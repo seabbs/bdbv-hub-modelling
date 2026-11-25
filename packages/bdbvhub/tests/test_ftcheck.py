@@ -270,7 +270,7 @@ def test_a_check_forecast_resumes_from_the_releases_it_wrote(
 
     def forecast_releases(some, _target, _models):
         (task,) = some
-        if task.vintage == "2026-10-08" and not done:
+        if task.vintage == "2026-10-08" and "killed" not in done:
             done.append("killed")
             raise KeyboardInterrupt
         done.append(task.vintage)
