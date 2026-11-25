@@ -30,13 +30,28 @@ for vintage, totals in (
     for week, total in zip(weeks, totals):
         imputed = total // 3
         rows.append(
-            ("real", vintage, vintage, "CD-NK", week, total - imputed, imputed, total)
+            (
+                "real",
+                vintage,
+                vintage,
+                "CD-NK",
+                week,
+                total - imputed,
+                imputed,
+                total,
+            )
         )
 target = pd.DataFrame(
     rows,
     columns=[
-        "kind", "vintage", "cutoff", "location", "target_end_date",
-        "observed", "imputed", "total",
+        "kind",
+        "vintage",
+        "cutoff",
+        "location",
+        "target_end_date",
+        "observed",
+        "imputed",
+        "total",
     ],
 )
 ```

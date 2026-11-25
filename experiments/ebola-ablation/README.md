@@ -1,7 +1,7 @@
 # Ebola ablation
 
 Status: exploratory. It is not part of the paper or the workflow.
-Findings are in #1123; what the pseudo weeks become is open in #1141.
+Findings are in #1123.
 
 ## What it tests
 
@@ -9,13 +9,11 @@ The fine-tuned Chronos-2 does much worse than zero-shot on the BDBV hub data, wh
 The experiment finds the feature of the BDBV data that causes this.
 Six held-out simulated outbreaks become six provinces of a hub-shaped data set, and one BDBV feature at a time is imposed on them (`ebola_ablation.py sim`): the release history, late-starting zones, small counts, a weekday cycle, longer delays and zones that stop reporting.
 The hub data can also be moved one feature at a time towards the simulations (`ebola_ablation.py bdbv`).
-Each variant runs through the BDBV check (`bdbvhub ft-check forecast`) with zero-shot and fine-tuned Chronos-2, each with and without pseudo weeks, scored against `randomwalknowcast`.
-`pseudo_vintages.py` counts the past vintages the hub's reference/report pairs support, and checks them against the real releases.
+Each variant runs through the BDBV check (`bdbvhub ft-check forecast`) with zero-shot and fine-tuned Chronos-2, scored against `randomwalknowcast`.
 
 ## Files
 
 - `ebola_ablation.py`: the variants' hub data (`sim`, `bdbv`), the backtest config (`config`) and each variant's scores (`summary`).
-- `pseudo_vintages.py`: pseudo vintages from the hub's reference/report pairs.
 - `ebola_ablation_report.py`: the page, every number computed from the files above.
 - `tests/`: their tests (`uv run pytest experiments/ebola-ablation/tests`).
 
@@ -38,10 +36,9 @@ for v in daily weekly short fresh gap few few_daily late_start small \
 done
 uv run python $E/ebola_ablation.py bdbv as_is --src data --out $OUT/bdbv/as_is/data
 for d in $OUT/sim/* $OUT/bdbv/*; do
-  for m in randomwalknowcast foundation_zeroshot foundation \
-    foundation_zeroshot_pseudoweeks foundation_pseudoweeks; do
+  for m in randomwalknowcast foundation_zeroshot foundation; do
     c=""
-    case $m in foundation | foundation_pseudoweeks) c=$CKPT ;; esac
+    case $m in foundation) c=$CKPT ;; esac
     DEVICE=cpu CHRONOS_BLOCK_LIMIT=1000 BDBV_DATA_DIR=$d/data \
       uv run --group chronos bdbvhub ft-check forecast --model $m \
       --checkpoint "$c" --config $OUT/backtest.toml \
@@ -50,10 +47,8 @@ for d in $OUT/sim/* $OUT/bdbv/*; do
   BDBV_DATA_DIR=$d/data uv run python $E/ebola_ablation.py summary $d \
     --out $d/summary.json
 done
-uv run python $E/pseudo_vintages.py data --out $OUT/pseudo-vintages.json
 uv run python $E/ebola_ablation_report.py $OUT/sim/* $OUT/bdbv/* \
-  --checkpoint $CKPT --releases $RELEASES \
-  --pseudo-vintages $OUT/pseudo-vintages.json --out $OUT/ebola-ablation.html
+  --checkpoint $CKPT --releases $RELEASES --out $OUT/ebola-ablation.html
 ```
 
 On a CPU each Chronos-2 forecast of a simulated variant takes a few minutes, and of the hub data about 20 minutes.
