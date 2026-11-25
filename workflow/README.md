@@ -217,7 +217,7 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 
 - Data: `germany_fetch`, `germany_triangle`, `germany_dev_stats`, `ebola_hub`, `ebola_data` (the hub's releases, downloaded on the driver for `ebola_backtest`), `data`, and `synthetic_forecasts_development` and `synthetic_forecasts_paper` (the synthetic runner's forecasts of each run's seeds).
 - Benchmarks: `germany_development`, `germany_heldout` (paper runs only), `ebola_backtest` and `ebola_backtest_draws`.
-- Fit store history: `fit_store_history` fetches the release asset of our stored forecasts made before each round closed and checks its checksum; `publish_fit_store_history` (opt-in) builds and publishes it from the fit store branch.
+- Round releases: our submissions are read from the hub's clone (`ebola_hub`), and `round_releases` reads the models each round did not submit from that round's release (`round-<reference date>`, its `hub.zip`), with the submission ledger's table naming what each round submitted.
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
 - Evidence read from git (`evidence_checkpoint_scores`), gathered by `evidence`.
 - Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `pairing_germany`, `pairing_synthetic` and `si_copula` (the walks' scores with and without pairing, and their German rolling $\rho_p$, on development data), `grid_tables`, `summary` and `publish_paper`.

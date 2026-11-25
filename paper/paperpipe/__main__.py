@@ -100,7 +100,7 @@ def _sources(a: argparse.Namespace) -> Sources:
         ebola_extra=tuple(a.ebola_extra),
         ebola_draws=a.ebola_draws,
         ebola_draws_models=tuple(a.ebola_draws_models),
-        store_history=a.store_history,
+        round_releases=a.round_releases,
     )
 
 
@@ -231,10 +231,10 @@ def _ebola_extra(a: argparse.Namespace) -> None:
     _write(raw.loc[raw["model"].str.match(a.models)], a.out)
 
 
-def _fit_store_history(a: argparse.Namespace) -> None:
+def _round_releases(a: argparse.Namespace) -> None:
     from paperdata import ebola
 
-    ebola.write_store_history(a.repo, a.ref, a.out)
+    ebola.write_release_samples(a.releases, a.ledger, a.out)
 
 
 def _germany_extra(a: argparse.Namespace) -> None:
@@ -297,7 +297,7 @@ def _limits(p: argparse.ArgumentParser) -> None:
     p.add_argument("--ebola-extra", type=Path, nargs="*", default=[])
     p.add_argument("--ebola-draws", type=Path, default=None)
     p.add_argument("--ebola-draws-models", nargs="*", default=[])
-    p.add_argument("--store-history", type=Path, default=None)
+    p.add_argument("--round-releases", type=Path, default=None)
 
 
 def _outputs(p: argparse.ArgumentParser) -> None:
@@ -418,11 +418,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(run=_ebola_extra)
 
-    p = sub.add_parser("fit-store-history")
-    p.add_argument("--repo", type=Path, default=Path())
-    p.add_argument("--ref", default="origin/fit-store")
+    p = sub.add_parser("round-releases")
+    p.add_argument("--releases", type=Path, required=True)
+    p.add_argument("--ledger", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.set_defaults(run=_fit_store_history)
+    p.set_defaults(run=_round_releases)
 
     p = sub.add_parser("germany-extra")
     p.add_argument("--input", type=Path, required=True)
