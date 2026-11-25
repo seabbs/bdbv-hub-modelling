@@ -167,6 +167,7 @@ def test_runs_and_references_take_the_shared_display_names(tmp_path):
     assert names == {
         "Zero-shot (reporting triangle)",
         "Zero-shot (complete data)",
+        "Zero-shot (baselinenowcast)",
         "Random walk nowcast",
     }
 
