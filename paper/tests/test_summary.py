@@ -159,3 +159,21 @@ def test_the_checkpoint_spec_is_read_beside_its_release_record(
     )
     (segment / "published.json").write_text('{"tag": "t", "hash": "x"}')
     assert finetuned_spec(segment / "published.json") == "slots-e8a1f5ae338b"
+
+
+def test_summary_gives_the_training_checkpoints_from_the_config(
+    tmp_path,
+) -> None:
+    path = tmp_path / "results.yml"
+    write_summary(
+        path, "paper", {}, prefixes=[100, 200, 400, 800, 1600, 3200, 4800]
+    )
+    training = yaml.safe_load(path.read_text())["results"]["training"]
+    assert training == {
+        "simulations": "4,800",
+        "checkpoints": "100, 200, 400, 800, 1,600, 3,200 and 4,800",
+        "first": "100",
+        "first_rate": "98%",
+        "penultimate": "3,200",
+        "penultimate_rate": "33%",
+    }

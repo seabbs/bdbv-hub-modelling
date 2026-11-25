@@ -12,7 +12,7 @@ numbers are from its held-out half.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +24,13 @@ from paperfigs.periods import PERIODS
 from paperpipe.meta import DUMMY_LABEL, baseline_of
 from paperpipe.outputs import REFERENCE
 
-__all__ = ["QUOTED_MODELS", "finetuned_spec", "study_summary", "write_summary"]
+__all__ = [
+    "QUOTED_MODELS",
+    "finetuned_spec",
+    "study_summary",
+    "training_summary",
+    "write_summary",
+]
 
 
 SCOPES: dict[str, tuple[str, str]] = {
@@ -141,14 +147,44 @@ def finetuned_spec(record: Path | str) -> str:
     return checkpoint_spec(json.loads(settings.read_text()))
 
 
+def training_summary(prefixes: Sequence[int]) -> dict[str, str]:
+    """Return the final run's checkpoints as the paper quotes them.
+
+    The learning rate falls linearly to zero over the last prefix, so a
+    checkpoint at `n` of `N` simulations is taken at `1 - n / N` of the
+    starting rate.
+    """
+    *earlier, last = [int(n) for n in prefixes]
+
+    def rate(n: int) -> str:
+        return f"{round(100 * (1 - n / last))}%"
+
+    first = earlier[0] if earlier else last
+    penultimate = earlier[-1] if earlier else last
+    listed = ", ".join(f"{n:,}" for n in earlier)
+    return {
+        "simulations": f"{last:,}",
+        "checkpoints": f"{listed} and {last:,}" if earlier else f"{last:,}",
+        "first": f"{first:,}",
+        "first_rate": rate(first),
+        "penultimate": f"{penultimate:,}",
+        "penultimate_rate": rate(penultimate),
+    }
+
+
 def write_summary(
     path: Path,
     mode: str,
     studies: Mapping[str, dict],
     finetuned: str | None = None,
     realdata_after: str | None = None,
+    prefixes: Sequence[int] = (),
 ) -> None:
     """Write every study's numbers as Quarto metadata under `results`.
+
+    `prefixes` are the final run's checkpoints, in simulations; the paper
+    quotes them, and the learning rate at the first and last but one
+    (`training_summary`), under `training`.
 
     `realdata_after` is the last BDBV release the real-data model trained
     on, quoted by the SI.
@@ -161,6 +197,7 @@ def write_summary(
             "mode": mode,
             "finetuned": pin,
             "realdata_after": realdata_after or "pending",
+            **({"training": training_summary(prefixes)} if prefixes else {}),
             **studies,
         }
     }

@@ -108,7 +108,7 @@ Chronos-2's group attention has no notion of which series is which, so on its ow
 
 - We add three learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
 - They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
-- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the 3,200 simulations.
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the {{< meta results.training.simulations >}} simulations.
 - We identify places by name within each block, with no limit on the number of places.
 - A place's parent is the nearest prefix of its name in the block, else the country.
 - Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
@@ -225,7 +225,7 @@ Each simulation gives one observation draw, cut at 14 cut-offs, one drawn at ran
 Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
 A block with fewer than 10 cases reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
 Each day counts once, at its latest report, in the block's busiest level.
-We train on 3,200 simulations drawn from the grid, with checkpoints at 100, 200, 400, 800, 1,600 and 3,200.
+We train on {{< meta results.training.simulations >}} simulations drawn from the grid, with checkpoints at {{< meta results.training.checkpoints >}}.
 
 ::: {#tbl-block-layouts}
 | Layout | Share of blocks |
@@ -588,13 +588,13 @@ Choices tuned on development data, with their values and the data they were set 
 
 ### Checkpoint curve
 
-- We compare the final run's checkpoints, fine-tuned on 100, 200, 400, 800, 1,600 and 3,200 simulations.
+- We compare the final run's checkpoints, fine-tuned on {{< meta results.training.checkpoints >}} simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-validation gives the trainer's validation loss by level, for transparency, not to select a checkpoint.
 - @fig-checkpoint-curve gives German first-half relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero over the 3,200 simulations, so the earlier checkpoints are taken at 97% (100) to 50% (1,600) of the starting rate, and only the 3,200 checkpoint is annealed.
+- The learning rate falls linearly to zero over the {{< meta results.training.simulations >}} simulations, so the earlier checkpoints are taken at {{< meta results.training.first_rate >}} ({{< meta results.training.first >}}) to {{< meta results.training.penultimate_rate >}} ({{< meta results.training.penultimate >}}) of the starting rate, and only the {{< meta results.training.simulations >}} checkpoint is annealed.
 
 ![The trainer's validation loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-validation.png){#fig-finetune-validation}
 

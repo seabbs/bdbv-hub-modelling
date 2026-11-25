@@ -212,9 +212,24 @@ def test_outputs_have_the_ebola_tables_only_in_a_paper_run() -> None:
 
 
 def test_summary_args_name_the_checkpoint_when_set() -> None:
-    assert _flow().summary_args() == " --realdata-after 2026-08-01"
+    prefixes = "--prefixes 100 200 400 800 1600 3200 4800"
+    assert _flow().summary_args() == (
+        f" --realdata-after 2026-08-01 {prefixes}"
+    )
     assert _flow(finetuned_record="n9/published.json").summary_args() == (
-        "--finetuned-record n9/published.json --realdata-after 2026-08-01"
+        "--finetuned-record n9/published.json --realdata-after 2026-08-01 "
+        f"{prefixes}"
+    )
+
+
+def test_the_summary_takes_the_final_runs_own_checkpoints() -> None:
+    runs = {"runa": {"prefixes": [100, 3200]}}
+    assert _flow(runs=runs).summary_args().endswith("--prefixes 100 3200")
+    # With no final run, the workflow's fine-tuning settings.
+    assert (
+        _flow(final_run=None, runs=runs)
+        .summary_args()
+        .endswith("--prefixes 100 200 400 800 1600 3200 4800")
     )
 
 
