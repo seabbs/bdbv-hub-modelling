@@ -1,5 +1,6 @@
 """The Snakemake DAG stays valid and the development target runs."""
 
+import os
 import re
 import subprocess
 import sys
@@ -396,9 +397,17 @@ def test_every_forecasting_rule_declares_its_threads():
 def test_the_pages_render_computes_nothing_the_workflow_hosts_make(
     tmp_path: Path,
 ) -> None:
-    # Pages renders with paper/workflow/pages.yaml: the German benchmark
-    # and the figures, never a simulation, a training run or what reads
-    # them, which pend in the paper.
+    # Pages renders with paper/workflow/pages.yaml: the figures, tables
+    # and summary over the German benchmark's stored forecasts, never the
+    # benchmark, a simulation, a training run or the pairing sensitivity.
+    # The fetched data newer than the forecasts would rerun the benchmark
+    # if a rule made them.
+    (tmp_path / "germany-results").mkdir()
+    forecasts = tmp_path / "germany-results" / "paper-forecasts.csv.gz"
+    forecasts.write_text("")
+    os.utime(forecasts, (1, 1))
+    (tmp_path / "germany").mkdir()
+    (tmp_path / "germany" / "COVID-19_hospitalizations.csv").write_text("")
     cfg = tmp_path / "real.yaml"
     cfg.write_text(
         yaml.safe_dump(
@@ -426,9 +435,10 @@ def test_the_pages_render_computes_nothing_the_workflow_hosts_make(
     )
     assert res.returncode == 0, res.stderr
     log = res.stdout + res.stderr
-    for rule in ("germany_development", "publish_paper"):
-        assert f"rule {rule}" in log
+    assert "rule publish_paper" in log
     for rule in (
+        "germany_fetch",
+        "germany_development",
         "simulate_batch",
         "fetch_batch",
         "train_segment",
@@ -453,9 +463,18 @@ def test_the_pages_render_reads_stored_outputs_as_inputs(
         "synthetic": {
             "forecasts": {"development": str(store / "synthetic-dev.csv.gz")}
         },
-        "stored": {"pairing_synthetic": str(store / "pairing.csv.gz")},
+        "stored": {
+            "pairing_synthetic": str(store / "pairing.csv.gz"),
+            "pairing_germany": str(store / "pairing-germany.csv.gz"),
+            "copula_rho": str(store / "rho.csv.gz"),
+        },
     }
-    for name in ("synthetic-dev.csv.gz", "pairing.csv.gz"):
+    for name in (
+        "synthetic-dev.csv.gz",
+        "pairing.csv.gz",
+        "pairing-germany.csv.gz",
+        "rho.csv.gz",
+    ):
         (store / name).write_text("")
     cfg = tmp_path / "real.yaml"
     cfg.write_text(
@@ -491,6 +510,7 @@ def test_the_pages_render_reads_stored_outputs_as_inputs(
         "simulate_batch",
         "synthetic_forecasts_development",
         "pairing_synthetic",
+        "pairing_germany",
         "train_segment",
     ):
         assert f"rule {rule}:" not in log
