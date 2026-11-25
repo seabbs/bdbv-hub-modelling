@@ -1,7 +1,11 @@
 # nowcastutils
 
-The pieces the other nowcasting packages build on: releases and their cut-offs, daily snapshots, location hierarchies, the forecast task and sample trajectories.
-It is for anyone writing a model or a scorer that should see the same releases and places as the rest of the repository.
+The pieces a nowcasting model or scorer builds on: releases and their cut-offs, daily snapshots, location hierarchies, the forecast task and sample trajectories.
+Use it to write a model or a scorer that sees the same releases and places as the rest of the repository.
+
+In this project every other package builds on it.
+Each model takes its `ForecastTask`, returns a sample table and is found by name in its registry.
+The BDBV backtest, the German benchmark, the hub submission and the paper all find their models this way.
 
 ## Start here
 
@@ -19,6 +23,7 @@ It is for anyone writing a model or a scorer that should see the same releases a
 - [`trajectories`](src/nowcastutils/trajectories/): coherent sample trajectories from quantile forecasts.
 - [`files`](src/nowcastutils/files.py), [`web`](src/nowcastutils/web.py): table writing and downloads.
 - [`devices`](src/nowcastutils/devices.py): compute device settings.
+- [`chunks`](src/nowcastutils/chunks.py), [`shapes`](src/nowcastutils/shapes.py): runs split into blocks, and shared array shapes so JAX compiles once.
 
 ## Next
 

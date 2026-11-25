@@ -1,7 +1,13 @@
 # bdbvhub
 
-Nowcasts and forecasts for the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub), built on the `nowcast*` packages.
-It reads the hub's data (`nowcastbdbv`), fits and stores the models, writes and checks the weekly hub file, and builds the docs site's hub pages.
+Our side of the [BDBV Modeling Hub](https://github.com/InsightNet-US/BDBV-Modeling-Hub), built on the `nowcast*` packages.
+It fits our models to the hub's data, keeps the fits in a store, writes and checks the weekly hub file, and builds the hub pages of the docs site.
+
+In this project it is the `bdbvhub` command the CI workflows call.
+Fit store fits and stores every fitted model (`bdbvhub fit-store`).
+Site runs the backtests and builds the docs pages (`bdbvhub backtest`, `bdbvhub report`).
+Fit candidates writes the week's hub file (`bdbvhub nowcast`) for Submit to the BDBV hub.
+It sits at the top of the package stack and imports every other `nowcast*` package.
 
 ## Start here
 
@@ -15,6 +21,7 @@ It reads the hub's data (`nowcastbdbv`), fits and stores the models, writes and 
 - [`store`](src/bdbvhub/store/): the fit store, its archive and the backtest digest.
 - [`pairing`](src/bdbvhub/pairing.py): the walk models' pairing sensitivity on the BDBV backtest.
 - [`compare`](src/bdbvhub/compare.py): comparison with the hub's forecasts. Health-zone forecasts are in [`nowcastbdbv.zones`](../nowcastbdbv/src/nowcastbdbv/zones.py).
+- [`ftcheck`](src/bdbvhub/ftcheck.py): the Chronos-2 models, zero-shot and fine-tuned, on every hub release, scored.
 - [`submission`](src/bdbvhub/submission/): the hub file writer and checks, model metadata, the rounds and the CI fit configurations.
 - [`reporting`](src/bdbvhub/reporting/): the docs pages, tables and figures of the hub data.
 - [`cli`](src/bdbvhub/cli.py): the command.
