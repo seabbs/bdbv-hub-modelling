@@ -1,9 +1,10 @@
-"""randomwalknowcast's German 7-day sums ahead of a mid-week nowcast date.
+"""The walks' German 7-day sums ahead of a mid-week nowcast date.
 
 The 7-day sums after the cut-off walk on from each sample's sum ending
 on the cut-off in daily steps, the target's own resolution, so they
 carry no weekday cycle. The daily counts walk in daily steps too, and
-include the country as the sum of the states.
+include the country as the sum of the states. `randomwalk` returns the
+sums to its start as reported and walks on in daily steps.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nowcastbaselines.randomwalk import RandomWalkNowcast
+from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcastgermany.data import nowcast_tasks, read_triangle
 from nowcastutils.base import NATIONAL, ForecastTask
 
@@ -72,19 +73,46 @@ def test_daily_counts_include_the_country(task: ForecastTask) -> None:
     assert (wide[NATIONAL] >= wide[states].max(axis=1)).all()
 
 
+@pytest.mark.parametrize("model", [RandomWalk, RandomWalkNowcast])
 def test_median_sums_ahead_have_no_weekday_cycle(
-    draws: pd.DataFrame,
+    task: ForecastTask, model: type[RandomWalk]
 ) -> None:
     # The medians of the sums after the cut-off, averaged by weekday, are
-    # about level: a weekday cycle would make some weekdays' sums higher.
+    # about level: a weekday cycle, or a sum left at 0, would make some
+    # weekdays' sums higher.
     cut = pd.Timestamp(DATE)
-    ahead = draws.loc[draws["target_end_date"] > cut]
+    out = model().forecast(task)
+    ahead = out.loc[pd.to_datetime(out["target_end_date"]) > cut]
     assert set(ahead["location"]) == {"CD-BE", "CD-BY"}
     med = ahead.groupby(["location", "target_end_date"])["value"].median()
     for loc, own in med.groupby(level="location"):
-        days = own.index.get_level_values("target_end_date")
+        days = pd.to_datetime(own.index.get_level_values("target_end_date"))
         by_day = own.groupby((days - cut).days % 7).mean()
         assert by_day.std() / by_day.mean() < 0.08, loc
+
+
+def test_randomwalk_sums_to_its_start_are_as_reported() -> None:
+    triangle = read_triangle(FIXTURE)
+    task = nowcast_tasks(triangle, DATE, 50, 1, horizons=range(-28, 22))[0]
+    out = RandomWalk().forecast(task)
+    daily = task.daily_history
+    assert daily is not None
+    latest = daily.loc[daily["vintage"] == daily["vintage"].max()]
+    fixed = 0
+    for (loc, day), cell in out.groupby(["location", "target_end_date"]):
+        assert cell["value"].median() > 0, (loc, day)
+        if cell["value"].nunique() > 1:
+            continue
+        end = pd.Timestamp(day)
+        days = pd.to_datetime(latest["onset_date"])
+        week = latest.loc[
+            (latest["location"] == loc)
+            & (days > end - pd.Timedelta(days=7))
+            & (days <= end)
+        ]
+        assert cell["value"].iloc[0] == week["observed"].sum(), (loc, day)
+        fixed += 1
+    assert fixed > 0
 
 
 def test_daily_counts_walk_with_the_sums_spread(
