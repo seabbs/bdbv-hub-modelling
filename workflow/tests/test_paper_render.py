@@ -97,14 +97,13 @@ def _calls(repo: Path) -> list[str]:
     return (repo / "calls.log").read_text().splitlines()
 
 
-def test_development_run_fetches_the_store_then_renders(repo: Path) -> None:
+def test_development_run_renders_without_the_fit_store(repo: Path) -> None:
     out = _run(repo)
     assert out.returncode == 0, out.stderr
     calls = _calls(repo)
-    fetch = next(i for i, c in enumerate(calls) if c.startswith("git fetch"))
+    # The paper reads our forecasts from the hub and the round releases.
+    assert not any("fit-store" in c for c in calls)
     snake = next(i for i, c in enumerate(calls) if "snakemake" in c)
-    assert "refs/heads/fit-store:refs/remotes/origin/fit-store" in calls[fetch]
-    assert fetch < snake
     assert calls[snake] == (
         "uv run --group paper --group chronos snakemake -s workflow/Snakefile "
         "render "
