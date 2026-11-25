@@ -87,7 +87,7 @@ rule train_segment:
     log:
         f"{TRAIN}/n{{n}}.log",
     benchmark:
-        f"{TRAIN}/benchmarks/train_segment/n{{n}}.tsv"
+        f"{RUN}/{memory.TRAINER_BENCHMARK}"
     # The trainer, the run's critical path, goes before every other job;
     # runs take the GPUs in turn (`Training.trainer_priority`).
     priority: TRAINING.trainer_priority
@@ -95,13 +95,17 @@ rule train_segment:
         TOOLS_ENV
     # The trainer and its block-cutting workers.
     threads: lambda wc: run_of(wc).ft["cut_workers"] + 1
-    # None of the cores the jobs beside it share (flowlib.machine).
+    # None of the cores or memory the jobs beside it share
+    # (flowlib.machine): its own are kept for it.
     resources:
         mem_mb=memory.from_benchmark(
-            f"{TRAIN}/benchmarks/train_segment/n{{n}}.tsv", 4096, like=("n",)
+            f"{RUN}/{memory.TRAINER_BENCHMARK}",
+            memory.TRAINER_MIN_MB,
+            like=("n",),
         ),
         gpu=1,
         side_cores=0,
+        side_mem_mb=0,
     params:
         prev_args=lambda wc: runs.resume_options(run_of(wc), int(wc.n)),
         held=lambda wc: held_range(wc.run),

@@ -75,7 +75,8 @@ DEFAULTS = (
     ("DEVICE", "auto"),
     # The cores kept for the trainer, which jobs beside it never take
     # (flowlib.machine.side_cores): its threads, `finetune.cut_workers`
-    # + 1 in workflow/config.yaml; 0 where nothing trains.
+    # + 1 in workflow/config.yaml; 0 where nothing trains, which keeps
+    # no memory for it either (flowlib.machine.side_mem).
     ("TRAINER_CORES", "4"),
     # The CUDA GPUs the workflow shares out, comma-separated ids (empty:
     # CUDA_VISIBLE_DEVICES', else every one nvidia-smi lists;
