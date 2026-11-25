@@ -35,8 +35,8 @@ def test_the_fast_tier_runs_no_slow_tests(name, job):
 @pytest.mark.parametrize("job", ["full", "r-live", "chronos"])
 def test_fits_and_replays_run_nightly_on_dispatch_or_when_labelled(job):
     # The plan job decides: every tier nightly, on dispatch and with the
-    # label, none on a push, and on a pull request each tier whose code
-    # the change reaches.
+    # label, none on a push (but r-live on a push to next), and on a pull
+    # request each tier whose code the change reaches.
     workflow = _workflow("tests.yml")
     (step,) = [s for s in workflow["jobs"]["plan"]["steps"] if s.get("id")]
     for case in ("schedule", "workflow_dispatch", "push"):
