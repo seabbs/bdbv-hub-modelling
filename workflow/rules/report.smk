@@ -399,6 +399,8 @@ rule ft_check_forecast:
     # rule, so other code makes its own folder and none is reused.
     input:
         data=rules.hub_data.output,
+        # A fine-tuned checkpoint's release, which the forecast fetches.
+        released=ft_check_record,
     output:
         touch(f"{FTC_DIR}/forecasts/{{fmodel}}@{{key}}.done"),
     log:

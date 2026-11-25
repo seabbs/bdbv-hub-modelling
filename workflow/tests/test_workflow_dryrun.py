@@ -596,11 +596,12 @@ def test_a_publishing_run_checks_each_saved_checkpoint_once_released(
     settings = tmp_path / "runs" / "runa" / "train" / "n250" / "settings.json"
     settings.write_text('{"hash": "abcdef"}')
     jobs, edges = _dag(tmp_path, "finetune", FT)
-    labels = list(jobs.values())
-    assert labels.count("publish_checkpoint") == 2
-    assert labels.count("ft_check_release") == 1
-    publish = {i for i, label in jobs.items() if label == "publish_checkpoint"}
-    forecast = {i for i, label in jobs.items() if label == "ft_check_forecast"}
+    rules = {i: label.split("\\n")[0] for i, label in jobs.items()}
+    names = list(rules.values())
+    assert names.count("publish_checkpoint") == 2
+    assert names.count("ft_check_release") == 1
+    publish = {i for i, rule in rules.items() if rule == "publish_checkpoint"}
+    forecast = {i for i, rule in rules.items() if rule == "ft_check_forecast"}
     assert any(a in publish and b in forecast for a, b in edges)
 
 
