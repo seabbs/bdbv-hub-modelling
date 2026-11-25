@@ -286,8 +286,8 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     # copied into the run, so the GPU waited. One order (flowlib.compute):
     # the trainer, the quick hand-offs (its batches' copies, a
     # checkpoint's release for its BDBV check), the references, each
-    # checkpoint's scoring and evaluation (newest first), then simulation
-    # batches.
+    # checkpoint's scoring (newest first), simulation batches, then the
+    # held-out evaluation, which nothing waits for (Sam, 25 Nov).
     _hub(tmp_path)
     seg = tmp_path / "runs" / "runa" / "train" / "n250"
     seg.mkdir(parents=True)
@@ -307,6 +307,7 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
         "reference": [],
         "checkpoint": [],
         "batch": [],
+        "evaluate": [],
     }
     newest = {}
     for rule, wildcards, priority in _job_priorities(out.stdout):
@@ -318,13 +319,9 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
             rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards
         ):
             tiers["reference"].append(priority)
-        elif rule in (
-            "score_run_germany",
-            "ft_check_forecast",
-            "evaluate_steps",
-            "evaluate_base",
-            "evaluate_checkpoint",
-        ):
+        elif rule in ("evaluate_steps", "evaluate_base", "evaluate_checkpoint"):
+            tiers["evaluate"].append(priority)
+        elif rule in ("score_run_germany", "ft_check_forecast"):
             tiers["checkpoint"].append(priority)
             if rule == "score_run_germany":
                 n = int(re.search(r"n=(\d+)", wildcards)[1])
@@ -336,6 +333,7 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     assert min(tiers["fetch"]) > max(tiers["reference"])
     assert min(tiers["reference"]) > max(tiers["checkpoint"])
     assert min(tiers["checkpoint"]) > max(tiers["batch"])
+    assert min(tiers["batch"]) > max(tiers["evaluate"])
     assert newest[500] > newest[250]
 
 
@@ -569,12 +567,32 @@ def test_local_evaluation_plans_no_evaluation_rules(tmp_path):
     assert not any(k.startswith("evaluate") for k in jobs)
 
 
-def test_an_offloaded_checkpoint_publishes_with_its_held_out_losses(tmp_path):
+def test_an_offloaded_checkpoint_publishes_before_its_held_out_losses(
+    tmp_path,
+):
+    # Sam, 25 Nov: the held-out losses take hours on the CPU, so the
+    # release and its BDBV check never wait for them; they join the
+    # release once scored.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
+    where = tmp_path / "runs" / "runa" / "train" / "n250"
+    jobs = dry(tmp_path, f"{where}/published.json", config=OFFLOAD)
+    assert jobs == {"verify_checkpoint": 1, "publish_checkpoint": 1}
     jobs = dry(tmp_path, "publish", config=OFFLOAD)
     assert jobs["publish_checkpoint"] == 2
     assert jobs["evaluate_checkpoint"] == 2
+    assert jobs["release_held_out"] == 2
+
+
+def test_a_publishing_run_checks_each_checkpoint_once_released(tmp_path):
+    # Each saved checkpoint's BDBV check page is planned in the same pass
+    # as its release, not the pass after.
+    _hub(tmp_path)
+    _local(tmp_path, "PUBLISH=1")
+    _checkpoint(tmp_path, 250)
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["publish_checkpoint"] == 2
+    assert jobs["ft_check_release"] == 2
 
 
 def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):

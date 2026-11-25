@@ -105,7 +105,8 @@ def test_a_saved_checkpoint_is_final(tmp_path: Path) -> None:
     assert not t.saved("x", 200)
     assert t.segment_inputs(_wc(n="100")) == {}
     assert t.published_checkpoints(None) == [
-        f"{t.train_dir('x')}/n100/published.json"
+        f"{t.train_dir('x')}/n100/{name}"
+        for name in ("published.json", "held-out-released.txt")
     ]
 
 

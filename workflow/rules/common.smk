@@ -56,6 +56,12 @@ def ft_check_released(wc=None):
     return pages
 
 
+def released_ft_check_page(wc):
+    """The BDBV check page of checkpoint `ck` of the run, once released."""
+    record = checkpoints.publish_checkpoint.get(run=wc.run, ck=wc.ck).output[0]
+    return ft_check_page(f"slots-{json.loads(Path(record).read_text())['hash']}")
+
+
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"
@@ -98,6 +104,7 @@ RUN = f"{RUNS_DIR}/{{run}}"
 TRAIN = f"{RUN}/train"
 EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded.py"
 CHECKPOINT_PRIORITY = compute.CHECKPOINT_PRIORITY
+EVALUATION_PRIORITY = compute.EVALUATION_PRIORITY
 REFERENCE_PRIORITY = compute.REFERENCE_PRIORITY
 TRAIN_PRIORITY = compute.TRAIN_PRIORITY
 HANDOFF_PRIORITY = compute.HANDOFF_PRIORITY

@@ -1,8 +1,10 @@
 # Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
 # score step 0, each segment's step snapshots and its checkpoint, in
 # the `evaluate` group (WORKER_GROUPS places it), on the forecasting
-# device (`forecast` in the config, flowlib.forecast) beside the trainer, newest segment first. Files and
-# readers: workflow/flowlib/evaluations.py.
+# device (`forecast` in the config, flowlib.forecast) beside the trainer,
+# newest segment first, below every other job (EVALUATION_PRIORITY): no
+# release or check waits for it. Files and readers:
+# workflow/flowlib/evaluations.py.
 
 
 rule evaluate_steps:
@@ -18,7 +20,7 @@ rule evaluate_steps:
         f"{TRAIN}/logs/evaluate-steps-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_steps/n{{n}}.tsv"
-    priority: newest_first(CHECKPOINT_PRIORITY)
+    priority: newest_first(EVALUATION_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -54,7 +56,7 @@ rule evaluate_base:
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_base.tsv"
     # Above every checkpoint's evaluation, which needs it.
-    priority: CHECKPOINT_PRIORITY + 1
+    priority: EVALUATION_PRIORITY + 1
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -91,7 +93,7 @@ rule evaluate_checkpoint:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv"
-    priority: newest_first(CHECKPOINT_PRIORITY)
+    priority: newest_first(EVALUATION_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS

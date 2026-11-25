@@ -311,20 +311,37 @@ class Training:
             out += [f for n in ns for f in self.offloaded(run, n)]
             # Each checkpoint's 7-day check (rule seven_day_check).
             out += [f"{train}/n{n}/seven-day.json" for n in ns]
-            # A machine that publishes as it trains (PUBLISH in local.env).
+            # A machine that publishes as it trains (PUBLISH in local.env):
+            # each release, its BDBV check, and its held-out losses once
+            # scored.
             if self.local["PUBLISH"]:
-                out += [f"{train}/n{n}/published.json" for n in ns]
+                out += [
+                    f"{train}/n{n}/{name}"
+                    for n in ns
+                    for name in ("published.json", "ft-check.done")
+                ]
+                out += [f for n in ns for f in self.released_held_out(run, n)]
             # The check once its checkpoint is within reach, so it never
             # pulls the training past the batches there are.
             if there.check in ns:
                 out.append(f"{there.dir}/reports/n{there.check}-check.txt")
         return out
 
+    def released_held_out(self, run: str, n: int) -> list[str]:
+        """Return checkpoint n's held-out losses' upload, if offloaded."""
+        if self.runs[run].ft["eval"] != "offload":
+            return []
+        return [f"{self.train_dir(run)}/n{n}/held-out-released.txt"]
+
     def published_checkpoints(self, wc: Any) -> list[str]:  # noqa: ARG002
-        """Return every trained run's saved checkpoints' release records."""
+        """Return the saved checkpoints' releases and held-out uploads."""
         return [
-            f"{self.train_dir(run)}/n{n}/published.json"
+            f
             for run in self.trained_runs()
             for n in self.runs[run].ft["prefixes"]
             if self.saved(run, n)
+            for f in [
+                f"{self.train_dir(run)}/n{n}/published.json",
+                *self.released_held_out(run, n),
+            ]
         ]

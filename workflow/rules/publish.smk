@@ -5,7 +5,9 @@
 #
 # `verify_checkpoint` checks that a checkpoint's hash recomputes from its
 # commit (`finetune-verify`); `publish_checkpoint` releases a
-# verified one (workflow/scripts/publish_checkpoint.py); `publish_hf`
+# verified one (workflow/scripts/publish_checkpoint.py), without waiting
+# for its held-out losses, which `release_held_out` adds to the release
+# once scored (rules/evaluate.smk); `publish_hf`
 # uploads a verified one to the Hugging Face Hub (opt-in, named by its
 # output only); and
 # `publish_germany_unit` attaches a released checkpoint's German unit to
@@ -36,11 +38,11 @@ rule verify_checkpoint:
         "uv run finetune-verify {params.where} > {output} 2>{log}"
 
 
-rule publish_checkpoint:
+# A checkpoint, so the BDBV check of a checkpoint released in this pass
+# (`ft_check_release`, which reads its tag) is planned in the same pass.
+checkpoint publish_checkpoint:
     input:
         rules.verify_checkpoint.output,
-        # An offloaded checkpoint is released with its held-out losses.
-        lambda wc: offloaded(wc.run, wc.ck[1:]) if wc.ck[0] == "n" else [],
     output:
         f"{TRAIN}/{{ck}}/published.json",
     log:
@@ -59,6 +61,37 @@ rule publish_checkpoint:
         uv run python workflow/scripts/notify.py "checkpoint {wildcards.ck} published:" \
             "$(cat {output})" || true
         """
+
+
+rule ft_check_release:
+    # A checkpoint's BDBV check page (rules/report.smk) once released: its tag is read from
+    # the release record (`publish_checkpoint`, a checkpoint), so a
+    # publishing run checks a checkpoint in the pass that releases it.
+    input:
+        released_ft_check_page,
+    output:
+        touch(f"{TRAIN}/{{ck}}/ft-check.done"),
+    localrule: True
+
+
+rule release_held_out:
+    # An offloaded checkpoint's held-out losses, added to its release once
+    # scored, so the release never waits for them.
+    input:
+        published=f"{TRAIN}/{{ck}}/published.json",
+        held_out=f"{TRAIN}/{{ck}}/{SIDECAR}",
+    output:
+        f"{TRAIN}/{{ck}}/held-out-released.txt",
+    log:
+        f"{TRAIN}/{{ck}}/held-out-released.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        where=lambda wc, output: Path(output[0]).parent,
+    shell:
+        "uv run python workflow/scripts/publish_checkpoint.py --held-out "
+        "{params.where} {output} > {log} 2>&1"
 
 
 rule publish_hf:
