@@ -213,21 +213,18 @@ def test_steps_scores_the_newest_snapshot_first(tmp_path, fake):
     assert steps == [600, 400, 200]
 
 
-def test_evaluation_logs_each_batch(tmp_path, fake, monkeypatch, capsys):
+def test_evaluation_logs_each_pass(tmp_path, fake, monkeypatch, capsys):
     mod, _ = fake
     train = tmp_path / "train"
     snapshot(train, 0, ["start"])
 
     def evaluate(*_a, **_k):
-        mod.fs.report_batch(1, 2)
-        mod.fs.report_batch(2, 2)
+        mod.fe.timed("held_out_loss", lambda: None)
+        mod.fe.timed("by_level", lambda: None)
         return {"held_out_loss": 0.4}
 
     monkeypatch.setattr(mod.fe, "evaluate", evaluate)
     mod.main(["base", str(train / "n100"), "--device", "cpu"])
     out = capsys.readouterr().out
-    assert "step-0000000: batch 1/2" in out
-    assert "step-0000000: batch 2/2" in out
-    # Outside an evaluation nothing is logged.
-    mod.fs.report_batch(1, 2)
-    assert "batch" not in capsys.readouterr().out
+    assert "step-0000000: held_out_loss in " in out
+    assert "step-0000000: by_level in " in out
