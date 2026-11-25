@@ -3,7 +3,7 @@
 # ROOT. flowlib.compute adds the default resources and the site's account
 # and partitions file (SLURM_ACCOUNT, SLURM_PARTITIONS in
 # config/local.env; partitions.example.yaml here). Set-up and launch:
-# docs/development/slurm.md.
+# workflow/README.md, Run on a Slurm cluster.
 executor: slurm
 jobs: 100
 rerun-triggers: [mtime]

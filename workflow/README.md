@@ -82,7 +82,7 @@ The coordinator needs GNU rsync 3.1 or later first on `PATH` (the copies use `--
 
 `single`, `ssh` and `slurm` ship. Rules declare only their needs (`threads`, `mem_mb`, `gpu`), placement lives only in the local config, and any other `COMPUTE=<name>` runs with `workflow/profiles/<name>` and nothing else from `flowlib.compute`, so a cluster or cloud profile needs no code:
 
-- SLURM with a shared filesystem: `COMPUTE=slurm` runs every job as a Slurm job through `workflow/profiles/slurm` (`snakemake-executor-plugin-slurm`, in the `paper` group), with the site's account and partitions file from `config/local.env` (`SLURM_ACCOUNT`, `SLURM_PARTITIONS`). Each GPU job asks Slurm for its own GPU, and every run `finetune` trains trains at once, as far as the cluster has GPUs free. Steps: [Run on a Slurm cluster](../docs/development/slurm.md). Its dry run is tested (`workflow/tests/test_workflow_slurm.py`); a run on a cluster is not;
+- SLURM with a shared filesystem: `COMPUTE=slurm` runs every job as a Slurm job through `workflow/profiles/slurm` (`snakemake-executor-plugin-slurm`, in the `paper` group), with the site's account and partitions file from `config/local.env` (`SLURM_ACCOUNT`, `SLURM_PARTITIONS`). Each GPU job asks Slurm for its own GPU, and every run `finetune` trains trains at once, as far as the cluster has GPUs free. Steps: [Run on a Slurm cluster](#run-on-a-slurm-cluster). Its dry run is tested (`workflow/tests/test_workflow_slurm.py`); a run on a cluster is not;
 - a cloud batch service: add an executor plugin (`snakemake-executor-plugin-googlebatch` or `-kubernetes`) and a storage plugin (`snakemake-storage-plugin-gcs` or `-s3`), and in the profile `executor`, `default-storage-provider`, `default-storage-prefix` (the bucket), `shared-fs-usage: none` and the executor's project, region and machine settings. Files then move through the bucket, not rsync, and ROOT must be a path the storage prefix maps (see the plugin's docs). This is not tested here.
 
 A machine that needs more names a profile of its own, kept outside the repository, with `SNAKEMAKE_PROFILE` (in `config/local.env`): it replaces the profile and budget `COMPUTE` would give, so start from a copy of `workflow/profiles/default` or `workflow/profiles/slurm`. The default and slurm profiles with the machine settings (`CORES`, `MEM_MB`, `HEADROOM_*`, `SIM_SLOTS`, `DEVICE`) cover what most machines need.
@@ -287,6 +287,63 @@ A tick is skipped when another tick is still running (a lock in `output/`) or wh
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
 
 Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add their optional notes.
+
+## Run on a Slurm cluster
+
+With `COMPUTE=slurm` the workflow runs every job as a Slurm job, through Snakemake's Slurm executor plugin (`snakemake-executor-plugin-slurm`, in the `paper` group).
+The driver, one Snakemake run, submits the jobs through the plugin and waits for them.
+The nodes share the checkout and `ROOT`, so no files move.
+Each rule asks for its own threads, memory, runtime and GPU (`workflow/profiles/slurm/config.yaml`).
+
+### Steps
+
+1. Clone the repository onto the shared filesystem, and run `uv sync --all-groups` once on the login node.
+   The nodes need `git` and the checkout with its `.git`, as each simulation batch checks that the simulator is the committed one.
+2. Copy `workflow/profiles/slurm/partitions.example.yaml` outside the repository.
+   Rename its partitions and set their limits to the cluster's.
+   The plugin sends a job that takes a GPU only to a partition with `max_gpu`, and other jobs to the first partition that fits.
+3. Write `config/local.env` from `config/local.env.example`:
+
+   ```sh
+   COMPUTE=slurm
+   ROOT=/shared/bdbv-rounds
+   SLURM_ACCOUNT=<account>
+   SLURM_PARTITIONS=/shared/site/partitions.yaml
+   DEVICE=cuda
+   FORECAST_DEVICE=cuda
+   HF_HOME=/shared/hf
+   ```
+
+   Set `DEVICE`, and `FORECAST_DEVICE` if forecasting jobs should use GPUs, as the login node has no GPU to detect.
+   Leave `SLURM_ACCOUNT` empty to let the plugin guess the account.
+   Leave `SLURM_PARTITIONS` empty to send every job to `sinfo`'s default partition.
+4. Fill `HF_HOME` with the base Chronos-2 model once, from a machine with internet access.
+5. Set these in the shell that starts the driver, which Slurm passes to each job:
+
+   ```sh
+   export UV_NO_SYNC=1
+   export UV_OFFLINE=1       # nodes without internet access
+   export HF_HUB_OFFLINE=1   # once HF_HOME holds Chronos-2
+   ```
+
+6. Dry-run first: `task workflow:finetune -- -n` lists the jobs it would submit, with their resources.
+7. Start the driver on the submit host under `tmux` or `nohup` with `task workflow:run`, which runs `SCHEDULE_TARGETS` one tick after another.
+   Where login nodes forbid long processes, run it as a long Slurm job with few resources, for example `sbatch --time=7-0 --cpus-per-task=2 --mem=8G --wrap "task workflow:run"`.
+   Stop it with `touch output/coordinator.stop`, which ends it after the running tick.
+
+### What Slurm decides
+
+Slurm places and sizes every job.
+The one-machine caps do not apply: there is no `gpu` or core budget and no cores kept for the trainer (`TRAINER_CORES`).
+Each GPU job asks for one GPU (`--gpus=1`), and Slurm sets `CUDA_VISIBLE_DEVICES` to it, so `workflow/flowlib/gpus.py` runs it as it is.
+Runs do not wait on each other, so every run `finetune` trains (`train_runs`) trains at once, each trainer a Slurm job on a GPU node, as far as the cluster has GPUs free.
+With `forecast.device: cuda`, forecasting jobs need `forecast.gpu: exclusive`, so each asks Slurm for its own GPU.
+
+### Changing the job sizes
+
+Each rule's memory, runtime and threads are in the profile's `set-resources` and `set-threads`.
+To change them, copy `workflow/profiles/slurm` outside the repository, edit the copy and set `SNAKEMAKE_PROFILE` to it in `config/local.env`.
+That profile then replaces the one `COMPUTE` gives, with the default resources, account and partitions file, so add those to the copy's `default-resources` and `slurm-partition-config`.
 
 ## Monitor
 

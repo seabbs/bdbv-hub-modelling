@@ -17,7 +17,7 @@
   default resources `SLURM_DEFAULTS`, the site's account
   (`SLURM_ACCOUNT`) and its partitions file (`SLURM_PARTITIONS`, the
   plugin's `--slurm-partition-config`), which sends GPU jobs to a GPU
-  partition (docs/development/slurm.md).
+  partition (workflow/README.md, Run on a Slurm cluster).
 - any other name: its profile, `workflow/profiles/<name>`, alone (a
   cluster or cloud executor with its own resources).
 
