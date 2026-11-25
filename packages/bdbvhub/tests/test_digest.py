@@ -125,26 +125,13 @@ def test_model_code_covers_what_its_forecasts_run(
 ) -> None:
     from bdbvhub.store.digest import model_code
     from nowcastbdbv import backtest as bdbv_bt
-    from nowcastbdbv.data.tidy import load_daily_zones
-    from nowcastbdbv.data.zones import hub_zones
-    from nowcastbdbv.zones import zone_forecasts
-    from nowcasteval import backtest as bt
     from nowcasteval.nowcast import forecast_releases
 
-    data = ROOT / "tests" / "fixtures" / "data"
     real = target.loc[target["kind"] == "real"]
     tasks = bdbv_bt.make_tasks(
         real, delays.assign(kind="real"), config, daily=daily
     )
-    calls = [
-        lambda: forecast_releases(tasks, target, [model]),
-        lambda: zone_forecasts(
-            target, delays, daily, load_daily_zones(data),
-            hub_zones(data / "hub-config" / "tasks.json"),
-            models=[model], config=config,
-            origins=bt.real_vintages(real)[-2:-1],
-        ),
-    ]  # fmt: skip
+    calls = [lambda: forecast_releases(tasks, target, [model])]
     ran: set[str] = set()
     for call in calls:
         ran |= _ran(call)

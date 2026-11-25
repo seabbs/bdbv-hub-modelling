@@ -529,17 +529,16 @@ def test_concat_results_keeps_one_copy_of_shared_tables(
     assert len(pd.read_csv(out / "scores.csv")) == 2
 
 
-@pytest.mark.usefixtures("in_root")
-def test_zone_backtest_of_a_skipped_block_writes_empty_files(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_zone_backtest_with_no_stored_zone_run_writes_empty_files(
+    tmp_path: Path,
 ) -> None:
-    def nothing(*args: object, **kwargs: object) -> tuple[pd.DataFrame, ...]:
-        del args, kwargs
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-
-    monkeypatch.setattr("nowcastbdbv.zones.zone_backtest", nothing)
+    # The zone backtest scores the stored zone runs (#1094); with none
+    # loaded, as for a block of origins with none, its files are empty.
     names = ["zone-scores.csv", "zone-energy.csv", "zone-quantiles.csv"]
     outs = [
+        "--data", str(DATA),
+        "--store", str(tmp_path / "store"),
+        "--results", str(tmp_path / "results"),
         "--out", str(tmp_path / names[0]),
         "--energy-out", str(tmp_path / names[1]),
         "--quantiles-out", str(tmp_path / names[2]),
@@ -910,9 +909,9 @@ def test_stored_samples_leave_out_the_stored_fits_zones(
 
 
 def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
-    # compare-hub keeps the whole fits of the hub rounds only, for models
-    # it does not run live, in its sample columns, and they replace the
-    # stored rows of the same model and round.
+    # compare-hub keeps the whole fits of the hub rounds only, in its
+    # sample columns, and they replace the stored rows of the same model
+    # and round.
     from bdbvhub.cli import _comparison_stored
 
     whole = pd.DataFrame(
@@ -942,13 +941,13 @@ def test_hub_comparison_takes_the_whole_fits_of_its_rounds() -> None:
             "value": 1.0,
         }
     )
-    out = _comparison_stored(stored, whole, ["2026-10-24"], ["randomwalk"])
+    out = _comparison_stored(stored, whole, ["2026-10-24"])
     assert list(out.columns) == list(stored.columns)
     assert set(out["source"]) == {"real"}
     assert set(out["reference_date"]) == {"2026-10-24"}
     renewal = out.loc[out["model"] == "renewal"]
     assert list(renewal["target_end_date"]) == ["2026-09-12"]
-    assert set(out["model"]) == {"renewal", "renewalsp"}
+    assert set(out["model"]) == {"renewal", "renewalsp", "randomwalk"}
 
 
 @pytest.mark.slow
@@ -1009,20 +1008,59 @@ def test_a_stored_forecast_takes_the_zones_of_its_fit_directory(
     pd.testing.assert_frame_equal(seen["own"], zones)  # type: ignore[arg-type]
 
 
-def test_compare_hub_takes_no_live_model_and_a_given_table() -> None:
-    """The hub rounds report scores the hub's files only (`--models` with
-    nothing), with the ledger's table it made itself."""
+def test_compare_hub_runs_no_model_and_takes_a_given_table() -> None:
+    """Every model of ours comes from the fit store (#1094), so no model
+    is run live, and the hub rounds report gives the ledger's table."""
     from bdbvhub.cli import build_parser
 
     args = build_parser().parse_args(
-        [
-            "compare-hub",
-            "--models",
-            "--submissions-table",
-            "t.csv",
-        ]
+        ["compare-hub", "--submissions-table", "t.csv"]
     )
-    assert args.models == []
     assert args.submissions_table == "t.csv"
-    default = build_parser().parse_args(["compare-hub"])
-    assert default.models is None
+    assert not hasattr(args, "models")
+
+
+def test_the_hub_comparison_takes_the_walks_zones_from_the_store(
+    tmp_path: Path,
+) -> None:
+    # A walk's whole fit is its fit file and its zone run beside it. The
+    # release backtest leaves the zones out.
+    import argparse
+
+    from bdbvhub.cli import _fit_store_forecasts
+    from bdbvhub.store import store as st
+
+    root = tmp_path / "store"
+    rows = pd.DataFrame(
+        {
+            "model": "randomwalk",
+            "kind": "real",
+            "vintage": "2026-10-17",
+            "reference_date": "2026-10-24",
+            "location": ["CD", "CD-BC"],
+            "target_end_date": "2026-10-24",
+            "sample": 1,
+            "value": 5.0,
+            "as_of": None,
+            "horizon": 0,
+        }
+    )
+    meta = {"model": "randomwalk", "origin": "2026-10-17", "key": "k1"}
+    st.write_fit(
+        root,
+        st.StoredFit(
+            {**meta, "commit": "c", "status": "ok"},
+            rows,
+            pd.DataFrame(),
+            pd.DataFrame(),
+            zones=rows.drop(columns="as_of").assign(location="CD-BC-01"),
+        ),
+    )
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / st.STATUS_FILE).write_text(json.dumps([{**meta, "used": "k1"}]))
+    args = argparse.Namespace(results=str(results), store=str(root))
+    whole = _fit_store_forecasts(args)
+    assert sorted(whole["location"].astype(str)) == ["CD", "CD-BC", "CD-BC-01"]
+    bare = _fit_store_forecasts(args, zones=False)
+    assert sorted(bare["location"].astype(str)) == ["CD", "CD-BC"]

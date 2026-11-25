@@ -13,12 +13,14 @@ from bdbvhub.reporting.hubtables import (
     hub_tables,
     write_hub_tables,
 )
+from nowcastbaselines.zones import zone_forecast
 from nowcastbdbv import backtest as bdbv_bt
 from nowcastbdbv.data.tidy import load_daily_zones
 from nowcastbdbv.data.zones import hub_zones
 from nowcasteval import backtest as bt
 from nowcastutils.base import NATIONAL
 from nowcastutils.hierarchy import is_zone, province_of
+from nowcastutils.snapshots import weekly_counts
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
@@ -81,7 +83,13 @@ def test_hub_tables_cover_country_provinces_and_zones(
     )[0]
     forecasts = bt.run_forecasts([get_model("randomwalk")], [task])
     zones = hub_zones(DATA / "hub-config" / "tasks.json")
-    tables = hub_tables(forecasts, task, load_daily_zones(DATA), zones)
+    daily_zones = load_daily_zones(DATA)
+    # The walk's zones are its stored zone run's (`store.stored_zones`).
+    stored = zone_forecast(
+        get_model("randomwalk"), task, weekly_counts(daily_zones, latest),
+        zones, daily_zones,
+    ).assign(model="randomwalk", vintage=latest)  # fmt: skip
+    tables = hub_tables(forecasts, task, daily_zones, zones, stored)
     table = tables["randomwalk"]
     locations = set(table["location"])
     assert NATIONAL in locations
