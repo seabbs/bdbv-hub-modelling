@@ -60,17 +60,18 @@ def steps(
 ) -> None:
     """Score segment `where`'s step snapshots that have no result yet.
 
-    The segment's steps are those after checkpoint `prev`'s (from step 0
-    for the first) up to its own. A due step with neither snapshot nor
-    result fails the job: its snapshots were not copied in, and scoring
-    nothing must not mark the segment done.
+    The segment's steps are those after checkpoint `prev`'s (after step
+    0 for the first, which `base_step` scores alone, so no step waits
+    for it) up to its own. A due step with neither snapshot nor result
+    fails the job: its snapshots were not copied in, and scoring nothing
+    must not mark the segment done.
     """
     train = where.parent
     upto = json.loads((where / "settings.json").read_text())["steps"]
     after = (
         json.loads((prev / "settings.json").read_text())["steps"]
         if prev is not None
-        else -1
+        else 0
     )
     gone = missing(train, after, upto, every)
     if gone:
@@ -85,8 +86,8 @@ def steps(
 def base_step(where: Path, device: str) -> None:
     """Score step 0 (base Chronos-2) alone, unless it has a result.
 
-    A checkpoint's evaluation needs only this, so it can run between
-    segments rather than after every segment's step evaluation.
+    It scores every held-out block, and only a checkpoint's evaluation
+    needs it (the start loss); the step evaluations never wait for it.
     """
     train = where.parent
     score_snapshots(train, evaluations.pending(train, -1, 0), device)

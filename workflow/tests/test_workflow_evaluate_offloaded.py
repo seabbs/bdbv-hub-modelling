@@ -178,7 +178,8 @@ def test_steps_passes_a_segment_with_no_due_step(tmp_path, fake):
             "200",
         ]
     )
-    assert [c[1] for c in calls["evals"]] == [["start"]]
+    # Neither has a due step; step 0 is evaluate_base's.
+    assert calls["evals"] == []
 
 
 def test_base_scores_only_step_0_and_once(tmp_path, fake):

@@ -10,10 +10,9 @@
 rule evaluate_steps:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
-        # Its steps start after the previous checkpoint's.
+        # Its steps start after the previous checkpoint's, and after
+        # step 0 (evaluate_base), which it never waits for.
         prev=evaluate_prev,
-        # Step 0, scored on its own.
-        base=f"{TRAIN}/evals/step-0000000.json",
     output:
         touch(f"{TRAIN}/evals/n{{n}}.done"),
     log:
