@@ -631,7 +631,7 @@ rule sim_examples:
 # forecasts them. `si_copula` summarises both for the SI's copula figure.
 # A dummy German benchmark leaves them out, and null development
 # simulations the synthetic half and `si_copula`.
-if GERMANY["real"]:
+if GERMANY["real"] and FLOW.host_outputs:
 
     rule pairing_germany:
         input:
@@ -687,11 +687,11 @@ if GERMANY["real"] and SYNTHETIC["simulations"]["development"]:
 
 
 # The synthetic half made above, or the stored one (`stored`).
-if GERMANY["real"] and FLOW.pairing_synthetic_file():
+if GERMANY["real"] and FLOW.pairing_germany_file() and FLOW.pairing_synthetic_file():
 
     rule si_copula:
         input:
-            rules.pairing_germany.output.scores,
+            FLOW.pairing_germany_file(),
             FLOW.pairing_synthetic_file(),
         output:
             FLOW.workflow_evidence()["si_copula"],
@@ -826,6 +826,7 @@ STORED_SETS = {
         "synthetic": SYNTHETIC["simulations"]["development"],
         "finetune": config.get("final_run"),
         "simulations": FLOW.rounds_dir,
+        "germany": GERMANY["real"] and FLOW.host_outputs,
     }[name]
 }
 
