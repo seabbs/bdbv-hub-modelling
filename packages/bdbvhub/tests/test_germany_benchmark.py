@@ -791,3 +791,16 @@ def test_the_truth_context_runs_from_plot_start_for_both_views(
     assert out["target_end_date"].min() == "2021-09-01"
     assert out["target_end_date"].max() <= "2021-10-10"
     assert {"location", "truth", "truth_vintage"} <= set(out.columns)
+
+
+def test_a_short_history_still_forecasts_every_weekday(
+    triangle: pd.DataFrame,
+) -> None:
+    # From 2021-08-26 the Wednesday blocks at 2021-10-04 have no national
+    # pool above 0 between Germany's children, so Germany pools its own
+    # changes and every row is forecast.
+    short = triangle.loc[triangle["reference_date"] >= "2021-08-26"]
+    drawn = germany_forecasts(
+        ["randomwalknowcast"], short, ["2021-10-04"], n_samples=30, seed=1
+    )
+    assert {"DE", "DE-BE", "DE-BY"} <= set(drawn["location"])

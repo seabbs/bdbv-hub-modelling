@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from nowcastbaselines.pooling import pool_matrix, source_index
 
@@ -83,3 +84,50 @@ def test_a_pool_holds_the_qualifying_children_not_the_parent() -> None:
     # With no qualifying child, a node pools alone.
     assert m[1].tolist() == [0, 1, 0, 0, 0]
     assert m[3].tolist() == [0, 0, 0, 1, 0]
+
+
+def _spreads(reported: np.ndarray, level: np.ndarray):  # type: ignore[no-untyped-def]
+    from types import SimpleNamespace
+
+    from nowcastbaselines.baselinenowcast.delays import Settings
+    from nowcastbaselines.baselinenowcast.nowcast import _walk_spreads
+
+    start = np.full(reported.shape[0], reported.shape[1] - 1)
+    snap = SimpleNamespace(parent=np.array([-1, 0, 0]))
+    return _walk_spreads(reported, start, snap, level, Settings())
+
+
+def test_the_country_pools_only_children_with_a_walk_spread() -> None:
+    # Child 1 moves; child 2 is flat at 10, so its changes are under its
+    # Poisson noise and its own spread is no estimate. The country's pool
+    # of both would be 0 or below; it pools child 1 alone.
+    moving = np.tile([100.0, 130.0], 5)[:9]
+    flat = np.full(9, 10.0)
+    reported = np.stack([moving + flat, moving, flat])
+    level = np.array([125.0, 115.0, 10.0])
+    own, pooled = _spreads(reported, level)
+    assert own[1] > 0
+    assert not own[2] > 0
+    assert pooled[0] == pytest.approx(own[1])
+
+
+def test_a_country_with_no_child_spread_pools_its_own_changes() -> None:
+    flat = np.full(9, 10.0)
+    moving = np.tile([100.0, 130.0], 5)[:9]
+    reported = np.stack([moving, flat, flat])
+    own, pooled = _spreads(reported, np.array([20.0, 10.0, 10.0]))
+    assert not (own[1:] > 0).any()
+    assert pooled[0] == pytest.approx(own[0])
+    assert pooled[0] > 0
+
+
+def test_a_country_pool_that_works_is_kept() -> None:
+    a = np.tile([100.0, 130.0], 5)[:9]
+    b = np.tile([50.0, 80.0], 5)[:9]
+    reported = np.stack([a + b, a, b])
+    own, pooled = _spreads(reported, np.array([180.0, 115.0, 65.0]))
+    from nowcastbaselines.walk import walk_noise, walk_variance
+
+    both = np.concatenate([np.diff(np.log1p(a)), np.diff(np.log1p(b))])
+    noise = np.concatenate([walk_noise(a), walk_noise(b)])
+    assert pooled[0] == pytest.approx(walk_variance(both, noise))

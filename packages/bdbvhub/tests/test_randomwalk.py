@@ -448,3 +448,20 @@ def test_a_silent_place_stays_at_0_until_an_introduction(
     )
     assert origin.silent[i]
     assert (x[:, cw + 1] == 0).mean() > 0.9
+
+
+def test_randomwalknowcast_forecasts_sunday_weeks_with_a_pooled_spread(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # At 2026-11-08 the 7-day blocks ending Sunday give the provinces
+    # with ten or more cases a week no national pool above 0 between
+    # them. The country pools those with a spread of their own instead.
+    task = _task(target, delays, daily, "2026-11-08")
+    sundays = tuple(
+        (pd.Timestamp(d) + pd.Timedelta(days=1)).date().isoformat()
+        for d in task.target_end_dates
+    )
+    task = dataclasses.replace(task, target_end_dates=sundays)
+    out = get_model("randomwalknowcast").forecast(task)
+    check_samples(out, task)
+    assert set(out["location"]) == set(task.locations)
