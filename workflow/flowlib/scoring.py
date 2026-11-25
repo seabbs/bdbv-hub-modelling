@@ -11,12 +11,13 @@ from __future__ import annotations
 import os
 import shlex
 import tempfile
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from flowlib import compute, forecast, machine, notify, releases
 from flowlib.training import Training
+from nowcastutils import codekey
 
 EVALUATE = "uv run --group chronos python -m nowcastgermany.checkpoint"
 """The scoring CLI."""
@@ -30,27 +31,38 @@ REFERENCE_NAMES = {
 REFERENCE = "reference"
 """The label of the unit of the models no checkpoint changes."""
 
-REFERENCE_CODE = (
-    "packages/nowcastbaselines/src",
-    "packages/nowcastfoundation/src",
-    "packages/nowcastgermany/src/nowcastgermany/evaluation.py",
-    "packages/nowcastgermany/config/germany.toml",
-)
-"""What the reference's forecasts depend on, past their tasks: its models'
-packages, the German forecasting code and config (as
-`nowcastgermany.checkpoint.model_key`)."""
+REFERENCE_ENTRY = "nowcastgermany.checkpoint"
+"""The German scoring unit's module: the reference's forecasts depend on
+the repository's modules it imports (`nowcastutils.codekey`)."""
+
+REFERENCE_FILES = ("packages/nowcastgermany/config/germany.toml",)
+"""What else the reference's forecasts depend on: the German config."""
 
 
-def reference_code(label: str, root: Path | str = ".") -> list[str]:
+def _code(entries: Sequence[str], extra: Sequence[str]) -> list[str]:
+    """Return the files modules `entries` import, and `extra`, repo-relative.
+
+    Only the repository's modules the job imports (`codekey.module_files`),
+    so a change to one it never imports keeps its key.
+    """
+    repo = codekey.PACKAGES.parent
+    files = [
+        str(Path(f).relative_to(repo)) for f in codekey.module_files(entries)
+    ]
+    return sorted([*files, *extra])
+
+
+def _digest(files: Sequence[str]) -> str:
+    """Return the digest of repo-relative files (`codekey.digest`)."""
+    repo = codekey.PACKAGES.parent
+    return codekey.digest([repo / f for f in files], repo)
+
+
+def reference_code(label: str) -> list[str]:
     """Return the files the reference unit depends on; none for a checkpoint."""
     if label != REFERENCE:
         return []
-    out = []
-    for part in REFERENCE_CODE:
-        path = Path(root) / part
-        files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
-        out += [str(f.relative_to(root)) for f in files]
-    return out
+    return _code([REFERENCE_ENTRY], REFERENCE_FILES)
 
 
 def key_file(folder: Path | str, name: str, key: str) -> str:
@@ -80,61 +92,66 @@ def key_file(folder: Path | str, name: str, key: str) -> str:
     return str(path)
 
 
-def reference_key(label: str, root: Path | str = ".") -> str:
+def reference_key(label: str) -> str:
     """Return a digest of `reference_code`'s contents ("" for a checkpoint).
 
     The reference unit reads it as a file (`Scoring.reference_key_input`),
     and redoes only the rows of the models whose own key moved.
     """
-    import hashlib
-
-    h = hashlib.sha256()
-    files = reference_code(label, root)
-    for f in files:
-        h.update(f.encode())
-        h.update((Path(root) / f).read_bytes())
-    return h.hexdigest()[:12] if files else ""
+    files = reference_code(label)
+    return _digest(files) if files else ""
 
 
-FT_CHECK_CODE = (
-    "packages/nowcastbaselines/src",
-    "packages/nowcastfoundation/src",
-    "packages/nowcastbdbv/src",
-    "packages/nowcasteval/src/nowcasteval/nowcast.py",
-    "packages/nowcasteval/src/nowcasteval/backtest.py",
-    "packages/nowcastbdbv/config/backtest.toml",
-)
-"""What the BDBV check's forecasts depend on, past the data: the models'
-packages, the release tasks and the backtest config. The active-zone rule
-in packages/nowcastfoundation/config/finetune.toml is keyed by its values
-(`ft_check_key`), so a new
-checkpoint pinned there reruns only the fine-tuned model."""
+FT_CHECK_ENTRY = "bdbvhub.ftcheck"
+"""The BDBV check's module: its forecasts depend on the repository's
+modules it imports (the models, the release tasks), past the data."""
+
+FT_CHECK_FILES = ("packages/nowcastbdbv/config/backtest.toml",)
+"""What else the BDBV check's forecasts depend on: the backtest config.
+The active-zone rule in packages/nowcastfoundation/config/finetune.toml
+is keyed by its values (`ft_check_key`), so a new checkpoint pinned there
+reruns only the fine-tuned model."""
+
+
+def ft_check_code() -> list[str]:
+    """Return the files the BDBV check's forecasts depend on."""
+    return _code([FT_CHECK_ENTRY], FT_CHECK_FILES)
 
 
 def ft_check_key(root: Path | str = ".") -> str:
-    """Return a digest of `FT_CHECK_CODE` and the active-zone rule.
+    """Return a digest of `ft_check_code` and the active-zone rule.
 
     The check's forecasts read it as a file (`key_file`), so they rerun
-    when it changes, not on a checkout.
+    when it changes, not on a checkout. The rule is read from `root`.
     """
     import hashlib
     import tomllib
 
-    h = hashlib.sha256()
-    for part in FT_CHECK_CODE:
-        path = Path(root) / part
-        files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
-        for f in files:
-            h.update(str(f.relative_to(root)).encode())
-            h.update(f.read_bytes())
     conf = tomllib.loads(
         (
             Path(root) / "packages/nowcastfoundation/config/finetune.toml"
         ).read_text()
     )
     rule = {k: v for k, v in conf.items() if k.startswith("active_zone")}
+    h = hashlib.sha256(_digest(ft_check_code()).encode())
     h.update(repr(sorted(rule.items())).encode())
     return h.hexdigest()[:12]
+
+
+EVALUATOR_ENTRY = "nowcastfoundation.finetune.evaluate"
+"""The held-out evaluator's module (`workflow/scripts/evaluate_offloaded.py`
+runs it)."""
+
+EVALUATOR_FILES = (
+    "workflow/scripts/evaluate_offloaded.py",
+    "workflow/flowlib/evaluations.py",
+)
+"""The evaluation rules' script and the files it writes by."""
+
+
+def evaluator_code() -> list[str]:
+    """Return the files the held-out evaluation's results depend on."""
+    return _code([EVALUATOR_ENTRY], EVALUATOR_FILES)
 
 
 def unit_shell(study: str, segment: str = "") -> str:
@@ -361,6 +378,15 @@ class Scoring:
         if not key:
             return []
         return [key_file(f"{self.cache}/keys", label, key)]
+
+    def evaluator_key_input(self, wc: Any = None) -> list[str]:  # noqa: ARG002
+        """Return the evaluator's code-key file (`key_file`).
+
+        The evaluation rules' input, so they rerun when the evaluator's
+        code changes, not on a checkout.
+        """
+        key = _digest(evaluator_code())
+        return [key_file(f"{self.cache}/keys", "evaluator", key)]
 
     def references(self) -> list[str]:
         """Return the reference labels' German units, shared by every run."""
