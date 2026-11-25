@@ -77,7 +77,9 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
     Run forward, they simulate how outbreaks are reported, and can include a renewal process, parametric and time-varying delays, report-day effects and pooling across places and age groups [@lison2024; @abbottepinowcast; @Bergstrom2022].
   - epinowcast is a community-developed software framework for marginal generative nowcasting models [@abbottepinowcast].
     It is flexible, and supports a wide range of reporting patterns, including changing delays, report-day effects, hierarchical pooling, missing reference dates and user-defined reporting schedules.
-    It has been used in a wide range of applications, including COVID-19 hospitalisations in Germany and Switzerland, and norovirus in England [@Wolffram2023; @lison2024; @Mellor2025].
+    It has been used in a wide range of applications, including nowcasting COVID-19 hospitalisations in the German nowcast hub [@Wolffram2023], and as a check in nowcasts of mpox and norovirus in England [@Overton2023-dk; @Mellor2025].
+    The same form of model has been used to nowcast the effective reproduction number from line list data [@lison2024].
+    (Add the planned epinowcast case study paper, epinowcast/epinowcast#290, if it is out in time.)
     This makes it a natural basis for simulating training data, and our simulations follow its structure.
 
 - **What we did.**
