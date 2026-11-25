@@ -203,3 +203,83 @@ def test_wis_by_horizon_is_the_checkpoint_s_own(tmp_path):
     for k in offsets:
         q = [15 + 2 * k + (i - 3) * 2 for i in range(7)]
         assert got[str(k)] == pytest.approx(nowcasts.wis(q, 20), abs=1e-3)
+
+
+def test_the_dashboard_scores_at_the_german_scorer_s_levels():
+    # WIS is the hub's seven levels (score_germany); the 5% and 95%
+    # quantiles the models also give are for the 90% bands only.
+    from nowcastgermany.evaluation import QUANTILE_LEVELS
+
+    assert tuple(float(q) for q in nowcasts.SEVEN) == QUANTILE_LEVELS
+
+
+def test_wis_by_horizon_is_the_scorer_s(tmp_path):
+    # A file with the nine levels the models forecast: the dashboard's
+    # WIS at each horizon is score_quantiles' at the scorer's levels.
+    import pandas as pd
+
+    from nowcasteval.scoring import score_quantiles
+    from nowcastgermany.evaluation import QUANTILE_LEVELS
+
+    origin = "2022-02-09"
+    path = tmp_path / "reference" / f"{origin}.csv.gz"
+    path.parent.mkdir(parents=True)
+    nine = (
+        "0.025",
+        "0.05",
+        "0.1",
+        "0.25",
+        "0.5",
+        "0.75",
+        "0.9",
+        "0.95",
+        "0.975",
+    )
+    day0 = date.fromisoformat(origin)
+    rows = []
+    for k in range(-3, 4):
+        day = (day0 + timedelta(days=k)).isoformat()
+        for i, q in enumerate(nine):
+            rows.append(
+                {
+                    "model": "randomwalknowcast",
+                    "location": "DE",
+                    "target_end_date": day,
+                    "quantile": q,
+                    "value": 10 + 3 * k + (i - 4) * (2 + k % 3),
+                    "truth": 14,
+                    "truth_vintage": "2022-03-01",
+                }
+            )
+    frame = pd.DataFrame(rows)
+    frame.to_csv(path, index=False)
+    built = nowcasts.build(tmp_path, [], _refs())
+    got = built["byday"]["DE"]["rw"]["7day"]["daily"][origin]
+    forecasts = frame.assign(
+        quantile=frame["quantile"].astype(float),
+        horizon=[
+            (date.fromisoformat(d) - day0).days
+            for d in frame["target_end_date"]
+        ],
+    )[["location", "target_end_date", "horizon", "quantile", "value"]]
+    truth = frame[["location", "target_end_date", "truth"]].drop_duplicates()
+    want = score_quantiles(
+        forecasts[forecasts["quantile"].isin(QUANTILE_LEVELS)],
+        truth,
+        keys=["location", "target_end_date"],
+        quantile_levels=QUANTILE_LEVELS,
+    )
+    for h, w in zip(want["horizon"], want["wis"], strict=True):
+        assert got[str(h)] == pytest.approx(w, abs=1e-3)
+    # With the 5% and 95% quantiles too, WIS would differ.
+    levels = tuple(float(q) for q in nine)
+    all_nine = score_quantiles(
+        forecasts,
+        truth,
+        keys=["location", "target_end_date"],
+        quantile_levels=levels,
+    )
+    assert any(
+        abs(got[str(h)] - w) > 1e-3
+        for h, w in zip(all_nine["horizon"], all_nine["wis"], strict=True)
+    )

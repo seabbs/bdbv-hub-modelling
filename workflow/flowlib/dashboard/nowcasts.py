@@ -39,7 +39,9 @@ from .rows import num, sources
 from .runs import INTERIM, Classifier, Reference, Run, split_label
 
 SEVEN = ("0.025", "0.1", "0.25", "0.5", "0.75", "0.9", "0.975")
-"""The cached quantile levels."""
+"""The levels WIS is scored at: the German scorer's, the hub's seven
+(`nowcastgermany.evaluation.QUANTILE_LEVELS`), so the page's WIS is the
+project's. The 5% and 95% quantiles (`OUTER`) are for bands only."""
 
 LEVELS = tuple(float(q) for q in SEVEN)
 
