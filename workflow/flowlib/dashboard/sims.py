@@ -48,6 +48,38 @@ def layers(grid: Path | str) -> dict[str, str]:
     return out
 
 
+def notes(grid: Path | str) -> dict[str, str]:
+    """Return each grid setting's note, for the page's tooltips.
+
+    A drawn value's `why`; a factor's comment lines just above it in the
+    grid's `factors`.
+    """
+    text = Path(grid).read_text()
+    spec = yaml.safe_load(text)
+    out = {
+        name: str(d["why"])
+        for name, d in (spec.get("distributions") or {}).items()
+        if isinstance(d, Mapping) and d.get("why")
+    }
+    factors = set(spec.get("factors") or {})
+    block, comment = False, []
+    for line in text.splitlines():
+        if not line.startswith(" "):
+            block = line.startswith("factors:")
+            comment = []
+            continue
+        if not block:
+            continue
+        if line.startswith("  #"):
+            comment.append(line.strip().lstrip("#").strip())
+            continue
+        key = re.match(r"^  (\w+):", line)
+        if key and key.group(1) in factors and comment:
+            out.setdefault(key.group(1), " ".join(comment))
+        comment = []
+    return out
+
+
 def sources(root: Path | str, hidden: Iterable[int] = ()) -> dict[str, Path]:
     """Return the folders of simulations under `root`, by name.
 
@@ -209,8 +241,10 @@ class Index:
         cache: Path | str,
         layer_of: Mapping[str, str],
         hidden: Iterable[int] = (),
+        notes: Mapping[str, str] | None = None,
     ) -> None:
         self.root = Path(root)
+        self.notes = dict(notes or {})
         self.hidden = frozenset(int(r) for r in hidden)
         self.cache = Path(cache)
         self.layer_of = dict(layer_of)
@@ -270,6 +304,9 @@ class Index:
             "ids": [r["id"] for r in rows],
             "first": [r["first"] for r in rows],
             "layers": {k: self.layer_of[k] for k in factor_names + value_names},
+            # The grid's own order of its settings, and their notes.
+            "order": list(self.layer_of),
+            "notes": self.notes,
             "factors": factors,
             "values": {k: [r["v"].get(k) for r in rows] for k in value_names},
             "stats": {k: [r["s"][k] for r in rows] for k in stat_names},
@@ -310,16 +347,34 @@ class Index:
         return self.encoded[name] if self._ensure(name) else None
 
     def listing(self) -> list[dict[str, Any]]:
-        """Return the sources, each with its simulations if indexed."""
+        """Return the sources, each with its simulations if indexed.
+
+        Each says whether it is a round's or a run's; the default is the
+        run whose simulations changed last, else the last round.
+        """
+        found = self.sources()
+        runs = [k for k, f in found.items() if f.parent.parent.name == "runs"]
+        newest = max(runs, key=lambda k: _changed(found[k]), default=None)
+        default = newest or (list(found)[-1] if found else None)
         return [
             {
                 "key": k,
                 "simulations": len(self.built[k]["ids"])
                 if k in self.built
                 else None,
+                "kind": "run" if k in runs else "round",
+                "default": k == default,
             }
-            for k in self.sources()
+            for k in found
         ]
+
+
+def _changed(folder: Path) -> int:
+    """Return when a source's simulations last changed (ns)."""
+    return max(
+        (p.stat().st_mtime_ns for p in folder.glob("settings-*.csv")),
+        default=0,
+    )
 
 
 def _encode(payload: Any) -> bytes:

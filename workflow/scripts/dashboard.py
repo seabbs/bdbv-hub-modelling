@@ -344,10 +344,15 @@ def simulations(
     the workflow simulates (`simulate.grid_file`). The grid's test round
     is never listed (`hidden_rounds`).
     """
-    layer_of = sims.layers(CHECKOUT / config["simulate"]["grid_file"])
+    grid = CHECKOUT / config["simulate"]["grid_file"]
+    layer_of = sims.layers(grid)
     root = serve.root(local)
     index = sims.Index(
-        root, root / "dashboard" / "sims", layer_of, hidden_rounds(config)
+        root,
+        root / "dashboard" / "sims",
+        layer_of,
+        hidden_rounds(config),
+        sims.notes(grid),
     )
 
     def loop() -> None:

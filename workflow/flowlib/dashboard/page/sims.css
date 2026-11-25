@@ -1,7 +1,10 @@
 /* The simulations page: the fine-tuning dashboard's style.css, plus these. */
 select,input{background:var(--card);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:2px 6px;font-size:12px}
-.layer{margin:6px 0 12px}.layer>summary h3{text-transform:capitalize}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,170px),1fr));gap:8px;margin-top:8px}
+.lpanel h3{padding-right:16px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lpanel{padding:6px 8px!important;overflow:visible}
+.lpanel .info:hover::after,.lpanel .info:focus::after{left:auto;right:0}
 .plots3{align-items:start}.tablebox{max-height:520px;overflow:auto}
 .tablebox th{position:sticky;top:0;background:var(--bg)}
 .plots .card h3{font-weight:500}
@@ -18,3 +21,4 @@ line-height:1.35;max-width:280px}
 .bar rect.hit{fill:transparent;cursor:pointer}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;
 margin-right:4px;vertical-align:middle}
+.tog.on .mut{color:inherit;opacity:.8}
