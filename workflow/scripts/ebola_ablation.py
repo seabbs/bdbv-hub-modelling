@@ -238,7 +238,11 @@ def cap_delay(frame: pd.DataFrame, d: int = D) -> pd.DataFrame:
 
 
 def interpolate_releases(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add a release each day between releases, linear in each count."""
+    """Add a release each day between releases, linear in each count.
+
+    Each is labelled by its cut-off, after the label of the release
+    before it.
+    """
     cut = frame.drop_duplicates("vintage").sort_values("cutoff")
     vint, cuts = cut["vintage"].tolist(), pd.to_datetime(cut["cutoff"]).tolist()
     wide = frame.pivot_table(
@@ -257,6 +261,10 @@ def interpolate_releases(frame: pd.DataFrame) -> pd.DataFrame:
             val = a + (b - a) * k / span
             keep = (onset <= c) & (val != 0)
             iso = c.strftime("%Y-%m-%d")
+            # A task takes the releases labelled up to its own, so none
+            # may sort before the release it follows.
+            if iso <= vint[j - 1]:
+                continue
             out.append(
                 pd.DataFrame(
                     {
@@ -285,6 +293,10 @@ BDBV_VARIANTS = (
     "daily_releases",
     "weekly_source",
     "all",
+    "all_but_releases",
+    "no_first_release",
+    "releases_cap",
+    "releases_cap_late",
 )
 
 
@@ -300,6 +312,17 @@ def bdbv_variant(name: str, src: Path, out: Path) -> None:
     hz = pd.read_csv(src / "health_zones.csv.gz")
     zp = dict(zip(hz["location"], hz["province"], strict=False))
     zp.update({z: z.rsplit("-", 1)[0] for z in zones["location"].unique()})
+    if name == "no_first_release":
+        # The first release (2026-08-18), 50 days before the next, left
+        # out, so the releases have no long gap.
+        shutil.copytree(src, out, dirs_exist_ok=True)
+        for f in ("target.csv", "daily.csv", "daily_zones.csv.gz"):
+            t = pd.read_csv(src / f)
+            t.loc[t["vintage"] != origins[0]].to_csv(out / f, index=False)
+        hz.loc[hz["vintage"] != origins[0]].to_csv(
+            out / "health_zones.csv.gz", index=False
+        )
+        return
     if name == "weekly_source":
         shutil.copytree(src, out, dirs_exist_ok=True)
         for f in ("daily.csv", "daily_zones.csv.gz"):
@@ -313,6 +336,9 @@ def bdbv_variant(name: str, src: Path, out: Path) -> None:
         "cap_d": ["cap"],
         "daily_releases": ["interp"],
         "all": ["no_late", "no_zones", "cap", "flat", "interp"],
+        "all_but_releases": ["no_late", "no_zones", "cap", "flat"],
+        "releases_cap": ["no_zones", "cap", "interp"],
+        "releases_cap_late": ["no_late", "no_zones", "cap", "interp"],
     }[name]
     for step in steps:
         if step == "no_zones":
@@ -450,6 +476,10 @@ SIM_VARIANTS = (
     "long_delays",
     "stops",
     "bdbv_like",
+    "short",
+    "gap",
+    "few_daily",
+    "fresh",
 )
 
 
@@ -469,7 +499,12 @@ def sim_variant(
     `weekday` thins weekend onsets by half; `long_delays` delays 30% of
     reports by 14 to 35 more days; `stops` has a third of the zones stop
     reporting from a day near the first origin; `bdbv_like` is `few`,
-    `late_start`, `small` and `long_delays` together.
+    `late_start`, `small` and `long_delays` together. Three split
+    `few`: `short` releases weekly from 49 days before the first origin
+    (as many releases, no gap); `gap` weekly throughout but for the 50
+    days before the first origin (the gap, a long release history);
+    `few_daily` as `few` but daily from the first origin; `fresh`
+    weekly from the first origin alone, so its first release backfills.
     """
     rng = np.random.default_rng(seed)
     r = pick_outbreaks(files, k, seed, lead=70)
@@ -519,8 +554,27 @@ def sim_variant(
             r = r.loc[~(has & (r["rep"] >= when))]
     r = r.loc[r["count"] != 0]
     start = r["rep"].min()
+    weekly = list(
+        pd.date_range(last - pd.Timedelta(days=7 * 40), last, freq="7D")
+    )
     if "few" in feats:
         rel = [first - pd.Timedelta(days=50), *origins]
+    elif "few_daily" in feats:
+        rel = [
+            first - pd.Timedelta(days=50),
+            *pd.date_range(first, last, freq="D"),
+        ]
+    elif "fresh" in feats:
+        rel = list(origins)
+    elif "short" in feats:
+        rel = [c for c in weekly if c >= first - pd.Timedelta(days=49)]
+    elif "gap" in feats:
+        rel = [
+            c
+            for c in weekly
+            if c <= first - pd.Timedelta(days=50) or c >= first
+        ]
+        rel = [c for c in rel if c >= start]
     elif "weekly" in feats:
         rel = list(
             pd.date_range(last - pd.Timedelta(days=7 * 40), last, freq="7D")
@@ -610,7 +664,11 @@ def summary(folder: Path, out: Path, reference: str) -> None:
     """Write the check's skill and calibration tables of one variant."""
     from bdbvhub.reporting import ftcheck_report as fr
 
-    parts = sorted(p for p in (folder / "forecasts").iterdir() if p.is_dir())
+    parts = sorted(
+        p
+        for p in (folder / "forecasts").iterdir()
+        if (p / "release-samples.csv.gz").exists()
+    )
     tables = fr.skill_tables(parts, folder / "data", reference)
     cal = fr.calibration(tables["quantiles"])
     res = {
