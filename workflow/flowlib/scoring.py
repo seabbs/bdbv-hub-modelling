@@ -233,17 +233,6 @@ class Scoring:
         self.checkpoint_forecast = compute.scoring_forecast(
             self.forecast, gpus, training
         )
-        # A checkpoint's held-out evaluation, 7-day check and validation
-        # forecasts take a whole GPU between segments, if any; on the CPU,
-        # the evaluation's cores.
-        self.boundary_forecast = compute.scoring_forecast(
-            self.forecast, gpus, 0
-        )
-        self.boundary_threads = (
-            self.unit_threads
-            if self.boundary_forecast.gpu
-            else self.evaluate_threads
-        )
 
     def _gpus(self) -> int:
         """Return this machine's CUDA GPUs.
@@ -307,23 +296,14 @@ class Scoring:
         """
         return self._env(self.forecast, threads)
 
-    def boundary_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
-        """Return `unit_env` for a job at the segment boundary."""
-        return self._env(self.boundary_forecast, threads)
+    def evaluation_priority(self, wc: Any) -> float:
+        """Return a held-out evaluation job's priority (`flowlib.compute`).
 
-    def boundary_priority(self, wc: Any) -> float:
-        """Return a boundary job's priority (`flowlib.compute`).
-
-        On a GPU, `BOUNDARY_PRIORITY`, above the next segment, so it runs
-        as the segment ends; on the CPU, the held-out evaluation's. Step 0
-        (no `n`) first, which every checkpoint's evaluation needs, then
-        the newest checkpoint.
+        `EVALUATION_PRIORITY`, below every other job: step 0 (no `n`)
+        first, which every checkpoint's evaluation needs, then the newest
+        checkpoint.
         """
-        base = (
-            compute.BOUNDARY_PRIORITY
-            if self.boundary_forecast.gpu
-            else compute.EVALUATION_PRIORITY
-        )
+        base = compute.EVALUATION_PRIORITY
         if getattr(wc, "n", None) is None:
             return base + 0.5
         return compute.side_priority(base, int(wc.n))
