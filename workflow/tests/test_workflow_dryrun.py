@@ -337,7 +337,7 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
             rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards
         ):
             tiers["reference"].append(priority)
-        elif rule in ("evaluate_steps", "evaluate_base", "evaluate_checkpoint"):
+        elif rule in ("evaluate_base", "evaluate_checkpoint"):
             tiers["evaluate"].append(priority)
         elif rule in ("score_run_germany", "ft_check_forecast"):
             tiers["checkpoint"].append(priority)
@@ -559,27 +559,10 @@ OFFLOAD = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
 def test_offloaded_evaluation_is_planned_after_each_segment(tmp_path):
     jobs = dry(tmp_path, "finetune", config=OFFLOAD)
     assert jobs["train_segment"] == 2
-    assert jobs["evaluate_steps"] == 2
     assert jobs["evaluate_checkpoint"] == 2
-
-
-def test_offloaded_step_evaluation_checks_every_due_step(tmp_path):
-    # So a segment whose snapshots were not copied in fails, not passes.
-    out = dry_run(
-        tmp_path,
-        "finetune",
-        config=OFFLOAD,
-        extra=["-p", "--quiet", "progress"],
-    )
-    assert out.returncode == 0, out.stderr + out.stdout
-    shipped = yaml.safe_load((ROOT / "workflow/config.yaml").read_text())
-    every = shipped["finetune"]["eval_every"]
-    text = out.stdout + out.stderr
-    steps = [
-        ln for ln in text.splitlines() if "evaluate_offloaded.py steps" in ln
-    ]
-    assert steps
-    assert all(f"--eval-every {every}" in ln for ln in steps)
+    # Only checkpoints are scored offloaded: the trainer's step snapshots
+    # are left unscored.
+    assert not any(k.startswith("evaluate_steps") for k in jobs)
 
 
 def test_local_evaluation_plans_no_evaluation_rules(tmp_path):
@@ -821,7 +804,7 @@ def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # trainer (the run's critical path) goes first, then the simulations
     # it trains on, then checkpoint scoring (score.smk, 10 and below).
     got = priorities(tmp_path, "finetune", config=FT)
-    assert got["train_segment"] == 100
+    assert 100 <= got["train_segment"] < 101
     assert 15 <= got["simulate_batch"] < 16
 
 
@@ -1532,3 +1515,35 @@ def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
     ]
     assert "--dry-run" in command
     assert "--repo" not in command
+
+
+def test_the_ebola_ablation_runs_each_variant_and_model(tmp_path):
+    # The ablation target (#1123): each variant's data, each model's
+    # forecasts of it, its summary, and one page.
+    _hub(tmp_path)
+    sims = tmp_path / "sims"
+    sims.mkdir()
+    for seed in (33300, 33301):
+        (sims / f"counts-{seed}.csv.gz").write_text("")
+    config = {
+        "ablation": {
+            "sims": str(sims),
+            "seeds": [33300, 33301],
+            "sim_variants": ["few", "fresh"],
+            "bdbv_variants": ["as_is"],
+            "models": ["randomwalknowcast", "foundation_pseudoweeks"],
+        }
+    }
+    out = dry_run(tmp_path, "ablation", config=config, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    jobs = dict(re.findall(r"^(\w+)\s+(\d+)$", out.stdout, re.M))
+    assert jobs["ablation_data"] == "3"
+    assert jobs["ablation_forecast"] == "6"
+    assert jobs["ablation_summary"] == "3"
+    assert jobs["ablation_report"] == "1"
+    assert (
+        "--model foundation_pseudoweeks --checkpoint 'slots-c44bbe122e6c'"
+        in out.stdout
+    )
+    assert "--model randomwalknowcast --checkpoint ''" in out.stdout
+    assert "ablation/ebola-ablation.html" in out.stdout

@@ -86,14 +86,17 @@ rule train_segment:
         adapter=protected(f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors"),
     log:
         f"{TRAIN}/n{{n}}.log",
-    # The trainer, the run's critical path, goes before every other job.
-    priority: TRAIN_PRIORITY
+    # The trainer, the run's critical path, goes before every other job;
+    # runs take the GPUs in turn (`Training.trainer_priority`).
+    priority: TRAINING.trainer_priority
     conda:
         TOOLS_ENV
     # The trainer and its block-cutting workers.
     threads: lambda wc: run_of(wc).ft["cut_workers"] + 1
+    # None of the cores the jobs beside it share (flowlib.machine).
     resources:
         gpu=1,
+        side_cores=0,
     params:
         prev_args=lambda wc: runs.resume_options(run_of(wc), int(wc.n)),
         held=lambda wc: held_range(wc.run),
@@ -103,6 +106,8 @@ rule train_segment:
         sources=lambda wc: " ".join(run_of(wc).ft["sources"]),
         options=lambda wc: runs.trainer_options(run_of(wc)),
         device=machine.device(LOCAL),
+        # A GPU of its own, with several (flowlib.gpus).
+        claim=machine.CLAIM,
         # The checkpoint threshold: this machine's, if set, else the
         # config's (memory only).
         checkpoint=local_or_ft("CHECKPOINT_ABOVE", "checkpoint_above"),
@@ -134,8 +139,8 @@ rule train_segment:
         """
         uv run python workflow/scripts/prepare_segment.py {params.train} \
             {params.prev_args} >{log}
-        DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 \
-            PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
+        {params.claim} DEVICE={params.device} HF_HOME={params.hf_home} \
+            HF_HUB_OFFLINE=1 PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
             PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
             uv run --group chronos finetune-stream \
             {params.run}/sims {params.train} --grid-file {params.grid_file} \

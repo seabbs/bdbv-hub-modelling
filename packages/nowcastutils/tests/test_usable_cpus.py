@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -50,3 +51,25 @@ def test_only_the_helper_reads_the_affinity() -> None:
         check=False,
     ).stdout.split()
     assert found == ["packages/nowcastutils/src/nowcastutils/devices.py"]
+
+
+@pytest.mark.parametrize("platform", ["linux", "darwin", "win32"])
+def test_the_helper_type_checks_on_every_platform(platform: str) -> None:
+    # mypy checks `os` as the platform has it: macOS has no affinity.
+    pytest.importorskip("mypy")
+    got = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "--platform",
+            platform,
+            "--no-incremental",
+            "packages/nowcastutils/src/nowcastutils/devices.py",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert got.returncode == 0, got.stdout

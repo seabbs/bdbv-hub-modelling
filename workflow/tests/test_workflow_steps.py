@@ -12,6 +12,7 @@ STEPS = (
     "publish",
     "score",
     "report",
+    "ablation",
     "paper",
     "monitor",
 )

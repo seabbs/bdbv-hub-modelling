@@ -10,6 +10,10 @@ Nothing about a machine is committed.
     python3 workflow/flowlib/machine.py args     # Snakemake options
     python3 workflow/flowlib/machine.py device   # cuda, mps or cpu
     python3 workflow/flowlib/machine.py budget   # cores, mem_mb, gpu (JSON)
+
+The `gpu` resource has a slot for each CUDA GPU (`gpu_ids`), at least
+one: the trainer's turn on whichever device. Each GPU job runs through
+`CLAIM` (flowlib.gpus), which gives it a GPU no other job holds.
 """
 
 from __future__ import annotations
@@ -60,6 +64,34 @@ def device(
 
 
 _device = device
+
+
+CLAIM = "python3 workflow/flowlib/gpus.py"
+"""The command a GPU job runs through: it claims a free GPU
+(flowlib.gpus), then runs `KEY=VALUE ... COMMAND` as `env` does."""
+
+
+def gpu_ids(
+    cfg: Mapping[str, str],
+    path: str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> list[str]:
+    """Return the CUDA GPUs the workflow's jobs share out.
+
+    `GPUS` (comma-separated ids) if set, else those
+    `CUDA_VISIBLE_DEVICES` names, else every one `nvidia-smi` lists.
+    """
+    env = os.environ if environ is None else environ
+    for given in (cfg.get("GPUS", ""), env.get("CUDA_VISIBLE_DEVICES", "")):
+        got = [g.strip() for g in given.split(",") if g.strip()]
+        if got:
+            return got
+    return [str(i) for i in range(gpus(path))]
+
+
+def gpu_slots(cfg: Mapping[str, str], path: str | None = None) -> int:
+    """Return the `gpu` resource: one slot per GPU, at least one."""
+    return max(1, len(gpu_ids(cfg, path)))
 
 
 THREAD_VARS = (
@@ -130,16 +162,64 @@ def budget(
     total_mb: int | None = None,
 ) -> dict[str, int]:
     """Return the cores and memory (MB) the workflow may use here."""
-    if cfg.get("CORES"):
-        n = int(cfg["CORES"])
-    else:
-        n = (cores or os.cpu_count() or 1) - int(cfg.get("HEADROOM_CORES") or 0)
+    n = budget_cores(cfg, cores)
     if cfg.get("MEM_MB"):
         mem = int(cfg["MEM_MB"])
     else:
         total = machine_mb() if total_mb is None else total_mb
         mem = total - int(cfg.get("HEADROOM_GB") or 0) * 1024
-    return {"cores": max(1, n), "mem_mb": max(1024, mem)}
+    return {"cores": n, "mem_mb": max(1024, mem)}
+
+
+def budget_cores(cfg: Mapping[str, str], cores: int | None = None) -> int:
+    """Return the cores the workflow may use here (`budget`)."""
+    if cfg.get("CORES"):
+        n = int(cfg["CORES"])
+    else:
+        n = (cores or os.cpu_count() or 1) - int(cfg.get("HEADROOM_CORES") or 0)
+    return max(1, n)
+
+
+_DEFAULTS = dict(localconfig.DEFAULTS)
+
+DEFAULT_MB = 2048
+"""The memory (MB) a job takes unless its rule says."""
+
+
+def side_cores(
+    cfg: Mapping[str, str], cores: int, path: str | None = None
+) -> int | None:
+    """Return the cores the jobs beside the trainers share, or None.
+
+    The budget less a trainer's (`TRAINER_CORES`) for each `gpu` slot
+    (`gpu_slots`), as each slot trains a run at once, so a trainer whose
+    inputs appear mid-run never waits behind CPU jobs for its cores.
+    None, keeping nothing, where nothing trains (`TRAINER_CORES=0`) or
+    no core would be left.
+    """
+    each = int(cfg.get("TRAINER_CORES") or _DEFAULTS["TRAINER_CORES"])
+    kept = each * gpu_slots(cfg, path)
+    if kept <= 0 or cores - kept < 1:
+        return None
+    return cores - kept
+
+
+def scoring_threads(
+    cfg: Mapping[str, str],
+    threads: int,
+    cores: int | None = None,
+    path: str | None = None,
+) -> int:
+    """Return the CPU threads of a checkpoint's held-out evaluation.
+
+    The cores the trainers leave (`side_cores`, or the whole budget where
+    nothing trains) less one forecasting unit's `threads`, so another job
+    still runs beside it; never fewer than `threads`. Step 0 scores every
+    held-out block, hours on a unit's few threads.
+    """
+    total = budget_cores(cfg, cores)
+    free = side_cores(cfg, total, path) or total
+    return max(threads, free - threads)
 
 
 def args(
@@ -150,17 +230,25 @@ def args(
 ) -> list[str]:
     """Return the Snakemake options of this machine's cores and resources.
 
-    `gpu` is one trainer at a time, on whichever device; `sim_slots`
+    `gpu` is a slot per GPU, one on a machine without CUDA
+    (`gpu_slots`); `sim_slots`
     (`SIM_SLOTS`, default 2) caps simulation batches; `awaiting` lets one
-    batch from another host be waited for at a time.
+    batch from another host be waited for at a time. Every job but the
+    trainer, which claims none, takes its threads of `side_cores`
+    (`side_cores`), at most all of them.
     """
     got = budget(cfg, cores, total_mb)
+    side = side_cores(cfg, got["cores"], path)
     return [
         "--cores",
         str(got["cores"]),
+        "--default-resources",
+        f"mem_mb={DEFAULT_MB}",
+        *([f"side_cores=min(threads,{side})"] if side else []),
         "--resources",
+        *([f"side_cores={side}"] if side else []),
         f"mem_mb={got['mem_mb']}",
-        f"gpu={max(1, gpus(path))}",
+        f"gpu={gpu_slots(cfg, path)}",
         f"sim_slots={cfg.get('SIM_SLOTS') or 2}",
         "awaiting=1",
     ]
@@ -174,6 +262,6 @@ if __name__ == "__main__":
     elif what == "budget":
         import json
 
-        print(json.dumps({**budget(cfg), "gpu": max(1, gpus())}))
+        print(json.dumps({**budget(cfg), "gpu": gpu_slots(cfg)}))
     else:
         print(" ".join(args(cfg)))

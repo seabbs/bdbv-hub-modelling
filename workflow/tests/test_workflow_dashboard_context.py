@@ -57,6 +57,15 @@ def test_a_run_is_picked_by_name(tmp_path):
     assert ctx.runs[0].live
 
 
+def test_a_run_may_show_another_beside_it_for_comparison(tmp_path):
+    # An SI run's dashboard needs nothing of the main run; named after
+    # it, the main run is shown beside it, the SI run still live.
+    cfg, local = _workflow(tmp_path)
+    ctx = context.build(cfg, local, runs=["noslots", "runa"])
+    assert [r.key for r in ctx.runs] == ["noslots", "runa"]
+    assert [r.live for r in ctx.runs] == [True, False]
+
+
 def test_an_unknown_run_name_is_an_error(tmp_path):
     cfg, local = _workflow(tmp_path)
     with pytest.raises(SystemExit, match="runa, noslots"):
@@ -147,7 +156,7 @@ def test_runs_and_references_take_the_shared_display_names(tmp_path):
     ctx = context.build(cfg, local)
     assert ctx.references[0].label == "Random walk nowcast"
     # A run with no label of its own is the fine-tuned model.
-    assert ctx.runs[0].label == "Fine-tuned (delays)"
+    assert ctx.runs[0].label == "Fine-tuned (reporting triangle)"
     assert ctx.runs[0].colour == paperstyle.model_colour(context.RUN_MODEL)
     # The workflow's references are named and coloured from the paper.
     shipped = yaml.safe_load(
@@ -156,16 +165,17 @@ def test_runs_and_references_take_the_shared_display_names(tmp_path):
     assert all("paper_model" in r and "label" not in r for r in shipped)
     names = {paperstyle.model_label(r["paper_model"]) for r in shipped}
     assert names == {
-        "Zero-shot (delays)",
-        "Zero-shot (complete data only)",
+        "Zero-shot (reporting triangle)",
+        "Zero-shot (complete data)",
+        "Zero-shot (baselinenowcast)",
         "Random walk nowcast",
     }
 
 
 def test_runs_take_the_shared_name_and_colour_whatever_their_label(tmp_path):
-    # The live run is plain "Fine-tuned (delays)", earlier
-    # runs "Fine-tuned (delays) - <grid> grid" (else their key), never a
-    # configured label such as "grid r6 (live)".
+    # The live run is plain "Fine-tuned (reporting triangle)", earlier
+    # runs "Fine-tuned (reporting triangle) - <grid> grid" (else their
+    # key), never a configured label such as "grid r6 (live)".
     import json
 
     from flowlib.dashboard import paperstyle, runs
@@ -174,7 +184,10 @@ def test_runs_take_the_shared_name_and_colour_whatever_their_label(tmp_path):
     one = context.named_runs(
         [runs.make_run("r6", "/x", label="grid r6 (live)", colour="#db2777")]
     )
-    assert (one[0].label, one[0].colour) == ("Fine-tuned (delays)", blue)
+    assert (one[0].label, one[0].colour) == (
+        "Fine-tuned (reporting triangle)",
+        blue,
+    )
     old = tmp_path / "old"
     (old / "train" / "n250").mkdir(parents=True)
     (old / "train" / "n250" / "settings.json").write_text(
@@ -188,9 +201,9 @@ def test_runs_take_the_shared_name_and_colour_whatever_their_label(tmp_path):
         ]
     )
     assert [r.label for r in several] == [
-        "Fine-tuned (delays) - r5 grid",
-        "Fine-tuned (delays) - slots",
-        "Fine-tuned (delays)",
+        "Fine-tuned (reporting triangle) - r5 grid",
+        "Fine-tuned (reporting triangle) - slots",
+        "Fine-tuned (reporting triangle)",
     ]
     # The live run is drawn in the model's colour, the others in its
     # shades, so every run reads as the fine-tuned model.

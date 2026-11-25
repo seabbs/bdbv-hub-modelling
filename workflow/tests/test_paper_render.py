@@ -97,14 +97,13 @@ def _calls(repo: Path) -> list[str]:
     return (repo / "calls.log").read_text().splitlines()
 
 
-def test_development_run_fetches_the_store_then_renders(repo: Path) -> None:
+def test_development_run_renders_without_the_fit_store(repo: Path) -> None:
     out = _run(repo)
     assert out.returncode == 0, out.stderr
     calls = _calls(repo)
-    fetch = next(i for i, c in enumerate(calls) if c.startswith("git fetch"))
+    # The paper reads our forecasts from the hub and the round releases.
+    assert not any("fit-store" in c for c in calls)
     snake = next(i for i, c in enumerate(calls) if "snakemake" in c)
-    assert "refs/heads/fit-store:refs/remotes/origin/fit-store" in calls[fetch]
-    assert fetch < snake
     assert calls[snake] == (
         "uv run --group paper --group chronos snakemake -s workflow/Snakefile "
         "render "
@@ -118,6 +117,16 @@ def test_paper_target_and_cores_are_passed(repo: Path) -> None:
     assert out.returncode == 0, out.stderr
     (snake,) = [c for c in _calls(repo) if "snakemake" in c]
     assert "--config render=paper --cores 2 " in snake
+
+
+def test_pages_reads_its_own_config(repo: Path) -> None:
+    # Pages leaves out what the workflow's hosts make (paper/workflow/
+    # pages.yaml); `task paper` reads the paper config alone.
+    out = _run(repo, "development", "--pages")
+    assert out.returncode == 0, out.stderr
+    (snake,) = [c for c in _calls(repo) if "snakemake" in c]
+    assert "--configfile paper/workflow/pages.yaml" in snake
+    assert "--config render=development " in snake
 
 
 def test_an_unknown_target_fails(repo: Path) -> None:
@@ -145,7 +154,7 @@ def test_pages_and_the_taskfile_run_the_script() -> None:
         for s in steps
         if s.get("name") == "Run the paper workflow and render the paper"
     ]
-    assert 'paper_run.py --render "$TARGET"' in paper["run"]
+    assert 'paper_run.py --render "$TARGET" --pages' in paper["run"]
     # The script path is from the repository root.
     assert "working-directory" not in paper
     assert "snakemake" not in paper["run"]

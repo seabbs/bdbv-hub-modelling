@@ -51,15 +51,19 @@ from nowcastfoundation.forecaster import (
 from nowcastutils.base import ForecastModel, ForecastTask
 
 __all__ = [
+    "BACKTEST_CONFIG",
     "check_model",
     "forecast",
     "release_tasks",
 ]
 
+BACKTEST_CONFIG = "packages/nowcastbdbv/config/backtest.toml"
+"""The backtest config the check reads by default."""
+
 
 def release_tasks(
     data: Path | str,
-    config: Path | str = "packages/nowcastbdbv/config/backtest.toml",
+    config: Path | str = BACKTEST_CONFIG,
 ) -> tuple[list[ForecastTask], pd.DataFrame, pd.DataFrame, Any]:
     """Return the scored task of every release, the target, daily, config.
 
@@ -122,6 +126,7 @@ def forecast(
     data: Path | str,
     out: Path | str,
     checkpoint: str | None = None,
+    config: Path | str = BACKTEST_CONFIG,
 ) -> ReleaseForecasts:
     """Forecast every release with one model and write its folder.
 
@@ -138,13 +143,15 @@ def forecast(
         The folder.
     checkpoint : str, optional
         See `check_model`.
+    config : pathlib.Path or str
+        The backtest config (`release_tasks`).
 
     Returns
     -------
     ReleaseForecasts
         The forecasts.
     """
-    tasks, target, _, _ = release_tasks(data)
+    tasks, target, _, _ = release_tasks(data, config)
     model = check_model(name, checkpoint)
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)

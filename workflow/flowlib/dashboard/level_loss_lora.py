@@ -1,11 +1,9 @@
-"""Held-out loss by level and LoRA size, from what the trainer writes.
+"""The size of the LoRA update, from the checkpoints the trainer writes.
 
-Held-out loss by level at each checkpoint (`settings.json`), relative
-to its loss at the start (`history.json`); and the size of the LoRA
-update, the Frobenius norm of the scaled `B @ A`, by encoder layer at
-each checkpoint and by kind of module over checkpoints. The loss by
-source and the attention bias have their own sections. No scoring: only
-the trainer's own files are read.
+The Frobenius norm of the scaled `B @ A`, by encoder layer at each run's
+last checkpoint and by kind of module over checkpoints. Validation loss
+(by level and source) and the attention bias have their own sections.
+No scoring: only the trainer's own files are read.
 """
 
 from __future__ import annotations
@@ -21,8 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from flowlib import evaluations
-from flowlib.dashboard import logs, svg, training
+from flowlib.dashboard import logs, svg
 from flowlib.dashboard.runs import Run
 from nowcasteval import labels
 
@@ -35,12 +32,12 @@ BLOCK = re.compile(r"encoder\.block\.(\d+)\.layer\.(\d+)\.")
 KINDS = {"0": "time attention", "1": "group attention"}
 """Encoder sublayers by index (`Chronos2EncoderBlock.layer`)."""
 
-EXPLAINERS = ("lossbylevel", "lorabylayer", "lorabykind")
-"""The explainer keys (`page/explain.json`) of the three panels, in order."""
+EXPLAINERS = ("lorabylayer", "lorabykind")
+"""The explainer keys (`page/explain.json`) of the two panels, in order."""
 
 
 CARD_WIDTH = 420
-"""Width the three charts are drawn at, about their card's on a wide screen."""
+"""Width the charts are drawn at, about their card's on a wide screen."""
 CARD_HEIGHT = 260
 
 
@@ -54,37 +51,6 @@ def colour_of(key: str, keys: Sequence[str]) -> str:
     if key in named:
         return named[key]
     return labels.CATEGORICAL[keys.index(key) % len(labels.CATEGORICAL)]
-
-
-def _relative(
-    points: Sequence[tuple[int, Mapping[str, float]]],
-) -> dict[str, list[tuple[int, float]]]:
-    """Return each key's values over steps divided by its first value."""
-    out: dict[str, list[tuple[int, float]]] = {}
-    start = points[0][1] if points else {}
-    for step, values in points:
-        for key, value in values.items():
-            if start.get(key) and value is not None:
-                out.setdefault(key, []).append((step, value / start[key]))
-    return out
-
-
-def by_level(
-    history: Sequence[Mapping[str, Any]],
-    checkpoints: Sequence[tuple[str, Mapping[str, Any]]],
-) -> dict[str, list[tuple[int, float]]]:
-    """Return held-out loss by level at each checkpoint, relative to start.
-
-    Against each checkpoint's simulations trained.
-    """
-    points = evaluations.level_points(
-        history,
-        [
-            (int(s.get("n_outbreaks") or logs._size(name)), s)
-            for name, s in checkpoints
-        ],
-    )
-    return _relative(points)
 
 
 def _matrices(path: Path) -> dict[str, tuple[list[int], array]]:
@@ -246,40 +212,15 @@ def _by_run(
     return series, _legend(keys, shown)
 
 
-def _checkpoints(run: Run) -> list[tuple[str, Mapping[str, Any]]]:
-    if run.folder is None:
-        return []
-    return [(n, s) for n, s, _ in logs.checkpoints(run.folder)]
-
-
 def section(
     run_list: Sequence[Run], tip: Callable[[str], str] = lambda _: ""
 ) -> str:
-    """Return the panels of held-out loss by level and LoRA size.
+    """Return the panels of the LoRA update's size.
 
-    Each run's own history and checkpoints only, against simulations
-    trained. `tip` gives the info marker of an explainer key
-    (`page.tip`).
+    Each run's own checkpoints only. `tip` gives the info marker of an
+    explainer key (`page.tip`).
     """
     run_list = list(run_list)
-    levels, legend = _by_run(
-        {
-            r.key: by_level(training.history(r), _checkpoints(r))
-            for r in run_list
-        },
-        run_list,
-    )
-    level_card = svg.chart(
-        "Validation loss by level at each checkpoint, relative to the start",
-        levels,
-        hlines=[1.0],
-        xlabel="simulations trained",
-        info=tip("lossbylevel"),
-        note="All validation blocks, each level scored with the others masked.",
-        legend=legend,
-        width=CARD_WIDTH,
-        height=CARD_HEIGHT,
-    )
     # Each run's last checkpoint, in the run's colour.
     layers = []
     for r in run_list:
@@ -310,4 +251,4 @@ def section(
         width=CARD_WIDTH,
         height=CARD_HEIGHT,
     )
-    return f"<div class=plots3>{level_card}{lora}{kind_card}</div>"
+    return f"<div class=plots3>{lora}{kind_card}</div>"

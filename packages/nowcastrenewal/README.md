@@ -1,7 +1,11 @@
 # nowcastrenewal
 
 Renewal models of an outbreak, built on [PyRenew](https://github.com/CDCgov/PyRenew) (JAX, NumPyro).
-It holds the renewal models fitted to the hub's data and the joint model that simulates outbreaks for fine-tuning. The two share one set of components.
+It holds renewal models fitted to case counts and a joint model that simulates outbreaks from latent infections to reported counts.
+The two share one set of components.
+
+In this project the fitted models are the renewal track of the hub submission (`renewalbvd`, `renewalsp` and `renewal`), fitted by `bdbvhub` into the fit store.
+The simulator makes the outbreaks Chronos-2 is fine-tuned on, run by `nowcastfoundation.simulator` in the workflow's simulate step.
 
 ## Start here
 

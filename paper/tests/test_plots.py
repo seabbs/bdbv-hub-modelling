@@ -131,7 +131,7 @@ def test_chronos_variants_have_distinct_styles() -> None:
     ]
     styles = [model_style(n, []) for n in names]
     assert len({c for c, _ in styles}) == 3
-    # Complete data dashed, with delays dotted, fine-tuned solid.
+    # Complete data dashed, reporting triangle dotted, fine-tuned solid.
     assert [d for _, d in styles] == ["dashed", "dotted", "solid"]
     # Bars are filled with the model's colour, never hatched.
     bars = [bar_style(n, []) for n in names]
@@ -295,7 +295,7 @@ def test_nowcast_panels_have_a_column_per_model_and_a_row_per_origin_or_place():
     )
     assert len(fig.axes) == 6
     assert fig.axes[0].get_title() == "Random walk nowcast\nrel. 1.00"
-    assert fig.axes[1].get_title() == "Fine-tuned (delays)"
+    assert fig.axes[1].get_title() == "Fine-tuned (reporting triangle)"
     assert fig.axes[0].get_ylabel().startswith("origin ")
     assert fig.axes[4].get_ylabel() == "DE, 80+"
     plt.close(fig)

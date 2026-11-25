@@ -1,5 +1,5 @@
 # Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
-# score step 0, each segment's step snapshots and its checkpoint, in
+# score step 0 and each checkpoint, not the step snapshots between, in
 # the `evaluate` group (WORKER_GROUPS places it), on the forecasting
 # device (`forecast` in the config, flowlib.forecast) beside the trainer,
 # newest segment first, below every other job (EVALUATION_PRIORITY): no
@@ -7,44 +7,9 @@
 # workflow/flowlib/evaluations.py.
 
 
-rule evaluate_steps:
-    input:
-        settings=f"{TRAIN}/n{{n}}/settings.json",
-        # Its steps start after the previous checkpoint's.
-        prev=evaluate_prev,
-        # Step 0, scored on its own.
-        base=f"{TRAIN}/evals/step-0000000.json",
-    output:
-        touch(f"{TRAIN}/evals/n{{n}}.done"),
-    log:
-        f"{TRAIN}/logs/evaluate-steps-n{{n}}.log",
-    benchmark:
-        f"{TRAIN}/benchmarks/evaluate_steps/n{{n}}.tsv"
-    priority: newest_first(EVALUATION_PRIORITY)
-    conda:
-        TOOLS_ENV
-    threads: UNIT_THREADS
-    resources:
-        gpu=FORECAST.gpu,
-    params:
-        where=lambda wc, input: Path(input.settings).parent,
-        prev=lambda wc, input: runs.option("--prev", evaluate_prev_dir(input)),
-        env=unit_env,
-        device=FORECAST.device,
-        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
-        copy_in=evaluate_copy_in,
-        copy_back=lambda wc: [f"{train_dir(wc.run)}/evals/"],
-        eval_every=ft("eval_every"),
-    shell:
-        "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
-        f"{EVALUATE_PY} steps {{params.where}} {{params.prev}} "
-        "--eval-every {params.eval_every} --device {params.device} "
-        "> {log} 2>&1"
-
-
 rule evaluate_base:
-    # Step 0 (base Chronos-2) on the held-out blocks, before any other
-    # evaluation: the start loss each checkpoint's sidecar needs.
+    # Step 0 (base Chronos-2) on every held-out block: the start loss
+    # each checkpoint's sidecar needs.
     input:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
@@ -59,13 +24,13 @@ rule evaluate_base:
     priority: EVALUATION_PRIORITY + 1
     conda:
         TOOLS_ENV
-    threads: UNIT_THREADS
+    threads: EVALUATE_THREADS
     resources:
-        gpu=FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=unit_env,
-        device=FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [
             f"{train_dir(wc.run)}/evals/step-0000000/",
@@ -96,13 +61,13 @@ rule evaluate_checkpoint:
     priority: newest_first(EVALUATION_PRIORITY)
     conda:
         TOOLS_ENV
-    threads: UNIT_THREADS
+    threads: EVALUATE_THREADS
     resources:
-        gpu=FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=unit_env,
-        device=FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=evaluate_inputs_from,
     shell:
@@ -129,13 +94,13 @@ rule seven_day_check:
     priority: newest_first(CHECKPOINT_PRIORITY)
     conda:
         TOOLS_ENV
-    threads: UNIT_THREADS
+    threads: EVALUATE_THREADS
     resources:
-        gpu=FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=unit_env,
-        device=FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
     shell:

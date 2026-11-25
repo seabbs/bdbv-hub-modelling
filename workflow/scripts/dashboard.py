@@ -1,4 +1,4 @@
-"""Serve the fine-tuning dashboard, or write it once as a static page.
+"""Serve the fine-tuning and simulations dashboards, or write one once.
 
     dashboard.py [--run NAME ...] [--ref SPEC ...] [--while-pid PID]
     dashboard.py --once FILE [--run NAME ...]
@@ -7,7 +7,8 @@ The runs are the workflow's (`runs` in workflow/config.yaml), or those
 `--run` names; references come from its `dashboard` section and `--ref`
 (see `flowlib.dashboard.context`). It listens on the machine settings'
 `DASHBOARD_HOST` and `DASHBOARD_PORT` (config/local.env.example), showing
-the runs under `DASHBOARD_ROOT` (default `ROOT`). With `--while-pid` it
+the runs under `DASHBOARD_ROOT` (default `ROOT`) at `/` and their
+simulations at `/sims/` (flowlib.dashboard.sims). With `--while-pid` it
 ends when that process does: a workflow run serves it so
 (flowlib.dashboard.serve).
 """
@@ -31,9 +32,10 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from flowlib import localconfig
-from flowlib.dashboard import context, nowcasts, page
+from flowlib.dashboard import context, nowcasts, page, serve, sims
 
-CONFIG = Path(__file__).parents[1] / "config.yaml"
+CHECKOUT = Path(__file__).parents[2]
+CONFIG = CHECKOUT / "workflow" / "config.yaml"
 LOCK = threading.Lock()
 CLIENT_GONE = (ConnectionError, TimeoutError)
 """How a client that left shows up: a closed tab, a reset, a timeout."""
@@ -122,29 +124,93 @@ class Pages:
         threading.Thread(target=loop, daemon=True).start()
 
 
+class _Sending(BaseHTTPRequestHandler):
+    """A handler that sends whole bodies and logs nothing."""
+
+    def _send(self, code: int, body: bytes, kind: str) -> None:
+        self.send_response(code)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args: object) -> None:
+        pass
+
+
+JSON = "application/json"
+NOT_FOUND = (404, b"{}", JSON)
+
+
+def sims_answer(
+    index: sims.Index, layer_of: dict[str, str], path: str
+) -> tuple[int, bytes, str]:
+    """Return the answer to a request under /sims/.
+
+    The page (`/sims/`), the sources (`/sims/sources.json`), a source's
+    index (`/sims/index/<source>.json`) and one simulation
+    (`/sims/sim/<source>/<id>.json`).
+    """
+    rest = path.removeprefix("/sims")
+    if rest in ("", "/", "/index.html"):
+        return 200, sims.page().encode(), "text/html; charset=utf-8"
+    if rest == "/sources.json":
+        return 200, page._json(index.listing()).encode(), JSON
+    if rest.startswith("/index/") and rest.endswith(".json"):
+        body = index.encoded_data(rest[len("/index/") : -len(".json")])
+        return (200, body, JSON) if body is not None else NOT_FOUND
+    if rest.startswith("/sim/") and rest.endswith(".json"):
+        source, _, oid = rest[len("/sim/") : -len(".json")].partition("/")
+        folder = index.sources().get(source)
+        found = sims.simulation(folder, oid, layer_of) if folder else None
+        if found is None:
+            return NOT_FOUND
+        return 200, page._json(found).encode(), JSON
+    return 404, b"not found", "text/plain"
+
+
+def sims_handler(
+    index: sims.Index, layer_of: dict[str, str]
+) -> type[BaseHTTPRequestHandler]:
+    """Return a request handler for the simulations alone."""
+
+    class Handler(_Sending):
+        def do_GET(self) -> None:
+            path = unquote(urlsplit(self.path).path)
+            try:
+                if path == "/sims" or path.startswith("/sims/"):
+                    self._send(*sims_answer(index, layer_of, path))
+                else:
+                    self._send(404, b"not found", "text/plain")
+            except CLIENT_GONE:
+                return
+
+    return Handler
+
+
 def handler(
-    ctx: page.Context, pages: Pages | None = None
+    ctx: page.Context,
+    pages: Pages | None = None,
+    simulations: tuple[sims.Index, dict[str, str]] | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     """Return the request handler: the page, its parts and location data.
 
     They come from `pages`' last build; without `pages`, one is built now.
+    With `simulations` (an index and the grid's layers) it answers
+    /sims/ too (`sims_answer`).
     """
     if pages is None:
         pages = Pages(ctx)
         pages.rebuild()
 
-    class Handler(BaseHTTPRequestHandler):
-        def _send(self, code: int, body: bytes, kind: str) -> None:
-            self.send_response(code)
-            self.send_header("Content-Type", kind)
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
+    class Handler(_Sending):
         def do_GET(self) -> None:
             path = unquote(urlsplit(self.path).path)
             try:
-                if path == "/sections.json":
+                sims_path = path == "/sims" or path.startswith("/sims/")
+                if simulations is not None and sims_path:
+                    self._send(*sims_answer(*simulations, path))
+                elif path == "/sections.json":
                     query = parse_qs(urlsplit(self.path).query)
                     self._sections(query.get("have", [""])[0])
                 elif path.startswith("/data/"):
@@ -197,9 +263,6 @@ def handler(
                 return
             self._send(200, page._json(found).encode(), "application/json")
 
-        def log_message(self, *_args: object) -> None:
-            pass
-
     return Handler
 
 
@@ -213,6 +276,43 @@ def write_once(ctx: page.Context, out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(page.build(ctx))
     print("wrote", out)
+
+
+def hidden_rounds(config: dict) -> set[int]:
+    """Return the rounds the dashboard never shows: the grid's test round.
+
+    It is held out for the paper (`grid_rounds.test_round`).
+    """
+    test = (config.get("grid_rounds") or {}).get("test_round")
+    return set() if test is None else {int(test)}
+
+
+def simulations(
+    config: dict, local: dict[str, str], every: float
+) -> tuple[sims.Index, dict[str, str]]:
+    """Return the simulations' index, refreshed every `every` seconds.
+
+    Of the simulations under DASHBOARD_ROOT, each batch's summary cached
+    in `<DASHBOARD_ROOT>/dashboard/sims/`, with the layers of the grid
+    the workflow simulates (`simulate.grid_file`). The grid's test round
+    is never listed (`hidden_rounds`).
+    """
+    layer_of = sims.layers(CHECKOUT / config["simulate"]["grid_file"])
+    root = serve.root(local)
+    index = sims.Index(
+        root, root / "dashboard" / "sims", layer_of, hidden_rounds(config)
+    )
+
+    def loop() -> None:
+        while True:
+            try:
+                index.refresh()
+            except Exception:
+                traceback.print_exc(file=sys.stderr)
+            time.sleep(every)
+
+    threading.Thread(target=loop, daemon=True).start()
+    return index, layer_of
 
 
 def main() -> None:
@@ -236,9 +336,13 @@ def main() -> None:
         ctx,
         None if a.run else lambda: context.build(config, local, refs=a.ref),
     )
-    pages.start(float(config["dashboard"]["refresh_every"]))
+    every = float(config["dashboard"]["refresh_every"])
+    pages.start(every)
     host, port = address(local)
-    server = ThreadingHTTPServer((host, port), handler(ctx, pages))
+    server = ThreadingHTTPServer(
+        (host, port),
+        handler(ctx, pages, simulations(config, local, every)),
+    )
     print(f"http://{host}:{port}/", flush=True)
     server.serve_forever()
 

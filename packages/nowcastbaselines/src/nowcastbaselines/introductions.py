@@ -48,7 +48,7 @@ def silent_places(reported: np.ndarray, cut_week: int, k: int) -> np.ndarray:
     numpy.ndarray
         `[L]`, true where silent.
     """
-    recent = reported[:, cut_week - k + 1 : cut_week + 1]
+    recent = reported[:, max(cut_week - k + 1, 0) : cut_week + 1]
     return np.asarray(recent.sum(axis=1) == 0)
 
 

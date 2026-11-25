@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from flowlib import (
+    compute,
     evaluations,
     hosts,
     manifest,
@@ -68,6 +69,20 @@ class Training:
         """Return the runs `finetune` trains."""
         return runs.trained(self.config, self.runs)
 
+    def trainer_priority(self, wc: Any) -> float:
+        """Return a run's trainer priority: the order runs take a GPU.
+
+        `TRAIN_PRIORITY` plus a fraction below one, highest for the
+        first of `train_runs`, then the rest of them in order, then the
+        other runs in the config's order. Each run's trainer takes one
+        `gpu` slot, so with a GPU per run every run trains at once, and
+        with fewer they queue in this order.
+        """
+        trained = self.trained_runs()
+        order = trained + [r for r in self.runs if r not in trained]
+        rank = order.index(wc.run)
+        return compute.TRAIN_PRIORITY + (len(order) - rank) / (len(order) + 1)
+
     def run_of(self, wc: Any) -> runs.Run:
         """Return a job's run."""
         return self.runs[wc.run]
@@ -95,26 +110,9 @@ class Training:
 
     # Evaluation.
 
-    def evaluate_prev(self, wc: Any) -> str | list[str]:
-        """Return the settings of the checkpoint before segment n, if any."""
-        prev = self.run_of(wc).prev[int(wc.n)]
-        if not prev:
-            return []
-        return f"{self.train_dir(wc.run)}/n{prev}/settings.json"
-
     def first_prefix(self, run: str) -> int:
         """Return the run's first checkpoint: the one with no previous."""
         return next(n for n, p in self.runs[run].prev.items() if p is None)
-
-    @staticmethod
-    def evaluate_prev_dir(input: Any) -> Path | None:
-        """Return the previous checkpoint's folder, if it has one."""
-        return Path(input.prev).parent if input.prev else None
-
-    def evaluate_copy_in(self, wc: Any) -> list[str]:
-        """Return the run's step evaluations and held-out blocks."""
-        train = self.train_dir(wc.run)
-        return [f"{train}/evals/", f"{train}/{HELD_OUT_BLOCKS}"]
 
     def earlier_settings(self, wc: Any) -> list[str]:
         """Return the settings of the run's checkpoints before n."""
@@ -135,11 +133,10 @@ class Training:
         ]
 
     def offloaded(self, run: str, n: int) -> list[str]:
-        """Return checkpoint n's sidecar and step evaluations, if offloaded."""
+        """Return checkpoint n's sidecar, if its run evaluates offloaded."""
         if self.runs[run].ft["eval"] != "offload":
             return []
-        train = self.train_dir(run)
-        return [f"{train}/n{n}/{SIDECAR}", f"{train}/evals/n{n}.done"]
+        return [f"{self.train_dir(run)}/n{n}/{SIDECAR}"]
 
     def validation_curve_inputs(self, wc: Any) -> list[str]:
         """Return each of the run's checkpoints, with its held-out losses."""
@@ -245,8 +242,7 @@ class Training:
     def segment_inputs(self, wc: Any) -> dict[str, Any]:
         """Return a segment's batches, seed list and previous checkpoint.
 
-        A run's first segment, if `finetune` does not train the run, also
-        takes the final checkpoints of the runs it does train.
+        Its own run's alone: no run waits on another.
         """
         run, n = wc.run, int(wc.n)
         there, train = self.runs[run], self.train_dir(run)
@@ -265,14 +261,6 @@ class Training:
             out["real"] = runs.real_training_blocks(there)
         if there.prev[n] is not None:
             out["prev"] = f"{train}/n{there.prev[n]}/settings.json"
-        elif run not in self.trained_runs():
-            # A run outside `train_runs` starts once their final
-            # checkpoints exist, so it never takes their GPU.
-            out["after"] = [
-                f"{self.train_dir(r)}/n{self.runs[r].ft['prefixes'][-1]}"
-                "/settings.json"
-                for r in self.trained_runs()
-            ]
         return out
 
     def fetch_source(self, wc: Any) -> dict[str, str] | list[str]:
@@ -296,6 +284,14 @@ class Training:
             lambda n: self.saved(run, n),
             lambda s: self.outbreaks_or_full(run, s),
         )
+
+    def still_training(self) -> list[str]:
+        """Return the trained runs with a segment in reach left to train."""
+        return [
+            run
+            for run in self.trained_runs()
+            if any(not self.saved(run, n) for n in self.trainable(run))
+        ]
 
     def finetune_inputs(self, wc: Any) -> list[str]:  # noqa: ARG002
         """Return each trained run's checkpoints, held-out losses, checks."""

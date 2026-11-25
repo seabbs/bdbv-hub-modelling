@@ -8,8 +8,9 @@ so one pass gives the daily counts and the 7-day hub target):
 `foundation` (fine-tuned on simulated outbreaks, ragged layout, the hub's
 model; `finetuned_checkpoint`), `foundation_zeroshot` (pretrained
 weights), `foundation_complete` and `foundation_zeroshot_complete`
-(complete layout), and the two-step `foundation_twostep` and
-`foundation_zeroshot_twostep`. For the SI,
+(complete layout), and `foundation_baselinenowcast` and
+`foundation_zeroshot_baselinenowcast` (complete layout on baselinenowcast's
+point nowcast). For the SI,
 `foundation_real` is the ragged model with the checkpoint fine-tuned on real
 data alone (the German development half and the public BDBV data to date,
 `scripts/finetune_realdata.py`), pinned in
@@ -65,6 +66,7 @@ from nowcastutils.base import (
 )
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.hierarchy import province_of
+from nowcastutils.releases import pseudo_releases
 from nowcastutils.trajectories import (
     choose_coupling,
     couple,
@@ -678,23 +680,6 @@ def checkpoint_spec(settings: Mapping[str, Any]) -> str:
     return f"{SLOTS_PREFIX}{key}" if settings.get("series_bias") else key
 
 
-def newest_segment(train: Path | str) -> Path | None:
-    """Return a run's newest saved segment folder, or None before any.
-
-    The largest `n<N>` under the run's `train` folder whose settings and
-    adapter files (`ADAPTER_FILES`) are saved; a segment still training
-    has neither. The paper's fine-tuned models load it (`paperpipe.flow`).
-    """
-    saved = [
-        d
-        for d in Path(train).glob("n*")
-        if d.name[1:].isdigit()
-        and (d / "settings.json").is_file()
-        and all((d / "finetuned-ckpt" / f).is_file() for f in ADAPTER_FILES)
-    ]
-    return max(saved, key=lambda d: int(d.name[1:]), default=None)
-
-
 def local_checkpoint(segment: Path | str) -> Checkpoint:
     """Return a training segment's checkpoint, read from its folder.
 
@@ -723,7 +708,10 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
 
 
 def _finetuned(
-    name: str, layout: str = "ragged", two_step: bool = False
+    name: str,
+    layout: str = "ragged",
+    baselinenowcast: bool = False,
+    pseudo_weeks: bool = False,
 ) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_checkpoint`.
 
@@ -736,7 +724,8 @@ def _finetuned(
         FROM_DATA,
         layout,
         finetuned_checkpoint(),
-        two_step=two_step,
+        baselinenowcast=baselinenowcast,
+        pseudo_weeks=pseudo_weeks,
         active_zone_cases=cases,
         active_zone_weeks=weeks,
         active_zone_recent_weeks=recent,
@@ -1484,8 +1473,9 @@ def active_views(
     return out
 
 
-TWO_STEP_DELAY: Final = 40
-"""The two-step model's longest delay $D$ in days, capped by the history."""
+BASELINENOWCAST_DELAY: Final = 40
+"""The baselinenowcast models' longest delay $D$ in days, capped by the
+history."""
 
 
 def point_nowcast(
@@ -1494,7 +1484,7 @@ def point_nowcast(
     """Return `tri` with each place's days to the cut-off nowcast.
 
     Each place's daily triangle at the cut-off (`round(3 * D)` days,
-    $D$ = `TWO_STEP_DELAY` capped by the history) is filled by
+    $D$ = `BASELINENOWCAST_DELAY` capped by the history) is filled by
     baselinenowcast's point nowcast, and those days of the place's counts
     are replaced by it.
     """
@@ -1503,11 +1493,13 @@ def point_nowcast(
 
     history = task.daily_history
     if history is None or history.empty:
-        raise ModelUnavailableError("the two-step model needs daily releases")
+        raise ModelUnavailableError(
+            "the baselinenowcast model needs daily releases"
+        )
     cutoff = as_date(str(task.cutoff)[:10])
     at = tri.times.index(cutoff.isoformat())
     have = (cutoff - as_date(str(history["onset_date"].min()))).days + 1
-    delay = min(TWO_STEP_DELAY, have // 3)
+    delay = min(BASELINENOWCAST_DELAY, have // 3)
     if delay < 3:
         raise ModelUnavailableError(f"{have} days of releases are too few")
     rows = min(3 * delay, at + 1)
@@ -1639,13 +1631,22 @@ class FoundationModel:
     collect : list or None
         Private to `prefetch`: the groups a forecast would predict are
         added to it, and the forecast stops.
-    two_step : bool
-        The two-step model (#538's sensitivity analysis): each place's
+    baselinenowcast : bool
+        The baselinenowcast model (#538's sensitivity analysis): each place's
         daily counts to the cut-off are first replaced by baselinenowcast's
         point nowcast (`point_nowcast`), and Chronos-2 forecasts from the
         day after the cut-off on those corrected counts. The nowcast days
         are the point nowcast, with no uncertainty. Complete layout, daily
         source only.
+    pseudo_weeks : bool
+        The daily releases gain weekly pseudo releases where the release
+        history has gaps of two weeks or more and before its first
+        release, each the latest release's counts scaled by the share of
+        the task's delay line (`ForecastTask.delays`) reported by its
+        cut-off (`nowcastutils.releases.pseudo_releases`). The block sees
+        a release about every week; the releases themselves are kept.
+        A task with no delay line keeps its releases alone. Daily source
+        only.
     block_limit : int or None
         Most series in one block Chronos-2 predicts, the machine's block
         capacity; a task's block over it is cut into views
@@ -1682,7 +1683,8 @@ class FoundationModel:
         default=None, repr=False, compare=False
     )
     block_limit: int | None = None
-    two_step: bool = False
+    baselinenowcast: bool = False
+    pseudo_weeks: bool = False
     active_zone_cases: int | None = None
     active_zone_weeks: int = 8
     active_zone_recent_weeks: int = 4
@@ -1694,10 +1696,12 @@ class FoundationModel:
             raise ValueError(
                 f"unknown coupling {self.coupling!r}; one of {COUPLINGS}"
             )
-        if self.two_step and (
+        if self.baselinenowcast and (
             self.layout != "complete" or self.source not in ("daily", FROM_DATA)
         ):
-            raise ValueError("two_step needs the complete layout, daily")
+            raise ValueError("baselinenowcast needs the complete layout, daily")
+        if self.pseudo_weeks and self.source == "weekly":
+            raise ValueError("pseudo_weeks needs the daily source")
         if self.block_limit is None and os.environ.get(BLOCK_LIMIT_ENV):
             self.block_limit = int(os.environ[BLOCK_LIMIT_ENV])
 
@@ -1725,7 +1729,11 @@ class FoundationModel:
             daily = (
                 task.daily_history is not None and not task.daily_history.empty
             )
-            run = replace(self, source="daily" if daily else "weekly")
+            run = replace(
+                self,
+                source="daily" if daily else "weekly",
+                pseudo_weeks=self.pseudo_weeks and daily,
+            )
         if task.max_delay is not None and not run.lags:
             steps = (
                 -(-int(task.max_delay) // 7)
@@ -1789,7 +1797,7 @@ class FoundationModel:
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
-        if self.two_step:
+        if self.baselinenowcast:
             # Chronos-2 forecasts from the day after the cut-off, on the
             # counts baselinenowcast's point nowcast corrects.
             tri = point_nowcast(tri, places, task)
@@ -1930,6 +1938,8 @@ class FoundationModel:
         )
         rows = _rows(base, zone if zones else None)
         assert rows is not None
+        if self.pseudo_weeks:
+            rows = pseudo_releases(rows, task.delays)
         places = (NATIONAL, *task.locations, *zones)
         weeks = list(task.target_end_dates)
         return rows, places, weeks
@@ -2351,16 +2361,16 @@ register_model(
     fitted=True,
     paper_only=True,
 )
-# The two-step sensitivity analysis (#538): baselinenowcast's point
+# The baselinenowcast sensitivity analysis (#538): baselinenowcast's point
 # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
 register_model(
-    "foundation_zeroshot_twostep",
+    "foundation_zeroshot_baselinenowcast",
     partial(
         FoundationModel,
-        "foundation_zeroshot_twostep",
+        "foundation_zeroshot_baselinenowcast",
         FROM_DATA,
         "complete",
-        two_step=True,
+        baselinenowcast=True,
     ),
     "baselinenowcast's point nowcast, then Chronos-2 on the corrected "
     "daily counts, complete layout.",
@@ -2368,10 +2378,39 @@ register_model(
     paper_only=True,
 )
 register_model(
-    "foundation_twostep",
-    partial(_finetuned, "foundation_twostep", "complete", two_step=True),
+    "foundation_baselinenowcast",
+    partial(
+        _finetuned,
+        "foundation_baselinenowcast",
+        "complete",
+        baselinenowcast=True,
+    ),
     "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
     "corrected daily counts, complete layout.",
+    fitted=True,
+    paper_only=True,
+)
+# Weekly pseudo releases fill the release history's gaps (#1122), zero-shot
+# and fine-tuned.
+register_model(
+    "foundation_zeroshot_pseudoweeks",
+    partial(
+        FoundationModel,
+        "foundation_zeroshot_pseudoweeks",
+        FROM_DATA,
+        "ragged",
+        pseudo_weeks=True,
+    ),
+    "Chronos-2 zero-shot, ragged layout, with weekly pseudo releases from "
+    "the latest release and the delay line.",
+    fitted=True,
+    paper_only=True,
+)
+register_model(
+    "foundation_pseudoweeks",
+    partial(_finetuned, "foundation_pseudoweeks", "ragged", pseudo_weeks=True),
+    "Chronos-2 fine-tuned, ragged layout, with weekly pseudo releases from "
+    "the latest release and the delay line.",
     fitted=True,
     paper_only=True,
 )

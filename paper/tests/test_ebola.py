@@ -1,8 +1,7 @@
 """Tests of the Ebola hub loader and scoring."""
 
 import gzip
-import json
-import subprocess
+import zipfile
 
 import pandas as pd
 import pytest
@@ -27,106 +26,85 @@ def test_hub_samples_keep_latest_forecast_date(hub):
     assert s["value"].max() == 200
 
 
-def _git(repo, *args):
-    subprocess.run(
-        ["git", "-C", str(repo), *args],
-        check=True,
-        capture_output=True,
-    )
+def _release(folder, ref, models, vintage="2026-10-25"):
+    """Write a round release's `hub.zip` with each model's samples."""
+    out = folder / f"round-{ref}"
+    out.mkdir(parents=True)
+    with zipfile.ZipFile(out / "hub.zip", "w") as z:
+        for model, value in models.items():
+            rows = pd.DataFrame(
+                {
+                    # A model's file also holds the next round's rows.
+                    "reference_date": [ref] * 100 + ["2026-11-07"] * 100,
+                    "forecast_date": vintage,
+                    "target": ebola.TARGET,
+                    "target_end_date": "2026-11-07",
+                    "location": "CD",
+                    "output_type": "sample",
+                    "output_type_id": list(range(1, 101)) * 2,
+                    "value": value,
+                }
+            )
+            z.writestr(
+                f"hub/{vintage}/{model}-samples.csv.gz",
+                gzip.compress(rows.to_csv(index=False).encode()),
+            )
+            z.writestr(f"hub/{vintage}/{model}-quantiles.csv.gz", b"")
+    return out
 
 
-def _fit(repo, model, origin, key, fitted_at, value):
-    rows = [
-        [model, "real", origin, "2026-10-31", "CD", "2026-11-07", s, value]
-        for s in range(1, 101)
-    ]
-    fit = {
-        "meta": {
-            "model": model,
-            "origin": origin,
-            "key": key,
-            "fitted_at": fitted_at,
-            "status": "ok",
-        },
-        "forecasts": {
-            "columns": [
-                "model",
-                "kind",
-                "vintage",
-                "reference_date",
-                "location",
-                "target_end_date",
-                "sample",
-                "value",
-            ],
-            "data": rows,
-        },
-    }
-    path = repo / model / origin / f"{key}.json.gz"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(gzip.compress(json.dumps(fit).encode()))
+def _ledger(path, rows):
+    pd.DataFrame(
+        rows, columns=["reference_date", "hub_id", "status", "model"]
+    ).to_csv(path, index=False)
+    return path
 
 
 @pytest.fixture
-def store(tmp_path):
-    """Build a fit store with a prospective fit later refitted."""
-    repo = tmp_path / "store"
-    repo.mkdir()
-    _git(repo, "init", "-q", "-b", "fit-store")
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
-    _fit(repo, "renewal", "2026-10-25", "a", "2026-10-26T10:00:00+00:00", 5)
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", "first")
-    (repo / "renewal/2026-10-25/a.json.gz").unlink()
-    _fit(repo, "renewal", "2026-10-25", "b", "2026-11-05T10:00:00+00:00", 9)
-    # A fit made after its round closed is never prospective.
-    _fit(
-        repo, "foundation_x", "2026-10-25", "c", "2026-11-12T10:00:00+00:00", 1
+def releases(tmp_path):
+    """Round releases of two rounds and the ledger of what each sent."""
+    folder = tmp_path / "releases"
+    _release(folder, "2026-10-31", {"renewal": 5, "randomwalknowcast": 7})
+    # A round whose release has no `hub.zip` yet gives nothing.
+    (folder / "round-2026-11-07").mkdir()
+    ledger = _ledger(
+        tmp_path / "submissions.csv",
+        [
+            [
+                "2026-10-31",
+                "seabbs-rwnowcast",
+                "submitted",
+                "randomwalknowcast",
+            ],
+            ["2026-10-31", "seabbs-renewal", "failed", "renewal"],
+        ],
     )
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", "refit")
-    return repo
+    return folder, ledger
 
 
-def test_store_keeps_first_prospective_fit(store):
-    s = ebola.store_samples(store, "fit-store")
+def test_round_releases_give_the_unsubmitted_models_of_each_round(releases):
+    s = ebola.release_samples(*releases)
+    # The submitted walk is the hub's copy; only its round's rows are kept.
     assert set(s["model"]) == {"renewal"}
+    assert set(s["origin_date"]) == {pd.Timestamp("2026-10-31")}
+    assert len(s) == 100
     assert (s["value"] == 5).all()
 
 
-def test_the_store_history_file_holds_the_first_prospective_fits(
-    store, hub, tmp_path
-):
-    path = tmp_path / "fit-store-history.csv.gz"
-    ebola.write_store_history(store, "fit-store", path)
-    history = ebola.history_samples(path)
+def test_the_round_releases_file_is_what_load_reads(releases, hub, tmp_path):
+    path = tmp_path / "round-releases.csv.gz"
+    assert ebola.write_release_samples(*releases, path) == 100
     pd.testing.assert_frame_equal(
-        history, ebola.store_samples(store, "fit-store")
+        ebola.round_samples(path), ebola.release_samples(*releases)
     )
-    table = ebola.load(hub, history=path)
+    table = ebola.load(hub, releases=path)
+    assert set(table["model"]) == {"team-a", "renewal"}
     assert set(table.loc[table["model"] == "renewal", "value"]) == {5}
 
 
 def test_round_close_is_tuesday_before():
     close = ebola.round_close(pd.Timestamp("2026-11-14"))
     assert close == pd.Timestamp("2026-11-10 22:59", tz="UTC")
-
-
-def test_store_skips_fits_with_no_forecasts(store):
-    _fit(store, "pp", "2026-10-25", "d", "2026-10-26T09:00:00+00:00", 3)
-    _git(store, "add", "-A")
-    _git(store, "commit", "-q", "-m", "pp")
-    _fit(store, "pp", "2026-10-25", "e", "2026-10-26T08:00:00+00:00", 0)
-    path = store / "pp/2026-10-25/e.json.gz"
-    fit = json.loads(gzip.decompress(path.read_bytes()))
-    fit["forecasts"]["data"] = []
-    path.write_bytes(gzip.compress(json.dumps(fit).encode()))
-    _git(store, "add", "-A")
-    _git(store, "commit", "-q", "-m", "empty")
-    s = ebola.store_samples(store, "fit-store")
-    assert set(s["model"]) == {"renewal", "pp"}
-    assert (s.loc[s["model"] == "pp", "value"] == 3).all()
 
 
 def test_hub_samples_keep_trajectory_ids(hub):
@@ -179,15 +157,3 @@ def test_a_release_feeds_the_first_round_still_open_on_its_day() -> None:
     assert round_of(pd.Timestamp("2026-11-11")) == pd.Timestamp("2026-11-21")
     assert round_of(pd.Timestamp("2026-11-10")) == pd.Timestamp("2026-11-14")
     assert round_of(pd.Timestamp("2026-11-18")) == pd.Timestamp("2026-11-28")
-
-
-def test_the_store_history_is_written_without_holding_it_whole(
-    store, tmp_path, monkeypatch
-):
-    def whole(*_):
-        raise AssertionError("the whole history was built")
-
-    monkeypatch.setattr(ebola, "store_samples", whole)
-    path = tmp_path / "fit-store-history.csv.gz"
-    assert ebola.write_store_history(store, "fit-store", path) == 100
-    assert set(ebola.history_samples(path)["value"]) == {5}

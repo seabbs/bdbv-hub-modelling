@@ -47,11 +47,16 @@ font-size:12px}
 .leg2{font-size:12px;display:flex;flex-wrap:wrap;gap:4px 18px}.glocs{margin:6px 0}.glocs .tog{margin:1px}.panels{display:grid;gap:8px}
 .panels h4{margin:0 0 2px;font-size:12px}#gplot .ax,#gwis .ax{font-size:11px}.plots3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px}
 .plots3 .leg{font-size:11px;gap:2px 8px}
-/* Bias over training and the learning rates side by side, the matrices
-   below across the row. */
-.biasrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:8px;align-items:start}
-.biasdyn{display:contents}.biasmore{display:contents}.biasline{order:1}#lrcard{order:2}
-.biastabs,.biasheat{order:3;grid-column:1/-1}
+/* Attention bias: equal panels in an even grid, one column per relation
+   and one more (bias.js sets --bcols); two then one on a narrow screen. */
+.biashead{margin:0 0 6px}.biashead .lg{margin-right:0}
+.sw2{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+.biasgrid{display:grid;grid-template-columns:repeat(var(--bcols,4),minmax(0,1fr));gap:8px}
+.biasgrid .card h3{margin:0 0 2px}.biasgrid .bsub{font-size:11px;color:var(--mut);min-height:1.4em;margin-bottom:2px}
+.biasgrid .card svg{width:100%;height:auto;max-width:360px;display:block;margin:0 auto}
+.biasgrid .fs svg{max-width:none;max-height:80vh}
+@media(max-width:900px){.biasgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.biasgrid{grid-template-columns:1fr}}
 .topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0 4px;
 border-bottom:1px solid var(--line);margin-bottom:6px}
 .navrow{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
@@ -70,14 +75,13 @@ details.sec{scroll-margin-top:92px}details.sec h2{margin:10px 0 6px}
 .gsc svg{max-width:100%;height:auto}
 @media(max-width:1100px){.gscores{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.gscores{grid-template-columns:1fr}}
-#lrcard:not(.fs) svg{max-width:520px}
 /* Full screen enlarges a fixed-width chart only so far, so its text stays
    in proportion to the page's. */
 .fs svg.srv{max-width:min(100%,800px);margin:0 auto}
 /* Charts drawn on the server at a fixed width shrink on a phone; their
    axis text does not. */
 @media(max-width:560px){svg.srv .ax{font-size:14px}}
-.biasline svg{width:100%;height:auto}.tiles4{display:flex;flex-wrap:wrap;gap:12px}
+.tiles4{display:flex;flex-wrap:wrap;gap:12px}
 .tile4 .mut{font-size:11px;line-height:1.3}.tile4 svg{display:block}
 .rel .band{opacity:0;pointer-events:none}.rel:hover .band{opacity:.22}
 .rel{pointer-events:all}

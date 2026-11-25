@@ -24,10 +24,11 @@ def usable_cpus() -> int:
     int
         The number of usable CPUs.
     """
-    try:
-        return len(os.sched_getaffinity(0))
-    except AttributeError:
-        return os.cpu_count() or 1
+    # Looked up, not named: mypy checks `os` as each platform has it.
+    affinity = getattr(os, "sched_getaffinity", None)
+    if affinity is not None:
+        return len(affinity(0))
+    return os.cpu_count() or 1
 
 
 def host_devices(n: int) -> None:

@@ -51,6 +51,11 @@ DEFAULTS = (
     # A Snakemake profile of this machine's own, kept outside the
     # repository, which replaces the one COMPUTE gives (empty: none).
     ("SNAKEMAKE_PROFILE", ""),
+    # COMPUTE=slurm (flowlib.compute.slurm_args): the account jobs are
+    # charged to (empty: the plugin's guess) and the site's partitions
+    # file (empty: sinfo's default partition for every job).
+    ("SLURM_ACCOUNT", ""),
+    ("SLURM_PARTITIONS", ""),
     # Where the dashboard (workflow/scripts/dashboard.py) listens: its
     # host (an address of this machine; 127.0.0.1 keeps it local) and
     # port.
@@ -68,6 +73,14 @@ DEFAULTS = (
     ("MEM_MB", ""),
     ("SIM_SLOTS", ""),
     ("DEVICE", "auto"),
+    # The cores kept for the trainer, which jobs beside it never take
+    # (flowlib.machine.side_cores): its threads, `finetune.cut_workers`
+    # + 1 in workflow/config.yaml; 0 where nothing trains.
+    ("TRAINER_CORES", "4"),
+    # The CUDA GPUs the workflow shares out, comma-separated ids (empty:
+    # CUDA_VISIBLE_DEVICES', else every one nvidia-smi lists;
+    # flowlib.machine.gpu_ids).
+    ("GPUS", ""),
     # Series above which a training step recomputes activations in
     # backward (empty: the trainer's memory budget sets it); lower on a
     # small GPU. Memory only, outside the checkpoint's hash.

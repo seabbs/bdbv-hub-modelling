@@ -1,6 +1,12 @@
 # config
 
-This machine's settings.
+This machine's settings: paths, hosts, cores and devices for the workflow, the paper run and the Taskfile.
+
+In this project `workflow/flowlib/localconfig.py` reads `config/local.env`.
+The Taskfile, the Snakemake workflow and the shell scripts call it, so every one of them sees the same values.
+
+## Where to look
+
 
 - [`local.env.example`](local.env.example): every machine setting, with its default. Copy it to `config/local.env` (not committed) and set what differs on your machine; `workflow/flowlib/localconfig.py` checks every `local.env` against this list.
 

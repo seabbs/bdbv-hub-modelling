@@ -275,12 +275,14 @@ jobs:
       # above, then the paper from its results, for the site's /paper/.
       # Pull requests and pushes run the development target, which never
       # reads the held-out data; the paper target runs only on dispatch.
-      # As `task paper`; keep the two in step.
+      # As `task paper`, with the Pages config (paper/workflow/pages.yaml),
+      # which leaves out the simulations, fine-tuning runs and their scores
+      # that the workflow's hosts make.
       - name: Run the paper workflow and render the paper
         env:
           TARGET: ${{ inputs.paper_target || 'development' }}
         # The same steps as `task paper` (workflow/scripts/paper_run.py).
-        run: python3 workflow/scripts/paper_run.py --render "$TARGET"
+        run: python3 workflow/scripts/paper_run.py --render "$TARGET" --pages
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       # Each package's own docs site, at <site>/<package>/ (as
@@ -299,6 +301,12 @@ jobs:
           name: site
           path: _site
           # Read by this run's deploy and preview jobs only.
+          retention-days: 3
+      # The paper's built inputs, which the `paper-build` job publishes.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: paper-build
+          path: paper/build
           retention-days: 3
       # The results and data the `release` job may attach, and on a pull
       # request for comparing its results with main's.
@@ -341,6 +349,42 @@ jobs:
           branch: gh-pages
           clean-exclude: pr-preview/
           force: false
+
+  # The paper's built inputs (figures, tables, results.yml and
+  # evidence.yml) that this build rendered the site's paper from, as the
+  # asset paper-build.tar.gz of the `paper-build` release, replaced at each
+  # deploy from main. `task paper:preview` downloads it, so the paper
+  # renders locally without its workflow (paper/scripts/fetch_build.py).
+  paper-build:
+    name: Publish the paper's built inputs
+    needs: build
+    if: >-
+      !cancelled() && needs.build.result == 'success'
+      && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+      && inputs.paper_target != 'paper'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency: paper-build
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: paper-build
+          path: build
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tar -czf paper-build.tar.gz build
+          if ! gh release view paper-build -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create paper-build -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --prerelease --title "Paper build" \
+              --notes "The paper's built inputs from the latest Site build."
+          fi
+          gh release upload paper-build paper-build.tar.gz \
+            -R "$GITHUB_REPOSITORY" --clobber
+          gh release edit paper-build -R "$GITHUB_REPOSITORY" --notes \
+            "The paper's built inputs from the Site build of $GITHUB_SHA ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). \`task paper:preview\` downloads them into paper/build/."
 
   # Only for branches of this repository: a fork's token cannot write, and
   # it never gets secrets.

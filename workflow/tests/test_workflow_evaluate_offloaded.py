@@ -66,49 +66,6 @@ def checkpoint_at(train, n, steps):
     return where
 
 
-def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
-    mod, calls = fake
-    train = tmp_path / "train"
-    for step, kinds in ((0, ["start"]), (200, ["monitor"]), (400, ["monitor"])):
-        snapshot(train, step, kinds)
-    first = checkpoint_at(train, 250, 200)
-    second = checkpoint_at(train, 500, 400)
-    mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
-    assert calls["loads"] == 1
-    # Newest first.
-    assert [c[1] for c in calls["evals"]] == [["monitor"], ["start"]]
-    got = json.loads((train / "evals" / "step-0000200.json").read_text())
-    assert got["step"] == 200
-    assert got["eval_loss"] == 0.3
-    assert not (train / "evals" / "step-0000400.json").exists()
-    mod.main(
-        [
-            "steps",
-            str(second),
-            "--prev",
-            str(first),
-            "--device",
-            "cpu",
-            "--eval-every",
-            "200",
-        ]
-    )
-    assert len(calls["evals"]) == 3
-    mod.main(
-        [
-            "steps",
-            str(second),
-            "--prev",
-            str(first),
-            "--device",
-            "cpu",
-            "--eval-every",
-            "200",
-        ]
-    )
-    assert len(calls["evals"]) == 3
-
-
 def test_checkpoint_writes_the_sidecar_with_the_start_loss(tmp_path, fake):
     mod, calls = fake
     train = tmp_path / "train"
@@ -136,50 +93,6 @@ def test_a_checkpoint_with_no_base_loss_fails_clearly(tmp_path, fake):
         mod.main(["checkpoint", str(where), "--device", "cpu"])
 
 
-def test_steps_with_no_snapshots_in_its_segment_fails(tmp_path, fake):
-    # Snapshots never copied in (an rsync that failed) must not pass.
-    mod, calls = fake
-    where = checkpoint_at(tmp_path / "train", 100, 400)
-    with pytest.raises(SystemExit, match="no step snapshot"):
-        mod.main(
-            ["steps", str(where), "--device", "cpu", "--eval-every", "200"]
-        )
-    assert calls["evals"] == []
-
-
-def test_steps_fails_when_a_due_step_s_snapshot_is_missing(tmp_path, fake):
-    mod, _calls = fake
-    train = tmp_path / "train"
-    snapshot(train, 0, ["start"])
-    where = checkpoint_at(train, 100, 400)
-    with pytest.raises(SystemExit, match="step-0000200"):
-        mod.main(
-            ["steps", str(where), "--device", "cpu", "--eval-every", "200"]
-        )
-
-
-def test_steps_passes_a_segment_with_no_due_step(tmp_path, fake):
-    mod, calls = fake
-    train = tmp_path / "train"
-    first = checkpoint_at(train, 100, 150)
-    second = checkpoint_at(train, 200, 190)
-    snapshot(train, 0, ["start"])
-    mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
-    mod.main(
-        [
-            "steps",
-            str(second),
-            "--prev",
-            str(first),
-            "--device",
-            "cpu",
-            "--eval-every",
-            "200",
-        ]
-    )
-    assert [c[1] for c in calls["evals"]] == [["start"]]
-
-
 def test_base_scores_only_step_0_and_once(tmp_path, fake):
     mod, calls = fake
     train = tmp_path / "train"
@@ -192,20 +105,30 @@ def test_base_scores_only_step_0_and_once(tmp_path, fake):
     assert not (train / "evals" / "step-0000200.json").exists()
     mod.main(["base", str(first), "--device", "cpu"])
     assert len(calls["evals"]) == 1
-    # The segment's step evaluation then skips step 0.
-    mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
-    assert [c[1] for c in calls["evals"]] == [["start"], ["monitor"]]
 
 
-def test_steps_scores_the_newest_snapshot_first(tmp_path, fake):
-    mod, calls = fake
+def test_step_snapshots_are_not_scored(fake):
+    # Only checkpoints are scored offloaded (#1114).
+    mod, _ = fake
+    with pytest.raises(SystemExit):
+        mod.main(["steps", "n250", "--device", "cpu", "--eval-every", "200"])
+
+
+def test_evaluation_logs_each_batch(tmp_path, fake, monkeypatch, capsys):
+    mod, _ = fake
     train = tmp_path / "train"
-    for step in (200, 400, 600):
-        snapshot(train, step, ["monitor"])
-    where = checkpoint_at(train, 250, 600)
-    (train / "evals" / "step-0000000.json").write_text("{}")
-    mod.main(["steps", str(where), "--device", "cpu", "--eval-every", "200"])
-    steps = [
-        int(c[0].parent.name.removeprefix("step-")) for c in calls["evals"]
-    ]
-    assert steps == [600, 400, 200]
+    snapshot(train, 0, ["start"])
+
+    def evaluate(*_a, **_k):
+        mod.fs.report_batch(1, 2)
+        mod.fs.report_batch(2, 2)
+        return {"held_out_loss": 0.4}
+
+    monkeypatch.setattr(mod.fe, "evaluate", evaluate)
+    mod.main(["base", str(train / "n100"), "--device", "cpu"])
+    out = capsys.readouterr().out
+    assert "step-0000000: batch 1/2" in out
+    assert "step-0000000: batch 2/2" in out
+    # Outside an evaluation nothing is logged.
+    mod.fs.report_batch(1, 2)
+    assert "batch" not in capsys.readouterr().out

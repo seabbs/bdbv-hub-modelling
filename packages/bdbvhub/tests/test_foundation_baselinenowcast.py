@@ -1,4 +1,4 @@
-"""Two-step Chronos-2: baselinenowcast's point nowcast, then Chronos-2."""
+"""The baselinenowcast variants: its point nowcast, then Chronos-2."""
 
 import dataclasses
 import datetime as dt
@@ -83,18 +83,18 @@ def task():
     return nowcast_tasks(_triangle(), NOWCAST, 4, 7, horizons=HORIZONS)[0]
 
 
-def test_both_two_step_variants_are_registered():
+def test_both_baselinenowcast_variants_are_registered():
     from bdbvhub.models import get_model
 
-    zero = get_model("foundation_zeroshot_twostep")
-    assert (zero.layout, zero.source, zero.two_step) == (
+    zero = get_model("foundation_zeroshot_baselinenowcast")
+    assert (zero.layout, zero.source, zero.baselinenowcast) == (
         "complete",
         "data",
         True,
     )
     from nowcastutils.base import list_models
 
-    assert "foundation_twostep" in {s.name for s in list_models()}
+    assert "foundation_baselinenowcast" in {s.name for s in list_models()}
 
 
 def test_the_context_is_the_point_nowcast_to_the_cut_off(task):
@@ -108,7 +108,7 @@ def test_the_context_is_the_point_nowcast_to_the_cut_off(task):
 
     store: list = []
     model = dataclasses.replace(
-        get_model("foundation_zeroshot_twostep"), sample=_capture(store)
+        get_model("foundation_zeroshot_baselinenowcast"), sample=_capture(store)
     )
     model.forecast_both(task)
     group = store[-1]

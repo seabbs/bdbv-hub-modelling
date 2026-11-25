@@ -3,7 +3,7 @@
 `COMPUTE` in config/local.env picks how (`single` by default):
 
 - `single`: one machine, `workflow/profiles/default` with its budget
-  (flowlib.machine), as before.
+  (flowlib.machine).
 - `ssh`: this machine is the coordinator, the one Snakemake run, and
   places each job on a worker (`workflow/profiles/ssh`, the
   cluster-generic executor with `workflow/scripts/remote/`). `WORKERS`
@@ -13,8 +13,16 @@
   (`train=workstation score=server`); a group left out, or mapped to `any`,
   runs on the first worker with room. The pool is the sum of the
   workers' budgets, each read from the worker itself at launch.
+- `slurm`: every job a Slurm job (`workflow/profiles/slurm`), with the
+  default resources `SLURM_DEFAULTS`, the site's account
+  (`SLURM_ACCOUNT`) and its partitions file (`SLURM_PARTITIONS`, the
+  plugin's `--slurm-partition-config`), which sends GPU jobs to a GPU
+  partition (workflow/README.md, Run on a Slurm cluster).
 - any other name: its profile, `workflow/profiles/<name>`, alone (a
-  cluster or cloud executor with its own resources; none ships).
+  cluster or cloud executor with its own resources).
+
+`SNAKEMAKE_PROFILE`, a profile kept outside the repository, replaces
+the profile and budget any `COMPUTE` gives.
 
 A rule names no machine: it declares its threads, memory and GPU, and
 its group is `RULE_GROUPS`'. Local rules always run on the coordinator.
@@ -28,7 +36,8 @@ The coordinator's rsync must be GNU rsync 3.1 or later
 
 Freed cores go to the waiting job of highest priority, in one order:
 
-1. the trainer (`TRAIN_PRIORITY`), so the GPU never waits, then the
+1. the trainers (`TRAIN_PRIORITY`, each run a fraction above it in
+   turn, `Training.trainer_priority`), so a GPU never waits, then the
    quick hand-offs that unblock other work (`HANDOFF_PRIORITY`): the
    copies of the batches it reads into the run, and a checkpoint's
    verification and release, which its BDBV check needs;
@@ -43,10 +52,20 @@ Freed cores go to the waiting job of highest priority, in one order:
 
 Each band's jobs take its base plus a fraction below two, so the bands
 never overlap. Other jobs take Snakemake's default, 0.
+
+Training has the GPU. A checkpoint's scoring (its held-out evaluation,
+7-day check and German units) runs on the forecasting device while every
+GPU has a run to train, and on a GPU of its own, the whole GPU, once one
+has none (`scoring_forecast`): another GPU of the machine, or its only
+GPU when no segment of any run is left to train. Each run re-plans this,
+so the tick after a run's last segment moves its scoring to the GPU. The
+BDBV check's forecasts stay on the forecasting device: one release's
+block does not fit an 8 GB GPU.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -62,7 +81,11 @@ from typing import Any
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from flowlib import localconfig, machine, monitor
+from flowlib import forecast, localconfig, machine, monitor
+
+SLURM_DEFAULTS = ("mem_mb=2048", "runtime=60")
+"""A Slurm job's memory (MB) and runtime (minutes) unless its rule's
+`set-resources` in the profile says."""
 
 MODES = ("single", "ssh")
 """The modes this module sets the pool of; any other `COMPUTE` names a
@@ -74,7 +97,6 @@ GROUPS = ("simulate", "train", "evaluate", "publish", "score", "any")
 RULE_GROUPS = {
     "simulate_batch": "simulate",
     "train_segment": "train",
-    "evaluate_steps": "evaluate",
     "evaluate_base": "evaluate",
     "evaluate_checkpoint": "evaluate",
     "verify_checkpoint": "publish",
@@ -124,6 +146,31 @@ per checkpoint; the dashboard, tables and paper read it when done, and
 it joins the checkpoint's release then (`release_held_out`)."""
 
 
+def scoring_forecast(
+    default: forecast.Forecast, gpus: int, training: int
+) -> forecast.Forecast:
+    """Return the device and threads of a checkpoint's scoring.
+
+    Parameters
+    ----------
+    default : Forecast
+        The forecasting device and threads (`forecast` in the config).
+    gpus : int
+        This machine's CUDA GPUs (`machine.gpu_ids`).
+    training : int
+        The runs with a segment left to train (`Training.still_training`).
+
+    Returns
+    -------
+    Forecast
+        A whole CUDA GPU when the machine has more GPUs than runs to
+        train, else `default`.
+    """
+    if gpus > training:
+        return dataclasses.replace(default, device="cuda")
+    return default
+
+
 def newest_first(base: float) -> Callable[[Any], float]:
     """Return a job's priority beside the trainer: newer segments higher."""
     return lambda wc: side_priority(base, int(wc.n))
@@ -143,12 +190,16 @@ MACHINE_KEYS = frozenset(
         "MAILBOX",
         "NOTIFY",
         "SNAKEMAKE_PROFILE",
+        "SLURM_ACCOUNT",
+        "SLURM_PARTITIONS",
         "HEADROOM_CORES",
         "HEADROOM_GB",
         "CORES",
         "MEM_MB",
         "SIM_SLOTS",
         "DEVICE",
+        "TRAINER_CORES",
+        "GPUS",
         "CHECKPOINT_ABOVE",
         "TARGETS",
         "SCHEDULE_TARGETS",
@@ -436,7 +487,7 @@ def budget_of(
     This machine's, from `cfg`, for a local worker in this checkout.
     """
     if worker.local and Path(worker.checkout) == Path(checkout):
-        return {**machine.budget(cfg), "gpu": max(1, machine.gpus())}
+        return {**machine.budget(cfg), "gpu": machine.gpu_slots(cfg)}
     cmd = f"cd {shlex.quote(worker.checkout)} && "
     cmd += "python3 workflow/flowlib/machine.py budget"
     got = subprocess.run(
@@ -465,6 +516,22 @@ def args(
     return [*_profile_args(cfg, path, budgets, checkout), *monitor.args(cfg)]
 
 
+def slurm_args(cfg: Mapping[str, str]) -> list[str]:
+    """Return a Slurm run's default resources and the site's partitions.
+
+    No `gpu` or core cap: Slurm queues every GPU job across the nodes, so
+    as many runs train at once as the cluster has GPUs free.
+    """
+    account = cfg.get("SLURM_ACCOUNT")
+    partitions = cfg.get("SLURM_PARTITIONS")
+    return [
+        "--default-resources",
+        *SLURM_DEFAULTS,
+        *([f"slurm_account={account}"] if account else []),
+        *(["--slurm-partition-config", partitions] if partitions else []),
+    ]
+
+
 def _profile_args(
     cfg: Mapping[str, str],
     path: str | None,
@@ -474,10 +541,19 @@ def _profile_args(
     """Return the Snakemake options of the profile and its pool.
 
     For `ssh` without `budgets`, each worker's is read from it and kept
-    in `state_dir()/budgets.json` for the submit script. Another
-    `COMPUTE` is its profile alone.
+    in `state_dir()/budgets.json` for the submit script. `slurm` is its
+    profile with the site's settings (`slurm_args`). Another `COMPUTE`,
+    or `SNAKEMAKE_PROFILE`, is its profile alone.
     """
+    if cfg.get("SNAKEMAKE_PROFILE"):
+        return ["--workflow-profile", cfg["SNAKEMAKE_PROFILE"]]
     got = mode(cfg, checkout)
+    if got == "slurm":
+        return [
+            "--workflow-profile",
+            "workflow/profiles/slurm",
+            *slurm_args(cfg),
+        ]
     if got not in MODES:
         return ["--workflow-profile", f"workflow/profiles/{got}"]
     if got == "single":

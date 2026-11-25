@@ -36,6 +36,7 @@ include: "rules/evaluate.smk"
 include: "rules/publish.smk"
 include: "rules/score.smk"
 include: "rules/report.smk"
+include: "rules/ablation.smk"
 include: "rules/paper.smk"
 include: "rules/monitor.smk"
 
@@ -53,10 +54,11 @@ rule all:
 
 
 onstart:
-    # The fine-tuning dashboard of the runs under ROOT, served with a run
-    # that fine-tunes (`dashboard.serve`) until the coordinator, or this
-    # run, ends; and the machine's monitor, which serves it under
-    # /finetune/ and outlives the run (flowlib.dashboard.serve).
+    # The dashboard of the runs and simulations under ROOT, served with a
+    # run that fine-tunes or simulates (`dashboard.serve`) until the
+    # coordinator, or this run, ends; and the machine's monitor, which
+    # serves it under /finetune/ and /sims/ and outlives the run
+    # (flowlib.dashboard.serve).
     from flowlib.dashboard import serve
 
     if serve.wanted(config, TARGETS):
