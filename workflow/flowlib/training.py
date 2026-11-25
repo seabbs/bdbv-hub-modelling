@@ -110,26 +110,9 @@ class Training:
 
     # Evaluation.
 
-    def evaluate_prev(self, wc: Any) -> str | list[str]:
-        """Return the settings of the checkpoint before segment n, if any."""
-        prev = self.run_of(wc).prev[int(wc.n)]
-        if not prev:
-            return []
-        return f"{self.train_dir(wc.run)}/n{prev}/settings.json"
-
     def first_prefix(self, run: str) -> int:
         """Return the run's first checkpoint: the one with no previous."""
         return next(n for n, p in self.runs[run].prev.items() if p is None)
-
-    @staticmethod
-    def evaluate_prev_dir(input: Any) -> Path | None:
-        """Return the previous checkpoint's folder, if it has one."""
-        return Path(input.prev).parent if input.prev else None
-
-    def evaluate_copy_in(self, wc: Any) -> list[str]:
-        """Return the run's step evaluations and held-out blocks."""
-        train = self.train_dir(wc.run)
-        return [f"{train}/evals/", f"{train}/{HELD_OUT_BLOCKS}"]
 
     def earlier_settings(self, wc: Any) -> list[str]:
         """Return the settings of the run's checkpoints before n."""
@@ -150,11 +133,10 @@ class Training:
         ]
 
     def offloaded(self, run: str, n: int) -> list[str]:
-        """Return checkpoint n's sidecar and step evaluations, if offloaded."""
+        """Return checkpoint n's sidecar, if its run evaluates offloaded."""
         if self.runs[run].ft["eval"] != "offload":
             return []
-        train = self.train_dir(run)
-        return [f"{train}/n{n}/{SIDECAR}", f"{train}/evals/n{n}.done"]
+        return [f"{self.train_dir(run)}/n{n}/{SIDECAR}"]
 
     def validation_curve_inputs(self, wc: Any) -> list[str]:
         """Return each of the run's checkpoints, with its held-out losses."""
@@ -302,6 +284,14 @@ class Training:
             lambda n: self.saved(run, n),
             lambda s: self.outbreaks_or_full(run, s),
         )
+
+    def still_training(self) -> list[str]:
+        """Return the trained runs with a segment in reach left to train."""
+        return [
+            run
+            for run in self.trained_runs()
+            if any(not self.saved(run, n) for n in self.trainable(run))
+        ]
 
     def finetune_inputs(self, wc: Any) -> list[str]:  # noqa: ARG002
         """Return each trained run's checkpoints, held-out losses, checks."""

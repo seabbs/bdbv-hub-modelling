@@ -337,7 +337,7 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
             rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards
         ):
             tiers["reference"].append(priority)
-        elif rule in ("evaluate_steps", "evaluate_base", "evaluate_checkpoint"):
+        elif rule in ("evaluate_base", "evaluate_checkpoint"):
             tiers["evaluate"].append(priority)
         elif rule in ("score_run_germany", "ft_check_forecast"):
             tiers["checkpoint"].append(priority)
@@ -559,37 +559,10 @@ OFFLOAD = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
 def test_offloaded_evaluation_is_planned_after_each_segment(tmp_path):
     jobs = dry(tmp_path, "finetune", config=OFFLOAD)
     assert jobs["train_segment"] == 2
-    assert jobs["evaluate_steps"] == 2
     assert jobs["evaluate_checkpoint"] == 2
-
-
-def test_step_evaluation_never_waits_for_step_0(tmp_path):
-    # Step 0 scores every held-out block (evaluate_base, hours on the
-    # CPU); the steps' validation loss reaches the dashboard without it.
-    _checkpoint(tmp_path, 250)
-    train = tmp_path / "runs" / "runa" / "train"
-    jobs = dry(tmp_path, f"{train}/evals/n250.done", config=OFFLOAD)
-    assert jobs.get("evaluate_steps") == 1
-    assert "evaluate_base" not in jobs
-
-
-def test_offloaded_step_evaluation_checks_every_due_step(tmp_path):
-    # So a segment whose snapshots were not copied in fails, not passes.
-    out = dry_run(
-        tmp_path,
-        "finetune",
-        config=OFFLOAD,
-        extra=["-p", "--quiet", "progress"],
-    )
-    assert out.returncode == 0, out.stderr + out.stdout
-    shipped = yaml.safe_load((ROOT / "workflow/config.yaml").read_text())
-    every = shipped["finetune"]["eval_every"]
-    text = out.stdout + out.stderr
-    steps = [
-        ln for ln in text.splitlines() if "evaluate_offloaded.py steps" in ln
-    ]
-    assert steps
-    assert all(f"--eval-every {every}" in ln for ln in steps)
+    # Only checkpoints are scored offloaded: the trainer's step snapshots
+    # are left unscored.
+    assert not any(k.startswith("evaluate_steps") for k in jobs)
 
 
 def test_local_evaluation_plans_no_evaluation_rules(tmp_path):

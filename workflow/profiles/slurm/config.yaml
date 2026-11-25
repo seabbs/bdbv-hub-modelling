@@ -23,8 +23,6 @@ set-resources:
   - train_segment:mem_mb=32768
   - train_segment:runtime=720
   # The forecasting units load Chronos-2 and score a block of tasks.
-  - evaluate_steps:mem_mb=6144
-  - evaluate_steps:runtime=240
   - evaluate_base:mem_mb=6144
   - evaluate_base:runtime=240
   - evaluate_checkpoint:mem_mb=6144

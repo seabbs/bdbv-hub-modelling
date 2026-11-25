@@ -82,3 +82,27 @@ def test_the_trainer_claims_none_of_the_side_cores(tmp_path):
     assert got["score_run_germany"] == {2}
     beside = [v for r, v in got.items() if r != "train_segment"]
     assert all(min(v) >= 1 for v in beside)
+
+
+@pytest.mark.parametrize(
+    ("cfg", "cores", "threads"),
+    [
+        # archie: 12 cores budgeted, 4 the trainer's: 8 side cores, one
+        # unit's 2 kept for another job, 6 for the evaluation.
+        ({}, 12, 6),
+        # Nothing trains: every core but one unit's.
+        ({"TRAINER_CORES": "0"}, 12, 10),
+        # Too few cores to spare: a unit's own.
+        ({}, 6, 2),
+    ],
+)
+def test_the_evaluation_takes_the_side_cores_less_one_unit(cfg, cores, threads):
+    got = machine.scoring_threads(cfg, 2, cores=cores, path="")
+    assert got == threads
+
+
+def test_the_evaluate_rules_take_the_evaluation_threads():
+    text = (ROOT / "workflow" / "rules" / "evaluate.smk").read_text()
+    for rule in ("evaluate_base", "evaluate_checkpoint", "seven_day_check"):
+        block = text.split(f"rule {rule}:", 1)[1].split("\nrule ", 1)[0]
+        assert "threads: EVALUATE_THREADS" in block, rule

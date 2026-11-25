@@ -164,8 +164,8 @@ def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
     tmp_path, monkeypatch
 ):
     # WP10 part 2: workflow/scripts/evaluate_offloaded.py, end to end on
-    # CPU with the real evaluator, scores a step snapshot and a checkpoint
-    # exactly as the trainer scores the same adapter.
+    # CPU with the real evaluator, scores step 0 and a checkpoint exactly
+    # as the trainer scores the same adapter.
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
@@ -197,12 +197,10 @@ def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
     (where / "settings.json").write_text(
         json.dumps({"n_validation": len(val), "batch_size": 100, "steps": 200})
     )
-    runner.main(["steps", str(where), "--device", "cpu", "--eval-every", "200"])
+    runner.main(["base", str(where), "--device", "cpu"])
     runner.main(["checkpoint", str(where), "--device", "cpu"])
-    step = json.loads((train / "evals" / "step-0000200.json").read_text())
-    assert step["eval_loss"] == fs.held_out_loss(
-        model, val[: fs.ft.EVAL_BLOCKS], 100
-    )
+    # Step snapshots other than step 0 are left unscored.
+    assert not (train / "evals" / "step-0000200.json").exists()
     sidecar = json.loads((where / "held-out.json").read_text())
     assert sidecar["held_out_loss"] == fs.held_out_loss(model, val, 100)
     assert sidecar["held_out_loss_by_source"] == fs.held_out_by_source(

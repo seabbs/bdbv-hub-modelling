@@ -97,3 +97,34 @@ def test_jax_starts_with_the_cuda_platform_list_without_cuda():
     )
     assert out.returncode == 0, out.stderr[-1000:]
     assert out.stdout.strip() in {"cpu", "gpu", "cuda"}
+
+
+SCORING_RULES = (
+    "evaluate_base",
+    "evaluate_checkpoint",
+    "seven_day_check",
+    "score_germany",
+    "score_run_germany",
+)
+"""The checkpoint scoring rules, on the scoring device (#1114)."""
+
+
+def _rule_text(name: str) -> str:
+    for text in _rule_shells().values():
+        if f"rule {name}:" in text:
+            block = text.split(f"rule {name}:", 1)[1]
+            return re.split(r"\nrule ", block, maxsplit=1)[0]
+    raise AssertionError(f"no rule {name}")
+
+
+def test_checkpoint_scoring_runs_on_the_scoring_device():
+    for name in SCORING_RULES:
+        text = _rule_text(name)
+        assert "gpu=CHECKPOINT_FORECAST.gpu" in text, name
+        assert "env=checkpoint_env" in text, name
+        assert "FORECAST.device" not in text.replace(
+            "CHECKPOINT_FORECAST.device", ""
+        ), name
+    # The BDBV check stays on the forecasting device: its blocks do not
+    # fit an 8 GB GPU.
+    assert "gpu=FORECAST.gpu" in _rule_text("ft_check_forecast")

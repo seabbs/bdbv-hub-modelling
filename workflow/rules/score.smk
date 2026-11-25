@@ -60,9 +60,9 @@ rule score_germany:
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
-        gpu=FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
-        env=unit_env,
+        env=checkpoint_env,
         copy_back=unit_rows(GERMANY_UNIT),
         cache=lambda wc, output: Path(output[0]).parents[1],
         label=lambda wc: wc.label,
@@ -89,9 +89,9 @@ rule score_run_germany:
     threads: UNIT_THREADS
     resources:
         mem_mb=SC["mem_mb"],
-        gpu=FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
-        env=unit_env,
+        env=checkpoint_env,
         copy_back=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}/n{wc.n}/",
         cache=lambda wc, output: Path(output[0]).parents[1],
         label=lambda wc: f"n{wc.n}",

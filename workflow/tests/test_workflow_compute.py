@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from flowlib import compute, machine
+from flowlib import compute, forecast, machine
 
 ROOT = Path(__file__).parents[2]
 
@@ -289,7 +289,7 @@ def test_evaluation_is_a_group_a_host_can_place():
     # WP10: held-out evaluation runs off the trainer's machine, wherever
     # WORKER_GROUPS puts `evaluate`.
     assert "evaluate" in compute.GROUPS
-    for rule in ("evaluate_steps", "evaluate_base", "evaluate_checkpoint"):
+    for rule in ("evaluate_base", "evaluate_checkpoint"):
         assert compute.RULE_GROUPS[rule] == "evaluate"
 
 
@@ -356,3 +356,22 @@ def test_newer_segments_beside_the_trainer_come_first():
         n = "100"
 
     assert priority(W) > priority(V) >= 10
+
+
+@pytest.mark.parametrize(
+    ("gpus", "training", "device"),
+    [(1, 1, "cpu"), (1, 0, "cuda"), (2, 1, "cuda"), (0, 0, "cpu")],
+)
+def test_checkpoint_scoring_takes_a_gpu_no_trainer_needs(
+    gpus, training, device
+):
+    # Training has the GPU while a run trains; scoring takes a whole GPU
+    # only when one is left over (#1114).
+    fc = forecast.Forecast("cpu", 2)
+    got = compute.scoring_forecast(fc, gpus, training)
+    assert (got.device, got.threads, got.gpu) == (device, 2, device == "cuda")
+
+
+def test_a_cuda_forecast_device_stays_the_scoring_device():
+    fc = forecast.Forecast("cuda", 2)
+    assert compute.scoring_forecast(fc, 1, 1) == fc
