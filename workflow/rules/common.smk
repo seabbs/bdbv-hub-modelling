@@ -235,3 +235,28 @@ def ft_check_folders(ckpt):
     return [f"{FTC_DIR}/forecasts/{m}@{key}" for m in FTC["models"]] + [
         f"{FTC_DIR}/forecasts/ft-{ckpt}@{key}"
     ]
+
+
+# The Ebola ablation's settings and folders (rules/ablation.smk).
+# The fine-tuned models among the ablation's (nowcasteval.labels.FINETUNED).
+from nowcasteval.labels import FINETUNED as FINETUNED_MODELS
+
+ABL = config["ablation"]
+ABL_DIR = f"{LOCAL['ROOT']}/ablation"
+ABL_SIDES = {"sim": ABL["sim_variants"], "bdbv": ABL["bdbv_variants"]}
+
+
+def ablation_sims(wc=None):
+    """The simulated outbreaks' counts the sim variants draw from."""
+    base = ABL["sims"] or f"{ROUNDS_DIR}/r{ABL['round']}/sims"
+    return [f"{base}/counts-{seed}.csv.gz" for seed in ABL["seeds"]]
+
+
+def ablation_folders():
+    """Every variant's folder, simulated variants first."""
+    return [f"{ABL_DIR}/{side}/{v}" for side, vs in ABL_SIDES.items() for v in vs]
+
+
+def ablation_checkpoint(model):
+    """The checkpoint a fine-tuned model loads, else none."""
+    return ABL["checkpoint"] if model in FINETUNED_MODELS else ""
