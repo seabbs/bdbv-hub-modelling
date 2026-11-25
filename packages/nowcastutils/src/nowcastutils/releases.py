@@ -9,24 +9,35 @@ column, which `release_cutoff` reads.
 `release_pairs` tabulates, for each pair of consecutive delay files, which
 rows of the later file were already in the earlier one, the data the
 renewal models learn their report to publication lag from.
+`cumulative_first_release` finds a first release that is a cumulative dump
+rather than part of the reporting, and `without_cumulative_first_release`
+leaves it out of a task's releases.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import itertools
+import logging
 
 import numpy as np
 import pandas as pd
 
+from nowcastutils.base import ForecastTask
 from nowcastutils.dates import as_date
 
 __all__ = [
+    "HISTORY_FIELDS",
     "MAX_PAIR_AGE",
+    "cumulative_first_release",
     "latest_onset_days",
     "release_cutoff",
     "release_pairs",
+    "without_cumulative_first_release",
 ]
+
+log = logging.getLogger(__name__)
 
 
 def latest_onset_days(daily: pd.DataFrame) -> pd.Series:
@@ -156,3 +167,91 @@ def release_pairs(
     sizes = [len(p["total"]) for p in parts]
     out["pair"] = np.repeat(np.eye(len(parts)), sizes, axis=0)
     return out
+
+HISTORY_FIELDS = (
+    "target_history",
+    "daily_history",
+    "zone_history",
+    "zone_daily_history",
+    "delay_history",
+)
+"""The task's release tables, each with a `vintage` column."""
+
+
+def cumulative_first_release(
+    rows: pd.DataFrame | None, max_delay: int | None
+) -> str | None:
+    """Return the first release if it is a cumulative dump, else None.
+
+    The first release is a cumulative dump when the next release's
+    cut-off is more than $D$ (`max_delay`) days after its own. Every case
+    it holds is then older than $D$ by the next release, so it shares no
+    report within the delay window with any later release: it records
+    the counts to date, not how they were reported. How far its onsets
+    reach back is no test, as the first release of any data that start
+    after the outbreak reaches back to its start, and so does the release
+    after it.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame or None
+        Releases, with `vintage` and `cutoff`.
+    max_delay : int or None
+        $D$ in days. None finds no dump.
+
+    Returns
+    -------
+    str or None
+        The first release's label, or None if it is not a dump, there is
+        no later release or no $D$.
+    """
+    if max_delay is None or rows is None or rows.empty:
+        return None
+    cut = rows.drop_duplicates("vintage")
+    cut = cut.assign(cutoff=pd.to_datetime(cut["cutoff"])).sort_values("cutoff")
+    if len(cut) < 2:
+        return None
+    gap = (cut["cutoff"].iloc[1] - cut["cutoff"].iloc[0]).days
+    return str(cut["vintage"].iloc[0]) if gap > max_delay else None
+
+
+def without_cumulative_first_release(task: ForecastTask) -> ForecastTask:
+    """Return the task without a cumulative first release in its releases.
+
+    The first release of the task's releases (its daily releases, else
+    its weekly ones) is left out of every release table
+    (`HISTORY_FIELDS`) when it is a cumulative dump
+    (`cumulative_first_release`, with the task's `max_delay`), so the
+    history starts at the next release. Logged when it is.
+
+    Parameters
+    ----------
+    task : ForecastTask
+        The task.
+
+    Returns
+    -------
+    ForecastTask
+        The task, unchanged if its first release is not a dump.
+    """
+    daily = task.daily_history
+    rows = daily if daily is not None and not daily.empty else None
+    first = cumulative_first_release(
+        task.target_history if rows is None else rows, task.max_delay
+    )
+    if first is None:
+        return task
+    log.info(
+        "%s: release %s left out, a cumulative first release more than "
+        "%d days before the next",
+        task.vintage,
+        first,
+        task.max_delay,
+    )
+    tables = {}
+    for name in HISTORY_FIELDS:
+        table = getattr(task, name)
+        if table is not None and "vintage" in table.columns:
+            kept = table.loc[table["vintage"].astype(str) != first]
+            tables[name] = kept.reset_index(drop=True) if len(kept) else None
+    return dataclasses.replace(task, **tables)
