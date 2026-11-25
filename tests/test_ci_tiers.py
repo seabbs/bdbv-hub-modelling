@@ -277,3 +277,46 @@ def test_repo_checks_fail_on_copied_code_across_the_packages():
     assert "symilar -d 10" in step["run"]
     assert "packages" in step["run"]
     assert "duplicates=0 " in step["run"]
+
+
+def _plan_run():
+    workflow = _workflow("tests.yml")
+    (step,) = [s for s in workflow["jobs"]["plan"]["steps"] if s.get("id")]
+    return step
+
+
+def _r_live_pattern():
+    import re
+
+    (line,) = [
+        x
+        for x in _plan_run()["run"].splitlines()
+        if x.strip().endswith("r-live")
+    ]
+    return re.compile(line.split("'")[1])
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "packages/nowcastrenewal/src/nowcastrenewal/model/observation.py",
+        "packages/nowcastrenewal/src/nowcastrenewal/components/noise.py",
+        "packages/nowcastrenewal/src/nowcastrenewal/reporting/effects.py",
+        "packages/nowcastrenewal/src/nowcastrenewal/latent/rt.py",
+        "packages/nowcastrenewal/tests/test_observation_epinowcast.py",
+        "tests/model/r/reporting_cases.R",
+    ],
+)
+def test_r_live_runs_when_the_code_it_checks_changes(path):
+    # Any of nowcastrenewal's code or tests: the live checks import the
+    # fitted model's observation code as well as the simulator's.
+    assert _r_live_pattern().search(path)
+
+
+def test_r_live_runs_on_every_push_to_next():
+    step = _plan_run()
+    assert step["env"]["REF"] == "${{ github.ref }}"
+    assert (
+        'if [ "$EVENT" = push ] && [ "$REF" = refs/heads/next ]' in step["run"]
+    )
+    assert 'echo "r-live=true"' in step["run"]
