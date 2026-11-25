@@ -64,6 +64,49 @@ def test_national_is_the_sum_of_provinces(daily: pd.DataFrame) -> None:
     assert np.allclose(snap.counts[0], snap.counts[kids].sum(axis=0))
 
 
+def test_a_node_with_no_rows_is_the_sum_of_its_children(
+    daily: pd.DataFrame,
+) -> None:
+    provinces = ("CD-IT", "CD-NK")
+    leaves = daily.loc[daily["location"].isin(provinces)]
+    full = snapshot_arrays(daily, "2026-10-24", provinces)
+    snap = snapshot_arrays(leaves, "2026-10-24", provinces)
+    assert snap.locations == full.locations
+    assert np.allclose(snap.counts[0], snap.counts[1:].sum(axis=0))
+    assert np.array_equal(snap.counts[1:], full.counts[1:])
+
+
+def test_ancestors_with_no_rows_are_filled_from_the_leaves() -> None:
+    rows = [
+        ("XX-A-1", 2.0),
+        ("XX-A-2", 3.0),
+        ("XX-B-1", 5.0),
+    ]
+    daily = pd.DataFrame(
+        [
+            {
+                "vintage": "2026-10-03",
+                "location": loc,
+                "onset_date": "2026-10-01",
+                "observed": n,
+                "imputed": 0.0,
+                "cutoff": "2026-10-03",
+            }
+            for loc, n in rows
+        ]
+    )
+    snap = snapshot_arrays(daily, "2026-10-03", tuple(c for c, _ in rows))
+    total = {c: snap.counts[i].sum() for i, c in enumerate(snap.locations)}
+    assert total == {
+        "XX": 10.0,
+        "XX-A": 5.0,
+        "XX-B": 5.0,
+        "XX-A-1": 2.0,
+        "XX-A-2": 3.0,
+        "XX-B-1": 5.0,
+    }
+
+
 def test_hierarchy_and_node_order(daily: pd.DataFrame) -> None:
     snap = snapshot_arrays(daily, "2026-10-24", ("CD-IT", "CD-IT-01"))
     assert snap.locations == ("CD", "CD-IT", "CD-IT-01")

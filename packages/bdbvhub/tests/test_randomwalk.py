@@ -465,3 +465,30 @@ def test_randomwalknowcast_forecasts_sunday_weeks_with_a_pooled_spread(
     out = get_model("randomwalknowcast").forecast(task)
     check_samples(out, task)
     assert set(out["location"]) == set(task.locations)
+
+
+@pytest.mark.parametrize("name", ["randomwalk", "randomwalknowcast"])
+def test_country_provinces_and_zones_in_one_task(
+    task: ForecastTask,
+    daily_zones: pd.DataFrame,
+    daily: pd.DataFrame,
+    name: str,
+) -> None:
+    zones = tuple(sorted(daily_zones["location"].unique()))
+    every = dataclasses.replace(
+        task,
+        locations=("CD", *task.locations, *zones),
+        daily_history=pd.concat([daily, daily_zones]),
+        n_samples=20,
+    )
+    out = get_model(name).forecast(every)
+    assert set(out["location"]) == set(every.locations)
+    cells = out.groupby(["location", "target_end_date"]).size()
+    assert len(cells) == len(every.locations) * len(every.target_end_dates)
+    assert (cells == 20).all()
+    # Zones with no rows for their provinces or the country forecast as
+    # with them: those are the sums of the zones below.
+    alone = dataclasses.replace(
+        every, locations=zones, daily_history=daily_zones
+    )
+    assert set(get_model(name).forecast(alone)["location"]) == set(zones)
