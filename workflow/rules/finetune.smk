@@ -33,6 +33,7 @@ rule fetch_batch:
         settings=f"{RUN}/sims/settings-{{seed}}.csv",
     log:
         f"{RUN}/logs/fetch-{{seed}}.log",
+    priority: FETCH_PRIORITY
     localrule: True
     conda:
         TOOLS_ENV
