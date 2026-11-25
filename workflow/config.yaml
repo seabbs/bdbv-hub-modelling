@@ -171,6 +171,13 @@ forecast:
   device: cpu
   threads: 2
 
+# Each checkpoint's quick check (rule quick_check) on a whole GPU as its
+# segment ends: the held-out blocks it scores, spread evenly over the
+# run's set, sized for a few minutes on an 8 GB card. Its log gives the
+# seconds taken.
+quick_check:
+  blocks: 1000
+
 score:
   # Checkpoints to score, as labels (`<hash>`, `slots-<hash>`); null takes
   # every checkpoint released from `published_from` (rule release_list).

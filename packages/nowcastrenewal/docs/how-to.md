@@ -32,7 +32,7 @@ assert mixed.infections[-1, 1] > run.infections[-1, 1]
 ```python
 from nowcastrenewal.components.reference import delayed_events
 
-infections = run.infections[len(gt):]
+infections = run.infections[len(gt) :]
 onsets = delayed_events(infections, incubation, ascertainment=0.6)
 assert onsets.shape == infections.shape
 ```

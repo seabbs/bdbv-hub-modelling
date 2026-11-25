@@ -128,6 +128,7 @@ EVALUATION_PRIORITY = compute.EVALUATION_PRIORITY
 REFERENCE_PRIORITY = compute.REFERENCE_PRIORITY
 TRAIN_PRIORITY = compute.TRAIN_PRIORITY
 HANDOFF_PRIORITY = compute.HANDOFF_PRIORITY
+QUICK_PRIORITY = compute.QUICK_PRIORITY
 trained_runs = TRAINING.trained_runs
 run_of = TRAINING.run_of
 train_dir = TRAINING.train_dir
@@ -163,6 +164,8 @@ UNIT_THREADS = SCORING.unit_threads
 EVALUATE_THREADS = SCORING.evaluate_threads
 FORECAST = SCORING.forecast
 CHECKPOINT_FORECAST = SCORING.checkpoint_forecast
+QUICK_FORECAST = SCORING.quick_forecast
+QUICK_THREADS = SCORING.quick_threads
 GERMANY_UNIT = scoring.GERMANY_UNIT
 EVALUATE = scoring.EVALUATE
 newest_first = compute.newest_first
@@ -171,6 +174,7 @@ unit_priority = SCORING.unit_priority
 ft_check_priority = SCORING.ft_check_priority
 unit_env = SCORING.unit_env
 checkpoint_env = SCORING.checkpoint_env
+quick_env = SCORING.quick_env
 unit_rows = SCORING.unit_rows
 unit_shell = SCORING.unit_shell
 run_scores_dir = SCORING.run_scores_dir
@@ -235,4 +239,3 @@ def ft_check_folders(ckpt):
     return [f"{FTC_DIR}/forecasts/{m}@{key}" for m in FTC["models"]] + [
         f"{FTC_DIR}/forecasts/ft-{ckpt}@{key}"
     ]
-

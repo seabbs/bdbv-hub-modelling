@@ -211,22 +211,29 @@ class Scoring:
             local, self.unit_threads
         )
         # A checkpoint's scoring takes a GPU no run trains on, if any.
+        gpus = self._gpus()
+        training = len(training.still_training()) if gpus else 0
         self.checkpoint_forecast = compute.scoring_forecast(
-            self.forecast, *self._gpus_and_training()
+            self.forecast, gpus, training
+        )
+        # The quick check takes a whole GPU between segments, if any; on
+        # the CPU, the evaluation's cores.
+        self.quick_forecast = compute.scoring_forecast(self.forecast, gpus, 0)
+        self.quick_threads = (
+            self.unit_threads
+            if self.quick_forecast.gpu
+            else self.evaluate_threads
         )
 
-    def _gpus_and_training(self) -> tuple[int, int]:
-        """Return this machine's CUDA GPUs and its runs left to train.
+    def _gpus(self) -> int:
+        """Return this machine's CUDA GPUs.
 
-        No GPUs where jobs may run elsewhere (`COMPUTE` other than
-        single), whose GPUs this machine cannot count.
+        None where jobs may run elsewhere (`COMPUTE` other than single),
+        whose GPUs this machine cannot count.
         """
         if compute.mode(self.local) != "single":
-            return 0, 0
-        gpus = len(machine.gpu_ids(self.local))
-        if not gpus:
-            return 0, 0
-        return gpus, len(self.training.still_training())
+            return 0
+        return len(machine.gpu_ids(self.local))
 
     def checkpoint_labels(self, wc: Any = None) -> list[str]:  # noqa: ARG002
         """Return the checkpoints to score, less `score.skip`."""
@@ -279,6 +286,10 @@ class Scoring:
         first, on a GPU of its own.
         """
         return self._env(self.forecast, threads)
+
+    def quick_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
+        """Return `unit_env` for a quick check (its own device)."""
+        return self._env(self.quick_forecast, threads)
 
     def checkpoint_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
         """Return `unit_env` for a checkpoint's scoring (its own device)."""

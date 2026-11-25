@@ -321,12 +321,8 @@ def held_out_pass(
     return out
 
 
-QUICK_BLOCKS = 1000
-"""Held-out blocks the quick check scores (`quick_blocks`)."""
-
-
 def quick_blocks(
-    blocks: Sequence[dict[str, Any]], n: int = QUICK_BLOCKS
+    blocks: Sequence[dict[str, Any]], n: int
 ) -> list[dict[str, Any]]:
     """Return `n` held-out blocks spread evenly over the set, or all."""
     blocks = list(blocks)
@@ -340,7 +336,7 @@ def quick_check(
     base: Any,
     blocks: Sequence[dict[str, Any]],
     batch_size: int,
-    n: int = QUICK_BLOCKS,
+    n: int,
 ) -> dict[str, Any]:
     """Return the held-out loss and coverage of `quick_blocks`, quickly.
 

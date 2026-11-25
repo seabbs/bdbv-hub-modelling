@@ -109,6 +109,75 @@ rule seven_day_check:
         "> {log} 2>&1"
 
 
+rule quick_check:
+    # A few minutes' check of each checkpoint on a fixed sample of the
+    # held-out blocks (nowcastfoundation.finetune.evaluate.quick_check):
+    # its loss and coverage, for the dashboard's subset line and its
+    # summary. On a whole GPU if the machine has one, above the trainer
+    # (QUICK_PRIORITY), so it runs as the segment ends, before the next.
+    input:
+        settings=f"{TRAIN}/n{{n}}/settings.json",
+        adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+    output:
+        f"{TRAIN}/n{{n}}/{evaluations.QUICK_CHECK}",
+    log:
+        f"{TRAIN}/logs/quick-check-n{{n}}.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/quick_check/n{{n}}.tsv"
+    priority: QUICK_PRIORITY
+    conda:
+        TOOLS_ENV
+    threads: QUICK_THREADS
+    resources:
+        gpu=QUICK_FORECAST.gpu,
+    params:
+        where=lambda wc, input: Path(input.settings).parent,
+        env=quick_env,
+        device=QUICK_FORECAST.device,
+        blocks=config["quick_check"]["blocks"],
+        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
+        copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
+    shell:
+        "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
+        f"{EVALUATE_PY} quick {{params.where}} --blocks {{params.blocks}} "
+        "--device {params.device} > {log} 2>&1"
+
+
+rule quick_check_base:
+    # Base Chronos-2's quick check, once a run (step 0's snapshot), for
+    # the reference line.
+    input:
+        settings=lambda wc: (
+            f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
+        ),
+    output:
+        f"{TRAIN}/{evaluations.QUICK_BASE}",
+    log:
+        f"{TRAIN}/logs/quick-check-base.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/quick_check_base.tsv"
+    priority: QUICK_PRIORITY
+    conda:
+        TOOLS_ENV
+    threads: QUICK_THREADS
+    resources:
+        gpu=QUICK_FORECAST.gpu,
+    params:
+        where=lambda wc, input: Path(input.settings).parent,
+        env=quick_env,
+        device=QUICK_FORECAST.device,
+        blocks=config["quick_check"]["blocks"],
+        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
+        copy_in=lambda wc: [
+            f"{train_dir(wc.run)}/evals/step-0000000/",
+            f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
+        ],
+    shell:
+        "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
+        f"{EVALUATE_PY} quick-base {{params.where}} "
+        "--blocks {params.blocks} --device {params.device} > {log} 2>&1"
+
+
 rule validation_forecasts:
     # Each checkpoint's forecasts of a fixed sample of the run's held-out
     # (validation) blocks, with their history and truth, which the
