@@ -8,7 +8,7 @@
 "use strict";
 var PAL=window.simsPalette,LAYERS=window.simsLayers,MAXCOL=PAL.length-1;
 var NS="http://www.w3.org/2000/svg";
-var S={src:null,data:null,shown:[],levels:{},bins:{},group:null,
+var S={layer:null,src:null,data:null,shown:[],levels:{},bins:{},group:null,
  scale:"log",norm:false,sort:"cases",desc:true,sim:null};
 var STATS={cases:"Cases",strata:"Strata",days:"Days",weeks:"Weeks",
  peak:"Peak week's cases",peak_at:"Peak position",delay:"Mean delay (days)",
@@ -88,45 +88,53 @@ function lineChart(el,o){
  if(o.pick)svg.addEventListener("click",function(){if(cur)o.pick(o.series[cur[2]].id)})}
 function defaultHover(s,i,o){return "<b>"+esc(s.name)+"</b><br>"+(o.dates?o.dates(s.x[i]):fmt(s.x[i]))+": "+fmt(s.y[i])}
 
-// barsH: one row per level, the shown count solid over the source's faint.
+// The layer panels share one size (PW x PH), so the grid is even: shares
+// of each level (shown solid over all faint) and histograms (all faint,
+// shown solid), on the same colours.
+var PW=240,PH=132;
+function panelSvg(inner){return '<svg viewBox="0 0 '+PW+' '+PH+'" width="100%" role="img">'+inner+'</svg>'}
+// barsH: one row per level, its share of the shown simulations solid over
+// its share of the source's faint; click a level to filter to it.
 function barsH(el,rows,click){
- var W=width(el),lab=Math.min(150,W*0.38),R=44,rh=18,H=rows.length*rh+4,pw=W-lab-R;
- var mx=Math.max.apply(null,rows.map(function(r){return r.all}))||1,g=[];
- rows.forEach(function(r,i){var y=2+i*rh,wa=r.all/mx*pw,ws=r.n/mx*pw;
-  g.push('<g class=bar data-i='+i+'><text class=ax x='+(lab-6)+' y='+(y+12)+' text-anchor=end'+(r.on?' style="fill:var(--c1);font-weight:600"':'')+'>'+esc(r.label.length>22?r.label.slice(0,21)+"…":r.label)+'</text>'+
-   '<rect x='+lab+' y='+(y+2)+' width='+wa+' height='+(rh-6)+' rx=3 fill="var(--c1)" fill-opacity=.18></rect>'+
-   '<rect x='+lab+' y='+(y+2)+' width='+ws+' height='+(rh-6)+' rx=3 fill="var(--c1)"></rect>'+
-   '<text class=ax x='+(lab+Math.max(wa,ws)+4)+' y='+(y+12)+'>'+r.n+'</text>'+
-   '<rect class=hit x=0 y='+y+' width='+W+' height='+rh+'></rect></g>')});
- el.innerHTML='<svg width='+W+' height='+H+'>'+g.join("")+'</svg>';
+ var n=rows.length,lab=86,R=34,rh=Math.min(18,(PH-4)/n),pw=PW-lab-R,g=[];
+ var tall=rows.reduce(function(a,r){return a+r.all},0)||1,tshown=rows.reduce(function(a,r){return a+r.n},0)||1;
+ // Shares drawn against the largest, so a panel's bars fill its width.
+ var top=Math.max.apply(null,rows.map(function(r){return Math.max(r.all/tall,r.n/tshown)}))||1;
+ rows.forEach(function(r,i){var y=2+i*rh,sa=r.all/tall/top,ss=r.n/tshown/top,bh=Math.max(3,rh-5);
+  g.push('<g class=bar data-i='+i+'><text class=ax x='+(lab-4)+' y='+(y+rh/2+4)+' text-anchor=end'+(r.on?' style="fill:var(--c2);font-weight:600"':'')+'>'+esc(r.label.length>14?r.label.slice(0,13)+"…":r.label)+'</text>'+
+   '<rect x='+lab+' y='+(y+(rh-bh)/2)+' width='+(sa*pw)+' height='+bh+' rx=2 fill="var(--c1)" fill-opacity=.2></rect>'+
+   '<rect x='+lab+' y='+(y+(rh-bh)/2+bh*0.25)+' width='+(ss*pw)+' height='+(bh*0.5)+' rx=2 fill="'+(r.on?"var(--c2)":"var(--c1)")+'"></rect>'+
+   '<text class=ax x='+(lab+Math.max(sa,ss)*pw+3)+' y='+(y+rh/2+4)+'>'+Math.round(100*r.n/tshown)+'%</text>'+
+   '<rect class=hit x=0 y='+y+' width='+PW+' height='+rh+'></rect></g>')});
+ el.innerHTML=panelSvg(g.join(""));
  [].forEach.call(el.querySelectorAll("g.bar"),function(b){var r=rows[+b.dataset.i];
   b.addEventListener("click",function(){click(r)});
-  b.addEventListener("mousemove",function(e){showTip(e,"<b>"+esc(r.label)+"</b><br>"+r.n+" shown of "+r.all)});
+  b.addEventListener("mousemove",function(e){showTip(e,"<b>"+esc(r.label)+"</b><br>"+r.n+" shown ("+Math.round(100*r.n/tshown)+"%), "+r.all+" in the source ("+Math.round(100*r.all/tall)+"%)")});
   b.addEventListener("mouseleave",hideTip)})}
 
 // hist: 20 bins over the source's range, on a log scale for positive
 // values over more than three orders of magnitude with a long right tail;
-// click a bin to filter to it.
+// all faint, shown solid, each scaled to its own peak so the shapes
+// compare; click a bin to filter to it.
 function hist(el,all,shown,sel,click){
- var a=all.filter(function(v){return v!==null}),W=width(el),H=120,L=36,R=8,T=6,B=22,pw=W-L-R,ph=H-T-B;
+ var a=all.filter(function(v){return v!==null}),L=6,R=6,T=6,B=18,pw=PW-L-R,ph=PH-T-B;
  if(!a.length){el.innerHTML="<p class=mut>No values.</p>";return}
  var mn=Math.min.apply(null,a),mxv=Math.max.apply(null,a),md=median(a),lg=mn>0&&mxv/mn>1000&&mxv-md>10*(md-mn);
  var tf=lg?Math.log10:function(v){return v},inv=lg?function(v){return Math.pow(10,v)}:function(v){return v};
  var lo=tf(mn),hi=tf(mxv);if(hi===lo)hi=lo+1;var n=20,bw=(hi-lo)/n;
  function count(v){var c=new Array(n).fill(0);v.forEach(function(x){if(x===null||(lg&&x<=0))return;c[Math.min(n-1,Math.floor((tf(x)-lo)/bw))]++});return c}
- var ca=count(a),cs=count(shown),mx=Math.max.apply(null,ca)||1,g=[],gap=2,w=pw/n;
- ticks(0,mx,3).forEach(function(v){var y=T+ph-v/mx*ph;g.push('<line class=grid x1='+L+' x2='+(W-R)+' y1='+y+' y2='+y+'></line><text class=ax x='+(L-4)+' y='+(y+4)+' text-anchor=end>'+fmt(v)+'</text>')});
- for(var i=0;i<n;i++){var x=L+i*w,on;
-  on=sel&&Math.abs(sel[0]-inv(lo+i*bw))<=Math.abs(inv(lo+i*bw))*1e-9+1e-12;
-  g.push('<g class=bar data-i='+i+'><rect x='+(x+gap/2)+' y='+(T+ph-ca[i]/mx*ph)+' width='+(w-gap)+' height='+(ca[i]/mx*ph)+' fill="var(--c1)" fill-opacity=.18></rect>'+
-   '<rect x='+(x+gap/2)+' y='+(T+ph-cs[i]/mx*ph)+' width='+(w-gap)+' height='+(cs[i]/mx*ph)+' fill="'+(on?"var(--c2)":"var(--c1)")+'"></rect>'+
+ var ca=count(a),cs=count(shown),ma=Math.max.apply(null,ca)||1,ms=Math.max.apply(null,cs)||1,g=[],gap=1.5,w=pw/n;
+ g.push('<line class=grid x1='+L+' x2='+(PW-R)+' y1='+(T+ph)+' y2='+(T+ph)+'></line>');
+ for(var i=0;i<n;i++){var x=L+i*w,on=sel&&Math.abs(sel[0]-inv(lo+i*bw))<=Math.abs(inv(lo+i*bw))*1e-9+1e-12;
+  g.push('<g class=bar data-i='+i+'><rect x='+(x+gap/2)+' y='+(T+ph-ca[i]/ma*ph)+' width='+(w-gap)+' height='+(ca[i]/ma*ph)+' fill="var(--c1)" fill-opacity=.2></rect>'+
+   '<rect x='+(x+gap/2+w*0.2)+' y='+(T+ph-cs[i]/ms*ph)+' width='+Math.max(1,w*0.6-gap)+' height='+(cs[i]/ms*ph)+' fill="'+(on?"var(--c2)":"var(--c1)")+'"></rect>'+
    '<rect class=hit x='+x+' y='+T+' width='+w+' height='+ph+'></rect></g>')}
- [0,n/2,n].forEach(function(k){g.push('<text class=ax x='+(L+k*w)+' y='+(H-6)+' text-anchor='+(k?k===n?'end':'middle':'start')+'>'+fmt(inv(lo+k*bw))+'</text>')});
- if(lg)g.push('<text class=ax x='+(W-R)+' y='+(T+10)+' text-anchor=end>log scale</text>');
- el.innerHTML='<svg width='+W+' height='+H+'>'+g.join("")+'</svg>';
+ [0,n].forEach(function(k){g.push('<text class=ax x='+(L+k*w)+' y='+(PH-4)+' text-anchor='+(k?'end':'start')+'>'+fmt(inv(lo+k*bw))+'</text>')});
+ if(lg)g.push('<text class=ax x='+(PW/2)+' y='+(PH-4)+' text-anchor=middle>log scale</text>');
+ el.innerHTML=panelSvg(g.join(""));
  [].forEach.call(el.querySelectorAll("g.bar"),function(b){var i=+b.dataset.i,r=[inv(lo+i*bw),inv(lo+(i+1)*bw)];
   b.addEventListener("click",function(){click(r)});
-  b.addEventListener("mousemove",function(e){showTip(e,fmt(r[0])+" to "+fmt(r[1])+"<br>"+cs[i]+" shown of "+ca[i])});
+  b.addEventListener("mousemove",function(e){showTip(e,fmt(r[0])+" to "+fmt(r[1])+"<br>"+cs[i]+" shown, "+ca[i]+" in the source")});
   b.addEventListener("mouseleave",hideTip)})}
 
 // heat: a matrix in one sequential hue (the first accent), by its share
@@ -198,18 +206,33 @@ function summary(){var d=S.data,sh=S.shown;
  [].forEach.call($("bygroup").querySelectorAll("tr[data-l]"),function(r){r.addEventListener("click",function(){
   if(S.group&&r.dataset.l!=="other"&&r.dataset.l!=="all")toggleLevel(S.group,r.dataset.l)})})}
 
-function layers(){var d=S.data,box=$("layerbody"),html=[];
- var all=[].concat(LAYERS,["outcomes"]);
- all.forEach(function(layer){var fs=Object.keys(d.factors).filter(function(k){return d.layers[k]===layer}),
-  vs=Object.keys(d.values).filter(function(k){return d.layers[k]===layer});
-  if(layer==="outcomes")vs=Object.keys(d.stats);
-  if(!fs.length&&!vs.length)return;
-  html.push('<details class="sec layer" open><summary><h3>'+layer+' <span class=mut>('+fs.length+' factors, '+vs.length+(layer==="outcomes"?" statistics":" drawn values")+')</span></h3></summary><div class=plots3>'+
-   fs.map(function(k){return '<div class=card><h3>'+esc(k)+'</h3><div data-f="'+esc(k)+'"></div></div>'}).join("")+
-   vs.map(function(k){return '<div class=card><h3>'+esc(STATS[k]&&layer==="outcomes"?STATS[k]:k)+'</h3><div data-'+(layer==="outcomes"?"s":"v")+'="'+esc(k)+'"></div></div>'}).join("")+'</div></details>')});
- var open={};[].forEach.call(box.querySelectorAll("details.layer"),function(e,i){open[i]=e.open});
- box.innerHTML=html.join("");
- [].forEach.call(box.querySelectorAll("details.layer"),function(e,i){if(i in open)e.open=open[i]});
+// The layers, one at a time (S.layer, the first by default): its settings
+// that vary in the source as an even grid of panels in the grid's order,
+// each named plainly with its grid note as its tooltip; those constant in
+// the source on one line.
+function plain(k){var t=(S.layer==="outcomes"&&STATS[k]||k).replace(/_/g," ");return t.charAt(0).toUpperCase()+t.slice(1)}
+function settingsOf(layer){var d=S.data;
+ if(layer==="outcomes")return Object.keys(d.stats);
+ var mine=function(k){return d.layers[k]===layer&&(k in d.factors||k in d.values)};
+ var ordered=(d.order||[]).filter(mine);
+ return ordered.concat(Object.keys(d.layers).filter(function(k){return mine(k)&&ordered.indexOf(k)<0}))}
+function varies(k){var d=S.data;
+ if(k in d.factors)return d.factors[k].levels.length>1;
+ var col=(d.values[k]||d.stats[k]).filter(function(v){return v!==null});
+ return col.length>0&&Math.min.apply(null,col)<Math.max.apply(null,col)}
+function constantText(k){var d=S.data;
+ if(k in d.factors)return d.factors[k].levels[0]||"(none)";
+ var col=(d.values[k]||d.stats[k]).filter(function(v){return v!==null});return col.length?fmt(col[0]):"–"}
+function layers(){var d=S.data,box=$("layerbody"),names=[].concat(LAYERS,["outcomes"]);
+ names=names.filter(function(l){return settingsOf(l).length});
+ if(names.indexOf(S.layer)<0)S.layer=names[0];
+ $("layerpick").innerHTML=names.map(function(l){var n=settingsOf(l).filter(varies).length;
+  return '<button type=button class="tog'+(l===S.layer?" on":"")+'" data-l="'+l+'">'+l.charAt(0).toUpperCase()+l.slice(1)+' <span class=mut>'+n+'</span></button>'}).join("");
+ var keys=settingsOf(S.layer),vary=keys.filter(varies),still=keys.filter(function(k){return !varies(k)});
+ var notes=d.notes||{};
+ box.innerHTML=vary.map(function(k){var kind=k in d.factors?"f":S.layer==="outcomes"?"s":"v",note=notes[k]||"";
+  return '<div class="card lpanel">'+(note?'<div class=cardinfo><span class=info tabindex=0 data-tip="'+esc(note)+'">ⓘ</span></div>':'')+'<h3 title="'+esc(k+(note?": "+note:""))+'">'+esc(plain(k))+'</h3><div data-'+kind+'="'+esc(k)+'"></div></div>'}).join("");
+ $("constants").innerHTML=still.length?"<b>Constant in this source:</b> "+still.map(function(k){return esc(plain(k))+" "+esc(constantText(k))}).join("; "):"";
  var shown=S.shown;
  [].forEach.call(box.querySelectorAll("[data-f]"),function(el){var k=el.dataset.f,f=d.factors[k],
   na=new Array(f.levels.length).fill(0),ns=na.slice();
@@ -221,6 +244,7 @@ function layers(){var d=S.data,box=$("layerbody"),html=[];
   [].forEach.call(box.querySelectorAll("[data-"+p[0]+"]"),function(el){var k=el.dataset[p[0]],col=d[p[1]][k];
    hist(el,col,shown.map(function(i){return col[i]}),S.bins[k],function(r){
     var c=S.bins[k];if(c&&Math.abs(c[0]-r[0])<1e-12)delete S.bins[k];else S.bins[k]=r;update()})})})}
+$("layerpick").addEventListener("click",function(e){var b=e.target.closest("button[data-l]");if(!b)return;S.layer=b.dataset.l;layers()});
 
 function sample(ix,cap){if(ix.length<=cap)return ix;var out=[],step=ix.length/cap;
  for(var j=0;j<cap;j++)out.push(ix[Math.floor(j*step)]);return out}
@@ -338,6 +362,7 @@ var resized;window.addEventListener("resize",function(){clearTimeout(resized);re
 fetch("sources.json").then(function(r){return r.json()}).then(function(list){
  if(!list.length){$("status").textContent="No simulations under this machine's ROOT yet.";return}
  $("source").innerHTML=list.map(function(s){return "<option value='"+esc(s.key)+"'>"+esc(s.key)+(s.simulations!==null?" ("+s.simulations+")":"")+"</option>"}).join("");
- var h=readHash(),keys=list.map(function(s){return s.key}),src=keys.indexOf(h.src)>=0?h.src:keys[keys.length-1];
+ var h=readHash(),keys=list.map(function(s){return s.key}),def=list.find(function(s){return s.default}),
+  src=keys.indexOf(h.src)>=0?h.src:def?def.key:keys[keys.length-1];
  $("source").value=src;load(src,h.sim)}).catch(function(){$("status").textContent="Could not reach the server."});
 })();

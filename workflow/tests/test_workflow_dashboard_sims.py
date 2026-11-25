@@ -258,3 +258,37 @@ def test_a_simulating_run_serves_the_dashboard(monkeypatch):
     assert serve.wanted(on, ["simulate"])
     assert serve.wanted(on, ["push"])
     assert not serve.wanted(on, ["score"])
+
+
+def test_each_setting_has_its_grid_note():
+    got = sims.notes(GRID)
+    # A drawn value's `why`, a factor's comment above it in the grid.
+    assert got["quiet"].startswith("even outbreaks reach most places")
+    assert "stops for good" in got["report_stop"]
+
+
+def test_the_index_keeps_the_grid_s_order_and_notes(root, tmp_path):
+    index = sims.Index(
+        root, tmp_path / "cache", LAYERS, notes={"quiet": "why quiet"}
+    )
+    got = index.data("r1")
+    assert got["order"] == list(LAYERS)
+    assert got["notes"] == {"quiet": "why quiet"}
+
+
+def test_the_newest_run_is_the_default_source(root, tmp_path):
+    import os
+
+    _batch(root / "runs" / "runb" / "sims", 101)
+    for name, when in (("runa", 1000), ("runb", 2000)):
+        for f in (root / "runs" / name / "sims").iterdir():
+            os.utime(f, (when, when))
+    listing = sims.Index(root, tmp_path / "cache", LAYERS).listing()
+    assert [s["key"] for s in listing if s["default"]] == ["runb"]
+    assert {s["key"]: s["kind"] for s in listing}["r1"] == "round"
+
+
+def test_the_page_picks_one_layer_at_a_time():
+    page = sims.page()
+    assert "id=layerpick" in page
+    assert "id=constants" in page
