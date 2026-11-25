@@ -440,7 +440,12 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Without the attention biases scores changed by [X], and without lag series by [X] (SI, Attention biases for place and parent against none; Delays against no delays).
   - Given a baseline nowcast as complete counts, the fine-tuned model scored [X] (SI, Daily nowcasts).
   - Correlated trajectories changed scores by [X] (SI, Impact of correlated trajectories).
+  - We extended baselinenowcast to forecast, as the random walk nowcast, and adapted it to sparse data [@Johnson2025] (SI, Baselines).
+    It estimates delays from releases more than a day apart, borrows the delay, dispersion and walk spread of a parent place where counts are low, and models introductions into places with no recent cases.
+    It scored [X] against the other Ebola hub submissions.
   - The renewal models built on our port of epinowcast scored [X] against the other Ebola hub submissions (SI, Renewal model).
+    We stabilised them with the reproduction number estimates of BVDOutbreakSize, our model of the whole outbreak [@BVDOutbreakSize].
+    The hub imputes missing onset dates by subtracting a delay drawn from its own delay fit, a simplified approach that can bias recent counts, so we modelled that imputation rather than treat imputed onsets as observed [@bdbv_modeling_hub_2026; @lison2024].
 - **Strengths and limitations of the evaluation.**
   - We used one foundation model, one source of synthetic data and two case studies.
     However, the case studies differ in pathogen, reporting system and cadence, and one was in real time.
