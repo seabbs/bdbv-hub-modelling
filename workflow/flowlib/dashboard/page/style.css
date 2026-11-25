@@ -53,7 +53,8 @@ font-size:12px}
 .sw2{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
 .biasgrid{display:grid;grid-template-columns:repeat(var(--bcols,4),minmax(0,1fr));gap:8px}
 .biasgrid .card h3{margin:0 0 2px}.biasgrid .bsub{font-size:11px;color:var(--mut);min-height:1.4em;margin-bottom:2px}
-.biasgrid .card svg{width:100%;height:auto}.biasgrid .fs svg{max-height:80vh}
+.biasgrid .card svg{width:100%;height:auto;max-width:360px;display:block;margin:0 auto}
+.biasgrid .fs svg{max-width:none;max-height:80vh}
 @media(max-width:900px){.biasgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.biasgrid{grid-template-columns:1fr}}
 .topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:6px 0 4px;
