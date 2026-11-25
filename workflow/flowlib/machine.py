@@ -174,6 +174,30 @@ def budget(
     return {"cores": max(1, n), "mem_mb": max(1024, mem)}
 
 
+_DEFAULTS = dict(localconfig.DEFAULTS)
+
+DEFAULT_MB = 2048
+"""The memory (MB) a job takes unless its rule says."""
+
+
+def side_cores(
+    cfg: Mapping[str, str], cores: int, path: str | None = None
+) -> int | None:
+    """Return the cores the jobs beside the trainers share, or None.
+
+    The budget less a trainer's (`TRAINER_CORES`) for each `gpu` slot
+    (`gpu_slots`), as each slot trains a run at once, so a trainer whose
+    inputs appear mid-run never waits behind CPU jobs for its cores.
+    None, keeping nothing, where nothing trains (`TRAINER_CORES=0`) or
+    no core would be left.
+    """
+    each = int(cfg.get("TRAINER_CORES") or _DEFAULTS["TRAINER_CORES"])
+    kept = each * gpu_slots(cfg, path)
+    if kept <= 0 or cores - kept < 1:
+        return None
+    return cores - kept
+
+
 def args(
     cfg: Mapping[str, str],
     cores: int | None = None,
@@ -185,13 +209,20 @@ def args(
     `gpu` is a slot per GPU, one on a machine without CUDA
     (`gpu_slots`); `sim_slots`
     (`SIM_SLOTS`, default 2) caps simulation batches; `awaiting` lets one
-    batch from another host be waited for at a time.
+    batch from another host be waited for at a time. Every job but the
+    trainer, which claims none, takes its threads of `side_cores`
+    (`side_cores`), at most all of them.
     """
     got = budget(cfg, cores, total_mb)
+    side = side_cores(cfg, got["cores"], path)
     return [
         "--cores",
         str(got["cores"]),
+        "--default-resources",
+        f"mem_mb={DEFAULT_MB}",
+        *([f"side_cores=min(threads,{side})"] if side else []),
         "--resources",
+        *([f"side_cores={side}"] if side else []),
         f"mem_mb={got['mem_mb']}",
         f"gpu={gpu_slots(cfg, path)}",
         f"sim_slots={cfg.get('SIM_SLOTS') or 2}",

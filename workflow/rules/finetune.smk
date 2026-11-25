@@ -92,8 +92,10 @@ rule train_segment:
         TOOLS_ENV
     # The trainer and its block-cutting workers.
     threads: lambda wc: run_of(wc).ft["cut_workers"] + 1
+    # None of the cores the jobs beside it share (flowlib.machine).
     resources:
         gpu=1,
+        side_cores=0,
     params:
         prev_args=lambda wc: runs.resume_options(run_of(wc), int(wc.n)),
         held=lambda wc: held_range(wc.run),

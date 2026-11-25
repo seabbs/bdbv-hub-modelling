@@ -58,7 +58,7 @@ The workflow uses:
 
 - paths: `ROOT` (rounds, and the runs in `ROOT/runs/`), `SCORE_CACHE`;
 - what this machine does: `TARGETS` (what `all` runs; by default `simulate finetune score`, so a CPU machine sets `simulate score` and a GPU machine `finetune`), `SIMS_FROM` (`local` or `release`), `PUBLISH` (release each checkpoint as it is trained);
-- resources: `MIN_FREE_GB` and `MIN_DISK_GB` (memory and disk a tick needs free to start), `HEADROOM_CORES` and `HEADROOM_GB` (cores and memory kept free), `CORES` and `MEM_MB` (set them outright instead), `SIM_SLOTS` (batches at once, 2 by default) and `DEVICE` (`auto`: CUDA, then MPS, then the CPU);
+- resources: `MIN_FREE_GB` and `MIN_DISK_GB` (memory and disk a tick needs free to start), `HEADROOM_CORES` and `HEADROOM_GB` (cores and memory kept free), `CORES` and `MEM_MB` (set them outright instead), `SIM_SLOTS` (batches at once, 2 by default), `TRAINER_CORES` (cores kept for the trainer) and `DEVICE` (`auto`: CUDA, then MPS, then the CPU);
 - sharing the rounds: `SIM_SEEDS` (the seeds this machine takes: seeds, `first-last` ranges or rounds as `r<N>`; empty: all), and on a helping machine `REMOTE` and `REMOTE_ROOT` (the rounds host and its rounds folder; empty: `ROOT`);
 - `HOST_NAME`.
 
@@ -135,6 +135,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
 - `finetune`: every prefix, and its scoring: each checkpoint's German unit (`score_run_germany`), the reference units (`score_germany`), each trained run's German report (`german_report`) and each released checkpoint's BDBV check page (`ft_check_page`), kept when up to date.
   The trainer claims `finetune.cut_workers` plus one cores, its block-cutting workers and itself, so scoring and simulation beside it share what is left of the machine's budget.
+  Those cores are kept for it: every other job takes its threads of `side_cores`, the budget less `TRAINER_CORES` (4 by default; 0 where nothing trains) for each GPU slot, so a trainer whose inputs appear mid-run never waits behind CPU jobs.
 
 Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
