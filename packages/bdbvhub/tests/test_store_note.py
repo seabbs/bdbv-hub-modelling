@@ -51,9 +51,9 @@ def test_the_site_results_are_made_on_main_with_no_preview_head() -> None:
     import yaml
 
     workflows = Path(__file__).parents[3] / ".github" / "workflows"
-    job = yaml.safe_load((workflows / "site-results.yml").read_text())[
-        "jobs"
-    ]["site-results"]
+    job = yaml.safe_load((workflows / "site-results.yml").read_text())["jobs"][
+        "site-results"
+    ]
     runs = "\n".join(s.get("run", "") for s in job["steps"])
     assert "bdbvhub report" in runs
     for step in job["steps"]:
