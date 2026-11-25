@@ -1643,3 +1643,9 @@ def test_zone_data_keys_the_walks(
         store.current_keys(tasks, walks, {}, "c")
     )
     assert store.ZONE_CODE in store.fit_code("randomwalk", ROOT)
+
+
+def test_the_branch_moves_a_fit_s_zone_run_with_it() -> None:
+    from bdbvhub.store import branch
+
+    assert branch.ZONES_SUFFIX == store.ZONES_SUFFIX

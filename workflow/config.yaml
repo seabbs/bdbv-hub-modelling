@@ -202,8 +202,8 @@ hub_rounds:
   # The hub rounds report (rules/report.smk): our last this many submitted
   # rounds against every hub team.
   rounds: 4
-  # Our models rerun on current code for each round, from the data as of
-  # that round (`compare-hub --models`), beside what we submitted.
+  # Our models as the fit store holds them for each round, with their
+  # zone runs (`fit-store load --models`), beside what we submitted.
   models: [randomwalknowcast]
 
 ft_check:

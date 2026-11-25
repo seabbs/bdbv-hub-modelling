@@ -89,7 +89,7 @@ def test_hub_tables_cover_country_provinces_and_zones(
         get_model("randomwalk"), task, weekly_counts(daily_zones, latest),
         zones, daily_zones,
     ).assign(model="randomwalk", vintage=latest)  # fmt: skip
-    tables = hub_tables(forecasts, task, daily_zones, zones, stored)
+    tables = hub_tables(forecasts, task, zones, stored)
     table = tables["randomwalk"]
     locations = set(table["location"])
     assert NATIONAL in locations
@@ -136,8 +136,7 @@ def test_hub_tables_take_a_zone_fit_s_own_zones(
         else forecasts["location"] == task.locations[0]
     ]
     fitted = first.assign(location=zone, vintage=task.vintage)
-    daily_zones = load_daily_zones(DATA)
-    table = hub_tables(forecasts, task, daily_zones, zones, fitted)["renewal"]
+    table = hub_tables(forecasts, task, zones, fitted)["renewal"]
     rows = table.loc[table["location"].isin(set(zones))]
     assert set(rows["location"]) == {zone}
     mine = table.loc[table["location"] == task.locations[0]]
@@ -149,7 +148,7 @@ def test_hub_tables_take_a_zone_fit_s_own_zones(
     )
     # Without its zone fit, a model's zones are those in its own forecast;
     # these province-only samples have none.
-    split = hub_tables(forecasts, task, daily_zones, zones)["renewal"]
+    split = hub_tables(forecasts, task, zones)["renewal"]
     assert not set(split["location"]) & set(zones)
 
 
@@ -176,7 +175,6 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
     provinces = walk.loc[walk["location"].isin(set(task.locations))]
     # A model with zone samples of its own that sum to its provinces:
     # each province's first zone holds it and the others are zero.
-    daily_zones = load_daily_zones(DATA)
     first: dict[str, str] = {}
     for zone in mine:
         first.setdefault(province_of(zone), zone)
@@ -190,7 +188,7 @@ def test_a_models_own_zones_stay_apart_from_its_provinces(
         rows.append(prov.assign(location=zone, value=prov["value"] * keep))
     split = pd.concat(rows, ignore_index=True)
     own = pd.concat([walk, split]).assign(model="own")
-    tables = hub_tables(pd.concat([walk, own]), task, daily_zones, zones)
+    tables = hub_tables(pd.concat([walk, own]), task, zones)
     keys = ["location", "target_end_date", "output_type_id"]
 
     def places(name: str) -> pd.DataFrame:
@@ -246,9 +244,7 @@ def test_a_model_that_forecasts_the_country_keeps_its_national_rows(
         lambda *_a, **_k: pd.DataFrame(columns=list(SAMPLE_COLUMNS)),
     )
     zones = hub_zones(DATA / "hub-config" / "tasks.json")
-    tables = hub_tables(
-        pd.concat([walk, own]), task, load_daily_zones(DATA), zones
-    )
+    tables = hub_tables(pd.concat([walk, own]), task, zones)
     chronos = tables["foundation"]
     assert (chronos.loc[chronos["location"] == NATIONAL, "value"] == 7).all()
     rw = tables["randomwalk"]

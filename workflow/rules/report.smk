@@ -302,9 +302,10 @@ rule hub_submissions_table:
 
 rule hub_comparison:
     # Every hub team's files and ours scored on the same truth, beside
-    # `hub_rounds.models` rerun on current code for each round
-    # (`compare-hub --models`). The data folder is also set as
-    # BDBV_DATA_DIR, which the hub's places are read from.
+    # `hub_rounds.models` as the fit store holds them for each round, with
+    # their zone runs (`fit-store load --models`, then `compare-hub`). The
+    # data folder is also set as BDBV_DATA_DIR, which the hub's places are
+    # read from.
     input:
         target=rules.hub_data.output,
         table=rules.hub_submissions_table.output,
@@ -322,11 +323,16 @@ rule hub_comparison:
         out=lambda wc, output: Path(output.scores).parent,
         models=" ".join(config["hub_rounds"]["models"]),
     shell:
+        "(rm -rf {params.out}/store && "
+        "uv run fit-store-branch fetch {params.out}/store && "
+        "BDBV_DATA_DIR={params.data} uv run bdbvhub fit-store load "
+        "--data {params.data} --store {params.out}/store "
+        "--results {params.out}/results --models {params.models} && "
         "BDBV_DATA_DIR={params.data} uv run bdbvhub compare-hub --fetch "
         "--data {params.data} --hub-dir {params.data}/hub-submissions "
         "--cache-dir {params.data}/raw/hub-submissions --out {params.out} "
-        "--results {params.out}/results --models {params.models} --stored "
-        "--submissions-table {input.table} > {log} 2>&1"
+        "--store {params.out}/store --results {params.out}/results --stored "
+        "--submissions-table {input.table}) > {log} 2>&1"
 
 
 rule hub_rounds_report:

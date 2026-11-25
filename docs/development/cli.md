@@ -14,7 +14,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `bvd` | Cache the BVDOutbreakSize releases each vintage may use. |
 | `compare-hub [--fetch]` | Score our retrospective forecasts and the hub's submitted ones on the same truth and weeks. |
 | `nowcast` | Forecast from a real vintage, write the hub file and check it. With `--config` and `--fit`, forecast from a fit configuration. |
-| `zone-backtest` | Score `randomwalk` and `randomwalknowcast` run at zone level on the real vintages. `--chunk K/N` runs only block K of N of the origins. |
+| `zone-backtest` | Score the zone runs of `randomwalk` and `randomwalknowcast` that the fit store holds, for the fits `fit-store load` used, on the real vintages. `--chunk K/N` scores only block K of N of the origins. |
 | `fit-store plan`, `fit`, `load`, `unpack` | List the fits the fit store lacks (`--origins` for some origins), make one, load the stored fits into `results/`, or write a submission candidate's stored fit directory for the submission. |
 | `fit` | Fit a configuration and write the fit directory and its diagnostics, for the submission CI. |
 | `plot-submission` | Plot a submitted hub file. |
@@ -26,7 +26,7 @@ Paths to the tidy data default to `$BDBV_DATA_DIR` or `data/`.
 | `freeze-round` | Write a round's docs page to the ledger once its pull request has merged. |
 | `report` | Make the docs figures and tables. |
 | `digest [--with PATH...] [--text TEXT] [--model M]` | Print a hash of what a backtest reads, which keys its cached outputs in the Site workflow. With `--model`, only that model's code (its import closure, less the other models' modules) with the data. |
-| `backtest --forecast-only`, `zone-backtest --forecast-only` | Forecast without scoring and write the forecasts to `--parts`, so each model can run apart. |
+| `backtest --forecast-only` | Forecast without scoring and write the forecasts to `--parts`, so each model can run apart. |
 | `score PART...` | Score the forecasts of `--forecast-only` runs, every model together, and write the results files one run of each backtest writes. |
 | `concat-results --out DIR [--dedupe FILE...] PART...` | Stack the results files of runs made apart, such as blocks of dates, in the order given. `--dedupe` keeps one copy of rows every part writes in full. |
 

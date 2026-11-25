@@ -163,17 +163,18 @@ def test_a_fit_key_holds_the_zone_module_only_where_its_model_calls_it() -> (
     from bdbvhub.store.store import fit_code
 
     zones = "packages/nowcastbaselines/src/nowcastbaselines/zones.py"
-    # The zone fits call its zone_task, so their keys hold it.
-    for model in ("renewal", "renewalbvd", "renewalsp"):
-        assert zones in fit_code(model, ROOT)
-    # Models whose modules do not import it leave it out: the walks, and
-    # Chronos-2, which takes its zones straight from its block.
+    # The zone fits call its zone_task, and the walks' stored fits make
+    # their zone runs with it (`store.walk_zones`), so their keys hold it.
     for model in (
+        "renewal",
+        "renewalbvd",
+        "renewalsp",
         "randomwalk",
         "randomwalknowcast",
-        "foundation_zeroshot",
     ):
-        assert zones not in fit_code(model, ROOT)
+        assert zones in fit_code(model, ROOT)
+    # Chronos-2 takes its zones straight from its block.
+    assert zones not in fit_code("foundation_zeroshot", ROOT)
 
 
 def _bvd_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

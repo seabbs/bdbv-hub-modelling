@@ -43,7 +43,6 @@ from nowcastutils.base import (
 )
 from nowcastutils.dates import as_date
 from nowcastutils.hierarchy import is_zone, province_of
-from nowcastutils.snapshots import weekly_counts
 
 FINETUNED_MODELS = ("foundation",)
 MODELS = (
@@ -858,22 +857,15 @@ def test_national_sums_provinces_not_zones(zoned: pd.DataFrame) -> None:
 
 
 def test_zone_samples_come_straight_from_the_block(
-    task: ForecastTask,
     zoned: pd.DataFrame,
-    daily_zones: pd.DataFrame,
-    tasks_json,
 ) -> None:
-    zones = hub_zones(tasks_json)
-    counts = weekly_counts(daily_zones, task.vintage)
     own = zoned.loc[zoned["location"].map(is_zone)]
     provinces = _provinces(zoned)
     # The block's own zone series: nothing sums them to the provinces
     # (the stand-in draws each series apart, so they do not sum).
     assert check_zone_coherence(provinces, own)
     # The hub file takes them as they are.
-    split = zones_for_model(
-        "foundation_zeroshot", task, zoned, counts, zones, daily_zones
-    )
+    split = zones_for_model(zoned)
     keys = ["location", "target_end_date", "sample"]
     a = split.set_index(keys)["value"].sort_index()
     pd.testing.assert_series_equal(a, own.set_index(keys)["value"].sort_index())

@@ -182,9 +182,10 @@ def _stored(
     if fit is None:
         raise LookupError(f"the store holds no good fit at {origin}")
     if config and fit.files:
-        # As `store.unpack` writes it.
+        # As `store.unpack` writes it, with a walk's stored forecasts and
+        # zone run.
         with tempfile.TemporaryDirectory() as fit_dir:
-            _unpack(fit.files, Path(fit_dir))
+            store.write_fit_dir(root, fit, Path(fit_dir))
             table = hub(model, config=config, fit_dir=Path(fit_dir))
     else:
         forecast = stored_forecast(fit.forecasts, task, own_national(model))

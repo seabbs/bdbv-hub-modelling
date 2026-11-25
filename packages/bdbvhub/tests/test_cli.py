@@ -41,55 +41,50 @@ def _written(out: Path) -> pd.DataFrame:
 
 @pytest.mark.slow
 @pytest.mark.usefixtures("in_root")
-def test_cli_nowcast_writes_zones(tmp_path: Path) -> None:
-    args = ["nowcast", "--out", str(tmp_path / "sub")]
-    assert main([*args, "--forecast-date", "2026-07-31"]) == 0
-    table = _written(tmp_path / "sub")
-    assert set(table["forecast_date"]) == {"2026-07-31"}
+def test_cli_nowcast_writes_a_walk_s_stored_zones(tmp_path: Path) -> None:
+    # The submission forecasts a walk from its unpacked stored fit, whose
+    # zone run gives the file's zones (#1094).
+    from bdbvhub.store import store as st
+    from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
+    from nowcastbdbv.data.zones import load_zone_data
+    from nowcasteval.backtest import load_config
+
+    config = load_config("packages/nowcastbdbv/config/backtest.toml")
+    origin = "2026-10-17"
+    tasks = st.origin_tasks(
+        load_target(DATA), load_delays(DATA), config, load_daily(DATA),
+        load_zone_data(DATA),
+    )  # fmt: skip
+    root = tmp_path / "store"
+    stored = st.fit("randomwalk", tasks[origin], {}, "c")
+    st.write_fit(root, stored)
+    keys = st.current_keys({origin: tasks[origin]}, ["randomwalk"], {}, "c")
+    fit = tmp_path / "fit"
+    assert st.unpack(root, keys, "randomwalk", origin, fit)[0] == "ok"
+    out = tmp_path / "sub"
+    args = ["--data", str(DATA), "--vintage", origin, "--out", str(out)]
+    assert main(["nowcast", "--config", "randomwalk", "--fit", str(fit),
+                 *args]) == 0  # fmt: skip
+    table = _written(out)
     level = table["location"].str.count("-")
     zones = table.loc[level == 2]
-    provs = table.loc[level == 1]
-    assert zones["location"].nunique() > 150
-    side = json.loads((tmp_path / "sub" / "zones.json").read_text())
+    side = json.loads((out / "zones.json").read_text())
     assert side["zones"] is True
     assert side["n_zones"] == zones["location"].nunique()
     assert side["note"] == ""
+    keys = ["location", "target_end_date", "output_type_id"]
+    got = zones.set_index(keys)["value"].sort_index()
+    want = stored.zones.loc[
+        stored.zones["target_end_date"].isin(set(zones["target_end_date"]))
+    ].rename(columns={"sample": "output_type_id"})
+    want = want.set_index(keys)["value"].sort_index()
+    assert got.index.equals(want.index)
+    assert (got.to_numpy() == want.round().clip(lower=0).to_numpy()).all()
     # Zones need not sum to their provinces; national is their sum.
+    provs = table.loc[level == 1]
     keys = ["output_type_id", "target_end_date"]
     nat = table.loc[level == 0].set_index(keys)["value"]
     assert (nat == provs.groupby(keys)["value"].sum().reindex(nat.index)).all()
-
-
-@pytest.mark.slow
-@pytest.mark.usefixtures("in_root")
-def test_cli_nowcast_takes_a_fit_s_own_zones(tmp_path: Path) -> None:
-    fit = tmp_path / "fit"
-    args = ["--data", str(DATA), "--vintage", "2026-10-17"]
-    assert (
-        main(["fit", "--config", "randomwalk", *args, "--out", str(fit)]) == 0
-    )
-    nowcast = ["nowcast", "--config", "randomwalk", "--fit", str(fit), *args]
-    assert main([*nowcast, "--out", str(tmp_path / "split")]) == 0
-    split = _written(tmp_path / "split")
-    zones = split.loc[split["location"].str.count("-") == 2]
-    # A fit with its own zone samples: each zone gets another zone's
-    # samples in its province, so the sums stay those of the provinces.
-    keys = ["location", "target_end_date", "output_type_id"]
-    own = zones[[*keys, "value"]].rename(columns={"output_type_id": "sample"})
-    own["province"] = own["location"].str.slice(0, 5)
-    own = own.sort_values(["province", "location", "target_end_date", "sample"])
-    own["value"] = own.groupby(["province", "target_end_date", "sample"])[
-        "value"
-    ].transform(lambda v: v.iloc[::-1].to_numpy())
-    own.drop(columns="province").to_csv(fit / "zones.csv.gz", index=False)
-    assert main([*nowcast, "--out", str(tmp_path / "own")]) == 0
-    table = _written(tmp_path / "own")
-    got = table.loc[table["location"].str.count("-") == 2].rename(
-        columns={"output_type_id": "sample"}
-    )
-    merged = got.merge(own, on=["location", "target_end_date", "sample"])
-    assert len(merged) == len(own)
-    assert (merged["value_x"] == merged["value_y"]).all()
 
 
 @pytest.mark.usefixtures("in_root")
@@ -1053,7 +1048,9 @@ def test_the_hub_comparison_takes_the_walks_zones_from_the_store(
             rows,
             pd.DataFrame(),
             pd.DataFrame(),
-            zones=rows.drop(columns="as_of").assign(location="CD-BC-01"),
+            zones=rows.iloc[[1]]
+            .drop(columns="as_of")
+            .assign(location="CD-BC-01"),
         ),
     )
     results = tmp_path / "results"

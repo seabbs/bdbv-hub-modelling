@@ -48,7 +48,10 @@ def _score(
     origins: list[str] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     daily_zones = load_daily_zones(DATA)
-    run = store.stored_zone_forecasts(*stored, daily_zones, origins=origins)
+    # The backtest's weeks, as `zone-backtest` takes from `[forecast]`.
+    run = store.stored_zone_forecasts(
+        *stored, daily_zones, origins=origins, min_horizon=-4, max_horizon=3
+    )
     return score_zones(target, delays, load_daily(DATA), daily_zones, run)
 
 

@@ -7,9 +7,10 @@ is run) and writes one page with the docs site's interactive charts
 coverage), and the forecast explorer (`explorer.js`) with its location,
 round and model controls. A plain summary comes first and one small table
 last: each model's pairwise relative WIS on the cells it shares with
-every other model, scaled to `seabbs-rwnowcast`. Models `compare-hub`
-reran on current code for each round (`--models`) are shown beside our
-submissions as `<model> (current code)`.
+every other model, scaled to `seabbs-rwnowcast`. Our models as the fit
+store holds them for each round (`fit-store load --models`), stored for
+the current code, are shown beside our submissions as
+`<model> (current code)`.
 
 The page reads its data from the folder `<OUT stem>-data/` beside it.
 
