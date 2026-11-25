@@ -87,8 +87,9 @@ def _sim_commands(out):
 
 
 def test_batches_run_by_count_not_a_cap(tmp_path):
-    # SIM_SLOTS alone sets how many batches run at once: a batch claims
-    # no memory and runs under no prefix.
+    # SIM_SLOTS sets how many batches run at once: each claims its rule's
+    # memory, so the slots fit the machine's budget, and runs under no
+    # prefix.
     (tmp_path / "local.env").write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
     )
@@ -101,7 +102,9 @@ def test_batches_run_by_count_not_a_cap(tmp_path):
     )
     assert len(claims) == 40
     assert all("sim_slots=1" in c for c in claims)
-    assert not any(re.search(r"mem_mb=[1-9]", c) for c in claims)
+    rule = (ROOT / "workflow" / "rules" / "simulate.smk").read_text()
+    claim = re.search(r"rule simulate_batch:.*?mem_mb=(\d+)", rule, re.S)
+    assert all(f"mem_mb={claim.group(1)}," in c for c in claims)
     bare = re.compile(r"eigen=false\s+workflow/scripts/timed\.sh")
     assert all(bare.search(x) for x in lines)
 
