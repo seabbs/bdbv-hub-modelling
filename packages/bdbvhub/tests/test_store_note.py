@@ -88,17 +88,16 @@ def test_the_preview_head_comes_from_the_environment(
     assert "!!!" not in text
 
 
-def test_pages_passes_the_pull_request_head() -> None:
+def test_the_site_results_are_made_on_main_with_no_preview_head() -> None:
+    # Fit store's site-results job writes the note from main's store, so
+    # a preview shows main's results and names no pull request head.
     import yaml
 
-    pages = Path(__file__).parents[3] / ".github" / "workflows" / "pages.yml"
-    steps = yaml.safe_load(pages.read_text())["jobs"]["build"]["steps"]
-    (step,) = [
-        s
-        for s in steps
-        if s.get("name")
-        == "Compare with hub forecasts, then the docs figures and tables"
+    workflows = Path(__file__).parents[3] / ".github" / "workflows"
+    job = yaml.safe_load((workflows / "fit-store.yml").read_text())["jobs"][
+        "site-results"
     ]
-    assert step["env"]["PREVIEW_HEAD"] == (
-        "${{ github.event.pull_request.head.sha }}"
-    )
+    runs = "\n".join(s.get("run", "") for s in job["steps"])
+    assert "bdbvhub report" in runs
+    for step in job["steps"]:
+        assert "PREVIEW_HEAD" not in (step.get("env") or {})
