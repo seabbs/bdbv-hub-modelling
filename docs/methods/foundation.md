@@ -41,7 +41,7 @@ Zone counts are zero before the zone releases start.
 Chronos-2 forecasts every target series in the block jointly, from one shared last step of context, $t^*$, which each layout sets differently.
 
 - **Complete** (`*_complete`): the targets $X_{p,t}$ for $t \le t^*$.
-  $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([Baseline models](baselines.md#forecast)).
+  $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([supporting information](../paper/si.html#baselines)).
   It comes from the delay alone, so it needs no walk spread.
 - **Reporting triangle** (`*_ragged`): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.

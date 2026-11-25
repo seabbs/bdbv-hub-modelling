@@ -72,7 +72,7 @@ The model runs in single precision (float32), JAX's default.
   The generation interval is computed once and the hub's delay once per release, both in float64, and the incubation period in float32 at each draw of its mean and SD (`CensoredPMF`); all match primarycensored.
 - The simulator's delays use the same closed form, truncated at their maximum delay and renormalised as primarycensored's $D$.
   In float64 they are within $10^{-8}$ of primarycensored, and in float32 within $4 \times 10^{-5}$ of numerical integration.
-- The negative binomial size is kept below 1000, which is Poisson for these counts, and the Dirichlet-multinomial concentration below $10^4$ ([Likelihood](model.md#likelihood)).
+- The negative binomial size is kept below 1000, which is Poisson for these counts, and the Dirichlet-multinomial concentration below $10^4$ ([supporting information](../paper/si.html#renewal-model)).
 - The hub imputation sums are products of banded $7 \times 7k$ blocks for each onset week, so the cost grows with the number of weeks and not its square.
 
 The tests check the renewal and the imputation against a NumPy reference, `tests/model/numpy_reference.py`.
@@ -85,7 +85,7 @@ Stored fits run their chains in parallel.
 Without other settings, NUTS runs 4 chains of 1000 warm-up and 1000 draws, with target acceptance 0.9 and maximum tree depth 10.
 Each chain starts from its own draw from the prior.
 The [fit store](../development/cli.md#fit-store)'s fits, which the backtest and the submission read, take each model's settings from its candidate in `packages/bdbvsubmission/policy.toml`.
-`renewal` and `renewalbvd` use 2 chains of 500 warm-up and 1500 draws, keeping every other one, and `renewalsp` 2 chains of 500 warm-up and 750 draws, all at target acceptance 0.9 (0.95 for `renewalbvd`).
+Those settings, and the convergence checks that rule a fit out, are in the paper's [supporting information](../paper/si.html#renewal-model).
 Leave-one-province-out fits take theirs from `[sampler]` in `packages/nowcastbdbv/config/backtest.toml` when `BDBV_RENEWAL_SAMPLER` is unset.
 Each fit reports its largest R-hat over parameters and the share of draws at the maximum tree depth.
 
