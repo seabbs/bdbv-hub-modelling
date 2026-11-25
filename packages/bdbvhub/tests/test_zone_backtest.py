@@ -5,24 +5,61 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from bdbvhub.store import store
 from nowcastbdbv.data.tidy import load_daily, load_daily_zones
-from nowcastbdbv.data.zones import hub_zones
-from nowcastbdbv.zones import ZONE_BASELINE, zone_backtest, zone_relative_skill
+from nowcastbdbv.data.zones import load_zone_data
+from nowcastbdbv.zones import (
+    ZONE_BASELINE,
+    ZoneForecasts,
+    score_zones,
+    zone_relative_skill,
+)
+from nowcasteval.backtest import BacktestConfig
 
 DATA = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "data"
 
 
 @pytest.fixture(scope="module")
-def result(
-    target: pd.DataFrame, delays: pd.DataFrame
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    return zone_backtest(
-        target,
-        delays,
-        load_daily(DATA),
-        load_daily_zones(DATA),
-        hub_zones(DATA / "hub-config" / "tasks.json"),
+def stored(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> tuple[Path, Path]:
+    """A fit store holding both walks at every origin, loaded."""
+    tmp = tmp_path_factory.mktemp("zone-store")
+    root, results = tmp / "store", tmp / "results"
+    config = BacktestConfig(n_samples=100, seed=1)
+    tasks = store.origin_tasks(
+        target, delays, config, load_daily(DATA), load_zone_data(DATA)
     )
+    walks = list(store.SAMPLE_FREE)
+    for task in tasks.values():
+        for name in walks:
+            store.write_fit(root, store.fit(name, task, {}, "c"))
+    keys = store.current_keys(tasks, walks, {}, "c")
+    store.load(root, keys, results)
+    return root, results
+
+
+def _score(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    stored: tuple[Path, Path],
+    origins: list[str] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    daily_zones = load_daily_zones(DATA)
+    # The backtest's weeks, as `zone-backtest` takes from `[forecast]`.
+    run = store.stored_zone_forecasts(
+        *stored, daily_zones, origins=origins, min_horizon=-4, max_horizon=3
+    )
+    return score_zones(target, delays, load_daily(DATA), daily_zones, run)
+
+
+@pytest.fixture(scope="module")
+def result(
+    target: pd.DataFrame, delays: pd.DataFrame, stored: tuple[Path, Path]
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    return _score(target, delays, stored)
 
 
 @pytest.fixture(scope="module")
@@ -114,6 +151,7 @@ def test_zone_forecasts_are_the_scored_forms_by_origin(
 def test_zone_backtest_by_origin_chunk_matches_one_run(
     target: pd.DataFrame,
     delays: pd.DataFrame,
+    stored: tuple[Path, Path],
     result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
     vintages: list[str],
 ) -> None:
@@ -121,14 +159,7 @@ def test_zone_backtest_by_origin_chunk_matches_one_run(
 
     origins = vintages[:-1]
     parts = [
-        zone_backtest(
-            target,
-            delays,
-            load_daily(DATA),
-            load_daily_zones(DATA),
-            hub_zones(DATA / "hub-config" / "tasks.json"),
-            origins=chunk(origins, f"{k}/2"),
-        )
+        _score(target, delays, stored, chunk(origins, f"{k}/2"))
         for k in range(2)
     ]
     for i in range(3):
@@ -140,42 +171,38 @@ def test_zone_backtest_by_origin_chunk_matches_one_run(
 def test_zone_backtest_of_no_origin_is_empty(
     target: pd.DataFrame, delays: pd.DataFrame
 ) -> None:
-    # A block whose origins every model skips forecasts nothing.
-    out = zone_backtest(
-        target,
-        delays,
-        load_daily(DATA),
-        load_daily_zones(DATA),
-        hub_zones(DATA / "hub-config" / "tasks.json"),
-        origins=[],
+    # A block whose origins no stored zone run covers scores nothing.
+    empty = pd.DataFrame(columns=["origin", "model"])
+    run = ZoneForecasts(empty, pd.DataFrame(), pd.DataFrame())
+    out = score_zones(
+        target, delays, load_daily(DATA), load_daily_zones(DATA), run
     )
     assert all(t.empty for t in out)
 
 
 @pytest.mark.slow
-def test_zone_forecasts_made_apart_by_model_score_as_one_run(
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    result: tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame],
-    tmp_path: Path,
+def test_the_zone_backtest_scores_the_stored_zone_runs(
+    stored: tuple[Path, Path], vintages: list[str]
 ) -> None:
-    from nowcastbdbv.zones import ZoneForecasts, score_zones, zone_forecasts
-
-    args = (
-        target,
-        delays,
-        load_daily(DATA),
-        load_daily_zones(DATA),
-        hub_zones(DATA / "hub-config" / "tasks.json"),
-    )
-    parts = []
-    for name in ("randomwalk", "randomwalknowcast"):
-        zone_forecasts(*args, models=[name]).write(tmp_path / name)
-        parts.append(tmp_path / name)
-    run = ZoneForecasts.read(parts)
-    out = score_zones(target, delays, args[2], args[3], run)
-    for got, want in zip(out, result, strict=True):
-        pd.testing.assert_frame_equal(got, want, check_dtype=False)
+    # Each origin's forecasts are its walks' stored zone runs (#1094),
+    # less the zones with no cases at the origin.
+    run = store.stored_zone_forecasts(*stored, load_daily_zones(DATA))
+    origin = vintages[-2]
+    zones = store.stored_zones(*stored, origins=[origin])
+    for name in store.SAMPLE_FREE:
+        mine = run.samples.loc[
+            (run.samples["key"] == name)
+            & (run.samples["origin"].astype(str) == origin)
+        ]
+        theirs = zones.loc[
+            (zones["model"] == name)
+            & zones["location"].isin(set(mine["location"]))
+        ]
+        assert len(mine) == len(theirs) > 0
+        assert set(mine["location"]) < set(
+            zones.loc[zones["model"] == name, "location"]
+        )
+    assert not run.delays.empty
 
 
 def test_zone_forecasts_read_skips_an_empty_part(tmp_path: Path) -> None:

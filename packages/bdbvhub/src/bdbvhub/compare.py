@@ -7,13 +7,12 @@ Files whose licence allows redistribution (`OPEN_LICENCES`) are kept
 gzipped in a committed directory; the rest go to an uncommitted cache.
 Files from the archived cumulative outbreak size round are skipped.
 
-For each hub round, `our_forecasts` runs our unfitted models from the
-latest real vintage that serves the round.
-Rounds with no such vintage are skipped.
-Fitted models are slow, so `stored_forecasts` takes theirs from the
-backtest forecast files for the same round, and `compare-hub` puts the
-fit store's whole fits of the round in their place, as those files hold
-only the backtest's weeks.
+Our models' forecasts of each hub round are the fit store's: the
+random walks are stored like the fitted models, with their zone runs
+(`bdbvhub.store.store.stored_zones`).
+`stored_forecasts` takes them from the backtest forecast files for the
+same round, and `compare-hub` puts the fit store's whole fits of the
+round in their place, as those files hold only the backtest's weeks.
 The `source` column says which (`real` or `hub`).
 
 `score_comparison` scores every model on the hub teams' cells only: the
@@ -41,7 +40,7 @@ import json
 import os
 import tomllib
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -49,16 +48,12 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from bdbvhub.models import get_model, list_models
-from nowcastbaselines.zones import zone_task
+from bdbvhub.models import list_models
 from nowcastbdbv.backtest import make_tasks
-from nowcastbdbv.data.zones import ZoneData
-from nowcasteval.backtest import BacktestConfig, run_forecasts
+from nowcasteval.backtest import BacktestConfig
 from nowcasteval.nowcast import release_backtest
 from nowcasteval.scoring import pairwise_skill, summarise_scores
 from nowcastutils.dates import as_date, reference_date_for_vintage
-from nowcastutils.hierarchy import is_zone
-from nowcastutils.snapshots import weekly_counts
 
 __all__ = [
     "ATTRIBUTION",
@@ -76,7 +71,6 @@ __all__ = [
     "load_hub_submissions",
     "load_team_metadata",
     "match_vintage",
-    "our_forecasts",
     "own_hub_ids",
     "resolve_baseline",
     "score_comparison",
@@ -611,82 +605,6 @@ def match_vintage(
     ref = as_date(reference_date)
     serving = [v for v in real_vintages if reference_date_for_vintage(v) == ref]
     return max(serving) if serving else None
-
-
-def our_forecasts(
-    reference_dates: Sequence[str],
-    target: pd.DataFrame,
-    delays: pd.DataFrame,
-    config: BacktestConfig,
-    models: Sequence[str],
-    daily: pd.DataFrame,
-    zones: ZoneData,
-    min_horizon: int | None = None,
-) -> pd.DataFrame:
-    """Run our models for hub rounds from the matching vintages.
-
-    Each model runs on the country and provinces, and again on every hub
-    health zone (`zones.codes`), as the submission does (`zones_for_model`
-    over `hub_zones`), so a model rerun for a round is scored on the cells
-    its submitted file covers. Only the zones are kept from the zone run,
-    as it also gives the country. A model that forecasts the zones itself
-    (`reads_zones`) has no zone run, and its hub zones are kept.
-
-    Parameters
-    ----------
-    reference_dates : sequence of str
-        Hub reference dates.
-    target, delays : pandas.DataFrame
-        Tidy tables.
-    config : BacktestConfig
-        Horizons, samples and seed.
-    models : sequence of str
-        Registered model names that run at zone level.
-    daily : pandas.DataFrame
-        Daily onsets by release of the country and provinces.
-    zones : ZoneData
-        The health-zone tables and codes (`load_zone_data`).
-    min_horizon : int, optional
-        First week, in weeks from the reference date, to cover the weeks
-        the hub forecasts did. Defaults to `config.min_horizon`.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Output of `run_forecasts` with a `source` column (`real`). Rounds
-        with no matching vintage are skipped.
-    """
-    if min_horizon is not None:
-        config = replace(config, min_horizon=min_horizon)
-    real = target.loc[target["kind"] == "real"]
-    vintages = sorted(set(real["vintage"]))
-    built = [get_model(n) for n in models]
-    frames = []
-    for ref in sorted(set(reference_dates)):
-        vintage = match_vintage(ref, vintages)
-        if vintage is None or not built:
-            continue
-        rows = real.loc[real["vintage"] == vintage]
-        tasks = make_tasks(rows, delays, config, daily=daily, zones=zones)
-        counts = weekly_counts(zones.daily, vintage)
-        here = tuple(zones.codes)
-        history = pd.concat([daily, zones.daily])
-        walks = [m for m in built if not getattr(m, "reads_zones", False)]
-        fc = run_forecasts(built, tasks)
-        # Every model's zones are the hub's, as its submission's are.
-        fc = fc.loc[~fc["location"].map(is_zone) | fc["location"].isin(here)]
-        if walks:
-            zone = run_forecasts(
-                walks, [zone_task(t, counts, here, history) for t in tasks]
-            )
-            fc = pd.concat(
-                [fc, zone.loc[zone["location"].isin(here)]], ignore_index=True
-            )
-        fc["source"] = "real"
-        frames.append(fc)
-    if not frames:
-        return pd.DataFrame(columns=[*SAMPLE_COLUMNS, "horizon"])
-    return pd.concat(frames, ignore_index=True)
 
 
 def stored_forecasts(

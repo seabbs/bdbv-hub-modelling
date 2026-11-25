@@ -40,8 +40,7 @@ mkdir -p results && cp -R output/ci/dl/inputs/results/. results/
 mkdir -p output/parts && cp -R output/ci/dl/parts-* output/parts/ 2>/dev/null
 p=output/parts/parts
 if "$bdbv" score \
-     "$p"-development-{randomwalk,randomwalknowcast} \
-     "$p"-zones-{randomwalk,randomwalknowcast} &&
+     "$p"-development-{randomwalk,randomwalknowcast} &&
    "$bdbv" concat-results --out results/germany \
      output/parts/parts-germany-*/germany &&
    "$germany" fetch &&

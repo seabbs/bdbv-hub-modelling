@@ -5,7 +5,9 @@ The random walk models run at zone level, on the zones' own release
 snapshots (`zone_task`), with the zone, then province, then national
 pooling of `pooling`.
 Their zone samples are the zone model's own draws, and need not sum to
-the province samples (`zone_forecast`).
+the province samples (`zone_forecast`). The fit store makes each walk's
+zone run once per origin (`bdbvhub.store.store.walk_zones`), and every
+user reads it from there.
 
 The renewal models fit the zones themselves and sum them to the
 provinces, and Chronos-2 forecasts the zones as series of its joint
@@ -216,36 +218,18 @@ def zone_task(
     )
 
 
-def zones_for_model(
-    name: str | None,
-    task: ForecastTask,
-    samples: pd.DataFrame,
-    counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    daily_zones: pd.DataFrame,
-) -> pd.DataFrame:
-    """Return a model's health-zone samples.
+def zones_for_model(samples: pd.DataFrame) -> pd.DataFrame:
+    """Return the health-zone samples in a model's forecast.
 
     A model's own zone rows in `samples` are used as they are: the
-    renewal models fit them and Chronos-2 forecasts them. A random walk
-    model with no fit is run on the zones (`zone_forecast`). Other
-    samples have no zones.
+    renewal models fit them and Chronos-2 forecasts them. Other samples
+    have none: a walk's zones are its stored zone run
+    (`bdbvhub.store.store.walk_zones`), which its callers pass instead.
 
     Parameters
     ----------
-    name : str or None
-        The registered model, None for a fit configuration with none.
-    task : ForecastTask
-        The province task.
     samples : pandas.DataFrame
-        The model's samples for `task`: provinces, and zones if it
-        forecasts them.
-    counts : pandas.DataFrame
-        Weekly zone counts at the task's vintage (`weekly_counts`).
-    zones : tuple of str
-        The hub's zone codes.
-    daily_zones : pandas.DataFrame
-        The daily zone table (`load_daily_zones`).
+        The model's samples: provinces, and zones if it forecasts them.
 
     Returns
     -------
@@ -255,7 +239,4 @@ def zones_for_model(
     own = samples["location"].map(is_zone)
     if own.any():
         return samples.loc[own, list(SAMPLE_COLUMNS)].reset_index(drop=True)
-    if walks_own_zones(name):
-        model = get_model(str(name))
-        return zone_forecast(model, task, counts, zones, daily_zones)
     return pd.DataFrame(columns=list(SAMPLE_COLUMNS))

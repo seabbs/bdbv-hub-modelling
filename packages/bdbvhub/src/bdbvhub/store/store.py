@@ -31,6 +31,10 @@ which `unpack` writes out for the submission to forecast from, so the
 submission uses the stored fit rather than fitting again. A walk's fit
 directory holds its records, and `unpack` adds its stored forecasts
 (`fitting.STORED_FORECASTS`).
+A walk's stored fit also holds its run on every hub zone (`walk_zones`),
+in a file of its own beside the fit (`zones_path`), as it holds about 20
+times the fit's rows. `read_fit` leaves it alone; `stored_zones` reads
+the zone runs of the fits `load` used, for the consumers that need them.
 Where the store has no fit for the current key, `load` uses the newest
 stored fit of that pair and says so (`StoreStatus`).
 `command` runs `bdbvhub fit-store`.
@@ -66,6 +70,7 @@ from bdbvhub.models import get_model, list_models
 from nowcastbdbv.backtest import vintage_task
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
 from nowcastbdbv.data.zones import ZoneData, load_zone_data
+from nowcastbdbv.zones import ZoneForecasts
 from nowcasteval.backtest import (
     BacktestConfig,
     load_config,
@@ -73,7 +78,7 @@ from nowcasteval.backtest import (
     real_vintages,
     run_forecasts,
 )
-from nowcastutils.base import ForecastModel, ForecastTask
+from nowcastutils.base import SAMPLE_COLUMNS, ForecastModel, ForecastTask
 from nowcastutils.files import write_csv
 from nowcastutils.hierarchy import is_zone
 
@@ -85,6 +90,8 @@ __all__ = [
     "STATUS_FILE",
     "STORE_DATA",
     "UNPACKED_FILE",
+    "ZONES_SUFFIX",
+    "ZONE_CODE",
     "ZONE_FITS_FILE",
     "StoreStatus",
     "StoredFit",
@@ -102,13 +109,20 @@ __all__ = [
     "origin_tasks",
     "plan",
     "read_fit",
+    "read_zones",
     "samplers",
     "stack_forecasts",
     "store_path",
     "stored_delays",
     "stored_models",
+    "stored_zone_delays",
+    "stored_zone_forecasts",
+    "stored_zones",
     "unpack",
+    "walk_zones",
     "write_fit",
+    "write_fit_dir",
+    "zones_path",
 ]
 
 FIT_FUNCTIONS: Final = {
@@ -116,6 +130,7 @@ FIT_FUNCTIONS: Final = {
         "build_model",
         "fit",
         "fit_files",
+        "walk_zones",
     ),
     "packages/nowcasteval/src/nowcasteval/backtest.py": (
         "_fit_rows",
@@ -146,6 +161,9 @@ RECORD_CODE: Final = "packages/bdbvhub/src/bdbvhub/submission/fitting.py"
 fit records (`fit_files`). The models with a fit directory
 (`renewal.FIT_VARIANTS`) hold the whole file in their keys."""
 
+ZONE_CODE: Final = "packages/nowcastbaselines/src/nowcastbaselines/zones.py"
+"""The zone run of a walk (`walk_zones`), in the walks' keys."""
+
 STORE_DATA: Final = "packages/nowcastbdbv/src/nowcastbdbv/data/*.csv"
 """The package's data files, which a fit may read (the province centres
 of the renewal models' gravity kernel). Every stored fit's key holds
@@ -153,6 +171,9 @@ them."""
 
 STATUS_FILE: Final = "fit-store.json"
 """What `load` used, written beside the results for the docs."""
+
+ZONES_SUFFIX: Final = ".zones.csv.gz"
+"""The suffix of a walk's zone run beside its fit (`zones_path`)."""
 
 ZONE_FITS_FILE: Final = "zone-fits.csv.gz"
 """The zone samples of the stored zone fits, which `load` writes beside
@@ -168,7 +189,8 @@ with no new release is forecast from the last release's stored fit."""
 
 ZONE_FIELDS: Final = ("zone_history", "zone_daily_history", "zone_codes")
 """Task fields in the fit key of a model only if it reads zones
-(`reads_zones`), so zone data never refits the others."""
+(`reads_zones`) or is run on them (`SAMPLE_FREE`), so zone data never
+refits the others."""
 
 PLACE_FIELDS: Final = ("imputation_delay", "places")
 """Task fields in the fit key of a model only if it reads them
@@ -397,7 +419,8 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     package's data files (`STORE_DATA`), without the loader, IO and report
     modules in `KEY_SKIP`. A model with a fit directory (a renewal
     variant or a walk) also holds the code that writes its fit records
-    (`RECORD_CODE`). The store's and the
+    (`RECORD_CODE`), and a walk the code of its zone run (`ZONE_CODE`).
+    The store's and the
     backtest's own code is keyed by function (`FIT_FUNCTIONS`), not by
     file.
 
@@ -419,6 +442,8 @@ def fit_code(model: str, root: Path | str = ".") -> list[str]:
     code = model_code(model, root, (), cli=False, skip=KEY_SKIP)
     if model in FIT_VARIANTS.values() or model in SAMPLE_FREE:
         code = sorted({*code, RECORD_CODE})
+    if model in SAMPLE_FREE:
+        code = sorted({*code, ZONE_CODE})
     data = [p.relative_to(root).as_posix() for p in Path(root).glob(STORE_DATA)]
     return sorted([*code, *data])
 
@@ -571,7 +596,7 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     """Hash the inputs of one stored fit.
 
     The task's zone data (`ZONE_FIELDS`) are hashed only for a model that
-    reads them.
+    reads them, or that the store runs on the zones (`SAMPLE_FREE`).
 
     Parameters
     ----------
@@ -600,8 +625,9 @@ def fit_key(model: ForecastModel, task: ForecastTask, code: str) -> str:
     if inputs is not None:
         head["inputs"] = inputs(task)
     digest.update(json.dumps(head, sort_keys=True).encode())
+    on_zones = zones or model.name in SAMPLE_FREE
     for f in fields(task):
-        if f.name in ZONE_FIELDS and not zones:
+        if f.name in ZONE_FIELDS and not on_zones:
             continue
         if f.name in PLACE_FIELDS and not reads_places:
             continue
@@ -690,6 +716,12 @@ class StoredFit:
     files : dict
         A submission candidate's fit directory (`fit_files`): file name
         to base64 contents. Empty for other models.
+    zones : pandas.DataFrame
+        A walk's zone run (`walk_zones`), written to its own file
+        (`zones_path`) and left out by `read_fit` (`read_zones` reads
+        it). Empty for other models.
+    zone_delays : pandas.DataFrame
+        The delay a walk learnt in its zone run, empty if it has none.
     """
 
     meta: dict[str, Any]
@@ -697,13 +729,35 @@ class StoredFit:
     fits: pd.DataFrame
     delays: pd.DataFrame
     files: dict[str, str] = field(default_factory=dict)
+    zones: pd.DataFrame = field(default_factory=pd.DataFrame)
+    zone_delays: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
-_TABLES: Final = ("forecasts", "fits", "delays")
+_TABLES: Final = ("forecasts", "fits", "delays", "zone_delays")
+
+
+def zones_path(store: Path | str, model: str, origin: str, key: str) -> Path:
+    """Return where a walk's zone run is stored, beside its fit.
+
+    Parameters
+    ----------
+    store : pathlib.Path or str
+        The store root.
+    model, origin, key : str
+        The fit.
+
+    Returns
+    -------
+    pathlib.Path
+        `<store>/<model>/<origin>/<key>.zones.csv.gz`.
+    """
+    return Path(store) / model / origin / f"{key}{ZONES_SUFFIX}"
 
 
 def write_fit(store: Path | str, stored: StoredFit) -> Path:
     """Write a fit to the store as gzipped JSON.
+
+    A walk's zone run goes to its own file (`zones_path`).
 
     Parameters
     ----------
@@ -733,6 +787,10 @@ def write_fit(store: Path | str, stored: StoredFit) -> Path:
     # No timestamp in the gzip header, so the bytes depend on the content.
     with gzip.GzipFile(path, "wb", mtime=0) as fh:
         fh.write(json.dumps(body).encode())
+    if not stored.zones.empty:
+        write_csv(
+            stored.zones, zones_path(store, m["model"], m["origin"], m["key"])
+        )
     return path
 
 
@@ -752,16 +810,42 @@ def read_fit(path: Path | str) -> StoredFit:
     body = json.loads(gzip.decompress(Path(path).read_bytes()))
 
     def table(name: str) -> pd.DataFrame:
+        if name not in body:
+            return pd.DataFrame()
         return pd.read_json(
             io.StringIO(json.dumps(body[name])),
             orient="split",
             dtype=False,
         )
 
-    forecasts, fits, delays = (table(n) for n in _TABLES)
+    forecasts, fits, delays, zone_delays = (table(n) for n in _TABLES)
     return StoredFit(
-        body["meta"], forecasts, fits, delays, body.get("files", {})
+        body["meta"],
+        forecasts,
+        fits,
+        delays,
+        body.get("files", {}),
+        zone_delays=zone_delays,
     )
+
+
+def read_zones(path: Path | str) -> pd.DataFrame:
+    """Read a walk's stored zone run, text columns as categories.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        A file `write_fit` wrote (`zones_path`).
+
+    Returns
+    -------
+    pandas.DataFrame
+        The `walk_zones` rows, none if there is no such file.
+    """
+    if not Path(path).exists():
+        return pd.DataFrame()
+    text = dict.fromkeys(TEXT_COLUMNS, str)
+    return compact_forecasts(pd.read_csv(path, dtype=text))
 
 
 def _commit() -> str:
@@ -861,9 +945,12 @@ def fit(
     fits: list[pd.DataFrame] = []
     learnt: list[pd.DataFrame] = []
     start = time.monotonic()
+    zones, zone_delays = pd.DataFrame(), pd.DataFrame()
     try:
         forecasts = run_forecasts([model], [task], fits, learnt)
         files = fit_files(model, task, sampler, time.monotonic() - start)
+        if name in SAMPLE_FREE:
+            zones, zone_delays = walk_zones(build_model(name, sampler), task)
     except Exception as err:
         return failed(meta, err)
     return StoredFit(
@@ -872,6 +959,59 @@ def fit(
         pd.concat(fits, ignore_index=True) if fits else pd.DataFrame(),
         pd.concat(learnt, ignore_index=True) if learnt else pd.DataFrame(),
         files,
+        zones,
+        zone_delays,
+    )
+
+
+def walk_zones(
+    model: ForecastModel, task: ForecastTask
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Run a walk on every hub zone of the task's provinces.
+
+    The zone run of the submission, the hub comparison, the zone backtest
+    and the docs (`nowcastbaselines.zones.zone_forecast`): each zone from
+    its own release snapshots up to the origin (`zone_daily_history`),
+    for every hub zone (`zone_codes`), whether or not it has cases.
+
+    Parameters
+    ----------
+    model : ForecastModel
+        A walk (`SAMPLE_FREE`), before it forecasts anything.
+    task : ForecastTask
+        The task at the origin (`origin_tasks`), with its zone data.
+
+    Returns
+    -------
+    tuple of pandas.DataFrame
+        The final-count zone samples as `run_forecasts` gives them
+        (`model`, `kind`, `vintage`, `reference_date`, `horizon`,
+        `location`, `target_end_date`, `sample` and `value`), none if
+        the task has no zone data, and the delay the walk learnt on the
+        zones (`delay_summary`), none if it has none.
+    """
+    from nowcastbaselines.zones import zone_forecast
+    from nowcastutils.snapshots import weekly_counts
+
+    daily = task.zone_daily_history
+    if daily is None or not task.zone_codes:
+        return pd.DataFrame(), pd.DataFrame()
+    counts = weekly_counts(daily, task.vintage)
+    samples = zone_forecast(model, task, counts, task.zone_codes, daily)
+    ref = pd.Timestamp(task.reference_date)
+    weeks = (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
+    zones = samples.assign(
+        model=model.name,
+        kind=task.kind,
+        vintage=task.vintage,
+        reference_date=task.reference_date.isoformat(),
+        horizon=weeks,
+    )
+    cols = ["model", "kind", "vintage", "reference_date", "horizon"]
+    summary = getattr(model, "delay_summary", None)
+    return (
+        zones[[*cols, *SAMPLE_COLUMNS]],
+        pd.DataFrame() if summary is None else summary,
     )
 
 
@@ -978,10 +1118,9 @@ def unpack(
 
     The fit of the current key is used when stored (same code and data,
     same fit), else the newest stored fit of the model and origin
-    (`_choose`), chosen for each model on its own. Writes the fit's
-    files, a walk's stored forecasts (`SAMPLE_FREE`,
-    `fitting.STORED_FORECASTS`) and `UNPACKED_FILE`, which says which fit
-    they came from (its key and commit, and the current key) and at which
+    (`_choose`), chosen for each model on its own. Writes the fit
+    directory (`write_fit_dir`) and `UNPACKED_FILE`, which says which fit
+    it came from (its key and commit, and the current key) and at which
     store commit.
 
     Parameters
@@ -1010,13 +1149,7 @@ def unpack(
     if not stored.files:
         return "missing", stored
     target = Path(out)
-    target.mkdir(parents=True, exist_ok=True)
-    for name, body in stored.files.items():
-        (target / name).write_bytes(base64.b64decode(body))
-    if model in SAMPLE_FREE:
-        from bdbvhub.submission.fitting import STORED_FORECASTS
-
-        write_csv(stored.forecasts, target / STORED_FORECASTS)
+    write_fit_dir(store, stored, target)
     commit = Path(store) / COMMIT_FILE
     record = {
         "model": model,
@@ -1031,6 +1164,39 @@ def unpack(
     }
     (target / UNPACKED_FILE).write_text(json.dumps(record, indent=1) + "\n")
     return "ok", stored
+
+
+def write_fit_dir(store: Path | str, stored: StoredFit, out: Path) -> None:
+    """Write a stored fit's directory, as the submission forecasts from it.
+
+    The fit's files, and for a walk (`SAMPLE_FREE`) its stored forecasts
+    (`fitting.STORED_FORECASTS`) and its zone run as the zone fits give
+    theirs (`nowcastrenewal.zones.ZONES_FILE`), if it has one.
+
+    Parameters
+    ----------
+    store : pathlib.Path or str
+        The store root.
+    stored : StoredFit
+        The fit, read from `store`.
+    out : pathlib.Path
+        The fit directory.
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    for name, body in stored.files.items():
+        (out / name).write_bytes(base64.b64decode(body))
+    meta = stored.meta
+    if meta["model"] not in SAMPLE_FREE:
+        return
+    from bdbvhub.submission.fitting import STORED_FORECASTS
+    from nowcastrenewal.zones import ZONES_FILE
+
+    write_csv(stored.forecasts, out / STORED_FORECASTS)
+    zones = read_zones(
+        zones_path(store, meta["model"], meta["origin"], meta["key"])
+    )
+    if not zones.empty:
+        write_csv(zones[list(SAMPLE_COLUMNS)], out / ZONES_FILE)
 
 
 @dataclass(frozen=True)
@@ -1162,6 +1328,144 @@ def load(
         json.dumps([vars(s) for s in status], indent=1) + "\n"
     )
     return status
+
+
+def _used(
+    results: Path | str,
+    models: Sequence[str],
+    origins: Sequence[str] | None,
+) -> list[tuple[str, str, str]]:
+    """Return the (model, origin, key) of each fit `load` used."""
+    status = Path(results) / STATUS_FILE
+    if not status.exists():
+        return []
+    return [
+        (s["model"], s["origin"], s["used"])
+        for s in json.loads(status.read_text())
+        if s.get("used")
+        and s["model"] in models
+        and (origins is None or s["origin"] in origins)
+    ]
+
+
+def stored_zones(
+    store: Path | str,
+    results: Path | str,
+    models: Sequence[str] = SAMPLE_FREE,
+    origins: Sequence[str] | None = None,
+) -> pd.DataFrame:
+    """Return the walks' stored zone runs of the fits `load` used.
+
+    `load` chooses each pair's fit (`_choose`: the current key's, else
+    the newest good one) and records it in `STATUS_FILE`. The zone runs
+    of those fits are read only here, for the consumers that need them.
+
+    Parameters
+    ----------
+    store : pathlib.Path or str
+        The store root `load` read.
+    results : pathlib.Path or str
+        Where `load` wrote `STATUS_FILE`.
+    models : sequence of str
+        The walks to read.
+    origins : sequence of str, optional
+        Only these origins. All if None.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `walk_zones` rows, text columns as categories; none if `load` has
+        not run or used no fit with a zone run.
+    """
+    return stack_forecasts(
+        [
+            read_zones(zones_path(store, m, o, k))
+            for m, o, k in _used(results, models, origins)
+        ]
+    )
+
+
+def stored_zone_delays(
+    store: Path | str,
+    results: Path | str,
+    models: Sequence[str] = SAMPLE_FREE,
+    origins: Sequence[str] | None = None,
+) -> pd.DataFrame:
+    """Return the delays the walks learnt in the zone runs `load` used.
+
+    Parameters
+    ----------
+    store, results, models, origins
+        As for `stored_zones`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The `zone_delays` of each fit, with `origin`.
+    """
+    frames = [
+        read_fit(store_path(store, m, o, k)).zone_delays.assign(origin=o)
+        for m, o, k in _used(results, models, origins)
+    ]
+    frames = [f for f in frames if not f.empty]
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+
+def stored_zone_forecasts(
+    store: Path | str,
+    results: Path | str,
+    daily_zones: pd.DataFrame,
+    models: Sequence[str] = SAMPLE_FREE,
+    origins: Sequence[str] | None = None,
+    min_horizon: int | None = None,
+    max_horizon: int | None = None,
+) -> ZoneForecasts:
+    """Return the stored zone runs as the zone backtest scores them.
+
+    Each origin keeps the zones with cases in its release and the
+    backtest's weeks, as `load` keeps them for the provinces, for the
+    zone backtest (`nowcastbdbv.zones.score_zones`).
+
+    Parameters
+    ----------
+    store, results, models, origins
+        As for `stored_zones`.
+    daily_zones : pandas.DataFrame
+        The daily zone table (`load_daily_zones`).
+    min_horizon, max_horizon : int, optional
+        The backtest's weeks (`[forecast]`). None keeps every week.
+
+    Returns
+    -------
+    ZoneForecasts
+        The runs, samples under each model's name and delays by origin.
+    """
+    from nowcastutils.snapshots import weekly_counts
+
+    low = -(10**6) if min_horizon is None else min_horizon
+    high = 10**6 if max_horizon is None else max_horizon
+    runs, samples = [], []
+    for model, origin, key in _used(results, models, origins):
+        zones = read_zones(zones_path(store, model, origin, key))
+        if zones.empty:
+            continue
+        active = set(weekly_counts(daily_zones, origin)["location"])
+        mine = zones.loc[
+            zones["location"].astype(str).isin(active)
+            & zones["horizon"].between(low, high)
+        ]
+        runs.append({"origin": origin, "model": model})
+        samples.append(
+            mine[list(SAMPLE_COLUMNS)]
+            .astype({"location": str, "target_end_date": str})
+            .assign(key=model, origin=origin)
+        )
+    delays = stored_zone_delays(store, results, models, origins)
+    return ZoneForecasts(
+        pd.DataFrame(runs, columns=["origin", "model"]),
+        (pd.concat(samples, ignore_index=True) if samples else pd.DataFrame()),
+        delays,
+    )
 
 
 def stored_delays(results: Path | str) -> pd.DataFrame:

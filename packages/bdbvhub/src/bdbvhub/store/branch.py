@@ -14,9 +14,10 @@
 
 KEYS is the JSON list of current keys, `<model>/<origin>/<key>`, and
 PLAN the matrix of planned fits, as `fit-store plan --keys --out` write
-them. Only planned files are copied. For each pair in KEYS the push
-keeps the current key's file and the newest good fit of older code,
-and deletes the rest. FIT_STORE_BRANCH names the branch (default
+them. Only planned files are copied, each fit with its zone run beside it
+(`<key>.zones.csv.gz`, a walk's). For each pair in KEYS the push keeps
+the current key's fit and the newest good fit of older code, and deletes
+the rest with their zone runs. FIT_STORE_BRANCH names the branch (default
 fit-store). Run in a checkout whose `origin` holds the branch.
 
 Standard library and git only, so a CI job with no forecast
@@ -46,6 +47,9 @@ BOT = (
     "41898282+github-actions[bot]@users.noreply.github.com",
 )
 """The name and email the store's commits are made as."""
+
+ZONES_SUFFIX = ".zones.csv.gz"
+"""A fit's zone run beside it (`bdbvhub.store.store.ZONES_SUFFIX`)."""
 
 PUSH_TRIES = 5
 """Times a push is tried, refetching the branch each time."""
@@ -118,15 +122,20 @@ def prune(
     """Copy NEW's planned fits into WORK and prune it; return those stored.
 
     For each `<model>/<origin>/<key>` in KEYS, WORK keeps that key's
-    file and the newest good fit of older code, and loses the rest.
+    file and the newest good fit of older code, and loses the rest. A
+    fit's zone run goes with it.
     """
     stored = []
     for fit in plan:
-        name = f"{fit['model']}/{fit['origin']}/{fit['key']}.json.gz"
+        stem = f"{fit['model']}/{fit['origin']}/{fit['key']}"
+        name = f"{stem}.json.gz"
         if (new / name).is_file():
             (work / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(new / name, work / name)
-            stored.append(name.removesuffix(".json.gz"))
+            zones = f"{stem}{ZONES_SUFFIX}"
+            if (new / zones).is_file():
+                shutil.copyfile(new / zones, work / zones)
+            stored.append(stem)
     for entry in keys:
         model, origin, key = entry.split("/")
         older = []
@@ -140,6 +149,10 @@ def prune(
         for _, _, path in older:
             if path != keep:
                 path.unlink()
+                zones = path.with_name(
+                    path.name.removesuffix(".json.gz") + ZONES_SUFFIX
+                )
+                zones.unlink(missing_ok=True)
     return stored
 
 

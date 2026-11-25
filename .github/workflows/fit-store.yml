@@ -3,8 +3,9 @@ name: Fit store
 # Fits each fitted model once per real origin and stores the result on
 # the fit-store branch, one file per fit, keyed by a hash of what reaches
 # the fit (bdbvhub.store.store.fit_key). The random walks fit nothing,
-# but their forecasts are stored the same way (`SAMPLE_FREE`), so the
-# submission, the backtests and Pages read one forecast of each. `plan` lists the
+# but their forecasts are stored the same way (`SAMPLE_FREE`), with their
+# zone runs beside them, so the submission, the backtests, the hub
+# comparison and Pages read one forecast of each. `plan` lists the
 # keys the store lacks, so only those are fitted: a model code change
 # refits every origin, and a new hub release adds one fit per model.
 # Pages reads the store and never fits; this workflow rebuilds it when
@@ -428,9 +429,9 @@ jobs:
       - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json rest.json
 
   # The BDBV backtests of the models that fit nothing (the walks' release
-  # snapshots and zone backtests and the pairing sensitivity), one job
-  # per cell, beside the fits and under the same write guard. The walks'
-  # forecasts at each origin are stored fits (`fit-quick`), which
+  # snapshots and the pairing sensitivity), one job per cell, beside the
+  # fits and under the same write guard. The walks' forecasts at each
+  # origin, with their zone runs, are stored fits (`fit-quick`), which
   # `backtests` loads; these cells forecast what the store does not hold. Each only
   # forecasts (`--forecast-only`), cached under a hash of the code and
   # data it reads (`bdbvhub digest --model`), so a change to one
@@ -457,14 +458,6 @@ jobs:
             run: >-
               uv run bdbvhub pairing-sensitivity --study bdbv
               --out output/parts/pairing
-          - cell: zones-randomwalknowcast
-            model: randomwalknowcast
-            run: >-
-              uv run bdbvhub zone-backtest --forecast-only --models randomwalknowcast
-          - cell: zones-randomwalk
-            model: randomwalk
-            run: >-
-              uv run bdbvhub zone-backtest --forecast-only --models randomwalk
           - cell: releases-randomwalknowcast
             model: randomwalknowcast
             run: >-
@@ -569,7 +562,8 @@ jobs:
         run: |
           p=output/parts/parts
           uv run bdbvhub score "$p"-releases-{randomwalk,randomwalknowcast}
-          uv run bdbvhub score "$p"-zones-{randomwalk,randomwalknowcast}
+          # The walks' stored zone runs of the fits `load` used.
+          uv run bdbvhub zone-backtest --store "$STORE"
           # The pairing sensitivity's blocks, for docs/pairing.md.
           mkdir -p results/pairing
           cp "$p"-pairing-bdbv/pairing/*.csv.gz results/pairing/

@@ -1,10 +1,10 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Health-zone nowcasts at the latest release, for the Nowcast page.
 
-The random walk models are run on each zone (`zone_forecast`), as in
-the submitted file. The page's interactive
-charts show every zone with a forecast or recent cases, beside the
-country and provinces (`place_chart_data`).
+The random walk models' zones are their stored zone runs
+(`bdbvhub.store.store.stored_zones`), as in the submitted file. The
+page's interactive charts show every zone with a forecast or recent
+cases, beside the country and provinces (`place_chart_data`).
 A week with no onsets in a zone has a count of 0.
 """
 
@@ -15,59 +15,17 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
-from bdbvhub.models import get_model
-from nowcastbaselines.zones import zone_forecast
 from nowcasteval.explorer import compact, trajectories
 from nowcasteval.nowcast import SUMMARY_LEVELS
-from nowcastutils.base import ForecastTask
 from nowcastutils.hierarchy import province_of
 from nowcastutils.snapshots import weekly_counts
 
 __all__ = [
     "place_chart_data",
     "zone_counts",
-    "zone_nowcast",
 ]
 
 _QCOLS = tuple(f"q{int(100 * p)}" for p in SUMMARY_LEVELS)
-
-
-def zone_nowcast(
-    model: str,
-    task: ForecastTask,
-    daily_zones: pd.DataFrame,
-    zones: tuple[str, ...],
-) -> pd.DataFrame:
-    """Forecast every zone at the task's release.
-
-    Parameters
-    ----------
-    model : str
-        A registered model.
-    task : ForecastTask
-        The province task at the latest release.
-    daily_zones : pandas.DataFrame
-        The daily zone table (`load_daily_zones`).
-    zones : tuple of str
-        The hub's zone codes (`hub_zones`).
-
-    Returns
-    -------
-    pandas.DataFrame
-        Zone samples with `model`, `kind`, `vintage`, `reference_date` and
-        `horizon` in weeks from the reference date, as `run_forecasts`.
-    """
-    counts = weekly_counts(daily_zones, task.vintage)
-    samples = zone_forecast(get_model(model), task, counts, zones, daily_zones)
-    ref = pd.Timestamp(task.reference_date)
-    weeks = (pd.to_datetime(samples["target_end_date"]) - ref).dt.days // 7
-    return samples.assign(
-        model=model,
-        kind="real",
-        vintage=task.vintage,
-        reference_date=str(task.reference_date),
-        horizon=weeks,
-    )
 
 
 def zone_counts(
