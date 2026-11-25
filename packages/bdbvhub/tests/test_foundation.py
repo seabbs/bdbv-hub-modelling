@@ -146,7 +146,7 @@ def test_registered_as_fitted_models() -> None:
 
 
 def test_only_the_hub_model_is_fitted_by_the_store() -> None:
-    # Sam, 12:36: one Chronos-2 model in the Fit store and the submission;
+    # One Chronos-2 model in the Fit store and the submission;
     # the zero-shot and layout comparisons run only in the paper's
     # workflow, which names them.
     from bdbvhub.cli import _models
@@ -1047,8 +1047,8 @@ def test_slots_checkpoints_have_their_own_releases(
         ("chronos-slots-abc", "2026-11-20T00:00:00Z", False),
     )
     monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
-    # The newest released checkpoint, slots releases included (Sam,
-    # 12:36): the submission is never a hand pin that goes stale.
+    # The newest released checkpoint, slots releases included:
+    # the submission is never a hand pin that goes stale.
     assert foundation.resolve_checkpoint("latest") == _checkpoint("slots-abc")
     pinned = foundation.resolve_checkpoint("slots-abc")
     assert pinned == _checkpoint("slots-abc")
@@ -1269,7 +1269,7 @@ def test_a_fine_tuned_complete_model_builds_the_complete_block(
 
 def test_the_hub_model_loads_the_latest_released_checkpoint() -> None:
     """`foundation` loads the newest released checkpoint by config, not a
-    hand pin that goes stale (Sam, 2026-11-24 12:36)."""
+    hand pin that goes stale."""
     import tomllib
 
     root = Path(__file__).resolve().parents[3]

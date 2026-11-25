@@ -520,7 +520,7 @@ def rt_check_from_fit(fit_dir: Path | str, data_dir: Path | str) -> str:
 
     fit, data = Path(fit_dir), Path(data_dir)
     if not (fit / RT_FILE).exists():
-        raise FileNotFoundError(f"{fit} has no {RT_FILE}: refit after #835.")
+        raise FileNotFoundError(f"{fit} has no {RT_FILE}: refit it.")
     record = json.loads((fit / "fit.json").read_text())
     diagnostics = json.loads((fit / "diagnostics.json").read_text())
     vintage = str(record["vintage"])

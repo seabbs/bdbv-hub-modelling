@@ -1,6 +1,6 @@
 """The 7-day check: a block's 7-day row against its daily rows' sums.
 
-Lead 00:55 (Sam): per checkpoint on held-out sims, (i) coherence, the
+Per checkpoint on held-out sims, (i) coherence, the
 7-day row's forecast against the 7-day sums of the same block's daily
 forecast (median ratio, and how often the sums fall in the row's 90%
 interval), and (ii) weekday leak, the roughness of the 7-day median

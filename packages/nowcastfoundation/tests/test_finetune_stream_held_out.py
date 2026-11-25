@@ -41,7 +41,7 @@ def test_held_out_blocks_are_cut_once_per_key(tmp_path):
 
 def test_the_held_out_key_hashes_the_cutting_code_not_the_trainer():
     # A trainer edit outside the cut must not re-key the saved held-out
-    # blocks (Run A re-cut them for 20 minutes after #753 and #754).
+    # blocks.
     import hashlib
     import inspect
 
@@ -57,9 +57,9 @@ def test_the_held_out_key_hashes_the_cutting_code_not_the_trainer():
 
 
 def test_the_saved_blocks_are_keyed_on_the_sims_not_the_simulator(tmp_path):
-    # Lead 13:00: Run A recut its held-out blocks at a restart because the
-    # simulator's source changed (#853), though its sims on disk had not.
-    # The blocks depend on the sims' files, which the key hashes instead.
+    # A change to the simulator's source alone must not recut the
+    # held-out blocks at a restart. The blocks depend on the sims' files,
+    # which the key hashes instead.
     from nowcastfoundation.finetune import stream as fs
 
     code = fs.cut_code_sha256()
@@ -81,8 +81,7 @@ def test_the_saved_blocks_are_keyed_on_the_sims_not_the_simulator(tmp_path):
 
 
 def test_each_trainer_constant_has_its_own_docstring():
-    # Review on #784: NEXT_CHUNK_* sat between HELD_OUT_* and their
-    # docstrings. Each module-level constant is followed by its string.
+    # Each module-level constant is followed by its string.
     import ast
     import inspect
 

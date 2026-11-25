@@ -230,7 +230,7 @@ def test_delays_for_vintage_uses_the_latest_available(
 
 @pytest.mark.usefixtures("in_root")
 def test_nowcast_notes_what_it_handled(tmp_path: Path, plain: Path) -> None:
-    # A walk run here has no zones: they are its stored fit's (#1094).
+    # A walk run here has no zones: they are its stored fit's.
     handled = json.loads((plain / "handled.json").read_text())
     assert len(handled) == 1
     assert "no health zones" in handled[0]

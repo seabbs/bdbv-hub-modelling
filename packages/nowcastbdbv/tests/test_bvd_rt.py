@@ -174,7 +174,7 @@ def test_fit_axis_reaches_the_bvd_day(tables, table, release):
 
 
 def test_the_bvd_weight_is_an_sd_inflation_of_one_and_a_half():
-    # Sam's value (#768 item 5): the BVDOutbreakSize SDs are inflated by
-    # 1.5, a power prior with tempering 1 / 1.5^2.
+    # The BVDOutbreakSize SDs are inflated by 1.5, a power prior with
+    # tempering 1 / 1.5^2.
     assert BVD.bvd_sd_inflation == 1.5
     assert not hasattr(BVD, "bvd_alpha")

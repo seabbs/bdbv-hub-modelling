@@ -44,7 +44,7 @@ def test_precision_comes_from_the_environment_auto_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Every forecast takes the device's half precision unless told:
-    # fp32 on the CPU, fp16 on an RTX 2070 (#1114).
+    # fp32 on the CPU, fp16 on an RTX 2070.
     import torch
 
     monkeypatch.delenv("PRECISION", raising=False)

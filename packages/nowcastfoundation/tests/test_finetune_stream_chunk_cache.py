@@ -27,9 +27,8 @@ def test_a_saved_chunk_loads_under_its_key_only(tmp_path):
 
 
 def test_the_chunk_in_training_stays_saved_beside_the_next(tmp_path):
-    # Lead 11:25: Run B's driver restart lost the chunk it was training
-    # (801-900): only the next chunk (901-1000) was saved, so 801-900 was
-    # cut again with the GPU idle. The last two chunks saved stay.
+    # A driver restart must not lose the chunk in training, or it is cut
+    # again with the GPU idle. The last two chunks saved stay.
     pairs, empty = _pairs()
     for name in ("a", "b", "c"):
         fs.save_chunk(tmp_path, {"outbreaks": [name]}, pairs, empty)

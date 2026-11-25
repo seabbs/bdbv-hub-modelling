@@ -213,7 +213,7 @@ def test_loss_runs_carry_checkpoint_losses_by_layout_and_level(tmp_path):
 
 
 def test_an_offloaded_run_s_losses_reach_the_loss_plot(tmp_path):
-    # WP10: the trainer logs no held-out losses; the evaluate rules write
+    # The trainer logs no held-out losses; the evaluate rules write
     # them per step, and the plot reads them as if logged.
     folder = tmp_path / "run"
     train = folder / "train"
@@ -286,8 +286,8 @@ def test_the_mean_rate_leaves_out_the_gaps_of_restarts():
 
 
 def test_the_recent_rate_starts_at_the_trainer_s_resume(tmp_path):
-    # Run A stopped 10:09 to 11:10: a window spanning it gave 0.10 steps/s
-    # and an ETA of days. The rate is over the steps since the resume.
+    # A window spanning a stop would give a low rate and an ETA of
+    # days. The rate is over the steps since the resume.
     before = [(0.0, 0.0), (600.0, 600.0)]
     after = [(4200.0, 600.0), (4300.0, 680.0), (4400.0, 760.0)]
     rate, span = training.recent_rate(

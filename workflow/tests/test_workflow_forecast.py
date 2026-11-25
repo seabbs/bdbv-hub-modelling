@@ -100,7 +100,7 @@ def test_jax_starts_with_the_cuda_platform_list_without_cuda():
 
 
 SCORING_RULES = ("score_germany", "score_run_germany")
-"""The German units, on the scoring device while a run trains (#1114)."""
+"""The German units, on the scoring device while a run trains."""
 
 
 def _rule_text(name: str) -> str:
@@ -132,7 +132,7 @@ EVALUATION_RULES = (
     "validation_forecasts_base",
 )
 """A checkpoint's held-out scoring: on the CPU while a run trains, a
-whole GPU once none does, never pausing training (#1114)."""
+whole GPU once none does, never pausing training."""
 
 
 def test_evaluation_never_pauses_training():

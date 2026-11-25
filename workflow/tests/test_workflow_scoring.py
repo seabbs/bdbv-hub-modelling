@@ -169,7 +169,7 @@ def test_evaluation_runs_right_after_the_hand_offs():
 
 def test_code_keys_ignore_modules_the_jobs_never_import():
     # A change to the trainer must not rerun the German reference or the
-    # BDBV check, which never import it (#1114).
+    # BDBV check, which never import it.
     from flowlib import scoring
 
     from nowcastutils import codekey

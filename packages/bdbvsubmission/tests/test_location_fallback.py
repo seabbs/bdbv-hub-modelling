@@ -1,6 +1,6 @@
-"""A check that fails at one location falls back there only (Sam,
-2026-11-24): the failing province's subtree comes from the next
-candidate in the chain, and national is re-summed."""
+"""A check that fails at one location falls back there only: the
+failing province's subtree comes from the next candidate in the chain,
+and national is re-summed."""
 
 from __future__ import annotations
 

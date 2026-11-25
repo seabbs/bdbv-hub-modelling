@@ -265,7 +265,7 @@ def _source_of(model: str) -> str:
     """Return the model's source (daily or weekly), which sets its colour.
 
     The `foundation` models read the daily releases; scores stored under
-    the old names keep the source their name says.
+    a name with a source keep the source their name says.
     """
     for source in ("daily", "weekly"):
         if f"_{source}_" in model:

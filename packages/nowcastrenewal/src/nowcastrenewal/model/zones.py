@@ -697,7 +697,7 @@ def extend_vintage(
 
     The silent zones are never seeded and have no data, so the zone model
     of the extended vintage has the fitted model's sampled sites and the
-    fit's posterior drives it (#768 item 8). They receive infections only
+    fit's posterior drives it. They receive infections only
     through the fitted importation: the kernel is normalised per origin
     over every zone (`gravity_kernel` with `receivers`, as the fit's
     was), its fitted block is the fit's kernel and silent zones send

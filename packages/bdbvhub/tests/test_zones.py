@@ -263,7 +263,7 @@ def test_only_the_random_walks_forecast_their_own_zones() -> None:
 
 
 def test_a_walk_s_zones_are_not_run_here(open_task: ForecastTask) -> None:
-    # A walk's zone run is its stored fit's (`store.fit`, #1094), which
+    # A walk's zone run is its stored fit's (`store.fit`), which
     # the submission and the docs read: none is made from its provinces.
     prov = RandomWalkNowcast().forecast(open_task)
     assert zones_for_model(prov).empty

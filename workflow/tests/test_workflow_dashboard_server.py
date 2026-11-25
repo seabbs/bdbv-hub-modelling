@@ -100,8 +100,8 @@ def test_sections_send_only_what_changed(server):
 
 
 def test_the_page_never_waits_on_a_build(tmp_path):
-    # Sam's page hung for minutes: the nowcasts rebuild (~450 s) held the
-    # lock the page request waited on. A request serves the last page
+    # A rebuild (the nowcasts take ~450 s) must not hold up the page. A
+    # request serves the last page
     # built, while another build holds the lock.
     ctx = _machine(tmp_path)
     ctx.once = False
@@ -168,7 +168,7 @@ def _bare(cls, path):
 def test_every_kind_of_client_leaving_is_dropped_quietly(
     tmp_path, capsys, gone
 ):
-    # Lead 02:50: the server must not need a respawn loop. A client that
+    # The server must not need a respawn loop. A client that
     # leaves in any way is not a server error.
     class Gone:
         def write(self, _b):
@@ -201,7 +201,7 @@ def test_a_client_gone_while_an_error_is_sent_is_dropped(tmp_path, monkeypatch):
 
 
 def test_the_server_listens_where_the_machine_settings_say(tmp_path):
-    # Lead 02:50: the host and port are machine settings (outside the
+    # The host and port are machine settings (outside the
     # repo), so no proxy forwards to a loopback-only server.
     from flowlib import localconfig
 

@@ -4,7 +4,7 @@
 # "huggingface" reads [huggingface] `repo` at its pinned `revision`, cached
 # by huggingface_hub; "github" the release `hash` names; "local" the
 # training segment folder `local`. Every source is checked against the
-# adapter's SHA-256. GitHub until a Hub repository is chosen (Sam's pick).
+# adapter's SHA-256. GitHub while no Hub repository is set.
 source = "github"
 
 # The GitHub release of the checkpoint
@@ -12,7 +12,7 @@ source = "github"
 # newest released checkpoint on seabbs/bdbv-hub-modelling by publish date
 # (`chronos-ft-<hash>` or `chronos-slots-<hash>`), so each new release,
 # interim or final, is picked up and refits those models, never a hand pin
-# that goes stale (Sam, 2026-11-24). A settings hash (`slots-<hash>` or
+# that goes stale. A settings hash (`slots-<hash>` or
 # `<hash>`) pins that release instead. Either way the adapter is checked
 # against the release's sha256sums.txt. The Fit store and the submission
 # resolve it once per run (`bdbvhub finetuned-checkpoint`,

@@ -1,4 +1,4 @@
-"""Offloaded evaluation results and how readers merge them (WP10)."""
+"""Offloaded evaluation results and how readers merge them."""
 
 import json
 

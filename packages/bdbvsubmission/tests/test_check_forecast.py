@@ -694,9 +694,8 @@ def test_poisson_limits_of_the_recent_maximum_replace_the_floor() -> None:
 def test_plausibility_only_warns_and_never_rules_a_candidate_out(
     tmp_path: Path,
 ) -> None:
-    """Plausibility is for a human to read in the PR body (Sam,
-    2026-11-24): a wildly high forecast warns, and every other check is
-    unchanged."""
+    """Plausibility is for a human to read in the PR body: a wildly high
+    forecast warns, and every other check is unchanged."""
     s = statuses(sub(tmp_path, growth=8.0))
     assert s["plausible"] == "warn"
     assert "fail" not in {s[n] for n in ("schema", "values", "samples")}

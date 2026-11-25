@@ -71,7 +71,7 @@ def _copy_repo(tmp_path: Path) -> Path:
 
 
 def test_code_digest_keeps_its_key_when_modules_move(tmp_path: Path) -> None:
-    # The packages move (WP2b) renames modules and rewrites import lines
+    # Moving modules between packages renames them and rewrites import lines
     # without changing what a fit runs, so no stored fit refits.
     root = _copy_repo(tmp_path)
     src = root / "packages/nowcastbaselines/src/nowcastbaselines"
@@ -117,7 +117,7 @@ def _cut_defs(path: Path, names: set[str]) -> str:
 def test_code_digest_keeps_its_key_when_a_function_moves(
     tmp_path: Path,
 ) -> None:
-    # Splitting a module (WP2a) moves functions between files, with the
+    # Splitting a module moves functions between files, with the
     # third-party imports they use, so no stored fit refits.
     root = _copy_repo(tmp_path)
     src = root / "packages/nowcastbaselines/src/nowcastbaselines"
@@ -159,7 +159,7 @@ def _replace(path: Path, old: str, new: str) -> None:
 def test_code_digest_keeps_its_key_when_a_module_moves_package(
     tmp_path: Path,
 ) -> None:
-    # The packages move (WP2b) puts modules in new packages that re-export
+    # Modules in workspace packages are re-exported
     # them from `__init__.py`. The target's own `__init__.py` holds only
     # a docstring, as every workspace package's does.
     root = _copy_repo(tmp_path)
@@ -1522,7 +1522,7 @@ def _sorted_samples(frame: pd.DataFrame) -> pd.DataFrame:
 def test_a_walk_stores_its_zone_run_in_a_file_of_its_own(
     name: str, tasks: dict[str, ForecastTask], tmp_path: Path
 ) -> None:
-    """A walk's zone run is made once, by its stored fit (#1094).
+    """A walk's zone run is made once, by its stored fit.
 
     It is the run on every hub zone of the stored task, as the
     submission's zones are. It sits in its own file beside the fit, as it

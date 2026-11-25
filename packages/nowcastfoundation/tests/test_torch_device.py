@@ -1,4 +1,4 @@
-"""The torch device comes from config, never detected (Sam, 2026-11-24)."""
+"""The torch device comes from config, never detected."""
 
 import pytest
 

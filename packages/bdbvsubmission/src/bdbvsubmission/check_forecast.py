@@ -529,8 +529,7 @@ def check_plausible(
     $L$ over `plausible_low_ratio` where that is a case or more, unless
     it is at least the count already observed for that week. Locations
     without observed data are skipped. A breach only warns: the numbers
-    go in the PR body for a human to read, and never rule a model out
-    (Sam, 2026-11-24).
+    go in the PR body for a human to read, and never rule a model out.
     """
     n_recent = int(c["plausible_recent_weeks"])
     level = float(c["plausible_poisson_level"])

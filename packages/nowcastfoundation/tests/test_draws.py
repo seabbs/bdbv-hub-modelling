@@ -196,7 +196,7 @@ def test_the_longest_delay_is_the_first_option_past_the_99th_centile():
 def test_long_delay_tails_are_a_real_share(grid):
     """Over a sixth of draws have a 99% delay of 60 days or more (Germany's
     is 61 to 81), some with a fast head as well, and the longest delay
-    reaches the grid's last option. The lognormal tail is trimmed (#1043),
+    reaches the grid's last option. The lognormal tail is trimmed,
     so fast-head long-tail lognormals are fewer, but still a real share."""
     rng = draws.generator(8)
     q99, head, longest = [], [], []
@@ -253,7 +253,7 @@ def test_incubation_varies_by_place_and_age(grid):
 
 
 def test_settling_and_oscillating_paths_are_common(grid):
-    # Lead 14:05: slow declines to R = 1 and oscillation around it are
+    # Slow declines to R = 1 and oscillation around it are
     # common shapes, in every window; each trajectory has a rising
     # counterpart for early outbreaks not brought under control.
     levels = grid["factors"]["trajectory"]
@@ -284,7 +284,7 @@ def test_spike_pieces_are_rare_and_small(grid):
 
 
 def test_controlled_paths_start_near_r_1_8(grid):
-    # Lead 01:20: slow declines from about R = 1.8 to 1.
+    # Slow declines from about R = 1.8 to 1.
     rng = draws.generator(32)
     starts = []
     for _ in range(3_000):
@@ -299,7 +299,7 @@ def test_controlled_paths_start_near_r_1_8(grid):
 
 
 def test_reporting_delay_shapes_are_not_capped_at_2(grid):
-    # The joint model reports any gamma shape (#614), so the shape below
+    # The joint model reports any gamma shape, so the shape below
     # 2 that epinowcast's simulate branch needed is gone.
     assert grid["distributions"]["delay_shape"]["dist"] == "lognormal"
     shape = _scipy(grid["distributions"]["delay_shape"])
@@ -308,7 +308,7 @@ def test_reporting_delay_shapes_are_not_capped_at_2(grid):
 
 
 def test_strata_mostly_deviate_moderately_from_a_shared_path(grid):
-    # Lead 01:20: moderate strata deviations. Strata are mostly linked
+    # Moderate strata deviations. Strata are mostly linked
     # (one outbreak), not each an outbreak of its own.
     link = grid["factors"]["strata_link"]
     assert link["independent"] / sum(link.values()) <= 0.25

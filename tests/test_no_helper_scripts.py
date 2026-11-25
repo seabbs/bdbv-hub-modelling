@@ -1,4 +1,4 @@
-"""WP4.3c (#343): no helper scripts outside the packages and the workflow.
+"""No helper scripts outside the packages and the workflow.
 
 Each former `scripts/` or `tools/` file is a workflow rule, a package
 command, a test helper beside its tests, or gone.

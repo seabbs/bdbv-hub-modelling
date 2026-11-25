@@ -1,4 +1,4 @@
-# Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
+# Offloaded held-out evaluation: with `finetune.eval: offload`,
 # score step 0 and each checkpoint, in the `evaluate` group
 # (WORKER_GROUPS places it). With the 7-day check and the validation
 # forecasts, each runs on the checkpoint scoring device

@@ -184,7 +184,7 @@ A suggested general line for the model metadata's `methods_long`:
 
 - **Fit monitoring and the matrix.** These follow `epiforecasts/BVDOutbreakSize`: `docs.yml`, `docs/fits/convergence.jl`, `docs/fits/check_convergence.jl` and `scripts/fetch_fits.sh`.
   That means the same fail and warn thresholds, two levels, and treating a fit that cannot be judged as a failure.
-  It also means one matrix job per fit, content-addressed fits (now the fit store), a once-a-minute progress heartbeat, short-lived fit artefacts, and a report in the job summary.
+  It also means one matrix job per fit, content-addressed fits (the fit store), a once-a-minute progress heartbeat, short-lived fit artefacts, and a report in the job summary.
 - **Fork and PR mechanics.** These follow `epiforecasts/cityforecasts` (`bin/submit_to_hub.sh` and `.github/workflows/submit-to-hub.yaml`).
   That means a classic PAT, a branch per round cut from the hub's `main`, a force push, finding the open PR by head branch and fork owner, and `gh pr create --head owner:branch`.
 - **Scheduled fits on hosted runners with artefacts.** `seabbs/ecdc-weekly-growth-forecasts` (`.github/workflows/forecast.yaml`) shows this works.

@@ -73,7 +73,7 @@ def test_the_interim_checkpoint_is_the_saved_state_s_adapter(tmp_path):
 def test_the_interim_checkpoint_verifies_and_releases_like_a_saved_one(
     tmp_path,
 ):
-    # Lead 01:50 (Sam): the interim is the hub's fine-tuned model, so it
+    # The interim is the hub's fine-tuned model, so it
     # is released through the workflow, named for its settings hash.
     from nowcastfoundation.finetune import verify
 

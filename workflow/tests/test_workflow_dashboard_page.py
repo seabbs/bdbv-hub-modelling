@@ -544,7 +544,7 @@ def test_the_trainer_status_is_folded_and_the_loss_open(tmp_path):
 
 
 def test_checkpoint_tables_show_the_7_day_check(tmp_path):
-    # Lead 00:55: the 7-day row against its daily rows' sums (median
+    # The 7-day row against its daily rows' sums (median
     # ratio, sums inside its 90% interval) and its roughness over the
     # truth's (1 is as smooth as the truth), from the checkpoint's
     # seven-day.json (rule seven_day_check).
@@ -565,7 +565,7 @@ def test_checkpoint_tables_show_the_7_day_check(tmp_path):
 
 def test_the_trainer_s_losses_are_labelled_validation(tmp_path):
     # The trainer scores the grid's validation round; the held-out (test)
-    # set is the paper's alone (lead 15:20), so no panel says held-out.
+    # set is the paper's alone, so no panel says held-out.
     out = page.build(_machine(tmp_path))
     text = re.sub(r"<script.*?</script>", "", out, flags=re.S)
     assert "Validation loss" in out
@@ -573,7 +573,7 @@ def test_the_trainer_s_losses_are_labelled_validation(tmp_path):
 
 
 def test_a_just_restarted_run_shows_its_position_from_the_status(tmp_path):
-    # Lead 00:20: after a restart the new segment log has no step lines,
+    # After a restart the new segment log has no step lines,
     # and the page showed an old evaluation's step (37,200, 1592/3200)
     # with an ETA from it. Step and simulations come only from the
     # trainer's status; with no step since the restart there is no ETA.
@@ -606,7 +606,7 @@ def test_a_just_restarted_run_shows_its_position_from_the_status(tmp_path):
 
 
 def test_the_etas_come_from_the_status_and_the_rate_alone(tmp_path):
-    # Lead 01:05 sweep (14): no step or simulations interpolated from the
+    # No step or simulations interpolated from the
     # checkpoints and logged chunks. The status gives the step and the
     # simulations (so its steps a simulation), the log the rate.
     ctx = _machine(tmp_path)

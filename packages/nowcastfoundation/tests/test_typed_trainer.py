@@ -1,4 +1,4 @@
-"""The fine-tuning trainer modules are type-checked (#631).
+"""The fine-tuning trainer modules are type-checked.
 
 Every trainer module is typed, so none is left in a mypy override.
 """

@@ -1,8 +1,4 @@
-"""The workflow's fine-tune settings are the agreed design.
-
-17 Nov 2026, then lead 19:20/19:24 (24 Nov, Sam): the next run trains on
-4,800 simulations with 32 cuts each.
-"""
+"""The workflow's fine-tune settings: 4,800 simulations with 32 cuts each."""
 
 import shlex
 import subprocess
@@ -18,7 +14,7 @@ CONFIG = yaml.safe_load((ROOT / "workflow" / "config.yaml").read_text())
 DESIGN = {
     "holdout": 90,
     "outbreaks": 4800,
-    # Run A's and Run B's checkpoints, then the end.
+    # The checkpoints, then the end.
     "prefixes": [100, 200, 400, 800, 1600, 3200, 4800],
     "loss_horizon_days": 7,
     "quiet_min_cases": 10,
@@ -39,8 +35,7 @@ DESIGN = {
 def test_every_setting_trains_on_one_fixed_count():
     # A fixed number of simulations, not a time budget, ending a chunk.
     assert DESIGN["outbreaks"] == DESIGN["prefixes"][-1] == 4800
-    # Checkpoints double from 100 to 3,200, as Run A's and Run B's, then
-    # the end, each ending a chunk.
+    # Checkpoints double from 100 to 3,200, then the end, each ending a chunk.
     assert DESIGN["prefixes"][:-1] == [100 * 2**i for i in range(6)]
     assert all(p % DESIGN["chunk"] == 0 for p in DESIGN["prefixes"])
     assert "hours" not in CONFIG["finetune"]

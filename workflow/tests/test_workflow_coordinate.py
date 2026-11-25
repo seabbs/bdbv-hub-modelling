@@ -70,7 +70,7 @@ def test_a_tick_that_raises_backs_off_and_goes_on(tmp_path):
 
 
 def test_no_timer_runs_ticks_and_each_task_is_named_once():
-    # The coordinator run replaced the timer (schedule.py), and a task
+    # The coordinator run, not a timer (schedule.py), runs ticks, and a task
     # named twice in a Taskfile silently loses its first definition.
     assert not (ROOT / "workflow" / "scripts" / "schedule.py").exists()
     for path in [

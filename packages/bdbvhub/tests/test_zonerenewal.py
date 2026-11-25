@@ -163,7 +163,7 @@ def test_zone_fit_sums_fitted_and_silent_zones_to_provinces(
     model = get_model("renewal")
     assert isinstance(model, zr.ZoneRenewalModel)
     samples = model.forecast(task)
-    # #768 item 8: no random-walk layer. The run takes every zone of the
+    # No random-walk layer. The run takes every zone of the
     # task: it fits the zones with a recent case and draws the silent
     # ones from the fitted importation, in one forecast pass.
     (given,) = seen
@@ -544,7 +544,7 @@ def test_silent_zones_have_no_onset_in_the_walk_window(
 def test_renewalsp_fits_each_zone_on_its_own(
     task: ForecastTask, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # #768 item 9, staged: the single-patch model fitted to each zone with
+    # The single-patch model fitted to each zone with
     # a recent case on its own, beside renewalsp. Silent zones keep the
     # walk's introductions, and provinces are zone sums, so no province
     # sample is split across zones.
