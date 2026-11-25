@@ -3,6 +3,10 @@
 The manuscript and supporting information for the paper on fine-tuning Chronos-2 on simulated outbreaks for nowcasting.
 One Snakemake workflow runs its evaluation, from each study's data to the figures, tables and numbers the paper quotes, and then renders the paper.
 
+In this project the paper reports the fine-tuned Chronos-2 model (`nowcastfoundation`) against the baselines (`nowcastbaselines`) on held-out simulations, the German benchmark (`nowcastgermany`) and the BDBV outbreak (`nowcastbdbv`).
+Its rules are a module of the [workflow](../workflow/README.md), and the Site workflow renders it into the docs site at `/paper/`.
+Its code layout is the last section below.
+
 ## Reproducing the paper
 
 From the repository root, with [uv](https://docs.astral.sh/uv/), [Task](https://taskfile.dev), [Quarto](https://quarto.org), git and a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN` or a `gh` login):

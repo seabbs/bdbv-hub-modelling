@@ -1,6 +1,11 @@
 # Workflows
 
-Each workflow, when it runs and what it writes.
+The GitHub Actions workflows that test the code, build the docs site, keep the fit store and submit to the BDBV Modeling Hub.
+
+In this project they are what runs without a person: every pull request's checks, the site every 6 hours, and the weekly hub submission.
+They call the same Taskfile tasks and package commands as a local run, with shared setup in `.github/actions/` and helper scripts in `.github/scripts/`.
+
+Each workflow, when it runs and what it writes:
 
 | Workflow | File | When it runs | What it does and writes |
 | --- | --- | --- | --- |

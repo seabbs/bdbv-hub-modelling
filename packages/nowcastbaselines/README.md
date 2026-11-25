@@ -1,7 +1,12 @@
 # nowcastbaselines
 
-The random walk and the random walk nowcast, the baselines every other model is compared with.
-It is for anyone who needs a simple, well-tested forecast of weekly counts revised as later releases report more cases.
+The random walk, the random walk nowcast and a JAX port of baselinenowcast.
+Use it for a simple, well-tested forecast of weekly counts that are revised as later releases report more cases.
+
+In this project they are the baselines every other model is scored against.
+The random walk nowcast is submitted to the hub each week as `seabbs-rwnowcast`.
+The random walks are also the last fallbacks of the renewal track ([`policy.toml`](../bdbvsubmission/policy.toml)).
+The German benchmark and the paper's studies score relative to `randomwalknowcast`.
 
 ## Start here
 

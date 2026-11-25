@@ -3,7 +3,11 @@
 One Snakemake workflow simulates outbreaks, fine-tunes Chronos-2 on them, publishes the checkpoints, scores them and builds the paper.
 The paper's rules (`paper/workflow/Snakefile`) are a module of it, with their settings in `paper/workflow/config.yaml`.
 
-In short:
+In this project it makes the fine-tuned Chronos-2 checkpoints (`nowcastfoundation`) and the paper's results.
+Simulation and fine-tuning run on our own CPU and GPU hosts, not on CI, and publish each round and checkpoint as a GitHub release.
+The Site workflow runs the paper's targets through [`scripts/paper_run.py`](scripts/paper_run.py), and the Tests workflow runs its tests and dry runs.
+
+Where to look:
 
 - Entry point: `Snakefile`, run through `task workflow:<target>` (`Taskfile.yml`) with a profile from `profiles/`.
 - Shared rules any study uses: `rules/` (simulate, finetune, evaluate, publish, score, monitor, report).
