@@ -75,7 +75,10 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
     However, there is no general software framework for them, and they have not been extended to the wide range of reporting patterns seen in practice, such as changing delays, report-day effects and mixed reporting cadences.
   - Marginal generative models specify expected counts by reference date and spread them across delays, treating each cell of the reporting triangle as a separate draw [@mcgough2020nowcasting; @gunther2021nowcasting; @lison2024; @abbottepinowcast].
     Run forward, they simulate how outbreaks are reported, and can include a renewal process, parametric and time-varying delays, report-day effects and pooling across places and age groups [@lison2024; @abbottepinowcast; @Bergstrom2022].
-    This makes them a natural basis for simulating training data, and it is the structure our simulations follow.
+  - epinowcast is a community-developed software framework for marginal generative nowcasting models [@abbottepinowcast].
+    It is flexible, and supports a wide range of reporting patterns, including changing delays, report-day effects, hierarchical pooling, missing reference dates and user-defined reporting schedules.
+    It has been used in a wide range of applications, including COVID-19 hospitalisations in Germany and Switzerland, and norovirus in England [@Wolffram2023; @lison2024; @Mellor2025].
+    This makes it a natural basis for simulating training data, and our simulations follow its structure.
 
 - **What we did.**
   - We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.
