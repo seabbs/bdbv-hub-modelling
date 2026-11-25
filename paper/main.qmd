@@ -442,6 +442,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Correlated trajectories changed scores by [X] (SI, Impact of correlated trajectories).
   - The random walk nowcast, baselinenowcast extended to forecast and adapted to sparse data, scored [X] against the other Ebola hub submissions [@Johnson2025] (SI, Baselines).
   - The renewal models built on our port of epinowcast, stabilised with BVDOutbreakSize and adapted to the hub's imputation of onset dates, scored [X] against the other Ebola hub submissions [@BVDOutbreakSize; @lison2024] (SI, Renewal model).
+    Stabilising with BVDOutbreakSize changed scores by [X], and pooling and transmission between places by [X] (SI, Renewal model variants).
 - **Strengths and limitations of the evaluation.**
   - We used one foundation model, one source of synthetic data and two case studies.
     However, the case studies differ in pathogen, reporting system and cadence, and one was in real time.
