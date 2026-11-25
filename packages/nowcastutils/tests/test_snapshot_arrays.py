@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nowcastutils.releases import release_cutoff
+from nowcastutils.releases import release_cutoff, release_cutoffs
 from nowcastutils.snapshots import blocks, snapshot_arrays, weekly_sums
 
 VINTAGES = ("2026-08-18", "2026-10-09", "2026-10-17", "2026-10-24")
@@ -31,6 +31,17 @@ def snap(daily: pd.DataFrame):
 def test_cutoff_is_the_release_s_latest_onset_day(daily: pd.DataFrame) -> None:
     cuts = [release_cutoff(daily, v).isoformat() for v in VINTAGES]
     assert cuts == ["2026-08-18", "2026-10-07", "2026-10-16", "2026-10-24"]
+
+
+def test_cutoffs_are_each_release_s_in_one_pass(daily: pd.DataFrame) -> None:
+    # One pass over the rows gives each release's cut-off, as one
+    # lookup a release does; vintages read as dates match their labels.
+    one = [release_cutoff(daily, v) for v in VINTAGES]
+    assert release_cutoffs(daily, VINTAGES) == one
+    typed = daily.astype({"vintage": "string"})
+    assert release_cutoffs(typed, VINTAGES) == one
+    with pytest.raises(KeyError):
+        release_cutoffs(daily, ["2020-01-01"])
 
 
 def test_ages_count_from_the_cutoff_not_the_release_date(snap) -> None:
