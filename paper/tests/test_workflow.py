@@ -384,3 +384,51 @@ def test_every_forecasting_rule_declares_its_threads():
     assert text.count("gpu=FORECAST.gpu") == text.count(
         "threads: FORECAST.threads"
     )
+
+
+def test_the_pages_render_computes_nothing_the_workflow_hosts_make(
+    tmp_path: Path,
+) -> None:
+    # Pages renders with paper/workflow/pages.yaml: the German benchmark
+    # and the figures, never a simulation, a training run or what reads
+    # them, which pend in the paper.
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "results": str(tmp_path / "results"),
+                "build": str(tmp_path / "build"),
+                "germany": {
+                    "data": str(tmp_path / "germany"),
+                    "results": str(tmp_path / "germany-results"),
+                },
+            }
+        )
+    )
+    base = str(PAPER / "workflow" / "config.yaml")
+    pages = str(PAPER / "workflow" / "pages.yaml")
+    res = _snakemake(
+        "render",
+        "-n",
+        "--config",
+        "render=development",
+        "--configfile",
+        base,
+        str(cfg),
+        pages,
+    )
+    assert res.returncode == 0, res.stderr
+    log = res.stdout + res.stderr
+    for rule in ("germany_development", "pairing_germany", "publish_paper"):
+        assert f"rule {rule}" in log
+    for rule in (
+        "simulate_batch",
+        "fetch_batch",
+        "train_segment",
+        "evaluate_checkpoint",
+        "synthetic_forecasts_development",
+        "pairing_synthetic",
+        "si_copula",
+        "sim_realism",
+    ):
+        assert f"rule {rule}:" not in log

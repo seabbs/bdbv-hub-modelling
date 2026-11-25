@@ -329,6 +329,30 @@ def test_the_evidence_reads_the_workflow_rules_outputs() -> None:
     }
 
 
+def test_with_no_development_simulations_the_copula_scores_pend(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    germany = tmp_path / "germany.toml"
+    split = CONFIG["heldout"]["germany_from"]
+    germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
+    (tmp_path / "packages" / "nowcastfoundation" / "config").mkdir(parents=True)
+    (
+        tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
+    config = copy.deepcopy(CONFIG)
+    config["germany"]["config"] = str(germany)
+    config["synthetic"]["simulations"]["development"] = None
+    monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+    flow = PaperFlow.load(
+        config, {}, tmp_path, lambda f: f.replace("$ROOT", str(tmp_path))
+    )
+    assert flow.synthetic["simulations"]["development"] is None
+    files = flow.workflow_evidence()
+    # The German rho_p needs no simulation; the walks' scores do.
+    assert "copula_rho" in files
+    assert "si_copula" not in files
+
+
 def test_the_copula_evidence_reads_real_german_data_only() -> None:
     files = _flow().workflow_evidence()
     assert files["si_copula"].endswith("evidence/si-copula.csv")

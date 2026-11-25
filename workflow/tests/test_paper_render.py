@@ -120,6 +120,16 @@ def test_paper_target_and_cores_are_passed(repo: Path) -> None:
     assert "--config render=paper --cores 2 " in snake
 
 
+def test_pages_reads_its_own_config(repo: Path) -> None:
+    # Pages leaves out what the workflow's hosts make (paper/workflow/
+    # pages.yaml); `task paper` reads the paper config alone.
+    out = _run(repo, "development", "--pages")
+    assert out.returncode == 0, out.stderr
+    (snake,) = [c for c in _calls(repo) if "snakemake" in c]
+    assert "--configfile paper/workflow/pages.yaml" in snake
+    assert "--config render=development " in snake
+
+
 def test_an_unknown_target_fails(repo: Path) -> None:
     out = _run(repo, "final")
     assert out.returncode != 0
@@ -145,7 +155,7 @@ def test_pages_and_the_taskfile_run_the_script() -> None:
         for s in steps
         if s.get("name") == "Run the paper workflow and render the paper"
     ]
-    assert 'paper_run.py --render "$TARGET"' in paper["run"]
+    assert 'paper_run.py --render "$TARGET" --pages' in paper["run"]
     # The script path is from the repository root.
     assert "working-directory" not in paper
     assert "snakemake" not in paper["run"]
