@@ -9,13 +9,13 @@ This section is for readers who want to know how the renewal models submitted to
 
 ## Where to start
 
-- To understand the models, start with [Methods](methods.md), which follows the data from the hub to the submission.
+- To understand the models, start with the paper's [supporting information](../paper/si.html#renewal-model), linked from [Methods](methods.md).
 - To fit one, start with `bdbvhub fit` ([CLI](../development/cli.md)) or `nowcastrenewal.forecaster` in [Python](../nowcastrenewal/reference/).
 
 ## In this section
 
-- [Methods](methods.md): how the models work, from data to submission, with their limitations.
-- [Methods reference](../methods/model.md): the zone model, its single-patch province form, and the BVDOutbreakSize-informed model, with their equations.
+- [Methods](methods.md): what the models are, with a link to their methods in the paper's supporting information, and how they are submitted.
+- [Methods reference](../methods/model.md): what the fits give the site and the hub beyond the supporting information, such as the weekly Rt target.
 - [Implementation](../methods/implementation.md): how the models are built in code, computed and sampled.
 
 The code is in [nowcastrenewal](../packages/index.md#nowcastrenewal).

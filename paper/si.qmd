@@ -35,6 +35,8 @@ The nowcast uses our port of the baselinenowcast method [@Johnson2025], with one
 $C_{p,r}(t)$ is the count of place $p$ with onset on day $t$ at release $r$, and $Y_{p,r}(w)$ its sum over week $w$.
 Release $r$ has cut-off $c_r$, its latest onset day, and the forecast's latest release is $o$.
 Two consecutive releases are $s = c_{r+1} - c_r$ days apart, and only pairs with $1 \le s \le D$, $D = 42$ days, inform the delay.
+A pair further apart keeps its counts in the data.
+Where no pair is that close, the delay is fitted to the longer pairs instead, as a day of every age at their first release is final at their second.
 
 **Delay.**
 With $\Delta_p(j) \ge 0$ the daily log growth at age $j$, and $\Delta_p(j) = 0$ for $j \ge D$, for each gap $s$ and age $x < D$,
@@ -96,6 +98,17 @@ Places below that level are forecast on their own, not summed to their parent.
 - Held-out simulations: the places are the intermediate level, and the leaves are forecast on their own.
   Releases are weekly.
 
+**Limitations.**
+
+- While the release history in the delay window is shorter than $D$, no chain to the final count can be checked against a final count.
+- Each delay factor rests on one onset day per age per pair, and the youngest ages rest on few cases even nationally.
+- The cut-off is the latest onset day, which can be earlier than the true last report day.
+- The chain ladder treats reporting speed as fixed by age, but speed and backlogs vary between releases.
+- The observation model is learnt from the earlier releases, which may be few.
+- In BDBV the counts include the hub's imputed onsets, which are re-drawn as cases gain onsets, so changes between releases mix reporting with imputation.
+- The walk has no drift.
+  Its spread comes from 8 weekly changes, net of a delta-method Poisson noise term that assumes no extra dispersion in the reported counts.
+
 ### Renewal model
 
 We submitted renewal models built on our port of epinowcast to PyRenew to the Ebola hub in real time [@pyrenew; @bdbv_modeling_hub_2026].
@@ -112,6 +125,18 @@ We submitted renewal models built on our port of epinowcast to PyRenew to the Eb
 - A zone is fitted if it had a case in the 9 weeks to the cut-off, the walk window of the baselines (Baselines).
   This was 55 of the 519 hub zones at the 2026-11-08 release.
 
+**Time axis and seeding.**
+
+- The data weeks start one week before the weekly onsets, summed over the fitted zones, first reach 5, or their peak if lower.
+  They end with the week that holds the release's cut-off $T$.
+- The model axis starts 42 days earlier, the length of the generation interval, for seeding.
+- Every weekly walk is held at its starting value over the 6 seeding weeks and the first data week.
+- Each zone's seed is $e_z \sim \mathrm{LogNormal}(0, 1.5^2)$ infections a day that will be confirmed, or $e_z / (\alpha_0 N_z)$ infections per resident, on the first data day.
+- The seed is projected back over the seeding weeks at a daily growth rate shared by all zones, $r_s \sim \mathrm{LogNormal}\big(\log(\log 2 / 11.7), 0.3^2\big)$.
+  This is BVDOutbreakSize's prior on the outbreak's cryptic growth, a median doubling time of 11.7 days.
+- Zones with cases in the first data week are seeded at the start.
+  Later zones start at $10^{-6}$ of that level and add their seed to $\Phi_z(t)$ each day for 7 days, from 5 days before their first case week.
+
 **Transmission.**
 Infections per resident $x_z(t)$ in zone $z$ follow a renewal equation [@Fraser2007; @Cori2013] with importation and depletion,
 $$
@@ -119,9 +144,14 @@ $$
 $$
 
 - $g$ is BVDOutbreakSize's Gamma generation interval (mean 15.3 days, SD 9.3 days), double interval censored as in primarycensored [@abbottprimarycensored; @Park2024].
+  It is $G(d + 1) - 2G(d) + G(d - 1)$ with $G$ the integrated distribution function, on lags 1 to 42 days and renormalised (mean 14.8 days, SD 8.4 days).
 - $W = (1 - \varepsilon) I + \varepsilon\, \mathrm{diag}(1/N) K \mathrm{diag}(N)$ sends a share $\varepsilon \sim \mathrm{Beta}(1, 100)$ of each zone's transmission to other zones.
 - $K$ is a gravity kernel on zone populations $N_z$ and centroid distances $D_{zq}$, $K_{zq} \propto N_z e^{-D_{zq} / 300\,\mathrm{km}}$.
+  It is normalised per origin over every zone of the task, fitted or not, with $D$ the great-circle distance between centroids.
+- A zone's centroid is that of its largest polygon.
+  The 19 hub zones the map lacks, none with a case, take their province's centre and mean zone population.
 - $\nu$ is a learnt share of the population at risk, so growth slows as it is used up.
+  $S_z$ starts at $\nu$ less the seed, so infections never exceed $\nu N_z$.
 
 The log reproduction number of zone $z$ in province $p(z)$ is
 $$
@@ -129,18 +159,27 @@ $$
 $$
 
 - The shared trend $\log R(t)$, the province deviations $\delta_p$ and the zone deviations $\epsilon_z$ are weekly AR(1) processes that decay to zero, with BVDOutbreakSize's prior on their half-life.
+- Each process is $\xi(t) = 2^{-1/h}\, \xi(t - 1) + \sigma z(t)$ with standard normal steps $z(t)$, its own half-life $h$ in weeks and its own step SD $\sigma$.
+- The shared trend is the unweighted mean of the zones' log Rt, not the national Rt.
 - The province deviations sum to zero over provinces and the zone deviations within each province.
   So zones borrow strength from their province, and provinces from the country.
+- The deviations are sampled as coordinates on orthonormal bases of these sum-to-zero subspaces.
+  The zone basis has one block per province, and a province with one fitted zone has no block.
 - As in BVDOutbreakSize, only zones with at least 30 cases by the cut-off have a deviation of their own.
   The others take their province's.
+- The starting values are $\log R_z(0) = \log R(0) + v_z$, with $v$ summing to zero over zones and normal on its basis.
+  The province part of $v$ starts $\delta$ and the rest starts $\epsilon$.
 
 **Observation model and delays.**
 Expected onsets are infections convolved with the incubation period $\eta$, times a weekly varying ascertainment $\alpha(s)$,
 $$
-\lambda_z(s) = \alpha(s)\, N_z \sum_{u = 0}^{28} x_z(s - u)\, \eta(u).
+\lambda_z(s) = \alpha(s)\, N_z \sum_{u = 0}^{28} x_z(s - u)\, \eta(u), \qquad \operatorname{logit} \alpha(s) = \operatorname{logit} \alpha_0 + a(s).
 $$
 
+- Only the product of ascertainment and the share at risk is identified, so $\alpha_0 = 0.6$ is fixed and $a$ is a weekly random walk from zero.
 - $\eta$ is log-normal, with BVDOutbreakSize's priors on its mean and SD [@MacNeil2010].
+  Both are truncated below at 1 day, and the mean prior reproduces the 95% interval of 5.2 to 7.3 days from the 2007 Uganda outbreak.
+  Each draw is double interval censored as $g$ is, on lags 0 to 28 days.
 - Each onset is reported after a delay from a discrete hazard that is smooth in delay and drifts with onset day.
 - Each province has its own delay level and drift, shrunk towards the shared delay, and its zones share it.
 - A reported case enters a release after a short publication lag, learnt from how many rows of one release's delay file were already in the previous release.
@@ -151,17 +190,67 @@ $$
 - The known-onset delays of each province are Dirichlet-multinomial by onset week.
 - The delay is learnt jointly with the counts, so the model corrects recent weeks for cases not yet reported, and the corrected counts are the nowcast.
 
+The onset-to-report delay $f_{p,s}(d)$ of province $p$ for onset day $s$, on delays $d$ of 0 to 60 days, comes from the hazard
+$$
+\operatorname{logit} H_{p,s}(d) = \beta(d) + \gamma(s) + a_p + g_p(s), \qquad f_{p,s}(d) = H_{p,s}(d) \prod_{j < d}\{1 - H_{p,s}(j)\}, \qquad H_{p,s}(60) = 1.
+$$
+
+- $\beta$ is a random walk over delay, so the shape is smooth but not parametric.
+- $\gamma$ is a weekly random walk over onset day from zero, which shifts all hazards together.
+- $a_p$ and $g_p(s)$ are a province offset and a weekly province walk from zero, each summing to zero over provinces.
+
+The share of cases reported on day $t$ without an onset is $m_z(t)$, with $\operatorname{logit} m_z(t) = \bar m(t) + \omega_{p(z)}(t)$.
+$\bar m$ is a weekly random walk and $\omega_p$ are province random walks that sum to zero over provinces.
+A case reported on day $t$ is in the release with probability $\Pi(t) = F_\ell(T - t)$, with $F_\ell$ the distribution function of the publication lag on 0 to 7 days.
+Expected known and imputed onsets of zone $z$ at release $T$ are
+$$
+\mathrm{known}_{z,T}(s) = \lambda_z(s) \sum_d f_{p(z),s}(d)\, \{1 - m_z(s + d)\}\, \Pi(s + d), \qquad \mathrm{imputed}_{z,T}(s) = \sum_{t = s}^{T} \hat f_T(t - s)\, \Pi(t)\, M_z(t),
+$$
+with $M_z(t) = m_z(t) \sum_s \lambda_z(s) f_{p(z),s}(t - s)$ the cases reported on day $t$ without an onset.
+
+- $\hat f_T$ is the daily delay the hub's imputation implies at release $T$, and is data.
+- The hub draws a report hour uniformly within the day and subtracts a generalised gamma delay in hours, fitted to the non-negative published delays.
+- $\hat f_T$ is the double interval censored form of that delay on 0 to 60 days, in closed form.
+- The hub fitted its delays as exact for releases up to 2026-10-24 and as double interval censored from 2026-11-01, and $\hat f_T$ follows the fit of each release.
+
+The likelihood has four terms.
+
+- Weekly known and imputed onsets are negative binomial, each stream with its own size $\phi$, kept below 1000.
+- Known-onset delays by province and onset week are Dirichlet-multinomial given each week's total, with concentration $\psi$ kept below $10^4$.
+  Delays below 0 count as 0 and above 60 as 60.
+- Each delay-file row of release $i + 1$ was already in release $i$ with probability
+  $$
+  q = (1 - b_i) \frac{\sum_u F_\ell(T_i - t_u)}{\sum_u F_\ell(T_{i+1} - t_u)},
+  $$
+  averaged over the onset days $u$ of the row's week, with $t_u$ the report day for onset $u$.
+  $b_i$ is the share of rows that appear late whatever their age, such as onsets recorded later for cases first counted as imputed.
+- The kept rows of each cell are beta-binomial with mean $q$.
+  Rows up to 60 days old at release $i$ enter, and the term conditions on the later release, so it informs $F_\ell$ only.
+
 **BVDOutbreakSize-informed Rt.**
 BVDOutbreakSize fits a larger joint model to more data streams than the hub publishes [@BVDOutbreakSize].
 `renewalbvd` adds its Rt estimates as a down-weighted pseudo-observation of our own Rt, a form of approximate Markov melding [@Goudie2019].
 
 - We take the newest BVDOutbreakSize release updated by the forecast's cut-off whose joint fit has a worst R-hat of at most 1.1.
-- At that release's data cut-off $t_b$, our infection-weighted national Rt is matched to the release's national log Rt,
+  Its data must end by the forecast date, and the cut-off is the end of the Sunday that opens the round's submission window, Kinshasa time, or the end of the release date if that is later.
+- Early releases give only the growth rate $r$, which we turn into $R = (1 + r\theta)^a$ with the shape $a$ and scale $\theta$ of the generation interval [@Wallinga2007].
+- Both models date Rt by infection, so the estimates are aligned to the release's data cut-off $t_b$.
+  The fit axis extends to the end of the week of $t_b$ where that week is after the data.
+- For the country and each patch $k$, our Rt is the zone Rt before depletion weighted by infections over the data week that holds $t_b$,
+  $$
+  R_{\mathcal{G}}(t_b) = \frac{\sum_{z \in \mathcal{G}} \Omega_z\, R_z(t_b)}{\sum_{z \in \mathcal{G}} \Omega_z}, \qquad \Omega_z = N_z \sum_{t \in \mathrm{week}(t_b)} x_z(t),
+  $$
+  over the fitted zones $\mathcal{G}$ of the patch's provinces.
+- At $t_b$, our infection-weighted national Rt is matched to the release's national log Rt,
   $$
   \mu_\mathrm{CD} \sim \mathcal{N}\big(\log R_\mathrm{CD}(t_b),\ \kappa^2 \sigma_\mathrm{CD}^2\big),
   $$
   with $\mu_\mathrm{CD}$ and $\sigma_\mathrm{CD}$ the mean and SD of the release's draws.
-- Each patch's Rt relative to national, and each fitted zone's where the release has a zone estimate, is matched in the same way.
+- Each patch's Rt relative to national, and each fitted zone's where the release has a zone estimate, is matched in the same way,
+  $$
+  \tilde\mu_k - \tilde\mu_\mathrm{CD} \sim \mathcal{N}\big(\log R_k(t_b) - \log R_\mathrm{CD}(t_b),\ \kappa^2 \sigma_{\Delta,k}^2\big), \qquad \sigma_{\Delta,k}^2 = \max(\tilde\sigma_k^2 - \tilde\sigma_\mathrm{CD}^2,\ 0.05^2).
+  $$
+  $\tilde\mu$ and $\tilde\sigma$ are the log median and the SD from the 90% interval of each estimate.
 - $\kappa = 1.5$ inflates the release's SDs, a power prior with tempering $1 / \kappa^2 \approx 0.44$ [@Ibrahim2000].
   It reflects that the external estimates are built partly on the same case data as ours.
   We set it by judgement, not by tuning on scores.
@@ -173,23 +262,68 @@ BVDOutbreakSize fits a larger joint model to more data streams than the hub publ
 
 - `renewalsp` fits each zone with a recent case on its own, with no shared trend, deviations, importation or BVDOutbreakSize term.
 - Its log Rt is one weekly AR(1) process, and its delay and missing-onset share are its own.
+- It keeps the share at risk and its depletion, though one zone's series barely informs it.
+  Its other parts and priors are those of `renewal`.
+- A zone with no recent case takes the introduction layer of the random walk nowcast (Baselines).
 - Comparing it with `renewal` and `renewalbvd` shows what pooling, importation and the external Rt add.
+
+**Priors.**
+Every time-varying part is a weekly random walk or AR(1), so it stays near constant unless the data show change (@tbl-renewal-priors).
+
+::: {#tbl-renewal-priors}
+| Quantity | Prior | Source |
+|---|---|---|
+| Step SD of the shared log Rt trend | $\mathrm{LogNormal}(\log 0.12, 0.5^2)$ | weakly informative |
+| Start of the shared log Rt | $\mathcal{N}(0, 0.5^2)$ | weakly informative |
+| Step SD of the province and zone deviations | $\mathcal{N}^+(0, 0.1^2)$ | weakly informative |
+| Half-life of the shared trend and the deviations | $\mathrm{LogNormal}(\log 6, 0.6^2)$ weeks | BVDOutbreakSize |
+| Spread of the starting deviations | $\mathcal{N}^+(0, 0.3^2)$ | weakly informative |
+| Importation share $\varepsilon$ | $\mathrm{Beta}(1, 100)$ | mostly local transmission |
+| Share at risk $\nu$ | $\mathrm{LogNormal}(\log 0.05, 0.75^2)$ | weakly informative |
+| Incubation period mean and SD | $\mathcal{N}(6.3, 0.54^2)$ and $\mathcal{N}(3.5, 0.8^2)$ days | BVDOutbreakSize [@MacNeil2010] |
+| Seed infections per day $e_z$ | $\mathrm{LogNormal}(0, 1.5^2)$ | weakly informative |
+| Seed growth rate $r_s$ | $\mathrm{LogNormal}\big(\log(\log 2 / 11.7), 0.3^2\big)$ per day | BVDOutbreakSize |
+| Step SD of the ascertainment walk $a$ | $\mathcal{N}^+(0, 0.03^2)$ | weakly informative |
+| Delay hazard at delay 0, $\beta(0)$ | $\mathcal{N}(-2, 1)$ | weakly informative |
+| Step SD of $\beta$ over delay | $\mathcal{N}^+(0, 0.4^2)$ | weakly informative |
+| Step SD of $\gamma$ over onset day | $\mathcal{N}^+(0, 0.15^2)$ | weakly informative |
+| Spread of the province delay offsets $a_p$ | $\mathcal{N}^+(0, 0.5^2)$ | weakly informative |
+| Step SD of the province delay walks $g_p$ | $\mathcal{N}^+(0, 0.1^2)$ | weakly informative |
+| Start and step SD of the missing-onset walk $\bar m$ | $\mathcal{N}(-2, 1)$ and $\mathcal{N}^+(0, 0.3^2)$ | weakly informative |
+| Spread and step SD of the missing-onset deviations $\omega_p$ | $\mathcal{N}^+(0, 0.5^2)$ and $\mathcal{N}^+(0, 0.1^2)$ | weakly informative |
+| Publication lag on 0 to 7 days | $\mathrm{Dirichlet}(1, \dots, 1)$ | uninformative |
+| Share of late delay-file rows $b_i$ | $\mathrm{Beta}(1, 19)$ | weakly informative |
+| Negative binomial overdispersion | $1/\sqrt{\phi} \sim \mathcal{N}^+(0, 0.25^2)$ | weakly informative |
+| Dirichlet-multinomial overdispersion | $1/\sqrt{\psi} \sim \mathcal{N}^+(0, 0.1^2)$ | weakly informative |
+| Beta-binomial overdispersion of the delay-file rows | $\tau \sim \mathcal{N}^+(0, 0.5^2)$, concentration $1/(\tau^2 + 10^{-3})$ | weakly informative |
+
+The main priors of the renewal models.
+:::
 
 **Inference.**
 
 - We fit each model with the No-U-Turn sampler [@Hoffman2014] in NumPyro [@Phan2019], through PyRenew.
 - `renewal` and `renewalbvd` run 2 chains of 500 warm-up and 1500 draws, keeping every other draw, with target acceptance 0.9 (0.95 for `renewalbvd`) and maximum tree depth 10.
 - `renewalsp` runs 2 chains of 500 warm-up and 750 draws per zone.
+- Each chain starts from its own draw from the prior.
 - Walks are sampled non-centred and anchored at their mean over the fit, which removes a ridge between a walk's level and its first steps.
+- The shared log Rt walk is sampled centred, as its weekly levels, where the fit's mean weekly cases reach $1 / 0.12^2 \approx 69$, as the data then pin it.
+  Otherwise a centred walk funnels, so it stays non-centred.
 - A fit of `renewal` or `renewalbvd` took 1.4 to 3.1 hours on a 4-core runner at the origins 2026-10-17 to 2026-11-15.
 - A fit with a rank-normalised R-hat above 1.1, a bulk or tail effective sample size below 25 or more than 5% divergent transitions is ruled out [@Vehtari2021].
+- An R-hat above 1.05, an effective sample size below 100 or more than 1% divergent transitions is reported only.
+- Each fit also reports, for every chain, the share of draws at the maximum tree depth, the E-BFMI and the step size, and the posterior predictive coverage of the in-sample weeks, none of which rules a fit out.
 
 **Forecasts and submission.**
 
 - Each of 100 trajectories is one posterior draw.
 - Past the data, log Rt continues its AR(1) processes, so it reverts towards zero with its fitted half-life.
+- Ascertainment and the delay continue their random walks, and the missing-onset share keeps its last value.
 - A trajectory is the known onsets reported by the cut-off, plus a negative binomial draw of those reported later, plus the final imputed onsets.
+- The final imputed onsets are a negative binomial draw centred on the current imputed count plus those expected later, as the hub re-imputes each release.
 - Zones that are not fitted are forecast from the fit's posterior, with infections only through the fitted importation.
+  They follow the renewal with their province's Rt, or the shared Rt where their province has no fitted zone, and are observed as any zone.
+  They send nothing on, so the fitted zones are exactly as in the fit.
 - A province is the sum of its zones and the country the sum of the provinces, draw by draw, so the levels are coherent.
 - The hub model `seabbs-renewal` tries `renewalbvd`, `renewalsp`, `renewal`, `randomwalknowcast` and `randomwalk` in turn each week, and submits the first that passes its convergence and format checks.
 
