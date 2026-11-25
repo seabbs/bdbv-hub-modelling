@@ -282,9 +282,11 @@ def _job_priorities(stdout):
 def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     # Sam, overnight 25 Nov: with sims queued for later segments, freed
     # cores went to batches; the German reference and each checkpoint's
-    # scoring starved. One order (flowlib.compute): the trainer, the
-    # references, each checkpoint's scoring and evaluation (newest
-    # first), then simulation batches.
+    # scoring starved, and the batches the trainer reads were never
+    # copied into the run, so the GPU waited. One order (flowlib.compute):
+    # the trainer and its batches' copies, the references, each
+    # checkpoint's scoring and evaluation (newest first), then simulation
+    # batches.
     _hub(tmp_path)
     seg = tmp_path / "runs" / "runa" / "train" / "n250"
     seg.mkdir(parents=True)
@@ -294,11 +296,19 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
     out = dry_run(tmp_path, "finetune", config=config, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
-    tiers = {"train": [], "reference": [], "checkpoint": [], "batch": []}
+    tiers = {
+        "train": [],
+        "fetch": [],
+        "reference": [],
+        "checkpoint": [],
+        "batch": [],
+    }
     newest = {}
     for rule, wildcards, priority in _job_priorities(out.stdout):
         if rule == "train_segment":
             tiers["train"].append(priority)
+        elif rule == "fetch_batch":
+            tiers["fetch"].append(priority)
         elif rule == "score_germany" or (
             rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards
         ):
@@ -317,7 +327,8 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
         elif rule == "simulate_batch":
             tiers["batch"].append(priority)
     assert all(tiers.values()), tiers
-    assert min(tiers["train"]) > max(tiers["reference"])
+    assert min(tiers["train"]) > max(tiers["fetch"])
+    assert min(tiers["fetch"]) > max(tiers["reference"])
     assert min(tiers["reference"]) > max(tiers["checkpoint"])
     assert min(tiers["checkpoint"]) > max(tiers["batch"])
     assert newest[500] > newest[250]
