@@ -1,9 +1,11 @@
 """A training step keeps the bias's rows until backward is done, and is
-recomputed when its activations would not fit the device's free memory."""
+recomputed when its activations would not fit the device's memory."""
 
 import inspect
+import unittest.mock as mock
 
 import numpy as np
+import pandas as pd
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -110,9 +112,23 @@ def spy_checkpoints(monkeypatch) -> list[int]:
     return calls
 
 
-def test_a_batch_over_the_free_memory_is_recomputed_up_front(monkeypatch):
-    # A step whose estimated activations exceed the device's free memory
-    # less the margin is recomputed from the start, not after it runs out.
+class FakePeak:
+    """A meter that reports a set peak, as `CudaPeak` does on a GPU."""
+
+    def __init__(self, peak: int) -> None:
+        self.value = peak
+        self.started = 0
+
+    def start(self) -> None:
+        self.started += 1
+
+    def peak(self) -> int:
+        return self.value
+
+
+def test_a_batch_over_the_budget_is_recomputed_up_front(monkeypatch):
+    # A step predicted over the device's total less the trainer's footprint
+    # and the margin is recomputed from the start, not after it runs out.
     from chronos.chronos2.model import Chronos2Model
 
     calls = spy_checkpoints(monkeypatch)
@@ -120,25 +136,88 @@ def test_a_batch_over_the_free_memory_is_recomputed_up_front(monkeypatch):
     model.train()
     batch = batch_of(toy_block())
     accepted = inspect.signature(Chronos2Model.forward).parameters
-    need = fs.activation_bytes(
-        batch["context"].shape[0], fs.batch_tokens(batch)
-    )
+    series, tokens = batch["context"].shape[0], fs.batch_tokens(batch)
+    need = series * tokens * fs.ACTIVATION_BYTES
     total = 8 * 10**9
     margin = int(fs.MEMORY_MARGIN * total)
-    roomy = (need + margin, total)
-    fs.train_step(model, batch, accepted, "cpu", 1.0, memory=lambda: roomy)
+    roomy = fs.MemoryRule(total, total - margin - need)
+    meter = FakePeak(1234)
+    fs.train_step(model, batch, accepted, "cpu", 1.0, roomy, meter)
     assert not calls
-    tight = (need + margin - 1, total)
-    fs.train_step(model, batch, accepted, "cpu", 1.0, memory=lambda: tight)
+    assert meter.started == 1
+    assert roomy.rows[-1] == {
+        "series": series,
+        "tokens": tokens,
+        "recomputed": False,
+        "predicted": need,
+        "measured": 1234,
+        "cost": fs.ACTIVATION_BYTES,
+    }
+    tight = fs.MemoryRule(total, total - margin - need + 1)
+    fs.train_step(model, batch, accepted, "cpu", 1.0, tight, FakePeak(1))
     assert calls
+    assert tight.rows[-1]["recomputed"]
     calls.clear()
-    # Off CUDA there is no device memory to read: the series rule alone.
-    fs.train_step(model, batch, accepted, "cpu", 1.0, memory=lambda: None)
+    # Off CUDA there is no rule: the series threshold alone.
+    fs.train_step(model, batch, accepted, "cpu", 1.0)
     assert not calls
-    # The memory rule does not close a recompute opened around it.
+    # The rule does not close a recompute opened around it.
     with fs.recompute_every_block():
-        fs.train_step(model, batch, accepted, "cpu", 1.0, memory=lambda: roomy)
+        fs.train_step(model, batch, accepted, "cpu", 1.0, roomy, meter)
         assert fs._RECOMPUTING["all"]
+    assert roomy.rows[-1]["recomputed"]
+
+
+def test_a_step_that_runs_out_raises_the_cost_to_recompute_its_size():
+    model = tiny_model()
+    batch = batch_of(toy_block())
+    series, tokens = batch["context"].shape[0], fs.batch_tokens(batch)
+    rule = fs.MemoryRule(8 * 10**9, 0)
+    assert not rule.needs_recompute(series, tokens)
+
+    def oom(*_args, **_kwargs):
+        raise RuntimeError("CUDA out of memory")
+
+    with (
+        mock.patch.object(fs, "forward", oom),
+        pytest.raises(RuntimeError, match="out of memory"),
+    ):
+        fs.train_step(model, batch, {}, "cpu", 1.0, rule, FakePeak(0))
+    assert rule.needs_recompute(series, tokens)
+
+
+def test_the_cost_is_fitted_from_measured_peaks_and_kept_in_the_state():
+    rule = fs.MemoryRule(8 * 10**9, 10**9)
+    assert rule.cost == fs.ACTIVATION_BYTES
+    # Small and recomputed steps do not fit the cost.
+    rule.record(10, 10, False, 10**9)
+    rule.record(1000, 10, True, 10**12)
+    assert rule.measured == 0
+    for i in range(fs.FIT_AFTER - 1):
+        rule.record(1000, 10, False, 1000 * 10 * (200_000 + i))
+    assert rule.cost == fs.ACTIVATION_BYTES
+    rule.record(1000, 10, False, 1000 * 10 * 300_000)
+    # The most a measured step used per series and token.
+    assert rule.cost == 300_000
+    again = fs.MemoryRule(8 * 10**9, 10**9, rule.state())
+    assert again.cost == rule.cost
+    assert again.needs_recompute(2000, 10) == rule.needs_recompute(2000, 10)
+    # A step that ran out sets a floor that recomputes its size.
+    again.ran_out(2000, 9)
+    assert again.needs_recompute(2000, 9)
+    assert fs.MemoryRule(1, 0, again.state()).floor == again.floor
+
+
+def test_the_memory_rows_are_written_and_trimmed_on_resume(tmp_path):
+    rule = fs.MemoryRule(8 * 10**9, 10**9)
+    for step in (1, 2, 3):
+        rule.record(100, 10, False, 5)
+        fs.record_memory(tmp_path, step, rule)
+    assert not rule.rows
+    fs.trim_memory(tmp_path, 2)
+    frame = pd.read_csv(tmp_path / fs.MEMORY_FILE)
+    assert frame["step"].tolist() == [1, 2]
+    assert {"predicted", "measured", "recomputed"} <= set(frame.columns)
 
 
 def test_batch_tokens_counts_context_patches_reg_and_output_patches():
@@ -147,13 +226,20 @@ def test_batch_tokens_counts_context_patches_reg_and_output_patches():
     assert fs.batch_tokens(batch) == 3 + 1 + 3
 
 
+def test_the_footprint_counts_weights_and_the_trained_parameters_thrice():
+    model = torch.nn.Linear(4, 2)
+    model.bias.requires_grad_(False)
+    weights = (8 + 2) * 4
+    assert fs.fixed_footprint(model) == weights + 3 * 8 * 4
+
+
 @pytest.mark.parametrize(
     ("series", "tokens", "ran_out"),
     [
-        # Run runa, n1600 on archie (RTX 2070, 8 GB, about 6.9 GB free to
-        # the trainer): blocks under `checkpoint_above` that ran out of
-        # memory alone, by series and tokens (trimmed context patches, the
-        # reg token and output patches), from the saved chunk blocks.
+        # Run runa, n1600 on archie (RTX 2070, 8 GB): blocks under
+        # `checkpoint_above` that ran out of memory alone, by series and
+        # tokens (trimmed context patches, the reg token and output
+        # patches), from the saved chunk blocks.
         (630, 21, True),
         (725, 18, True),
         (720, 17, True),
@@ -166,5 +252,6 @@ def test_batch_tokens_counts_context_patches_reg_and_output_patches():
     ],
 )
 def test_archie_blocks_that_ran_out_are_recomputed(series, tokens, ran_out):
-    free, total = int(6.9e9), 8_161_329_152
-    assert fs.needs_recompute(series, tokens, (free, total)) is ran_out
+    # Chronos-2 with its LoRA adapter holds about 0.48 GB.
+    rule = fs.MemoryRule(8_161_329_152, 480_000_000)
+    assert rule.needs_recompute(series, tokens) is ran_out
