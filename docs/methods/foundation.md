@@ -5,7 +5,7 @@ The `foundation` model and its comparison variants give the hub target's release
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 `foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the reporting-triangle layout.
-The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), `foundation_twostep` and `foundation_zeroshot_twostep` (baselinenowcast), and `foundation_real` (fine-tuned on real data alone).
+The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), `foundation_baselinenowcast` and `foundation_zeroshot_baselinenowcast` (baselinenowcast), and `foundation_real` (fine-tuned on real data alone).
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
 Only `foundation` runs in the Fit store and the submission; the variants are run by the paper's workflow alone.
 Each model reads the cadence from the data: one pass on the daily releases gives the daily counts and the weekly hub target, and a task with weekly releases only gives the weekly target.
@@ -100,7 +100,7 @@ The renewal models fit the zones and sum them to their provinces instead ([Healt
 
 ## Fine-tuning
 
-The fine-tuned models (`foundation`, `foundation_complete`, `foundation_twostep`) load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
+The fine-tuned models (`foundation`, `foundation_complete`, `foundation_baselinenowcast`) load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
 The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
 The simulator is `nowcastfoundation.simulator` (the design and value draws, then each simulation as the joint PyRenew model in `nowcastrenewal.simulation.outbreak`), run on the grid config `packages/nowcastfoundation/config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `nowcastfoundation.finetune.chronos` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
 

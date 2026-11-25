@@ -367,11 +367,11 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 - The lag count against a fixed cap and the joint block against each level alone and the sum of the lowest level have no SI section yet, and get a paragraph when they do.
 :::
 
-Against `randomwalknowcast`, the zero-shot baselinenowcast variant scored {{< meta results.synthetic.models.foundation_zeroshot_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_twostep >}} on the German {{< meta results.germany.scope >}}.
-The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_twostep >}} and {{< meta results.germany.models.foundation_twostep >}}, and on the reporting-triangle layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
+Against `randomwalknowcast`, the zero-shot baselinenowcast variant scored {{< meta results.synthetic.models.foundation_zeroshot_baselinenowcast >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_baselinenowcast >}} on the German {{< meta results.germany.scope >}}.
+The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_baselinenowcast >}} and {{< meta results.germany.models.foundation_baselinenowcast >}}, and on the reporting-triangle layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
 
 ::: {.content-visible when-meta="results.ebola.shown"}
-On the Ebola {{< meta results.ebola.scope >}}, the zero-shot and fine-tuned baselinenowcast variants and the fine-tuned model on the reporting triangle scored {{< meta results.ebola.models.foundation_zeroshot_twostep >}}, {{< meta results.ebola.models.foundation_twostep >}} and {{< meta results.ebola.models.foundation >}}.
+On the Ebola {{< meta results.ebola.scope >}}, the zero-shot and fine-tuned baselinenowcast variants and the fine-tuned model on the reporting triangle scored {{< meta results.ebola.models.foundation_zeroshot_baselinenowcast >}}, {{< meta results.ebola.models.foundation_baselinenowcast >}} and {{< meta results.ebola.models.foundation >}}.
 :::
 
 We score the model fine-tuned on real data on the German held-out half and on Ebola rounds after its last training release, {{< meta results.realdata_after >}}, against the model fine-tuned on simulations (SI, Real-data fine-tune against synthetic).

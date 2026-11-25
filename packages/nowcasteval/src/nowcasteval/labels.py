@@ -40,7 +40,7 @@ __all__ = [
 FINETUNED: Final[dict[str, str]] = {
     "foundation": "foundation_zeroshot",
     "foundation_complete": "foundation_zeroshot_complete",
-    "foundation_twostep": "foundation_zeroshot_twostep",
+    "foundation_baselinenowcast": "foundation_zeroshot_baselinenowcast",
     "foundation_pseudoweeks": "foundation_zeroshot_pseudoweeks",
 }
 """Each Chronos-2 model fine-tuned on simulations and its zero-shot
@@ -62,8 +62,8 @@ MODEL_LABELS: Final[dict[str, str]] = {
     "foundation": "Fine-tuned (reporting triangle)",
     "foundation_zeroshot_complete": "Zero-shot (complete data)",
     "foundation_complete": "Fine-tuned (complete data)",
-    "foundation_zeroshot_twostep": "Zero-shot (baselinenowcast)",
-    "foundation_twostep": "Fine-tuned (baselinenowcast)",
+    "foundation_zeroshot_baselinenowcast": "Zero-shot (baselinenowcast)",
+    "foundation_baselinenowcast": "Fine-tuned (baselinenowcast)",
     "foundation_zeroshot_pseudoweeks": (
         "Zero-shot (reporting triangle, pseudo weeks)"
     ),
@@ -120,8 +120,8 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
     "foundation_zeroshot": (_ZERO_SHOT_GREEN, "dotted"),
     "foundation": (_SLOT_BLUE, "solid"),
     "foundation_complete": (_COMPLETE_PURPLE, "solid"),
-    "foundation_zeroshot_twostep": (_COMPLETE_PURPLE, "dotted"),
-    "foundation_twostep": (_SLOT_BLUE, "dashed"),
+    "foundation_zeroshot_baselinenowcast": (_COMPLETE_PURPLE, "dotted"),
+    "foundation_baselinenowcast": (_SLOT_BLUE, "dashed"),
     "foundation_zeroshot_pseudoweeks": (_ZERO_SHOT_GREEN, "dashed"),
     "foundation_pseudoweeks": (_SLOT_BLUE, "dotted"),
     "epinowcast": (_BROWN, "solid"),
