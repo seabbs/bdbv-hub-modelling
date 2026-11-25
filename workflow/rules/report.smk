@@ -407,6 +407,7 @@ rule ft_check_forecast:
         f"{FTC_DIR}/benchmarks/{{fmodel}}@{{key}}.tsv"
     wildcard_constraints:
         key=r"[0-9a-f]{12}",
+    priority: ft_check_priority(CHECKPOINT_PRIORITY, REFERENCE_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS

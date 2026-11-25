@@ -218,9 +218,38 @@ class Scoring:
         """Return the labels, oldest published first (none before listed)."""
         return releases.oldest_first(f"{self.cache}/releases.json", self.sc)
 
-    def unit_priority(self, base: float) -> Callable[[Any], float]:
-        """Return a unit's priority: `base`, newer checkpoints higher."""
-        return lambda wc: releases.priority(self.score_order(), wc.label, base)
+    def unit_priority(
+        self, base: float, reference: float
+    ) -> Callable[[Any], float]:
+        """Return a German unit's priority (`flowlib.compute`'s order).
+
+        A reference label's is `reference`; a checkpoint's is `base`,
+        newer checkpoints higher.
+        """
+
+        def priority(wc: Any) -> float:
+            if wc.label in self.sc["reference"]:
+                return reference
+            return releases.priority(self.score_order(), wc.label, base)
+
+        return priority
+
+    def ft_check_priority(
+        self, base: float, reference: float
+    ) -> Callable[[Any], float]:
+        """Return a BDBV check forecast's priority (`flowlib.compute`).
+
+        A reference model's is `reference`; a checkpoint's (`ft-<label>`)
+        is `base`, newer checkpoints higher.
+        """
+
+        def priority(wc: Any) -> float:
+            if not wc.fmodel.startswith("ft-"):
+                return reference
+            label = wc.fmodel.removeprefix("ft-")
+            return releases.priority(self.score_order(), label, base)
+
+        return priority
 
     def unit_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
         """Return the unit's device (torch and JAX), threads and batch."""

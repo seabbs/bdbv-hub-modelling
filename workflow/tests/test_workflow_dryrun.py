@@ -261,6 +261,68 @@ def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
     assert jobs["ft_check_page"] == 1
 
 
+def _job_priorities(stdout):
+    """Return each job's rule, wildcards and priority from a dry run."""
+    found = []
+    for block in re.split(r"\n(?=(?:local)?rule \w+:)", stdout):
+        rule = re.match(r"(?:local)?rule (\w+):", block)
+        if rule:
+            wildcards = re.search(r"wildcards: (.*)", block)
+            got = re.search(r"priority: ([\d.]+)", block)
+            found.append(
+                (
+                    rule[1],
+                    wildcards[1] if wildcards else "",
+                    float(got[1]) if got else 0.0,
+                )
+            )
+    return found
+
+
+def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
+    # Sam, overnight 25 Nov: with sims queued for later segments, freed
+    # cores went to batches; the German reference and each checkpoint's
+    # scoring starved. One order (flowlib.compute): the trainer, the
+    # references, each checkpoint's scoring and evaluation (newest
+    # first), then simulation batches.
+    _hub(tmp_path)
+    seg = tmp_path / "runs" / "runa" / "train" / "n250"
+    seg.mkdir(parents=True)
+    (seg / "published.json").write_text(
+        '{"tag": "chronos-slots-abcdef", "hash": "abcdef"}'
+    )
+    config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
+    out = dry_run(tmp_path, "finetune", config=config, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    tiers = {"train": [], "reference": [], "checkpoint": [], "batch": []}
+    newest = {}
+    for rule, wildcards, priority in _job_priorities(out.stdout):
+        if rule == "train_segment":
+            tiers["train"].append(priority)
+        elif rule == "score_germany" or (
+            rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards
+        ):
+            tiers["reference"].append(priority)
+        elif rule in (
+            "score_run_germany",
+            "ft_check_forecast",
+            "evaluate_steps",
+            "evaluate_base",
+            "evaluate_checkpoint",
+        ):
+            tiers["checkpoint"].append(priority)
+            if rule == "score_run_germany":
+                n = int(re.search(r"n=(\d+)", wildcards)[1])
+                newest[n] = priority
+        elif rule == "simulate_batch":
+            tiers["batch"].append(priority)
+    assert all(tiers.values()), tiers
+    assert min(tiers["train"]) > max(tiers["reference"])
+    assert min(tiers["reference"]) > max(tiers["checkpoint"])
+    assert min(tiers["checkpoint"]) > max(tiers["batch"])
+    assert newest[500] > newest[250]
+
+
 def test_finetune_builds_each_trained_run_s_german_report(tmp_path):
     # The run's report page comes with it: its checkpoints against
     # zero-shot and randomwalknowcast on the German development half.
@@ -1124,7 +1186,8 @@ def test_score_threads_are_a_machine_setting(tmp_path):
     assert all(re.search(r"threads: 3\b", b) for b in units)
 
 
-def test_newer_checkpoints_are_scored_first(tmp_path):
+def test_the_reference_then_newer_checkpoints_are_scored_first(tmp_path):
+    # The reference every checkpoint is compared with comes first.
     config = {"score": {"labels": ["aaa", "bbb"]}}
     blocks = score_jobs(tmp_path, config)
     got = {}
@@ -1133,7 +1196,7 @@ def test_newer_checkpoints_are_scored_first(tmp_path):
         if rule:
             label = re.search(r"wildcards: label=(\S+)", block)[1]
             got[label] = float(re.search(r"priority: ([\d.]+)", block)[1])
-    assert got["bbb"] > got["aaa"] > got["reference"]
+    assert got["reference"] > got["bbb"] > got["aaa"]
 
 
 def test_one_unit_runs_before_the_release_list_exists(tmp_path):
