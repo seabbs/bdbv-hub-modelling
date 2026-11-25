@@ -245,3 +245,54 @@ def test_the_forecast_reads_the_backtest_config_it_is_given(monkeypatch):
             ]
         )
     assert seen["config"] == "ablation.toml"
+
+
+def test_a_check_forecast_resumes_from_the_releases_it_wrote(
+    tmp_path, monkeypatch
+):
+    # A restart loses at most the release in hand (#1182).
+    from types import SimpleNamespace
+
+    import pandas as pd
+
+    from bdbvhub import ftcheck
+    from nowcasteval.nowcast import ReleaseForecasts
+
+    tasks = [
+        SimpleNamespace(vintage=v, kind="real")
+        for v in ("2026-10-01", "2026-10-08", "2026-10-15")
+    ]
+    monkeypatch.setattr(
+        ftcheck, "release_tasks", lambda *_: (tasks, pd.DataFrame(), None, None)
+    )
+    monkeypatch.setattr(ftcheck, "check_model", lambda *_: object())
+    done = []
+
+    def forecast_releases(some, _target, _models):
+        (task,) = some
+        if task.vintage == "2026-10-08" and not done:
+            done.append("killed")
+            raise KeyboardInterrupt
+        done.append(task.vintage)
+        row = {"model": "m", "origin": task.vintage}
+        return ReleaseForecasts(
+            pd.DataFrame([{**row, "status": "forecast", "reason": ""}]),
+            pd.DataFrame([{**row, "value": 1.0}]),
+            pd.DataFrame(columns=["model", "origin"]),
+            pd.DataFrame(columns=["model", "origin"]),
+        )
+
+    monkeypatch.setattr(ftcheck, "forecast_releases", forecast_releases)
+    out = tmp_path / "m@key"
+    with pytest.raises(KeyboardInterrupt):
+        ftcheck.forecast("m", tmp_path, out)
+    got = ftcheck.forecast("m", tmp_path, out)
+    # The first release was kept; the run went on from the second.
+    assert done == ["2026-10-01", "killed", "2026-10-08", "2026-10-15"]
+    assert list(got.runs["origin"]) == [
+        "2026-10-01",
+        "2026-10-08",
+        "2026-10-15",
+    ]
+    back = ReleaseForecasts.read([out])
+    assert list(back.samples["origin"]) == list(got.samples["origin"])
