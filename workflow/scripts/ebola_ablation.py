@@ -11,6 +11,8 @@ forecasts and scores it unchanged.
   zones, with one BDBV feature imposed (`SIM_VARIANTS`).
 - `summary DIR --out FILE`: the check's tables of one variant's folders
   (`ftcheck_report.skill_tables`, `calibration`) as JSON.
+- `config --base FILE --samples N --max-delay D --out FILE`: the backtest
+  config with the ablation's draws and longest delay.
 - `report DIR... --out FILE`: the ablation page from the variants'
   summaries, each model with and without weekly pseudo releases
   (`FoundationModel.pseudo_weeks`).
@@ -23,7 +25,9 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import shutil
+import tomllib
 from pathlib import Path
 
 import numpy as np
@@ -1006,6 +1010,28 @@ the workflow's <code>ablation</code> target
     out.write_text(html)
 
 
+def backtest_config(
+    base: Path, out: Path, samples: int, max_delay: int
+) -> None:
+    """Write the backtest config `base` with `samples` draws and `max_delay`.
+
+    Only the backtest's draws (`[samples] backtest`) and the longest delay
+    (`[forecast] max_delay`) change.
+    """
+    text = base.read_text()
+    text, n1 = re.subn(
+        r"(?m)^max_delay = \d+$", f"max_delay = {max_delay}", text
+    )
+    text, n2 = re.subn(r"(?m)^backtest = \d+$", f"backtest = {samples}", text)
+    if (n1, n2) != (1, 1):
+        raise ValueError(f"{base} has no single max_delay and backtest")
+    conf = tomllib.loads(text)
+    assert conf["forecast"]["max_delay"] == max_delay
+    assert conf["samples"]["backtest"] == samples
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text)
+
+
 def main() -> None:
     """Command line."""
     ap = argparse.ArgumentParser(description=__doc__)
@@ -1025,6 +1051,11 @@ def main() -> None:
     m.add_argument("folder", type=Path)
     m.add_argument("--out", type=Path, required=True)
     m.add_argument("--reference", default="randomwalknowcast")
+    c = sub.add_parser("config")
+    c.add_argument("--base", type=Path, required=True)
+    c.add_argument("--samples", type=int, required=True)
+    c.add_argument("--max-delay", type=int, required=True)
+    c.add_argument("--out", type=Path, required=True)
     r = sub.add_parser("report")
     r.add_argument("folders", type=Path, nargs="+")
     r.add_argument("--out", type=Path, required=True)
@@ -1035,6 +1066,8 @@ def main() -> None:
         bdbv_variant(a.variant, a.src, a.out)
     elif a.cmd == "sim":
         sim_variant(a.variant, a.sims, a.out, a.src, a.k, a.seed)
+    elif a.cmd == "config":
+        backtest_config(a.base, a.out, a.samples, a.max_delay)
     elif a.cmd == "summary":
         summary(a.folder, a.out, a.reference)
     else:

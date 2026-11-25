@@ -215,6 +215,49 @@ ft_check:
   finetuned: foundation
   checkpoint: ""
 
+ablation:
+  # The Ebola ablation (rules/ablation.smk, workflow/scripts/ebola_ablation.py,
+  # #1123): held-out simulated outbreaks given one BDBV feature at a time
+  # (`sim_variants`) and the hub data moved one feature at a time towards
+  # the simulations (`bdbv_variants`), each forecast by `models` through
+  # the BDBV check and scored against `reference`, with `samples` draws
+  # and the longest delay `max_delay` (days). The simulations are
+  # `seeds` of round `round`, or of the folder `sims` when set; `k` of
+  # them, drawn with `seed`, become the provinces. Fine-tuned models load
+  # `checkpoint`. The page is <ROOT>/ablation/ebola-ablation.html, copied
+  # to REVIEW_DIR as bdbv-ebola-ablation.html. Not part of `all`.
+  round: 33
+  sims: ""
+  seeds: [33300, 33301, 33302, 33303, 33304, 33305, 33306, 33307, 33308, 33309]
+  k: 6
+  seed: 1
+  checkpoint: slots-c44bbe122e6c
+  reference: randomwalknowcast
+  samples: 200
+  max_delay: 42
+  block_limit: 1000
+  models:
+    - randomwalknowcast
+    - foundation_zeroshot
+    - foundation
+    - foundation_zeroshot_pseudoweeks
+    - foundation_pseudoweeks
+  sim_variants:
+    - daily
+    - weekly
+    - short
+    - fresh
+    - gap
+    - few
+    - few_daily
+    - late_start
+    - small
+    - weekday
+    - long_delays
+    - stops
+    - bdbv_like
+  bdbv_variants: [as_is]
+
 dashboard:
   # The fine-tuning dashboard (task workflow:dashboard;
   # workflow/flowlib/dashboard).
