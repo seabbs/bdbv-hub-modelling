@@ -26,6 +26,15 @@ def ablation_folders():
     return [f"{ABL_DIR}/{side}/{v}" for side, vs in ABL_SIDES.items() for v in vs]
 
 
+def ablation_releases():
+    """The training run's block releases, relative to ROOT unless
+    absolute; none when `ablation.releases` is empty."""
+    path = ABL["releases"]
+    if not path:
+        return []
+    return [path if Path(path).is_absolute() else f"{LOCAL['ROOT']}/{path}"]
+
+
 def ablation_checkpoint(model):
     """The checkpoint a fine-tuned model loads, else none."""
     return ABL["checkpoint"] if model in FINETUNED_MODELS else ""
@@ -133,8 +142,11 @@ rule ablation_summary:
 
 
 rule ablation_report:
+    # The page (workflow/scripts/ebola_ablation_report.py), with the
+    # training run's block releases (`ablation.releases`) when set.
     input:
-        [f"{f}/summary.json" for f in ablation_folders()],
+        summaries=[f"{f}/summary.json" for f in ablation_folders()],
+        releases=ablation_releases(),
     output:
         f"{ABL_DIR}/ebola-ablation.html",
     log:
@@ -146,11 +158,14 @@ rule ablation_report:
         folders=" ".join(ablation_folders()),
         checkpoint=ABL["checkpoint"],
         reference=ABL["reference"],
+        releases=lambda wc, input: (
+            f"--releases {input.releases}" if input.releases else ""
+        ),
         review=LOCAL["REVIEW_DIR"],
     shell:
-        "(uv run python workflow/scripts/ebola_ablation.py report "
-        "{params.folders} --checkpoint '{params.checkpoint}' "
-        "--reference {params.reference} --out {output} "
+        "(uv run python workflow/scripts/ebola_ablation_report.py "
+        "{params.folders} --checkpoint {params.checkpoint} "
+        "--reference {params.reference} {params.releases} --out {output} "
         "&& if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
         "cp {output} '{params.review}/bdbv-ebola-ablation.html.tmp' && "
         "mv '{params.review}/bdbv-ebola-ablation.html.tmp' "

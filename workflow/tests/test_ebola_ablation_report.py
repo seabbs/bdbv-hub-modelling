@@ -147,7 +147,8 @@ def test_the_page_is_computed_from_the_runs(tmp_path) -> None:
     assert "Pseudo weeks" in html
     assert "Release counts" in html
     # The training blocks come from releases.csv.
-    assert "7 releases or fewer" in html
+    # Training blocks at or below the most releases BDBV had (4).
+    assert "4 releases or fewer" in html
     # Scores come from the summaries.
     assert "3.70" in html
     assert "0.90" in html

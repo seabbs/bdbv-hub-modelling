@@ -222,7 +222,9 @@ ablation:
   # and the longest delay `max_delay` (days). The simulations are
   # `seeds` of round `round`, or of the folder `sims` when set; `k` of
   # them, drawn with `seed`, become the provinces. Fine-tuned models load
-  # `checkpoint`. The page is <ROOT>/ablation/ebola-ablation.html, copied
+  # `checkpoint`. The page counts the training run's block releases from
+  # `releases` (relative to ROOT; empty leaves them out). The page is
+  # <ROOT>/ablation/ebola-ablation.html, copied
   # to REVIEW_DIR as bdbv-ebola-ablation.html. Not part of `all`.
   round: 33
   sims: ""
@@ -230,6 +232,7 @@ ablation:
   k: 6
   seed: 1
   checkpoint: slots-c44bbe122e6c
+  releases: runs/runb/train/releases.csv
   reference: randomwalknowcast
   samples: 200
   max_delay: 42

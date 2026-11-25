@@ -258,6 +258,7 @@ properties:
       - k
       - seed
       - checkpoint
+      - releases
       - reference
       - samples
       - max_delay
@@ -274,6 +275,7 @@ properties:
       k: {type: integer, minimum: 1}
       seed: {type: integer}
       checkpoint: {type: string}
+      releases: {type: string}
       reference: {type: string}
       samples: {type: integer, minimum: 1}
       max_delay: {type: integer, minimum: 1}
