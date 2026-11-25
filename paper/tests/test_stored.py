@@ -52,7 +52,7 @@ def test_each_set_names_its_files_from_the_config() -> None:
     # Nothing from the held-out round or the paper run's forecasts.
     text = json.dumps(sets)
     assert "/r38/" not in text
-    assert "synthetic.csv.gz" not in text.replace("synthetic-dev.csv.gz", "")
+    assert CONFIG["synthetic"]["forecasts"]["paper"] not in text
 
 
 def test_the_hash_follows_the_contents_not_the_paths(tmp_path: Path) -> None:
