@@ -560,21 +560,25 @@ def test_keys_follow_the_task_settings_and_bvd_release(
 
 
 @pytest.mark.usefixtures("in_root")
-def test_skipped_origins_leave_the_other_keys_alone(
+def test_origins_before_the_first_leave_the_other_keys_alone(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     daily: pd.DataFrame,
     config: BacktestConfig,
     tasks: dict[str, ForecastTask],
+    vintages: list[str],
 ) -> None:
     sampler = store.samplers()
     models = ["renewal"]
     keys = store.current_keys(tasks, models, sampler, "c")
-    skip = dataclasses.replace(config, skip_origins=("2026-08-18",))
-    kept = store.origin_tasks(target, delays, skip, daily, load_zone_data(DATA))
-    assert "2026-08-18" not in kept
+    # With D, 2026-08-18 is a cumulative first release, so the store
+    # starts a release later.
+    later = dataclasses.replace(config, max_delay=42)
+    kept = store.origin_tasks(target, delays, later, daily, load_zone_data(DATA))
+    assert list(tasks) == vintages[1:]
+    assert list(kept) == vintages[2:]
     assert store.current_keys(kept, models, sampler, "c") == {
-        k: v for k, v in keys.items() if k[1] != "2026-08-18"
+        k: v for k, v in keys.items() if k[1] in kept
     }
 
 
