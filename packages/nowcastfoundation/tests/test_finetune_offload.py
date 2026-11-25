@@ -89,13 +89,23 @@ def test_an_offloaded_step_records_its_rates_and_saves_nothing(tmp_path):
 
 
 @pytest.mark.usefixtures("short_context")
-def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
+def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(
+    tmp_path, monkeypatch
+):
     model = trained()
     val = blocks()
     where = tmp_path / "step-0000100"
     fs.save_snapshot(model, where, {"step": 100})
     base = tiny_model()
     series_bias.attach(base)
+    forwards = []
+    forward = fs.forward
+
+    def counted(*args, **kwargs):
+        forwards.append(1)
+        return forward(*args, **kwargs)
+
+    monkeypatch.setattr(fs, "forward", counted)
     got = fe.evaluate(
         where / "adapter",
         base,
@@ -103,25 +113,67 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
         ["monitor", "by_source", "checkpoint"],
         batch_size=100,
     )
-    assert got["eval_loss"] == fs.held_out_loss(
-        model, val[: fs.ft.EVAL_BLOCKS], 100
+    # One forward pass per batch gives every loss and the coverage.
+    from chronos.chronos2.dataset import DatasetMode
+
+    batches = len(list(fs.ByLength(val, 100, DatasetMode.VALIDATION).indices()))
+    assert len(forwards) == batches
+    monkeypatch.setattr(fs, "forward", forward)
+
+    def near(a, b):
+        return a == pytest.approx(b, rel=1e-5)
+
+    assert near(
+        got["eval_loss"], fs.held_out_loss(model, val[: fs.ft.EVAL_BLOCKS], 100)
     )
-    assert got["by_source"] == fs.held_out_by_source(
-        model, val, 100, fs.ft.EVAL_BLOCKS
+    assert near(
+        got["by_source"],
+        fs.held_out_by_source(model, val, 100, fs.ft.EVAL_BLOCKS),
     )
-    assert got["held_out_loss"] == fs.held_out_loss(model, val, 100)
-    assert got["held_out_loss_by_level"] == fs.held_out_by_level(
-        model, val, fs.LEVEL_BLOCKS
+    assert near(got["held_out_loss"], fs.held_out_loss(model, val, 100))
+    parts = fs.held_out_parts(model, val, 100)
+    assert near(got["held_out_loss_nowcast"], parts["nowcast"])
+    assert near(
+        got["held_out_loss_by_level"],
+        fs.held_out_by_level(model, val, fs.LEVEL_BLOCKS),
     )
-    assert got["held_out_loss_by_source"] == fs.held_out_by_source(
-        model, val, 100
+    assert near(
+        got["held_out_loss_by_source"], fs.held_out_by_source(model, val, 100)
     )
+    assert near(got["held_out_coverage"], fe.held_out_coverage(model, val, 100))
     assert np.isfinite(got["eval_loss"])
     # Each total comes with its nowcast and forecast parts.
     for name in ("eval_loss", "held_out_loss"):
         assert got[f"{name}_nowcast"] + got[f"{name}_forecast"] == (
             pytest.approx(got[name], rel=1e-6)
         )
+
+
+@pytest.mark.usefixtures("short_context")
+def test_the_quick_check_scores_a_fixed_subset(tmp_path):
+    model = trained()
+    val = blocks(6)
+    where = tmp_path / "n100" / "finetuned-ckpt"
+    model.save_pretrained(where)
+    picked = fe.quick_blocks(val, 3)
+    # Spread evenly over the held-out set, the same every time.
+    assert [b["context"][0, 0] for b in picked] == [
+        val[i]["context"][0, 0] for i in (0, 2, 4)
+    ]
+    assert fe.quick_blocks(val, 10) == val
+    base = tiny_model()
+    series_bias.attach(base)
+    got = fe.quick_check(where, base, val, 100, 3)
+    assert got["blocks"] == 3
+    assert got["loss"] == pytest.approx(
+        fs.held_out_loss(model, picked, 100), rel=1e-5
+    )
+    cover = fe.held_out_coverage(model, picked, 100)
+    assert got["cover90"] == pytest.approx(cover["cover90"])
+    assert got["cover50"] == pytest.approx(cover["cover50"])
+    assert got["loss_nowcast"] + got["loss_forecast"] == pytest.approx(
+        got["loss"], rel=1e-6
+    )
 
 
 def test_held_out_blocks_round_trip_with_their_count(tmp_path):
