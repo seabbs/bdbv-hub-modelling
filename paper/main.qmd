@@ -441,14 +441,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Given a baseline nowcast as complete counts, the fine-tuned model scored [X] (SI, Daily nowcasts).
   - Correlated trajectories changed scores by [X] (SI, Impact of correlated trajectories).
   - The renewal models built on our port of epinowcast scored [X] against the other Ebola hub submissions (SI, Renewal model).
-- **Comparison with other work.**
-  - Most uses of foundation models in forecast hubs are zero-shot, and correct for delays outside the model, with a nowcast or adjustment applied before the model sees the data [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
-    Our model learns the delays itself, so nowcasting and forecasting happen in one step.
-  - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
-  - Mantis and the UMass axial model use simulations to teach transmission dynamics to custom neural network architectures, while we use them to teach reporting delays to a general foundation model and keep its own forecasting [@Dudley2026; @umass_axial].
-  - Mantis simulates single populations, with one final series per outbreak, no releases or revisions and delays as a weighted kernel over days rather than double interval censored distributions, while our grid simulates linked places and age groups, their releases and revisions, and the model nowcasts them jointly [@Dudley2026].
-  - Mantis is evaluated retrospectively and does not state that its test sets were fixed before its simulators were built, while we fixed our test sets in advance, the German held-out half, the BDBV data and a fresh simulated test round, and submitted to the Ebola hub in real time [@Dudley2026].
-- **Strengths and weaknesses.**
+- **Strengths and limitations of the evaluation.**
   - We used one foundation model, one source of synthetic data and two case studies.
     However, the case studies differ in pathogen, reporting system and cadence, and one was in real time.
   - We did not compare with epinowcast directly, or, for the synthetic study, with the model that generated the data.
@@ -462,54 +455,45 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past Ebola rounds to decide whether to submit it.
     Those rounds informed that decision, so only rounds after its first submission are prospective for it.
     The German held-out half and the simulated test round were fixed in advance, so they are held out for every decision.
-  - We evaluated on a retrospective and a real-time case study, with synthetic data that can be tuned to a setting.
-  - Fine-tuning ran on one machine, so it needs no shared compute.
-  - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
-  - Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
-  - We used one layout, daily counts and daily lag series, with an aggregate row per place in both reporting-triangle models, and could also have included weekly lag series in the block.
-  - We simulate and fine-tune on counts only.
-  - Other common nowcasting targets are proportions, such as influenza-like illness as a share of visits, variant or sequence proportions, and wastewater samples [@Bracher2026; @placeholder].
-  - Extending the simulator and fine-tuning to these targets is future work.
+- **Strengths and limitations of the model and data.**
+  - Fine-tuning ran on one machine, so it needs no shared compute, and the synthetic data can be tuned to a setting.
   - We could only fine-tune and forecast with blocks that fit in the memory of our available GPUs, which forced several approximations (Methods; SI, Fitting in GPU memory).
     We fine-tuned on blocks of at most 364 steps of history but forecast with all available data, and did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
     We cut systems too large for one block into views, so zones in different subtrees inform each other only through the aggregated totals.
     For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.
+  - We used one layout, daily counts and daily lag series, with an aggregate row per place in both reporting-triangle models, and could also have included weekly lag series in the block.
+  - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
+    Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
+  - We simulate and fine-tune on counts only.
+    Other common nowcasting targets are proportions, such as influenza-like illness as a share of visits, variant or sequence proportions, and wastewater samples [@Bracher2026; @placeholder].
   - Key references: [@Kalahasti2026; @Meyer2025].
-- **Domain knowledge in foundation models.**
-  - Domain knowledge enters in two ways, through the simulations and through small changes to the architecture.
-  - Simulators for nowcasting need the surveillance process modelled correctly, with releases and revisions and double interval censored delays, and this is where epidemiological knowledge adds value over generic large-scale simulation [@Charniga2024; @abbottprimarycensored].
-  - A marginal generative nowcasting model gives such a simulator, as it can be run forward, and epinowcast already covers the reporting patterns seen in practice [@abbottepinowcast].
-  - The attention biases add what the model cannot learn from values alone, which series belong to which place and how places nest [@Woo2024; @Yang2022].
-  - Whether each route improves the nowcasts and forecasts is to be filled in from the results and the sensitivity analyses.
+- **Comparison with foundation models and neural networks.**
+  - Most uses of foundation models in forecast hubs are zero-shot, and correct for delays outside the model, with a nowcast or adjustment applied before the model sees the data [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
+    Our model learns the delays itself, so nowcasting and forecasting happen in one step.
+  - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
+  - Mantis and the UMass axial model use simulations to teach transmission dynamics to custom neural network architectures, while we use them to teach reporting delays to a general foundation model and keep its own forecasting [@Dudley2026; @umass_axial].
+  - Mantis simulates single populations, with one final series per outbreak, no releases or revisions and delays as a weighted kernel over days rather than double interval censored distributions, while our grid simulates linked places and age groups, their releases and revisions, and the model nowcasts them jointly [@Dudley2026].
+  - Mantis is evaluated retrospectively and does not state that its test sets were fixed before its simulators were built, while we fixed our test sets in advance, the German held-out half, the BDBV data and a fresh simulated test round, and submitted to the Ebola hub in real time [@Dudley2026].
+  - Domain knowledge enters our model in two ways, through the simulations and through the attention biases, which add what the model cannot learn from values alone, which series belong to which place and how places nest [@Woo2024; @Yang2022].
+    Whether each route improves the nowcasts and forecasts is to be filled in from the results and the sensitivity analyses.
   - This gives a case study for adding domain knowledge to foundation models in other fields where a well-tested generative model of the data exists.
-  - Key references: [@Dudley2026; @Dudley2025; @Dooley2023; @Hollmann2025; @Ansari2025].
-- **Against the literature.**
-  - Other uses of foundation models in infectious disease modelling.
-    Key references: [@Kalahasti2026; @Cai2026; @Wang2025; @Jafari2026; @Du2025; @Li2025; @Aygun2025; @Martinson2026; @Koucha2026].
-  - Fine-tuning in other domains.
-    Key references: [@Laglil2026; @Das2024b; @Hu2021].
-  - Other nowcasting approaches.
-    Chain ladder methods are simple and fast but have limited forecasting support, while generative models can forecast but need expert knowledge to configure for each target and reporting system [@Johnson2025; @abbottepinowcast].
+  - Key references: [@Kalahasti2026; @Cai2026; @Wang2025; @Jafari2026; @Du2025; @Li2025; @Aygun2025; @Martinson2026; @Koucha2026; @Laglil2026; @Das2024b; @Hu2021; @Dudley2025; @Dooley2023; @Hollmann2025; @Ansari2025].
+- **Comparison with nowcasting methods.**
+  - Chain ladder methods are simple and fast but have limited forecasting support, while generative models can forecast but need expert knowledge to configure for each target and reporting system [@Johnson2025; @abbottepinowcast].
     Our model sits between them, configured once through the simulations and applied to new targets without change.
-    Key references: [@bastos; @Seaman2022; @Bergstrom2022; @Gressani2024; @Schneble2021; @vandeKassteele2019; @Overton2023-dk; @Mellor2025; @Tang2025; @stonerPowerfulModellingFramework2020; @Kamarthi2021; @Koemen2025; @Wilsens2025].
-- **A possible emulator.**
-  - A model fine-tuned on epinowcast simulations may emulate epinowcast in a fraction of its run time.
-  - We did not compare with epinowcast, so we cannot say how close it is.
-  - The same approach could emulate other slow packages.
-- **Porting models between languages.**
+  - Simulators for nowcasting need the surveillance process modelled correctly, with releases and revisions and double interval censored delays, and this is where epidemiological knowledge adds value over generic large-scale simulation [@Charniga2024; @abbottprimarycensored].
+    A marginal generative nowcasting model gives such a simulator, as it can be run forward, and epinowcast already covers the reporting patterns seen in practice [@abbottepinowcast].
   - We ported the epinowcast model from R and Stan to Python on top of PyRenew [@RCoreTeam; @Carpenter2017; @pyrenew].
-  - LLM coding assistants make this kind of port much quicker, which makes it easier to standardise on a single code base.
-  - A port still depends on the original implementation being well tested, as it gives the reference the port is checked against.
-  - Without a mature, well-tested original, there is no way to tell whether a port is correct.
-- **Fine-tuned foundation models as baselines.**
-  - We think fine-tuned foundation models like ours, and the same approach applied to newer industry-leading foundation models, should serve as baselines for other model developers and for hubs.
-  - They are cheap to run, general across pathogens, need no specialist knowledge of the reporting system to configure, and improve as the base models improve.
-  - This needs open checkpoints, the simulation grid and the workflow that fine-tunes and scores them.
-- **Further work.**
-  - Other foundation models.
-  - More case studies.
+    LLM coding assistants make this kind of port much quicker, which makes it easier to standardise on a single code base.
+    A port still depends on the original implementation being well tested, as it gives the reference the port is checked against.
+    Without a mature, well-tested original, there is no way to tell whether a port is correct.
+  - Key references: [@bastos; @Seaman2022; @Bergstrom2022; @Gressani2024; @Schneble2021; @vandeKassteele2019; @Overton2023-dk; @Mellor2025; @Tang2025; @stonerPowerfulModellingFramework2020; @Kamarthi2021; @Koemen2025; @Wilsens2025].
+- **Future work.**
+  - Other foundation models, and more case studies.
   - A direct comparison with Mantis, and fine-tuning Mantis on our simulations for nowcasting, as reporting delays, revisions and surveillance quirks are not in its training simulations [@Dudley2026].
-  - Testing the fine-tuned model as an emulator of epinowcast.
+  - A model fine-tuned on epinowcast simulations may emulate epinowcast in a fraction of its run time.
+    Testing this needs a direct comparison with epinowcast, and the same approach could emulate other slow packages.
+  - Extending the simulator and fine-tuning to proportions and other non-count targets.
   - Fine-tuning with other epidemiological features as covariates, such as distances between locations or mobility.
   - Training on the count not yet reported instead of the total count.
     The reported count would then be a lower bound by construction.
@@ -519,6 +503,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Foundation time series models can be adapted to infectious disease surveillance data, with domain knowledge added through simulated data and small changes to their architecture.
   - This combines their forecasting with the delay handling of nowcasting methods, without specialist configuration.
   - Fine-tuned foundation models, ours and the same approach on newer foundation models, should serve as baselines for model developers and for forecast and nowcast hubs.
+    They are cheap to run, general across pathogens and improve as the base models improve, but this needs open checkpoints, the simulation grid and the workflow that fine-tunes and scores them.
   - More case studies are needed before routine use.
 :::
 
