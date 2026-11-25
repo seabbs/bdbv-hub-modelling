@@ -59,7 +59,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
   - Some recent infectious disease forecasting models fine-tune a foundation model on real surveillance data [@dhauser_fluchronos; @fluxengine_atlas].
   - Several existing methods incorporate domain knowledge using simulated data but all of these approach custom neural network architectures [@Dudley2026; @umass_axial].
   - Outside of infectious disease forecasting fine tuning using domain-specific synthetic data has been shown to improve performance in other domains, including weather forecasting [@Dooley2023] and financial time series [@Muller2022].
-  - As well as fine tuning it is possible to adapt foundation time series models for specific tasks. This includes modifying their attention in order to bias them towards related covariates or other time series. (not quite there need to be clearer about specifc tasks I think).
+  - As well as fine tuning, foundation time series models can be adapted with small changes to their architecture.
+    One such change adds learned biases to the attention scores, so the model knows which series are related, such as a count and its reporting delays, or a place and the region that contains it [@Woo2024; @Yang2022].
   - Key references: [@mcgough2020nowcasting; @gunther2021nowcasting; @Wolffram2023; @Ansari2024; @Das2024a; @Woo2024; @Rasul2023; @Garza2023; @Aksu2024; @Shchur2025; @Kalahasti2026; @Dudley2025].
 
 - **Context 2** Nowcasting methods and avilable models
@@ -70,7 +71,9 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
   - Bayesian marginal and why yes for synth.
 
 - **What we did.**
-  - We fine-tuned, and modified, Chronos-2, a general time series foundation model, using infectious disease surveillance data simulated using the epinowcast nowcasting framework. (note quite there need to be clearer about the attnetion biases changes).
+  - We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.
+  - We gave the model the reporting triangle as one series per place and reporting delay.
+    We added learned attention biases so it can tell which delay series belong to which place, and which places sit within which regions.
   - We developed the settings for the simulated data based on our past experience of infectious disease modelling including in the COVID-19 pandmeic [@Wolffram2023], the 2023 Mpox outbreak [@Overton2023-dk], and based on the early data available for the 2025 Ebola outbreak in the Democratic Republic of the Congo [@bdbv_modeling_hub_2026].
   - We adapted a recently developed baseline nowcasting method to also produce forecasts as a baseline for comparison.
   - We first evaluated these models on held-out simulations.
