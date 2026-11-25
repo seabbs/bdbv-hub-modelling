@@ -341,7 +341,7 @@ def test_a_place_with_no_week_to_start_from_starts_late_and_stays_small(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "The copula pairs each week's province draws on its own (#310), so "
+        "The copula pairs each week's province draws on its own, so "
         "a sample's nowcast week and the week after are not one trajectory: "
         "the correlation is about 0 paired and 0.9 unpaired. Whether to keep "
         "trajectories is an open decision."

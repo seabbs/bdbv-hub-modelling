@@ -122,7 +122,7 @@ pit_min_rows = 20
 # symmetric: a ratio r is breached when the value is above r times or
 # below 1/r times the reference.
 # The format checks (schema, values, samples, rt) and the national sum
-# fail; the plausibility checks only warn (Sam, 2026-11-24).
+# fail; the plausibility checks only warn.
 [checks]
 samples = 100
 horizon_weeks = 3          # target end dates required after the reference date

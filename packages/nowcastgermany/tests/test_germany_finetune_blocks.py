@@ -90,7 +90,7 @@ def test_the_cutter_imports_without_the_evaluation_module():
 
 
 def test_german_blocks_keep_the_real_dates(monkeypatch):
-    # Lead 01:05 sweep (7): the German tasks score on the real dates, so
+    # The German tasks score on the real dates, so
     # a block is cut on its own date, not moved to the Saturday after.
     counts = fg.german_counts(_wide(), "2021-07-31")
     seen = []

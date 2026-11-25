@@ -73,7 +73,7 @@ def test_dates_share_chronos_passes(monkeypatch: pytest.MonkeyPatch) -> None:
         .reset_index(drop=True),
     )
     # Dates whose tasks share a schema share passes. Each date's lags
-    # come from its own reporting delay (#548) and each daily block its
+    # come from its own reporting delay and each daily block its
     # own context, so the schemas, and so the passes, need not be shared:
     # never more passes than the dates alone.
     assert max(calls) <= pipe.calls <= sum(calls)

@@ -1,4 +1,4 @@
-"""Chronos-2 forward passes packed to the device's memory (#1114)."""
+"""Chronos-2 forward passes packed to the device's memory."""
 
 from __future__ import annotations
 

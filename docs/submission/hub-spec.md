@@ -165,7 +165,7 @@ This passes under either reading and matches the joint meaning hubValidations gi
 
 ## 4a. Target `wk R_t` (quantiles)
 
-Since 2026-11-23 (hub tasks.json at b7e6842f5, InsightNet-US/BDBV-Modeling-Hub#142) the round has a second, optional model task.
+The round has a second, optional model task (hub tasks.json at b7e6842f5).
 
 - `target`: `optional: ["wk R_t"]`, the effective reproduction number in the epi week ending on `target_end_date`.
 - `target_end_date`: the reference week and the week before only (horizon 0 or negative).

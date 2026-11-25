@@ -161,7 +161,6 @@ def test_the_si_notes_name_every_level_and_the_held_out_seeds() -> None:
 
 
 def test_the_held_out_note_names_the_grid_file_and_no_machine_path() -> None:
-    # It named a retired grid label and printed the simulations' folder.
     config = {
         **CONFIG["synthetic"],
         "simulations": {"paper": "$ROUNDS/r38/sims"},

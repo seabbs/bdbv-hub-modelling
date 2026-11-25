@@ -147,7 +147,7 @@ def _contrast(a: str, b: str) -> float:
 
 
 def test_zero_shot_is_green_and_complete_data_zero_shot_purple() -> None:
-    # Green as the old dashboard's zero-shot, not pink.
+    # Zero-shot is green, not pink.
     def hue(colour: str) -> float:
         _, a, b = _lab(_linear(colour))
         return float(np.degrees(np.arctan2(b, a)) % 360)

@@ -693,7 +693,7 @@ SUBMISSIONS = pd.DataFrame(
 
 def test_substituted_weeks_are_scored_under_their_own_label() -> None:
     """A week a fallback went out under seabbs-renewal is not scored as
-    the chain's start (Sam, #768 item 14)."""
+    the chain's start."""
     from bdbvhub.compare import split_substituted, substituted_label
 
     forecasts = pd.concat(

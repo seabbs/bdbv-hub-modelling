@@ -164,8 +164,8 @@ evidence:
   compare_daily:
     file: $ROOT/runs/compare-daily.csv
   # The realised shares of each combination of block layout and options
-  # (rule block_combinations). From the no-slots run: Run A's trainer
-  # predates the joint tally, and no-slots cuts the same blocks.
+  # (rule block_combinations). From the no-slots run, which cuts the same
+  # blocks as Run A.
   block_combinations:
     file: $ROOT/runs/noslots/train/block-combinations.csv
 

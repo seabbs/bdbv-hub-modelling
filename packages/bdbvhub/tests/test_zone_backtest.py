@@ -184,7 +184,7 @@ def test_zone_backtest_of_no_origin_is_empty(
 def test_the_zone_backtest_scores_the_stored_zone_runs(
     stored: tuple[Path, Path], vintages: list[str]
 ) -> None:
-    # Each origin's forecasts are its walks' stored zone runs (#1094),
+    # Each origin's forecasts are its walks' stored zone runs,
     # less the zones with no cases at the origin.
     run = store.stored_zone_forecasts(*stored, load_daily_zones(DATA))
     origin = vintages[-2]

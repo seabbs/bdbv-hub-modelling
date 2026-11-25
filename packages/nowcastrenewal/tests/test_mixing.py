@@ -135,7 +135,7 @@ def test_exported_outflow_loses_the_whole_share_whatever_the_kernel():
     # A kernel normalised per origin over more receivers than it lists
     # (columns sum to less than 1): with "exported" each origin still
     # loses its whole share, as what goes to the unlisted receivers
-    # leaves (#768 item 8).
+    # leaves.
     full = normalise_kernel(K_WEIGHTS, "origin")
     sub = full[:3, :3]
     assert np.all(sub.sum(axis=0) < 1)

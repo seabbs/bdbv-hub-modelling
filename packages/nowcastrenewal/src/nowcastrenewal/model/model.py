@@ -187,9 +187,8 @@ class ModelConfig:
         data twice at full weight, and larger values widen the estimates
         so they move our Rt mainly where our own data are weak. It is set
         by that judgement, like a prior, and is not tuned on scores.
-        Sam set 1.5 (#768 item 5), the power prior with tempering
-        $1 / 1.5^2 \approx 0.44$, a little weaker than the earlier
-        $\sqrt{2}$ (tempering 0.5). `math.inf` gives the model without
+        It is 1.5, the power prior with tempering
+        $1 / 1.5^2 \approx 0.44$. `math.inf` gives the model without
         the term, exactly.
     dmax : int
         Maximum onset-to-report delay in days. Longer delays of known
@@ -210,7 +209,7 @@ class ModelConfig:
         the walk's weekly changes (`forecaster.fit_config`).
     rt_sd_lognormal : tuple of float or None
         Median and log-scale SD of a LogNormal prior on that walk's step
-        SD, shared by every variant (Sam, 2026-11-24). A centred walk
+        SD, shared by every variant. A centred walk
         funnels where its step SD nears 0, which HalfNormal(0.2) allowed:
         at the 2026-11-22
         release, CD-NK fitted alone mixed the step SD at bulk ESS 29 and

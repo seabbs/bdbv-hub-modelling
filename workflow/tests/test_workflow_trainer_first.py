@@ -4,8 +4,8 @@ Snakemake's scheduler (its MILP) picks the jobs that maximise the sum of
 their priorities. A finished segment frees its cores, and the next
 segment, a checkpoint's release and its scoring all become ready at
 once: their priorities summed must never outweigh the trainer's, or the
-GPU waits behind CPU jobs (archie, 25 Nov: verify_checkpoint and
-seven_day_check took n1600's freed cores and n3200 never started).
+GPU waits behind CPU jobs: verify_checkpoint and seven_day_check would
+take a finished segment's freed cores and the next segment never starts.
 """
 
 import logging

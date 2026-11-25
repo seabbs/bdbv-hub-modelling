@@ -317,8 +317,8 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
     assert CONFIG["evidence"]["checkpoint_scores"] == {
         "file": "$ROOT/runs/comparison.csv"
     }
-    # Run A's trainer predates the joint tally; no-slots cuts the same
-    # blocks, so its tally is Run A's design.
+    # The no-slots run writes the joint tally and cuts the same blocks
+    # as Run A, so its tally is Run A's design.
     assert CONFIG["evidence"]["block_combinations"] == {
         "file": "$ROOT/runs/noslots/train/block-combinations.csv"
     }

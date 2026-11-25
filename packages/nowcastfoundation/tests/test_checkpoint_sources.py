@@ -198,7 +198,7 @@ def test_the_repository_s_config_names_a_source() -> None:
 
     got = tomllib.loads(conf)
     assert got["source"] in fc.FINETUNED_SOURCES
-    # The Hub repository is Sam's pick: empty until he sets it.
+    # The Hub repository is empty until one is set.
     assert set(got["huggingface"]) == {"repo", "revision"}
 
 

@@ -277,7 +277,7 @@ def test_r_live_scores_the_paper_against_scoringutils_live():
 
 def test_repo_checks_fail_on_copied_code_across_the_packages():
     # pylint's symilar over every package's source: any block of 10 or
-    # more lines found twice fails the job (Sam: as DRY as possible).
+    # more lines found twice fails the job.
     job = _workflow("tests.yml")["jobs"]["repo"]
     (step,) = [s for s in job["steps"] if s.get("name") == "Duplicate code"]
     assert "symilar -d 10" in step["run"]

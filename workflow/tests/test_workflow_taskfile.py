@@ -68,7 +68,7 @@ MOVED = {
 # The named dry runs.
 DRY = ["dry:tick", "dry:paper", "dry:submit", "dry:fit-store"]
 
-# Each included Taskfile's namespace and its folder (Sam, 24 Nov).
+# Each included Taskfile's namespace and its folder.
 LOCATIONS = {
     "nowcastutils": "packages/nowcastutils",
     "nowcasteval": "packages/nowcasteval",

@@ -7,8 +7,8 @@ from nowcastfoundation.finetune import interim, stream, verify
 
 
 def test_memory_settings_are_outside_the_hash():
-    # #533: the trainer hashed checkpoint_above, which verify leaves out,
-    # so Run A's n800 and n1600 failed verify and could not be released.
+    # Verify leaves checkpoint_above out of the hash, so the trainer must
+    # too, or its checkpoints fail verify and cannot be released.
     s = {"seed": 1, "note": "x"}
     want = verify.settings_hash(s)
     assert verify.settings_hash(s | {"checkpoint_above": 0}) == want

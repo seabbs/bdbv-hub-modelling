@@ -192,8 +192,8 @@ def _count(value: Any) -> str:
 
 def _training(settings: Mapping[str, Any]) -> list[str]:
     """Return the lines on the training data."""
-    # Checkpoints record the grid by its path when trained: the config
-    # moved beside nowcastfoundation on 24 Nov.
+    # Checkpoints record the grid by the path it had when they were
+    # trained.
     hashes = settings.get("code_sha256", {})
     grid = next(
         (hashes[p] for p in GRID_PATHS if p in hashes),

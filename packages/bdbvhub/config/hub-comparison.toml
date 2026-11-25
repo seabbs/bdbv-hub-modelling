@@ -20,8 +20,8 @@ stored = [
 # here by `--fetch`.
 submissions_table = "data/raw/submission-ledger/submissions.csv"
 # `apart`: a week a fallback went out under one of our hub ids is scored
-# as "<hub id> [<model>]", never mixed with the chain's start (Sam, #768
-# item 14). `together` keeps every week under the hub id.
+# as "<hub id> [<model>]", never mixed with the chain's start.
+# `together` keeps every week under the hub id.
 substituted = "apart"
 # Locations shown in the plot of each round.
 locations = ["CD", "CD-IT", "CD-NK"]

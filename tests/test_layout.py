@@ -137,8 +137,7 @@ def test_renewal_code_reads_no_hub_delay_or_places() -> None:
 
 
 def test_config_holds_only_machine_settings():
-    # Each other config file lives beside the code that reads it (Sam,
-    # 24 Nov).
+    # Each other config file lives beside the code that reads it.
     import subprocess
 
     root = Path(__file__).parents[1]

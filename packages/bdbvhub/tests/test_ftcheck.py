@@ -250,7 +250,7 @@ def test_the_forecast_reads_the_backtest_config_it_is_given(monkeypatch):
 def test_a_check_forecast_resumes_from_the_releases_it_wrote(
     tmp_path, monkeypatch
 ):
-    # A restart loses at most the release in hand (#1182).
+    # A restart loses at most the release in hand.
     from types import SimpleNamespace
 
     import pandas as pd

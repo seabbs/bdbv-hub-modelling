@@ -36,7 +36,7 @@ def test_chronos_loads_on_the_device_setting(loaded, monkeypatch):
 
 
 def test_auto_or_unset_is_refused_at_load(loaded, monkeypatch):
-    # The device is configured, never detected (#827).
+    # The device is configured, never detected.
     foundation, seen = loaded
     for value in ("auto", None):
         if value is None:
@@ -88,7 +88,7 @@ def test_chronos_batch_and_threads_are_machine_settings(monkeypatch):
 
 
 def test_the_inter_op_pool_takes_the_job_s_threads_too(monkeypatch):
-    # torch's inter-op pool defaults to every core (#1114).
+    # torch's inter-op pool defaults to every core.
     import torch
 
     from nowcastfoundation.backends import chronos2
