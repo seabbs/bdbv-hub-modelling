@@ -230,13 +230,16 @@ SCHEDULE_TARGETS=finetune
 PUBLISH=1
 SIMS_FROM=local
 DEVICE=cuda
-FORECAST_DEVICE=cpu
+FORECAST_DEVICE=cuda
+FORECAST_GPU=share
+FORECAST_GPU_JOBS=1
 HEADROOM_CORES=<cores kept free>
 HEADROOM_GB=<GB kept free>
 SIM_SLOTS=<batches at once>
 ```
 
 `HEADROOM_CORES` and `HEADROOM_GB` keep cores and memory free for the machine's user; the trainer, the scoring units (`forecast.threads` each) and the simulation batches share the rest.
+The forecasting jobs (held-out evaluation, the BDBV check, the German units) run on the GPU beside the trainer, one at a time (`FORECAST_GPU_JOBS`): each needs about 2 GB of GPU memory, which an 8 GB card holds beside the trainer, and runs many times faster than on two CPU threads.
 Check the plan, then start the coordinator from a driver checkout at the commit to run:
 
 ```sh
