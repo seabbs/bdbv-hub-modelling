@@ -125,7 +125,7 @@ def test_a_country_pool_that_works_is_kept() -> None:
     a = np.tile([100.0, 130.0], 5)[:9]
     b = np.tile([50.0, 80.0], 5)[:9]
     reported = np.stack([a + b, a, b])
-    own, pooled = _spreads(reported, np.array([180.0, 115.0, 65.0]))
+    _, pooled = _spreads(reported, np.array([180.0, 115.0, 65.0]))
     from nowcastbaselines.walk import walk_noise, walk_variance
 
     both = np.concatenate([np.diff(np.log1p(a)), np.diff(np.log1p(b))])

@@ -673,9 +673,17 @@ def build_origin(
         none = [
             c for c, v in zip(snap.locations, var, strict=True) if not v > 0
         ]
+        roots = [
+            f"{snap.locations[n]} ({pooled[n]:.3g})"
+            for n in np.flatnonzero(snap.parent < 0)
+        ]
         raise NoWalkSpread(
             f"No walk spread above 0 at {snap.releases[o]} for "
-            f"{', '.join(none)}, of its own or from any parent."
+            f"{', '.join(none)}, of its own or from any parent. The "
+            f"national pool, {', '.join(roots)}, nets its weekly changes "
+            "of their Poisson noise to 0 or below, or has fewer than 2 of "
+            f"them, and so does each of its children with "
+            f"{settings.min_level:g} or more cases a week."
         )
     sigma = np.sqrt(var)
     k = settings.walk_weeks
@@ -744,6 +752,14 @@ def _walk_spreads(
     own = np.array([variance(np.array([n])) for n in range(n_loc)])
     pool = pool_matrix(level, snap.parent, settings.min_level)
     pooled = np.array([variance(np.flatnonzero(pool[n])) for n in range(n_loc)])
+    # A country with no pooled estimate pools only the children that
+    # qualify with an estimate of their own (`pooling`), else its own
+    # changes, so every place below it has the country's spread.
+    qualify = pool_matrix(
+        np.where(own > 0, level, 0.0), snap.parent, settings.min_level
+    )
+    for n in np.flatnonzero((snap.parent < 0) & ~(pooled > 0)):
+        pooled[n] = variance(np.flatnonzero(qualify[n]))
     return own, pooled
 
 
