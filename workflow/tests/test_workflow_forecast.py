@@ -29,7 +29,9 @@ def test_an_unknown_device_is_refused():
         forecast.settings(CONFIG, {"FORECAST_DEVICE": "auto"})
 
 
-@pytest.mark.parametrize(("device", "gpu"), [("cuda", 1), ("cpu", 0), ("mps", 0)])
+@pytest.mark.parametrize(
+    ("device", "gpu"), [("cuda", 1), ("cpu", 0), ("mps", 0)]
+)
 def test_a_cuda_job_takes_a_whole_gpu(device, gpu):
     # Jobs never share a GPU: a CUDA job waits for a free one.
     assert forecast.Forecast(device, 2).gpu == gpu
