@@ -281,13 +281,6 @@ class _RowLosses:
         Chronos2Model._compute_loss = self.original
 
 
-EVAL_ACTIVATION_BYTES = 60_000
-"""GPU memory a held-out forward pass holds per series and token, with
-no gradients: a twelfth of a training step's (`stream.ACTIVATION_BYTES`),
-as inference keeps one layer's activations, not every layer's. A batch
-that still runs out is split (`held_out_pass`)."""
-
-
 def block_cost(block: dict[str, Any]) -> int:
     """Return a block's series x tokens at most, before trimming.
 
@@ -337,18 +330,15 @@ def pack(data: Any, budget: int) -> list[list[int]]:
 def eval_budget(device: str) -> int | None:
     """Return a held-out batch's series x tokens on `device`, or None.
 
-    On CUDA, the free memory less `stream.MEMORY_MARGIN` of the total
-    over `EVAL_ACTIVATION_BYTES`; elsewhere None, for the trainer's
+    On CUDA the backend's pass budget (`backends.chronos2.pass_budget`),
+    so a batch fills the device; elsewhere None, for the trainer's
     batches (`stream.ByLength`), as larger ones gain nothing on a CPU.
     """
+    from nowcastfoundation.backends.chronos2 import pass_budget
+
     if not device.startswith("cuda"):
         return None
-    memory = fs.device_memory()
-    if memory is None:
-        return None
-    free, total = memory
-    spare = free - int(fs.MEMORY_MARGIN * total)
-    return max(1, spare // EVAL_ACTIVATION_BYTES)
+    return pass_budget(device)[1]
 
 
 def held_out_pass(
