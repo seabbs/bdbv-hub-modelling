@@ -1,5 +1,5 @@
 ---
-title: "Title to be chosen"
+title: "Fine-tuning a time series foundation model on synthetic outbreaks for nowcasting and forecasting"
 # Candidate titles:
 # 1. Fine-tuning a time series foundation model on synthetic outbreaks for nowcasting and forecasting
 # 2. Teaching a foundation model to nowcast with domain-informed synthetic data
@@ -39,26 +39,63 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - **The gap.**
-  - Real-time case counts are incomplete because of reporting delays.
-  - Generic forecasting models do not use the reporting structure, so they treat incomplete recent counts as final.
-  - Hub models built on foundation models correct for delays outside the model, not by adapting it.
-  - They apply a revision or chain-ladder nowcast first, or raise the most recent weeks [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
-  - Forecast and nowcast hubs lack strong baselines that are cheap to run and general across pathogens, against which to judge new models.
+  - Infectious disease forecasting is being increasingly used to provide situational awareness for public health.
+  - Both in infectious disease forecasting, and more widely, modern machine learning methods including neural networks are becoming increasingly popular.
+    In particular, foundation time series models which are neaural networks trained on many time series have been shown to outperform traditional methods in many settings.
+    However, these methods are not generally specifically designed to deal with, or to make use of, the biases and delays common to infectious disease surveillance data.
+  - Nowcasting models have become increasingly popular as a method to make use of these reporting delays in order to improve forecasts of what will eventually be reported.
+  - Generally, these methods are either relatively simple [@hohle; @Johnson2025], complex and customised for a given setting [@epinowcast; @Wolkfram2023], or are developed in ad-hoc fashion for a given target [@bdbv_modeling_hub_2026].
+  - If these methods have forecasting support it is generally relatively limited or difficult to make performant without expert knowledge of the target and the reporting system.
+  - Methods that fused the frontier forecasting performance of foundation time-series models with the nowcasting performance of domain-specific methods without requiring specialisit knowledge to configure could improve infectious disease forecasts and more generally provide a case study for incorporating domain knowledge into foundation models.
   - Key references: [@hohle; @Johnson2025; @reichCollaborativeHubsMaking2022].
-- **Context.**
-  - Nowcasting methods model reporting delays directly.
+
+- **Context.** Foundation time series models and their use in infectious disease forecasting.
   - Time series foundation models forecast new series with no training on them.
-  - They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly zero-shot, among them Chronos-2, TimesFM and Moirai [@flusight_hub; @placeholder; @respicast_si_hub; @Ansari2025; @Das2024a; @Woo2024].
-  - Some hub models fine-tune a foundation model on real surveillance data [@dhauser_fluchronos; @fluxengine_atlas].
-  - Neural networks built for epidemic forecasting include DEFSI and EpiDeep [@placeholder], GLEAM-AI, a surrogate trained on simulations [@nu_ucsd_gleam_ai], the UMass axial transformer, pretrained on simulated seasons [@umass_axial], and ACCIDDA-Chromantis, delay-aware networks trained on real revisions [@accidda_chromantis].
-  - Mantis is a forecasting model for infectious diseases trained on mechanistic simulations, which it uses to teach transmission dynamics, as the axial model also does [@Dudley2026; @umass_axial].
-  - Synthetic data can instead teach a model reporting delays and surveillance quirks, such as right truncation, changing delays, mixed reporting cadences and places that nest, set in realistic renewal epidemics.
-  - Training on domain-specific synthetic data has precedent: KernelSynth for Chronos [@Ansari2024], ForecastPFN [@Dooley2023], and prior-fitted networks [@Muller2022; @Hollmann2025].
+  - They are typically developed using complex, high parameter neural networks, trained on many time series, and are able to learn general patterns in time series data.
+  - Recent examples include Chronos-2 [@Ansari2025], TimesFM [@Das2024a] and Moirai [@Woo2024] which have all been shown to peroform well on a wide range of forecasting tasks.
+  - They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly without modification (zero-shot) [@flusight_hub; @placeholder; @respicast_si_hub; @Ansari2025; @Das2024a; @Woo2024].
+  - Most of the currently used foundation modles come with tools that allow them to be fine-tuned on new data.
+  - This is a process where the weights of the model are modified to better fit the new data, usually using Low-Rank Adaptation (LoRA) or similar methods, which allow the model to be adapted to new data without requiring full retraining.
+  - Some recent infectious disease forecasting models fine-tune a foundation model on real surveillance data [@dhauser_fluchronos; @fluxengine_atlas].
+  - Several existing methods incorporate domain knowledge using simulated data but all of these approach custom neural network architectures [@Dudley2026; @umass_axial].
+  - Outside of infectious disease forecasting fine tuning using domain-specific synthetic data has been shown to improve performance in other domains, including weather forecasting [@Dooley2023] and financial time series [@Muller2022].
+  - As well as fine tuning, foundation time series models can be adapted with small changes to their architecture.
+    One such change adds learned biases to the attention scores, so the model knows which series are related, such as a count and its reporting delays, or a place and the region that contains it [@Woo2024; @Yang2022].
   - Key references: [@mcgough2020nowcasting; @gunther2021nowcasting; @Wolffram2023; @Ansari2024; @Das2024a; @Woo2024; @Rasul2023; @Garza2023; @Aksu2024; @Shchur2025; @Kalahasti2026; @Dudley2025].
+
+- **Context 2** Nowcasting methods and avilable models
+  - Nowcasting methods estimate what will eventually be reported for recent dates, using the reporting triangle of counts by reference date and reporting delay [@hohle; @Wolffram2023].
+  - To use simulated data for fine-tuning, we need a method that can also act as a generative model of how outbreaks are reported.
+  - Chain ladder methods scale up partial counts by the share historically reported at each delay [@Johnson2025].
+    They are fast and transparent, but have no model of incidence, so they cannot simulate new outbreaks.
+  - Regression methods fit the reporting triangle as a smooth surface over reference date and delay [@vandeKassteele2019; @Schneble2021; @bastos; @Mellor2025].
+    They describe the observed data well but do not constrain the delay distribution or include mechanisms such as transmission, so they give no clear process to simulate from.
+  - Conditional generative models first model total counts and then split them across delays [@hohle; @Stoner2020; @Stoner2023; @Seaman2022].
+    This separates variability in incidence from variability in reporting.
+    However, there is no general software framework for them, and they have not been extended to the wide range of reporting patterns seen in practice, such as changing delays, report-day effects and mixed reporting cadences.
+  - Marginal generative models specify expected counts by reference date and spread them across delays, treating each cell of the reporting triangle as a separate draw [@mcgough2020nowcasting; @gunther2021nowcasting; @lison2024; @abbottepinowcast].
+    Run forward, they simulate how outbreaks are reported, and can include a renewal process, parametric and time-varying delays, report-day effects and pooling across places and age groups [@lison2024; @abbottepinowcast; @Bergstrom2022].
+  - epinowcast is a community-developed software framework for marginal generative nowcasting models [@abbottepinowcast].
+    It is flexible, and supports a wide range of reporting patterns, including changing delays, report-day effects, hierarchical pooling, missing reference dates and user-defined reporting schedules.
+    It has been used in a wide range of applications, including nowcasting COVID-19 hospitalisations in the German nowcast hub [@Wolffram2023], and as a check in nowcasts of mpox and norovirus in England [@Overton2023-dk; @Mellor2025].
+    The same form of model has been used to nowcast the effective reproduction number from line list data [@lison2024].
+    This makes it a natural basis for simulating training data, and our simulations follow its structure.
+  - PyRenew is a Python framework, developed and used at the US CDC, for building renewal models of infectious disease from modular components, such as infection processes, delays and observation models, using JAX and NumPyro [@pyrenew; @Phan2019].
+    It was developed to fit models similar to those in EpiNow2 and to the generative process in epinowcast to multiple data streams across many locations [@EpiNow2; @abbottepinowcast].
+    However, it has no marginal nowcasting model, and does not have delays that change over time or Dirichlet-multinomial reporting noise.
+
 - **What we did.**
-  - We fine-tuned Chronos-2, a general time series foundation model, on simulated outbreaks rather than training a model from scratch.
-  - We aimed to keep the foundation model's own forecasting and add delay handling, so the loss covers the nowcast and one week ahead only.
-  - We evaluated it on held-out simulations, on the German COVID-19 hospitalisation nowcast hub, and on the Ebola forecasting hub, partly prospectively.
+  - We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.
+  - epinowcast is written in R and Stan [@RCoreTeam; @Carpenter2017], while Chronos-2 is written in Python.
+    We ported the epinowcast model to Python on top of PyRenew, reusing its components and adding components where it had none, such as delays that change over time.  - We gave the model the reporting triangle as one series per place and reporting delay.
+    We added learned attention biases so it can tell which delay series belong to which place, and which places sit within which regions.
+  - We developed the settings for the simulated data based on our past experience of infectious disease modelling including in the COVID-19 pandmeic [@Wolffram2023], the 2023 Mpox outbreak [@Overton2023-dk], and based on the early data available for the 2025 Ebola outbreak in the Democratic Republic of the Congo [@bdbv_modeling_hub_2026].
+  - We adapted a recently developed baseline nowcasting method to also produce forecasts as a baseline for comparison.
+  - We first evaluated these models on held-out simulations.
+  - To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 hospitalisation nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
+  - We explored a range of senesitivity analyses to assess the impact of different design choices on model performance.
+  - These included: assessing the impact of using a baseline nowcast as input to the foundation model, fine-tuning on real data, removing the attention biases and lag series, and comparing different lag count rules and block structures.
+  - We aim to demonstrate the potential of foundation time series models fine-tuned on domain-specific synthetic data to improve infectious disease nowcasting and forecasting, and to provide a case study for incorporating domain knowledge into foundation models more generally.
   - Key references: [@Ansari2025; @Johnson2025].
 :::
 
@@ -438,6 +475,11 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - A model fine-tuned on epinowcast simulations may emulate epinowcast in a fraction of its run time.
   - We did not compare with epinowcast, so we cannot say how close it is.
   - The same approach could emulate other slow packages.
+- **Porting models between languages.**
+  - We ported epinowcast from R and Stan to PyRenew so the simulator and the foundation model share one Python code base [@RCoreTeam; @Carpenter2017; @pyrenew].
+  - LLM coding assistants make this kind of port much quicker, which makes it easier to standardise on a single code base.
+  - A port still depends on the original implementation being well tested, as it gives the reference the port is checked against.
+  - Without a mature, well-tested original, there is no way to tell whether a port is correct.
 - **Fine-tuned foundation models as baselines.**
   - We think fine-tuned foundation models like ours, and the same approach applied to newer industry-leading foundation models, should serve as baselines for other model developers and for hubs.
   - They are cheap to run, general across pathogens, and improve as the base models improve.
