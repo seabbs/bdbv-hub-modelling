@@ -28,7 +28,7 @@ import numpy as np
 import pandas as pd
 from scipy.special import ndtri
 
-from nowcastutils.base import NATIONAL
+from nowcastutils.hierarchy import depth
 
 __all__ = [
     "CANDIDATES",
@@ -107,19 +107,19 @@ CANDIDATES: Final = tuple(
 (`bdbvhub.pairing.bdbv_candidates`); the defaults are the best."""
 
 
-def _provinces(
-    locations: pd.Series | tuple[str, ...], national: str
-) -> np.ndarray:
-    """Return whether each location is a province, not the country or a zone."""
-    codes = pd.Series(list(locations), dtype=object).astype(str)
-    return ((codes != national) & (codes.str.count("-") < 2)).to_numpy()
+def _provinces(locations: pd.Series | tuple[str, ...]) -> np.ndarray:
+    """Return whether each location is a province, one level below a root.
+
+    The root (the country) and the levels below the provinces (zones) are
+    not provinces (`nowcastutils.hierarchy.depth`).
+    """
+    return np.array([depth(str(c)) == 1 for c in locations], dtype=bool)
 
 
 def estimate_rho(
     scores: pd.DataFrame,
     prior: float = PRIOR,
     weight: float = PRIOR_WEIGHT,
-    national: str = NATIONAL,
     max_rho: float = MAX_RHO,
 ) -> dict[str, float | int | bool]:
     r"""Estimate $\rho_p$ from normal scores, with its record.
@@ -139,8 +139,6 @@ def estimate_rho(
         $\rho_0$.
     weight : float
         $w$, the pairs the prior counts as.
-    national : str
-        The country's location code.
     max_rho : float
         The largest estimate.
 
@@ -158,7 +156,7 @@ def estimate_rho(
     }
     if scores.empty:
         return fallback
-    rows = scores.loc[_provinces(scores["location"], national)]
+    rows = scores.loc[_provinces(scores["location"])]
     key = ["model", "origin", "target_end_date"]
     pairs = rows.merge(rows, on=key, suffixes=("_a", "_b"))
     pairs = pairs.loc[pairs["location_a"] < pairs["location_b"]]
@@ -266,7 +264,6 @@ def pair_walks(
     locations: tuple[str, ...],
     rho: float,
     rng: np.random.Generator,
-    national: str = NATIONAL,
 ) -> np.ndarray:
     r"""Pair a walk model's province draws within each week.
 
@@ -288,8 +285,6 @@ def pair_walks(
         $\rho_p$, in [0, 1).
     rng : numpy.random.Generator
         Random generator.
-    national : str
-        The country's code.
 
     Returns
     -------
@@ -300,7 +295,7 @@ def pair_walks(
     if not 0.0 <= rho < 1.0:
         raise ValueError("rho must be between 0 and 1 (not 1).")
     n, n_places, n_steps = values.shape
-    paired = _provinces(locations, national)
+    paired = _provinces(locations)
     if not paired.any():
         return values
     z = np.sqrt(rho) * rng.standard_normal((n, 1, n_steps)) + np.sqrt(

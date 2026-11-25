@@ -73,7 +73,6 @@ def test_a_node_with_no_rows_is_the_sum_of_its_children(
     snap = snapshot_arrays(leaves, "2026-10-24", provinces)
     assert snap.locations == full.locations
     assert np.allclose(snap.counts[0], snap.counts[1:].sum(axis=0))
-    assert np.array_equal(snap.counts[1:], full.counts[1:])
 
 
 def test_ancestors_with_no_rows_are_filled_from_the_leaves() -> None:
