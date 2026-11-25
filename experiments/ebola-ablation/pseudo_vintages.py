@@ -18,9 +18,10 @@ of onset (reference) and report the hub publishes, with no delay model:
 - The daily releases (`daily-confirmed-case.csv`): counts by onset day
   at each real release, the vintages themselves (`check`).
 
-`python workflow/scripts/pseudo_vintages.py DATA --out FILE` writes the
-sources, the pseudo vintages by cut-off and their check against the real
-releases as JSON for the ablation page (`ebola_ablation_report.py`).
+`python experiments/ebola-ablation/pseudo_vintages.py DATA --out FILE`
+writes the sources, the pseudo vintages by cut-off and their check against
+the real releases as JSON for the ablation page
+(`ebola_ablation_report.py`).
 """
 
 from __future__ import annotations

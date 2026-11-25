@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).parents[2]
-sys.path.insert(0, str(ROOT / "workflow" / "scripts"))
+ROOT = Path(__file__).parents[3]
+sys.path.insert(0, str(ROOT / "experiments" / "ebola-ablation"))
 import ebola_ablation as ea  # noqa: E402
 
 

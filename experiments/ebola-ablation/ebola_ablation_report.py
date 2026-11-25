@@ -1,11 +1,12 @@
-"""The Ebola ablation page (the workflow's `ablation_report`).
+"""The Ebola ablation page (experiments/ebola-ablation).
 
 Reads each variant's scores (`ebola_ablation.py summary`), its releases
 and the training run's block releases (`releases.csv`, written by the
 block builder), and writes one page with the docs theme
 (`bdbvhub.reporting.pages`). Every number on it is computed here.
 
-    python workflow/scripts/ebola_ablation_report.py DIR... --out FILE \
+    python experiments/ebola-ablation/ebola_ablation_report.py DIR... \
+        --out FILE \
         --checkpoint slots-<hash> [--releases releases.csv]
 """
 
@@ -707,14 +708,12 @@ def report(
         "Relative CRPS pools across outbreaks, so the largest dominate it; "
         "the log CRPS weighs them evenly.\n"
         "The draws, the longest delay and the block limit are the "
-        "workflow's <code>ablation</code> settings, so BDBV scores differ "
-        "from the published check.\n"
+        "experiment's settings, so BDBV scores differ from the published "
+        "check.\n"
         "The variants change the held-out simulations' reports after "
         "simulation; they are not new simulator runs.</p>",
-        "<p class=mut>Code: <code>workflow/scripts/ebola_ablation.py</code> "
-        "and <code>ebola_ablation_report.py</code>, run by the workflow's "
-        "<code>ablation</code> target "
-        "(<code>workflow/rules/ablation.smk</code>).</p>",
+        "<p class=mut>Code: <code>experiments/ebola-ablation/</code>, an "
+        "exploratory experiment, not part of the paper.</p>",
     ]
     return pages.write_page(
         out, pages.page("Ebola ablation", parts, ("tablesort.js",), root)

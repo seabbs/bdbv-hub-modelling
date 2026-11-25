@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).parents[2]
-sys.path.insert(0, str(ROOT / "workflow" / "scripts"))
+ROOT = Path(__file__).parents[3]
+sys.path.insert(0, str(ROOT / "experiments" / "ebola-ablation"))
 import pseudo_vintages as pv  # noqa: E402
 
 LOCATIONS = pd.DataFrame(

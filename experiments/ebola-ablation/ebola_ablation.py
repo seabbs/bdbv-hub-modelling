@@ -14,8 +14,7 @@ forecasts and scores it unchanged.
 - `config --base FILE --samples N --max-delay D --out FILE`: the backtest
   config with the ablation's draws and longest delay.
 
-`ebola_ablation_report.py` writes the page. The workflow's `ablation`
-target runs every step (workflow/rules/ablation.smk).
+`ebola_ablation_report.py` writes the page; README.md gives every step.
 """
 
 from __future__ import annotations

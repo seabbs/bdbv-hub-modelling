@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).parents[2]
-sys.path.insert(0, str(ROOT / "workflow" / "scripts"))
+ROOT = Path(__file__).parents[3]
+sys.path.insert(0, str(ROOT / "experiments" / "ebola-ablation"))
 import ebola_ablation_report as er  # noqa: E402
 
 MODELS = {

@@ -87,7 +87,6 @@ required:
   - score
   - hub_rounds
   - ft_check
-  - ablation
   - dashboard
   - huggingface
 properties:
@@ -248,47 +247,6 @@ properties:
         items: {type: string}
       finetuned: {type: string}
       checkpoint: {type: string}
-  ablation:
-    type: object
-    additionalProperties: false
-    required:
-      - round
-      - sims
-      - seeds
-      - k
-      - seed
-      - checkpoint
-      - releases
-      - reference
-      - samples
-      - max_delay
-      - block_limit
-      - models
-      - sim_variants
-      - bdbv_variants
-    properties:
-      round: {$ref: "#/$defs/round"}
-      sims: {type: string}
-      seeds:
-        type: array
-        items: {type: integer}
-      k: {type: integer, minimum: 1}
-      seed: {type: integer}
-      checkpoint: {type: string}
-      releases: {type: string}
-      reference: {type: string}
-      samples: {type: integer, minimum: 1}
-      max_delay: {type: integer, minimum: 1}
-      block_limit: {type: integer, minimum: 1}
-      models:
-        type: array
-        items: {type: string}
-      sim_variants:
-        type: array
-        items: {type: string}
-      bdbv_variants:
-        type: array
-        items: {type: string}
   dashboard:
     type: object
     additionalProperties: false
