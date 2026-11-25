@@ -4,7 +4,7 @@ import re
 
 import pytest
 from flowlib import compute, localconfig, runs
-from test_workflow_dryrun import FT, _dag, _jobs_of, dry, dry_run
+from test_workflow_dryrun import FT, _jobs_of, dry, dry_run
 
 pytest.importorskip("snakemake")
 
@@ -160,12 +160,14 @@ def test_a_run_trains_without_waiting_on_any_other(tmp_path):
     target = f"{tmp_path}/runs/b/train/n250/settings.json"
     jobs = dry(tmp_path, target, config={**TWO, "train_runs": ["a"]})
     assert jobs["train_segment"] == 1
-    jobs, edges = _dag(tmp_path, "finetune", TWO)
-    run_of = {
-        j: re.search(r"run: (\w+)", label)[1]
-        for j, label in jobs.items()
-        if label.startswith("train_segment")
-    }
+    # Both runs at once: each run's first segment waits on no trainer.
+    config = {**TWO, "train_runs": ["a"]}
+    out = dry_run(tmp_path, "finetune", target, config=config, extra=["--dag"])
+    assert out.returncode == 0, out.stderr
+    jobs = dict(re.findall(r'^\s*(\d+)\[label = "([^"]+)"', out.stdout, re.M))
+    edges = re.findall(r"^\s*(\d+) -> (\d+)$", out.stdout, re.M)
+    trainers = {j for j, label in jobs.items() if label.startswith("train_")}
+    assert len(trainers) == 3
     after = {j: set() for j in jobs}
     for a, b in edges:
         after[b].add(a)
@@ -176,9 +178,8 @@ def test_a_run_trains_without_waiting_on_any_other(tmp_path):
             upstream(k, seen)
         return seen
 
-    for j, run in run_of.items():
-        others = {k for k in upstream(j, set()) if k in run_of}
-        assert {run_of[k] for k in others} <= {run}, (run, others)
+    firsts = [j for j in trainers if not upstream(j, set()) & trainers]
+    assert len(firsts) == 2
 
 
 def test_the_runs_trainers_queue_in_the_config_s_order(tmp_path):

@@ -86,8 +86,9 @@ rule train_segment:
         adapter=protected(f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors"),
     log:
         f"{TRAIN}/n{{n}}.log",
-    # The trainer, the run's critical path, goes before every other job.
-    priority: TRAIN_PRIORITY
+    # The trainer, the run's critical path, goes before every other job;
+    # runs take the GPUs in turn (`Training.trainer_priority`).
+    priority: TRAINING.trainer_priority
     conda:
         TOOLS_ENV
     # The trainer and its block-cutting workers.

@@ -157,8 +157,8 @@ runs:
   # layer (late release starts and the weekly-release share).
   runb: {release_layer: packages/nowcastfoundation/config/finetune/release-layer.yaml}
 
-# The runs `finetune` trains (null: every run in `runs`). The variants
-# train after Run A, so they never take its GPU.
+# The runs `finetune` trains (null: every run in `runs`), each on a GPU
+# of its own when there are enough, else in this order.
 train_runs: [runa]
 
 # The device and CPU threads of every forecasting job: checkpoint scoring
