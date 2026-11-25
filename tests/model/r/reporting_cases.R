@@ -59,10 +59,10 @@ reference_parts <- function(input) {
   obs <- obs[report_date <= max(reference_date)]
   obs[, confirm := cumsum(confirm), by = .(place, age, reference_date)]
   if (!is.null(input$missing_counts)) {
-    # Reports with no reference date, by report date, cumulative.
+    # Reports with no reference date, by report date (new reports, as
+    # epinowcast takes them).
     missing <- CJ(place = places, age = ages, report_date = d0 + 0:(input$n_days - 1))
     missing[, confirm := as.integer(input$missing_counts)]
-    missing[, confirm := cumsum(confirm), by = .(place, age)]
     missing[, reference_date := as.IDate(NA)]
     obs <- rbind(obs, missing, use.names = TRUE)
   }
