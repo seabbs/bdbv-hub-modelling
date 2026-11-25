@@ -183,11 +183,18 @@ It is one process: the page is rebuilt in the background and a client that leave
 
 It runs two ways, through the one script (`flowlib.dashboard.serve`):
 
-- with the run: `dashboard.serve: true` in the workflow config (the default), on a machine whose targets (`TARGETS`) include `finetune`, starts it from the run's own checkout and local config when the run starts, showing the runs it trains (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
+- with the run: `dashboard.serve: true` in the workflow config (the default), on a machine whose targets (`TARGETS`) include `finetune`, `simulate` or `push`, starts it from the run's own checkout and local config when the run starts, showing the runs it trains (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
 - alone: `task workflow:dashboard`, from any checkout, in the foreground.
 
 Either shows the runs under `DASHBOARD_ROOT` (default `ROOT`) that have trained there, the most recently active first, found again on each refresh, so a new run appears in the run picker by itself; `--run NAME` shows only the runs named.
 The machine's monitor serves it under `/finetune/` (see Monitor), so the monitor's port is the one address to open or forward.
+
+The same server shows the simulations under `DASHBOARD_ROOT` at `/sims/` (`flowlib.dashboard.sims`), and the monitor serves them under `/sims/`.
+Its sources are each round's `rounds/r<N>/sims/` and each run's `runs/<run>/sims/`.
+Each simulation is summarised from its first observation draw, every stratum summed: its grid factors and drawn values, each under its grid layer (infections, strata, observation, delays, reporting), its cases, strata, weeks, peak, mean delay and share reported within 7 days, and its weekly counts by reference date.
+A batch is summarised once and cached in `<DASHBOARD_ROOT>/dashboard/sims/` until its files change; the index is refreshed every `dashboard.refresh_every` seconds.
+The page has a summary (tiles and medians by the levels of a chosen factor), each layer's factors and drawn values against the whole source, every simulation's weekly counts on one panel and one panel per level, and a table.
+Clicking a level, a histogram bin or a table row filters or selects; a deep dive shows one simulation's counts by stratum, its counts as known at three cut-offs, its delays, its reporting triangle, its infections, onsets and R where the batch kept them, and its settings by layer.
 `task workflow:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a mailbox) and Tables. Every chart has an info marker (`page/explain.json`).
@@ -277,7 +284,7 @@ Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add 
 ## Monitor
 
 `task workflow:monitor` serves [Panoptes](https://github.com/panoptes-organization/panoptes), Snakemake's web monitor: every run's jobs, their state, what is running and what has failed, in one page.
-It is each machine's one entry: a fine-tuning run starts it, unless one is already serving (`<ROOT>/monitor/serve.pid`), and it keeps serving after the run ends; it serves the fine-tuning dashboard at `/finetune/`, linked from its pages beside the DAG.
+It is each machine's one entry: a fine-tuning or simulating run starts it, unless one is already serving (`<ROOT>/monitor/serve.pid`), and it keeps serving after the run ends; it serves the fine-tuning dashboard at `/finetune/` and the simulations at `/sims/`, linked from its pages beside the DAG.
 Every Snakemake run the tasks, ticks and paper scripts start reports to it through the logger plugin `snakemake-logger-plugin-panoptes` (`workflow/flowlib/monitor.py`), on by default.
 Runs report to `MONITOR_URL`; another machine's runs report to the serving machine's address, and an empty `MONITOR_URL` switches reporting off.
 The plugin drops events it cannot send, so a run goes on when no server is listening.

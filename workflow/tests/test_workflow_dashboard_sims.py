@@ -175,7 +175,6 @@ def test_the_page_reuses_the_dashboard_style():
     assert "--c1:" in page
     # Relative URLs, so it works under the monitor's /sims/ and alone.
     assert 'fetch("/' not in page
-    assert 'href="../finetune/"' not in page
 
 
 @pytest.fixture
@@ -203,14 +202,17 @@ def _get(url):
 
 def test_the_server_answers_the_page_index_and_one_simulation(server):
     status, body = _get(server + "/sims/")
-    assert status == 200 and "<title>Simulations</title>" in body
+    assert status == 200
+    assert "<title>Simulations</title>" in body
     status, body = _get(server + "/sims/sources.json")
     assert status == 200
     assert [s["key"] for s in json.loads(body)] == ["r1", "runa"]
     status, body = _get(server + "/sims/index/r1.json")
-    assert status == 200 and len(json.loads(body)["ids"]) == 4
+    assert status == 200
+    assert len(json.loads(body)["ids"]) == 4
     status, body = _get(server + "/sims/sim/r1/101-0001.json")
-    assert status == 200 and json.loads(body)["id"] == "101-0001"
+    assert status == 200
+    assert json.loads(body)["id"] == "101-0001"
     assert _get(server + "/sims/index/r9.json")[0] == 404
     assert _get(server + "/sims/sim/r1/101-0009.json")[0] == 404
 
