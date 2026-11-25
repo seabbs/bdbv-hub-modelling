@@ -29,17 +29,13 @@ STEP = re.compile(
     r"(?: \(nowcast ([\d.eE+-]+), forecast ([\d.eE+-]+)\))?"
     r"(?:, by source ((?:[\w+]+ [\d.eE+-]+(?:, |$))+))?"
 )
-"""A logged step of the trainer: time, step, loss, held-out loss (none
-for a run that leaves it to the evaluator), its
-nowcast and forecast parts if logged, and the held-out loss by source
-(any source names) every few hundred steps. The bias relations' means
-and ranges after it are read with `BIAS`."""
+"""A logged step of the trainer: time, step and loss, then its held-out
+part, which the dashboard does not read (validation is the full set at
+each checkpoint, flowlib.evaluations). The bias relations' means and
+ranges after it are read with `BIAS`."""
 
 STAMP = re.compile(r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[\w+\] (.*)$")
 """Any line of the trainer: its time and message."""
-
-SOURCE = re.compile(r"([\w+]+) ([\d.eE+-]+)")
-"""One source and its loss in a step's `by source` list."""
 
 NUM = r"[+-]?[\d.]+(?:e[+-]?\d+)?"
 BIAS = re.compile(rf"(\w+?)_? ({NUM}) \[({NUM}), ({NUM})\]")
@@ -129,13 +125,6 @@ class Log:
                 "t": t,
                 "step": int(g[1]),
                 "loss": _float(g[2]),
-                "held": _float(g[3]),
-                "parts": (
-                    {"nowcast": float(g[4]), "forecast": float(g[5])}
-                    if g[4] is not None
-                    else {}
-                ),
-                "src": {k: float(v) for k, v in SOURCE.findall(g[6] or "")},
                 "bias": {
                     k: {"mean": float(v), "min": float(lo), "max": float(hi)}
                     for k, v, lo, hi in BIAS.findall(biased)

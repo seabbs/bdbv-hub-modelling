@@ -7,20 +7,6 @@ import pytest
 from flowlib.dashboard import logs, runs, training
 
 
-def test_the_log_reads_any_source_names(tmp_path):
-    path = tmp_path / "train.log"
-    path.write_text(
-        "2026-11-17 10:00:00 [train] step 200: loss 0.5, held-out (first 100)"
-        " 0.4, by source 3day 0.31, daily+univariate 0.29, weekly 0.12\n"
-    )
-    row = logs.Log(path).rows()[0]
-    assert row["src"] == {
-        "3day": 0.31,
-        "daily+univariate": 0.29,
-        "weekly": 0.12,
-    }
-
-
 def test_run_params_from_the_settings_and_history(tmp_path):
     n = tmp_path / "train" / "n250"
     n.mkdir(parents=True)
@@ -45,7 +31,7 @@ def test_steps_per_simulation_follow_the_last_checkpoint():
     assert training.steps_per_simulation([]) == 1.0
 
 
-def test_loss_runs_take_held_out_by_source_from_history(tmp_path):
+def test_loss_runs_take_the_step_0_losses_from_history(tmp_path):
     folder = tmp_path / "run"
     (folder / "train").mkdir(parents=True)
     (folder / "train" / "history.json").write_text(
@@ -70,7 +56,6 @@ def test_loss_runs_take_held_out_by_source_from_history(tmp_path):
         colour="#111",
     )
     # Against simulations trained: 4 steps a simulation.
-    assert got["bysrc"] == {"weekly": [[50, 0.25]], "3day": [[50, 0.4]]}
     assert got["full0"] == 0.5
     assert got["src0"] == {"weekly": 0.3}
     assert got["train"] == [[50, 0.45]]
@@ -124,10 +109,6 @@ def test_loss_runs_carry_the_nowcast_and_forecast_parts(tmp_path):
     )
     assert got["parts0"] == {"nowcast": 0.2, "forecast": 0.3}
     assert got["bparts0"] == {"nowcast": 0.2, "forecast": 0.3}
-    assert got["held_parts"] == {
-        "nowcast": [[25, 0.1]],
-        "forecast": [[25, 0.3]],
-    }
     # Checkpoints are at their own simulations.
     assert got["ck_parts"] == {
         "nowcast": [[250, 0.1]],
@@ -258,7 +239,7 @@ def test_an_offloaded_run_s_losses_reach_the_loss_plot(tmp_path):
         colour="#111",
     )
     assert got["full0"] == 0.5
-    assert got["bysrc"] == {"weekly": [[50, 0.25]]}
+    assert got["src0"] == {"weekly": 0.3}
     assert got["train"] == [[50, 0.45]]
 
 
@@ -294,7 +275,6 @@ def test_an_offloaded_run_s_steps_are_read_without_a_held_out_loss(tmp_path):
     row = logs.Log(path).rows()[0]
     assert row["step"] == 200
     assert row["loss"] == 0.0792
-    assert row["held"] is None
 
 
 def test_the_mean_rate_leaves_out_the_gaps_of_restarts():
@@ -303,32 +283,6 @@ def test_the_mean_rate_leaves_out_the_gaps_of_restarts():
     points = [(t0, 0), (t0 + 100, 100), (t0 + 7300, 100), (t0 + 7350, 200)]
     assert training.mean_rate(points) == pytest.approx(200 / 150)
     assert training.mean_rate([(t0, 5)]) is None
-
-
-def test_an_offloaded_run_s_step_evaluations_are_its_held_out_line(tmp_path):
-    # The trainer logs no held-out loss when it offloads evaluation; each
-    # step's subset loss and its parts come from train/evals.
-    folder = tmp_path / "run"
-    train = folder / "train"
-    (train / "evals").mkdir(parents=True)
-    (train / "history.json").write_text(json.dumps([{"step": 0}]))
-    for step, loss in ((200, 0.3), (400, 0.2)):
-        (train / "evals" / f"step-{step:07d}.json").write_text(
-            json.dumps(
-                {
-                    "step": step,
-                    "eval_loss": loss,
-                    "eval_loss_nowcast": loss - 0.1,
-                    "eval_loss_forecast": 0.1,
-                }
-            )
-        )
-    run = runs.make_run("r", str(folder), live=True)
-    rows = [{"step": 200, "loss": 0.4, "held": None}]
-    got = training.loss_run(run, rows, [], lambda s: s / 4, None, "#111")
-    assert got["held"] == [[50.0, 0.3], [100.0, 0.2]]
-    assert got["held_parts"]["nowcast"] == [[50.0, 0.2], [100.0, 0.1]]
-    assert got["held_parts"]["forecast"] == [[50.0, 0.1], [100.0, 0.1]]
 
 
 def test_the_recent_rate_starts_at_the_trainer_s_resume(tmp_path):

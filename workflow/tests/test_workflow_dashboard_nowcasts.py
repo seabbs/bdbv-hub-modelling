@@ -147,7 +147,7 @@ def test_a_file_score_wins_over_wis(tmp_path):
 
 
 def test_other_known_reference_models_are_shown_under_their_label(tmp_path):
-    model = "foundation_zeroshot_pseudoweeks"
+    model = "foundation_zeroshot_baselinenowcast"
     _quantiles(tmp_path / "reference" / "2022-02-09.csv.gz", model)
     rs, refs = _setup()
     # Not the fixture's zero-shot, which takes any foundation model.
