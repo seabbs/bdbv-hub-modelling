@@ -9,7 +9,7 @@ var S={run:null,idx:null,block:null,row:0,on:{},data:null};
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function fmt(v){return v==null?"–":String(+(+v).toPrecision(3))}
 function colour(key){if(key==="base")return D.base;var ms=S.idx.models.filter(function(m){return m.key!=="base"});
- var i=ms.findIndex(function(m){return m.key===key});return D.palette[(i+1)%D.palette.length]}
+ var i=ms.findIndex(function(m){return m.key===key});return D.palette[i%D.palette.length]}
 function label(m){return m.key==="base"?m.label:m.label+" ("+m.n+" simulations)"}
 function controls(){var runs=D.runs,b=S.idx.blocks;
  $("vrun").innerHTML=runs.map(function(r){return '<option value="'+esc(r.key)+'"'+(r.key===S.run?" selected":"")+'>'+esc(r.label)+'</option>'}).join("");

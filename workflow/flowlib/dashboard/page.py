@@ -697,6 +697,10 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
     )
 
 
+GREEN_SLOTS = (2, 4)
+"""The categorical palette's aqua and green (`labels.CATEGORICAL`)."""
+
+
 def validation_card(ctx: Context) -> str:
     """Return the validation forecasts' card: forecasts against truth.
 
@@ -712,7 +716,13 @@ def validation_card(ctx: Context) -> str:
                 if r.folder is not None
             ],
             "base": paperstyle.model_colour("foundation_zeroshot"),
-            "palette": list(labels.CATEGORICAL),
+            # The checkpoints' colours: the categorical order without its
+            # greens, which zero-shot's green would be confused with.
+            "palette": [
+                c
+                for i, c in enumerate(labels.CATEGORICAL)
+                if i not in GREEN_SLOTS
+            ],
         }
     )
     controls = (
