@@ -1,10 +1,10 @@
 """The paper's host-made outputs, published as releases and read back.
 
 The workflow's hosts make what the Site build cannot: the synthetic
-study's forecasts, the fine-tuning runs' curves and checkpoint scores, and
-the simulation summaries. Each set of them is published as a release,
-`paper-<set>-<hash>`, whose hash is of the files' contents, so a set is
-published once per version (rules `release_paper_<set>`, target
+study's forecasts, the fine-tuning runs' progress tables and checkpoint
+scores, and the simulation summaries. Each set of them is published as a
+release, `paper-<set>-<hash>`, whose hash is of the files' contents, so a
+set is published once per version (rules `release_paper_<set>`, target
 `paper_inputs`). Only development outputs are published: `publish` refuses
 a held-out synthetic seed, a held-out German date or an Ebola row.
 
@@ -48,7 +48,6 @@ REPO = "seabbs/bdbv-hub-modelling"
 # Each stored file and the config entry it stands in for.
 STORED = {
     "pairing-synthetic.csv.gz": ("stored", "pairing_synthetic"),
-    "validation-curve.csv": ("stored", "finetune_validation"),
     "sim-diseases.csv": ("stored", "sim_diseases"),
     "sim-summaries.csv": ("stored", "sim_summaries"),
     "sim-realism.csv": ("stored", "sim_realism"),
@@ -59,6 +58,16 @@ STORED = {
     "compare-daily.csv": ("evidence", "compare_daily"),
     "block-combinations.csv": ("evidence", "block_combinations"),
 }
+
+PROGRESS_TABLES = {
+    "loss": "progress/loss.csv",
+    "seven_day": "progress/seven-day.csv",
+    "horizons": "horizon-scores.csv",
+}
+"""Each run's progress tables in the `finetune` set, by the progress
+step's option, from the run's reports folder (workflow rules run_progress
+and horizon_table). Stored as `progress/<run>/<file name>`; the BDBV check
+is left out, as it holds Ebola rows."""
 
 # The dates a German row is held out by, as the table guard reads them
 # (`paperpipe.config.check_no_heldout`): a development origin's targets
@@ -88,7 +97,21 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             f"{dev_sims}/settings-{seed}.csv"
         )
     rounds = config.get("rounds_dir")
-    final = config.get("final_run")
+    runs_dir = config.get("runs_dir")
+    runs = [
+        config.get("live_run"),
+        *(config.get("comparisons") or {}).values(),
+    ]
+    # Each paper run's progress tables (workflow rules run_progress and
+    # horizon_table).
+    progress = {
+        f"progress/{run}/{Path(table).name}": (
+            f"{runs_dir}/{run}/reports/{table}"
+        )
+        for run in dict.fromkeys(r for r in runs if r)
+        for table in PROGRESS_TABLES.values()
+        if runs_dir
+    }
 
     def file_of(name: str) -> str | None:
         entry = evidence.get(name) or {}
@@ -104,9 +127,7 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             ),
         },
         "finetune": {
-            "validation-curve.csv": f"{final}/validation-curve.csv"
-            if final
-            else None,
+            **progress,
             "comparison.csv": file_of("checkpoint_scores"),
             "compare-daily.csv": file_of("compare_daily"),
             "block-combinations.csv": file_of("block_combinations"),
@@ -235,6 +256,8 @@ def overlay(folders: Mapping[str, Path]) -> dict[str, Any]:
             config["synthetic"] = {"forecasts": {"development": str(forecasts)}}
         if (folder / "examples").is_dir():
             config["stored"]["examples"] = str(folder / "examples")
+        if (folder / "progress").is_dir():
+            config["stored"]["progress"] = str(folder / "progress")
         for name, (block, key) in STORED.items():
             path = folder / name
             if not path.is_file():

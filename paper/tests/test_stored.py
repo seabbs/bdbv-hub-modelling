@@ -44,11 +44,16 @@ def test_each_set_names_its_files_from_the_config() -> None:
     assert sets["synthetic"]["pairing-synthetic.csv.gz"].endswith(
         "evidence/pairing/pairing-synthetic.csv.gz"
     )
+    runs = dict.fromkeys([CONFIG["live_run"], *CONFIG["comparisons"].values()])
     assert set(sets["finetune"]) == {
-        "validation-curve.csv",
         "comparison.csv",
         "compare-daily.csv",
         "block-combinations.csv",
+        *(
+            f"progress/{run}/{name}"
+            for run in runs
+            for name in ("loss.csv", "seven-day.csv", "horizon-scores.csv")
+        ),
     }
     sims = sets["simulations"]
     assert {"sim-diseases.csv", "sim-summaries.csv", "sim-realism.csv"} <= set(
@@ -62,6 +67,24 @@ def test_each_set_names_its_files_from_the_config() -> None:
     text = json.dumps(sets)
     assert "/r38/" not in text
     assert CONFIG["synthetic"]["forecasts"]["paper"] not in text
+
+
+def test_the_finetune_set_holds_each_run_s_progress_tables() -> None:
+    # From the run's reports, without the BDBV check's Ebola rows.
+    config = copy.deepcopy(CONFIG)
+    config["runs_dir"] = "/r/runs"
+    found = stored.sets(config, "paper/results")["finetune"]
+    run = config["live_run"]
+    assert found[f"progress/{run}/loss.csv"] == (
+        f"/r/runs/{run}/reports/progress/loss.csv"
+    )
+    assert found[f"progress/{run}/horizon-scores.csv"] == (
+        f"/r/runs/{run}/reports/horizon-scores.csv"
+    )
+    assert not any("bdbv" in name for name in found)
+    config["runs_dir"] = None
+    found = stored.sets(config, "paper/results")["finetune"]
+    assert not any(name.startswith("progress/") for name in found)
 
 
 def test_the_hash_follows_the_contents_not_the_paths(tmp_path: Path) -> None:
@@ -109,7 +132,7 @@ def test_development_rows_pass(tmp_path: Path) -> None:
 
 def test_a_bundle_unpacks_to_its_files_and_overlay(tmp_path: Path) -> None:
     files = {
-        "validation-curve.csv": _write(
+        "progress/runa/loss.csv": _write(
             tmp_path / "h" / "v.csv", pd.DataFrame({"v": [1]})
         ),
         "comparison.csv": _write(
@@ -119,12 +142,12 @@ def test_a_bundle_unpacks_to_its_files_and_overlay(tmp_path: Path) -> None:
     bundle = stored.bundle("finetune", files, tmp_path / "out")
     with tarfile.open(bundle) as tar:
         names = set(tar.getnames())
-    assert {"manifest.json", "validation-curve.csv", "comparison.csv"} <= names
+    assert {"manifest.json", "progress/runa/loss.csv", "comparison.csv"} <= (
+        names
+    )
     folder = stored.unpack(bundle, tmp_path / "stored" / "finetune")
     overlay = stored.overlay({"finetune": folder})
-    assert overlay["stored"]["finetune_validation"] == str(
-        folder / "validation-curve.csv"
-    )
+    assert overlay["stored"]["progress"] == str(folder / "progress")
     assert overlay["evidence"]["checkpoint_scores"] == {
         "file": str(folder / "comparison.csv")
     }
@@ -145,8 +168,8 @@ def test_fetch_takes_each_sets_newest_release(tmp_path: Path) -> None:
         {"tag_name": "chronos-slots-ccc", "created_at": "2026-11-25T00:00:00Z"},
     ]
     files = {
-        "validation-curve.csv": _write(
-            tmp_path / "h" / "v.csv", pd.DataFrame({"v": [1]})
+        "comparison.csv": _write(
+            tmp_path / "h" / "c.csv", pd.DataFrame({"v": [1]})
         )
     }
     asked = []
@@ -157,7 +180,7 @@ def test_fetch_takes_each_sets_newest_release(tmp_path: Path) -> None:
 
     overlay = stored.fetch(tmp_path / "stored", releases, download)
     assert asked == ["paper-finetune-bbb"]
-    assert "finetune_validation" in overlay["stored"]
+    assert "checkpoint_scores" in overlay["evidence"]
     # Sets with no release are left out, so their results stay pending.
     assert "synthetic" not in json.dumps(overlay)
 
@@ -168,7 +191,6 @@ def test_stored_outputs_stand_in_for_the_host_rules() -> None:
     config["rounds_dir"] = None
     config["synthetic"]["simulations"]["development"] = None
     config["stored"] = {
-        "finetune_validation": "s/validation-curve.csv",
         "sim_diseases": "s/sim-diseases.csv",
         "sim_summaries": "s/sim-summaries.csv",
         "sim_realism": "s/sim-realism.csv",
@@ -177,7 +199,6 @@ def test_stored_outputs_stand_in_for_the_host_rules() -> None:
     }
     flow = PaperFlow(config, {}, "2026-08-01")
     files = flow.workflow_evidence()
-    assert files["finetune_validation"] == "s/validation-curve.csv"
     assert files["sim_diseases"] == "s/sim-diseases.csv"
     assert files["sim_realism"] == "s/sim-realism.csv"
     assert "si_copula" in files

@@ -55,10 +55,8 @@ def test_validation_losses_are_asked_for_only_when_offloaded(
     off = _training(tmp_path, eval="offload")
     train = off.train_dir("x")
     assert off.offloaded("x", 100) == [f"{train}/n100/held-out.json"]
-    assert len(off.validation_curve_inputs(_wc())) == 4
     local = _training(tmp_path, eval="local")
     assert local.offloaded("x", 100) == []
-    assert len(local.validation_curve_inputs(_wc())) == 2
 
 
 def test_a_worker_copies_back_what_publishing_reads(tmp_path: Path) -> None:

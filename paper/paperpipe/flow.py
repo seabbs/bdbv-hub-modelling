@@ -27,6 +27,7 @@ from paperpipe.outputs import (
     STUDY_SI_TABLES,
     figure_names,
 )
+from paperpipe.stored import PROGRESS_TABLES
 
 __all__ = [
     "BDBV",
@@ -157,7 +158,7 @@ class PaperFlow:
             for mode, folder in synthetic["simulations"].items()
         }
         # Null leaves the run or rounds out, and what reads them pending.
-        for key in ("final_run", "rounds_dir"):
+        for key in ("final_run", "rounds_dir", "runs_dir"):
             if config.get(key):
                 config[key] = expand(config[key])
         # The `_ft` models load the final run's final checkpoint, a rule
@@ -261,12 +262,11 @@ class PaperFlow:
     def workflow_evidence(self) -> dict[str, str]:
         """Return the evidence step's inputs from workflow rules.
 
-        The final run's validation loss curve (rule validation_curve), the
-        published-range table's rows (rule sim_diseases) and the realism
+        The published-range table's rows (rule sim_diseases) and the realism
         step's outputs (rule sim_realism), and the walk models' pairing
         scores and rho_p (rules si_copula and pairing_germany). Each is
-        left out, and its SI result pending, while its run or rounds folder
-        is null, for the pairing scores while the German benchmark runs on
+        left out, and its SI result pending, while the rounds folder is
+        null, for the pairing scores while the German benchmark runs on
         dummy data, and for the walks' scores while the development
         simulations are null.
         """
@@ -282,10 +282,6 @@ class PaperFlow:
                 )
             elif stored.get("copula_rho"):
                 files["copula_rho"] = stored["copula_rho"]
-        if final := self.config.get("final_run"):
-            files["finetune_validation"] = f"{final}/validation-curve.csv"
-        elif stored.get("finetune_validation"):
-            files["finetune_validation"] = stored["finetune_validation"]
         if where := self.rounds_dir:
             files["sim_diseases"] = f"{where}/report/sim-diseases.csv"
             files["sim_summaries"] = f"{evidence}/sim-summaries.csv"
@@ -346,6 +342,63 @@ class PaperFlow:
                 for r in self.config["grid_rounds"]["rounds"]
             ],
         }
+
+    # Each run's progress ----------------------------------------------
+
+    def progress_runs(self) -> list[str]:
+        """Return the runs with a progress figure.
+
+        The live run and each comparison's run.
+        """
+        runs = [
+            self.config.get("live_run"),
+            *(self.config.get("comparisons") or {}).values(),
+        ]
+        return list(dict.fromkeys(r for r in runs if r))
+
+    def progress_files(self, run: str) -> dict[str, str]:
+        """Return a run's progress tables: made, stored or none.
+
+        With `runs_dir`, the run's own reports from the workflow's rules
+        run_progress (losses, the 7-day check and the BDBV check) and
+        horizon_table (German relative scores by horizon), of the
+        checkpoints it has saved. Without it, the copies the hosts
+        published (`paperpipe.stored`), those that exist, which leave out
+        the BDBV check. With neither, none, and the figure's panels say so.
+        """
+        if runs_dir := self.config.get("runs_dir"):
+            where = f"{runs_dir}/{run}/reports"
+            return {
+                "loss": f"{where}/progress/loss.csv",
+                "seven_day": f"{where}/progress/seven-day.csv",
+                "bdbv": f"{where}/progress/bdbv.csv",
+                "horizons": f"{where}/horizon-scores.csv",
+            }
+        stored = self.stored.get("progress")
+        if not stored:
+            return {}
+        files = {
+            key: f"{stored}/{run}/{Path(table).name}"
+            for key, table in PROGRESS_TABLES.items()
+        }
+        return {k: f for k, f in files.items() if Path(f).is_file()}
+
+    def progress_figure(self, mode: str, run: str) -> str:
+        """Return a run's progress figure."""
+        return f"{self.results}/{mode}/figures/si/progress-{run}.png"
+
+    @staticmethod
+    def progress_args(mode: str, files: Mapping[str, str]) -> str:
+        """Return the progress step's table options.
+
+        The BDBV check is a paper run's only, as the Ebola study is held
+        out of development runs.
+        """
+        return " ".join(
+            f"--{key.replace('_', '-')} {path}"
+            for key, path in files.items()
+            if key != "bdbv" or mode == "paper"
+        )
 
     def live_arg(self) -> str:
         """Return the live run option, whose newest checkpoints are shown."""
@@ -621,7 +674,17 @@ class PaperFlow:
             for study in studies
             for path in [*self.figures(mode, study), *self.tables(mode, study)]
         ]
-        return [f"{r}/{mode}/evidence.yml", *design, *joint, *real, *per_study]
+        progress = [
+            self.progress_figure(mode, run) for run in self.progress_runs()
+        ]
+        return [
+            f"{r}/{mode}/evidence.yml",
+            *design,
+            *joint,
+            *real,
+            *progress,
+            *per_study,
+        ]
 
     def ebola_real_finetune(self, w: Wildcards) -> list[str]:
         """Return the Ebola real-data table, which development runs lack."""

@@ -159,6 +159,30 @@ rule daily_table:
         "{params.reference} {wildcards.run} {output} > {log} 2>&1"
 
 
+rule horizon_table:
+    # A run's saved checkpoints on every German horizon, the nowcasts and
+    # the forecasts, relative to the German config's references, for its
+    # SI progress figure (nowcastgermany.checkpoint.horizon_table).
+    input:
+        references=references(),
+        units=lambda wc: run_units(wc.run),
+    output:
+        f"{RUN}/reports/horizon-scores.csv",
+    log:
+        f"{RUN}/logs/horizon-table.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        evaluate=EVALUATE,
+        train=lambda wc: train_dir(wc.run),
+        scores=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}",
+        reference=lambda wc, input: input.references[0].removesuffix(".done"),
+    shell:
+        "{params.evaluate} horizons {params.train} {params.scores} "
+        "{params.reference} {wildcards.run} {output} > {log} 2>&1"
+
+
 # The runs the paper compares: its live run and each comparison's run
 # (paper config `live_run`, `comparisons`), not every run the workflow
 # config names.

@@ -13,7 +13,6 @@ and `merged_history`, so a run evaluated either way reads the same.
 
 from __future__ import annotations
 
-import csv
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
@@ -36,8 +35,6 @@ __all__ = [
     "start_loss",
     "step_of",
     "step_results",
-    "validation_curve",
-    "write_validation_curve",
 ]
 
 
@@ -113,42 +110,6 @@ def level_points(
         for n, s in checkpoints
         if s.get("held_out_loss_by_level")
     ]
-
-
-def validation_curve(
-    train: Path | str, run: str, prefixes: Iterable[int]
-) -> list[dict[str, Any]]:
-    """Return a run's validation loss by level as rows, start and checkpoints.
-
-    One row per point and level (`blocks`), against simulations trained
-    (`outbreaks_seen`): the paper's fine-tune curve.
-    """
-    train = Path(train)
-    got = _read(train / "history.json")
-    hist = merged_history(got if isinstance(got, list) else [], train)
-    cks = [(n, checkpoint_settings(train / f"n{n}")) for n in sorted(prefixes)]
-    return [
-        {
-            "run": run,
-            "blocks": k,
-            "outbreaks_seen": n,
-            "validation_loss": float(v),
-        }
-        for n, by in level_points(hist, cks)
-        for k, v in by.items()
-    ]
-
-
-def write_validation_curve(
-    train: Path | str, run: str, prefixes: Iterable[int], out: Path | str
-) -> None:
-    """Write `validation_curve` as a CSV."""
-    rows = validation_curve(train, run, prefixes)
-    names = ["run", "blocks", "outbreaks_seen", "validation_loss"]
-    with Path(out).open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=names)
-        writer.writeheader()
-        writer.writerows(rows)
 
 
 def step_of(snapshot: Path) -> int:

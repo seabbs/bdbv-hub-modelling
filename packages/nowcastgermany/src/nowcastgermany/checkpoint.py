@@ -29,6 +29,7 @@ Usage:
     CHECKPOINTS HASH...
   python -m nowcastgermany.checkpoint run TRAIN SCORES REFERENCE RUN OUT
   python -m nowcastgermany.checkpoint daily TRAIN SCORES REFERENCE RUN OUT
+  python -m nowcastgermany.checkpoint horizons TRAIN SCORES REFERENCE RUN OUT
   python -m nowcastgermany.checkpoint compare OUT TABLE...
 """
 
@@ -76,6 +77,13 @@ CURRENT_RUNS: Final = frozenset({"one-model"})
 """Runs whose adapters this code loads (series bias, mixed layouts)."""
 HELD_OUT_LEVELS: Final = ("leaf", "national", "intermediate")
 GERMANY_CELL: Final = ["origin", "location", "target_end_date"]
+HORIZON_PARTS: Final = {
+    "all": lambda h: h.notna(),
+    "nowcast": lambda h: h <= 0,
+    "forecast": lambda h: h > 0,
+}
+"""The parts of the German horizons a table scores: every day, the hub's
+days back to the origin (nowcasts), and the days after it (forecasts)."""
 COVERAGE: Final = (50, 90)
 """Central intervals scored for coverage: 50% and 90%."""
 GERMANY_COVERAGE: Final = (50, 95)
@@ -670,11 +678,14 @@ def germany_rows(
     folders: Mapping[str, Path],
     target: str = "7day",
     baseline: str = BASELINE,
+    horizons: str = "nowcast",
 ) -> pd.DataFrame:
     """Return the German development half's rule rows.
 
     `folders` gives each label's cached German unit. Rows are of the view
-    `target` (`7day` or `daily`), relative to zero-shot `baseline`.
+    `target` (`7day` or `daily`), relative to zero-shot `baseline`, on
+    the part of the horizons `horizons` names (`HORIZON_PARTS`): by
+    default the hub's, as the paper scores the teams.
     """
     from nowcastgermany import evaluation as de
 
@@ -686,9 +697,8 @@ def germany_rows(
         fc = _cached(folder, target)
         if fc is None or fc.empty:
             continue
-        # The table scores the hub's horizons only, as the paper scores
-        # the teams; the forecast days are for the page.
-        fc = fc.loc[(fc["origin"] < config.split_date) & (fc["horizon"] <= 0)]
+        keep = HORIZON_PARTS[horizons](fc["horizon"])
+        fc = fc.loc[(fc["origin"] < config.split_date) & keep]
         nat = de.score_germany(fc, config.truth_delay)
         logged = fc.assign(
             value=np.log1p(fc["value"].clip(lower=0)),
@@ -821,6 +831,38 @@ def daily_table(
     return pd.concat(parts, ignore_index=True)
 
 
+def horizon_table(
+    train: Path, scores: Path, reference: Path, run: str
+) -> pd.DataFrame:
+    """Return a run's checkpoints on each part of the German horizons.
+
+    Each saved segment `n<N>` of `train` and zero-shot (`reference`), by
+    level and model, on every horizon, the nowcasts and the forecasts
+    (`HORIZON_PARTS`), each row tagged with its part as `horizons`, with
+    its checkpoint's outbreaks (0 for zero-shot) and the run's name.
+    """
+    segments = _segments(train)
+    folders = {REFERENCE: Path(reference)} | {
+        d.name: Path(scores) / d.name
+        for d in segments
+        if (Path(scores) / d.name).is_dir()
+    }
+    outbreaks = {
+        d.name: outbreaks_and_grid(
+            json.loads((d / "settings.json").read_text())
+        )[0]
+        for d in segments
+    }
+    parts = [
+        germany_rows(folders, horizons=part).assign(horizons=part)
+        for part in HORIZON_PARTS
+    ]
+    new = pd.concat(parts, ignore_index=True)
+    new["outbreaks"] = new["checkpoint"].map(outbreaks).fillna(0).astype(int)
+    new["run"] = np.where(new["checkpoint"] == "zero-shot", "zero-shot", run)
+    return new.reindex(columns=[*COLUMNS, "horizons"])
+
+
 def run_table(
     train: Path, scores: Path, reference: Path, run: str
 ) -> pd.DataFrame:
@@ -887,6 +929,9 @@ def main(argv: Sequence[str]) -> None:
         out.round(4).to_csv(argv[5], index=False)
     elif study == "daily" and len(argv) == 6:
         out = daily_table(cache, Path(argv[2]), Path(argv[3]), argv[4])
+        out.round(4).to_csv(argv[5], index=False)
+    elif study == "horizons" and len(argv) == 6:
+        out = horizon_table(cache, Path(argv[2]), Path(argv[3]), argv[4])
         out.round(4).to_csv(argv[5], index=False)
     elif study == "compare" and len(argv) >= 3:
         tables = [pd.read_csv(p) for p in argv[2:]]
