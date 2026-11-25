@@ -18,7 +18,7 @@ rule evaluate_steps:
         f"{TRAIN}/logs/evaluate-steps-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_steps/n{{n}}.tsv"
-    priority: newest_first(EVALUATE_PRIORITY)
+    priority: newest_first(CHECKPOINT_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -54,7 +54,7 @@ rule evaluate_base:
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_base.tsv"
     # Above every checkpoint's evaluation, which needs it.
-    priority: EVALUATE_PRIORITY + 1
+    priority: CHECKPOINT_PRIORITY + 1
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -91,7 +91,7 @@ rule evaluate_checkpoint:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv"
-    priority: newest_first(EVALUATE_PRIORITY)
+    priority: newest_first(CHECKPOINT_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -124,7 +124,7 @@ rule seven_day_check:
         f"{TRAIN}/logs/seven-day-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/seven_day_check/n{{n}}.tsv"
-    priority: newest_first(EVALUATE_PRIORITY)
+    priority: newest_first(CHECKPOINT_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
