@@ -122,7 +122,13 @@ def test_integration_runs_the_tests_of_no_package_in_15_minutes():
     assert job["timeout-minutes"] <= 15
     runs = " ".join(s.get("run", "") for s in job["steps"])
     (tests,) = [s for s in job["steps"] if s.get("name") == "Tests"]
-    assert tests["run"].split()[-2:] == ["tests", "workflow/tests"]
+    # The repo and workflow tests, then each experiment's own tests.
+    words = [w for w in tests["run"].split() if w != "\\"]
+    paths = words[words.index("tests") :]
+    assert paths[:2] == ["tests", "workflow/tests"]
+    assert all(
+        p.startswith("experiments/") and p.endswith("/tests") for p in paths[2:]
+    )
     assert "snakefmt --check" in runs
     assert "snakemake -s workflow/Snakefile --lint" in runs
     assert "--group paper pytest" in runs

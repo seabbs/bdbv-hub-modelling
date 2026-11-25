@@ -629,7 +629,7 @@ jobs:
             find "$STORE" -path "$STORE/site" -prune -o -type f \
               ! -name .commit -print0 | sort -z | xargs -0 sha256sum
             find data -type f -print0 | sort -z | xargs -0 sha256sum
-            git rev-parse HEAD^{tree}
+            git rev-parse 'HEAD^{tree}'
             echo "$ledger $tag"
           } | sha256sum | cut -c1-16)
           last=$(jq -r '.key // ""' "$STORE/site/latest.json" 2>/dev/null || true)

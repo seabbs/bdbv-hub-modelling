@@ -65,10 +65,11 @@ jobs:
               changed=$all
             else
               changed=$(for p in $all; do
-                grep -q "^packages/$p/" <<<"$files" && echo "$p"; done)
+                if grep -q "^packages/$p/" <<<"$files"; then echo "$p"; fi
+              done)
             fi
           fi
-          json=$(printf '%s\n' $changed | jq -R . | jq -cs 'map(select(. != ""))')
+          json=$(printf '%s\n' "$changed" | jq -R . | jq -cs 'map(select(. != ""))')
           echo "packages=$json" >> "$GITHUB_OUTPUT"
           echo "Package sites to build: $json" >> "$GITHUB_STEP_SUMMARY"
 
@@ -141,7 +142,7 @@ jobs:
               exit 0
             fi
             git -C pages commit -q \
-              -m "Package docs: $(ls site | xargs) from $GITHUB_SHA"
+              -m "Package docs: $(cd site && printf "%s " *)from $GITHUB_SHA"
             git -C pages push -q origin HEAD:gh-pages && exit 0
             echo "::warning::gh-pages moved (try $try); trying again"
             sleep 10
