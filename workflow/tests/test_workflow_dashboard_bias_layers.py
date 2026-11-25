@@ -102,8 +102,8 @@ def test_layers_shade_from_light_to_dark_in_the_relation_s_hue():
     got = _shade(12)
     assert len(set(got)) == 12
     assert all("#123456" in c for c in got)
-    # Shallow layers are mixed with the background, deep ones with ink.
-    assert "var(--bg)" in got[0]
+    # Shallow layers are mixed into the card, deep ones with ink.
+    assert "var(--card)" in got[0]
     assert "var(--fg)" in got[-1]
 
 
