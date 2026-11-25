@@ -87,9 +87,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - **What we did.**
   - We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.
   - epinowcast is written in R and Stan [@RCoreTeam; @Carpenter2017], while Chronos-2 is written in Python.
-    We ported the epinowcast model to Python on top of PyRenew, reusing its components and adding components where it had none, such as delays that change over time.
-    We did this for modularity, so each part of the surveillance process can be swapped or extended on its own, and so the simulator and the foundation model share one language.
-  - We gave the model the reporting triangle as one series per place and reporting delay.
+    We ported the epinowcast model to Python on top of PyRenew, reusing its components and adding components where it had none, such as delays that change over time.  - We gave the model the reporting triangle as one series per place and reporting delay.
     We added learned attention biases so it can tell which delay series belong to which place, and which places sit within which regions.
   - We developed the settings for the simulated data based on our past experience of infectious disease modelling including in the COVID-19 pandmeic [@Wolffram2023], the 2023 Mpox outbreak [@Overton2023-dk], and based on the early data available for the 2025 Ebola outbreak in the Democratic Republic of the Congo [@bdbv_modeling_hub_2026].
   - We adapted a recently developed baseline nowcasting method to also produce forecasts as a baseline for comparison.
