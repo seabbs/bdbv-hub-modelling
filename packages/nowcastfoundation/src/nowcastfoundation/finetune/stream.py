@@ -1121,7 +1121,7 @@ class CudaPeak:
         """Return the step's peak above its start."""
         import torch
 
-        return torch.cuda.max_memory_allocated() - self.base
+        return int(torch.cuda.max_memory_allocated()) - self.base
 
 
 def memory_rule(
