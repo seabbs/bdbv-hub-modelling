@@ -11041,10 +11041,7 @@ on or before its vintage as <code>zone_history</code> and
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastbdbv/src/nowcastbdbv/backtest.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 61</span>
-<span class="normal"> 62</span>
-<span class="normal"> 63</span>
-<span class="normal"> 64</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 64</span>
 <span class="normal"> 65</span>
 <span class="normal"> 66</span>
 <span class="normal"> 67</span>
@@ -11158,7 +11155,10 @@ on or before its vintage as <code>zone_history</code> and
 <span class="normal">175</span>
 <span class="normal">176</span>
 <span class="normal">177</span>
-<span class="normal">178</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_tasks</span><span class="p">(</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">make_tasks</span><span class="p">(</span>
     <span class="n">target</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">delays</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">BacktestConfig</span><span class="p">,</span>
@@ -11249,32 +11249,32 @@ on or before its vintage as <code>zone_history</code> and
                 <span class="n">same</span> <span class="o">&amp;=</span> <span class="n">delays</span><span class="p">[</span><span class="s2">"kind"</span><span class="p">]</span> <span class="o">==</span> <span class="n">kind</span>
             <span class="n">past</span> <span class="o">=</span> <span class="n">delays</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">same</span><span class="p">]</span>
             <span class="n">history</span> <span class="o">=</span> <span class="n">past</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">past</span><span class="o">.</span><span class="n">empty</span> <span class="k">else</span> <span class="kc">None</span>
-        <span class="n">tasks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="n">ForecastTask</span><span class="p">(</span>
-                <span class="n">vintage</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">),</span>
-                <span class="n">reference_date</span><span class="o">=</span><span class="n">ref</span><span class="p">,</span>
-                <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">kind</span><span class="p">),</span>
-                <span class="n">cutoff</span><span class="o">=</span><span class="n">release_cutoff</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">))</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span>
-                <span class="n">target</span><span class="o">=</span><span class="n">rows</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-                <span class="n">delays</span><span class="o">=</span><span class="n">dly</span><span class="p">,</span>
-                <span class="n">delay_history</span><span class="o">=</span><span class="n">history</span><span class="p">,</span>
-                <span class="n">target_history</span><span class="o">=</span><span class="n">past_target</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">past_target</span><span class="o">.</span><span class="n">empty</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-                <span class="n">daily_history</span><span class="o">=</span><span class="n">_daily_for</span><span class="p">(</span><span class="n">daily</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">kind</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">)),</span>
-                <span class="o">**</span><span class="n">_zone_fields</span><span class="p">(</span><span class="n">zones</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">kind</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">)),</span>
-                <span class="n">imputation_delay</span><span class="o">=</span><span class="n">imputation</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">)),</span>
-                <span class="n">places</span><span class="o">=</span><span class="n">places</span><span class="p">,</span>
-                <span class="n">locations</span><span class="o">=</span><span class="n">forecast_locations</span><span class="p">(</span><span class="n">rows</span><span class="p">),</span>
-                <span class="n">target_end_dates</span><span class="o">=</span><span class="n">forecast_weeks</span><span class="p">(</span><span class="n">ref</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
-                <span class="n">n_samples</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">n_samples</span><span class="p">,</span>
-                <span class="n">seed</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span>
-                <span class="n">max_delay</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">max_delay</span><span class="p">,</span>
-                <span class="n">report_by</span><span class="o">=</span><span class="p">{</span>
-                    <span class="n">d</span><span class="p">:</span> <span class="n">release_cutoff</span><span class="p">(</span><span class="n">source</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">mine</span><span class="p">],</span> <span class="n">d</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
-                    <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">report_by</span><span class="p">)</span>
-                    <span class="k">if</span> <span class="n">kind</span> <span class="o">!=</span> <span class="s2">"simulated"</span> <span class="ow">and</span> <span class="n">d</span> <span class="o">&gt;</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">)</span>
-                <span class="p">},</span>
-            <span class="p">)</span>
+        <span class="n">task</span> <span class="o">=</span> <span class="n">ForecastTask</span><span class="p">(</span>
+            <span class="n">vintage</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">),</span>
+            <span class="n">reference_date</span><span class="o">=</span><span class="n">ref</span><span class="p">,</span>
+            <span class="n">kind</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">kind</span><span class="p">),</span>
+            <span class="n">cutoff</span><span class="o">=</span><span class="n">release_cutoff</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">))</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span>
+            <span class="n">target</span><span class="o">=</span><span class="n">rows</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">delays</span><span class="o">=</span><span class="n">dly</span><span class="p">,</span>
+            <span class="n">delay_history</span><span class="o">=</span><span class="n">history</span><span class="p">,</span>
+            <span class="n">target_history</span><span class="o">=</span><span class="n">past_target</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">past_target</span><span class="o">.</span><span class="n">empty</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">daily_history</span><span class="o">=</span><span class="n">_daily_for</span><span class="p">(</span><span class="n">daily</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">kind</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">)),</span>
+            <span class="o">**</span><span class="n">_zone_fields</span><span class="p">(</span><span class="n">zones</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">kind</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">)),</span>
+            <span class="n">imputation_delay</span><span class="o">=</span><span class="n">imputation</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">)),</span>
+            <span class="n">places</span><span class="o">=</span><span class="n">places</span><span class="p">,</span>
+            <span class="n">locations</span><span class="o">=</span><span class="n">forecast_locations</span><span class="p">(</span><span class="n">rows</span><span class="p">),</span>
+            <span class="n">target_end_dates</span><span class="o">=</span><span class="n">forecast_weeks</span><span class="p">(</span><span class="n">ref</span><span class="p">,</span> <span class="n">config</span><span class="p">),</span>
+            <span class="n">n_samples</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">n_samples</span><span class="p">,</span>
+            <span class="n">seed</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span>
+            <span class="n">max_delay</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">max_delay</span><span class="p">,</span>
+            <span class="n">report_by</span><span class="o">=</span><span class="p">{</span>
+                <span class="n">d</span><span class="p">:</span> <span class="n">release_cutoff</span><span class="p">(</span><span class="n">source</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">mine</span><span class="p">],</span> <span class="n">d</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+                <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">report_by</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">kind</span> <span class="o">!=</span> <span class="s2">"simulated"</span> <span class="ow">and</span> <span class="n">d</span> <span class="o">&gt;</span> <span class="nb">str</span><span class="p">(</span><span class="n">vintage</span><span class="p">)</span>
+            <span class="p">},</span>
         <span class="p">)</span>
+        <span class="c1"># A cumulative first release is not part of the reporting.</span>
+        <span class="n">tasks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">without_cumulative_first_release</span><span class="p">(</span><span class="n">task</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">tasks</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -11476,10 +11476,7 @@ one, so its fit also covers the next round's weeks.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastbdbv/src/nowcastbdbv/backtest.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">187</span>
-<span class="normal">188</span>
-<span class="normal">189</span>
-<span class="normal">190</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">190</span>
 <span class="normal">191</span>
 <span class="normal">192</span>
 <span class="normal">193</span>
@@ -11534,7 +11531,10 @@ one, so its fit also covers the next round's weeks.</p>
 <span class="normal">242</span>
 <span class="normal">243</span>
 <span class="normal">244</span>
-<span class="normal">245</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">vintage_task</span><span class="p">(</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">vintage_task</span><span class="p">(</span>
     <span class="n">target</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">delays</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">BacktestConfig</span><span class="p">,</span>
@@ -11745,10 +11745,7 @@ gets the rows of its kind on or before its vintage as
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastbdbv/src/nowcastbdbv/backtest.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">276</span>
-<span class="normal">277</span>
-<span class="normal">278</span>
-<span class="normal">279</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">279</span>
 <span class="normal">280</span>
 <span class="normal">281</span>
 <span class="normal">282</span>
@@ -11792,7 +11789,10 @@ gets the rows of its kind on or before its vintage as
 <span class="normal">320</span>
 <span class="normal">321</span>
 <span class="normal">322</span>
-<span class="normal">323</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">development_tasks</span><span class="p">(</span>
+<span class="normal">323</span>
+<span class="normal">324</span>
+<span class="normal">325</span>
+<span class="normal">326</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">development_tasks</span><span class="p">(</span>
     <span class="n">target</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">delays</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">BacktestConfig</span><span class="p">,</span>
@@ -12037,10 +12037,7 @@ gets the rows of its kind on or before its vintage as
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastbdbv/src/nowcastbdbv/backtest.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">326</span>
-<span class="normal">327</span>
-<span class="normal">328</span>
-<span class="normal">329</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">329</span>
 <span class="normal">330</span>
 <span class="normal">331</span>
 <span class="normal">332</span>
@@ -12078,7 +12075,10 @@ gets the rows of its kind on or before its vintage as
 <span class="normal">364</span>
 <span class="normal">365</span>
 <span class="normal">366</span>
-<span class="normal">367</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_development</span><span class="p">(</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_development</span><span class="p">(</span>
     <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ForecastModel</span><span class="p">],</span>
     <span class="n">target</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">delays</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
@@ -12247,10 +12247,7 @@ task.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastbdbv/src/nowcastbdbv/backtest.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">370</span>
-<span class="normal">371</span>
-<span class="normal">372</span>
-<span class="normal">373</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">373</span>
 <span class="normal">374</span>
 <span class="normal">375</span>
 <span class="normal">376</span>
@@ -12274,7 +12271,10 @@ task.</p>
 <span class="normal">394</span>
 <span class="normal">395</span>
 <span class="normal">396</span>
-<span class="normal">397</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lopo_tasks</span><span class="p">(</span>
+<span class="normal">397</span>
+<span class="normal">398</span>
+<span class="normal">399</span>
+<span class="normal">400</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">lopo_tasks</span><span class="p">(</span>
     <span class="n">target</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">delays</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">BacktestConfig</span><span class="p">,</span>
@@ -12469,10 +12469,7 @@ if no model supports a mask.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastbdbv/src/nowcastbdbv/backtest.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">400</span>
-<span class="normal">401</span>
-<span class="normal">402</span>
-<span class="normal">403</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">403</span>
 <span class="normal">404</span>
 <span class="normal">405</span>
 <span class="normal">406</span>
@@ -12532,7 +12529,10 @@ if no model supports a mask.</p>
 <span class="normal">460</span>
 <span class="normal">461</span>
 <span class="normal">462</span>
-<span class="normal">463</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_lopo</span><span class="p">(</span>
+<span class="normal">463</span>
+<span class="normal">464</span>
+<span class="normal">465</span>
+<span class="normal">466</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_lopo</span><span class="p">(</span>
     <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">ForecastModel</span><span class="p">],</span>
     <span class="n">target</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">delays</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>

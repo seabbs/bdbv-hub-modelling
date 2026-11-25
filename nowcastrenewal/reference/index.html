@@ -13678,7 +13678,8 @@ more than the fitted ones: a zone fit's fitted and silent zones
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1169</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1168</span>
+<span class="normal">1169</span>
 <span class="normal">1170</span>
 <span class="normal">1171</span>
 <span class="normal">1172</span>
@@ -13724,8 +13725,7 @@ more than the fitted ones: a zone fit's fitted and silent zones
 <span class="normal">1212</span>
 <span class="normal">1213</span>
 <span class="normal">1214</span>
-<span class="normal">1215</span>
-<span class="normal">1216</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal">1215</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">RenewalRun</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""One fit of a variant to a task.</span>
 
@@ -13900,7 +13900,8 @@ one run of the provinces together, <code>"all"</code>.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1219</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1218</span>
+<span class="normal">1219</span>
 <span class="normal">1220</span>
 <span class="normal">1221</span>
 <span class="normal">1222</span>
@@ -13917,8 +13918,7 @@ one run of the provinces together, <code>"all"</code>.</p>
 <span class="normal">1233</span>
 <span class="normal">1234</span>
 <span class="normal">1235</span>
-<span class="normal">1236</span>
-<span class="normal">1237</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal">1236</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">RenewalFit</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""The fits of a variant to a task and the samples they give.</span>
 
@@ -14093,7 +14093,8 @@ the representation, which keys a stored fit.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1240</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1239</span>
+<span class="normal">1240</span>
 <span class="normal">1241</span>
 <span class="normal">1242</span>
 <span class="normal">1243</span>
@@ -14317,8 +14318,7 @@ the representation, which keys a stored fit.</p>
 <span class="normal">1461</span>
 <span class="normal">1462</span>
 <span class="normal">1463</span>
-<span class="normal">1464</span>
-<span class="normal">1465</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="normal">1464</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">RenewalModel</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""A renewal variant as a `ForecastModel`.</span>
 
@@ -14637,7 +14637,8 @@ the representation, which keys a stored fit.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1289</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1288</span>
+<span class="normal">1289</span>
 <span class="normal">1290</span>
 <span class="normal">1291</span>
 <span class="normal">1292</span>
@@ -14689,8 +14690,7 @@ the representation, which keys a stored fit.</p>
 <span class="normal">1338</span>
 <span class="normal">1339</span>
 <span class="normal">1340</span>
-<span class="normal">1341</span>
-<span class="normal">1342</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RenewalRun</span><span class="p">:</span>
+<span class="normal">1341</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RenewalRun</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fit the variant to a task and draw trajectories.</span>
 
 <span class="sd">    Parameters</span>
@@ -14795,7 +14795,8 @@ this.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1344</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1343</span>
+<span class="normal">1344</span>
 <span class="normal">1345</span>
 <span class="normal">1346</span>
 <span class="normal">1347</span>
@@ -14809,8 +14810,7 @@ this.</p>
 <span class="normal">1355</span>
 <span class="normal">1356</span>
 <span class="normal">1357</span>
-<span class="normal">1358</span>
-<span class="normal">1359</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RenewalFit</span><span class="p">:</span>
+<span class="normal">1358</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RenewalFit</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fit the variant to a task and return the samples.</span>
 
 <span class="sd">    Every variant is fitted on health zones, by</span>
@@ -14914,7 +14914,8 @@ rows (<code>RenewalFit.as_reported</code>).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1394</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1393</span>
+<span class="normal">1394</span>
 <span class="normal">1395</span>
 <span class="normal">1396</span>
 <span class="normal">1397</span>
@@ -14949,8 +14950,7 @@ rows (<code>RenewalFit.as_reported</code>).</p>
 <span class="normal">1426</span>
 <span class="normal">1427</span>
 <span class="normal">1428</span>
-<span class="normal">1429</span>
-<span class="normal">1430</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="normal">1429</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return joint sample trajectories for a task.</span>
 
 <span class="sd">    Parameters</span>
@@ -15120,7 +15120,8 @@ rows (<code>RenewalFit.as_reported</code>).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1432</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1431</span>
+<span class="normal">1432</span>
 <span class="normal">1433</span>
 <span class="normal">1434</span>
 <span class="normal">1435</span>
@@ -15152,8 +15153,7 @@ rows (<code>RenewalFit.as_reported</code>).</p>
 <span class="normal">1461</span>
 <span class="normal">1462</span>
 <span class="normal">1463</span>
-<span class="normal">1464</span>
-<span class="normal">1465</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">write_fit_dir</span><span class="p">(</span>
+<span class="normal">1464</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">write_fit_dir</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">fit_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span> <span class="n">config_name</span><span class="p">:</span> <span class="nb">str</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Write the last `forecast`'s fit as the submission reads it.</span>
@@ -15541,7 +15541,8 @@ setting) each chain then has a core. Never more than the provinces.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">254</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">253</span>
+<span class="normal">254</span>
 <span class="normal">255</span>
 <span class="normal">256</span>
 <span class="normal">257</span>
@@ -15554,8 +15555,7 @@ setting) each chain then has a core. Never more than the provinces.</p>
 <span class="normal">264</span>
 <span class="normal">265</span>
 <span class="normal">266</span>
-<span class="normal">267</span>
-<span class="normal">268</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">model_config</span><span class="p">(</span><span class="n">variant</span><span class="p">:</span> <span class="n">Variant</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelConfig</span><span class="p">:</span>
+<span class="normal">267</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">model_config</span><span class="p">(</span><span class="n">variant</span><span class="p">:</span> <span class="n">Variant</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelConfig</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Build the `ModelConfig` of a variant.</span>
 
 <span class="sd">    Parameters</span>
@@ -15660,7 +15660,8 @@ data weeks.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">271</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">270</span>
+<span class="normal">271</span>
 <span class="normal">272</span>
 <span class="normal">273</span>
 <span class="normal">274</span>
@@ -15683,8 +15684,7 @@ data weeks.</p>
 <span class="normal">291</span>
 <span class="normal">292</span>
 <span class="normal">293</span>
-<span class="normal">294</span>
-<span class="normal">295</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">centred_min_weekly_cases</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="n">ModelConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="normal">294</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">centred_min_weekly_cases</span><span class="p">(</span><span class="n">config</span><span class="p">:</span> <span class="n">ModelConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Return the weekly cases from which a fit's log Rt walk is centred.</span>
 
 <span class="sd">    The count noise on a weekly log change in cases is about</span>
@@ -15821,7 +15821,8 @@ places, reach <code>centred_min_weekly_cases</code>, and non-centred otherwise.<
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">298</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">297</span>
+<span class="normal">298</span>
 <span class="normal">299</span>
 <span class="normal">300</span>
 <span class="normal">301</span>
@@ -15843,8 +15844,7 @@ places, reach <code>centred_min_weekly_cases</code>, and non-centred otherwise.<
 <span class="normal">317</span>
 <span class="normal">318</span>
 <span class="normal">319</span>
-<span class="normal">320</span>
-<span class="normal">321</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_config</span><span class="p">(</span><span class="n">variant</span><span class="p">:</span> <span class="n">Variant</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelConfig</span><span class="p">:</span>
+<span class="normal">320</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_config</span><span class="p">(</span><span class="n">variant</span><span class="p">:</span> <span class="n">Variant</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ModelConfig</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Build the `ModelConfig` a variant fits to one vintage with.</span>
 
 <span class="sd">    The same rule for every variant: the fit's log Rt walk is centred</span>
@@ -15948,7 +15948,8 @@ variable, then <code>overrides</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">324</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">323</span>
+<span class="normal">324</span>
 <span class="normal">325</span>
 <span class="normal">326</span>
 <span class="normal">327</span>
@@ -15966,8 +15967,7 @@ variable, then <code>overrides</code>.</p>
 <span class="normal">339</span>
 <span class="normal">340</span>
 <span class="normal">341</span>
-<span class="normal">342</span>
-<span class="normal">343</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sampler_settings</span><span class="p">(</span>
+<span class="normal">342</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">sampler_settings</span><span class="p">(</span>
     <span class="n">overrides</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Return NUTS settings.</span>
@@ -16083,7 +16083,8 @@ R-hat can show a chain that stays in another mode.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">346</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">345</span>
+<span class="normal">346</span>
 <span class="normal">347</span>
 <span class="normal">348</span>
 <span class="normal">349</span>
@@ -16107,8 +16108,7 @@ R-hat can show a chain that stays in another mode.</p>
 <span class="normal">367</span>
 <span class="normal">368</span>
 <span class="normal">369</span>
-<span class="normal">370</span>
-<span class="normal">371</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">nuts_kernel</span><span class="p">(</span><span class="n">model_fn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">sampler</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="normal">370</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">nuts_kernel</span><span class="p">(</span><span class="n">model_fn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">sampler</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Build the NUTS kernel for a sampler table.</span>
 
 <span class="sd">    Each chain starts from its own prior draw, so chains start apart and</span>
@@ -16250,7 +16250,8 @@ R-hat can show a chain that stays in another mode.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">374</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">373</span>
+<span class="normal">374</span>
 <span class="normal">375</span>
 <span class="normal">376</span>
 <span class="normal">377</span>
@@ -16294,8 +16295,7 @@ R-hat can show a chain that stays in another mode.</p>
 <span class="normal">415</span>
 <span class="normal">416</span>
 <span class="normal">417</span>
-<span class="normal">418</span>
-<span class="normal">419</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_nuts</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">sampler</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="normal">418</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_nuts</span><span class="p">(</span><span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">sampler</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fit a built model by NUTS, keeping the fields the diagnostics need.</span>
 
 <span class="sd">    Parameters</span>
@@ -16419,7 +16419,8 @@ R-hat can show a chain that stays in another mode.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">422</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">421</span>
+<span class="normal">422</span>
 <span class="normal">423</span>
 <span class="normal">424</span>
 <span class="normal">425</span>
@@ -16432,8 +16433,7 @@ R-hat can show a chain that stays in another mode.</p>
 <span class="normal">432</span>
 <span class="normal">433</span>
 <span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">horizon_weeks</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="normal">435</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">horizon_weeks</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Weeks the model must run past the week holding the vintage.</span>
 
 <span class="sd">    Parameters</span>
@@ -16550,7 +16550,8 @@ joint fit passed the R-hat gate (<code>nowcastrenewal.bvd</code>).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">443</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">442</span>
+<span class="normal">443</span>
 <span class="normal">444</span>
 <span class="normal">445</span>
 <span class="normal">446</span>
@@ -16574,8 +16575,7 @@ joint fit passed the R-hat gate (<code>nowcastrenewal.bvd</code>).</p>
 <span class="normal">464</span>
 <span class="normal">465</span>
 <span class="normal">466</span>
-<span class="normal">467</span>
-<span class="normal">468</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bvd_release</span><span class="p">(</span>
+<span class="normal">467</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bvd_release</span><span class="p">(</span>
     <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">cache_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BvdRelease</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return the BVDOutbreakSize release chosen for a task's vintage.</span>
@@ -16696,7 +16696,8 @@ vintage, or None if none qualifies.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">471</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">470</span>
+<span class="normal">471</span>
 <span class="normal">472</span>
 <span class="normal">473</span>
 <span class="normal">474</span>
@@ -16716,8 +16717,7 @@ vintage, or None if none qualifies.</p>
 <span class="normal">488</span>
 <span class="normal">489</span>
 <span class="normal">490</span>
-<span class="normal">491</span>
-<span class="normal">492</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bvd_rows</span><span class="p">(</span>
+<span class="normal">491</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bvd_rows</span><span class="p">(</span>
     <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">cache_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""BVDOutbreakSize rows for a task's vintage, from the release cache.</span>
@@ -16824,7 +16824,8 @@ only <code>tag: None</code> if no release qualified.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">495</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">494</span>
+<span class="normal">495</span>
 <span class="normal">496</span>
 <span class="normal">497</span>
 <span class="normal">498</span>
@@ -16846,8 +16847,7 @@ only <code>tag: None</code> if no release qualified.</p>
 <span class="normal">514</span>
 <span class="normal">515</span>
 <span class="normal">516</span>
-<span class="normal">517</span>
-<span class="normal">518</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bvd_record</span><span class="p">(</span><span class="n">release</span><span class="p">:</span> <span class="n">BvdRelease</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="normal">517</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">bvd_record</span><span class="p">(</span><span class="n">release</span><span class="p">:</span> <span class="n">BvdRelease</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Describe the BVDOutbreakSize release used, for the fit diagnostics.</span>
 
 <span class="sd">    Parameters</span>
@@ -16918,7 +16918,8 @@ only <code>tag: None</code> if no release qualified.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">529</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">528</span>
+<span class="normal">529</span>
 <span class="normal">530</span>
 <span class="normal">531</span>
 <span class="normal">532</span>
@@ -16926,8 +16927,7 @@ only <code>tag: None</code> if no release qualified.</p>
 <span class="normal">534</span>
 <span class="normal">535</span>
 <span class="normal">536</span>
-<span class="normal">537</span>
-<span class="normal">538</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">task_places</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="normal">537</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">task_places</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return the task's places (`ForecastTask.places`).</span>
 
 <span class="sd">    Raises</span>
@@ -16984,7 +16984,8 @@ only <code>tag: None</code> if no release qualified.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">541</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">540</span>
+<span class="normal">541</span>
 <span class="normal">542</span>
 <span class="normal">543</span>
 <span class="normal">544</span>
@@ -16992,8 +16993,7 @@ only <code>tag: None</code> if no release qualified.</p>
 <span class="normal">546</span>
 <span class="normal">547</span>
 <span class="normal">548</span>
-<span class="normal">549</span>
-<span class="normal">550</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">task_imputation_delay</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="normal">549</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">task_imputation_delay</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return the task's imputation delay (`ForecastTask.imputation_delay`).</span>
 
 <span class="sd">    Raises</span>
@@ -17146,7 +17146,8 @@ term. Without them that variant is the main model.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">553</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">552</span>
+<span class="normal">553</span>
 <span class="normal">554</span>
 <span class="normal">555</span>
 <span class="normal">556</span>
@@ -17195,8 +17196,7 @@ term. Without them that variant is the main model.</p>
 <span class="normal">599</span>
 <span class="normal">600</span>
 <span class="normal">601</span>
-<span class="normal">602</span>
-<span class="normal">603</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">vintage_inputs</span><span class="p">(</span>
+<span class="normal">602</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">vintage_inputs</span><span class="p">(</span>
     <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span>
     <span class="n">config</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="n">table</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -17364,7 +17364,8 @@ term. Without them that variant is the main model.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">606</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">605</span>
+<span class="normal">606</span>
 <span class="normal">607</span>
 <span class="normal">608</span>
 <span class="normal">609</span>
@@ -17411,8 +17412,7 @@ term. Without them that variant is the main model.</p>
 <span class="normal">650</span>
 <span class="normal">651</span>
 <span class="normal">652</span>
-<span class="normal">653</span>
-<span class="normal">654</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">samples_table</span><span class="p">(</span>
+<span class="normal">653</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">samples_table</span><span class="p">(</span>
     <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="n">draws</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
@@ -17561,7 +17561,8 @@ term. Without them that variant is the main model.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">678</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">677</span>
+<span class="normal">678</span>
 <span class="normal">679</span>
 <span class="normal">680</span>
 <span class="normal">681</span>
@@ -17579,8 +17580,7 @@ term. Without them that variant is the main model.</p>
 <span class="normal">693</span>
 <span class="normal">694</span>
 <span class="normal">695</span>
-<span class="normal">696</span>
-<span class="normal">697</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">report_cutoffs</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="normal">696</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">report_cutoffs</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Days from the model start to each later vintage in `task.report_by`.</span>
 
 <span class="sd">    Parameters</span>
@@ -17683,7 +17683,8 @@ on the same data (<code>bdbvhub coherence</code>).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">713</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">712</span>
+<span class="normal">713</span>
 <span class="normal">714</span>
 <span class="normal">715</span>
 <span class="normal">716</span>
@@ -17713,8 +17714,7 @@ on the same data (<code>bdbvhub coherence</code>).</p>
 <span class="normal">740</span>
 <span class="normal">741</span>
 <span class="normal">742</span>
-<span class="normal">743</span>
-<span class="normal">744</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">check_national</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="normal">743</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">check_national</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Stop if the task's national data hold cases in no province.</span>
 
 <span class="sd">    National is the sum of the provinces, sample by sample, so cases the</span>
@@ -17852,7 +17852,8 @@ the sum of the province draws within each draw. These are the
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">747</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">746</span>
+<span class="normal">747</span>
 <span class="normal">748</span>
 <span class="normal">749</span>
 <span class="normal">750</span>
@@ -17902,8 +17903,7 @@ the sum of the province draws within each draw. These are the
 <span class="normal">794</span>
 <span class="normal">795</span>
 <span class="normal">796</span>
-<span class="normal">797</span>
-<span class="normal">798</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">ppc_rows</span><span class="p">(</span>
+<span class="normal">797</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">ppc_rows</span><span class="p">(</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">insample</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">"""Observed rows and the matching in-sample predictive draws.</span>
@@ -18034,7 +18034,8 @@ suggests the momentum resampling explores the energy poorly.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">801</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">800</span>
+<span class="normal">801</span>
 <span class="normal">802</span>
 <span class="normal">803</span>
 <span class="normal">804</span>
@@ -18048,8 +18049,7 @@ suggests the momentum resampling explores the energy poorly.</p>
 <span class="normal">812</span>
 <span class="normal">813</span>
 <span class="normal">814</span>
-<span class="normal">815</span>
-<span class="normal">816</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">ebfmi</span><span class="p">(</span><span class="n">energy</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="normal">815</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">ebfmi</span><span class="p">(</span><span class="n">energy</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Energy Bayesian fraction of missing information of one chain.</span>
 
 <span class="sd">    Parameters</span>
@@ -18200,7 +18200,8 @@ delay in days (<code>median_delay</code>), the mean delay in days
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">825</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">824</span>
+<span class="normal">825</span>
 <span class="normal">826</span>
 <span class="normal">827</span>
 <span class="normal">828</span>
@@ -18282,8 +18283,7 @@ delay in days (<code>median_delay</code>), the mean delay in days
 <span class="normal">904</span>
 <span class="normal">905</span>
 <span class="normal">906</span>
-<span class="normal">907</span>
-<span class="normal">908</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">delay_summary</span><span class="p">(</span>
+<span class="normal">907</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">delay_summary</span><span class="p">(</span>
     <span class="n">beta</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span>
     <span class="n">shift</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">],</span>
     <span class="n">first_day</span><span class="p">:</span> <span class="n">dt</span><span class="o">.</span><span class="n">date</span><span class="p">,</span>
@@ -18479,7 +18479,8 @@ delay (column <code>place</code>), with the shared delay of several places.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">911</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">910</span>
+<span class="normal">911</span>
 <span class="normal">912</span>
 <span class="normal">913</span>
 <span class="normal">914</span>
@@ -18530,8 +18531,7 @@ delay (column <code>place</code>), with the shared delay of several places.</p>
 <span class="normal">959</span>
 <span class="normal">960</span>
 <span class="normal">961</span>
-<span class="normal">962</span>
-<span class="normal">963</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_records</span><span class="p">(</span>
+<span class="normal">962</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run_records</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">places</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Return a fitted model's chain trace, sampler fields and delays.</span>
@@ -18685,7 +18685,8 @@ several provinces.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 966</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 965</span>
+<span class="normal"> 966</span>
 <span class="normal"> 967</span>
 <span class="normal"> 968</span>
 <span class="normal"> 969</span>
@@ -18721,8 +18722,7 @@ several provinces.</p>
 <span class="normal"> 999</span>
 <span class="normal">1000</span>
 <span class="normal">1001</span>
-<span class="normal">1002</span>
-<span class="normal">1003</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_delays</span><span class="p">(</span><span class="n">fit</span><span class="p">:</span> <span class="n">RenewalFit</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="normal">1002</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_delays</span><span class="p">(</span><span class="n">fit</span><span class="p">:</span> <span class="n">RenewalFit</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return the delay summaries of a fit's runs, as one table.</span>
 
 <span class="sd">    Parameters</span>
@@ -18862,7 +18862,8 @@ that diverged (<code>divergent_share</code>) or hit the tree depth cap
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1006</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1005</span>
+<span class="normal">1006</span>
 <span class="normal">1007</span>
 <span class="normal">1008</span>
 <span class="normal">1009</span>
@@ -18899,8 +18900,7 @@ that diverged (<code>divergent_share</code>) or hit the tree depth cap
 <span class="normal">1040</span>
 <span class="normal">1041</span>
 <span class="normal">1042</span>
-<span class="normal">1043</span>
-<span class="normal">1044</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_summary</span><span class="p">(</span><span class="n">run</span><span class="p">:</span> <span class="n">RenewalRun</span><span class="p">,</span> <span class="n">sampler</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="normal">1043</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_summary</span><span class="p">(</span><span class="n">run</span><span class="p">:</span> <span class="n">RenewalRun</span><span class="p">,</span> <span class="n">sampler</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Summarise one fit: sampler settings, time and convergence.</span>
 
 <span class="sd">    Parameters</span>
@@ -19037,7 +19037,8 @@ and, if kept, <code>num_steps</code>, <code>accept_prob</code>, <code>energy</co
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1047</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1046</span>
+<span class="normal">1047</span>
 <span class="normal">1048</span>
 <span class="normal">1049</span>
 <span class="normal">1050</span>
@@ -19077,8 +19078,7 @@ and, if kept, <code>num_steps</code>, <code>accept_prob</code>, <code>energy</co
 <span class="normal">1084</span>
 <span class="normal">1085</span>
 <span class="normal">1086</span>
-<span class="normal">1087</span>
-<span class="normal">1088</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">chain_diagnostics</span><span class="p">(</span>
+<span class="normal">1087</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">chain_diagnostics</span><span class="p">(</span>
     <span class="n">extra</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">max_tree_depth</span><span class="p">:</span> <span class="nb">int</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">"""Per-chain sampler diagnostics, as BVDOutbreakSize reports them.</span>
@@ -19202,7 +19202,8 @@ Undefined values, such as for a constant, are None.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1098</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1097</span>
+<span class="normal">1098</span>
 <span class="normal">1099</span>
 <span class="normal">1100</span>
 <span class="normal">1101</span>
@@ -19248,8 +19249,7 @@ Undefined values, such as for a constant, are None.</p>
 <span class="normal">1141</span>
 <span class="normal">1142</span>
 <span class="normal">1143</span>
-<span class="normal">1144</span>
-<span class="normal">1145</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">parameter_diagnostics</span><span class="p">(</span>
+<span class="normal">1144</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">parameter_diagnostics</span><span class="p">(</span>
     <span class="n">trace</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">"""R-hat and effective sample sizes of every sampled scalar.</span>
@@ -19391,7 +19391,8 @@ Undefined values, such as for a constant, are None.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1148</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1147</span>
+<span class="normal">1148</span>
 <span class="normal">1149</span>
 <span class="normal">1150</span>
 <span class="normal">1151</span>
@@ -19408,8 +19409,7 @@ Undefined values, such as for a constant, are None.</p>
 <span class="normal">1162</span>
 <span class="normal">1163</span>
 <span class="normal">1164</span>
-<span class="normal">1165</span>
-<span class="normal">1166</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">worst_rhat</span><span class="p">(</span>
+<span class="normal">1165</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">worst_rhat</span><span class="p">(</span>
     <span class="n">params</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
 <span class="w">    </span><span class="sd">"""Return the `n` parameters with the highest R-hat.</span>
@@ -19532,7 +19532,8 @@ and <code>value</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1486</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1485</span>
+<span class="normal">1486</span>
 <span class="normal">1487</span>
 <span class="normal">1488</span>
 <span class="normal">1489</span>
@@ -19606,8 +19607,7 @@ and <code>value</code>.</p>
 <span class="normal">1557</span>
 <span class="normal">1558</span>
 <span class="normal">1559</span>
-<span class="normal">1560</span>
-<span class="normal">1561</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">rt_quantiles</span><span class="p">(</span>
+<span class="normal">1560</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">rt_quantiles</span><span class="p">(</span>
     <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">runs</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">RenewalRun</span><span class="p">]</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Weekly effective Rt quantiles of every place a fit models.</span>
@@ -19835,7 +19835,8 @@ BVD term).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1564</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1563</span>
+<span class="normal">1564</span>
 <span class="normal">1565</span>
 <span class="normal">1566</span>
 <span class="normal">1567</span>
@@ -19882,8 +19883,7 @@ BVD term).</p>
 <span class="normal">1608</span>
 <span class="normal">1609</span>
 <span class="normal">1610</span>
-<span class="normal">1611</span>
-<span class="normal">1612</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_renewal</span><span class="p">(</span>
+<span class="normal">1611</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_renewal</span><span class="p">(</span>
     <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span>
     <span class="n">sampler</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
     <span class="n">fit_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span>
@@ -20101,7 +20101,8 @@ BVD term).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1615</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1614</span>
+<span class="normal">1615</span>
 <span class="normal">1616</span>
 <span class="normal">1617</span>
 <span class="normal">1618</span>
@@ -20212,8 +20213,7 @@ BVD term).</p>
 <span class="normal">1723</span>
 <span class="normal">1724</span>
 <span class="normal">1725</span>
-<span class="normal">1726</span>
-<span class="normal">1727</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">write_fit_dir</span><span class="p">(</span>
+<span class="normal">1726</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">write_fit_dir</span><span class="p">(</span>
     <span class="n">fit</span><span class="p">:</span> <span class="n">RenewalFit</span><span class="p">,</span>
     <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span>
     <span class="n">settings</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
@@ -20420,7 +20420,8 @@ BVD term).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/forecaster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1730</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1729</span>
+<span class="normal">1730</span>
 <span class="normal">1731</span>
 <span class="normal">1732</span>
 <span class="normal">1733</span>
@@ -20443,8 +20444,7 @@ BVD term).</p>
 <span class="normal">1750</span>
 <span class="normal">1751</span>
 <span class="normal">1752</span>
-<span class="normal">1753</span>
-<span class="normal">1754</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_renewal</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">fit_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Forecast</span><span class="p">:</span>
+<span class="normal">1753</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_renewal</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">fit_dir</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Forecast</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Read the trajectories `fit_renewal` saved.</span>
 
 <span class="sd">    Parameters</span>
@@ -21161,7 +21161,7 @@ samples.</p>
 <span class="sd">        The zones with a case in the random walks' walk window are</span>
 <span class="sd">        fitted in one model, and the silent ones are drawn with them from</span>
 <span class="sd">        its posterior, taking infections only through its fitted</span>
-<span class="sd">        importation (`run`, #768 item 8). Each province sample is</span>
+<span class="sd">        importation (`run`). Each province sample is</span>
 <span class="sd">        the sum of its zones' samples of the same id. National is the</span>
 <span class="sd">        sum of the provinces, and a task with national cases in no</span>
 <span class="sd">        province stops (`check_national`).</span>
@@ -21653,7 +21653,7 @@ estimates. The fit key holds it (<code>bdbvhub.store.store.fit_key</code>).</p>
 <p>The zones with a case in the random walks' walk window are
 fitted in one model, and the silent ones are drawn with them from
 its posterior, taking infections only through its fitted
-importation (<code>run</code>, #768 item 8). Each province sample is
+importation (<code>run</code>). Each province sample is
 the sum of its zones' samples of the same id. National is the
 sum of the provinces, and a task with national cases in no
 province stops (<code>check_national</code>).</p>
@@ -21798,7 +21798,7 @@ province stops (<code>check_national</code>).</p>
 <span class="sd">    The zones with a case in the random walks' walk window are</span>
 <span class="sd">    fitted in one model, and the silent ones are drawn with them from</span>
 <span class="sd">    its posterior, taking infections only through its fitted</span>
-<span class="sd">    importation (`run`, #768 item 8). Each province sample is</span>
+<span class="sd">    importation (`run`). Each province sample is</span>
 <span class="sd">    the sum of its zones' samples of the same id. National is the</span>
 <span class="sd">    sum of the provinces, and a task with national cases in no</span>
 <span class="sd">    province stops (`check_national`).</span>
@@ -21986,8 +21986,7 @@ zone). The silent zones take
 <code>randomwalknowcast</code>'s introductions (<code>_silent_walk</code>), as in
 <code>renewalsp</code>. Provinces are the sums of their zones, sample by sample,
 and national is their sum, so no province sample is split across
-zones. Zone fits pair draws by index, as <code>renewalsp</code>'s provinces do.
-It is <code>renewalsp</code> (Sam, 2026-11-24; #768 item 9).</p>
+zones. Zone fits pair draws by index, as <code>renewalsp</code>'s provinces do.</p>
 
 
 
@@ -22066,8 +22065,7 @@ It is <code>renewalsp</code> (Sam, 2026-11-24; #768 item 9).</p>
 <span class="normal">730</span>
 <span class="normal">731</span>
 <span class="normal">732</span>
-<span class="normal">733</span>
-<span class="normal">734</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="normal">733</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">SingleZoneRenewalModel</span><span class="p">(</span><span class="n">ZoneRenewalModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""A single-patch variant fitted to each zone on its own.</span>
 
@@ -22078,7 +22076,6 @@ It is <code>renewalsp</code> (Sam, 2026-11-24; #768 item 9).</p>
 <span class="sd">    `renewalsp`. Provinces are the sums of their zones, sample by sample,</span>
 <span class="sd">    and national is their sum, so no province sample is split across</span>
 <span class="sd">    zones. Zone fits pair draws by index, as `renewalsp`'s provinces do.</span>
-<span class="sd">    It is `renewalsp` (Sam, 2026-11-24; #768 item 9).</span>
 <span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RenewalRun</span><span class="p">:</span>
@@ -22171,9 +22168,9 @@ It is <code>renewalsp</code> (Sam, 2026-11-24; #768 item 9).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/zones.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">679</span>
-<span class="normal">680</span>
-<span class="normal">681</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RenewalRun</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">678</span>
+<span class="normal">679</span>
+<span class="normal">680</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RenewalRun</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fit one zone on its own (`RenewalModel.run`)."""</span>
     <span class="k">return</span> <span class="n">RenewalModel</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
@@ -22282,7 +22279,8 @@ It is <code>renewalsp</code> (Sam, 2026-11-24; #768 item 9).</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/zones.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">683</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">682</span>
+<span class="normal">683</span>
 <span class="normal">684</span>
 <span class="normal">685</span>
 <span class="normal">686</span>
@@ -22332,8 +22330,7 @@ It is <code>renewalsp</code> (Sam, 2026-11-24; #768 item 9).</p>
 <span class="normal">730</span>
 <span class="normal">731</span>
 <span class="normal">732</span>
-<span class="normal">733</span>
-<span class="normal">734</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ZoneRenewalFit</span><span class="p">:</span>
+<span class="normal">733</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_fit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ZoneRenewalFit</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Fit each zone with a recent case on its own and sum them.</span>
 
 <span class="sd">    Parameters</span>
@@ -25622,9 +25619,8 @@ partly on the same case data as ours: at 1 we would count those
 data twice at full weight, and larger values widen the estimates
 so they move our Rt mainly where our own data are weak. It is set
 by that judgement, like a prior, and is not tuned on scores.
-Sam set 1.5 (#768 item 5), the power prior with tempering
-$1 / 1.5^2 \approx 0.44$, a little weaker than the earlier
-$\sqrt{2}$ (tempering 0.5). <code>math.inf</code> gives the model without
+It is 1.5, the power prior with tempering
+$1 / 1.5^2 \approx 0.44$. <code>math.inf</code> gives the model without
 the term, exactly.</p>
               </div>
             </td>
@@ -25681,7 +25677,7 @@ the walk's weekly changes (<code>forecaster.fit_config</code>).</p>
             <td>
               <div class="doc-md-description">
                 <p>Median and log-scale SD of a LogNormal prior on that walk's step
-SD, shared by every variant (Sam, 2026-11-24). A centred walk
+SD, shared by every variant. A centred walk
 funnels where its step SD nears 0, which HalfNormal(0.2) allowed:
 at the 2026-11-22
 release, CD-NK fitted alone mixed the step SD at bulk ESS 29 and
@@ -25782,8 +25778,7 @@ divergences. The prior moves its posterior median from 0.04 to
 <span class="normal">232</span>
 <span class="normal">233</span>
 <span class="normal">234</span>
-<span class="normal">235</span>
-<span class="normal">236</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal">235</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">ModelConfig</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Structural choices of the model, for the ladder and the variants.</span>
 
@@ -25816,9 +25811,8 @@ divergences. The prior moves its posterior median from 0.04 to
 <span class="sd">        data twice at full weight, and larger values widen the estimates</span>
 <span class="sd">        so they move our Rt mainly where our own data are weak. It is set</span>
 <span class="sd">        by that judgement, like a prior, and is not tuned on scores.</span>
-<span class="sd">        Sam set 1.5 (#768 item 5), the power prior with tempering</span>
-<span class="sd">        $1 / 1.5^2 \approx 0.44$, a little weaker than the earlier</span>
-<span class="sd">        $\sqrt{2}$ (tempering 0.5). `math.inf` gives the model without</span>
+<span class="sd">        It is 1.5, the power prior with tempering</span>
+<span class="sd">        $1 / 1.5^2 \approx 0.44$. `math.inf` gives the model without</span>
 <span class="sd">        the term, exactly.</span>
 <span class="sd">    dmax : int</span>
 <span class="sd">        Maximum onset-to-report delay in days. Longer delays of known</span>
@@ -25839,7 +25833,7 @@ divergences. The prior moves its posterior median from 0.04 to
 <span class="sd">        the walk's weekly changes (`forecaster.fit_config`).</span>
 <span class="sd">    rt_sd_lognormal : tuple of float or None</span>
 <span class="sd">        Median and log-scale SD of a LogNormal prior on that walk's step</span>
-<span class="sd">        SD, shared by every variant (Sam, 2026-11-24). A centred walk</span>
+<span class="sd">        SD, shared by every variant. A centred walk</span>
 <span class="sd">        funnels where its step SD nears 0, which HalfNormal(0.2) allowed:</span>
 <span class="sd">        at the 2026-11-22</span>
 <span class="sd">        release, CD-NK fitted alone mixed the step SD at bulk ESS 29 and</span>
@@ -26082,7 +26076,8 @@ had (<code>nowcastutils.releases.release_pairs</code>), or None.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">245</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">244</span>
+<span class="normal">245</span>
 <span class="normal">246</span>
 <span class="normal">247</span>
 <span class="normal">248</span>
@@ -26156,8 +26151,7 @@ had (<code>nowcastutils.releases.release_pairs</code>), or None.</p>
 <span class="normal">316</span>
 <span class="normal">317</span>
 <span class="normal">318</span>
-<span class="normal">319</span>
-<span class="normal">320</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="normal">319</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Vintage</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""One data vintage, on weeks starting `start_date` (a Sunday).</span>
 
@@ -31131,7 +31125,8 @@ diagnostics. Chains run in parallel when devices allow.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">555</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">554</span>
+<span class="normal">555</span>
 <span class="normal">556</span>
 <span class="normal">557</span>
 <span class="normal">558</span>
@@ -31185,8 +31180,7 @@ diagnostics. Chains run in parallel when devices allow.</p>
 <span class="normal">606</span>
 <span class="normal">607</span>
 <span class="normal">608</span>
-<span class="normal">609</span>
-<span class="normal">610</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span>
+<span class="normal">609</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">MultiSignalModel</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span>
     <span class="n">num_warmup</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span>
@@ -31415,7 +31409,8 @@ forecasts against a later vintage as reported, like for like.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">613</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">612</span>
+<span class="normal">613</span>
 <span class="normal">614</span>
 <span class="normal">615</span>
 <span class="normal">616</span>
@@ -31487,8 +31482,7 @@ forecasts against a later vintage as reported, like for like.</p>
 <span class="normal">682</span>
 <span class="normal">683</span>
 <span class="normal">684</span>
-<span class="normal">685</span>
-<span class="normal">686</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_trajectories</span><span class="p">(</span>
+<span class="normal">685</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_trajectories</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">MultiSignalModel</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span>
     <span class="n">n_trajectories</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
@@ -32058,7 +32052,8 @@ draw counts as reported by it.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">469</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">468</span>
+<span class="normal">469</span>
 <span class="normal">470</span>
 <span class="normal">471</span>
 <span class="normal">472</span>
@@ -32130,8 +32125,7 @@ draw counts as reported by it.</p>
 <span class="normal">538</span>
 <span class="normal">539</span>
 <span class="normal">540</span>
-<span class="normal">541</span>
-<span class="normal">542</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">model_args</span><span class="p">(</span>
+<span class="normal">541</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">model_args</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">MultiSignalModel</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span>
     <span class="n">forecast</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -32362,7 +32356,8 @@ of the axis, <code>n_init</code> days before <code>start_date</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">695</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">694</span>
+<span class="normal">695</span>
 <span class="normal">696</span>
 <span class="normal">697</span>
 <span class="normal">698</span>
@@ -32440,8 +32435,7 @@ of the axis, <code>n_init</code> days before <code>start_date</code>.</p>
 <span class="normal">770</span>
 <span class="normal">771</span>
 <span class="normal">772</span>
-<span class="normal">773</span>
-<span class="normal">774</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">weekly_rt</span><span class="p">(</span>
+<span class="normal">773</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">weekly_rt</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">MultiSignalModel</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span>
     <span class="n">posterior</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -53415,9 +53409,8 @@ partly on the same case data as ours: at 1 we would count those
 data twice at full weight, and larger values widen the estimates
 so they move our Rt mainly where our own data are weak. It is set
 by that judgement, like a prior, and is not tuned on scores.
-Sam set 1.5 (#768 item 5), the power prior with tempering
-$1 / 1.5^2 \approx 0.44$, a little weaker than the earlier
-$\sqrt{2}$ (tempering 0.5). <code>math.inf</code> gives the model without
+It is 1.5, the power prior with tempering
+$1 / 1.5^2 \approx 0.44$. <code>math.inf</code> gives the model without
 the term, exactly.</p>
               </div>
             </td>
@@ -53474,7 +53467,7 @@ the walk's weekly changes (<code>forecaster.fit_config</code>).</p>
             <td>
               <div class="doc-md-description">
                 <p>Median and log-scale SD of a LogNormal prior on that walk's step
-SD, shared by every variant (Sam, 2026-11-24). A centred walk
+SD, shared by every variant. A centred walk
 funnels where its step SD nears 0, which HalfNormal(0.2) allowed:
 at the 2026-11-22
 release, CD-NK fitted alone mixed the step SD at bulk ESS 29 and
@@ -53575,8 +53568,7 @@ divergences. The prior moves its posterior median from 0.04 to
 <span class="normal">232</span>
 <span class="normal">233</span>
 <span class="normal">234</span>
-<span class="normal">235</span>
-<span class="normal">236</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal">235</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">ModelConfig</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Structural choices of the model, for the ladder and the variants.</span>
 
@@ -53609,9 +53601,8 @@ divergences. The prior moves its posterior median from 0.04 to
 <span class="sd">        data twice at full weight, and larger values widen the estimates</span>
 <span class="sd">        so they move our Rt mainly where our own data are weak. It is set</span>
 <span class="sd">        by that judgement, like a prior, and is not tuned on scores.</span>
-<span class="sd">        Sam set 1.5 (#768 item 5), the power prior with tempering</span>
-<span class="sd">        $1 / 1.5^2 \approx 0.44$, a little weaker than the earlier</span>
-<span class="sd">        $\sqrt{2}$ (tempering 0.5). `math.inf` gives the model without</span>
+<span class="sd">        It is 1.5, the power prior with tempering</span>
+<span class="sd">        $1 / 1.5^2 \approx 0.44$. `math.inf` gives the model without</span>
 <span class="sd">        the term, exactly.</span>
 <span class="sd">    dmax : int</span>
 <span class="sd">        Maximum onset-to-report delay in days. Longer delays of known</span>
@@ -53632,7 +53623,7 @@ divergences. The prior moves its posterior median from 0.04 to
 <span class="sd">        the walk's weekly changes (`forecaster.fit_config`).</span>
 <span class="sd">    rt_sd_lognormal : tuple of float or None</span>
 <span class="sd">        Median and log-scale SD of a LogNormal prior on that walk's step</span>
-<span class="sd">        SD, shared by every variant (Sam, 2026-11-24). A centred walk</span>
+<span class="sd">        SD, shared by every variant. A centred walk</span>
 <span class="sd">        funnels where its step SD nears 0, which HalfNormal(0.2) allowed:</span>
 <span class="sd">        at the 2026-11-22</span>
 <span class="sd">        release, CD-NK fitted alone mixed the step SD at bulk ESS 29 and</span>
@@ -53875,7 +53866,8 @@ had (<code>nowcastutils.releases.release_pairs</code>), or None.</p>
 
               <details class="mkdocstrings-source">
                 <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">245</span>
+                <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">244</span>
+<span class="normal">245</span>
 <span class="normal">246</span>
 <span class="normal">247</span>
 <span class="normal">248</span>
@@ -53949,8 +53941,7 @@ had (<code>nowcastutils.releases.release_pairs</code>), or None.</p>
 <span class="normal">316</span>
 <span class="normal">317</span>
 <span class="normal">318</span>
-<span class="normal">319</span>
-<span class="normal">320</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
+<span class="normal">319</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Vintage</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""One data vintage, on weeks starting `start_date` (a Sunday).</span>
 
@@ -54714,7 +54705,8 @@ data) so the observation informs Rt there.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">379</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">378</span>
+<span class="normal">379</span>
 <span class="normal">380</span>
 <span class="normal">381</span>
 <span class="normal">382</span>
@@ -54734,8 +54726,7 @@ data) so the observation informs Rt there.</p>
 <span class="normal">396</span>
 <span class="normal">397</span>
 <span class="normal">398</span>
-<span class="normal">399</span>
-<span class="normal">400</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_weeks</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">ModelConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="normal">399</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit_weeks</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">ModelConfig</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Weeks on the fit axis: the data weeks, extended to the BVD day.</span>
 
 <span class="sd">    The BVD pseudo-observation sits on $s_b$, which can fall after the</span>
@@ -54871,7 +54862,8 @@ precision, which stalls NUTS.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">403</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">402</span>
+<span class="normal">403</span>
 <span class="normal">404</span>
 <span class="normal">405</span>
 <span class="normal">406</span>
@@ -54897,8 +54889,7 @@ precision, which stalls NUTS.</p>
 <span class="normal">426</span>
 <span class="normal">427</span>
 <span class="normal">428</span>
-<span class="normal">429</span>
-<span class="normal">430</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">capped_concentration</span><span class="p">(</span>
+<span class="normal">429</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">capped_concentration</span><span class="p">(</span>
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">inv_sqrt_rv</span><span class="p">:</span> <span class="n">DistributionalVariable</span><span class="p">,</span> <span class="n">floor</span><span class="p">:</span> <span class="nb">float</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TransformedVariable</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Concentration $1 / (x^2 + c)$ from $x = 1 / \sqrt{\text{conc}}$.</span>
@@ -55062,7 +55053,8 @@ draw counts as reported by it.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">469</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">468</span>
+<span class="normal">469</span>
 <span class="normal">470</span>
 <span class="normal">471</span>
 <span class="normal">472</span>
@@ -55134,8 +55126,7 @@ draw counts as reported by it.</p>
 <span class="normal">538</span>
 <span class="normal">539</span>
 <span class="normal">540</span>
-<span class="normal">541</span>
-<span class="normal">542</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">model_args</span><span class="p">(</span>
+<span class="normal">541</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">model_args</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">MultiSignalModel</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span>
     <span class="n">forecast</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -55406,7 +55397,8 @@ diagnostics. Chains run in parallel when devices allow.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">555</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">554</span>
+<span class="normal">555</span>
 <span class="normal">556</span>
 <span class="normal">557</span>
 <span class="normal">558</span>
@@ -55460,8 +55452,7 @@ diagnostics. Chains run in parallel when devices allow.</p>
 <span class="normal">606</span>
 <span class="normal">607</span>
 <span class="normal">608</span>
-<span class="normal">609</span>
-<span class="normal">610</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span>
+<span class="normal">609</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fit</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">MultiSignalModel</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span>
     <span class="n">num_warmup</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">500</span><span class="p">,</span>
@@ -55690,7 +55681,8 @@ forecasts against a later vintage as reported, like for like.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">613</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">612</span>
+<span class="normal">613</span>
 <span class="normal">614</span>
 <span class="normal">615</span>
 <span class="normal">616</span>
@@ -55762,8 +55754,7 @@ forecasts against a later vintage as reported, like for like.</p>
 <span class="normal">682</span>
 <span class="normal">683</span>
 <span class="normal">684</span>
-<span class="normal">685</span>
-<span class="normal">686</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_trajectories</span><span class="p">(</span>
+<span class="normal">685</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">forecast_trajectories</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">MultiSignalModel</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span>
     <span class="n">n_trajectories</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
@@ -55994,7 +55985,8 @@ of the axis, <code>n_init</code> days before <code>start_date</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastrenewal/src/nowcastrenewal/model/model.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">695</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">694</span>
+<span class="normal">695</span>
 <span class="normal">696</span>
 <span class="normal">697</span>
 <span class="normal">698</span>
@@ -56072,8 +56064,7 @@ of the axis, <code>n_init</code> days before <code>start_date</code>.</p>
 <span class="normal">770</span>
 <span class="normal">771</span>
 <span class="normal">772</span>
-<span class="normal">773</span>
-<span class="normal">774</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">weekly_rt</span><span class="p">(</span>
+<span class="normal">773</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">weekly_rt</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="n">MultiSignalModel</span><span class="p">,</span>
     <span class="n">data</span><span class="p">:</span> <span class="n">Vintage</span><span class="p">,</span>
     <span class="n">posterior</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -61678,7 +61669,7 @@ fitted (<code>gravity_kernel</code>, <code>extend_vintage</code>).</p>
         <p>Add silent zones to a fitted zone vintage, to forecast them.</p>
 <p>The silent zones are never seeded and have no data, so the zone model
 of the extended vintage has the fitted model's sampled sites and the
-fit's posterior drives it (#768 item 8). They receive infections only
+fit's posterior drives it. They receive infections only
 through the fitted importation: the kernel is normalised per origin
 over every zone (<code>gravity_kernel</code> with <code>receivers</code>, as the fit's
 was), its fitted block is the fit's kernel and silent zones send
@@ -61913,7 +61904,7 @@ as <code>receivers</code>.</p>
 
 <span class="sd">    The silent zones are never seeded and have no data, so the zone model</span>
 <span class="sd">    of the extended vintage has the fitted model's sampled sites and the</span>
-<span class="sd">    fit's posterior drives it (#768 item 8). They receive infections only</span>
+<span class="sd">    fit's posterior drives it. They receive infections only</span>
 <span class="sd">    through the fitted importation: the kernel is normalised per origin</span>
 <span class="sd">    over every zone (`gravity_kernel` with `receivers`, as the fit's</span>
 <span class="sd">    was), its fitted block is the fit's kernel and silent zones send</span>

@@ -414,6 +414,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nowcastutils.releases.HISTORY_FIELDS" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;HISTORY_FIELDS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nowcastutils.releases.latest_onset_days" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -440,6 +451,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;release_pairs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nowcastutils.releases.cumulative_first_release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;cumulative_first_release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nowcastutils.releases.without_cumulative_first_release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;without_cumulative_first_release
       
     </span>
   </a>
@@ -1011,6 +1044,17 @@
   
     <nav class="md-nav" aria-label=" devices">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#nowcastutils.devices.allowed_cpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;allowed_cpus
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#nowcastutils.devices.usable_cpus" class="md-nav__link">
@@ -1338,6 +1382,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#nowcastutils.releases.HISTORY_FIELDS" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;HISTORY_FIELDS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nowcastutils.releases.latest_onset_days" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1364,6 +1419,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;release_pairs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nowcastutils.releases.cumulative_first_release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;cumulative_first_release
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nowcastutils.releases.without_cumulative_first_release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;without_cumulative_first_release
       
     </span>
   </a>
@@ -1937,6 +2014,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#nowcastutils.devices.allowed_cpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;allowed_cpus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#nowcastutils.devices.usable_cpus" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2213,7 +2301,10 @@ data, whatever the label, and every tidy table carries it as a <code>cutoff</cod
 column, which <code>release_cutoff</code> reads.
 <code>release_pairs</code> tabulates, for each pair of consecutive delay files, which
 rows of the later file were already in the earlier one, the data the
-renewal models learn their report to publication lag from.</p>
+renewal models learn their report to publication lag from.
+<code>cumulative_first_release</code> finds a first release that is a cumulative dump
+rather than part of the reporting, and <code>without_cumulative_first_release</code>
+leaves it out of a task's releases.</p>
 
 
 
@@ -2252,6 +2343,30 @@ renewal models learn their report to publication lag from.</p>
 
         <p>Oldest report age at the earlier release of a pair kept by
 <code>release_pairs</code>, in days, the renewal models' maximum delay.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="nowcastutils.releases.HISTORY_FIELDS" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">HISTORY_FIELDS</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
+  </span>
+
+<a href="#nowcastutils.releases.HISTORY_FIELDS" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="n">HISTORY_FIELDS</span> <span class="o">=</span> <span class="p">(</span><span class="s1">'target_history'</span><span class="p">,</span> <span class="s1">'daily_history'</span><span class="p">,</span> <span class="s1">'zone_history'</span><span class="p">,</span> <span class="s1">'zone_daily_history'</span><span class="p">,</span> <span class="s1">'delay_history'</span><span class="p">)</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The task's release tables, each with a <code>vintage</code> column.</p>
 
     </div>
 
@@ -2334,25 +2449,25 @@ daily onsets, one date per release.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastutils/src/nowcastutils/releases.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">32</span>
-<span class="normal">33</span>
-<span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">44</span>
 <span class="normal">45</span>
 <span class="normal">46</span>
 <span class="normal">47</span>
 <span class="normal">48</span>
 <span class="normal">49</span>
-<span class="normal">50</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">latest_onset_days</span><span class="p">(</span><span class="n">daily</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
+<span class="normal">50</span>
+<span class="normal">51</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
+<span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">latest_onset_days</span><span class="p">(</span><span class="n">daily</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return each release's data cut-off, its latest onset day.</span>
 
 <span class="sd">    The cut-off is the latest onset day over all places in the release's</span>
@@ -2466,24 +2581,24 @@ daily onsets, one date per release.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastutils/src/nowcastutils/releases.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">53</span>
-<span class="normal">54</span>
-<span class="normal">55</span>
-<span class="normal">56</span>
-<span class="normal">57</span>
-<span class="normal">58</span>
-<span class="normal">59</span>
-<span class="normal">60</span>
-<span class="normal">61</span>
-<span class="normal">62</span>
-<span class="normal">63</span>
-<span class="normal">64</span>
-<span class="normal">65</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">65</span>
 <span class="normal">66</span>
 <span class="normal">67</span>
 <span class="normal">68</span>
 <span class="normal">69</span>
-<span class="normal">70</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">release_cutoff</span><span class="p">(</span><span class="n">rows</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">release</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">dt</span><span class="o">.</span><span class="n">date</span><span class="p">:</span>
+<span class="normal">70</span>
+<span class="normal">71</span>
+<span class="normal">72</span>
+<span class="normal">73</span>
+<span class="normal">74</span>
+<span class="normal">75</span>
+<span class="normal">76</span>
+<span class="normal">77</span>
+<span class="normal">78</span>
+<span class="normal">79</span>
+<span class="normal">80</span>
+<span class="normal">81</span>
+<span class="normal">82</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">release_cutoff</span><span class="p">(</span><span class="n">rows</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">release</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">dt</span><span class="o">.</span><span class="n">date</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return a release's data cut-off, its latest onset day.</span>
 
 <span class="sd">    Parameters</span>
@@ -2628,19 +2743,7 @@ None if no pair of files is available.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastutils/src/nowcastutils/releases.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 78</span>
-<span class="normal"> 79</span>
-<span class="normal"> 80</span>
-<span class="normal"> 81</span>
-<span class="normal"> 82</span>
-<span class="normal"> 83</span>
-<span class="normal"> 84</span>
-<span class="normal"> 85</span>
-<span class="normal"> 86</span>
-<span class="normal"> 87</span>
-<span class="normal"> 88</span>
-<span class="normal"> 89</span>
-<span class="normal"> 90</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 90</span>
 <span class="normal"> 91</span>
 <span class="normal"> 92</span>
 <span class="normal"> 93</span>
@@ -2708,7 +2811,19 @@ None if no pair of files is available.</p>
 <span class="normal">155</span>
 <span class="normal">156</span>
 <span class="normal">157</span>
-<span class="normal">158</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">release_pairs</span><span class="p">(</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">release_pairs</span><span class="p">(</span>
     <span class="n">delays</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">as_of</span><span class="p">:</span> <span class="n">dt</span><span class="o">.</span><span class="n">date</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">max_age</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">MAX_PAIR_AGE</span><span class="p">,</span>
@@ -2789,6 +2904,350 @@ None if no pair of files is available.</p>
     <span class="n">sizes</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">p</span><span class="p">[</span><span class="s2">"total"</span><span class="p">])</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">parts</span><span class="p">]</span>
     <span class="n">out</span><span class="p">[</span><span class="s2">"pair"</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">repeat</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)),</span> <span class="n">sizes</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">out</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nowcastutils.releases.cumulative_first_release" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">cumulative_first_release</span>
+
+
+<a href="#nowcastutils.releases.cumulative_first_release" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">cumulative_first_release</span><span class="p">(</span><span class="n">rows</span><span class="p">:</span> <span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">max_delay</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the first release if it is a cumulative dump, else None.</p>
+<p>The first release is a cumulative dump when the next release's
+cut-off is more than $D$ (<code>max_delay</code>) days after its own. Every case
+it holds is then older than $D$ by the next release, so it shares no
+report within the delay window with any later release: it records
+the counts to date, not how they were reported. How far its onsets
+reach back is no test, as the first release of any data that start
+after the outbreak reaches back to its start, and so does the release
+after it.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>rows</code>
+            </td>
+            <td>
+                  <code><span title="pandas.DataFrame">DataFrame</span> or None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Releases, with <code>vintage</code> and <code>cutoff</code>.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_delay</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span> or None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>$D$ in days. None finds no dump.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="str">str</span> or None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The first release's label, or None if it is not a dump, there is
+no later release or no $D$.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>packages/nowcastutils/src/nowcastutils/releases.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">cumulative_first_release</span><span class="p">(</span>
+    <span class="n">rows</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">max_delay</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the first release if it is a cumulative dump, else None.</span>
+
+<span class="sd">    The first release is a cumulative dump when the next release's</span>
+<span class="sd">    cut-off is more than $D$ (`max_delay`) days after its own. Every case</span>
+<span class="sd">    it holds is then older than $D$ by the next release, so it shares no</span>
+<span class="sd">    report within the delay window with any later release: it records</span>
+<span class="sd">    the counts to date, not how they were reported. How far its onsets</span>
+<span class="sd">    reach back is no test, as the first release of any data that start</span>
+<span class="sd">    after the outbreak reaches back to its start, and so does the release</span>
+<span class="sd">    after it.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    rows : pandas.DataFrame or None</span>
+<span class="sd">        Releases, with `vintage` and `cutoff`.</span>
+<span class="sd">    max_delay : int or None</span>
+<span class="sd">        $D$ in days. None finds no dump.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    str or None</span>
+<span class="sd">        The first release's label, or None if it is not a dump, there is</span>
+<span class="sd">        no later release or no $D$.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">max_delay</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">rows</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">rows</span><span class="o">.</span><span class="n">empty</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">cut</span> <span class="o">=</span> <span class="n">rows</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">(</span><span class="s2">"vintage"</span><span class="p">)</span>
+    <span class="n">cut</span> <span class="o">=</span> <span class="n">cut</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="n">cutoff</span><span class="o">=</span><span class="n">pd</span><span class="o">.</span><span class="n">to_datetime</span><span class="p">(</span><span class="n">cut</span><span class="p">[</span><span class="s2">"cutoff"</span><span class="p">]))</span><span class="o">.</span><span class="n">sort_values</span><span class="p">(</span><span class="s2">"cutoff"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cut</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">gap</span> <span class="o">=</span> <span class="p">(</span><span class="n">cut</span><span class="p">[</span><span class="s2">"cutoff"</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">cut</span><span class="p">[</span><span class="s2">"cutoff"</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">days</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">cut</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="k">if</span> <span class="n">gap</span> <span class="o">&gt;</span> <span class="n">max_delay</span> <span class="k">else</span> <span class="kc">None</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="nowcastutils.releases.without_cumulative_first_release" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">without_cumulative_first_release</span>
+
+
+<a href="#nowcastutils.releases.without_cumulative_first_release" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">without_cumulative_first_release</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ForecastTask</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the task without a cumulative first release in its releases.</p>
+<p>The first release of the task's releases (its daily releases, else
+its weekly ones) is left out of every release table
+(<code>HISTORY_FIELDS</code>) when it is a cumulative dump
+(<code>cumulative_first_release</code>, with the task's <code>max_delay</code>), so the
+history starts at the next release. Logged when it is.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>task</code>
+            </td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ForecastTask
+
+
+  
+      dataclass
+   (nowcastutils.base.ForecastTask)" href="#nowcastutils.base.ForecastTask">ForecastTask</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The task.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="            ForecastTask
+
+
+  
+      dataclass
+   (nowcastutils.base.ForecastTask)" href="#nowcastutils.base.ForecastTask">ForecastTask</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The task, unchanged if its first release is not a dump.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>packages/nowcastutils/src/nowcastutils/releases.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">without_cumulative_first_release</span><span class="p">(</span><span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ForecastTask</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return the task without a cumulative first release in its releases.</span>
+
+<span class="sd">    The first release of the task's releases (its daily releases, else</span>
+<span class="sd">    its weekly ones) is left out of every release table</span>
+<span class="sd">    (`HISTORY_FIELDS`) when it is a cumulative dump</span>
+<span class="sd">    (`cumulative_first_release`, with the task's `max_delay`), so the</span>
+<span class="sd">    history starts at the next release. Logged when it is.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    task : ForecastTask</span>
+<span class="sd">        The task.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    ForecastTask</span>
+<span class="sd">        The task, unchanged if its first release is not a dump.</span>
+<span class="sd">    """</span>
+    <span class="n">daily</span> <span class="o">=</span> <span class="n">task</span><span class="o">.</span><span class="n">daily_history</span>
+    <span class="n">rows</span> <span class="o">=</span> <span class="n">daily</span> <span class="k">if</span> <span class="n">daily</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">daily</span><span class="o">.</span><span class="n">empty</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="n">first</span> <span class="o">=</span> <span class="n">cumulative_first_release</span><span class="p">(</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">target_history</span> <span class="k">if</span> <span class="n">rows</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">rows</span><span class="p">,</span> <span class="n">task</span><span class="o">.</span><span class="n">max_delay</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">first</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">task</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+        <span class="s2">"</span><span class="si">%s</span><span class="s2">: release </span><span class="si">%s</span><span class="s2"> left out, a cumulative first release more than "</span>
+        <span class="s2">"</span><span class="si">%d</span><span class="s2"> days before the next"</span><span class="p">,</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">vintage</span><span class="p">,</span>
+        <span class="n">first</span><span class="p">,</span>
+        <span class="n">task</span><span class="o">.</span><span class="n">max_delay</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">tables</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">HISTORY_FIELDS</span><span class="p">:</span>
+        <span class="n">table</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">table</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="s2">"vintage"</span> <span class="ow">in</span> <span class="n">table</span><span class="o">.</span><span class="n">columns</span><span class="p">:</span>
+            <span class="n">kept</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">table</span><span class="p">[</span><span class="s2">"vintage"</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span> <span class="o">!=</span> <span class="n">first</span><span class="p">]</span>
+            <span class="n">tables</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">kept</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">kept</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">task</span><span class="p">,</span> <span class="o">**</span><span class="n">tables</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -8405,6 +8864,89 @@ part of every stored fit's key (<code>bdbvhub.store.store.fit_code</code>).</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="nowcastutils.devices.allowed_cpus" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">allowed_cpus</span>
+
+
+<a href="#nowcastutils.devices.allowed_cpus" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">allowed_cpus</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return the ids of the CPUs this process may run on, sorted.</p>
+<p>The process's CPU affinity where the platform has it (Linux), so a
+<code>taskset</code> or a container's CPU set is respected. Elsewhere (macOS,
+Windows) every CPU the host reports, and at least CPU 0.</p>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="int">int</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The usable CPU ids, in increasing order.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+            <details class="mkdocstrings-source">
+              <summary>Source code in <code>packages/nowcastutils/src/nowcastutils/devices.py</code></summary>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">15</span>
+<span class="normal">16</span>
+<span class="normal">17</span>
+<span class="normal">18</span>
+<span class="normal">19</span>
+<span class="normal">20</span>
+<span class="normal">21</span>
+<span class="normal">22</span>
+<span class="normal">23</span>
+<span class="normal">24</span>
+<span class="normal">25</span>
+<span class="normal">26</span>
+<span class="normal">27</span>
+<span class="normal">28</span>
+<span class="normal">29</span>
+<span class="normal">30</span>
+<span class="normal">31</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">allowed_cpus</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return the ids of the CPUs this process may run on, sorted.</span>
+
+<span class="sd">    The process's CPU affinity where the platform has it (Linux), so a</span>
+<span class="sd">    `taskset` or a container's CPU set is respected. Elsewhere (macOS,</span>
+<span class="sd">    Windows) every CPU the host reports, and at least CPU 0.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    list[int]</span>
+<span class="sd">        The usable CPU ids, in increasing order.</span>
+<span class="sd">    """</span>
+    <span class="c1"># Looked up, not named: mypy checks `os` as each platform has it.</span>
+    <span class="n">affinity</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">os</span><span class="p">,</span> <span class="s2">"sched_getaffinity"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">affinity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">affinity</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">()</span> <span class="ow">or</span> <span class="mi">1</span><span class="p">))</span>
+</code></pre></div></td></tr></table></div>
+            </details>
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="nowcastutils.devices.usable_cpus" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <span class="doc doc-object-name doc-function-name">usable_cpus</span>
 
@@ -8416,9 +8958,7 @@ part of every stored fit's key (<code>bdbvhub.store.store.fit_code</code>).</p>
     <div class="doc doc-contents ">
 
         <p>Return the number of CPUs this process may run on.</p>
-<p>The process's CPU affinity where the platform has it (Linux), so a
-<code>taskset</code> or a container's CPU set is respected. Elsewhere (macOS,
-Windows) every CPU the host reports, and at least 1.</p>
+<p>The count of <code>allowed_cpus</code>.</p>
 
 
     <p><span class="doc-section-title">Returns:</span></p>
@@ -8446,39 +8986,27 @@ Windows) every CPU the host reports, and at least 1.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastutils/src/nowcastutils/devices.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">15</span>
-<span class="normal">16</span>
-<span class="normal">17</span>
-<span class="normal">18</span>
-<span class="normal">19</span>
-<span class="normal">20</span>
-<span class="normal">21</span>
-<span class="normal">22</span>
-<span class="normal">23</span>
-<span class="normal">24</span>
-<span class="normal">25</span>
-<span class="normal">26</span>
-<span class="normal">27</span>
-<span class="normal">28</span>
-<span class="normal">29</span>
-<span class="normal">30</span>
-<span class="normal">31</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">usable_cpus</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">34</span>
+<span class="normal">35</span>
+<span class="normal">36</span>
+<span class="normal">37</span>
+<span class="normal">38</span>
+<span class="normal">39</span>
+<span class="normal">40</span>
+<span class="normal">41</span>
+<span class="normal">42</span>
+<span class="normal">43</span>
+<span class="normal">44</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">usable_cpus</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return the number of CPUs this process may run on.</span>
 
-<span class="sd">    The process's CPU affinity where the platform has it (Linux), so a</span>
-<span class="sd">    `taskset` or a container's CPU set is respected. Elsewhere (macOS,</span>
-<span class="sd">    Windows) every CPU the host reports, and at least 1.</span>
+<span class="sd">    The count of `allowed_cpus`.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    int</span>
 <span class="sd">        The number of usable CPUs.</span>
 <span class="sd">    """</span>
-    <span class="c1"># Looked up, not named: mypy checks `os` as each platform has it.</span>
-    <span class="n">affinity</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">os</span><span class="p">,</span> <span class="s2">"sched_getaffinity"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">affinity</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">affinity</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">()</span> <span class="ow">or</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">allowed_cpus</span><span class="p">())</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -8537,25 +9065,25 @@ Other flags in <code>XLA_FLAGS</code> are kept, and a larger count is kept.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastutils/src/nowcastutils/devices.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">34</span>
-<span class="normal">35</span>
-<span class="normal">36</span>
-<span class="normal">37</span>
-<span class="normal">38</span>
-<span class="normal">39</span>
-<span class="normal">40</span>
-<span class="normal">41</span>
-<span class="normal">42</span>
-<span class="normal">43</span>
-<span class="normal">44</span>
-<span class="normal">45</span>
-<span class="normal">46</span>
-<span class="normal">47</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">47</span>
 <span class="normal">48</span>
 <span class="normal">49</span>
 <span class="normal">50</span>
 <span class="normal">51</span>
-<span class="normal">52</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">host_devices</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="normal">52</span>
+<span class="normal">53</span>
+<span class="normal">54</span>
+<span class="normal">55</span>
+<span class="normal">56</span>
+<span class="normal">57</span>
+<span class="normal">58</span>
+<span class="normal">59</span>
+<span class="normal">60</span>
+<span class="normal">61</span>
+<span class="normal">62</span>
+<span class="normal">63</span>
+<span class="normal">64</span>
+<span class="normal">65</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">host_devices</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Give XLA at least `n` host devices, so `n` chains run in parallel.</span>
 
 <span class="sd">    NumPyro runs chains in parallel only with as many devices as chains.</span>
