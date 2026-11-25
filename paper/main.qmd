@@ -90,7 +90,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - A third each of the training blocks with places have a country equal to, above or later than the sum of its places.
 - We fine-tune base Chronos-2 on synthetic data on one machine, with its default LoRA recipe.
 - LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (SI).
-- Zero-shot Chronos-2 with delays gets the same input as the fine-tuned model for each task, the same lag series, lag count, aggregate rows and layout, so only the weights differ.
+- Zero-shot Chronos-2 on the reporting triangle gets the same input as the fine-tuned model for each task, the same lag series, lag count, aggregate rows and layout, so only the weights differ.
 - We train on {{< meta results.training.simulations >}} simulations drawn from the grid, each drawing its settings independently.
 - The learning rate falls linearly to zero over these simulations.
 - Each simulation gives up to 14 training blocks.
@@ -222,7 +222,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ### Sensitivity analyses
 
 ::: {.callout-note title="Plan"}
-- We nowcast in two steps, giving the point nowcast of our baselinenowcast port to Chronos-2 as complete counts, both zero-shot and with the fine-tuned model, with no further fine-tuning.
+- We run baselinenowcast first, giving the point nowcast of our baselinenowcast port to Chronos-2 as complete counts, both zero-shot and with the fine-tuned model, with no further fine-tuning.
 - The fine-tuned model on this input shows what the synthetic data teach beyond the reporting delays.
 - We fine-tune Chronos-2 on real data, the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
 - We fine-tune one run without the attention biases and one without lag series, and compare each with the main run.
@@ -243,7 +243,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 
 ::: {.callout-note title="Plan"}
 Each section has a figure panel.
-Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data only), Zero-shot (delays) and Fine-tuned (delays) in every figure and table.
+Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data only), Zero-shot (reporting triangle) and Fine-tuned (reporting triangle) in every figure and table.
 The case studies' score panels also show the hub's baseline, which their scores are relative to.
 Zero-shot (complete data only) has no lag series.
 Every other comparison, and the hub teams beyond the hub's baseline, is in the SI.
@@ -367,11 +367,11 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 - The lag count against a fixed cap and the joint block against each level alone and the sum of the lowest level have no SI section yet, and get a paragraph when they do.
 :::
 
-Against `randomwalknowcast`, zero-shot Chronos-2 on the two-step input scored {{< meta results.synthetic.models.foundation_zeroshot_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_twostep >}} on the German {{< meta results.germany.scope >}}.
-The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_twostep >}} and {{< meta results.germany.models.foundation_twostep >}}, and on the ragged layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
+Against `randomwalknowcast`, zero-shot Chronos-2 with baselinenowcast first scored {{< meta results.synthetic.models.foundation_zeroshot_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_twostep >}} on the German {{< meta results.germany.scope >}}.
+The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_twostep >}} and {{< meta results.germany.models.foundation_twostep >}}, and on the reporting-triangle layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
 
 ::: {.content-visible when-meta="results.ebola.shown"}
-On the Ebola {{< meta results.ebola.scope >}}, zero-shot Chronos-2 and the fine-tuned model on the two-step input and the fine-tuned model on the ragged layout scored {{< meta results.ebola.models.foundation_zeroshot_twostep >}}, {{< meta results.ebola.models.foundation_twostep >}} and {{< meta results.ebola.models.foundation >}}.
+On the Ebola {{< meta results.ebola.scope >}}, zero-shot and fine-tuned Chronos-2 with baselinenowcast first and the fine-tuned model on the reporting triangle scored {{< meta results.ebola.models.foundation_zeroshot_twostep >}}, {{< meta results.ebola.models.foundation_twostep >}} and {{< meta results.ebola.models.foundation >}}.
 :::
 
 We score the model fine-tuned on real data on the German held-out half and on Ebola rounds after its last training release, {{< meta results.realdata_after >}}, against the model fine-tuned on simulations (SI, Real-data fine-tune against synthetic).
@@ -409,7 +409,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Fine-tuning ran on one machine, so it needs no shared compute.
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
   - Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
-  - We used one layout, daily counts and daily lag series, with an aggregate row per place in both models with delays, and could also have included weekly lag series in the block.
+  - We used one layout, daily counts and daily lag series, with an aggregate row per place in both reporting-triangle models, and could also have included weekly lag series in the block.
   - We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.
   - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
   - We simulate and fine-tune on counts only.

@@ -343,9 +343,9 @@ def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     fig = checkpoint_figure(rows)
     ax = next(a for a in fig.axes if a.get_visible())
     lines = {line.get_label(): line for line in ax.get_lines()}
-    curve = lines["Fine-tuned (delays)"]
+    curve = lines["Fine-tuned (reporting triangle)"]
     assert list(curve.get_xdata()) == [1000, 2000]
-    zero = lines["Zero-shot (delays)"]
+    zero = lines["Zero-shot (reporting triangle)"]
     complete = lines["Zero-shot (complete data only)"]
     assert set(zero.get_ydata()) == {2.0}
     assert set(complete.get_ydata()) == {1.7}
