@@ -458,6 +458,7 @@ jobs:
           packages/nowcastrenewal/tests/test_triangle.py
           packages/nowcastrenewal/tests/test_reporting_effects.py
           packages/nowcastrenewal/tests/test_reporting_expectation.py
+          packages/nowcastrenewal/tests/test_observation_epinowcast.py
           packages/nowcasteval/tests/test_pairwise_skill.py
       # The paper's scores against scoringutils, scored live.
       - name: Live scoringutils check (paper)
