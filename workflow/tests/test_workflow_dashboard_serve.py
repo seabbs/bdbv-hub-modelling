@@ -66,15 +66,15 @@ def test_a_dead_server_is_replaced(tmp_path):
         driver.wait()
 
 
-def test_the_workflow_serves_the_dashboard_of_the_runs_it_trains():
-    # On by default: a fine-tuning run serves its own dashboard from its
-    # onstart, the same entry the task uses, for the runs it trains.
+def test_the_workflow_serves_the_dashboard_by_default():
+    # On by default: a fine-tuning run serves the dashboard from its
+    # onstart, the same entry the task uses; it finds the runs itself.
     config = (ROOT / "workflow" / "config.yaml").read_text()
     assert "serve: true" in config
     snakefile = (ROOT / "workflow" / "Snakefile").read_text()
     assert "onstart:" in snakefile
     assert "serve.ensure(" in snakefile
-    assert "runs=TRAINING.trained_runs()" in snakefile
+    assert "serve.ensure(LOCAL, serve.driver_pid())" in snakefile
 
 
 def test_the_dashboard_shows_the_runs_it_is_given(tmp_path):

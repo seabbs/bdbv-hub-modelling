@@ -6,8 +6,11 @@ the pid file (`pidfile`) is still alive. The server ends by itself when
 the process it was started for ends (`--while-pid`): the coordinator
 run (`DRIVER_ENV`, set by workflow/scripts/coordinate.py), else the
 Snakemake run. The workflow calls it from its `onstart` when
-`dashboard.serve` is true (the default), for the runs it trains;
-`task workflow:dashboard` runs the same script in the foreground.
+`dashboard.serve` is true (the default); with no runs named it shows
+every run under ROOT. The same hook keeps one long-lived monitor
+serving (`ensure_monitor`), which serves the dashboard under
+/finetune/. `task workflow:dashboard` runs the dashboard in the
+foreground.
 """
 
 from __future__ import annotations
@@ -20,6 +23,10 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).parents[2] / "scripts" / "dashboard.py"
 """The dashboard's server (workflow/scripts/dashboard.py)."""
+
+MONITOR = Path(__file__).parents[1] / "monitor_server.py"
+"""The monitor's server (flowlib/monitor_server.py), the machine's one
+entry, with the dashboard under /finetune/."""
 
 DRIVER_ENV = "WORKFLOW_DRIVER_PID"
 """The process a served dashboard lives as long as, when set."""
@@ -93,6 +100,47 @@ def driver_pid() -> int:
     return int(os.environ.get(DRIVER_ENV) or os.getpid())
 
 
+def _start(path: Path, argv: list[str], env: Mapping[str, str] | None) -> int:
+    """Start `argv` detached, logging beside the pid file `path`."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with (path.parent / "serve.log").open("ab") as log:
+        proc = subprocess.Popen(
+            argv,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            env=None if env is None else {**os.environ, **env},
+        )
+    path.write_text(f"{proc.pid}\n")
+    return proc.pid
+
+
+def monitor_pidfile(local: Mapping[str, str]) -> Path:
+    """Return the pid file of the monitor serving this machine."""
+    return Path(local["ROOT"]).expanduser() / "monitor" / "serve.pid"
+
+
+def ensure_monitor(
+    local: Mapping[str, str], script: Path | str = MONITOR
+) -> int:
+    """Start the monitor unless one is serving; return its pid.
+
+    One per machine and long-lived: it outlives the runs that start it,
+    with its database in `<ROOT>/monitor/`.
+    """
+    path = monitor_pidfile(local)
+    old = _recorded(path)
+    if old and serving(old, script):
+        return old
+    db = Path(local["ROOT"]).expanduser() / "monitor" / "panoptes.db"
+    return _start(
+        path,
+        [sys.executable, str(script)],
+        {"PANOPTES_DB_URL": f"sqlite:///{db}"},
+    )
+
+
 def ensure(
     local: Mapping[str, str],
     driver: int,
@@ -121,20 +169,14 @@ def ensure(
     old = _recorded(path)
     if old and serving(old, script):
         return old
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with (path.parent / "serve.log").open("ab") as log:
-        proc = subprocess.Popen(
-            [
-                sys.executable,
-                str(script),
-                "--while-pid",
-                str(driver),
-                *(a for run in runs for a in ("--run", run)),
-            ],
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    path.write_text(f"{proc.pid}\n")
-    return proc.pid
+    return _start(
+        path,
+        [
+            sys.executable,
+            str(script),
+            "--while-pid",
+            str(driver),
+            *(a for run in runs for a in ("--run", run)),
+        ],
+        None,
+    )

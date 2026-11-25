@@ -52,7 +52,7 @@ var cache={};
 function load(loc){var pre=C.preload||{};
  if(pre[loc])return Promise.resolve(pre[loc]);
  var k=C.key+"/"+loc;if(cache[k])return Promise.resolve(cache[k]);
- return fetch("/data/"+encodeURIComponent(C.key)+"/"+encodeURIComponent(loc)+".json").then(function(r){return r.json()})
+ return fetch("data/"+encodeURIComponent(C.key)+"/"+encodeURIComponent(loc)+".json").then(function(r){return r.json()})
   .then(function(j){cache[k]=j;return j})}
 function colour(id){var m=C.meta.find(function(x){return x.id==id});return m?m.color:"var(--mut)"}
 function id2lab(id){var m=C.meta.find(function(x){return x.id==id});return m?m.label:id}

@@ -1,5 +1,8 @@
 """The monitor's server: Panoptes, with the workflow's DAG beside it.
 
+It is each machine's one entry: the fine-tuning dashboard is served under
+`/finetune/` (`add_finetune`).
+
 Panoptes (`panoptes-ui`) shows each run's jobs; `/dag/` adds the rule
 graph and job DAG of the targets `MONITOR_DAG` names (flowlib.dag),
 coloured by the jobs Panoptes has seen and redrawn on each visit. A
@@ -48,10 +51,12 @@ MAX_GROUPS = 60
 """Job groups an expanded rule shows before grouping by one wildcard."""
 
 LINK = (
+    '<a class="nav-link" href="/finetune/">'
+    '<i class="nav-icon icon-graph"></i>Fine-tuning</a>'
     '<a class="nav-link" href="/dag/">'
     '<i class="nav-icon icon-share"></i>DAG</a>'
 )
-"""The link Panoptes' pages gain to the DAG."""
+"""The links Panoptes' pages gain to the fine-tuning dashboard and DAG."""
 
 _STYLE = """<style>
 :root { --fg: #222; --bg: #fff; --muted: #666; --line: #ccc; }
@@ -412,6 +417,48 @@ def add_dag(app, cfg: Mapping[str, str], seen) -> None:
         return response
 
 
+def add_finetune(app, cfg: Mapping[str, str]) -> None:
+    """Serve the fine-tuning dashboard under `/finetune/`.
+
+    The dashboard (workflow/scripts/dashboard.py) listens on
+    DASHBOARD_HOST:DASHBOARD_PORT, by default this machine only; each
+    request under `/finetune/` is passed to it, so the monitor's port is
+    the one entry.
+    """
+    import urllib.error
+    import urllib.request
+
+    from flask import Response, redirect, request
+
+    base = f"http://{cfg['DASHBOARD_HOST']}:{cfg['DASHBOARD_PORT']}"
+
+    def bare():
+        return redirect("/finetune/", code=308)
+
+    def proxied(path: str = ""):
+        query = request.query_string.decode()
+        url = f"{base}/{path}" + (f"?{query}" if query else "")
+        try:
+            with urllib.request.urlopen(url, timeout=60) as got:
+                return Response(
+                    got.read(),
+                    status=got.status,
+                    content_type=got.headers.get("Content-Type"),
+                )
+        except urllib.error.HTTPError as err:
+            return Response(err.read(), status=err.code)
+        except OSError:
+            return (
+                "The fine-tuning dashboard is not running: it is served "
+                "with a fine-tuning run.",
+                503,
+            )
+
+    app.add_url_rule("/finetune", "finetune_bare", bare)
+    app.add_url_rule("/finetune/", "finetune_index", proxied)
+    app.add_url_rule("/finetune/<path:path>", "finetune_path", proxied)
+
+
 def panoptes_jobs() -> list[dict]:
     """Return the jobs of Panoptes' running workflows, oldest first."""
     from panoptes.database import db_session
@@ -454,6 +501,7 @@ def main() -> None:
     from panoptes.app import app
 
     add_dag(app, cfg, panoptes_jobs)
+    add_finetune(app, cfg)
     threading.Thread(target=rebuild, args=(cfg,), daemon=True).start()
     app.run(
         host=cfg["MONITOR_HOST"], port=int(cfg["MONITOR_PORT"]), threaded=True

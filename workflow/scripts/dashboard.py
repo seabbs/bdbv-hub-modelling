@@ -21,6 +21,7 @@ import sys
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -79,8 +80,14 @@ class Pages:
     not.
     """
 
-    def __init__(self, ctx: page.Context) -> None:
+    def __init__(
+        self,
+        ctx: page.Context,
+        context_of: Callable[[], page.Context] | None = None,
+    ) -> None:
         self.ctx = ctx
+        # Built afresh on each refresh when set, so a new run shows.
+        self.context_of = context_of
         self.html: bytes | None = None
         self.parts: dict[str, str] = {}
         self.builts: dict[str, object] = {}
@@ -88,6 +95,8 @@ class Pages:
     def refresh(self) -> None:
         """Build the page once and swap it in."""
         with LOCK:
+            if self.context_of is not None:
+                self.ctx = self.context_of()
             html, parts = page.render(self.ctx)
             builts = {
                 d["key"]: self.ctx.nowcasts(d["key"]) for d in self.ctx.datasets
@@ -222,7 +231,11 @@ def main() -> None:
     # waits on a build.
     if a.while_pid:
         end_with(a.while_pid)
-    pages = Pages(ctx)
+    # With no --run, the runs under ROOT are found again on each refresh.
+    pages = Pages(
+        ctx,
+        None if a.run else lambda: context.build(config, local, refs=a.ref),
+    )
     pages.start(float(config["dashboard"]["refresh_every"]))
     host, port = address(local)
     server = ThreadingHTTPServer((host, port), handler(ctx, pages))
