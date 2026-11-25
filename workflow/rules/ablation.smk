@@ -141,12 +141,32 @@ rule ablation_summary:
         "--reference {params.reference} --out {output} > {log} 2>&1"
 
 
+rule ablation_pseudo_vintages:
+    # Past vintages counted from the hub's reference/report pairs, checked
+    # against the real releases (workflow/scripts/pseudo_vintages.py).
+    input:
+        rules.hub_data.output,
+    output:
+        f"{ABL_DIR}/pseudo-vintages.json",
+    log:
+        f"{ABL_DIR}/logs/pseudo-vintages.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        data=lambda wc, input: Path(input[0]).parent,
+    shell:
+        "uv run python workflow/scripts/pseudo_vintages.py {params.data} "
+        "--out {output} > {log} 2>&1"
+
+
 rule ablation_report:
     # The page (workflow/scripts/ebola_ablation_report.py), with the
     # training run's block releases (`ablation.releases`) when set.
     input:
         summaries=[f"{f}/summary.json" for f in ablation_folders()],
         releases=ablation_releases(),
+        vintages=rules.ablation_pseudo_vintages.output,
     output:
         f"{ABL_DIR}/ebola-ablation.html",
     log:
@@ -165,7 +185,8 @@ rule ablation_report:
     shell:
         "(uv run python workflow/scripts/ebola_ablation_report.py "
         "{params.folders} --checkpoint {params.checkpoint} "
-        "--reference {params.reference} {params.releases} --out {output} "
+        "--reference {params.reference} {params.releases} "
+        "--pseudo-vintages {input.vintages} --out {output} "
         "&& if [ -n '{params.review}' ]; then mkdir -p '{params.review}' && "
         "cp {output} '{params.review}/bdbv-ebola-ablation.html.tmp' && "
         "mv '{params.review}/bdbv-ebola-ablation.html.tmp' "

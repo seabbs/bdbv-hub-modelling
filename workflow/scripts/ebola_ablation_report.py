@@ -390,30 +390,160 @@ def _conclusion(found: dict) -> list[str]:
     return out
 
 
-def _pseudo(found: dict) -> list[str]:
-    """Return the pseudo weeks section, if the pseudo-week models ran."""
+ISSUE = "https://github.com/seabbs/bdbv-hub-modelling/issues/1141"
+"""The issue where Sam decides what pseudo weeks become."""
+
+
+def _n(x: float) -> str:
+    return f"{x:,.0f}"
+
+
+def _pseudo(found: dict, vintages: dict | None) -> list[str]:
+    """Return the pseudo weeks section.
+
+    The scaled pseudo weeks the models ran (if they did) and the pseudo
+    vintages counted from the hub's reference/report pairs
+    (`pseudo_vintages.py`), if given.
+    """
     rows = [(k, v) for k, v in found.items() if v.crps(FT_PW) is not None]
-    if not rows:
+    if not rows and vintages is None:
         return []
-    listed = "; ".join(
-        f"{_label(*k)} {_f(v.crps(FT))} to {_f(v.crps(FT_PW))}" for k, v in rows
-    )
-    return [
+    parts = [
         "<h2>Pseudo weeks</h2>",
-        "<p>With pseudo weeks (<code>FoundationModel.pseudo_weeks</code>, "
+        "<p><b>The pseudo weeks the models ran are imputed.</b> "
+        "With pseudo weeks (<code>FoundationModel.pseudo_weeks</code>, "
         "<code>nowcastutils.releases.pseudo_releases</code>) the model adds "
         "a release every 7 days wherever the release history has a gap of "
         "two weeks or more, and before its first release.\n"
-        "Each pseudo release is the latest release's daily counts times the "
+        "Each such release is the latest release's daily counts times the "
         "share of the delay line's cases of that place and onset week "
-        "reported by its cut-off.\n"
-        "The counts in the gap are estimated from a delay model, not "
-        "reported.\n"
-        "The simulated variants carry a delay line of each province's cases "
-        "by onset week, in days, as the hub's.</p>",
-        f"<p>The fine-tuned model's relative CRPS without and with pseudo "
-        f"weeks: {listed}.</p>",
+        "reported by its cut-off: a delay model applied to the latest "
+        "data, not counts anyone reported.\n"
+        "What replaces them is open in "
+        f"<a href='{ISSUE}'>#1141</a>.</p>",
     ]
+    if rows:
+        parts += [
+            "<p>Relative CRPS / relative log CRPS against the reference, "
+            "with and without the scaled pseudo weeks. The simulated "
+            "variants carry a delay line of each province's cases by onset "
+            "week, in days, as the hub's.</p>",
+            _table(
+                ["Variant", *(lab for _, lab in MODELS)],
+                [
+                    [_label(*k)]
+                    + [
+                        f"{_f(v.crps(m))} <span class=mut>/ "
+                        f"{_f(v.crps(m, True))}</span>"
+                        for m, _ in MODELS
+                    ]
+                    for k, v in rows
+                ],
+            ),
+        ]
+    if vintages is None:
+        return parts
+    src = vintages["sources"]
+    parts += [
+        "<h3>Reference/report pairs in the hub data</h3>",
+        "<p>Past vintages can be counted, with no delay model, only from "
+        "the pairs of onset (reference) and report the hub publishes.</p>",
+        _table(
+            ["File", "Holds", "Places", "Reference", "Report", "Releases"],
+            [
+                [
+                    f"<code>{html.escape(r['file'])}</code>",
+                    html.escape(r["holds"]),
+                    r["places"],
+                    r["reference"],
+                    r["report"],
+                    r["releases"],
+                ]
+                for r in src
+            ],
+        ),
+        "<h3>Pseudo vintages from the pairs</h3>",
+        "<p>Each cut-off's vintage counts the cases the latest files "
+        f"(delay line of {vintages['latest_delay_line']}, missing-onset "
+        f"counts of {vintages['latest_missing']}) say were reported by it.\n"
+        "A case with an observed onset is reported on its onset day plus "
+        "its delay, and its onset day is known only to the week, so it is "
+        "certainly reported by the cut-off (lower), possibly (upper), or "
+        "as the share of its 7 onset days that report by then (even "
+        "split).\n"
+        "Cases with no onset count exactly by report day, but have no "
+        "onset to place them by.\n"
+        "Real releases are shown where one is that day.</p>",
+        _table(
+            [
+                "Cut-off",
+                "Observed onsets: lower",
+                "even split",
+                "upper",
+                "Real release, observed onsets",
+                "No onset, reported by then",
+                "Real release, imputed onsets",
+            ],
+            [
+                [
+                    v["cutoff"],
+                    _n(v["lower"]),
+                    _n(v["even"]),
+                    _n(v["upper"]),
+                    _n(v["real_observed"]) if "real_observed" in v else "",
+                    _n(v["missing"]),
+                    _n(v["real_imputed"]) if "real_imputed" in v else "",
+                ]
+                for v in vintages["vintages"]
+            ],
+        ),
+        "<h3>Check against the real releases</h3>",
+        "<p>Each real release's observed-onset counts by province and "
+        "onset week against the pseudo vintage at its date.\n"
+        "Its own delay line matches it in every cell, so the pairs and the "
+        "releases agree when read from the same release.\n"
+        "Read from the latest files, a release often holds fewer cases "
+        "than were reported by its date (below the lower bound): reports "
+        "reach a release some days after the report date, and cases "
+        "without an onset at the time gain one later.\n"
+        "It sometimes holds more (above the upper bound), where a case's "
+        "onset or report was revised later.</p>",
+        _table(
+            [
+                "Release",
+                "Cells",
+                "Inside bounds",
+                "Below lower",
+                "Above upper",
+                "Exact cells equal",
+                "Own delay line equal",
+            ],
+            [
+                [
+                    c["release"],
+                    str(c["cells"]),
+                    f"{c['inside']:.0%}",
+                    f"{c['below']:.0%}",
+                    f"{c['above']:.0%}",
+                    f"{c['exact_equal']} of {c['exact_cells']}",
+                    f"{c['own_equal']:.0%}" if "own_equal" in c else "no file",
+                ]
+                for c in vintages["check"]
+            ],
+        ),
+        "<p>Where a choice is needed:</p><ul>"
+        "<li>The onset day within its week of an observed-onset case whose "
+        "7 possible report days straddle the cut-off (lower to upper).</li>"
+        "<li>The onset of a case with no onset date: only its report day "
+        "is published.</li>"
+        "<li>Zones: the delay line is by province, so a zone's share of "
+        "its province's pseudo counts.</li>"
+        "<li>The lag from report to release: a case reported by a cut-off "
+        "was not always in the release of that day.</li>"
+        f"<li>Negative delays ({vintages['negative_delays']} cases in the "
+        "latest delay line), reported before their onset.</li></ul>",
+    ]
+    return parts
 
 
 def _release_counts(
@@ -478,6 +608,7 @@ def report(
     reference: str = "randomwalknowcast",
     releases: Path | None = None,
     root: Path | str = ".",
+    pseudo_vintages: Path | None = None,
 ) -> Path:
     """Write the ablation page from the variants' folders.
 
@@ -497,6 +628,9 @@ def report(
         training block counts.
     root : pathlib.Path or str
         The repository root, holding `docs/` (`pages.page`).
+    pseudo_vintages : pathlib.Path, optional
+        The pseudo vintages counted from the hub's reference/report pairs
+        (`pseudo_vintages.py`).
 
     Returns
     -------
@@ -524,7 +658,12 @@ def report(
         f"the ragged layout. {html.escape(reference)} is the reference.</p>",
         "<h2>Conclusion</h2>",
         *(f"<p>{p}</p>" for p in _conclusion(found)),
-        *_pseudo(found),
+        *_pseudo(
+            found,
+            None
+            if pseudo_vintages is None
+            else json.loads(Path(pseudo_vintages).read_text()),
+        ),
         "<h2>Variants</h2>",
         "<p>Six held-out simulated outbreaks become six provinces, each "
         "outbreak's leaves its zones.\n"
@@ -590,9 +729,18 @@ def main() -> None:
     ap.add_argument("--checkpoint", required=True)
     ap.add_argument("--reference", default="randomwalknowcast")
     ap.add_argument("--releases", type=Path, default=None)
+    ap.add_argument("--pseudo-vintages", type=Path, default=None)
     ap.add_argument("--root", type=Path, default=Path())
     a = ap.parse_args()
-    report(a.folders, a.out, a.checkpoint, a.reference, a.releases, a.root)
+    report(
+        a.folders,
+        a.out,
+        a.checkpoint,
+        a.reference,
+        a.releases,
+        a.root,
+        a.pseudo_vintages,
+    )
 
 
 if __name__ == "__main__":
