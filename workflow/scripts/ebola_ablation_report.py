@@ -348,7 +348,7 @@ def _conclusion(found: dict) -> list[str]:
             )
         out.append(text)
     parts = [
-        (name, SIM_LABELS[name][0].lower())
+        (name, SIM_LABELS[name][0])
         for name in ("weekly", "short", "fresh", "gap", "few_daily")
         if sc(name)
     ]
@@ -368,7 +368,7 @@ def _conclusion(found: dict) -> list[str]:
     ]
     if others:
         listed = "; ".join(
-            f"{SIM_LABELS[n][0].lower()} {_f(found[('sim', n)].crps(FT))} "
+            f"{SIM_LABELS[n][0]} {_f(found[('sim', n)].crps(FT))} "
             f"(zero-shot {_f(found[('sim', n)].crps(ZS))})"
             for n in others
         )
@@ -396,8 +396,7 @@ def _pseudo(found: dict) -> list[str]:
     if not rows:
         return []
     listed = "; ".join(
-        f"{_label(*k).lower()} {_f(v.crps(FT))} to {_f(v.crps(FT_PW))}"
-        for k, v in rows
+        f"{_label(*k)} {_f(v.crps(FT))} to {_f(v.crps(FT_PW))}" for k, v in rows
     )
     return [
         "<h2>Pseudo weeks</h2>",
@@ -430,7 +429,8 @@ def _release_counts(
         if side == "sim" and f.name not in ("daily", "few", "fresh", "gap"):
             continue
         counts, gap = release_history(f, reference)
-        most = max(most, max(counts))
+        if f.name == "few":
+            most = max(counts)
         rows.append(
             [
                 _label(side, f.name),
@@ -453,7 +453,7 @@ def _release_counts(
             if f.parent.name == "bdbv"
             and (f / "forecasts" / reference / "release-runs.csv.gz").exists()
         ]
-        at_most = sorted({2, *bdbv, *([most] if most <= 20 else [])})
+        at_most = sorted({2, *bdbv, *([most] if most else [])})
         t = training_releases(pd.read_csv(releases), at_most)
         parts += [
             "<p>The training run's blocks "
