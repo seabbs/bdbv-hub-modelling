@@ -23,7 +23,7 @@ import pandas as pd
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.hierarchy import depth
 from nowcastutils.hierarchy import parent as parent_of
-from nowcastutils.releases import release_cutoff
+from nowcastutils.releases import release_cutoffs
 
 __all__ = [
     "SnapshotArrays",
@@ -141,7 +141,7 @@ def snapshot_arrays(
             nodes[c] = None
     nodes_t = tuple(sorted(nodes, key=lambda c: (depth(c), len(c), c)))
     first = as_date(str(rows["onset_date"].min()))
-    cutoffs = [release_cutoff(rows, r) for r in releases]
+    cutoffs = release_cutoffs(rows, releases)
     days = pd.date_range(first, epiweek_end(max(cutoffs)), freq="D")
     index = {d: i for i, d in enumerate(days.date)}
     cut = np.array([index[c] for c in cutoffs], dtype=np.int64)
