@@ -431,9 +431,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - We fine-tuned Chronos-2, a general time series foundation model, on surveillance data simulated from a marginal generative nowcasting model, the epinowcast model ported to PyRenew.
   - We gave it the reporting triangle as series, with learned attention biases linking each delay series to its place and each place to its region.
   - We evaluated it on held-out simulations, retrospectively against the German COVID-19 nowcast hub, and retrospectively and then in real time against the Ebola forecasting hub.
-  - Results to be filled in: how it compares with zero-shot Chronos-2, the baseline nowcast and the hub models, for nowcasts and forecasts.
-  - It needs no specialist knowledge of the reporting system to configure.
-- **Comparison with other work.**
+  - Results to be filled in: how it compares with zero-shot Chronos-2, the baseline nowcast and the hub models, for nowcasts and forecasts.- **Comparison with other work.**
   - Most uses of foundation models in forecast hubs are zero-shot, and correct for delays outside the model, with a nowcast or adjustment applied before the model sees the data [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
     Our model learns the delays itself, so nowcasting and forecasting happen in one step.
   - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
