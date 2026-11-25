@@ -154,15 +154,19 @@ def test_evaluation_reruns_only_when_its_code_or_held_out_set_moves():
         assert "held_out=held_out_key" in text, name
 
 
-def test_jobs_ask_for_the_memory_they_use():
-    # Peak RSS on archie, 25 Nov: a Chronos-2 BDBV check forecast 16.4 GB,
-    # a random walk's 1.7 GB, a 7-day check 3.5 GB, the trainer about
-    # 6 GB; three Chronos-2 checks at once ran the machine out of memory.
-    memory = CONFIG["memory"]
-    assert memory["ft_check_chronos"] >= 16_800
-    assert memory["ft_check"] >= 1_800
-    assert memory["seven_day_check"] >= 3_600
-    assert memory["train_segment"] >= 6_500
-    for name in ("ft_check_forecast", "seven_day_check", "evaluate_checkpoint"):
-        assert "mem_mb=" in _rule_text(name), name
-    assert "mem_mb=ft_check_mem" in _rule_text("ft_check_forecast")
+def test_jobs_ask_for_the_memory_their_benchmarks_show():
+    # Each from its own last benchmark (flowlib.memory), with a minimum in
+    # the rule; no machine's figures in the config (Sam, 25 Nov).
+    assert "memory" not in CONFIG
+    assert "mem_mb" not in CONFIG["score"]
+    for name in (
+        "train_segment",
+        "ft_check_forecast",
+        "seven_day_check",
+        "evaluate_checkpoint",
+        "evaluate_base",
+        "validation_forecasts",
+        "score_germany",
+        "score_run_germany",
+    ):
+        assert "mem_mb=memory.from_benchmark(" in _rule_text(name), name
