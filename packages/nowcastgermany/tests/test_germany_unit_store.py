@@ -79,12 +79,13 @@ def test_the_side_branch_and_its_fallback_are_gone():
     assert importlib.util.find_spec("nowcastgermany.ft_store") is None
     assert not hasattr(store, "choose_checkpoint")
     assert not hasattr(store, "STORE_BRANCH")
-    # Fit store's site-results job loads the released unit for the site.
+    # Site results loads the released unit for the site.
     workflows = ROOT / ".github" / "workflows"
-    for name in ("pages.yml", "fit-store.yml"):
+    for name in ("pages.yml", "site-results.yml"):
         assert "germany-ft-forecasts" not in (workflows / name).read_text()
     assert (
-        "germany-forecasts.tar.gz" in (workflows / "fit-store.yml").read_text()
+        "germany-forecasts.tar.gz"
+        in (workflows / "site-results.yml").read_text()
     )
 
 
