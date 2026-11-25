@@ -1549,3 +1549,19 @@ def test_a_scored_step_0_is_kept(tmp_path):
     jobs = dry(tmp_path, "finetune", config=OFFLOAD)
     assert "evaluate_base" not in jobs
     assert jobs["evaluate_checkpoint"] == 2
+
+
+def test_a_job_asks_for_its_last_peak(tmp_path):
+    # Its benchmark's max_rss with a margin, not a fixed figure.
+    from flowlib import memory
+
+    for n in (250, 500):
+        _checkpoint(tmp_path, n)
+    bench = tmp_path / "runs/runa/train/benchmarks/seven_day_check/n250.tsv"
+    bench.parent.mkdir(parents=True)
+    bench.write_text("s\th:m:s\tmax_rss\n1\t0:00:01\t9000\n")
+    out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    jobs = [j for j in _jobs_of(out, "seven_day_check") if "n=250" in str(j)]
+    assert jobs
+    assert f"mem_mb={memory.padded(9000)}" in str(jobs[0])
