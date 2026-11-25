@@ -81,8 +81,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
     The same form of model has been used to nowcast the effective reproduction number from line list data [@lison2024].
     This makes it a natural basis for simulating training data, and our simulations follow its structure.
   - PyRenew is a Python framework, developed and used at the US CDC, for building renewal models of infectious disease from modular components, such as infection processes, delays and observation models, using JAX and NumPyro [@pyrenew; @Phan2019].
-    It can express marginal generative nowcasting models of the same form as epinowcast.
-    However, it does not have delays that change over time or Dirichlet-multinomial reporting noise.
+    It is a more modular tool, developed to allow models similar to those in EpiNow2 and to the generative process in epinowcast to be fit to multiple data streams [@EpiNow2; @abbottepinowcast].
+    However, it has no marginal nowcasting model, and does not have delays that change over time or Dirichlet-multinomial reporting noise.
 
 - **What we did.**
   - We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.
