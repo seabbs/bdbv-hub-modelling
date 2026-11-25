@@ -871,3 +871,87 @@ def test_a_run_s_horizon_table_scores_each_part_of_its_checkpoints(
     assert by.loc["n100", "run"] == "runa"
     assert by.loc["zero-shot", "outbreaks"] == 0
     assert by.loc["zero-shot", "run"] == "zero-shot"
+
+
+def test_a_unit_s_workers_come_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(ck.WORKERS_ENV, raising=False)
+    assert ck.score_workers() == 1
+    monkeypatch.setenv(ck.WORKERS_ENV, "4")
+    assert ck.score_workers() == 4
+
+
+@pytest.mark.parametrize(
+    ("threads", "workers", "each"), [(4, 4, 1), (8, 4, 2), (2, 4, 1)]
+)
+def test_workers_share_the_unit_s_threads(threads, workers, each) -> None:
+    assert ck.worker_threads(threads, workers) == each
+
+
+@pytest.mark.parametrize(
+    ("index", "workers", "cores"),
+    [(0, 2, [10, 11]), (1, 2, [12, 13]), (2, 2, [10, 11]), (0, 8, [10])],
+)
+def test_each_worker_takes_its_own_of_the_unit_s_cores(
+    index, workers, cores
+) -> None:
+    assert ck.worker_cores([10, 11, 12, 13], index, workers) == cores
+
+
+def _unit_files(root: Path) -> dict[str, pd.DataFrame]:
+    return {p.name: pd.read_csv(p) for p in sorted(root.glob("*.csv.gz"))}
+
+
+@pytest.mark.parametrize("step", [1, 3])
+def test_a_unit_split_over_workers_writes_what_one_process_does(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, step: int
+) -> None:
+    # The dates are forecast in the chunks one process forecasts them
+    # in, split over the workers, so every date's rows, records and
+    # timings are the same. Forked here, so the workers see the stubs.
+    import multiprocessing
+
+    from nowcastgermany import evaluation as de
+
+    if "fork" not in multiprocessing.get_all_start_methods():
+        pytest.skip("no fork on this platform")
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    real = de.germany_forecasts
+
+    def forecasts(models, *args, **kwargs):
+        out = real(models, *args, **kwargs)
+        # Rows that depend on the chunk, as Chronos-2's batched passes
+        # may: a split that changed the chunks would change them.
+        return out.assign(
+            model=models[0], value=len(args[1]) * 10 + out["horizon"]
+        )
+
+    monkeypatch.setattr(de, "germany_forecasts", forecasts)
+    monkeypatch.setattr(ck, "score_dates", lambda: step)
+    monkeypatch.setattr(ck, "START_METHOD", "fork")
+    out = {}
+    for workers in (1, 3):
+        monkeypatch.setenv(ck.WORKERS_ENV, str(workers))
+        cache = tmp_path / f"w{workers}"
+        ck.germany_unit(cache, "n100")
+        root = cache / ck.GERMANY_UNIT / "n100"
+        timings = pd.read_csv(root / "timings.csv")
+        out[workers] = (
+            _unit_files(root),
+            ck.written(root),
+            len(timings),
+            sorted(timings["dates"]),
+        )
+    one, three = out[1], out[3]
+    assert one[0].keys() == three[0].keys()
+    assert len(one[0]) == 80
+    for name, rows in one[0].items():
+        pd.testing.assert_frame_equal(rows, three[0][name])
+    assert one[1:] == three[1:]
+    # Resumed in one process, the split unit has nothing left to do.
+    monkeypatch.setenv(ck.WORKERS_ENV, "1")
+    seen.clear()
+    ck.germany_unit(tmp_path / "w3", "n100")
+    assert seen == []
