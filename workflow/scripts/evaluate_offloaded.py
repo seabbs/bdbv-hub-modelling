@@ -182,10 +182,8 @@ def validation(where: Path, device: str, base_only: bool = False) -> None:
     if base_only:
         out, label = where.parent / evaluations.VALIDATION_BASE, "base"
     else:
-        from peft import PeftModel
-
         series_bias.attach_for(model, where / "finetuned-ckpt")
-        model = PeftModel.from_pretrained(model, where / "finetuned-ckpt")
+        model = fe.merged(model, where / "finetuned-ckpt")
         out, label = where / evaluations.VALIDATION_FILE, where.name
     model.eval()
     t0 = time.perf_counter()

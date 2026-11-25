@@ -1,10 +1,11 @@
 # Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
 # score step 0 and each checkpoint, in the `evaluate` group
 # (WORKER_GROUPS places it). With the 7-day check and the validation
-# forecasts, each takes a whole GPU if the machine has one, above the
-# next segment (`Scoring.boundary_priority`), so it runs as a segment
-# ends; else the forecasting device (`forecast` in the config) beside the
-# trainer, below every other job. No release or check waits for it.
+# forecasts, each runs on the checkpoint scoring device
+# (`compute.scoring_forecast`): the CPU with the cores the trainer leaves
+# while a run trains, a whole GPU once none does, below every other job
+# (`Scoring.evaluation_priority`). It never pauses training, and no
+# release or check waits for it.
 # Files and readers: workflow/flowlib/evaluations.py.
 
 
@@ -16,22 +17,26 @@ rule evaluate_base:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
         ),
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/evals/step-0000000.json",
     log:
         f"{TRAIN}/logs/evaluate-base.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_base.tsv"
-    priority: boundary_priority
+    priority: evaluation_priority
     conda:
         TOOLS_ENV
-    threads: BOUNDARY_THREADS
+    threads: EVALUATE_THREADS
     resources:
-        gpu=BOUNDARY_FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=boundary_env,
-        device=BOUNDARY_FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [
             f"{train_dir(wc.run)}/evals/step-0000000/",
@@ -54,22 +59,26 @@ rule evaluate_checkpoint:
         # Earlier checkpoints' settings: `evaluations.start_loss` reads their
         # held_out_loss_start when the run evaluated them in the trainer.
         earlier=earlier_settings,
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/n{{n}}/{SIDECAR}",
     log:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv"
-    priority: boundary_priority
+    priority: evaluation_priority
     conda:
         TOOLS_ENV
-    threads: BOUNDARY_THREADS
+    threads: EVALUATE_THREADS
     resources:
-        gpu=BOUNDARY_FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=boundary_env,
-        device=BOUNDARY_FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=evaluate_inputs_from,
     shell:
@@ -87,22 +96,26 @@ rule seven_day_check:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/n{{n}}/seven-day.json",
     log:
         f"{TRAIN}/logs/seven-day-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/seven_day_check/n{{n}}.tsv"
-    priority: boundary_priority
+    priority: evaluation_priority
     conda:
         TOOLS_ENV
-    threads: BOUNDARY_THREADS
+    threads: EVALUATE_THREADS
     resources:
-        gpu=BOUNDARY_FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=boundary_env,
-        device=BOUNDARY_FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
     shell:
@@ -121,22 +134,26 @@ rule validation_forecasts:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/n{{n}}/{evaluations.VALIDATION_FILE}",
     log:
         f"{TRAIN}/logs/validation-forecasts-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/validation_forecasts/n{{n}}.tsv"
-    priority: boundary_priority
+    priority: evaluation_priority
     conda:
         TOOLS_ENV
-    threads: BOUNDARY_THREADS
+    threads: EVALUATE_THREADS
     resources:
-        gpu=BOUNDARY_FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=boundary_env,
-        device=BOUNDARY_FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
     shell:
@@ -152,22 +169,26 @@ rule validation_forecasts_base:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
         ),
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/{evaluations.VALIDATION_BASE}",
     log:
         f"{TRAIN}/logs/validation-forecasts-base.log",
     benchmark:
         f"{TRAIN}/benchmarks/validation_forecasts_base.tsv"
-    priority: boundary_priority
+    priority: evaluation_priority
     conda:
         TOOLS_ENV
-    threads: BOUNDARY_THREADS
+    threads: EVALUATE_THREADS
     resources:
-        gpu=BOUNDARY_FORECAST.gpu,
+        gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=boundary_env,
-        device=BOUNDARY_FORECAST.device,
+        env=checkpoint_env,
+        device=CHECKPOINT_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
     shell:

@@ -124,20 +124,31 @@ def test_checkpoint_scoring_runs_on_the_scoring_device():
     assert "gpu=FORECAST.gpu" in _rule_text("ft_check_forecast")
 
 
-BOUNDARY_RULES = (
+EVALUATION_RULES = (
     "evaluate_base",
     "evaluate_checkpoint",
     "seven_day_check",
     "validation_forecasts",
     "validation_forecasts_base",
 )
-"""A checkpoint's scoring at the segment boundary, on a whole GPU (#1114)."""
+"""A checkpoint's held-out scoring: on the CPU while a run trains, a
+whole GPU once none does, never pausing training (#1114)."""
 
 
-def test_boundary_scoring_takes_the_gpu_before_the_next_segment():
-    for name in BOUNDARY_RULES:
+def test_evaluation_never_pauses_training():
+    for name in EVALUATION_RULES:
         text = _rule_text(name)
-        assert "gpu=BOUNDARY_FORECAST.gpu" in text, name
-        assert "env=boundary_env" in text, name
-        assert "priority: boundary_priority" in text, name
-        assert "threads: BOUNDARY_THREADS" in text, name
+        assert "gpu=CHECKPOINT_FORECAST.gpu" in text, name
+        assert "env=checkpoint_env" in text, name
+        assert "priority: evaluation_priority" in text, name
+        assert "threads: EVALUATE_THREADS" in text, name
+        assert "BOUNDARY" not in text, name
+
+
+def test_evaluation_reruns_only_when_its_code_or_held_out_set_moves():
+    # Sam, 25 Nov: outputs keyed by their inputs' content, so a restart
+    # or another module's change never recomputes them.
+    for name in EVALUATION_RULES:
+        text = _rule_text(name)
+        assert "code=SCORING.evaluator_key_input" in text, name
+        assert "held_out=held_out_key" in text, name

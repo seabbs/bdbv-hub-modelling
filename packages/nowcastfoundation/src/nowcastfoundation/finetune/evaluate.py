@@ -58,13 +58,10 @@ def evaluate(
     need (`held_out_pass`) gives every loss and the coverage, each as the
     trainer's own functions give it (`finetune.stream`).
     """
-    from peft import PeftModel
-
     unknown = set(kinds) - set(KINDS)
     if unknown:
         raise ValueError(f"unknown kinds: {sorted(unknown)}")
-    model = PeftModel.from_pretrained(base, adapter)
-    model.eval()
+    model = merged(base, adapter)
     val = list(blocks)
     full = "start" in kinds or "checkpoint" in kinds
     need = range(len(val)) if full else _subset_needs(val, kinds)
@@ -179,6 +176,21 @@ def _by_level(
     return {k: float(np.mean(v)) for k, v in losses.items()}
 
 
+def merged(base: Any, adapter: Path) -> Any:
+    """Return `base` with `adapter`'s LoRA merged into its weights.
+
+    For scoring: the same outputs as the adapter on top, to float
+    rounding, without LoRA's extra low-rank products in every layer
+    (about an eighth of a pass on a CPU). The series bias, saved whole,
+    stays as a module. `base` is changed in place.
+    """
+    from peft import PeftModel
+
+    model = PeftModel.from_pretrained(base, adapter).merge_and_unload()
+    model.eval()
+    return model
+
+
 def row_losses(
     model: Any,
     quantile_preds: Any,
@@ -281,13 +293,6 @@ class _RowLosses:
         Chronos2Model._compute_loss = self.original
 
 
-EVAL_ACTIVATION_BYTES = 60_000
-"""GPU memory a held-out forward pass holds per series and token, with
-no gradients: a twelfth of a training step's (`stream.ACTIVATION_BYTES`),
-as inference keeps one layer's activations, not every layer's. A batch
-that still runs out is split (`held_out_pass`)."""
-
-
 def block_cost(block: dict[str, Any]) -> int:
     """Return a block's series x tokens at most, before trimming.
 
@@ -337,18 +342,15 @@ def pack(data: Any, budget: int) -> list[list[int]]:
 def eval_budget(device: str) -> int | None:
     """Return a held-out batch's series x tokens on `device`, or None.
 
-    On CUDA, the free memory less `stream.MEMORY_MARGIN` of the total
-    over `EVAL_ACTIVATION_BYTES`; elsewhere None, for the trainer's
+    On CUDA the backend's pass budget (`backends.chronos2.pass_budget`),
+    so a batch fills the device; elsewhere None, for the trainer's
     batches (`stream.ByLength`), as larger ones gain nothing on a CPU.
     """
+    from nowcastfoundation.backends.chronos2 import pass_budget
+
     if not device.startswith("cuda"):
         return None
-    memory = fs.device_memory()
-    if memory is None:
-        return None
-    free, total = memory
-    spare = free - int(fs.MEMORY_MARGIN * total)
-    return max(1, spare // EVAL_ACTIVATION_BYTES)
+    return pass_budget(device)[1]
 
 
 def _each_batch(
@@ -771,13 +773,10 @@ def seven_day_check(
     `base` and `adapter`, as `evaluate` loads them; the levels are read
     as `at_levels` gives them.
     """
-    from peft import PeftModel
-
     rolling = [b for b in blocks if b.get("source") in ROLLING][:most]
     if not rolling:
         return {}
-    model = PeftModel.from_pretrained(base, adapter)
-    model.eval()
+    model = merged(base, adapter)
     at = at_levels(model, SEVEN_DAY_LEVELS)
     parts = []
     budget = eval_budget(str(next(model.parameters()).device))
