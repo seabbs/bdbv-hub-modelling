@@ -762,3 +762,45 @@ def test_units_sharing_a_cache_write_through_their_own_temporary_files(
     _write(pd.DataFrame({"a": [1]}), path)
     assert pd.read_csv(path)["a"].tolist() == [1]
     assert [p.name for p in tmp_path.iterdir() if p.is_file()] == [path.name]
+
+
+def test_a_unit_drops_the_rows_of_a_model_it_no_longer_runs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A renamed model (b to c) is forecast under its new name, and the old
+    # name's rows go from every date, also those nothing else redoes.
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
+    dates = de.nowcast_dates(config)
+    seen: list = []
+    _unit_stubs(monkeypatch, seen)
+    asked: list = []
+    real = de.germany_forecasts
+
+    def forecasts(models, *args, **kwargs):
+        asked.append(tuple(models))
+        out = real(models, *args, **kwargs)
+        return pd.concat([out.assign(model=m) for m in models])
+
+    names = ["a", "b"]
+    monkeypatch.setattr(ck, "label_models", lambda *_a, **_k: tuple(names))
+    monkeypatch.setattr(ck, "model_key", lambda m: f"code-{m}")
+    monkeypatch.setattr(de, "germany_forecasts", forecasts)
+    root = tmp_path / ck.GERMANY_UNIT / ck.REFERENCE
+    ck.germany_unit(tmp_path, ck.REFERENCE)
+    names[:] = ["a", "c"]
+    asked.clear()
+    ck.germany_unit(tmp_path, ck.REFERENCE)
+    assert asked == [("c",)]
+    for d in dates:
+        assert set(pd.read_csv(root / f"{d}.csv.gz")["model"]) == {"a", "c"}
+    # A model dropped with nothing new: no forecast, its rows still go.
+    names[:] = ["a"]
+    asked.clear()
+    ck.germany_unit(tmp_path, ck.REFERENCE)
+    assert asked == []
+    for d in dates:
+        assert set(pd.read_csv(root / f"{d}.csv.gz")["model"]) == {"a"}

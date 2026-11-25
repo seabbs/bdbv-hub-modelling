@@ -555,6 +555,14 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
         )
         if need:
             groups.setdefault(need, []).append(d)
+    # Rows of a model the label no longer runs (a renamed or dropped
+    # model) go from every date, also those nothing is redone on.
+    gone = {d for (d, m) in have if m != EVERY and m not in models}
+    for d in sorted(gone - {d for ds in groups.values() for d in ds}):
+        out = root / f"{d}.csv.gz"
+        if out.exists():
+            old = pd.read_csv(out)
+            _write(old.loc[old["model"].isin(models)], out)
     todo = [(need, d) for need, ds in groups.items() for d in ds]
     # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
@@ -592,10 +600,8 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
             if len(need) < len(models) and out.exists():
                 # The other models' rows of the date are kept.
                 old = pd.read_csv(out)
-                mine = pd.concat(
-                    [old.loc[~old["model"].isin(need)], mine],
-                    ignore_index=True,
-                )
+                kept = old["model"].isin(models) & ~old["model"].isin(need)
+                mine = pd.concat([old.loc[kept], mine], ignore_index=True)
             _write(mine, out)
             _record(root, date, {m: want[m] for m in need})
         _free()
