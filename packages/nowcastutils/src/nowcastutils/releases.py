@@ -20,6 +20,7 @@ import dataclasses
 import datetime as dt
 import itertools
 import logging
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -168,6 +169,7 @@ def release_pairs(
     out["pair"] = np.repeat(np.eye(len(parts)), sizes, axis=0)
     return out
 
+
 HISTORY_FIELDS = (
     "target_history",
     "daily_history",
@@ -248,7 +250,7 @@ def without_cumulative_first_release(task: ForecastTask) -> ForecastTask:
         first,
         task.max_delay,
     )
-    tables = {}
+    tables: dict[str, Any] = {}
     for name in HISTORY_FIELDS:
         table = getattr(task, name)
         if table is not None and "vintage" in table.columns:
