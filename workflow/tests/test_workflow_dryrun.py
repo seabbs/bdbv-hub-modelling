@@ -1559,8 +1559,10 @@ def test_the_ebola_ablation_runs_each_variant_and_model(tmp_path):
             "sim_variants": ["few", "fresh"],
             "bdbv_variants": ["as_is"],
             "models": ["randomwalknowcast", "foundation_pseudoweeks"],
+            "releases": str(tmp_path / "releases.csv"),
         }
     }
+    (tmp_path / "releases.csv").write_text("")
     out = dry_run(tmp_path, "ablation", config=config, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
     jobs = dict(re.findall(r"^(\w+)\s+(\d+)$", out.stdout, re.M))
@@ -1574,3 +1576,5 @@ def test_the_ebola_ablation_runs_each_variant_and_model(tmp_path):
     )
     assert "--model randomwalknowcast --checkpoint ''" in out.stdout
     assert "ablation/ebola-ablation.html" in out.stdout
+    assert f"--releases {tmp_path / 'releases.csv'}" in out.stdout
+    assert "ebola_ablation_report.py" in out.stdout
