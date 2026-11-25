@@ -821,7 +821,7 @@ def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # trainer (the run's critical path) goes first, then the simulations
     # it trains on, then checkpoint scoring (score.smk, 10 and below).
     got = priorities(tmp_path, "finetune", config=FT)
-    assert got["train_segment"] == 100
+    assert 100 <= got["train_segment"] < 101
     assert 15 <= got["simulate_batch"] < 16
 
 

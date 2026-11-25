@@ -28,7 +28,8 @@ The coordinator's rsync must be GNU rsync 3.1 or later
 
 Freed cores go to the waiting job of highest priority, in one order:
 
-1. the trainer (`TRAIN_PRIORITY`), so the GPU never waits, then the
+1. the trainers (`TRAIN_PRIORITY`, each run a fraction above it in
+   turn, `Training.trainer_priority`), so a GPU never waits, then the
    quick hand-offs that unblock other work (`HANDOFF_PRIORITY`): the
    copies of the batches it reads into the run, and a checkpoint's
    verification and release, which its BDBV check needs;

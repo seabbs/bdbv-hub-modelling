@@ -57,6 +57,15 @@ def test_a_run_is_picked_by_name(tmp_path):
     assert ctx.runs[0].live
 
 
+def test_a_run_may_show_another_beside_it_for_comparison(tmp_path):
+    # An SI run's dashboard needs nothing of the main run; named after
+    # it, the main run is shown beside it, the SI run still live.
+    cfg, local = _workflow(tmp_path)
+    ctx = context.build(cfg, local, runs=["noslots", "runa"])
+    assert [r.key for r in ctx.runs] == ["noslots", "runa"]
+    assert [r.live for r in ctx.runs] == [True, False]
+
+
 def test_an_unknown_run_name_is_an_error(tmp_path):
     cfg, local = _workflow(tmp_path)
     with pytest.raises(SystemExit, match="runa, noslots"):

@@ -1075,6 +1075,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
             # The trainer's status, views and sources: folded, as the tiles
             # say where the run is.
             f"<div class=tiles>{tiles}</div>{now}{tput}{timings}"
+            f"{also_training(ctx, live)}"
             "<details class=about>"
             f"<summary class=mut>Trainer status</summary>{kv.box(about)}"
             "</details>",
@@ -1096,6 +1097,27 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     parts.append(("tables", "Tables", tables, False))
     bar = f"{bar} <span class=mut>{datetime.now():%H:%M:%S}</span>"
     return live, bar, selector_data(ctx, builts), parts
+
+
+def also_training(ctx: Context, live: Run) -> str:
+    """Return the status tiles of each other run training now, if any.
+
+    Runs train at once, a GPU each (flowlib.training): each run whose
+    trainer is alive (`logs.trainer_state`) beside the live run.
+    """
+    out = []
+    for r in ctx.runs:
+        if r is live or not r.folder or not logs.trainer_state(r.folder)[1]:
+            continue
+        st = live_status(r, ctx.log(r), run_sizes(ctx.prefixes, ctx.outbreaks))
+        tiles, _ = status_tiles(st, r)
+        out.append(
+            f"<h3><b>{html.escape(r.label)}</b></h3>"
+            f"<div class=tiles>{tiles}</div>"
+        )
+    if not out:
+        return ""
+    return "<h3 class=mut>Also training</h3>" + "".join(out)
 
 
 NAV = {

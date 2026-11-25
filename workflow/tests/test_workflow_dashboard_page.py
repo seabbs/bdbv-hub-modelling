@@ -5,6 +5,7 @@ import gzip
 import json
 import os
 import re
+import shutil
 import time
 from datetime import datetime, timedelta
 
@@ -632,3 +633,35 @@ def test_without_a_status_the_position_is_not_known(tmp_path):
     st = page.live_status(ctx.runs[0], ctx.log(ctx.runs[0]), planned)
     assert (st.step, st.trained) == (None, None)
     assert st.eta(max(planned)) == "n/a"
+
+
+def _status_section(out):
+    return out.split("<h2>Status</h2>", 1)[1].split("<h2>", 1)[0]
+
+
+def test_every_run_training_at_once_has_its_status(tmp_path):
+    # Runs train at once, a GPU each: the status names each one training,
+    # not the live run's alone.
+    ctx = _machine(tmp_path)
+    alone = _status_section(page.build(ctx)).count("<div class=tiles>")
+    live = ctx.runs[0].folder
+    for name in ("other", "idle"):
+        shutil.copytree(live, tmp_path / name)
+    _status(tmp_path / "other", step=120, outbreaks=110)
+    idle = tmp_path / "idle" / "train" / "stream-status.json"
+    old = time.time() - 3600
+    os.utime(idle, (old, old))
+    ctx.runs += [
+        runs.make_run("other", tmp_path / "other", label="other run"),
+        runs.make_run("idle", tmp_path / "idle", label="idle run"),
+    ]
+    status = _status_section(page.build(ctx))
+    assert "Also training" in status
+    assert "<b>other run</b>" in status
+    assert "idle run" not in status
+    assert status.count("<div class=tiles>") == 2 * alone
+
+
+def test_one_run_training_shows_its_status_alone(tmp_path):
+    status = _status_section(page.build(_machine(tmp_path)))
+    assert "Also training" not in status

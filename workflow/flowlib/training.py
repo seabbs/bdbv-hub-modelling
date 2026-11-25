@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from flowlib import (
+    compute,
     evaluations,
     hosts,
     manifest,
@@ -67,6 +68,20 @@ class Training:
     def trained_runs(self) -> list[str]:
         """Return the runs `finetune` trains."""
         return runs.trained(self.config, self.runs)
+
+    def trainer_priority(self, wc: Any) -> float:
+        """Return a run's trainer priority: the order runs take a GPU.
+
+        `TRAIN_PRIORITY` plus a fraction below one, highest for the
+        first of `train_runs`, then the rest of them in order, then the
+        other runs in the config's order. Each run's trainer takes one
+        `gpu` slot, so with a GPU per run every run trains at once, and
+        with fewer they queue in this order.
+        """
+        trained = self.trained_runs()
+        order = trained + [r for r in self.runs if r not in trained]
+        rank = order.index(wc.run)
+        return compute.TRAIN_PRIORITY + (len(order) - rank) / (len(order) + 1)
 
     def run_of(self, wc: Any) -> runs.Run:
         """Return a job's run."""
@@ -245,8 +260,7 @@ class Training:
     def segment_inputs(self, wc: Any) -> dict[str, Any]:
         """Return a segment's batches, seed list and previous checkpoint.
 
-        A run's first segment, if `finetune` does not train the run, also
-        takes the final checkpoints of the runs it does train.
+        Its own run's alone: no run waits on another.
         """
         run, n = wc.run, int(wc.n)
         there, train = self.runs[run], self.train_dir(run)
@@ -265,14 +279,6 @@ class Training:
             out["real"] = runs.real_training_blocks(there)
         if there.prev[n] is not None:
             out["prev"] = f"{train}/n{there.prev[n]}/settings.json"
-        elif run not in self.trained_runs():
-            # A run outside `train_runs` starts once their final
-            # checkpoints exist, so it never takes their GPU.
-            out["after"] = [
-                f"{self.train_dir(r)}/n{self.runs[r].ft['prefixes'][-1]}"
-                "/settings.json"
-                for r in self.trained_runs()
-            ]
         return out
 
     def fetch_source(self, wc: Any) -> dict[str, str] | list[str]:
