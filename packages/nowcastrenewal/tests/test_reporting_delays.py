@@ -43,9 +43,28 @@ CASES: list[dict[str, Any]] = (
 DIST = {"exponential": 1, "lognormal": 2, "gamma": 3}
 
 
+# Edges: windows of one, two and five days and a long one, at each
+# family's middle values; and very short and very long delays (means of
+# about a third of a day and of 40 to 50 days) in short and long windows.
+EDGE_DMAX = (1, 2, 5, 150)
+MIDDLE = [CASES[4], CASES[13], CASES[19]]
+EXTREMES: list[dict[str, Any]] = [
+    {"family": "lognormal", "values": {"delay_median": m, "delay_sdlog": 0.9}}
+    for m in (0.2, 40.0)
+] + [
+    {"family": "gamma", "values": {"delay_mean": m, "delay_cv": 0.8}}
+    for m in (0.3, 50.0)
+] + [{"family": "exponential", "values": {"delay_mean": m}} for m in (0.3, 50.0)]
+
+
 def _rows() -> list[dict[str, Any]]:
     rows = []
-    for case, dmax in itertools.product(CASES, DMAX):
+    grid = [
+        *itertools.product(CASES, DMAX),
+        *itertools.product(MIDDLE, EDGE_DMAX),
+        *itertools.product(EXTREMES, (5, 84, 150)),
+    ]
+    for case, dmax in grid:
         p = Delay.from_values(case["family"], case["values"])
         rows.append({**case, "dmax": dmax, "mu": p.mu, "sigma": float(p.sigma)})
     return rows
@@ -112,6 +131,11 @@ def _ours(r: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
     return np.asarray(lh), np.asarray(lp)
 
 
+def _as_list(x: Any) -> list[Any]:
+    """A vector from R; one value comes back unboxed (`auto_unbox`)."""
+    return x if isinstance(x, list) else [x]
+
+
 def _survival_before(log_pmf: np.ndarray) -> np.ndarray:
     p = np.exp(log_pmf)
     return 1 - np.concatenate([[0.0], np.cumsum(p)[:-1]])
@@ -129,7 +153,7 @@ def test_double_censored_delays_match_epinowcast(
     r, want = ROWS[i], epinowcast_hazards[i]
     lh, lp = _ours(r)
     want_lh = np.array(
-        [np.inf if x in (None, "Inf") else x for x in want["logit_hazard"]],
+        [np.inf if x in (None, "Inf") else x for x in _as_list(want["logit_hazard"])],
         dtype=float,
     )
     assert np.isposinf(lh[-1])
@@ -139,18 +163,20 @@ def test_double_censored_delays_match_epinowcast(
     tol = 1e-9 + 1e-12 / p[:-1] + 1e-12 / after
     got, ref = lh[:-1], want_lh[:-1]
     # epinowcast's hazards are NaN once its running survival, built by
-    # subtracting each probability, falls below 0: only where under 1e-12
-    # of the reports remain (5e-13 at most here).
+    # subtracting each probability, falls below 0: only where little of
+    # the reports remain. Its errors add up over the window, so that is
+    # under 1e-12 in windows to 84 days and under 1e-11 in longer ones.
     nan = np.isnan(ref)
-    assert np.all(after[nan] < 1e-12)
+    lost_by = 1e-12 if r["dmax"] <= 84 else 1e-11
+    assert np.all(after[nan] < lost_by)
     assert np.all(np.abs(got - ref)[~nan] <= tol[~nan])
     want_lp = np.array(
-        [-np.inf if x in (None, "-Inf") else x for x in want["log_pmf"]],
+        [-np.inf if x in (None, "-Inf") else x for x in _as_list(want["log_pmf"])],
         dtype=float,
     )
-    # Its log pmf is NaN in places too, only where under 1e-12 is left.
+    # Its log pmf is NaN in places too, only where little is left.
     lost = np.isnan(want_lp)
-    assert np.all(p[lost] < 1e-12)
+    assert np.all(p[lost] < lost_by)
     np.testing.assert_allclose(
         p[~lost], np.exp(want_lp[~lost]), rtol=1e-9, atol=1e-12
     )
