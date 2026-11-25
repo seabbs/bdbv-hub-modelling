@@ -81,7 +81,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
     The same form of model has been used to nowcast the effective reproduction number from line list data [@lison2024].
     (Add the planned epinowcast case study paper, epinowcast/epinowcast#290, if it is out in time.)
     This makes it a natural basis for simulating training data, and our simulations follow its structure.
-  - epinowcast is written in R and Stan.
+  - epinowcast is written in R and Stan [@RCoreTeam; @Carpenter2017].
     PyRenew is a Python library from the US CDC's Center for Forecasting and Outbreak Analytics for building renewal models from modular components, using JAX and NumPyro [@pyrenew; @Phan2019].
 
 - **What we did.**
@@ -476,6 +476,11 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - A model fine-tuned on epinowcast simulations may emulate epinowcast in a fraction of its run time.
   - We did not compare with epinowcast, so we cannot say how close it is.
   - The same approach could emulate other slow packages.
+- **Porting models between languages.**
+  - We ported epinowcast from R and Stan to PyRenew so the simulator and the foundation model share one Python code base [@RCoreTeam; @Carpenter2017; @pyrenew].
+  - LLM coding assistants make this kind of port much quicker, which makes it easier to standardise on a single code base.
+  - A port still depends on the original implementation being well tested, as it gives the reference the port is checked against.
+  - Without a mature, well-tested original, there is no way to tell whether a port is correct.
 - **Fine-tuned foundation models as baselines.**
   - We think fine-tuned foundation models like ours, and the same approach applied to newer industry-leading foundation models, should serve as baselines for other model developers and for hubs.
   - They are cheap to run, general across pathogens, and improve as the base models improve.
