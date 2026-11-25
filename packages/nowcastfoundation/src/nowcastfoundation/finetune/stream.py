@@ -816,25 +816,42 @@ def train_step(
     accepted: Any,
     device: Any,
     share: float,
-    memory: Callable[[], tuple[int, int] | None] | None = None,
+    rule: MemoryRule | None = None,
+    meter: Any = None,
 ) -> float:
     """Accumulate a batch's gradients, scaled by `share`; return its loss.
 
     Forward and backward both run with the rows' places assigned, so a
     block recomputed in backward (`checkpoint_large_batches`) gets the
-    same series bias. A batch whose activations would not fit the
-    device's free memory (`needs_recompute`, read by `memory`, by default
-    `device_memory`) is recomputed from the start.
+    same series bias. With a `rule`, a batch predicted not to fit is
+    recomputed from the start, and the peak `meter` measures (by default
+    `CudaPeak`) is recorded in it. A batch that runs out of memory raises
+    the rule's cost before the error goes on to `accumulate`.
     """
-    tokens = batch_tokens(batch)
-    free = (memory or device_memory)()
-    large = needs_recompute(int(batch["context"].shape[0]), tokens, free)
-    with (
-        recompute_every_block() if large else nullcontext(),
-        series_bias.assigned(model, batch.get("series_rows")),
-    ):
-        loss = forward(model, batch, accepted, device).loss
-        (loss * share).backward()
+    series, tokens = int(batch["context"].shape[0]), batch_tokens(batch)
+    large = rule is not None and rule.needs_recompute(series, tokens)
+    if rule is not None:
+        meter = meter or CudaPeak()
+        meter.start()
+    try:
+        with (
+            recompute_every_block() if large else nullcontext(),
+            series_bias.assigned(model, batch.get("series_rows")),
+        ):
+            loss = forward(model, batch, accepted, device).loss
+            (loss * share).backward()
+    except RuntimeError as error:
+        recomputed = large or _RECOMPUTING["all"]
+        if (
+            rule is not None
+            and "out of memory" in str(error)
+            and not recomputed
+        ):
+            rule.ran_out(series, tokens)
+        raise
+    if rule is not None:
+        recomputed = large or _RECOMPUTING["all"]
+        rule.record(series, tokens, recomputed, meter.peak())
     return float(loss.detach())
 
 
@@ -963,15 +980,22 @@ def recompute_every_block() -> Iterator[None]:
 
 
 ACTIVATION_BYTES: Final = 750_000
-"""GPU memory a Chronos-2 training step holds for backward per series and
-token when its activations are not recomputed. Fitted on an RTX 2070
-(8 GB, about 6.9 GB free to the trainer), blocks of 600 to 730 series
-ran out of memory alone from about 9,900 series x tokens, so a step over
-about 8,100 is recomputed there."""
+"""GPU memory a Chronos-2 training step is taken to hold for backward per
+series and token, without recomputation, until the trainer has measured
+its own (`MemoryRule`). Conservative: on an RTX 2070 (8 GB) blocks of 600
+to 730 series ran out of memory from about 9,900 series x tokens."""
 
-MEMORY_MARGIN: Final = 0.1
-"""Share of the device's memory a step leaves free (`needs_recompute`), for
-the allocator's fragmentation and other processes on the GPU."""
+MEMORY_MARGIN: Final = 0.15
+"""Share of the device's memory a step leaves unused (`MemoryRule`): the
+CUDA context, the display and the allocator's fragmentation."""
+
+FIT_FROM: Final = 2_000
+"""Fewest series x tokens of a step whose measured peak fits the cost, so
+fixed costs of small steps do not inflate it."""
+
+FIT_AFTER: Final = 50
+"""Measured steps the fitted cost needs before it replaces
+`ACTIVATION_BYTES`."""
 
 
 def batch_tokens(batch: dict[str, Any]) -> int:
@@ -985,43 +1009,154 @@ def batch_tokens(batch: dict[str, Any]) -> int:
     return -(-width // INPUT_PATCH) + 1 + outputs
 
 
-def activation_bytes(series: int, tokens: int) -> int:
-    """Return a step's activation memory without recomputation."""
-    return series * tokens * ACTIVATION_BYTES
+def fixed_footprint(model: Any) -> int:
+    """Return the bytes the trainer holds whatever the step.
 
-
-def needs_recompute(
-    series: int, tokens: int, memory: tuple[int, int] | None
-) -> bool:
-    """Return whether a step must recompute its activations to fit.
-
-    `memory` is the device's free and total bytes (`device_memory`), or
-    None off CUDA, where the series threshold alone decides
-    (`checkpoint_large_batches`). A step is recomputed when its
-    activations (`activation_bytes`) exceed the free memory less
-    `MEMORY_MARGIN` of the total. Recomputation gives the same gradients,
-    so the blocks and steps trained are the same whatever the device.
+    The model's parameters and buffers, and for each trainable parameter
+    its gradient and the optimiser's two moments. Counted from the model,
+    not measured, so a resumed run has the same.
     """
-    if memory is None:
-        return False
-    free, total = memory
-    budget = free - int(MEMORY_MARGIN * total)
-    return activation_bytes(series, tokens) > budget
+    held = sum(t.numel() * t.element_size() for t in model.parameters())
+    held += sum(t.numel() * t.element_size() for t in model.buffers())
+    trained = sum(
+        t.numel() * t.element_size()
+        for t in model.parameters()
+        if t.requires_grad
+    )
+    return int(held + 3 * trained)
 
 
-def device_memory() -> tuple[int, int] | None:
-    """Return the CUDA device's free and total bytes, or None off CUDA.
+class MemoryRule:
+    """Decide which training steps recompute their activations.
 
-    Free counts what PyTorch caches but does not use, as a step can take
-    it.
+    A step's peak is predicted as its series x tokens (`batch_tokens`)
+    times the activation cost per series and token. A step predicted over
+    the budget, the device's total memory less the trainer's fixed
+    footprint (`fixed_footprint`) and `MEMORY_MARGIN` of the total, is
+    recomputed from the start, which gives the same gradients in less
+    memory. The cost starts at `ACTIVATION_BYTES`. Each step run without
+    recomputation of at least `FIT_FROM` series x tokens has its measured
+    peak recorded, and once `FIT_AFTER` are, the cost is the most any of
+    them used per series and token. A step that runs out of memory raises
+    the cost so that one its size is recomputed. The cost depends only on
+    the steps run, so the same run history on the same card makes the
+    same decisions, and it is kept in the trainer's state (`state`).
     """
+
+    def __init__(
+        self,
+        total: int,
+        footprint: int,
+        state: dict[str, Any] | None = None,
+    ) -> None:
+        self.total = total
+        self.footprint = footprint
+        self.budget = total - footprint - int(MEMORY_MARGIN * total)
+        state = state or {}
+        self.measured = int(state.get("measured", 0))
+        self.most = int(state.get("most", 0))
+        self.floor = int(state.get("floor", 0))
+        self.rows: list[dict[str, Any]] = []
+
+    @property
+    def cost(self) -> int:
+        """Return the activation bytes per series and token in use."""
+        fitted = self.most if self.measured >= FIT_AFTER else ACTIVATION_BYTES
+        return max(fitted, self.floor)
+
+    def predict(self, series: int, tokens: int) -> int:
+        """Return a step's predicted peak without recomputation."""
+        return series * tokens * self.cost
+
+    def needs_recompute(self, series: int, tokens: int) -> bool:
+        """Return whether a step must recompute its activations to fit."""
+        return self.predict(series, tokens) > self.budget
+
+    def record(
+        self, series: int, tokens: int, recomputed: bool, peak: int
+    ) -> None:
+        """Record a step's measured peak, fitting the cost from it."""
+        self.rows.append(
+            {
+                "series": series,
+                "tokens": tokens,
+                "recomputed": recomputed,
+                "predicted": self.predict(series, tokens),
+                "measured": peak,
+                "cost": self.cost,
+            }
+        )
+        if recomputed or series * tokens < FIT_FROM:
+            return
+        self.measured += 1
+        self.most = max(self.most, -(-peak // (series * tokens)))
+
+    def ran_out(self, series: int, tokens: int) -> None:
+        """Raise the cost so that a step this size is recomputed."""
+        self.floor = max(self.floor, self.budget // (series * tokens) + 1)
+
+    def state(self) -> dict[str, int]:
+        """Return what a resumed run needs to make the same decisions."""
+        return {
+            "measured": self.measured,
+            "most": self.most,
+            "floor": self.floor,
+        }
+
+
+class CudaPeak:
+    """Measure the GPU memory a step allocates above what it starts with."""
+
+    def __init__(self) -> None:
+        self.base = 0
+
+    def start(self) -> None:
+        """Reset the device's peak and note the memory in use."""
+        import torch
+
+        torch.cuda.reset_peak_memory_stats()
+        self.base = torch.cuda.memory_allocated()
+
+    def peak(self) -> int:
+        """Return the step's peak above its start."""
+        import torch
+
+        return int(torch.cuda.max_memory_allocated()) - self.base
+
+
+def memory_rule(
+    model: Any, device: Any, state: dict[str, Any] | None
+) -> MemoryRule | None:
+    """Return the trainer's `MemoryRule` on CUDA, or None elsewhere."""
     import torch
 
-    if not torch.cuda.is_available():
+    if not torch.cuda.is_available() or str(device).startswith(("cpu", "mps")):
         return None
-    free, total = torch.cuda.mem_get_info()
-    cached = torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
-    return free + cached, total
+    total = torch.cuda.get_device_properties(device).total_memory
+    return MemoryRule(total, fixed_footprint(model), state)
+
+
+MEMORY_FILE = "memory.csv"
+"""Each training step's series, tokens, whether it was recomputed, and its
+predicted and measured peak (`MemoryRule`), in the run's training folder."""
+
+
+def record_memory(out: Path, step: int, rule: MemoryRule) -> None:
+    """Add the rule's rows for `step` to `MEMORY_FILE` and clear them."""
+    if not rule.rows:
+        return
+    path = out / MEMORY_FILE
+    frame = pd.DataFrame(rule.rows).assign(step=step)
+    frame.to_csv(path, mode="a", header=not path.exists(), index=False)
+    rule.rows.clear()
+
+
+def trim_memory(out: Path, step: int) -> None:
+    """Keep the rows of `MEMORY_FILE` up to `step`, for a resumed run."""
+    path = out / MEMORY_FILE
+    if path.exists():
+        frame = pd.read_csv(path)
+        frame[frame["step"] <= step].to_csv(path, index=False)
 
 
 _PROGRESS: dict[str, Callable[[int, int], None] | None] = {"report": None}
@@ -2265,6 +2400,13 @@ def main(root: Path | None = None) -> None:
         strict=False,
     ):
         group["base_lr"] = base_lr
+    rule = memory_rule(model, device, (state or {}).get("memory"))
+    if rule is not None:
+        log(
+            f"memory: {rule.total / 1e9:.2f} GB on the device, "
+            f"{rule.footprint / 1e9:.2f} GB held, {rule.budget / 1e9:.2f} GB "
+            f"for a step's activations at {rule.cost} bytes a series token"
+        )
     step, done, position = 0, 0, 0
     # The outbreaks trained on, in order, and those of the current chunk.
     trained: list[str] = []
@@ -2324,6 +2466,7 @@ def main(root: Path | None = None) -> None:
         chunk = state.get("chunk", []) if position else []
         lines = consumed.read_text().splitlines()[:step]
         consumed.write_text("".join(f"{line}\n" for line in lines))
+        trim_memory(out, step)
         log(f"resumed at step {step}, outbreaks {done + 1}-, batch {position}")
 
     def snapshot() -> None:
@@ -2341,13 +2484,14 @@ def main(root: Path | None = None) -> None:
                 "history": history,
                 "seen": seen,
                 "losses": losses,
+                **({"memory": rule.state()} if rule is not None else {}),
             },
         )
 
     def backward(part: list[int], share: float) -> float:
         """Accumulate the gradients of part of a batch."""
         batch = data._build_batch(part)
-        value = train_step(model, batch, accepted, device, share)
+        value = train_step(model, batch, accepted, device, share, rule)
         del batch
         return value
 
@@ -2475,6 +2619,7 @@ def main(root: Path | None = None) -> None:
             # Cheap without `free_memory`; the step starts from no gradients
             # whatever ran before it.
             optimiser.zero_grad()
+            cost = rule.cost if rule is not None else 0
             value = accumulate(list(indices), backward, zero)
             if not finite_step(params, optimiser, value):
                 # The step still counts, so the schedule, the evaluation
@@ -2485,6 +2630,13 @@ def main(root: Path | None = None) -> None:
             free_memory()
             step += 1
             position += 1
+            if rule is not None:
+                record_memory(out, step, rule)
+                if rule.cost != cost:
+                    log(
+                        f"step {step}: activation cost now {rule.cost} "
+                        "bytes a series token"
+                    )
             with consumed.open("a") as f:
                 f.write(
                     f"{step}\t"

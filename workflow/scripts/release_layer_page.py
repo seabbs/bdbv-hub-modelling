@@ -481,7 +481,7 @@ img{{max-width:100%;height:auto;border:1px solid var(--line)}} td,th{{padding:3p
 table{{border-collapse:collapse;font-size:13px}} .muted{{color:var(--muted);font-size:13px}} code{{font-size:12px}}
 </style></head><body>
 <h1>What the release layer does to training blocks</h1>
-<p>The release layer (PR #883, <code>packages/nowcastfoundation/config/finetune/release-layer.yaml</code>) acts when blocks are cut, on the simulations already made.
+<p>The release layer (<code>packages/nowcastfoundation/config/finetune/release-layer.yaml</code>) acts when blocks are cut, on the simulations already made.
 A share of blocks ({start.get("share", 0):.0%}) has its releases start late: every release before the drawn start day is dropped and the cut's is kept.
 The first kept release then holds every onset reported before it, the lag rows start there and the counts row keeps the whole history, as in the BDBV hub's data.
 Its cadences set the share of daily-step blocks released weekly ({layer.get("cadences", {}).get("daily", {}).get("weekly", 0.2):.0%}).</p>
@@ -497,7 +497,7 @@ Its cadences set the share of daily-step blocks released weekly ({layer.get("cad
 <p>BDBV hub (CD, daily onsets, releases {real["first_release"]} to {real["cut"]}): {real["releases"]} releases, lag 0 row filled on {real["filled"]} of {real["steps"]} days, fill {pct(real["fill"])}, D {real["D"]}.
 Germany (national, daily releases, cuts {", ".join(de["cut"]) if len(de) else "none"}): median fill {pct(de["fill"].median()) if len(de) else "n/a"}, median D {de["D"].median() if len(de) else "n/a"}.</p>
 <h2>3. Lag count</h2>
-<p>D is next's lag rule (<code>forecaster.lag_count</code>, #889), which the blocks are cut with: the largest of the places' 99% settling delays over the release history, capped by that history, or the history itself where no step has settled.
+<p>D is the lag rule (<code>forecaster.lag_count</code>), which the blocks are cut with: the largest of the places' 99% settling delays over the release history, capped by that history, or the history itself where no step has settled.
 Blocks with no lag series (the layer's no-lag share) have no D and are left out.
 Each panel's title gives the share of blocks whose D is at their release history (cut-off minus first kept release), where the cap or the no-settled-step rule sets it rather than a delay.</p>
 <img src="data:image/png;base64,{lags}" alt="Lag count D by source, on-time and late-start blocks, with BDBV and Germany">

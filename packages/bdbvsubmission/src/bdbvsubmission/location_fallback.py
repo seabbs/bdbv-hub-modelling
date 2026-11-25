@@ -7,7 +7,7 @@ chain that converged and passes there. National is re-summed per sample
 from the merged provinces plus the kept candidate's unassigned component
 (`national.json`), so the file stays coherent. The merged file then goes
 through the format checks and the hub's validation again; if it fails
-either, the candidate is ruled out as before (Sam, 2026-11-24).
+either, the candidate is ruled out.
 """
 
 from __future__ import annotations

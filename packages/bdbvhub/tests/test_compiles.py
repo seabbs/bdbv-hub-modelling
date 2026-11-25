@@ -22,8 +22,8 @@ from nowcastbdbv.backtest import make_tasks
 from nowcasteval.backtest import BacktestConfig
 from nowcastutils.base import ForecastTask
 
-# The walks' draws on a fixed task; #808 (no reported-count floor) and
-# the copula prior 0.1 (chosen on the release backtest) moved both.
+# The walks' draws on a fixed task, with no reported-count floor and
+# the copula prior 0.1 (chosen on the release backtest).
 PINNED = {
     "randomwalk": "fd8acfe7c44b5231",
     "randomwalknowcast": "4441512f7b028820",

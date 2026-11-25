@@ -186,7 +186,6 @@ properties:
       - published_from
       - skip
       - reference
-      - mem_mb
       - evidence
       - checkpoints
       - branch
@@ -196,7 +195,6 @@ properties:
       published_from: {type: string}
       skip: {$ref: "#/$defs/labels"}
       reference: {$ref: "#/$defs/labels"}
-      mem_mb: {$ref: "#/$defs/positive"}
       evidence: {type: string}
       checkpoints: {type: string}
       branch: {type: string}

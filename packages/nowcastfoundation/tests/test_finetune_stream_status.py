@@ -114,8 +114,8 @@ def test_a_fresh_run_s_status_starts_at_step_zero(tmp_path):
 def test_the_status_names_the_model_load_after_saved_held_out_blocks(
     tmp_path, monkeypatch
 ):
-    # Lead 03:20: Run B loaded its saved held-out blocks and went on to
-    # the model, but its status still said it waited for held-out
+    # A run that loads its saved held-out blocks and goes on to the
+    # model says it trains, not that it waits for held-out
     # simulations.
     import chronos
 
@@ -156,8 +156,8 @@ def test_the_status_names_the_model_load_after_saved_held_out_blocks(
 
 
 def test_the_status_names_a_checkpoint_s_evaluation():
-    # Overseer 04:31: Run B's status said 'training' through the n100
-    # evaluation (~20 min on the GPU), which the dashboard reads.
+    # The status names a checkpoint's evaluation (~20 min on the GPU)
+    # rather than 'training', as the dashboard reads it.
     import inspect
 
     assert fs.checkpoint_stage(100) == "evaluating checkpoint n100"

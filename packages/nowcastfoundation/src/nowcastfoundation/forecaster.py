@@ -1629,7 +1629,7 @@ class FoundationModel:
         Private to `prefetch`: the groups a forecast would predict are
         added to it, and the forecast stops.
     baselinenowcast : bool
-        The baselinenowcast model (#538's sensitivity analysis): each place's
+        The baselinenowcast model (a sensitivity analysis): each place's
         daily counts to the cut-off are first replaced by baselinenowcast's
         point nowcast (`point_nowcast`), and Chronos-2 forecasts from the
         day after the cut-off on those corrected counts. The nowcast days
@@ -2340,7 +2340,7 @@ register_model(
     fitted=True,
     paper_only=True,
 )
-# The baselinenowcast sensitivity analysis (#538): baselinenowcast's point
+# The baselinenowcast sensitivity analysis: baselinenowcast's point
 # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
 register_model(
     "foundation_zeroshot_baselinenowcast",

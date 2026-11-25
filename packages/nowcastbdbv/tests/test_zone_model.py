@@ -284,7 +284,7 @@ def test_anchored_starts_are_non_centred(zone_vintage):
 def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
     zone_vintage, tables, table
 ):
-    # Option (a), #736: the pooled log Rt walk and the province and zone
+    # The pooled log Rt walk and the province and zone
     # deviations are AR(1) with a fitted half-life, and the forecast
     # continues that process with no forecast-only reversion.
     import nowcastrenewal.model.model as module
@@ -314,9 +314,8 @@ def test_every_rt_walk_is_a_fitted_ar1_in_fit_and_forecast(
 def test_the_seed_grows_at_bvdoutbreaksizes_cryptic_growth_prior(
     zone_vintage,
 ):
-    # #768 item 6: one shared seed growth rate with BVDOutbreakSize's
-    # prior on cryptic growth, in place of a clip on the growth implied
-    # by the first Rt.
+    # One shared seed growth rate with BVDOutbreakSize's
+    # prior on cryptic growth.
     from nowcastrenewal.model.model import SEED_DOUBLING_DAYS
 
     assert SEED_DOUBLING_DAYS == 11.7
@@ -349,7 +348,7 @@ def test_seeding_stays_within_the_pool_under_the_prior(zone_vintage):
 
 
 def test_a_centred_zone_model_samples_its_pooled_rt_levels(zone_vintage):
-    # `fit_config` centres the walk wherever the counts pin it (#1041).
+    # `fit_config` centres the walk wherever the counts pin it.
     # Centring, like the mean anchor, removes the start-step ridge, so
     # the centred pooled walk is not also anchored. The deviations stay
     # anchored and non-centred.

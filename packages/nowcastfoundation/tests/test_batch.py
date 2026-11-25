@@ -197,7 +197,7 @@ def test_only_empty_draws_are_drawn_again(tmp_path, stand_in):
     assert len(failures) >= 2
     assert (failures["reason"] == "no cases").all()
     settings = pd.read_csv(files["settings"])
-    # Under the old floor of 10 a draw this small was drawn again.
+    # A draw this small is kept: there is no floor of 10.
     assert 0 < settings.loc[0, "cases"] < 10
 
 

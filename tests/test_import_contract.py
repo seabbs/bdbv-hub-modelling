@@ -107,8 +107,7 @@ def test_a_change_runs_the_jobs_of_every_package_that_can_see_it() -> None:
 
 
 STUDIES = ("nowcastgermany",)
-"""Study packages, which build on the generic ones and never the reverse
-(Sam, 2026-11-23)."""
+"""Study packages, which build on the generic ones and never the reverse."""
 
 STUDY_FREE = ("nowcastfoundation", "nowcasteval")
 """Packages whose modules import no study yet, function-level imports

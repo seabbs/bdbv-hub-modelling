@@ -1,4 +1,4 @@
-"""A German model's key covers only the code it imports (#1114)."""
+"""A German model's key covers only the code it imports."""
 
 import pytest
 

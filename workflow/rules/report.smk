@@ -436,7 +436,13 @@ rule ft_check_forecast:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        mem_mb=SC["mem_mb"],
+        # Its model's peak under this code, else under another code key,
+        # else the most any check forecast used.
+        mem_mb=memory.from_benchmark(
+            f"{FTC_DIR}/benchmarks/{{fmodel}}@{{key}}.tsv",
+            2048,
+            like=(("key",), ("fmodel", "key")),
+        ),
         gpu=FORECAST.gpu,
     params:
         env=unit_env,

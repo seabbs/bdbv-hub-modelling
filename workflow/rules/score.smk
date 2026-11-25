@@ -59,7 +59,9 @@ rule score_germany:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        mem_mb=SC["mem_mb"],
+        mem_mb=memory.from_benchmark(
+            f"{CACHE}/benchmarks/score_germany/{{label}}.tsv", 3072, like=("label",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         env=checkpoint_env,
@@ -88,7 +90,9 @@ rule score_run_germany:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        mem_mb=SC["mem_mb"],
+        mem_mb=memory.from_benchmark(
+            f"{RUN}/scores/benchmarks/score_run_germany/n{{n}}.tsv", 3072, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         env=checkpoint_env,
@@ -152,6 +156,30 @@ rule daily_table:
         reference=lambda wc, input: input.references[0].removesuffix(".done"),
     shell:
         "{params.evaluate} daily {params.train} {params.scores} "
+        "{params.reference} {wildcards.run} {output} > {log} 2>&1"
+
+
+rule horizon_table:
+    # A run's saved checkpoints on every German horizon, the nowcasts and
+    # the forecasts, relative to the German config's references, for its
+    # SI progress figure (nowcastgermany.checkpoint.horizon_table).
+    input:
+        references=references(),
+        units=lambda wc: run_units(wc.run),
+    output:
+        f"{RUN}/reports/horizon-scores.csv",
+    log:
+        f"{RUN}/logs/horizon-table.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        evaluate=EVALUATE,
+        train=lambda wc: train_dir(wc.run),
+        scores=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}",
+        reference=lambda wc, input: input.references[0].removesuffix(".done"),
+    shell:
+        "{params.evaluate} horizons {params.train} {params.scores} "
         "{params.reference} {wildcards.run} {output} > {log} 2>&1"
 
 

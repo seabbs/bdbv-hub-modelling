@@ -77,7 +77,7 @@ def test_a_snapshot_is_written_whole(tmp_path):
 
 
 def test_an_offloaded_step_records_its_rates_and_saves_nothing(tmp_path):
-    # Only step 0 and the checkpoints are scored offloaded (#1150), so a
+    # Only step 0 and the checkpoints are scored offloaded, so a
     # step between leaves no snapshot: its history entry is all it keeps.
     model = trained()
     optimiser = fs.make_optimiser(model, 1e-4, 1e-3)
@@ -261,7 +261,7 @@ def test_a_snapshot_is_scored_as_its_request_asks(tmp_path, monkeypatch):
 def test_the_evaluate_rules_runner_gives_the_trainer_s_losses(
     tmp_path, monkeypatch
 ):
-    # WP10 part 2: workflow/scripts/evaluate_offloaded.py, end to end on
+    # workflow/scripts/evaluate_offloaded.py, end to end on
     # CPU with the real evaluator, scores step 0 and a checkpoint exactly
     # as the trainer scores the same adapter.
     import importlib.util
@@ -344,7 +344,7 @@ def rolling_toy(seed: int) -> dict:
 
 @pytest.mark.usefixtures("short_context")
 def test_a_checkpoint_s_7_day_check_runs_on_its_7_day_blocks(tmp_path):
-    # Lead 00:55: one 7-day check per checkpoint (rule seven_day_check),
+    # One 7-day check per checkpoint (rule seven_day_check),
     # not a second one inside the held-out evaluation.
     model = trained()
     where = tmp_path / "step-0000100"
@@ -363,7 +363,7 @@ def test_a_checkpoint_s_7_day_check_runs_on_its_7_day_blocks(tmp_path):
 @pytest.mark.usefixtures("short_context")
 def test_the_adapter_is_merged_before_scoring(tmp_path, monkeypatch):
     # LoRA's extra low-rank products cost about an eighth of a CPU pass;
-    # merged weights give the same losses (#1114).
+    # merged weights give the same losses.
     model = trained()
     val = blocks()
     where = tmp_path / "step-0000100"

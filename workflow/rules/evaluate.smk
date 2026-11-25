@@ -1,11 +1,11 @@
-# Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
+# Offloaded held-out evaluation: with `finetune.eval: offload`,
 # score step 0 and each checkpoint, in the `evaluate` group
 # (WORKER_GROUPS places it). With the 7-day check and the validation
 # forecasts, each runs on the checkpoint scoring device
 # (`compute.scoring_forecast`): the CPU with the cores the trainer leaves
-# while a run trains, a whole GPU once none does, below every other job
-# (`Scoring.evaluation_priority`). It never pauses training, and no
-# release or check waits for it.
+# while a run trains, a whole GPU once none does, right after the
+# hand-offs and the next segment's batches (`Scoring.evaluation_priority`).
+# It never pauses training, and no release or check waits for it.
 # Files and readers: workflow/flowlib/evaluations.py.
 
 
@@ -32,6 +32,9 @@ rule evaluate_base:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/evaluate_base.tsv", 4096, like=("run",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -74,6 +77,9 @@ rule evaluate_checkpoint:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv", 4096, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -111,6 +117,9 @@ rule seven_day_check:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/seven_day_check/n{{n}}.tsv", 3072, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -129,8 +138,7 @@ rule validation_forecasts:
     # (validation) blocks, with their history and truth, which the
     # dashboard sets against the truth
     # (nowcastfoundation.finetune.evaluate.validation_forecasts), on the
-    # checkpoint scoring device, below every other job: nothing waits for
-    # them.
+    # checkpoint scoring device, at the held-out evaluation's priority.
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
@@ -149,6 +157,9 @@ rule validation_forecasts:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/validation_forecasts/n{{n}}.tsv", 3072, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -184,6 +195,9 @@ rule validation_forecasts_base:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/validation_forecasts_base.tsv", 3072, like=("run",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -197,21 +211,33 @@ rule validation_forecasts_base:
         "--device {params.device} > {log} 2>&1"
 
 
-rule validation_curve:
-    # The run's validation loss by level at the start and at each
-    # checkpoint, against simulations trained: the paper's fine-tune
-    # curve (flowlib.evaluations.validation_curve).
+rule run_progress:
+    # A run's fine-tuning progress tables from its own files, as they
+    # stand: losses by step, the 7-day check and the BDBV check by
+    # checkpoint, for its SI figure (flowlib.progress; the paper's
+    # progress_<run> rule).
     input:
-        validation_curve_inputs,
+        lambda wc: [
+            f
+            for n in run_prefixes(wc.run)
+            for f in [f"{train_dir(wc.run)}/n{n}/settings.json", *offloaded(wc.run, n)]
+        ],
     output:
-        f"{RUN}/validation-curve.csv",
+        loss=f"{RUN}/reports/progress/loss.csv",
+        seven_day=f"{RUN}/reports/progress/seven-day.csv",
+        bdbv=f"{RUN}/reports/progress/bdbv.csv",
     log:
-        f"{RUN}/logs/validation-curve.log",
+        f"{RUN}/logs/progress.log",
     localrule: True
     params:
         train=lambda wc: train_dir(wc.run),
-        prefixes=lambda wc: RUNS[wc.run].ft["prefixes"],
+        prefixes=lambda wc: run_prefixes(wc.run),
     run:
-        evaluations.write_validation_curve(
-            params.train, wildcards.run, params.prefixes, output[0]
+        progress.write_progress(
+            params.train,
+            params.prefixes,
+            FTC_DIR,
+            output.loss,
+            output.seven_day,
+            output.bdbv,
         )

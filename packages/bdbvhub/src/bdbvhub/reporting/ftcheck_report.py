@@ -302,6 +302,9 @@ def write_report(
 ) -> Path:
     """Write the page and its data folder `<stem>-data/`; return the page.
 
+    The data folder also holds `overall.csv`, the relative CRPS of each
+    model over every horizon.
+
     Built from the same parts as the hub rounds and this-round pages
     (`bdbvhub.reporting.pages`): a three-line summary; the score summary
     of relative CRPS by horizon (`nowcasteval.scoresummary`, natural and
@@ -329,6 +332,8 @@ def write_report(
     """
     out = Path(out)
     data = pages.data_dir(out)
+    # The overall skill, which a run's progress figure reads.
+    tables["overall"].to_csv(data / "overall.csv", index=False)
     models = list(dict.fromkeys(tables["overall"]["model"]))
     names = {m: model_label(m) for m in models}
     colours = comparison_colours({names[m]: m for m in models}, {}, [])

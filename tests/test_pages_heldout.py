@@ -16,7 +16,7 @@ def _jobs() -> dict:
 
 def test_pages_forecasts_nothing_for_the_german_benchmark() -> None:
     # The German forecasts (development and held-out) are stored outputs
-    # Pages loads; no job of its own forecasts them (Sam, 2026-11-23).
+    # Pages loads; no job of its own forecasts them.
     jobs = _jobs()
     assert "germany-heldout" not in jobs
     assert (
@@ -56,7 +56,7 @@ def test_a_paper_dispatch_is_never_deployed() -> None:
 
 
 def test_pages_forecasts_and_scores_nothing() -> None:
-    # Pages only loads stored results and renders (Sam, 2026-11-24): the
+    # Pages only loads stored results and renders: the
     # BDBV backtests and their scores come from the fit store.
     jobs = _jobs()
     assert "backtest" not in jobs

@@ -271,8 +271,8 @@ def test_a_block_too_large_alone_is_recomputed_not_waited_for():
 
 
 def test_a_block_waits_while_another_process_holds_the_memory():
-    # Overseer 18:00: Run A died when a scoring job held the GPU. A block
-    # that keeps running out waits and is run again; the run goes on.
+    # A block that runs out of GPU memory while another
+    # process holds it waits and is run again; the run goes on.
     from nowcastfoundation.finetune.stream import accumulate
 
     calls: list[list[int]] = []

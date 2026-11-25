@@ -14,7 +14,9 @@ from flowlib import (
     localconfig,
     machine,
     manifest,
+    memory,
     notify,
+    progress,
     releases,
     rounds,
     scoring,
@@ -100,7 +102,6 @@ GRID_FILE = ROUNDS.grid_file
 seeds_of = ROUNDS.seeds_of
 round_of = ROUNDS.round_of
 here = ROUNDS.here
-batch_priority = ROUNDS.batch_priority
 batch_files = ROUNDS.batch_files
 round_records = ROUNDS.round_records
 round_sims = ROUNDS.round_sims
@@ -118,6 +119,7 @@ push_record = ROUNDS.push_record
 # take the {run} wildcard, and its files are in <ROOT>/runs/<run>/.
 
 TRAINING = training.Training(config, LOCAL, ROUNDS)
+batch_priority = TRAINING.batch_priority
 RUNS = TRAINING.runs
 RUNS_DIR = TRAINING.dir
 RUN = f"{RUNS_DIR}/{{run}}"
@@ -140,7 +142,6 @@ earlier_settings = TRAINING.earlier_settings
 evaluate_inputs_from = TRAINING.evaluate_inputs_from
 offloaded = TRAINING.offloaded
 held_out_key = TRAINING.held_out_key
-validation_curve_inputs = TRAINING.validation_curve_inputs
 check_report = TRAINING.check_report
 training_seeds = TRAINING.training_seeds
 held_range = TRAINING.held_range

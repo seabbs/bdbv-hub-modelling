@@ -1,6 +1,6 @@
 """The release layer: late release starts and cadences, with no resimulation.
 
-Lead 10:35 (Sam): raggedness and weekly releases are drawn per block at
+Raggedness and weekly releases are drawn per block at
 fine-tune time from the simulations already made. A block's releases
 before its drawn start day are dropped, so its first kept release
 backfills the onsets before it, its lag series start there and its counts
@@ -119,7 +119,7 @@ def test_a_late_block_keeps_its_counts_and_loses_its_early_lag_cells():
         # The counts row holds the whole history known at the cut, from
         # the first onset. Compared over the context both share: the lag
         # rule can give the late block another lag count, so its context
-        # ends at another step, after which the row is the truth (#889).
+        # ends at another step, after which the row is the truth.
         ha, hb = _history(a), _history(b)
         n = min(len(ha), len(hb))
         assert n > 0
@@ -167,7 +167,7 @@ def test_the_proposed_layer_file_is_valid():
         / "release-layer.yaml"
     )
     ft.check_release_layer(layer)
-    # Lead 21:15 (Sam, exact): a third of daily-step blocks are released
+    # A third of daily-step blocks are released
     # weekly, and 15% of blocks start late.
     assert layer["cadences"]["daily"]["weekly"] == 1 / 3
     assert layer["start"]["share"] == 0.15
@@ -197,7 +197,7 @@ def test_each_block_s_releases_are_recorded_under_a_layer(tmp_path):
 
 
 def test_a_share_of_blocks_has_no_lag_rows():
-    # Lead 02:00 (Sam): a small share of blocks trains on counts alone, as
+    # A small share of blocks trains on counts alone, as
     # when only the latest data are available: no lag series at all.
     none = _blocks({"no_lags": {"share": 1.0}})
     assert none
@@ -237,7 +237,7 @@ JITTER = {"lag_jitter": {"share": 1.0, "sd": 0.05}}
 
 
 def test_a_jittered_block_scales_the_rule_s_lag_count():
-    # Lead 15:08 (Sam): 10% of blocks take the rule's D times a factor
+    # 10% of blocks take the rule's D times a factor
     # from Normal(1, 0.05), rounded, at least 1, within the history.
     off = {(b["source"], b["cut"]): b for b in _blocks(None)}
     on = _blocks(JITTER)

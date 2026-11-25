@@ -44,7 +44,7 @@ def test_the_tag_follows_the_series_bias(
 def test_a_release_never_waits_for_its_held_out_losses(
     publish_checkpoint, monkeypatch, tmp_path
 ):
-    # Sam, 25 Nov: releases waited hours for the CPU's held-out losses.
+    # The CPU's held-out losses take hours.
     (tmp_path / "settings.json").write_text(json.dumps({"hash": "abc"}))
     (tmp_path / "held-out.json").write_text('{"held_out_loss": 0.2}')
     calls = []

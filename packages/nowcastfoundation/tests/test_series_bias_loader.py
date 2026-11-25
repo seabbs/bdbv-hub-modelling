@@ -156,8 +156,8 @@ def test_a_bias_adapter_loads_through_the_strict_loader(tmp_path):
 
 
 def test_an_adapter_loads_onto_its_model_s_device(tmp_path, monkeypatch):
-    # archie, 25 Nov: German scoring on the CPU loaded its adapter onto the
-    # trainer's full GPU (PEFT's default device) and ran out of memory.
+    # An adapter loads onto its model's device, not PEFT's default, so
+    # German scoring on the CPU never takes the trainer's GPU.
     from peft import PeftModel
 
     model = trained_bias()

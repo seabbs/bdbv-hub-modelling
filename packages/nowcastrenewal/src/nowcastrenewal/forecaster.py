@@ -226,8 +226,7 @@ VARIANTS: Final[dict[str, Variant]] = {
             "case on its own, with no pooling or coupling; silent zones take "
             "the random walk's introductions, and provinces are zone sums.",
             # Each zone alone drops pooling and importation; depletion and
-            # the Rt process are those of the zone models (Sam, 2026-11-24:
-            # it replaces the fit of each province on its own).
+            # the Rt process are those of the zone models.
             overrides={"national": True},
             per_province=True,
         ),

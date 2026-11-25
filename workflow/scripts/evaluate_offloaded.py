@@ -32,7 +32,10 @@ sys.path.insert(0, str(ROOT / "workflow"))
 from flowlib import evaluations  # noqa: E402
 
 from nowcastfoundation import series_bias  # noqa: E402
-from nowcastfoundation.backends.chronos2 import torch_device  # noqa: E402
+from nowcastfoundation.backends.chronos2 import (  # noqa: E402
+    apply_threads,
+    torch_device,
+)
 from nowcastfoundation.finetune import evaluate as fe  # noqa: E402
 from nowcastfoundation.finetune import stream as fs  # noqa: E402
 
@@ -231,6 +234,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="where step 0's results are kept across runs (`base`)",
     )
     args = p.parse_args(argv)
+    apply_threads()
     device = torch_device(args.device)
     if args.what == "base":
         base_step(args.where, device, args.cache)

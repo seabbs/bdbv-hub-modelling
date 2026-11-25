@@ -115,12 +115,19 @@ def autocast(device: str, precision: str | None = None) -> Any:
 
 
 def apply_threads() -> None:
-    """Set torch's CPU threads to `TORCH_THREADS`, if set (the rule's)."""
+    """Set torch's CPU threads to `TORCH_THREADS`, if set (the rule's).
+
+    Both pools: the intra-op one, and the inter-op one, which otherwise
+    takes every core. The inter-op pool is fixed once torch has used it,
+    so it keeps its size then.
+    """
     n = os.environ.get("TORCH_THREADS", "").strip()
     if n:
         import torch
 
         torch.set_num_threads(int(n))
+        with contextlib.suppress(RuntimeError):
+            torch.set_num_interop_threads(int(n))
 
 
 def chronos_batch() -> int:

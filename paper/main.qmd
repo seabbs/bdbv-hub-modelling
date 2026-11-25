@@ -109,6 +109,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ::: {.callout-note title="Plan"}
 - We used the German COVID-19 hospitalisation nowcast hub's reporting triangle, nationally, by state and by age group.
 - We used the Ebola forecasting hub's weekly confirmed cases by symptom onset, with every release, by country, province and health zone.
+- We exclude a first release that reports cumulative counts rather than new reports, as BDBV's 18 August release does, because it does not reflect reporting.
 - Key references: [@Wolffram2023; @hospitalization_nowcast_hub_2025; @bdbv_modeling_hub_2026; @MacNeil2010].
 :::
 

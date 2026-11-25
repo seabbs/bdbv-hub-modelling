@@ -27,8 +27,8 @@ def test_the_committed_runs_are_run_a_its_variants_and_run_b():
 
 
 def test_run_b_trains_with_the_release_layer():
-    # Lead 00:30: Run B is Run A's recipe on the new grid with the release
-    # layer; the committed config must name the layer's file.
+    # Run B is Run A's recipe with the release layer; the committed
+    # config must name the layer's file.
     cfg = runs.load_config()
     found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
     layer = found["runb"].ft["release_layer"]
@@ -132,7 +132,7 @@ def test_trainer_options_name_only_the_settings_given():
 
 
 def test_the_release_layer_is_passed_only_when_a_run_names_one():
-    # Lead 10:35: late release starts and weekly releases drawn at
+    # Late release starts and weekly releases drawn at
     # fine-tune time; no run takes it until its entry names the file.
     assert runs.load_config()["finetune"]["release_layer"] is None
     assert "--release-layer" not in runs.trainer_options(_run())

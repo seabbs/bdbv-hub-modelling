@@ -153,7 +153,7 @@ runs:
   # Run A with the German real-data blocks mixed in (the paper's
   # real-data comparison).
   realdata: {real_training: germany}
-  # Run B: Run A's recipe on the grid's new simulations with the release
+  # Run B: Run A's recipe with the release
   # layer (late release starts and the weekly-release share).
   runb: {release_layer: packages/nowcastfoundation/config/finetune/release-layer.yaml}
 
@@ -183,8 +183,6 @@ score:
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]
-  # A unit's memory cap (MB), at its measured 5 GB peak.
-  mem_mb: 6144
   # The evidence tables the scores merge into, kept rows of other rules.
   evidence: evidence/checkpoint-scores.csv
   checkpoints: evidence/checkpoints.csv

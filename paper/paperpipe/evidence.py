@@ -10,8 +10,10 @@ waits on in place of its table, and `None` in place of its numbers.
 - `copula_figure`: the rolling copula against no pairing, by study and
   level.
 - `rho_medians`: the median rolling rho_p of each walk model.
-- `validation_figure` and `realism_figure`: the fine-tune's validation loss
-  and the simulated outbreaks against the data and published values.
+- `realism_figure`: the simulated outbreaks against the data and
+  published values.
+- `checkpoint_figure`: relative scores by checkpoint, the German panels of
+  each run's progress figure (`paperpipe.progress`).
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
-from matplotlib.figure import Figure
+from matplotlib.figure import Figure, SubFigure
 from nowcasteval.labels import (
     FINETUNED_OF,
     MODEL_LABELS,
@@ -59,7 +61,6 @@ __all__ = [
     "realism_reference",
     "rho_medians",
     "slots_summary",
-    "validation_figure",
     "waiting",
     "write_evidence",
 ]
@@ -265,7 +266,7 @@ def _source_of(model: str) -> str:
     """Return the model's source (daily or weekly), which sets its colour.
 
     The `foundation` models read the daily releases; scores stored under
-    the old names keep the source their name says.
+    a name with a source keep the source their name says.
     """
     for source in ("daily", "weekly"):
         if f"_{source}_" in model:
@@ -273,41 +274,59 @@ def _source_of(model: str) -> str:
     return "daily" if model.startswith("foundation") else model
 
 
-def checkpoint_figure(scores: pd.DataFrame) -> Figure:
+def _family(model: str) -> str:
+    """Return the model a `_complete` model is the complete-data form of."""
+    return model.removesuffix("_complete")
+
+
+def _family_colours(models: Sequence[str]) -> dict[str, str]:
+    """Return a distinct colour for each model family.
+
+    Each keeps its shared colour (`nowcasteval.labels.MODEL_STYLES`)
+    unless an earlier family has it, then takes the next free one.
+    """
+    out: dict[str, str] = {}
+    spare = (f"C{i}" for i in range(10))
+    for family in sorted({_family(m) for m in models}):
+        colour = MODEL_STYLES.get(family, (None,))[0]
+        while colour is None or colour in out.values():
+            colour = next(spare)
+        out[family] = colour
+    return out
+
+
+def checkpoint_figure(
+    scores: pd.DataFrame,
+    fig: Figure | SubFigure | None = None,
+    legend: bool = True,
+) -> Figure | SubFigure:
     """Plot each model's relative WIS against the fine-tune's outbreaks.
 
     One panel per study and level, titled with its n of matched cells and
     greyed when n is under `MIN_CELLS`. Each fine-tuned model is a line
-    over its checkpoints on a log axis of outbreaks. The models with no
-    fine-tuning are horizontal lines in the same colour: zero-shot
-    Chronos-2 on the reporting-triangle layout (dashed) and on complete data
-    (dotted, the `_complete` models), with `randomwalknowcast` the line at
-    1. `scores` has one row per study, level, model and checkpoint, with
-    `outbreaks` (0 for zero-shot) and `rel_wis` against `randomwalknowcast`.
+    over its checkpoints on a log axis of outbreaks, one colour per
+    model. The models with no fine-tuning are horizontal lines in the
+    same colour: zero-shot Chronos-2 on the reporting-triangle layout
+    (dashed) and on complete data (dotted, the `_complete` models), with
+    `randomwalknowcast` the line at 1. `scores` has one row per study,
+    level, model and checkpoint, with `outbreaks` (0 for zero-shot) and
+    `rel_wis` against `randomwalknowcast`.
+    Drawn on `fig`, a new figure by default, or a subfigure of a run's
+    progress figure (`paperpipe.progress`); `legend` False leaves out the
+    shared legend.
     """
     sc = scores.loc[scores["model"] != "randomwalknowcast"]
     sizes = sorted(sc.loc[sc["outbreaks"] > 0, "outbreaks"].unique())
     ticks = sizes or list(PLANNED_CHECKPOINTS)
-    # One colour per source across panels, so the shared legend holds.
-    sources = sorted({_source_of(m) for m in sc["model"]})
-    colours = {s: f"C{i}" for i, s in enumerate(sources)}
-    # Models with a shared colour (`evaluation.labels`) keep it.
-    colours |= {
-        _source_of(m): MODEL_STYLES[m][0]
-        for m in sc["model"].unique()
-        if m in MODEL_STYLES
-    }
+    # One colour per model across panels, so the shared legend holds; a
+    # model on complete data takes its reporting-triangle model's colour.
+    colours = _family_colours(sc["model"])
     panels = list(sc.groupby(["study", "level"], sort=False).groups)
     ncol = min(3, len(panels))
     nrow = int(np.ceil(len(panels) / ncol))
-    fig, axes = plt.subplots(
-        nrow,
-        ncol,
-        figsize=(3.6 * ncol, 2.8 * nrow),
-        layout="constrained",
-        squeeze=False,
-    )
-    axes = axes.ravel()
+    if fig is None:
+        fig = plt.figure(figsize=(3.6 * ncol, 2.8 * nrow), layout="constrained")
+    axes = fig.subplots(nrow, ncol, squeeze=False).ravel()
     for ax, (study, level) in zip(axes, panels, strict=False):
         one = sc.loc[(sc["study"] == study) & (sc["level"] == level)]
         n = int(one["n"].min())
@@ -315,7 +334,7 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         k = int(one["n_origins"].min()) if "n_origins" in one else None
         origins = "" if k is None else f", {k} origin{'s' if k != 1 else ''}"
         for model, g in one.groupby("model"):
-            colour = "#bbbbbb" if thin else colours[_source_of(model)]
+            colour = "#bbbbbb" if thin else colours[_family(model)]
             tuned = g.loc[g["outbreaks"] > 0].sort_values("outbreaks")
             if not tuned.empty:
                 ax.plot(
@@ -358,6 +377,8 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
         ax.set_ylabel("Relative WIS")
     for ax in axes[len(panels) :]:
         ax.set_visible(False)
+    if not legend:
+        return fig
     # The legend from the panels drawn in colour, one entry per line.
     shown = [ax for ax in axes if ax.get_visible() and ax.texts == []]
     entries = {}
@@ -367,28 +388,6 @@ def checkpoint_figure(scores: pd.DataFrame) -> Figure:
     labels = sorted(entries)
     handles = [entries[label] for label in labels]
     fig.legend(handles, labels, loc="outside lower center", ncol=2, fontsize=7)
-    return fig
-
-
-def validation_figure(curve: pd.DataFrame) -> Figure:
-    """Plot validation loss against the outbreaks seen.
-
-    One line per run and set of validation blocks (`blocks`), as losses on
-    different blocks do not compare.
-    """
-    fig, ax = plt.subplots(figsize=(6, 3.6), layout="constrained")
-    for (run, blocks), g in curve.groupby(["run", "blocks"]):
-        g = g.sort_values("outbreaks_seen")
-        ax.plot(
-            g["outbreaks_seen"],
-            g["validation_loss"],
-            marker="o",
-            ms=3,
-            label=f"{run}, {blocks}",
-        )
-    ax.set_xlabel("Simulated outbreaks seen")
-    ax.set_ylabel("Validation loss")
-    ax.legend(frameon=False, fontsize=8)
     return fig
 
 
@@ -530,7 +529,6 @@ def diseases_table(diseases: pd.DataFrame) -> pd.DataFrame:
 EVIDENCE: Final = {
     "si_copula": "the walks' scores, no pairing against rolling rho_p",
     "copula_rho": "the walk models' German rho_p by nowcast date",
-    "finetune_validation": "the final run's validation loss curve",
     "sim_summaries": "per-outbreak summaries of the final grid's simulations",
     "sim_realism": "the German development half's values",
     "sim_diseases": "the published disease values",
@@ -815,11 +813,6 @@ def write_evidence(
         ["sim_diseases"],
     )
     ckpt = None if raw is None else checkpoint_rows(raw, run)
-    figure(
-        "checkpoint-curve",
-        None if ckpt is None else checkpoint_figure(ckpt),
-        ["checkpoint_scores"],
-    )
     table(
         "checkpoint-table",
         None if raw is None else checkpoint_table(raw, run),
@@ -849,12 +842,6 @@ def write_evidence(
             None if rows is None else comparison_figure(rows),
             [f"compare_{name}"],
         )
-    curve = data["finetune_validation"]
-    figure(
-        "finetune-validation",
-        None if curve is None or curve.empty else validation_figure(curve),
-        ["finetune_validation"],
-    )
     sims, ref = data["sim_summaries"], data["sim_realism"]
     figure(
         "sim-realism",

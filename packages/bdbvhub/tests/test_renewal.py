@@ -39,8 +39,8 @@ def test_variants_are_registered_as_fitted_models() -> None:
         model = get_model(name)
         assert isinstance(model, ForecastModel)
         assert model.name == name
-    # Sam (lead 2026-11-24 12:32): renewalsp is the single-patch model
-    # fitted per zone; the per-province fit and its zone split are gone.
+    # renewalsp is the single-patch model fitted per zone, with no
+    # per-province fit or zone split.
     assert set(rn.VARIANTS) == {"renewal", "renewalsp", "renewalbvd"}
     assert "renewalsp_zones" not in specs
     assert not hasattr(rn, "with_zones")
@@ -58,7 +58,7 @@ def test_variants_are_registered_as_fitted_models() -> None:
 
 
 def test_every_renewal_shares_one_rt_process() -> None:
-    # Sam (lead 2026-11-24 12:08, 12:22): one step-SD prior for every
+    # One step-SD prior for every
     # variant and one centring rule, so they differ only in what they
     # ablate.
     assert not hasattr(rn, "CENTRED_RT_MIN_CASES")
@@ -96,8 +96,8 @@ def test_renewal_model_fits_provinces_only_on_their_own(
         raise AssertionError("fitted")
 
     monkeypatch.setattr(rn.RenewalModel, "run", ran)
-    # Every variant fits zones (`nowcastrenewal.zones`); the province
-    # fits they replaced are gone.
+    # Every variant fits zones (`nowcastrenewal.zones`), never provinces
+    # on their own.
     with pytest.raises(NotImplementedError, match="health zones"):
         rn.RenewalModel(rn.VARIANTS[name]).forecast_fit(task)
 

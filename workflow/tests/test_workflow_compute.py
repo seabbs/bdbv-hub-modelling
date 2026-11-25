@@ -286,7 +286,7 @@ def test_only_the_profiles_this_setup_uses_ship():
 
 
 def test_evaluation_is_a_group_a_host_can_place():
-    # WP10: held-out evaluation runs off the trainer's machine, wherever
+    # Held-out evaluation runs off the trainer's machine, wherever
     # WORKER_GROUPS puts `evaluate`.
     assert "evaluate" in compute.GROUPS
     for rule in ("evaluate_base", "evaluate_checkpoint"):
@@ -366,7 +366,7 @@ def test_checkpoint_scoring_takes_a_gpu_no_trainer_needs(
     gpus, training, device
 ):
     # Training has the GPU while a run trains; scoring takes a whole GPU
-    # only when one is left over (#1114).
+    # only when one is left over.
     fc = forecast.Forecast("cpu", 2)
     got = compute.scoring_forecast(fc, gpus, training)
     assert (got.device, got.threads, got.gpu) == (device, 2, device == "cuda")

@@ -56,7 +56,7 @@ models = [
   "foundation_zeroshot_complete",
   "foundation_zeroshot",
   "foundation",
-  # The baselinenowcast sensitivity analysis (#538): baselinenowcast's point
+  # The baselinenowcast sensitivity analysis: baselinenowcast's point
   # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
   "foundation_zeroshot_baselinenowcast",
   "foundation_baselinenowcast",
@@ -65,7 +65,7 @@ models = [
 # BDBV to date), run on the held-out half only, for the SI's comparison
 # with the models fine-tuned on simulations. Its checkpoint is released as
 # realdata-ft-<hash> and pinned by `realdata` in packages/nowcastfoundation/config/finetune.toml; the
-# model is registered only once that pin is set (it is empty now), and its
+# model is registered only once that pin is set (it is empty), and its
 # training is not a workflow rule. The workflow's real-data run is
 # different: `runs.realdata` in workflow/config.yaml mixes German real-data
 # blocks into Run A's simulations.

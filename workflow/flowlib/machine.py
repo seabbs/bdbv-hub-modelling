@@ -66,6 +66,30 @@ def device(
 _device = device
 
 
+LAUNCH = "python3 workflow/flowlib/launch.py"
+"""The command a job runs through on a shared machine: it pins the job to
+its cores and waits for its memory (flowlib.launch), then runs
+`KEY=VALUE ... COMMAND` as `env` does."""
+
+
+def launch_prefix(
+    cfg: Mapping[str, str],
+    threads: int | None = None,
+    trainer: bool = False,
+    mem_mb: int = 0,
+) -> str:
+    """Return the launcher before a job's command, or "" where not used.
+
+    Only where Snakemake runs jobs on a shared machine itself (`COMPUTE`
+    single, or ssh, whose workers do); a cluster's or cloud's scheduler
+    gives each job its cores and memory.
+    """
+    if (cfg.get("COMPUTE") or "single") not in ("single", "ssh"):
+        return ""
+    who = "--trainer" if trainer else f"--threads {threads}"
+    return f"{LAUNCH} {who} --mem {mem_mb} "
+
+
 CLAIM = "python3 workflow/flowlib/gpus.py"
 """The command a GPU job runs through: it claims a free GPU
 (flowlib.gpus), then runs `KEY=VALUE ... COMMAND` as `env` does."""

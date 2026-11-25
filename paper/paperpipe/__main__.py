@@ -11,6 +11,7 @@ Steps, in workflow order:
 - `joint-scores`: sample trajectories scored jointly (energy score);
 - `figures` and `score-tables`: main-text and SI outputs;
 - `evidence`: SI tables, figures and numbers from evidence branches;
+- `progress`: a fine-tuning run's progress figure, from its own tables;
 - `realism`: the grid's simulations against the German development half;
 - `pairing`: the walks' scores with and without pairing, summarised;
 - `ebola-extra`: further Ebola samples, kept to some models;
@@ -213,6 +214,26 @@ def _evidence(a: argparse.Namespace) -> None:
         )
 
 
+def _progress(a: argparse.Namespace) -> None:
+    import matplotlib.pyplot as plt
+
+    from paperpipe.progress import progress_figure
+
+    def table(path: Path | None) -> pd.DataFrame:
+        return pd.DataFrame() if path is None else pd.read_csv(path)
+
+    fig = progress_figure(
+        table(a.loss),
+        table(a.horizons),
+        table(a.seven_day),
+        None if a.bdbv is None else pd.read_csv(a.bdbv),
+        run=a.title,
+    )
+    a.out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(a.out, dpi=200)
+    plt.close(fig)
+
+
 def _realism(a: argparse.Namespace) -> None:
     sims = pd.concat([pd.read_csv(p) for p in a.summaries], ignore_index=True)
     sims.to_csv(a.out_sims, index=False)
@@ -402,6 +423,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="NAME=RUN: a COMPARISONS name and the variant run it compares.",
     )
     p.set_defaults(run=_evidence)
+
+    p = sub.add_parser("progress")
+    # A table not given (not made yet) leaves its panels empty.
+    p.add_argument("--loss", type=Path, default=None)
+    p.add_argument("--horizons", type=Path, default=None)
+    p.add_argument("--seven-day", type=Path, default=None)
+    p.add_argument("--bdbv", type=Path, default=None)
+    p.add_argument("--title", default="")
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(run=_progress)
 
     p = sub.add_parser("realism")
     p.add_argument("summaries", type=Path, nargs="+")

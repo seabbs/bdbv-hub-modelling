@@ -609,6 +609,34 @@ for study in STUDIES:
             f"--realdata-after {FLOW.realdata_after}"
 
 
+# Each fine-tuning run's progress figure (`paperpipe.progress`), from that
+# run's own tables only (workflow rules run_progress and horizon_table, or
+# the hosts' published copies), so no run waits on another. A table not
+# made yet leaves its panels saying so. The BDBV check is a paper run's
+# only.
+for _run in FLOW.progress_runs():
+
+    rule:
+        name:
+            f"progress_{_run}"
+        input:
+            **FLOW.progress_files(_run),
+        output:
+            FLOW.progress_figure("{mode}", _run),
+        log:
+            f"{R}/{{mode}}/logs/progress_{_run}.log",
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+            title=_run,
+            tables=lambda w, input: FLOW.progress_args(w.mode, input),
+        shell:
+            "exec >{log} 2>&1; "
+            "{params.python} -m paperpipe progress {params.tables} "
+            "--title {params.title} --out {output}"
+
+
 # Example simulations of the grid, from the development round
 # (`paperfigs.sim_examples`), or a note of what they wait on.
 rule sim_examples:

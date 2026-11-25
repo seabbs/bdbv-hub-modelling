@@ -42,14 +42,14 @@ def test_the_walks_are_stored_before_the_slow_fits() -> None:
 
 
 def test_no_simulated_backtest_is_run() -> None:
-    # The recovery and scenario backtests are retired (Sam, 2026-11-24).
+    # The fit store runs no recovery or scenario backtest.
     text = FIT_STORE.read_text()
     for word in ("recovery-only", "scenarios-only", "recovery-", "scenario-"):
         assert word not in text, word
 
 
 def test_the_backtests_are_stored_without_waiting_for_the_fits() -> None:
-    # The fits take hours; Pages needs the backtests now (main, 24 Nov).
+    # The fits take hours, and Pages needs the backtests without them.
     # Only the walks' quick stage, which they load, comes first.
     job = _jobs()["backtests"]
     assert set(job["needs"]) == {"plan", "backtest", "store-quick"}
@@ -61,7 +61,7 @@ def test_the_backtests_are_stored_without_waiting_for_the_fits() -> None:
 
 
 def test_the_zone_backtest_scores_the_stored_zone_runs() -> None:
-    # The walks' zone runs are stored fits (#1094): no cell forecasts the
+    # The walks' zone runs are stored fits: no cell forecasts the
     # zones, and the backtests job scores what `fit-store load` chose.
     job = _jobs()["backtests"]
     run = "\n".join(str(s.get("run", "")) for s in job["steps"])

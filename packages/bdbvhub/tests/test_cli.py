@@ -43,7 +43,7 @@ def _written(out: Path) -> pd.DataFrame:
 @pytest.mark.usefixtures("in_root")
 def test_cli_nowcast_writes_a_walk_s_stored_zones(tmp_path: Path) -> None:
     # The submission forecasts a walk from its unpacked stored fit, whose
-    # zone run gives the file's zones (#1094).
+    # zone run gives the file's zones.
     from bdbvhub.store import store as st
     from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
     from nowcastbdbv.data.zones import load_zone_data
@@ -527,7 +527,7 @@ def test_concat_results_keeps_one_copy_of_shared_tables(
 def test_zone_backtest_with_no_stored_zone_run_writes_empty_files(
     tmp_path: Path,
 ) -> None:
-    # The zone backtest scores the stored zone runs (#1094); with none
+    # The zone backtest scores the stored zone runs; with none
     # loaded, as for a block of origins with none, its files are empty.
     names = ["zone-scores.csv", "zone-energy.csv", "zone-quantiles.csv"]
     outs = [
@@ -1004,7 +1004,7 @@ def test_a_stored_forecast_takes_the_zones_of_its_fit_directory(
 
 
 def test_compare_hub_runs_no_model_and_takes_a_given_table() -> None:
-    """Every model of ours comes from the fit store (#1094), so no model
+    """Every model of ours comes from the fit store, so no model
     is run live, and the hub rounds report gives the ledger's table."""
     from bdbvhub.cli import build_parser
 

@@ -89,10 +89,12 @@ def test_the_example_partitions_send_gpu_jobs_to_a_gpu_partition():
 def test_batches_and_the_trainer_claim_what_they_use():
     # A batch claims no memory on one machine (it is run by count); a
     # Slurm job without a claim gets the whole node or the partition's
-    # default. The trainer's GPU comes from its rule (`gpu=1`).
+    # default. The trainer's GPU comes from its rule (`gpu=1`), its
+    # memory from its last peak (flowlib.memory).
     sized = _set("set-resources")
+    assert int(sized["simulate_batch"]["mem_mb"]) > 0
+    assert "mem_mb" not in sized["train_segment"]
     for rule in ("simulate_batch", "train_segment"):
-        assert int(sized[rule]["mem_mb"]) > 0, rule
         assert int(sized[rule]["runtime"]) > 0, rule
     threads = dict(r.split("=") for r in _profile()["set-threads"])
     assert threads["simulate_batch"] == "1"
@@ -184,3 +186,40 @@ def test_every_gpu_job_asks_slurm_for_its_gpu(tmp_path):
         assert gpu[rule] == {True}, rule
     job = types.SimpleNamespace(resources={"gpu": 1})
     assert "--gpus=1" in utils.set_gres_string(job)
+
+
+def _commands(out: str) -> dict[str, str]:
+    return {b.split(":", 1)[0]: b for b in out.split("\nrule ")[1:] if ":" in b}
+
+
+def test_the_launcher_is_off_under_slurm_and_on_one_machine(tmp_path):
+    # Slurm gives each job its cores and memory; on one machine the
+    # launcher pins them and waits for the memory (flowlib.launch).
+    pytest.importorskip("snakemake")
+    pytest.importorskip("snakemake_executor_plugin_slurm")
+    sys.path.insert(0, str(Path(__file__).parent))
+    from test_workflow_dryrun import FT, dry_run
+
+    config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
+    rules = ("train_segment", "evaluate_base", "score_run_germany")
+    for compute_mode, on in (("single", True), ("slurm", False)):
+        root = tmp_path / compute_mode
+        root.mkdir()
+        (root / "local.env").write_text(
+            f"ROOT={root}\nHOST_NAME=test-host\nCOMPUTE={compute_mode}\n"
+        )
+        extra = (
+            [*compute.args({"COMPUTE": "slurm"}), "--cores", "1"]
+            if compute_mode == "slurm"
+            else []
+        )
+        out = dry_run(
+            root, "finetune", config=config, quiet=False, extra=["-p", *extra]
+        )
+        assert out.returncode == 0, out.stderr + out.stdout
+        got = _commands(out.stdout)
+        for rule in rules:
+            assert ("flowlib/launch.py" in got[rule]) is on, (
+                compute_mode,
+                rule,
+            )

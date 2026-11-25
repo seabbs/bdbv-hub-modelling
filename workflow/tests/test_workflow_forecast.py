@@ -100,7 +100,7 @@ def test_jax_starts_with_the_cuda_platform_list_without_cuda():
 
 
 SCORING_RULES = ("score_germany", "score_run_germany")
-"""The German units, on the scoring device while a run trains (#1114)."""
+"""The German units, on the scoring device while a run trains."""
 
 
 def _rule_text(name: str) -> str:
@@ -132,7 +132,7 @@ EVALUATION_RULES = (
     "validation_forecasts_base",
 )
 """A checkpoint's held-out scoring: on the CPU while a run trains, a
-whole GPU once none does, never pausing training (#1114)."""
+whole GPU once none does, never pausing training."""
 
 
 def test_evaluation_never_pauses_training():
@@ -152,3 +152,21 @@ def test_evaluation_reruns_only_when_its_code_or_held_out_set_moves():
         text = _rule_text(name)
         assert "code=SCORING.evaluator_key_input" in text, name
         assert "held_out=held_out_key" in text, name
+
+
+def test_jobs_ask_for_the_memory_their_benchmarks_show():
+    # Each from its own last benchmark (flowlib.memory), with a minimum in
+    # the rule; no machine's figures in the config (Sam, 25 Nov).
+    assert "memory" not in CONFIG
+    assert "mem_mb" not in CONFIG["score"]
+    for name in (
+        "train_segment",
+        "ft_check_forecast",
+        "seven_day_check",
+        "evaluate_checkpoint",
+        "evaluate_base",
+        "validation_forecasts",
+        "score_germany",
+        "score_run_germany",
+    ):
+        assert "mem_mb=memory.from_benchmark(" in _rule_text(name), name

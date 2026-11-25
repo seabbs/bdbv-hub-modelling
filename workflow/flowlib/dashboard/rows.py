@@ -17,8 +17,8 @@ def source(model: str) -> str | None:
     """Return a model's release source (daily or weekly), if it has one.
 
     The `foundation` models read the daily releases the studies have
-    (`nowcastfoundation.forecaster.FROM_DATA`); rows stored under the old
-    names keep the source their name says.
+    (`nowcastfoundation.forecaster.FROM_DATA`); rows stored under a
+    name with a source keep the source their name says.
     """
     if "weekly" in model:
         return "weekly"

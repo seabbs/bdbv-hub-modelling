@@ -71,7 +71,7 @@ def _copy_repo(tmp_path: Path) -> Path:
 
 
 def test_code_digest_keeps_its_key_when_modules_move(tmp_path: Path) -> None:
-    # The packages move (WP2b) renames modules and rewrites import lines
+    # Moving modules between packages renames them and rewrites import lines
     # without changing what a fit runs, so no stored fit refits.
     root = _copy_repo(tmp_path)
     src = root / "packages/nowcastbaselines/src/nowcastbaselines"
@@ -117,7 +117,7 @@ def _cut_defs(path: Path, names: set[str]) -> str:
 def test_code_digest_keeps_its_key_when_a_function_moves(
     tmp_path: Path,
 ) -> None:
-    # Splitting a module (WP2a) moves functions between files, with the
+    # Splitting a module moves functions between files, with the
     # third-party imports they use, so no stored fit refits.
     root = _copy_repo(tmp_path)
     src = root / "packages/nowcastbaselines/src/nowcastbaselines"
@@ -128,24 +128,38 @@ def test_code_digest_keeps_its_key_when_a_function_moves(
         '"""Walk noise."""\n\nimport numpy as np\n\n'
         '__all__ = ["walk_noise", "walk_variance"]\n\n\n' + cut
     )
-    walk = src / "walk.py"
-    walk.write_text(
-        walk.read_text().replace('"walk_noise", "walk_variance"', "")
+    _replace(
+        src / "walk.py",
+        '    "walk_noise",\n    "walk_variance",\n',
+        "",
     )
-    chain = src / "baselinenowcast" / "nowcast.py"
-    chain.write_text(
-        chain.read_text().replace(
-            "nowcastbaselines.walk import walk_noise",
-            "nowcastbaselines.noise import walk_noise",
-        )
+    _replace(
+        src / "walk.py",
+        "from jax import Array\n",
+        "from jax import Array\n\nfrom nowcastbaselines.noise import "
+        "walk_variance\n",
+    )
+    _replace(
+        src / "baselinenowcast" / "nowcast.py",
+        "from nowcastbaselines.walk import DailySteps, walk_noise, "
+        "walk_variance\n",
+        "from nowcastbaselines.noise import walk_noise, walk_variance\n"
+        "from nowcastbaselines.walk import DailySteps\n",
     )
     assert store.code_digest("randomwalknowcast", root) == before
+
+
+def _replace(path: Path, old: str, new: str) -> None:
+    """Replace text the module holds, so the move is the one made."""
+    text = path.read_text()
+    assert old in text, f"{old!r} not in {path.name}"
+    path.write_text(text.replace(old, new))
 
 
 def test_code_digest_keeps_its_key_when_a_module_moves_package(
     tmp_path: Path,
 ) -> None:
-    # The packages move (WP2b) puts modules in new packages that re-export
+    # Modules in workspace packages are re-exported
     # them from `__init__.py`. The target's own `__init__.py` holds only
     # a docstring, as every workspace package's does.
     root = _copy_repo(tmp_path)
@@ -1508,7 +1522,7 @@ def _sorted_samples(frame: pd.DataFrame) -> pd.DataFrame:
 def test_a_walk_stores_its_zone_run_in_a_file_of_its_own(
     name: str, tasks: dict[str, ForecastTask], tmp_path: Path
 ) -> None:
-    """A walk's zone run is made once, by its stored fit (#1094).
+    """A walk's zone run is made once, by its stored fit.
 
     It is the run on every hub zone of the stored task, as the
     submission's zones are. It sits in its own file beside the fit, as it

@@ -590,7 +590,7 @@ class ZoneRenewalModel(RenewalModel):
         The zones with a case in the random walks' walk window are
         fitted in one model, and the silent ones are drawn with them from
         its posterior, taking infections only through its fitted
-        importation (`run`, #768 item 8). Each province sample is
+        importation (`run`). Each province sample is
         the sum of its zones' samples of the same id. National is the
         sum of the provinces, and a task with national cases in no
         province stops (`check_national`).
@@ -673,7 +673,6 @@ class SingleZoneRenewalModel(ZoneRenewalModel):
     `renewalsp`. Provinces are the sums of their zones, sample by sample,
     and national is their sum, so no province sample is split across
     zones. Zone fits pair draws by index, as `renewalsp`'s provinces do.
-    It is `renewalsp` (Sam, 2026-11-24; #768 item 9).
     """
 
     def run(self, task: ForecastTask) -> RenewalRun:

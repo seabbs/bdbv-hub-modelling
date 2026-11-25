@@ -133,7 +133,7 @@ def test_a_complete_block_has_its_nowcast_steps_without_lag_series():
 
 
 def test_the_trainer_does_not_publish():
-    # Lead 01:05 (20): publishing is the workflow's `publish_checkpoint`
+    # Publishing is the workflow's `publish_checkpoint`
     # (with an offloaded run's losses); the trainer's own flag was a
     # second, half-wired way that refused offloaded runs.
     import pytest

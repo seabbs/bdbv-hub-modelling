@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -196,7 +197,7 @@ def test_finetune_trains_one_segment_per_prefix(tmp_path):
 
 
 def test_finetune_asks_for_its_scores(tmp_path):
-    # Lead 10:15 (Sam): fine-tuning produces its own scoring through the
+    # Fine-tuning produces its own scoring through the
     # DAG: each checkpoint's German unit and the reference units, cached
     # when unchanged, with no separate TARGETS entry or driver.
     jobs = dry(tmp_path, "finetune", config=FT)
@@ -214,7 +215,7 @@ def _hub(tmp_path):
 
 
 def test_each_checkpoint_has_its_own_ft_check_page(tmp_path):
-    # Lead 08:00: a new checkpoint is a new page, so it is built without
+    # A new checkpoint is a new page, so it is built without
     # forcing; the reference models' forecasts are shared.
     _hub(tmp_path)
     config = {"ft_check": {"checkpoint": "slots-abcdef"}}
@@ -227,7 +228,7 @@ def test_each_checkpoint_has_its_own_ft_check_page(tmp_path):
 
 
 def test_ft_check_forecasts_are_keyed_by_their_code(tmp_path):
-    # Lead 14:25: a forecast folder made by older code is never reused:
+    # A forecast folder made by older code is never reused:
     # every model's folder, the fine-tuned one too, carries the code key.
     import sys
 
@@ -250,9 +251,9 @@ def test_ft_check_forecasts_are_keyed_by_their_code(tmp_path):
 
 
 def test_a_fresh_host_fetches_the_hub_s_data_commit(tmp_path):
-    # archie, 25 Nov: with no hub_watch.sh, <ROOT>/hub/head.txt never
-    # existed, so the BDBV check could not be planned; the workflow
-    # fetches it when missing, and hub_watch.sh keeps it current.
+    # Without hub_watch.sh, <ROOT>/hub/head.txt is missing and the BDBV
+    # check cannot be planned, so the workflow fetches it when missing,
+    # and hub_watch.sh keeps it current.
     config = {"ft_check": {"checkpoint": "slots-abcdef"}}
     jobs = dry(tmp_path, "ft_check", config=config)
     assert jobs["hub_head"] == 1
@@ -260,7 +261,7 @@ def test_a_fresh_host_fetches_the_hub_s_data_commit(tmp_path):
 
 
 def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
-    # Lead 10:50: each released checkpoint (its published.json) gets its
+    # Each released checkpoint (its published.json) gets its
     # BDBV check page.
     _hub(tmp_path)
     seg = tmp_path / "runs" / "runa" / "train" / "n250"
@@ -290,15 +291,18 @@ def _job_priorities(stdout):
     return found
 
 
-def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
-    # Sam, overnight 25 Nov: with sims queued for later segments, freed
-    # cores went to batches; the German reference and each checkpoint's
-    # scoring starved, and the batches the trainer reads were never
-    # copied into the run, so the GPU waited. One order (flowlib.compute):
+def test_jobs_rank_trainer_evaluation_references_scoring_then_batches(
+    tmp_path,
+):
+    # Freed cores must not go to batches for later segments while the
+    # German reference, checkpoint scoring or the trainer's batch copies
+    # wait, or the GPU idles. One order (flowlib.compute):
     # the trainer, the quick hand-offs (its batches' copies, a
     # checkpoint's release for its BDBV check), the references, each
-    # checkpoint's scoring (newest first), simulation batches, then the
-    # held-out evaluation, which nothing waits for (Sam, 25 Nov).
+    # checkpoint's scoring (newest first), then simulation batches. The
+    # held-out evaluation goes right after the hand-offs and the batches
+    # the next segment reads, so the dashboard's validation loss never
+    # waits hours behind the CPU jobs.
     _hub(tmp_path)
     seg = tmp_path / "runs" / "runa" / "train" / "n250"
     seg.mkdir(parents=True)
@@ -329,7 +333,7 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
             "verify_checkpoint",
             "publish_checkpoint",
             # Quick jobs a released checkpoint's BDBV check waits on, which
-            # at priority 0 queued behind every CPU job (archie, 25 Nov).
+            # at priority 0 would queue behind every CPU job.
             "hub_data",
             "ft_check_page",
         ):
@@ -351,10 +355,14 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     seen = {rule for rule, _, _ in _job_priorities(out.stdout)}
     assert {"hub_data", "ft_check_page"} <= seen
     assert min(tiers["train"]) > max(tiers["fetch"])
-    assert min(tiers["fetch"]) > max(tiers["reference"])
+    next_batches = [p for p in tiers["batch"] if p > max(tiers["evaluate"])]
+    later = [p for p in tiers["batch"] if p < min(tiers["checkpoint"])]
+    assert next_batches
+    assert later
+    assert len(next_batches) + len(later) == len(tiers["batch"])
+    assert min(tiers["fetch"]) > max(next_batches)
+    assert min(tiers["evaluate"]) > max(tiers["reference"])
     assert min(tiers["reference"]) > max(tiers["checkpoint"])
-    assert min(tiers["checkpoint"]) > max(tiers["batch"])
-    assert min(tiers["batch"]) > max(tiers["evaluate"])
     assert newest[500] > newest[250]
 
 
@@ -574,7 +582,7 @@ def test_local_evaluation_plans_no_evaluation_rules(tmp_path):
 def test_an_offloaded_checkpoint_publishes_before_its_held_out_losses(
     tmp_path,
 ):
-    # Sam, 25 Nov: the held-out losses take hours on the CPU, so the
+    # The held-out losses take hours on the CPU, so the
     # release and its BDBV check never wait for them; they join the
     # release once scored.
     for n in (250, 500):
@@ -592,8 +600,8 @@ def test_a_publishing_run_checks_each_saved_checkpoint_once_released(
     tmp_path,
 ):
     # A saved checkpoint's BDBV check page is planned in the pass that
-    # releases it, with no Snakemake checkpoint, whose DAG update hung the
-    # run on archie (25 Nov); its forecast waits for the release.
+    # releases it, with no Snakemake checkpoint, whose DAG update can hang the
+    # run; its forecast waits for the release.
     _hub(tmp_path)
     _local(tmp_path, "PUBLISH=1")
     _checkpoint(tmp_path, 250)
@@ -739,7 +747,7 @@ def test_the_live_run_switches_over_without_retraining(tmp_path):
 
 
 def priorities(tmp_path, *targets, config=None):
-    """Return each rule's job priority in a dry run (0 when unset)."""
+    """Return each rule's job priorities in a dry run (0 when unset)."""
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
     overlay = tmp_path / "overlay.yaml"
@@ -755,12 +763,12 @@ def priorities(tmp_path, *targets, config=None):
         text=True,
     )  # fmt: skip
     assert out.returncode == 0, out.stderr + out.stdout
-    found = {}
+    found = defaultdict(list)
     for block in re.split(r"\n(?=rule \w+:)", out.stdout):
         rule = re.match(r"rule (\w+):", block)
         if rule:
             got = re.search(r"priority: ([\d.]+)", block)
-            found[rule[1]] = float(got[1]) if got else 0
+            found[rule[1]].append(float(got[1]) if got else 0)
     return found
 
 
@@ -803,11 +811,20 @@ def test_a_run_over_rounds_simulates_them_in_seed_order(tmp_path):
 def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # One pool per machine: when jobs compete for cores or the GPU, the
     # trainer (the run's critical path) goes first, then the simulations
-    # it trains on, then checkpoint scoring (score.smk, 10 and below).
+    # its next segment trains on, then the rest.
     got = priorities(tmp_path, "finetune", config=FT)
     trainer = compute.TRAIN_PRIORITY
-    assert trainer <= got["train_segment"] < trainer + 1
-    assert 15 <= got["simulate_batch"] < 16
+    assert all(trainer <= p < trainer + 1 for p in got["train_segment"])
+    others = [p for r, ps in got.items() if r != "train_segment" for p in ps]
+    assert max(others) < compute.HANDOFF_PRIORITY + 2
+    # The first segment reads its 13 batches, a spare and the held-out
+    # round's 40; the second segment's batches wait below them.
+    batches = batch_priorities(tmp_path, "finetune", config=FT)
+    first = {*range(30200, 30214), *range(30100, 30140)}
+    nxt, later = compute.NEXT_BATCH_PRIORITY, compute.BATCH_PRIORITY
+    assert all(nxt <= batches[s] < nxt + 1 for s in first)
+    assert all(later <= batches[s] < later + 1 for s in set(batches) - first)
+    assert set(batches) - first
 
 
 def test_publish_verifies_then_releases_each_checkpoint(tmp_path):
@@ -1459,7 +1476,7 @@ def test_the_daily_comparison_scores_every_run_s_checkpoints(tmp_path):
 
 
 def test_an_interim_checkpoint_verifies_then_releases(tmp_path):
-    # Lead 01:50 (Sam): the hub's fine-tuned model is an interim
+    # The hub's fine-tuned model is an interim
     # checkpoint (`finetune.interim`), released through the same rules.
     where = tmp_path / "runs" / "runa" / "train" / "interim" / "s48100"
     (where / "finetuned-ckpt").mkdir(parents=True)
@@ -1480,7 +1497,7 @@ def test_rt_check_is_one_job_per_model_and_origin(tmp_path):
 
 
 def test_each_checkpoint_gets_its_7_day_check(tmp_path):
-    # Lead 00:55 (Sam): the 7-day check is a workflow rule per checkpoint,
+    # The 7-day check is a workflow rule per checkpoint,
     # on the held-out blocks, whichever way the run evaluates.
     where = tmp_path / "runs" / "runa" / "train" / "n250"
     (where / "finetuned-ckpt").mkdir(parents=True)
@@ -1500,10 +1517,10 @@ def test_a_new_machine_fetches_the_german_triangle_before_scoring(tmp_path):
 
 
 def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
-    # Lead 10:55 (#969): publish_hf is opt-in and uploads only with a
+    # `publish_hf` is opt-in and uploads only with a
     # repository in packages/nowcastfoundation/config/finetune.toml and dry_run
     # off; the repository
-    # is empty until Sam picks it, so it writes the folder only.
+    # is empty until one is set, so it writes the folder only.
     where = tmp_path / "runs" / "runa" / "train" / "interim" / "s48100"
     (where / "finetuned-ckpt").mkdir(parents=True)
     (where / "settings.json").write_text("{}")
@@ -1540,3 +1557,19 @@ def test_a_scored_step_0_is_kept(tmp_path):
     jobs = dry(tmp_path, "finetune", config=OFFLOAD)
     assert "evaluate_base" not in jobs
     assert jobs["evaluate_checkpoint"] == 2
+
+
+def test_a_job_asks_for_its_last_peak(tmp_path):
+    # Its benchmark's max_rss with a margin, not a fixed figure.
+    from flowlib import memory
+
+    for n in (250, 500):
+        _checkpoint(tmp_path, n)
+    bench = tmp_path / "runs/runa/train/benchmarks/seven_day_check/n250.tsv"
+    bench.parent.mkdir(parents=True)
+    bench.write_text("s\th:m:s\tmax_rss\n1\t0:00:01\t9000\n")
+    out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    jobs = [j for j in _jobs_of(out, "seven_day_check") if "n=250" in str(j)]
+    assert jobs
+    assert f"mem_mb={memory.padded(9000)}" in str(jobs[0])

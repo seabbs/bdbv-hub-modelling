@@ -679,7 +679,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # The hub's forecasts come over the network, which times out
-          # now and then; three tries, a minute apart (#231).
+          # now and then; three tries, a minute apart.
           for try in 1 2 3; do
             uv run bdbvhub compare-hub --fetch && break
             if [ "$try" = 3 ]; then exit 1; fi

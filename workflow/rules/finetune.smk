@@ -86,6 +86,8 @@ rule train_segment:
         adapter=protected(f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors"),
     log:
         f"{TRAIN}/n{{n}}.log",
+    benchmark:
+        f"{TRAIN}/benchmarks/train_segment/n{{n}}.tsv"
     # The trainer, the run's critical path, goes before every other job;
     # runs take the GPUs in turn (`Training.trainer_priority`).
     priority: TRAINING.trainer_priority
@@ -95,6 +97,9 @@ rule train_segment:
     threads: lambda wc: run_of(wc).ft["cut_workers"] + 1
     # None of the cores the jobs beside it share (flowlib.machine).
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/train_segment/n{{n}}.tsv", 4096, like=("n",)
+        ),
         gpu=1,
         side_cores=0,
     params:
@@ -106,8 +111,12 @@ rule train_segment:
         sources=lambda wc: " ".join(run_of(wc).ft["sources"]),
         options=lambda wc: runs.trainer_options(run_of(wc)),
         device=machine.device(LOCAL),
-        # A GPU of its own, with several (flowlib.gpus).
+        # A GPU of its own, with several (flowlib.gpus), and on a shared
+        # machine the cores kept for it and its memory (flowlib.launch).
         claim=machine.CLAIM,
+        launch=lambda wc, resources: machine.launch_prefix(
+            LOCAL, trainer=True, mem_mb=resources.mem_mb
+        ),
         # The checkpoint threshold: this machine's, if set, else the
         # config's (memory only).
         checkpoint=local_or_ft("CHECKPOINT_ABOVE", "checkpoint_above"),
@@ -139,7 +148,8 @@ rule train_segment:
         """
         uv run python workflow/scripts/prepare_segment.py {params.train} \
             {params.prev_args} >{log}
-        {params.claim} DEVICE={params.device} HF_HOME={params.hf_home} \
+        {params.claim} {params.launch}DEVICE={params.device} \
+            HF_HOME={params.hf_home} \
             HF_HUB_OFFLINE=1 PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
             PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
             uv run --group chronos finetune-stream \

@@ -246,7 +246,7 @@ def test_fit_code_covers_what_a_stored_fit_runs(
 def test_model_code_follows_imports_into_workspace_packages(
     tmp_path: Path,
 ) -> None:
-    # The packages move (WP2b) puts modules under packages/<name>/src, so
+    # Modules live under packages/<name>/src, so
     # the walk resolves each top-level package to its own source folder.
     from bdbvhub.store.digest import model_code
 

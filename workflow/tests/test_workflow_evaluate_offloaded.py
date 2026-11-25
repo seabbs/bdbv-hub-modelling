@@ -108,7 +108,7 @@ def test_base_scores_only_step_0_and_once(tmp_path, fake):
 
 
 def test_step_snapshots_are_not_scored(fake):
-    # Only checkpoints are scored offloaded (#1114).
+    # Only checkpoints are scored offloaded.
     mod, _ = fake
     with pytest.raises(SystemExit):
         mod.main(["steps", "n250", "--device", "cpu", "--eval-every", "200"])

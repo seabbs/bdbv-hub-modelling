@@ -33,10 +33,13 @@ def test_finetune_plans_each_checkpoint_s_validation_forecasts(tmp_path):
     assert rules.count("validation_forecasts") == 2
     assert rules.count("validation_forecasts_base") == 1
     mine = [p for r, _, p in jobs if r.startswith("validation_forecasts")]
+    from flowlib import compute
+
     others = [
         p
         for r, _, p in jobs
-        if r in ("train_segment", "fetch_batch", "simulate_batch")
+        if r in ("train_segment", "fetch_batch")
+        or (r == "simulate_batch" and p >= compute.NEXT_BATCH_PRIORITY)
     ]
     # Below the trainer, its hand-offs and the batches it waits on.
     assert max(mine) < min(others)
