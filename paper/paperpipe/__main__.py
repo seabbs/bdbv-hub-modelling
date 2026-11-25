@@ -257,6 +257,7 @@ def _summary(a: argparse.Namespace) -> None:
         if a.finetuned_record
         else None,
         realdata_after=a.realdata_after,
+        prefixes=a.prefixes,
     )
 
 
@@ -440,6 +441,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scores", type=Path, nargs="+", required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--finetuned-record", type=Path, default=None)
+    p.add_argument("--prefixes", type=int, nargs="*", default=[])
     p.add_argument(
         "--realdata-after",
         default=None,

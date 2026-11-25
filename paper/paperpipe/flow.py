@@ -60,16 +60,25 @@ class Wildcards(Protocol):
     study: str
 
 
+def _prefixes(config: Mapping[str, Any]) -> list[int]:
+    """Return the final run's checkpoint prefixes.
+
+    The run's own `prefixes` in the workflow's `runs`, else `finetune`'s,
+    which they are with no final run.
+    """
+    name = Path(config["final_run"]).name if config.get("final_run") else ""
+    entry = (config.get("runs") or {}).get(name) or {}
+    return [
+        int(n) for n in entry.get("prefixes") or config["finetune"]["prefixes"]
+    ]
+
+
 def _final_prefix(config: Mapping[str, Any]) -> int:
     """Return the final run's last checkpoint prefix.
 
-    The run's own `prefixes` in the workflow's `runs`, else `finetune`'s:
-    its final checkpoint, where the learning rate reaches zero.
+    Its final checkpoint, where the learning rate reaches zero.
     """
-    name = Path(config["final_run"]).name
-    entry = (config.get("runs") or {}).get(name) or {}
-    prefixes = entry.get("prefixes") or config["finetune"]["prefixes"]
-    return int(prefixes[-1])
+    return _prefixes(config)[-1]
 
 
 @dataclass(frozen=True)
@@ -589,7 +598,10 @@ class PaperFlow:
         """Return the `paperpipe summary` options the config sets."""
         record = self.config.get("finetuned_record")
         ft = f"--finetuned-record {record}" if record else ""
-        return f"{ft} --realdata-after {self.realdata_after}"
+        prefixes = " ".join(str(n) for n in _prefixes(self.config))
+        return (
+            f"{ft} --realdata-after {self.realdata_after} --prefixes {prefixes}"
+        )
 
     def held_out_placeholders(self, w: Wildcards) -> str:
         """Return the included tables of the studies a run leaves out."""
