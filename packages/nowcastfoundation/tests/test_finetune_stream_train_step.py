@@ -92,8 +92,8 @@ def test_assigned_restores_the_rows_it_replaced():
     assert state["rows"] is None
 
 
-def spy_checkpoints(monkeypatch) -> list[int]:
-    """Count encoder blocks checkpointed, with no series threshold."""
+def spy_checkpoints(monkeypatch, above: int | None = 10**9) -> list[int]:
+    """Count checkpoints, encoder blocks checkpointed above `above`."""
     import torch.utils.checkpoint as tc
     from chronos.chronos2.model import Chronos2EncoderBlock
 
@@ -108,7 +108,7 @@ def spy_checkpoints(monkeypatch) -> list[int]:
     monkeypatch.setattr(
         Chronos2EncoderBlock, "forward", Chronos2EncoderBlock.forward
     )
-    fs.checkpoint_large_batches(10**9)
+    fs.checkpoint_large_batches(above)
     return calls
 
 
@@ -149,6 +149,7 @@ def test_a_batch_over_the_budget_is_recomputed_up_front(monkeypatch):
         "series": series,
         "tokens": tokens,
         "recomputed": False,
+        "kept_bias": False,
         "predicted": need,
         "measured": 1234,
         "cost": fs.ACTIVATION_BYTES,
@@ -258,7 +259,7 @@ def test_archie_blocks_that_ran_out_are_recomputed(series, tokens, ran_out):
 
 
 def bias_step(monkeypatch, rule, meter=None):
-    """Run a bias model's step under `rule`; return its grads and checkpoints."""
+    """Run a bias model's step under `rule`: its grads and checkpoints."""
     from chronos.chronos2.model import Chronos2Model
 
     calls = spy_checkpoints(monkeypatch)
@@ -282,11 +283,12 @@ def bias_step(monkeypatch, rule, meter=None):
     return grads, len(calls), batch
 
 
-def toy_rule(free: int, bias=fs.BiasShape(2, 4, 32)) -> fs.MemoryRule:
-    """A rule whose budget is `free` bytes."""
+def toy_rule(free: int) -> fs.MemoryRule:
+    """A rule for the tiny model with the bias, its budget `free` bytes."""
     total = 8 * 10**9
     margin = int(fs.MEMORY_MARGIN * total)
-    return fs.MemoryRule(total, total - margin - free, bias=bias)
+    shape = fs.BiasShape(layers=2, heads=4, d_model=32)
+    return fs.MemoryRule(total, total - margin - free, bias=shape)
 
 
 def test_a_step_keeps_the_bias_when_it_fits_with_the_same_gradients(
@@ -336,7 +338,8 @@ def test_a_kept_step_fits_the_cost_without_what_the_bias_held():
     for _ in range(fs.FIT_AFTER):
         rule.record(1000, 10, False, 1000 * 10 * 300_000 + held, held)
     assert rule.cost == 300_000
-    assert rule.rows[-1]["predicted"] == rule.predict(1000, 10) + held
+    row = rule.rows[-1]
+    assert row["predicted"] == row["cost"] * 1000 * 10 + held
 
 
 def test_a_kept_step_that_runs_out_checkpoints_the_bias_at_its_size():
@@ -365,14 +368,14 @@ def test_a_step_that_runs_out_before_the_rule_changes_is_run_again():
 
     with (
         mock.patch.object(fs, "forward", oom),
-        pytest.raises(fs.RunAgain, match="out of memory"),
+        pytest.raises(fs.RunAgainError, match="out of memory"),
     ):
         fs.train_step(model, batch, {}, "cpu", 1.0, rule, FakePeak(0))
     assert not rule.keeps_bias(series, tokens)
     assert not rule.needs_recompute(series, tokens)
     with (
         mock.patch.object(fs, "forward", oom),
-        pytest.raises(fs.RunAgain),
+        pytest.raises(fs.RunAgainError),
     ):
         fs.train_step(model, batch, {}, "cpu", 1.0, rule, FakePeak(0))
     assert rule.needs_recompute(series, tokens)
@@ -382,26 +385,13 @@ def test_a_step_that_runs_out_before_the_rule_changes_is_run_again():
         pytest.raises(RuntimeError, match="out of memory") as raised,
     ):
         fs.train_step(model, batch, {}, "cpu", 1.0, rule, FakePeak(0))
-    assert not isinstance(raised.value, fs.RunAgain)
+    assert not isinstance(raised.value, fs.RunAgainError)
 
 
 def test_with_no_series_threshold_only_a_recompute_checkpoints(monkeypatch):
-    from chronos.chronos2.model import Chronos2EncoderBlock, Chronos2Model
+    from chronos.chronos2.model import Chronos2Model
 
-    import torch.utils.checkpoint as tc
-
-    calls: list[int] = []
-    real = tc.checkpoint
-
-    def spy(*args, **kwargs):
-        calls.append(1)
-        return real(*args, **kwargs)
-
-    monkeypatch.setattr(tc, "checkpoint", spy)
-    monkeypatch.setattr(
-        Chronos2EncoderBlock, "forward", Chronos2EncoderBlock.forward
-    )
-    fs.checkpoint_large_batches(None)
+    calls = spy_checkpoints(monkeypatch, None)
     model = tiny_model()
     model.train()
     batch = batch_of(toy_block())
