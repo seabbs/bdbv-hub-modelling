@@ -103,6 +103,8 @@ rule train_segment:
         sources=lambda wc: " ".join(run_of(wc).ft["sources"]),
         options=lambda wc: runs.trainer_options(run_of(wc)),
         device=machine.device(LOCAL),
+        # A GPU of its own, with several (flowlib.gpus).
+        claim=machine.CLAIM,
         # The checkpoint threshold: this machine's, if set, else the
         # config's (memory only).
         checkpoint=local_or_ft("CHECKPOINT_ABOVE", "checkpoint_above"),
@@ -134,8 +136,8 @@ rule train_segment:
         """
         uv run python workflow/scripts/prepare_segment.py {params.train} \
             {params.prev_args} >{log}
-        DEVICE={params.device} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 \
-            PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
+        {params.claim} DEVICE={params.device} HF_HOME={params.hf_home} \
+            HF_HUB_OFFLINE=1 PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
             PYTORCH_MPS_LOW_WATERMARK_RATIO=0.6 MPLCONFIGDIR="${{TMPDIR:-/tmp}}" \
             uv run --group chronos finetune-stream \
             {params.run}/sims {params.train} --grid-file {params.grid_file} \
