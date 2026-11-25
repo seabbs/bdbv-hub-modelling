@@ -111,8 +111,9 @@ def _ours(
     daily: pd.DataFrame,
     rounds: tuple[str, ...] = ("2026-10-24",),
     min_horizon: int = -4,
+    models: tuple[str, ...] = ("flat",),
 ) -> pd.DataFrame:
-    """Our model's forecasts of hub rounds, as the fit store holds them."""
+    """Our models' forecasts of hub rounds, as the fit store holds them."""
     from bdbvhub.models import get_model
     from nowcastbdbv.backtest import make_tasks
     from nowcasteval.backtest import run_forecasts
@@ -127,7 +128,7 @@ def _ours(
             continue
         rows = real.loc[real["vintage"] == vintage]
         tasks = make_tasks(rows, delays, config, daily=daily)
-        frames.append(run_forecasts([get_model("flat")], tasks))
+        frames.append(run_forecasts([get_model(m) for m in models], tasks))
     return pd.concat(frames, ignore_index=True).assign(source="real")
 
 

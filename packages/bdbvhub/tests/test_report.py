@@ -20,8 +20,13 @@ read it only as page input."""
 
 
 @pytest.mark.slow
-def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
-    from test_hubcompare import _write_hub
+def test_comparison_page(
+    tmp_path: Path,
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+) -> None:
+    from test_hubcompare import _ours, _write_hub
 
     from bdbvhub.cli import main
 
@@ -29,6 +34,12 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
     report._comparison_page(fig, gen, tmp_path / "missing", target)
     assert "compare-hub" in (gen / "comparison-scores.md").read_text()
     _write_hub(tmp_path / "hub")
+    # The walks' forecasts of the round, as stored (compare-hub runs no
+    # model of ours).
+    stored = tmp_path / "stored.csv.gz"
+    walks = ("randomwalk", "randomwalknowcast")
+    ours = _ours(target, delays, daily, models=walks).drop(columns="source")
+    ours.to_csv(stored, index=False)
     out = tmp_path / "out"
     assert (
         main(
@@ -51,10 +62,7 @@ def test_comparison_page(tmp_path: Path, target: pd.DataFrame) -> None:
                     / "backtest.toml"
                 ),
                 "--stored",
-                str(tmp_path / "none.csv.gz"),
-                "--models",
-                "randomwalk",
-                "randomwalknowcast",
+                str(stored),
             ]
         )
         == 0

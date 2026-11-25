@@ -377,9 +377,9 @@ def make_report(
         both = [
             f for f in (zone_samples, walks) if f is not None and not f.empty
         ]
-        fitted = pd.concat(both, ignore_index=True) if both else None
+        zone_runs = pd.concat(both, ignore_index=True) if both else None
         write_hub_tables(
-            hub_tables(at, task, zone_data.codes, fitted),
+            hub_tables(at, task, zone_data.codes, zone_runs),
             res / "hub" / str(vintage),
         )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))

@@ -149,10 +149,9 @@ def prune(
         for _, _, path in older:
             if path != keep:
                 path.unlink()
-                zones = path.with_name(
+                path.with_name(
                     path.name.removesuffix(".json.gz") + ZONES_SUFFIX
-                )
-                zones.unlink(missing_ok=True)
+                ).unlink(missing_ok=True)
     return stored
 
 
