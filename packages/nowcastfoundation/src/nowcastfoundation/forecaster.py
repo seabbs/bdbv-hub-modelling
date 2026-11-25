@@ -66,7 +66,6 @@ from nowcastutils.base import (
 )
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.hierarchy import province_of
-from nowcastutils.releases import pseudo_releases
 from nowcastutils.trajectories import (
     choose_coupling,
     couple,
@@ -711,7 +710,6 @@ def _finetuned(
     name: str,
     layout: str = "ragged",
     baselinenowcast: bool = False,
-    pseudo_weeks: bool = False,
 ) -> FoundationModel:
     """Build a fine-tuned model with the checkpoint `finetuned_checkpoint`.
 
@@ -725,7 +723,6 @@ def _finetuned(
         layout,
         finetuned_checkpoint(),
         baselinenowcast=baselinenowcast,
-        pseudo_weeks=pseudo_weeks,
         active_zone_cases=cases,
         active_zone_weeks=weeks,
         active_zone_recent_weeks=recent,
@@ -1638,15 +1635,6 @@ class FoundationModel:
         day after the cut-off on those corrected counts. The nowcast days
         are the point nowcast, with no uncertainty. Complete layout, daily
         source only.
-    pseudo_weeks : bool
-        The daily releases gain weekly pseudo releases where the release
-        history has gaps of two weeks or more and before its first
-        release, each the latest release's counts scaled by the share of
-        the task's delay line (`ForecastTask.delays`) reported by its
-        cut-off (`nowcastutils.releases.pseudo_releases`). The block sees
-        a release about every week; the releases themselves are kept.
-        A task with no delay line keeps its releases alone. Daily source
-        only.
     block_limit : int or None
         Most series in one block Chronos-2 predicts, the machine's block
         capacity; a task's block over it is cut into views
@@ -1684,7 +1672,6 @@ class FoundationModel:
     )
     block_limit: int | None = None
     baselinenowcast: bool = False
-    pseudo_weeks: bool = False
     active_zone_cases: int | None = None
     active_zone_weeks: int = 8
     active_zone_recent_weeks: int = 4
@@ -1700,8 +1687,6 @@ class FoundationModel:
             self.layout != "complete" or self.source not in ("daily", FROM_DATA)
         ):
             raise ValueError("baselinenowcast needs the complete layout, daily")
-        if self.pseudo_weeks and self.source == "weekly":
-            raise ValueError("pseudo_weeks needs the daily source")
         if self.block_limit is None and os.environ.get(BLOCK_LIMIT_ENV):
             self.block_limit = int(os.environ[BLOCK_LIMIT_ENV])
 
@@ -1729,11 +1714,7 @@ class FoundationModel:
             daily = (
                 task.daily_history is not None and not task.daily_history.empty
             )
-            run = replace(
-                self,
-                source="daily" if daily else "weekly",
-                pseudo_weeks=self.pseudo_weeks and daily,
-            )
+            run = replace(self, source="daily" if daily else "weekly")
         if task.max_delay is not None and not run.lags:
             steps = (
                 -(-int(task.max_delay) // 7)
@@ -1938,8 +1919,6 @@ class FoundationModel:
         )
         rows = _rows(base, zone if zones else None)
         assert rows is not None
-        if self.pseudo_weeks:
-            rows = pseudo_releases(rows, task.delays)
         places = (NATIONAL, *task.locations, *zones)
         weeks = list(task.target_end_dates)
         return rows, places, weeks
@@ -2387,30 +2366,6 @@ register_model(
     ),
     "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
     "corrected daily counts, complete layout.",
-    fitted=True,
-    paper_only=True,
-)
-# Weekly pseudo releases fill the release history's gaps (#1122), zero-shot
-# and fine-tuned.
-register_model(
-    "foundation_zeroshot_pseudoweeks",
-    partial(
-        FoundationModel,
-        "foundation_zeroshot_pseudoweeks",
-        FROM_DATA,
-        "ragged",
-        pseudo_weeks=True,
-    ),
-    "Chronos-2 zero-shot, ragged layout, with weekly pseudo releases from "
-    "the latest release and the delay line.",
-    fitted=True,
-    paper_only=True,
-)
-register_model(
-    "foundation_pseudoweeks",
-    partial(_finetuned, "foundation_pseudoweeks", "ragged", pseudo_weeks=True),
-    "Chronos-2 fine-tuned, ragged layout, with weekly pseudo releases from "
-    "the latest release and the delay line.",
     fitted=True,
     paper_only=True,
 )
