@@ -59,6 +59,8 @@ The packages they are built from:
 </table>
 <!-- /packages table -->
 
+To run the simulation and fine-tuning workflow on your own machine or on a Slurm cluster, see [`workflow/`](workflow/README.md) and [Run on a Slurm cluster](https://samabbott.co.uk/bdbv-hub-modelling/development/slurm/).
+
 ## Status
 
 [![Docs](https://img.shields.io/badge/docs-online-blue.svg)](https://samabbott.co.uk/bdbv-hub-modelling/)
