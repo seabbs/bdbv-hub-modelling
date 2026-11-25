@@ -33,6 +33,7 @@ import pandas as pd
 from nowcasteval import labels
 from nowcasteval.scoring import wis_quantile
 
+from . import paperstyle
 from .paperstyle import WIS_PARTS
 from .rows import num, sources
 from .runs import INTERIM, Classifier, Reference, Run, split_label
@@ -55,6 +56,23 @@ TRUTH_FILE = "truth.csv.gz"
 """A dataset's truth context file (`nowcastgermany.checkpoint.TRUTH_FILE`)."""
 
 TARGET = "7day"
+
+RUN_MODEL = "foundation"
+"""The model a run's checkpoint is in its score files."""
+
+TWOSTEP_MODEL = "foundation_twostep"
+"""A checkpoint's two-step model (its point nowcast, then Chronos-2), in
+the same files as `RUN_MODEL`; each is its own series (`twostep_id`)."""
+
+TWOSTEP = "twostep:"
+"""The prefix of a checkpoint's two-step series id, before its hash."""
+
+
+def twostep_id(run_hash: str) -> str:
+    """Return the series id of a checkpoint's two-step model."""
+    return f"{TWOSTEP}{run_hash}"
+
+
 """The target of rows that name none (files scored before the column)."""
 
 
@@ -166,7 +184,15 @@ def read_file(
                 if series is None and ref_folder:
                     series = f"model:{model}"
                 elif series is not None and series not in refs:
-                    series = run_hash
+                    # A checkpoint's own model, or its two-step model as
+                    # a series of its own; any other model is not shown.
+                    series = (
+                        run_hash
+                        if model == RUN_MODEL
+                        else twostep_id(run_hash)
+                        if model == TWOSTEP_MODEL
+                        else None
+                    )
                 by_model[model] = series
             series = by_model[model]
             value = num(r.get("value"))
@@ -661,6 +687,12 @@ def location(built: Mapping[str, Any] | None, loc: str) -> dict[str, Any]:
     }
 
 
+def twostep_label(run_label: str, n: int | None) -> str:
+    """Return a checkpoint's two-step series label."""
+    size = f" n{n}" if n else ""
+    return f"{labels.model_label(TWOSTEP_MODEL)}, {run_label}{size}"
+
+
 def meta(
     built: Mapping[str, Any],
     run_list: Sequence[Run],
@@ -671,8 +703,8 @@ def meta(
     """Return each series' label, run, size and colour, in page order.
 
     References first, in their configured order, then other reference
-    models by name, then each run's checkpoints by size, in the run's
-    colour.
+    models by name and each checkpoint's two-step model by size, then
+    each run's checkpoints by size, in the run's colour.
     """
     which = Classifier(run_list, references, excluded)
     refs = {r.key: r for r in references}
@@ -698,6 +730,21 @@ def meta(
                     "run": "ref",
                     "n": 1,
                     "color": labels.NEUTRAL,
+                }
+            )
+        elif s.startswith(TWOSTEP):
+            key = s.removeprefix(TWOSTEP)
+            run = which.run_of(built["folders"].get(key, key))
+            if run is None:
+                continue
+            out.append(
+                {
+                    "id": s,
+                    "label": twostep_label(by_key[run].label, sizes.get(key)),
+                    "run": "ref",
+                    "n": 2 + (sizes.get(key) or 0),
+                    "color": paperstyle.model_colour(TWOSTEP_MODEL),
+                    "dash": paperstyle.model_dash(TWOSTEP_MODEL),
                 }
             )
         else:

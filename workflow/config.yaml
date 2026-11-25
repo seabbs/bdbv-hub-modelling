@@ -235,12 +235,19 @@ dashboard:
     # (nowcasteval.labels: MODEL_LABELS, MODEL_STYLES).
     - key: zero
       paper_model: foundation_zeroshot
-      model: "^(?!randomwalknowcast)(?!.*_complete$)"
+      model: "^foundation_zeroshot$"
       checkpoint: zero-shot
       role: start
     - key: complete
       paper_model: foundation_zeroshot_complete
-      model: "_complete$"
+      model: "^foundation_zeroshot_complete$"
+      checkpoint: zero-shot
+    # The two-step zero-shot model (its point nowcast, then Chronos-2),
+    # off until picked; each checkpoint's two-step model is its own series
+    # beside it (flowlib.dashboard.nowcasts.TWOSTEP_MODEL).
+    - key: zero_twostep
+      paper_model: foundation_zeroshot_twostep
+      model: "^foundation_zeroshot_twostep$"
       checkpoint: zero-shot
     - key: rw
       paper_model: randomwalknowcast
