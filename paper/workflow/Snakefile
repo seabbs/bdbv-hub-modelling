@@ -118,7 +118,8 @@ for _mode in MODES:
         name:
             f"synthetic_forecasts_{_mode}"
         input:
-            FLOW.synthetic_simulations(_mode),
+            sims=FLOW.synthetic_simulations(_mode),
+            finetuned=FINETUNED,
         output:
             SYNTHETIC["forecasts"][_mode],
         log:
@@ -132,16 +133,16 @@ for _mode in MODES:
         params:
             python=PYTHON,
             # The simulations folder, from its first file.
-            sims=lambda w, input: str(Path(input[0]).parent),
+            sims=lambda w, input: str(Path(input.sims[0]).parent),
             seeds=FLOW.seeds(_mode),
-            # The fine-tuned models wait for the final run's checkpoint.
+            # The fine-tuned models run once there is a final run.
             models=FLOW.synthetic_models_arg(),
             samples=config["synthetic"]["samples"],
             device=FORECAST.device,
             threads=FORECAST.threads,
             env=FORECAST.env,
         shell:
-            "exec >{log} 2>&1; {params.env} "
+            "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
             "{params.python} paper/scripts/run_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples {params.samples} "
             "--device {params.device} --threads {params.threads} {params.models}"
@@ -199,6 +200,7 @@ rule germany_fetch:
 rule germany_development:
     input:
         TRIANGLE,
+        FINETUNED,
     output:
         f"{GERMANY['results']}/paper-forecasts.csv.gz",
     log:
@@ -217,7 +219,7 @@ rule germany_development:
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         out=lambda w, output: Path(output[0]).parent,
     shell:
-        "exec >{log} 2>&1; {params.env} "
+        "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
         "{params.germany} backtest {params.args} --out {params.out} && "
         "{params.germany} teams {params.args} --out {params.out} && "
         "{params.germany} paper --config {params.germany_root_config} "
@@ -228,6 +230,7 @@ rule germany_development:
 rule germany_heldout:
     input:
         TRIANGLE,
+        FINETUNED,
     output:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
     log:
@@ -247,7 +250,7 @@ rule germany_heldout:
         # The held-out forecasts are in the results folder's held-out/.
         out=lambda w, output: Path(output[0]).parent.parent,
     shell:
-        "exec >{log} 2>&1; {params.env} "
+        "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
         "{params.germany} backtest {params.args} --held-out "
         "--out {params.out} && "
         "{params.germany} teams {params.args} --held-out --out {params.out} && "
@@ -782,6 +785,8 @@ rule summary:
     input:
         meta=FLOW.summary_meta,
         scores=FLOW.summary_scores,
+        # The checkpoint the `_ft` models loaded, which the summary names.
+        finetuned=FINETUNED,
     output:
         f"{R}/{{mode}}/results.yml",
     log:

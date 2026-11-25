@@ -8,8 +8,8 @@ The first form runs the third (`render`, the paper workflow and render,
 as Pages CI does) at nice 19 with this machine's cores less its headroom
 (`flowlib.machine.budget`). The workflow asks for every input it needs,
 the held-out simulations and German forecasts included, and makes what is
-missing. The paper workflow loads the final fine-tuning run's newest
-checkpoint itself (`paperpipe.flow`).
+missing, the final fine-tuning run's final checkpoint among them, which
+every `_ft` model loads (`paperpipe.flow`).
 The second form runs those targets of the paper workflow alone. Each run
 logs to PAPER_LOGS and posts start, done or FAILED with the log's first
 error line (mailbox lines when NOTIFY is set, `flowlib.notify`). The

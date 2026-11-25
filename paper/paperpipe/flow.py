@@ -9,7 +9,6 @@ functions: `w` holds the rule's wildcards, `mode` and `study`.
 
 from __future__ import annotations
 
-import os
 import shlex
 import sys
 import tomllib
@@ -18,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
-from nowcastfoundation.forecaster import local_checkpoint, newest_segment
+from nowcastfoundation.forecaster import FINETUNED_ENV
 
 from paperpipe.config import run_settings, run_studies
 from paperpipe.outputs import (
@@ -61,6 +60,18 @@ class Wildcards(Protocol):
     study: str
 
 
+def _final_prefix(config: Mapping[str, Any]) -> int:
+    """Return the final run's last checkpoint prefix.
+
+    The run's own `prefixes` in the workflow's `runs`, else `finetune`'s:
+    its final checkpoint, where the learning rate reaches zero.
+    """
+    name = Path(config["final_run"]).name
+    entry = (config.get("runs") or {}).get(name) or {}
+    prefixes = entry.get("prefixes") or config["finetune"]["prefixes"]
+    return int(prefixes[-1])
+
+
 @dataclass(frozen=True)
 class PaperFlow:
     """The paper workflow's settings, with its paths and arguments.
@@ -94,9 +105,10 @@ class PaperFlow:
         The simulation folders are expanded in `config` itself (`expand`,
         `flowlib.localconfig.expand`), so each step that is passed the
         config reads the same folders, as are the final run's and the
-        rounds' folders and evidence `file`s. `finetuned` is the spec of the
-        final run's newest saved checkpoint, whose folder is put in the
-        environment as `BDBV_CHRONOS_FT`, which every `_ft` model loads.
+        rounds' folders and evidence `file`s. `finetuned_record` is the
+        release record (`published.json`, rule publish_checkpoint) of the
+        final run's final checkpoint, its last prefix, which every rule
+        running an `_ft` model takes as an input.
 
         Parameters
         ----------
@@ -139,18 +151,14 @@ class PaperFlow:
         for key in ("final_run", "rounds_dir"):
             if config.get(key):
                 config[key] = expand(config[key])
-        # The `_ft` models load the final run's newest saved checkpoint,
-        # pending until it has one. Outputs record its spec, not its folder.
-        segment = (
-            newest_segment(Path(config["final_run"]) / "train")
+        # The `_ft` models load the final run's final checkpoint, a rule
+        # input, so each new one reruns their forecasts.
+        config["finetuned_record"] = (
+            f"{config['final_run']}/train/n{_final_prefix(config)}"
+            "/published.json"
             if config.get("final_run")
             else None
         )
-        config["finetuned"] = (
-            None if segment is None else local_checkpoint(segment).hash
-        )
-        if segment is not None:
-            os.environ.update(BDBV_CHRONOS_FT=str(segment))
         with (
             root / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
         ).open("rb") as f:
@@ -335,9 +343,28 @@ class PaperFlow:
         ]
         return tables + extra
 
+    def finetuned_inputs(self) -> list[str]:
+        """Return the final checkpoint's release record, if there is a run.
+
+        Only the final run's own checkpoint, so no other run is an input.
+        """
+        record = self.config.get("finetuned_record")
+        return [record] if record else []
+
+    def finetuned_env(self) -> str:
+        """Return the environment setting that loads the final checkpoint.
+
+        Its segment folder as `BDBV_CHRONOS_FT`, which every `_ft` model
+        loads; empty while the fine-tuned models are pending.
+        """
+        record = self.config.get("finetuned_record")
+        if not record:
+            return ""
+        return f"{FINETUNED_ENV}={Path(record).parent}"
+
     def synthetic_models_arg(self) -> str:
         """Return the synthetic runner's models option."""
-        if self.config.get("finetuned"):
+        if self.config.get("finetuned_record"):
             return ""
         from nowcasteval.labels import FINETUNED
 
@@ -560,8 +587,8 @@ class PaperFlow:
 
     def summary_args(self) -> str:
         """Return the `paperpipe summary` options the config sets."""
-        finetuned = self.config.get("finetuned")
-        ft = f"--finetuned {finetuned}" if finetuned else ""
+        record = self.config.get("finetuned_record")
+        ft = f"--finetuned-record {record}" if record else ""
         return f"{ft} --realdata-after {self.realdata_after}"
 
     def held_out_placeholders(self, w: Wildcards) -> str:

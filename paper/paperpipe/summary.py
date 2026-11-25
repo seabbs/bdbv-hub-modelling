@@ -11,18 +11,20 @@ numbers are from its held-out half.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import yaml
+from nowcastfoundation.forecaster import checkpoint_spec
 
 from paperfigs.periods import PERIODS
 from paperpipe.meta import DUMMY_LABEL, baseline_of
 from paperpipe.outputs import REFERENCE
 
-__all__ = ["QUOTED_MODELS", "study_summary", "write_summary"]
+__all__ = ["QUOTED_MODELS", "finetuned_spec", "study_summary", "write_summary"]
 
 
 SCOPES: dict[str, tuple[str, str]] = {
@@ -126,6 +128,17 @@ def _against_reference(
         m: round(float(rel[m]), 2) if m in rel.index else "pending"
         for m in QUOTED_MODELS
     }
+
+
+def finetuned_spec(record: Path | str) -> str:
+    """Return the spec of the checkpoint a release record names.
+
+    The record (`published.json`) sits in the checkpoint's segment folder
+    beside its `settings.json`, whose spec (`checkpoint_spec`) the `_ft`
+    models loaded.
+    """
+    settings = Path(record).with_name("settings.json")
+    return checkpoint_spec(json.loads(settings.read_text()))
 
 
 def write_summary(
