@@ -231,7 +231,7 @@ def test_the_forecast_reads_the_backtest_config_it_is_given(monkeypatch):
 
     seen = {}
 
-    def stop(data, config):
+    def stop(_data, config):
         seen["config"] = config
         raise RuntimeError("stop")
 

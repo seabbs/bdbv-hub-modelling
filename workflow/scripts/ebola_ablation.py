@@ -11,11 +11,17 @@ forecasts and scores it unchanged.
   zones, with one BDBV feature imposed (`SIM_VARIANTS`).
 - `summary DIR --out FILE`: the check's tables of one variant's folders
   (`ftcheck_report.skill_tables`, `calibration`) as JSON.
+- `report DIR... --out FILE`: the ablation page from the variants'
+  summaries, each model with and without weekly pseudo releases
+  (`FoundationModel.pseudo_weeks`).
+
+The workflow's `ablation` target runs every step (workflow/rules/ablation.smk).
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import shutil
 from pathlib import Path
@@ -466,6 +472,44 @@ def thin(
     return pos - neg
 
 
+DELAY_CAP = 200
+"""Most cases of one province and onset week in the simulated delay line."""
+
+
+def delay_line(
+    r: pd.DataFrame, vintage: str, cap: int, rng: np.random.Generator
+) -> pd.DataFrame:
+    """Return the delay line at `vintage`, as the hub's `delays.csv.gz`.
+
+    One row per case reported by `vintage`, with its province, onset week
+    and onset-to-report delay in days, as the hub publishes it. A
+    province and onset week with more than `cap` cases gives `cap` of
+    them, drawn in proportion to the counts, so the line stays small at
+    simulated counts. `r` holds `province`, `ref`, `rep` and `count`;
+    removals (negative counts) are not cases.
+    """
+    rv = r.loc[(r["rep"] <= pd.Timestamp(vintage)) & (r["count"] > 0)]
+    rv = rv.assign(
+        week=saturday(rv["ref"]).to_numpy(),
+        delay=(rv["rep"] - rv["ref"]).dt.days,
+    )
+    parts = []
+    for (prov, week), g in rv.groupby(["province", "week"]):
+        count = g["count"].to_numpy(dtype=int)
+        total = int(count.sum())
+        if total <= cap:
+            delay = np.repeat(g["delay"].to_numpy(), count)
+        else:
+            delay = rng.choice(g["delay"].to_numpy(), size=cap, p=count / total)
+        parts.append(
+            pd.DataFrame({"location": prov, "onset_week": week, "delay": delay})
+        )
+    line = pd.concat(parts, ignore_index=True)
+    return line.assign(
+        vintage=vintage, location_name=line["location"], cutoff=vintage
+    )[["vintage", "location", "location_name", "onset_week", "delay", "cutoff"]]
+
+
 SIM_VARIANTS = (
     "daily",
     "weekly",
@@ -618,27 +662,9 @@ def sim_variant(
     targets = [c.strftime("%Y-%m-%d") for c in [*origins, truth]]
     places = ["CD", *sorted(r["province"].unique())]
     zp = dict(zip(r["zone"], r["province"], strict=False))
-    # The delay table only stands in for the hub's; the check's models
-    # read their delays from the releases.
-    rows = []
-    for v in targets:
-        rv = r.loc[r["rep"] <= pd.Timestamp(v)]
-        rv = rv.loc[rv["count"] > 0].sample(
-            n=min(500, int((rv["count"] > 0).sum())), random_state=seed
-        )
-        rows.append(
-            pd.DataFrame(
-                {
-                    "vintage": v,
-                    "location": rv["province"],
-                    "location_name": rv["province"],
-                    "onset_week": saturday(rv["ref"]).to_numpy(),
-                    "delay": ((rv["rep"] - rv["ref"]).dt.days // 7).to_numpy(),
-                    "cutoff": v,
-                }
-            )
-        )
-    delays = pd.concat(rows, ignore_index=True)
+    delays = pd.concat(
+        [delay_line(r, v, DELAY_CAP, rng) for v in targets], ignore_index=True
+    )
     write_hub(out, src, daily, zones, targets, places, zp, delays)
     keep = daily.loc[daily["vintage"].isin(targets)]
     info = {
@@ -679,6 +705,307 @@ def summary(folder: Path, out: Path, reference: str) -> None:
     out.write_text(json.dumps(res, indent=1, default=float))
 
 
+# ---------------------------------------------------------------- report
+
+MODELS = (
+    ("foundation_zeroshot", "Zero-shot"),
+    ("foundation", "Fine-tuned"),
+    ("foundation_zeroshot_pseudoweeks", "Zero-shot, pseudo weeks"),
+    ("foundation_pseudoweeks", "Fine-tuned, pseudo weeks"),
+)
+"""The models the page compares, each against the reference."""
+
+SIM_LABELS = {
+    "daily": (
+        "Control",
+        "The held-out outbreaks as simulated, released daily from the "
+        "first report (most training blocks).",
+    ),
+    "weekly": (
+        "Weekly releases",
+        "Released every 7 days over the 40 weeks to the last round.",
+    ),
+    "short": (
+        "Weekly, 7 weeks before the first round",
+        "Weekly from 49 days before the first round, no gap.",
+    ),
+    "fresh": (
+        "Weekly from the first round",
+        "Weekly from the first round only, so its first release holds "
+        "every earlier onset.",
+    ),
+    "gap": (
+        "Weekly with a 50-day gap",
+        "Weekly over 40 weeks, but none in the 50 days before the first round.",
+    ),
+    "few": (
+        "BDBV releases",
+        "One release 50 days before the first round, then weekly from it, "
+        "as BDBV's releases.",
+    ),
+    "few_daily": (
+        "BDBV gap, then daily",
+        "One release 50 days before the first round, then daily from it.",
+    ),
+    "late_start": (
+        "Late-starting zones",
+        "Daily releases. A third of zones report nothing before a day "
+        "within 3 weeks of the first round, then all their earlier cases "
+        "at once.",
+    ),
+    "small": (
+        "Small counts",
+        "Daily releases. Each outbreak thinned to a peak of 60 cases a week.",
+    ),
+    "weekday": ("Weekday cycle", "Daily releases. Weekend onsets halved."),
+    "long_delays": (
+        "Longer delays",
+        "Daily releases. 30% of reports arrive 14 to 35 days later than "
+        "simulated.",
+    ),
+    "stops": (
+        "Zones stop reporting",
+        "Daily releases. A third of zones stop reporting from a day near "
+        "the first round.",
+    ),
+    "bdbv_like": (
+        "Full Ebola-like",
+        "BDBV releases, late-starting zones, small counts and longer "
+        "delays together.",
+    ),
+}
+"""Each simulated variant's label and definition."""
+
+BDBV_LABELS = {
+    "as_is": ("BDBV hub data", "The hub data as released."),
+    "rebuilt": ("Rebuilt", "The hub data rewritten by the ablation's writer."),
+    "no_zones": ("No zones", "No health-zone data."),
+    "no_late_provinces": (
+        "No late provinces",
+        "Provinces and zones first reported after the first release left out.",
+    ),
+    "flat_weekdays": (
+        "Flat weekdays",
+        "Each epiweek's counts spread evenly over its days.",
+    ),
+    "cap_d": ("Delays capped at D", "No report more than D days after onset."),
+    "daily_releases": (
+        "Daily releases",
+        "A release each day between releases, linear in each count.",
+    ),
+    "weekly_source": ("Weekly source", "No daily data: the weekly target."),
+    "all": ("All changes", "Every change above together."),
+    "all_but_releases": (
+        "All but releases",
+        "Every change above but daily releases.",
+    ),
+    "no_first_release": (
+        "No first release",
+        "The first release, 50 days before the next, left out.",
+    ),
+    "releases_cap": (
+        "Daily releases, capped delays",
+        "Daily releases and delays capped at D, without zones.",
+    ),
+    "releases_cap_late": (
+        "Daily releases, capped delays, no late provinces",
+        "As above, with late provinces left out.",
+    ),
+}
+"""Each BDBV variant's label and definition."""
+
+STYLE = """
+:root{--bg:#fff;--fg:rgba(0,0,0,.87);--mut:rgba(0,0,0,.54);
+--line:rgba(0,0,0,.07);--a:#4051b5}
+@media (prefers-color-scheme:dark){:root{--bg:#1e2129;
+--fg:rgba(226,228,233,.82);--mut:rgba(226,228,233,.56);
+--line:rgba(226,228,233,.12);--a:#5e8bde}}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,
+sans-serif;max-width:1200px;margin:0 auto;padding:16px}
+a{color:var(--a)}
+table{border-collapse:collapse;font-size:13px;margin:8px 0 16px}
+td,th{border-bottom:1px solid var(--line);padding:3px 8px;text-align:right}
+td:first-child,th:first-child{text-align:left}
+.mut{color:var(--mut)}
+.wrap{overflow-x:auto}
+"""
+
+
+def _cell(value: float | None) -> str:
+    return "" if value is None or value != value else f"{value:.2f}"
+
+
+def _tables(summary: dict) -> tuple[dict, dict, dict]:
+    """Return a summary's overall, by-weeks-back and national medians."""
+    overall = {r["model"]: r for r in summary["overall"]}
+    weeks: dict[str, dict[int, float]] = {}
+    for r in summary["by_weeks_back"]:
+        weeks.setdefault(r["model"], {})[int(r["weeks_back"])] = r[
+            "relative_crps"
+        ]
+    medians: dict[str, dict[int, float]] = {}
+    for r in summary["calibration"]:
+        if r["level"] == "national":
+            medians.setdefault(r["model"], {})[int(r["weeks_back"])] = r[
+                "median_over_truth"
+            ]
+    return overall, weeks, medians
+
+
+def _variant_table(folders: list[Path], labels: dict) -> str:
+    """Return one side's table: each model's relative CRPS and medians."""
+    head = "".join(f"<th>{lab}</th>" for _, lab in MODELS)
+    rows = []
+    for f in folders:
+        overall, _, medians = _tables(
+            json.loads((f / "summary.json").read_text())
+        )
+        cells = []
+        for m, _ in MODELS:
+            r = overall.get(m)
+            cells.append(
+                ""
+                if r is None
+                else f"{_cell(r['relative_crps'])} / "
+                f"{_cell(r['relative_log_crps'])}"
+            )
+        med = [
+            _cell(medians.get(m, {}).get(0))
+            for m in ("foundation", "foundation_pseudoweeks")
+        ]
+        label = labels.get(f.name, (f.name, ""))[0]
+        rows.append(
+            f"<tr><td>{label}</td>"
+            + "".join(f"<td>{c}</td>" for c in cells)
+            + "".join(f"<td>{c}</td>" for c in med)
+            + "</tr>"
+        )
+    return (
+        "<div class=wrap><table><tr><th>Variant</th>"
+        + head
+        + "<th>FT median / truth, weeks back 0</th>"
+        "<th>FT pseudo weeks median / truth</th></tr>"
+        + "".join(rows)
+        + "</table></div>"
+    )
+
+
+def _weeks_table(folders: list[Path], labels: dict) -> str:
+    """Return relative CRPS by weeks back, a row per variant and model."""
+    rows = []
+    span = range(-1, 6)
+    for f in folders:
+        _, weeks, _ = _tables(json.loads((f / "summary.json").read_text()))
+        label = labels.get(f.name, (f.name, ""))[0]
+        for m, lab in MODELS:
+            if m not in weeks:
+                continue
+            rows.append(
+                f"<tr><td>{label}</td><td>{lab}</td>"
+                + "".join(f"<td>{_cell(weeks[m].get(k))}</td>" for k in span)
+                + "</tr>"
+            )
+    return (
+        "<div class=wrap><table><tr><th>Variant</th><th>Model</th>"
+        + "".join(f"<th>{k}</th>" for k in span)
+        + "</tr>"
+        + "".join(rows)
+        + "</table></div>"
+    )
+
+
+def report(
+    folders: list[Path],
+    out: Path,
+    checkpoint: str,
+    reference: str = "randomwalknowcast",
+) -> None:
+    """Write the ablation page from the variants' summaries.
+
+    Parameters
+    ----------
+    folders : list of pathlib.Path
+        Each variant's folder, with its `summary.json`, under a `sim` or
+        `bdbv` folder for its side.
+    out : pathlib.Path
+        The page.
+    checkpoint : str
+        The fine-tuned checkpoint the variants ran.
+    reference : str
+        The model the scores are relative to.
+    """
+    sides = {
+        side: [f for f in folders if f.parent.name == side]
+        for side in ("sim", "bdbv")
+    }
+    sim, bdbv = sides["sim"], sides["bdbv"]
+    defs = "".join(
+        f"<tr><td>{SIM_LABELS.get(f.name, (f.name, ''))[0]}</td>"
+        f"<td style=text-align:left>{SIM_LABELS.get(f.name, ('', ''))[1]}"
+        "</td></tr>"
+        for f in sim
+    ) + "".join(
+        f"<tr><td>{BDBV_LABELS.get(f.name, (f.name, ''))[0]}</td>"
+        f"<td style=text-align:left>{BDBV_LABELS.get(f.name, ('', ''))[1]}"
+        "</td></tr>"
+        for f in bdbv
+    )
+    day = dt.date.today().isoformat()
+    html = f"""<!doctype html><html lang=en><meta charset=utf-8>
+<meta name=viewport content='width=device-width,initial-scale=1'>
+<title>Ebola ablation</title><style>{STYLE}</style><body>
+<h1>Ebola (BDBV): the fine-tuned Chronos-2 and the release history</h1>
+<p class=mut>Built {day}. Checkpoint chronos-{checkpoint} against zero-shot
+Chronos-2, both in the ragged layout, each with and without pseudo weeks.
+{reference} is the reference.</p>
+<h2>Setup</h2>
+<p>Six held-out simulated outbreaks become six provinces, each outbreak's
+leaves its zones.
+Each is shifted so its peak week ends on 3 October.
+Eight weekly rounds run from 3 weeks before to 4 weeks after it.
+A release 150 days after the last round is the truth.
+The simulated reports are changed one feature at a time, then written as
+hub data, with a delay line of each province's cases by onset week.
+The BDBV variants change the hub data one feature at a time towards the
+simulations.
+Each variant runs through the BDBV check unchanged
+(<code>bdbvhub ft-check forecast</code>, scored by
+<code>ftcheck_report.skill_tables</code>).</p>
+<h2>Pseudo weeks</h2>
+<p>With pseudo weeks the model adds a release every 7 days wherever the
+release history has a gap of two weeks or more, and before its first
+release.
+Each pseudo release is the latest release's daily counts times the share
+of the delay line's cases of that place and onset week reported by the
+pseudo release's cut-off.
+Only data available at the cut-off are used, and every release is kept
+(<code>nowcastutils.releases.pseudo_releases</code>).</p>
+<h2>Simulated variants</h2>
+<p>Cells are relative CRPS / relative log CRPS against {reference},
+pairwise as on the check pages, at the country and provinces on weeks the
+truth holds in full.
+The median columns are the fine-tuned model's national medians over the
+truth in the round's week.</p>
+{_variant_table(sim, SIM_LABELS)}
+<h2>BDBV hub data</h2>
+<p>Scored against the latest hub release.</p>
+{_variant_table(bdbv, BDBV_LABELS)}
+<h2>Relative CRPS by weeks back</h2>
+<p>Weeks back -1 is the week after the round, 0 the round's week, 1 and on
+earlier weeks still being reported.</p>
+{_weeks_table(sim + bdbv, {**SIM_LABELS, **BDBV_LABELS})}
+<h2>Variants</h2>
+<div class=wrap><table><tr><th>Variant</th><th>Definition</th></tr>
+{defs}</table></div>
+<p class=mut>Code: <code>workflow/scripts/ebola_ablation.py</code>, run by
+the workflow's <code>ablation</code> target
+(<code>workflow/rules/ablation.smk</code>).</p>
+</body></html>
+"""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html)
+
+
 def main() -> None:
     """Command line."""
     ap = argparse.ArgumentParser(description=__doc__)
@@ -698,13 +1025,20 @@ def main() -> None:
     m.add_argument("folder", type=Path)
     m.add_argument("--out", type=Path, required=True)
     m.add_argument("--reference", default="randomwalknowcast")
+    r = sub.add_parser("report")
+    r.add_argument("folders", type=Path, nargs="+")
+    r.add_argument("--out", type=Path, required=True)
+    r.add_argument("--checkpoint", required=True)
+    r.add_argument("--reference", default="randomwalknowcast")
     a = ap.parse_args()
     if a.cmd == "bdbv":
         bdbv_variant(a.variant, a.src, a.out)
     elif a.cmd == "sim":
         sim_variant(a.variant, a.sims, a.out, a.src, a.k, a.seed)
-    else:
+    elif a.cmd == "summary":
         summary(a.folder, a.out, a.reference)
+    else:
+        report(a.folders, a.out, a.checkpoint, a.reference)
 
 
 if __name__ == "__main__":
