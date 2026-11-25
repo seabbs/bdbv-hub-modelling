@@ -17,6 +17,7 @@ COMPUTE = (
     "bdbvhub report",
     "nowcastgermany ft-load",
     "concat-results",
+    "fit-store load",
 )
 
 
