@@ -1,0 +1,54 @@
+<header class=topbar>
+<div class=navrow><b>Simulations</b>
+<label class=k>Source <select id=source></select></label>
+<nav class=nav><a href="#summary">Summary</a><a href="#layers">By layer</a>
+<a href="#series">Simulations</a><a href="#table">Table</a>
+<a href="#dive">Deep dive</a></nav>
+<span id=status class=mut></span></div>
+<div class=selbar><span class=k>Colour and group by</span>
+<select id=groupby></select>
+<span id=chips></span>
+<button id=clear class=tog type=button>Clear filters</button></div>
+</header>
+<details class=sec id=summary open><summary><h2>Summary</h2></summary>
+<div id=tiles class=tiles></div>
+<h3 style="margin-top:10px">By <span id=bylabel></span></h3>
+<div style="overflow-x:auto"><table id=bygroup></table></div>
+</details>
+<details class=sec id=layers open><summary><h2>By layer</h2></summary>
+<p class=cnote>Each grid layer's factors and drawn values over the
+simulations shown (solid) against all of the source's (faint). Click a
+level or a bin to filter to it; click again to drop it.</p>
+<div id=layerbody></div>
+</details>
+<details class=sec id=series open><summary><h2>Simulations</h2></summary>
+<div class=sctl>
+<button class="tog on" data-scale=log type=button>Log</button>
+<button class=tog data-scale=linear type=button>Linear</button>
+<span class=sep></span>
+<button class=tog id=norm type=button>Share of peak</button>
+<span class=sep></span>
+<label class=k>Lines per panel <input id=cap type=number min=10 max=2000
+value=150 style="width:64px"></label>
+</div>
+<p class=cnote>Final weekly counts by week since each simulation's first
+reference date (first draw, strata summed). Hover for a simulation; click
+it to open its deep dive.</p>
+<div class=card><h3>All shown</h3><div id=spag></div>
+<div id=spagleg class=leg></div></div>
+<div id=panels class=plots style="margin-top:8px"></div>
+</details>
+<details class=sec id=table open><summary><h2>Table</h2></summary>
+<p class=cnote>The first 200 simulations shown, sorted by the column clicked.
+Click a row to open its deep dive.</p>
+<div class=tablebox><table id=simtable></table></div>
+</details>
+<details class=sec id=dive open><summary><h2>Deep dive</h2></summary>
+<div class=sctl><label class=k>Simulation
+<input id=simid list=simids style="width:140px"></label>
+<datalist id=simids></datalist>
+<button id=random class=tog type=button>Random shown</button>
+<span id=divestatus class=mut></span></div>
+<div id=divebody></div>
+</details>
+<div id=tip class=tipbox hidden></div>
