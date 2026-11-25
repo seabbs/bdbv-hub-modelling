@@ -49,8 +49,8 @@ def store_note(
     status : sequence of mapping
         The `fit-store load` record, one entry per (model, origin).
     build : str, optional
-        The commit the site's results are made from (Fit store's
-        `site-results`, on main).
+        The commit the site's results are made from (Site results,
+        on main).
 
     Returns
     -------
@@ -92,8 +92,8 @@ def store_note(
 def write_store_note(results: Path | str, generated: Path | str) -> None:
     """Write `fit-store.md` from the results' store record.
 
-    The build commit is `$GITHUB_SHA`, the main commit Fit store's
-    `site-results` job makes the site's results at.
+    The build commit is `$GITHUB_SHA`, the main commit Site results
+    (site-results.yml) makes the site's results at.
 
     Parameters
     ----------
