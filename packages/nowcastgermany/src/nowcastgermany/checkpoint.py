@@ -43,7 +43,7 @@ import subprocess
 import sys
 import time
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final
 
@@ -320,6 +320,34 @@ def merge_evidence(old: pd.DataFrame, new: pd.DataFrame) -> pd.DataFrame:
 # Units -----------------------------------------------------------------
 
 
+WORKERS_ENV: Final = "SCORE_WORKERS"
+"""The environment variable with the worker processes a German unit
+splits its dates over: its rule's threads (`flowlib.scoring.unit_shell`)."""
+
+THREAD_VARS: Final = (
+    "TORCH_THREADS",
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+)
+"""The thread settings a unit's job gives (`flowlib.machine.torch_env`),
+which a unit split over workers shares out between them."""
+
+START_METHOD: Final = "spawn"
+"""How a unit starts its workers: fresh interpreters, as torch and JAX
+hold threads that a forked process would not have."""
+
+
+def score_workers() -> int:
+    """Return the worker processes a German unit splits its dates over.
+
+    `SCORE_WORKERS` (`WORKERS_ENV`), else one: the unit forecasts in its
+    own process.
+    """
+    return max(1, int(os.environ.get(WORKERS_ENV) or 1))
+
+
 def score_dates() -> int:
     """Return the German dates a unit forecasts together.
 
@@ -502,13 +530,162 @@ def triangle_path(config: Any) -> Path:
     return Path("data/raw/germany") / Path(config.triangle).name
 
 
+def worker_threads(threads: int, workers: int) -> int:
+    """Return each worker's share of a unit's `threads`, at least one."""
+    return max(1, threads // workers)
+
+
+def worker_cores(cores: Sequence[int], index: int, workers: int) -> list[int]:
+    """Return the cores of worker `index` of `workers`: its share of `cores`.
+
+    Each worker takes its own slice, so none of their thread pools (XLA's
+    sizes itself to every core it may use) crowds another's.
+    """
+    each = max(1, len(cores) // workers)
+    at = (index % max(1, len(cores) // each)) * each
+    return list(cores)[at : at + each]
+
+
+@dataclasses.dataclass(frozen=True)
+class _Unit:
+    """What a German unit's worker needs to forecast and write its dates."""
+
+    root: Path
+    tasks_dir: Path
+    models: tuple[str, ...]
+
+
+_TRIANGLE: list[pd.DataFrame] = []
+"""A worker process's German triangle, read once (`_start_worker`)."""
+
+
+def _start_worker(
+    label: str,
+    segment: Path | None,
+    path: Path,
+    counter: Any,
+    workers: int,
+) -> None:
+    """Set up a worker: its checkpoint, its own cores, and the triangle."""
+    from nowcastgermany.data import hub_triangle
+
+    _pin(label, segment)
+    if hasattr(os, "sched_setaffinity"):
+        with counter.get_lock():
+            index = counter.value
+            counter.value += 1
+        cores = sorted(os.sched_getaffinity(0))
+        os.sched_setaffinity(0, worker_cores(cores, index, workers))
+    _TRIANGLE[:] = [hub_triangle(path)]
+
+
+def _worker_chunk(
+    unit: _Unit, need: tuple[str, ...], chunk: list[str]
+) -> list[dict[str, Any]]:
+    """Forecast a chunk in a worker process (`_forecast_chunk`)."""
+    return _forecast_chunk(unit, _TRIANGLE[0], need, chunk)
+
+
+def _forecast_chunk(
+    unit: _Unit,
+    triangle: pd.DataFrame,
+    need: tuple[str, ...],
+    chunk: list[str],
+) -> list[dict[str, Any]]:
+    """Forecast a chunk of dates with the models `need`, one file a date.
+
+    Returns the seconds by model and date (`germany_forecasts`). The
+    date's rows of the unit's other models are kept.
+    """
+    from nowcastgermany import evaluation as de
+
+    config = de.load_germany_config(
+        "packages/nowcastgermany/config/germany.toml"
+    )
+    timings: list[dict[str, Any]] = []
+    fc = de.germany_forecasts(
+        list(need),
+        triangle,
+        chunk,
+        config.n_samples,
+        config.seed,
+        unit.tasks_dir,
+        max_delay=config.truth_delay,
+        horizons=config.horizons,
+        targets=config.targets,
+        timings=timings,
+    )
+    fc = de.with_truth(fc, triangle, config.truth_delay)
+    for date in chunk:
+        mine = fc.loc[fc["origin"] == date].reset_index(drop=True)
+        out = unit.root / f"{date}.csv.gz"
+        if len(need) < len(unit.models) and out.exists():
+            # The other models' rows of the date are kept.
+            old = pd.read_csv(out)
+            kept = old["model"].isin(unit.models) & ~old["model"].isin(need)
+            mine = pd.concat([old.loc[kept], mine], ignore_index=True)
+        _write(mine, out)
+    _free()
+    return timings
+
+
+Chunk = tuple[tuple[str, ...], list[str]]
+"""The models a chunk of dates needs, and the dates."""
+
+
+def _chunk_results(
+    unit: _Unit,
+    triangle: pd.DataFrame,
+    chunks: Sequence[Chunk],
+    workers: int,
+    start: tuple[str, Path | None, Path],
+) -> Iterator[tuple[Chunk, list[dict[str, Any]]]]:
+    """Yield each chunk with its timings as it is done, in any order.
+
+    In this process with one worker; else over `workers` processes, each
+    with its share of the job's threads (`worker_threads`) and cores.
+    `start` is the label, segment and triangle path a worker loads.
+    """
+    if workers <= 1 or len(chunks) <= 1:
+        for need, chunk in chunks:
+            yield (need, chunk), _forecast_chunk(unit, triangle, need, chunk)
+        return
+    import multiprocessing
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    threads = int(os.environ.get("TORCH_THREADS") or workers)
+    # The workers take their environment from this process's.
+    for var in THREAD_VARS:
+        os.environ[var] = str(worker_threads(threads, workers))
+    workers = min(workers, len(chunks))
+    context = multiprocessing.get_context(START_METHOD)
+    counter = context.Value("i", 0)
+    with ProcessPoolExecutor(
+        max_workers=workers,
+        mp_context=context,
+        initializer=_start_worker,
+        initargs=(*start, counter, workers),
+    ) as pool:
+        futures = {
+            pool.submit(_worker_chunk, unit, need, chunk): (need, chunk)
+            for need, chunk in chunks
+        }
+        try:
+            for done in as_completed(futures):
+                yield futures[done], done.result()
+        except BaseException:
+            pool.shutdown(cancel_futures=True)
+            raise
+
+
 def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
     """Forecast each German development date, own quantiles with truth.
 
     Each date is forecast at the German config's horizons (`horizons`):
     the hub's nowcast and the forecast days after it. The fine-tuned
     models load the release `label` names, or a run's own `segment`
-    folder (`<run>/train/n<N>`) when given, cached as `label`.
+    folder (`<run>/train/n<N>`) when given, cached as `label`. Its
+    chunks of dates are split over `score_workers()` processes.
     """
     from nowcastgermany import evaluation as de
     from nowcastgermany.data import hub_triangle
@@ -563,53 +740,35 @@ def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:
         if out.exists():
             old = pd.read_csv(out)
             _write(old.loc[old["model"].isin(models)], out)
-    todo = [(need, d) for need, ds in groups.items() for d in ds]
     # Dates are forecast `score_dates()` at a time, Chronos-2 predicted for
     # all of them in a few batched passes, and written one file a date so
-    # a stopped run resumes.
+    # a stopped run resumes. The chunks are the same however many workers
+    # forecast them, so their rows are too.
     step = score_dates()
-    chunks = [
+    chunks: list[Chunk] = [
         (need, ds[i : i + step])
         for need, ds in groups.items()
         for i in range(0, len(ds), step)
     ]
-    for i, (need, chunk) in enumerate(chunks):
-        start = time.monotonic()
-        timings: list[dict[str, Any]] = []
-        fc = de.germany_forecasts(
-            list(need),
-            triangle,
-            chunk,
-            config.n_samples,
-            config.seed,
-            tasks_dir,
-            max_delay=config.truth_delay,
-            horizons=config.horizons,
-            targets=config.targets,
-            timings=timings,
-        )
+    unit = _Unit(root, tasks_dir, tuple(models))
+    done = len(dates) - sum(len(c) for _, c in chunks)
+    times = root / "timings.csv"
+    start = time.monotonic()
+    results = _chunk_results(
+        unit, triangle, chunks, score_workers(), (label, segment, path)
+    )
+    # This process alone records the dates and their timings.
+    for (need, chunk), timings in results:
         # Seconds by model and date, for the `benchmarks` target.
-        times = root / "timings.csv"
         pd.DataFrame(timings).assign(dates=len(chunk)).to_csv(
             times, mode="a", header=not times.exists(), index=False
         )
-        fc = de.with_truth(fc, triangle, config.truth_delay)
         for date in chunk:
-            mine = fc.loc[fc["origin"] == date].reset_index(drop=True)
-            out = root / f"{date}.csv.gz"
-            if len(need) < len(models) and out.exists():
-                # The other models' rows of the date are kept.
-                old = pd.read_csv(out)
-                kept = old["model"].isin(models) & ~old["model"].isin(need)
-                mine = pd.concat([old.loc[kept], mine], ignore_index=True)
-            _write(mine, out)
             _record(root, date, {m: want[m] for m in need})
-        _free()
-        took = time.monotonic() - start
-        done = len(dates) - len(todo) + sum(len(c) for _, c in chunks[: i + 1])
+        done += len(chunk)
         print(
             f"germany {label} {len(chunk)} dates to {chunk[-1]} "
-            f"({done}/{len(dates)}): {took:.0f} s",
+            f"({done}/{len(dates)}): {time.monotonic() - start:.0f} s",
             flush=True,
         )
     print(f"germany {label} done", flush=True)
