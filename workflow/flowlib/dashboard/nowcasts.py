@@ -703,10 +703,11 @@ def location(built: Mapping[str, Any] | None, loc: str) -> dict[str, Any]:
     }
 
 
-def twostep_label(run_label: str, n: int | None) -> str:
-    """Return a checkpoint's two-step series label."""
+def twostep_label(run_label: str | None, n: int | None) -> str:
+    """Return a checkpoint's two-step series label, its run's if given."""
     size = f" n{n}" if n else ""
-    return f"{labels.model_label(TWOSTEP_MODEL)}, {run_label}{size}"
+    run = f", {run_label}" if run_label else ""
+    return f"{labels.model_label(TWOSTEP_MODEL)}{run}{size}"
 
 
 def meta(
@@ -756,7 +757,11 @@ def meta(
             out.append(
                 {
                     "id": s,
-                    "label": twostep_label(by_key[run].label, sizes.get(key)),
+                    # The run is named only when there are several.
+                    "label": twostep_label(
+                        by_key[run].label if len(run_list) > 1 else None,
+                        sizes.get(key),
+                    ),
                     "run": "ref",
                     "n": 2 + (sizes.get(key) or 0),
                     "color": paperstyle.model_colour(TWOSTEP_MODEL),
