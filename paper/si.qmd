@@ -954,6 +954,7 @@ Ebola hub submissions scores by location and stratum. {{< meta results.ebola.lab
 
 ::: {.callout-note title="Plan"}
 - We score `renewal`, `renewalbvd` and `renewalsp` on every Ebola hub round, retrospectively, from the fits each made with the release before the round closed (Renewal model).
+- The fits and scores come from the submission workflow's stored fits and hub comparison, not from the paper workflow, as the renewal models were only used for submission.
 - `renewalbvd` against `renewal` shows whether stabilising with BVDOutbreakSize's reproduction number estimates improved the forecasts [@BVDOutbreakSize].
 - `renewal` against `renewalsp` shows what pooling and transmission between places add.
 - We compare them by pairwise relative skill on the forecasts each pair shares, with WIS on the natural and log scales, for the country, provinces and zones apart, as in the Ebola case study.
