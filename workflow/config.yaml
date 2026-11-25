@@ -190,8 +190,9 @@ score:
   branch: checkpoint-scoring
   # Worker processes a German unit splits its chunks of dates over, one
   # thread each: the unit's rule's threads (SCORE_WORKERS in the local
-  # config overrides it).
-  workers: 4
+  # config overrides it). Two take the cores one 2-thread unit took, so
+  # the held-out evaluation keeps its threads; more take them from it.
+  workers: 2
 
 hub_rounds:
   # The hub rounds report (rules/report.smk): our last this many submitted

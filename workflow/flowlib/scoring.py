@@ -193,9 +193,11 @@ def report_args(
 GERMANY_UNIT = "germany-days"
 """The German units' cache folder, as `evaluation.checkpoint.GERMANY_UNIT`."""
 
-WORKER_MB = 3072
+WORKER_MB = 4608
 """The least memory (MB) of each of a German unit's worker processes,
-each holding what one process forecasting a chunk of dates holds."""
+each holding what one process forecasting a chunk of dates holds: the
+reference unit's four workers peaked at 17.7 GB with their coordinator
+(laptop CPU, five dates a chunk)."""
 
 
 class Scoring:

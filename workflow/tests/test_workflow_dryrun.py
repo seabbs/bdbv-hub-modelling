@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from flowlib import compute
+from flowlib import compute, scoring
 
 pytest.importorskip("snakemake")
 
@@ -1265,7 +1265,7 @@ def test_score_workers_are_a_machine_setting(tmp_path):
         assert re.search(r"threads: 3\b", block)
         assert "SCORE_WORKERS=3 " in block
         mem = int(re.search(r"mem_mb=(\d+)", block)[1])
-        assert mem >= 3 * 3072
+        assert mem >= 3 * scoring.WORKER_MB
 
 
 def test_the_reference_then_newer_checkpoints_are_scored_first(tmp_path):
