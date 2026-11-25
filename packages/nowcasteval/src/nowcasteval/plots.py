@@ -133,6 +133,8 @@ MODEL_STYLE: Final[dict[str, tuple[int, str]]] = {
     "foundation_zeroshot_twostep": (5, "dotted"),
     "foundation_twostep": (5, "solid"),
     "foundation_real": (6, "shortdash"),
+    "foundation_zeroshot_pseudoweeks": (6, "dashdot"),
+    "foundation_pseudoweeks": (6, "longdashdot"),
 }
 """Each model's place in `MODEL_COLOURS` and its dash in `DASHES`.
 

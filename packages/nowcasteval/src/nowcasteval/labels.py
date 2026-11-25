@@ -41,6 +41,7 @@ FINETUNED: Final[dict[str, str]] = {
     "foundation": "foundation_zeroshot",
     "foundation_complete": "foundation_zeroshot_complete",
     "foundation_twostep": "foundation_zeroshot_twostep",
+    "foundation_pseudoweeks": "foundation_zeroshot_pseudoweeks",
 }
 """Each Chronos-2 model fine-tuned on simulations and its zero-shot
 counterpart, the same block with the pretrained weights. A checkpoint's
@@ -62,6 +63,8 @@ MODEL_LABELS: Final[dict[str, str]] = {
     "foundation_zeroshot_complete": "Zero-shot (complete data only)",
     "foundation_zeroshot_twostep": "Two-step zero-shot (point nowcast)",
     "foundation_twostep": "Two-step fine-tuned (point nowcast)",
+    "foundation_zeroshot_pseudoweeks": "Zero-shot (delays, pseudo weeks)",
+    "foundation_pseudoweeks": "Fine-tuned (delays, pseudo weeks)",
     "randomwalknowcast": "Random walk nowcast",
     "randomwalk": "Random walk",
     "KIT-frozen_baseline": "Hub baseline (KIT)",
@@ -115,6 +118,8 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
     "foundation": (_SLOT_BLUE, "solid"),
     "foundation_zeroshot_twostep": (_COMPLETE_PURPLE, "dotted"),
     "foundation_twostep": (_SLOT_BLUE, "dashed"),
+    "foundation_zeroshot_pseudoweeks": (_ZERO_SHOT_GREEN, "dashed"),
+    "foundation_pseudoweeks": (_SLOT_BLUE, "dotted"),
     "epinowcast": (_BROWN, "solid"),
     "hub_ensemble": (_SLOT_YELLOW, "solid"),
 }
