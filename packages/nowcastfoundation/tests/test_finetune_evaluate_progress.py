@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from nowcastfoundation.finetune import evaluate as fe  # noqa: E402
+from nowcastfoundation.finetune import evaluate as fe
 
 
 def test_each_pass_is_reported_inside_the_context():
