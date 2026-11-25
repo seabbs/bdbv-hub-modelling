@@ -135,10 +135,7 @@ ft = TRAINING.ft
 local_or_ft = TRAINING.local_or_ft
 segment_copy_back = TRAINING.segment_copy_back
 saved = TRAINING.saved
-evaluate_prev = TRAINING.evaluate_prev
 first_prefix = TRAINING.first_prefix
-evaluate_prev_dir = TRAINING.evaluate_prev_dir
-evaluate_copy_in = TRAINING.evaluate_copy_in
 earlier_settings = TRAINING.earlier_settings
 evaluate_inputs_from = TRAINING.evaluate_inputs_from
 offloaded = TRAINING.offloaded
@@ -163,7 +160,9 @@ SCORING = scoring.Scoring(config, LOCAL, TRAINING, checkpoints)
 SC = SCORING.sc
 CACHE = SCORING.cache
 UNIT_THREADS = SCORING.unit_threads
+EVALUATE_THREADS = SCORING.evaluate_threads
 FORECAST = SCORING.forecast
+CHECKPOINT_FORECAST = SCORING.checkpoint_forecast
 GERMANY_UNIT = scoring.GERMANY_UNIT
 EVALUATE = scoring.EVALUATE
 newest_first = compute.newest_first
@@ -171,6 +170,7 @@ checkpoint_labels = SCORING.checkpoint_labels
 unit_priority = SCORING.unit_priority
 ft_check_priority = SCORING.ft_check_priority
 unit_env = SCORING.unit_env
+checkpoint_env = SCORING.checkpoint_env
 unit_rows = SCORING.unit_rows
 unit_shell = SCORING.unit_shell
 run_scores_dir = SCORING.run_scores_dir
@@ -236,27 +236,3 @@ def ft_check_folders(ckpt):
         f"{FTC_DIR}/forecasts/ft-{ckpt}@{key}"
     ]
 
-
-# The Ebola ablation's settings and folders (rules/ablation.smk).
-# The fine-tuned models among the ablation's (nowcasteval.labels.FINETUNED).
-from nowcasteval.labels import FINETUNED as FINETUNED_MODELS
-
-ABL = config["ablation"]
-ABL_DIR = f"{LOCAL['ROOT']}/ablation"
-ABL_SIDES = {"sim": ABL["sim_variants"], "bdbv": ABL["bdbv_variants"]}
-
-
-def ablation_sims(wc=None):
-    """The simulated outbreaks' counts the sim variants draw from."""
-    base = ABL["sims"] or f"{ROUNDS_DIR}/r{ABL['round']}/sims"
-    return [f"{base}/counts-{seed}.csv.gz" for seed in ABL["seeds"]]
-
-
-def ablation_folders():
-    """Every variant's folder, simulated variants first."""
-    return [f"{ABL_DIR}/{side}/{v}" for side, vs in ABL_SIDES.items() for v in vs]
-
-
-def ablation_checkpoint(model):
-    """The checkpoint a fine-tuned model loads, else none."""
-    return ABL["checkpoint"] if model in FINETUNED_MODELS else ""

@@ -347,6 +347,106 @@ def seven_day_check(
     return summarise_seven_day(parts)
 
 
+VALIDATION_LEVELS = (0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)
+"""The levels a validation forecast keeps, the dashboard's seven."""
+
+VALIDATION_BLOCKS = 20
+"""Held-out blocks in a run's validation forecasts (`validation_sample`)."""
+
+VALIDATION_ROWS = 12
+"""Target rows a validation forecast keeps of a block, national first."""
+
+VALIDATION_TAIL = 28
+"""Context steps before the horizon a validation forecast keeps."""
+
+
+def validation_sample(
+    n_blocks: int, most: int = VALIDATION_BLOCKS
+) -> list[int]:
+    """Return the held-out blocks a run's validation forecasts show.
+
+    `most` indices spread evenly over the blocks, the first included;
+    the same for every checkpoint of a run.
+    """
+    if n_blocks <= most:
+        return list(range(n_blocks))
+    return sorted({int(i * n_blocks / most) for i in range(most)})
+
+
+def _values(x: np.ndarray) -> list[float | None]:
+    return [float(v) if np.isfinite(v) else None for v in x]
+
+
+def forecast_record(
+    index: int,
+    block: dict[str, Any],
+    q: np.ndarray,
+    target: np.ndarray,
+    tail: int = VALIDATION_TAIL,
+) -> dict[str, Any]:
+    """Return one held-out block's forecast, for the dashboard.
+
+    `q` is the block's quantiles at `VALIDATION_LEVELS`, `[rows, 7,
+    steps]`, and `target` its truth, `[rows, steps]`. Each kept row
+    (`VALIDATION_ROWS`, national rows first) has its name and level, its
+    last `tail` context steps before the horizon, its truth and its
+    quantiles over the block's prediction length.
+    """
+    h = int(block["prediction_length"])
+    n = int(block["n_targets"])
+    context = np.asarray(block["context"], dtype=float)
+    past = context[:n, context.shape[1] - h - tail : context.shape[1] - h]
+    levels = list(block.get("levels", ()))
+    places = list(block.get("places", ()))
+    targets = list(block.get("target_places", range(n)))
+
+    def name(r: int) -> str:
+        i = targets[r] if r < len(targets) else r
+        return str(places[i]) if i < len(places) else f"row {r}"
+
+    def level(r: int) -> str:
+        return str(levels[r]) if r < len(levels) else ""
+
+    order = sorted(range(n), key=lambda r: level(r) != "national")
+    return {
+        "block": int(index),
+        "source": str(block.get("source", "")),
+        "cut": block.get("cut_date"),
+        "mix": str(block.get("mix", "")),
+        "nowcast": int(block.get("nowcast", 0)),
+        "rows": [
+            {
+                "name": name(r),
+                "level": level(r),
+                "history": _values(past[r]),
+                "truth": _values(target[r, :h]),
+                "q": [_values(q[r, k, :h]) for k in range(q.shape[1])],
+            }
+            for r in order[:VALIDATION_ROWS]
+        ],
+    }
+
+
+def validation_forecasts(
+    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+) -> list[dict[str, Any]]:
+    """Return `model`'s forecasts of the run's sampled held-out blocks.
+
+    The blocks `validation_sample` picks, each as `forecast_record`
+    gives it. `model` is base Chronos-2, with an adapter for a
+    checkpoint.
+    """
+    picks = validation_sample(len(blocks))
+    chosen = [blocks[i] for i in picks]
+    at = at_levels(model, VALIDATION_LEVELS)
+    out = []
+    for i, (block, raw, target) in zip(
+        picks, _predictions(model, chosen, batch_size), strict=True
+    ):
+        out.append(forecast_record(i, block, at(raw), target))
+    return out
+
+
 def load_base(device: str) -> Any:
     """Return base Chronos-2 on `device`."""
     from chronos import Chronos2Pipeline

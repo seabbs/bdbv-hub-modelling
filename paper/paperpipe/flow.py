@@ -272,19 +272,46 @@ class PaperFlow:
         """
         files = {}
         evidence = f"{self.results}/evidence"
+        stored = self.stored
         if self.germany["real"]:
-            if self.synthetic["simulations"].get("development"):
+            if self.pairing_synthetic_file():
                 files["si_copula"] = f"{evidence}/si-copula.csv"
             files["copula_rho"] = (
                 f"{evidence}/pairing/pairing-germany-rho.csv.gz"
             )
         if final := self.config.get("final_run"):
             files["finetune_validation"] = f"{final}/validation-curve.csv"
+        elif stored.get("finetune_validation"):
+            files["finetune_validation"] = stored["finetune_validation"]
         if where := self.rounds_dir:
             files["sim_diseases"] = f"{where}/report/sim-diseases.csv"
             files["sim_summaries"] = f"{evidence}/sim-summaries.csv"
             files["sim_realism"] = f"{evidence}/sim-realism.csv"
+        else:
+            for name in ("sim_diseases", "sim_summaries", "sim_realism"):
+                if stored.get(name):
+                    files[name] = stored[name]
         return files
+
+    @property
+    def stored(self) -> Mapping[str, str]:
+        """Host-made outputs read as files in place of their rules.
+
+        The `stored` block, which the Site build sets from the paper-*
+        releases (`paperpipe.stored`); empty on the workflow's hosts.
+        """
+        return dict(self.config.get("stored") or {})
+
+    def pairing_synthetic_file(self) -> str | None:
+        """Return the synthetic pairing scores: made, stored or none.
+
+        Rule pairing_synthetic makes them from the development
+        simulations; without those, the stored file stands in, and with
+        neither the copula figure waits on them.
+        """
+        if self.synthetic["simulations"].get("development"):
+            return f"{self.results}/evidence/pairing/pairing-synthetic.csv.gz"
+        return self.stored.get("pairing_synthetic")
 
     def realism_inputs(self) -> dict[str, Any]:
         """Return the realism step's inputs.
@@ -403,13 +430,16 @@ class PaperFlow:
         (`grid_rounds.validation_round` in `rounds_dir`), which the
         simulate rule builds, so the held-out round is never read for them.
         Each pick names a simulation, `<seed>-<n>`, and the files are its
-        seed's. With no rounds folder there are none, and the figure says
-        what it waits on.
+        seed's. With no rounds folder they are the stored examples, and
+        with neither there are none, and the figure says what it waits on.
         """
-        if self.rounds_dir is None:
+        if self.rounds_dir is not None:
+            round_ = self.config["grid_rounds"]["validation_round"]
+            folder = f"{self.rounds_dir}/r{round_}/sims"
+        elif self.stored.get("examples"):
+            folder = self.stored["examples"]
+        else:
             return {"counts": [], "settings": []}
-        round_ = self.config["grid_rounds"]["validation_round"]
-        folder = f"{self.rounds_dir}/r{round_}/sims"
         picks = self.synthetic["examples"]["picks"]
         seeds = sorted({str(sim).split("-")[0] for sim, _ in picks})
         return {

@@ -81,6 +81,8 @@ class Context:
     logs: dict[str, logs.RunLog] = field(default_factory=dict)
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
+    held_out_from: dict[str, str] = field(default_factory=dict)
+    """Each dataset's held-out half's first nowcast date: never read."""
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -133,6 +135,7 @@ class Context:
             unit=ds.get("unit") or key,
             days=days,
             ranges=ranges,
+            until=self.held_out_from.get(key),
         )
 
 
@@ -690,6 +693,56 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
         "<div class=plots3 id=lossplots></div>"
         f'<script type="application/json" id=ldata>{data}</script>'
         f"<script>{_asset('axes.js')}\n{_asset('loss.js')}</script>"
+        + validation_card(ctx)
+    )
+
+
+GREEN_SLOTS = (2, 4)
+"""The categorical palette's aqua and green (`labels.CATEGORICAL`)."""
+
+
+def validation_card(ctx: Context) -> str:
+    """Return the validation forecasts' card: forecasts against truth.
+
+    A run's checkpoints' and base Chronos-2's forecasts of a sample of
+    its held-out blocks (flowlib.dashboard.validation), fetched from the
+    server a block at a time; a static page has none.
+    """
+    data = _json(
+        {
+            "runs": [
+                {"key": r.key, "label": r.label}
+                for r in ctx.runs
+                if r.folder is not None
+            ],
+            "base": paperstyle.model_colour("foundation_zeroshot"),
+            # The checkpoints' colours: the categorical order without its
+            # greens, which zero-shot's green would be confused with.
+            "palette": [
+                c
+                for i, c in enumerate(labels.CATEGORICAL)
+                if i not in GREEN_SLOTS
+            ],
+        }
+    )
+    controls = (
+        "<div class=sctl><label class=mut>Run <select id=vrun></select>"
+        "</label><label class=mut>Block <select id=vblock></select></label>"
+        "<label class=mut>Row <select id=vrow></select></label></div>"
+        "<div class=sctl id=vmodels></div>"
+    )
+    script = "" if ctx.once else f"<script>{_asset('validation.js')}</script>"
+    note = (
+        "<p class=mut>Served pages only: the forecasts are fetched from the "
+        "dashboard's server.</p>"
+        if ctx.once
+        else ""
+    )
+    return (
+        f"<div class=card id=valcard><h3>Validation forecasts against the "
+        f"truth{tip('validation')}</h3>{controls}<div id=valplot></div>"
+        f"<div id=vleg class=leg></div>{note}</div>"
+        f'<script type="application/json" id=vdata>{data}</script>{script}'
     )
 
 
@@ -1104,8 +1157,8 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (
-            "levels",
-            "Validation loss by level and LoRA size",
+            "lora",
+            "LoRA update",
             level_loss_lora.section(ctx.runs, tip),
             True,
         ),
@@ -1143,7 +1196,7 @@ def also_training(ctx: Context, live: Run) -> str:
 NAV = {
     "status": "Status",
     "mailbox": "Activity",
-    "levels": "By level",
+    "lora": "LoRA",
 }
 """Short names in the top bar, where they differ from the section titles."""
 

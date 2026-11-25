@@ -1,15 +1,18 @@
-"""Score an offloaded run's snapshots and checkpoints (rules/evaluate.smk).
+"""Score an offloaded run's step 0 and checkpoints (rules/evaluate.smk).
 
-    python workflow/scripts/evaluate_offloaded.py steps TRAIN/n<N> \
-        --eval-every K [--prev TRAIN/n<M>]
     python workflow/scripts/evaluate_offloaded.py base TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py seven-day TRAIN/n<N>
+    python workflow/scripts/evaluate_offloaded.py validation TRAIN/n<N>
+    python workflow/scripts/evaluate_offloaded.py validation-base TRAIN/n<N>
 
-`steps` scores segment n<N>'s step snapshots, `base` step 0 alone (base
-Chronos-2, the start loss), `checkpoint` its adapter, `seven-day` its
-7-day check (`SEVEN_DAY`, beside its settings), with
-the trainer's own losses (nowcastfoundation.finetune.evaluate); the files are as
+`base` scores step 0 alone (base Chronos-2, the start loss), `checkpoint`
+segment n<N>'s adapter, `seven-day` its 7-day check (`SEVEN_DAY`, beside
+its settings), `validation` its forecasts of a sample of the held-out
+blocks and `validation-base` base Chronos-2's of the same blocks
+(`evaluations.VALIDATION_FILE`, `VALIDATION_BASE`), with the trainer's
+own losses
+(nowcastfoundation.finetune.evaluate); the files are as
 `flowlib.evaluations` says.
 """
 
@@ -34,60 +37,11 @@ from nowcastfoundation.finetune import evaluate as fe  # noqa: E402
 from nowcastfoundation.finetune import stream as fs  # noqa: E402
 
 
-def missing(train: Path, after: int, upto: int, every: int) -> list[str]:
-    """Return the segment's due steps with neither snapshot nor result.
-
-    Each step after `after` up to `upto` that is a multiple of `every` is
-    due.
-    """
-    evals = train / "evals"
-
-    def found(step: int) -> bool:
-        name = f"step-{step:07d}"
-        return (evals / name / "request.json").exists() or (
-            evals / f"{name}.json"
-        ).exists()
-
-    due = range((after // every + 1) * every, upto + 1, every)
-    return [f"step-{k:07d}" for k in due if not found(k)]
-
-
-def steps(
-    where: Path,
-    prev: Path | None,
-    device: str,
-    every: int,
-) -> None:
-    """Score segment `where`'s step snapshots that have no result yet.
-
-    The segment's steps are those after checkpoint `prev`'s (after step
-    0 for the first, which `base_step` scores alone, so no step waits
-    for it) up to its own. A due step with neither snapshot nor result
-    fails the job: its snapshots were not copied in, and scoring nothing
-    must not mark the segment done.
-    """
-    train = where.parent
-    upto = json.loads((where / "settings.json").read_text())["steps"]
-    after = (
-        json.loads((prev / "settings.json").read_text())["steps"]
-        if prev is not None
-        else 0
-    )
-    gone = missing(train, after, upto, every)
-    if gone:
-        raise SystemExit(
-            f"{where}: no step snapshot or result for {', '.join(gone[:5])}"
-            f"{' ...' if len(gone) > 5 else ''} in {train / 'evals'}"
-            " (were the trainer's snapshots copied in?)"
-        )
-    score_snapshots(train, evaluations.pending(train, after, upto), device)
-
-
 def base_step(where: Path, device: str) -> None:
     """Score step 0 (base Chronos-2) alone, unless it has a result.
 
-    It scores every held-out block, and only a checkpoint's evaluation
-    needs it (the start loss); the step evaluations never wait for it.
+    It scores every held-out block; a checkpoint's evaluation needs it
+    for the start loss.
     """
     train = where.parent
     score_snapshots(train, evaluations.pending(train, -1, 0), device)
@@ -170,29 +124,70 @@ def seven_day(where: Path, device: str) -> None:
     fs.log(f"{where.name}: 7-day check {check} in {seconds:.0f} s")
 
 
-def main(argv: Sequence[str] | None = None) -> None:
-    """Run `steps` or `checkpoint`."""
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("what", choices=("steps", "base", "checkpoint", "seven-day"))
-    p.add_argument("where", type=Path)
-    p.add_argument("--prev", type=Path)
-    # The rule passes `forecast.device` (flowlib.forecast); never detected.
-    p.add_argument("--device", required=True)
-    p.add_argument(
-        "--eval-every",
-        type=int,
-        help="the trainer's --eval-every: each multiple must be scored",
+def validation(where: Path, device: str, base_only: bool = False) -> None:
+    """Write a checkpoint's (or base Chronos-2's) validation forecasts.
+
+    Of the sample of the run's held-out blocks that
+    `fe.validation_sample` picks; `where` is a checkpoint's folder, whose
+    settings give the run's batch size and validation blocks.
+    """
+    import gzip
+
+    settings = json.loads((where / "settings.json").read_text())
+    blocks = fe.load_blocks(
+        where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
     )
+    model = fe.load_base(device)
+    if base_only:
+        out, label = where.parent / evaluations.VALIDATION_BASE, "base"
+    else:
+        from peft import PeftModel
+
+        series_bias.attach_for(model, where / "finetuned-ckpt")
+        model = PeftModel.from_pretrained(model, where / "finetuned-ckpt")
+        out, label = where / evaluations.VALIDATION_FILE, where.name
+    model.eval()
+    t0 = time.perf_counter()
+    with logging_batches(f"{label} validation forecasts"):
+        records = fe.validation_forecasts(
+            model, blocks, settings.get("batch_size", 256)
+        )
+    seconds = time.perf_counter() - t0
+    tmp = out.with_suffix(".tmp")
+    with gzip.open(tmp, "wt") as f:
+        json.dump(
+            {
+                "model": label,
+                "n_outbreaks": 0 if base_only else settings.get("n_outbreaks"),
+                "device": device,
+                "seconds": seconds,
+                "blocks": records,
+            },
+            f,
+        )
+    tmp.replace(out)
+    fs.log(f"{label}: {len(records)} validation forecasts in {seconds:.0f} s")
+
+
+WHAT = ("base", "checkpoint", "seven-day", "validation", "validation-base")
+"""The subcommands."""
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Run one of `WHAT`."""
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("what", choices=WHAT)
+    p.add_argument("where", type=Path)
+    # The rule passes its scoring device (flowlib.compute); never detected.
+    p.add_argument("--device", required=True)
     args = p.parse_args(argv)
     device = torch_device(args.device)
-    if args.what == "steps":
-        if args.eval_every is None:
-            p.error("steps needs --eval-every")
-        steps(args.where, args.prev, device, args.eval_every)
-    elif args.what == "base":
+    if args.what == "base":
         base_step(args.where, device)
     elif args.what == "seven-day":
         seven_day(args.where, device)
+    elif args.what in ("validation", "validation-base"):
+        validation(args.where, device, args.what == "validation-base")
     else:
         checkpoint(args.where, device)
 

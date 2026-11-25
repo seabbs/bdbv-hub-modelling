@@ -17,7 +17,7 @@ from typing import Any
 
 from nowcasteval import labels
 
-from . import logs, paperstyle
+from . import logs, nowcasts, paperstyle
 from . import runs as spec
 from .page import Context
 from .sources import Sources
@@ -112,7 +112,8 @@ def build(
     """
     ft = config["finetune"]
     dash = dict(config["dashboard"])
-    # Held out of model development (BDBV): never shown.
+    # Held out of model development (BDBV, the German held-out half):
+    # never shown.
     held = dict(dash.get("held_out") or {})
     hidden = set(held.get("datasets") or ())
     datasets = [d for d in dash.get("datasets") or [] if d["key"] not in hidden]
@@ -137,6 +138,10 @@ def build(
         mail_filter=dash.get("mail_filter", ""),
         mail_hide=held.get("mail", ""),
         hidden_studies=hidden_studies,
+        held_out_from={
+            k: nowcasts.held_out_from(v)
+            for k, v in (held.get("from") or {}).items()
+        },
         once=once,
         view={
             "studies": studies,

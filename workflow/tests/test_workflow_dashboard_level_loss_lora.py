@@ -1,4 +1,4 @@
-"""Validation loss by level and LoRA size."""
+"""The size of the LoRA update."""
 
 import json
 import math
@@ -22,22 +22,6 @@ HISTORY = [
         "by_source": {"daily": 0.1, "weekly": 0.6},
     },
 ]
-
-
-def test_loss_by_level_is_relative_to_the_start_at_each_checkpoint():
-    cks = [
-        ("n250", {"steps": 1500, "held_out_loss_by_level": {"leaf": 0.1}}),
-        ("n500", {"steps": 3000, "held_out_loss_by_level": {"leaf": 0.05}}),
-    ]
-    assert level_loss_lora.by_level(HISTORY, cks) == {
-        "leaf": [(0, 1.0), (250, 0.5), (500, 0.25)],
-        "national": [(0, 1.0)],
-    }
-
-
-def test_no_start_gives_no_curves():
-    assert level_loss_lora.by_level([{"step": 10, "loss": 0.5}], []) == {}
-    assert level_loss_lora.by_level([], []) == {}
 
 
 def _safetensors(path, tensors):
@@ -110,14 +94,16 @@ def test_lora_size_of_a_run_by_checkpoint(tmp_path):
     }
 
 
-def test_section_has_three_panels(tmp_path):
+def test_the_section_shows_only_the_lora_update(tmp_path):
+    # Validation loss by level is the loss section's; this one is LoRA's.
     folder = tmp_path / "run"
     (folder / "train").mkdir(parents=True)
     (folder / "train" / "history.json").write_text(json.dumps(HISTORY))
     run = runs.Run("r5", "r5", folder=folder, live=True)
     out = level_loss_lora.section([run])
-    assert out.count("<div class=card>") == 3
+    assert out.count("<div class=card>") == 2
     assert "by encoder layer" in out
+    assert "loss" not in out.lower()
 
 
 def test_lora_update_size_by_kind(tmp_path):
@@ -171,21 +157,21 @@ def test_every_explainer_has_a_note():
         assert page.EXPLAIN.get(key)
 
 
-def test_every_run_is_in_the_level_and_lora_panels(tmp_path):
+def test_every_run_is_in_the_lora_panels(tmp_path):
+    t_a, t_b = _lora(0, 0, "q")
     folders = {}
-    for key, v in (("r5", 0.5), ("r6", 0.8)):
+    for key, v in (("r5", 1.0), ("r6", 2.0)):
         folder = tmp_path / key
         d = folder / "train" / "n250"
-        d.mkdir(parents=True)
-        (folder / "train" / "history.json").write_text(json.dumps(HISTORY))
+        _safetensors(
+            d / "finetuned-ckpt" / "adapter_model.safetensors",
+            {t_a: [[v, 0.0]], t_b: [[1.0], [0.0]]},
+        )
+        (d / "finetuned-ckpt" / "adapter_config.json").write_text(
+            '{"r": 1, "lora_alpha": 1}'
+        )
         (d / "settings.json").write_text(
-            json.dumps(
-                {
-                    "steps": 1500,
-                    "n_outbreaks": 250,
-                    "held_out_loss_by_level": {"leaf": 0.2 * v},
-                }
-            )
+            json.dumps({"steps": 1500, "n_outbreaks": 250})
         )
         folders[key] = folder
     rs = [
@@ -193,11 +179,11 @@ def test_every_run_is_in_the_level_and_lora_panels(tmp_path):
         runs.make_run("r6", folders["r6"], live=True),
     ]
     out = level_loss_lora.section(rs)
-    assert "leaf (r5)" in out
-    assert "leaf (r6)" in out
+    assert "time attention (r5)" in out
+    assert "time attention (r6)" in out
     assert "simulations trained" in out
-    # One legend: levels by colour, runs by line style.
-    assert out.count(">leaf</span>") == 1
+    # One legend: kinds by colour, runs by line style.
+    assert out.count(">time attention</span>") == 1
 
 
 def test_the_gram_matrices_are_the_products_of_the_lora_factors():
