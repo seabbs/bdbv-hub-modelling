@@ -16,6 +16,10 @@ rule evaluate_base:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
         ),
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/evals/step-0000000.json",
     log:
@@ -54,6 +58,10 @@ rule evaluate_checkpoint:
         # Earlier checkpoints' settings: `evaluations.start_loss` reads their
         # held_out_loss_start when the run evaluated them in the trainer.
         earlier=earlier_settings,
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/n{{n}}/{SIDECAR}",
     log:
@@ -87,6 +95,10 @@ rule seven_day_check:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/n{{n}}/seven-day.json",
     log:
@@ -121,6 +133,10 @@ rule validation_forecasts:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/n{{n}}/{evaluations.VALIDATION_FILE}",
     log:
@@ -152,6 +168,10 @@ rule validation_forecasts_base:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
         ),
+        # Its code and held-out set, by content (`key_file`), so it
+        # reruns when either changes, never on a restart.
+        code=SCORING.evaluator_key_input,
+        held_out=held_out_key,
     output:
         f"{TRAIN}/{evaluations.VALIDATION_BASE}",
     log:

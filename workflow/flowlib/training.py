@@ -25,7 +25,7 @@ from flowlib import (
     segments,
 )
 from flowlib.rounds import Rounds
-from nowcastfoundation.sidecar import HELD_OUT_BLOCKS, SIDECAR
+from nowcastfoundation.sidecar import HELD_OUT_BLOCKS, HELD_OUT_KEY, SIDECAR
 
 SEGMENT_COPY_BACK: tuple[str, ...] = (
     "outbreaks.txt",
@@ -122,6 +122,15 @@ class Training:
             for p in self.run_of(wc).ft["prefixes"]
             if p < n
         ]
+
+    def held_out_key(self, wc: Any) -> list[str]:
+        """Return the run's held-out set key (`HELD_OUT_KEY`), once written.
+
+        An input of every evaluation, so a new held-out set reruns them.
+        The trainer writes it before step 0; until then there is none.
+        """
+        path = Path(self.train_dir(wc.run)) / HELD_OUT_KEY
+        return [str(path)] if path.is_file() else []
 
     def evaluate_inputs_from(self, wc: Any) -> list[str]:
         """Return files a checkpoint's evaluation reads but no rule makes."""
