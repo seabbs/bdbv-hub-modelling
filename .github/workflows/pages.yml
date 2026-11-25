@@ -116,17 +116,22 @@ jobs:
           fi
           tar -xzf "$bundle"
           cat output/fit-store/backtests/latest.json >> "$GITHUB_STEP_SUMMARY"
-      # Pages never fits a model. The fitted models' forecasts come from
-      # the fit store (fit-store.yml), which reruns this build when it has
-      # stored new fits. `load` writes them into results/ with a record of
-      # the fits used, which each page with their results states.
-      - name: Load the stored fits
+      # What the site shows from the fits and backtests: the stored fits'
+      # forecasts as `fit-store load` wrote them, the hub comparison, the
+      # German benchmark's tables and the docs figures and tables, as Fit
+      # store made them (its `site-results`), unpacked last so they win.
+      # Site loads, scores and forecasts nothing.
+      - name: Load the stored site results
         env:
           FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
-          # The fine-tuned models list the releases for their checkpoint.
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          uv run bdbvhub fit-store load --store output/fit-store
+          bundle=output/fit-store/site/latest.tar.gz
+          if [ ! -f "$bundle" ]; then
+            echo "::error::the fit store holds no site results yet; run Fit store, whose site-results job makes them"
+            exit 1
+          fi
+          tar -xzf "$bundle"
+          cat output/fit-store/site/latest.json >> "$GITHUB_STEP_SUMMARY"
       # The store too, as the Getting started notebook reads a stored fit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -135,8 +140,12 @@ jobs:
             data
             !data/raw
             results
+            docs/generated
+            docs/figures
+            docs/submission/rounds
             output
             !output/fit-store/backtests
+            !output/fit-store/site
           retention-days: 1
 
   build:
@@ -153,72 +162,16 @@ jobs:
           sync: 'false'
           jax-scope: pages-report
       - run: uv sync --frozen --all-groups
-      # Pages for the submitted rounds come from the ledger branch that
-      # the submission workflow writes. A merged round's page is frozen in
-      # its `pages/` and copied as it is.
-      - name: Fetch the submission ledger
-        run: |
-          mkdir -p output/ledger
-          if git fetch -q --depth 1 origin submission-ledger; then
-            git archive FETCH_HEAD | tar -x -C output/ledger
-          fi
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: inputs
-      # The fine-tuned models' German forecasts, as the workflow's German
-      # unit made them: the asset germany-forecasts.tar.gz of the release
-      # packages/nowcastfoundation/config/finetune.toml pins (`nowcastgermany
-      # ft-tag`), attached by
-      # `publish_germany_unit`. No other checkpoint stands in. Development
-      # dates only. `concat-results` below stacks them with the other
-      # models, so they are scored on the same cells.
-      - name: Load the stored fine-tuned German forecasts
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
+      # The German benchmark's data, for the paper (a download).
+      - name: Fetch the German data
+        run: uv run nowcastgermany fetch
+      # The live fine-tuning run's newest scored checkpoint, read at the
+      # checkpoint-scoring branch's head (never a pinned commit).
+      - name: The live fine-tuning checkpoint
         run: |
-          mkdir -p output/germany-ft-store
-          tag=$(uv run nowcastgermany ft-tag)
-          if gh release download "$tag" -R "$GITHUB_REPOSITORY" \
-            -p germany-forecasts.tar.gz -D output/germany-ft-store; then
-            tar -xzf output/germany-ft-store/germany-forecasts.tar.gz \
-              -C output/germany-ft-store
-          fi
-          uv run nowcastgermany ft-load \
-            --store output/germany-ft-store \
-            --out output/parts/parts-germany-ft-store/germany \
-            --note results/germany/ft-checkpoint.json
-      - name: Compare with hub forecasts, then the docs figures and tables
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          GH_TOKEN: ${{ github.token }}
-          # A preview's store note names the pull request's head, not the
-          # merge commit, in one line; empty outside pull requests.
-          PREVIEW_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          FIT_STORE_RUN=$(gh run list -R "$GITHUB_REPOSITORY" \
-            -w fit-store.yml -b main -s in_progress -L 1 \
-            --json url -q '.[0].url // ""')
-          export FIT_STORE_RUN
-          # The hub's forecasts come over the network, which times out
-          # now and then; three tries, a minute apart (#231).
-          for try in 1 2 3; do
-            uv run bdbvhub compare-hub --fetch && break
-            if [ "$try" = 3 ]; then exit 1; fi
-            echo "::warning::compare-hub --fetch failed (try $try); retrying"
-            sleep 60
-          done
-          uv run bdbvhub concat-results --out results/germany \
-            output/parts/parts-germany-*/germany
-          # The hub teams' nowcasts are read, not run, so they are scored
-          # here.
-          uv run nowcastgermany fetch
-          uv run nowcastgermany teams --out results/germany
-          uv run nowcastgermany asof --out results/germany
-          uv run nowcastgermany paper --results results/germany
-          uv run bdbvhub report --ledger output/ledger
-          # The live fine-tuning run's newest scored checkpoint, read at
-          # the checkpoint-scoring branch's head (never a pinned commit).
           mkdir -p output/live
           if git fetch -q --depth 1 origin checkpoint-scoring; then
             git show FETCH_HEAD:evidence/checkpoint-scores.csv \

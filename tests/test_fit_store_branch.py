@@ -207,3 +207,24 @@ def test_a_fit_s_zone_file_is_stored_and_pruned_with_it(
         "m/o/two.json.gz",
         "m/o/two.zones.csv.gz",
     ]
+
+
+def test_push_site_stores_the_site_results_and_their_key(
+    tmp_path: Path,
+) -> None:
+    _git("init", "-q", "--bare", "remote.git", cwd=tmp_path)
+    _git("clone", "-q", "remote.git", "clone", cwd=tmp_path)
+    clone = tmp_path / "clone"
+    for key, value in (("user.name", "t"), ("user.email", "t@t")):
+        _git("config", key, value, cwd=clone)
+    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=clone)
+    _git("push", "-q", "origin", "HEAD:main", cwd=clone)
+    bundle = tmp_path / "site.tar.gz"
+    bundle.write_bytes(b"site")
+    out = _run("push-site", str(bundle), "abc123", "k1", cwd=clone)
+    assert out.returncode == 0, out.stderr
+    got = tmp_path / "got"
+    assert _run("fetch", str(got), cwd=clone).returncode == 0
+    assert (got / "site" / "latest.tar.gz").read_bytes() == b"site"
+    meta = json.loads((got / "site" / "latest.json").read_text())
+    assert meta == {"commit": "abc123", "key": "k1"}

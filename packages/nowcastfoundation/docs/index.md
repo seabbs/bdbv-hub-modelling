@@ -29,7 +29,13 @@ for vintage in pd.date_range("2026-03-01", "2026-03-21"):
         age = (vintage - day).days
         observed = 10 if age >= 3 else 3 * age + 1
         rows.append(
-            (vintage.date().isoformat(), "A", day.date().isoformat(), observed, 0)
+            (
+                vintage.date().isoformat(),
+                "A",
+                day.date().isoformat(),
+                observed,
+                0,
+            )
         )
 releases = pd.DataFrame(
     rows, columns=["vintage", "location", "onset_date", "observed", "imputed"]
