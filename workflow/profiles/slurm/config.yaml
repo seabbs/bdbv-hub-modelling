@@ -9,7 +9,9 @@ jobs: 100
 rerun-triggers: [mtime]
 printshellcmds: true
 keep-going: true
-retries: 1
+# A job that runs out of memory runs again with twice its memory
+# (flowlib.memory: each rule's mem_mb doubles with the attempt).
+retries: 2
 # A shared filesystem shows a node's outputs late.
 latency-wait: 120
 set-threads:
@@ -20,14 +22,11 @@ set-resources:
   # Slurm job must, or it gets the whole node or the partition default.
   - simulate_batch:mem_mb=4096
   - simulate_batch:runtime=120
-  - train_segment:mem_mb=32768
   - train_segment:runtime=720
-  # The forecasting units load Chronos-2 and score a block of tasks.
-  - evaluate_base:mem_mb=6144
+  # The forecasting units load Chronos-2 and score a block of tasks; their
+  # memory is each one's last peak (flowlib.memory).
   - evaluate_base:runtime=240
-  - evaluate_checkpoint:mem_mb=6144
   - evaluate_checkpoint:runtime=240
-  - seven_day_check:mem_mb=6144
   - seven_day_check:runtime=240
   - score_germany:runtime=240
   - score_run_germany:runtime=240

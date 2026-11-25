@@ -152,7 +152,7 @@ def test_the_reference_unit_reads_its_code_key_as_a_file(tmp_path):
     assert s.reference_key_input("abc123") == []
 
 
-def test_evaluation_runs_below_every_other_job():
+def test_evaluation_runs_right_after_the_hand_offs():
     from types import SimpleNamespace
 
     from flowlib import compute, scoring
@@ -160,7 +160,8 @@ def test_evaluation_runs_below_every_other_job():
     s = scoring.Scoring.__new__(scoring.Scoring)
     new, old = SimpleNamespace(n="800"), SimpleNamespace(n="400")
     assert s.evaluation_priority(new) > s.evaluation_priority(old)
-    assert s.evaluation_priority(new) < compute.BATCH_PRIORITY
+    assert s.evaluation_priority(new) < compute.NEXT_BATCH_PRIORITY
+    assert s.evaluation_priority(old) > compute.REFERENCE_PRIORITY + 2
     # Step 0 first, which every checkpoint's evaluation needs.
     assert s.evaluation_priority(SimpleNamespace()) > s.evaluation_priority(new)
     assert not hasattr(compute, "BOUNDARY_PRIORITY")

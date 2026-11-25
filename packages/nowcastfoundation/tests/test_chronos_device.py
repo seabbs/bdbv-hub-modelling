@@ -85,3 +85,21 @@ def test_chronos_batch_and_threads_are_machine_settings(monkeypatch):
     assert seen["batch"] == [2, 1]
     foundation.apply_threads()
     assert seen["n"] == 3
+
+
+def test_the_inter_op_pool_takes_the_job_s_threads_too(monkeypatch):
+    # torch's inter-op pool defaults to every core (#1114).
+    import torch
+
+    from nowcastfoundation.backends import chronos2
+
+    seen = {}
+    monkeypatch.setenv("TORCH_THREADS", "2")
+    monkeypatch.setattr(
+        torch, "set_num_threads", lambda n: seen.update(intra=n)
+    )
+    monkeypatch.setattr(
+        torch, "set_num_interop_threads", lambda n: seen.update(inter=n)
+    )
+    chronos2.apply_threads()
+    assert seen == {"intra": 2, "inter": 2}

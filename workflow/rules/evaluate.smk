@@ -3,9 +3,9 @@
 # (WORKER_GROUPS places it). With the 7-day check and the validation
 # forecasts, each runs on the checkpoint scoring device
 # (`compute.scoring_forecast`): the CPU with the cores the trainer leaves
-# while a run trains, a whole GPU once none does, below every other job
-# (`Scoring.evaluation_priority`). It never pauses training, and no
-# release or check waits for it.
+# while a run trains, a whole GPU once none does, right after the
+# hand-offs and the next segment's batches (`Scoring.evaluation_priority`).
+# It never pauses training, and no release or check waits for it.
 # Files and readers: workflow/flowlib/evaluations.py.
 
 
@@ -32,6 +32,9 @@ rule evaluate_base:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/evaluate_base.tsv", 4096, like=("run",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -74,6 +77,9 @@ rule evaluate_checkpoint:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv", 4096, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -111,6 +117,9 @@ rule seven_day_check:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/seven_day_check/n{{n}}.tsv", 3072, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -129,8 +138,7 @@ rule validation_forecasts:
     # (validation) blocks, with their history and truth, which the
     # dashboard sets against the truth
     # (nowcastfoundation.finetune.evaluate.validation_forecasts), on the
-    # checkpoint scoring device, below every other job: nothing waits for
-    # them.
+    # checkpoint scoring device, at the held-out evaluation's priority.
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
         adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
@@ -149,6 +157,9 @@ rule validation_forecasts:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/validation_forecasts/n{{n}}.tsv", 3072, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -184,6 +195,9 @@ rule validation_forecasts_base:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/validation_forecasts_base.tsv", 3072, like=("run",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,

@@ -137,3 +137,19 @@ def test_a_run_trains_while_a_segment_in_reach_is_unsaved(
     # Nothing in reach (no batches yet): no trainer is planned either.
     monkeypatch.setattr(t, "trainable", lambda _run: [])
     assert t.still_training() == []
+
+
+def test_the_next_segment_s_batches_go_first(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from flowlib import compute
+
+    t = _training(tmp_path)
+    monkeypatch.setattr(t, "next_seeds", lambda: frozenset({30200, 30201}))
+    first, second, later = (
+        t.batch_priority(SimpleNamespace(seed=str(s)))
+        for s in (30200, 30201, 30202)
+    )
+    # The next segment's above the held-out evaluation, earlier seeds first.
+    assert first > second > compute.NEXT_BATCH_PRIORITY
+    assert compute.BATCH_PRIORITY <= later < compute.BATCH_PRIORITY + 1

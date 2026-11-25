@@ -152,3 +152,21 @@ def test_evaluation_reruns_only_when_its_code_or_held_out_set_moves():
         text = _rule_text(name)
         assert "code=SCORING.evaluator_key_input" in text, name
         assert "held_out=held_out_key" in text, name
+
+
+def test_jobs_ask_for_the_memory_their_benchmarks_show():
+    # Each from its own last benchmark (flowlib.memory), with a minimum in
+    # the rule; no machine's figures in the config (Sam, 25 Nov).
+    assert "memory" not in CONFIG
+    assert "mem_mb" not in CONFIG["score"]
+    for name in (
+        "train_segment",
+        "ft_check_forecast",
+        "seven_day_check",
+        "evaluate_checkpoint",
+        "evaluate_base",
+        "validation_forecasts",
+        "score_germany",
+        "score_run_germany",
+    ):
+        assert "mem_mb=memory.from_benchmark(" in _rule_text(name), name
