@@ -58,6 +58,4 @@ def test_the_trainer_runs_through_the_core_claim():
     ).read_text()
     block = text.split("rule train_segment:", 1)[1].split("\nrule ", 1)[0]
     assert "{params.claim} {params.cpus}" in block
-    assert f'cpus=f"{{machine.CPUS}} --trainer"' in block or (
-        "cpus=machine.CPUS_TRAINER" in block
-    )
+    assert 'cpus=f"{machine.CPUS} --trainer"' in block

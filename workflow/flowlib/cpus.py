@@ -8,11 +8,16 @@ This script sets the job's CPU affinity to `N` cores before it starts:
 the pools it makes size themselves to those cores and run only on them.
 
     python3 workflow/flowlib/cpus.py N [KEY=VALUE ...] COMMAND [ARG ...]
+    python3 workflow/flowlib/cpus.py --trainer [KEY=VALUE ...] COMMAND ...
 
-It takes the locks of `N` free cores among those the process may use in
-this node's `claims_dir`, held until the job's last process exits, so
-jobs of every Snakemake run on the node keep apart; with fewer free, it
-adds others, so the job still runs on `N` cores. Off Linux (no CPU
+The trainers' cores are kept for them (`reserved`): the last
+`TRAINER_CORES` of the cores the process may use for each `gpu` slot,
+as `machine.side_cores` keeps them from the budget. A trainer
+(`--trainer`) takes `TRAINER_CORES` of them; any other job takes `N` of
+the rest. Each takes the locks of free cores in this node's
+`claims_dir`, held until the job's last process exits, so jobs of every
+Snakemake run on the node keep apart; with fewer free, it adds others of
+its set, so the job still runs on `N` cores. Off Linux (no CPU
 affinity), and with `N` at or above the cores it may use, it runs the
 job as it is.
 """
@@ -25,12 +30,42 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).parents[1]))
+
+from flowlib import localconfig, machine
+
 
 def claims_dir() -> Path:
     """Return the folder of this node's core locks (`CPU_CLAIMS_DIR`)."""
     if os.environ.get("CPU_CLAIMS_DIR"):
         return Path(os.environ["CPU_CLAIMS_DIR"])
     return Path("/tmp") / f"bdbv-cpu-claims-{os.getuid()}"
+
+
+def reserved(allowed: Sequence[int], kept: int) -> list[int]:
+    """Return the trainers' cores: the last `kept` of `allowed`, if fewer."""
+    if kept <= 0 or kept >= len(allowed):
+        return []
+    return list(allowed)[-kept:]
+
+
+def unreserved(allowed: Sequence[int], kept: int) -> list[int]:
+    """Return the cores other jobs pin to: `allowed` less `reserved`."""
+    held = set(reserved(allowed, kept))
+    return [c for c in allowed if c not in held]
+
+
+def kept_cores(cfg: dict[str, str]) -> tuple[int, int]:
+    """Return a trainer's cores and those kept for every trainer.
+
+    `TRAINER_CORES` each, one trainer for each `gpu` slot
+    (`machine.gpu_slots`), as `machine.side_cores` counts them.
+    """
+    each = int(
+        cfg.get("TRAINER_CORES") or dict(localconfig.DEFAULTS)["TRAINER_CORES"]
+    )
+    return each, each * machine.gpu_slots(cfg)
 
 
 def take(
@@ -65,13 +100,20 @@ def take(
 
 
 def main(argv: Sequence[str]) -> None:
-    """Pin to `argv[0]` cores, if this system can, and run the rest."""
+    """Pin to `argv[0]` cores, or a trainer's, if it can; run the rest."""
     if len(argv) < 2:
-        sys.exit("usage: cpus.py N [KEY=VALUE ...] COMMAND [ARG ...]")
-    n, rest = int(argv[0]), list(argv[1:])
+        sys.exit("usage: cpus.py N|--trainer [KEY=VALUE ...] COMMAND ...")
+    rest = list(argv[1:])
     if hasattr(os, "sched_setaffinity"):
         allowed = sorted(os.sched_getaffinity(0))
-        cores, fds = take(allowed, max(1, n), claims_dir())
+        each, kept = kept_cores(localconfig.read())
+        if argv[0] == "--trainer":
+            n, mine = each, reserved(allowed, kept) or allowed
+        else:
+            n, mine = int(argv[0]), unreserved(allowed, kept)
+        if n <= 0:
+            os.execvp("env", ["env", *rest])
+        cores, fds = take(mine, max(1, n), claims_dir())
         # The job's processes inherit the locks and hold them until exit.
         for fd in fds:
             os.set_inheritable(fd, True)
