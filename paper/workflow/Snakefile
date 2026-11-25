@@ -645,7 +645,8 @@ rule sim_examples:
 # development data only (`nowcasteval.pairing`): the German development
 # half, and the development seeds' outbreaks as the synthetic runner
 # forecasts them. `si_copula` summarises both for the SI's copula figure.
-# A dummy German benchmark leaves them out.
+# A dummy German benchmark leaves them out, and null development
+# simulations the synthetic half and `si_copula`.
 if GERMANY["real"]:
 
     rule pairing_germany:
@@ -672,6 +673,9 @@ if GERMANY["real"]:
             "exec >{log} 2>&1; {params.env} "
             "{params.germany} pairing-sensitivity {params.args} "
             "--out {params.out}"
+
+
+if GERMANY["real"] and SYNTHETIC["simulations"]["development"]:
 
     rule pairing_synthetic:
         input:

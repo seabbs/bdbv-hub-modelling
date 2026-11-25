@@ -16,7 +16,8 @@ task paper                 # the development run, without the held-out data
 task paper TARGET=paper    # the paper run, with the held-out data
 ```
 
-CI runs the same steps (`python3 workflow/scripts/paper_run.py --render`, [`paper_run.py`](../workflow/scripts/paper_run.py)).
+CI runs the same steps (`python3 workflow/scripts/paper_run.py --render development --pages`, [`paper_run.py`](../workflow/scripts/paper_run.py)), with [`workflow/pages.yaml`](workflow/pages.yaml) over the config.
+That leaves out the simulations, fine-tuning runs and their scores, which the workflow's hosts make, so on the site the synthetic study runs on dummy data and those SI results say what they wait on.
 It fetches the fit store, runs the target's missing steps, renders the paper as HTML and PDF and copies it into `docs/paper/`.
 `CORES=8 task paper`, or `CORES` in `config/local.env`, sets Snakemake's cores (4 by default).
 From `paper/`, `task pipeline:dev`, `task pipeline:paper` and `task render` run the steps one at a time.
