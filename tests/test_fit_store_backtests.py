@@ -38,7 +38,7 @@ def test_the_walks_are_stored_before_the_slow_fits() -> None:
         str(s.get("run", "")) for s in jobs["store-quick"]["steps"]
     )
     assert "push new keys.json quick.json" in store
-    assert "store-quick" in jobs["pages"]["needs"]
+    assert "store-quick" in jobs["site-results"]["needs"]
 
 
 def test_no_simulated_backtest_is_run() -> None:
@@ -55,9 +55,9 @@ def test_the_backtests_are_stored_without_waiting_for_the_fits() -> None:
     assert set(job["needs"]) == {"plan", "backtest", "store-quick"}
     run = "\n".join(str(s.get("run", "")) for s in job["steps"])
     assert run.index("fit-store load") < run.index("bdbvhub score")
-    assert run.index("push-backtests") < run.index("gh workflow run pages.yml")
-    assert job["permissions"]["actions"] == "write"
-    assert "backtests" not in _jobs()["pages"]["needs"]
+    assert "push-backtests" in run
+    # The site's results, made from them, rebuild Pages.
+    assert "backtests" in _jobs()["site-results"]["needs"]
 
 
 def test_the_zone_backtest_scores_the_stored_zone_runs() -> None:

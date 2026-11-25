@@ -11,6 +11,9 @@
         add DIR's planned fits to the branch, prune it and push
     fit-store-branch push-backtests BUNDLE COMMIT
         store BUNDLE as backtests/latest.tar.gz, made at COMMIT, and push
+    fit-store-branch push-site BUNDLE COMMIT KEY
+        store BUNDLE as site/latest.tar.gz, made at COMMIT from inputs
+        with hash KEY, and push
 
 KEYS is the JSON list of current keys, `<model>/<origin>/<key>`, and
 PLAN the matrix of planned fits, as `fit-store plan --keys --out` write
@@ -231,9 +234,32 @@ def push_backtests(bundle: Path, commit: str) -> int:
     return _commit(stage)
 
 
+SITE = "site"
+"""The branch folder of the site's results (Fit store's `site-results`),
+which `prune` never touches: `latest.tar.gz` (the results and docs files
+Pages unpacks) and `latest.json` (the commit that made them and the hash
+of their inputs, so unchanged inputs are not made again)."""
+
+
+def push_site(bundle: Path, commit: str, key: str) -> int:
+    """Store BUNDLE as the branch's site results, made at COMMIT."""
+    bundle = bundle.resolve()
+
+    def stage(work: Path) -> str:
+        folder = work / SITE
+        folder.mkdir(exist_ok=True)
+        shutil.copyfile(bundle, folder / "latest.tar.gz")
+        meta = {"commit": commit, "key": key}
+        (folder / "latest.json").write_text(json.dumps(meta) + "\n")
+        return f"Store the site results of {commit}"
+
+    return _commit(stage)
+
+
 USAGE = (
     "usage: fit-store-branch guard EVENT REF SCRATCH | fetch DIR"
     " | push DIR KEYS PLAN | push-backtests BUNDLE COMMIT"
+    " | push-site BUNDLE COMMIT KEY"
 )
 
 
@@ -249,6 +275,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return push(*(Path(r) for r in rest))
     if action == "push-backtests" and len(rest) == 2:
         return push_backtests(Path(rest[0]), rest[1])
+    if action == "push-site" and len(rest) == 3:
+        return push_site(Path(rest[0]), rest[1], rest[2])
     print(USAGE, file=sys.stderr)
     return 2
 
