@@ -48,13 +48,23 @@ DIST = {"exponential": 1, "lognormal": 2, "gamma": 3}
 # about a third of a day and of 40 to 50 days) in short and long windows.
 EDGE_DMAX = (1, 2, 5, 150)
 MIDDLE = [CASES[4], CASES[13], CASES[19]]
-EXTREMES: list[dict[str, Any]] = [
-    {"family": "lognormal", "values": {"delay_median": m, "delay_sdlog": 0.9}}
-    for m in (0.2, 40.0)
-] + [
-    {"family": "gamma", "values": {"delay_mean": m, "delay_cv": 0.8}}
-    for m in (0.3, 50.0)
-] + [{"family": "exponential", "values": {"delay_mean": m}} for m in (0.3, 50.0)]
+EXTREMES: list[dict[str, Any]] = (
+    [
+        {
+            "family": "lognormal",
+            "values": {"delay_median": m, "delay_sdlog": 0.9},
+        }
+        for m in (0.2, 40.0)
+    ]
+    + [
+        {"family": "gamma", "values": {"delay_mean": m, "delay_cv": 0.8}}
+        for m in (0.3, 50.0)
+    ]
+    + [
+        {"family": "exponential", "values": {"delay_mean": m}}
+        for m in (0.3, 50.0)
+    ]
+)
 
 
 def _rows() -> list[dict[str, Any]]:
@@ -153,7 +163,10 @@ def test_double_censored_delays_match_epinowcast(
     r, want = ROWS[i], epinowcast_hazards[i]
     lh, lp = _ours(r)
     want_lh = np.array(
-        [np.inf if x in (None, "Inf") else x for x in _as_list(want["logit_hazard"])],
+        [
+            np.inf if x in (None, "Inf") else x
+            for x in _as_list(want["logit_hazard"])
+        ],
         dtype=float,
     )
     assert np.isposinf(lh[-1])
@@ -171,7 +184,10 @@ def test_double_censored_delays_match_epinowcast(
     assert np.all(after[nan] < lost_by)
     assert np.all(np.abs(got - ref)[~nan] <= tol[~nan])
     want_lp = np.array(
-        [-np.inf if x in (None, "-Inf") else x for x in _as_list(want["log_pmf"])],
+        [
+            -np.inf if x in (None, "-Inf") else x
+            for x in _as_list(want["log_pmf"])
+        ],
         dtype=float,
     )
     # Its log pmf is NaN in places too, only where little is left.
