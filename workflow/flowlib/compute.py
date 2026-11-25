@@ -99,7 +99,9 @@ HANDOFF_PRIORITY = 90
 """The quick jobs that unblock others: a batch's copy into a run
 (`fetch_batch`), so a simulated batch never waits for a core to reach the
 trainer, and a checkpoint's verification and release
-(`verify_checkpoint`, `publish_checkpoint`), which its BDBV check needs.
+(`verify_checkpoint`, `publish_checkpoint`), which its BDBV check needs,
+and the check's own quick jobs (`hub_head`, `hub_data`, `ft_check_page`,
+`ft_check_release`), so its page never queues behind the CPU jobs.
 Below the trainer, above every other job. A release never waits for the
 held-out evaluation (`EVALUATION_PRIORITY`)."""
 

@@ -267,6 +267,7 @@ rule hub_head:
         f"{HUB}/head.txt",
     log:
         f"{HUB}/logs/head.log",
+    priority: HANDOFF_PRIORITY
     localrule: True
     shell:
         "gh api 'repos/InsightNet-US/BDBV-Modeling-Hub/commits"
@@ -282,6 +283,7 @@ rule hub_data:
         f"{HUB}/data/target.csv",
     log:
         f"{HUB}/logs/data.log",
+    priority: HANDOFF_PRIORITY
     localrule: True
     conda:
         TOOLS_ENV
@@ -458,6 +460,7 @@ rule ft_check_page:
         f"{FTC_DIR}/logs/report-{{ckpt}}.log",
     wildcard_constraints:
         ckpt=r"slots-[0-9a-f]+|[0-9a-f]+",
+    priority: HANDOFF_PRIORITY
     localrule: True
     conda:
         TOOLS_ENV

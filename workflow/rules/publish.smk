@@ -69,6 +69,7 @@ rule ft_check_release:
         released_ft_check_page,
     output:
         touch(f"{TRAIN}/{{ck}}/ft-check.done"),
+    priority: HANDOFF_PRIORITY
     localrule: True
 
 
