@@ -284,7 +284,8 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     # cores went to batches; the German reference and each checkpoint's
     # scoring starved, and the batches the trainer reads were never
     # copied into the run, so the GPU waited. One order (flowlib.compute):
-    # the trainer and its batches' copies, the references, each
+    # the trainer, the quick hand-offs (its batches' copies, a
+    # checkpoint's release for its BDBV check), the references, each
     # checkpoint's scoring and evaluation (newest first), then simulation
     # batches.
     _hub(tmp_path)
@@ -292,6 +293,10 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     seg.mkdir(parents=True)
     (seg / "published.json").write_text(
         '{"tag": "chronos-slots-abcdef", "hash": "abcdef"}'
+    )
+    # A publishing machine releases each checkpoint for its BDBV check.
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nPUBLISH=1\n"
     )
     config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
     out = dry_run(tmp_path, "finetune", config=config, quiet=False)
@@ -307,7 +312,7 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     for rule, wildcards, priority in _job_priorities(out.stdout):
         if rule == "train_segment":
             tiers["train"].append(priority)
-        elif rule == "fetch_batch":
+        elif rule in ("fetch_batch", "verify_checkpoint", "publish_checkpoint"):
             tiers["fetch"].append(priority)
         elif rule == "score_germany" or (
             rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards

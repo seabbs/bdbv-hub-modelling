@@ -255,7 +255,7 @@ The workflow updates itself as results come in. Each machine runs its own target
 | a simulating machine | `simulate release` | simulates the configured rounds and releases each batch |
 
 A tick (`task workflow:tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
-When jobs compete, the trainer goes first (priority 100), then the copies of the batches it reads (90), then the references every checkpoint is compared with (30), then each checkpoint's scoring and evaluation, newest first (20), then simulation batches (15); `workflow/flowlib/compute.py` sets the order.
+When jobs compete, the trainer goes first (priority 100), then quick hand-offs (90: the copies of the batches it reads, and each checkpoint's verification and release for its BDBV check), then the references every checkpoint is compared with (30), then each checkpoint's scoring and evaluation, newest first (20), then simulation batches (15); `workflow/flowlib/compute.py` sets the order.
 Before it, the lists the pool plans from (the checkpoint releases, and on a machine without the rounds the batches it can have) are refreshed in a run of their own.
 A failed refresh leaves the last lists, and the pool still runs.
 The outward targets (`land`, `publish`, `release`) follow in their configured order.

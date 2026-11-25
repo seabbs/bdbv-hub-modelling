@@ -26,6 +26,7 @@ rule verify_checkpoint:
         f"{TRAIN}/{{ck}}/verified.txt",
     log:
         f"{TRAIN}/{{ck}}/verify.log",
+    priority: HANDOFF_PRIORITY
     localrule: True
     conda:
         TOOLS_ENV
@@ -44,6 +45,7 @@ rule publish_checkpoint:
         f"{TRAIN}/{{ck}}/published.json",
     log:
         f"{TRAIN}/{{ck}}/publish.log",
+    priority: HANDOFF_PRIORITY
     localrule: True
     conda:
         TOOLS_ENV
