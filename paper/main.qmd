@@ -64,11 +64,17 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
   - Key references: [@mcgough2020nowcasting; @gunther2021nowcasting; @Wolffram2023; @Ansari2024; @Das2024a; @Woo2024; @Rasul2023; @Garza2023; @Aksu2024; @Shchur2025; @Kalahasti2026; @Dudley2025].
 
 - **Context 2** Nowcasting methods and avilable models
-  - The basic aim
-  - Chain ladder and why no for synth
-  - Regression methods and why no for synth
-  - Condtional methods and why no for synth
-  - Bayesian marginal and why yes for synth.
+  - Nowcasting methods estimate what will eventually be reported for recent dates, using the reporting triangle of counts by reference date and reporting delay [@hohle; @Wolffram2023].
+  - To use simulated data for fine-tuning, we need a method that can also act as a generative model of how outbreaks are reported.
+  - Chain ladder methods scale up partial counts by the share historically reported at each delay [@Johnson2025].
+    They are fast and transparent, but have no model of incidence, so they cannot simulate new outbreaks.
+  - Regression methods fit the reporting triangle as a smooth surface over reference date and delay [@vandeKassteele2019; @Schneble2021; @bastos; @Mellor2025].
+    They describe the observed data well but do not constrain the delay distribution or include mechanisms such as transmission, so they give no clear process to simulate from.
+  - Conditional generative models first model total counts and then split them across delays [@hohle; @Stoner2020; @Stoner2023; @Seaman2022].
+    This separates variability in incidence from variability in reporting, which helps inference but adds little when simulating.
+  - Marginal generative models specify expected counts by reference date and spread them across delays, treating each cell of the reporting triangle as a separate draw [@mcgough2020nowcasting; @gunther2021nowcasting; @lison2024; @abbottepinowcast].
+    Run forward, they simulate how outbreaks are reported, and can include a renewal process, parametric and time-varying delays, report-day effects and pooling across places and age groups [@lison2024; @abbottepinowcast; @Bergstrom2022].
+    This makes them a natural basis for simulating training data, and it is the structure our simulations follow.
 
 - **What we did.**
   - We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.
