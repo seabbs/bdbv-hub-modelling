@@ -134,6 +134,7 @@ def test_ssh_pools_the_workers_and_submits_through_the_scripts():
     assert "mem_mb=74000" in res
     assert "gpu=2" in res
     assert "sim_slots=6" in res
+    assert "gpu_share=2" in res
 
 
 def test_the_ssh_profile_names_the_scripts():
