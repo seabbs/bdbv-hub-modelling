@@ -88,6 +88,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
   - We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.
   - epinowcast is written in R and Stan [@RCoreTeam; @Carpenter2017], while Chronos-2 is written in Python.
     We ported the epinowcast model to Python on top of PyRenew, reusing its components and adding components where it had none, such as delays that change over time.
+  - We validated the port by submitting renewal models built on it to the Ebola forecasting hub in real time [@bdbv_modeling_hub_2026].
+    One of these used the posterior reproduction number estimates of BVDOutbreakSize, our model of the outbreak's size, to inform its own [@BVDOutbreakSize].
   - We gave the model the reporting triangle as one series per place and reporting delay.
     We added learned attention biases so it can tell which delay series belong to which place, and which places sit within which regions.
   - We developed the settings for the simulated data based on our past experience of infectious disease modelling including in the COVID-19 pandmeic [@Wolffram2023], the 2023 Mpox outbreak [@Overton2023-dk], and based on the early data available for the 2025 Ebola outbreak in the Democratic Republic of the Congo [@bdbv_modeling_hub_2026].
@@ -428,10 +430,17 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
 
 ::: {.callout-note title="Plan"}
 - **Summary.**
-  - We fine-tuned Chronos-2, a general time series foundation model, on surveillance data simulated from a marginal generative nowcasting model, the epinowcast model ported to PyRenew.
-  - We gave it the reporting triangle as series, with learned attention biases linking each delay series to its place and each place to its region.
-  - We evaluated it on held-out simulations, retrospectively against the German COVID-19 nowcast hub, and retrospectively and then in real time against the Ebola forecasting hub.
-  - Results to be filled in: how it compares with zero-shot Chronos-2, the baseline nowcast and the hub models, for nowcasts and forecasts.- **Comparison with other work.**
+  - We aimed to combine the forecasting of a foundation time series model with the delay handling of nowcasting methods, without specialist configuration.
+  - Fine-tuned on simulations alone, Chronos-2 [beat / matched / fell short of] this aim.
+  - On held-out simulations it scored [X] relative to the random walk nowcast, against [X] for zero-shot Chronos-2 on the reporting triangle and [X] on complete data.
+  - On the German nowcast hub it scored [X] relative to the hub's baseline, ranking [X] of [X] models.
+  - On the Ebola hub it scored [X] from its first submission, prospectively, ranking [X] of [X] submissions.
+  - Fine-tuning on real data instead scored [X] against fine-tuning on simulations (SI, Real-data fine-tune against synthetic).
+  - Without the attention biases scores changed by [X], and without lag series by [X] (SI, Attention biases for place and parent against none; Delays against no delays).
+  - Given a baseline nowcast as complete counts, the fine-tuned model scored [X] (SI, Daily nowcasts).
+  - Correlated trajectories changed scores by [X] (SI, Impact of correlated trajectories).
+  - The renewal models built on our port of epinowcast scored [X] against the other Ebola hub submissions (SI, Renewal model).
+- **Comparison with other work.**
   - Most uses of foundation models in forecast hubs are zero-shot, and correct for delays outside the model, with a nowcast or adjustment applied before the model sees the data [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
     Our model learns the delays itself, so nowcasting and forecasting happen in one step.
   - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
@@ -440,13 +449,18 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Mantis is evaluated retrospectively and does not state that its test sets were fixed before its simulators were built, while we fixed our test sets in advance, the German held-out half, the BDBV data and a fresh simulated test round, and submitted to the Ebola hub in real time [@Dudley2026].
 - **Strengths and weaknesses.**
   - We used one foundation model, one source of synthetic data and two case studies.
-  - We did not compare with epinowcast, or, for the synthetic study, with the model that generated the data.
+    However, the case studies differ in pathogen, reporting system and cadence, and one was in real time.
+  - We did not compare with epinowcast directly, or, for the synthetic study, with the model that generated the data.
+    However, the German case study includes the hub's epinowcast-based model [@Wolffram2023].
+  - We ported the epinowcast model to PyRenew rather than using it directly.
+    However, we validated the port by submitting renewal models built on it to the Ebola hub in real time, where they scored [X] against the other submissions (SI, Renewal model).
   - We did not compare directly with Mantis or other custom neural networks trained for this task [@Dudley2026].
     The ACCIDDA-Chromantis hub submission is one such model, with delay-aware networks trained on real revisions, and appears in the Ebola case study only as one of the hub teams' forecasts [@accidda_chromantis; @bdbv_modeling_hub_2026].
   - The Ebola case study is held out from model development but not blind.
     We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
-    A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
-  - We looked at the fine-tuned model's scores on past Ebola rounds to decide whether to submit it, so those rounds are not held out for that decision.
+  - From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past Ebola rounds to decide whether to submit it.
+    Those rounds informed that decision, so only rounds after its first submission are prospective for it.
+    The German held-out half and the simulated test round were fixed in advance, so they are held out for every decision.
   - We evaluated on a retrospective and a real-time case study, with synthetic data that can be tuned to a setting.
   - Fine-tuning ran on one machine, so it needs no shared compute.
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
@@ -461,6 +475,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Zones in different subtrees then inform each other only through the aggregated totals.
   - For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.
   - Forecasts at different levels are not constrained to sum.
+    However, the joint block forecasts the levels together, so each informs the others.
   - Fine-tuning used a GPU, which made it several times faster than a CPU.
   - On a CPU alone it would run in hours.
   - Key references: [@Kalahasti2026; @Meyer2025].
