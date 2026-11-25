@@ -5,7 +5,7 @@ The `foundation` model and its comparison variants give the hub target's release
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
 `foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the reporting-triangle layout.
-The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), `foundation_twostep` and `foundation_zeroshot_twostep` (baselinenowcast first), and `foundation_real` (fine-tuned on real data alone).
+The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), `foundation_twostep` and `foundation_zeroshot_twostep` (baselinenowcast), and `foundation_real` (fine-tuned on real data alone).
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
 Only `foundation` runs in the Fit store and the submission; the variants are run by the paper's workflow alone.
 Each model reads the cadence from the data: one pass on the daily releases gives the daily counts and the weekly hub target, and a task with weekly releases only gives the weekly target.
