@@ -183,8 +183,6 @@ score:
   # Labels scored beside every checkpoint: randomwalknowcast and zero-shot
   # Chronos-2.
   reference: [reference]
-  # A unit's memory cap (MB), at its measured 5 GB peak.
-  mem_mb: 6144
   # The evidence tables the scores merge into, kept rows of other rules.
   evidence: evidence/checkpoint-scores.csv
   checkpoints: evidence/checkpoints.csv
@@ -213,21 +211,6 @@ ft_check:
   finetuned: foundation
   checkpoint: ""
 
-
-# Each job's memory (MB), as Snakemake counts it against the machine's
-# MEM_MB less its headroom, from peak RSS on archie: a Chronos-2 BDBV
-# check forecast (`ft_check_chronos`, a release's joint block of over
-# 2,000 series in one group) 16.4 GB, any other model's (`ft_check`)
-# 1.7 GB, a 7-day check 3.5 GB, the trainer about 6 GB. The held-out
-# evaluation holds the run's held-out blocks (1.3 GB pickled) beside
-# Chronos-2. The German units take `score.mem_mb`.
-memory:
-  train_segment: 7168
-  ft_check_chronos: 17408
-  ft_check: 2048
-  evaluate: 6144
-  seven_day_check: 4096
-  validation_forecasts: 4096
 
 dashboard:
   # The fine-tuning and simulations dashboard (task workflow:dashboard;

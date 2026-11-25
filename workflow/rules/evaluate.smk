@@ -32,7 +32,9 @@ rule evaluate_base:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
-        mem_mb=MEMORY["evaluate"],
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/evaluate_base.tsv", 4096, like=("run",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -75,7 +77,9 @@ rule evaluate_checkpoint:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
-        mem_mb=MEMORY["evaluate"],
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv", 4096, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -113,7 +117,9 @@ rule seven_day_check:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
-        mem_mb=MEMORY["seven_day_check"],
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/seven_day_check/n{{n}}.tsv", 3072, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -151,7 +157,9 @@ rule validation_forecasts:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
-        mem_mb=MEMORY["validation_forecasts"],
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/validation_forecasts/n{{n}}.tsv", 3072, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -187,7 +195,9 @@ rule validation_forecasts_base:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
-        mem_mb=MEMORY["validation_forecasts"],
+        mem_mb=memory.from_benchmark(
+            f"{TRAIN}/benchmarks/validation_forecasts_base.tsv", 3072, like=("run",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
