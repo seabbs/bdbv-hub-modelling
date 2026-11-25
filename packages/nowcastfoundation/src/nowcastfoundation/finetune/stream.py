@@ -1873,8 +1873,9 @@ def build_parser() -> argparse.ArgumentParser:
     # the trainer's state beside it (`n<N>/state`), which the next
     # segment resumes from (workflow/rules/finetune.smk).
     parser.add_argument("--until", type=int)
-    # Evaluate in the trainer (local) or leave adapter snapshots for
-    # finetune.evaluate to score elsewhere (offload; rules/evaluate.smk).
+    # Evaluate in the trainer (local) or leave step 0's adapter and the
+    # checkpoints for finetune.evaluate to score elsewhere (offload;
+    # rules/evaluate.smk).
     # Training and the settings hash are the same either way.
     parser.add_argument("--eval", choices=EVAL_MODES, default="local")
     # Steps between held-out evaluations: the monitor, and by source on
@@ -1911,6 +1912,19 @@ def save_snapshot(model: Any, where: Path, request: dict[str, Any]) -> None:
     (tmp / "request.json").write_text(json.dumps(request))
     shutil.rmtree(where, ignore_errors=True)
     tmp.rename(where)
+
+
+def offloaded_step(model: Any, optimiser: Any, step: int) -> dict[str, Any]:
+    """Return an offloaded run's history entry at an evaluation step.
+
+    Its learning rates and series bias. Only step 0 and the checkpoints
+    are scored offloaded, so the step leaves no snapshot.
+    """
+    entry: dict[str, Any] = {"step": step, "lr": group_rates(optimiser)}
+    bias = bias_summary(model)
+    if bias:
+        entry["bias"] = bias
+    return entry
 
 
 def save_blocks(blocks: list[dict[str, Any]], path: Path) -> None:
@@ -2494,25 +2508,9 @@ def main(root: Path | None = None) -> None:
                     stage="training", step=step, outbreaks=done, gpu=memory()
                 )
             if step % args.eval_every == 0 and offload:
-                since = time.perf_counter()
-                kinds = ["monitor"]
-                if step % args.by_source_every == 0:
-                    kinds.append("by_source")
-                save_snapshot(
-                    model, out / "evals" / f"step-{step:07d}", request(kinds)
-                )
-                entry: dict[str, Any] = {
-                    "step": step,
-                    "lr": group_rates(optimiser),
-                }
-                bias = bias_summary(model)
-                if bias:
-                    entry["bias"] = bias
-                split["eval_s"] += time.perf_counter() - since
-                history.append(entry)
+                history.append(offloaded_step(model, optimiser, step))
                 log(
-                    f"step {step}: loss {value:.4f}, held-out "
-                    f"({', '.join(kinds)}) left to the evaluator, "
+                    f"step {step}: loss {value:.4f}, "
                     f"{time.perf_counter() - t0:.0f} s"
                 )
                 (out / "history.json").write_text(json.dumps(history))
@@ -2522,7 +2520,7 @@ def main(root: Path | None = None) -> None:
                     model, val[: ft.EVAL_BLOCKS], args.batch_size
                 )
                 monitor = parts["loss"]
-                entry = {
+                entry: dict[str, Any] = {
                     "step": step,
                     "eval_loss": monitor,
                     **loss_parts("eval_loss", parts),

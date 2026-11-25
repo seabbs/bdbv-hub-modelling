@@ -1,11 +1,11 @@
 """Offloaded held-out evaluation: where its results are and who reads them.
 
 With `finetune.eval: offload` the trainer saves an adapter snapshot and a
-request at step 0 and each evaluation step (`train/evals/step-<k>/`) and
-writes checkpoints without their held-out losses
-(`finetune-stream`). The `evaluate` rules (rules/evaluate.smk,
-run by workflow/scripts/evaluate_offloaded.py) score them: each step's
-result is `train/evals/step-<k>.json` and a checkpoint's is the sidecar
+request at step 0 (`train/evals/step-0000000/`) and writes checkpoints
+without their held-out losses (`finetune-stream`). The `evaluate` rules
+(rules/evaluate.smk, run by workflow/scripts/evaluate_offloaded.py) score
+them: step 0's result is `train/evals/step-0000000.json` and a
+checkpoint's is the sidecar
 `n<N>/held-out.json`, beside its `settings.json`, which is a protected
 output of its segment. Readers take both through `checkpoint_settings`
 and `merged_history`, so a run evaluated either way reads the same.
