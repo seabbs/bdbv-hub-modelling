@@ -1,15 +1,17 @@
 # Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
-# score step 0 and each checkpoint, in
-# the `evaluate` group (WORKER_GROUPS places it), on the forecasting
-# device (`forecast` in the config, flowlib.forecast) beside the trainer,
-# newest segment first, below every other job (EVALUATION_PRIORITY): no
-# release or check waits for it. Files and readers:
-# workflow/flowlib/evaluations.py.
+# score step 0 and each checkpoint, in the `evaluate` group
+# (WORKER_GROUPS places it). With the 7-day check and the validation
+# forecasts, each takes a whole GPU if the machine has one, above the
+# next segment (`Scoring.boundary_priority`), so it runs as a segment
+# ends; else the forecasting device (`forecast` in the config) beside the
+# trainer, below every other job. No release or check waits for it.
+# Files and readers: workflow/flowlib/evaluations.py.
 
 
 rule evaluate_base:
     # Step 0 (base Chronos-2) on every held-out block: the start loss
-    # each checkpoint's sidecar needs.
+    # each checkpoint's sidecar needs. Kept in the score cache by model,
+    # held-out set, evaluator and precision, so it is scored once.
     input:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
@@ -20,26 +22,26 @@ rule evaluate_base:
         f"{TRAIN}/logs/evaluate-base.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_base.tsv"
-    # Above every checkpoint's evaluation, which needs it.
-    priority: EVALUATION_PRIORITY + 1
+    priority: boundary_priority
     conda:
         TOOLS_ENV
-    threads: EVALUATE_THREADS
+    threads: BOUNDARY_THREADS
     resources:
-        gpu=CHECKPOINT_FORECAST.gpu,
+        gpu=BOUNDARY_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=checkpoint_env,
-        device=CHECKPOINT_FORECAST.device,
+        env=boundary_env,
+        device=BOUNDARY_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [
             f"{train_dir(wc.run)}/evals/step-0000000/",
             f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
         ],
+        cache=f"{CACHE}/held-out-base",
     shell:
         "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} base {{params.where}} --device {{params.device}} "
-        "> {log} 2>&1"
+        "--cache {params.cache} > {log} 2>&1"
 
 
 rule evaluate_checkpoint:
@@ -58,16 +60,16 @@ rule evaluate_checkpoint:
         f"{TRAIN}/logs/evaluate-checkpoint-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/evaluate_checkpoint/n{{n}}.tsv"
-    priority: newest_first(EVALUATION_PRIORITY)
+    priority: boundary_priority
     conda:
         TOOLS_ENV
-    threads: EVALUATE_THREADS
+    threads: BOUNDARY_THREADS
     resources:
-        gpu=CHECKPOINT_FORECAST.gpu,
+        gpu=BOUNDARY_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=checkpoint_env,
-        device=CHECKPOINT_FORECAST.device,
+        env=boundary_env,
+        device=BOUNDARY_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=evaluate_inputs_from,
     shell:
@@ -91,91 +93,22 @@ rule seven_day_check:
         f"{TRAIN}/logs/seven-day-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/seven_day_check/n{{n}}.tsv"
-    priority: newest_first(CHECKPOINT_PRIORITY)
+    priority: boundary_priority
     conda:
         TOOLS_ENV
-    threads: EVALUATE_THREADS
+    threads: BOUNDARY_THREADS
     resources:
-        gpu=CHECKPOINT_FORECAST.gpu,
+        gpu=BOUNDARY_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=checkpoint_env,
-        device=CHECKPOINT_FORECAST.device,
+        env=boundary_env,
+        device=BOUNDARY_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
     shell:
         "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
         f"{EVALUATE_PY} seven-day {{params.where}} --device {{params.device}} "
         "> {log} 2>&1"
-
-
-rule quick_check:
-    # A few minutes' check of each checkpoint on a fixed sample of the
-    # held-out blocks (nowcastfoundation.finetune.evaluate.quick_check):
-    # its loss and coverage, for the dashboard's subset line and its
-    # summary. On a whole GPU if the machine has one, above the trainer
-    # (QUICK_PRIORITY), so it runs as the segment ends, before the next.
-    input:
-        settings=f"{TRAIN}/n{{n}}/settings.json",
-        adapter=f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors",
-    output:
-        f"{TRAIN}/n{{n}}/{evaluations.QUICK_CHECK}",
-    log:
-        f"{TRAIN}/logs/quick-check-n{{n}}.log",
-    benchmark:
-        f"{TRAIN}/benchmarks/quick_check/n{{n}}.tsv"
-    priority: QUICK_PRIORITY
-    conda:
-        TOOLS_ENV
-    threads: QUICK_THREADS
-    resources:
-        gpu=QUICK_FORECAST.gpu,
-    params:
-        where=lambda wc, input: Path(input.settings).parent,
-        env=quick_env,
-        device=QUICK_FORECAST.device,
-        blocks=config["quick_check"]["blocks"],
-        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
-        copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
-    shell:
-        "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
-        f"{EVALUATE_PY} quick {{params.where}} --blocks {{params.blocks}} "
-        "--device {params.device} > {log} 2>&1"
-
-
-rule quick_check_base:
-    # Base Chronos-2's quick check, once a run (step 0's snapshot), for
-    # the reference line.
-    input:
-        settings=lambda wc: (
-            f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
-        ),
-    output:
-        f"{TRAIN}/{evaluations.QUICK_BASE}",
-    log:
-        f"{TRAIN}/logs/quick-check-base.log",
-    benchmark:
-        f"{TRAIN}/benchmarks/quick_check_base.tsv"
-    priority: QUICK_PRIORITY
-    conda:
-        TOOLS_ENV
-    threads: QUICK_THREADS
-    resources:
-        gpu=QUICK_FORECAST.gpu,
-    params:
-        where=lambda wc, input: Path(input.settings).parent,
-        env=quick_env,
-        device=QUICK_FORECAST.device,
-        blocks=config["quick_check"]["blocks"],
-        hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
-        copy_in=lambda wc: [
-            f"{train_dir(wc.run)}/evals/step-0000000/",
-            f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}",
-        ],
-    shell:
-        "{params.env} HF_HOME={params.hf_home} HF_HUB_OFFLINE=1 "
-        f"{EVALUATE_PY} quick-base {{params.where}} "
-        "--blocks {params.blocks} --device {params.device} > {log} 2>&1"
 
 
 rule validation_forecasts:
@@ -194,16 +127,16 @@ rule validation_forecasts:
         f"{TRAIN}/logs/validation-forecasts-n{{n}}.log",
     benchmark:
         f"{TRAIN}/benchmarks/validation_forecasts/n{{n}}.tsv"
-    priority: newest_first(EVALUATION_PRIORITY)
+    priority: boundary_priority
     conda:
         TOOLS_ENV
-    threads: EVALUATE_THREADS
+    threads: BOUNDARY_THREADS
     resources:
-        gpu=CHECKPOINT_FORECAST.gpu,
+        gpu=BOUNDARY_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=checkpoint_env,
-        device=CHECKPOINT_FORECAST.device,
+        env=boundary_env,
+        device=BOUNDARY_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
     shell:
@@ -225,16 +158,16 @@ rule validation_forecasts_base:
         f"{TRAIN}/logs/validation-forecasts-base.log",
     benchmark:
         f"{TRAIN}/benchmarks/validation_forecasts_base.tsv"
-    priority: EVALUATION_PRIORITY
+    priority: boundary_priority
     conda:
         TOOLS_ENV
-    threads: EVALUATE_THREADS
+    threads: BOUNDARY_THREADS
     resources:
-        gpu=CHECKPOINT_FORECAST.gpu,
+        gpu=BOUNDARY_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
-        env=checkpoint_env,
-        device=CHECKPOINT_FORECAST.device,
+        env=boundary_env,
+        device=BOUNDARY_FORECAST.device,
         hf_home=LOCAL.get("HF_HOME", "output/finetune/hf"),
         copy_in=lambda wc: [f"{train_dir(wc.run)}/{HELD_OUT_BLOCKS}"],
     shell:

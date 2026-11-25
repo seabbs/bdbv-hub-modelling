@@ -68,10 +68,16 @@ def evaluate(
     val = list(blocks)
     full = "start" in kinds or "checkpoint" in kinds
     need = range(len(val)) if full else _subset_needs(val, kinds)
+    device = str(next(model.parameters()).device)
     scored = dict(
         zip(
             need,
-            held_out_pass(model, [val[i] for i in need], batch_size),
+            held_out_pass(
+                model,
+                [val[i] for i in need],
+                batch_size,
+                eval_budget(device),
+            ),
             strict=True,
         )
     )
@@ -92,6 +98,10 @@ def evaluate(
     if "checkpoint" in kinds:
         out["held_out_loss_by_level"] = _by_level(val, got, fs.LEVEL_BLOCKS)
         out["held_out_loss_by_source"] = _by_source(val, got, None)
+    if full:
+        check = precision_check(model, val, batch_size, device)
+        if check is not None:
+            out["precision_check"] = check
     return out
 
 
@@ -244,13 +254,21 @@ class _RowLosses:
             at = torch.arange(target.shape[-1], device=mask.device)
             steps = torch.as_tensor(self.steps, device=mask.device)
             now = at[None, :] < steps[:, None]
+            kind = target.device.type
             for part, keep in (
                 ("loss", torch.ones_like(now)),
                 ("nowcast", now),
                 ("forecast", ~now),
             ):
                 kwargs["future_target_mask"] = (mask & keep).float()
-                got = row_losses(model, **kwargs)
+                with torch.autocast(device_type=kind, enabled=False):
+                    got = row_losses(
+                        model,
+                        **{
+                            **kwargs,
+                            "quantile_preds": kwargs["quantile_preds"].float(),
+                        },
+                    )
                 self.rows[part] = got.double().cpu().numpy()
             return loss
 
@@ -263,20 +281,101 @@ class _RowLosses:
         Chronos2Model._compute_loss = self.original
 
 
+EVAL_ACTIVATION_BYTES = 60_000
+"""GPU memory a held-out forward pass holds per series and token, with
+no gradients: a twelfth of a training step's (`stream.ACTIVATION_BYTES`),
+as inference keeps one layer's activations, not every layer's. A batch
+that still runs out is split (`held_out_pass`)."""
+
+
+def block_cost(block: dict[str, Any]) -> int:
+    """Return a block's series x tokens at most, before trimming.
+
+    Its rows over the context patches, the reg token and the output
+    patches, as `stream.batch_tokens` counts a batch's.
+    """
+    tokens = (
+        -(-ft.CONTEXT // fs.INPUT_PATCH)
+        + 1
+        + -(-int(block["prediction_length"]) // ft.OUTPUT_PATCH)
+    )
+    return int(block["context"].shape[0]) * tokens
+
+
+def pack(data: Any, budget: int) -> list[list[int]]:
+    """Return batches of blocks of one length within `budget` each.
+
+    Within each prediction length (`stream.ByLength`), the largest blocks
+    first, each batch filled while its series x tokens (`block_cost`)
+    stay within `budget`; a block over it runs alone.
+    """
+    groups: list[list[int]] = []
+    for length in data.data:
+        idx = [i for i, n in enumerate(data.lengths) if n == length]
+        costs = {
+            i: block_cost(
+                {
+                    "context": data.inputs[i]["context"],
+                    "prediction_length": length,
+                }
+            )
+            for i in idx
+        }
+        group: list[int] = []
+        used = 0
+        for i in sorted(idx, key=lambda k: -costs[k]):
+            if group and used + costs[i] > budget:
+                groups.append(group)
+                group, used = [], 0
+            group.append(i)
+            used += costs[i]
+        if group:
+            groups.append(group)
+    return groups
+
+
+def eval_budget(device: str) -> int | None:
+    """Return a held-out batch's series x tokens on `device`, or None.
+
+    On CUDA, the free memory less `stream.MEMORY_MARGIN` of the total
+    over `EVAL_ACTIVATION_BYTES`; elsewhere None, for the trainer's
+    batches (`stream.ByLength`), as larger ones gain nothing on a CPU.
+    """
+    if not device.startswith("cuda"):
+        return None
+    memory = fs.device_memory()
+    if memory is None:
+        return None
+    free, total = memory
+    spare = free - int(fs.MEMORY_MARGIN * total)
+    return max(1, spare // EVAL_ACTIVATION_BYTES)
+
+
 def held_out_pass(
-    model: Any, blocks: Sequence[dict[str, Any]], batch_size: int
+    model: Any,
+    blocks: Sequence[dict[str, Any]],
+    batch_size: int,
+    budget: int | None = None,
+    precision: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return each block's row losses and interval hits, from one pass.
 
-    Each batch (`finetune.stream.ByLength`, as the trainer batches) is run
-    through the model once: its loss by row (`row_losses`) over every
-    step, the nowcast steps and the forecast steps, and its target rows'
-    50% and 90% interval hits (`_block_hits`). A block's entry holds
-    `n`, its rows, `loss`, `nowcast` and `forecast`, by row, and `cover`.
+    Each batch is run through the model once: its loss by row
+    (`row_losses`, in fp32) over every step, the nowcast steps and the
+    forecast steps, and its target rows' 50% and 90% interval hits
+    (`_block_hits`). A block's entry holds `n`, its rows, `loss`,
+    `nowcast` and `forecast`, by row, and `cover`. Batches are the
+    trainer's (`stream.ByLength`) without a `budget`, else blocks packed
+    to it (`pack`); a batch that runs out of memory is split in two.
+    The forward runs at the inference precision (`precision`, by
+    default `PRECISION`; `backends.chronos2.inference_precision`). Row
+    losses are means over rows, so the batching changes no result.
     """
     import torch
     from chronos.chronos2.dataset import DatasetMode
     from chronos.chronos2.model import Chronos2Model
+
+    from nowcastfoundation.backends.chronos2 import autocast
 
     blocks = list(blocks)
     data = fs.ByLength(
@@ -285,79 +384,109 @@ def held_out_pass(
         DatasetMode.VALIDATION,
         series_bias.has_bias(model),
     )
+    groups = list(data.indices()) if budget is None else pack(data, budget)
     accepted = inspect.signature(Chronos2Model.forward).parameters
     at = at_levels(model, INTERVAL_LEVELS)
+    device = str(next(model.parameters()).device)
     training = model.training
     model.eval()
     out: list[dict[str, Any]] = [{} for _ in blocks]
+
+    def run(indices: list[int], split: _RowLosses) -> None:
+        batch = data._build_batch(indices)
+        sizes = [int(blocks[i]["context"].shape[0]) for i in indices]
+        split.steps = np.concatenate(
+            [
+                np.full(n, fs.nowcast_steps(blocks[i]))
+                for i, n in zip(indices, sizes, strict=True)
+            ]
+        )
+        try:
+            with autocast(device, precision):
+                got = fs.forward(model, batch, accepted)
+        except torch.OutOfMemoryError:
+            if len(indices) == 1:
+                raise
+            del batch
+            fs.free_memory()
+            half = len(indices) // 2
+            run(indices[:half], split)
+            run(indices[half:], split)
+            return
+        raw = got.quantile_preds.float().cpu().numpy()
+        target = batch["future_target"].float().cpu().numpy()
+        start = 0
+        for i, n, (lo, hi) in zip(
+            indices, sizes, batch["target_idx_ranges"], strict=True
+        ):
+            if lo != start:
+                raise ValueError("a block's rows are not where expected")
+            out[i] = {
+                "n": n,
+                **{k: v[start : start + n] for k, v in split.rows.items()},
+                "cover": _block_hits(blocks[i], at(raw[lo:hi]), target[lo:hi]),
+            }
+            start += n
+
     with torch.no_grad(), _RowLosses() as split:
-        for indices in data.indices():
-            batch = data._build_batch(indices)
-            sizes = [int(blocks[i]["context"].shape[0]) for i in indices]
-            split.steps = np.concatenate(
-                [
-                    np.full(n, fs.nowcast_steps(blocks[i]))
-                    for i, n in zip(indices, sizes, strict=True)
-                ]
-            )
-            got = fs.forward(model, batch, accepted)
-            raw = got.quantile_preds.float().cpu().numpy()
-            target = batch["future_target"].float().cpu().numpy()
-            start = 0
-            for i, n, (lo, hi) in zip(
-                indices, sizes, batch["target_idx_ranges"], strict=True
-            ):
-                if lo != start:
-                    raise ValueError("a block's rows are not where expected")
-                out[i] = {
-                    "n": n,
-                    **{k: v[start : start + n] for k, v in split.rows.items()},
-                    "cover": _block_hits(
-                        blocks[i], at(raw[lo:hi]), target[lo:hi]
-                    ),
-                }
-                start += n
+        for k, indices in enumerate(groups, start=1):
+            run(list(indices), split)
+            if budget is not None:
+                fs.report_batch(k, len(groups))
     model.train(training)
     return out
 
 
-def quick_blocks(
-    blocks: Sequence[dict[str, Any]], n: int
-) -> list[dict[str, Any]]:
-    """Return `n` held-out blocks spread evenly over the set, or all."""
+PRECISION_BLOCKS = 20
+"""Held-out blocks `precision_check` scores at fp32 too."""
+
+PRECISION_TOLERANCE = 0.005
+"""The relative difference in held-out loss between half precision and
+fp32 that `precision_check` accepts (0.5%)."""
+
+
+def spread(blocks: Sequence[dict[str, Any]], n: int) -> list[dict[str, Any]]:
+    """Return `n` blocks spread evenly over `blocks`, or all of them."""
     blocks = list(blocks)
     if n >= len(blocks):
         return blocks
     return [blocks[i * len(blocks) // n] for i in range(n)]
 
 
-def quick_check(
-    adapter: Path,
-    base: Any,
+def precision_check(
+    model: Any,
     blocks: Sequence[dict[str, Any]],
     batch_size: int,
-    n: int,
-) -> dict[str, Any]:
-    """Return the held-out loss and coverage of `quick_blocks`, quickly.
+    device: str,
+) -> dict[str, Any] | None:
+    """Return the held-out loss at half precision against fp32, or None.
 
-    `base` with `adapter` (and its series bias), in one pass: the loss
-    and its nowcast and forecast parts, the 50% and 90% interval
-    coverage, the blocks scored and the seconds taken.
+    On `PRECISION_BLOCKS` blocks spread over the set, when the inference
+    precision on `device` is not fp32; `rel` is their relative
+    difference, which `PRECISION_TOLERANCE` bounds.
     """
-    from peft import PeftModel
+    from nowcastfoundation.backends.chronos2 import inference_precision
 
-    tick = time.perf_counter()
-    picked = quick_blocks(blocks, n)
-    series_bias.attach_for(base, adapter)
-    model = PeftModel.from_pretrained(base, adapter)
-    got = held_out_pass(model, picked, batch_size)
-    cover = summarise_coverage([row for r in got for row in r["cover"]])
+    precision = inference_precision(device)
+    if precision == "fp32":
+        return None
+    sample = spread(blocks, PRECISION_BLOCKS)
+    half = _losses("loss", held_out_pass(model, sample, batch_size))["loss"]
+    full = _losses(
+        "loss", held_out_pass(model, sample, batch_size, precision="fp32")
+    )["loss"]
+    rel = abs(half - full) / full
+    if rel > PRECISION_TOLERANCE:
+        fs.log(
+            f"held-out loss at {precision} is {rel:.2%} off fp32, over"
+            f" {PRECISION_TOLERANCE:.1%}"
+        )
     return {
-        **_losses("loss", got),
-        "cover50": cover["cover50"],
-        "cover90": cover["cover90"],
-        "blocks": len(picked),
-        "seconds": time.perf_counter() - tick,
+        "precision": precision,
+        "blocks": len(sample),
+        "loss": half,
+        "loss_fp32": full,
+        "rel": rel,
     }
 
 

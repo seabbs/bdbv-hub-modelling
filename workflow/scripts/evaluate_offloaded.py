@@ -1,21 +1,17 @@
 """Score an offloaded run's step 0 and checkpoints (rules/evaluate.smk).
 
-    python workflow/scripts/evaluate_offloaded.py base TRAIN/n<N>
+    python workflow/scripts/evaluate_offloaded.py base TRAIN/n<N> [--cache DIR]
     python workflow/scripts/evaluate_offloaded.py checkpoint TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py seven-day TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py validation TRAIN/n<N>
     python workflow/scripts/evaluate_offloaded.py validation-base TRAIN/n<N>
-    python workflow/scripts/evaluate_offloaded.py quick TRAIN/n<N> --blocks K
-    python workflow/scripts/evaluate_offloaded.py quick-base TRAIN/n<N> \
-        --blocks K
 
 `base` scores step 0 alone (base Chronos-2, the start loss), `checkpoint`
 segment n<N>'s adapter, `seven-day` its 7-day check (`SEVEN_DAY`, beside
 its settings), `validation` its forecasts of a sample of the held-out
 blocks and `validation-base` base Chronos-2's of the same blocks
-(`evaluations.VALIDATION_FILE`, `VALIDATION_BASE`), `quick` its quick
-check of K held-out blocks and `quick-base` base Chronos-2's
-(`evaluations.QUICK_CHECK`, `QUICK_BASE`), with the trainer's own losses
+(`evaluations.VALIDATION_FILE`, `VALIDATION_BASE`), with the trainer's own
+losses
 (nowcastfoundation.finetune.evaluate); the files are as
 `flowlib.evaluations` says.
 """
@@ -41,14 +37,55 @@ from nowcastfoundation.finetune import evaluate as fe  # noqa: E402
 from nowcastfoundation.finetune import stream as fs  # noqa: E402
 
 
-def base_step(where: Path, device: str) -> None:
+def base_step(where: Path, device: str, cache: Path | None = None) -> None:
     """Score step 0 (base Chronos-2) alone, unless it has a result.
 
     It scores every held-out block; a checkpoint's evaluation needs it
-    for the start loss.
+    for the start loss. With `cache`, a result for the same model,
+    held-out set, request, evaluator and precision (`base_key`) is taken
+    from it, and a new one kept in it, so each is scored once.
     """
     train = where.parent
+    snap = train / "evals" / "step-0000000"
+    out = snap.with_name(snap.name + ".json")
+    if out.exists():
+        fs.log(f"{out}: step 0 is scored")
+        return
+    kept = cache / f"{base_key(train, device)}.json" if cache else None
+    if kept is not None and kept.is_file():
+        fe.write_json(out, json.loads(kept.read_text()))
+        fs.log(f"{out}: step 0 from {kept}")
+        return
     score_snapshots(train, evaluations.pending(train, -1, 0), device)
+    if kept is not None and out.is_file():
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        fe.write_json(kept, json.loads(out.read_text()))
+
+
+def base_key(train: Path, device: str) -> str:
+    """Return what step 0's result depends on, hashed.
+
+    Base Chronos-2 and its revision, the held-out set
+    (`stream.HELD_OUT_KEY`), step 0's request, the evaluator's code and
+    the inference precision on `device`.
+    """
+    import hashlib
+
+    from nowcastfoundation.backends.chronos2 import inference_precision
+
+    request = json.loads(
+        (train / "evals/step-0000000/request.json").read_text()
+    )
+    key = {
+        "model": fe.CHRONOS_MODEL,
+        "revision": fe.CHRONOS_REVISION,
+        "held_out": json.loads((train / fs.HELD_OUT_KEY).read_text()),
+        "request": {k: v for k, v in request.items() if k != "step"},
+        "evaluator": hashlib.sha256(Path(fe.__file__).read_bytes()).hexdigest(),
+        "precision": inference_precision(device),
+    }
+    text = json.dumps(key, sort_keys=True)
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
 def logging_batches(label: str) -> Any:
@@ -173,47 +210,12 @@ def validation(where: Path, device: str, base_only: bool = False) -> None:
     fs.log(f"{label}: {len(records)} validation forecasts in {seconds:.0f} s")
 
 
-def quick(where: Path, device: str, n: int, base_only: bool = False) -> None:
-    """Write a checkpoint's (or base Chronos-2's) quick check.
-
-    Its loss and coverage on `n` held-out blocks spread over the run's
-    set (`fe.quick_check`). Base Chronos-2 is step 0's snapshot.
-    """
-    train = where.parent
-    if base_only:
-        adapter = train / "evals" / "step-0000000" / "adapter"
-        out, label = train / evaluations.QUICK_BASE, "base"
-        settings = json.loads(adapter.with_name("request.json").read_text())
-    else:
-        adapter = where / "finetuned-ckpt"
-        out, label = where / evaluations.QUICK_CHECK, where.name
-        settings = json.loads((where / "settings.json").read_text())
-    blocks = fe.load_blocks(
-        train / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
-    )
-    with logging_batches(f"{label} quick check"):
-        got = fe.quick_check(
-            adapter,
-            fe.load_base(device),
-            blocks,
-            settings.get("batch_size", 256),
-            n,
-        )
-    fe.write_json(out, {**got, "device": device})
-    fs.log(
-        f"{label}: quick check loss {got['loss']:.4f} on {got['blocks']}"
-        f" blocks in {got['seconds']:.0f} s"
-    )
-
-
 WHAT = (
     "base",
     "checkpoint",
     "seven-day",
     "validation",
     "validation-base",
-    "quick",
-    "quick-base",
 )
 """The subcommands."""
 
@@ -226,20 +228,16 @@ def main(argv: Sequence[str] | None = None) -> None:
     # The rule passes its scoring device (flowlib.compute); never detected.
     p.add_argument("--device", required=True)
     p.add_argument(
-        "--blocks",
-        type=int,
-        help="held-out blocks the quick check scores (`quick_check.blocks`)",
+        "--cache",
+        type=Path,
+        help="where step 0's results are kept across runs (`base`)",
     )
     args = p.parse_args(argv)
     device = torch_device(args.device)
     if args.what == "base":
-        base_step(args.where, device)
+        base_step(args.where, device, args.cache)
     elif args.what == "seven-day":
         seven_day(args.where, device)
-    elif args.what in ("quick", "quick-base"):
-        if args.blocks is None:
-            p.error(f"{args.what} needs --blocks")
-        quick(args.where, device, args.blocks, args.what == "quick-base")
     elif args.what in ("validation", "validation-base"):
         validation(args.where, device, args.what == "validation-base")
     else:

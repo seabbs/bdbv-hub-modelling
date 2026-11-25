@@ -138,15 +138,6 @@ class Training:
             return []
         return [f"{self.train_dir(run)}/n{n}/{SIDECAR}"]
 
-    def quick(self, run: str, n: int | None) -> list[str]:
-        """Return checkpoint n's quick check (None: base's), if offloaded."""
-        if self.runs[run].ft["eval"] != "offload":
-            return []
-        train = self.train_dir(run)
-        if n is None:
-            return [f"{train}/{evaluations.QUICK_BASE}"]
-        return [f"{train}/n{n}/{evaluations.QUICK_CHECK}"]
-
     def validation_curve_inputs(self, wc: Any) -> list[str]:
         """Return each of the run's checkpoints, with its held-out losses."""
         train, ns = self.train_dir(wc.run), self.runs[wc.run].ft["prefixes"]
@@ -316,10 +307,6 @@ class Training:
             out += [f for n in ns for f in self.offloaded(run, n)]
             # Each checkpoint's 7-day check (rule seven_day_check).
             out += [f"{train}/n{n}/seven-day.json" for n in ns]
-            # An offloaded run's quick checks and base Chronos-2's, between
-            # segments (rules quick_check, _base).
-            out += [f for n in ns for f in self.quick(run, n)]
-            out += self.quick(run, None) if ns else []
             # Its validation forecasts and base Chronos-2's, for the
             # dashboard (rules validation_forecasts, _base).
             out += [f"{train}/n{n}/{evaluations.VALIDATION_FILE}" for n in ns]

@@ -84,7 +84,6 @@ required:
   - runs
   - train_runs
   - forecast
-  - quick_check
   - score
   - hub_rounds
   - ft_check
@@ -167,16 +166,6 @@ properties:
 
   train_runs:
     oneOf: [{type: "null"}, {$ref: "#/$defs/labels"}]
-
-  quick_check:
-    description: >-
-      Each checkpoint's quick check (rule quick_check): the held-out
-      blocks it scores, spread evenly over the run's set.
-    type: object
-    additionalProperties: false
-    required: [blocks]
-    properties:
-      blocks: {type: integer, minimum: 1}
 
   forecast:
     description: >-

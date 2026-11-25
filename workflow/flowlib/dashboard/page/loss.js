@@ -91,7 +91,7 @@ function draw(){
  var keyed=LT=="layout"?SRCS.map(function(s){return [s,SRC[s]]}):LT=="level"?LVLS.map(function(l){return [l,LVL[l]]}):[];
  var heldLeg=keyed.filter(function(k){return has(function(h){return h.key==k[0]})}).map(function(k){return '<span><i style="background:'+k[1]+'"></i>'+k[0]+'</span>'}).join("")
   +(keyed.length?byRuns.map(function(r){return '<span>'+sw("var(--fg)",STY[D.runs.indexOf(r)%4])+' '+r.label+'</span>'}).join(""):"")
-  +(has(function(h){return h.sub})?'<span>'+sw("var(--fg)","")+' subset: first 100 blocks at each evaluation, or an offloaded run\'s quick check at step 0 and each checkpoint</span>':"")
+  +(has(function(h){return h.sub})?'<span>'+sw("var(--fg)","")+' subset (first 100 blocks), each evaluation</span>':"")
   +(has(function(h){return !h.sub})?'<span>'+msw("o")+' full set, step 0 and each checkpoint</span>':"")
   +(LT=="level"?'<span class=mut>by level: step 0 and checkpoints only (the trainer logs no level loss in between)</span>':"")
   +(mode=="base"&&runs.some(function(r){return r.held.length})?'<span class=mut>subset: no base Chronos-2 value</span>':"")

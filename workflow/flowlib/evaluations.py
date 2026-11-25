@@ -27,8 +27,6 @@ from nowcastfoundation.sidecar import (
 )
 
 __all__ = [
-    "QUICK_BASE",
-    "QUICK_CHECK",
     "VALIDATION_BASE",
     "VALIDATION_FILE",
     "checkpoint_settings",
@@ -41,23 +39,6 @@ __all__ = [
     "validation_curve",
     "write_validation_curve",
 ]
-
-
-QUICK_CHECK = "quick-check.json"
-"""A checkpoint's quick check (rule quick_check), beside its settings:
-the loss, its parts and the coverage of a fixed sample of the held-out
-blocks (`finetune.evaluate.quick_check`)."""
-
-QUICK_BASE = "evals/quick-check-base.json"
-"""Base Chronos-2's quick check, in the run's train folder (rule
-quick_check_base)."""
-
-QUICK_LOSSES = {
-    "loss": "eval_loss",
-    "loss_nowcast": "eval_loss_nowcast",
-    "loss_forecast": "eval_loss_forecast",
-}
-"""A quick check's losses as the history's subset losses."""
 
 
 VALIDATION_FILE = "validation-forecasts.json.gz"
@@ -81,32 +62,10 @@ def checkpoint_settings(where: Path | str) -> dict[str, Any]:
     where = Path(where)
     settings = _read(where / "settings.json")
     sidecar = _read(where / SIDECAR)
-    out = with_sidecar(
+    return with_sidecar(
         settings if isinstance(settings, dict) else {},
         sidecar if isinstance(sidecar, dict) else None,
     )
-    quick = _read(where / QUICK_CHECK)
-    if isinstance(quick, dict):
-        out["quick_check"] = quick
-    return out
-
-
-def quick_results(train: Path | str) -> dict[int, dict[str, Any]]:
-    """Return the quick checks' losses as subset losses, by step.
-
-    Base Chronos-2's at step 0 and each checkpoint's at its step.
-    """
-    train = Path(train)
-    found = [(0, _read(train / QUICK_BASE))]
-    for where in sorted(train.glob(f"n*/{QUICK_CHECK}")):
-        settings = _read(where.parent / "settings.json")
-        if isinstance(settings, dict) and "steps" in settings:
-            found.append((int(settings["steps"]), _read(where)))
-    return {
-        step: {QUICK_LOSSES[k]: v for k, v in got.items() if k in QUICK_LOSSES}
-        for step, got in found
-        if isinstance(got, dict)
-    }
 
 
 def step_results(train: Path | str) -> dict[int, dict[str, Any]]:
@@ -124,14 +83,8 @@ def step_results(train: Path | str) -> dict[int, dict[str, Any]]:
 def merged_history(
     history: Sequence[Mapping[str, Any]], train: Path | str
 ) -> list[dict[str, Any]]:
-    """Return the trainer's history with each step's offloaded losses.
-
-    With the quick checks' losses as the subset losses at step 0 and at
-    each checkpoint (`quick_results`).
-    """
+    """Return the trainer's history with each step's offloaded losses."""
     results = step_results(train)
-    for step, quick in quick_results(train).items():
-        results[step] = {**results.get(step, {}), **quick}
     out = []
     for entry in history:
         entry = dict(entry)
