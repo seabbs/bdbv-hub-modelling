@@ -75,19 +75,16 @@ def test_daily_counts_include_the_country(task: ForecastTask) -> None:
 def test_median_sums_ahead_have_no_weekday_cycle(
     draws: pd.DataFrame,
 ) -> None:
+    # The medians of the sums after the cut-off, averaged by weekday, are
+    # about level: a weekday cycle would make some weekdays' sums higher.
     cut = pd.Timestamp(DATE)
-    ahead = draws.loc[
-        (draws["location"] == "DE") & (draws["target_end_date"] >= cut)
-    ]
-    med = ahead.groupby("target_end_date")["value"].median()
-    # Between two sums ending on the cut-off weekday the medians move one
-    # way only.
-    for k in range(3):
-        week = med.iloc[7 * k : 7 * k + 8].to_numpy()
-        if len(week) < 8:
-            break
-        steps = np.diff(week)
-        assert (steps >= -1).all() or (steps <= 1).all(), week
+    ahead = draws.loc[draws["target_end_date"] > cut]
+    assert set(ahead["location"]) == {"CD-BE", "CD-BY"}
+    med = ahead.groupby(["location", "target_end_date"])["value"].median()
+    for loc, own in med.groupby(level="location"):
+        days = own.index.get_level_values("target_end_date")
+        by_day = own.groupby((days - cut).days % 7).mean()
+        assert by_day.std() / by_day.mean() < 0.08, loc
 
 
 def test_daily_counts_walk_with_the_sums_spread(
