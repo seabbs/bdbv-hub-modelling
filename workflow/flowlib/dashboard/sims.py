@@ -48,6 +48,38 @@ def layers(grid: Path | str) -> dict[str, str]:
     return out
 
 
+def notes(grid: Path | str) -> dict[str, str]:
+    """Return each grid setting's note, for the page's tooltips.
+
+    A drawn value's `why`; a factor's comment lines just above it in the
+    grid's `factors`.
+    """
+    text = Path(grid).read_text()
+    spec = yaml.safe_load(text)
+    out = {
+        name: str(d["why"])
+        for name, d in (spec.get("distributions") or {}).items()
+        if isinstance(d, Mapping) and d.get("why")
+    }
+    factors = set(spec.get("factors") or {})
+    block, comment = False, []
+    for line in text.splitlines():
+        if not line.startswith(" "):
+            block = line.startswith("factors:")
+            comment = []
+            continue
+        if not block:
+            continue
+        if line.startswith("  #"):
+            comment.append(line.strip().lstrip("#").strip())
+            continue
+        key = re.match(r"^  (\w+):", line)
+        if key and key.group(1) in factors and comment:
+            out.setdefault(key.group(1), " ".join(comment))
+        comment = []
+    return out
+
+
 def sources(root: Path | str, hidden: Iterable[int] = ()) -> dict[str, Path]:
     """Return the folders of simulations under `root`, by name.
 
@@ -123,6 +155,76 @@ def _read_settings(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, keep_default_na=False)
 
 
+DELAY_POINTS = (0, 1, 2, 3, 5, 7, 10, 14, 21, 28, 42)
+"""The delays (days) a simulation's reporting delay distribution is kept
+at: the share of its cases reported by each."""
+
+CACHE_VERSION = 2
+"""The batch summaries' version: a cached summary of another is redone."""
+
+
+def _derived(rows: pd.DataFrame) -> tuple[dict[str, float], dict[str, Any]]:
+    """Return what a simulation's drawn settings produced, from its counts.
+
+    Statistics: the share reported within 14 and 28 days, releases a
+    week (report dates over their span), the median gap between report
+    dates and the days from the first reference date to the first report
+    (cadence), the largest weekly log growth, and the observation noise
+    (the mean absolute log ratio of each day's final count to its
+    centred 7-day mean). Curves: the delay distribution's cumulative
+    share at `DELAY_POINTS`, and the reference- and report-date weekday
+    profiles (Monday first, each weekday's counts over their mean).
+    """
+    total = float(rows["count"].sum()) or 1.0
+    by_delay = rows.groupby("delay")["count"].sum()
+    cdf = [
+        _round(float(by_delay[by_delay.index <= d].sum()) / total, 4)
+        for d in DELAY_POINTS
+    ]
+    reports = np.sort(rows["rep"].unique())
+    days = (reports[-1] - reports[0]) / np.timedelta64(1, "D") + 1
+    gaps = np.diff(reports) / np.timedelta64(1, "D")
+    daily = rows.groupby("ref")["count"].sum()
+    daily = daily.reindex(
+        pd.date_range(daily.index.min(), daily.index.max()), fill_value=0
+    )
+    smooth = daily.rolling(7, center=True, min_periods=1).mean()
+    noise = np.abs(
+        np.log1p(daily.clip(lower=0)) - np.log1p(smooth.clip(lower=0))
+    ).mean()
+    first = rows["ref"].min()
+    weekly = rows.groupby((rows["ref"] - first).dt.days // 7)["count"].sum()
+    growth = np.diff(np.log1p(weekly.clip(lower=0).to_numpy()))
+
+    def profile(dates: pd.Series) -> list[float]:
+        by = rows.groupby(dates.dt.day_of_week)["count"].sum()
+        by = by.reindex(range(7), fill_value=0).to_numpy(dtype=float)
+        mean = by.mean()
+        return [_round(v / mean, 3) if mean else 0.0 for v in by]
+
+    stats = {
+        "within14": _round(
+            float(by_delay[by_delay.index < 14].sum()) / total, 3
+        ),
+        "within28": _round(
+            float(by_delay[by_delay.index < 28].sum()) / total, 3
+        ),
+        "releases": _round(7 * len(reports) / days, 3),
+        "gap": _round(float(np.median(gaps)), 3) if len(gaps) else 0.0,
+        "first_report": int((reports[0] - first) / np.timedelta64(1, "D")),
+        "growth": _round(float(max(growth.max(), 0.0)), 3)
+        if len(growth)
+        else 0.0,
+        "noise": _round(float(noise), 3),
+    }
+    curves = {
+        "cdf": cdf,
+        "refdow": profile(rows["ref"]),
+        "repdow": profile(rows["rep"]),
+    }
+    return stats, curves
+
+
 def _summary(rows: pd.DataFrame) -> tuple[dict[str, float], list[int], str]:
     """Return a simulation's statistics, weekly counts and first date."""
     first = rows["ref"].min()
@@ -157,8 +259,9 @@ def summarise_batch(
 
     Each has its id, its grid factors (`f`) and single drawn values
     (`v`), its statistics (`s`, from the first draw's counts with every
-    stratum summed), its weekly counts by reference date (`w`) and its
-    first reference date.
+    stratum summed, `_derived`'s among them), its curves (`x`: the delay
+    distribution and weekday profiles), its weekly counts by reference
+    date (`w`) and its first reference date.
     """
     table = _read_settings(settings)
     by_id = dict(list(_read_counts(counts).groupby("id")))
@@ -177,13 +280,15 @@ def summarise_batch(
             elif ";" not in row[name]:
                 factors[name] = row[name]
         stats, series, first = _summary(by_id[oid])
+        more, curves = _derived(by_id[oid])
         out.append(
             {
                 "id": oid,
                 "f": factors,
                 "v": values,
-                "s": stats,
+                "s": stats | more,
                 "w": series,
+                "x": curves,
                 "first": first,
             }
         )
@@ -209,8 +314,10 @@ class Index:
         cache: Path | str,
         layer_of: Mapping[str, str],
         hidden: Iterable[int] = (),
+        notes: Mapping[str, str] | None = None,
     ) -> None:
         self.root = Path(root)
+        self.notes = dict(notes or {})
         self.hidden = frozenset(int(r) for r in hidden)
         self.cache = Path(cache)
         self.layer_of = dict(layer_of)
@@ -227,7 +334,7 @@ class Index:
         counts = settings.with_name(f"counts-{seed}.csv.gz")
         if not counts.exists():
             return []
-        stamp = _stamp(counts, settings)
+        stamp = [CACHE_VERSION, *_stamp(counts, settings)]
         cached = self.cache / name / f"{seed}.json"
         try:
             got = json.loads(cached.read_text())
@@ -270,10 +377,18 @@ class Index:
             "ids": [r["id"] for r in rows],
             "first": [r["first"] for r in rows],
             "layers": {k: self.layer_of[k] for k in factor_names + value_names},
+            # The grid's own order of its settings, and their notes.
+            "order": list(self.layer_of),
+            "notes": self.notes,
             "factors": factors,
             "values": {k: [r["v"].get(k) for r in rows] for k in value_names},
             "stats": {k: [r["s"][k] for r in rows] for k in stat_names},
             "series": [r["w"] for r in rows],
+            "derived": {
+                k: [r["x"][k] for r in rows]
+                for k in ("cdf", "refdow", "repdow")
+            },
+            "delay_points": list(DELAY_POINTS),
         }
 
     def refresh(self) -> None:
@@ -310,16 +425,34 @@ class Index:
         return self.encoded[name] if self._ensure(name) else None
 
     def listing(self) -> list[dict[str, Any]]:
-        """Return the sources, each with its simulations if indexed."""
+        """Return the sources, each with its simulations if indexed.
+
+        Each says whether it is a round's or a run's; the default is the
+        run whose simulations changed last, else the last round.
+        """
+        found = self.sources()
+        runs = [k for k, f in found.items() if f.parent.parent.name == "runs"]
+        newest = max(runs, key=lambda k: _changed(found[k]), default=None)
+        default = newest or (list(found)[-1] if found else None)
         return [
             {
                 "key": k,
                 "simulations": len(self.built[k]["ids"])
                 if k in self.built
                 else None,
+                "kind": "run" if k in runs else "round",
+                "default": k == default,
             }
-            for k in self.sources()
+            for k in found
         ]
+
+
+def _changed(folder: Path) -> int:
+    """Return when a source's simulations last changed (ns)."""
+    return max(
+        (p.stat().st_mtime_ns for p in folder.glob("settings-*.csv")),
+        default=0,
+    )
 
 
 def _encode(payload: Any) -> bytes:
@@ -328,6 +461,26 @@ def _encode(payload: Any) -> bytes:
 
 def _clean(values: pd.Series) -> list[float | None]:
     return [None if not math.isfinite(v) else _round(float(v)) for v in values]
+
+
+@functools.lru_cache(maxsize=16)
+def _batch_rows(path: str, stamp: tuple) -> dict[str, pd.DataFrame]:
+    """Return a batch's counts by simulation, decoded once (`stamp` keys).
+
+    The deep dive reads a simulation from here, so each batch is read and
+    decompressed once while it is among the last 16 used.
+    """
+    del stamp
+    return dict(list(_read_counts(Path(path)).groupby("id")))
+
+
+@functools.lru_cache(maxsize=16)
+def _latent_rows(path: str, stamp: tuple) -> dict[str, pd.DataFrame]:
+    """Return a batch's latent values (all strata summed) by simulation."""
+    del stamp
+    lat = pd.read_csv(path, dtype={"outbreak": str, "location": str})
+    lat = lat[lat["location"] == "all"]
+    return dict(list(lat.groupby("outbreak")))
 
 
 @functools.lru_cache(maxsize=32)
@@ -340,9 +493,9 @@ def _detail(
     layer_of = dict(layer_items)
     seed = _ID.match(oid).group(1)
     path = Path(folder)
-    counts = _read_counts(path / f"counts-{seed}.csv.gz")
-    rows = counts[counts["id"] == oid]
-    if rows.empty:
+    counts_path = path / f"counts-{seed}.csv.gz"
+    rows = _batch_rows(str(counts_path), tuple(_stamp(counts_path))).get(oid)
+    if rows is None or rows.empty:
         return None
     first, last = rows["ref"].min(), rows["ref"].max()
     dates = pd.date_range(first, last, freq="D")
@@ -398,8 +551,9 @@ def _detail(
     latent = None
     latent_path = path / f"latent-{seed}.csv.gz"
     if latent_path.exists():
-        lat = pd.read_csv(latent_path, dtype={"outbreak": str, "location": str})
-        lat = lat[(lat["outbreak"] == oid) & (lat["location"] == "all")]
+        lat = _latent_rows(str(latent_path), tuple(_stamp(latent_path))).get(
+            oid, pd.DataFrame()
+        )
         if not lat.empty:
             lat = lat.sort_values("day")
             latent = {"dates": list(lat["date"].astype(str))} | {

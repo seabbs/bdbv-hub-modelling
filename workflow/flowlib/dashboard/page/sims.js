@@ -8,11 +8,14 @@
 "use strict";
 var PAL=window.simsPalette,LAYERS=window.simsLayers,MAXCOL=PAL.length-1;
 var NS="http://www.w3.org/2000/svg";
-var S={src:null,data:null,shown:[],levels:{},bins:{},group:null,
+var S={layer:null,src:null,data:null,shown:[],levels:{},bins:{},group:null,
  scale:"log",norm:false,sort:"cases",desc:true,sim:null};
 var STATS={cases:"Cases",strata:"Strata",days:"Days",weeks:"Weeks",
  peak:"Peak week's cases",peak_at:"Peak position",delay:"Mean delay (days)",
- within7:"Share within 7 days",negative:"Share of negative updates"};
+ within7:"Share within 7 days",negative:"Share of negative updates",
+ within14:"Share within 14 days",within28:"Share within 28 days",
+ releases:"Releases a week",gap:"Days between releases",first_report:"Days to the first report",
+ growth:"Largest weekly growth (log)",noise:"Observation noise"};
 function $(id){return document.getElementById(id)}
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){
  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
@@ -88,45 +91,53 @@ function lineChart(el,o){
  if(o.pick)svg.addEventListener("click",function(){if(cur)o.pick(o.series[cur[2]].id)})}
 function defaultHover(s,i,o){return "<b>"+esc(s.name)+"</b><br>"+(o.dates?o.dates(s.x[i]):fmt(s.x[i]))+": "+fmt(s.y[i])}
 
-// barsH: one row per level, the shown count solid over the source's faint.
+// The layer panels share one size (PW x PH), so the grid is even: shares
+// of each level (shown solid over all faint) and histograms (all faint,
+// shown solid), on the same colours.
+var PW=240,PH=132;
+function panelSvg(inner){return '<svg viewBox="0 0 '+PW+' '+PH+'" width="100%" role="img">'+inner+'</svg>'}
+// barsH: one row per level, its share of the shown simulations solid over
+// its share of the source's faint; click a level to filter to it.
 function barsH(el,rows,click){
- var W=width(el),lab=Math.min(150,W*0.38),R=44,rh=18,H=rows.length*rh+4,pw=W-lab-R;
- var mx=Math.max.apply(null,rows.map(function(r){return r.all}))||1,g=[];
- rows.forEach(function(r,i){var y=2+i*rh,wa=r.all/mx*pw,ws=r.n/mx*pw;
-  g.push('<g class=bar data-i='+i+'><text class=ax x='+(lab-6)+' y='+(y+12)+' text-anchor=end'+(r.on?' style="fill:var(--c1);font-weight:600"':'')+'>'+esc(r.label.length>22?r.label.slice(0,21)+"…":r.label)+'</text>'+
-   '<rect x='+lab+' y='+(y+2)+' width='+wa+' height='+(rh-6)+' rx=3 fill="var(--c1)" fill-opacity=.18></rect>'+
-   '<rect x='+lab+' y='+(y+2)+' width='+ws+' height='+(rh-6)+' rx=3 fill="var(--c1)"></rect>'+
-   '<text class=ax x='+(lab+Math.max(wa,ws)+4)+' y='+(y+12)+'>'+r.n+'</text>'+
-   '<rect class=hit x=0 y='+y+' width='+W+' height='+rh+'></rect></g>')});
- el.innerHTML='<svg width='+W+' height='+H+'>'+g.join("")+'</svg>';
+ var n=rows.length,lab=86,R=34,rh=Math.min(18,(PH-4)/n),pw=PW-lab-R,g=[];
+ var tall=rows.reduce(function(a,r){return a+r.all},0)||1,tshown=rows.reduce(function(a,r){return a+r.n},0)||1;
+ // Shares drawn against the largest, so a panel's bars fill its width.
+ var top=Math.max.apply(null,rows.map(function(r){return Math.max(r.all/tall,r.n/tshown)}))||1;
+ rows.forEach(function(r,i){var y=2+i*rh,sa=r.all/tall/top,ss=r.n/tshown/top,bh=Math.max(3,rh-5);
+  g.push('<g class=bar data-i='+i+'><text class=ax x='+(lab-4)+' y='+(y+rh/2+4)+' text-anchor=end'+(r.on?' style="fill:var(--c2);font-weight:600"':'')+'>'+esc(r.label.length>14?r.label.slice(0,13)+"…":r.label)+'</text>'+
+   '<rect x='+lab+' y='+(y+(rh-bh)/2)+' width='+(sa*pw)+' height='+bh+' rx=2 fill="var(--c1)" fill-opacity=.2></rect>'+
+   '<rect x='+lab+' y='+(y+(rh-bh)/2+bh*0.25)+' width='+(ss*pw)+' height='+(bh*0.5)+' rx=2 fill="'+(r.on?"var(--c2)":"var(--c1)")+'"></rect>'+
+   '<text class=ax x='+(lab+Math.max(sa,ss)*pw+3)+' y='+(y+rh/2+4)+'>'+Math.round(100*r.n/tshown)+'%</text>'+
+   '<rect class=hit x=0 y='+y+' width='+PW+' height='+rh+'></rect></g>')});
+ el.innerHTML=panelSvg(g.join(""));
  [].forEach.call(el.querySelectorAll("g.bar"),function(b){var r=rows[+b.dataset.i];
   b.addEventListener("click",function(){click(r)});
-  b.addEventListener("mousemove",function(e){showTip(e,"<b>"+esc(r.label)+"</b><br>"+r.n+" shown of "+r.all)});
+  b.addEventListener("mousemove",function(e){showTip(e,"<b>"+esc(r.label)+"</b><br>"+r.n+" shown ("+Math.round(100*r.n/tshown)+"%), "+r.all+" in the source ("+Math.round(100*r.all/tall)+"%)")});
   b.addEventListener("mouseleave",hideTip)})}
 
 // hist: 20 bins over the source's range, on a log scale for positive
 // values over more than three orders of magnitude with a long right tail;
-// click a bin to filter to it.
+// all faint, shown solid, each scaled to its own peak so the shapes
+// compare; click a bin to filter to it.
 function hist(el,all,shown,sel,click){
- var a=all.filter(function(v){return v!==null}),W=width(el),H=120,L=36,R=8,T=6,B=22,pw=W-L-R,ph=H-T-B;
+ var a=all.filter(function(v){return v!==null}),L=6,R=6,T=6,B=18,pw=PW-L-R,ph=PH-T-B;
  if(!a.length){el.innerHTML="<p class=mut>No values.</p>";return}
  var mn=Math.min.apply(null,a),mxv=Math.max.apply(null,a),md=median(a),lg=mn>0&&mxv/mn>1000&&mxv-md>10*(md-mn);
  var tf=lg?Math.log10:function(v){return v},inv=lg?function(v){return Math.pow(10,v)}:function(v){return v};
  var lo=tf(mn),hi=tf(mxv);if(hi===lo)hi=lo+1;var n=20,bw=(hi-lo)/n;
  function count(v){var c=new Array(n).fill(0);v.forEach(function(x){if(x===null||(lg&&x<=0))return;c[Math.min(n-1,Math.floor((tf(x)-lo)/bw))]++});return c}
- var ca=count(a),cs=count(shown),mx=Math.max.apply(null,ca)||1,g=[],gap=2,w=pw/n;
- ticks(0,mx,3).forEach(function(v){var y=T+ph-v/mx*ph;g.push('<line class=grid x1='+L+' x2='+(W-R)+' y1='+y+' y2='+y+'></line><text class=ax x='+(L-4)+' y='+(y+4)+' text-anchor=end>'+fmt(v)+'</text>')});
- for(var i=0;i<n;i++){var x=L+i*w,on;
-  on=sel&&Math.abs(sel[0]-inv(lo+i*bw))<=Math.abs(inv(lo+i*bw))*1e-9+1e-12;
-  g.push('<g class=bar data-i='+i+'><rect x='+(x+gap/2)+' y='+(T+ph-ca[i]/mx*ph)+' width='+(w-gap)+' height='+(ca[i]/mx*ph)+' fill="var(--c1)" fill-opacity=.18></rect>'+
-   '<rect x='+(x+gap/2)+' y='+(T+ph-cs[i]/mx*ph)+' width='+(w-gap)+' height='+(cs[i]/mx*ph)+' fill="'+(on?"var(--c2)":"var(--c1)")+'"></rect>'+
+ var ca=count(a),cs=count(shown),ma=Math.max.apply(null,ca)||1,ms=Math.max.apply(null,cs)||1,g=[],gap=1.5,w=pw/n;
+ g.push('<line class=grid x1='+L+' x2='+(PW-R)+' y1='+(T+ph)+' y2='+(T+ph)+'></line>');
+ for(var i=0;i<n;i++){var x=L+i*w,on=sel&&Math.abs(sel[0]-inv(lo+i*bw))<=Math.abs(inv(lo+i*bw))*1e-9+1e-12;
+  g.push('<g class=bar data-i='+i+'><rect x='+(x+gap/2)+' y='+(T+ph-ca[i]/ma*ph)+' width='+(w-gap)+' height='+(ca[i]/ma*ph)+' fill="var(--c1)" fill-opacity=.2></rect>'+
+   '<rect x='+(x+gap/2+w*0.2)+' y='+(T+ph-cs[i]/ms*ph)+' width='+Math.max(1,w*0.6-gap)+' height='+(cs[i]/ms*ph)+' fill="'+(on?"var(--c2)":"var(--c1)")+'"></rect>'+
    '<rect class=hit x='+x+' y='+T+' width='+w+' height='+ph+'></rect></g>')}
- [0,n/2,n].forEach(function(k){g.push('<text class=ax x='+(L+k*w)+' y='+(H-6)+' text-anchor='+(k?k===n?'end':'middle':'start')+'>'+fmt(inv(lo+k*bw))+'</text>')});
- if(lg)g.push('<text class=ax x='+(W-R)+' y='+(T+10)+' text-anchor=end>log scale</text>');
- el.innerHTML='<svg width='+W+' height='+H+'>'+g.join("")+'</svg>';
+ [0,n].forEach(function(k){g.push('<text class=ax x='+(L+k*w)+' y='+(PH-4)+' text-anchor='+(k?'end':'start')+'>'+fmt(inv(lo+k*bw))+'</text>')});
+ if(lg)g.push('<text class=ax x='+(PW/2)+' y='+(PH-4)+' text-anchor=middle>log scale</text>');
+ el.innerHTML=panelSvg(g.join(""));
  [].forEach.call(el.querySelectorAll("g.bar"),function(b){var i=+b.dataset.i,r=[inv(lo+i*bw),inv(lo+(i+1)*bw)];
   b.addEventListener("click",function(){click(r)});
-  b.addEventListener("mousemove",function(e){showTip(e,fmt(r[0])+" to "+fmt(r[1])+"<br>"+cs[i]+" shown of "+ca[i])});
+  b.addEventListener("mousemove",function(e){showTip(e,fmt(r[0])+" to "+fmt(r[1])+"<br>"+cs[i]+" shown, "+ca[i]+" in the source")});
   b.addEventListener("mouseleave",hideTip)})}
 
 // heat: a matrix in one sequential hue (the first accent), by its share
@@ -198,18 +209,33 @@ function summary(){var d=S.data,sh=S.shown;
  [].forEach.call($("bygroup").querySelectorAll("tr[data-l]"),function(r){r.addEventListener("click",function(){
   if(S.group&&r.dataset.l!=="other"&&r.dataset.l!=="all")toggleLevel(S.group,r.dataset.l)})})}
 
-function layers(){var d=S.data,box=$("layerbody"),html=[];
- var all=[].concat(LAYERS,["outcomes"]);
- all.forEach(function(layer){var fs=Object.keys(d.factors).filter(function(k){return d.layers[k]===layer}),
-  vs=Object.keys(d.values).filter(function(k){return d.layers[k]===layer});
-  if(layer==="outcomes")vs=Object.keys(d.stats);
-  if(!fs.length&&!vs.length)return;
-  html.push('<details class="sec layer" open><summary><h3>'+layer+' <span class=mut>('+fs.length+' factors, '+vs.length+(layer==="outcomes"?" statistics":" drawn values")+')</span></h3></summary><div class=plots3>'+
-   fs.map(function(k){return '<div class=card><h3>'+esc(k)+'</h3><div data-f="'+esc(k)+'"></div></div>'}).join("")+
-   vs.map(function(k){return '<div class=card><h3>'+esc(STATS[k]&&layer==="outcomes"?STATS[k]:k)+'</h3><div data-'+(layer==="outcomes"?"s":"v")+'="'+esc(k)+'"></div></div>'}).join("")+'</div></details>')});
- var open={};[].forEach.call(box.querySelectorAll("details.layer"),function(e,i){open[i]=e.open});
- box.innerHTML=html.join("");
- [].forEach.call(box.querySelectorAll("details.layer"),function(e,i){if(i in open)e.open=open[i]});
+// The layers, one at a time (S.layer, the first by default): its settings
+// that vary in the source as an even grid of panels in the grid's order,
+// each named plainly with its grid note as its tooltip; those constant in
+// the source on one line.
+function plain(k){var t=(S.layer==="outcomes"&&STATS[k]||k).replace(/_/g," ");return t.charAt(0).toUpperCase()+t.slice(1)}
+function settingsOf(layer){var d=S.data;
+ if(layer==="outcomes")return Object.keys(d.stats);
+ var mine=function(k){return d.layers[k]===layer&&(k in d.factors||k in d.values)};
+ var ordered=(d.order||[]).filter(mine);
+ return ordered.concat(Object.keys(d.layers).filter(function(k){return mine(k)&&ordered.indexOf(k)<0}))}
+function varies(k){var d=S.data;
+ if(k in d.factors)return d.factors[k].levels.length>1;
+ var col=(d.values[k]||d.stats[k]).filter(function(v){return v!==null});
+ return col.length>0&&Math.min.apply(null,col)<Math.max.apply(null,col)}
+function constantText(k){var d=S.data;
+ if(k in d.factors)return d.factors[k].levels[0]||"(none)";
+ var col=(d.values[k]||d.stats[k]).filter(function(v){return v!==null});return col.length?fmt(col[0]):"–"}
+function layers(){var d=S.data,box=$("layerbody"),names=[].concat(LAYERS,["outcomes"]);
+ names=names.filter(function(l){return settingsOf(l).length});
+ if(names.indexOf(S.layer)<0)S.layer=names[0];
+ $("layerpick").innerHTML=names.map(function(l){var n=settingsOf(l).filter(varies).length;
+  return '<button type=button class="tog'+(l===S.layer?" on":"")+'" data-l="'+l+'">'+l.charAt(0).toUpperCase()+l.slice(1)+' <span class=mut>'+n+'</span></button>'}).join("");
+ var keys=settingsOf(S.layer),vary=keys.filter(varies),still=keys.filter(function(k){return !varies(k)});
+ var notes=d.notes||{};
+ box.innerHTML=vary.map(function(k){var kind=k in d.factors?"f":S.layer==="outcomes"?"s":"v",note=notes[k]||"";
+  return '<div class="card lpanel">'+(note?'<div class=cardinfo><span class=info tabindex=0 data-tip="'+esc(note)+'">ⓘ</span></div>':'')+'<h3 title="'+esc(k+(note?": "+note:""))+'">'+esc(plain(k))+'</h3><div data-'+kind+'="'+esc(k)+'"></div></div>'}).join("");
+ $("constants").innerHTML=still.length?"<b>Constant in this source:</b> "+still.map(function(k){return esc(plain(k))+" "+esc(constantText(k))}).join("; "):"";
  var shown=S.shown;
  [].forEach.call(box.querySelectorAll("[data-f]"),function(el){var k=el.dataset.f,f=d.factors[k],
   na=new Array(f.levels.length).fill(0),ns=na.slice();
@@ -221,6 +247,66 @@ function layers(){var d=S.data,box=$("layerbody"),html=[];
   [].forEach.call(box.querySelectorAll("[data-"+p[0]+"]"),function(el){var k=el.dataset[p[0]],col=d[p[1]][k];
    hist(el,col,shown.map(function(i){return col[i]}),S.bins[k],function(r){
     var c=S.bins[k];if(c&&Math.abs(c[0]-r[0])<1e-12)delete S.bins[k];else S.bins[k]=r;update()})})})}
+$("layerpick").addEventListener("click",function(e){var b=e.target.closest("button[data-l]");if(!b)return;S.layer=b.dataset.l;layers()});
+
+// ---- what the simulations produce, by group -------------------------------
+// Each summary computed from the simulations (the delay distribution,
+// weekday profiles, release cadence, epidemic shape, revisions and noise),
+// split by the "Colour and group by" factor as the series panels are: per
+// level its median and 50% band, the source's whole faint grey.
+var DW=300,DH=170,DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+function q(a,p){var b=a.filter(function(v){return v!==null&&!isNaN(v)}).sort(function(x,y){return x-y});if(!b.length)return null;
+ var i=(b.length-1)*p,lo=Math.floor(i),hi=Math.ceil(i);return b[lo]+(b[hi]-b[lo])*(i-lo)}
+function dsvg(inner){return '<svg viewBox="0 0 '+DW+' '+DH+'" width="100%" role="img">'+inner+'</svg>'}
+// curves: per group, the median and 50% band of each point of a curve.
+function curvePanel(el,xs,xlab,rowsOf,groupsList,colour,opts){
+ var L=36,R=8,T=8,B=28,pw=DW-L-R,ph=DH-T-B,g=[],ys=[];
+ var sets=groupsList.map(function(gr){var rows=rowsOf(gr.ix);
+  var st=xs.map(function(_,j){var col=rows.map(function(r){return r[j]});return [q(col,0.25),q(col,0.5),q(col,0.75)]});
+  st.forEach(function(v){v.forEach(function(x){if(x!==null)ys.push(x)})});return {gr:gr,st:st}});
+ if(!ys.length){el.innerHTML="<p class=mut>No values.</p>";return}
+ var y0=opts.y0!==undefined?opts.y0:Math.min.apply(null,ys),y1=Math.max.apply(null,ys);if(y1===y0)y1=y0+1;
+ var x0=0,x1=xs.length-1,sx=function(j){return L+(j-x0)/(x1-x0||1)*pw},sy=function(v){return T+ph-(v-y0)/(y1-y0)*ph};
+ ticks(y0,y1,3).forEach(function(v){g.push('<line class=grid x1='+L+' x2='+(DW-R)+' y1='+sy(v)+' y2='+sy(v)+'></line><text class=ax x='+(L-4)+' y='+(sy(v)+3)+' text-anchor=end>'+fmt(v)+'</text>')});
+ if(opts.hline!==undefined)g.push('<line class=mark x1='+L+' x2='+(DW-R)+' y1='+sy(opts.hline)+' y2='+sy(opts.hline)+'></line>');
+ xs.forEach(function(x,j){if(xs.length<=8||j%2===0||j===xs.length-1)g.push('<text class=ax x='+sx(j)+' y='+(DH-B+12)+' text-anchor=middle>'+x+'</text>')});
+ g.push('<text class=ax x='+(L+pw/2)+' y='+(DH-3)+' text-anchor=middle>'+xlab+'</text>');
+ sets.forEach(function(set){var c=colour(set.gr.key),faint=set.gr.key==="(all)",up=[],dn=[],med="";
+  set.st.forEach(function(v,j){if(v[0]===null)return;up.push(sx(j).toFixed(1)+","+sy(v[2]).toFixed(1));dn.unshift(sx(j).toFixed(1)+","+sy(v[0]).toFixed(1));med+=(med?"L":"M")+sx(j).toFixed(1)+" "+sy(v[1]).toFixed(1)});
+  g.push('<polygon points="'+up.concat(dn).join(" ")+'" fill="'+c+'" opacity="'+(faint?0.12:0.18)+'"><title>'+esc(set.gr.label)+': 50% of simulations</title></polygon>');
+  g.push('<path d="'+med+'" fill=none stroke="'+c+'" stroke-width='+(faint?1.5:2)+(faint?' stroke-dasharray="4 3"':'')+'><title>'+esc(set.gr.label)+' ('+set.gr.ix.length+'): median</title></path>')});
+ el.innerHTML=dsvg(g.join(""))}
+// intervals: per group a row, its 5-95% line, 25-75% bar and median.
+function intervalPanel(el,col,groupsList,colour,log){
+ var L=92,R=10,T=6,B=18,rh=Math.min(18,(DH-T-B)/groupsList.length),pw=DW-L-R,g=[],all=[];
+ var sets=groupsList.map(function(gr){var v=gr.ix.map(function(i){return col[i]}).filter(function(x){return x!==null&&(!log||x>0)});v.forEach(function(x){all.push(x)});
+  return {gr:gr,q:[q(v,0.05),q(v,0.25),q(v,0.5),q(v,0.75),q(v,0.95)],n:v.length}});
+ if(!all.length){el.innerHTML="<p class=mut>No values.</p>";return}
+ var tf=log?Math.log10:function(v){return v},inv=log?function(v){return Math.pow(10,v)}:function(v){return v};
+ var lo=tf(q(all,0.01)),hi=tf(q(all,0.99));if(hi===lo){hi=lo+1}
+ var sx=function(v){return L+(Math.min(hi,Math.max(lo,tf(v)))-lo)/(hi-lo)*pw};
+ [lo,(lo+hi)/2,hi].forEach(function(t,k){g.push('<text class=ax x='+(L+k*pw/2)+' y='+(DH-4)+' text-anchor='+(k===0?'start':k===2?'end':'middle')+'>'+fmt(inv(t))+'</text>')});
+ sets.forEach(function(set,i){var y=T+i*rh+rh/2,c=colour(set.gr.key),v=set.q;
+  g.push('<text class=ax x='+(L-6)+' y='+(y+4)+' text-anchor=end>'+esc(set.gr.label.length>13?set.gr.label.slice(0,12)+"…":set.gr.label)+'</text>');
+  if(v[2]===null)return;
+  g.push('<g><title>'+esc(set.gr.label)+' ('+set.n+'): median '+fmt(v[2])+', 50% '+fmt(v[1])+' to '+fmt(v[3])+', 90% '+fmt(v[0])+' to '+fmt(v[4])+'</title>'+
+   '<line x1='+sx(v[0])+' x2='+sx(v[4])+' y1='+y+' y2='+y+' stroke="'+c+'" stroke-width=1.5 opacity=.7></line>'+
+   '<rect x='+sx(v[1])+' y='+(y-4)+' width='+Math.max(1,sx(v[3])-sx(v[1]))+' height=8 rx=2 fill="'+c+'" opacity=.45></rect>'+
+   '<circle cx='+sx(v[2])+' cy='+y+' r=3.5 fill="'+c+'" stroke="var(--card)" stroke-width=1.5></circle>'+
+   '<rect x=0 y='+(y-rh/2)+' width='+DW+' height='+rh+' fill=transparent></rect></g>')});
+ if(log)g.push('<text class=ax x='+(DW-R)+' y='+(T+8)+' text-anchor=end>log scale</text>');
+ el.innerHTML=dsvg(g.join(""))}
+function derived(){var d=S.data,box=$("derivedbody");if(!d.derived){box.innerHTML='<p class=mut>This source was summarised before these summaries; it is summarised again on the next refresh.</p>';return}
+ var g=groups(),by={};S.shown.forEach(function(i){var l=g.of(i);(by[l]=by[l]||[]).push(i)});
+ var list=[{key:"(all)",label:"all of the source",ix:d.ids.map(function(_,i){return i})}].concat(g.list.map(function(l){return {key:l,label:l==="all"?"shown":l,ix:by[l]||[]}}));
+ var colour=function(k){return k==="(all)"?"var(--mut)":g.colour(k)};
+ $("derivedleg").innerHTML=list.map(function(x){return '<span><i style="background:'+colour(x.key)+(x.key==="(all)"?';opacity:.5':'')+'"></i>'+esc(x.label)+' <span class=mut>'+x.ix.length+'</span></span>'}).join("")+'<span class=mut>Split by '+esc(S.group||"nothing")+' (the "Colour and group by" control); median and 50% band, or median, 50% and 90% of the simulations.</span>';
+ var curves=[["cdf","Share reported by delay","delay (days)",d.delay_points,{y0:0}],["refdow","Reference-date weekday profile","weekday of reference date",DAYS,{hline:1}],["repdow","Report-date weekday profile","weekday of report",DAYS,{hline:1}]];
+ var scalars=[["within7"],["within14"],["within28"],["releases"],["gap"],["first_report"],["growth"],["peak",true],["peak_at"],["negative"],["noise"]];
+ box.innerHTML=curves.map(function(c){return '<div class="card lpanel"><h3>'+c[1]+'</h3><div data-c="'+c[0]+'"></div></div>'}).join("")+
+  scalars.filter(function(k){return d.stats[k[0]]}).map(function(k){return '<div class="card lpanel"><h3>'+esc(STATS[k[0]]||k[0])+'</h3><div data-x="'+k[0]+'"></div></div>'}).join("");
+ curves.forEach(function(c){curvePanel(box.querySelector('[data-c="'+c[0]+'"]'),c[3],c[2],function(ix){return ix.map(function(i){return d.derived[c[0]][i]})},list,colour,c[4])});
+ scalars.forEach(function(k){var el=box.querySelector('[data-x="'+k[0]+'"]');if(el)intervalPanel(el,d.stats[k[0]],list,colour,!!k[1])})}
 
 function sample(ix,cap){if(ix.length<=cap)return ix;var out=[],step=ix.length/cap;
  for(var j=0;j<cap;j++)out.push(ix[Math.floor(j*step)]);return out}
@@ -308,7 +394,7 @@ function dive(j){var box=$("divebody"),x=j.dates.map(dayNum),i=S.data.ids.indexO
 // ---- wiring ------------------------------------------------------------
 function update(){S.shown=filtered();chips();
  $("status").textContent=S.shown.length.toLocaleString()+" of "+S.data.ids.length.toLocaleString()+" shown";
- summary();layers();spaghetti();table()}
+ summary();layers();derived();spaghetti();table()}
 function setHash(){var h="src="+encodeURIComponent(S.src||"")+(S.sim?"&sim="+encodeURIComponent(S.sim):"");
  history.replaceState(null,"","#"+h)}
 function readHash(){var o={};location.hash.slice(1).split("&").forEach(function(p){var kv=p.split("=");if(kv[0])o[kv[0]]=decodeURIComponent(kv[1]||"")});return o}
@@ -338,6 +424,7 @@ var resized;window.addEventListener("resize",function(){clearTimeout(resized);re
 fetch("sources.json").then(function(r){return r.json()}).then(function(list){
  if(!list.length){$("status").textContent="No simulations under this machine's ROOT yet.";return}
  $("source").innerHTML=list.map(function(s){return "<option value='"+esc(s.key)+"'>"+esc(s.key)+(s.simulations!==null?" ("+s.simulations+")":"")+"</option>"}).join("");
- var h=readHash(),keys=list.map(function(s){return s.key}),src=keys.indexOf(h.src)>=0?h.src:keys[keys.length-1];
+ var h=readHash(),keys=list.map(function(s){return s.key}),def=list.find(function(s){return s.default}),
+  src=keys.indexOf(h.src)>=0?h.src:def?def.key:keys[keys.length-1];
  $("source").value=src;load(src,h.sim)}).catch(function(){$("status").textContent="Could not reach the server."});
 })();

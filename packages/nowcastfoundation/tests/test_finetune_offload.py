@@ -385,3 +385,62 @@ def test_the_adapter_is_merged_before_scoring(tmp_path, monkeypatch):
     assert got["held_out_loss"] == pytest.approx(
         fs.held_out_loss(model, val, 100), rel=1e-5
     )
+
+
+def _mixed(n: int = 4) -> list[dict]:
+    """Held-out blocks of two prediction lengths, interleaved."""
+    out = []
+    for i, block in enumerate(blocks(n)):
+        if i % 2:
+            block = {
+                **block,
+                "context": block["context"][:, :-8],
+                "prediction_length": block["prediction_length"] - 8,
+            }
+        out.append(block)
+    return out
+
+
+@pytest.mark.usefixtures("short_context")
+def test_predictions_come_in_the_blocks_order_packed_or_not():
+    # Batches group blocks by length; each block's quantiles must still
+    # be its own, in the order given (validation forecasts, 7-day check).
+    model = trained()
+    val = _mixed()
+    one = fe._predictions(model, val, 100)
+    packed = fe._predictions(model, val, 100, budget=10**9)
+    for block, got, again in zip(val, one, packed, strict=True):
+        assert got[0] is block
+        assert again[0] is block
+        assert got[1].shape[-1] >= block["prediction_length"]
+        np.testing.assert_allclose(again[1], got[1], rtol=1e-4, atol=1e-5)
+
+
+@pytest.mark.usefixtures("short_context")
+def test_predictions_run_at_the_inference_precision(monkeypatch):
+    model = trained()
+    val = blocks(2)
+    seen = []
+    forward = fs.forward
+
+    def watched(*args, **kwargs):
+        seen.append(torch.is_autocast_enabled("cpu"))
+        return forward(*args, **kwargs)
+
+    monkeypatch.setattr(fs, "forward", watched)
+    monkeypatch.setenv("PRECISION", "bf16")
+    fe._predictions(model, val, 100)
+    assert seen
+    assert all(seen)
+
+
+@pytest.mark.usefixtures("short_context")
+def test_validation_records_name_their_own_blocks(monkeypatch):
+    model = trained()
+    val = _mixed(4)
+    monkeypatch.setattr(fe, "validation_sample", lambda n, *_: list(range(n)))
+    got = fe.validation_forecasts(model, val, 100)
+    assert [r["block"] for r in got] == [0, 1, 2, 3]
+    # Each record's truth is its own block's horizon.
+    for r, block in zip(got, val, strict=True):
+        assert len(r["rows"][0]["truth"]) == block["prediction_length"]

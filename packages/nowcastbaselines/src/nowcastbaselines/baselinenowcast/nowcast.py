@@ -71,7 +71,7 @@ from jax import Array
 
 from nowcastbaselines.introductions import introduction_rates, silent_places
 from nowcastbaselines.pooling import pool_matrix, source_index
-from nowcastbaselines.walk import walk_noise, walk_variance
+from nowcastbaselines.walk import DailySteps, walk_noise, walk_variance
 from nowcastutils.base import ModelUnavailableError
 from nowcastutils.snapshots import SnapshotArrays, week_sum, weekly_sums
 
@@ -511,6 +511,10 @@ class Origin:
         Errors behind each fit, `[L, K]`.
     obs_source : numpy.ndarray or None
         Index of the estimate behind each fit, `[L, K]`.
+    steps : DailySteps or None
+        For blocks of one day, the walk's step mean and spread by the
+        weekday of the day stepped into; None where every step has mean
+        0 and spread `sigma`.
     """
 
     snap: SnapshotArrays
@@ -530,6 +534,7 @@ class Origin:
     size: np.ndarray | None = None
     obs_n: np.ndarray | None = None
     obs_source: np.ndarray | None = None
+    steps: DailySteps | None = None
 
     @property
     def start_nowcast(self) -> int:
