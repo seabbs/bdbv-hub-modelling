@@ -180,7 +180,7 @@ It is one process: the page is rebuilt in the background and a client that leave
 
 It runs two ways, through the one script (`flowlib.dashboard.serve`):
 
-- with the run: `dashboard.serve: true` in the workflow config, on a machine whose targets (`TARGETS`) include `finetune`, starts it from the run's own checkout when the run starts (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
+- with the run: `dashboard.serve: true` in the workflow config (the default), on a machine whose targets (`TARGETS`) include `finetune`, starts it from the run's own checkout and local config when the run starts, showing the runs it trains (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
 - alone: `task workflow:dashboard`, from any checkout, in the foreground.
 
 Either shows the runs under `DASHBOARD_ROOT` (default `ROOT`), so a checkout can watch another machine folder's runs.
@@ -241,7 +241,7 @@ LOCAL_CONFIG=<run folder>/local.env nohup task workflow:run > <run folder>/coord
 ```
 
 Stop it with `touch output/coordinator.stop` in the driver checkout, which ends it after the running tick.
-`task workflow:dashboard` with the same `LOCAL_CONFIG` serves the run's dashboard.
+The run serves its dashboard on `DASHBOARD_HOST:DASHBOARD_PORT` for as long as the coordinator lives (section 6).
 
 ## Scheduled runs
 
