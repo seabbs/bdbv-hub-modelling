@@ -42,7 +42,7 @@ class Training:
     Parameters
     ----------
     config : mapping
-        The workflow config (`runs`, `finetune`, `next_segment_only`).
+        The workflow config (`runs`, `finetune`).
     local : mapping
         This machine's settings (`localconfig.read`).
     rounds : Rounds
@@ -297,14 +297,6 @@ class Training:
             lambda s: self.outbreaks_or_full(run, s),
         )
 
-    def to_train(self, run: str) -> list[int]:
-        """Return the prefixes `finetune` asks for of the run."""
-        return segments.to_train(
-            self.trainable(run),
-            lambda n: self.saved(run, n),
-            bool(self.config.get("next_segment_only")),
-        )
-
     def finetune_inputs(self, wc: Any) -> list[str]:  # noqa: ARG002
         """Return each trained run's checkpoints, held-out losses, checks."""
         out = []
@@ -312,7 +304,7 @@ class Training:
             there, train, ns = (
                 self.runs[run],
                 self.train_dir(run),
-                self.to_train(run),
+                self.trainable(run),
             )
             out += [f"{train}/n{n}/settings.json" for n in ns]
             # An offloaded run's held-out losses, scored after each segment.
@@ -322,8 +314,8 @@ class Training:
             # A machine that publishes as it trains (PUBLISH in local.env).
             if self.local["PUBLISH"]:
                 out += [f"{train}/n{n}/published.json" for n in ns]
-            # The check once its checkpoint is asked for, so one segment a
-            # run does not train on to it.
+            # The check once its checkpoint is within reach, so it never
+            # pulls the training past the batches there are.
             if there.check in ns:
                 out.append(f"{there.dir}/reports/n{there.check}-check.txt")
         return out

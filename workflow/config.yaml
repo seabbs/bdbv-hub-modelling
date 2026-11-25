@@ -27,11 +27,6 @@ grid_rounds:
 # changes, its rounds join these and it takes new ones.
 retired_rounds: {first: 9, last: 32}
 
-# Whether `finetune` trains only the next segment, not every one in
-# reach. A scheduled tick sets it (flowlib.schedule), so each run ends
-# after one segment and the next run plans afresh.
-next_segment_only: false
-
 simulate:
   # The grid the simulator runs: its factors, sampling distributions,
   # shares, floors and sim QC thresholds (nowcastfoundation.simulator

@@ -260,8 +260,8 @@ Before it, the lists the pool plans from (the checkpoint releases, and on a mach
 A failed refresh leaves the last lists, and the pool still runs.
 The outward targets (`land`, `publish`, `release`) follow in their configured order.
 A failed run skips `land` and `release`, so `land` never follows a failed `score`, but `publish` still releases the checkpoints saved.
-A tick's run trains only the next segment (`next_segment_only`), so it ends after one segment and the next run plans afresh.
-Work that appears during a run, such as a new checkpoint or a landed round, waits for the next tick's run, so it waits at most as long as the longest running job, one segment.
+A tick's run trains every segment within reach of the batches there are, so the next segment starts as soon as the one before is saved, while that checkpoint is scored, evaluated and published on the CPU.
+Work that appears during a run, such as a landed round or a newly listed batch, waits for the next tick's run.
 Snakemake locks the worktree it runs in, so each machine has one driver worktree.
 A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
