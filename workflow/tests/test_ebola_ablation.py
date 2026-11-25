@@ -109,3 +109,15 @@ def test_the_report_shows_each_variant_with_and_without_pseudo_weeks(
     for v in ("3.70", "1.10", "1.40"):
         assert v in html
     assert "slots-c44bbe122e6c" in html
+
+
+def test_the_backtest_config_takes_the_draws_and_delay(tmp_path) -> None:
+    import tomllib
+
+    out = tmp_path / "backtest.toml"
+    ea.backtest_config(
+        ROOT / "packages/nowcastbdbv/config/backtest.toml", out, 200, 42
+    )
+    conf = tomllib.loads(out.read_text())
+    assert conf["samples"]["backtest"] == 200
+    assert conf["forecast"]["max_delay"] == 42
