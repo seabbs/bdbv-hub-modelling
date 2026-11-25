@@ -130,8 +130,9 @@ class PaperFlow:
                 f"`heldout.germany_from` is {heldout}."
             )
         synthetic = config["synthetic"]
+        # A null folder leaves that run's simulations out.
         synthetic["simulations"] = {
-            mode: expand(folder)
+            mode: expand(folder) if folder else None
             for mode, folder in synthetic["simulations"].items()
         }
         # Null leaves the run or rounds out, and what reads them pending.
@@ -248,13 +249,15 @@ class PaperFlow:
         step's outputs (rule sim_realism), and the walk models' pairing
         scores and rho_p (rules si_copula and pairing_germany). Each is
         left out, and its SI result pending, while its run or rounds folder
-        is null, or for the pairing scores while the German benchmark runs
-        on dummy data.
+        is null, for the pairing scores while the German benchmark runs on
+        dummy data, and for the walks' scores while the development
+        simulations are null.
         """
         files = {}
         evidence = f"{self.results}/evidence"
         if self.germany["real"]:
-            files["si_copula"] = f"{evidence}/si-copula.csv"
+            if self.synthetic["simulations"].get("development"):
+                files["si_copula"] = f"{evidence}/si-copula.csv"
             files["copula_rho"] = (
                 f"{evidence}/pairing/pairing-germany-rho.csv.gz"
             )

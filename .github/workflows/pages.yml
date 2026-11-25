@@ -275,12 +275,14 @@ jobs:
       # above, then the paper from its results, for the site's /paper/.
       # Pull requests and pushes run the development target, which never
       # reads the held-out data; the paper target runs only on dispatch.
-      # As `task paper`; keep the two in step.
+      # As `task paper`, with the Pages config (paper/workflow/pages.yaml),
+      # which leaves out the simulations, fine-tuning runs and their scores
+      # that the workflow's hosts make.
       - name: Run the paper workflow and render the paper
         env:
           TARGET: ${{ inputs.paper_target || 'development' }}
         # The same steps as `task paper` (workflow/scripts/paper_run.py).
-        run: python3 workflow/scripts/paper_run.py --render "$TARGET"
+        run: python3 workflow/scripts/paper_run.py --render "$TARGET" --pages
       - name: Build the site into _site
         run: uv run mkdocs build --strict
       # Each package's own docs site, at <site>/<package>/ (as
