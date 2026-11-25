@@ -5,7 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from nowcastbaselines.introductions import _depth, introduction_rates
+from nowcastbaselines.introductions import (
+    _depth,
+    introduction_rates,
+    silent_places,
+)
 
 # Country 0, provinces 1 and 2, zones 3 and 4 in province 1 and zones 5
 # and 6 in province 2.
@@ -83,3 +87,11 @@ def test_places_at_different_depths_never_pool_as_one_level() -> None:
     # no sibling and no other zone, so its rate is 0.
     assert q[3] == 0
     assert q[2] > 0
+
+
+def test_a_history_shorter_than_the_window_is_not_silent() -> None:
+    # The cut-off week 2 has fewer than k = 4 weeks to it: the weeks it
+    # has hold cases.
+    reported = np.array([[3.0, 4.0, 5.0, 0.0, 0.0, 0.0]])
+    assert not silent_places(reported, 2, 4)[0]
+    assert silent_places(np.zeros((1, 6)), 2, 4)[0]
