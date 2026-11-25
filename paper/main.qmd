@@ -222,7 +222,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 ### Sensitivity analyses
 
 ::: {.callout-note title="Plan"}
-- We run baselinenowcast first, giving the point nowcast of our baselinenowcast port to Chronos-2 as complete counts, both zero-shot and with the fine-tuned model, with no further fine-tuning.
+- In the baselinenowcast variant, we give the point nowcast of our baselinenowcast port to Chronos-2 as complete counts, both zero-shot and with the fine-tuned model, with no further fine-tuning.
 - The fine-tuned model on this input shows what the synthetic data teach beyond the reporting delays.
 - We fine-tune Chronos-2 on real data, the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
 - We fine-tune one run without the attention biases and one without lag series, and compare each with the main run.
@@ -243,9 +243,9 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 
 ::: {.callout-note title="Plan"}
 Each section has a figure panel.
-Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data only), Zero-shot (reporting triangle) and Fine-tuned (reporting triangle) in every figure and table.
+Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data), Zero-shot (reporting triangle) and Fine-tuned (reporting triangle) in every figure and table.
 The case studies' score panels also show the hub's baseline, which their scores are relative to.
-Zero-shot (complete data only) has no lag series.
+Zero-shot (complete data) has no lag series.
 Every other comparison, and the hub teams beyond the hub's baseline, is in the SI.
 Each panel shows:
 
@@ -367,11 +367,11 @@ Ebola hub submissions: mean scores, coverage and number of forecasts of each mod
 - The lag count against a fixed cap and the joint block against each level alone and the sum of the lowest level have no SI section yet, and get a paragraph when they do.
 :::
 
-Against `randomwalknowcast`, zero-shot Chronos-2 with baselinenowcast first scored {{< meta results.synthetic.models.foundation_zeroshot_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_twostep >}} on the German {{< meta results.germany.scope >}}.
+Against `randomwalknowcast`, the zero-shot baselinenowcast variant scored {{< meta results.synthetic.models.foundation_zeroshot_twostep >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_twostep >}} on the German {{< meta results.germany.scope >}}.
 The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_twostep >}} and {{< meta results.germany.models.foundation_twostep >}}, and on the reporting-triangle layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
 
 ::: {.content-visible when-meta="results.ebola.shown"}
-On the Ebola {{< meta results.ebola.scope >}}, zero-shot and fine-tuned Chronos-2 with baselinenowcast first and the fine-tuned model on the reporting triangle scored {{< meta results.ebola.models.foundation_zeroshot_twostep >}}, {{< meta results.ebola.models.foundation_twostep >}} and {{< meta results.ebola.models.foundation >}}.
+On the Ebola {{< meta results.ebola.scope >}}, the zero-shot and fine-tuned baselinenowcast variants and the fine-tuned model on the reporting triangle scored {{< meta results.ebola.models.foundation_zeroshot_twostep >}}, {{< meta results.ebola.models.foundation_twostep >}} and {{< meta results.ebola.models.foundation >}}.
 :::
 
 We score the model fine-tuned on real data on the German held-out half and on Ebola rounds after its last training release, {{< meta results.realdata_after >}}, against the model fine-tuned on simulations (SI, Real-data fine-tune against synthetic).

@@ -320,7 +320,7 @@ def test_checkpoint_rows_keep_only_the_live_run() -> None:
 
 def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     # The fine-tuned checkpoints are the curve; zero-shot Chronos-2 on the
-    # ragged layout and on complete data only are horizontal lines, and
+    # reporting-triangle layout and on complete data are horizontal lines, and
     # randomwalknowcast is the line at 1.
     from paperpipe.evidence import checkpoint_figure
 
@@ -346,7 +346,7 @@ def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     curve = lines["Fine-tuned (reporting triangle)"]
     assert list(curve.get_xdata()) == [1000, 2000]
     zero = lines["Zero-shot (reporting triangle)"]
-    complete = lines["Zero-shot (complete data only)"]
+    complete = lines["Zero-shot (complete data)"]
     assert set(zero.get_ydata()) == {2.0}
     assert set(complete.get_ydata()) == {1.7}
     # One colour per source, the references in other line styles.
@@ -354,7 +354,7 @@ def test_checkpoint_curves_show_the_untuned_models_as_lines() -> None:
     assert len({zero.get_linestyle(), complete.get_linestyle()}) == 2
     assert set(lines["Random walk nowcast"].get_ydata()) == {1}
     legend = [t.get_text() for t in fig.legends[0].get_texts()]
-    assert "Zero-shot (complete data only)" in legend
+    assert "Zero-shot (complete data)" in legend
     assert "Random walk nowcast" in legend
 
 

@@ -60,10 +60,10 @@ def base_model(name: str) -> str:
 MODEL_LABELS: Final[dict[str, str]] = {
     "foundation_zeroshot": "Zero-shot (reporting triangle)",
     "foundation": "Fine-tuned (reporting triangle)",
-    "foundation_zeroshot_complete": "Zero-shot (complete data only)",
-    "foundation_complete": "Fine-tuned (complete data only)",
-    "foundation_zeroshot_twostep": "Zero-shot (baselinenowcast first)",
-    "foundation_twostep": "Fine-tuned (baselinenowcast first)",
+    "foundation_zeroshot_complete": "Zero-shot (complete data)",
+    "foundation_complete": "Fine-tuned (complete data)",
+    "foundation_zeroshot_twostep": "Zero-shot (baselinenowcast)",
+    "foundation_twostep": "Fine-tuned (baselinenowcast)",
     "foundation_zeroshot_pseudoweeks": (
         "Zero-shot (reporting triangle, pseudo weeks)"
     ),
@@ -131,7 +131,7 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
 baselines, foundation models, others.
 
 Zero-shot on the reporting triangle is green and zero-shot on complete
-data only purple, chosen with the dataviz palette validator: against
+data purple, chosen with the dataviz palette validator: against
 Fine-tuned (reporting triangle) and Random walk nowcast every pair is at
 least 8 apart (OKLab Delta E x 100) under simulated deuteranopia and
 protanopia and 15 under normal vision, on light and dark backgrounds.

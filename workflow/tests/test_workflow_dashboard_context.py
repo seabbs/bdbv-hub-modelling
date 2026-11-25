@@ -166,7 +166,7 @@ def test_runs_and_references_take_the_shared_display_names(tmp_path):
     names = {paperstyle.model_label(r["paper_model"]) for r in shipped}
     assert names == {
         "Zero-shot (reporting triangle)",
-        "Zero-shot (complete data only)",
+        "Zero-shot (complete data)",
         "Random walk nowcast",
     }
 

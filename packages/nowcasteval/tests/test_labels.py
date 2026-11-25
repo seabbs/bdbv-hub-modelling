@@ -12,7 +12,7 @@ from nowcasteval.labels import (
 MAIN = {
     "foundation": "Fine-tuned (reporting triangle)",
     "foundation_zeroshot": "Zero-shot (reporting triangle)",
-    "foundation_zeroshot_complete": "Zero-shot (complete data only)",
+    "foundation_zeroshot_complete": "Zero-shot (complete data)",
     "randomwalknowcast": "Random walk nowcast",
     "randomwalk": "Random walk",
 }
