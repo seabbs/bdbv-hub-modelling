@@ -43,6 +43,39 @@ def test_a_checkpointed_step_trains_the_bias_as_a_plain_one(monkeypatch):
         assert torch.allclose(a, b, atol=1e-6)
 
 
+def test_a_block_under_the_threshold_is_recomputed_when_asked(monkeypatch):
+    # A block too large for memory alone is run again with every encoder
+    # block checkpointed (`recompute_every_block`), whatever its series.
+    import torch.utils.checkpoint as tc
+    from chronos.chronos2.model import Chronos2EncoderBlock, Chronos2Model
+
+    calls: list[int] = []
+    real = tc.checkpoint
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(tc, "checkpoint", spy)
+    monkeypatch.setattr(
+        Chronos2EncoderBlock, "forward", Chronos2EncoderBlock.forward
+    )
+    fs.checkpoint_large_batches(10**9)
+    # No series bias, whose time chunks are checkpointed too.
+    model = tiny_model()
+    model.train()
+    batch = batch_of(toy_block())
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    fs.train_step(model, batch, accepted, "cpu", 1.0)
+    assert not calls
+    with fs.recompute_every_block():
+        fs.train_step(model, batch, accepted, "cpu", 1.0)
+    assert calls
+    calls.clear()
+    fs.train_step(model, batch, accepted, "cpu", 1.0)
+    assert not calls
+
+
 def test_assigned_restores_the_rows_it_replaced():
     model = tiny_model()
     series_bias.attach(model)
