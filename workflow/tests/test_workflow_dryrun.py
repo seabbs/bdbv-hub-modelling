@@ -1256,7 +1256,8 @@ def config_score_workers() -> int:
 
 def test_score_workers_are_a_machine_setting(tmp_path):
     # A unit's threads are its worker processes, which the config sets and
-    # a machine may override; its memory is each worker's.
+    # a machine may override; its memory is each worker's and the
+    # coordinator's.
     config = {"score": {"labels": ["aaa"]}}
     blocks = score_jobs(tmp_path, config, "SCORE_WORKERS=3\n")
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
@@ -1265,7 +1266,7 @@ def test_score_workers_are_a_machine_setting(tmp_path):
         assert re.search(r"threads: 3\b", block)
         assert "SCORE_WORKERS=3 " in block
         mem = int(re.search(r"mem_mb=(\d+)", block)[1])
-        assert mem >= 3 * scoring.WORKER_MB
+        assert mem >= 3 * scoring.WORKER_MB + scoring.COORDINATOR_MB
 
 
 def test_the_reference_then_newer_checkpoints_are_scored_first(tmp_path):
