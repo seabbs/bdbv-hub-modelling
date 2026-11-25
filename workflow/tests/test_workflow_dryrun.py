@@ -1578,3 +1578,5 @@ def test_the_ebola_ablation_runs_each_variant_and_model(tmp_path):
     assert "ablation/ebola-ablation.html" in out.stdout
     assert f"--releases {tmp_path / 'releases.csv'}" in out.stdout
     assert "ebola_ablation_report.py" in out.stdout
+    assert jobs["ablation_pseudo_vintages"] == "1"
+    assert "--pseudo-vintages" in out.stdout
