@@ -24,6 +24,7 @@ from nowcastbdbv.data.tidy import delays_for_vintage
 from nowcastbdbv.data.zones import ZoneData, hub_places
 from nowcasteval.backtest import (
     BacktestConfig,
+    backtest_origins,
     forecast_locations,
     forecast_weeks,
     real_vintages,
@@ -284,10 +285,10 @@ def development_tasks(
     daily: pd.DataFrame | None = None,
     zones: ZoneData | None = None,
 ) -> list[ForecastTask]:
-    """Build the development tasks: every real vintage but the latest.
+    """Build the development tasks: every origin but the latest.
 
-    Vintages in `config.skip_origins` are left out as origins but stay in
-    the later tasks' histories.
+    The origins are `nowcasteval.backtest.backtest_origins`. Earlier
+    vintages stay in the later tasks' histories.
 
     Parameters
     ----------
@@ -308,10 +309,11 @@ def development_tasks(
     Returns
     -------
     list of ForecastTask
-        Tasks for every real vintage before the latest but the skipped.
+        Tasks for every origin before the latest real vintage.
     """
     real = target.loc[target["kind"] == "real"]
     latest = real_vintages(real)[-1]
+    origins = set(backtest_origins(real, config))
     return [
         t
         for t in make_tasks(
@@ -322,7 +324,7 @@ def development_tasks(
             daily=daily,
             zones=zones,
         )
-        if t.vintage < latest and t.vintage not in config.skip_origins
+        if t.vintage < latest and t.vintage in origins
     ]
 
 

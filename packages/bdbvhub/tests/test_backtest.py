@@ -25,7 +25,7 @@ from nowcasteval.backtest import (
     score_tasks,
     truth_changes,
 )
-from nowcasteval.nowcast import resolve_truth_delay
+from nowcasteval.nowcast import resolve_truth_delay, truth_skip
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
@@ -99,8 +99,12 @@ def test_truth_delay_is_fixed_or_estimated_from_the_releases() -> None:
     assert resolve_truth_delay(cfg, target) == 14
     assert resolve_truth_delay(replace(cfg, truth_level=0.9), target) == 7
     assert resolve_truth_delay(replace(cfg, truth_delay=28), target) == 28
+    assert truth_skip(target, cfg) == ("2026-07-01",)
+    assert truth_skip(target, BacktestConfig()) == ()
+    # Without the last release no age reaches 98%.
+    early = target.loc[target["vintage"] != "2026-09-26"]
     with pytest.raises(ValueError, match="truth_level"):
-        resolve_truth_delay(BacktestConfig(), target)
+        resolve_truth_delay(cfg, early)
 
 
 def test_backtest_origins_start_at_two_usable_releases(
@@ -123,7 +127,7 @@ def test_forecast_weeks() -> None:
     assert len(weeks) == 8
 
 
-def test_development_uses_every_real_vintage_but_the_latest(
+def test_development_uses_every_origin_but_the_latest(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     config: BacktestConfig,
@@ -132,7 +136,8 @@ def test_development_uses_every_real_vintage_but_the_latest(
     forecasts = run_development([get_model("flat")], target, delays, config)
     # Vintages after the model choice date are backtested too.
     real = forecasts.loc[forecasts["kind"] == "real"]
-    assert set(real["vintage"]) == set(vintages[:-1])
+    # The first release has no earlier one, so it is not an origin.
+    assert set(real["vintage"]) == set(vintages[1:-1])
     assert max(real["vintage"]) > "2026-10-10"
 
 
@@ -375,7 +380,7 @@ def test_lopo_masks_one_province_at_a_time(
     # Only the masked province is kept, from development vintages only.
     assert (forecasts["location"] == forecasts["masked"]).all()
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
-    assert set(forecasts["vintage"]) == set(vintages[:-1])
+    assert set(forecasts["vintage"]) == set(vintages[1:-1])
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
     assert set(scores["truth_vintage"]) == {vintages[-1]}
 

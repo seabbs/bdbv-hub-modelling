@@ -1517,7 +1517,8 @@ def _zone_origins(args: argparse.Namespace) -> list[str] | None:
     if not args.chunk:
         return None
     real = load_target(args.data).query("kind == 'real'")
-    return chunk(bt.real_vintages(real)[:-1], args.chunk)
+    config = bt.load_config(args.backtest_config)
+    return chunk(bt.backtest_origins(real, config)[:-1], args.chunk)
 
 
 def _zone_backtest(args: argparse.Namespace) -> int:
@@ -1864,7 +1865,7 @@ def _pairing_sensitivity(args: argparse.Namespace, data_dir: str) -> int:
     config = args.config or "packages/nowcastbdbv/config/backtest.toml"
     data = args.data or data_dir
     real = load_target(data).query("kind == 'real'")
-    origins = bt.real_vintages(real)[:-1]
+    origins = bt.backtest_origins(real, bt.load_config(config))[:-1]
     if args.chunk:
         origins = chunk(origins, args.chunk)
     if args.candidates:
@@ -1990,13 +1991,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "coherence":
         return _coherence(args)
     if args.command == "truth-sensitivity":
-        from nowcasteval.nowcast import truth_sensitivity
+        from nowcasteval.nowcast import truth_sensitivity, truth_skip
 
         conf = bt.load_config(args.config)
+        target = load_target(args.data)
         got = truth_sensitivity(
-            load_target(args.data),
+            target,
             load_daily(args.data),
-            skip=conf.skip_origins,
+            skip=truth_skip(target.query("kind == 'real'"), conf),
         )
         text = (
             got["delays"].to_markdown(index=False)
