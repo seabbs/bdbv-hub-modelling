@@ -57,9 +57,29 @@ def ft_check_released(wc=None):
 
 
 def released_ft_check_page(wc):
-    """The BDBV check page of checkpoint `ck` of the run, once released."""
-    record = checkpoints.publish_checkpoint.get(run=wc.run, ck=wc.ck).output[0]
-    return ft_check_page(f"slots-{json.loads(Path(record).read_text())['hash']}")
+    """The BDBV check page of saved checkpoint `ck` of the run."""
+    settings = Path(train_dir(wc.run), wc.ck, "settings.json")
+    return ft_check_page(f"slots-{json.loads(settings.read_text())['hash']}")
+
+
+def ft_check_record(wc):
+    """The release record of a BDBV check forecast's checkpoint, when it
+    is one of the trained runs' saved checkpoints, so it is released
+    before it is forecast."""
+    import glob
+
+    if not wc.fmodel.startswith("ft-slots-"):
+        return []
+    key = wc.fmodel.removeprefix("ft-slots-")
+    for run in TRAINING.trained_runs():
+        train = train_dir(run)
+        for settings in [
+            *glob.glob(f"{train}/n*/settings.json"),
+            *glob.glob(f"{train}/interim/*/settings.json"),
+        ]:
+            if json.loads(Path(settings).read_text()).get("hash") == key:
+                return str(Path(settings).with_name("published.json"))
+    return []
 
 
 TARGETS = LOCAL["TARGETS"].split()

@@ -38,9 +38,7 @@ rule verify_checkpoint:
         "uv run finetune-verify {params.where} > {output} 2>{log}"
 
 
-# A checkpoint, so the BDBV check of a checkpoint released in this pass
-# (`ft_check_release`, which reads its tag) is planned in the same pass.
-checkpoint publish_checkpoint:
+rule publish_checkpoint:
     input:
         rules.verify_checkpoint.output,
     output:
@@ -64,9 +62,9 @@ checkpoint publish_checkpoint:
 
 
 rule ft_check_release:
-    # A checkpoint's BDBV check page (rules/report.smk) once released: its tag is read from
-    # the release record (`publish_checkpoint`, a checkpoint), so a
-    # publishing run checks a checkpoint in the pass that releases it.
+    # A saved checkpoint's BDBV check page (rules/report.smk), named by the
+    # hash in its settings; its forecasts wait for its release
+    # (`ft_check_record`).
     input:
         released_ft_check_page,
     output:

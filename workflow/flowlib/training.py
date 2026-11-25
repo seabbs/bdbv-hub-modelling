@@ -312,13 +312,14 @@ class Training:
             # Each checkpoint's 7-day check (rule seven_day_check).
             out += [f"{train}/n{n}/seven-day.json" for n in ns]
             # A machine that publishes as it trains (PUBLISH in local.env):
-            # each release, its BDBV check, and its held-out losses once
-            # scored.
+            # each release, a saved checkpoint's BDBV check, and its
+            # held-out losses once scored.
             if self.local["PUBLISH"]:
+                out += [f"{train}/n{n}/published.json" for n in ns]
                 out += [
-                    f"{train}/n{n}/{name}"
+                    f"{train}/n{n}/ft-check.done"
                     for n in ns
-                    for name in ("published.json", "ft-check.done")
+                    if self.saved(run, n)
                 ]
                 out += [f for n in ns for f in self.released_held_out(run, n)]
             # The check once its checkpoint is within reach, so it never
