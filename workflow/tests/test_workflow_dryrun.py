@@ -10,11 +10,12 @@ from pathlib import Path
 
 import pytest
 import yaml
-from flowlib import compute
+from flowlib import compute, scoring
 
 pytest.importorskip("snakemake")
 
 ROOT = Path(__file__).parents[2]
+CONFIG = ROOT / "workflow" / "config.yaml"
 SNAKEMAKE = Path(sys.executable).parent / "snakemake"
 
 
@@ -1239,17 +1240,32 @@ def test_score_units_run_torch_beside_the_trainer_on_the_cpu(tmp_path):
         assert "OMP_NUM_THREADS=1 " not in block
         assert "CUDA_VISIBLE_DEVICES" not in block
         assert not re.search(r"resources: .*gpu=1", block)
-        # A few threads, not the machine: simulations keep their cores.
-        assert re.search(r"threads: 2\b", block)
+        # A few worker processes, not the machine: simulations keep
+        # their cores. Each worker takes one thread.
+        workers = config_score_workers()
+        assert re.search(rf"threads: {workers}\b", block)
+        assert f"SCORE_WORKERS={workers} " in block
+        assert f"OMP_NUM_THREADS={workers} " in block
         assert "--xla_cpu_multi_thread_eigen=false" in block
 
 
-def test_score_threads_are_a_machine_setting(tmp_path):
+def config_score_workers() -> int:
+    """Return the config's German unit workers (`score.workers`)."""
+    return int(yaml.safe_load(CONFIG.read_text())["score"]["workers"])
+
+
+def test_score_workers_are_a_machine_setting(tmp_path):
+    # A unit's threads are its worker processes, which the config sets and
+    # a machine may override; its memory is each worker's.
     config = {"score": {"labels": ["aaa"]}}
-    blocks = score_jobs(tmp_path, config, "FORECAST_THREADS=3\n")
+    blocks = score_jobs(tmp_path, config, "SCORE_WORKERS=3\n")
     units = [b for b in blocks if re.match(r"rule score_germany:", b)]
     assert units
-    assert all(re.search(r"threads: 3\b", b) for b in units)
+    for block in units:
+        assert re.search(r"threads: 3\b", block)
+        assert "SCORE_WORKERS=3 " in block
+        mem = int(re.search(r"mem_mb=(\d+)", block)[1])
+        assert mem >= 3 * scoring.WORKER_MB
 
 
 def test_the_reference_then_newer_checkpoints_are_scored_first(tmp_path):

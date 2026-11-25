@@ -57,10 +57,13 @@ rule score_germany:
     priority: unit_priority(CHECKPOINT_PRIORITY, REFERENCE_PRIORITY)
     conda:
         TOOLS_ENV
-    threads: UNIT_THREADS
+    # Each thread is a worker process of one thread (flowlib.scoring).
+    threads: SCORE_WORKERS
     resources:
         mem_mb=memory.from_benchmark(
-            f"{CACHE}/benchmarks/score_germany/{{label}}.tsv", 3072, like=("label",)
+            f"{CACHE}/benchmarks/score_germany/{{label}}.tsv",
+            UNIT_MEMORY,
+            like=("label",),
         ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
@@ -88,10 +91,12 @@ rule score_run_germany:
     priority: newest_first(CHECKPOINT_PRIORITY)
     conda:
         TOOLS_ENV
-    threads: UNIT_THREADS
+    threads: SCORE_WORKERS
     resources:
         mem_mb=memory.from_benchmark(
-            f"{RUN}/scores/benchmarks/score_run_germany/n{{n}}.tsv", 3072, like=("n",)
+            f"{RUN}/scores/benchmarks/score_run_germany/n{{n}}.tsv",
+            UNIT_MEMORY,
+            like=("n",),
         ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:

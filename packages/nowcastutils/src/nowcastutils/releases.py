@@ -22,6 +22,7 @@ import dataclasses
 import datetime as dt
 import itertools
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -84,6 +85,39 @@ def release_cutoff(rows: pd.DataFrame, release: str) -> dt.date:
     """
     cut = rows.loc[rows["vintage"] == release, "cutoff"]
     return as_date(str(cut.iloc[0]))
+
+
+def release_cutoffs(
+    rows: pd.DataFrame, releases: Sequence[str]
+) -> list[dt.date]:
+    """Return each release's data cut-off, as `release_cutoff` does.
+
+    One pass over `rows`, where `release_cutoff` compares every row for
+    each release.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        Rows with `vintage` and `cutoff` columns.
+    releases : sequence of str
+        The release labels.
+
+    Returns
+    -------
+    list of datetime.date
+        The cut-offs, in the order of `releases`.
+
+    Raises
+    ------
+    KeyError
+        If a release has no rows.
+    """
+    first = rows.drop_duplicates("vintage")
+    at = {
+        str(v): str(c)
+        for v, c in zip(first["vintage"], first["cutoff"], strict=True)
+    }
+    return [as_date(at[str(r)]) for r in releases]
 
 
 MAX_PAIR_AGE = 60
