@@ -272,6 +272,13 @@ def horizons(
     return days, ranges, spec.get("default")
 
 
+def held_out_from(german_config: Path | str) -> str:
+    """Return a German config's split date, its held-out half's first date."""
+    from nowcastgermany.evaluation import load_germany_config
+
+    return str(load_germany_config(ROOT / german_config).split_date)
+
+
 @functools.lru_cache(maxsize=1 << 16)
 def _offset(day: str, origin: str) -> int:
     """Return the days from `origin` to `day`."""
@@ -448,8 +455,12 @@ def build(
     unit: str | None = None,
     days: Range | None = None,
     ranges: Mapping[str, Range] | None = None,
+    until: str | None = None,
 ) -> dict[str, Any] | None:
     """Return every location's nowcasts by series, target, source, origin.
+
+    `until` is the first nowcast date of a held-out half (`held_out_from`):
+    no file of that date or later is read.
 
     `days` and `ranges` are the horizon's days every model is shown over
     and the horizon control's choices (`digest`).
@@ -489,6 +500,8 @@ def build(
             continue
         for path in sorted(folder.glob("*.csv.gz")):
             origin = path.name.removesuffix(".csv.gz")
+            if until is not None and origin >= until:
+                continue
             if ref:
                 origins.add(origin)
             try:
@@ -608,6 +621,7 @@ def cached_build(
     unit: str | None = None,
     days: Range | None = None,
     ranges: Mapping[str, Range] | None = None,
+    until: str | None = None,
 ) -> dict[str, Any] | None:
     """Return `build`'s result, reused while no file of the folders changes."""
     cache = Path(cache)
@@ -618,6 +632,7 @@ def cached_build(
         shown,
         days,
         tuple(sorted((ranges or {}).items())),
+        until,
     )
     if store.get("sig") != sig or "built" not in store:
         store["built"] = build(
@@ -632,6 +647,7 @@ def cached_build(
             unit,
             days,
             ranges,
+            until,
         )
         store["sig"] = sig
     return store["built"]

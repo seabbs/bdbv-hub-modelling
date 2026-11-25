@@ -208,7 +208,7 @@ The page has a sticky bar (section links, the live run's step, one run and refer
 
 Settings:
 
-- `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), the notes filter.
+- `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), what is held out (`held_out`: BDBV, the German held-out half from its split date, and the grid's test round, none of which the dashboard reads), the notes filter.
 - `workflow/config.yaml`'s `runs`: the runs shown, each from `<ROOT>/runs/<name>`, the first live. `--run NAME` shows only the named runs, the first live.
 - `config/local.env` (or the file `LOCAL_CONFIG` names, outside the checkout): `ROOT`, the scoring cache (`SCORE_CACHE`) the score table and each dataset's forecasts are read from, the mailbox (`MAILBOX`), where it listens (`DASHBOARD_HOST`, `DASHBOARD_PORT`) and whose runs it shows (`DASHBOARD_ROOT`).
 - `--ref`: more references, or ones replacing the configured.

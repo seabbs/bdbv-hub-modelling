@@ -278,6 +278,15 @@ def write_once(ctx: page.Context, out: Path) -> None:
     print("wrote", out)
 
 
+def hidden_rounds(config: dict) -> set[int]:
+    """Return the rounds the dashboard never shows: the grid's test round.
+
+    It is held out for the paper (`grid_rounds.test_round`).
+    """
+    test = (config.get("grid_rounds") or {}).get("test_round")
+    return set() if test is None else {int(test)}
+
+
 def simulations(
     config: dict, local: dict[str, str], every: float
 ) -> tuple[sims.Index, dict[str, str]]:
@@ -285,11 +294,14 @@ def simulations(
 
     Of the simulations under DASHBOARD_ROOT, each batch's summary cached
     in `<DASHBOARD_ROOT>/dashboard/sims/`, with the layers of the grid
-    the workflow simulates (`simulate.grid_file`).
+    the workflow simulates (`simulate.grid_file`). The grid's test round
+    is never listed (`hidden_rounds`).
     """
     layer_of = sims.layers(CHECKOUT / config["simulate"]["grid_file"])
     root = serve.root(local)
-    index = sims.Index(root, root / "dashboard" / "sims", layer_of)
+    index = sims.Index(
+        root, root / "dashboard" / "sims", layer_of, hidden_rounds(config)
+    )
 
     def loop() -> None:
         while True:
