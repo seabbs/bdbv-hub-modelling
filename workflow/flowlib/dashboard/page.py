@@ -1104,8 +1104,8 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (
-            "levels",
-            "Validation loss by level and LoRA size",
+            "lora",
+            "LoRA update",
             level_loss_lora.section(ctx.runs, tip),
             True,
         ),
@@ -1143,7 +1143,7 @@ def also_training(ctx: Context, live: Run) -> str:
 NAV = {
     "status": "Status",
     "mailbox": "Activity",
-    "levels": "By level",
+    "lora": "LoRA",
 }
 """Short names in the top bar, where they differ from the section titles."""
 

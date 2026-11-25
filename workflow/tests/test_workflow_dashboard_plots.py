@@ -22,14 +22,22 @@ def _node(script: str) -> object:
     return json.loads(out.stdout)
 
 
-def test_the_level_and_lora_charts_are_drawn_at_their_card_width(tmp_path):
+def test_the_lora_charts_are_drawn_at_their_card_width(tmp_path):
     # Drawn 620 wide and shrunk into a 430 px card, their text was 7 px.
-    folder = tmp_path / "run"
-    (folder / "train").mkdir(parents=True)
-    history = [{"step": 0, "held_out_loss": 0.4, "by_level": {"leaf": 0.2}}]
-    (folder / "train" / "history.json").write_text(json.dumps(history))
+    from test_workflow_dashboard_level_loss_lora import _lora, _safetensors
+
+    d = tmp_path / "run" / "train" / "n250"
+    t_a, t_b = _lora(0, 0, "q")
+    _safetensors(
+        d / "finetuned-ckpt" / "adapter_model.safetensors",
+        {t_a: [[1.0, 0.0]], t_b: [[1.0], [0.0]]},
+    )
+    (d / "finetuned-ckpt" / "adapter_config.json").write_text(
+        '{"r": 1, "lora_alpha": 1}'
+    )
+    (d / "settings.json").write_text(json.dumps({"n_outbreaks": 250}))
     out = level_loss_lora.section(
-        [runs.Run("r5", "r5", folder=folder, live=True)]
+        [runs.Run("r5", "r5", folder=tmp_path / "run", live=True)]
     )
     widths = {int(w) for w in re.findall(r'viewBox="0 0 (\d+) ', out)}
     assert widths

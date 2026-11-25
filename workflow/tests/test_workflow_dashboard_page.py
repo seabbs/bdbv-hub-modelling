@@ -195,7 +195,7 @@ def test_every_section_is_built_for_the_configured_runs(tmp_path):
         "status",
         "loss",
         "bias",
-        "levels",
+        "lora",
         "nowcasts",
         "mailbox",
         "tables",
