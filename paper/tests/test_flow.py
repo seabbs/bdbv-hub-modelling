@@ -146,7 +146,7 @@ def test_ebola_sources_name_every_input() -> None:
         "--ebola-backtest",
         "--ebola-draws",
         "--ebola-draws-models randomwalk randomwalknowcast",
-        "--store-history",
+        "--round-releases",
     ):
         assert option in args
     assert _flow(ebola__hub=None).sources(_w("paper", "ebola")) == ""
@@ -249,13 +249,15 @@ def test_examples_are_read_from_the_development_round() -> None:
     }
 
 
-def test_ebola_reads_the_fit_store_history_release() -> None:
+def test_ebola_reads_our_unsubmitted_models_from_the_round_releases() -> None:
     flow = _flow()
-    history = flow.store_history()
-    assert history.endswith("evidence/fit-store-history.csv.gz")
-    assert history in flow.source_files(_w("paper", "ebola"))
-    assert f"--store-history {history}" in flow.sources(_w("paper", "ebola"))
-    assert _flow(ebola__store_history=None).store_history() is None
+    releases = flow.round_releases()
+    assert releases.endswith("evidence/round-releases.csv.gz")
+    assert releases in flow.source_files(_w("paper", "ebola"))
+    sources = flow.sources(_w("paper", "ebola"))
+    assert f"--round-releases {releases}" in sources
+    assert "store" not in sources
+    assert _flow(ebola__round_releases=None).round_releases() is None
 
 
 def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
