@@ -165,9 +165,11 @@ def test_task_leaves_the_local_config_to_localconfig(taskfile):
     assert "dotenv:" not in text
 
 
-def test_the_workflow_s_profile_comes_from_the_local_config():
+def test_the_workflow_s_profile_comes_from_the_compute_settings():
+    # SNAKEMAKE_PROFILE, COMPUTE and the budget, for a task and a tick.
     text = (ROOT / "workflow" / "Taskfile.yml").read_text()
-    assert "localconfig.py SNAKEMAKE_PROFILE" in text
+    assert "$(python3 workflow/flowlib/compute.py)" in text
+    assert "SNAKEMAKE_PROFILE" not in text
 
 
 def test_a_host_s_seeds_profile_and_rounds_host_are_local(tmp_path):

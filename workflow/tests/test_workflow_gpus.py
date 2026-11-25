@@ -68,9 +68,12 @@ def test_each_claim_takes_a_free_gpu(tmp_path):
     assert again[0] == first[0]
 
 
-def _run(tmp_path, local, command):
+def _run(tmp_path, local, command, **extra):
     env = {**os.environ, "LOCAL_CONFIG": str(local)}
     env.pop("CUDA_VISIBLE_DEVICES", None)
+    env.pop("SLURM_JOB_ID", None)
+    env["GPU_CLAIMS_DIR"] = str(tmp_path / "claims")
+    env.update(extra)
     return subprocess.run(
         ["python3", str(SCRIPT), "SEEN=yes", "sh", "-c", command],
         env={**env, "PATH": f"{tmp_path / 'none'}:{env['PATH']}"},
@@ -86,7 +89,7 @@ def test_a_job_runs_on_the_gpu_it_claims(tmp_path):
     show = 'echo "$CUDA_VISIBLE_DEVICES $SEEN"'
     assert _run(tmp_path, local, show) == "0 yes\n"
     # GPU 0 held by another job: this one takes GPU 1.
-    folder = tmp_path / gpus.FOLDER
+    folder = tmp_path / "claims"
     fd = os.open(folder / "gpu-0.lock", os.O_RDWR | os.O_CREAT)
     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     assert _run(tmp_path, local, show) == "1 yes\n"
@@ -99,7 +102,7 @@ def test_the_claim_holds_while_the_job_runs(tmp_path):
     # The job, still running, holds GPU 0's lock.
     check = (
         f'{sys.executable} -c "import fcntl, os; '
-        f"fd = os.open('{tmp_path / gpus.FOLDER / 'gpu-0.lock'}', os.O_RDWR); "
+        f"fd = os.open('{tmp_path / 'claims' / 'gpu-0.lock'}', os.O_RDWR); "
         'fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)" '
         "2>/dev/null && echo free || echo held"
     )
@@ -151,3 +154,31 @@ def test_a_cpu_forecast_claims_no_gpu(tmp_path):
     ]
     assert lines
     assert not any(machine.CLAIM in line for line in lines)
+
+
+def test_a_slurm_job_runs_on_the_gpus_slurm_gave_it(tmp_path):
+    # Slurm assigns the job its GPUs and sets CUDA_VISIBLE_DEVICES; ids
+    # are the node's, so no lock is taken.
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\nGPUS=0,1\n")
+    show = 'echo "$CUDA_VISIBLE_DEVICES $SEEN"'
+    got = _run(
+        tmp_path, local, show, SLURM_JOB_ID="7", CUDA_VISIBLE_DEVICES="3"
+    )
+    assert got == "3 yes\n"
+    assert not (tmp_path / "claims").exists()
+
+
+def test_a_cluster_executor_assigns_the_gpus(tmp_path):
+    local = tmp_path / "local.env"
+    local.write_text(f"ROOT={tmp_path}\nGPUS=0,1\nCOMPUTE=slurm\n")
+    show = 'echo "$CUDA_VISIBLE_DEVICES $SEEN"'
+    assert _run(tmp_path, local, show, CUDA_VISIBLE_DEVICES="5") == "5 yes\n"
+    assert not (tmp_path / "claims").exists()
+
+
+def test_the_locks_are_this_node_s_not_the_shared_root(monkeypatch):
+    monkeypatch.delenv("GPU_CLAIMS_DIR", raising=False)
+    folder = gpus.claims_dir()
+    assert folder.parent == Path("/tmp")
+    assert str(os.getuid()) in folder.name
