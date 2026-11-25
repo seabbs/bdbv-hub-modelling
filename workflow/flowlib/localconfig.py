@@ -51,6 +51,11 @@ DEFAULTS = (
     # A Snakemake profile of this machine's own, kept outside the
     # repository, which replaces the one COMPUTE gives (empty: none).
     ("SNAKEMAKE_PROFILE", ""),
+    # COMPUTE=slurm (flowlib.compute.slurm_args): the account jobs are
+    # charged to (empty: the plugin's guess) and the site's partitions
+    # file (empty: sinfo's default partition for every job).
+    ("SLURM_ACCOUNT", ""),
+    ("SLURM_PARTITIONS", ""),
     # Where the dashboard (workflow/scripts/dashboard.py) listens: its
     # host (an address of this machine; 127.0.0.1 keeps it local) and
     # port.
