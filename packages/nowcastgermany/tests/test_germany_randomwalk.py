@@ -1,15 +1,16 @@
 """The walks' German 7-day sums ahead of a mid-week nowcast date.
 
 The 7-day sums after the cut-off walk on from each sample's sum ending
-on the cut-off in daily steps, the target's own resolution, so they
-carry no weekday cycle. The daily counts walk in daily steps too, each
-into its weekday with that weekday's spread, and include the country as
-the sum of the states. `randomwalk` returns the sums to its start as
+on the cut-off in daily steps, the target's own resolution. The daily
+counts walk in daily steps too, each step with its weekday's mean, so
+their median repeats the week from the cut-off, and include the country
+as the sum of the states. `randomwalk` returns the sums to its start as
 reported and walks on in daily steps.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 from pathlib import Path
 
@@ -17,11 +18,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nowcastbaselines.randomwalk import (
-    RandomWalk,
-    RandomWalkNowcast,
-    _step_sigma,
-)
+from nowcastbaselines.randomwalk import RandomWalk, RandomWalkNowcast
 from nowcastgermany.data import nowcast_tasks, read_triangle
 from nowcastutils.base import NATIONAL, ForecastTask
 
@@ -78,24 +75,6 @@ def test_daily_counts_include_the_country(task: ForecastTask) -> None:
     assert (wide[NATIONAL] >= wide[states].max(axis=1)).all()
 
 
-@pytest.mark.parametrize("model", [RandomWalk, RandomWalkNowcast])
-def test_median_sums_ahead_have_no_weekday_cycle(
-    task: ForecastTask, model: type[RandomWalk]
-) -> None:
-    # The medians of the sums after the cut-off, averaged by weekday, are
-    # about level: a weekday cycle, or a sum left at 0, would make some
-    # weekdays' sums higher.
-    cut = pd.Timestamp(DATE)
-    out = model().forecast(task)
-    ahead = out.loc[pd.to_datetime(out["target_end_date"]) > cut]
-    assert set(ahead["location"]) == {"CD-BE", "CD-BY"}
-    med = ahead.groupby(["location", "target_end_date"])["value"].median()
-    for loc, own in med.groupby(level="location"):
-        days = pd.to_datetime(own.index.get_level_values("target_end_date"))
-        by_day = own.groupby((days - cut).days % 7).mean()
-        assert by_day.std() / by_day.mean() < 0.08, loc
-
-
 def test_randomwalk_sums_to_its_start_are_as_reported() -> None:
     triangle = read_triangle(FIXTURE)
     task = nowcast_tasks(triangle, DATE, 50, 1, horizons=range(-28, 22))[0]
@@ -120,19 +99,41 @@ def test_randomwalk_sums_to_its_start_are_as_reported() -> None:
     assert fixed > 0
 
 
-def test_daily_walk_steps_into_each_weekday_with_its_own_spread(
+def _median_interval(
+    q: pd.DataFrame, loc: str, day: str, n: int
+) -> tuple[float, float, float]:
+    """Return a median and its 95% order-statistic interval from `n` draws."""
+    own = q.loc[(q["location"] == loc) & (q["date"].astype(str) == day)]
+    at = own.set_index("quantile")["value"]
+    half = 1.96 * 0.5 / np.sqrt(n)
+    return at[0.5], at[round(0.5 - half, 4)], at[round(0.5 + half, 4)]
+
+
+def test_daily_medians_repeat_the_week_from_the_cut_off(
     task: ForecastTask,
 ) -> None:
-    # The daily walk's step into each day takes that day's weekday's
-    # spread, from the daily nowcast's changes into that weekday.
-    model = RandomWalkNowcast()
-    model._start(task)
-    origin, _ = model._block_draws(task, 1, weekdays=True)
-    assert origin.step_sigma is not None
-    assert origin.step_sigma.shape == (len(origin.snap.locations), 7)
-    cut = origin.snap.cut_week(origin.o)
-    first = np.full(len(origin.snap.locations), cut)
-    steps = _step_sigma(origin, first, 14)
-    day = pd.Timestamp(DATE) + pd.to_timedelta(np.arange(1, 15), unit="D")
-    want = origin.step_sigma[:, day.weekday]
-    np.testing.assert_allclose(steps, want)
+    # The walk's steps into each weekday have that weekday's mean, which
+    # sum to 0 over the week: the median follows the weekday pattern and
+    # repeats every 7 days, within the medians' Monte Carlo error.
+    n = 2000
+    big = dataclasses.replace(task, n_samples=n)
+    half = round(1.96 * 0.5 / np.sqrt(n), 4)
+    q = RandomWalkNowcast().daily_quantiles(big, (0.5 - half, 0.5, 0.5 + half))
+    cut = pd.Timestamp(DATE)
+    for loc in ("CD-BE", "CD-BY"):
+        week = [
+            _median_interval(
+                q, loc, (cut + dt.timedelta(days=h)).date().isoformat(), n
+            )
+            for h in range(1, 8)
+        ]
+        # The week's medians follow the weekday pattern, not one level.
+        mids = [m for m, _, _ in week]
+        width = max(hi - lo for _, lo, hi in week)
+        assert max(mids) - min(mids) > 2 * width, loc
+        for h in range(1, 8):
+            a = (cut + dt.timedelta(days=h)).date().isoformat()
+            b = (cut + dt.timedelta(days=h + 7)).date().isoformat()
+            ma, lo_a, hi_a = _median_interval(q, loc, a, n)
+            mb, lo_b, hi_b = _median_interval(q, loc, b, n)
+            assert abs(ma - mb) <= (hi_a - lo_a) + (hi_b - lo_b), (loc, h)
