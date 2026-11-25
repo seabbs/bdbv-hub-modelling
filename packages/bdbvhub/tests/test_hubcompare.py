@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import gzip
 import tomllib
@@ -17,14 +18,13 @@ from bdbvhub.compare import (
     load_hub_submissions,
     load_team_metadata,
     match_vintage,
-    our_forecasts,
     resolve_baseline,
     score_comparison,
     stored_forecasts,
     submission_dir,
     summarise_comparison,
 )
-from nowcastbdbv.data.zones import hub_zones, load_zone_data
+from nowcastbdbv.data.zones import hub_zones
 from nowcasteval.backtest import BacktestConfig
 from nowcasteval.plots import comparison_colours, plot_hub_round
 from nowcastutils.dates import reference_date_for_vintage
@@ -35,7 +35,6 @@ pytestmark = pytest.mark.usefixtures("flat_model")
 WEEKS = ["2026-09-19", "2026-09-26", "2026-10-03", "2026-10-10"]
 DATA = ROOT / "tests" / "fixtures" / "data"
 ZONES = hub_zones(DATA / "hub-config" / "tasks.json")
-ZONE_DATA = load_zone_data(DATA)
 NO_ZONES = pd.DataFrame(
     {
         **{c: pd.Series(dtype=str) for c in ("kind", "vintage", "location")},
@@ -107,19 +106,30 @@ _CONFIG = BacktestConfig(n_samples=100, seed=1)
 
 
 def _ours(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    rounds: tuple[str, ...] = ("2026-10-24",),
+    min_horizon: int = -4,
+    models: tuple[str, ...] = ("flat",),
 ) -> pd.DataFrame:
-    config = _CONFIG
-    return our_forecasts(
-        ["2026-10-24"],
-        target,
-        delays,
-        config,
-        ["flat"],
-        daily,
-        ZONE_DATA,
-        min_horizon=-4,
-    )
+    """Our models' forecasts of hub rounds, as the fit store holds them."""
+    from bdbvhub.models import get_model
+    from nowcastbdbv.backtest import make_tasks
+    from nowcasteval.backtest import run_forecasts
+
+    config = dataclasses.replace(_CONFIG, min_horizon=min_horizon)
+    real = target.loc[target["kind"] == "real"]
+    vintages = sorted(set(real["vintage"]))
+    frames = []
+    for ref in rounds:
+        vintage = match_vintage(ref, vintages)
+        if vintage is None:
+            continue
+        rows = real.loc[real["vintage"] == vintage]
+        tasks = make_tasks(rows, delays, config, daily=daily)
+        frames.append(run_forecasts([get_model(m) for m in models], tasks))
+    return pd.concat(frames, ignore_index=True).assign(source="real")
 
 
 def test_load_hub_submissions_keeps_weekly_samples(tmp_path: Path) -> None:
@@ -243,69 +253,6 @@ def test_match_vintage(target: pd.DataFrame) -> None:
     latest = reference_date_for_vintage(vintages[-1])
     assert match_vintage(latest, vintages) == vintages[-1]
     assert match_vintage(latest + dt.timedelta(days=7), vintages) is None
-
-
-def test_our_forecasts_cover_the_hub_weeks(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
-) -> None:
-    config = BacktestConfig(n_samples=100, seed=1)
-    fc = our_forecasts(
-        ["2026-10-31"],
-        target,
-        delays,
-        config,
-        ["flat"],
-        daily,
-        ZONE_DATA,
-        min_horizon=-5,
-    )
-    assert set(fc["model"]) == {"flat"}
-    assert set(fc["source"]) == {"real"}
-    # The model runs at zone level too.
-    assert (fc["location"].str.count("-") == 2).any()
-    keys = ["model", "location", "target_end_date", "sample"]
-    assert not fc.duplicated(keys).any()
-    assert fc["horizon"].min() == -5
-    assert fc["horizon"].max() == 3
-
-
-def test_our_forecasts_have_every_hub_zone_the_submission_has(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
-) -> None:
-    """A model rerun for a round forecasts every hub zone of its provinces,
-    as its submitted file does (`zones_for_model` over `hub_zones`), not
-    only the zones with cases, so it is scored on the same cells."""
-    from nowcastutils.hierarchy import province_of
-
-    config = BacktestConfig(n_samples=20, seed=1)
-    fc = our_forecasts(
-        ["2026-10-31"], target, delays, config, ["randomwalk"], daily,
-        ZONE_DATA, min_horizon=-2,
-    )  # fmt: skip
-    provinces = set(fc.loc[fc["location"].str.count("-") == 1, "location"])
-    want = {z for z in ZONE_DATA.codes if province_of(z) in provinces}
-    got = set(fc.loc[fc["location"].str.count("-") == 2, "location"])
-    assert got == want
-
-
-def test_the_daily_walk_reruns_over_zones_with_no_recent_cases(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
-) -> None:
-    """Every hub zone is rerun (#996), including zones whose recent days
-    are all 0: the daily walk gives them a forecast (0) rather than
-    stopping the comparison (main Site, run 45393528009)."""
-    config = BacktestConfig(n_samples=20, seed=1)
-    fc = our_forecasts(
-        ["2026-10-31"], target, delays, config,
-        ["randomwalknowcast"], daily, ZONE_DATA, min_horizon=-2,
-    )  # fmt: skip
-    from nowcastutils.hierarchy import province_of
-
-    provinces = set(fc.loc[fc["location"].str.count("-") == 1, "location"])
-    want = {z for z in ZONE_DATA.codes if province_of(z) in provinces}
-    zones = fc.loc[fc["location"].str.count("-") == 2]
-    assert set(zones["location"]) == want
-    assert (fc["value"] >= 0).all()
 
 
 def test_stored_forecasts_pick_matching_rounds(tmp_path: Path) -> None:
@@ -671,15 +618,8 @@ def test_our_models_are_scored_only_on_the_hub_cells(
     # hub team forecast. Only the hub teams' cells are scored, so a model
     # that forecast all of them has the hub's n.
     _write_hub(tmp_path)
-    ours = our_forecasts(
-        ["2026-10-24", "2026-10-31"],
-        target,
-        delays,
-        _CONFIG,
-        ["flat"],
-        daily,
-        ZONE_DATA,
-        min_horizon=-6,
+    ours = _ours(
+        target, delays, daily, ("2026-10-24", "2026-10-31"), min_horizon=-6
     )
     hub = load_hub_submissions(tmp_path)
     scores, energy, _ = score_comparison(

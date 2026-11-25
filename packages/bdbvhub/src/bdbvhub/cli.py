@@ -8,7 +8,7 @@ Commands:
   leave-one-province-out check.
 - `nowcast`: forecast from a real vintage, write the hub file and check it.
   With `--config` (and `--fit`), forecast from a fit configuration.
-- `zone-backtest`: score the random walk models run at zone level.
+- `zone-backtest`: score the random walks' stored zone runs.
 - `digest`: hash what a backtest reads, to key its cached outputs.
 - `concat-results`: stack the results files of runs made apart.
 - `score`: score the forecasts of `--forecast-only` runs together.
@@ -126,7 +126,6 @@ from nowcastutils.devices import host_devices
 from nowcastutils.files import write_csv
 from nowcastutils.forecast import Forecast
 from nowcastutils.hierarchy import is_zone
-from nowcastutils.snapshots import weekly_counts
 
 __all__ = ["build_parser", "chunk", "host_devices", "main"]
 
@@ -243,7 +242,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     zb = sub.add_parser(
-        "zone-backtest", help="Score the random walk models at zone level."
+        "zone-backtest",
+        help="Score the random walks' zone runs, as the fit store holds "
+        "them, on later releases.",
     )
     zb.add_argument("--data", default=data_dir)
     zb.add_argument(
@@ -255,11 +256,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--chunk", default=None, help=_CHUNK_HELP.format(what="origins")
     )
     zb.add_argument(
-        "--forecast-only",
-        action="store_true",
-        help="Forecast without scoring, writing to --parts.",
+        "--store",
+        default="output/fit-store",
+        help="The fit store checkout that `fit-store load` read.",
     )
-    zb.add_argument("--parts", default="output/parts")
+    zb.add_argument(
+        "--results",
+        default="results",
+        help="Where `fit-store load` wrote its status file, which names "
+        "the fits whose zone runs are scored.",
+    )
     zb.add_argument("--out", default="results/zone-scores.csv")
     zb.add_argument("--energy-out", default="results/zone-energy.csv")
     zb.add_argument("--quantiles-out", default="results/zone-quantiles.csv")
@@ -267,7 +273,8 @@ def build_parser() -> argparse.ArgumentParser:
     zb.add_argument(
         "--backtest-config",
         default="packages/nowcastbdbv/config/backtest.toml",
-        help="Gives `[samples] backtest`, the draws per zone forecast.",
+        help="Gives `[forecast]` min_horizon and max_horizon, the weeks "
+        "scored.",
     )
 
     pst = sub.add_parser(
@@ -555,13 +562,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Where `fit-store load` wrote its status file.",
     )
     cmp.add_argument(
-        "--models",
-        nargs="*",
-        default=None,
-        help="Models to run live (none if given empty). Defaults to the "
-        "unfitted ones.",
-    )
-    cmp.add_argument(
         "--stored",
         nargs="*",
         default=None,
@@ -629,6 +629,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     rep = sub.add_parser("report", help="Make the docs figures and tables.")
+    _add_store_arg(rep)
     rep.add_argument("--figures", default="docs/figures")
     rep.add_argument("--generated", default="docs/generated")
     rep.add_argument(
@@ -915,18 +916,15 @@ def _order(table: pd.DataFrame) -> list[str]:
 def _score(args: argparse.Namespace) -> int:
     """Score every model's forecasts from --forecast-only runs together.
 
-    Writes the files the backtest and the zone backtest write when they
-    run every model at once.
+    Writes the files the backtest writes when it runs every model at
+    once.
     """
-    from nowcastbdbv.zones import ZoneForecasts, score_zones
-
     parts = [Path(p) for p in args.parts]
     results, output = Path(args.results), Path(args.output)
     results.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     config = bt.load_config(args.config)
     target, delays = load_target(args.data), load_delays(args.data)
-    daily = load_daily(args.data)
     dev = _stack(parts, "forecasts.csv.gz")
     release = [p for p in parts if (p / "release-runs.csv.gz").exists()]
     if dev is not None or release:
@@ -952,21 +950,6 @@ def _score(args: argparse.Namespace) -> int:
             ReleaseForecasts.read(release),
         )  # fmt: skip
         write_csv(forecasts, output / "forecasts.csv.gz")
-    zoned = [p for p in parts if (p / "zone-forecast-runs.csv.gz").exists()]
-    if zoned:
-        run = ZoneForecasts.read(zoned)
-        scores, energy, kept = score_zones(
-            target, delays, daily, load_daily_zones(args.data), run
-        )
-        _write_zone_results(
-            scores,
-            energy,
-            kept,
-            results / "zone-scores.csv",
-            results / "zone-energy.csv",
-            results / "zone-quantiles.csv",
-            results / "zone-draws.csv.gz",
-        )
     print(f"Scored the forecasts of {len(parts)} parts into {results}.")
     return 0
 
@@ -1063,8 +1046,10 @@ def _fit_store_forecasts(
     """Return the real forecasts of every whole fit in the results' status.
 
     The fits are read from `--store` by the keys `fit-store load` wrote
-    to `STATUS_FILE`. Empty if either is missing. Without `zones`, each
-    fit's zone rows, most of its rows, are dropped as it is read.
+    to `STATUS_FILE`, with a walk's zone run beside its fit
+    (`store.read_zones`). Empty if either is missing. Without `zones`,
+    each fit's zone rows, most of its rows, are dropped as it is read,
+    and no zone run is read.
     """
     status = Path(args.results) / store.STATUS_FILE
     root = Path(args.store)
@@ -1084,6 +1069,14 @@ def _fit_store_forecasts(
         if not zones:
             keep &= ~fc["location"].map(is_zone)
         frames.append(fc.loc[keep])
+        if zones:
+            frames.append(
+                store.read_zones(
+                    store.zones_path(
+                        root, entry["model"], entry["origin"], entry["used"]
+                    )
+                )
+            )
     frames = [f for f in frames if not f.empty]
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
@@ -1104,15 +1097,12 @@ def _with_whole_fits(
 
 
 def _comparison_stored(
-    stored: pd.DataFrame,
-    whole: pd.DataFrame,
-    rounds: Sequence[str],
-    live: Sequence[str],
+    stored: pd.DataFrame, whole: pd.DataFrame, rounds: Sequence[str]
 ) -> pd.DataFrame:
     """Put the whole fits of the hub rounds in place of the stored rows.
 
-    Only rounds in `rounds` and models not in `live` are taken, in the
-    comparison's sample columns, with `kind` as `source`.
+    Only rounds in `rounds` are taken, in the comparison's sample
+    columns, with `kind` as `source`.
     """
     from bdbvhub import compare as hc
 
@@ -1121,10 +1111,9 @@ def _comparison_stored(
     # A date read back as a timestamp prints with its time, so keep the day.
     day = whole["reference_date"].astype(str).str.slice(0, 10)
     whole = whole.assign(reference_date=day)
-    whole = whole.loc[
-        whole["reference_date"].isin(list(rounds))
-        & ~whole["model"].isin(list(live))
-    ].rename(columns={"kind": "source"})
+    whole = whole.loc[whole["reference_date"].isin(list(rounds))].rename(
+        columns={"kind": "source"}
+    )
     return _with_whole_fits(
         stored, whole[list(hc.SAMPLE_COLUMNS)], "reference_date"
     )
@@ -1227,18 +1216,18 @@ def _write_fits(fits: list[pd.DataFrame], path: Path) -> None:
 
 def _zones(
     data: str,
-    name: str | None,
     task: ForecastTask,
     samples: pd.DataFrame,
     own: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame | None, str]:
-    """Forecast the zones, or say why not.
+    """Return the zones, or say why there are none.
 
-    A model that forecast the zones itself (`own`: the zone renewal fits,
-    from the fit directory or the model) gives its zone samples, for the
-    hub's zones. Otherwise the zones come from `zones_for_model` for model
-    `name`. Zone samples with none of the hub's zones or target dates (a
-    stale `ZONES_FILE`) give no zones, and a note.
+    A model whose zones are apart from its samples (`own`: the zone
+    renewal fits' and the walks' stored zone runs, from the fit
+    directory, or the model's) gives those, for the hub's zones.
+    Otherwise the zones are those in its samples (`zones_for_model`).
+    No zone samples, or none of the hub's zones or target dates (a stale
+    `ZONES_FILE`), give no zones, and a note.
     """
     hub_config = Path(data) / "hub-config" / "tasks.json"
     if own is not None:
@@ -1253,16 +1242,12 @@ def _zones(
                 "target dates, so the file has no health zones"
             )
         return own.reset_index(drop=True), ""
-    try:
-        daily = load_daily_zones(data)
-    except OSError:
-        return None, "no zone data, so the file has no health zones"
-    counts = weekly_counts(daily, task.vintage)
-    if counts.empty:
-        return None, f"no zone data for {task.vintage}, so no health zones"
-    zones = zones_for_model(
-        name, task, samples, counts, hub_zones(hub_config), daily
-    )
+    zones = zones_for_model(samples)
+    if zones.empty:
+        return None, (
+            "the forecast has no health-zone samples, so the file has no "
+            "health zones"
+        )
     return zones, ""
 
 
@@ -1322,7 +1307,7 @@ def _hub_forecast(
             Path(fit) / ZONES_FILE, dtype={"target_end_date": str}
         )
     name = get_config(config).model if config else model
-    zones, zone_note = _zones(data, name, task, result.samples, own)
+    zones, zone_note = _zones(data, task, result.samples, own)
     # A model that forecasts zones itself gives them through `zones`.
     own_zones = result.samples["location"].map(is_zone)
     table = to_hub_table(
@@ -1531,37 +1516,26 @@ def _zone_origins(args: argparse.Namespace) -> list[str] | None:
 
 
 def _zone_backtest(args: argparse.Namespace) -> int:
-    from nowcastbdbv.zones import zone_backtest
+    """Score the walks' zone runs of the fits `fit-store load` used."""
+    from nowcastbdbv.zones import score_zones
 
-    hub_config = Path(args.data) / "hub-config" / "tasks.json"
-    # The zone backtest keeps its own default horizons and seed, with
-    # `[samples] backtest` draws.
-    draws = bt.load_config(args.backtest_config).score_samples
-    config = dataclasses.replace(bt.BacktestConfig(), n_samples=draws)
-    if args.forecast_only:
-        from nowcastbdbv.zones import zone_forecasts
-
-        zone_forecasts(
-            load_target(args.data),
-            load_delays(args.data),
-            load_daily(args.data),
-            load_daily_zones(args.data),
-            hub_zones(hub_config),
-            models=args.models,
-            config=config,
-            origins=_zone_origins(args),
-        ).write(args.parts)
-        print(f"Zone forecasts of {args.models} written to {args.parts}.")
-        return 0
-    scores, energy, forecasts = zone_backtest(
+    daily_zones = load_daily_zones(args.data)
+    config = bt.load_config(args.backtest_config)
+    run = store.stored_zone_forecasts(
+        args.store,
+        args.results,
+        daily_zones,
+        args.models,
+        _zone_origins(args),
+        config.min_horizon,
+        config.max_horizon,
+    )
+    scores, energy, forecasts = score_zones(
         load_target(args.data),
         load_delays(args.data),
         load_daily(args.data),
-        load_daily_zones(args.data),
-        hub_zones(hub_config),
-        models=args.models,
-        config=config,
-        origins=_zone_origins(args),
+        daily_zones,
+        run,
     )
     _write_zone_results(
         scores,
@@ -1814,41 +1788,16 @@ def _compare_hub(args: argparse.Namespace) -> int:
     daily = load_daily(args.data)
     config = bt.load_config(args.backtest_config)
     rounds = sorted(set(hub["reference_date"]))
-    live = (
-        args.models
-        if args.models is not None
-        else [s.name for s in list_models() if not s.fitted]
-    )
-    horizons = (
-        pd.to_datetime(hub["target_end_date"])
-        - pd.to_datetime(hub["reference_date"])
-    ).dt.days // 7
     codes = hub_zones(Path(args.data) / "hub-config" / "tasks.json")
-    ours = hc.our_forecasts(
-        rounds,
-        target,
-        delays,
-        config,
-        live,
-        daily,
-        load_zone_data(args.data),
-        min_horizon=min(int(horizons.min()), config.min_horizon)
-        if len(hub)
-        else None,
-    )
+    # Every model of ours is the fit store's, the walks with their zone
+    # runs: none is run here.
     stored = hc.stored_forecasts(
-        cfg.stored if args.stored is None else args.stored,
-        rounds,
-        exclude=live,
+        cfg.stored if args.stored is None else args.stored, rounds
     )
-    stored = _comparison_stored(
-        stored, _fit_store_forecasts(args), rounds, live
-    )
+    stored = _comparison_stored(stored, _fit_store_forecasts(args), rounds)
     hub_ids = hc.own_hub_ids()
     forecasts = hc.as_submitted(
-        pd.concat(
-            [f for f in (hub, ours, stored) if not f.empty], ignore_index=True
-        ),
+        pd.concat([f for f in (hub, stored) if not f.empty], ignore_index=True),
         hub_ids,
     )
     table_file = Path(args.submissions_table or cfg.submissions_table)
@@ -2118,6 +2067,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         figures=args.figures,
         generated=args.generated,
         data_dir=_data_root(),
+        store=args.store,
     )
     from bdbvhub.submission.rounds import make_round_pages
 

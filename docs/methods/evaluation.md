@@ -26,8 +26,8 @@ So scores compare fairly although the number of draws differs across models and 
 
 | Forecasts | Draws per forecast | Set by |
 |---|---|---|
-| Models the site runs itself in the release backtest, health zones and leave-one-province-out | 1,000 | `[samples] backtest` in `packages/nowcastbdbv/config/backtest.toml` |
-| Stored fits, the submission, the Nowcast page and our models in the Comparison with the hub | 100 | `[forecast] n_samples` in `packages/nowcastbdbv/config/backtest.toml` |
+| Models the site runs itself in the release backtest and leave-one-province-out | 1,000 | `[samples] backtest` in `packages/nowcastbdbv/config/backtest.toml` |
+| Stored fits, the random walks' zone runs, the submission, the Nowcast page and our models in the Comparison with the hub | 100 | `[forecast] n_samples` in `packages/nowcastbdbv/config/backtest.toml` |
 | Hub teams | 100 | Their submissions |
 | German nowcast benchmark | Quantiles at seven levels, scored by WIS | `packages/nowcastgermany/config/germany.toml` |
 
@@ -180,11 +180,11 @@ It runs on every real vintage for the three renewal models.
 
 `randomwalk` and `randomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([Baseline models](baselines.md#health-zones)).
 A week with no onsets in a zone has a count of 0.
-Each model's zone samples are scored as the model draws them, as in the submitted file.
+Each model's zone samples are its zone run at the origin, which the fit store holds for every hub zone, scored as the model draws them, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with only one release are skipped, as for provinces.
 Zones are scored on the reported target as for [real releases](#real-releases), with the zone delays fitted at the origin, so a zone count is never scored against a count still being reported.
 Relative CRPS is against `randomwalknowcast`.
-On the Nowcast page every model is shown at zone level: the random walks from their zone runs, and the fitted models from the zone samples of their stored forecasts ([Renewal models](model.md#health-zones)).
+On the Nowcast page every model is shown at zone level: the random walks from their stored zone runs, and the fitted models from the zone samples of their stored forecasts ([Renewal models](model.md#health-zones)).
 The Comparison with the hub scores every model's zone samples on the zone cells the hub teams forecast.
 
 ## Scores by place type and plausibility { #checks }

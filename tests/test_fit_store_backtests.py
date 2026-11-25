@@ -22,8 +22,6 @@ def test_the_walk_backtests_run_under_the_store_s_write_guard() -> None:
     assert sorted(cells) == sorted(
         [
             "pairing-bdbv",
-            "zones-randomwalk",
-            "zones-randomwalknowcast",
             "releases-randomwalk",
             "releases-randomwalknowcast",
         ]
@@ -60,3 +58,13 @@ def test_the_backtests_are_stored_without_waiting_for_the_fits() -> None:
     assert run.index("push-backtests") < run.index("gh workflow run pages.yml")
     assert job["permissions"]["actions"] == "write"
     assert "backtests" not in _jobs()["pages"]["needs"]
+
+
+def test_the_zone_backtest_scores_the_stored_zone_runs() -> None:
+    # The walks' zone runs are stored fits (#1094): no cell forecasts the
+    # zones, and the backtests job scores what `fit-store load` chose.
+    job = _jobs()["backtests"]
+    run = "\n".join(str(s.get("run", "")) for s in job["steps"])
+    assert run.index("fit-store load") < run.index("bdbvhub zone-backtest")
+    assert "parts-zones" not in run
+    assert "zone-backtest --forecast-only" not in FIT_STORE.read_text()

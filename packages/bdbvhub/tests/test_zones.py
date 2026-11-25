@@ -262,34 +262,15 @@ def test_only_the_random_walks_forecast_their_own_zones() -> None:
     assert not walks_own_zones("not-a-model")
 
 
-@pytest.mark.slow
-def test_walk_models_take_their_own_zone_draws(
-    open_task: ForecastTask,
-    open_counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    daily_zones: pd.DataFrame,
-) -> None:
-    model = RandomWalkNowcast()
-    prov = model.forecast(open_task)
-    got = zones_for_model(
-        "randomwalknowcast", open_task, prov, open_counts, zones, daily_zones
-    )
-    want = zone_forecast(model, open_task, open_counts, zones, daily_zones)
-    pd.testing.assert_frame_equal(
-        got.reset_index(drop=True), want.reset_index(drop=True)
-    )
+def test_a_walk_s_zones_are_not_run_here(open_task: ForecastTask) -> None:
+    # A walk's zone run is its stored fit's (`store.fit`, #1094), which
+    # the submission and the docs read: none is made from its provinces.
+    prov = RandomWalkNowcast().forecast(open_task)
+    assert zones_for_model(prov).empty
 
 
-def test_samples_without_zones_get_none(
-    open_task: ForecastTask,
-    open_counts: pd.DataFrame,
-    zones: tuple[str, ...],
-    daily_zones: pd.DataFrame,
-) -> None:
+def test_samples_without_zones_get_none(open_task: ForecastTask) -> None:
     # A model's zones come from its own forecast, so samples with none
     # get none here.
     prov = RandomWalk().forecast(open_task)
-    got = zones_for_model(
-        "renewal", open_task, prov, open_counts, zones, daily_zones
-    )
-    assert got.empty
+    assert zones_for_model(prov).empty

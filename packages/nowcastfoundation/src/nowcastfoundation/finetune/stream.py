@@ -38,8 +38,9 @@ import shutil
 import subprocess
 import time
 import zlib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
+from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from typing import Any, cast
 
@@ -904,7 +905,8 @@ def checkpoint_large_batches(above: int) -> None:
 
     Chronos-2's group attention runs over every series of a batch, so its
     memory grows with their square. Above `above` series each encoder block
-    is checkpointed (`torch.utils.checkpoint`).
+    is checkpointed (`torch.utils.checkpoint`), and every encoder block is
+    while `recompute_every_block` is open.
     """
     import functools
 
@@ -915,7 +917,7 @@ def checkpoint_large_batches(above: int) -> None:
     forward = Chronos2EncoderBlock.forward
 
     def checkpointed(self: Any, hidden_states: Any, **kwargs: Any) -> Any:
-        large = hidden_states.shape[0] > above
+        large = _RECOMPUTING["all"] or hidden_states.shape[0] > above
         if large and self.training and torch.is_grad_enabled():
             return checkpoint(
                 functools.partial(forward, self, **kwargs),
@@ -925,6 +927,25 @@ def checkpoint_large_batches(above: int) -> None:
         return forward(self, hidden_states, **kwargs)
 
     Chronos2EncoderBlock.forward = checkpointed
+
+
+_RECOMPUTING = {"all": False}
+"""Whether `checkpoint_large_batches` checkpoints every batch."""
+
+
+@contextmanager
+def recompute_every_block() -> Iterator[None]:
+    """Checkpoint every encoder block while open, whatever its series.
+
+    Memory also grows with a block's context: a block under the series
+    threshold with a long context can run out of memory alone, and
+    recomputing its activations gives the same gradients in less memory.
+    """
+    _RECOMPUTING["all"] = True
+    try:
+        yield
+    finally:
+        _RECOMPUTING["all"] = False
 
 
 INPUT_PATCH = 16
@@ -1278,14 +1299,21 @@ OOM_WAITS = 120
 def wait_for_memory(waits: int) -> None:
     """Log that memory ran out and sleep `OOM_PAUSE` seconds."""
     log(
-        f"out of memory for a single block (wait {waits}/{OOM_WAITS}): "
-        f"another process may hold the GPU; retrying in {OOM_PAUSE} s"
+        f"out of memory for a single block recomputed (wait {waits}/"
+        f"{OOM_WAITS}): another process may hold the GPU; retrying in "
+        f"{OOM_PAUSE} s"
     )
     time.sleep(OOM_PAUSE)
 
 
 def accumulate(
-    indices: list[int], backward: Any, zero: Any, wait: Any = wait_for_memory
+    indices: list[int],
+    backward: Any,
+    zero: Any,
+    wait: Any = wait_for_memory,
+    recompute: Callable[[], AbstractContextManager[Any]] = (
+        recompute_every_block
+    ),
 ) -> float:
     """Return a batch's loss, accumulating its gradients by `backward`.
 
@@ -1293,7 +1321,9 @@ def accumulate(
     out, they are cleared and the memory freed (`zero`) and the batch is
     run again in halves, and so on, so every block is used once and they
     share the gradient as the whole batch would. A single block that runs
-    out is run once more at once, then after each `wait` (called with the
+    out is run once more at once with its activations recomputed
+    (`recompute`), which gives the same gradients in less memory. If it
+    still runs out, it is run again after each `wait` (called with the
     wait's number), up to `OOM_WAITS` times, since another process on the
     GPU may hold the memory for a while.
 
@@ -1301,10 +1331,11 @@ def accumulate(
     ------
     RuntimeError
         If a single block still does not fit: leaving it out would bias
-        training, so the run stops (lower the checkpoint threshold).
+        training, so the run stops.
     """
     parts = [indices]
     retried: dict[int, int] = {}
+    alone: set[int] = set()
     retry = False
     while True:
         if retry:
@@ -1312,9 +1343,14 @@ def accumulate(
         retry = True
         values, sizes = [], []
         total = sum(len(p) for p in parts)
+        runs = 0
         try:
             for part in parts:
-                values.append(backward(part, len(part) / total))
+                if len(part) == 1 and part[0] in alone:
+                    with recompute():
+                        values.append(backward(part, len(part) / total))
+                else:
+                    values.append(backward(part, len(part) / total))
                 sizes.append(len(part))
             return (
                 float(np.average(values, weights=sizes)) if values else np.nan
@@ -1327,16 +1363,24 @@ def accumulate(
                 at = parts.index(part)
                 parts[at : at + 1] = [part[:half], part[half:]]
                 continue
+            if part[0] not in alone:
+                log(
+                    f"block {part[0]} ran out of memory alone; "
+                    "running it again with its activations recomputed"
+                )
+                alone.add(part[0])
+                continue
             runs = retried.get(part[0], 0)
-            if runs > OOM_WAITS:
+            if runs >= OOM_WAITS:
                 raise RuntimeError(
-                    f"block {part[0]} is too large for memory even alone; "
-                    "lower checkpoint_above"
+                    f"block {part[0]} is too large for memory even alone "
+                    "with its activations recomputed"
                 ) from error
             retried[part[0]] = runs + 1
-            if runs:
-                zero()
-                wait(runs)
+        # Outside the handler, so the error's frames and their tensors are
+        # gone before the memory is freed.
+        zero()
+        wait(runs + 1)
 
 
 def finite_step(params: list[Any], optimiser: Any, value: float) -> bool:

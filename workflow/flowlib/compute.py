@@ -25,6 +25,24 @@ checkout must be at the coordinator's commit. It runs with the
 coordinator's run settings (`job_env`) and its own machine settings.
 The coordinator's rsync must be GNU rsync 3.1 or later
 (`rsync_problem`); submit refuses such a job otherwise.
+
+Freed cores go to the waiting job of highest priority, in one order:
+
+1. the trainer (`TRAIN_PRIORITY`), so the GPU never waits, then the
+   quick hand-offs that unblock other work (`HANDOFF_PRIORITY`): the
+   copies of the batches it reads into the run, and a checkpoint's
+   verification and release, which its BDBV check needs;
+2. the references every checkpoint is compared with
+   (`REFERENCE_PRIORITY`): the German reference unit and the BDBV
+   check's zero-shot and randomwalknowcast forecasts;
+3. each checkpoint's scoring and evaluation (`CHECKPOINT_PRIORITY`): its
+   German unit, its BDBV check forecast and the held-out evaluation,
+   newest checkpoint first (`newest_first`, `releases.priority`);
+4. simulation batches (`BATCH_PRIORITY`), earliest seed first
+   (`segments.batch_priority`).
+
+Each band's jobs take its base plus a fraction below two, so the bands
+never overlap. Other jobs take Snakemake's default, 0.
 """
 
 from __future__ import annotations
@@ -76,6 +94,34 @@ GPUs are not shared across workers."""
 TRAIN_PRIORITY = 100
 """The trainer's job priority, above every other job's, so the next
 segment starts the moment the previous ends."""
+
+HANDOFF_PRIORITY = 90
+"""The quick jobs that unblock others: a batch's copy into a run
+(`fetch_batch`), so a simulated batch never waits for a core to reach the
+trainer, and a checkpoint's verification and release
+(`verify_checkpoint`, `publish_checkpoint`), which its BDBV check needs,
+and the check's own quick jobs (`hub_head`, `hub_data`, `ft_check_page`,
+`ft_check_release`), so its page never queues behind the CPU jobs.
+Below the trainer, above every other job. A release never waits for the
+held-out evaluation (`EVALUATION_PRIORITY`)."""
+
+REFERENCE_PRIORITY = 30
+"""The references' job priority: below the trainer, above every
+checkpoint's scoring, which they are compared with."""
+
+CHECKPOINT_PRIORITY = 20
+"""A checkpoint's scoring: below the references, above simulation
+batches, newer checkpoints a fraction higher."""
+
+BATCH_PRIORITY = 15
+"""A simulation batch's job priority, below one above it
+(`segments.batch_priority`), under every checkpoint's scoring."""
+
+EVALUATION_PRIORITY = 10
+"""The offloaded held-out evaluation (rules/evaluate.smk): below every
+other job, as no release, check or batch waits for it. Hours on the CPU
+per checkpoint; the dashboard, tables and paper read it when done, and
+it joins the checkpoint's release then (`release_held_out`)."""
 
 
 def newest_first(base: float) -> Callable[[Any], float]:

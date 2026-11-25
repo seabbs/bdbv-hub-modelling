@@ -125,26 +125,13 @@ def test_model_code_covers_what_its_forecasts_run(
 ) -> None:
     from bdbvhub.store.digest import model_code
     from nowcastbdbv import backtest as bdbv_bt
-    from nowcastbdbv.data.tidy import load_daily_zones
-    from nowcastbdbv.data.zones import hub_zones
-    from nowcastbdbv.zones import zone_forecasts
-    from nowcasteval import backtest as bt
     from nowcasteval.nowcast import forecast_releases
 
-    data = ROOT / "tests" / "fixtures" / "data"
     real = target.loc[target["kind"] == "real"]
     tasks = bdbv_bt.make_tasks(
         real, delays.assign(kind="real"), config, daily=daily
     )
-    calls = [
-        lambda: forecast_releases(tasks, target, [model]),
-        lambda: zone_forecasts(
-            target, delays, daily, load_daily_zones(data),
-            hub_zones(data / "hub-config" / "tasks.json"),
-            models=[model], config=config,
-            origins=bt.real_vintages(real)[-2:-1],
-        ),
-    ]  # fmt: skip
+    calls = [lambda: forecast_releases(tasks, target, [model])]
     ran: set[str] = set()
     for call in calls:
         ran |= _ran(call)
@@ -176,17 +163,18 @@ def test_a_fit_key_holds_the_zone_module_only_where_its_model_calls_it() -> (
     from bdbvhub.store.store import fit_code
 
     zones = "packages/nowcastbaselines/src/nowcastbaselines/zones.py"
-    # The zone fits call its zone_task, so their keys hold it.
-    for model in ("renewal", "renewalbvd", "renewalsp"):
-        assert zones in fit_code(model, ROOT)
-    # Models whose modules do not import it leave it out: the walks, and
-    # Chronos-2, which takes its zones straight from its block.
+    # The zone fits call its zone_task, and the walks' stored fits make
+    # their zone runs with it (`store.walk_zones`), so their keys hold it.
     for model in (
+        "renewal",
+        "renewalbvd",
+        "renewalsp",
         "randomwalk",
         "randomwalknowcast",
-        "foundation_zeroshot",
     ):
-        assert zones not in fit_code(model, ROOT)
+        assert zones in fit_code(model, ROOT)
+    # Chronos-2 takes its zones straight from its block.
+    assert zones not in fit_code("foundation_zeroshot", ROOT)
 
 
 def _bvd_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

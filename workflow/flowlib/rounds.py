@@ -14,7 +14,15 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from flowlib import grids, hosts, manifest, notify, segments, simulator
+from flowlib import (
+    compute,
+    grids,
+    hosts,
+    manifest,
+    notify,
+    segments,
+    simulator,
+)
 
 
 class Rounds:
@@ -60,8 +68,10 @@ class Rounds:
         return hosts.simulates(int(seed), self.mine)
 
     def batch_priority(self, wc: Any) -> float:
-        """Return a batch's priority: 15, earlier seeds a fraction higher."""
-        return segments.batch_priority(int(wc.seed), 15, self.sim["seed_base"])
+        """Return a batch's priority, earlier seeds a fraction higher."""
+        return segments.batch_priority(
+            int(wc.seed), compute.BATCH_PRIORITY, self.sim["seed_base"]
+        )
 
     def batch_files(self, wc: Any) -> dict[str, str]:
         """Return a batch's files: simulated here, or pushed by its host."""

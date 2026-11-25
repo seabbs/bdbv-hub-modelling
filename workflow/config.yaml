@@ -27,11 +27,6 @@ grid_rounds:
 # changes, its rounds join these and it takes new ones.
 retired_rounds: {first: 9, last: 32}
 
-# Whether `finetune` trains only the next segment, not every one in
-# reach. A scheduled tick sets it (flowlib.schedule), so each run ends
-# after one segment and the next run plans afresh.
-next_segment_only: false
-
 simulate:
   # The grid the simulator runs: its factors, sampling distributions,
   # shares, floors and sim QC thresholds (nowcastfoundation.simulator
@@ -202,8 +197,8 @@ hub_rounds:
   # The hub rounds report (rules/report.smk): our last this many submitted
   # rounds against every hub team.
   rounds: 4
-  # Our models rerun on current code for each round, from the data as of
-  # that round (`compare-hub --models`), beside what we submitted.
+  # Our models as the fit store holds them for each round, with their
+  # zone runs (`fit-store load --models`), beside what we submitted.
   models: [randomwalknowcast]
 
 ft_check:
@@ -224,9 +219,10 @@ dashboard:
   # The fine-tuning dashboard (task workflow:dashboard;
   # workflow/flowlib/dashboard).
   # serve: true serves it with a run whose targets include finetune
-  # (flowlib.dashboard.serve), on DASHBOARD_HOST:DASHBOARD_PORT, for as
-  # long as the coordinator (or that Snakemake run) lives.
-  serve: false
+  # (flowlib.dashboard.serve), on DASHBOARD_HOST:DASHBOARD_PORT, showing
+  # the runs it trains, for as long as the coordinator (or that Snakemake
+  # run) lives.
+  serve: true
   # It shows the workflow's runs (`runs` above), each in <ROOT>/runs/<run>,
   # or those --run NAME picks; the first is the live run.
   # Reference series, matched on rows by model and checkpoint; --ref adds

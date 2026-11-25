@@ -169,3 +169,41 @@ def test_push_backtests_stores_the_bundle_beside_the_fits(
     meta = json.loads((got / "backtests" / "latest.json").read_text())
     assert meta["commit"] == "abc123"
     assert (got / "m/o/cur.json.gz").is_file()
+
+
+def test_a_fit_s_zone_file_is_stored_and_pruned_with_it(
+    tmp_path: Path,
+) -> None:
+    # A walk's zone run sits beside its fit (`store.zones_path`).
+    _git("init", "-q", "--bare", "remote.git", cwd=tmp_path)
+    _git("clone", "-q", "remote.git", "clone", cwd=tmp_path)
+    clone = tmp_path / "clone"
+    for key, value in (("user.name", "t"), ("user.email", "t@t")):
+        _git("config", key, value, cwd=clone)
+    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=clone)
+    _git("push", "-q", "origin", "HEAD:main", cwd=clone)
+    keys, plan = tmp_path / "keys.json", tmp_path / "plan.json"
+
+    def push(new: Path, key: str, fitted_at: str) -> None:
+        _fit(new, f"m/o/{key}", "ok", fitted_at)
+        (new / "m" / "o" / f"{key}.zones.csv.gz").write_bytes(b"zones")
+        keys.write_text(json.dumps([f"m/o/{key}"]))
+        plan.write_text(
+            json.dumps({"include": [{"model": "m", "origin": "o", "key": key}]})
+        )
+        out = _run("push", str(new), str(keys), str(plan), cwd=clone)
+        assert out.returncode == 0, out.stderr
+
+    push(tmp_path / "a", "one", "2026-11-01")
+    push(tmp_path / "b", "two", "2026-11-02")
+    push(tmp_path / "c", "three", "2026-11-03")
+    got = tmp_path / "got"
+    assert _run("fetch", str(got), cwd=clone).returncode == 0
+    files = sorted(p.relative_to(got).as_posix() for p in got.rglob("*.gz"))
+    # The current key and the newest good older fit, each with its zones.
+    assert files == [
+        "m/o/three.json.gz",
+        "m/o/three.zones.csv.gz",
+        "m/o/two.json.gz",
+        "m/o/two.zones.csv.gz",
+    ]

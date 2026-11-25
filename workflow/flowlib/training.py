@@ -42,7 +42,7 @@ class Training:
     Parameters
     ----------
     config : mapping
-        The workflow config (`runs`, `finetune`, `next_segment_only`).
+        The workflow config (`runs`, `finetune`).
     local : mapping
         This machine's settings (`localconfig.read`).
     rounds : Rounds
@@ -297,14 +297,6 @@ class Training:
             lambda s: self.outbreaks_or_full(run, s),
         )
 
-    def to_train(self, run: str) -> list[int]:
-        """Return the prefixes `finetune` asks for of the run."""
-        return segments.to_train(
-            self.trainable(run),
-            lambda n: self.saved(run, n),
-            bool(self.config.get("next_segment_only")),
-        )
-
     def finetune_inputs(self, wc: Any) -> list[str]:  # noqa: ARG002
         """Return each trained run's checkpoints, held-out losses, checks."""
         out = []
@@ -312,27 +304,45 @@ class Training:
             there, train, ns = (
                 self.runs[run],
                 self.train_dir(run),
-                self.to_train(run),
+                self.trainable(run),
             )
             out += [f"{train}/n{n}/settings.json" for n in ns]
             # An offloaded run's held-out losses, scored after each segment.
             out += [f for n in ns for f in self.offloaded(run, n)]
             # Each checkpoint's 7-day check (rule seven_day_check).
             out += [f"{train}/n{n}/seven-day.json" for n in ns]
-            # A machine that publishes as it trains (PUBLISH in local.env).
+            # A machine that publishes as it trains (PUBLISH in local.env):
+            # each release, a saved checkpoint's BDBV check, and its
+            # held-out losses once scored.
             if self.local["PUBLISH"]:
                 out += [f"{train}/n{n}/published.json" for n in ns]
-            # The check once its checkpoint is asked for, so one segment a
-            # run does not train on to it.
+                out += [
+                    f"{train}/n{n}/ft-check.done"
+                    for n in ns
+                    if self.saved(run, n)
+                ]
+                out += [f for n in ns for f in self.released_held_out(run, n)]
+            # The check once its checkpoint is within reach, so it never
+            # pulls the training past the batches there are.
             if there.check in ns:
                 out.append(f"{there.dir}/reports/n{there.check}-check.txt")
         return out
 
+    def released_held_out(self, run: str, n: int) -> list[str]:
+        """Return checkpoint n's held-out losses' upload, if offloaded."""
+        if self.runs[run].ft["eval"] != "offload":
+            return []
+        return [f"{self.train_dir(run)}/n{n}/held-out-released.txt"]
+
     def published_checkpoints(self, wc: Any) -> list[str]:  # noqa: ARG002
-        """Return every trained run's saved checkpoints' release records."""
+        """Return the saved checkpoints' releases and held-out uploads."""
         return [
-            f"{self.train_dir(run)}/n{n}/published.json"
+            f
             for run in self.trained_runs()
             for n in self.runs[run].ft["prefixes"]
             if self.saved(run, n)
+            for f in [
+                f"{self.train_dir(run)}/n{n}/published.json",
+                *self.released_held_out(run, n),
+            ]
         ]

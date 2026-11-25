@@ -41,12 +41,13 @@ from bdbvhub.reporting.data_plots import (
 from bdbvhub.reporting.hubtables import hub_tables, write_hub_tables
 from bdbvhub.reporting.site import site_baseline, site_models
 from bdbvhub.reporting.store_note import write_store_note
-from bdbvhub.reporting.zone_nowcast import (
-    place_chart_data,
-    zone_counts,
-    zone_nowcast,
+from bdbvhub.reporting.zone_nowcast import place_chart_data, zone_counts
+from bdbvhub.store.store import (
+    ZONE_FITS_FILE,
+    samplers,
+    stored_models,
+    stored_zones,
 )
-from bdbvhub.store.store import ZONE_FITS_FILE, samplers, stored_models
 from nowcastbaselines.baselinenowcast.delays import Settings
 from nowcastbdbv.backtest import make_tasks
 from nowcastbdbv.data.delays import delay_summary
@@ -67,7 +68,7 @@ from nowcastbdbv.data.zone_map import (
     zone_boundaries,
     zone_names,
 )
-from nowcastbdbv.data.zones import hub_zones, load_zone_data
+from nowcastbdbv.data.zones import load_zone_data
 from nowcasteval.backtest import (
     BacktestConfig,
     check_distinct,
@@ -185,6 +186,7 @@ def make_report(
     hub_comparison: Path | str = "results/hub-comparison",
     germany: Path | str = "results/germany",
     germany_config: Path | str = "packages/nowcastgermany/config/germany.toml",
+    store: Path | str = "output/fit-store",
 ) -> None:
     """Write every docs figure and table.
 
@@ -208,6 +210,9 @@ def make_report(
         Output of `nowcastgermany backtest`, if it has been run.
     germany_config : pathlib.Path or str
         The German benchmark's settings.
+    store : pathlib.Path or str
+        The fit store checkout `fit-store load` read, which holds the
+        walks' zone runs (`stored_zones`).
     """
     fig, gen = Path(figures), Path(generated)
     res, out = Path(results), Path(output)
@@ -341,8 +346,9 @@ def make_report(
     forecasts_now = _nowcast_forecasts(tasks, latest, res)
     _nowcast_page(fig, gen, target, forecasts_now, names, config, latest)
     _zone_nowcast_section(
-        fig, gen, data_dir, target, tasks[0], forecasts_now, config, names
-    )
+        fig, gen, data_dir, target, tasks[0], forecasts_now, config, names,
+        store, res,
+    )  # fmt: skip
     # Every model's hub tables at every real origin, for the round
     # releases, so a round released after later hub releases still gets
     # its own.
@@ -365,10 +371,15 @@ def make_report(
                 zones=zone_data,
             )[0]
             at = _stored_at(res, vintage)
+        # The walks' zones are their stored zone runs, read one origin
+        # at a time.
+        walks = stored_zones(store, res, origins=[str(vintage)])
+        both = [
+            f for f in (zone_samples, walks) if f is not None and not f.empty
+        ]
+        zone_runs = pd.concat(both, ignore_index=True) if both else None
         write_hub_tables(
-            hub_tables(
-                at, task, zone_data.daily, zone_data.codes, zone_samples
-            ),
+            hub_tables(at, task, zone_data.codes, zone_runs),
             res / "hub" / str(vintage),
         )
     groups = _nowcast_groups(target, sorted(set(forecasts_now["location"])))
@@ -990,22 +1001,24 @@ def _zone_nowcast_section(
     forecasts: pd.DataFrame,
     config: BacktestConfig,
     names: list[str],
+    store: Path | str,
+    res: Path,
 ) -> None:
     """Write the Nowcast page's picker and health-zone section.
 
     The picker covers the country, provinces and zones at the latest
-    release. The random walk models are run on the zones here. The fitted
-    models' samples are taken from the stored forecasts of the comparison,
-    as for the hub rounds, where there are some for the release.
+    release. The random walk models' zones are their stored zone runs
+    (`stored_zones`). The fitted models' samples are taken from the
+    stored forecasts of the comparison, as for the hub rounds, where
+    there are some for the release.
     """
     daily_zones = load_daily_zones(data_dir)
-    zones = hub_zones(Path(data_dir) / "hub-config" / "tasks.json")
     quick = [s.name for s in list_models() if not s.fitted]
     prov = forecasts.loc[
         (forecasts["vintage"] == task.vintage)
         & (forecasts["location"] != NATIONAL)
     ]
-    ran = [zone_nowcast(m, task, daily_zones, zones) for m in quick]
+    walks = stored_zones(store, res, quick, [task.vintage])
     ref = str(task.reference_date)
     stored = stored_forecasts(
         load_comparison_config().stored, [ref], exclude=quick
@@ -1023,7 +1036,7 @@ def _zone_nowcast_section(
         & (forecasts["location"] == NATIONAL)
         & forecasts["model"].isin(quick)
     ]
-    every = pd.concat([national, at_release, *ran, stored], ignore_index=True)
+    every = pd.concat([national, at_release, walks, stored], ignore_index=True)
     if "as_of" in every:
         every = every.loc[every["as_of"].isna()]
     labels = location_names(target)

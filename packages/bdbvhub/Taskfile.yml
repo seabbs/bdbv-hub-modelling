@@ -104,7 +104,7 @@ tasks:
 
   backtest-zones:
     dir: ../..
-    desc: Score randomwalk and randomwalknowcast at health-zone level (writes results/zone-scores.csv)
+    desc: Score the walks' stored zone runs at health-zone level, after `fit-store load` (writes results/zone-scores.csv)
     cmds:
       - uv run bdbvhub zone-backtest {{.CLI_ARGS}}
 

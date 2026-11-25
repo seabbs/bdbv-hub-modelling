@@ -54,7 +54,7 @@ rule score_germany:
         f"{CACHE}/log/{GERMANY_UNIT}-{{label}}.log",
     benchmark:
         f"{CACHE}/benchmarks/score_germany/{{label}}.tsv"
-    priority: unit_priority(5)
+    priority: unit_priority(CHECKPOINT_PRIORITY, REFERENCE_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -83,7 +83,7 @@ rule score_run_germany:
         f"{RUN}/scores/log/{GERMANY_UNIT}-n{{n}}.log",
     benchmark:
         f"{RUN}/scores/benchmarks/score_run_germany/n{{n}}.tsv"
-    priority: newest_first(5)
+    priority: newest_first(CHECKPOINT_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS

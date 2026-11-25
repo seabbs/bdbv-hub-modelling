@@ -6,9 +6,9 @@ not, is archived with each hub release. For each model `hub_tables`
 gives the hub sample table, with the country, the provinces and the
 health zones, as `bdbvhub nowcast` writes it for a submission,
 and the same forecast as hub quantiles.
-As in a submission, the zone fits of `renewal` and `renewalbvd` give
-their own zone samples, and the zones of every other model come from
-`zones_for_model`, which fits no model.
+As in a submission, the zone fits of `renewal` and `renewalbvd` and
+the random walks give their stored zone samples, and the zones of every
+other model come from its own samples (`zones_for_model`).
 """
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ from nowcasteval.scoring import QUANTILE_LEVELS
 from nowcastutils.base import NATIONAL, SAMPLE_COLUMNS, ForecastTask
 from nowcastutils.files import write_csv
 from nowcastutils.hierarchy import is_zone
-from nowcastutils.snapshots import weekly_counts
 
 __all__ = [
     "HUB_QUANTILE_LEVELS",
@@ -90,7 +89,6 @@ def _unassigned(rows: pd.DataFrame) -> pd.DataFrame | None:
 def hub_tables(
     forecasts: pd.DataFrame,
     task: ForecastTask,
-    daily_zones: pd.DataFrame,
     zones: tuple[str, ...],
     fitted: pd.DataFrame | None = None,
 ) -> dict[str, pd.DataFrame]:
@@ -103,21 +101,19 @@ def hub_tables(
         national rows.
     task : ForecastTask
         The task.
-    daily_zones : pandas.DataFrame
-        The daily zone table (`load_daily_zones`).
     zones : tuple of str
         The hub's zone codes.
     fitted : pandas.DataFrame, optional
-        The zone fits' zone samples (`bdbvhub.store.store.ZONE_FITS_FILE`),
-        with `model` and `vintage`. A model with rows at the task's
-        vintage takes them in place of `zones_for_model`.
+        The stored zone samples, with `model` and `vintage`: the zone
+        fits' (`bdbvhub.store.store.ZONE_FITS_FILE`) and the walks' zone
+        runs (`bdbvhub.store.store.stored_zones`). A model with rows at
+        the task's vintage takes them in place of `zones_for_model`.
 
     Returns
     -------
     dict
         Hub sample table by model.
     """
-    counts = weekly_counts(daily_zones, task.vintage)
     rows = forecasts.loc[forecasts["vintage"] == task.vintage]
     if "as_of" in rows:
         rows = rows.loc[rows["as_of"].isna()]
@@ -140,9 +136,7 @@ def hub_tables(
         if mine is not None and not mine.empty:
             split = mine.loc[:, list(SAMPLE_COLUMNS)].reset_index(drop=True)
         else:
-            split = zones_for_model(
-                str(name), task, places, counts, zones, daily_zones
-            )
+            split = zones_for_model(places)
         # A model that forecasts the country keeps its national rows.
         country_own = own_national(str(name))
         country = own.loc[own["location"] == NATIONAL, list(SAMPLE_COLUMNS)]

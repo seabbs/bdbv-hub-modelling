@@ -259,6 +259,24 @@ rule rt_check:
 HUB = f"{LOCAL['ROOT']}/hub"
 
 
+rule hub_head:
+    # The hub's data commit when a host has none yet, so the BDBV check
+    # can be planned on a host with no hub_watch.sh, which keeps it
+    # current.
+    output:
+        f"{HUB}/head.txt",
+    log:
+        f"{HUB}/logs/head.log",
+    priority: HANDOFF_PRIORITY
+    localrule: True
+    conda:
+        TOOLS_ENV
+    shell:
+        "gh api 'repos/InsightNet-US/BDBV-Modeling-Hub/commits"
+        "?path=target-data/time-series.csv&per_page=1' --jq '.[0].sha' "
+        "> {output} 2> {log}"
+
+
 rule hub_data:
     # The hub's tidy data (`bdbvhub data`), including tasks.json.
     input:
@@ -267,13 +285,17 @@ rule hub_data:
         f"{HUB}/data/target.csv",
     log:
         f"{HUB}/logs/data.log",
+    priority: HANDOFF_PRIORITY
     localrule: True
     conda:
         TOOLS_ENV
     params:
         out=lambda wc, output: Path(output[0]).parent,
     shell:
-        "uv run bdbvhub data --raw {params.out}/raw --out {params.out} " "> {log} 2>&1"
+        # A token, as GitHub limits unauthenticated reads.
+        'GITHUB_TOKEN="${{GITHUB_TOKEN:-$(gh auth token 2>/dev/null)}}" '
+        "uv run bdbvhub data --raw {params.out}/raw --out {params.out} "
+        "> {log} 2>&1"
 
 
 rule hub_submissions_table:
@@ -302,9 +324,10 @@ rule hub_submissions_table:
 
 rule hub_comparison:
     # Every hub team's files and ours scored on the same truth, beside
-    # `hub_rounds.models` rerun on current code for each round
-    # (`compare-hub --models`). The data folder is also set as
-    # BDBV_DATA_DIR, which the hub's places are read from.
+    # `hub_rounds.models` as the fit store holds them for each round, with
+    # their zone runs (`fit-store load --models`, then `compare-hub`). The
+    # data folder is also set as BDBV_DATA_DIR, which the hub's places are
+    # read from.
     input:
         target=rules.hub_data.output,
         table=rules.hub_submissions_table.output,
@@ -322,11 +345,16 @@ rule hub_comparison:
         out=lambda wc, output: Path(output.scores).parent,
         models=" ".join(config["hub_rounds"]["models"]),
     shell:
+        "(rm -rf {params.out}/store && "
+        "uv run fit-store-branch fetch {params.out}/store && "
+        "BDBV_DATA_DIR={params.data} uv run bdbvhub fit-store load "
+        "--data {params.data} --store {params.out}/store "
+        "--results {params.out}/results --models {params.models} && "
         "BDBV_DATA_DIR={params.data} uv run bdbvhub compare-hub --fetch "
         "--data {params.data} --hub-dir {params.data}/hub-submissions "
         "--cache-dir {params.data}/raw/hub-submissions --out {params.out} "
-        "--results {params.out}/results --models {params.models} --stored "
-        "--submissions-table {input.table} > {log} 2>&1"
+        "--store {params.out}/store --results {params.out}/results --stored "
+        "--submissions-table {input.table}) > {log} 2>&1"
 
 
 rule hub_rounds_report:
@@ -393,6 +421,8 @@ rule ft_check_forecast:
     # rule, so other code makes its own folder and none is reused.
     input:
         data=rules.hub_data.output,
+        # A fine-tuned checkpoint's release, which the forecast fetches.
+        released=ft_check_record,
     output:
         touch(f"{FTC_DIR}/forecasts/{{fmodel}}@{{key}}.done"),
     log:
@@ -401,6 +431,7 @@ rule ft_check_forecast:
         f"{FTC_DIR}/benchmarks/{{fmodel}}@{{key}}.tsv"
     wildcard_constraints:
         key=r"[0-9a-f]{12}",
+    priority: ft_check_priority(CHECKPOINT_PRIORITY, REFERENCE_PRIORITY)
     conda:
         TOOLS_ENV
     threads: UNIT_THREADS
@@ -431,6 +462,7 @@ rule ft_check_page:
         f"{FTC_DIR}/logs/report-{{ckpt}}.log",
     wildcard_constraints:
         ckpt=r"slots-[0-9a-f]+|[0-9a-f]+",
+    priority: HANDOFF_PRIORITY
     localrule: True
     conda:
         TOOLS_ENV

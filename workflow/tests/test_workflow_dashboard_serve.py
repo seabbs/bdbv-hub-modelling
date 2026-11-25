@@ -66,14 +66,38 @@ def test_a_dead_server_is_replaced(tmp_path):
         driver.wait()
 
 
-def test_the_workflow_serves_the_dashboard_when_configured():
-    # One switch in the workflow config; the Snakefile's onstart calls the
-    # same entry the task uses.
+def test_the_workflow_serves_the_dashboard_by_default():
+    # On by default: a fine-tuning run serves the dashboard from its
+    # onstart, the same entry the task uses; it finds the runs itself.
     config = (ROOT / "workflow" / "config.yaml").read_text()
-    assert "serve: false" in config
+    assert "serve: true" in config
     snakefile = (ROOT / "workflow" / "Snakefile").read_text()
     assert "onstart:" in snakefile
     assert "serve.ensure(" in snakefile
+    assert "serve.ensure(LOCAL, serve.driver_pid())" in snakefile
+
+
+def test_the_dashboard_shows_the_runs_it_is_given(tmp_path):
+    seen = tmp_path / "argv.txt"
+    script = tmp_path / "argv_dashboard.py"
+    script.write_text(
+        f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv[1:]))\n"
+    )
+    driver = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"]
+    )
+    try:
+        serve.ensure(
+            _local(tmp_path), driver.pid, script=script, runs=["runa", "runb"]
+        )
+        for _ in range(100):
+            if seen.exists():
+                break
+            time.sleep(0.1)
+    finally:
+        driver.kill()
+        driver.wait()
+    assert "--run runa --run runb" in seen.read_text()
 
 
 def test_the_coordinator_names_itself_as_the_driver():

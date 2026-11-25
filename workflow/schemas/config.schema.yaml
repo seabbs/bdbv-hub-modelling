@@ -79,7 +79,6 @@ required:
   - rounds
   - grid_rounds
   - retired_rounds
-  - next_segment_only
   - simulate
   - finetune
   - runs
@@ -112,8 +111,6 @@ properties:
     properties:
       first: {$ref: "#/$defs/round"}
       last: {$ref: "#/$defs/round"}
-
-  next_segment_only: {type: boolean}
 
   simulate:
     type: object

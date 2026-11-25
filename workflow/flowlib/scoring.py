@@ -218,9 +218,38 @@ class Scoring:
         """Return the labels, oldest published first (none before listed)."""
         return releases.oldest_first(f"{self.cache}/releases.json", self.sc)
 
-    def unit_priority(self, base: float) -> Callable[[Any], float]:
-        """Return a unit's priority: `base`, newer checkpoints higher."""
-        return lambda wc: releases.priority(self.score_order(), wc.label, base)
+    def unit_priority(
+        self, base: float, reference: float
+    ) -> Callable[[Any], float]:
+        """Return a German unit's priority (`flowlib.compute`'s order).
+
+        A reference label's is `reference`; a checkpoint's is `base`,
+        newer checkpoints higher.
+        """
+
+        def priority(wc: Any) -> float:
+            if wc.label in self.sc["reference"]:
+                return reference
+            return releases.priority(self.score_order(), wc.label, base)
+
+        return priority
+
+    def ft_check_priority(
+        self, base: float, reference: float
+    ) -> Callable[[Any], float]:
+        """Return a BDBV check forecast's priority (`flowlib.compute`).
+
+        A reference model's is `reference`; a checkpoint's (`ft-<label>`)
+        is `base`, newer checkpoints higher.
+        """
+
+        def priority(wc: Any) -> float:
+            if not wc.fmodel.startswith("ft-"):
+                return reference
+            label = wc.fmodel.removeprefix("ft-")
+            return releases.priority(self.score_order(), label, base)
+
+        return priority
 
     def unit_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
         """Return the unit's device (torch and JAX), threads and batch."""
@@ -244,12 +273,12 @@ class Scoring:
         """Return the run's checkpoints a target asks for.
 
         On a machine that trains (`finetune` in TARGETS) those saved and
-        those this pass trains (`to_train`), so a table or report pulls
+        those within reach (`trainable`), so a table or report pulls
         the training and scoring it needs; elsewhere those saved, so a
         machine that only scores never trains.
         """
         if "finetune" in str(self.local.get("TARGETS", "")).split():
-            return self.training.to_train(run)
+            return self.training.trainable(run)
         prefixes = self.training.runs[run].ft["prefixes"]
         return [n for n in prefixes if self.training.saved(run, n)]
 
@@ -292,7 +321,7 @@ class Scoring:
         units = [
             f"{self.run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done"
             for run in self.training.trained_runs()
-            for n in self.training.to_train(run)
+            for n in self.training.trainable(run)
         ]
         return units + self.references()
 

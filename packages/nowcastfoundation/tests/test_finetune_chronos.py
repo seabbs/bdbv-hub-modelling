@@ -233,6 +233,43 @@ def test_a_block_too_large_for_memory_stops_the_run():
     assert waited == list(range(1, OOM_WAITS + 1))
 
 
+def test_a_block_too_large_alone_is_recomputed_not_waited_for():
+    # Run runa, n100 step 98: a block of 588 series under `checkpoint_above`
+    # ran out of an 8 GB GPU alone, and the trainer waited for another
+    # process that was not there. It is run again with its activations
+    # recomputed, at once, which the same block fits in.
+    from contextlib import contextmanager
+
+    from nowcastfoundation.finetune.stream import accumulate
+
+    recomputing: list[int] = []
+
+    @contextmanager
+    def recompute():
+        recomputing.append(1)
+        try:
+            yield
+        finally:
+            recomputing.pop()
+
+    calls: list[tuple[list[int], bool]] = []
+
+    def backward(part, _share):
+        calls.append((list(part), bool(recomputing)))
+        if 9 in part and not recomputing:
+            raise RuntimeError("CUDA out of memory")
+        return 0.5
+
+    waited: list[int] = []
+    value = accumulate(
+        [1, 9], backward, lambda: None, wait=waited.append, recompute=recompute
+    )
+    assert value == 0.5
+    assert waited == []
+    # Only the block that ran out alone is recomputed.
+    assert calls[-2:] == [([1], False), ([9], True)]
+
+
 def test_a_block_waits_while_another_process_holds_the_memory():
     # Overseer 18:00: Run A died when a scoring job held the GPU. A block
     # that keeps running out waits and is run again; the run goes on.

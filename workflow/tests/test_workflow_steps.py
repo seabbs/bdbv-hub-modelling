@@ -27,6 +27,7 @@ REPORTS = {
     "german_report",
     "benchmarks",
     "hub_data",
+    "hub_head",
     "hub_submissions_table",
     "hub_comparison",
     "hub_rounds_report",

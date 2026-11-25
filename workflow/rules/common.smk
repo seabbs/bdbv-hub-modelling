@@ -56,6 +56,32 @@ def ft_check_released(wc=None):
     return pages
 
 
+def released_ft_check_page(wc):
+    """The BDBV check page of saved checkpoint `ck` of the run."""
+    settings = Path(train_dir(wc.run), wc.ck, "settings.json")
+    return ft_check_page(f"slots-{json.loads(settings.read_text())['hash']}")
+
+
+def ft_check_record(wc):
+    """The release record of a BDBV check forecast's checkpoint, when it
+    is one of the trained runs' saved checkpoints, so it is released
+    before it is forecast."""
+    import glob
+
+    if not wc.fmodel.startswith("ft-slots-"):
+        return []
+    key = wc.fmodel.removeprefix("ft-slots-")
+    for run in TRAINING.trained_runs():
+        train = train_dir(run)
+        for settings in [
+            *glob.glob(f"{train}/n*/settings.json"),
+            *glob.glob(f"{train}/interim/*/settings.json"),
+        ]:
+            if json.loads(Path(settings).read_text()).get("hash") == key:
+                return str(Path(settings).with_name("published.json"))
+    return []
+
+
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"
@@ -97,8 +123,11 @@ RUNS_DIR = TRAINING.dir
 RUN = f"{RUNS_DIR}/{{run}}"
 TRAIN = f"{RUN}/train"
 EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded.py"
-EVALUATE_PRIORITY = 15
+CHECKPOINT_PRIORITY = compute.CHECKPOINT_PRIORITY
+EVALUATION_PRIORITY = compute.EVALUATION_PRIORITY
+REFERENCE_PRIORITY = compute.REFERENCE_PRIORITY
 TRAIN_PRIORITY = compute.TRAIN_PRIORITY
+HANDOFF_PRIORITY = compute.HANDOFF_PRIORITY
 trained_runs = TRAINING.trained_runs
 run_of = TRAINING.run_of
 train_dir = TRAINING.train_dir
@@ -140,6 +169,7 @@ EVALUATE = scoring.EVALUATE
 newest_first = compute.newest_first
 checkpoint_labels = SCORING.checkpoint_labels
 unit_priority = SCORING.unit_priority
+ft_check_priority = SCORING.ft_check_priority
 unit_env = SCORING.unit_env
 unit_rows = SCORING.unit_rows
 unit_shell = SCORING.unit_shell

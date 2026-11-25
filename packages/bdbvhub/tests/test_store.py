@@ -1496,3 +1496,156 @@ def test_the_walks_are_stored_and_forecast_from_the_store(
         have["value"].sort_index().to_numpy(),
         want.rename(index=str, level=1).sort_index().to_numpy(),
     )
+
+
+def _sorted_samples(frame: pd.DataFrame) -> pd.DataFrame:
+    keys = list(SAMPLE_COLUMNS)
+    out = frame[keys].astype({"location": str, "target_end_date": str})
+    return out.sort_values(keys[:3]).reset_index(drop=True)
+
+
+@pytest.mark.parametrize("name", ["randomwalk", "randomwalknowcast"])
+def test_a_walk_stores_its_zone_run_in_a_file_of_its_own(
+    name: str, tasks: dict[str, ForecastTask], tmp_path: Path
+) -> None:
+    """A walk's zone run is made once, by its stored fit (#1094).
+
+    It is the run on every hub zone of the stored task, as the
+    submission's zones are. It sits in its own file beside the fit, as it
+    holds about 20 times the fit's rows, so `read_fit` leaves it alone.
+    """
+    from nowcastbaselines.zones import zone_forecast
+    from nowcastutils.hierarchy import is_zone
+    from nowcastutils.snapshots import weekly_counts
+
+    origin = sorted(tasks)[-1]
+    task = tasks[origin]
+    stored = store.fit(name, task, {}, "c")
+    path = store.write_fit(tmp_path, stored)
+    zones = store.zones_path(tmp_path, name, origin, stored.meta["key"])
+    assert zones.exists()
+    back = store.read_fit(path)
+    assert back.zones.empty
+    assert not back.forecasts["location"].map(is_zone).any()
+    daily = task.zone_daily_history
+    assert daily is not None
+    want = zone_forecast(
+        get_model(name), task, weekly_counts(daily, origin), task.zone_codes,
+        daily,
+    )  # fmt: skip
+    got = store.read_zones(zones)
+    assert set(got["model"]) == {name}
+    assert set(got["kind"]) == {"real"}
+    assert set(got["vintage"].astype(str)) == {origin}
+    ref = task.reference_date.isoformat()
+    assert set(got["reference_date"].astype(str)) == {ref}
+    weeks = (
+        pd.to_datetime(got["target_end_date"].astype(str)) - pd.Timestamp(ref)
+    ).dt.days // 7
+    assert (got["horizon"].to_numpy() == weeks.to_numpy()).all()
+    pd.testing.assert_frame_equal(
+        _sorted_samples(got), _sorted_samples(want), check_dtype=False
+    )
+
+
+def test_the_nowcast_walk_stores_its_zone_delay(
+    tasks: dict[str, ForecastTask], tmp_path: Path
+) -> None:
+    # The zone backtest draws the reported counts under the zone run's
+    # own delay, so the stored fit keeps it.
+    origin = sorted(tasks)[-1]
+    stored = store.fit("randomwalknowcast", tasks[origin], {}, "c")
+    assert not stored.zone_delays.empty
+    back = store.read_fit(store.write_fit(tmp_path, stored))
+    pd.testing.assert_frame_equal(
+        back.zone_delays.reset_index(drop=True),
+        stored.zone_delays.reset_index(drop=True),
+        check_dtype=False,
+    )
+    walk = store.fit("randomwalk", tasks[origin], {}, "c")
+    assert walk.zone_delays.empty
+
+
+def test_the_stored_zones_are_the_zone_runs_load_used(
+    tasks: dict[str, ForecastTask], config: BacktestConfig, tmp_path: Path
+) -> None:
+    from nowcastutils.hierarchy import is_zone
+
+    name = "randomwalknowcast"
+    origins = sorted(tasks)[-2:]
+    root = tmp_path / "store"
+    for origin in origins:
+        store.write_fit(root, store.fit(name, tasks[origin], {}, "c"))
+    keys = store.current_keys({o: tasks[o] for o in origins}, [name], {}, "c")
+    results = tmp_path / "results"
+    store.load(root, keys, results, config.min_horizon, config.max_horizon)
+    every = store.stored_zones(root, results)
+    assert set(every["vintage"].astype(str)) == set(origins)
+    assert every["location"].astype(str).map(is_zone).all()
+    one = store.stored_zones(root, results, origins=[origins[-1]])
+    assert set(one["vintage"].astype(str)) == {origins[-1]}
+    assert store.stored_zones(root, results, models=["renewal"]).empty
+    delays = store.stored_zone_delays(root, results)
+    assert set(delays["origin"].astype(str)) == set(origins)
+    # `load` leaves the zone runs in the store, so no results file holds
+    # them unless a consumer asks.
+    dev = pd.read_csv(results / "forecasts.csv.gz")
+    assert not dev["location"].map(is_zone).any()
+    assert not (results / store.ZONE_FITS_FILE).exists()
+
+
+def test_unpack_writes_a_walk_s_zones_for_the_submission(
+    tasks: dict[str, ForecastTask], tmp_path: Path
+) -> None:
+    # The submission takes a walk's zones from its fit directory, as it
+    # takes a zone fit's.
+    from nowcastrenewal.zones import ZONES_FILE
+
+    name = "randomwalk"
+    origin = sorted(tasks)[-1]
+    stored = store.fit(name, tasks[origin], {}, "c")
+    root = tmp_path / "store"
+    store.write_fit(root, stored)
+    keys = store.current_keys({origin: tasks[origin]}, [name], {}, "c")
+    out = tmp_path / "fit"
+    state, _ = store.unpack(root, keys, name, origin, out)
+    assert state == "ok"
+    got = pd.read_csv(out / ZONES_FILE, dtype={"target_end_date": str})
+    assert list(got.columns) == list(SAMPLE_COLUMNS)
+    want = store.read_zones(
+        store.zones_path(root, name, origin, stored.meta["key"])
+    )
+    pd.testing.assert_frame_equal(
+        _sorted_samples(got), _sorted_samples(want), check_dtype=False
+    )
+
+
+@pytest.mark.usefixtures("in_root", "offline_bvd")
+def test_zone_data_keys_the_walks(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    daily_zones: pd.DataFrame,
+    health_zones: pd.DataFrame,
+    config: BacktestConfig,
+    tasks: dict[str, ForecastTask],
+) -> None:
+    # Their stored fits hold their zone runs, which read the zone data.
+    zoned = store.origin_tasks(
+        target,
+        delays,
+        config,
+        daily,
+        ZoneData(health_zones, daily_zones, ("CD-IT-01", "CD-NK-01")),
+    )
+    walks = list(store.SAMPLE_FREE)
+    assert store.current_keys(zoned, walks, {}, "c") != (
+        store.current_keys(tasks, walks, {}, "c")
+    )
+    assert store.ZONE_CODE in store.fit_code("randomwalk", ROOT)
+
+
+def test_the_branch_moves_a_fit_s_zone_run_with_it() -> None:
+    from bdbvhub.store import branch
+
+    assert branch.ZONES_SUFFIX == store.ZONES_SUFFIX

@@ -39,6 +39,9 @@ def dry_run(tmp_path, *targets, config=None, extra=(), quiet=True, dry=True):
     if not local.exists():
         local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
     overlay = tmp_path / "overlay.yaml"
+    if not dry:
+        # A test run serves no dashboard.
+        config = {**(config or {}), "dashboard": {"serve": False}}
     overlay.write_text(yaml.safe_dump(config or {}))
     return subprocess.run(
         [
@@ -84,8 +87,9 @@ def _sim_commands(out):
 
 
 def test_batches_run_by_count_not_a_cap(tmp_path):
-    # SIM_SLOTS alone sets how many batches run at once: a batch claims
-    # no memory and runs under no prefix.
+    # SIM_SLOTS sets how many batches run at once: each claims its rule's
+    # memory, so the slots fit the machine's budget, and runs under no
+    # prefix.
     (tmp_path / "local.env").write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\n"
     )
@@ -98,7 +102,9 @@ def test_batches_run_by_count_not_a_cap(tmp_path):
     )
     assert len(claims) == 40
     assert all("sim_slots=1" in c for c in claims)
-    assert not any(re.search(r"mem_mb=[1-9]", c) for c in claims)
+    rule = (ROOT / "workflow" / "rules" / "simulate.smk").read_text()
+    claim = re.search(r"rule simulate_batch:.*?mem_mb=(\d+)", rule, re.S)
+    assert all(f"mem_mb={claim.group(1)}," in c for c in claims)
     bare = re.compile(r"eigen=false\s+workflow/scripts/timed\.sh")
     assert all(bare.search(x) for x in lines)
 
@@ -242,6 +248,16 @@ def test_ft_check_forecasts_are_keyed_by_their_code(tmp_path):
     assert jobs["ft_check_forecast"] == "3"
 
 
+def test_a_fresh_host_fetches_the_hub_s_data_commit(tmp_path):
+    # archie, 25 Nov: with no hub_watch.sh, <ROOT>/hub/head.txt never
+    # existed, so the BDBV check could not be planned; the workflow
+    # fetches it when missing, and hub_watch.sh keeps it current.
+    config = {"ft_check": {"checkpoint": "slots-abcdef"}}
+    jobs = dry(tmp_path, "ft_check", config=config)
+    assert jobs["hub_head"] == 1
+    assert jobs["hub_data"] == 1
+
+
 def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
     # Lead 10:50: each released checkpoint (its published.json) gets its
     # BDBV check page.
@@ -253,6 +269,92 @@ def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
     )
     jobs = dry(tmp_path, "finetune", config=FT)
     assert jobs["ft_check_page"] == 1
+
+
+def _job_priorities(stdout):
+    """Return each job's rule, wildcards and priority from a dry run."""
+    found = []
+    for block in re.split(r"\n(?=(?:local)?rule \w+:)", stdout):
+        rule = re.match(r"(?:local)?rule (\w+):", block)
+        if rule:
+            wildcards = re.search(r"wildcards: (.*)", block)
+            got = re.search(r"priority: ([\d.]+)", block)
+            found.append(
+                (
+                    rule[1],
+                    wildcards[1] if wildcards else "",
+                    float(got[1]) if got else 0.0,
+                )
+            )
+    return found
+
+
+def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
+    # Sam, overnight 25 Nov: with sims queued for later segments, freed
+    # cores went to batches; the German reference and each checkpoint's
+    # scoring starved, and the batches the trainer reads were never
+    # copied into the run, so the GPU waited. One order (flowlib.compute):
+    # the trainer, the quick hand-offs (its batches' copies, a
+    # checkpoint's release for its BDBV check), the references, each
+    # checkpoint's scoring (newest first), simulation batches, then the
+    # held-out evaluation, which nothing waits for (Sam, 25 Nov).
+    _hub(tmp_path)
+    seg = tmp_path / "runs" / "runa" / "train" / "n250"
+    seg.mkdir(parents=True)
+    (seg / "published.json").write_text(
+        '{"tag": "chronos-slots-abcdef", "hash": "abcdef"}'
+    )
+    # A publishing machine releases each checkpoint for its BDBV check.
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nPUBLISH=1\n"
+    )
+    config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
+    out = dry_run(tmp_path, "finetune", config=config, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    tiers = {
+        "train": [],
+        "fetch": [],
+        "reference": [],
+        "checkpoint": [],
+        "batch": [],
+        "evaluate": [],
+    }
+    newest = {}
+    for rule, wildcards, priority in _job_priorities(out.stdout):
+        if rule == "train_segment":
+            tiers["train"].append(priority)
+        elif rule in (
+            "fetch_batch",
+            "verify_checkpoint",
+            "publish_checkpoint",
+            # Quick jobs a released checkpoint's BDBV check waits on, which
+            # at priority 0 queued behind every CPU job (archie, 25 Nov).
+            "hub_data",
+            "ft_check_page",
+        ):
+            tiers["fetch"].append(priority)
+        elif rule == "score_germany" or (
+            rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards
+        ):
+            tiers["reference"].append(priority)
+        elif rule in ("evaluate_steps", "evaluate_base", "evaluate_checkpoint"):
+            tiers["evaluate"].append(priority)
+        elif rule in ("score_run_germany", "ft_check_forecast"):
+            tiers["checkpoint"].append(priority)
+            if rule == "score_run_germany":
+                n = int(re.search(r"n=(\d+)", wildcards)[1])
+                newest[n] = priority
+        elif rule == "simulate_batch":
+            tiers["batch"].append(priority)
+    assert all(tiers.values()), tiers
+    seen = {rule for rule, _, _ in _job_priorities(out.stdout)}
+    assert {"hub_data", "ft_check_page"} <= seen
+    assert min(tiers["train"]) > max(tiers["fetch"])
+    assert min(tiers["fetch"]) > max(tiers["reference"])
+    assert min(tiers["reference"]) > max(tiers["checkpoint"])
+    assert min(tiers["checkpoint"]) > max(tiers["batch"])
+    assert min(tiers["batch"]) > max(tiers["evaluate"])
+    assert newest[500] > newest[250]
 
 
 def test_finetune_builds_each_trained_run_s_german_report(tmp_path):
@@ -485,12 +587,42 @@ def test_local_evaluation_plans_no_evaluation_rules(tmp_path):
     assert not any(k.startswith("evaluate") for k in jobs)
 
 
-def test_an_offloaded_checkpoint_publishes_with_its_held_out_losses(tmp_path):
+def test_an_offloaded_checkpoint_publishes_before_its_held_out_losses(
+    tmp_path,
+):
+    # Sam, 25 Nov: the held-out losses take hours on the CPU, so the
+    # release and its BDBV check never wait for them; they join the
+    # release once scored.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
+    where = tmp_path / "runs" / "runa" / "train" / "n250"
+    jobs = dry(tmp_path, f"{where}/published.json", config=OFFLOAD)
+    assert jobs == {"verify_checkpoint": 1, "publish_checkpoint": 1}
     jobs = dry(tmp_path, "publish", config=OFFLOAD)
     assert jobs["publish_checkpoint"] == 2
     assert jobs["evaluate_checkpoint"] == 2
+    assert jobs["release_held_out"] == 2
+
+
+def test_a_publishing_run_checks_each_saved_checkpoint_once_released(
+    tmp_path,
+):
+    # A saved checkpoint's BDBV check page is planned in the pass that
+    # releases it, with no Snakemake checkpoint, whose DAG update hung the
+    # run on archie (25 Nov); its forecast waits for the release.
+    _hub(tmp_path)
+    _local(tmp_path, "PUBLISH=1")
+    _checkpoint(tmp_path, 250)
+    settings = tmp_path / "runs" / "runa" / "train" / "n250" / "settings.json"
+    settings.write_text('{"hash": "abcdef"}')
+    jobs, edges = _dag(tmp_path, "finetune", FT)
+    rules = {i: label.split("\\n")[0] for i, label in jobs.items()}
+    names = list(rules.values())
+    assert names.count("publish_checkpoint") == 2
+    assert names.count("ft_check_release") == 1
+    publish = {i for i, rule in rules.items() if rule == "publish_checkpoint"}
+    forecast = {i for i, rule in rules.items() if rule == "ft_check_forecast"}
+    assert any(a in publish and b in forecast for a, b in edges)
 
 
 def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
@@ -901,7 +1033,7 @@ def test_a_failed_run_posts_a_mailbox_line(tmp_path):
     (n800 / "settings.json").write_text("{}")
     # Evaluated in the trainer, so the report needs only the checkpoint.
     overlay = tmp_path / "overlay.yaml"
-    overlay.write_text("finetune:\n  eval: local\n")
+    overlay.write_text("finetune:\n  eval: local\ndashboard:\n  serve: false\n")
     target = tmp_path / "runs" / "runa" / "reports" / "n800-check.txt"
     out = subprocess.run(
         [
@@ -1005,35 +1137,18 @@ def test_a_no_bias_control_is_a_run_in_its_own_folder(tmp_path):
     assert "--series-bias" not in out.stdout
 
 
-def test_a_tick_trains_only_the_next_segment(tmp_path):
-    # So each run ends after one segment and the next run plans afresh:
-    # new rounds, new releases, a checkpoint to score.
-    jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
-    assert jobs["train_segment"] == 1
+def test_a_run_trains_the_next_segment_beside_the_scoring(tmp_path):
+    # n500 trains once n250 is saved, while n250 is scored, not a run
+    # later.
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["train_segment"] == 2
+    assert jobs["score_run_germany"] == 2
 
 
-def test_a_tick_after_n250_trains_n500(tmp_path):
+def test_a_run_after_n250_trains_n500(tmp_path):
     _checkpoint(tmp_path, 250)
-    jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
+    jobs = dry(tmp_path, "finetune", config=FT)
     assert jobs["train_segment"] == 1
-
-
-def test_a_tick_does_not_train_on_to_the_n1000_check(tmp_path):
-    # The n1000 report needs n1000, so it must not pull the chain there.
-    config = {
-        **FT,
-        "next_segment_only": True,
-        "rounds": [1, 2, 3],
-        "finetune": {
-            **FT["finetune"],
-            "prefixes": [250, 500, 1000],
-            "outbreaks": 1000,
-            "rounds": [2, 3],
-        },
-    }
-    jobs = dry(tmp_path, "finetune", config=config)
-    assert jobs["train_segment"] == 1
-    assert "checkpoint_check" not in jobs
 
 
 def _rounds_host(tmp_path, rounds):
@@ -1060,9 +1175,7 @@ def test_a_fresh_listing_keeps_the_checkpoints_saved(tmp_path):
     _rounds_host(tmp_path, {1: range(30100, 30140), 2: range(30200, 30240)})
     _checkpoint(tmp_path, 250)
     dry(tmp_path, "finetune", config=REMOTE)
-    jobs = dry(
-        tmp_path, "finetune", config={**REMOTE, "next_segment_only": True}
-    )
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert jobs["train_segment"] == 1
 
 
@@ -1137,7 +1250,8 @@ def test_score_threads_are_a_machine_setting(tmp_path):
     assert all(re.search(r"threads: 3\b", b) for b in units)
 
 
-def test_newer_checkpoints_are_scored_first(tmp_path):
+def test_the_reference_then_newer_checkpoints_are_scored_first(tmp_path):
+    # The reference every checkpoint is compared with comes first.
     config = {"score": {"labels": ["aaa", "bbb"]}}
     blocks = score_jobs(tmp_path, config)
     got = {}
@@ -1146,7 +1260,7 @@ def test_newer_checkpoints_are_scored_first(tmp_path):
         if rule:
             label = re.search(r"wildcards: label=(\S+)", block)[1]
             got[label] = float(re.search(r"priority: ([\d.]+)", block)[1])
-    assert got["bbb"] > got["aaa"] > got["reference"]
+    assert got["reference"] > got["bbb"] > got["aaa"]
 
 
 def test_one_unit_runs_before_the_release_list_exists(tmp_path):

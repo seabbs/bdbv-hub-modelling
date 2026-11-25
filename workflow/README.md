@@ -95,7 +95,7 @@ Each outbreak draws its settings independently from the grid (`simulate.grid_fil
 The simulator is `nowcastfoundation.simulator` (`simulate_batch`, run as `python -m nowcastfoundation.simulator GRID N SEED OUT`).
 It draws each outbreak's design and values in Python and runs each outbreak as one numpyro model from the shared PyRenew components, its latent infections to its reported counts (`nowcastrenewal.simulation.outbreak`).
 
-- `simulate_batch`: one batch of the simulator. Batches run by count (`sim_slots`), started by the scheduler as slots free up, with no memory claim of their own. A batch that fails is retried once. The simulator must be the committed one, and it runs with JAX on one thread.
+- `simulate_batch`: one batch of the simulator. Batches run by count (`sim_slots`), started by the scheduler as slots free up, each claiming its peak memory (5.5 GB). A batch that fails is retried once. The simulator must be the committed one, and it runs with JAX on one thread.
 - `batch_record`: the batch's manifest row (sha256 of each file, memory, time, grid, commit, host), keeping a row the round's manifest already holds.
 - `round_manifest`: the round's `manifest.csv`, rows in seed order.
 - `sim_qc`: the sim QC (`sim-qc`, `nowcastfoundation.finetune.qc`), a record of each simulation's summaries in the round's `qc/`. It sets no thresholds and nothing is excluded or deleted.
@@ -123,7 +123,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `fetch_batch`: a batch into `<ROOT>/runs/<run>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
 - The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<ROOT>/runs/<run>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC summaries in `<ROOT>/runs/<run>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.
-- `evaluate_steps`, `evaluate_base`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. `evaluate_base` scores step 0 alone (base Chronos-2, the start loss), `evaluate_steps` a segment's snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), which needs only step 0. They run on the forecasting device (`forecast` in the config, the CPU by default) beside the trainer, newest first. They use the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`) in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
+- `evaluate_steps`, `evaluate_base`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. `evaluate_base` scores step 0 alone (base Chronos-2, the start loss), `evaluate_steps` a segment's snapshots (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), which needs only step 0. They run on the forecasting device (`forecast` in the config, the CPU by default) beside the trainer, newest first, below every other job, so no release or check waits for them. They use the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`) in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
 - `seven_day_check`: each checkpoint's 7-day check on its run's held-out blocks (`n<N>/seven-day.json`, `nowcastfoundation.finetune.evaluate.seven_day_check`): the 7-day row's median against the 7-day sums of the same block's daily medians (median ratio, and the share of those sums in the row's 90% interval), and the roughness of the log 7-day median against the truth's. It runs on the forecasting device beside the trainer, for every run however it evaluates; `finetune` asks for it and the dashboard's checkpoint tables show it.
 - `validation_curve`: a run's validation loss by level at the start and at each checkpoint, against simulations trained (`<run>/validation-curve.csv`, `flowlib.evaluations.validation_curve`). The paper's `evidence` rule reads the final run's.
 - `block_combinations`: the share of each combination of block layout and options over a run's training, from its final checkpoint's tally (`<run>/train/block-combinations.csv`, the SI table).
@@ -137,10 +137,12 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 ## 3. Publish (`rules/publish.smk`)
 
 - `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
-- `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`).
+- `publish_checkpoint`: opt-in, the release `chronos-slots-<hash>` or `chronos-ft-<hash>` (`workflow/scripts/publish_checkpoint.py`). It never waits for the checkpoint's held-out losses.
+- `ft_check_release`: a saved checkpoint's BDBV check page (`ft_check_page`), named by the hash in its settings (`<ck>/ft-check.done`). A fine-tuned checkpoint's BDBV check forecast waits for its release.
+- `release_held_out`: an offloaded checkpoint's held-out losses (`held-out.json`), uploaded to its release once scored (`<ck>/held-out-released.txt`).
 - `publish_germany_unit`: opt-in, attaches a released checkpoint's German unit (`<SCORE_CACHE>/germany-days/slots-<hash>`) to its release as `germany-forecasts.tar.gz` (`nowcastgermany unit-publish`), which the Pages build loads for the checkpoint `packages/nowcastfoundation/config/finetune.toml` pins.
 - `publish_hf`: opt-in and named by its output only (`<ck>/huggingface.json`), uploads a verified checkpoint to the Hugging Face Hub repository `[huggingface] repo` in `packages/nowcastfoundation/config/finetune.toml`: its adapter, settings, `sha256sums.txt` and model card (`publish-hf`, `nowcastfoundation.hubpublish`), as the revision tagged with its spec. The token is `HF_TOKEN` from the environment. With `huggingface.dry_run` in the config, or no repository, it only writes the folder `<ck>/huggingface/`.
-- `publish`: every checkpoint.
+- `publish`: every saved checkpoint, with its held-out losses once scored.
 
 ## 4. Score (`rules/score.smk`)
 
@@ -167,7 +169,8 @@ Reports read the other steps' outputs back for people, each with one script.
 - `grid_figures`: the rounds in `rounds` side by side, each summary's ECDF and the shares of patterns and phases.
 - `sim_report`: a round's report, `r<N>/report/sim-report.html`; `sim_report_run` one report of every round in `rounds`; `sim_reports` all of them. `sim_diseases` gives the grid's training rounds' ranges against the published values by disease (`report/sim-diseases.csv`), for the SI's disease table.
 - `german_report`: the run's checkpoints against zero-shot and randomwalknowcast on the German development half (`workflow/scripts/german_report.py`), in `<ROOT>/runs/<run>/reports/german/`.
-- `hub_rounds`: our last `hub_rounds.rounds` hub rounds against every hub team on the hub's latest data, `<ROOT>/hub/hub-rounds.html` (`hub_rounds_report`, `workflow/scripts/hub_rounds_report.py`), copied to `REVIEW_DIR` when set. `hub_data` tidies the hub's data, `hub_submissions_table` reads which chain model went out from the ledger branch, and `hub_comparison` scores the hub's files as submitted beside `hub_rounds.models` rerun on current code for each round (`compare-hub --models`). They rerun when `<ROOT>/hub/head.txt` changes, which `workflow/scripts/hub_watch.sh` writes when the hub's data commit moves before it builds the target. Not part of `all`.
+- `hub_rounds`: our last `hub_rounds.rounds` hub rounds against every hub team on the hub's latest data, `<ROOT>/hub/hub-rounds.html` (`hub_rounds_report`, `workflow/scripts/hub_rounds_report.py`), copied to `REVIEW_DIR` when set. `hub_data` tidies the hub's data, `hub_submissions_table` reads which chain model went out from the ledger branch, and `hub_comparison` scores the hub's files as submitted beside `hub_rounds.models` as the fit store holds them for each round (`fit-store load --models`, then `compare-hub`). They rerun when `<ROOT>/hub/head.txt` changes, which `workflow/scripts/hub_watch.sh` writes when the hub's data commit moves before it builds the target. Not part of `all`.
+- `hub_head`: the hub's data commit (`<ROOT>/hub/head.txt`) when a host has none, fetched with `gh`; `workflow/scripts/hub_watch.sh` keeps it current. `hub_data` reads the hub with the `gh` token.
 - `ft_check`: the BDBV foundation-model check of `ft_check.checkpoint` (else `packages/nowcastfoundation/config/finetune.toml`'s pin), copied to `REVIEW_DIR` as `bdbv-ft-check.html`; `ft_check_page` builds one checkpoint's page, `<ROOT>/hub/ft-check/<ckpt>/bdbv-ft-check-<ckpt>.html` (`bdbvhub ft-check`, `bdbvhub.ftcheck`), copied to `REVIEW_DIR` under that name, so each checkpoint is its own target; `finetune` asks for the page of every released checkpoint (a segment's `published.json`). `ft_check_forecast` forecasts every hub release with one model into `<ROOT>/hub/ft-check/forecasts/<model>@<code key>` (`flowlib.scoring.ft_check_key`): `ft_check.models` once per code key, and `ft_check.finetuned` as `ft-<checkpoint>@<code key>`, so a new checkpoint reruns only it and a folder from other code is never reused. Chronos-2 models build the active-zone and by-province blocks. The page gives each model's pairwise relative skill on the CRPS and log CRPS, scaled to `ft_check.reference`, overall and by weeks back, with the forecasts and their 50% and 90% intervals. Not part of `all`.
 - `rt_check`: the Rt sense check of a stored renewal fit before its `wk R_t` is submitted, `<rt_check.out_dir>/<model>-<origin>.html` (`bdbvhub rt-check`, `bdbvhub.reporting.rtcheck`): Rt by country, province and fitted zone over their cases, with BVDOutbreakSize's Rt. It reads the fit the store (`rt_check.store`) holds for the current code and is copied to `REVIEW_DIR` as `rt-check.html` when set. Not part of `all`.
 - `this_round`: this week's round, `<ROOT>/hub/this-round.html` (`this_round_report`, `workflow/scripts/this_round_report.py`), copied to `REVIEW_DIR` when set: every candidate's forecasts and nowcasts against the data as of the round, the renewal candidates' wk R_t, the gate's pick and why, and the renewal fits' convergence; no scores. `this_round_inputs` downloads the latest Submit run on main's artefacts, fetches the fit store and archives every candidate's hub table for the round (`workflow/scripts/this_round_inputs.sh`). It reruns when `<ROOT>/hub/round/run.txt` or `round/store.txt` changes, which `workflow/scripts/hub_watch.sh` writes. Not part of `all`.
@@ -180,10 +183,11 @@ It is one process: the page is rebuilt in the background and a client that leave
 
 It runs two ways, through the one script (`flowlib.dashboard.serve`):
 
-- with the run: `dashboard.serve: true` in the workflow config, on a machine whose targets (`TARGETS`) include `finetune`, starts it from the run's own checkout when the run starts (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
+- with the run: `dashboard.serve: true` in the workflow config (the default), on a machine whose targets (`TARGETS`) include `finetune`, starts it from the run's own checkout and local config when the run starts, showing the runs it trains (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
 - alone: `task workflow:dashboard`, from any checkout, in the foreground.
 
-Either shows the runs under `DASHBOARD_ROOT` (default `ROOT`), so a checkout can watch another machine folder's runs.
+Either shows the runs under `DASHBOARD_ROOT` (default `ROOT`) that have trained there, the most recently active first, found again on each refresh, so a new run appears in the run picker by itself; `--run NAME` shows only the runs named.
+The machine's monitor serves it under `/finetune/` (see Monitor), so the monitor's port is the one address to open or forward.
 `task workflow:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a mailbox) and Tables. Every chart has an info marker (`page/explain.json`).
@@ -241,7 +245,7 @@ LOCAL_CONFIG=<run folder>/local.env nohup task workflow:run > <run folder>/coord
 ```
 
 Stop it with `touch output/coordinator.stop` in the driver checkout, which ends it after the running tick.
-`task workflow:dashboard` with the same `LOCAL_CONFIG` serves the run's dashboard.
+The run serves its dashboard for as long as the coordinator lives, and the machine's monitor at `MONITOR_HOST:MONITOR_PORT` shows it at `/finetune/` (section 6).
 
 ## Scheduled runs
 
@@ -254,13 +258,13 @@ The workflow updates itself as results come in. Each machine runs its own target
 | a simulating machine | `simulate release` | simulates the configured rounds and releases each batch |
 
 A tick (`task workflow:tick`, `workflow/scripts/tick.py`) runs the pool targets (`simulate`, `push`, `finetune`, `score`) as one Snakemake run at nice 19 with the default profile and the machine's budget, so a free core or the GPU takes whichever queued job fits.
-When jobs compete, the trainer goes first (priority 20), then simulation (15), then checkpoint scoring (10 and below).
+When jobs compete, the trainer goes first (priority 100), then quick hand-offs (90: the copies of the batches it reads, and each checkpoint's verification and release for its BDBV check), then the references every checkpoint is compared with (30), then each checkpoint's scoring and evaluation, newest first (20), then simulation batches (15); `workflow/flowlib/compute.py` sets the order.
 Before it, the lists the pool plans from (the checkpoint releases, and on a machine without the rounds the batches it can have) are refreshed in a run of their own.
 A failed refresh leaves the last lists, and the pool still runs.
 The outward targets (`land`, `publish`, `release`) follow in their configured order.
 A failed run skips `land` and `release`, so `land` never follows a failed `score`, but `publish` still releases the checkpoints saved.
-A tick's run trains only the next segment (`next_segment_only`), so it ends after one segment and the next run plans afresh.
-Work that appears during a run, such as a new checkpoint or a landed round, waits for the next tick's run, so it waits at most as long as the longest running job, one segment.
+A tick's run trains every segment within reach of the batches there are, so the next segment starts as soon as the one before is saved, while that checkpoint is scored, evaluated and published on the CPU.
+Work that appears during a run, such as a landed round or a newly listed batch, waits for the next tick's run.
 Snakemake locks the worktree it runs in, so each machine has one driver worktree.
 A tick is skipped when another tick is still running (a lock in `output/`) or when less than `MIN_FREE_GB` of memory or `MIN_DISK_GB` of disk is free. Its log is `output/workflow-tick.log`.
 
@@ -273,6 +277,7 @@ Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add 
 ## Monitor
 
 `task workflow:monitor` serves [Panoptes](https://github.com/panoptes-organization/panoptes), Snakemake's web monitor: every run's jobs, their state, what is running and what has failed, in one page.
+It is each machine's one entry: a fine-tuning run starts it, unless one is already serving (`<ROOT>/monitor/serve.pid`), and it keeps serving after the run ends; it serves the fine-tuning dashboard at `/finetune/`, linked from its pages beside the DAG.
 Every Snakemake run the tasks, ticks and paper scripts start reports to it through the logger plugin `snakemake-logger-plugin-panoptes` (`workflow/flowlib/monitor.py`), on by default.
 Runs report to `MONITOR_URL`; another machine's runs report to the serving machine's address, and an empty `MONITOR_URL` switches reporting off.
 The plugin drops events it cannot send, so a run goes on when no server is listening.
