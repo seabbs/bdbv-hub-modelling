@@ -363,14 +363,11 @@ def test_the_evidence_reads_the_workflow_rules_outputs() -> None:
     flow = _flow()
     files = flow.workflow_evidence()
     rounds = CONFIG["rounds_dir"]
-    assert files["finetune_validation"] == (
-        f"{CONFIG['final_run']}/validation-curve.csv"
-    )
     assert files["sim_diseases"] == f"{rounds}/report/sim-diseases.csv"
     assert files["sim_summaries"].endswith("evidence/sim-summaries.csv")
     assert files["sim_realism"].endswith("evidence/sim-realism.csv")
     args = flow.options(files)
-    assert f"--finetune-validation {files['finetune_validation']}" in args
+    assert f"--sim-diseases {files['sim_diseases']}" in args
     assert _flow(final_run=None).workflow_evidence().keys() == {
         "si_copula",
         "copula_rho",
@@ -427,3 +424,25 @@ def test_the_simulations_and_their_ready_file_are_always_inputs(
     assert flow.source_files(_w("paper", "synthetic")) == [
         flow.synthetic["forecasts"]["paper"]
     ]
+
+
+def test_each_paper_run_has_a_progress_figure_from_its_own_tables() -> None:
+    # The live run and each comparison's run, each reading only its own
+    # reports, and none while the runs folder is null.
+    flow = _flow()
+    runs = flow.progress_runs()
+    assert runs == list(
+        dict.fromkeys([CONFIG["live_run"], *CONFIG["comparisons"].values()])
+    )
+    for run in runs:
+        files = flow.progress_files(run)
+        assert set(files) == {"loss", "seven_day", "bdbv", "horizons"}
+        assert all(f"/runs/{run}/reports/" in f for f in files.values())
+    outputs = flow.outputs(SimpleNamespace(mode="development", study=""))
+    assert flow.progress_figure("development", runs[0]) in outputs
+    assert _flow(runs_dir=None).progress_runs() == []
+
+
+def test_only_a_paper_run_s_progress_figure_reads_the_bdbv_check() -> None:
+    assert PaperFlow.progress_bdbv("development", "b.csv") == ""
+    assert PaperFlow.progress_bdbv("paper", "b.csv") == "--bdbv b.csv"

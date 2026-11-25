@@ -165,6 +165,10 @@ def test_the_page_carries_the_explorer_s_styles_and_data(tmp_path):
     assert len(data["models"]) == 2
     row = data["rows"][0] if "rows" in data else data["q"][0]
     assert len(row) == 4 + len(QUANTILE_COLUMNS)
+    # The overall skill, for the run's progress figure.
+    overall = pd.read_csv(tmp_path / "p-data" / "overall.csv")
+    assert list(overall["model"]) == list(ids.values())
+    assert list(overall["relative_crps"]) == [1.0, 0.9]
 
 
 def _samples():

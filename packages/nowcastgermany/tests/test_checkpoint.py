@@ -804,3 +804,70 @@ def test_a_unit_drops_the_rows_of_a_model_it_no_longer_runs(
     assert asked == []
     for d in dates:
         assert set(pd.read_csv(root / f"{d}.csv.gz")["model"]) == {"a"}
+
+
+@pytest.mark.parametrize(
+    ("part", "kept"),
+    [("nowcast", {-7, 0}), ("forecast", {7}), ("all", {-7, 0, 7})],
+)
+def test_german_rows_score_the_horizons_asked_for(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, part: str, kept: set
+) -> None:
+    # Nowcasts are the hub's days back (0 and before), forecasts the days
+    # after the origin, and `all` both.
+    from nowcastgermany import evaluation as de
+
+    root = tmp_path / ck.GERMANY_UNIT / "reference"
+    root.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "model": "m",
+            "origin": "2021-11-22",
+            "target_end_date": ["2021-11-15", "2021-11-22", "2021-11-29"],
+            "horizon": [-7, 0, 7],
+            "value": 1.0,
+            "truth": 1.0,
+        }
+    ).to_csv(root / "2021-11-22.csv.gz", index=False)
+    seen: list = []
+
+    def score(fc, _delay):
+        seen.append(set(fc["horizon"]))
+        return pd.DataFrame(columns=["model", *ck.GERMANY_CELL, "wis"])
+
+    monkeypatch.setattr(de, "score_germany", score)
+    monkeypatch.setattr(ck, "relative", lambda sc, *_a: sc)
+    monkeypatch.setattr(ck, "matched", lambda sc, _cell: sc)
+    ck.germany_rows({"reference": root}, horizons=part)
+    assert seen
+    assert all(s == kept for s in seen)
+
+
+def test_a_run_s_horizon_table_scores_each_part_of_its_checkpoints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The run's saved checkpoints with zero-shot, once per part of the
+    # horizons, each row tagged with its part, outbreaks and run.
+    train, scores, ref = tmp_path / "train", tmp_path / "s", tmp_path / "r"
+    _saved(train, 100)
+    (scores / "n100").mkdir(parents=True)
+    seen: list = []
+
+    def germany(folders, horizons="nowcast"):
+        seen.append((dict(folders), horizons))
+        return pd.DataFrame(
+            [{"study": "germany", "checkpoint": c, "level": "national",
+              "rel_wis": 1.0}
+             for c in ("zero-shot", "n100")]
+        ).reindex(columns=ck.COLUMNS)  # fmt: skip
+
+    monkeypatch.setattr(ck, "germany_rows", germany)
+    got = ck.horizon_table(train, scores, ref, "runa")
+    assert [h for _, h in seen] == list(ck.HORIZON_PARTS)
+    assert seen[0][0] == {ck.REFERENCE: ref, "n100": scores / "n100"}
+    assert sorted(set(got["horizons"])) == sorted(ck.HORIZON_PARTS)
+    by = got.drop_duplicates("checkpoint").set_index("checkpoint")
+    assert by.loc["n100", "outbreaks"] == 100
+    assert by.loc["n100", "run"] == "runa"
+    assert by.loc["zero-shot", "outbreaks"] == 0
+    assert by.loc["zero-shot", "run"] == "zero-shot"
