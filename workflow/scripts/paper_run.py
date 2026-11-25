@@ -55,9 +55,7 @@ def render(target: str, cfg: Mapping[str, str], *, pages: bool = False) -> int:
 
     `development` never reads the held-out data; `paper` needs it
     (paper/README.md). CORES (environment or config/local.env) sets
-    Snakemake's cores (default 4). The Ebola study reads our stored fits
-    from the fit store's history, so the fit-store branch is fetched
-    first. Snakemake then runs the target's missing steps
+    Snakemake's cores (default 4). Snakemake runs the target's missing steps
     (`--rerun-triggers mtime` reuses the backtest forecasts CI has
     already made) and renders main.qmd and si.qmd, which are copied into
     docs/paper/ for the site. The chronos group is installed too, as the
@@ -81,13 +79,6 @@ def render(target: str, cfg: Mapping[str, str], *, pages: bool = False) -> int:
                 ["gh", "auth", "token"], capture_output=True, text=True
             ).stdout.strip()
         env["GITHUB_TOKEN"] = token
-    subprocess.run(
-        [
-            "git", "fetch", "-q", "--no-tags", "origin",
-            "+refs/heads/fit-store:refs/remotes/origin/fit-store",
-        ],
-        cwd=ROOT, env=env, check=True,
-    )  # fmt: skip
     cores = env.get("CORES") or cfg.get("CORES") or "4"
     subprocess.run(
         [

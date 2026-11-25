@@ -409,17 +409,17 @@ class PaperFlow:
                 models = " ".join(ebola["backtest_models"])
                 args.append(f"--ebola-draws {self.ebola_draws}")
                 args.append(f"--ebola-draws-models {models}")
-            history = self.store_history()
-            if history:
-                args.append(f"--store-history {history}")
+            releases = self.round_releases()
+            if releases:
+                args.append(f"--round-releases {releases}")
             return " ".join(args)
         return ""
 
-    def store_history(self) -> str | None:
-        """Return the fit store's history file, fetched from its release."""
-        if not self.ebola.get("store_history"):
+    def round_releases(self) -> str | None:
+        """Return our unsubmitted models' forecasts from the round releases."""
+        if not self.ebola.get("round_releases"):
             return None
-        return f"{self.results}/evidence/fit-store-history.csv.gz"
+        return f"{self.results}/evidence/round-releases.csv.gz"
 
     def source_files(self, w: Wildcards) -> list[str]:
         """Files a study's real data come from, built by other rules."""
@@ -431,15 +431,15 @@ class PaperFlow:
             hub = f"{ebola['hub']}/target-data/time-series.csv"
             target = f"{ebola['data']}/target.csv"
             draws = [self.ebola_draws] if ebola.get("n_samples") else []
-            history = self.store_history()
-            stored = [history] if history else []
+            releases = self.round_releases()
+            released = [releases] if releases else []
             return [
                 hub,
                 target,
                 ebola["backtest"],
                 *self.ebola_extra(),
                 *draws,
-                *stored,
+                *released,
             ]
         if w.study == "synthetic":
             fc = self.synthetic["forecasts"][w.mode]
