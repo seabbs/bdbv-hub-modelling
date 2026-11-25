@@ -160,6 +160,7 @@ SCORING = scoring.Scoring(config, LOCAL, TRAINING, checkpoints)
 SC = SCORING.sc
 CACHE = SCORING.cache
 UNIT_THREADS = SCORING.unit_threads
+EVALUATE_THREADS = SCORING.evaluate_threads
 FORECAST = SCORING.forecast
 CHECKPOINT_FORECAST = SCORING.checkpoint_forecast
 GERMANY_UNIT = scoring.GERMANY_UNIT

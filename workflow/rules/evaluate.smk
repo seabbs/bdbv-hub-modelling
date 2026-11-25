@@ -24,7 +24,7 @@ rule evaluate_base:
     priority: EVALUATION_PRIORITY + 1
     conda:
         TOOLS_ENV
-    threads: UNIT_THREADS
+    threads: EVALUATE_THREADS
     resources:
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
@@ -61,7 +61,7 @@ rule evaluate_checkpoint:
     priority: newest_first(EVALUATION_PRIORITY)
     conda:
         TOOLS_ENV
-    threads: UNIT_THREADS
+    threads: EVALUATE_THREADS
     resources:
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
@@ -94,7 +94,7 @@ rule seven_day_check:
     priority: newest_first(CHECKPOINT_PRIORITY)
     conda:
         TOOLS_ENV
-    threads: UNIT_THREADS
+    threads: EVALUATE_THREADS
     resources:
         gpu=CHECKPOINT_FORECAST.gpu,
     params:

@@ -206,6 +206,10 @@ class Scoring:
         # config, which the machine may override).
         self.forecast = forecast.settings(config, local)
         self.unit_threads = self.forecast.threads
+        # The held-out evaluation takes the cores the trainer leaves.
+        self.evaluate_threads = machine.scoring_threads(
+            local, self.unit_threads
+        )
         # A checkpoint's scoring takes a GPU no run trains on, if any.
         self.checkpoint_forecast = compute.scoring_forecast(
             self.forecast, *self._gpus_and_training()
