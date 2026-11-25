@@ -42,8 +42,9 @@ rule evaluate_steps:
 
 
 rule evaluate_base:
-    # Step 0 (base Chronos-2) on the held-out blocks, before any other
-    # evaluation: the start loss each checkpoint's sidecar needs.
+    # Step 0 (base Chronos-2) on every held-out block: the start loss
+    # each checkpoint's sidecar needs. The step evaluations never wait for
+    # it.
     input:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"
