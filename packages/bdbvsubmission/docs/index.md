@@ -47,14 +47,30 @@ path = Path(tempfile.mkdtemp()) / "candidate.csv"
 with path.open("w", newline="") as fh:
     out = csv.writer(fh)
     out.writerow(
-        ["reference_date", "forecast_date", "target", "target_end_date",
-         "location", "output_type", "output_type_id", "value"]
+        [
+            "reference_date",
+            "forecast_date",
+            "target",
+            "target_end_date",
+            "location",
+            "output_type",
+            "output_type_id",
+            "value",
+        ]
     )
     for sample, values in (("1", (4, 6)), ("2", (5, -1))):
         for week, value in zip(("2026-11-14", "2026-11-21"), values):
             out.writerow(
-                ["2026-11-21", "2026-11-17", TARGET, week,
-                 "CD-NK", "sample", sample, value]
+                [
+                    "2026-11-21",
+                    "2026-11-17",
+                    TARGET,
+                    week,
+                    "CD-NK",
+                    "sample",
+                    sample,
+                    value,
+                ]
             )
 samples = read_samples(path)
 assert samples.locations == ["CD-NK"]

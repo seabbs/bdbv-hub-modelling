@@ -99,14 +99,8 @@ def test_jax_starts_with_the_cuda_platform_list_without_cuda():
     assert out.stdout.strip() in {"cpu", "gpu", "cuda"}
 
 
-SCORING_RULES = (
-    "evaluate_base",
-    "evaluate_checkpoint",
-    "seven_day_check",
-    "score_germany",
-    "score_run_germany",
-)
-"""The checkpoint scoring rules, on the scoring device (#1114)."""
+SCORING_RULES = ("score_germany", "score_run_germany")
+"""The German units, on the scoring device while a run trains (#1114)."""
 
 
 def _rule_text(name: str) -> str:
@@ -128,3 +122,22 @@ def test_checkpoint_scoring_runs_on_the_scoring_device():
     # The BDBV check stays on the forecasting device: its blocks do not
     # fit an 8 GB GPU.
     assert "gpu=FORECAST.gpu" in _rule_text("ft_check_forecast")
+
+
+BOUNDARY_RULES = (
+    "evaluate_base",
+    "evaluate_checkpoint",
+    "seven_day_check",
+    "validation_forecasts",
+    "validation_forecasts_base",
+)
+"""A checkpoint's scoring at the segment boundary, on a whole GPU (#1114)."""
+
+
+def test_boundary_scoring_takes_the_gpu_before_the_next_segment():
+    for name in BOUNDARY_RULES:
+        text = _rule_text(name)
+        assert "gpu=BOUNDARY_FORECAST.gpu" in text, name
+        assert "env=boundary_env" in text, name
+        assert "priority: boundary_priority" in text, name
+        assert "threads: BOUNDARY_THREADS" in text, name

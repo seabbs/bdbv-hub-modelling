@@ -163,6 +163,8 @@ UNIT_THREADS = SCORING.unit_threads
 EVALUATE_THREADS = SCORING.evaluate_threads
 FORECAST = SCORING.forecast
 CHECKPOINT_FORECAST = SCORING.checkpoint_forecast
+BOUNDARY_FORECAST = SCORING.boundary_forecast
+BOUNDARY_THREADS = SCORING.boundary_threads
 GERMANY_UNIT = scoring.GERMANY_UNIT
 EVALUATE = scoring.EVALUATE
 newest_first = compute.newest_first
@@ -171,6 +173,8 @@ unit_priority = SCORING.unit_priority
 ft_check_priority = SCORING.ft_check_priority
 unit_env = SCORING.unit_env
 checkpoint_env = SCORING.checkpoint_env
+boundary_env = SCORING.boundary_env
+boundary_priority = SCORING.boundary_priority
 unit_rows = SCORING.unit_rows
 unit_shell = SCORING.unit_shell
 run_scores_dir = SCORING.run_scores_dir
@@ -235,4 +239,3 @@ def ft_check_folders(ckpt):
     return [f"{FTC_DIR}/forecasts/{m}@{key}" for m in FTC["models"]] + [
         f"{FTC_DIR}/forecasts/ft-{ckpt}@{key}"
     ]
-

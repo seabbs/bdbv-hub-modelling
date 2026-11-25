@@ -36,6 +36,9 @@ The coordinator's rsync must be GNU rsync 3.1 or later
 
 Freed cores go to the waiting job of highest priority, in one order:
 
+0. a checkpoint's held-out evaluation, 7-day check and validation
+   forecasts on a machine with a GPU (`BOUNDARY_PRIORITY`), on the whole
+   GPU as its segment ends, before the next segment takes it;
 1. the trainers (`TRAIN_PRIORITY`, each run a fraction above it in
    turn, `Training.trainer_priority`), so a GPU never waits, then the
    quick hand-offs that unblock other work (`HANDOFF_PRIORITY`): the
@@ -113,9 +116,19 @@ exclusive` on CUDA take `gpu` too. Placed on a worker by its group,
 a GPU rule also takes that worker's own `gpu_<worker>`, so the pooled
 GPUs are not shared across workers."""
 
-TRAIN_PRIORITY = 100
-"""The trainer's job priority, above every other job's, so the next
-segment starts the moment the previous ends."""
+TRAIN_PRIORITY = 10**6
+"""The trainer's job priority, so the next segment starts the moment the
+previous ends. Snakemake's scheduler picks the ready jobs whose
+priorities sum highest, so it is above the sum of as many other jobs as
+a machine has cores (up to 10,000), each at most `HANDOFF_PRIORITY` + 2:
+a finished segment's freed cores never go to its checkpoint's release
+and scoring instead of the next segment."""
+
+BOUNDARY_PRIORITY = 2 * TRAIN_PRIORITY
+"""A checkpoint's held-out evaluation, 7-day check and validation
+forecasts on a GPU (`Scoring.boundary_priority`): above the trainer, so
+they take the GPU first as a segment ends, and the next segment starts
+once they are done."""
 
 HANDOFF_PRIORITY = 90
 """The quick jobs that unblock others: a batch's copy into a run

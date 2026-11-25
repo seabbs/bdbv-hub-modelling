@@ -98,12 +98,13 @@ def inference_precision(device: str, precision: str | None = None) -> str:
     return "bf16" if kind == "mps" else "fp32"
 
 
-def _autocast(device: str) -> Any:
+def autocast(device: str, precision: str | None = None) -> Any:
     """Return the context Chronos-2 forecasts in.
 
-    Autocast at half precision (`inference_precision`), or none at fp32.
+    Autocast at half precision (`inference_precision` of `precision`), or
+    none at fp32.
     """
-    precision = inference_precision(device)
+    precision = inference_precision(device, precision)
     if precision == "fp32":
         return contextlib.nullcontext()
     import torch
@@ -243,7 +244,7 @@ def _predict(
                 if bias
                 else contextlib.nullcontext()
             ),
-            _autocast(torch_device()),
+            autocast(torch_device()),
         ):
             quantiles, _ = pipeline.predict_quantiles(
                 [_chronos_input(g) for g in part],
