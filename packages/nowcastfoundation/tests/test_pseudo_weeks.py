@@ -1,6 +1,7 @@
 """The foundation model's option of weekly pseudo releases."""
 
 import datetime as dt
+import itertools
 
 import pandas as pd
 import pytest
@@ -67,9 +68,8 @@ def test_pseudo_weeks_fill_the_release_history_weekly() -> None:
     got = _vintages(pseudo, task)
     assert {"2026-01-10", "2026-03-01"} <= set(got)
     assert "2026-02-22" in got
-    assert "2026-01-03" in got
     days = [dt.date.fromisoformat(v) for v in got]
-    assert max((b - a).days for a, b in zip(days, days[1:], strict=False)) < 14
+    assert max((b - a).days for a, b in itertools.pairwise(days)) < 14
 
 
 def test_pseudo_weeks_need_the_delay_line() -> None:

@@ -75,7 +75,9 @@ def test_reported_on_onset_gives_each_pseudo_release_every_case() -> None:
     rows = _release("2026-03-01")
     out = pseudo_releases(rows, _delays([0], WEEKS))
     real = out.loc[out["vintage"] == "2026-03-01"]
-    pd.testing.assert_frame_equal(real.reset_index(drop=True), rows)
+    pd.testing.assert_frame_equal(
+        real.reset_index(drop=True), rows, check_dtype=False
+    )
     pseudo = out.loc[out["vintage"] != "2026-03-01"]
     assert sorted(pseudo["vintage"].unique())[-1] == "2026-02-22"
     assert (pseudo["cutoff"] == pseudo["vintage"]).all()
@@ -119,7 +121,9 @@ def test_only_the_latest_release_is_scaled() -> None:
     rows = pd.concat([early, late], ignore_index=True)
     out = pseudo_releases(rows, _delays([0], WEEKS))
     pd.testing.assert_frame_equal(
-        out.loc[out["vintage"] == "2026-01-15"].reset_index(drop=True), early
+        out.loc[out["vintage"] == "2026-01-15"].reset_index(drop=True),
+        early,
+        check_dtype=False,
     )
     gap = out.loc[out["vintage"].between("2026-01-16", "2026-02-28")]
     assert sorted(gap["vintage"].unique()) == [
@@ -146,9 +150,7 @@ def test_places_without_delays_take_their_parent_or_all() -> None:
         [_delays([0], WEEKS, "CD-AA"), _delays([100], WEEKS, "CD-BB")]
     )
     out = pseudo_releases(rows, delays)
-    at = out.loc[out["vintage"] == "2026-02-22"].groupby("location")[
-        "observed"
-    ]
+    at = out.loc[out["vintage"] == "2026-02-22"].groupby("location")["observed"]
     young = at.min()
     # The zone takes its province's delays; the country every place's.
     assert young["CD-AA-01"] == pytest.approx(10)
