@@ -144,6 +144,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 - We report the final checkpoint, where the learning rate reaches zero, and select no checkpoint on real data.
 - Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
 - A system too large for one block is cut into views, in training and at forecast time alike.
+- Blocks are limited to what fits in the memory of our available GPUs, and we made several approximations to fit within this (SI, Fitting in GPU memory).
 - Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces (SI).
 - For the Ebola case study, the fine-tuned model makes two forecasts at each nowcast date.
 - One is a joint block of the country, all provinces and the active health zones.
@@ -466,18 +467,13 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) [@bdbv_modeling_hub_2026].
   - Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.
   - We used one layout, daily counts and daily lag series, with an aggregate row per place in both reporting-triangle models, and could also have included weekly lag series in the block.
-  - We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.
-  - We did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
   - We simulate and fine-tune on counts only.
   - Other common nowcasting targets are proportions, such as influenza-like illness as a share of visits, variant or sequence proportions, and wastewater samples [@Bracher2026; @placeholder].
   - Extending the simulator and fine-tuning to these targets is future work.
-  - We cut systems too large for one block into views (Methods).
-  - Zones in different subtrees then inform each other only through the aggregated totals.
-  - For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.
-  - Forecasts at different levels are not constrained to sum.
-    However, the joint block forecasts the levels together, so each informs the others.
-  - Fine-tuning used a GPU, which made it several times faster than a CPU.
-  - On a CPU alone it would run in hours.
+  - We could only fine-tune and forecast with blocks that fit in the memory of our available GPUs, which forced several approximations (Methods; SI, Fitting in GPU memory).
+    We fine-tuned on blocks of at most 364 steps of history but forecast with all available data, and did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
+    We cut systems too large for one block into views, so zones in different subtrees inform each other only through the aggregated totals.
+    For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Domain knowledge in foundation models.**
   - Domain knowledge enters in two ways, through the simulations and through small changes to the architecture.

@@ -278,6 +278,19 @@ Training takes the simulations in order, in chunks.
 Each simulation gives up to 14 training blocks, which are shuffled within a chunk and packed into steps.
 Each step is filled until it holds 256 series or more, so one large block can make a step on its own.
 
+#### Fitting in GPU memory
+
+We fine-tune and forecast only with blocks that fit in the memory of our available GPUs, and make several approximations to do so.
+
+- A block holds at most 1,000 series, the capacity of the smallest GPU that trains, measured with every block's activations recomputed, with a margin.
+- A system with more series is cut into views that each fit, by aggregating a level of places, dropping the age split or taking a subtree (Training blocks).
+- Places in different views then inform each other only through the aggregated totals.
+- The same limit applies at forecast time, so the Ebola by-province forecast is cut into views as in training (Ebola forecast layout).
+- A training block has at most 364 steps of context, while forecasts use all available data.
+- A step whose series exceed 733 recomputes its activations in the backward pass rather than storing them, which changes memory and speed but not the trained model.
+- A step that runs out of memory is run again in halves, and a single block that runs out of memory stops the run, so no block is dropped.
+- A machine with more GPU memory can raise the block limit, which changes the trained model.
+
 ::: {.callout-note title="Plan"}
 - A table lists the trainer's memory and speed settings at the values the paper run used, read from the workflow configuration.
 - A machine can override them for its own runs, and the table gives the committed defaults.
