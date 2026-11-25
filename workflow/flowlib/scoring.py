@@ -160,10 +160,15 @@ def unit_shell(study: str, segment: str = "") -> str:
     The unit of `study` caches under {params.cache} as {params.label};
     `segment`, if given, is the run's own checkpoint folder it loads.
     When it starts is the scheduler's: its rule's `resources` (memory,
-    GPU) against the machine's (flowlib.machine).
+    GPU) against the machine's (flowlib.machine). A German unit splits
+    its dates over as many worker processes as its rule has threads.
     """
     # The German unit reads the triangle its rule takes as input.
-    triangle = "GERMANY_TRIANGLE={input.germany} " if study == "germany" else ""
+    triangle = (
+        "SCORE_WORKERS={threads} GERMANY_TRIANGLE={input.germany} "
+        if study == "germany"
+        else ""
+    )
     return (
         f"mkdir -p {{params.copy_back}} && "
         f"env {{params.env}} {triangle}{EVALUATE} {study} {{params.cache}} "
@@ -188,6 +193,10 @@ def report_args(
 GERMANY_UNIT = "germany-days"
 """The German units' cache folder, as `evaluation.checkpoint.GERMANY_UNIT`."""
 
+WORKER_MB = 3072
+"""The least memory (MB) of each of a German unit's worker processes,
+each holding what one process forecasting a chunk of dates holds."""
+
 
 class Scoring:
     """The checkpoint scoring units of a workflow config on this machine.
@@ -199,7 +208,8 @@ class Scoring:
     local : mapping
         This machine's settings (`localconfig.read`): SCORE_CACHE and
         FORECAST_DEVICE/FORECAST_THREADS, which
-        override the config's `forecast` (`flowlib.forecast`).
+        override the config's `forecast` (`flowlib.forecast`), and
+        SCORE_WORKERS, which overrides `score.workers`.
     training : Training
         The fine-tuning runs whose checkpoints are scored.
     checkpoints : object
@@ -223,9 +233,15 @@ class Scoring:
         # config, which the machine may override).
         self.forecast = forecast.settings(config, local)
         self.unit_threads = self.forecast.threads
-        # The held-out evaluation takes the cores the trainer leaves.
+        # A German unit's worker processes, one thread each: the
+        # machine's `SCORE_WORKERS`, else the config's `score.workers`.
+        self.score_workers = int(
+            local.get("SCORE_WORKERS") or self.sc["workers"]
+        )
+        # The held-out evaluation takes the cores the trainer leaves, less
+        # a German unit's, so one still runs beside it.
         self.evaluate_threads = machine.scoring_threads(
-            local, self.unit_threads
+            local, max(self.unit_threads, self.score_workers)
         )
         # A checkpoint's scoring takes a GPU no run trains on, if any.
         gpus = self._gpus()
@@ -254,6 +270,10 @@ class Scoring:
     def score_order(self) -> list[str]:
         """Return the labels, oldest published first (none before listed)."""
         return releases.oldest_first(f"{self.cache}/releases.json", self.sc)
+
+    def unit_memory_floor(self) -> int:
+        """Return a German unit's least memory: `WORKER_MB` a worker."""
+        return WORKER_MB * self.score_workers
 
     def unit_priority(
         self, base: float, reference: float
