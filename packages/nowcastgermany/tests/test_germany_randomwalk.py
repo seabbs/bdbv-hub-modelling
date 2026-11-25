@@ -44,8 +44,10 @@ def draws(task: ForecastTask) -> pd.DataFrame:
 
 
 def test_sums_ahead_walk_in_daily_steps(draws: pd.DataFrame) -> None:
-    # A walk at daily steps has independent steps from day to day, so
-    # two days' changes of log(1 + sum) are about uncorrelated.
+    # A walk at daily steps has independent steps from day to day, so two
+    # days' changes of log(1 + sum) are not positively correlated (each
+    # day's Poisson count makes them negatively so); sums interpolated
+    # between weekly steps would change alike every day of a week.
     cut = pd.Timestamp(DATE)
     wide = draws.pivot_table(
         index=["location", "sample"],
@@ -58,7 +60,7 @@ def test_sums_ahead_walk_in_daily_steps(draws: pd.DataFrame) -> None:
         first = logs[days[1]] - logs[days[0]]
         second = logs[days[2]] - logs[days[1]]
         assert first.std() > 0
-        assert abs(np.corrcoef(first, second)[0, 1]) < 0.5, h
+        assert np.corrcoef(first, second)[0, 1] < 0.5, h
 
 
 def test_daily_counts_include_the_country(task: ForecastTask) -> None:
@@ -86,3 +88,22 @@ def test_median_sums_ahead_have_no_weekday_cycle(
             break
         steps = np.diff(week)
         assert (steps >= -1).all() or (steps <= 1).all(), week
+
+
+def test_daily_counts_walk_with_the_sums_spread(
+    task: ForecastTask, draws: pd.DataFrame
+) -> None:
+    # The walk's spread is one estimate, scaled to the step: a day's walk
+    # spreads as the 7-day sums' does, not by the weekday swings of the
+    # daily counts.
+    day = (pd.Timestamp(DATE) + dt.timedelta(days=21)).date().isoformat()
+    q = RandomWalkNowcast().daily_quantiles(task, (0.1, 0.9))
+    q = q.loc[(q["location"] == "CD-BY") & (q["date"].astype(str) == day)]
+    daily = np.log1p(q["value"].to_numpy())
+    sums = draws.loc[
+        (draws["location"] == "CD-BY")
+        & (draws["target_end_date"] == pd.Timestamp(day)),
+        "value",
+    ]
+    weekly = np.log1p(sums.quantile([0.1, 0.9]).to_numpy())
+    assert np.ptp(daily) < 1.5 * np.ptp(weekly)
