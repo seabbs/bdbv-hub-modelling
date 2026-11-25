@@ -76,6 +76,18 @@ def test_a_snapshot_is_written_whole(tmp_path):
     ]
 
 
+def test_an_offloaded_step_records_its_rates_and_saves_nothing(tmp_path):
+    # Only step 0 and the checkpoints are scored offloaded (#1150), so a
+    # step between leaves no snapshot: its history entry is all it keeps.
+    model = trained()
+    optimiser = fs.make_optimiser(model, 1e-4, 1e-3)
+    entry = fs.offloaded_step(model, optimiser, 200)
+    assert entry["step"] == 200
+    assert entry["lr"] == fs.group_rates(optimiser)
+    assert "bias" in entry
+    assert not (tmp_path / "evals").exists()
+
+
 @pytest.mark.usefixtures("short_context")
 def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(tmp_path):
     model = trained()
