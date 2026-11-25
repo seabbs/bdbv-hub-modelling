@@ -40,13 +40,17 @@ def test_auto_takes_each_device_s_half_precision(
     assert chronos2.inference_precision(device, "auto") == want
 
 
-def test_precision_comes_from_the_environment_fp32_by_default(
+def test_precision_comes_from_the_environment_auto_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Stored fits and submissions set none, so they stay fp32 and keep
-    # their keys; the scoring units get auto from the workflow.
+    # Every forecast takes the device's half precision unless told:
+    # fp32 on the CPU, fp16 on an RTX 2070 (#1114).
+    import torch
+
     monkeypatch.delenv("PRECISION", raising=False)
-    assert chronos2.inference_precision("cuda") == "fp32"
+    assert chronos2.inference_precision("cpu") == "fp32"
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda *_: (7, 5))
+    assert chronos2.inference_precision("cuda") == "fp16"
     monkeypatch.setenv("PRECISION", "bf16")
     assert chronos2.inference_precision("cpu") == "bf16"
     monkeypatch.setenv("PRECISION", "fp8")
