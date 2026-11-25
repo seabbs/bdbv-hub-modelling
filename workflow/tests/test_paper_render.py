@@ -108,7 +108,7 @@ def test_development_run_renders_without_the_fit_store(repo: Path) -> None:
         "uv run --group paper --group chronos snakemake -s workflow/Snakefile "
         "render "
         "--config render=development --cores 4 --resources heavy=1 "
-        "--rerun-triggers mtime"
+        "--rerun-triggers mtime --show-failed-logs"
     )
 
 
