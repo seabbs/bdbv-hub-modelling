@@ -69,5 +69,6 @@ def test_a_pass_out_of_memory_is_split(monkeypatch):
     got = chronos2._predict(
         pipe, [_group(1) for _ in range(4)], 3, np.asarray(pipe.quantiles)
     )
-    assert len(got) == 4 and all(g is not None for g in got)
+    assert len(got) == 4
+    assert all(g is not None for g in got)
     assert pipe.passes == [1, 1, 1, 1]

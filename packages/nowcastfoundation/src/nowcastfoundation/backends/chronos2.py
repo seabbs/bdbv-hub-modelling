@@ -2,8 +2,9 @@
 """The Chronos-2 backend: device, precision and batched quantiles.
 
 `_predict` gives groups of series (`nowcastfoundation.backends.Series`)
-to a Chronos-2 pipeline in forward passes of up to `chronos_batch()`
-rows, with the series bias's places and parents where the model has it.
+to a Chronos-2 pipeline in forward passes packed to the device's memory
+(`pass_budget`), with the series bias's places and parents where the
+model has it.
 """
 
 from __future__ import annotations
@@ -70,9 +71,9 @@ PRECISIONS: Final = ("fp32", "fp16", "bf16", "auto")
 def inference_precision(device: str, precision: str | None = None) -> str:
     """Return the precision Chronos-2 forecasts in on `device`.
 
-    `precision`, by default `PRECISION`, fp32 if unset: stored fits and
-    submissions set none, so they stay fp32; the workflow gives scoring
-    units `auto` (`flowlib.machine.torch_env`). `auto` takes each device's
+    `precision`, by default `PRECISION`, `auto` if unset, so every
+    forecast takes its device's: fp32 on a CPU, where stored fits and
+    submissions run. `auto` takes each device's
     half precision: fp16 on CUDA GPUs below compute capability 8 (fp16
     tensor cores, no bf16), bf16 on compute capability 8 and above and on
     Apple GPUs, fp32 on the CPU (bf16 ran about 5 times slower on a CPU
@@ -84,7 +85,7 @@ def inference_precision(device: str, precision: str | None = None) -> str:
     ValueError
         If the precision is not one of `PRECISIONS`.
     """
-    precision = precision or os.environ.get("PRECISION") or "fp32"
+    precision = precision or os.environ.get("PRECISION") or "auto"
     if precision not in PRECISIONS:
         raise ValueError(f"precision {precision!r} is not one of {PRECISIONS}")
     if precision != "auto":
@@ -194,11 +195,76 @@ def _n_rows(group: Series) -> int:
     return int(n + len(group.get("past_covariates", {})))
 
 
-def _passes(groups: Sequence[Series], budget: int) -> list[list[int]]:
+INFERENCE_BYTES: Final = 60_000
+"""GPU memory a Chronos-2 forward pass holds per series and token, with no
+gradients: a twelfth of a training step's (finetune.stream's
+`ACTIVATION_BYTES`), as inference keeps one layer's activations, not
+every layer's. A pass that still runs out is split (`_predict`)."""
+
+MEMORY_MARGIN: Final = 0.1
+"""Share of the device's memory a pass leaves free, for the allocator's
+fragmentation."""
+
+
+def device_memory() -> tuple[int, int] | None:
+    """Return the CUDA device's free and total bytes, or None off CUDA.
+
+    Free counts what PyTorch caches but does not use, as a pass can take
+    it.
+    """
+    import torch
+
+    if not torch.cuda.is_available():
+        return None
+    free, total = torch.cuda.mem_get_info()
+    cached = torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
+    return free + cached, total
+
+
+def pass_budget(device: str) -> tuple[int | None, int | None]:
+    """Return a forward pass's most rows, or most series x tokens.
+
+    `CHRONOS_BATCH` rows where a machine sets it; on CUDA the free memory
+    less `MEMORY_MARGIN` of the total over `INFERENCE_BYTES`, so a pass
+    fills the device; elsewhere `chronos_batch()` rows, as larger passes
+    gain nothing on a CPU.
+    """
+    if os.environ.get("CHRONOS_BATCH") or not device.startswith("cuda"):
+        return chronos_batch(), None
+    memory = device_memory()
+    if memory is None:
+        return chronos_batch(), None
+    free, total = memory
+    spare = free - int(MEMORY_MARGIN * total)
+    return None, max(1, spare // INFERENCE_BYTES)
+
+
+OUTPUT_PATCH: Final = 16
+"""Steps in one of Chronos-2's input and output patches."""
+
+
+def group_cost(group: Series, horizon: int) -> int:
+    """Return a group's series x tokens in a forward pass.
+
+    Its rows over its context patches, the reg token and its output
+    patches.
+    """
+    width = np.atleast_2d(group["target"]).shape[-1]
+    tokens = -(-width // OUTPUT_PATCH) + 1 + -(-horizon // OUTPUT_PATCH)
+    return _n_rows(group) * tokens
+
+
+def _passes(
+    groups: Sequence[Series],
+    rows: int | None,
+    tokens: int | None = None,
+    horizon: int = 0,
+) -> list[list[int]]:
     """Return the groups of each forward pass, by index.
 
-    Groups of one schema share passes of at most `budget` rows, in order;
-    a group larger than `budget` is a pass of its own.
+    Groups of one schema share passes of at most `rows` rows, or, with
+    `tokens`, of at most that many series x tokens (`group_cost`), in
+    order; a group over the budget is a pass of its own.
     """
     by: dict[tuple[Any, ...], list[int]] = {}
     for i, g in enumerate(groups):
@@ -206,14 +272,19 @@ def _passes(groups: Sequence[Series], budget: int) -> list[list[int]]:
     out: list[list[int]] = []
     for idx in by.values():
         chunk: list[int] = []
-        rows = 0
+        used = 0
         for i in idx:
-            n = _n_rows(groups[i])
-            if chunk and rows + n > budget:
+            n = (
+                group_cost(groups[i], horizon)
+                if tokens is not None
+                else _n_rows(groups[i])
+            )
+            budget = tokens if tokens is not None else rows or 1
+            if chunk and used + n > budget:
                 out.append(chunk)
-                chunk, rows = [], 0
+                chunk, used = [], 0
             chunk.append(i)
-            rows += n
+            used += n
         out.append(chunk)
     return out
 
@@ -223,35 +294,54 @@ def _predict(
 ) -> list[Any]:
     """Return Chronos-2's quantiles at `levels` for each group.
 
-    Groups of one schema share forward passes of up to `chronos_batch()`
-    rows, each pass exactly one of Chronos-2's batches. With the series
-    bias each pass carries its groups' rows' places and parents, kept
-    apart (`series_bias.batch_rows`), as in held-out losses.
+    Groups of one schema share forward passes packed to the device
+    (`pass_budget`, `_passes`), each pass exactly one of Chronos-2's
+    batches; a pass that runs out of memory is split in two. With the
+    series bias each pass carries its groups' rows' places and parents,
+    kept apart (`series_bias.batch_rows`), as in held-out losses.
     """
+    import torch
+
     model = getattr(pipeline, "model", None)
     bias = model is not None and series_bias.has_bias(model)
+    device = torch_device()
     out: list[Any] = [None] * len(groups)
-    for chunk in _passes(groups, chronos_batch()):
+
+    def run(chunk: list[int]) -> None:
         part = [groups[i] for i in chunk]
         rows = (
             series_bias.batch_rows([_group_rows(g) for g in part])
             if bias
             else None
         )
-        with (
-            (
-                series_bias.assigned(model, rows)
-                if bias
-                else contextlib.nullcontext()
-            ),
-            autocast(torch_device()),
-        ):
-            quantiles, _ = pipeline.predict_quantiles(
-                [_chronos_input(g) for g in part],
-                batch_size=sum(_n_rows(g) for g in part),
-                prediction_length=horizon,
-                quantile_levels=levels.tolist(),
-            )
+        try:
+            with (
+                (
+                    series_bias.assigned(model, rows)
+                    if bias
+                    else contextlib.nullcontext()
+                ),
+                autocast(device),
+            ):
+                quantiles, _ = pipeline.predict_quantiles(
+                    [_chronos_input(g) for g in part],
+                    batch_size=sum(_n_rows(g) for g in part),
+                    prediction_length=horizon,
+                    quantile_levels=levels.tolist(),
+                )
+        except torch.OutOfMemoryError:
+            if len(chunk) == 1:
+                raise
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            half = len(chunk) // 2
+            run(chunk[:half])
+            run(chunk[half:])
+            return
         for i, q in zip(chunk, quantiles, strict=True):
             out[i] = q
+
+    rows, tokens = pass_budget(device)
+    for chunk in _passes(groups, rows, tokens, horizon):
+        run(chunk)
     return out
