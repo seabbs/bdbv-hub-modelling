@@ -47,11 +47,13 @@ rule simulate_batch:
     conda:
         TOOLS_ENV
     threads: 1
-    # Batches are run by count, not by memory: at most
-    # `--resources sim_slots=N` at once (SIM_SLOTS, 2 by default), which
-    # the scheduler starts as slots free up.
+    # At most `--resources sim_slots=N` batches at once (SIM_SLOTS, 2 by
+    # default), started as slots free up. Each claims its peak memory
+    # (2.7 to 5.4 GB on archie), so more slots never start more batches
+    # than fit beside the trainer and scoring. A batch uses about 1.25
+    # cores (JAX's own threads beside its one).
     resources:
-        mem_mb=0,
+        mem_mb=5500,
         sim_slots=1,
     params:
         sims=lambda wc, output: Path(output.counts).parent,
