@@ -128,18 +128,32 @@ def test_code_digest_keeps_its_key_when_a_function_moves(
         '"""Walk noise."""\n\nimport numpy as np\n\n'
         '__all__ = ["walk_noise", "walk_variance"]\n\n\n' + cut
     )
-    walk = src / "walk.py"
-    walk.write_text(
-        walk.read_text().replace('"walk_noise", "walk_variance"', "")
+    _replace(
+        src / "walk.py",
+        '    "walk_noise",\n    "walk_variance",\n',
+        "",
     )
-    chain = src / "baselinenowcast" / "nowcast.py"
-    chain.write_text(
-        chain.read_text().replace(
-            "nowcastbaselines.walk import walk_noise",
-            "nowcastbaselines.noise import walk_noise",
-        )
+    _replace(
+        src / "walk.py",
+        "from jax import Array\n",
+        "from jax import Array\n\nfrom nowcastbaselines.noise import "
+        "walk_variance\n",
+    )
+    _replace(
+        src / "baselinenowcast" / "nowcast.py",
+        "from nowcastbaselines.walk import DailySteps, walk_noise, "
+        "walk_variance\n",
+        "from nowcastbaselines.noise import walk_noise, walk_variance\n"
+        "from nowcastbaselines.walk import DailySteps\n",
     )
     assert store.code_digest("randomwalknowcast", root) == before
+
+
+def _replace(path: Path, old: str, new: str) -> None:
+    """Replace text the module holds, so the move is the one made."""
+    text = path.read_text()
+    assert old in text, f"{old!r} not in {path.name}"
+    path.write_text(text.replace(old, new))
 
 
 def test_code_digest_keeps_its_key_when_a_module_moves_package(
