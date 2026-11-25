@@ -168,3 +168,65 @@ def test_the_page_needs_no_training_releases(tmp_path) -> None:
         root=ROOT,
     )
     assert "BDBV releases" in out.read_text()
+
+
+def test_the_pseudo_weeks_section_says_they_are_imputed(tmp_path) -> None:
+    _variant(tmp_path, "sim", "few", CUTS)
+    vintages = tmp_path / "pseudo-vintages.json"
+    vintages.write_text(
+        json.dumps(
+            {
+                "latest_delay_line": "2026-11-22",
+                "latest_missing": "2026-11-22",
+                "negative_delays": 36,
+                "sources": [
+                    {
+                        "file": "auxiliary-data/x.csv",
+                        "holds": "Cases",
+                        "places": "provinces",
+                        "reference": "onset week",
+                        "report": "report day, exact",
+                        "releases": "2026-10-09 to 2026-11-22 (7)",
+                    }
+                ],
+                "vintages": [
+                    {
+                        "cutoff": "2026-08-18",
+                        "lower": 4103,
+                        "even": 4296.0,
+                        "upper": 4488,
+                        "missing": 821,
+                        "real_observed": 3956,
+                        "real_imputed": 734,
+                    }
+                ],
+                "check": [
+                    {
+                        "release": "2026-10-09",
+                        "cells": 96,
+                        "inside": 0.48,
+                        "below": 0.45,
+                        "above": 0.07,
+                        "exact_cells": 77,
+                        "exact_equal": 35,
+                        "own_equal": 1.0,
+                    }
+                ],
+            }
+        )
+    )
+    out = tmp_path / "page.html"
+    er.report(
+        [tmp_path / "sim" / "few"],
+        out,
+        checkpoint="slots-c44bbe122e6c",
+        pseudo_vintages=vintages,
+        root=ROOT,
+    )
+    html = out.read_text()
+    assert "imputed" in html
+    assert "issues/1141" in html
+    assert "auxiliary-data/x.csv" in html
+    assert "4,103" in html
+    assert "3,956" in html
+    assert "onset day" in html
