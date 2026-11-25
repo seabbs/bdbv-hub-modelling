@@ -127,3 +127,13 @@ def test_benchmarks_share_a_compile_cache_of_their_own(tmp_path):
 def test_the_engine_identifier_is_read_from_the_code():
     assert re.fullmatch(r"[0-9a-f]{12}", simulator.engine_id())
     assert simulator.engine_id() == simulator.engine_id()
+
+
+def test_a_batch_claims_its_peak_memory(tmp_path):
+    # A batch peaks at 2.7 to 5.4 GB on archie, so the scheduler holds
+    # its memory back rather than start more batches than fit.
+    batch = tmp_path / "rounds" / "r4" / "sims" / "counts-30400.csv.gz"
+    out = dry_run(tmp_path, str(batch), quiet=False)
+    assert out.returncode == 0, out.stderr
+    job = out.stdout.split("rule simulate_batch", 1)[1].split("\n\n", 1)[0]
+    assert re.search(r"mem_mb=5500\b", job), job
