@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -91,6 +92,16 @@ def base_step(where: Path, device: str) -> None:
     score_snapshots(train, evaluations.pending(train, -1, 0), device)
 
 
+def logging_batches(label: str) -> Any:
+    """Log each batch of an evaluation as `label` (fs.batch_progress)."""
+    start = time.perf_counter()
+
+    def report(k: int, n: int) -> None:
+        fs.log(f"{label}: batch {k}/{n} ({time.perf_counter() - start:.0f} s)")
+
+    return fs.batch_progress(report)
+
+
 def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
     """Score step snapshots `todo`, newest first, writing each result."""
     if not todo:
@@ -103,7 +114,8 @@ def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
         n = json.loads((snap / "request.json").read_text()).get("n_validation")
         if n not in blocks:
             blocks[n] = fe.load_blocks(train / fs.HELD_OUT_BLOCKS, n)
-        result = fe.snapshot_result(base, snap, blocks[n], device)
+        with logging_batches(snap.name):
+            result = fe.snapshot_result(base, snap, blocks[n], device)
         fe.write_json(snap.with_name(snap.name + ".json"), result)
         kinds = ", ".join(result["kinds"])
         fs.log(f"{snap.name}: {kinds} in {result['seconds']:.0f} s")
@@ -116,13 +128,14 @@ def checkpoint(where: Path, device: str) -> None:
         where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
     )
     try:
-        got = fe.write_checkpoint_sidecar(
-            where,
-            fe.load_base("cpu"),
-            blocks,
-            device,
-            settings.get("batch_size", 256),
-        )
+        with logging_batches(where.name):
+            got = fe.write_checkpoint_sidecar(
+                where,
+                fe.load_base("cpu"),
+                blocks,
+                device,
+                settings.get("batch_size", 256),
+            )
     except ValueError as error:
         raise SystemExit(str(error)) from error
     fs.log(f"{where.name}: held-out loss {got['held_out_loss']:.4f}")
@@ -134,8 +147,6 @@ SEVEN_DAY = "seven-day.json"
 
 def seven_day(where: Path, device: str) -> None:
     """Write a checkpoint's 7-day check on its run's held-out blocks."""
-    import time
-
     settings = json.loads((where / "settings.json").read_text())
     blocks = fe.load_blocks(
         where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
@@ -143,9 +154,13 @@ def seven_day(where: Path, device: str) -> None:
     base = fe.load_base(device)
     series_bias.attach_for(base, where / "finetuned-ckpt")
     t0 = time.perf_counter()
-    check = fe.seven_day_check(
-        where / "finetuned-ckpt", base, blocks, settings.get("batch_size", 256)
-    )
+    with logging_batches(f"{where.name} 7-day"):
+        check = fe.seven_day_check(
+            where / "finetuned-ckpt",
+            base,
+            blocks,
+            settings.get("batch_size", 256),
+        )
     seconds = time.perf_counter() - t0
     fe.write_json(
         where / SEVEN_DAY,

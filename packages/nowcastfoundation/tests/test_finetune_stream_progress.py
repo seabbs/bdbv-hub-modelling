@@ -5,9 +5,9 @@ import pytest
 pytest.importorskip("torch")
 pytest.importorskip("chronos")
 
-from chronos_toy import toy_block  # noqa: E402
+from chronos_toy import toy_block
 
-from nowcastfoundation.finetune import stream as fs  # noqa: E402
+from nowcastfoundation.finetune import stream as fs
 
 
 @pytest.fixture
