@@ -200,8 +200,23 @@ def test_german_unit_workers_come_from_the_config_or_machine(tmp_path):
     assert s.score_workers == s.sc["workers"]
     s = _scoring(tmp_path, labels=[], local_extra={"SCORE_WORKERS": "3"})
     assert s.score_workers == 3
-    # Each worker holds what one process held, so the floor is each's.
-    assert s.unit_memory_floor() == 3 * scoring.WORKER_MB
+    # Each worker holds what one process held, and the coordinator its
+    # own on top.
+    assert (
+        s.unit_memory_floor() == 3 * scoring.WORKER_MB + scoring.COORDINATOR_MB
+    )
+
+
+def test_a_german_unit_on_a_gpu_is_one_worker_s_memory(tmp_path):
+    # On CUDA the unit forecasts in its own process (one GPU, one
+    # process), so its floor is one worker's.
+    import dataclasses
+
+    s = _scoring(tmp_path, labels=[], local_extra={"SCORE_WORKERS": "3"})
+    s.checkpoint_forecast = dataclasses.replace(
+        s.checkpoint_forecast, device="cuda"
+    )
+    assert s.unit_memory_floor() == scoring.WORKER_MB + scoring.COORDINATOR_MB
 
 
 def test_the_evaluation_leaves_a_german_unit_its_workers(tmp_path):

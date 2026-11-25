@@ -973,8 +973,130 @@ def test_a_worker_pins_itself_to_its_share_of_the_unit_s_cores(
     monkeypatch.setattr(devices, "allowed_cpus", lambda: [4, 5, 6, 7])
     monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+    monkeypatch.setattr(ck, "_watch_parent", lambda _parent: None)
     counter = multiprocessing.Value("i", 0)
     for _ in range(2):
-        ck._start_worker("abc", None, tmp_path, counter, 2)
+        ck._start_worker("abc", None, tmp_path, counter, 2, os.getpid())
     assert pinned == [[4, 5], [6, 7]]
     assert os.environ["BDBV_CHRONOS_FT"] == "abc"
+
+
+def test_a_unit_on_cuda_forecasts_in_one_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The rule claims one GPU, which one process holds: workers would
+    # each preallocate it.
+    monkeypatch.setenv(ck.WORKERS_ENV, "4")
+    monkeypatch.setenv("DEVICE", "cuda")
+    assert ck.score_workers() == 1
+    monkeypatch.setenv("DEVICE", "cpu")
+    assert ck.score_workers() == 4
+
+
+def test_a_worker_watches_its_coordinator(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import multiprocessing
+
+    from nowcastgermany import data as dg
+
+    watched: list = []
+    monkeypatch.setattr(ck, "_watch_parent", watched.append)
+    monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
+    monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+    counter = multiprocessing.Value("i", 0)
+    ck._start_worker("abc", None, tmp_path, counter, 2, 1234)
+    assert watched == [1234]
+
+
+_HELPER = """
+import os
+import time
+from pathlib import Path
+
+from nowcastgermany import checkpoint as ck
+
+
+def start(label, segment, path, counter, workers, parent):
+    if WATCH:
+        ck._watch_parent(parent)
+
+
+def chunk(unit, need, dates):
+    (unit.root / f"{os.getpid()}.pid").touch()
+    time.sleep(120)
+    return []
+"""
+
+_COORDINATOR = """
+import sys
+from pathlib import Path
+
+import helper
+from nowcastgermany import checkpoint as ck
+
+if __name__ == "__main__":
+    ck._start_worker = helper.start
+    ck._worker_chunk = helper.chunk
+    root = Path(sys.argv[1])
+    unit = ck._Unit(root, root, ("m",))
+    chunks = [(("m",), [str(i)]) for i in range(4)]
+    for _ in ck._chunk_results(unit, None, chunks, 2, ("abc", None, root)):
+        pass
+"""
+
+
+def _gone(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    return False
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX signals")
+@pytest.mark.parametrize(
+    ("signal_name", "watch"), [("SIGKILL", True), ("SIGTERM", False)]
+)
+def test_a_unit_s_workers_stop_with_their_coordinator(
+    tmp_path: Path, signal_name: str, watch: bool
+) -> None:
+    # A killed coordinator leaves no worker forecasting on: a worker
+    # watches its parent, and a coordinator stopped by SIGTERM stops its
+    # workers itself.
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    (tmp_path / "helper.py").write_text(f"WATCH = {watch}\n{_HELPER}")
+    (tmp_path / "coordinator.py").write_text(_COORDINATOR)
+    root = tmp_path / "unit"
+    root.mkdir()
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            [str(tmp_path), os.environ.get("PYTHONPATH", "")]
+        ),
+    }
+    proc = subprocess.Popen(
+        [sys.executable, str(tmp_path / "coordinator.py"), str(root)], env=env
+    )
+    try:
+        deadline = time.monotonic() + 60
+        while len(list(root.glob("*.pid"))) < 2:
+            assert proc.poll() is None, "the coordinator stopped early"
+            assert time.monotonic() < deadline, "the workers never started"
+            time.sleep(0.1)
+        pids = [int(p.stem) for p in root.glob("*.pid")]
+        proc.send_signal(getattr(signal, signal_name))
+        proc.wait(timeout=30)
+        deadline = time.monotonic() + 10
+        while not all(_gone(p) for p in pids):
+            assert time.monotonic() < deadline, "a worker outlived its unit"
+            time.sleep(0.1)
+    finally:
+        proc.kill()
+        for p in root.glob("*.pid"):
+            if not _gone(int(p.stem)):
+                os.kill(int(p.stem), signal.SIGKILL)

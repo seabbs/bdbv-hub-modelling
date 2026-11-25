@@ -39,6 +39,7 @@ __all__ = [
     "latest_onset_days",
     "origin_releases",
     "release_cutoff",
+    "release_cutoffs",
     "release_pairs",
     "without_cumulative_first_release",
 ]
