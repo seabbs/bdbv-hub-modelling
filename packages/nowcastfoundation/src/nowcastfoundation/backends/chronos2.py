@@ -249,7 +249,7 @@ def group_cost(group: Series, horizon: int) -> int:
     Its rows over its context patches, the reg token and its output
     patches.
     """
-    width = np.atleast_2d(group["target"]).shape[-1]
+    width = int(np.atleast_2d(group["target"]).shape[-1])
     tokens = -(-width // OUTPUT_PATCH) + 1 + -(-horizon // OUTPUT_PATCH)
     return _n_rows(group) * tokens
 
