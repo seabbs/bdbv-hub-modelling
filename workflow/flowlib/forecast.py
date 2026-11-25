@@ -8,11 +8,8 @@ in config/local.env. No rule or script picks a device itself: each
 forecasting rule puts `Forecast.env` before its command and asks for
 `Forecast.gpu` of the `gpu` resource.
 
-With `device: cuda`, `forecast.gpu` says how a job meets the trainer,
-which holds `gpu=1` while it trains: `exclusive` (the default) makes the
-job take the GPU too, so it waits for a free one; `share` runs it beside
-the trainer on the same GPU, which costs GPU memory and some training
-speed but scores as checkpoints land.
+Jobs never share a GPU: with `device: cuda` a forecasting job takes a
+whole `gpu` slot, as the trainer does, so it waits for a free GPU.
 """
 
 from __future__ import annotations
@@ -24,9 +21,6 @@ from typing import Any
 
 DEVICES = ("cpu", "cuda", "mps")
 """The devices a forecasting job may name."""
-
-GPU_MODES = ("exclusive", "share")
-"""How a CUDA forecasting job meets the trainer's GPU."""
 
 JAX_PLATFORM = {"cpu": "cpu", "cuda": "", "mps": "cpu"}
 """JAX's platforms for each device. With cuda it is empty, so JAX takes
@@ -50,29 +44,24 @@ EIGEN = "--xla_cpu_multi_thread_eigen=false"
 
 @dataclasses.dataclass(frozen=True)
 class Forecast:
-    """A forecasting job's device, CPU threads and GPU use."""
+    """A forecasting job's device and CPU threads."""
 
     device: str
     threads: int
-    gpu_mode: str = "exclusive"
 
     def __post_init__(self) -> None:
-        """Refuse a device, thread count or GPU use not allowed."""
+        """Refuse a device or thread count not allowed."""
         if self.device not in DEVICES:
             raise ValueError(
                 f"forecast device {self.device!r} is not one of {DEVICES}"
             )
         if self.threads < 1:
             raise ValueError(f"forecast threads {self.threads} is below 1")
-        if self.gpu_mode not in GPU_MODES:
-            raise ValueError(
-                f"forecast gpu {self.gpu_mode!r} is not one of {GPU_MODES}"
-            )
 
     @property
     def gpu(self) -> int:
-        """Return the `gpu` resource a job takes: 1 for exclusive CUDA."""
-        return int(self.device == "cuda" and self.gpu_mode == "exclusive")
+        """Return the `gpu` resource a job takes: a whole GPU for CUDA."""
+        return int(self.device == "cuda")
 
     def variables(self) -> dict[str, str]:
         """Return the environment a forecasting job runs with.
@@ -116,21 +105,10 @@ def settings(config: Mapping[str, Any], local: Mapping[str, str]) -> Forecast:
     Returns
     -------
     Forecast
-        The device, threads and GPU use.
+        The device and threads.
     """
     fc = config["forecast"]
-    got = Forecast(
+    return Forecast(
         device=local.get("FORECAST_DEVICE") or str(fc["device"]),
         threads=int(local.get("FORECAST_THREADS") or fc["threads"]),
-        gpu_mode=str(fc.get("gpu", "exclusive")),
     )
-    # A cluster job (COMPUTE other than single or ssh) has only the GPU
-    # it asks for, and a shared one asks for none.
-    compute = local.get("COMPUTE") or "single"
-    shared = got.device == "cuda" and got.gpu_mode == "share"
-    if shared and compute not in ("single", "ssh"):
-        raise ValueError(
-            f"COMPUTE={compute}: forecast.gpu must be exclusive for cuda, "
-            "as a cluster job gets only the GPU it asks for"
-        )
-    return got

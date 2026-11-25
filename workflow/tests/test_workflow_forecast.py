@@ -30,11 +30,15 @@ def test_an_unknown_device_is_refused():
 
 
 @pytest.mark.parametrize(
-    ("device", "mode", "gpu"),
-    [("cuda", "exclusive", 1), ("cuda", "share", 0), ("cpu", "exclusive", 0)],
+    ("device", "gpu"), [("cuda", 1), ("cpu", 0), ("mps", 0)]
 )
-def test_only_exclusive_cuda_takes_the_trainer_s_gpu(device, mode, gpu):
-    assert forecast.Forecast(device, 2, mode).gpu == gpu
+def test_a_cuda_job_takes_a_whole_gpu(device, gpu):
+    # Jobs never share a GPU: a CUDA job waits for a free one.
+    assert forecast.Forecast(device, 2).gpu == gpu
+
+
+def test_the_config_has_no_gpu_mode():
+    assert set(CONFIG["forecast"]) == {"device", "threads"}
 
 
 def test_the_env_names_torch_and_jax_devices_and_threads():
@@ -93,15 +97,3 @@ def test_jax_starts_with_the_cuda_platform_list_without_cuda():
     )
     assert out.returncode == 0, out.stderr[-1000:]
     assert out.stdout.strip() in {"cpu", "gpu", "cuda"}
-
-
-def test_a_cluster_refuses_a_shared_gpu():
-    # On one machine a shared GPU is run by count; a cluster job only has
-    # the GPU it asks for, and a shared one asks for none.
-    cfg = {"forecast": {"device": "cuda", "threads": 2, "gpu": "share"}}
-    assert forecast.settings(cfg, {"COMPUTE": "single"}).gpu == 0
-    assert forecast.settings(cfg, {"COMPUTE": "ssh"}).gpu == 0
-    with pytest.raises(ValueError, match="exclusive"):
-        forecast.settings(cfg, {"COMPUTE": "slurm"})
-    cfg["forecast"]["gpu"] = "exclusive"
-    assert forecast.settings(cfg, {"COMPUTE": "slurm"}).gpu == 1

@@ -174,15 +174,10 @@ properties:
       FORECAST_DEVICE and FORECAST_THREADS in config/local.env override them.
     type: object
     additionalProperties: false
-    required: [device, threads, gpu]
+    required: [device, threads]
     properties:
       device: {enum: [cpu, cuda, mps]}
       threads: {type: integer, minimum: 1}
-      gpu:
-        description: >-
-          With device cuda, exclusive takes the trainer's gpu resource (the
-          job waits for the GPU); share runs beside the trainer on it.
-        enum: [exclusive, share]
 
   score:
     type: object

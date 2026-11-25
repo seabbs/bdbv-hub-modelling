@@ -1024,6 +1024,32 @@ def device_memory() -> tuple[int, int] | None:
     return free + cached, total
 
 
+_PROGRESS: dict[str, Callable[[int, int], None] | None] = {"report": None}
+"""Who `report_batch` tells of each batch, inside `batch_progress`."""
+
+
+@contextmanager
+def batch_progress(report: Callable[[int, int], None]) -> Iterator[None]:
+    """Tell `report` of each batch of a pass while open.
+
+    `report(k, n)` follows batch `k` of the pass's `n`
+    (`ByLength.indices`), so a long held-out evaluation shows how far it
+    has got.
+    """
+    _PROGRESS["report"] = report
+    try:
+        yield
+    finally:
+        _PROGRESS["report"] = None
+
+
+def report_batch(k: int, n: int) -> None:
+    """Tell `batch_progress`'s reporter, if any, that batch `k` of `n` ran."""
+    report = _PROGRESS["report"]
+    if report is not None:
+        report(k, n)
+
+
 INPUT_PATCH = 16
 """Steps in one of Chronos-2's input patches."""
 
@@ -1104,8 +1130,10 @@ class ByLength:
         """Yield every block's index once, in batches of one length.
 
         Batches are those Chronos-2's sequential batches make: blocks in
-        order until a batch holds `batch_size` series.
+        order until a batch holds `batch_size` series. Each is reported
+        once used (`report_batch`).
         """
+        planned = []
         for length in self.data:
             idx = [i for i, n in enumerate(self.lengths) if n == length]
             batch, rows = [], 0
@@ -1113,10 +1141,13 @@ class ByLength:
                 batch.append(i)
                 rows += int(self.inputs[i]["context"].shape[0])
                 if rows >= self.batch_size:
-                    yield batch
+                    planned.append(batch)
                     batch, rows = [], 0
             if batch:
-                yield batch
+                planned.append(batch)
+        for k, batch in enumerate(planned, start=1):
+            yield batch
+            report_batch(k, len(planned))
 
     def batches(self) -> Any:
         """Yield every block once, in batches of one length."""

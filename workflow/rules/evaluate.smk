@@ -10,10 +10,9 @@
 rule evaluate_steps:
     input:
         settings=f"{TRAIN}/n{{n}}/settings.json",
-        # Its steps start after the previous checkpoint's.
+        # Its steps start after the previous checkpoint's, and after
+        # step 0 (evaluate_base), which it never waits for.
         prev=evaluate_prev,
-        # Step 0, scored on its own.
-        base=f"{TRAIN}/evals/step-0000000.json",
     output:
         touch(f"{TRAIN}/evals/n{{n}}.done"),
     log:
@@ -43,8 +42,9 @@ rule evaluate_steps:
 
 
 rule evaluate_base:
-    # Step 0 (base Chronos-2) on the held-out blocks, before any other
-    # evaluation: the start loss each checkpoint's sidecar needs.
+    # Step 0 (base Chronos-2) on every held-out block: the start loss
+    # each checkpoint's sidecar needs. The step evaluations never wait for
+    # it.
     input:
         settings=lambda wc: (
             f"{train_dir(wc.run)}/n{first_prefix(wc.run)}/settings.json"

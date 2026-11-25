@@ -75,8 +75,9 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
     second = checkpoint_at(train, 500, 400)
     mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
     assert calls["loads"] == 1
-    # Newest first.
-    assert [c[1] for c in calls["evals"]] == [["monitor"], ["start"]]
+    # Step 0 is evaluate_base's alone: the steps never wait for it.
+    assert [c[1] for c in calls["evals"]] == [["monitor"]]
+    assert not (train / "evals" / "step-0000000.json").exists()
     got = json.loads((train / "evals" / "step-0000200.json").read_text())
     assert got["step"] == 200
     assert got["eval_loss"] == 0.3
@@ -93,7 +94,7 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
             "200",
         ]
     )
-    assert len(calls["evals"]) == 3
+    assert len(calls["evals"]) == 2
     mod.main(
         [
             "steps",
@@ -106,7 +107,7 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
             "200",
         ]
     )
-    assert len(calls["evals"]) == 3
+    assert len(calls["evals"]) == 2
 
 
 def test_checkpoint_writes_the_sidecar_with_the_start_loss(tmp_path, fake):
@@ -177,7 +178,8 @@ def test_steps_passes_a_segment_with_no_due_step(tmp_path, fake):
             "200",
         ]
     )
-    assert [c[1] for c in calls["evals"]] == [["start"]]
+    # Neither has a due step; step 0 is evaluate_base's.
+    assert calls["evals"] == []
 
 
 def test_base_scores_only_step_0_and_once(tmp_path, fake):
@@ -209,3 +211,23 @@ def test_steps_scores_the_newest_snapshot_first(tmp_path, fake):
         int(c[0].parent.name.removeprefix("step-")) for c in calls["evals"]
     ]
     assert steps == [600, 400, 200]
+
+
+def test_evaluation_logs_each_batch(tmp_path, fake, monkeypatch, capsys):
+    mod, _ = fake
+    train = tmp_path / "train"
+    snapshot(train, 0, ["start"])
+
+    def evaluate(*_a, **_k):
+        mod.fs.report_batch(1, 2)
+        mod.fs.report_batch(2, 2)
+        return {"held_out_loss": 0.4}
+
+    monkeypatch.setattr(mod.fe, "evaluate", evaluate)
+    mod.main(["base", str(train / "n100"), "--device", "cpu"])
+    out = capsys.readouterr().out
+    assert "step-0000000: batch 1/2" in out
+    assert "step-0000000: batch 2/2" in out
+    # Outside an evaluation nothing is logged.
+    mod.fs.report_batch(1, 2)
+    assert "batch" not in capsys.readouterr().out

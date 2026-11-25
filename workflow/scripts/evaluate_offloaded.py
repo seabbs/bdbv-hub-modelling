@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -59,17 +60,18 @@ def steps(
 ) -> None:
     """Score segment `where`'s step snapshots that have no result yet.
 
-    The segment's steps are those after checkpoint `prev`'s (from step 0
-    for the first) up to its own. A due step with neither snapshot nor
-    result fails the job: its snapshots were not copied in, and scoring
-    nothing must not mark the segment done.
+    The segment's steps are those after checkpoint `prev`'s (after step
+    0 for the first, which `base_step` scores alone, so no step waits
+    for it) up to its own. A due step with neither snapshot nor result
+    fails the job: its snapshots were not copied in, and scoring nothing
+    must not mark the segment done.
     """
     train = where.parent
     upto = json.loads((where / "settings.json").read_text())["steps"]
     after = (
         json.loads((prev / "settings.json").read_text())["steps"]
         if prev is not None
-        else -1
+        else 0
     )
     gone = missing(train, after, upto, every)
     if gone:
@@ -84,11 +86,21 @@ def steps(
 def base_step(where: Path, device: str) -> None:
     """Score step 0 (base Chronos-2) alone, unless it has a result.
 
-    A checkpoint's evaluation needs only this, so it can run between
-    segments rather than after every segment's step evaluation.
+    It scores every held-out block, and only a checkpoint's evaluation
+    needs it (the start loss); the step evaluations never wait for it.
     """
     train = where.parent
     score_snapshots(train, evaluations.pending(train, -1, 0), device)
+
+
+def logging_batches(label: str) -> Any:
+    """Log each batch of an evaluation as `label` (fs.batch_progress)."""
+    start = time.perf_counter()
+
+    def report(k: int, n: int) -> None:
+        fs.log(f"{label}: batch {k}/{n} ({time.perf_counter() - start:.0f} s)")
+
+    return fs.batch_progress(report)
 
 
 def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
@@ -103,7 +115,8 @@ def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
         n = json.loads((snap / "request.json").read_text()).get("n_validation")
         if n not in blocks:
             blocks[n] = fe.load_blocks(train / fs.HELD_OUT_BLOCKS, n)
-        result = fe.snapshot_result(base, snap, blocks[n], device)
+        with logging_batches(snap.name):
+            result = fe.snapshot_result(base, snap, blocks[n], device)
         fe.write_json(snap.with_name(snap.name + ".json"), result)
         kinds = ", ".join(result["kinds"])
         fs.log(f"{snap.name}: {kinds} in {result['seconds']:.0f} s")
@@ -116,13 +129,14 @@ def checkpoint(where: Path, device: str) -> None:
         where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
     )
     try:
-        got = fe.write_checkpoint_sidecar(
-            where,
-            fe.load_base("cpu"),
-            blocks,
-            device,
-            settings.get("batch_size", 256),
-        )
+        with logging_batches(where.name):
+            got = fe.write_checkpoint_sidecar(
+                where,
+                fe.load_base("cpu"),
+                blocks,
+                device,
+                settings.get("batch_size", 256),
+            )
     except ValueError as error:
         raise SystemExit(str(error)) from error
     fs.log(f"{where.name}: held-out loss {got['held_out_loss']:.4f}")
@@ -134,8 +148,6 @@ SEVEN_DAY = "seven-day.json"
 
 def seven_day(where: Path, device: str) -> None:
     """Write a checkpoint's 7-day check on its run's held-out blocks."""
-    import time
-
     settings = json.loads((where / "settings.json").read_text())
     blocks = fe.load_blocks(
         where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
@@ -143,9 +155,13 @@ def seven_day(where: Path, device: str) -> None:
     base = fe.load_base(device)
     series_bias.attach_for(base, where / "finetuned-ckpt")
     t0 = time.perf_counter()
-    check = fe.seven_day_check(
-        where / "finetuned-ckpt", base, blocks, settings.get("batch_size", 256)
-    )
+    with logging_batches(f"{where.name} 7-day"):
+        check = fe.seven_day_check(
+            where / "finetuned-ckpt",
+            base,
+            blocks,
+            settings.get("batch_size", 256),
+        )
     seconds = time.perf_counter() - t0
     fe.write_json(
         where / SEVEN_DAY,
