@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -12,7 +13,6 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "docs" / "hooks"))
-sys.path.insert(0, str(ROOT / "packages"))
 SITES = sorted((ROOT / "packages").glob("*/mkdocs.yml"))
 BLOCK = re.compile(r"^```python\n(.*?)^```", re.MULTILINE | re.DOTALL)
 TEMPLATE = [
@@ -82,7 +82,7 @@ def test_a_package_site_links_back_to_the_main_site(site: Path) -> None:
     import site_links
 
     base = yaml.safe_load((ROOT / "packages" / "mkdocs-base.yml").read_text())
-    assert "../site_links.py" in base["hooks"]
+    assert "../../docs/hooks/site_links.py" in base["hooks"]
     config = {
         "nav": list(_config(site)["nav"]),
         "extra": dict(base["extra"]),
@@ -112,7 +112,7 @@ def test_each_package_site_is_built_when_it_changes() -> None:
     assert on["push"]["branches"] == ["main"]
     text = (ROOT / ".github/workflows/package-docs.yml").read_text()
     assert "mkdocs build --strict" in text
-    assert "target-folder" in text
+    assert "HEAD:gh-pages" in text
 
 
 @pytest.mark.slow
@@ -128,9 +128,13 @@ def test_package_site_examples_run(site: Path, tmp_path: Path) -> None:
         for block in BLOCK.findall((site.parent / "docs" / page).read_text())
     )
     assert code, "a package site has no example"
+    # The package's own source first: bdbvsubmission has its own
+    # environment and is not installed in the root one.
+    env = {**os.environ, "PYTHONPATH": str(site.parent / "src")}
     run = subprocess.run(
         [sys.executable, "-c", code],
         cwd=tmp_path,
+        env=env,
         capture_output=True,
         text=True,
         check=False,

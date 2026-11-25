@@ -7,6 +7,11 @@ repo_url: https://github.com/seabbs/bdbv-hub-modelling
 repo_name: seabbs/bdbv-hub-modelling
 copyright: Copyright &copy; 2026 Sam Abbott. MIT licence.
 docs_dir: docs
+# Paths from packages/<package>/: the links back to the project's site, and
+# each README marked into a page (as on the main site).
+hooks:
+  - ../../docs/hooks/site_links.py
+  - ../../docs/hooks/readmes.py
 
 theme:
   name: material

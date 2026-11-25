@@ -1,0 +1,149 @@
+name: Package docs
+
+# Each package's own docs site (packages/<package>/mkdocs.yml, from
+# packages/mkdocs-base.yml), built on its own and only when it changes.
+# From main each site is published to the gh-pages branch at <package>/,
+# which the Site workflow's deploy keeps, so the main site build never
+# builds a package. Pull requests build the changed sites as a check.
+# A change to the template, its hooks or this workflow rebuilds every
+# site, as does a dispatch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'docs/hooks/readmes.py'
+      - 'docs/hooks/site_links.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/package-docs.yml'
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'docs/hooks/readmes.py'
+      - 'docs/hooks/site_links.py'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/package-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-docs-${{ github.ref }}
+  # A run on main publishes the sites its push changed, so it finishes.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  plan:
+    name: Plan the package sites
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      packages: ${{ steps.plan.outputs.packages }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # The sites whose package changed between the push's or the pull
+      # request's base and head; every site after a shared change.
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: >-
+            ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          all=$(for c in packages/*/mkdocs.yml; do
+            basename "$(dirname "$c")"; done)
+          if [ "$EVENT" = workflow_dispatch ] \
+            || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            changed=$all
+          else
+            files=$(git diff --name-only "$BASE" HEAD)
+            if grep -qE '^(packages/mkdocs-base\.yml|docs/hooks/(readmes|site_links)\.py|pyproject\.toml|uv\.lock|\.github/workflows/package-docs\.yml)$' <<<"$files"; then
+              changed=$all
+            else
+              changed=$(for p in $all; do
+                grep -q "^packages/$p/" <<<"$files" && echo "$p"; done)
+            fi
+          fi
+          json=$(printf '%s\n' $changed | jq -R . | jq -cs 'map(select(. != ""))')
+          echo "packages=$json" >> "$GITHUB_OUTPUT"
+          echo "Package sites to build: $json" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build ${{ matrix.package }}
+    needs: plan
+    if: ${{ needs.plan.outputs.packages != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.plan.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - run: uv sync --frozen --only-group docs
+      - name: Build the site
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: >-
+          uv run --no-sync mkdocs build --strict
+          -f "packages/$PACKAGE/mkdocs.yml" -d "$PWD/site/$PACKAGE"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-${{ matrix.package }}
+          path: site
+          retention-days: 3
+
+  # From main, each built site to gh-pages at <package>/, replacing only
+  # those folders. A push that loses a race with another deploy starts
+  # again from the new gh-pages head.
+  publish:
+    name: Publish the package sites
+    needs: build
+    if: >-
+      !cancelled() && needs.build.result == 'success'
+      && github.event_name != 'pull_request'
+      && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency: package-docs-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: site-*
+          path: site
+          merge-multiple: true
+      - name: Publish each site to gh-pages
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for try in 1 2 3 4 5; do
+            rm -rf pages && git worktree prune
+            git fetch -q --depth 1 origin gh-pages
+            git worktree add -q --detach pages FETCH_HEAD
+            for dir in site/*/; do
+              package=$(basename "$dir")
+              rm -rf "pages/$package"
+              cp -R "$dir" "pages/$package"
+            done
+            git -C pages add -A
+            if git -C pages diff --cached --quiet; then
+              echo "The package sites are unchanged"
+              exit 0
+            fi
+            git -C pages commit -q \
+              -m "Package docs: $(ls site | xargs) from $GITHUB_SHA"
+            git -C pages push -q origin HEAD:gh-pages && exit 0
+            echo "::warning::gh-pages moved (try $try); trying again"
+            sleep 10
+          done
+          exit 1

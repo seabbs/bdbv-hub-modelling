@@ -16,6 +16,7 @@ hooks:
   - docs/hooks/cache_bust.py
   - docs/hooks/citations.py
   - docs/hooks/readmes.py
+  - docs/hooks/packages.py
 
 exclude_docs: |
   README.md
@@ -54,29 +55,15 @@ nav:
           - Opting in: submission/opting-in.md
           - Submission log: submission/rounds/index.md
   - Packages:
+      # Each package's own site follows the index (docs/hooks/packages.py).
       - packages/index.md
-      - nowcastrenewal: packages/nowcastrenewal.md
-      - nowcastfoundation: packages/nowcastfoundation.md
-      - nowcastgermany: packages/nowcastgermany.md
-      - nowcastbdbv: packages/nowcastbdbv.md
-      - bdbvhub: packages/bdbvhub.md
       - Setup: setup.md
       - Getting started: getting-started.ipynb
       - Development:
           - Contributing: development/contributing.md
           - Adding a model: development/adding-a-model.md
           - CLI: development/cli.md
-      - API reference:
-          - reference/index.md
-          - Data: reference/data.md
-          - Models:
-              - Forecasters: reference/forecasters.md
-              - Renewal model: reference/model.md
-          - Evaluation: reference/evaluation.md
-          - Reporting:
-              - Figures and tables: reference/reporting.md
-              - Submission: reference/submission.md
-          - CLI: reference/cli.md
+      - API reference: reference/index.md
       - Citation and licence: citation.md
 
 theme:
@@ -188,6 +175,18 @@ plugins:
         reference/nowcastutils.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastutils/reference/
         reference/nowcasteval.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcasteval/reference/
         reference/nowcastbaselines.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastbaselines/reference/
+        packages/bdbvhub.md: https://samabbott.co.uk/bdbv-hub-modelling/bdbvhub/
+        packages/nowcastbdbv.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastbdbv/
+        packages/nowcastfoundation.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastfoundation/
+        packages/nowcastgermany.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastgermany/
+        packages/nowcastrenewal.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastrenewal/
+        reference/cli.md: https://samabbott.co.uk/bdbv-hub-modelling/bdbvhub/reference/
+        reference/data.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastbdbv/reference/
+        reference/evaluation.md: https://samabbott.co.uk/bdbv-hub-modelling/bdbvhub/reference/
+        reference/forecasters.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastfoundation/reference/
+        reference/model.md: https://samabbott.co.uk/bdbv-hub-modelling/nowcastrenewal/reference/
+        reference/reporting.md: https://samabbott.co.uk/bdbv-hub-modelling/bdbvhub/reference/
+        reference/submission.md: https://samabbott.co.uk/bdbv-hub-modelling/bdbvhub/reference/
   - mkdocs-jupyter:
       # Only the executed notebook. The .py source would also render to
       # getting-started/ and replace it with a page without outputs.

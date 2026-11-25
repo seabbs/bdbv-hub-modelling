@@ -1,3 +1,0 @@
-# nowcastrenewal
-
-<!-- readme: packages/nowcastrenewal -->
