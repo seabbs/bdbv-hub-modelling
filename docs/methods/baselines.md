@@ -22,7 +22,7 @@ Where no pair is that close, the delay at the origin is fitted to the longer pai
 
 ## Delay
 
-The delay is our port of baselinenowcast's chain ladder, fitted on the daily snapshots, by maximum likelihood over release pairs of any gap up to $D$, so days first shown as 0 count ([SI](../paper/si.html#baselines)).
+The delay is our port of baselinenowcast's chain ladder, fitted on the daily snapshots, by non-negative least squares over release pairs of any gap up to $D$ ([SI](../paper/si.html#baselines)).
 
 ## Nowcast
 

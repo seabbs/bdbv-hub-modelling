@@ -39,12 +39,11 @@ Two consecutive releases are $s = c_{r+1} - c_r$ days apart, and only pairs with
 **Delay.**
 With $\Delta_p(j) \ge 0$ the daily log growth at age $j$, and $\Delta_p(j) = 0$ for $j \ge D$, for each gap $s$ and age $x < D$,
 $$
-\sum_t C_{p,r}(t) \sim \mathrm{Binomial}\Big(\sum_t C_{p,r+1}(t),\ \exp\Big\{-\sum_{j=x}^{x+s-1} \Delta_p(j)\Big\}\Big),
+\log \frac{\sum_t C_{p,r+1}(t)}{\sum_t C_{p,r}(t)} = \sum_{j=x}^{x+s-1} \Delta_p(j),
 $$
 summed over pairs of gap $s$ and days $t$ of age $x$ at $r$.
 
-- $\Delta_p$ is the maximum likelihood fit.
-- Where the earlier sum is 0, 1 case counts as shown at both releases, as baselinenowcast's chain ladder divides by at least 1, so days first shown as 0 still count their later cases.
+- $\Delta_p$ is the non-negative least squares fit of these equations, weighted by their denominators.
 - With gaps of one day only, $\exp \Delta_p(x)$ is baselinenowcast's chain-ladder factor.
 - As in baselinenowcast, only onset days within $1.5 D$ of the cut-off contribute, and a downward revision is taken from the day's earlier increments.
 - The growth from age $a$ to final is $\Gamma_p(a) = \exp \sum_{j=a}^{D-1} \Delta_p(j)$, and $1 / \Gamma_p(a)$ is the share reported.

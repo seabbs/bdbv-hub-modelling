@@ -15,16 +15,13 @@ $s = c_{r+1} - c_r$ days and is in window when $s \le D$.
 A day of age $a$ at release $r$ grows by $\exp \sum_{j=a}^{a+s-1} g(j)$
 to release $r + 1$, with $g(j) \ge 0$ the daily log development factor
 and $g(j) = 0$ for $j \ge D$.
-For each gap $s$ and age $a$, the sums $\sum N_{r+1}(t)$ and
-$\sum N_r(t)$, over the in-window pairs of that gap and the days of age
-$a$ that both releases observe, are the cases at the later release and
-those of them shown at the earlier.
-Each case was shown at the earlier with chance
-$\exp(-\sum_{j=a}^{a+s-1} g(j))$, a binomial, and $g$ maximises the
-likelihood of all of them (`log_factors`).
-Where the earlier release shows 0, 1 case counts as shown at both, as
-baselinenowcast's chain ladder divides by at least 1, so the later cases
-of days first shown as 0 count.
+For each gap $s$ and age $a$, the ratio of sums
+$\sum N_{r+1}(t) / \sum N_r(t)$, over the in-window pairs of that gap
+and the days of age $a$ that both releases observe, gives one equation
+for $\sum_{j=a}^{a+s-1} g(j)$ on the log scale, weighted by the
+denominator.
+$g$ is the non-negative least squares fit of all of them
+(`log_factors`).
 Cells a release does not observe are skipped, not filled.
 A place with at least 10 cases a week uses its own $g$, and otherwise
 the pooled $g$ of its nearest parent with them, fitted to the summed

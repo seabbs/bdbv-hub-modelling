@@ -5,9 +5,8 @@ seed 3, from the eager code before the walks were compiled as whole
 programs. Compiling must not change a single draw. A change to the
 model's draws re-pins them: both for local plus global introduction
 rates, randomwalknowcast for quiet places with recent cases walking
-from their level, both for pairing their province draws within each
-week, which reorders draws and keeps every cell's, and both for the
-delay counting days first shown as 0.
+from their level, and both for pairing their province draws within each
+week, which reorders draws and keeps every cell's.
 """
 
 from __future__ import annotations
@@ -23,10 +22,11 @@ from nowcastbdbv.backtest import make_tasks
 from nowcasteval.backtest import BacktestConfig
 from nowcastutils.base import ForecastTask
 
-# The walks' draws on a fixed task.
+# The walks' draws on a fixed task; #808 (no reported-count floor) and
+# the copula prior 0.1 (chosen on the release backtest) moved both.
 PINNED = {
-    "randomwalk": "0c6c773848cc860a",
-    "randomwalknowcast": "dbafab582407e30a",
+    "randomwalk": "fd8acfe7c44b5231",
+    "randomwalknowcast": "4441512f7b028820",
 }
 
 _COMPILES: list[float] = []

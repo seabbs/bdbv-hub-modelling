@@ -22,7 +22,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import Array, lax
-from scipy.optimize import minimize, nnls
+from scipy.optimize import nnls
 
 from nowcastbaselines.pooling import MIN_LEVEL, pool_matrix, source_index
 from nowcastutils.base import ModelUnavailableError
@@ -372,21 +372,14 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
     A day of age $a$ at release $r$ is age $a + s$ at release $r + 1$,
     with $s$ the pair's gap in days.
     Releases are batched reports, so its growth over the gap is
-    $\exp x$, $x = \sum_{j=a}^{a+s-1} g(j)$, with $g(j) = 0$ from
-    ``max_delay``.
-    The pairs of each gap are summed by age, as baselinenowcast sums over
-    reference times, to $N$ cases at the later release, of which $D$
-    were shown at the earlier.
-    Each case at the later release was shown at the earlier with chance
-    $e^{-x}$, so $D$ is binomial, with log likelihood
-    $-D x + (N - D) \log(1 - e^{-x})$.
-    Where the days were shown as 0, $D = 0$, so 1 case counts as shown
-    at both releases, as baselinenowcast's chain ladder divides by at
-    least 1, and their new reports still count.
-    $g \ge 0$ maximises the sum over gaps and ages, from the least
-    squares fit of $\log(N / D)$ weighted by $D$.
-    With a gap of 1 only, $g(a)$ is the log of the chain ladder factor
-    $N / D$.
+    $\exp \sum_{j=a}^{a+s-1} g(j)$, with $g(j) = 0$ from ``max_delay``.
+    The pairs of each gap are summed by age before the ratio, as
+    baselinenowcast sums over reference times.
+    Every gap and age with a denominator gives one equation
+    $\log(\sum \mathrm{num} / \sum \mathrm{den}) = \sum g$,
+    weighted by $\sum \mathrm{den}$, and $g \ge 0$ is the
+    non-negative least squares fit.
+    With a gap of 1 only, $g(a)$ is the log of the chain ladder factor.
 
     Parameters
     ----------
@@ -405,77 +398,21 @@ def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
     n_loc, _, d = num.shape
     uniq = np.unique(gaps)
     member = (gaps[:, None] == uniq[None, :]).astype(float)
-    n_sum = np.einsum("lpa,ps->lsa", num, member).reshape(n_loc, -1)
-    d_sum = np.einsum("lpa,ps->lsa", den, member).reshape(n_loc, -1)
+    n_sum = np.einsum("lpa,ps->lsa", num, member)
+    d_sum = np.einsum("lpa,ps->lsa", den, member)
     age = np.arange(d)
     j = np.arange(d)[None, None, :]
     lo = age[None, :, None]
     rows = ((j >= lo) & (j < lo + uniq[:, None, None])).reshape(-1, d)
-    rows = rows.astype(float)
-    # A count that fell is no removal in the delay (`_delay_counts`).
-    new = np.clip(n_sum - d_sum, 0.0, None)
-    # baselinenowcast's chain ladder divides by at least 1 case.
-    shown = np.maximum(d_sum, 1.0)
-    out = np.zeros((n_loc, d))
+    g = np.zeros((n_loc, d))
     for n in range(n_loc):
-        w = shown[n]
-        y = np.log1p(new[n] / w)
+        w = d_sum[n].ravel()
+        # A zero denominator gives a row of weight 0, so no equation.
+        seen = w > 0
+        y = np.log(np.where(seen, n_sum[n].ravel() / np.where(seen, w, 1), 1))
         root = np.sqrt(w)
-        start = nnls(rows * root[:, None], y * root)[0]
-        out[n] = _binomial_fit(rows, w, new[n], start)
-    return out
-
-
-def _binomial_fit(
-    rows: np.ndarray,
-    den: np.ndarray,
-    new: np.ndarray,
-    start: np.ndarray,
-    tol: float = 1e-10,
-) -> np.ndarray:
-    """Maximise the binomial likelihood of `log_factors` over `g >= 0`.
-
-    The likelihood is concave in `g`, and L-BFGS-B climbs it from the
-    start, which it keeps when it is already the maximum, as with a gap of
-    1 only.
-
-    Parameters
-    ----------
-    rows : numpy.ndarray
-        Which factors each equation sums, ``(n_eq, max_delay)``.
-    den, new : numpy.ndarray
-        Each equation's cases shown at the earlier release, and new by
-        the later, ``(n_eq,)``.
-    start : numpy.ndarray
-        Starting factors, ``(max_delay,)``.
-    tol : float
-        Gradient per case to stop at.
-
-    Returns
-    -------
-    numpy.ndarray
-        $g$, ``(max_delay,)``.
-    """
-    scale = max(float(np.sum(den + new)), 1.0)
-
-    def loss(g: np.ndarray) -> tuple[float, np.ndarray]:
-        # The likelihood is 0 at x = 0 where a case is still to come, so
-        # x has a floor that keeps the search's trial points finite.
-        x = np.maximum(rows @ g, 1e-12)
-        ll = -den * x + new * np.log(-np.expm1(-x))
-        grad = rows.T @ (den - new / np.expm1(x))
-        return -float(ll.sum()) / scale, grad / scale
-
-    fit = minimize(
-        loss,
-        start,
-        jac=True,
-        method="L-BFGS-B",
-        bounds=[(0.0, None)] * start.size,
-        options={"ftol": 0.0, "gtol": tol, "maxiter": 10_000},
-    )
-    out: np.ndarray = fit.x
-    return out
+        g[n] = nnls(rows * root[:, None], y * root)[0]
+    return g
 
 
 def growth(g: Any, start: Any, stop: Any) -> np.ndarray:
