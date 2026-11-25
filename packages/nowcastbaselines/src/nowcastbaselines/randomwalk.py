@@ -677,25 +677,53 @@ class RandomWalkNowcast(RandomWalk):
         return frame(task, weeks, values, self.rows(origin, task))
 
     def _block_draws(
-        self, task: ForecastTask, period: int, end: int = HUB_WEEKDAY
+        self,
+        task: ForecastTask,
+        period: int,
+        end: int = HUB_WEEKDAY,
+        sigma: np.ndarray | None = None,
     ) -> tuple[Origin, dict[str, np.ndarray]]:
         """Return the draws of each block of `period` days ending `end`.
 
         The delay is fitted once, on the hub weeks' snapshots, and shared
         by every block (`_shared_delay`); the observation model, the walk
-        and the copula are fitted on the blocks.
+        and the copula are fitted on the blocks. A given `sigma` `[L]` is
+        the walk's step spread in place of the blocks' own.
         """
-        snap = self._snap
-        assert snap is not None
-        origin = build_origin(
-            blocks(snap, period, end),
-            self.settings_for(task),
-            True,
-            self._shared_delay,
-        )
+        origin = self._block_origin(task, period, end, True)
+        if sigma is not None:
+            origin = replace(origin, sigma=sigma)
         values, labels = self.trajectories(origin, task, origin.point)
         values = self.pair(origin, task, values)
         return origin, {w: values[:, :, i] for i, w in enumerate(labels)}
+
+    def _block_origin(
+        self, task: ForecastTask, period: int, end: int, errors: bool
+    ) -> Origin:
+        """Return the fit of the blocks of `period` days ending `end`."""
+        snap = self._snap
+        assert snap is not None
+        return build_origin(
+            blocks(snap, period, end),
+            self.settings_for(task),
+            errors,
+            self._shared_delay,
+        )
+
+    def _day_sigma(self, task: ForecastTask) -> np.ndarray:
+        r"""Return the walk's daily step spread, `[L]`.
+
+        It is the spread of the 7-day sums ending on the cut-off's weekday
+        over $\sqrt{7}$, as a random walk's variance grows with its steps,
+        so a daily walk spreads as the 7-day sums' walk does and not by
+        the daily counts' weekday swings.
+        """
+        snap = self._snap
+        assert snap is not None
+        end = snap.days[snap.cut[-1]].weekday()
+        sigma = self._block_origin(task, 7, end, False).sigma
+        day: np.ndarray = sigma / np.sqrt(7.0)
+        return day
 
     def _shared_delay(
         self,
@@ -732,7 +760,9 @@ class RandomWalkNowcast(RandomWalk):
         targets = list(task.target_end_dates)
         draws: dict[str, np.ndarray] = {}
         if self.error_days == 1:
-            origin, days = self._block_draws(task, 1)
+            origin, days = self._block_draws(
+                task, 1, sigma=self._day_sigma(task)
+            )
             labels = list(days)
             x = np.stack([days[d] for d in labels], axis=-1)
             c = np.concatenate(
@@ -829,7 +859,8 @@ class RandomWalkNowcast(RandomWalk):
         """Return quantiles of each target date's count, by place.
 
         The draws are of blocks of one day, with the observation model
-        fitted on daily counts, and the walk steps a day. The country is
+        fitted on daily counts, and the walk steps a day with the 7-day
+        sums' spread (`_day_sigma`). The country is
         the sum of the provinces by sample (`add_national`).
 
         Parameters
@@ -845,7 +876,7 @@ class RandomWalkNowcast(RandomWalk):
             Columns `location`, `date`, `quantile` and `value`.
         """
         self._start(task)
-        origin, days = self._block_draws(task, 1)
+        origin, days = self._block_draws(task, 1, sigma=self._day_sigma(task))
         targets = list(task.target_end_dates)
         n = task.n_samples
         values = np.stack(

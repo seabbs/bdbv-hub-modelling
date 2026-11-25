@@ -77,17 +77,32 @@ def test_every_day_has_its_seven_day_sum(rolling, day_task) -> None:
             assert 0.3 * lo <= v <= 3 * hi, (day, v, lo, hi)
 
 
-def test_the_sums_ending_saturday_are_the_hub_weeks(hub, rolling) -> None:
+def test_the_sums_ending_saturday_are_the_hub_weeks(
+    hub, rolling, hub_task
+) -> None:
+    # To the cut-off, the sums ending Saturday are the hub weeks' draws.
+    # After it the sums walk in daily steps and the hub weeks in weekly
+    # ones, with the same spread a week, so they agree in distribution.
     keys = ["location", "target_end_date", "sample"]
+    cut = pd.Timestamp(hub_task.cutoff)
     sat = rolling.loc[
         pd.to_datetime(rolling["target_end_date"]).dt.weekday == 5
-    ]
-    a = hub.sort_values(keys).reset_index(drop=True)
-    b = sat.sort_values(keys).reset_index(drop=True)
-    b["target_end_date"] = b["target_end_date"].astype(
-        a["target_end_date"].dtype
+    ].copy()
+    a = hub.copy()
+    for f in (a, sat):
+        f["target_end_date"] = pd.to_datetime(f["target_end_date"])
+    upto_a = a.loc[a["target_end_date"] <= cut].sort_values(keys)
+    upto_b = sat.loc[sat["target_end_date"] <= cut].sort_values(keys)
+    pd.testing.assert_frame_equal(
+        upto_a.reset_index(drop=True), upto_b.reset_index(drop=True)
     )
-    pd.testing.assert_frame_equal(a, b)
+    later = ["location", "target_end_date"]
+    ma = a.loc[a["target_end_date"] > cut].groupby(later)["value"].median()
+    mb = sat.loc[sat["target_end_date"] > cut].groupby(later)["value"].median()
+    assert len(ma) > 0
+    big = ma > 20
+    rel = (mb[big] - ma[big]).abs() / ma[big]
+    assert (rel < 0.25).all(), rel.max()
 
 
 def test_daily_errors_give_seven_day_sums_of_daily_draws(day_task) -> None:
