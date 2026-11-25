@@ -3,6 +3,10 @@
 results: paper/results
 # Where `publish` copies a run's outputs for main.qmd and si.qmd.
 build: paper/build
+# Whether this run makes the hosts' outputs: the German pairing
+# sensitivity. Pages sets it false and reads the published copy
+# (`paperpipe.stored`).
+host_outputs: true
 # The run `render` publishes first: development or paper.
 render: development
 studies: [synthetic, germany, ebola]

@@ -274,11 +274,14 @@ class PaperFlow:
         evidence = f"{self.results}/evidence"
         stored = self.stored
         if self.germany["real"]:
-            if self.pairing_synthetic_file():
+            if self.pairing_synthetic_file() and self.pairing_germany_file():
                 files["si_copula"] = f"{evidence}/si-copula.csv"
-            files["copula_rho"] = (
-                f"{evidence}/pairing/pairing-germany-rho.csv.gz"
-            )
+            if self.host_outputs:
+                files["copula_rho"] = (
+                    f"{evidence}/pairing/pairing-germany-rho.csv.gz"
+                )
+            elif stored.get("copula_rho"):
+                files["copula_rho"] = stored["copula_rho"]
         if final := self.config.get("final_run"):
             files["finetune_validation"] = f"{final}/validation-curve.csv"
         elif stored.get("finetune_validation"):
@@ -301,6 +304,21 @@ class PaperFlow:
         releases (`paperpipe.stored`); empty on the workflow's hosts.
         """
         return dict(self.config.get("stored") or {})
+
+    @property
+    def host_outputs(self) -> bool:
+        """Whether this run makes the hosts' outputs (`host_outputs`).
+
+        Pages sets it false: the German pairing sensitivity is read from
+        the stored copy, never run.
+        """
+        return bool(self.config.get("host_outputs", True))
+
+    def pairing_germany_file(self) -> str | None:
+        """Return the German pairing scores: made, stored or none."""
+        if self.host_outputs:
+            return f"{self.results}/evidence/pairing/pairing-germany.csv.gz"
+        return self.stored.get("pairing_germany")
 
     def pairing_synthetic_file(self) -> str | None:
         """Return the synthetic pairing scores: made, stored or none.
@@ -373,6 +391,9 @@ class PaperFlow:
         results = self.germany["results"]
         halves = [""] if mode == "development" else ["", "held-out/"]
         tables = [f"{results}/{h}paper-forecasts.csv.gz" for h in halves]
+        # Pages reads the host's development table (`paperpipe.stored`).
+        if not self.host_outputs and self.stored.get("germany_forecasts"):
+            tables[0] = self.stored["germany_forecasts"]
         extra = [
             f"{self.results}/evidence/germany-extra-{i}.csv.gz"
             for i in range(len(self.germany.get("extra") or []))

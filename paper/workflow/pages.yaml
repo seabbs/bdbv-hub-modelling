@@ -5,6 +5,7 @@
 # the newest of what they published is fetched and read through a second
 # overlay (`paperpipe.stored`), and what is not published yet says what it
 # waits on.
+host_outputs: false
 final_run: null
 rounds_dir: null
 synthetic:

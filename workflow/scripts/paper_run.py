@@ -106,6 +106,7 @@ def render(target: str, cfg: Mapping[str, str], *, pages: bool = False) -> int:
             *(["--configfile", PAGES_CONFIG, STORED_CONFIG] if pages else []),
             "--cores", cores,
             "--resources", "heavy=1", "--rerun-triggers", "mtime",
+            "--show-failed-logs",
             *monitor.args(cfg),
         ],
         cwd=ROOT, env=env, check=True,

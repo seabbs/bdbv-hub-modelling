@@ -229,9 +229,15 @@ def _figures(
         .to_dict()
     )
 
+    # Without a shown model's forecasts there is no origin to draw, and
+    # the nowcast panels say what they wait on.
+    waiting = f"Waiting on forecasts of {', '.join(nowcasts['models'][study])}."
+
     def over_time(location: str) -> dict:
         # Panel A of the main results: the shown origins overlaid at one
         # place, each nowcast over its horizons against the truth.
+        if not origins:
+            return {"baseline": baseline, "nowcast": False}
         return {
             "baseline": baseline,
             "nowcast": True,
@@ -241,10 +247,14 @@ def _figures(
         }
 
     def by_origin(location: str, stratum: str = "all") -> Figure:
+        if not origins:
+            return _pending(waiting)
         rows = [(o, location, stratum, f"origin {o:%Y-%m-%d}") for o in origins]
         return nowcast_panels(forecasts, observations, truth, models, rows, rel)
 
     def by_place(places: list[tuple[str, str, str]]) -> Figure:
+        if not origins:
+            return _pending(waiting)
         rows = _place_rows(truth, places, origins, nowcasts)
         return nowcast_panels(forecasts, observations, truth, models, rows, rel)
 

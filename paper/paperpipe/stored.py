@@ -52,12 +52,18 @@ STORED = {
     "sim-diseases.csv": ("stored", "sim_diseases"),
     "sim-summaries.csv": ("stored", "sim_summaries"),
     "sim-realism.csv": ("stored", "sim_realism"),
+    "pairing-germany.csv.gz": ("stored", "pairing_germany"),
+    "pairing-germany-rho.csv.gz": ("stored", "copula_rho"),
+    "germany-forecasts.csv.gz": ("stored", "germany_forecasts"),
     "comparison.csv": ("evidence", "checkpoint_scores"),
     "compare-daily.csv": ("evidence", "compare_daily"),
     "block-combinations.csv": ("evidence", "block_combinations"),
 }
 
-DATE_COLUMNS = ("origin_date", "target_date", "nowcast_date", "as_of_date")
+# The dates a German row is held out by, as the table guard reads them
+# (`paperpipe.config.check_no_heldout`): a development origin's targets
+# may run past the split.
+DATE_COLUMNS = ("origin_date", "nowcast_date")
 
 
 def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
@@ -105,6 +111,18 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             "compare-daily.csv": file_of("compare_daily"),
             "block-combinations.csv": file_of("block_combinations"),
         },
+        "germany": {
+            "pairing-germany.csv.gz": (
+                f"{results}/evidence/pairing/pairing-germany.csv.gz"
+            ),
+            "pairing-germany-rho.csv.gz": (
+                f"{results}/evidence/pairing/pairing-germany-rho.csv.gz"
+            ),
+            # The German benchmark's development table, every model.
+            "germany-forecasts.csv.gz": (
+                f"{config['germany']['results']}/paper-forecasts.csv.gz"
+            ),
+        },
         "simulations": {
             "sim-diseases.csv": f"{rounds}/report/sim-diseases.csv"
             if rounds
@@ -135,12 +153,16 @@ def tag(set_name: str, files: Mapping[str, Path | str]) -> str:
 
 
 def check_development(
-    files: Mapping[str, Path | str], config: Mapping[str, Any]
+    files: Mapping[str, Path | str],
+    config: Mapping[str, Any],
+    *,
+    german: bool = False,
 ) -> None:
     """Fail if a table holds a held-out row.
 
     A held-out synthetic seed (in `seed` or a synthetic `location`), a
-    German row on or after the held-out date, or an Ebola row.
+    German row on or after the held-out date, or an Ebola row. With
+    `german` every row is German, as in the German pairing tables.
     """
     heldout = config["heldout"]
     seeds = {int(s) for s in heldout["synthetic_seeds"]}
@@ -160,15 +182,13 @@ def check_development(
             found = frame.loc[synthetic, "location"].map(seed_of)
             if found.isin(seeds).any():
                 problems.append("held-out seeds")
-        german = (
-            study == "germany"
-            if study is not None
-            else pd.Series(False, index=frame.index)
-        )
+        german_rows = pd.Series(german, index=frame.index)
+        if study is not None:
+            german_rows = german_rows | (study == "germany")
         for column in DATE_COLUMNS:
             if column in frame:
                 late = pd.to_datetime(frame[column], errors="coerce") >= since
-                if (late & german).any():
+                if (late & german_rows).any():
                     problems.append(f"German {column} held out")
         if problems:
             raise ValueError(
@@ -239,7 +259,7 @@ def fetch(
     out: Path,
     releases: Sequence[Mapping[str, Any]],
     download: Callable[[str, Path], Path],
-    names: Sequence[str] = ("synthetic", "finetune", "simulations"),
+    names: Sequence[str] = ("synthetic", "finetune", "simulations", "germany"),
 ) -> dict[str, Any]:
     """Unpack each set's newest release under `out`; return the overlay."""
     folders = {}
@@ -330,7 +350,7 @@ def main(argv: Sequence[str]) -> int:
         config = {"heldout": json.loads(args.heldout)}
         files = dict(entry.split("=", 1) for entry in args.file)
         files = {name: Path(path) for name, path in files.items()}
-        check_development(files, config)
+        check_development(files, config, german=args.set == "germany")
         sha = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True,
             check=False,
