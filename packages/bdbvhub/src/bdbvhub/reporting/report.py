@@ -71,6 +71,7 @@ from nowcastbdbv.data.zone_map import (
 from nowcastbdbv.data.zones import load_zone_data
 from nowcasteval.backtest import (
     BacktestConfig,
+    backtest_origins,
     check_distinct,
     load_config,
     run_forecasts,
@@ -358,7 +359,7 @@ def make_report(
         if zone_fits.exists()
         else None
     )
-    for vintage in sorted(set(real["vintage"]) - set(config.skip_origins)):
+    for vintage in backtest_origins(real, config):
         if vintage == latest:
             task, at = tasks[0], forecasts_now
         else:

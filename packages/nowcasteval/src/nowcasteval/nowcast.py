@@ -80,7 +80,7 @@ from nowcastutils.base import (
 from nowcastutils.dates import as_date, epiweek_end
 from nowcastutils.files import write_csv
 from nowcastutils.hierarchy import province_of
-from nowcastutils.releases import release_cutoff
+from nowcastutils.releases import cumulative_first_release, release_cutoff
 
 __all__ = [
     "COMPLETE_GROWTH",
@@ -108,6 +108,7 @@ __all__ = [
     "summarise",
     "truth_from_vintage",
     "truth_sensitivity",
+    "truth_skip",
     "week_shares",
     "weeks_back_from_cutoff",
 ]
@@ -716,14 +717,38 @@ def truth_sensitivity(
     return {"delays": delays, "complete": pd.DataFrame(out)}
 
 
+def truth_skip(target: pd.DataFrame, config: BacktestConfig) -> tuple[str, ...]:
+    """Return the releases the truth delay leaves out.
+
+    A cumulative first release under the config's `max_delay`
+    (`nowcastutils.releases.cumulative_first_release`) is left out, as
+    its old weeks were revised rather than late.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Real target rows, with `vintage` and `cutoff`.
+    config : BacktestConfig
+        Gives `max_delay`.
+
+    Returns
+    -------
+    tuple of str
+        The release, or none.
+    """
+    first = cumulative_first_release(target, config.max_delay)
+    return () if first is None else (first,)
+
+
 def resolve_truth_delay(config: BacktestConfig, target: pd.DataFrame) -> int:
     """Return the backtest's truth delay $D$, in days.
 
     Parameters
     ----------
     config : BacktestConfig
-        Gives a fixed `truth_delay`, or `truth_level` and `skip_origins`
-        to estimate it with (`reporting_delay`).
+        Gives a fixed `truth_delay`, or `truth_level` to estimate it with
+        (`reporting_delay`), less a cumulative first release under
+        `max_delay` (`truth_skip`).
     target : pandas.DataFrame
         The tidy target table.
 
@@ -740,7 +765,7 @@ def resolve_truth_delay(config: BacktestConfig, target: pd.DataFrame) -> int:
     if config.truth_delay is not None:
         return config.truth_delay
     real = target.loc[target["kind"] == "real"]
-    delay = reporting_delay(real, config.truth_level, config.skip_origins)
+    delay = reporting_delay(real, config.truth_level, truth_skip(real, config))
     if delay is None:
         raise ValueError(
             f"No age has {config.truth_level:.0%} of the national count "

@@ -598,14 +598,15 @@ def test_fit_store_plan_takes_origins(tmp_path: Path) -> None:
 def test_fit_store_plan_refuses_an_origin_it_does_not_fit(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # 2026-08-18 is in `[forecast] skip_origins`. Planning it silently
-    # gave "0 of 0 fits to make", which `await_fits` read as all present.
+    # 2026-08-18 and 2026-10-09 come before the first origin. Planning
+    # one silently gave "0 of 0 fits to make", which `await_fits` read as
+    # all present.
     from bdbvhub.cli import main
 
     args = ["fit-store", "plan", "--store", str(tmp_path / "store")]
-    args += ["--models", "renewal", "--origins", "2026-08-18"]
+    args += ["--models", "renewal", "--origins", "2026-10-09"]
     assert main(args) == 1
-    assert "2026-08-18" in capsys.readouterr().err
+    assert "2026-10-09" in capsys.readouterr().err
 
 
 def test_fit_store_unpack_says_when_the_store_has_no_fit(

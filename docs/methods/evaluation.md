@@ -87,14 +87,15 @@ In leave-one-province-out, a week is complete when it ended at least 3 weeks bef
 
 ## Real releases
 
-Each real release with a later release is an origin, except the first, 2026-08-18 (`skip_origins` in `packages/nowcastbdbv/config/backtest.toml`).
-That release has no delay file, so the renewal models fell back on their prior delay there.
+Each real release with a later release is an origin from the first release with at least two usable releases up to it (`nowcasteval.backtest.backtest_origins`).
+A cumulative first release ([Data](../data.md)) is not usable, so the first origin is 2026-10-17.
+That first release, 2026-08-18, has no delay file.
 It is also 50 days before the next release, and its weeks three or more weeks old hold 88% to 97% of the counts the 2026-11-08 release gives them, against 93% to 102% in the releases between.
 It stays in the data of later origins.
 The random walk models forecast from the releases up to the origin only.
 The renewal models' stored forecasts from the origin are scored with them.
 So are hub teams' forecasts for a round, at the latest release serving it.
-A model that cannot forecast from an origin, such as a random walk model with only one release, is listed with no forecasts there.
+A model that cannot forecast from an origin is listed with no forecasts there.
 Two targets are scored.
 
 **Reported.** The count each later release $o'$ shows for every forecast week it reports.

@@ -73,9 +73,9 @@ from nowcastbdbv.data.zones import ZoneData, load_zone_data
 from nowcastbdbv.zones import ZoneForecasts
 from nowcasteval.backtest import (
     BacktestConfig,
+    backtest_origins,
     load_config,
     merge_by_model,
-    real_vintages,
     run_forecasts,
 )
 from nowcastutils.base import SAMPLE_COLUMNS, ForecastModel, ForecastTask
@@ -542,8 +542,8 @@ def origin_tasks(
     submission forecasts its vintage's own round, or the next round when
     no new release came, from the stored fit. A stored task is asked for
     final counts only (no `report_by`), so it holds no release after its
-    origin. Releases in `config.skip_origins`
-    are not origins, but stay in the later tasks' histories.
+    origin. The origins are `nowcasteval.backtest.backtest_origins`;
+    earlier releases stay in the later tasks' histories.
 
     Parameters
     ----------
@@ -569,8 +569,7 @@ def origin_tasks(
             NEXT_ROUND_WEEKS,
             zones=zones,
         )[0]
-        for v in real_vintages(target)
-        if v not in config.skip_origins
+        for v in backtest_origins(target, config)
     }
 
 

@@ -9,7 +9,8 @@ Every registered model forecasts every task.
 Real forecasts are scored by `nowcasteval.nowcast` on the
 count each later release reported.
 
-Every real vintage but the latest is backtested.
+Every origin but the latest is backtested: each real vintage with at
+least two usable releases up to it (`backtest_origins`).
 `truth_changes` shows how much the truth moved between vintages.
 """
 
@@ -39,9 +40,11 @@ from nowcastutils.base import (
     check_samples,
 )
 from nowcastutils.dates import as_date
+from nowcastutils.releases import origin_releases
 
 __all__ = [
     "BacktestConfig",
+    "backtest_origins",
     "check_distinct",
     "energy_tasks",
     "for_scoring",
@@ -106,9 +109,6 @@ class BacktestConfig:
         release the BVD variant may use
         (`nowcastrenewal.bvd.select_release`). None leaves the BVD
         module's own default.
-    skip_origins : tuple of str
-        Real releases that are not backtest origins. They stay in the
-        histories of later origins.
     truth_delay : int, optional
         $D$, in days: the release backtest scores each week's complete
         target on the first release whose cut-off is at least $D$ days
@@ -130,7 +130,6 @@ class BacktestConfig:
     complete_after_weeks: int = 0
     sampler: dict[str, Any] = field(default_factory=dict)
     bvd_max_rhat: float | None = None
-    skip_origins: tuple[str, ...] = ()
     truth_delay: int | None = None
     truth_level: float = TRUTH_LEVEL
     max_delay: int | None = None
@@ -210,7 +209,6 @@ def load_config(
         max_delay=(
             int(fc["max_delay"]) if fc.get("max_delay") is not None else None
         ),
-        skip_origins=tuple(str(d) for d in sp.get("skip_origins", ())),
         truth_delay=_truth_delay(sp.get("truth_delay", "auto")),
         truth_level=_truth_level(sp.get("truth_level", TRUTH_LEVEL)),
     )
@@ -541,6 +539,31 @@ def energy_tasks(
     )
     out["truth_vintage"] = truth_date
     return out
+
+
+def backtest_origins(target: pd.DataFrame, config: BacktestConfig) -> list[str]:
+    """List the real vintages forecasting starts from, oldest first.
+
+    Each is a real vintage with at least two usable releases up to it, a
+    cumulative first release under the config's `max_delay` not counted
+    (`nowcastutils.releases.origin_releases`). Every model, the fit
+    store and the scores use these origins. Earlier vintages stay in the
+    histories of later origins.
+
+    Parameters
+    ----------
+    target : pandas.DataFrame
+        Target rows, with `kind`, `vintage` and `cutoff`.
+    config : BacktestConfig
+        Gives `max_delay`.
+
+    Returns
+    -------
+    list of str
+        The origins, the latest real vintage included.
+    """
+    real = target.loc[target["kind"] == "real"]
+    return origin_releases(real, config.max_delay)
 
 
 def real_vintages(target: pd.DataFrame) -> list[str]:
