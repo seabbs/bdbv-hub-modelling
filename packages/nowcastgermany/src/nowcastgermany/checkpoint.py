@@ -18,7 +18,9 @@ BDBV is held out for the paper, so no BDBV rows are scored here.
 
 A German unit splits its chunks of dates over `SCORE_WORKERS` worker
 processes (`score_workers`), its rule's threads; each chunk is forecast
-as one process would, so the rows are the same.
+as one process would, so the rows are the same. On CUDA it forecasts in
+its own process, which holds the rule's one GPU. A worker exits when its
+coordinator does, which stops its workers on SIGTERM.
 
 Relative scores divide by randomwalknowcast's on the cells every model
 and checkpoint of a level made. Every score comes from
@@ -43,8 +45,10 @@ import dataclasses
 import gc
 import json
 import os
+import signal
 import subprocess
 import sys
+import threading
 import time
 import tomllib
 from collections.abc import Iterator, Mapping, Sequence
@@ -347,8 +351,11 @@ def score_workers() -> int:
     """Return the worker processes a German unit splits its dates over.
 
     `SCORE_WORKERS` (`WORKERS_ENV`), else one: the unit forecasts in its
-    own process.
+    own process. One on CUDA (`DEVICE`), where the rule claims one GPU
+    and each worker would claim its memory.
     """
+    if os.environ.get("DEVICE") == "cuda":
+        return 1
     return max(1, int(os.environ.get(WORKERS_ENV) or 1))
 
 
@@ -562,6 +569,38 @@ class _Unit:
 _TRIANGLE: list[pd.DataFrame] = []
 """A worker process's German triangle, read once (`_start_worker`)."""
 
+PARENT_POLL: Final = 1.0
+"""Seconds between a worker's checks that its coordinator is alive."""
+
+PR_SET_PDEATHSIG: Final = 1
+"""Linux's `prctl` option to signal a process when its parent exits."""
+
+
+def _watch_parent(parent: int) -> None:
+    """Exit this worker when its coordinator, process `parent`, has gone.
+
+    A daemon thread polls the parent every `PARENT_POLL` seconds, so a
+    coordinator killed outright (SIGKILL) leaves no worker forecasting
+    on. Linux also kills the worker as its parent exits (`prctl`).
+    """
+    if sys.platform == "linux":
+        import ctypes
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
+
+    def watch() -> None:
+        while os.getppid() == parent:
+            time.sleep(PARENT_POLL)
+        os._exit(1)
+
+    threading.Thread(target=watch, name="parent-watch", daemon=True).start()
+
+
+def _stop(signum: int, _frame: Any) -> None:
+    """Stop the coordinator on `signum` as on an error: its workers too."""
+    raise SystemExit(128 + signum)
+
 
 def _start_worker(
     label: str,
@@ -569,11 +608,16 @@ def _start_worker(
     path: Path,
     counter: Any,
     workers: int,
+    parent: int,
 ) -> None:
-    """Set up a worker: its checkpoint, its own cores, and the triangle."""
+    """Set up a worker: its checkpoint, its own cores, and the triangle.
+
+    It exits when its coordinator, process `parent`, does.
+    """
     from nowcastgermany.data import hub_triangle
     from nowcastutils.devices import allowed_cpus
 
+    _watch_parent(parent)
     _pin(label, segment)
     # Looked up, not named: mypy checks `os` as each platform has it.
     pin = getattr(os, "sched_setaffinity", None)
@@ -650,7 +694,9 @@ def _chunk_results(
 
     In this process with one worker; else over `workers` processes, each
     with its share of the job's threads (`worker_threads`) and cores.
-    `start` is the label, segment and triangle path a worker loads.
+    `start` is the label, segment and triangle path a worker loads. On
+    an error, or SIGTERM in the main thread, the workers are stopped
+    without finishing their chunks.
     """
     if workers <= 1 or len(chunks) <= 1:
         for need, chunk in chunks:
@@ -666,22 +712,31 @@ def _chunk_results(
         os.environ[var] = str(worker_threads(threads, workers))
     context = multiprocessing.get_context(START_METHOD)
     counter = context.Value("i", 0)
-    with ProcessPoolExecutor(
-        max_workers=workers,
-        mp_context=context,
-        initializer=_start_worker,
-        initargs=(*start, counter, workers),
-    ) as pool:
-        futures = {
-            pool.submit(_worker_chunk, unit, need, chunk): (need, chunk)
-            for need, chunk in chunks
-        }
-        try:
-            for done in as_completed(futures):
-                yield futures[done], done.result()
-        except BaseException:
-            pool.shutdown(cancel_futures=True)
-            raise
+    main = threading.current_thread() is threading.main_thread()
+    before = signal.signal(signal.SIGTERM, _stop) if main else None
+    try:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=context,
+            initializer=_start_worker,
+            initargs=(*start, counter, workers, os.getpid()),
+        ) as pool:
+            futures = {
+                pool.submit(_worker_chunk, unit, need, chunk): (need, chunk)
+                for need, chunk in chunks
+            }
+            try:
+                for done in as_completed(futures):
+                    yield futures[done], done.result()
+            except BaseException:
+                # Running chunks are not waited for: each may take minutes.
+                for proc in list(pool._processes.values()):
+                    proc.terminate()
+                pool.shutdown(wait=False, cancel_futures=True)
+                raise
+    finally:
+        if main:
+            signal.signal(signal.SIGTERM, before or signal.SIG_DFL)
 
 
 def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:

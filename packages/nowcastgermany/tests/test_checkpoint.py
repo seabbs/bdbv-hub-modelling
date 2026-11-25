@@ -973,9 +973,10 @@ def test_a_worker_pins_itself_to_its_share_of_the_unit_s_cores(
     monkeypatch.setattr(devices, "allowed_cpus", lambda: [4, 5, 6, 7])
     monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+    monkeypatch.setattr(ck, "_watch_parent", lambda _parent: None)
     counter = multiprocessing.Value("i", 0)
     for _ in range(2):
-        ck._start_worker("abc", None, tmp_path, counter, 2)
+        ck._start_worker("abc", None, tmp_path, counter, 2, os.getpid())
     assert pinned == [[4, 5], [6, 7]]
     assert os.environ["BDBV_CHRONOS_FT"] == "abc"
 
