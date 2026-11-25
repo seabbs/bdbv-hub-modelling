@@ -65,10 +65,6 @@ still runs. `finetune` lists its batches itself each time a run plans."""
 
 def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
     """Return the Snakemake run of `targets` on this machine's budget."""
-    extra = []
-    if "finetune" in targets:
-        # One segment a run, so the next run plans afresh.
-        extra += ["--config", "next_segment_only=True"]
     return [
         "nice",
         "-n",
@@ -80,7 +76,6 @@ def _snakemake(cfg: Mapping[str, str], targets: list[str]) -> list[str]:
         "snakemake",
         *targets,
         *compute.args(cfg),
-        *extra,
     ]
 
 

@@ -193,11 +193,3 @@ def test_prefixes_need_a_spare_batch_but_the_last():
     assert got == [20, 40]
     got = segments.trainable([80], 80, 20, order, lambda n: n == 80, kept)
     assert got == [80]
-
-
-def test_next_segment_only_asks_for_the_saved_and_the_next():
-    def saved(n):
-        return n == 100
-
-    assert segments.to_train([100, 200, 400], saved, False) == [100, 200, 400]
-    assert segments.to_train([100, 200, 400], saved, True) == [100, 200]

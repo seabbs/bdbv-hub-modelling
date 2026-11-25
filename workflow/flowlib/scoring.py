@@ -244,12 +244,12 @@ class Scoring:
         """Return the run's checkpoints a target asks for.
 
         On a machine that trains (`finetune` in TARGETS) those saved and
-        those this pass trains (`to_train`), so a table or report pulls
+        those within reach (`trainable`), so a table or report pulls
         the training and scoring it needs; elsewhere those saved, so a
         machine that only scores never trains.
         """
         if "finetune" in str(self.local.get("TARGETS", "")).split():
-            return self.training.to_train(run)
+            return self.training.trainable(run)
         prefixes = self.training.runs[run].ft["prefixes"]
         return [n for n in prefixes if self.training.saved(run, n)]
 
@@ -292,7 +292,7 @@ class Scoring:
         units = [
             f"{self.run_scores_dir(run)}/{GERMANY_UNIT}/n{n}.done"
             for run in self.training.trained_runs()
-            for n in self.training.to_train(run)
+            for n in self.training.trainable(run)
         ]
         return units + self.references()
 

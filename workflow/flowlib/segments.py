@@ -228,14 +228,3 @@ def trainable(
         for n in prefixes
         if saved(n) or reachable(n + batch * (n < outbreaks), order, kept)
     ]
-
-
-def to_train(
-    prefixes: Sequence[int], saved: Callable[[int], bool], next_only: bool
-) -> list[int]:
-    """Return the prefixes to ask for: all, or the saved and the next."""
-    if not next_only:
-        return list(prefixes)
-    done = [n for n in prefixes if saved(n)]
-    rest = [n for n in prefixes if n not in done]
-    return done + rest[:1]

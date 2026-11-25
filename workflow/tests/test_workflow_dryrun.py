@@ -1011,35 +1011,18 @@ def test_a_no_bias_control_is_a_run_in_its_own_folder(tmp_path):
     assert "--series-bias" not in out.stdout
 
 
-def test_a_tick_trains_only_the_next_segment(tmp_path):
-    # So each run ends after one segment and the next run plans afresh:
-    # new rounds, new releases, a checkpoint to score.
-    jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
-    assert jobs["train_segment"] == 1
+def test_a_run_trains_the_next_segment_beside_the_scoring(tmp_path):
+    # n500 trains once n250 is saved, while n250 is scored, not a run
+    # later.
+    jobs = dry(tmp_path, "finetune", config=FT)
+    assert jobs["train_segment"] == 2
+    assert jobs["score_run_germany"] == 2
 
 
-def test_a_tick_after_n250_trains_n500(tmp_path):
+def test_a_run_after_n250_trains_n500(tmp_path):
     _checkpoint(tmp_path, 250)
-    jobs = dry(tmp_path, "finetune", config={**FT, "next_segment_only": True})
+    jobs = dry(tmp_path, "finetune", config=FT)
     assert jobs["train_segment"] == 1
-
-
-def test_a_tick_does_not_train_on_to_the_n1000_check(tmp_path):
-    # The n1000 report needs n1000, so it must not pull the chain there.
-    config = {
-        **FT,
-        "next_segment_only": True,
-        "rounds": [1, 2, 3],
-        "finetune": {
-            **FT["finetune"],
-            "prefixes": [250, 500, 1000],
-            "outbreaks": 1000,
-            "rounds": [2, 3],
-        },
-    }
-    jobs = dry(tmp_path, "finetune", config=config)
-    assert jobs["train_segment"] == 1
-    assert "checkpoint_check" not in jobs
 
 
 def _rounds_host(tmp_path, rounds):
@@ -1066,9 +1049,7 @@ def test_a_fresh_listing_keeps_the_checkpoints_saved(tmp_path):
     _rounds_host(tmp_path, {1: range(30100, 30140), 2: range(30200, 30240)})
     _checkpoint(tmp_path, 250)
     dry(tmp_path, "finetune", config=REMOTE)
-    jobs = dry(
-        tmp_path, "finetune", config={**REMOTE, "next_segment_only": True}
-    )
+    jobs = dry(tmp_path, "finetune", config=REMOTE)
     assert jobs["train_segment"] == 1
 
 
