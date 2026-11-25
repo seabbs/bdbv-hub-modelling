@@ -52,7 +52,20 @@ reference_parts <- function(input) {
     delay = 0:(D - 1)
   )
   obs[, report_date := reference_date + delay][, delay := NULL]
-  obs <- obs[report_date <= max(reference_date)][, confirm := 0L]
+  # Reports by cell, in the order above, or none; then cumulative by
+  # reference date, as epinowcast takes them.
+  counts <- if (is.null(input$new_counts)) 0L else as.integer(input$new_counts)
+  obs[, confirm := counts]
+  obs <- obs[report_date <= max(reference_date)]
+  obs[, confirm := cumsum(confirm), by = .(place, age, reference_date)]
+  if (!is.null(input$missing_counts)) {
+    # Reports with no reference date, by report date, cumulative.
+    missing <- CJ(place = places, age = ages, report_date = d0 + 0:(input$n_days - 1))
+    missing[, confirm := as.integer(input$missing_counts)]
+    missing[, confirm := cumsum(confirm), by = .(place, age)]
+    missing[, reference_date := as.IDate(NA)]
+    obs <- rbind(obs, missing, use.names = TRUE)
+  }
   pobs <- suppressMessages(suppressWarnings(epinowcast::enw_preprocess_data(
     obs, by = c("place", "age"), max_delay = D
   )))
@@ -168,17 +181,23 @@ reference_parts <- function(input) {
 
 # Runs epinowcast's model at the pin with parameters `p` fixed, for the
 # modules given, and latent expected counts `lambda` (days by strata).
-reporting_run <- function(pobs, reference, report, expectation, p, lambda) {
+# With `family`, the observation model, `missing`, the missingness formula,
+# and `likelihood`, whether the run also returns the pointwise log
+# likelihood (`log_lik`, by snapshot).
+reporting_run <- function(pobs, reference, report, expectation, p, lambda,
+                          family = "poisson", missing = ~0,
+                          likelihood = FALSE) {
   log_l <- log(lambda)
   p$expr_lelatent_int <- matrix(log_l[1, ], nrow = 1)
   capture <- function(data, init, ...) data.table(data = list(data), init = list(init))
   prepared <- epinowcast::epinowcast(
     data = pobs, reference = reference,
     report = report, expectation = expectation,
-    missing = epinowcast::enw_missing(formula = ~0, data = pobs),
-    obs = epinowcast::enw_obs(family = "poisson", data = pobs),
+    missing = epinowcast::enw_missing(formula = missing, data = pobs),
+    obs = epinowcast::enw_obs(family = family, data = pobs),
     fit = epinowcast::enw_fit_opts(
-      sampler = capture, nowcast = TRUE, pp = TRUE, likelihood = FALSE
+      sampler = capture, nowcast = TRUE, pp = TRUE, likelihood = likelihood,
+      output_loglik = likelihood
     ),
     model = NULL
   )
@@ -209,6 +228,48 @@ reporting_run <- function(pobs, reference, report, expectation, p, lambda) {
     show_messages = FALSE, show_exceptions = FALSE
   )))
   list(fit = fit, data = data, model = model)
+}
+
+# A run's draw of a variable in its declared shape, the draws dimension
+# dropped; NULL where the model has none.
+reporting_draw <- function(fit, name) {
+  d <- posterior::draws_of(posterior::as_draws_rvars(fit$draws(name))[[name]])
+  dd <- dim(d)
+  if (length(d) == 0) NULL else if (length(dd) <= 2) as.numeric(d) else array(d, dd[-1])
+}
+
+# Every cell's log expected reports in a run, with the model's own
+# `expected_obs_from_snaps` on its transformed parameters, as its
+# generated quantities call it (before any missingness).
+reporting_log_expected <- function(run) {
+  data <- run$data
+  draw <- function(name) reporting_draw(run$fit, name)
+  target <- tempfile("enw-fns-")
+  dir.create(target)
+  suppressMessages(epinowcast::enw_stan_to_r(
+    c("hazard.stan", "combine_logit_hazards.stan", "expected_obs.stan",
+      "expected_obs_from.stan", "filt_obs_indexes.stan",
+      "apply_missing_reference_effects.stan", "log_expected_by_report.stan"),
+    verbose = FALSE, target_dir = target
+  ))
+  exp_lobs <- draw("exp_lobs")  # strata by days
+  refp_lh <- if (data$model_refp > 0) draw("refp_lh") else matrix(0, data$dmax, 1)
+  refnp_lh <- if (data$model_refnp > 0) draw("refnp_lh") else numeric(0)
+  srdlh <- draw("srdlh")
+  if (is.null(srdlh)) srdlh <- numeric(0)
+  ref_as_p <- as.integer(!(data$model_rep > 0 || data$model_refp == 0))
+  expected_obs_from_snaps(
+    1L, data$s, lapply(seq_len(nrow(exp_lobs)), function(g) exp_lobs[g, ]),
+    reporting_nested(data$rep_findex), as.numeric(srdlh),
+    matrix(refp_lh, nrow = data$dmax), as.integer(data$refp_findex),
+    as.integer(data$model_refp), as.integer(data$rep_fncol), ref_as_p,
+    as.integer(data$sdmax), as.integer(data$csdmax), as.integer(data$sg),
+    as.integer(data$st), as.integer(data$csdmax[data$s]), as.numeric(refnp_lh),
+    as.integer(data$model_refnp), as.integer(data$sdmax),
+    as.integer(data$csdmax), as.integer(data$rep_agg_p),
+    reporting_nested(data$rep_agg_n_selected),
+    reporting_nested(data$rep_agg_selected_idx)
+  )
 }
 
 reference_case <- function(input) {
@@ -314,37 +375,8 @@ expectation_case <- function(input) {
   lambda <- exp(t(as.matrix(input$log_lambda)))
   run <- reporting_run(pobs, reference, report, expectation, p, lambda)
   data <- run$data
-  draw <- function(name) {
-    d <- posterior::draws_of(posterior::as_draws_rvars(run$fit$draws(name))[[name]])
-    # One draw: drop the draws dimension.
-    dd <- dim(d)
-    if (length(d) == 0) NULL else if (length(dd) <= 2) as.numeric(d) else array(d, dd[-1])
-  }
-  target <- tempfile("enw-fns-")
-  dir.create(target)
-  suppressMessages(epinowcast::enw_stan_to_r(
-    c("hazard.stan", "combine_logit_hazards.stan", "expected_obs.stan",
-      "expected_obs_from.stan"),
-    verbose = FALSE, target_dir = target
-  ))
-  exp_lobs <- draw("exp_lobs")  # strata by days
-  refp_lh <- if (data$model_refp > 0) draw("refp_lh") else matrix(0, data$dmax, 1)
-  refnp_lh <- if (data$model_refnp > 0) draw("refnp_lh") else numeric(0)
-  srdlh <- draw("srdlh")
-  if (is.null(srdlh)) srdlh <- numeric(0)
   ref_as_p <- as.integer(!(data$model_rep > 0 || data$model_refp == 0))
-  log_exp <- expected_obs_from_snaps(
-    1L, data$s, lapply(seq_len(nrow(exp_lobs)), function(g) exp_lobs[g, ]),
-    reporting_nested(data$rep_findex), as.numeric(srdlh),
-    matrix(refp_lh, nrow = data$dmax), as.integer(data$refp_findex),
-    as.integer(data$model_refp), as.integer(data$rep_fncol), ref_as_p,
-    as.integer(data$sdmax), as.integer(data$csdmax), as.integer(data$sg),
-    as.integer(data$st), as.integer(data$csdmax[data$s]), as.numeric(refnp_lh),
-    as.integer(data$model_refnp), as.integer(data$sdmax),
-    as.integer(data$csdmax), as.integer(data$rep_agg_p),
-    reporting_nested(data$rep_agg_n_selected),
-    reporting_nested(data$rep_agg_selected_idx)
-  )
+  log_exp <- reporting_log_expected(run)
   list(
     groups = meta[, .(.group, place, age)][!duplicated(.group)],
     dates = as.character(sort(unique(meta$date))),
@@ -358,4 +390,61 @@ expectation_case <- function(input) {
     sg = data$sg, st = data$st, sdmax = data$sdmax,
     log_expected = as.numeric(log_exp)
   )
+}
+
+# The observation model and missing reference dates through epinowcast at
+# the pin: the reference module (`reference_parts`) on the case's reports,
+# no report module, the latent expected counts `input$log_lambda` and the
+# case's observation family with `input$phi` (as `sqrt_phi`), run with
+# fixed parameters and the likelihood on. With `input$missing_prop`, a
+# missingness model of one intercept (`enw_missing(~1)`) on the case's
+# reports with no reference date, at that proportion.
+# Returns the log likelihood by snapshot (`log_lik`), each cell's log
+# expected reports before missingness and, with missingness, the
+# proportion and the log expected reports with no reference date by
+# report date, from the model's own functions.
+observation_case <- function(input) {
+  parts <- reference_parts(input)
+  for (name in names(parts)) assign(name, parts[[name]])
+  missing <- !is.null(input$missing_prop)
+  expectation <- epinowcast::enw_expectation(
+    r = ~1, generation_time = 1, observation = ~1, data = pobs
+  )
+  if (input$family != "poisson") p$sqrt_phi <- array(1 / sqrt(input$phi))
+  if (missing) p$miss_int <- array(qlogis(input$missing_prop))
+  lambda <- exp(t(as.matrix(input$log_lambda)))
+  run <- reporting_run(
+    pobs, reference, epinowcast::enw_report(data = pobs), expectation, p,
+    lambda, family = input$family, missing = if (missing) ~1 else ~0,
+    likelihood = TRUE
+  )
+  data <- run$data
+  log_exp <- reporting_log_expected(run)
+  out <- list(
+    groups = meta[, .(.group, place, age)][!duplicated(.group)],
+    dates = as.character(sort(unique(meta$date))),
+    refp_cols = if (parametric) colnames(rd$refp_fdesign) else NULL,
+    refnp_cols = if (hazard) colnames(rd$refnp_fdesign) else NULL,
+    parameters = p,
+    sg = data$sg, st = data$st, sdmax = data$sdmax,
+    log_expected = as.numeric(log_exp),
+    log_lik = reporting_draw(run$fit, "log_lik")
+  )
+  if (missing) {
+    lprop <- reporting_draw(run$fit, "miss_ref_lprop")
+    by_ref <- apply_missing_reference_effects(
+      1L, data$s, log_exp, as.integer(data$sdmax), as.integer(data$csdmax),
+      lprop
+    )
+    reps <- epinowcast:::enw_reps_with_complete_refs(
+      pobs$new_confirm[[1]], max_delay = data$dmax, by = ".group"
+    )
+    out$missing_prop <- exp(lprop)
+    out$missing_log_expected <- log_expected_by_report(
+      by_ref, reporting_nested(data$obs_by_report)
+    )
+    out$missing_group <- reps$.group
+    out$missing_date <- as.character(reps$report_date)
+  }
+  out
 }
