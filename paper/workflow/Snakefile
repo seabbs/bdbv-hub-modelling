@@ -180,53 +180,57 @@ rule render:
         "exec >{log} 2>&1; cd paper && quarto render main.qmd && quarto render si.qmd"
 
 
-rule germany_fetch:
-    output:
-        TRIANGLE,
-    log:
-        f"{R}/logs/germany_fetch.log",
-    # Needs the network, git or quarto: runs on the driver's host.
-    localrule: True
-    conda:
-        TOOLS_ENV
-    params:
-        germany=GERMANY_CLI,
-        germany_config=GERMANY["config"],
-        germany_data=lambda w, output: Path(output[0]).parent,
-    shell:
-        "exec >{log} 2>&1; "
-        "{params.germany} fetch --config {params.germany_config} "
-        "--out {params.germany_data}"
+# The German benchmark: its data and its development forecasts. Pages
+# makes neither (`host_outputs: false`); its Site build fetches the data
+# and stacks the stored forecasts before the paper runs.
+if FLOW.host_outputs:
 
+    rule germany_fetch:
+        output:
+            TRIANGLE,
+        log:
+            f"{R}/logs/germany_fetch.log",
+        # Needs the network, git or quarto: runs on the driver's host.
+        localrule: True
+        conda:
+            TOOLS_ENV
+        params:
+            germany=GERMANY_CLI,
+            germany_config=GERMANY["config"],
+            germany_data=lambda w, output: Path(output[0]).parent,
+        shell:
+            "exec >{log} 2>&1; "
+            "{params.germany} fetch --config {params.germany_config} "
+            "--out {params.germany_data}"
 
-rule germany_development:
-    input:
-        TRIANGLE,
-        FINETUNED,
-    output:
-        f"{GERMANY['results']}/paper-forecasts.csv.gz",
-    log:
-        f"{R}/logs/germany_development.log",
-    benchmark:
-        f"{R}/benchmarks/germany_development/germany_development.tsv"
-    conda:
-        TOOLS_ENV
-    threads: FORECAST.threads
-    resources:
-        gpu=FORECAST.gpu,
-    params:
-        env=FORECAST.env,
-        ft=FT_EXPORT,
-        germany=GERMANY_CLI,
-        germany_root_config=GERMANY["config"],
-        args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
-        out=lambda w, output: Path(output[0]).parent,
-    shell:
-        "exec >{log} 2>&1; {params.ft} {params.env} "
-        "{params.germany} backtest {params.args} --out {params.out} && "
-        "{params.germany} teams {params.args} --out {params.out} && "
-        "{params.germany} paper --config {params.germany_root_config} "
-        "--results {params.out}"
+    rule germany_development:
+        input:
+            TRIANGLE,
+            FINETUNED,
+        output:
+            f"{GERMANY['results']}/paper-forecasts.csv.gz",
+        log:
+            f"{R}/logs/germany_development.log",
+        benchmark:
+            f"{R}/benchmarks/germany_development/germany_development.tsv"
+        conda:
+            TOOLS_ENV
+        threads: FORECAST.threads
+        resources:
+            gpu=FORECAST.gpu,
+        params:
+            env=FORECAST.env,
+            ft=FT_EXPORT,
+            germany=GERMANY_CLI,
+            germany_root_config=GERMANY["config"],
+            args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
+            out=lambda w, output: Path(output[0]).parent,
+        shell:
+            "exec >{log} 2>&1; {params.ft} {params.env} "
+            "{params.germany} backtest {params.args} --out {params.out} && "
+            "{params.germany} teams {params.args} --out {params.out} && "
+            "{params.germany} paper --config {params.germany_root_config} "
+            "--results {params.out}"
 
 
 # Only a paper run asks for this, so development never runs it.
