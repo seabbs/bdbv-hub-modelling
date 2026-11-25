@@ -33,6 +33,7 @@ import pandas as pd
 from nowcasteval import labels
 from nowcasteval.scoring import wis_quantile
 
+from . import paperstyle
 from .paperstyle import WIS_PARTS
 from .rows import num, sources
 from .runs import INTERIM, Classifier, Reference, Run, split_label
@@ -55,6 +56,29 @@ TRUTH_FILE = "truth.csv.gz"
 """A dataset's truth context file (`nowcastgermany.checkpoint.TRUTH_FILE`)."""
 
 TARGET = "7day"
+
+RUN_MODEL = "foundation"
+"""The model a run's checkpoint is in its score files."""
+
+
+def variant_id(model: str, run_hash: str) -> str:
+    """Return the series id of a checkpoint's variant model.
+
+    A fine-tuned model other than `RUN_MODEL` (`labels.FINETUNED`, such
+    as `foundation_baselinenowcast`) in a checkpoint's files is a series
+    of its own, `<model>:<hash>`.
+    """
+    return f"{model}:{run_hash}"
+
+
+def variant_of(series: str) -> tuple[str, str] | None:
+    """Return a variant series' (model, checkpoint hash), else None."""
+    model, sep, run_hash = series.partition(":")
+    if sep and model in labels.FINETUNED and model != RUN_MODEL:
+        return model, run_hash
+    return None
+
+
 """The target of rows that name none (files scored before the column)."""
 
 
@@ -166,7 +190,15 @@ def read_file(
                 if series is None and ref_folder:
                     series = f"model:{model}"
                 elif series is not None and series not in refs:
-                    series = run_hash
+                    # A checkpoint's own model, or one of its variants as
+                    # a series of its own; any other model is not shown.
+                    series = (
+                        run_hash
+                        if model == RUN_MODEL
+                        else variant_id(model, run_hash)
+                        if model in labels.FINETUNED
+                        else None
+                    )
                 by_model[model] = series
             series = by_model[model]
             value = num(r.get("value"))
@@ -270,6 +302,13 @@ def horizons(
         for name, span in (spec.get("ranges") or {}).items()
     }
     return days, ranges, spec.get("default")
+
+
+def held_out_from(german_config: Path | str) -> str:
+    """Return a German config's split date, its held-out half's first date."""
+    from nowcastgermany.evaluation import load_germany_config
+
+    return str(load_germany_config(ROOT / german_config).split_date)
 
 
 @functools.lru_cache(maxsize=1 << 16)
@@ -448,8 +487,12 @@ def build(
     unit: str | None = None,
     days: Range | None = None,
     ranges: Mapping[str, Range] | None = None,
+    until: str | None = None,
 ) -> dict[str, Any] | None:
     """Return every location's nowcasts by series, target, source, origin.
+
+    `until` is the first nowcast date of a held-out half (`held_out_from`):
+    no file of that date or later is read.
 
     `days` and `ranges` are the horizon's days every model is shown over
     and the horizon control's choices (`digest`).
@@ -489,6 +532,8 @@ def build(
             continue
         for path in sorted(folder.glob("*.csv.gz")):
             origin = path.name.removesuffix(".csv.gz")
+            if until is not None and origin >= until:
+                continue
             if ref:
                 origins.add(origin)
             try:
@@ -608,6 +653,7 @@ def cached_build(
     unit: str | None = None,
     days: Range | None = None,
     ranges: Mapping[str, Range] | None = None,
+    until: str | None = None,
 ) -> dict[str, Any] | None:
     """Return `build`'s result, reused while no file of the folders changes."""
     cache = Path(cache)
@@ -618,6 +664,7 @@ def cached_build(
         shown,
         days,
         tuple(sorted((ranges or {}).items())),
+        until,
     )
     if store.get("sig") != sig or "built" not in store:
         store["built"] = build(
@@ -632,6 +679,7 @@ def cached_build(
             unit,
             days,
             ranges,
+            until,
         )
         store["sig"] = sig
     return store["built"]
@@ -671,8 +719,8 @@ def meta(
     """Return each series' label, run, size and colour, in page order.
 
     References first, in their configured order, then other reference
-    models by name, then each run's checkpoints by size, in the run's
-    colour.
+    models by name and each checkpoint's variants by size, then each
+    run's checkpoints by size, in the run's colour.
     """
     which = Classifier(run_list, references, excluded)
     refs = {r.key: r for r in references}
@@ -698,6 +746,25 @@ def meta(
                     "run": "ref",
                     "n": 1,
                     "color": labels.NEUTRAL,
+                }
+            )
+        elif variant_of(s):
+            model, key = variant_of(s)
+            run = which.run_of(built["folders"].get(key, key))
+            if run is None:
+                continue
+            n = sizes.get(key)
+            # The run is named only when there are several.
+            name = f", {by_key[run].label}" if len(run_list) > 1 else ""
+            out.append(
+                {
+                    "id": s,
+                    "label": f"{labels.model_label(model)}{name}"
+                    + (f" n{n}" if n else ""),
+                    "run": "ref",
+                    "n": 2 + (n or 0),
+                    "color": paperstyle.model_colour(model),
+                    "dash": paperstyle.model_dash(model),
                 }
             )
         else:

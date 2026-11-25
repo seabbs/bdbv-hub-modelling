@@ -81,6 +81,8 @@ class Context:
     logs: dict[str, logs.RunLog] = field(default_factory=dict)
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
+    held_out_from: dict[str, str] = field(default_factory=dict)
+    """Each dataset's held-out half's first nowcast date: never read."""
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -133,6 +135,7 @@ class Context:
             unit=ds.get("unit") or key,
             days=days,
             ranges=ranges,
+            until=self.held_out_from.get(key),
         )
 
 
@@ -994,22 +997,33 @@ def tables_section(ctx: Context, info: Mapping[str, Any]) -> str:
     return "".join(out)
 
 
-def selector_data(ctx: Context, builts: Mapping[str, Any]) -> str:
-    """Return the shared run and reference selector's data."""
+def selector_data(
+    ctx: Context,
+    builts: Mapping[str, Any],
+    sizes: Mapping[str, int] | None = None,
+) -> str:
+    """Return the shared run and reference selector's data.
+
+    Other reference models and each checkpoint's variants are listed
+    after the configured references, off until picked.
+    """
     refs = [
         {"key": r.key, "label": r.label, "color": r.colour}
         for r in ctx.references
     ]
     for ds in ctx.datasets:
         built = builts.get(ds["key"])
-        for s in built["sets"] if built else ():
-            if s.startswith("model:") and not any(r["key"] == s for r in refs):
+        extra = (
+            nowcasts.meta(built, ctx.runs, ctx.references, sizes or {})
+            if built
+            else []
+        )
+        for m in extra:
+            s = m["id"]
+            other = s.startswith("model:") or nowcasts.variant_of(s)
+            if other and not any(r["key"] == s for r in refs):
                 refs.append(
-                    {
-                        "key": s,
-                        "label": s.removeprefix("model:"),
-                        "color": labels.NEUTRAL,
-                    }
+                    {"key": s, "label": m["label"], "color": m["color"]}
                 )
     shown = [r.key for r in ctx.runs] + [
         r.key for r in ctx.references if r.role in ("start", "baseline")
@@ -1093,8 +1107,8 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
         ("loss", "Loss", loss_section(ctx, live, st), True),
         ("bias", "Attention bias", bias_section(ctx, live, st), True),
         (
-            "levels",
-            "Validation loss by level and LoRA size",
+            "lora",
+            "LoRA update",
             level_loss_lora.section(ctx.runs, tip),
             True,
         ),
@@ -1105,7 +1119,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     tables = tables_section(ctx, info)
     parts.append(("tables", "Tables", tables, False))
     bar = f"{bar} <span class=mut>{datetime.now():%H:%M:%S}</span>"
-    return live, bar, selector_data(ctx, builts), parts
+    return live, bar, selector_data(ctx, builts, sizes), parts
 
 
 def also_training(ctx: Context, live: Run) -> str:
@@ -1132,7 +1146,7 @@ def also_training(ctx: Context, live: Run) -> str:
 NAV = {
     "status": "Status",
     "mailbox": "Activity",
-    "levels": "By level",
+    "lora": "LoRA",
 }
 """Short names in the top bar, where they differ from the section titles."""
 

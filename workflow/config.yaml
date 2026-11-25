@@ -276,12 +276,19 @@ dashboard:
     # (nowcasteval.labels: MODEL_LABELS, MODEL_STYLES).
     - key: zero
       paper_model: foundation_zeroshot
-      model: "^(?!randomwalknowcast)(?!.*_complete$)"
+      model: "^foundation_zeroshot$"
       checkpoint: zero-shot
       role: start
     - key: complete
       paper_model: foundation_zeroshot_complete
-      model: "_complete$"
+      model: "^foundation_zeroshot_complete$"
+      checkpoint: zero-shot
+    # Zero-shot on baselinenowcast's point nowcast, off until picked; each
+    # checkpoint's variants are series of their own beside it
+    # (flowlib.dashboard.nowcasts.variant_id).
+    - key: zero_baselinenowcast
+      paper_model: foundation_zeroshot_baselinenowcast
+      model: "^foundation_zeroshot_baselinenowcast$"
       checkpoint: zero-shot
     - key: rw
       paper_model: randomwalknowcast
@@ -301,12 +308,17 @@ dashboard:
   rule: own-quantile-wis_crps-1000-common
   # Held out of model development: BDBV (Ebola) is entirely held out for
   # the paper, so no panel, selector, table or mailbox line shows its
-  # scores or nowcasts.
+  # scores or nowcasts; so are the German held-out half and the grid's
+  # test round.
   # Datasets and score studies by key; mailbox lines matching `mail`.
   held_out:
     datasets: [bdbv]
     studies: [ebola]
     mail: "\\bebola\\b|\\bBDBV\\b(?![-_])"
+    # A dataset's held-out half, from its German config's split date: no
+    # nowcast date on or after it is read. The grid's test round
+    # (`grid_rounds.test_round`) is never listed with the simulations.
+    from: {germany: packages/nowcastgermany/config/germany.toml}
   # Mailbox lines shown (a regular expression).
   mail_filter: "slots|ckpt-scores|fm-finetune|sim round|workflow:"
   # How often the server rebuilds the nowcast panels' data (s).
