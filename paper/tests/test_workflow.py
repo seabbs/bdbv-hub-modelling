@@ -51,6 +51,7 @@ def _offline(tmp: Path, **extra) -> Path:
         # The workflow's runs and rounds are left out, as each is pending.
         "final_run": None,
         "rounds_dir": None,
+        "runs_dir": None,
         "evidence": None,
         **extra,
     }
@@ -343,7 +344,6 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
     # the runner's and the summary's input.
     run = tmp_path / "run"
     run.mkdir()
-    (run / "validation-curve.csv").write_text("")
     segment = run / "train" / f"n{WORKFLOW['finetune']['prefixes'][-1]}"
     segment.mkdir(parents=True)
     (segment / "settings.json").write_text('{"hash": "abcdef123456"}')

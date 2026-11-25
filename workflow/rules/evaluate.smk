@@ -211,21 +211,33 @@ rule validation_forecasts_base:
         "--device {params.device} > {log} 2>&1"
 
 
-rule validation_curve:
-    # The run's validation loss by level at the start and at each
-    # checkpoint, against simulations trained: the paper's fine-tune
-    # curve (flowlib.evaluations.validation_curve).
+rule run_progress:
+    # A run's fine-tuning progress tables from its own files, as they
+    # stand: losses by step, the 7-day check and the BDBV check by
+    # checkpoint, for its SI figure (flowlib.progress; the paper's
+    # progress_<run> rule).
     input:
-        validation_curve_inputs,
+        lambda wc: [
+            f
+            for n in run_prefixes(wc.run)
+            for f in [f"{train_dir(wc.run)}/n{n}/settings.json", *offloaded(wc.run, n)]
+        ],
     output:
-        f"{RUN}/validation-curve.csv",
+        loss=f"{RUN}/reports/progress/loss.csv",
+        seven_day=f"{RUN}/reports/progress/seven-day.csv",
+        bdbv=f"{RUN}/reports/progress/bdbv.csv",
     log:
-        f"{RUN}/logs/validation-curve.log",
+        f"{RUN}/logs/progress.log",
     localrule: True
     params:
         train=lambda wc: train_dir(wc.run),
-        prefixes=lambda wc: RUNS[wc.run].ft["prefixes"],
+        prefixes=lambda wc: run_prefixes(wc.run),
     run:
-        evaluations.write_validation_curve(
-            params.train, wildcards.run, params.prefixes, output[0]
+        progress.write_progress(
+            params.train,
+            params.prefixes,
+            FTC_DIR,
+            output.loss,
+            output.seven_day,
+            output.bdbv,
         )

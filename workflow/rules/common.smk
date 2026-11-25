@@ -16,6 +16,7 @@ from flowlib import (
     manifest,
     memory,
     notify,
+    progress,
     releases,
     rounds,
     scoring,
@@ -141,7 +142,6 @@ earlier_settings = TRAINING.earlier_settings
 evaluate_inputs_from = TRAINING.evaluate_inputs_from
 offloaded = TRAINING.offloaded
 held_out_key = TRAINING.held_out_key
-validation_curve_inputs = TRAINING.validation_curve_inputs
 check_report = TRAINING.check_report
 training_seeds = TRAINING.training_seeds
 held_range = TRAINING.held_range

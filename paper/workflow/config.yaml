@@ -11,20 +11,23 @@ host_outputs: true
 render: development
 studies: [synthetic, germany, ebola]
 # The paper's final fine-tuning run: its folder, a `runs` entry of the
-# workflow (workflow/config.yaml), under the machine's ROOT. Its validation
-# loss curve is the SI's (rule validation_curve), and every `_ft` model
-# loads its final checkpoint, train/n<last prefix>, whose release record
-# (published.json, rule publish_checkpoint) is an input of each rule that
-# runs one, so a new final checkpoint reruns them. Null leaves the run
-# out and the fine-tuned forecasts pending.
+# workflow (workflow/config.yaml), under the machine's ROOT. Every `_ft`
+# model loads its final checkpoint, train/n<last prefix>, whose release
+# record (published.json, rule publish_checkpoint) is an input of each
+# rule that runs one, so a new final checkpoint reruns them. Null leaves
+# the run out and the fine-tuned forecasts pending.
 final_run: $ROOT/runs/runa
+# The fine-tuning runs' folder under the machine's ROOT (the workflow's
+# runs): each run in `live_run` and `comparisons` has an SI progress figure
+# from its own reports (rule progress_<run>). Null leaves them out.
+runs_dir: $ROOT/runs
 # The simulation rounds' folder under the machine's ROOT (the workflow's
 # rounds): the SI's realism reads the grid's training rounds
 # (`grid_rounds.rounds`) and the German development half's statistics.
 # Null leaves the rounds out, and what reads them pending.
 rounds_dir: $ROOT/rounds
 # The live fine-tuning run (the checkpoint scores' `run`, its workflow
-# run name) whose newest scored checkpoints the SI curve, comparisons and
+# run name) whose newest scored checkpoints the SI comparisons and
 # tables show as preliminary.
 live_run: runa
 # The fine-tuning comparisons (`paperpipe.evidence.COMPARISONS`): each

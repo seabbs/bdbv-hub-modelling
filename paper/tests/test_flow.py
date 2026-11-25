@@ -428,7 +428,7 @@ def test_the_simulations_and_their_ready_file_are_always_inputs(
 
 def test_each_paper_run_has_a_progress_figure_from_its_own_tables() -> None:
     # The live run and each comparison's run, each reading only its own
-    # reports, and none while the runs folder is null.
+    # reports.
     flow = _flow()
     runs = flow.progress_runs()
     assert runs == list(
@@ -440,9 +440,29 @@ def test_each_paper_run_has_a_progress_figure_from_its_own_tables() -> None:
         assert all(f"/runs/{run}/reports/" in f for f in files.values())
     outputs = flow.outputs(SimpleNamespace(mode="development", study=""))
     assert flow.progress_figure("development", runs[0]) in outputs
-    assert _flow(runs_dir=None).progress_runs() == []
+
+
+def test_without_runs_a_progress_figure_reads_the_stored_tables(
+    tmp_path: Path,
+) -> None:
+    # Pages has no runs folder: it reads the hosts' published tables
+    # (`paperpipe.stored`), which have no BDBV check.
+    stored = tmp_path / "progress"
+    run = CONFIG["live_run"]
+    (stored / run).mkdir(parents=True)
+    (stored / run / "loss.csv").write_text("")
+    (stored / run / "horizon-scores.csv").write_text("")
+    flow = _flow(runs_dir=None, stored={"progress": str(stored)})
+    assert flow.progress_files(run) == {
+        "loss": f"{stored}/{run}/loss.csv",
+        "horizons": f"{stored}/{run}/horizon-scores.csv",
+    }
+    assert _flow(runs_dir=None).progress_files(run) == {}
 
 
 def test_only_a_paper_run_s_progress_figure_reads_the_bdbv_check() -> None:
-    assert PaperFlow.progress_bdbv("development", "b.csv") == ""
-    assert PaperFlow.progress_bdbv("paper", "b.csv") == "--bdbv b.csv"
+    files = {"loss": "l.csv", "bdbv": "b.csv"}
+    assert PaperFlow.progress_args("development", files) == "--loss l.csv"
+    assert PaperFlow.progress_args("paper", files) == (
+        "--loss l.csv --bdbv b.csv"
+    )
