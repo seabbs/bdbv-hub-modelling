@@ -100,7 +100,6 @@ GRID_FILE = ROUNDS.grid_file
 seeds_of = ROUNDS.seeds_of
 round_of = ROUNDS.round_of
 here = ROUNDS.here
-batch_priority = ROUNDS.batch_priority
 batch_files = ROUNDS.batch_files
 round_records = ROUNDS.round_records
 round_sims = ROUNDS.round_sims
@@ -118,6 +117,7 @@ push_record = ROUNDS.push_record
 # take the {run} wildcard, and its files are in <ROOT>/runs/<run>/.
 
 TRAINING = training.Training(config, LOCAL, ROUNDS)
+batch_priority = TRAINING.batch_priority
 RUNS = TRAINING.runs
 RUNS_DIR = TRAINING.dir
 RUN = f"{RUNS_DIR}/{{run}}"

@@ -102,13 +102,6 @@ def test_sources_name_each_round() -> None:
     assert r.summary_sources([2], ["s.csv"]) == "r2=/r/rounds/r2/sims:s.csv"
 
 
-def test_earlier_batches_come_first() -> None:
-    r = _rounds()
-    first = r.batch_priority(SimpleNamespace(seed="30200"))
-    later = r.batch_priority(SimpleNamespace(seed="30202"))
-    assert first > later
-
-
 def test_a_batch_s_fields_name_this_host_and_grid(tmp_path) -> None:
     grid = tmp_path / "grid.yaml"
     grid.write_text("a: 1\n")

@@ -62,6 +62,7 @@ class Training:
         self.runs: dict[str, runs.Run] = runs.resolve(config, local)
         self.dir = f"{local['ROOT']}/runs"
         self._listed: dict[str, set[int]] = {}
+        self._next: frozenset[int] | None = None
 
     # Runs and their settings.
 
@@ -246,6 +247,35 @@ class Training:
             self.available_seeds(run),
             self.held_seeds(run),
             lambda s: self.outbreaks_or_full(run, s),
+        )
+
+    def next_seeds(self) -> frozenset[int]:
+        """Return the seeds each trained run's next segment reads.
+
+        Its first segment in reach not yet saved (`trainable`); its
+        batches go before the held-out evaluation
+        (`compute.NEXT_BATCH_PRIORITY`). Read once a DAG build.
+        """
+        if self._next is None:
+            seeds: set[int] = set()
+            for run in self.trained_runs():
+                todo = [
+                    n for n in self.trainable(run) if not self.saved(run, n)
+                ]
+                if todo:
+                    seeds |= set(self.segment_seeds(run, min(todo)))
+            self._next = frozenset(seeds)
+        return self._next
+
+    def batch_priority(self, wc: Any) -> float:
+        """Return a batch's priority: the next segment's above the rest."""
+        base = (
+            compute.NEXT_BATCH_PRIORITY
+            if int(wc.seed) in self.next_seeds()
+            else compute.BATCH_PRIORITY
+        )
+        return segments.batch_priority(
+            int(wc.seed), base, self.rounds.sim["seed_base"]
         )
 
     def segment_inputs(self, wc: Any) -> dict[str, Any]:
