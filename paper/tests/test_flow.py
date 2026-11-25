@@ -12,9 +12,16 @@ import yaml
 
 from paperpipe.flow import HELD_OUT_INCLUDES, PaperFlow
 
-CONFIG = yaml.safe_load(
-    (Path(__file__).parents[1] / "workflow" / "config.yaml").read_text()
-)
+# The config the workflow passes the paper: the project workflow's, with
+# the paper's settings on top (workflow/Snakefile).
+CONFIG = {
+    **yaml.safe_load(
+        (Path(__file__).parents[2] / "workflow" / "config.yaml").read_text()
+    ),
+    **yaml.safe_load(
+        (Path(__file__).parents[1] / "workflow" / "config.yaml").read_text()
+    ),
+}
 
 
 def _flow(**changes: object) -> PaperFlow:
@@ -53,13 +60,11 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
-    # The final run's newest saved checkpoint, from its own folder.
     root = tmp_path / "root"
-    segment = root / "runs" / "runa" / "train" / "n800"
-    (segment / "finetuned-ckpt").mkdir(parents=True)
-    (segment / "settings.json").write_text('{"hash": "abc123"}')
-    for name in ("adapter_config.json", "adapter_model.safetensors"):
-        (segment / "finetuned-ckpt" / name).write_text("")
+    # An older saved checkpoint is never what the paper loads.
+    older = root / "runs" / "runa" / "train" / "n800"
+    (older / "finetuned-ckpt").mkdir(parents=True)
+    (older / "settings.json").write_text('{"hash": "abc123"}')
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
     flow = PaperFlow.load(
         config, {}, tmp_path, lambda f: f.replace("$ROOT", str(root))
@@ -68,9 +73,13 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     assert flow.synthetic["simulations"]["paper"] == sims
     # Steps passed the config read the same folders and checkpoint.
     assert config["synthetic"]["simulations"]["paper"] == sims
-    # Outputs record the checkpoint's spec; only the models read the folder.
-    assert config["finetuned"] == "abc123"
-    assert os.environ["BDBV_CHRONOS_FT"] == str(segment)
+    # The `_ft` models load the final run's final checkpoint, a rule
+    # input: its release record, whatever is saved when the flow plans.
+    final = CONFIG["finetune"]["prefixes"][-1]
+    segment = root / "runs" / "runa" / "train" / f"n{final}"
+    assert config["finetuned_record"] == f"{segment}/published.json"
+    assert flow.finetuned_env() == f"BDBV_CHRONOS_FT={segment}"
+    assert "BDBV_CHRONOS_FT" not in os.environ
     assert flow.realdata_after == "2026-08-01"
 
 
@@ -86,12 +95,36 @@ def test_with_no_saved_checkpoint_the_fine_tuned_models_are_pending(
     ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
+    config["final_run"] = None
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
-    PaperFlow.load(
+    flow = PaperFlow.load(
         config, {}, tmp_path, lambda f: f.replace("$ROOT", str(tmp_path))
     )
-    assert config["finetuned"] is None
+    assert config["finetuned_record"] is None
+    assert flow.finetuned_env() == ""
     assert "BDBV_CHRONOS_FT" not in os.environ
+
+
+def test_the_final_checkpoint_is_the_runs_own_last_prefix(
+    tmp_path: Path,
+) -> None:
+    germany = tmp_path / "germany.toml"
+    split = CONFIG["heldout"]["germany_from"]
+    germany.write_text(f'[nowcast]\nsplit_date = "{split}"\n')
+    (tmp_path / "packages" / "nowcastfoundation" / "config").mkdir(parents=True)
+    (
+        tmp_path / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
+    ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
+    config = copy.deepcopy(CONFIG)
+    config["germany"]["config"] = str(germany)
+    config["runs"] = {"runa": {"prefixes": [100, 3200]}, "other": {}}
+    flow = PaperFlow.load(
+        config, {}, tmp_path, lambda f: f.replace("$ROOT", str(tmp_path))
+    )
+    # Only the final run's own record: no other run is an input.
+    assert flow.finetuned_inputs() == [
+        f"{tmp_path}/runs/runa/train/n3200/published.json"
+    ]
 
 
 def test_no_script_pins_the_checkpoint() -> None:
@@ -180,8 +213,8 @@ def test_outputs_have_the_ebola_tables_only_in_a_paper_run() -> None:
 
 def test_summary_args_name_the_checkpoint_when_set() -> None:
     assert _flow().summary_args() == " --realdata-after 2026-08-01"
-    assert _flow(finetuned="abc").summary_args() == (
-        "--finetuned abc --realdata-after 2026-08-01"
+    assert _flow(finetuned_record="n9/published.json").summary_args() == (
+        "--finetuned-record n9/published.json --realdata-after 2026-08-01"
     )
 
 
@@ -305,7 +338,8 @@ def test_an_offline_config_leaves_the_workflow_inputs_out(
     config["rounds_dir"] = None
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
     flow = PaperFlow.load(config, {}, tmp_path, lambda f: f)
-    assert config["finetuned"] is None
+    assert config["finetuned_record"] is None
+    assert flow.finetuned_inputs() == []
     assert flow.workflow_evidence() == {}
     assert flow.example_files() == {"counts": [], "settings": []}
 
