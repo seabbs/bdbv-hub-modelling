@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import pytest
@@ -746,7 +747,7 @@ def test_the_live_run_switches_over_without_retraining(tmp_path):
 
 
 def priorities(tmp_path, *targets, config=None):
-    """Return each rule's job priority in a dry run (0 when unset)."""
+    """Return each rule's job priorities in a dry run (0 when unset)."""
     local = tmp_path / "local.env"
     local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
     overlay = tmp_path / "overlay.yaml"
@@ -762,12 +763,12 @@ def priorities(tmp_path, *targets, config=None):
         text=True,
     )  # fmt: skip
     assert out.returncode == 0, out.stderr + out.stdout
-    found = {}
+    found = defaultdict(list)
     for block in re.split(r"\n(?=rule \w+:)", out.stdout):
         rule = re.match(r"rule (\w+):", block)
         if rule:
             got = re.search(r"priority: ([\d.]+)", block)
-            found[rule[1]] = float(got[1]) if got else 0
+            found[rule[1]].append(float(got[1]) if got else 0)
     return found
 
 
@@ -813,9 +814,17 @@ def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # its next segment trains on, then the rest.
     got = priorities(tmp_path, "finetune", config=FT)
     trainer = compute.TRAIN_PRIORITY
-    assert trainer <= got["train_segment"] < trainer + 1
-    nxt = compute.NEXT_BATCH_PRIORITY
-    assert nxt <= got["simulate_batch"] < nxt + 1
+    assert all(trainer <= p < trainer + 1 for p in got["train_segment"])
+    others = [p for r, ps in got.items() if r != "train_segment" for p in ps]
+    assert max(others) < compute.HANDOFF_PRIORITY + 2
+    # The first segment reads its 13 batches, a spare and the held-out
+    # round's 40; the second segment's batches wait below them.
+    batches = batch_priorities(tmp_path, "finetune", config=FT)
+    first = {*range(30200, 30214), *range(30100, 30140)}
+    nxt, later = compute.NEXT_BATCH_PRIORITY, compute.BATCH_PRIORITY
+    assert all(nxt <= batches[s] < nxt + 1 for s in first)
+    assert all(later <= batches[s] < later + 1 for s in set(batches) - first)
+    assert set(batches) - first
 
 
 def test_publish_verifies_then_releases_each_checkpoint(tmp_path):
