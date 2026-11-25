@@ -224,3 +224,29 @@ def test_the_explorer_shows_each_model_s_final_count_forecast():
     assert set(QUANTILE_COLUMNS) <= set(got.columns)
     assert bool(one["ours"])
     assert one["reference_date"] == "2026-11-15"
+
+
+def test_the_forecast_reads_the_backtest_config_it_is_given(monkeypatch):
+    from bdbvhub import cli, ftcheck
+
+    seen = {}
+
+    def stop(_data, config):
+        seen["config"] = config
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(ftcheck, "release_tasks", stop)
+    with pytest.raises(RuntimeError, match="stop"):
+        cli.main(
+            [
+                "ft-check",
+                "forecast",
+                "--model",
+                "randomwalknowcast",
+                "--config",
+                "ablation.toml",
+                "--out",
+                "out",
+            ]
+        )
+    assert seen["config"] == "ablation.toml"

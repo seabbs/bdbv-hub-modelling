@@ -620,6 +620,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ftc.add_argument("--reference", default="randomwalknowcast")
     ftc.add_argument(
+        "--config",
+        default="packages/nowcastbdbv/config/backtest.toml",
+        help="forecast: the backtest config.",
+    )
+    ftc.add_argument(
         "--root",
         default=".",
         help="report: the repository root, holding docs/.",
@@ -1891,7 +1896,9 @@ def _ft_check(args: argparse.Namespace) -> int:
         if not args.model:
             print("ERROR: forecast needs --model.", file=sys.stderr)
             return 1
-        ftcheck.forecast(args.model, args.data, args.out, args.checkpoint)
+        ftcheck.forecast(
+            args.model, args.data, args.out, args.checkpoint, args.config
+        )
         print(f"Forecasts of {args.model} written to {args.out}.")
         return 0
     from bdbvhub.reporting import ftcheck_report
