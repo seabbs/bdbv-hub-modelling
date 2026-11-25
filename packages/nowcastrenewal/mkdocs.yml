@@ -1,0 +1,11 @@
+INHERIT: ../mkdocs-base.yml
+site_name: nowcastrenewal
+site_description: The renewal models and the joint model that simulates outbreaks.
+site_url: https://samabbott.co.uk/bdbv-hub-modelling/nowcastrenewal/
+edit_uri: edit/main/packages/nowcastrenewal/docs/
+
+nav:
+  - Getting started: index.md
+  - How to: how-to.md
+  - Reference: reference.md
+  - How it is used in the workflow: workflow.md

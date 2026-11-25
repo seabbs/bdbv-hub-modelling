@@ -1,3 +1,0 @@
-# bdbvhub
-
-<!-- readme: packages/bdbvhub -->

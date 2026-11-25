@@ -285,14 +285,6 @@ jobs:
         run: python3 workflow/scripts/paper_run.py --render "$TARGET" --pages
       - name: Build the site into _site
         run: uv run mkdocs build --strict
-      # Each package's own docs site, at <site>/<package>/ (as
-      # `task package-docs`).
-      - name: Build each package's docs site into _site/<package>
-        run: |
-          for config in packages/*/mkdocs.yml; do
-            package=$(basename "$(dirname "$config")")
-            uv run mkdocs build --strict -f "$config" -d "$PWD/_site/$package"
-          done
       # The German page and its data name no held-out nowcast date.
       - name: Check the German page for held-out dates
         run: uv run germany-site-check _site
@@ -337,11 +329,23 @@ jobs:
       # Pages serves the branch as it is, without Jekyll. Only the root
       # needs this: a preview's copy would survive its removal.
       - run: touch _site/.nojekyll
+      # Each package's site at <package>/ is published by the Package docs
+      # workflow when the package changes; the deploy keeps those folders.
+      - id: keep
+        run: |
+          {
+            echo 'paths<<EOF'
+            echo 'pr-preview/'
+            for config in packages/*/mkdocs.yml; do
+              echo "$(basename "$(dirname "$config")")/"
+            done
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
       - uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
         with:
           folder: _site
           branch: gh-pages
-          clean-exclude: pr-preview/
+          clean-exclude: ${{ steps.keep.outputs.paths }}
           force: false
 
   # Only for branches of this repository: a fork's token cannot write, and

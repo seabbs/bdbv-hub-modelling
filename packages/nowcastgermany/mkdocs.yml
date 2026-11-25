@@ -1,0 +1,11 @@
+INHERIT: ../mkdocs-base.yml
+site_name: nowcastgermany
+site_description: The German COVID-19 hospitalisation nowcasting hub as a case study.
+site_url: https://samabbott.co.uk/bdbv-hub-modelling/nowcastgermany/
+edit_uri: edit/main/packages/nowcastgermany/docs/
+
+nav:
+  - Getting started: index.md
+  - How to: how-to.md
+  - Reference: reference.md
+  - How it is used in the workflow: workflow.md
