@@ -426,7 +426,7 @@ def test_the_pages_render_computes_nothing_the_workflow_hosts_make(
     )
     assert res.returncode == 0, res.stderr
     log = res.stdout + res.stderr
-    for rule in ("germany_development", "pairing_germany", "publish_paper"):
+    for rule in ("germany_development", "publish_paper"):
         assert f"rule {rule}" in log
     for rule in (
         "simulate_batch",
@@ -435,6 +435,7 @@ def test_the_pages_render_computes_nothing_the_workflow_hosts_make(
         "evaluate_checkpoint",
         "synthetic_forecasts_development",
         "pairing_synthetic",
+        "pairing_germany",
         "si_copula",
         "sim_realism",
     ):
