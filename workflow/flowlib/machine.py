@@ -162,16 +162,22 @@ def budget(
     total_mb: int | None = None,
 ) -> dict[str, int]:
     """Return the cores and memory (MB) the workflow may use here."""
-    if cfg.get("CORES"):
-        n = int(cfg["CORES"])
-    else:
-        n = (cores or os.cpu_count() or 1) - int(cfg.get("HEADROOM_CORES") or 0)
+    n = budget_cores(cfg, cores)
     if cfg.get("MEM_MB"):
         mem = int(cfg["MEM_MB"])
     else:
         total = machine_mb() if total_mb is None else total_mb
         mem = total - int(cfg.get("HEADROOM_GB") or 0) * 1024
-    return {"cores": max(1, n), "mem_mb": max(1024, mem)}
+    return {"cores": n, "mem_mb": max(1024, mem)}
+
+
+def budget_cores(cfg: Mapping[str, str], cores: int | None = None) -> int:
+    """Return the cores the workflow may use here (`budget`)."""
+    if cfg.get("CORES"):
+        n = int(cfg["CORES"])
+    else:
+        n = (cores or os.cpu_count() or 1) - int(cfg.get("HEADROOM_CORES") or 0)
+    return max(1, n)
 
 
 _DEFAULTS = dict(localconfig.DEFAULTS)
@@ -196,6 +202,24 @@ def side_cores(
     if kept <= 0 or cores - kept < 1:
         return None
     return cores - kept
+
+
+def scoring_threads(
+    cfg: Mapping[str, str],
+    threads: int,
+    cores: int | None = None,
+    path: str | None = None,
+) -> int:
+    """Return the CPU threads of a checkpoint's held-out evaluation.
+
+    The cores the trainers leave (`side_cores`, or the whole budget where
+    nothing trains) less one forecasting unit's `threads`, so another job
+    still runs beside it; never fewer than `threads`. Step 0 scores every
+    held-out block, hours on a unit's few threads.
+    """
+    total = budget_cores(cfg, cores)
+    free = side_cores(cfg, total, path) or total
+    return max(threads, free - threads)
 
 
 def args(

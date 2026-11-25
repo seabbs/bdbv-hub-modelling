@@ -144,6 +144,27 @@ def _timeline(origin: Origin, task: ForecastTask) -> list[str]:
     return weeks
 
 
+def _between_weeks(
+    walk: dict[str, np.ndarray], cut: dt.date, days: list[str]
+) -> dict[str, np.ndarray]:
+    """Return each sample's 7-day sums ending after the cut-off.
+
+    The sums ending on the cut-off's weekday are the walk's; one ending
+    $r$ days after such a sum $W_k$ is
+    $(1 - r/7) W_k + (r/7) W_{k+1}$, the next sum's days at its rate.
+    """
+    out = {}
+    for d in days:
+        k, r = divmod((as_date(d) - cut).days, 7)
+        lo = walk[(cut + dt.timedelta(days=7 * k)).isoformat()]
+        if r == 0:
+            out[d] = lo
+            continue
+        hi = walk[(cut + dt.timedelta(days=7 * (k + 1))).isoformat()]
+        out[d] = lo + (hi - lo) * r / 7
+    return out
+
+
 def _label(origin: Origin, i: int) -> str:
     n = len(origin.snap.locations)
     kind = "own" if i < n else "pooled"
@@ -718,11 +739,14 @@ class RandomWalkNowcast(RandomWalk):
     def _rolling(self, task: ForecastTask) -> pd.DataFrame:
         """Return draws of the 7-day sums ending on each target date.
 
-        With `error_days` 7 each sum is a block of 7 days ending on its
-        weekday, with its own observation model, as baselinenowcast's
-        `ref_time_aggregator` of 7-day rolling sums; with 1, the sums are
-        of draws of daily counts, whose observation model is fitted on
-        days.
+        With `error_days` 7 each sum to the cut-off is a block of 7 days
+        ending on its weekday, with its own observation model, as
+        baselinenowcast's `ref_time_aggregator` of 7-day rolling sums.
+        The sums after the cut-off come from the walk of the blocks ending
+        on the cut-off's weekday, whose last block is whole at the cut-off
+        (`_between_weeks`), so they carry no weekday cycle. With 1, the
+        sums are of draws of daily counts, whose observation model is
+        fitted on days.
         """
         self._start(task)
         targets = list(task.target_end_dates)
@@ -737,10 +761,18 @@ class RandomWalkNowcast(RandomWalk):
             week = c[..., 7:] - c[..., :-7]
             draws = {d: week[..., i] for i, d in enumerate(labels[6:])}
         else:
-            ends = sorted({as_date(d).weekday() for d in targets})
-            for end in ends:
-                origin, got = self._block_draws(task, 7, end)
-                draws.update(got)
+            snap = self._snap
+            assert snap is not None
+            cut = snap.days[snap.cut[-1]].date()
+            past = [d for d in targets if as_date(d) <= cut]
+            ends = {as_date(d).weekday() for d in past} - {cut.weekday()}
+            for end in sorted(ends):
+                _, got = self._block_draws(task, 7, end)
+                draws.update({d: got[d] for d in past if d in got})
+            origin, walk = self._block_draws(task, 7, cut.weekday())
+            draws.update({d: walk[d] for d in past if d in walk})
+            ahead = [d for d in targets if as_date(d) > cut]
+            draws.update(_between_weeks(walk, cut, ahead))
         self.delay_summary = delay_summary(origin, self.name, task.vintage)
         rows = self.rows(origin, task)
         n = task.n_samples

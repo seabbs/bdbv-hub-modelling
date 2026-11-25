@@ -43,16 +43,10 @@ def test_a_machine_setting_wins_over_the_run_s(tmp_path: Path) -> None:
     assert t.local_or_ft("UNSET", "outbreaks")(_wc()) == 200
 
 
-def test_a_segment_resumes_from_the_checkpoint_before(tmp_path: Path) -> None:
+def test_a_checkpoint_reads_the_settings_before_it(tmp_path: Path) -> None:
     t = _training(tmp_path)
     train = t.train_dir("x")
-    assert t.evaluate_prev(_wc(n="100")) == []
-    assert t.evaluate_prev(_wc(n="200")) == f"{train}/n100/settings.json"
     assert t.earlier_settings(_wc(n="200")) == [f"{train}/n100/settings.json"]
-    assert t.evaluate_prev_dir(SimpleNamespace(prev="a/b/settings.json")) == (
-        Path("a/b")
-    )
-    assert t.evaluate_prev_dir(SimpleNamespace(prev=[])) is None
 
 
 def test_validation_losses_are_asked_for_only_when_offloaded(
@@ -60,8 +54,8 @@ def test_validation_losses_are_asked_for_only_when_offloaded(
 ) -> None:
     off = _training(tmp_path, eval="offload")
     train = off.train_dir("x")
-    assert off.offloaded("x", 100)[1] == f"{train}/evals/n100.done"
-    assert len(off.validation_curve_inputs(_wc())) == 6
+    assert off.offloaded("x", 100) == [f"{train}/n100/held-out.json"]
+    assert len(off.validation_curve_inputs(_wc())) == 4
     local = _training(tmp_path, eval="local")
     assert local.offloaded("x", 100) == []
     assert len(local.validation_curve_inputs(_wc())) == 2
@@ -127,3 +121,19 @@ def test_released_batches_are_listed_once_per_run(
     assert len(calls) == asked
     record = Path(t.runs["x"].dir) / "available-batches.txt"
     assert record.read_text().split() == [str(s) for s in sorted(first)]
+
+
+def test_a_run_trains_while_a_segment_in_reach_is_unsaved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    t = _training(tmp_path)
+    monkeypatch.setattr(t, "trainable", lambda _run: [100, 200])
+    assert t.still_training() == ["x"]
+    for n in (100, 200):
+        where = Path(t.train_dir("x")) / f"n{n}"
+        where.mkdir(parents=True)
+        (where / "settings.json").write_text("{}")
+    assert t.still_training() == []
+    # Nothing in reach (no batches yet): no trainer is planned either.
+    monkeypatch.setattr(t, "trainable", lambda _run: [])
+    assert t.still_training() == []

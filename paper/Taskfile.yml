@@ -10,6 +10,11 @@ tasks:
     cmds:
       - uv run ruff check .
       - uv run ruff format --check .
+  preview:
+    desc: Download the Site build's paper inputs into build/ and preview the paper (Quarto and uv; no workflow run)
+    cmds:
+      - uv run --no-project --python ">=3.12" python scripts/fetch_build.py
+      - quarto preview main.qmd {{.CLI_ARGS}}
   pipeline:dev:
     desc: Run the evaluation workflow without the held-out data, to paper/results/development/
     # The paper is a target of the project workflow, run from the root, as

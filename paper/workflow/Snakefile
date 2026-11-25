@@ -141,8 +141,9 @@ for _mode in MODES:
             device=FORECAST.device,
             threads=FORECAST.threads,
             env=FORECAST.env,
+            ft=FT_EXPORT,
         shell:
-            "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
+            "exec >{log} 2>&1; {params.ft} {params.env} "
             "{params.python} paper/scripts/run_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples {params.samples} "
             "--device {params.device} --threads {params.threads} {params.models}"
@@ -214,12 +215,13 @@ rule germany_development:
         gpu=FORECAST.gpu,
     params:
         env=FORECAST.env,
+        ft=FT_EXPORT,
         germany=GERMANY_CLI,
         germany_root_config=GERMANY["config"],
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         out=lambda w, output: Path(output[0]).parent,
     shell:
-        "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
+        "exec >{log} 2>&1; {params.ft} {params.env} "
         "{params.germany} backtest {params.args} --out {params.out} && "
         "{params.germany} teams {params.args} --out {params.out} && "
         "{params.germany} paper --config {params.germany_root_config} "
@@ -244,13 +246,14 @@ rule germany_heldout:
         gpu=FORECAST.gpu,
     params:
         env=FORECAST.env,
+        ft=FT_EXPORT,
         germany=GERMANY_CLI,
         germany_root_config=GERMANY["config"],
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         # The held-out forecasts are in the results folder's held-out/.
         out=lambda w, output: Path(output[0]).parent.parent,
     shell:
-        "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
+        "exec >{log} 2>&1; {params.ft} {params.env} "
         "{params.germany} backtest {params.args} --held-out "
         "--out {params.out} && "
         "{params.germany} teams {params.args} --held-out --out {params.out} && "
@@ -306,7 +309,7 @@ if FLOW.round_releases():
             "--jq '.[].tagName | select(startswith(\"round-\"))') && "
             "for tag in $tags; do "
             "gh release download $tag -R {params.repo} -p {params.asset} "
-            "-D {params.tmp}/$tag || echo \"$tag has no {params.asset}\"; "
+            '-D {params.tmp}/$tag || echo "$tag has no {params.asset}"; '
             "done && "
             "{params.python} -m paperpipe round-releases "
             "--releases {params.tmp} --ledger {params.tmp}/submissions.csv "

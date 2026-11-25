@@ -135,10 +135,7 @@ ft = TRAINING.ft
 local_or_ft = TRAINING.local_or_ft
 segment_copy_back = TRAINING.segment_copy_back
 saved = TRAINING.saved
-evaluate_prev = TRAINING.evaluate_prev
 first_prefix = TRAINING.first_prefix
-evaluate_prev_dir = TRAINING.evaluate_prev_dir
-evaluate_copy_in = TRAINING.evaluate_copy_in
 earlier_settings = TRAINING.earlier_settings
 evaluate_inputs_from = TRAINING.evaluate_inputs_from
 offloaded = TRAINING.offloaded
@@ -163,7 +160,9 @@ SCORING = scoring.Scoring(config, LOCAL, TRAINING, checkpoints)
 SC = SCORING.sc
 CACHE = SCORING.cache
 UNIT_THREADS = SCORING.unit_threads
+EVALUATE_THREADS = SCORING.evaluate_threads
 FORECAST = SCORING.forecast
+CHECKPOINT_FORECAST = SCORING.checkpoint_forecast
 GERMANY_UNIT = scoring.GERMANY_UNIT
 EVALUATE = scoring.EVALUATE
 newest_first = compute.newest_first
@@ -171,6 +170,7 @@ checkpoint_labels = SCORING.checkpoint_labels
 unit_priority = SCORING.unit_priority
 ft_check_priority = SCORING.ft_check_priority
 unit_env = SCORING.unit_env
+checkpoint_env = SCORING.checkpoint_env
 unit_rows = SCORING.unit_rows
 unit_shell = SCORING.unit_shell
 run_scores_dir = SCORING.run_scores_dir
@@ -235,3 +235,4 @@ def ft_check_folders(ckpt):
     return [f"{FTC_DIR}/forecasts/{m}@{key}" for m in FTC["models"]] + [
         f"{FTC_DIR}/forecasts/ft-{ckpt}@{key}"
     ]
+

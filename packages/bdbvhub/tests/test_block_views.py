@@ -7,7 +7,7 @@ import pytest
 
 pytest.importorskip("jax")
 
-from test_two_step import HORIZONS, NOWCAST, _triangle
+from test_foundation_baselinenowcast import HORIZONS, NOWCAST, _triangle
 
 from nowcastfoundation.forecaster import FoundationModel, block_views
 from nowcastutils.base import NATIONAL

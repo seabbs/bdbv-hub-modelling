@@ -25,15 +25,11 @@ from pathlib import Path
 import pandas as pd
 
 from bdbvhub.reporting import pages
+from nowcasteval.labels import model_label
 
 ZS, FT = "foundation_zeroshot", "foundation"
 ZS_PW, FT_PW = "foundation_zeroshot_pseudoweeks", "foundation_pseudoweeks"
-MODELS = (
-    (ZS, "Zero-shot"),
-    (FT, "Fine-tuned"),
-    (ZS_PW, "Zero-shot, pseudo weeks"),
-    (FT_PW, "Fine-tuned, pseudo weeks"),
-)
+MODELS = tuple((m, model_label(m)) for m in (ZS, FT, ZS_PW, FT_PW))
 """The models the page compares, each against the reference."""
 
 SIM_LABELS = {

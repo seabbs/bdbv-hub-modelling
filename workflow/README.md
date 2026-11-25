@@ -82,7 +82,7 @@ The coordinator needs GNU rsync 3.1 or later first on `PATH` (the copies use `--
 
 `single`, `ssh` and `slurm` ship. Rules declare only their needs (`threads`, `mem_mb`, `gpu`), placement lives only in the local config, and any other `COMPUTE=<name>` runs with `workflow/profiles/<name>` and nothing else from `flowlib.compute`, so a cluster or cloud profile needs no code:
 
-- SLURM with a shared filesystem: `COMPUTE=slurm` runs every job as a Slurm job through `workflow/profiles/slurm` (`snakemake-executor-plugin-slurm`, in the `paper` group), with the site's account and partitions file from `config/local.env` (`SLURM_ACCOUNT`, `SLURM_PARTITIONS`). Each GPU job asks Slurm for its own GPU, and every run `finetune` trains trains at once, as far as the cluster has GPUs free. Steps: [Run on a Slurm cluster](../docs/development/slurm.md). Its dry run is tested (`workflow/tests/test_workflow_slurm.py`); a run on a cluster is not;
+- SLURM with a shared filesystem: `COMPUTE=slurm` runs every job as a Slurm job through `workflow/profiles/slurm` (`snakemake-executor-plugin-slurm`, in the `paper` group), with the site's account and partitions file from `config/local.env` (`SLURM_ACCOUNT`, `SLURM_PARTITIONS`). Each GPU job asks Slurm for its own GPU, and every run `finetune` trains trains at once, as far as the cluster has GPUs free. Steps: [Run on a Slurm cluster](#run-on-a-slurm-cluster). Its dry run is tested (`workflow/tests/test_workflow_slurm.py`); a run on a cluster is not;
 - a cloud batch service: add an executor plugin (`snakemake-executor-plugin-googlebatch` or `-kubernetes`) and a storage plugin (`snakemake-storage-plugin-gcs` or `-s3`), and in the profile `executor`, `default-storage-provider`, `default-storage-prefix` (the bucket), `shared-fs-usage: none` and the executor's project, region and machine settings. Files then move through the bucket, not rsync, and ROOT must be a path the storage prefix maps (see the plugin's docs). This is not tested here.
 
 A machine that needs more names a profile of its own, kept outside the repository, with `SNAKEMAKE_PROFILE` (in `config/local.env`): it replaces the profile and budget `COMPUTE` would give, so start from a copy of `workflow/profiles/default` or `workflow/profiles/slurm`. The default and slurm profiles with the machine settings (`CORES`, `MEM_MB`, `HEADROOM_*`, `SIM_SLOTS`, `DEVICE`) cover what most machines need.
@@ -127,7 +127,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `fetch_batch`: a batch into `<ROOT>/runs/<run>/sims/`, hard linked from this machine's rounds, copied from the rounds host's (`remote`, `REMOTE` and `REMOTE_ROOT`) or downloaded from its release (`release`; `sims_from`, or `SIMS_FROM` in `config/local.env`).
 - The batches a machine without the rounds can have are listed afresh each time a run plans (`listed_batches` in rules/common.smk, recorded in `<ROOT>/runs/<run>/available-batches.txt`): those the rounds host's manifests list (mirrored with its QC summaries in `<ROOT>/runs/<run>/rounds/`), or those released. A segment is planned only once its batches are listed, counting the training seeds up to the first batch not yet listed, and nothing trains before the whole validation round is listed.
 - `train_segment`: one segment on the GPU. Its inputs are the batches that hold its first N outbreaks, one spare, and the validation round's batches. A finished checkpoint is final and is never retrained.
-- `evaluate_steps`, `evaluate_base`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. `evaluate_base` scores step 0 alone (base Chronos-2, the start loss), `evaluate_steps` a segment's other snapshots, never waiting for step 0, (`train/evals/step-<k>.json`) and `evaluate_checkpoint` the checkpoint (`n<N>/held-out.json`, beside its settings), which needs only step 0. They run on the forecasting device (`forecast` in the config, the CPU by default) beside the trainer, newest first, below every other job, so no release or check waits for them. They use the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`) in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
+- `evaluate_base`, `evaluate_checkpoint`: with `finetune.eval: offload` the trainer only trains, saving an adapter snapshot at step 0 and each evaluation step. `evaluate_base` scores step 0 alone (base Chronos-2, the start loss, `train/evals/step-0000000.json`) and `evaluate_checkpoint` each checkpoint (`n<N>/held-out.json`, beside its settings), which needs only step 0. The step snapshots between are not scored. They run on the scoring device (`compute.scoring_forecast`): the forecasting device (`forecast` in the config, the CPU by default) while every GPU has a run to train, else a whole GPU of their own, with the cores the trainer leaves less one unit's (`machine.scoring_threads`), newest first, below every other job, so no release or check waits for them. They use the trainer's own loss functions (`workflow/scripts/evaluate_offloaded.py`) in the `evaluate` group, so `WORKER_GROUPS="evaluate=server"` runs them off the trainer's machine. The dashboard, `checkpoint_check` and the release read the results with the trainer's (`flowlib.evaluations`).
 - `seven_day_check`: each checkpoint's 7-day check on its run's held-out blocks (`n<N>/seven-day.json`, `nowcastfoundation.finetune.evaluate.seven_day_check`): the 7-day row's median against the 7-day sums of the same block's daily medians (median ratio, and the share of those sums in the row's 90% interval), and the roughness of the log 7-day median against the truth's. It runs on the forecasting device beside the trainer, for every run however it evaluates; `finetune` asks for it and the dashboard's checkpoint tables show it.
 - `validation_curve`: a run's validation loss by level at the start and at each checkpoint, against simulations trained (`<run>/validation-curve.csv`, `flowlib.evaluations.validation_curve`). The paper's `evidence` rule reads the final run's.
 - `block_combinations`: the share of each combination of block layout and options over a run's training, from its final checkpoint's tally (`<run>/train/block-combinations.csv`, the SI table).
@@ -153,7 +153,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
 - `release_list`: the repository's releases, the only rule that reads the network; `task workflow:score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `score_germany`, `score_release`: the units of `nowcastgermany.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
-  Units run on the forecasting device with its threads (`forecast` in the config; `FORECAST_DEVICE`/`FORECAST_THREADS` override it per machine), beside the trainer: `train_segment` takes the `gpu` resource, with the highest priority, so the next segment starts the moment the previous ends. With `forecast.device: cuda` forecasting jobs take it too, a whole GPU each, so they wait for a free one: jobs never share a GPU.
+  Units run on the forecasting device with its threads (`forecast` in the config; `FORECAST_DEVICE`/`FORECAST_THREADS` override it per machine), beside the trainer: `train_segment` takes the `gpu` resource, with the highest priority, so the next segment starts the moment the previous ends. With `forecast.device: cuda` forecasting jobs take it too, a whole GPU each, so they wait for a free one: jobs never share a GPU. A checkpoint's units take a whole GPU of their own when the machine has one that no run is left to train on, so once training ends the next run or tick scores on the GPU (`compute.scoring_forecast`); the BDBV check stays on the forecasting device.
   The `gpu` resource has a slot per CUDA GPU (`GPUS` in config/local.env, else those `nvidia-smi` lists), and each job taking it runs on a GPU of its own (`workflow/flowlib/gpus.py` sets `CUDA_VISIBLE_DEVICES`).
   BDBV is held out for the paper, so no BDBV unit runs.
 - `score_run_germany`: a run's own saved checkpoint `n<N>`, loaded from `<ROOT>/runs/<run>/train/n<N>` with no release, cached in `<ROOT>/runs/<run>/scores/`.
@@ -207,7 +207,7 @@ The page has a sticky bar (section links, the live run's step, one run and refer
 
 Settings:
 
-- `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), the notes filter.
+- `workflow/config.yaml`'s `dashboard`: references (matched on rows by model and checkpoint, with a role: `baseline`, `start` or `other`), score studies and their labels, level order and defaults, the datasets (Germany: quantiles and WIS; BDBV is held out and never shown), what is held out (`held_out`: BDBV, the German held-out half from its split date, and the grid's test round, none of which the dashboard reads), the notes filter.
 - `workflow/config.yaml`'s `runs`: the runs shown, each from `<ROOT>/runs/<name>`, the first live. `--run NAME` shows only the named runs, the first live.
 - `config/local.env` (or the file `LOCAL_CONFIG` names, outside the checkout): `ROOT`, the scoring cache (`SCORE_CACHE`) the score table and each dataset's forecasts are read from, the mailbox (`MAILBOX`), where it listens (`DASHBOARD_HOST`, `DASHBOARD_PORT`) and whose runs it shows (`DASHBOARD_ROOT`).
 - `--ref`: more references, or ones replacing the configured.
@@ -286,6 +286,63 @@ A tick is skipped when another tick is still running (a lock in `output/`) or wh
 On CI, the site and the paper (`.github/workflows/pages.yml`) rebuild every 6 hours (`43 */6 * * *`, after the fit store's run) and whenever `evidence/` changes on main, so new checkpoint scores reach the docs and the paper without a manual step.
 
 Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add their optional notes.
+
+## Run on a Slurm cluster
+
+With `COMPUTE=slurm` the workflow runs every job as a Slurm job, through Snakemake's Slurm executor plugin (`snakemake-executor-plugin-slurm`, in the `paper` group).
+The driver, one Snakemake run, submits the jobs through the plugin and waits for them.
+The nodes share the checkout and `ROOT`, so no files move.
+Each rule asks for its own threads, memory, runtime and GPU (`workflow/profiles/slurm/config.yaml`).
+
+### Steps
+
+1. Clone the repository onto the shared filesystem, and run `uv sync --all-groups` once on the login node.
+   The nodes need `git` and the checkout with its `.git`, as each simulation batch checks that the simulator is the committed one.
+2. Copy `workflow/profiles/slurm/partitions.example.yaml` outside the repository.
+   Rename its partitions and set their limits to the cluster's.
+   The plugin sends a job that takes a GPU only to a partition with `max_gpu`, and other jobs to the first partition that fits.
+3. Write `config/local.env` from `config/local.env.example`:
+
+   ```sh
+   COMPUTE=slurm
+   ROOT=/shared/bdbv-rounds
+   SLURM_ACCOUNT=<account>
+   SLURM_PARTITIONS=/shared/site/partitions.yaml
+   DEVICE=cuda
+   FORECAST_DEVICE=cuda
+   HF_HOME=/shared/hf
+   ```
+
+   Set `DEVICE`, and `FORECAST_DEVICE` if forecasting jobs should use GPUs, as the login node has no GPU to detect.
+   Leave `SLURM_ACCOUNT` empty to let the plugin guess the account.
+   Leave `SLURM_PARTITIONS` empty to send every job to `sinfo`'s default partition.
+4. Fill `HF_HOME` with the base Chronos-2 model once, from a machine with internet access.
+5. Set these in the shell that starts the driver, which Slurm passes to each job:
+
+   ```sh
+   export UV_NO_SYNC=1
+   export UV_OFFLINE=1       # nodes without internet access
+   export HF_HUB_OFFLINE=1   # once HF_HOME holds Chronos-2
+   ```
+
+6. Dry-run first: `task workflow:finetune -- -n` lists the jobs it would submit, with their resources.
+7. Start the driver on the submit host under `tmux` or `nohup` with `task workflow:run`, which runs `SCHEDULE_TARGETS` one tick after another.
+   Where login nodes forbid long processes, run it as a long Slurm job with few resources, for example `sbatch --time=7-0 --cpus-per-task=2 --mem=8G --wrap "task workflow:run"`.
+   Stop it with `touch output/coordinator.stop`, which ends it after the running tick.
+
+### What Slurm decides
+
+Slurm places and sizes every job.
+The one-machine caps do not apply: there is no `gpu` or core budget and no cores kept for the trainer (`TRAINER_CORES`).
+Each GPU job asks for one GPU (`--gpus=1`), and Slurm sets `CUDA_VISIBLE_DEVICES` to it, so `workflow/flowlib/gpus.py` runs it as it is.
+Runs do not wait on each other, so every run `finetune` trains (`train_runs`) trains at once, each trainer a Slurm job on a GPU node, as far as the cluster has GPUs free.
+With `forecast.device: cuda`, forecasting jobs need `forecast.gpu: exclusive`, so each asks Slurm for its own GPU.
+
+### Changing the job sizes
+
+Each rule's memory, runtime and threads are in the profile's `set-resources` and `set-threads`.
+To change them, copy `workflow/profiles/slurm` outside the repository, edit the copy and set `SNAKEMAKE_PROFILE` to it in `config/local.env`.
+That profile then replaces the one `COMPUTE` gives, with the default resources, account and partitions file, so add those to the copy's `default-resources` and `slurm-partition-config`.
 
 ## Monitor
 

@@ -289,6 +289,9 @@ properties:
           datasets: {$ref: "#/$defs/labels"}
           studies: {$ref: "#/$defs/labels"}
           mail: {type: string}
+          from:
+            type: object
+            additionalProperties: {type: string}
       mail_filter: {type: string}
       refresh_every: {$ref: "#/$defs/positive"}
       datasets:

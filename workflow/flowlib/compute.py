@@ -17,7 +17,7 @@
   default resources `SLURM_DEFAULTS`, the site's account
   (`SLURM_ACCOUNT`) and its partitions file (`SLURM_PARTITIONS`, the
   plugin's `--slurm-partition-config`), which sends GPU jobs to a GPU
-  partition (docs/development/slurm.md).
+  partition (workflow/README.md, Run on a Slurm cluster).
 - any other name: its profile, `workflow/profiles/<name>`, alone (a
   cluster or cloud executor with its own resources).
 
@@ -52,10 +52,20 @@ Freed cores go to the waiting job of highest priority, in one order:
 
 Each band's jobs take its base plus a fraction below two, so the bands
 never overlap. Other jobs take Snakemake's default, 0.
+
+Training has the GPU. A checkpoint's scoring (its held-out evaluation,
+7-day check and German units) runs on the forecasting device while every
+GPU has a run to train, and on a GPU of its own, the whole GPU, once one
+has none (`scoring_forecast`): another GPU of the machine, or its only
+GPU when no segment of any run is left to train. Each run re-plans this,
+so the tick after a run's last segment moves its scoring to the GPU. The
+BDBV check's forecasts stay on the forecasting device: one release's
+block does not fit an 8 GB GPU.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -71,7 +81,7 @@ from typing import Any
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from flowlib import localconfig, machine, monitor
+from flowlib import forecast, localconfig, machine, monitor
 
 SLURM_DEFAULTS = ("mem_mb=2048", "runtime=60")
 """A Slurm job's memory (MB) and runtime (minutes) unless its rule's
@@ -87,7 +97,6 @@ GROUPS = ("simulate", "train", "evaluate", "publish", "score", "any")
 RULE_GROUPS = {
     "simulate_batch": "simulate",
     "train_segment": "train",
-    "evaluate_steps": "evaluate",
     "evaluate_base": "evaluate",
     "evaluate_checkpoint": "evaluate",
     "verify_checkpoint": "publish",
@@ -135,6 +144,31 @@ EVALUATION_PRIORITY = 10
 other job, as no release, check or batch waits for it. Hours on the CPU
 per checkpoint; the dashboard, tables and paper read it when done, and
 it joins the checkpoint's release then (`release_held_out`)."""
+
+
+def scoring_forecast(
+    default: forecast.Forecast, gpus: int, training: int
+) -> forecast.Forecast:
+    """Return the device and threads of a checkpoint's scoring.
+
+    Parameters
+    ----------
+    default : Forecast
+        The forecasting device and threads (`forecast` in the config).
+    gpus : int
+        This machine's CUDA GPUs (`machine.gpu_ids`).
+    training : int
+        The runs with a segment left to train (`Training.still_training`).
+
+    Returns
+    -------
+    Forecast
+        A whole CUDA GPU when the machine has more GPUs than runs to
+        train, else `default`.
+    """
+    if gpus > training:
+        return dataclasses.replace(default, device="cuda")
+    return default
 
 
 def newest_first(base: float) -> Callable[[Any], float]:
