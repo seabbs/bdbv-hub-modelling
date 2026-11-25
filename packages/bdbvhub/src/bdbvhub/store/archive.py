@@ -10,7 +10,6 @@ A model that cannot be archived is reported and left out.
 
 from __future__ import annotations
 
-import base64
 import datetime as dt
 import sys
 import tempfile
@@ -156,12 +155,6 @@ def store_task(
     )[0]
 
 
-def _unpack(files: Mapping[str, str], fit_dir: Path) -> None:
-    """Write a stored fit's files (base64) into `fit_dir`."""
-    for name, body in files.items():
-        (fit_dir / name).write_bytes(base64.b64decode(body))
-
-
 def _stored(
     root: Path,
     model: str,
@@ -189,13 +182,14 @@ def _stored(
             table = hub(model, config=config, fit_dir=Path(fit_dir))
     else:
         forecast = stored_forecast(fit.forecasts, task, own_national(model))
-        if ZONES_FILE in (fit.files or {}):
-            # A zone fit's own zones, as it submits them.
-            with tempfile.TemporaryDirectory() as fit_dir:
-                _unpack({ZONES_FILE: fit.files[ZONES_FILE]}, Path(fit_dir))
+        # A zone fit's own zones, or a walk's stored zone run, as it
+        # submits them.
+        with tempfile.TemporaryDirectory() as fit_dir:
+            store.write_fit_dir(root, fit, Path(fit_dir))
+            if (Path(fit_dir) / ZONES_FILE).exists():
                 table = hub(model, forecast=forecast, fit_dir=Path(fit_dir))
-        else:
-            table = hub(model, forecast=forecast)
+            else:
+                table = hub(model, forecast=forecast)
     meta = fit.meta
     return table.assign(
         key=meta["key"],
