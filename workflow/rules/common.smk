@@ -100,6 +100,7 @@ EVALUATE_PY = "uv run --group chronos python workflow/scripts/evaluate_offloaded
 CHECKPOINT_PRIORITY = compute.CHECKPOINT_PRIORITY
 REFERENCE_PRIORITY = compute.REFERENCE_PRIORITY
 TRAIN_PRIORITY = compute.TRAIN_PRIORITY
+FETCH_PRIORITY = compute.FETCH_PRIORITY
 trained_runs = TRAINING.trained_runs
 run_of = TRAINING.run_of
 train_dir = TRAINING.train_dir

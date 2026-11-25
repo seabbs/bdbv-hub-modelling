@@ -28,7 +28,8 @@ The coordinator's rsync must be GNU rsync 3.1 or later
 
 Freed cores go to the waiting job of highest priority, in one order:
 
-1. the trainer (`TRAIN_PRIORITY`), so the GPU never waits;
+1. the trainer (`TRAIN_PRIORITY`), then the copies of the batches it
+   reads into the run (`FETCH_PRIORITY`), so the GPU never waits;
 2. the references every checkpoint is compared with
    (`REFERENCE_PRIORITY`): the German reference unit and the BDBV
    check's zero-shot and randomwalknowcast forecasts;
@@ -91,6 +92,11 @@ GPUs are not shared across workers."""
 TRAIN_PRIORITY = 100
 """The trainer's job priority, above every other job's, so the next
 segment starts the moment the previous ends."""
+
+FETCH_PRIORITY = 90
+"""A batch's copy into a run (`fetch_batch`): below the trainer, which
+reads it, above every other job, so a simulated batch never waits for a
+core to reach the trainer."""
 
 REFERENCE_PRIORITY = 30
 """The references' job priority: below the trainer, above every
