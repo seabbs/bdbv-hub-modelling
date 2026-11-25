@@ -68,6 +68,14 @@ DEFAULTS = (
     ("MEM_MB", ""),
     ("SIM_SLOTS", ""),
     ("DEVICE", "auto"),
+    # The cores kept for the trainer, which jobs beside it never take
+    # (flowlib.machine.side_cores): its threads, `finetune.cut_workers`
+    # + 1 in workflow/config.yaml; 0 where nothing trains.
+    ("TRAINER_CORES", "4"),
+    # The CUDA GPUs the workflow shares out, comma-separated ids (empty:
+    # CUDA_VISIBLE_DEVICES', else every one nvidia-smi lists;
+    # flowlib.machine.gpu_ids).
+    ("GPUS", ""),
     # Series above which a training step recomputes activations in
     # backward (empty: the trainer's memory budget sets it); lower on a
     # small GPU. Memory only, outside the checkpoint's hash.
@@ -146,8 +154,6 @@ OPTIONAL = (
     "BLOCK_LIMIT",
     "CHRONOS_BATCH",
     "FORECAST_DEVICE",
-    "FORECAST_GPU",
-    "FORECAST_GPU_JOBS",
     "FORECAST_THREADS",
     "HF_HOME",
     "MPS_HIGH_WATERMARK",

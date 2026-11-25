@@ -134,7 +134,6 @@ def test_ssh_pools_the_workers_and_submits_through_the_scripts():
     assert "mem_mb=74000" in res
     assert "gpu=2" in res
     assert "sim_slots=6" in res
-    assert "gpu_share=2" in res
 
 
 def test_the_ssh_profile_names_the_scripts():
@@ -224,7 +223,7 @@ def test_the_trainer_comes_before_every_other_job():
                 rule = line.split()[1].rstrip(":")
             elif line.strip().startswith("priority:"):
                 seen[rule] = line.split(":", 1)[1].strip()
-    assert seen.pop("train_segment") == "TRAIN_PRIORITY"
+    assert seen.pop("train_segment") == "TRAINING.trainer_priority"
     for rule, value in seen.items():
         numbers = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", value)]
         assert all(x < compute.TRAIN_PRIORITY for x in numbers), rule

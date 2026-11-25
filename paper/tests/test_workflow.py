@@ -18,6 +18,9 @@ PAPER = Path(__file__).parents[1]
 # The paper is a module of the project workflow, run from the root.
 SNAKEFILE = PAPER.parent / "workflow" / "Snakefile"
 CONFIG = yaml.safe_load((PAPER / "workflow" / "config.yaml").read_text())
+WORKFLOW = yaml.safe_load(
+    (PAPER.parent / "workflow" / "config.yaml").read_text()
+)
 RULES = (
     "data",
     "publish_paper",
@@ -318,32 +321,32 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
             "paper": str(tmp_path / "out" / "synthetic.csv.gz"),
         },
     }
-    # Until the final run saves a checkpoint, the fine-tuned models are
-    # pending: not run, and no checkpoint recorded.
-    run = tmp_path / "run"
-    # A run outside the workflow's runs folder has no rule for its curve.
-    run.mkdir()
-    (run / "validation-curve.csv").write_text("")
+    # With no final run the fine-tuned models are pending: not run, and no
+    # checkpoint recorded.
     pending = _snakemake(
         "development",
         "-n",
         "-p",
         "--configfile",
         base,
-        str(_offline(tmp_path, synthetic=synthetic, final_run=str(run))),
+        str(_offline(tmp_path, synthetic=synthetic)),
     )
     assert pending.returncode == 0, pending.stderr
     log = pending.stdout + pending.stderr
-    assert "--finetuned" not in log
+    assert "--finetuned-record" not in log
+    assert "BDBV_CHRONOS_FT" not in log
     runner = [line for line in log.splitlines() if "run_synthetic.py" in line]
     assert runner
     assert not {w for line in runner for w in line.split()} & set(FINETUNED)
-    # Then they load its newest saved checkpoint.
-    segment = run / "train" / "n800"
-    (segment / "finetuned-ckpt").mkdir(parents=True)
+    # With one, they load its final checkpoint, whose release record is
+    # the runner's and the summary's input.
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "validation-curve.csv").write_text("")
+    segment = run / "train" / f"n{WORKFLOW['finetune']['prefixes'][-1]}"
+    segment.mkdir(parents=True)
     (segment / "settings.json").write_text('{"hash": "abcdef123456"}')
-    for name in ("adapter_config.json", "adapter_model.safetensors"):
-        (segment / "finetuned-ckpt" / name).write_text("")
+    (segment / "published.json").write_text('{"hash": "abcdef123456"}')
     pinned = _snakemake(
         "development",
         "-n",
@@ -353,7 +356,11 @@ def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
         str(_offline(tmp_path, synthetic=synthetic, final_run=str(run))),
     )
     assert pinned.returncode == 0, pinned.stderr
-    assert "--finetuned abcdef123456" in pinned.stdout + pinned.stderr
+    log = pinned.stdout + pinned.stderr
+    runner = [line for line in log.splitlines() if "run_synthetic.py" in line]
+    assert runner
+    assert all(f"BDBV_CHRONOS_FT={segment}" in r for r in runner)
+    assert f"--finetuned-record {segment}/published.json" in log
 
 
 def test_rules_that_need_the_network_or_git_run_on_the_driver():
@@ -384,3 +391,51 @@ def test_every_forecasting_rule_declares_its_threads():
     assert text.count("gpu=FORECAST.gpu") == text.count(
         "threads: FORECAST.threads"
     )
+
+
+def test_the_pages_render_computes_nothing_the_workflow_hosts_make(
+    tmp_path: Path,
+) -> None:
+    # Pages renders with paper/workflow/pages.yaml: the German benchmark
+    # and the figures, never a simulation, a training run or what reads
+    # them, which pend in the paper.
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "results": str(tmp_path / "results"),
+                "build": str(tmp_path / "build"),
+                "germany": {
+                    "data": str(tmp_path / "germany"),
+                    "results": str(tmp_path / "germany-results"),
+                },
+            }
+        )
+    )
+    base = str(PAPER / "workflow" / "config.yaml")
+    pages = str(PAPER / "workflow" / "pages.yaml")
+    res = _snakemake(
+        "render",
+        "-n",
+        "--config",
+        "render=development",
+        "--configfile",
+        base,
+        str(cfg),
+        pages,
+    )
+    assert res.returncode == 0, res.stderr
+    log = res.stdout + res.stderr
+    for rule in ("germany_development", "pairing_germany", "publish_paper"):
+        assert f"rule {rule}" in log
+    for rule in (
+        "simulate_batch",
+        "fetch_batch",
+        "train_segment",
+        "evaluate_checkpoint",
+        "synthetic_forecasts_development",
+        "pairing_synthetic",
+        "si_copula",
+        "sim_realism",
+    ):
+        assert f"rule {rule}:" not in log

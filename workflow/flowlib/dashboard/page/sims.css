@@ -1,0 +1,20 @@
+/* The simulations page: the fine-tuning dashboard's style.css, plus these. */
+select,input{background:var(--card);color:var(--fg);border:1px solid var(--line);
+border-radius:6px;padding:2px 6px;font-size:12px}
+.layer{margin:6px 0 12px}.layer>summary h3{text-transform:capitalize}
+.plots3{align-items:start}.tablebox{max-height:520px;overflow:auto}
+.tablebox th{position:sticky;top:0;background:var(--bg)}
+.plots .card h3{font-weight:500}
+.chip{display:inline-block;font-size:11px;border:1px solid var(--c1);
+border-radius:10px;padding:0 6px;margin:0 2px;cursor:pointer}
+.tipbox{position:fixed;z-index:50;pointer-events:none;background:var(--fg);
+color:var(--bg);padding:4px 8px;border-radius:6px;font-size:12px;
+line-height:1.35;max-width:280px}
+#simtable tr[data-id],#bygroup tr{cursor:pointer}
+#simtable tr[data-id]:hover{background:var(--card)}
+#simtable th{cursor:pointer;white-space:nowrap}
+.settings td:first-child{color:var(--mut);white-space:nowrap}
+.settings td{word-break:break-all}
+.bar rect.hit{fill:transparent;cursor:pointer}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;
+margin-right:4px;vertical-align:middle}

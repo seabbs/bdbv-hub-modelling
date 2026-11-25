@@ -64,10 +64,6 @@ def test_the_arguments_hold_cores_and_resources():
     assert "sim_slots=3" in res
     assert "gpu=1" in res
     assert "awaiting=1" in res
-    # One forecasting job beside the trainer on its GPU by default.
-    assert "gpu_share=1" in res
-    args = machine.args({"FORECAST_GPU_JOBS": "2"}, cores=8, path="")
-    assert "gpu_share=2" in args
 
 
 def test_the_command_line_prints_the_arguments_and_device(tmp_path):

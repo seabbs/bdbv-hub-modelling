@@ -1,7 +1,11 @@
 # nowcastfoundation
 
 Chronos-2 nowcasts and forecasts from reporting triangles, and the code that fine-tunes Chronos-2 on simulated outbreaks.
-It is for anyone using our fine-tuned checkpoints on their own data, and for working on the simulation, training and scoring steps of the workflow.
+Use it to nowcast your own data with a released fine-tuned checkpoint.
+
+In this project the workflow (`workflow/`) runs its simulator, trainer, publishing and scoring.
+`bdbvhub` forecasts with it as the hub model `seabbs-foundation`; `submit` in [`hub.toml`](../bdbvhub/config/hub.toml) sets whether that model is submitted.
+The German benchmark and the paper score its checkpoints.
 
 ## Start here
 
@@ -16,6 +20,7 @@ It is for anyone using our fine-tuned checkpoints on their own data, and for wor
 - [`checkpoints`](src/nowcastfoundation/checkpoints.py): loading a released checkpoint for your own reporting triangle.
 - [`simulator`](src/nowcastfoundation/simulator/): the grid simulator. It draws each simulation's design and values (`draws`) and runs batches (`batch`) through the joint model in `nowcastrenewal.simulation`.
 - [`finetune`](src/nowcastfoundation/finetune/): training blocks (`chronos`), the streaming trainer (`stream`), held-out scoring (`evaluate`) and hash checks (`verify`).
+- [`hubpublish`](src/nowcastfoundation/hubpublish.py), [`modelcard`](src/nowcastfoundation/modelcard.py): a checkpoint published to the Hugging Face Hub, with its model card.
 - [`series_bias`](src/nowcastfoundation/series_bias.py): the attention bias that ties a place's series together and to its parent.
 - [`sidecar`](src/nowcastfoundation/sidecar.py): an offloaded checkpoint's held-out losses.
 - [`live_checkpoint`](src/nowcastfoundation/live_checkpoint.py), [`live_checkpoint_page`](src/nowcastfoundation/live_checkpoint_page.py): the live run's newest checkpoints as preliminary results.

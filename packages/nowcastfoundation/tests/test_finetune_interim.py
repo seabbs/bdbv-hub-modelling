@@ -70,16 +70,6 @@ def test_the_interim_checkpoint_is_the_saved_state_s_adapter(tmp_path):
     assert settings["from_checkpoint"] == "n1600"
 
 
-def test_an_interim_folder_is_not_a_saved_checkpoint(tmp_path):
-    from nowcastfoundation.forecaster import newest_segment
-
-    train, _ = _run(tmp_path)
-    interim.export(train)
-    assert (
-        newest_segment(train) is None or newest_segment(train).name == "n1600"
-    )
-
-
 def test_the_interim_checkpoint_verifies_and_releases_like_a_saved_one(
     tmp_path,
 ):

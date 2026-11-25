@@ -1,7 +1,11 @@
 # nowcastgermany
 
 The German COVID-19 hospitalisation nowcasting hub as a retrospective case study.
-It turns the hub's reporting triangles into forecast tasks, scores our models beside the hub's teams, and stores the results for the docs and the paper.
+It turns the hub's reporting triangles into forecast tasks and scores models beside the hub's teams.
+
+In this project it is the real-data benchmark for the baselines and the fine-tuned model.
+The workflow scores each fine-tuned checkpoint on it and cuts German training blocks for the real-data ablation.
+The paper's German study runs its commands, and `bdbvhub` builds the docs site's benchmark page from it.
 
 ## Start here
 

@@ -9,7 +9,6 @@ functions: `w` holds the rule's wildcards, `mode` and `study`.
 
 from __future__ import annotations
 
-import os
 import shlex
 import sys
 import tomllib
@@ -18,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Protocol
 
-from nowcastfoundation.forecaster import local_checkpoint, newest_segment
+from nowcastfoundation.forecaster import FINETUNED_ENV
 
 from paperpipe.config import run_settings, run_studies
 from paperpipe.outputs import (
@@ -61,6 +60,27 @@ class Wildcards(Protocol):
     study: str
 
 
+def _prefixes(config: Mapping[str, Any]) -> list[int]:
+    """Return the final run's checkpoint prefixes.
+
+    The run's own `prefixes` in the workflow's `runs`, else `finetune`'s,
+    which they are with no final run.
+    """
+    name = Path(config["final_run"]).name if config.get("final_run") else ""
+    entry = (config.get("runs") or {}).get(name) or {}
+    return [
+        int(n) for n in entry.get("prefixes") or config["finetune"]["prefixes"]
+    ]
+
+
+def _final_prefix(config: Mapping[str, Any]) -> int:
+    """Return the final run's last checkpoint prefix.
+
+    Its final checkpoint, where the learning rate reaches zero.
+    """
+    return _prefixes(config)[-1]
+
+
 @dataclass(frozen=True)
 class PaperFlow:
     """The paper workflow's settings, with its paths and arguments.
@@ -94,9 +114,10 @@ class PaperFlow:
         The simulation folders are expanded in `config` itself (`expand`,
         `flowlib.localconfig.expand`), so each step that is passed the
         config reads the same folders, as are the final run's and the
-        rounds' folders and evidence `file`s. `finetuned` is the spec of the
-        final run's newest saved checkpoint, whose folder is put in the
-        environment as `BDBV_CHRONOS_FT`, which every `_ft` model loads.
+        rounds' folders and evidence `file`s. `finetuned_record` is the
+        release record (`published.json`, rule publish_checkpoint) of the
+        final run's final checkpoint, its last prefix, which every rule
+        running an `_ft` model takes as an input.
 
         Parameters
         ----------
@@ -130,26 +151,23 @@ class PaperFlow:
                 f"`heldout.germany_from` is {heldout}."
             )
         synthetic = config["synthetic"]
+        # A null folder leaves that run's simulations out.
         synthetic["simulations"] = {
-            mode: expand(folder)
+            mode: expand(folder) if folder else None
             for mode, folder in synthetic["simulations"].items()
         }
         # Null leaves the run or rounds out, and what reads them pending.
         for key in ("final_run", "rounds_dir"):
             if config.get(key):
                 config[key] = expand(config[key])
-        # The `_ft` models load the final run's newest saved checkpoint,
-        # pending until it has one. Outputs record its spec, not its folder.
-        segment = (
-            newest_segment(Path(config["final_run"]) / "train")
+        # The `_ft` models load the final run's final checkpoint, a rule
+        # input, so each new one reruns their forecasts.
+        config["finetuned_record"] = (
+            f"{config['final_run']}/train/n{_final_prefix(config)}"
+            "/published.json"
             if config.get("final_run")
             else None
         )
-        config["finetuned"] = (
-            None if segment is None else local_checkpoint(segment).hash
-        )
-        if segment is not None:
-            os.environ.update(BDBV_CHRONOS_FT=str(segment))
         with (
             root / "packages" / "nowcastfoundation" / "config" / "finetune.toml"
         ).open("rb") as f:
@@ -248,13 +266,15 @@ class PaperFlow:
         step's outputs (rule sim_realism), and the walk models' pairing
         scores and rho_p (rules si_copula and pairing_germany). Each is
         left out, and its SI result pending, while its run or rounds folder
-        is null, or for the pairing scores while the German benchmark runs
-        on dummy data.
+        is null, for the pairing scores while the German benchmark runs on
+        dummy data, and for the walks' scores while the development
+        simulations are null.
         """
         files = {}
         evidence = f"{self.results}/evidence"
         if self.germany["real"]:
-            files["si_copula"] = f"{evidence}/si-copula.csv"
+            if self.synthetic["simulations"].get("development"):
+                files["si_copula"] = f"{evidence}/si-copula.csv"
             files["copula_rho"] = (
                 f"{evidence}/pairing/pairing-germany-rho.csv.gz"
             )
@@ -332,9 +352,28 @@ class PaperFlow:
         ]
         return tables + extra
 
+    def finetuned_inputs(self) -> list[str]:
+        """Return the final checkpoint's release record, if there is a run.
+
+        Only the final run's own checkpoint, so no other run is an input.
+        """
+        record = self.config.get("finetuned_record")
+        return [record] if record else []
+
+    def finetuned_env(self) -> str:
+        """Return the environment setting that loads the final checkpoint.
+
+        Its segment folder as `BDBV_CHRONOS_FT`, which every `_ft` model
+        loads; empty while the fine-tuned models are pending.
+        """
+        record = self.config.get("finetuned_record")
+        if not record:
+            return ""
+        return f"{FINETUNED_ENV}={Path(record).parent}"
+
     def synthetic_models_arg(self) -> str:
         """Return the synthetic runner's models option."""
-        if self.config.get("finetuned"):
+        if self.config.get("finetuned_record"):
             return ""
         from nowcasteval.labels import FINETUNED
 
@@ -406,17 +445,17 @@ class PaperFlow:
                 models = " ".join(ebola["backtest_models"])
                 args.append(f"--ebola-draws {self.ebola_draws}")
                 args.append(f"--ebola-draws-models {models}")
-            history = self.store_history()
-            if history:
-                args.append(f"--store-history {history}")
+            releases = self.round_releases()
+            if releases:
+                args.append(f"--round-releases {releases}")
             return " ".join(args)
         return ""
 
-    def store_history(self) -> str | None:
-        """Return the fit store's history file, fetched from its release."""
-        if not self.ebola.get("store_history"):
+    def round_releases(self) -> str | None:
+        """Return our unsubmitted models' forecasts from the round releases."""
+        if not self.ebola.get("round_releases"):
             return None
-        return f"{self.results}/evidence/fit-store-history.csv.gz"
+        return f"{self.results}/evidence/round-releases.csv.gz"
 
     def source_files(self, w: Wildcards) -> list[str]:
         """Files a study's real data come from, built by other rules."""
@@ -428,15 +467,15 @@ class PaperFlow:
             hub = f"{ebola['hub']}/target-data/time-series.csv"
             target = f"{ebola['data']}/target.csv"
             draws = [self.ebola_draws] if ebola.get("n_samples") else []
-            history = self.store_history()
-            stored = [history] if history else []
+            releases = self.round_releases()
+            released = [releases] if releases else []
             return [
                 hub,
                 target,
                 ebola["backtest"],
                 *self.ebola_extra(),
                 *draws,
-                *stored,
+                *released,
             ]
         if w.study == "synthetic":
             fc = self.synthetic["forecasts"][w.mode]
@@ -557,9 +596,12 @@ class PaperFlow:
 
     def summary_args(self) -> str:
         """Return the `paperpipe summary` options the config sets."""
-        finetuned = self.config.get("finetuned")
-        ft = f"--finetuned {finetuned}" if finetuned else ""
-        return f"{ft} --realdata-after {self.realdata_after}"
+        record = self.config.get("finetuned_record")
+        ft = f"--finetuned-record {record}" if record else ""
+        prefixes = " ".join(str(n) for n in _prefixes(self.config))
+        return (
+            f"{ft} --realdata-after {self.realdata_after} --prefixes {prefixes}"
+        )
 
     def held_out_placeholders(self, w: Wildcards) -> str:
         """Return the included tables of the studies a run leaves out."""

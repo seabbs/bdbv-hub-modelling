@@ -28,7 +28,8 @@ The coordinator's rsync must be GNU rsync 3.1 or later
 
 Freed cores go to the waiting job of highest priority, in one order:
 
-1. the trainer (`TRAIN_PRIORITY`), so the GPU never waits, then the
+1. the trainers (`TRAIN_PRIORITY`, each run a fraction above it in
+   turn, `Training.trainer_priority`), so a GPU never waits, then the
    quick hand-offs that unblock other work (`HANDOFF_PRIORITY`): the
    copies of the batches it reads into the run, and a checkpoint's
    verification and release, which its BDBV check needs;
@@ -149,6 +150,8 @@ MACHINE_KEYS = frozenset(
         "MEM_MB",
         "SIM_SLOTS",
         "DEVICE",
+        "TRAINER_CORES",
+        "GPUS",
         "CHECKPOINT_ABOVE",
         "TARGETS",
         "SCHEDULE_TARGETS",
@@ -436,7 +439,7 @@ def budget_of(
     This machine's, from `cfg`, for a local worker in this checkout.
     """
     if worker.local and Path(worker.checkout) == Path(checkout):
-        return {**machine.budget(cfg), "gpu": max(1, machine.gpus())}
+        return {**machine.budget(cfg), "gpu": machine.gpu_slots(cfg)}
     cmd = f"cd {shlex.quote(worker.checkout)} && "
     cmd += "python3 workflow/flowlib/machine.py budget"
     got = subprocess.run(
@@ -522,7 +525,6 @@ def _profile_args(
         f"gpu={total['gpu']}",
         *(f"gpu_{n}={b['gpu']}" for n, b in budgets.items()),
         f"sim_slots={cfg.get('SIM_SLOTS') or 2}",
-        f"gpu_share={machine.gpu_jobs(cfg) * total['gpu']}",
         "awaiting=1",
     ]
 

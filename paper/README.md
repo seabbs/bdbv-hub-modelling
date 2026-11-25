@@ -3,6 +3,10 @@
 The manuscript and supporting information for the paper on fine-tuning Chronos-2 on simulated outbreaks for nowcasting.
 One Snakemake workflow runs its evaluation, from each study's data to the figures, tables and numbers the paper quotes, and then renders the paper.
 
+In this project the paper reports the fine-tuned Chronos-2 model (`nowcastfoundation`) against the baselines (`nowcastbaselines`) on held-out simulations, the German benchmark (`nowcastgermany`) and the BDBV outbreak (`nowcastbdbv`).
+Its rules are a module of the [workflow](../workflow/README.md), and the Site workflow renders it into the docs site at `/paper/`.
+Its code layout is the last section below.
+
 ## Reproducing the paper
 
 From the repository root, with [uv](https://docs.astral.sh/uv/), [Task](https://taskfile.dev), [Quarto](https://quarto.org), git and a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN` or a `gh` login):
@@ -12,8 +16,9 @@ task paper                 # the development run, without the held-out data
 task paper TARGET=paper    # the paper run, with the held-out data
 ```
 
-CI runs the same steps (`python3 workflow/scripts/paper_run.py --render`, [`paper_run.py`](../workflow/scripts/paper_run.py)).
-It fetches the fit store, runs the target's missing steps, renders the paper as HTML and PDF and copies it into `docs/paper/`.
+CI runs the same steps (`python3 workflow/scripts/paper_run.py --render development --pages`, [`paper_run.py`](../workflow/scripts/paper_run.py)), with [`workflow/pages.yaml`](workflow/pages.yaml) over the config.
+That leaves out the simulations, fine-tuning runs and their scores, which the workflow's hosts make, so on the site the synthetic study runs on dummy data and those SI results say what they wait on.
+It runs the target's missing steps, renders the paper as HTML and PDF and copies it into `docs/paper/`.
 `CORES=8 task paper`, or `CORES` in `config/local.env`, sets Snakemake's cores (4 by default).
 From `paper/`, `task pipeline:dev`, `task pipeline:paper` and `task render` run the steps one at a time.
 

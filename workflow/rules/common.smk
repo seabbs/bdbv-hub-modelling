@@ -64,14 +64,14 @@ def released_ft_check_page(wc):
 
 def ft_check_record(wc):
     """The release record of a BDBV check forecast's checkpoint, when it
-    is one of the trained runs' saved checkpoints, so it is released
-    before it is forecast."""
+    is one of any run's saved checkpoints, so it is released before it is
+    forecast."""
     import glob
 
     if not wc.fmodel.startswith("ft-slots-"):
         return []
     key = wc.fmodel.removeprefix("ft-slots-")
-    for run in TRAINING.trained_runs():
+    for run in TRAINING.runs:
         train = train_dir(run)
         for settings in [
             *glob.glob(f"{train}/n*/settings.json"),

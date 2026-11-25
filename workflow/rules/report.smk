@@ -438,7 +438,6 @@ rule ft_check_forecast:
     resources:
         mem_mb=SC["mem_mb"],
         gpu=FORECAST.gpu,
-        gpu_share=FORECAST.gpu_share,
     params:
         env=unit_env,
         data=lambda wc, input: Path(input.data[0]).parent,

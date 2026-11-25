@@ -118,7 +118,8 @@ for _mode in MODES:
         name:
             f"synthetic_forecasts_{_mode}"
         input:
-            FLOW.synthetic_simulations(_mode),
+            sims=FLOW.synthetic_simulations(_mode),
+            finetuned=FINETUNED,
         output:
             SYNTHETIC["forecasts"][_mode],
         log:
@@ -129,20 +130,19 @@ for _mode in MODES:
         resources:
             heavy=1,
             gpu=FORECAST.gpu,
-            gpu_share=FORECAST.gpu_share,
         params:
             python=PYTHON,
             # The simulations folder, from its first file.
-            sims=lambda w, input: str(Path(input[0]).parent),
+            sims=lambda w, input: str(Path(input.sims[0]).parent),
             seeds=FLOW.seeds(_mode),
-            # The fine-tuned models wait for the final run's checkpoint.
+            # The fine-tuned models run once there is a final run.
             models=FLOW.synthetic_models_arg(),
             samples=config["synthetic"]["samples"],
             device=FORECAST.device,
             threads=FORECAST.threads,
             env=FORECAST.env,
         shell:
-            "exec >{log} 2>&1; {params.env} "
+            "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
             "{params.python} paper/scripts/run_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples {params.samples} "
             "--device {params.device} --threads {params.threads} {params.models}"
@@ -200,6 +200,7 @@ rule germany_fetch:
 rule germany_development:
     input:
         TRIANGLE,
+        FINETUNED,
     output:
         f"{GERMANY['results']}/paper-forecasts.csv.gz",
     log:
@@ -211,7 +212,6 @@ rule germany_development:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
-        gpu_share=FORECAST.gpu_share,
     params:
         env=FORECAST.env,
         germany=GERMANY_CLI,
@@ -219,7 +219,7 @@ rule germany_development:
         args=f"--config {GERMANY['config']} --data {GERMANY['data']}",
         out=lambda w, output: Path(output[0]).parent,
     shell:
-        "exec >{log} 2>&1; {params.env} "
+        "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
         "{params.germany} backtest {params.args} --out {params.out} && "
         "{params.germany} teams {params.args} --out {params.out} && "
         "{params.germany} paper --config {params.germany_root_config} "
@@ -230,6 +230,7 @@ rule germany_development:
 rule germany_heldout:
     input:
         TRIANGLE,
+        FINETUNED,
     output:
         f"{GERMANY['results']}/held-out/paper-forecasts.csv.gz",
     log:
@@ -241,7 +242,6 @@ rule germany_heldout:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
-        gpu_share=FORECAST.gpu_share,
     params:
         env=FORECAST.env,
         germany=GERMANY_CLI,
@@ -250,7 +250,7 @@ rule germany_heldout:
         # The held-out forecasts are in the results folder's held-out/.
         out=lambda w, output: Path(output[0]).parent.parent,
     shell:
-        "exec >{log} 2>&1; {params.env} "
+        "exec >{log} 2>&1; " + FT_EXPORT + " {params.env} "
         "{params.germany} backtest {params.args} --held-out "
         "--out {params.out} && "
         "{params.germany} teams {params.args} --held-out --out {params.out} && "
@@ -278,62 +278,39 @@ rule ebola_hub:
         "rm -rf {params.hub} && mv {params.hub}.clone {params.hub}"
 
 
-if FLOW.store_history():
+if FLOW.round_releases():
 
-    # Our stored forecasts made before each round closed, from the fit
-    # store's history release, checked against its checksum.
-    rule fit_store_history:
+    # Our models each round did not submit, from the round's release
+    # (`paperpipe round-releases`); the submitted ones are the hub's copy.
+    rule round_releases:
         output:
-            FLOW.store_history(),
+            FLOW.round_releases(),
         log:
-            f"{R}/logs/fit_store_history.log",
-        # gh release download: runs on the driver's host.
-        localrule: True
-        conda:
-            TOOLS_ENV
-        params:
-            repo=EBOLA["store_history"]["repo"],
-            tag=EBOLA["store_history"]["tag"],
-            asset=EBOLA["store_history"]["asset"],
-            tmp=f"{R}/evidence/fit-store-history.tmp",
-        shell:
-            "exec >{log} 2>&1; "
-            "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-            "gh release download {params.tag} -R {params.repo} "
-            "-p {params.asset} -p {params.asset}.sha256 -D {params.tmp} && "
-            "(cd {params.tmp} && sha256sum -c {params.asset}.sha256) && "
-            "mv {params.tmp}/{params.asset} {output} && rm -rf {params.tmp}"
-
-    # Opt-in: publish the fit store's history (`paperpipe fit-store-history`)
-    # with its checksum, replacing the release's assets.
-    rule publish_fit_store_history:
-        output:
-            touch(f"{R}/evidence/fit-store-history.published"),
-        log:
-            f"{R}/logs/publish_fit_store_history.log",
+            f"{R}/logs/round_releases.log",
+        # git fetch and gh release download: runs on the driver's host.
         localrule: True
         conda:
             TOOLS_ENV
         params:
             python=PYTHON,
-            repo=EBOLA["store_history"]["repo"],
-            branch=EBOLA["store_history"]["branch"],
-            tag=EBOLA["store_history"]["tag"],
-            asset=EBOLA["store_history"]["asset"],
-            tmp=f"{R}/evidence/history-upload",
+            repo=EBOLA["round_releases"]["repo"],
+            ledger=EBOLA["round_releases"]["ledger"],
+            asset=EBOLA["round_releases"]["asset"],
+            tmp=f"{R}/evidence/round-releases.tmp",
         shell:
             "exec >{log} 2>&1; "
             "rm -rf {params.tmp} && mkdir -p {params.tmp} && "
-            "git fetch -q origin {params.branch} && "
-            "{params.python} -m paperpipe fit-store-history "
-            "--ref origin/{params.branch} --out {params.tmp}/{params.asset} && "
-            "(cd {params.tmp} && sha256sum {params.asset} > {params.asset}.sha256) && "
-            "(gh release view {params.tag} -R {params.repo} > /dev/null || "
-            "gh release create {params.tag} -R {params.repo} --prerelease "
-            "--title 'Fit store history' "
-            "--notes 'The first fit of each model and origin, made before its round closed.') && "
-            "gh release upload {params.tag} -R {params.repo} --clobber "
-            "{params.tmp}/{params.asset} {params.tmp}/{params.asset}.sha256"
+            "git fetch -q origin {params.ledger} && "
+            "git show FETCH_HEAD:submissions.csv > {params.tmp}/submissions.csv && "
+            "tags=$(gh release list -R {params.repo} -L 1000 --json tagName "
+            "--jq '.[].tagName | select(startswith(\"round-\"))') && "
+            "for tag in $tags; do "
+            "gh release download $tag -R {params.repo} -p {params.asset} "
+            "-D {params.tmp}/$tag || echo \"$tag has no {params.asset}\"; "
+            "done && "
+            "{params.python} -m paperpipe round-releases "
+            "--releases {params.tmp} --ledger {params.tmp}/submissions.csv "
+            "--out {output} && rm -rf {params.tmp}"
 
 
 rule ebola_backtest_draws:
@@ -350,7 +327,6 @@ rule ebola_backtest_draws:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
-        gpu_share=FORECAST.gpu_share,
         heavy=1,
     params:
         env=FORECAST.env,
@@ -397,7 +373,6 @@ rule ebola_backtest:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
-        gpu_share=FORECAST.gpu_share,
     params:
         env=FORECAST.env,
         bdbv=BDBV,
@@ -448,7 +423,6 @@ rule forecasts:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
-        gpu_share=FORECAST.gpu_share,
     params:
         env=FORECAST.env,
         python=PYTHON,
@@ -651,7 +625,8 @@ rule sim_examples:
 # development data only (`nowcasteval.pairing`): the German development
 # half, and the development seeds' outbreaks as the synthetic runner
 # forecasts them. `si_copula` summarises both for the SI's copula figure.
-# A dummy German benchmark leaves them out.
+# A dummy German benchmark leaves them out, and null development
+# simulations the synthetic half and `si_copula`.
 if GERMANY["real"]:
 
     rule pairing_germany:
@@ -668,7 +643,6 @@ if GERMANY["real"]:
         threads: FORECAST.threads
         resources:
             gpu=FORECAST.gpu,
-            gpu_share=FORECAST.gpu_share,
             heavy=1,
         params:
             env=FORECAST.env,
@@ -679,6 +653,9 @@ if GERMANY["real"]:
             "exec >{log} 2>&1; {params.env} "
             "{params.germany} pairing-sensitivity {params.args} "
             "--out {params.out}"
+
+
+if GERMANY["real"] and SYNTHETIC["simulations"]["development"]:
 
     rule pairing_synthetic:
         input:
@@ -692,7 +669,6 @@ if GERMANY["real"]:
         threads: FORECAST.threads
         resources:
             gpu=FORECAST.gpu,
-            gpu_share=FORECAST.gpu_share,
             heavy=1,
         params:
             env=FORECAST.env,
@@ -809,6 +785,8 @@ rule summary:
     input:
         meta=FLOW.summary_meta,
         scores=FLOW.summary_scores,
+        # The checkpoint the `_ft` models loaded, which the summary names.
+        finetuned=FINETUNED,
     output:
         f"{R}/{{mode}}/results.yml",
     log:

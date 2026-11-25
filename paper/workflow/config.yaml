@@ -9,9 +9,10 @@ studies: [synthetic, germany, ebola]
 # The paper's final fine-tuning run: its folder, a `runs` entry of the
 # workflow (workflow/config.yaml), under the machine's ROOT. Its validation
 # loss curve is the SI's (rule validation_curve), and every `_ft` model
-# loads its newest saved checkpoint, train/n<N>
-# (nowcastfoundation.forecaster.newest_segment); before it has one the
-# fine-tuned forecasts are pending. Null leaves the run out.
+# loads its final checkpoint, train/n<last prefix>, whose release record
+# (published.json, rule publish_checkpoint) is an input of each rule that
+# runs one, so a new final checkpoint reruns them. Null leaves the run
+# out and the fine-tuned forecasts pending.
 final_run: $ROOT/runs/runa
 # The simulation rounds' folder under the machine's ROOT (the workflow's
 # rounds): the SI's realism reads the grid's training rounds
@@ -88,8 +89,9 @@ germany:
 # from every past release, with the stored fits' (`bdbvhub
 # backtest`, after `fit-store load` on CI), the hub's releases, and once
 # the hub's baseline has a forecast with known truth, every team's
-# forecasts, our stored forecasts and the fit store. `hub: null` runs the
-# study on dummy data.
+# forecasts from the hub, our submissions among them, and our unsubmitted
+# models' from each round's release. `hub: null` runs the study on dummy
+# data.
 ebola:
   backtest: results/forecasts.csv.gz
   # Main's data, whose releases give the observations and truth, and the
@@ -106,14 +108,14 @@ ebola:
   n_samples: 1000
   hub: data/raw/bdbv-hub
   hub_repo: https://github.com/InsightNet-US/BDBV-Modeling-Hub.git
-  # Our stored forecasts made before each round closed: the fit store's
-  # history, published as a release asset (rule publish_fit_store_history)
-  # and fetched with its checksum (rule fit_store_history).
-  store_history:
+  # Our models a round did not submit, from that round's release
+  # (`round-<reference date>`), whose asset holds every model's forecast
+  # in the hub's format; the ledger branch's table says which model went
+  # out under each hub id (rule round_releases).
+  round_releases:
     repo: seabbs/bdbv-hub-modelling
-    branch: fit-store
-    tag: fit-store-history
-    asset: fit-store-history.csv.gz
+    ledger: submission-ledger
+    asset: hub.zip
 
 # What the nowcast panels show (`paperfigs.nowcasts`). The main panel
 # shows the national series of a case study, or one synthetic outbreak;

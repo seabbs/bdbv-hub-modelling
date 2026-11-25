@@ -1,8 +1,10 @@
 """Runs are config entries: the same rules, each run in its own folder."""
 
+import re
+
 import pytest
-from flowlib import localconfig, runs
-from test_workflow_dryrun import FT, dry, dry_run
+from flowlib import compute, localconfig, runs
+from test_workflow_dryrun import FT, _jobs_of, dry, dry_run
 
 pytest.importorskip("snakemake")
 
@@ -36,14 +38,6 @@ def test_run_b_trains_with_the_release_layer():
     assert (runs.CONFIG.parents[1] / layer).is_file()
     assert f"--release-layer {layer}" in runs.trainer_options(found["runb"])
     assert "--release-layer" not in runs.trainer_options(found["runa"])
-    assert runs.trained(cfg, found) == ["runa"]
-
-
-def test_only_run_a_trains_until_the_variants_are_due():
-    # The variants come after Run A (#261): `finetune` must not start them
-    # beside it on the GPU.
-    cfg = runs.load_config()
-    found = runs.resolve(cfg, {"ROOT": "/data", "SIMS_FROM": ""})
     assert runs.trained(cfg, found) == ["runa"]
 
 
@@ -159,21 +153,53 @@ def test_the_no_delays_run_is_run_a_on_complete_counts():
     assert "--layout" not in runs.trainer_options(found["runa"])
 
 
-def test_a_variant_trains_only_after_the_runs_finetune_trains(tmp_path):
-    # Asked for (by the paper's block combinations, say), a run outside
-    # `train_runs` starts only once those runs' final checkpoints exist,
-    # so it never takes their GPU.
+def test_a_run_trains_without_waiting_on_any_other(tmp_path):
+    # Every run trains on its own: one outside `train_runs`, asked for
+    # (by the paper's block combinations, say), plans no other run's
+    # segments, and two runs' segments depend on nothing of each other.
     target = f"{tmp_path}/runs/b/train/n250/settings.json"
     jobs = dry(tmp_path, target, config={**TWO, "train_runs": ["a"]})
-    assert jobs["train_segment"] == 3
-    # A run that `finetune` trains waits on no other.
-    target = f"{tmp_path}/runs/a/train/n250/settings.json"
-    assert (
-        dry(tmp_path, target, config={**TWO, "train_runs": ["a"]})[
-            "train_segment"
-        ]
-        == 1
+    assert jobs["train_segment"] == 1
+    # Both runs at once: each run's first segment waits on no trainer.
+    config = {**TWO, "train_runs": ["a"]}
+    out = dry_run(tmp_path, "finetune", target, config=config, extra=["--dag"])
+    assert out.returncode == 0, out.stderr
+    jobs = dict(re.findall(r'^\s*(\d+)\[label = "([^"]+)"', out.stdout, re.M))
+    edges = re.findall(r"^\s*(\d+) -> (\d+)$", out.stdout, re.M)
+    trainers = {j for j, label in jobs.items() if label.startswith("train_")}
+    assert len(trainers) == 3
+    after = {j: set() for j in jobs}
+    for a, b in edges:
+        after[b].add(a)
+
+    def upstream(j, seen):
+        for k in after[j] - seen:
+            seen.add(k)
+            upstream(k, seen)
+        return seen
+
+    firsts = [j for j in trainers if not upstream(j, set()) & trainers]
+    assert len(firsts) == 2
+
+
+def test_the_runs_trainers_queue_in_the_config_s_order(tmp_path):
+    # With fewer GPUs than runs, the trained runs go first, in order,
+    # then the others; every trainer stays above every other job.
+    out = dry_run(
+        tmp_path,
+        "finetune",
+        f"{tmp_path}/runs/b/train/n250/settings.json",
+        config={**TWO, "train_runs": ["a"]},
+        quiet=False,
     )
+    assert out.returncode == 0, out.stderr + out.stdout
+    got = {}
+    for job in _jobs_of(out, "train_segment"):
+        run = re.search(r"run=(\w+)", job["wildcards"])[1]
+        got.setdefault(run, set()).add(job["priority"])
+    assert min(got["a"]) > max(got["b"])
+    assert min(got["b"]) >= compute.TRAIN_PRIORITY
+    assert max(got["a"]) < compute.TRAIN_PRIORITY + 1
 
 
 def test_the_real_data_run_is_run_a_with_the_german_blocks():

@@ -24,35 +24,6 @@ def test_a_machine_overrides_the_config():
     assert (got.device, got.threads) == ("cuda", 8)
 
 
-def test_a_machine_shares_the_trainer_s_gpu():
-    got = forecast.settings(
-        CONFIG, {"FORECAST_DEVICE": "cuda", "FORECAST_GPU": "share"}
-    )
-    assert (got.device, got.gpu_mode, got.gpu, got.gpu_share) == (
-        "cuda",
-        "share",
-        0,
-        1,
-    )
-
-
-@pytest.mark.parametrize(
-    ("device", "mode"),
-    [("cuda", "exclusive"), ("cpu", "share"), ("cpu", "exclusive")],
-)
-def test_only_shared_cuda_takes_a_shared_slot(device, mode):
-    assert forecast.Forecast(device, 2, mode).gpu_share == 0
-
-
-def test_every_forecasting_rule_takes_a_shared_slot():
-    # A rule taking FORECAST.gpu takes FORECAST.gpu_share too, so
-    # FORECAST_GPU_JOBS caps the jobs beside the trainer.
-    for name, text in _rule_shells().items():
-        assert text.count("gpu=FORECAST.gpu,") == text.count(
-            "gpu_share=FORECAST.gpu_share,"
-        ), name
-
-
 def test_an_unknown_device_is_refused():
     with pytest.raises(ValueError, match="not one of"):
         forecast.settings(CONFIG, {"FORECAST_DEVICE": "auto"})

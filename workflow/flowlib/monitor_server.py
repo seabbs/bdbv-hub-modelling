@@ -1,7 +1,7 @@
 """The monitor's server: Panoptes, with the workflow's DAG beside it.
 
 It is each machine's one entry: the fine-tuning dashboard is served under
-`/finetune/` (`add_finetune`).
+`/finetune/` and the simulations under `/sims/` (`add_finetune`).
 
 Panoptes (`panoptes-ui`) shows each run's jobs; `/dag/` adds the rule
 graph and job DAG of the targets `MONITOR_DAG` names (flowlib.dag),
@@ -53,10 +53,12 @@ MAX_GROUPS = 60
 LINK = (
     '<a class="nav-link" href="/finetune/">'
     '<i class="nav-icon icon-graph"></i>Fine-tuning</a>'
+    '<a class="nav-link" href="/sims/">'
+    '<i class="nav-icon icon-chart"></i>Simulations</a>'
     '<a class="nav-link" href="/dag/">'
     '<i class="nav-icon icon-share"></i>DAG</a>'
 )
-"""The links Panoptes' pages gain to the fine-tuning dashboard and DAG."""
+"""The links Panoptes' pages gain to the dashboards and DAG."""
 
 _STYLE = """<style>
 :root { --fg: #222; --bg: #fff; --muted: #666; --line: #ccc; }
@@ -418,12 +420,13 @@ def add_dag(app, cfg: Mapping[str, str], seen) -> None:
 
 
 def add_finetune(app, cfg: Mapping[str, str]) -> None:
-    """Serve the fine-tuning dashboard under `/finetune/`.
+    """Serve the dashboards under `/finetune/` and `/sims/`.
 
     The dashboard (workflow/scripts/dashboard.py) listens on
-    DASHBOARD_HOST:DASHBOARD_PORT, by default this machine only; each
-    request under `/finetune/` is passed to it, so the monitor's port is
-    the one entry.
+    DASHBOARD_HOST:DASHBOARD_PORT, by default this machine only, with
+    the fine-tuning dashboard at `/` and the simulations at `/sims/`;
+    each request under `/finetune/` or `/sims/` is passed to it, so the
+    monitor's port is the one entry.
     """
     import urllib.error
     import urllib.request
@@ -432,31 +435,41 @@ def add_finetune(app, cfg: Mapping[str, str]) -> None:
 
     base = f"http://{cfg['DASHBOARD_HOST']}:{cfg['DASHBOARD_PORT']}"
 
-    def bare():
-        return redirect("/finetune/", code=308)
+    def proxy(prefix: str, upstream: str, missing: str) -> None:
+        def bare():
+            return redirect(f"/{prefix}/", code=308)
 
-    def proxied(path: str = ""):
-        query = request.query_string.decode()
-        url = f"{base}/{path}" + (f"?{query}" if query else "")
-        try:
-            with urllib.request.urlopen(url, timeout=60) as got:
-                return Response(
-                    got.read(),
-                    status=got.status,
-                    content_type=got.headers.get("Content-Type"),
-                )
-        except urllib.error.HTTPError as err:
-            return Response(err.read(), status=err.code)
-        except OSError:
-            return (
-                "The fine-tuning dashboard is not running: it is served "
-                "with a fine-tuning run.",
-                503,
-            )
+        def proxied(path: str = ""):
+            query = request.query_string.decode()
+            url = f"{base}{upstream}{path}" + (f"?{query}" if query else "")
+            try:
+                with urllib.request.urlopen(url, timeout=60) as got:
+                    return Response(
+                        got.read(),
+                        status=got.status,
+                        content_type=got.headers.get("Content-Type"),
+                    )
+            except urllib.error.HTTPError as err:
+                return Response(err.read(), status=err.code)
+            except OSError:
+                return missing, 503
 
-    app.add_url_rule("/finetune", "finetune_bare", bare)
-    app.add_url_rule("/finetune/", "finetune_index", proxied)
-    app.add_url_rule("/finetune/<path:path>", "finetune_path", proxied)
+        app.add_url_rule(f"/{prefix}", f"{prefix}_bare", bare)
+        app.add_url_rule(f"/{prefix}/", f"{prefix}_index", proxied)
+        app.add_url_rule(f"/{prefix}/<path:path>", f"{prefix}_path", proxied)
+
+    proxy(
+        "finetune",
+        "/",
+        "The fine-tuning dashboard is not running: it is served with a "
+        "fine-tuning run.",
+    )
+    proxy(
+        "sims",
+        "/sims/",
+        "The simulations dashboard is not running: it is served with a "
+        "run that simulates or fine-tunes.",
+    )
 
 
 def panoptes_jobs() -> list[dict]:

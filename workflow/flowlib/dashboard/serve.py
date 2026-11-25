@@ -1,4 +1,4 @@
-"""Serve the fine-tuning dashboard with a workflow run, or alone.
+"""Serve the dashboard with a workflow run, or alone.
 
 One entry for both: `ensure` starts `workflow/scripts/dashboard.py`
 detached, listening on DASHBOARD_HOST:DASHBOARD_PORT, unless the one in
@@ -7,10 +7,10 @@ the process it was started for ends (`--while-pid`): the coordinator
 run (`DRIVER_ENV`, set by workflow/scripts/coordinate.py), else the
 Snakemake run. The workflow calls it from its `onstart` when
 `dashboard.serve` is true (the default); with no runs named it shows
-every run under ROOT. The same hook keeps one long-lived monitor
-serving (`ensure_monitor`), which serves the dashboard under
-/finetune/. `task workflow:dashboard` runs the dashboard in the
-foreground.
+every run under ROOT, and their simulations under /sims/. The same hook
+keeps one long-lived monitor serving (`ensure_monitor`), which serves
+the dashboard under /finetune/ and /sims/. `task workflow:dashboard`
+runs the dashboard in the foreground.
 """
 
 from __future__ import annotations
@@ -84,15 +84,21 @@ JOB_ENV = "WORKFLOW_JOB"
 """Set in a worker's job (flowlib.compute.job_env), which serves nothing."""
 
 
+SERVED_FOR = ("finetune", "simulate", "push")
+"""The targets a run serves the dashboard for: it fine-tunes or simulates."""
+
+
 def wanted(config: Mapping[str, object], targets: list[str]) -> bool:
     """Return whether this run serves the dashboard.
 
     It does when `dashboard.serve` is true, its targets include
-    `finetune`, and it is not one job of another machine's run.
+    `finetune`, `simulate` or `push` (`SERVED_FOR`), and it is not one
+    job of another machine's run.
     """
     dash = config.get("dashboard") or {}
     on = bool(dash.get("serve")) if isinstance(dash, Mapping) else False
-    return on and "finetune" in targets and not os.environ.get(JOB_ENV)
+    named = any(t in SERVED_FOR for t in targets)
+    return on and named and not os.environ.get(JOB_ENV)
 
 
 def driver_pid() -> int:
