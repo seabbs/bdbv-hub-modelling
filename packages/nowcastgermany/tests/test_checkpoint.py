@@ -903,6 +903,7 @@ def _unit_files(root: Path) -> dict[str, pd.DataFrame]:
     return {p.name: pd.read_csv(p) for p in sorted(root.glob("*.csv.gz"))}
 
 
+@pytest.mark.filterwarnings("ignore:This process .* is multi-threaded")
 @pytest.mark.parametrize("step", [1, 3])
 def test_a_unit_split_over_workers_writes_what_one_process_does(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, step: int
@@ -955,3 +956,25 @@ def test_a_unit_split_over_workers_writes_what_one_process_does(
     seen.clear()
     ck.germany_unit(tmp_path / "w3", "n100")
     assert seen == []
+
+
+def test_a_worker_pins_itself_to_its_share_of_the_unit_s_cores(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import multiprocessing
+
+    from nowcastgermany import data as dg
+    from nowcastutils import devices
+
+    pinned: list = []
+    monkeypatch.setattr(
+        os, "sched_setaffinity", lambda _pid, c: pinned.append(c), raising=False
+    )
+    monkeypatch.setattr(devices, "allowed_cpus", lambda: [4, 5, 6, 7])
+    monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
+    monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
+    counter = multiprocessing.Value("i", 0)
+    for _ in range(2):
+        ck._start_worker("abc", None, tmp_path, counter, 2)
+    assert pinned == [[4, 5], [6, 7]]
+    assert os.environ["BDBV_CHRONOS_FT"] == "abc"

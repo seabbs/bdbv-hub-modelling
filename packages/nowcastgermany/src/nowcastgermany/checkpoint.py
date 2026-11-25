@@ -568,14 +568,16 @@ def _start_worker(
 ) -> None:
     """Set up a worker: its checkpoint, its own cores, and the triangle."""
     from nowcastgermany.data import hub_triangle
+    from nowcastutils.devices import allowed_cpus
 
     _pin(label, segment)
-    if hasattr(os, "sched_setaffinity"):
+    # Looked up, not named: mypy checks `os` as each platform has it.
+    pin = getattr(os, "sched_setaffinity", None)
+    if pin is not None:
         with counter.get_lock():
             index = counter.value
             counter.value += 1
-        cores = sorted(os.sched_getaffinity(0))
-        os.sched_setaffinity(0, worker_cores(cores, index, workers))
+        pin(0, worker_cores(allowed_cpus(), index, workers))
     _TRIANGLE[:] = [hub_triangle(path)]
 
 
