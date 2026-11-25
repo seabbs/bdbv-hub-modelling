@@ -50,21 +50,17 @@ Recent weeks are revised in later releases, so each forecast is made from one vi
 The count of a day is its known plus imputed onsets, and the counts of a week sum to the hub's weekly target.
 A release has an `as_of` date and a data cut-off ([Vintages](#vintages)).
 A release observes the days up to its cut-off, and a day in range with no row counts 0.
-The [Baseline models](baselines.md#daily-release-snapshots) page compares the counts of a day across releases by its age at each cut-off.
+The baseline models compare the counts of a day across releases by its age at each cut-off ([supporting information](../paper/si.html#baselines)).
 
 ## Delay and missingness data
 
-The hub imputes an onset for each case reported without one by subtracting a delay drawn from a fit to its published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), [Renewal models](model.md#hub-imputation)).
+The hub imputes an onset for each case reported without one by subtracting a delay drawn from a fit to its published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), [supporting information](../paper/si.html#renewal-model)).
 So the share of cases without an onset is measured at every vintage.
 
 ## BVDOutbreakSize estimates
 
 `renewalbvd` uses the Rt estimates in the public `results-<run>` releases of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) (MIT licence, [Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
 These are the national $R_T$ draws, the patch summaries with the national $R_T$ they are relative to where the release has them, and the release's data cut-off.
-Early releases give only the growth rate $r$, which is turned into $R_T = (1 + r\theta)^k$ with BVDOutbreakSize's Gamma generation interval (mean 15.3 days, SD 9.3 days, shape $k$, scale $\theta$).
-Each forecast uses the newest release whose files were all last updated by the forecast's cut-off, whose data end by the forecast date and whose fit converged.
-The cut-off is the end of the Sunday that opens the round's submission window, Kinshasa time, or the end of the vintage date if that is later.
-The joint fit's worst R-hat must be at most 1.1, and effective sample sizes are ignored.
-The R-hat is read from the fit diagnostics table in the release's rendered site, and a release without a readable table is passed over for the next older one.
+Which release a forecast uses, how growth rates are turned into $R_T$ and how the estimates enter the model are in the paper's [supporting information](../paper/si.html#renewal-model).
+The release's joint-fit R-hat is read from the fit diagnostics table in its rendered site, and a release without a readable table is passed over for the next older one.
 Each fit records the release it used, its R-hat and why newer releases were skipped.
-Their use is on the [Renewal models page](model.md#bvdoutbreaksize-informed).
