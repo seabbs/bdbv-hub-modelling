@@ -177,7 +177,6 @@ def test_every_gpu_job_asks_slurm_for_its_gpu(tmp_path):
     for rule in (
         "train_segment",
         "evaluate_base",
-        "evaluate_steps",
         "evaluate_checkpoint",
         "seven_day_check",
         "score_run_germany",

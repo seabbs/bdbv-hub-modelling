@@ -337,7 +337,7 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
             rule == "ft_check_forecast" and "fmodel=ft-" not in wildcards
         ):
             tiers["reference"].append(priority)
-        elif rule in ("evaluate_steps", "evaluate_base", "evaluate_checkpoint"):
+        elif rule in ("evaluate_base", "evaluate_checkpoint"):
             tiers["evaluate"].append(priority)
         elif rule in ("score_run_germany", "ft_check_forecast"):
             tiers["checkpoint"].append(priority)
