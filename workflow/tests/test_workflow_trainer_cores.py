@@ -73,6 +73,6 @@ def test_the_trainer_claims_none_of_the_side_cores(tmp_path):
     for rule, side in claims:
         got.setdefault(rule, set()).add(int(side))
     assert got["train_segment"] == {0}
-    assert got["simulate_batch"] == {1}
+    assert got["score_run_germany"] == {2}
     beside = [v for r, v in got.items() if r != "train_segment"]
     assert all(min(v) >= 1 for v in beside)

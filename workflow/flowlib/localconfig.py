@@ -68,6 +68,10 @@ DEFAULTS = (
     ("MEM_MB", ""),
     ("SIM_SLOTS", ""),
     ("DEVICE", "auto"),
+    # The cores kept for the trainer, which jobs beside it never take
+    # (flowlib.machine.side_cores): its threads, `finetune.cut_workers`
+    # + 1 in workflow/config.yaml; 0 where nothing trains.
+    ("TRAINER_CORES", "4"),
     # Series above which a training step recomputes activations in
     # backward (empty: the trainer's memory budget sets it); lower on a
     # small GPU. Memory only, outside the checkpoint's hash.
