@@ -1515,35 +1515,3 @@ def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
     ]
     assert "--dry-run" in command
     assert "--repo" not in command
-
-
-def test_the_ebola_ablation_runs_each_variant_and_model(tmp_path):
-    # The ablation target (#1123): each variant's data, each model's
-    # forecasts of it, its summary, and one page.
-    _hub(tmp_path)
-    sims = tmp_path / "sims"
-    sims.mkdir()
-    for seed in (33300, 33301):
-        (sims / f"counts-{seed}.csv.gz").write_text("")
-    config = {
-        "ablation": {
-            "sims": str(sims),
-            "seeds": [33300, 33301],
-            "sim_variants": ["few", "fresh"],
-            "bdbv_variants": ["as_is"],
-            "models": ["randomwalknowcast", "foundation_pseudoweeks"],
-        }
-    }
-    out = dry_run(tmp_path, "ablation", config=config, quiet=False)
-    assert out.returncode == 0, out.stderr + out.stdout
-    jobs = dict(re.findall(r"^(\w+)\s+(\d+)$", out.stdout, re.M))
-    assert jobs["ablation_data"] == "3"
-    assert jobs["ablation_forecast"] == "6"
-    assert jobs["ablation_summary"] == "3"
-    assert jobs["ablation_report"] == "1"
-    assert (
-        "--model foundation_pseudoweeks --checkpoint 'slots-c44bbe122e6c'"
-        in out.stdout
-    )
-    assert "--model randomwalknowcast --checkpoint ''" in out.stdout
-    assert "ablation/ebola-ablation.html" in out.stdout

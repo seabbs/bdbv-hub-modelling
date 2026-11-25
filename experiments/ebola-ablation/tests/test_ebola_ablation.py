@@ -1,14 +1,13 @@
 """The Ebola ablation (workflow/scripts/ebola_ablation.py)."""
 
-import json
 import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).parents[2]
-sys.path.insert(0, str(ROOT / "workflow" / "scripts"))
+ROOT = Path(__file__).parents[3]
+sys.path.insert(0, str(ROOT / "experiments" / "ebola-ablation"))
 import ebola_ablation as ea  # noqa: E402
 
 
@@ -47,68 +46,6 @@ def test_the_delay_line_keeps_every_case_under_the_cap() -> None:
         "CD-NK": 1000,
     }
     assert (line.loc[line["location"] == "CD-NK", "delay"] == 30).all()
-
-
-def _summary(models: dict[str, float]) -> dict:
-    return {
-        "overall": [
-            {
-                "model": m,
-                "relative_crps": v,
-                "relative_log_crps": v,
-                "n": 10,
-            }
-            for m, v in models.items()
-        ],
-        "by_weeks_back": [
-            {
-                "model": m,
-                "weeks_back": 0,
-                "relative_crps": v,
-                "relative_log_crps": v,
-            }
-            for m, v in models.items()
-        ],
-        "calibration": [
-            {
-                "model": m,
-                "level": "national",
-                "weeks_back": 0,
-                "median_over_truth": 1.0,
-                "median_over_reported": 1.0,
-                "coverage_90": 0.9,
-            }
-            for m in models
-        ],
-    }
-
-
-def test_the_report_shows_each_variant_with_and_without_pseudo_weeks(
-    tmp_path,
-) -> None:
-    scores = {
-        "foundation_zeroshot": 1.5,
-        "foundation": 3.7,
-        "foundation_zeroshot_pseudoweeks": 1.4,
-        "foundation_pseudoweeks": 1.1,
-    }
-    for side, variant in (("sim", "few"), ("bdbv", "as_is")):
-        d = tmp_path / side / variant
-        d.mkdir(parents=True)
-        (d / "summary.json").write_text(json.dumps(_summary(scores)))
-    out = tmp_path / "report.html"
-    ea.report(
-        [tmp_path / "sim" / "few", tmp_path / "bdbv" / "as_is"],
-        out,
-        checkpoint="slots-c44bbe122e6c",
-    )
-    html = out.read_text()
-    assert "BDBV releases" in html
-    assert "BDBV hub data" in html
-    assert "Pseudo weeks" in html
-    for v in ("3.70", "1.10", "1.40"):
-        assert v in html
-    assert "slots-c44bbe122e6c" in html
 
 
 def test_the_backtest_config_takes_the_draws_and_delay(tmp_path) -> None:

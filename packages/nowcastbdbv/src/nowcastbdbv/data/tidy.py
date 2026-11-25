@@ -13,6 +13,8 @@ The hub publishes these streams (see `DATA_STREAMS`):
   onset-to-report delay. Only the latest vintage is in the file.
   Earlier vintages are in `archived-delay-data/` or only in the git
   history, so `fetch_hub_data` walks the history to find them all.
+- `auxiliary-data/daily-missing-symptom-by-report-date.csv`: cases with
+  no onset date by report day, for each release (raw only).
 - `auxiliary-data/locations.csv` and `health-zone-code-mapping.csv`:
   location codes, names and parents.
 - `hub-config/`: the round configuration, used for validation.
@@ -146,6 +148,10 @@ DATA_STREAMS: Final[dict[str, str]] = {
         "One row per known-onset case: province, onset week and "
         "onset-to-report delay in days. Latest vintage only; earlier "
         "vintages are in the archive folder or the git history."
+    ),
+    "auxiliary-data/daily-missing-symptom-by-report-date.csv": (
+        "Cases with no onset date, by report day and release, for the "
+        "country, provinces and health zones."
     ),
     "auxiliary-data/locations.csv": (
         "Location codes, names, types and parents."
