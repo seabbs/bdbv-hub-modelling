@@ -38,3 +38,26 @@ def test_forecasting_jobs_run_on_their_threads_of_cores():
     got = s._env(forecast.Forecast("cpu", 2), 3)
     assert got.startswith(f"{machine.CPUS} 3 ")
     assert "OMP_NUM_THREADS=3" in got
+
+
+def test_side_jobs_never_take_the_trainer_s_cores(tmp_path):
+    allowed = list(range(8))
+    kept = cpus.reserved(allowed, 3)
+    assert kept == [5, 6, 7]
+    side, held = cpus.take(cpus.unreserved(allowed, 3), 6, tmp_path)
+    assert not set(side) & set(kept)
+    trainer, held2 = cpus.take(kept, 3, tmp_path)
+    assert trainer == kept
+    for fd in held + held2:
+        os.close(fd)
+
+
+def test_the_trainer_runs_through_the_core_claim():
+    text = (
+        Path(__file__).parents[2] / "workflow/rules/finetune.smk"
+    ).read_text()
+    block = text.split("rule train_segment:", 1)[1].split("\nrule ", 1)[0]
+    assert "{params.claim} {params.cpus}" in block
+    assert f'cpus=f"{{machine.CPUS}} --trainer"' in block or (
+        "cpus=machine.CPUS_TRAINER" in block
+    )
