@@ -183,7 +183,8 @@ It runs two ways, through the one script (`flowlib.dashboard.serve`):
 - with the run: `dashboard.serve: true` in the workflow config (the default), on a machine whose targets (`TARGETS`) include `finetune`, starts it from the run's own checkout and local config when the run starts, showing the runs it trains (the Snakefile's `onstart`), unless one is already serving (`<DASHBOARD_ROOT>/dashboard/serve.pid`, log beside it). It ends by itself when the coordinator (`task workflow:run`) ends, or with that Snakemake run when there is no coordinator, so it stays up across ticks and needs no worktree or tmux loop of its own;
 - alone: `task workflow:dashboard`, from any checkout, in the foreground.
 
-Either shows the runs under `DASHBOARD_ROOT` (default `ROOT`), so a checkout can watch another machine folder's runs.
+Either shows the runs under `DASHBOARD_ROOT` (default `ROOT`) that have trained there, the most recently active first, found again on each refresh, so a new run appears in the run picker by itself; `--run NAME` shows only the runs named.
+The machine's monitor serves it under `/finetune/` (see Monitor), so the monitor's port is the one address to open or forward.
 `task workflow:dashboard-static` builds the rule `dashboard`, a static render of the same page in `<ROOT>/reports/dashboard.html`.
 
 The page has a sticky bar (section links, the live run's step, one run and reference selector every chart follows) and sections: Status (tiles), Loss (client-side plots), Attention bias, Performance on real data (scores by study, score, target and source), Nowcasts (every dataset), Recent activity (with a mailbox) and Tables. Every chart has an info marker (`page/explain.json`).
@@ -241,7 +242,7 @@ LOCAL_CONFIG=<run folder>/local.env nohup task workflow:run > <run folder>/coord
 ```
 
 Stop it with `touch output/coordinator.stop` in the driver checkout, which ends it after the running tick.
-The run serves its dashboard on `DASHBOARD_HOST:DASHBOARD_PORT` for as long as the coordinator lives (section 6).
+The run serves its dashboard for as long as the coordinator lives, and the machine's monitor at `MONITOR_HOST:MONITOR_PORT` shows it at `/finetune/` (section 6).
 
 ## Scheduled runs
 
@@ -273,6 +274,7 @@ Nothing here needs an agent or a notes file; with `NOTIFY` set, rules still add 
 ## Monitor
 
 `task workflow:monitor` serves [Panoptes](https://github.com/panoptes-organization/panoptes), Snakemake's web monitor: every run's jobs, their state, what is running and what has failed, in one page.
+It is each machine's one entry: a fine-tuning run starts it, unless one is already serving (`<ROOT>/monitor/serve.pid`), and it keeps serving after the run ends; it serves the fine-tuning dashboard at `/finetune/`, linked from its pages beside the DAG.
 Every Snakemake run the tasks, ticks and paper scripts start reports to it through the logger plugin `snakemake-logger-plugin-panoptes` (`workflow/flowlib/monitor.py`), on by default.
 Runs report to `MONITOR_URL`; another machine's runs report to the serving machine's address, and an empty `MONITOR_URL` switches reporting off.
 The plugin drops events it cannot send, so a run goes on when no server is listening.

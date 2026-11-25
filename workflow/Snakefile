@@ -53,15 +53,17 @@ rule all:
 
 
 onstart:
-    # The fine-tuning dashboard of the runs it trains, served with a run
-    # that fine-tunes (`dashboard.serve`); it ends with the coordinator,
-    # or with this run (flowlib.dashboard.serve).
+    # The fine-tuning dashboard of the runs under ROOT, served with a run
+    # that fine-tunes (`dashboard.serve`) until the coordinator, or this
+    # run, ends; and the machine's monitor, which serves it under
+    # /finetune/ and outlives the run (flowlib.dashboard.serve).
     from flowlib.dashboard import serve
 
     if serve.wanted(config, TARGETS):
         # A side process: never the reason a run fails.
         try:
-            serve.ensure(LOCAL, serve.driver_pid(), runs=TRAINING.trained_runs())
+            serve.ensure(LOCAL, serve.driver_pid())
+            serve.ensure_monitor(LOCAL)
         except Exception as e:
             say(f"dashboard not served: {e}")
 

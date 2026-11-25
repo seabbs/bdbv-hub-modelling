@@ -22,7 +22,7 @@
  function poll(){
   if(window.ftPlaying)return;
   var q=Object.keys(have).map(function(k){return k+":"+have[k]}).join(",");
-  fetch("/sections.json?have="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(j){
+  fetch("sections.json?have="+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(j){
    // The first answer only records what the page was built with.
    Object.keys(j).forEach(function(k){var v=j[k];
     if(first||v.html===undefined){have[k]=v.hash;return}

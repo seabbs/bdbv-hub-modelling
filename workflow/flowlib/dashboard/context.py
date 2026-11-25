@@ -52,10 +52,12 @@ def references(
 def workflow_runs(
     config: Mapping[str, Any], local: Mapping[str, str], names: Sequence[str]
 ) -> list[spec.Run]:
-    """Return the workflow's runs (`runs`), or those `names` picks.
+    """Return the runs `names` picks, else every run under ROOT.
 
-    Each run is its folder, `<ROOT>/runs/<name>` (flowlib.runs). The
-    first is live: the first named, else the first in the config.
+    Each run is its folder, `<ROOT>/runs/<name>` (flowlib.runs). With no
+    names, the workflow's runs (`runs`) that have trained here, newest
+    activity first (`active_runs`), else all of them in the config's
+    order. The first is live.
 
     Raises
     ------
@@ -69,14 +71,29 @@ def workflow_runs(
             f"no run {', '.join(unknown)}: the workflow's runs are "
             f"{', '.join(known)}"
         )
-    chosen = list(names) or known
+    root = Path(local.get("DASHBOARD_ROOT") or local.get("ROOT") or ".")
+    root = root.expanduser()
+    chosen = list(names) or active_runs(known, root) or known
     if not chosen or not local.get("ROOT"):
         raise SystemExit(
             "no runs to show: the dashboard shows the workflow's runs "
             "(runs in workflow/config.yaml) under ROOT in config/local.env"
         )
-    root = Path(local.get("DASHBOARD_ROOT") or local["ROOT"]).expanduser()
     return spec.load_runs([(n, root / "runs" / n) for n in chosen])
+
+
+def active_runs(known: Sequence[str], root: Path) -> list[str]:
+    """Return the runs of `known` that have trained under `root`.
+
+    The most recently active first, by the newest file in its `train/`.
+    """
+
+    def last(name: str) -> float:
+        train = root / "runs" / name / "train"
+        return max((p.stat().st_mtime for p in train.iterdir()), default=0.0)
+
+    found = [n for n in known if (root / "runs" / n / "train").is_dir()]
+    return sorted(found, key=last, reverse=True)
 
 
 def build(
