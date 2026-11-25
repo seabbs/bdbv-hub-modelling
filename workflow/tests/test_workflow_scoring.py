@@ -150,3 +150,16 @@ def test_the_reference_unit_reads_its_code_key_as_a_file(tmp_path):
     assert Path(ref).parent == tmp_path / "cache" / "keys"
     assert Path(ref).name.startswith(f"{scoring.REFERENCE}-")
     assert s.reference_key_input("abc123") == []
+
+
+def test_boundary_jobs_go_before_the_trainer_only_on_a_gpu():
+    from types import SimpleNamespace
+
+    from flowlib import compute, forecast, scoring
+
+    s = scoring.Scoring.__new__(scoring.Scoring)
+    wc = SimpleNamespace(n="400")
+    s.boundary_forecast = forecast.Forecast("cuda", 2)
+    assert s.boundary_priority(wc) > compute.TRAIN_PRIORITY + 1
+    s.boundary_forecast = forecast.Forecast("cpu", 2)
+    assert s.boundary_priority(wc) < compute.HANDOFF_PRIORITY

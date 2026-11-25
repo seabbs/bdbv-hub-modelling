@@ -132,3 +132,21 @@ def test_evaluation_logs_each_batch(tmp_path, fake, monkeypatch, capsys):
     # Outside an evaluation nothing is logged.
     mod.fs.report_batch(1, 2)
     assert "batch" not in capsys.readouterr().out
+
+
+def test_base_chronos_2_s_step_0_is_cached_by_model_and_held_out_set(
+    tmp_path, fake
+):
+    mod, calls = fake
+    cache = tmp_path / "cache"
+    for run in ("a", "b"):
+        train = tmp_path / run / "train"
+        snapshot(train, 0, ["start"])
+        (train / "held-out-blocks.json").write_text('{"outbreaks": [1]}')
+        first = checkpoint_at(train, 250, 200)
+        mod.main(["base", str(first), "--device", "cpu", "--cache", str(cache)])
+        got = json.loads((train / "evals" / "step-0000000.json").read_text())
+        assert got["held_out_loss"] == 0.4
+    # Scored once: the second run takes the first's from the cache.
+    assert [c[1] for c in calls["evals"]] == [["start"]]
+    assert len(list(cache.glob("*.json"))) == 1

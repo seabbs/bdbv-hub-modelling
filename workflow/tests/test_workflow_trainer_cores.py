@@ -105,4 +105,5 @@ def test_the_evaluate_rules_take_the_evaluation_threads():
     text = (ROOT / "workflow" / "rules" / "evaluate.smk").read_text()
     for rule in ("evaluate_base", "evaluate_checkpoint", "seven_day_check"):
         block = text.split(f"rule {rule}:", 1)[1].split("\nrule ", 1)[0]
-        assert "threads: EVALUATE_THREADS" in block, rule
+        # On the CPU, BOUNDARY_THREADS are the evaluation's.
+        assert "threads: BOUNDARY_THREADS" in block, rule
