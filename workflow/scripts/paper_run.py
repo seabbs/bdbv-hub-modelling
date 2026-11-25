@@ -8,8 +8,8 @@ The first form runs the third (`render`, the paper workflow and render,
 as Pages CI does) at nice 19 with this machine's cores less its headroom
 (`flowlib.machine.budget`). The workflow asks for every input it needs,
 the held-out simulations and German forecasts included, and makes what is
-missing. The paper workflow loads the final fine-tuning run's newest
-checkpoint itself (`paperpipe.flow`).
+missing, the final fine-tuning run's final checkpoint among them, which
+every `_ft` model loads (`paperpipe.flow`).
 The second form runs those targets of the paper workflow alone. Each run
 logs to PAPER_LOGS and posts start, done or FAILED with the log's first
 error line (mailbox lines when NOTIFY is set, `flowlib.notify`). The
@@ -55,9 +55,7 @@ def render(target: str, cfg: Mapping[str, str], *, pages: bool = False) -> int:
 
     `development` never reads the held-out data; `paper` needs it
     (paper/README.md). CORES (environment or config/local.env) sets
-    Snakemake's cores (default 4). The Ebola study reads our stored fits
-    from the fit store's history, so the fit-store branch is fetched
-    first. Snakemake then runs the target's missing steps
+    Snakemake's cores (default 4). Snakemake runs the target's missing steps
     (`--rerun-triggers mtime` reuses the backtest forecasts CI has
     already made) and renders main.qmd and si.qmd, which are copied into
     docs/paper/ for the site. The chronos group is installed too, as the
@@ -81,13 +79,6 @@ def render(target: str, cfg: Mapping[str, str], *, pages: bool = False) -> int:
                 ["gh", "auth", "token"], capture_output=True, text=True
             ).stdout.strip()
         env["GITHUB_TOKEN"] = token
-    subprocess.run(
-        [
-            "git", "fetch", "-q", "--no-tags", "origin",
-            "+refs/heads/fit-store:refs/remotes/origin/fit-store",
-        ],
-        cwd=ROOT, env=env, check=True,
-    )  # fmt: skip
     cores = env.get("CORES") or cfg.get("CORES") or "4"
     subprocess.run(
         [

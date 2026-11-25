@@ -5,16 +5,19 @@ cases by week of symptom onset (`wk inc confirmed cases`) for each round,
 named by its `reference_date` (a Saturday). Rounds close at 23:59
 Kinshasa time (22:59 UTC) on the Tuesday four days before it.
 
-Three sources give samples.
+Two sources give samples of the rounds.
 
 - `hub_samples`: every team's files in a clone of the hub, our
   submissions and the hub's baseline (`HUB_BASELINE`) included. A file
   may hold several forecasts; the one with the latest `forecast_date` is
   kept.
-- `history_samples`: the fit store's history, a file of the first fit
-  stored for each model and origin, kept only if it was made before its
-  round closed. `write_store_history` writes it from the fit store
-  branch (`store_samples`), for the workflow to publish as a release.
+- `release_samples`: our models a round did not submit, from that
+  round's release (`round-<reference date>` on our repository), whose
+  `hub.zip` holds every model's forecast in the hub's format. The
+  submission ledger's table says which model went out under each hub id,
+  and those models are left to the hub's copy.
+  `write_release_samples` writes them for the workflow, and
+  `round_samples` reads them back.
 
 `load` gives every hub forecast's samples, one row per sample, in the
 paper's schema with `truth` left for the workflow to attach.
@@ -26,10 +29,7 @@ backtest against the count it was scored against.
 
 from __future__ import annotations
 
-import gzip
-import json
-import subprocess
-from collections.abc import Iterator
+import zipfile
 from pathlib import Path
 from typing import Final
 
@@ -44,15 +44,15 @@ __all__ = [
     "HUB_BASELINE",
     "TARGET",
     "backtest_samples",
-    "history_samples",
     "hub_samples",
     "load",
     "release_observations",
+    "release_samples",
     "round_close",
     "round_of",
-    "store_samples",
+    "round_samples",
     "truth_delay",
-    "write_store_history",
+    "write_release_samples",
 ]
 
 TARGET: Final = "wk inc confirmed cases"
@@ -133,112 +133,89 @@ def hub_samples(hub: str | Path) -> pd.DataFrame:
     return _samples(pd.concat(frames, ignore_index=True))
 
 
-def _git(repo: str | Path, *args: str) -> bytes:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args], check=True, capture_output=True
-    ).stdout
-
-
-def _prospective(repo: str | Path, ref: str) -> Iterator[pd.DataFrame]:
-    """Yield the samples of each prospective fit in the store's history.
-
-    Every fit file ever committed to `ref` is read once for its meta, so
-    only one fit is held at a time. For each model and origin the
-    earliest good fit with real forecasts is chosen, and kept if it was
-    made before the round it forecasts closed. The chosen fits are then
-    read again, one by one.
-    """
-    log = _git(
-        repo,
-        "log",
-        "--reverse",
-        "--format=commit %H",
-        "--name-only",
-        "--diff-filter=A",
-        ref,
-    ).decode()
-    added: dict[str, str] = {}
-    commit = ""
-    for line in log.splitlines():
-        if line.startswith("commit "):
-            commit = line.removeprefix("commit ")
-        elif line.endswith(".json.gz"):
-            added.setdefault(line, commit)
-
-    def real(path: str, commit: str) -> tuple[dict, pd.DataFrame]:
-        fit = json.loads(
-            gzip.decompress(_git(repo, "show", f"{commit}:{path}"))
+def _submitted(ledger: str | Path) -> set[tuple[str, pd.Timestamp]]:
+    """Return each model and round the ledger says went to the hub."""
+    table = pd.read_csv(ledger, dtype=str, keep_default_na=False)
+    table = table.loc[table["status"] == "submitted"]
+    return set(
+        zip(
+            table["model"],
+            pd.to_datetime(table["reference_date"]),
+            strict=True,
         )
-        table = fit["forecasts"]
-        frame = pd.DataFrame(table["data"], columns=table["columns"])
-        return fit["meta"], frame[frame["kind"] == "real"]
-
-    first: dict[tuple[str, str], tuple[str, str, str, pd.Timestamp]] = {}
-    for path, commit in added.items():
-        meta, frame = real(path, commit)
-        if meta["status"] != "ok":
-            continue
-        key = (meta["model"], meta["origin"])
-        if key in first and first[key][0] <= meta["fitted_at"]:
-            continue
-        if frame.empty:
-            continue
-        origin = pd.Timestamp(frame["reference_date"].iloc[0])
-        first[key] = (meta["fitted_at"], path, commit, origin)
-    for fitted_at, path, commit, origin in first.values():
-        if pd.Timestamp(fitted_at) <= round_close(origin):
-            yield _samples(real(path, commit)[1])
+    )
 
 
-def store_samples(
-    repo: str | Path, ref: str = "origin/fit-store"
-) -> pd.DataFrame:
-    """Read the prospective fits from the fit store's history.
+def release_samples(releases: str | Path, ledger: str | Path) -> pd.DataFrame:
+    """Read our unsubmitted models' forecasts from the round releases.
 
-    For each model and origin the earliest good fit is kept, if it was
-    made before the round it forecasts closed (`_prospective`).
+    `releases` holds a folder `round-<reference date>` per round with
+    that round's `hub.zip`, whose `hub/**/<model>-samples.csv.gz` are
+    every model's forecasts in the hub's format. Each round keeps its own
+    rows. A model the ledger's table (`ledger`) says went to the hub that
+    round is left out, as its forecast is the hub's copy
+    (`hub_samples`). A round with no `hub.zip` gives nothing.
     """
-    frames = list(_prospective(repo, ref))
+    sent = _submitted(ledger)
+    frames = []
+    for folder in sorted(Path(releases).glob("round-*")):
+        ref = pd.Timestamp(folder.name.removeprefix("round-"))
+        archive = folder / "hub.zip"
+        if not archive.exists():
+            continue
+        with zipfile.ZipFile(archive) as z:
+            for name in sorted(z.namelist()):
+                if not name.endswith("-samples.csv.gz"):
+                    continue
+                model = Path(name).name.removesuffix("-samples.csv.gz")
+                if (model, ref) in sent:
+                    continue
+                with z.open(name) as f:
+                    frame = pd.read_csv(f, compression="gzip")
+                frame = frame[
+                    (frame["target"] == TARGET)
+                    & (frame["output_type"] == "sample")
+                    & (pd.to_datetime(frame["reference_date"]) == ref)
+                ]
+                if not frame.empty:
+                    frames.append(_samples(frame.assign(model=model)))
     if not frames:
         return pd.DataFrame(columns=SAMPLE_COLUMNS)
     return pd.concat(frames, ignore_index=True)
 
 
-def write_store_history(repo: str | Path, ref: str, out: str | Path) -> int:
-    """Write the fit store's prospective fits (`store_samples`) to `out`.
+def write_release_samples(
+    releases: str | Path, ledger: str | Path, out: str | Path
+) -> int:
+    """Write `release_samples` to `out`, for `round_samples` to read.
 
-    The fits are written one at a time, so the history is never held
-    whole. The file is what `history_samples` reads, so the paper reads
-    the store's history without the branch. Returns the rows written.
+    Returns the rows written.
     """
     path = Path(out)
     path.parent.mkdir(parents=True, exist_ok=True)
-    rows = 0
-    with gzip.open(path, "wt", newline="") as f:
-        f.write(",".join(SAMPLE_COLUMNS) + "\n")
-        for frame in _prospective(repo, ref):
-            frame.to_csv(f, header=False, index=False)
-            rows += len(frame)
-    return rows
+    samples = release_samples(releases, ledger)
+    samples.to_csv(path, index=False)
+    return len(samples)
 
 
-def history_samples(path: str | Path) -> pd.DataFrame:
-    """Read a file `write_store_history` wrote, as `store_samples` gives."""
+def round_samples(path: str | Path) -> pd.DataFrame:
+    """Read a file `write_release_samples` wrote."""
     return _samples(pd.read_csv(path, dtype={"location": str}))
 
 
 def load(
     hub: str | Path,
-    history: str | Path | None = None,
+    releases: str | Path | None = None,
 ) -> pd.DataFrame:
     """Return every forecast's samples, with `truth` left empty.
 
-    `hub` is a clone of the hub and `history` the fit store's history
-    (`history_samples`). A model and round in both is taken from the hub.
+    `hub` is a clone of the hub and `releases` our unsubmitted models'
+    forecasts from the round releases (`round_samples`). A model and
+    round in both is taken from the hub.
     """
     parts = [hub_samples(hub)]
-    if history is not None:
-        parts.append(history_samples(history))
+    if releases is not None:
+        parts.append(round_samples(releases))
     seen: set[tuple[str, pd.Timestamp]] = set()
     kept = []
     for part in parts:

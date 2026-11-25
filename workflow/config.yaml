@@ -216,12 +216,13 @@ ft_check:
   checkpoint: ""
 
 dashboard:
-  # The fine-tuning dashboard (task workflow:dashboard;
+  # The fine-tuning and simulations dashboard (task workflow:dashboard;
   # workflow/flowlib/dashboard).
-  # serve: true serves it with a run whose targets include finetune
-  # (flowlib.dashboard.serve), on DASHBOARD_HOST:DASHBOARD_PORT, showing
-  # the runs it trains, for as long as the coordinator (or that Snakemake
-  # run) lives.
+  # serve: true serves it with a run whose targets include finetune,
+  # simulate or push (flowlib.dashboard.serve), on
+  # DASHBOARD_HOST:DASHBOARD_PORT, showing the runs it trains and their
+  # simulations (/sims/), for as long as the coordinator (or that
+  # Snakemake run) lives.
   serve: true
   # It shows the workflow's runs (`runs` above), each in <ROOT>/runs/<run>,
   # or those --run NAME picks; the first is the live run.

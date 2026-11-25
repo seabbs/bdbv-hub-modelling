@@ -150,6 +150,7 @@ MACHINE_KEYS = frozenset(
         "MEM_MB",
         "SIM_SLOTS",
         "DEVICE",
+        "TRAINER_CORES",
         "GPUS",
         "CHECKPOINT_ABOVE",
         "TARGETS",
