@@ -584,15 +584,24 @@ def test_an_offloaded_checkpoint_publishes_before_its_held_out_losses(
     assert jobs["release_held_out"] == 2
 
 
-def test_a_publishing_run_checks_each_checkpoint_once_released(tmp_path):
-    # Each saved checkpoint's BDBV check page is planned in the same pass
-    # as its release, not the pass after.
+def test_a_publishing_run_checks_each_saved_checkpoint_once_released(
+    tmp_path,
+):
+    # A saved checkpoint's BDBV check page is planned in the pass that
+    # releases it, with no Snakemake checkpoint, whose DAG update hung the
+    # run on archie (25 Nov); its forecast waits for the release.
     _hub(tmp_path)
     _local(tmp_path, "PUBLISH=1")
     _checkpoint(tmp_path, 250)
-    jobs = dry(tmp_path, "finetune", config=FT)
-    assert jobs["publish_checkpoint"] == 2
-    assert jobs["ft_check_release"] == 2
+    settings = tmp_path / "runs" / "runa" / "train" / "n250" / "settings.json"
+    settings.write_text('{"hash": "abcdef"}')
+    jobs, edges = _dag(tmp_path, "finetune", FT)
+    labels = list(jobs.values())
+    assert labels.count("publish_checkpoint") == 2
+    assert labels.count("ft_check_release") == 1
+    publish = {i for i, label in jobs.items() if label == "publish_checkpoint"}
+    forecast = {i for i, label in jobs.items() if label == "ft_check_forecast"}
+    assert any(a in publish and b in forecast for a, b in edges)
 
 
 def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
