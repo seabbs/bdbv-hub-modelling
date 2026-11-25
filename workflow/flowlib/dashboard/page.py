@@ -81,6 +81,8 @@ class Context:
     logs: dict[str, logs.RunLog] = field(default_factory=dict)
     stores: dict[str, dict] = field(default_factory=dict)
     excluded: set = field(default_factory=set)
+    held_out_from: dict[str, str] = field(default_factory=dict)
+    """Each dataset's held-out half's first nowcast date: never read."""
 
     def _runlog(self, run: Run) -> logs.RunLog:
         key = str(run.folder)
@@ -133,6 +135,7 @@ class Context:
             unit=ds.get("unit") or key,
             days=days,
             ranges=ranges,
+            until=self.held_out_from.get(key),
         )
 
 

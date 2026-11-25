@@ -22,7 +22,7 @@ import json
 import math
 import re
 import threading
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -49,13 +49,15 @@ def layers(grid: Path | str) -> dict[str, str]:
     return out
 
 
-def sources(root: Path | str) -> dict[str, Path]:
+def sources(root: Path | str, hidden: Iterable[int] = ()) -> dict[str, Path]:
     """Return the folders of simulations under `root`, by name.
 
     Rounds (`r<N>`, in round order), then runs; only folders with a
-    batch's settings.
+    batch's settings. Rounds in `hidden` (the grid's test round, held out
+    for the paper) are never listed.
     """
     root = Path(root)
+    skip = {f"r{int(r)}" for r in hidden}
 
     def has(folder: Path) -> bool:
         return any(folder.glob("settings-*.csv"))
@@ -66,7 +68,7 @@ def sources(root: Path | str) -> dict[str, Path]:
         key=lambda p: (len(p.parent.name), p.parent.name),
     )
     for folder in rounds:
-        if has(folder):
+        if has(folder) and folder.parent.name not in skip:
             out[folder.parent.name] = folder
     for folder in sorted((root / "runs").glob("*/sims")):
         if has(folder) and folder.parent.name not in out:
@@ -203,9 +205,14 @@ class Index:
     """
 
     def __init__(
-        self, root: Path | str, cache: Path | str, layer_of: Mapping[str, str]
+        self,
+        root: Path | str,
+        cache: Path | str,
+        layer_of: Mapping[str, str],
+        hidden: Iterable[int] = (),
     ) -> None:
         self.root = Path(root)
+        self.hidden = frozenset(int(r) for r in hidden)
         self.cache = Path(cache)
         self.layer_of = dict(layer_of)
         self.built: dict[str, dict[str, Any]] = {}
@@ -214,7 +221,7 @@ class Index:
 
     def sources(self) -> dict[str, Path]:
         """Return the sources under ROOT now."""
-        return sources(self.root)
+        return sources(self.root, self.hidden)
 
     def _batch(self, name: str, settings: Path) -> list[dict[str, Any]]:
         seed = _seed(settings)
