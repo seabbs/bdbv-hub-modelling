@@ -224,6 +224,16 @@ def ft_check_checkpoint():
     return FTC["checkpoint"] or finetuned_label()
 
 
+MEMORY = config["memory"]
+
+
+def ft_check_mem(wc):
+    """A BDBV check forecast's memory: a Chronos-2 model's (the zero-shot
+    and fine-tuned foundation models, `ft-<checkpoint>`) or another's."""
+    chronos = wc.fmodel.startswith(("ft-", "foundation"))
+    return MEMORY["ft_check_chronos" if chronos else "ft_check"]
+
+
 def ft_check_key():
     """The code key every BDBV check forecast folder carries
     (`scoring.ft_check_key`), so a folder from other code is never used."""

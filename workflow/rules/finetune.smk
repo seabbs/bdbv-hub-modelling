@@ -95,6 +95,7 @@ rule train_segment:
     threads: lambda wc: run_of(wc).ft["cut_workers"] + 1
     # None of the cores the jobs beside it share (flowlib.machine).
     resources:
+        mem_mb=MEMORY["train_segment"],
         gpu=1,
         side_cores=0,
     params:

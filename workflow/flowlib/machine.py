@@ -66,6 +66,11 @@ def device(
 _device = device
 
 
+CPUS = "python3 workflow/flowlib/cpus.py"
+"""The command a forecasting job runs through, with its threads: it pins
+the job to that many cores no other job holds (flowlib.cpus), then runs
+`KEY=VALUE ... COMMAND` as `env` does."""
+
 CLAIM = "python3 workflow/flowlib/gpus.py"
 """The command a GPU job runs through: it claims a free GPU
 (flowlib.gpus), then runs `KEY=VALUE ... COMMAND` as `env` does."""
