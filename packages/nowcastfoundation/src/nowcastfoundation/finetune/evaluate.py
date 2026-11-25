@@ -58,13 +58,10 @@ def evaluate(
     need (`held_out_pass`) gives every loss and the coverage, each as the
     trainer's own functions give it (`finetune.stream`).
     """
-    from peft import PeftModel
-
     unknown = set(kinds) - set(KINDS)
     if unknown:
         raise ValueError(f"unknown kinds: {sorted(unknown)}")
-    model = PeftModel.from_pretrained(base, adapter)
-    model.eval()
+    model = merged(base, adapter)
     val = list(blocks)
     full = "start" in kinds or "checkpoint" in kinds
     need = range(len(val)) if full else _subset_needs(val, kinds)
@@ -177,6 +174,21 @@ def _by_level(
                 float(mine[levels == level].sum()) / r["n"]
             )
     return {k: float(np.mean(v)) for k, v in losses.items()}
+
+
+def merged(base: Any, adapter: Path) -> Any:
+    """Return `base` with `adapter`'s LoRA merged into its weights.
+
+    For scoring: the same outputs as the adapter on top, to float
+    rounding, without LoRA's extra low-rank products in every layer
+    (about an eighth of a pass on a CPU). The series bias, saved whole,
+    stays as a module. `base` is changed in place.
+    """
+    from peft import PeftModel
+
+    model = PeftModel.from_pretrained(base, adapter).merge_and_unload()
+    model.eval()
+    return model
 
 
 def row_losses(
@@ -734,13 +746,10 @@ def seven_day_check(
     `base` and `adapter`, as `evaluate` loads them; the levels are read
     as `at_levels` gives them.
     """
-    from peft import PeftModel
-
     rolling = [b for b in blocks if b.get("source") in ROLLING][:most]
     if not rolling:
         return {}
-    model = PeftModel.from_pretrained(base, adapter)
-    model.eval()
+    model = merged(base, adapter)
     at = at_levels(model, SEVEN_DAY_LEVELS)
     parts = []
     for block, raw, _ in _predictions(model, rolling, batch_size):
