@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 from numpyro import handlers
 
-from nowcastrenewal.reporting.effects import ReferenceFrame
+from nowcastrenewal.reporting.effects import ReferenceFrame, report_days
 from nowcastrenewal.reporting.expectation import ReportingExpectation
 
 MAX_DELAY, N_DAYS, FIRST = 20, 42, "2026-01-05"
@@ -73,3 +73,17 @@ def test_reporting_that_stops_reports_nothing_after_it() -> None:
     t, d = np.meshgrid(np.arange(N_DAYS), np.arange(MAX_DELAY), indexing="ij")
     assert np.all(stopped[t + d >= stop] == 0)
     assert stopped[t + d < stop].sum() > 0
+
+
+def test_a_padded_frame_stops_reporting_on_the_triangle_s_day() -> None:
+    design = _design(report_stop="yes")
+    frame = ReferenceFrame(
+        dates=np.datetime64(FIRST) + np.arange(N_DAYS + 14),
+        place=np.array([0]),
+        age=np.array([0]),
+        n_days=N_DAYS,
+    )
+    padded = report_days(frame, design, VALUES, MAX_DELAY)
+    own = report_days(frame.cropped(), design, VALUES, MAX_DELAY)
+    assert padded is not None and own is not None
+    np.testing.assert_array_equal(padded[:, : own.shape[1]], own)
