@@ -51,6 +51,7 @@ import pandas as pd
 
 from nowcasteval.labels import FINETUNED, FINETUNED_OF, base_model
 from nowcastfoundation.sidecar import SIDECAR, with_sidecar
+from nowcastutils import codekey
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule: WIS and CRPS on each model's own quantiles, from
@@ -446,28 +447,19 @@ def _record(root: Path, date: str, keys: Mapping[str, str]) -> None:
 def model_key(model: str) -> str:
     """Return a digest of what a model's forecasts depend on, past its tasks.
 
-    The source of the package the model's class lives in (every module, so
-    a change to a helper counts), the German forecasting code
-    (`nowcastgermany.evaluation`) and the German config.
+    The repository's modules the model's own module and the German
+    forecasting code (`nowcastgermany.evaluation`) import
+    (`nowcastutils.codekey`), so a change to a module neither imports
+    keeps the key, and the German config.
     """
-    import hashlib
-    import importlib
-    import inspect
-
     from nowcastutils.base import list_models
 
     spec = next(s for s in list_models() if s.name == model)
     factory = getattr(spec.factory, "func", spec.factory)
-    package = importlib.import_module(factory.__module__.split(".")[0])
-    files = sorted(Path(inspect.getfile(package)).parent.rglob("*.py"))
-    from nowcastgermany import evaluation as de
-
-    files += [Path(de.__file__), Path(GERMANY_CONFIG)]
-    h = hashlib.sha256()
-    for f in files:
-        h.update(f.name.encode())
-        h.update(f.read_bytes())
-    return h.hexdigest()[:12]
+    files = codekey.module_files(
+        [factory.__module__, "nowcastgermany.evaluation"]
+    )
+    return codekey.digest([*files, Path(GERMANY_CONFIG).resolve()])
 
 
 def _reaches(path: Path, last: int, targets: Sequence[str]) -> bool:

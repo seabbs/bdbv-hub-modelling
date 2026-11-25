@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("torch")
 
-from nowcastgermany import checkpoint  # noqa: E402
+from nowcastgermany import checkpoint
 
 
 def test_the_trainer_is_not_in_a_forecast_model_s_key(monkeypatch):
