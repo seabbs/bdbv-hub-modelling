@@ -6,8 +6,8 @@ the pid file (`pidfile`) is still alive. The server ends by itself when
 the process it was started for ends (`--while-pid`): the coordinator
 run (`DRIVER_ENV`, set by workflow/scripts/coordinate.py), else the
 Snakemake run. The workflow calls it from its `onstart` when
-`dashboard.serve` is true; `task workflow:dashboard` runs the
-same script in the foreground.
+`dashboard.serve` is true (the default), for the runs it trains;
+`task workflow:dashboard` runs the same script in the foreground.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 SCRIPT = Path(__file__).parents[2] / "scripts" / "dashboard.py"
@@ -94,7 +94,10 @@ def driver_pid() -> int:
 
 
 def ensure(
-    local: Mapping[str, str], driver: int, script: Path | str = SCRIPT
+    local: Mapping[str, str],
+    driver: int,
+    script: Path | str = SCRIPT,
+    runs: Sequence[str] = (),
 ) -> int:
     """Start the dashboard unless one is serving; return its pid.
 
@@ -106,6 +109,8 @@ def ensure(
         The process the dashboard ends with.
     script : path
         The server to run.
+    runs : sequence of str
+        The runs it shows, the first live (`--run`); empty: the config's.
 
     Returns
     -------
@@ -119,7 +124,13 @@ def ensure(
     path.parent.mkdir(parents=True, exist_ok=True)
     with (path.parent / "serve.log").open("ab") as log:
         proc = subprocess.Popen(
-            [sys.executable, str(script), "--while-pid", str(driver)],
+            [
+                sys.executable,
+                str(script),
+                "--while-pid",
+                str(driver),
+                *(a for run in runs for a in ("--run", run)),
+            ],
             stdout=log,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,

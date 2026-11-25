@@ -39,6 +39,9 @@ def dry_run(tmp_path, *targets, config=None, extra=(), quiet=True, dry=True):
     if not local.exists():
         local.write_text(f"ROOT={tmp_path}\nHOST_NAME=test-host\n")
     overlay = tmp_path / "overlay.yaml"
+    if not dry:
+        # A test run serves no dashboard.
+        config = {**(config or {}), "dashboard": {"serve": False}}
     overlay.write_text(yaml.safe_dump(config or {}))
     return subprocess.run(
         [
@@ -901,7 +904,7 @@ def test_a_failed_run_posts_a_mailbox_line(tmp_path):
     (n800 / "settings.json").write_text("{}")
     # Evaluated in the trainer, so the report needs only the checkpoint.
     overlay = tmp_path / "overlay.yaml"
-    overlay.write_text("finetune:\n  eval: local\n")
+    overlay.write_text("finetune:\n  eval: local\ndashboard:\n  serve: false\n")
     target = tmp_path / "runs" / "runa" / "reports" / "n800-check.txt"
     out = subprocess.run(
         [
