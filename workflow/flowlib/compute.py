@@ -3,7 +3,7 @@
 `COMPUTE` in config/local.env picks how (`single` by default):
 
 - `single`: one machine, `workflow/profiles/default` with its budget
-  (flowlib.machine), as before.
+  (flowlib.machine).
 - `ssh`: this machine is the coordinator, the one Snakemake run, and
   places each job on a worker (`workflow/profiles/ssh`, the
   cluster-generic executor with `workflow/scripts/remote/`). `WORKERS`
@@ -13,8 +13,16 @@
   (`train=workstation score=server`); a group left out, or mapped to `any`,
   runs on the first worker with room. The pool is the sum of the
   workers' budgets, each read from the worker itself at launch.
+- `slurm`: every job a Slurm job (`workflow/profiles/slurm`), with the
+  default resources `SLURM_DEFAULTS`, the site's account
+  (`SLURM_ACCOUNT`) and its partitions file (`SLURM_PARTITIONS`, the
+  plugin's `--slurm-partition-config`), which sends GPU jobs to a GPU
+  partition (docs/development/slurm.md).
 - any other name: its profile, `workflow/profiles/<name>`, alone (a
-  cluster or cloud executor with its own resources; none ships).
+  cluster or cloud executor with its own resources).
+
+`SNAKEMAKE_PROFILE`, a profile kept outside the repository, replaces
+the profile and budget any `COMPUTE` gives.
 
 A rule names no machine: it declares its threads, memory and GPU, and
 its group is `RULE_GROUPS`'. Local rules always run on the coordinator.
@@ -64,6 +72,10 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
 
 from flowlib import localconfig, machine, monitor
+
+SLURM_DEFAULTS = ("mem_mb=2048", "runtime=60")
+"""A Slurm job's memory (MB) and runtime (minutes) unless its rule's
+`set-resources` in the profile says."""
 
 MODES = ("single", "ssh")
 """The modes this module sets the pool of; any other `COMPUTE` names a
@@ -144,6 +156,8 @@ MACHINE_KEYS = frozenset(
         "MAILBOX",
         "NOTIFY",
         "SNAKEMAKE_PROFILE",
+        "SLURM_ACCOUNT",
+        "SLURM_PARTITIONS",
         "HEADROOM_CORES",
         "HEADROOM_GB",
         "CORES",
@@ -468,6 +482,22 @@ def args(
     return [*_profile_args(cfg, path, budgets, checkout), *monitor.args(cfg)]
 
 
+def slurm_args(cfg: Mapping[str, str]) -> list[str]:
+    """Return a Slurm run's default resources and the site's partitions.
+
+    No `gpu` or core cap: Slurm queues every GPU job across the nodes, so
+    as many runs train at once as the cluster has GPUs free.
+    """
+    account = cfg.get("SLURM_ACCOUNT")
+    partitions = cfg.get("SLURM_PARTITIONS")
+    return [
+        "--default-resources",
+        *SLURM_DEFAULTS,
+        *([f"slurm_account={account}"] if account else []),
+        *(["--slurm-partition-config", partitions] if partitions else []),
+    ]
+
+
 def _profile_args(
     cfg: Mapping[str, str],
     path: str | None,
@@ -477,10 +507,19 @@ def _profile_args(
     """Return the Snakemake options of the profile and its pool.
 
     For `ssh` without `budgets`, each worker's is read from it and kept
-    in `state_dir()/budgets.json` for the submit script. Another
-    `COMPUTE` is its profile alone.
+    in `state_dir()/budgets.json` for the submit script. `slurm` is its
+    profile with the site's settings (`slurm_args`). Another `COMPUTE`,
+    or `SNAKEMAKE_PROFILE`, is its profile alone.
     """
+    if cfg.get("SNAKEMAKE_PROFILE"):
+        return ["--workflow-profile", cfg["SNAKEMAKE_PROFILE"]]
     got = mode(cfg, checkout)
+    if got == "slurm":
+        return [
+            "--workflow-profile",
+            "workflow/profiles/slurm",
+            *slurm_args(cfg),
+        ]
     if got not in MODES:
         return ["--workflow-profile", f"workflow/profiles/{got}"]
     if got == "single":

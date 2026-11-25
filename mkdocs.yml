@@ -66,6 +66,7 @@ nav:
           - Contributing: development/contributing.md
           - Adding a model: development/adding-a-model.md
           - CLI: development/cli.md
+          - Run on a Slurm cluster: development/slurm.md
       - API reference:
           - reference/index.md
           - Data: reference/data.md

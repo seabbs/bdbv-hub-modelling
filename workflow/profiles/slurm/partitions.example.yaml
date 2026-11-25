@@ -1,0 +1,19 @@
+# The site's partitions for COMPUTE=slurm: copy outside the repository,
+# rename and size them as the cluster has them, and set SLURM_PARTITIONS
+# in config/local.env to the copy. The plugin
+# (snakemake-executor-plugin-slurm, `--slurm-partition-config`) sends
+# each job to the partition that fits it best: a job taking `gpu` (the
+# trainer, and forecasting jobs with forecast.device cuda) only to one
+# with max_gpu, the others to the first that fits. Limits: max_runtime
+# (minutes), max_mem_mb, max_threads, max_gpu (GPUs per job), and more
+# in the plugin's documentation.
+partitions:
+  cpu:
+    max_runtime: 1440
+    max_mem_mb: 192000
+    max_threads: 64
+  gpu:
+    max_runtime: 2880
+    max_mem_mb: 256000
+    max_threads: 32
+    max_gpu: 4
