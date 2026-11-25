@@ -563,6 +563,16 @@ def test_offloaded_evaluation_is_planned_after_each_segment(tmp_path):
     assert jobs["evaluate_checkpoint"] == 2
 
 
+def test_step_evaluation_never_waits_for_step_0(tmp_path):
+    # Step 0 scores every held-out block (evaluate_base, hours on the
+    # CPU); the steps' validation loss reaches the dashboard without it.
+    _checkpoint(tmp_path, 250)
+    train = tmp_path / "runs" / "runa" / "train"
+    jobs = dry(tmp_path, f"{train}/evals/n250.done", config=OFFLOAD)
+    assert jobs.get("evaluate_steps") == 1
+    assert "evaluate_base" not in jobs
+
+
 def test_offloaded_step_evaluation_checks_every_due_step(tmp_path):
     # So a segment whose snapshots were not copied in fails, not passes.
     out = dry_run(

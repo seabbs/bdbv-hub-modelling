@@ -75,8 +75,9 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
     second = checkpoint_at(train, 500, 400)
     mod.main(["steps", str(first), "--device", "cpu", "--eval-every", "200"])
     assert calls["loads"] == 1
-    # Newest first.
-    assert [c[1] for c in calls["evals"]] == [["monitor"], ["start"]]
+    # Step 0 is evaluate_base's alone: the steps never wait for it.
+    assert [c[1] for c in calls["evals"]] == [["monitor"]]
+    assert not (train / "evals" / "step-0000000.json").exists()
     got = json.loads((train / "evals" / "step-0000200.json").read_text())
     assert got["step"] == 200
     assert got["eval_loss"] == 0.3
@@ -93,7 +94,7 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
             "200",
         ]
     )
-    assert len(calls["evals"]) == 3
+    assert len(calls["evals"]) == 2
     mod.main(
         [
             "steps",
@@ -106,7 +107,7 @@ def test_steps_scores_each_of_its_segment_s_snapshots_once(tmp_path, fake):
             "200",
         ]
     )
-    assert len(calls["evals"]) == 3
+    assert len(calls["evals"]) == 2
 
 
 def test_checkpoint_writes_the_sidecar_with_the_start_loss(tmp_path, fake):
