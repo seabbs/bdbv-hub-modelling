@@ -2,7 +2,7 @@
 
 A checkpoint's file holds `foundation` and its variants (on
 baselinenowcast's point nowcast, which has no spread at horizons up to
-0, and on pseudo weeks); the reference folder holds the zero-shot forms
+0, and on complete counts); the reference folder holds the zero-shot forms
 and `randomwalknowcast`.
 """
 
@@ -76,7 +76,7 @@ def _build(tmp_path):
         {
             "foundation": (4, 1),
             "foundation_baselinenowcast": (60, 0),
-            "foundation_pseudoweeks": (70, 1),
+            "foundation_complete": (70, 1),
         },
     )
     rs = [runs.make_run("runa", str(run), live=True)]
@@ -107,7 +107,7 @@ def test_the_variants_are_their_own_series(tmp_path):
     built, rs, refs = _build(tmp_path)
     assert _median(built, "zero_baselinenowcast") == 50
     assert _median(built, "foundation_baselinenowcast:abc123def456") == 60
-    assert _median(built, "foundation_pseudoweeks:abc123def456") == 73
+    assert _median(built, "foundation_complete:abc123def456") == 73
     got = {
         m["id"]: m
         for m in nowcasts.meta(built, rs, refs, {"abc123def456": 100})
