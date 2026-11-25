@@ -156,15 +156,12 @@ def test_the_paper_is_not_a_tick_target():
         schedule.plan({"SCHEDULE_TARGETS": "score paper"})
 
 
-def test_a_tick_trains_one_segment_a_run():
-    got = schedule.plan({"SCHEDULE_TARGETS": "simulate finetune"})
-    pool = got[0][1]
-    assert pool[pool.index("--config") + 1] == "next_segment_only=True"
-
-
-def test_a_tick_without_finetune_sets_no_config():
-    got = schedule.plan({"SCHEDULE_TARGETS": "score"})
-    assert "--config" not in got[0][1]
+def test_a_tick_plans_every_segment_in_reach():
+    # The next segment trains as soon as the one before is saved, beside
+    # that checkpoint's scoring, not a tick later.
+    for targets in ("simulate finetune", "score"):
+        got = schedule.plan({"SCHEDULE_TARGETS": targets})
+        assert "--config" not in got[-1][1]
 
 
 def test_a_step_says_whether_it_is_the_pool():
