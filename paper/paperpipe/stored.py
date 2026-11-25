@@ -70,11 +70,17 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
     synthetic = config["synthetic"]
     evidence = config.get("evidence") or {}
     dev_sims = synthetic["simulations"]["development"]
-    seeds = sorted({str(sim).split("-")[0] for sim, _ in synthetic["examples"]["picks"]})
+    seeds = sorted(
+        {str(sim).split("-")[0] for sim, _ in synthetic["examples"]["picks"]}
+    )
     examples = {}
     for seed in seeds if dev_sims else []:
-        examples[f"examples/counts-{seed}.csv.gz"] = f"{dev_sims}/counts-{seed}.csv.gz"
-        examples[f"examples/settings-{seed}.csv"] = f"{dev_sims}/settings-{seed}.csv"
+        examples[f"examples/counts-{seed}.csv.gz"] = (
+            f"{dev_sims}/counts-{seed}.csv.gz"
+        )
+        examples[f"examples/settings-{seed}.csv"] = (
+            f"{dev_sims}/settings-{seed}.csv"
+        )
     rounds = config.get("rounds_dir")
     final = config.get("final_run")
 
@@ -92,13 +98,17 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             ),
         },
         "finetune": {
-            "validation-curve.csv": f"{final}/validation-curve.csv" if final else None,
+            "validation-curve.csv": f"{final}/validation-curve.csv"
+            if final
+            else None,
             "comparison.csv": file_of("checkpoint_scores"),
             "compare-daily.csv": file_of("compare_daily"),
             "block-combinations.csv": file_of("block_combinations"),
         },
         "simulations": {
-            "sim-diseases.csv": f"{rounds}/report/sim-diseases.csv" if rounds else None,
+            "sim-diseases.csv": f"{rounds}/report/sim-diseases.csv"
+            if rounds
+            else None,
             "sim-summaries.csv": f"{results}/evidence/sim-summaries.csv",
             "sim-realism.csv": f"{results}/evidence/sim-realism.csv",
             **examples,
@@ -140,7 +150,7 @@ def check_development(
             continue
         frame = pd.read_csv(path)
         problems = []
-        study = frame["study"] if "study" in frame else None
+        study = frame.get("study")
         if study is not None and (study == "ebola").any():
             problems.append("Ebola rows")
         if "seed" in frame and frame["seed"].isin(seeds).any():
@@ -151,7 +161,9 @@ def check_development(
             if found.isin(seeds).any():
                 problems.append("held-out seeds")
         german = (
-            study == "germany" if study is not None else pd.Series(False, index=frame.index)
+            study == "germany"
+            if study is not None
+            else pd.Series(False, index=frame.index)
         )
         for column in DATE_COLUMNS:
             if column in frame:
@@ -234,7 +246,9 @@ def fetch(
     for name in names:
         release = newest(releases, name)
         if release is None:
-            print(f"{name}: no {PREFIX}{name}-* release; its results stay pending")
+            print(
+                f"{name}: no {PREFIX}{name}-* release; its results stay pending"
+            )
             continue
         with tempfile.TemporaryDirectory() as tmp:
             path = download(release, Path(tmp))
@@ -323,7 +337,9 @@ def main(argv: Sequence[str]) -> int:
         ).stdout.strip()  # fmt: skip
         release = gh_publish(args.set, files, sha)
         args.record.parent.mkdir(parents=True, exist_ok=True)
-        args.record.write_text(json.dumps({"set": args.set, "tag": release}) + "\n")
+        args.record.write_text(
+            json.dumps({"set": args.set, "tag": release}) + "\n"
+        )
         return 0
     config = fetch(args.out, gh_releases(), gh_download)
     args.overlay.parent.mkdir(parents=True, exist_ok=True)
