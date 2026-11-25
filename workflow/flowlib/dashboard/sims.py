@@ -33,7 +33,6 @@ import yaml
 LAYER_ORDER = ("infections", "strata", "observation", "delays", "reporting")
 """The grid's layers, in the order the grid file describes them."""
 
-ASSETS = Path(__file__).with_name("page")
 
 _ID = re.compile(r"^(\d+)-(\d+)$")
 """A simulation's id: its batch's seed and its number in the batch."""
@@ -459,9 +458,9 @@ def page() -> str:
         '<meta name=viewport content="width=device-width,initial-scale=1">'
         "<title>Simulations</title>"
         f"<style>{ft.ui_colours()}{ft._asset('style.css')}"
-        f"{(ASSETS / 'sims.css').read_text()}</style></head><body>"
-        f"{(ASSETS / 'sims.html').read_text()}"
+        f"{ft._asset('sims.css')}</style></head><body>"
+        f"{ft._asset('sims.html')}"
         f"<script>window.simsPalette={palette};window.simsLayers="
         f"{json.dumps(list(LAYER_ORDER))};\n"
-        f"{(ASSETS / 'sims.js').read_text()}</script></body></html>"
+        f"{ft._asset('sims.js')}</script></body></html>"
     )

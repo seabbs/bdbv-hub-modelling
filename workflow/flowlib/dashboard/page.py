@@ -12,6 +12,7 @@ scripts, style and tooltips are in `page/`.
 
 from __future__ import annotations
 
+import functools
 import html
 import json
 import math
@@ -51,7 +52,14 @@ ADAPTER = "finetuned-ckpt/adapter_model.safetensors"
 """A checkpoint's adapter, which the trainer writes before it scores it."""
 
 
+@functools.cache
 def _asset(name: str) -> str:
+    """Return a page asset, read once a process.
+
+    So a server keeps the scripts and markup of the code it started
+    with, though its checkout moves on: a newer script never meets older
+    markup.
+    """
     return (ASSETS / name).read_text()
 
 
