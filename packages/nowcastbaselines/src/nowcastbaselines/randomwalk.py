@@ -21,6 +21,11 @@ is the share of the week's final count reported, under the delay
 estimate of `chain`.
 Weeks up to the start are returned as reported.
 Later weeks are walk draws.
+A task whose targets are not all hub weeks has 7-day sums ending on each
+target date: the weeks are the blocks of 7 days ending on the cut-off's
+weekday, sums to the end of a place's start block are as reported, and
+later sums walk in daily steps from it (`_day_walks`), as
+`randomwalknowcast`'s sums after the cut-off do.
 
 `RandomWalkNowcast` (`randomwalknowcast`) nowcasts each hub week, with
 negative binomial new reports on the remaining count (`obs`).
@@ -197,6 +202,80 @@ def _walks(
     return np.asarray(lam, np.float64), counts
 
 
+def _day_walks(
+    key: jax.Array,
+    start: np.ndarray,
+    origin: Origin,
+    h: int,
+    quiet: np.ndarray,
+) -> np.ndarray:
+    r"""Return `h` daily steps of walk counts from `start` `[S, L]`.
+
+    The walk (`_walks`) steps at a 7-day sum's own resolution, a day. Its
+    daily step variance is the weekly one of `origin` over 7, as a random
+    walk's variance grows with its steps, and a place in `quiet` `[L]`
+    draws introductions with its weekly probability $q$ as
+    $1 - (1 - q)^{1/7}$ a day, every day after the start counted as
+    wholly unreported.
+
+    Returns
+    -------
+    numpy.ndarray
+        Counts `[S, L, h]`.
+    """
+    daily = replace(
+        origin,
+        sigma=origin.sigma / np.sqrt(7.0),
+        intro=1.0 - (1.0 - origin.intro) ** (1.0 / 7.0),
+    )
+    after = np.full(start.shape[1], origin.complete.shape[1])
+    _, counts = _walks(key, start.T, daily, after, h, quiet)
+    out: np.ndarray = counts.transpose(1, 0, 2)
+    return out
+
+
+def _complete_start(origin: Origin) -> np.ndarray:
+    """Return each place's latest complete week, `[L]`.
+
+    Raises
+    ------
+    NoCompleteWeek
+        If a place has no week at `Settings.completeness`.
+    """
+    good = origin.complete >= origin.settings.completeness
+    if not good.any(axis=1).all():
+        has = good.any(axis=1)
+        none = [
+            x
+            for x, ok in zip(origin.snap.locations, has, strict=True)
+            if not ok
+        ]
+        raise NoCompleteWeek(
+            f"No week reaches {origin.settings.completeness:.0%} "
+            f"complete at {origin.snap.releases[origin.o]} for "
+            f"{', '.join(none)}, so the walk has no start week."
+        )
+    return np.asarray(origin.start)
+
+
+def _reported_sums(snap: SnapshotArrays, days: list[str]) -> np.ndarray:
+    """Return each place's 7-day sum ending on each day, `[L, D]`.
+
+    The sums are of the counts the latest release reports.
+    """
+    counts = snap.counts[:, -1, :]
+    c = np.concatenate(
+        [np.zeros((counts.shape[0], 1)), np.cumsum(counts, axis=1)], axis=1
+    )
+    index = {d.date().isoformat(): i for i, d in enumerate(snap.days)}
+    out = np.zeros((counts.shape[0], len(days)))
+    for j, d in enumerate(days):
+        if d in index:
+            i = index[d]
+            out[:, j] = c[:, i + 1] - c[:, max(i - 6, 0)]
+    return out
+
+
 def start_window(settings: Settings, period: int = 7) -> int:
     """Return the blocks back from the cut-off block a start may be.
 
@@ -340,6 +419,10 @@ class RandomWalk:
         init=False, default=None, repr=False
     )
     needs_snapshots: ClassVar[bool] = True
+    _snap: SnapshotArrays | None = field(init=False, default=None, repr=False)
+    _fits: dict[tuple[int, bool], DelayFit | None] = field(
+        init=False, default_factory=dict, repr=False
+    )
 
     def pair(
         self,
@@ -585,24 +668,14 @@ class RandomWalk:
         """
         if not task.locations:
             return frame(task, [], np.zeros((task.n_samples, 0, 0)), [])
+        ends = pd.to_datetime(list(task.target_end_dates))
+        if (ends.day_of_week != HUB_WEEKDAY).any():
+            return self._rolling(task)
         origin = self.origin_at(task, errors=False)
         weeks = _timeline(origin, task)
         n_all, n = len(weeks), task.n_samples
         n_loc = len(origin.snap.locations)
-        good = origin.complete >= origin.settings.completeness
-        if not good.any(axis=1).all():
-            has = good.any(axis=1)
-            none = [
-                x
-                for x, ok in zip(origin.snap.locations, has, strict=True)
-                if not ok
-            ]
-            raise NoCompleteWeek(
-                f"No week reaches {origin.settings.completeness:.0%} "
-                f"complete at {origin.snap.releases[origin.o]} for "
-                f"{', '.join(none)}, so the walk has no start week."
-            )
-        start = origin.start
+        start = _complete_start(origin)
         x0 = origin.reported[np.arange(n_loc), start]
         _, y = _walks(
             _key(task),
@@ -623,6 +696,81 @@ class RandomWalk:
         self._diagnostics(origin, task, start)
         self._kept_frame = (weeks, self.rows(origin, task), task)
         return frame(task, weeks, values, self.rows(origin, task))
+
+    def _block_origin(
+        self, task: ForecastTask, period: int, end: int, errors: bool
+    ) -> Origin:
+        """Return the fit of the blocks of `period` days ending `end`."""
+        snap = self._snap
+        assert snap is not None
+        return build_origin(
+            blocks(snap, period, end),
+            self.settings_for(task),
+            errors,
+            self._shared_delay,
+        )
+
+    def _shared_delay(
+        self,
+        snap: SnapshotArrays,  # noqa: ARG002 - the blocks, as `DelayFn` gives
+        r: int,
+        settings: Settings,
+        longer: bool = False,
+    ) -> DelayFit | None:
+        """Fit the delay on the hub weeks' snapshots, once per release."""
+        key = (r, longer)
+        if key not in self._fits:
+            assert self._snap is not None
+            self._fits[key] = fit_delay(self._snap, r, settings, longer)
+        return self._fits[key]
+
+    def _start(self, task: ForecastTask) -> None:
+        """Hold the task's snapshots and clear the delay fits."""
+        self._snap = self.snapshots(task)
+        self._fits = {}
+
+    def _rolling(self, task: ForecastTask) -> pd.DataFrame:
+        """Return draws of the 7-day sums ending on each target date.
+
+        The weeks are the blocks of 7 days ending on the cut-off's weekday,
+        with the delay fitted on the hub weeks (`_shared_delay`). A sum
+        ending on or before the end of a place's latest complete block is
+        as reported. Later sums walk in daily steps from that block's
+        reported sum (`_day_walks`), so they carry no weekday cycle.
+        """
+        self._start(task)
+        snap = self._snap
+        assert snap is not None
+        cut = snap.days[snap.cut[-1]].date()
+        origin = self._block_origin(task, 7, cut.weekday(), False)
+        start = _complete_start(origin)
+        n_loc, n = len(snap.locations), task.n_samples
+        targets = list(task.target_end_dates)
+        x0 = origin.reported[np.arange(n_loc), start]
+        lag = np.array(
+            [
+                [(as_date(d) - as_date(origin.snap.week_ends[s])).days
+                 for d in targets]
+                for s in start
+            ]
+        )  # fmt: skip
+        y = _day_walks(
+            _key(task),
+            np.repeat(x0[None, :], n, axis=0),
+            origin,
+            max(int(lag.max()), 1),
+            origin.silent,
+        )
+        sums = _reported_sums(snap, targets)
+        values = np.empty((n, n_loc, len(targets)))
+        for loc in range(n_loc):
+            for j, k in enumerate(lag[loc]):
+                values[:, loc, j] = sums[loc, j] if k <= 0 else y[:, loc, k - 1]
+        values = self.pair(origin, task, values)
+        self._diagnostics(origin, task, start)
+        rows = self.rows(origin, task)
+        self._kept_frame = (targets, rows, task)
+        return frame(task, targets, values, rows)
 
 
 @dataclass
@@ -650,10 +798,6 @@ class RandomWalkNowcast(RandomWalk):
     error_days: int = 7
     delay_summary: pd.DataFrame | None = field(
         init=False, default=None, repr=False
-    )
-    _snap: SnapshotArrays | None = field(init=False, default=None, repr=False)
-    _fits: dict[tuple[int, bool], DelayFit | None] = field(
-        init=False, default_factory=dict, repr=False
     )
 
     def forecast(self, task: ForecastTask) -> pd.DataFrame:
@@ -714,19 +858,6 @@ class RandomWalkNowcast(RandomWalk):
         values = self.pair(origin, task, values)
         return origin, {w: values[:, :, i] for i, w in enumerate(labels)}
 
-    def _block_origin(
-        self, task: ForecastTask, period: int, end: int, errors: bool
-    ) -> Origin:
-        """Return the fit of the blocks of `period` days ending `end`."""
-        snap = self._snap
-        assert snap is not None
-        return build_origin(
-            blocks(snap, period, end),
-            self.settings_for(task),
-            errors,
-            self._shared_delay,
-        )
-
     def _day_sigma(self, task: ForecastTask) -> np.ndarray:
         r"""Return the walk's daily step spread, `[L]`.
 
@@ -741,25 +872,6 @@ class RandomWalkNowcast(RandomWalk):
         sigma = self._block_origin(task, 7, end, False).sigma
         day: np.ndarray = sigma / np.sqrt(7.0)
         return day
-
-    def _shared_delay(
-        self,
-        snap: SnapshotArrays,  # noqa: ARG002 - the blocks, as `DelayFn` gives
-        r: int,
-        settings: Settings,
-        longer: bool = False,
-    ) -> DelayFit | None:
-        """Fit the delay on the hub weeks' snapshots, once per release."""
-        key = (r, longer)
-        if key not in self._fits:
-            assert self._snap is not None
-            self._fits[key] = fit_delay(self._snap, r, settings, longer)
-        return self._fits[key]
-
-    def _start(self, task: ForecastTask) -> None:
-        """Hold the task's snapshots and clear the delay fits."""
-        self._snap = self.snapshots(task)
-        self._fits = {}
 
     def _rolling(self, task: ForecastTask) -> pd.DataFrame:
         """Return draws of the 7-day sums ending on each target date.
@@ -824,13 +936,10 @@ class RandomWalkNowcast(RandomWalk):
         cut: dt.date,
         days: list[str],
     ) -> dict[str, np.ndarray]:
-        r"""Walk each sample's 7-day sum ending on the cut-off in daily steps.
+        """Walk each sample's 7-day sum ending on the cut-off in daily steps.
 
-        The walk (`_walks`) steps at the sums' own resolution, a day. Its
-        daily step variance is the fit's weekly one over 7, as a random
-        walk's variance grows with its steps, and a quiet place's weekly
-        introduction probability $q$ is $1 - (1 - q)^{1/7}$ a day. The
-        draws are paired as the weekly ones (`pair`).
+        The walk is `_day_walks`, and the draws are paired as the weekly
+        ones (`pair`).
 
         Parameters
         ----------
@@ -851,23 +960,10 @@ class RandomWalkNowcast(RandomWalk):
             Each day's draws, `[S, L]`.
         """
         h = max((as_date(d) - cut).days for d in days)
-        n_loc = start.shape[1]
-        daily = replace(
-            origin,
-            sigma=origin.sigma / np.sqrt(7.0),
-            intro=1.0 - (1.0 - origin.intro) ** (1.0 / 7.0),
+        counts = _day_walks(
+            jax.random.fold_in(_key(task), 7), start, origin, h, _quiet(origin)
         )
-        # Every day after the cut-off is wholly unreported.
-        after = np.full(n_loc, origin.complete.shape[1])
-        _, counts = _walks(
-            jax.random.fold_in(_key(task), 7),
-            start.T,
-            daily,
-            after,
-            h,
-            _quiet(origin),
-        )
-        values = self.pair(origin, task, counts.transpose(1, 0, 2))
+        values = self.pair(origin, task, counts)
         return {d: values[:, :, (as_date(d) - cut).days - 1] for d in days}
 
     def daily_quantiles(
