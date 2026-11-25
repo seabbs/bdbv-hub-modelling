@@ -163,3 +163,22 @@ def test_boundary_jobs_go_before_the_trainer_only_on_a_gpu():
     assert s.boundary_priority(wc) > compute.TRAIN_PRIORITY + 1
     s.boundary_forecast = forecast.Forecast("cpu", 2)
     assert s.boundary_priority(wc) < compute.HANDOFF_PRIORITY
+
+
+def test_code_keys_ignore_modules_the_jobs_never_import():
+    # A change to the trainer must not rerun the German reference or the
+    # BDBV check, which never import it (#1114).
+    from flowlib import scoring
+
+    from nowcastutils import codekey
+
+    for files in (
+        scoring.reference_code("reference"),
+        scoring.ft_check_code(),
+    ):
+        assert not any(f.endswith("finetune/stream.py") for f in files)
+        assert not any(f.endswith("finetune/evaluate.py") for f in files)
+    assert any(
+        f.endswith("finetune/evaluate.py") for f in scoring.evaluator_code()
+    )
+    assert codekey.digest(scoring.evaluator_code())

@@ -141,3 +141,12 @@ def test_boundary_scoring_takes_the_gpu_before_the_next_segment():
         assert "env=boundary_env" in text, name
         assert "priority: boundary_priority" in text, name
         assert "threads: BOUNDARY_THREADS" in text, name
+
+
+def test_evaluation_reruns_only_when_its_code_or_held_out_set_moves():
+    # Sam, 25 Nov: outputs keyed by their inputs' content, so a restart
+    # or another module's change never recomputes them.
+    for name in BOUNDARY_RULES:
+        text = _rule_text(name)
+        assert "code=SCORING.evaluator_key_input" in text, name
+        assert "held_out=held_out_key" in text, name
