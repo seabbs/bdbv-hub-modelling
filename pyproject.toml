@@ -310,6 +310,8 @@ module = [
   "safetensors.*",
   "huggingface_hub",
   "huggingface_hub.*",
+  "einops",
+  "einops.*",
 ]
 ignore_missing_imports = true
 
