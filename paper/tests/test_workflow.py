@@ -518,3 +518,23 @@ def test_the_pages_render_reads_stored_outputs_as_inputs(
         "train_segment",
     ):
         assert f"rule {rule}:" not in log
+
+
+def test_figures_wait_when_no_shown_model_has_forecasts(tmp_path: Path) -> None:
+    # Until the shown models' forecasts are stored, their nowcast panels
+    # say what they wait on rather than failing the run.
+    nowcasts = {
+        **CONFIG["nowcasts"],
+        "models": {**CONFIG["nowcasts"]["models"], "germany": ["not_a_model"]},
+    }
+    res = _snakemake(
+        "development",
+        "--cores",
+        "2",
+        "--configfile",
+        str(PAPER / "workflow" / "config.yaml"),
+        str(_offline(tmp_path, n_samples=20, nowcasts=nowcasts)),
+    )
+    assert res.returncode == 0, res.stderr
+    figures = tmp_path / "results" / "development" / "figures"
+    assert (figures / "main" / "germany-nowcasts.png").is_file()
