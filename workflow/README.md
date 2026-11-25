@@ -136,6 +136,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `finetune`: every prefix, and its scoring: each checkpoint's German unit (`score_run_germany`), the reference units (`score_germany`), each trained run's German report (`german_report`) and each released checkpoint's BDBV check page (`ft_check_page`), kept when up to date.
   The trainer claims `finetune.cut_workers` plus one cores, its block-cutting workers and itself, so scoring and simulation beside it share what is left of the machine's budget.
   Those cores are kept for it: every other job takes its threads of `side_cores`, the budget less `TRAINER_CORES` (4 by default; 0 where nothing trains) for each GPU slot, so a trainer whose inputs appear mid-run never waits behind CPU jobs.
+  Its memory is kept for it too: every other job also claims its memory of `side_mem_mb`, the memory budget less, for each GPU slot, the most any segment under `ROOT` took (`flowlib.memory.trainer_mb`), so the next segment starts the moment the one before is saved, never after the scoring that started while it trained.
 
 Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
@@ -339,7 +340,7 @@ Each rule asks for its own threads, memory, runtime and GPU (`workflow/profiles/
 ### What Slurm decides
 
 Slurm places and sizes every job.
-The one-machine caps do not apply: there is no `gpu` or core budget and no cores kept for the trainer (`TRAINER_CORES`).
+The one-machine caps do not apply: there is no `gpu`, core or memory budget and no cores or memory kept for the trainer (`TRAINER_CORES`).
 Each GPU job asks for one GPU (`--gpus=1`), and Slurm sets `CUDA_VISIBLE_DEVICES` to it, so `workflow/flowlib/gpus.py` runs it as it is.
 Runs do not wait on each other, so every run `finetune` trains (`train_runs`) trains at once, each trainer a Slurm job on a GPU node, as far as the cluster has GPUs free.
 With `forecast.device: cuda`, forecasting jobs need `forecast.gpu: exclusive`, so each asks Slurm for its own GPU.

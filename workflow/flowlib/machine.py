@@ -24,13 +24,13 @@ import shlex
 import shutil
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from flowlib import localconfig
+from flowlib import localconfig, memory
 
 
 def gpus(path: str | None = None) -> int:
@@ -221,11 +221,52 @@ def side_cores(
     None, keeping nothing, where nothing trains (`TRAINER_CORES=0`) or
     no core would be left.
     """
-    each = int(cfg.get("TRAINER_CORES") or _DEFAULTS["TRAINER_CORES"])
-    kept = each * gpu_slots(cfg, path)
+    kept = trainer_cores(cfg) * gpu_slots(cfg, path)
     if kept <= 0 or cores - kept < 1:
         return None
     return cores - kept
+
+
+def trainer_cores(cfg: Mapping[str, str]) -> int:
+    """Return the cores kept for a trainer (`TRAINER_CORES`; 0: none)."""
+    return int(cfg.get("TRAINER_CORES") or _DEFAULTS["TRAINER_CORES"])
+
+
+SIDE_MEM = "side_mem_mb"
+"""The memory resource the jobs beside the trainers share (`side_mem`)."""
+
+
+def side_mem(cfg: Mapping[str, str], mem_mb: int, slots: int) -> int | None:
+    """Return the memory (MB) the jobs beside the trainers share, or None.
+
+    The budget `mem_mb` less a trainer's (`memory.trainer_mb`: the most a
+    segment under `ROOT` took) for each of `slots` GPU slots, as each
+    trains a run at once. Snakemake gives freed memory to the jobs ready
+    at the time, and the next segment is ready only once the one before
+    is saved, so without this the scoring that started while a segment
+    trained holds the memory the next one needs. None, keeping nothing,
+    where nothing trains (`TRAINER_CORES=0`) or no memory would be left.
+    """
+    if trainer_cores(cfg) <= 0:
+        return None
+    kept = memory.trainer_mb(cfg.get("ROOT")) * max(1, slots)
+    if mem_mb - kept < 1:
+        return None
+    return mem_mb - kept
+
+
+def share_side_memory(rules: Iterable[object]) -> None:
+    """Have each rule's jobs claim their `mem_mb` of `SIDE_MEM` too.
+
+    Called on `workflow.rules` once every rule is defined. A rule that
+    sets `SIDE_MEM` itself (the trainer, 0) keeps its own. Where no
+    `SIDE_MEM` pool is given (Slurm, or nothing trains) the claim is
+    unbounded and changes nothing.
+    """
+    for rule in rules:
+        res = rule.resources  # type: ignore[attr-defined]
+        if SIDE_MEM not in res and "mem_mb" in res:
+            res[SIDE_MEM] = res["mem_mb"].with_name(SIDE_MEM)
 
 
 def scoring_threads(
@@ -259,10 +300,12 @@ def args(
     (`SIM_SLOTS`, default 2) caps simulation batches; `awaiting` lets one
     batch from another host be waited for at a time. Every job but the
     trainer, which claims none, takes its threads of `side_cores`
-    (`side_cores`), at most all of them.
+    (`side_cores`), at most all of them, and its memory of `side_mem_mb`
+    (`side_mem`, `share_side_memory`).
     """
     got = budget(cfg, cores, total_mb)
     side = side_cores(cfg, got["cores"], path)
+    mem = side_mem(cfg, got["mem_mb"], gpu_slots(cfg, path))
     return [
         "--cores",
         str(got["cores"]),
@@ -272,6 +315,7 @@ def args(
         "--resources",
         *([f"side_cores={side}"] if side else []),
         f"mem_mb={got['mem_mb']}",
+        *([f"{SIDE_MEM}={mem}"] if mem else []),
         f"gpu={gpu_slots(cfg, path)}",
         f"sim_slots={cfg.get('SIM_SLOTS') or 2}",
         "awaiting=1",
