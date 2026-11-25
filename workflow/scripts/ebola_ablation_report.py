@@ -503,11 +503,11 @@ def _pseudo(found: dict, vintages: dict | None) -> list[str]:
         "Its own delay line matches it in every cell, so the pairs and the "
         "releases agree when read from the same release.\n"
         "Read from the latest files, a release often holds fewer cases "
-        "than were reported by its date (below the lower bound): reports "
-        "reach a release some days after the report date, and cases "
-        "without an onset at the time gain one later.\n"
-        "It sometimes holds more (above the upper bound), where a case's "
-        "onset or report was revised later.</p>",
+        "than were reported by its date (below the lower bound), and "
+        "sometimes more (above the upper bound).\n"
+        "The files cannot say why case by case; a lag from report to "
+        "release and later revisions of onsets, delays or onset status "
+        "would each do it.</p>",
         _table(
             [
                 "Release",
