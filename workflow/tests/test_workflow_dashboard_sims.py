@@ -292,3 +292,44 @@ def test_the_page_picks_one_layer_at_a_time():
     page = sims.page()
     assert "id=layerpick" in page
     assert "id=constants" in page
+
+
+def test_each_simulation_s_derived_summaries(root, tmp_path):
+    # Outbreak 1: half reported on the day, half a week later, 20 a day
+    # every day; outbreak 2: all on the day.
+    got = sims.Index(root, tmp_path / "cache", LAYERS).data("r1")
+    cdf = dict(zip(sims.DELAY_POINTS, got["derived"]["cdf"][0], strict=True))
+    assert cdf[0] == 0.5
+    assert cdf[5] == 0.5
+    assert cdf[7] == 1.0
+    assert got["derived"]["cdf"][1][0] == 1.0
+    assert got["derived"]["refdow"][0] == [1.0] * 7
+    assert got["derived"]["repdow"][0] == [1.0] * 7
+    stats = got["stats"]
+    assert stats["within14"][0] == 1.0
+    assert stats["first_report"][0] == 0
+    assert stats["gap"][0] == 1
+    assert stats["releases"][0] == 7.0
+    assert stats["growth"][0] == 0.0
+    assert stats["noise"][0] == 0.0
+
+
+def test_a_batch_is_read_once_for_its_simulations(root, monkeypatch):
+    calls = []
+    real = sims._read_counts
+
+    def counting(path):
+        calls.append(path)
+        return real(path)
+
+    monkeypatch.setattr(sims, "_read_counts", counting)
+    sims._batch_rows.cache_clear()
+    folder = root / "rounds" / "r1" / "sims"
+    assert sims.simulation(folder, "101-0001", LAYERS)
+    assert sims.simulation(folder, "101-0002", LAYERS)
+    assert len(calls) == 1
+
+
+def test_the_page_splits_the_derived_summaries_by_the_group():
+    page = sims.page()
+    assert "id=derived" in page
