@@ -152,7 +152,9 @@ def args(
 
     `gpu` is one trainer at a time, on whichever device; `sim_slots`
     (`SIM_SLOTS`, default 2) caps simulation batches; `awaiting` lets one
-    batch from another host be waited for at a time.
+    batch from another host be waited for at a time; `gpu_share`
+    (`FORECAST_GPU_JOBS`, default 1) caps the forecasting jobs beside the
+    trainer on its GPU (`forecast.gpu: share`, flowlib.forecast).
     """
     got = budget(cfg, cores, total_mb)
     return [
@@ -162,8 +164,14 @@ def args(
         f"mem_mb={got['mem_mb']}",
         f"gpu={max(1, gpus(path))}",
         f"sim_slots={cfg.get('SIM_SLOTS') or 2}",
+        f"gpu_share={gpu_jobs(cfg)}",
         "awaiting=1",
     ]
+
+
+def gpu_jobs(cfg: Mapping[str, str]) -> int:
+    """Return the forecasting jobs a GPU takes beside the trainer."""
+    return int(cfg.get("FORECAST_GPU_JOBS") or 1)
 
 
 if __name__ == "__main__":

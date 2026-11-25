@@ -61,6 +61,7 @@ rule score_germany:
     resources:
         mem_mb=SC["mem_mb"],
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         env=unit_env,
         copy_back=unit_rows(GERMANY_UNIT),
@@ -90,6 +91,7 @@ rule score_run_germany:
     resources:
         mem_mb=SC["mem_mb"],
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         env=unit_env,
         copy_back=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}/n{wc.n}/",

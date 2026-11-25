@@ -3,16 +3,19 @@
 Checkpoint scoring (the German units), held-out evaluation, backtests
 (German, Ebola), hub forecasts and the paper's runs all forecast on the
 workflow config's `forecast.device` with `forecast.threads` CPU threads.
-A machine overrides either with `FORECAST_DEVICE` or `FORECAST_THREADS`
-in config/local.env. No rule or script picks a device itself: each
-forecasting rule puts `Forecast.env` before its command and asks for
-`Forecast.gpu` of the `gpu` resource.
+A machine overrides them with `FORECAST_DEVICE`, `FORECAST_THREADS` or
+`FORECAST_GPU` in config/local.env. No rule or script picks a device
+itself: each forecasting rule puts `Forecast.env` before its command and
+asks for `Forecast.gpu` of the `gpu` resource and `Forecast.gpu_share`
+of `gpu_share`.
 
 With `device: cuda`, `forecast.gpu` says how a job meets the trainer,
 which holds `gpu=1` while it trains: `exclusive` (the default) makes the
 job take the GPU too, so it waits for a free one; `share` runs it beside
 the trainer on the same GPU, which costs GPU memory and some training
-speed but scores as checkpoints land.
+speed but scores as checkpoints land. Shared jobs each take a
+`gpu_share` slot, `FORECAST_GPU_JOBS` of them (1 by default,
+flowlib.machine), so the GPU's memory holds the trainer and them.
 """
 
 from __future__ import annotations
@@ -74,6 +77,11 @@ class Forecast:
         """Return the `gpu` resource a job takes: 1 for exclusive CUDA."""
         return int(self.device == "cuda" and self.gpu_mode == "exclusive")
 
+    @property
+    def gpu_share(self) -> int:
+        """Return the `gpu_share` slots a job takes: 1 for shared CUDA."""
+        return int(self.device == "cuda" and self.gpu_mode == "share")
+
     def variables(self) -> dict[str, str]:
         """Return the environment a forecasting job runs with.
 
@@ -111,7 +119,8 @@ def settings(config: Mapping[str, Any], local: Mapping[str, str]) -> Forecast:
         The workflow config, whose `forecast` gives the defaults.
     local : mapping
         This machine's settings (`localconfig.read`), whose
-        `FORECAST_DEVICE` and `FORECAST_THREADS` override them.
+        `FORECAST_DEVICE`, `FORECAST_THREADS` and `FORECAST_GPU`
+        override them.
 
     Returns
     -------
@@ -122,7 +131,7 @@ def settings(config: Mapping[str, Any], local: Mapping[str, str]) -> Forecast:
     got = Forecast(
         device=local.get("FORECAST_DEVICE") or str(fc["device"]),
         threads=int(local.get("FORECAST_THREADS") or fc["threads"]),
-        gpu_mode=str(fc.get("gpu", "exclusive")),
+        gpu_mode=local.get("FORECAST_GPU") or str(fc.get("gpu", "exclusive")),
     )
     # A cluster job (COMPUTE other than single or ssh) has only the GPU
     # it asks for, and a shared one asks for none.

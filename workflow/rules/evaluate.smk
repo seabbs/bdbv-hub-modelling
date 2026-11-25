@@ -26,6 +26,7 @@ rule evaluate_steps:
     threads: UNIT_THREADS
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         where=lambda wc, input: Path(input.settings).parent,
         prev=lambda wc, input: runs.option("--prev", evaluate_prev_dir(input)),
@@ -62,6 +63,7 @@ rule evaluate_base:
     threads: UNIT_THREADS
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         where=lambda wc, input: Path(input.settings).parent,
         env=unit_env,
@@ -99,6 +101,7 @@ rule evaluate_checkpoint:
     threads: UNIT_THREADS
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         where=lambda wc, input: Path(input.settings).parent,
         env=unit_env,
@@ -132,6 +135,7 @@ rule seven_day_check:
     threads: UNIT_THREADS
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         where=lambda wc, input: Path(input.settings).parent,
         env=unit_env,

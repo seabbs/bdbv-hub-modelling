@@ -522,6 +522,7 @@ def _profile_args(
         f"gpu={total['gpu']}",
         *(f"gpu_{n}={b['gpu']}" for n, b in budgets.items()),
         f"sim_slots={cfg.get('SIM_SLOTS') or 2}",
+        f"gpu_share={machine.gpu_jobs(cfg) * total['gpu']}",
         "awaiting=1",
     ]
 

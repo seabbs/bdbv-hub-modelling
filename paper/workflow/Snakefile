@@ -129,6 +129,7 @@ for _mode in MODES:
         resources:
             heavy=1,
             gpu=FORECAST.gpu,
+            gpu_share=FORECAST.gpu_share,
         params:
             python=PYTHON,
             # The simulations folder, from its first file.
@@ -210,6 +211,7 @@ rule germany_development:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         env=FORECAST.env,
         germany=GERMANY_CLI,
@@ -239,6 +241,7 @@ rule germany_heldout:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         env=FORECAST.env,
         germany=GERMANY_CLI,
@@ -347,6 +350,7 @@ rule ebola_backtest_draws:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
         heavy=1,
     params:
         env=FORECAST.env,
@@ -393,6 +397,7 @@ rule ebola_backtest:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         env=FORECAST.env,
         bdbv=BDBV,
@@ -443,6 +448,7 @@ rule forecasts:
     threads: FORECAST.threads
     resources:
         gpu=FORECAST.gpu,
+        gpu_share=FORECAST.gpu_share,
     params:
         env=FORECAST.env,
         python=PYTHON,
@@ -662,6 +668,7 @@ if GERMANY["real"]:
         threads: FORECAST.threads
         resources:
             gpu=FORECAST.gpu,
+            gpu_share=FORECAST.gpu_share,
             heavy=1,
         params:
             env=FORECAST.env,
@@ -685,6 +692,7 @@ if GERMANY["real"]:
         threads: FORECAST.threads
         resources:
             gpu=FORECAST.gpu,
+            gpu_share=FORECAST.gpu_share,
             heavy=1,
         params:
             env=FORECAST.env,

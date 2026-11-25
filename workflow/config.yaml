@@ -164,10 +164,11 @@ train_runs: [runa]
 # The device and CPU threads of every forecasting job: checkpoint scoring
 # (the German units), held-out evaluation, backtests (German, Ebola), hub
 # forecasts and the paper's runs (flowlib.forecast). A machine overrides
-# them with FORECAST_DEVICE and FORECAST_THREADS in config/local.env.
-# With device cuda, gpu says how a job meets the trainer's GPU: exclusive
-# takes the `gpu` resource, so the job waits for a free GPU; share runs it
-# beside the trainer on the same GPU (more GPU memory, slower training).
+# them with FORECAST_DEVICE, FORECAST_THREADS and FORECAST_GPU in
+# config/local.env. With device cuda, gpu says how a job meets the
+# trainer's GPU: exclusive takes the `gpu` resource, so the job waits for a
+# free GPU; share runs it beside the trainer on the same GPU (more GPU
+# memory, slower training), FORECAST_GPU_JOBS of them at once (1).
 forecast:
   device: cpu
   threads: 2

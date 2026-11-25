@@ -180,7 +180,9 @@ properties:
       gpu:
         description: >-
           With device cuda, exclusive takes the trainer's gpu resource (the
-          job waits for the GPU); share runs beside the trainer on it.
+          job waits for the GPU); share runs beside the trainer on it,
+          FORECAST_GPU_JOBS jobs at once. FORECAST_GPU in config/local.env
+          overrides it.
         enum: [exclusive, share]
 
   score:
