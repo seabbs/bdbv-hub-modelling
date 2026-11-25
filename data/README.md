@@ -1,7 +1,11 @@
 # data
 
-Data fetched from outside the repository.
-Nothing here is committed but this file: each command below rebuilds its part, and the tests read the frozen copy in `tests/fixtures/data/`.
+Data fetched from outside the repository: the BDBV Modeling Hub's releases, the BVDOutbreakSize estimates, the hub teams' forecasts and the German benchmark.
+Nothing here is committed but this file: each command below rebuilds its part.
+
+In this project the packages read the hub's tidy tables from here, unless `BDBV_DATA_DIR` points elsewhere.
+The fit store, the backtests, the submission and the paper all start from it.
+The tests read the frozen copy in `tests/fixtures/data/` instead.
 
 ## What is fetched where
 

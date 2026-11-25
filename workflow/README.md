@@ -3,7 +3,11 @@
 One Snakemake workflow simulates outbreaks, fine-tunes Chronos-2 on them, publishes the checkpoints, scores them and builds the paper.
 The paper's rules (`paper/workflow/Snakefile`) are a module of it, with their settings in `paper/workflow/config.yaml`.
 
-In short:
+In this project it makes the fine-tuned Chronos-2 checkpoints (`nowcastfoundation`) and the paper's results.
+Simulation and fine-tuning run on our own CPU and GPU hosts, not on CI, and publish each round and checkpoint as a GitHub release.
+The Site workflow runs the paper's targets through [`scripts/paper_run.py`](scripts/paper_run.py), and the Tests workflow runs its tests and dry runs.
+
+Where to look:
 
 - Entry point: `Snakefile`, run through `task workflow:<target>` (`Taskfile.yml`) with a profile from `profiles/`.
 - Shared rules any study uses: `rules/` (simulate, finetune, evaluate, publish, score, monitor, report).
@@ -131,7 +135,7 @@ The state carries the learning-rate schedule, the step, the batch position and t
 - `checkpoint_check`: a report of whether checkpoint `check_at` (800) beats zero-shot on the held-out simulations. No BDBV data is scored in development: BDBV is held out for the paper. It never stops training.
 - `finetune`: every prefix, and its scoring: each checkpoint's German unit (`score_run_germany`), the reference units (`score_germany`), each trained run's German report (`german_report`) and each released checkpoint's BDBV check page (`ft_check_page`), kept when up to date.
   The trainer claims `finetune.cut_workers` plus one cores, its block-cutting workers and itself, so scoring and simulation beside it share what is left of the machine's budget.
-  Those cores are kept for it: every other job takes its threads of `side_cores`, the budget less `TRAINER_CORES` (4 by default; 0 where nothing trains), so a trainer whose inputs appear mid-run never waits behind CPU jobs.
+  Those cores are kept for it: every other job takes its threads of `side_cores`, the budget less `TRAINER_CORES` (4 by default; 0 where nothing trains) for each GPU slot, so a trainer whose inputs appear mid-run never waits behind CPU jobs.
 
 Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
@@ -150,6 +154,7 @@ Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 - `release_list`: the repository's releases, the only rule that reads the network; `task workflow:score` and each tick rerun it in a run of its own before scoring, as Snakemake 9 ends a run after a forced checkpoint without the jobs it unlocks. The checkpoints scored are the slots ones first, then the others, oldest first, from `published_from`, or `score.labels`.
 - `score_germany`, `score_release`: the units of `nowcastgermany.checkpoint` for each checkpoint and the references, newest checkpoint first. Each caches one file per date and resumes from it.
   Units run on the forecasting device with its threads (`forecast` in the config; `FORECAST_DEVICE`/`FORECAST_THREADS` override it per machine), beside the trainer: `train_segment` takes the `gpu` resource, with the highest priority, so the next segment starts the moment the previous ends. With `forecast.device: cuda`, `forecast.gpu: exclusive` makes forecasting jobs take it too (they wait for the GPU) and `share` runs them beside the trainer on it.
+  The `gpu` resource has a slot per CUDA GPU (`GPUS` in config/local.env, else those `nvidia-smi` lists), and each job taking it runs on a GPU of its own (`workflow/flowlib/gpus.py` sets `CUDA_VISIBLE_DEVICES`).
   BDBV is held out for the paper, so no BDBV unit runs.
 - `score_run_germany`: a run's own saved checkpoint `n<N>`, loaded from `<ROOT>/runs/<run>/train/n<N>` with no release, cached in `<ROOT>/runs/<run>/scores/`.
 - `run_scores`: every trained run's checkpoints and report; `score` includes it.

@@ -19,8 +19,7 @@ PACKAGES = sorted(
     if p.parent.name != "bdbvsubmission"
 )
 
-# Folders with no README: tests/ and .github/ are read with the code they
-# test or run, and assets/ holds only logos.
+# Every top-level folder, and the CI workflows.
 FOLDERS = [
     "packages",
     "packages/bdbvsubmission",
@@ -28,6 +27,10 @@ FOLDERS = [
     "paper",
     "docs",
     "data",
+    "config",
+    "tests",
+    "assets",
+    ".github/workflows",
 ]
 
 

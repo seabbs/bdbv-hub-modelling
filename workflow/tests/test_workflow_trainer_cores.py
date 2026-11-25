@@ -38,8 +38,14 @@ def test_jobs_beside_the_trainer_share_the_cores_it_leaves():
 
 
 def test_a_machine_sets_the_trainer_s_cores():
-    args = machine.args({"TRAINER_CORES": "6"}, cores=12, total_mb=8192)
+    cfg = {"TRAINER_CORES": "6"}
+    args = machine.args(cfg, cores=12, total_mb=8192, path="")
     assert "side_cores=6" in _resources(args)
+
+
+def test_each_gpu_keeps_a_trainer_s_cores():
+    args = machine.args({"GPUS": "0,1"}, cores=12, total_mb=8192, path="")
+    assert "side_cores=4" in _resources(args)
 
 
 def test_no_cores_are_kept_where_nothing_trains_or_none_are_left():

@@ -1,7 +1,10 @@
 # nowcastbdbv
 
 The 2026 Bundibugyo virus disease (BDBV) outbreak in the DRC as a case study.
-It downloads, tidies and loads the BDBV Modeling Hub's data streams, its health zones, and the onset-to-report delays.
+It downloads, tidies and loads the BDBV Modeling Hub's data streams, its health zones and the onset-to-report delays, and builds backtest tasks from the hub's releases.
+
+In this project `bdbvhub` reads the hub's data through it for the fit store, the submission and the docs site.
+The paper's Ebola study and the workflow's round reports load the hub's target from it.
 
 ## Start here
 
@@ -17,8 +20,7 @@ It downloads, tidies and loads the BDBV Modeling Hub's data streams, its health 
 - [`zones`](src/nowcastbdbv/zones.py): the zone backtest of the random walks and its scores.
 - [`data-raw/`](data-raw): how the package's data files are built.
 
-It imports the generic packages: `nowcastutils`, `nowcasteval` and `nowcastbaselines`, and `nowcastrenewal` for the BVD download helper.
-More of the BDBV study moves here from `bdbvhub` (BVD inputs, reports), so that the generic packages import no outbreak.
+It imports the generic packages: `nowcastutils`, `nowcasteval` and `nowcastbaselines`, and `nowcastrenewal` for delay pmfs and the BVDOutbreakSize download helper.
 
 ## Install
 

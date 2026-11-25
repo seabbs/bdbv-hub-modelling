@@ -3,6 +3,9 @@
 The workspace's Python packages, each installable on its own.
 Generic packages know no outbreak; the study packages hold the BDBV and German case studies.
 
+In this project the workflow (`workflow/`), the paper (`paper/`), the docs site (`docs/`) and the CI workflows (`.github/workflows/`) all call these packages.
+`bdbvsubmission` is the exception: it has its own environment and reaches the others only through the `bdbvhub` command.
+
 Each package imports only those below it (the import-linter contract in `pyproject.toml`, checked in CI):
 
 1. `bdbvhub`: the hub submission, the fit store and the reports.
