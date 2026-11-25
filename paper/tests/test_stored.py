@@ -31,7 +31,12 @@ def test_each_set_names_its_files_from_the_config() -> None:
     assert set(sets["germany"]) == {
         "pairing-germany.csv.gz",
         "pairing-germany-rho.csv.gz",
+        "germany-forecasts.csv.gz",
     }
+    # The development half's table only, never the held-out one.
+    assert sets["germany"]["germany-forecasts.csv.gz"] == (
+        f"{CONFIG['germany']['results']}/paper-forecasts.csv.gz"
+    )
     assert (
         sets["synthetic"]["synthetic-dev.csv.gz"]
         == (CONFIG["synthetic"]["forecasts"]["development"])
@@ -221,3 +226,22 @@ def test_the_stored_german_pairing_stands_in(tmp_path: Path) -> None:
     config["stored"] = {}
     files = PaperFlow(config, {}, "2026-08-01").workflow_evidence()
     assert "copula_rho" not in files
+
+
+def test_the_stored_german_forecasts_stand_in_on_pages(tmp_path: Path) -> None:
+    folder = tmp_path / "germany"
+    folder.mkdir()
+    (folder / "germany-forecasts.csv.gz").write_text("")
+    overlay = stored.overlay({"germany": folder})
+    path = overlay["stored"]["germany_forecasts"]
+    config = copy.deepcopy(CONFIG)
+    config["host_outputs"] = False
+    config["stored"] = overlay["stored"]
+    flow = PaperFlow(config, {}, "2026-08-01")
+    assert flow.germany_tables("development")[0] == path
+    # A workflow host reads its own benchmark's table.
+    config["host_outputs"] = True
+    flow = PaperFlow(config, {}, "2026-08-01")
+    assert flow.germany_tables("development")[0].endswith(
+        "results/germany/paper-forecasts.csv.gz"
+    )
