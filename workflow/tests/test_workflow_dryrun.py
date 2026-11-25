@@ -248,6 +248,16 @@ def test_ft_check_forecasts_are_keyed_by_their_code(tmp_path):
     assert jobs["ft_check_forecast"] == "3"
 
 
+def test_a_fresh_host_fetches_the_hub_s_data_commit(tmp_path):
+    # archie, 25 Nov: with no hub_watch.sh, <ROOT>/hub/head.txt never
+    # existed, so the BDBV check could not be planned; the workflow
+    # fetches it when missing, and hub_watch.sh keeps it current.
+    config = {"ft_check": {"checkpoint": "slots-abcdef"}}
+    jobs = dry(tmp_path, "ft_check", config=config)
+    assert jobs["hub_head"] == 1
+    assert jobs["hub_data"] == 1
+
+
 def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
     # Lead 10:50: each released checkpoint (its published.json) gets its
     # BDBV check page.

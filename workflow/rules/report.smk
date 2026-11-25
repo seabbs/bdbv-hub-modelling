@@ -259,6 +259,21 @@ rule rt_check:
 HUB = f"{LOCAL['ROOT']}/hub"
 
 
+rule hub_head:
+    # The hub's data commit when a host has none yet, so the BDBV check
+    # can be planned on a host with no hub_watch.sh, which keeps it
+    # current.
+    output:
+        f"{HUB}/head.txt",
+    log:
+        f"{HUB}/logs/head.log",
+    localrule: True
+    shell:
+        "gh api 'repos/InsightNet-US/BDBV-Modeling-Hub/commits"
+        "?path=target-data/time-series.csv&per_page=1' --jq '.[0].sha' "
+        "> {output} 2> {log}"
+
+
 rule hub_data:
     # The hub's tidy data (`bdbvhub data`), including tasks.json.
     input:
@@ -273,7 +288,10 @@ rule hub_data:
     params:
         out=lambda wc, output: Path(output[0]).parent,
     shell:
-        "uv run bdbvhub data --raw {params.out}/raw --out {params.out} " "> {log} 2>&1"
+        # A token, as GitHub limits unauthenticated reads.
+        'GITHUB_TOKEN="${{GITHUB_TOKEN:-$(gh auth token 2>/dev/null)}}" '
+        "uv run bdbvhub data --raw {params.out}/raw --out {params.out} "
+        "> {log} 2>&1"
 
 
 rule hub_submissions_table:

@@ -155,6 +155,25 @@ def test_a_bias_adapter_loads_through_the_strict_loader(tmp_path):
     assert torch.allclose(predict(loaded, block, toy_rows()), want, atol=1e-5)
 
 
+def test_an_adapter_loads_onto_its_model_s_device(tmp_path, monkeypatch):
+    # archie, 25 Nov: German scoring on the CPU loaded its adapter onto the
+    # trainer's full GPU (PEFT's default device) and ran out of memory.
+    from peft import PeftModel
+
+    model = trained_bias()
+    model.save_pretrained(tmp_path / "bias")
+    seen = []
+    load = PeftModel.from_pretrained.__func__
+
+    def spy(cls, *args, **kwargs):
+        seen.append(kwargs.get("torch_device"))
+        return load(cls, *args, **kwargs)
+
+    monkeypatch.setattr(PeftModel, "from_pretrained", classmethod(spy))
+    series_bias.load_adapter(tiny_model(), tmp_path / "bias")
+    assert seen == ["cpu"]
+
+
 def test_a_dropped_bias_weight_is_an_error(tmp_path, monkeypatch):
     model = trained_bias()
     model.save_pretrained(tmp_path / "bias")
