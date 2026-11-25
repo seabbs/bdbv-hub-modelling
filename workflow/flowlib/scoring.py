@@ -288,13 +288,13 @@ class Scoring:
 
         return priority
 
-    def unit_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
+    def unit_env(self, wc: Any, threads: int, resources: Any) -> str:  # noqa: ARG002
         """Return the unit's device (torch and JAX), threads and batch.
 
         A unit taking the `gpu` resource runs through `machine.CLAIM`
         first, on a GPU of its own.
         """
-        return self._env(self.forecast, threads)
+        return self._env(self.forecast, threads, resources)
 
     def evaluation_priority(self, wc: Any) -> float:
         """Return a held-out evaluation job's priority (`flowlib.compute`).
@@ -309,16 +309,29 @@ class Scoring:
             return base + 0.5
         return compute.side_priority(base, int(wc.n))
 
-    def checkpoint_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
+    def checkpoint_env(
+        self,
+        wc: Any,  # noqa: ARG002
+        threads: int,
+        resources: Any,
+    ) -> str:
         """Return `unit_env` for a checkpoint's scoring (its own device)."""
-        return self._env(self.checkpoint_forecast, threads)
+        return self._env(self.checkpoint_forecast, threads, resources)
 
-    def _env(self, fc: forecast.Forecast, threads: int) -> str:
-        """Return a job's environment on `fc`'s device with `threads`."""
+    def _env(self, fc: forecast.Forecast, threads: int, resources: Any) -> str:
+        """Return a job's environment on `fc`'s device with `threads`.
+
+        Through the launcher on a shared machine (`machine.launch_prefix`),
+        which pins it to its threads of cores and waits for its memory,
+        and through `machine.CLAIM` for a GPU of its own.
+        """
         env = machine.torch_env(self.local, threads, fc.device)
         env["JAX_PLATFORMS"] = forecast.JAX_PLATFORM[fc.device]
         claim = f"{machine.CLAIM} " if fc.gpu else ""
-        return f"{claim}{machine.CPUS} {threads} {machine.shell_env(env)}"
+        launch = machine.launch_prefix(
+            self.local, threads, mem_mb=int(getattr(resources, "mem_mb", 0))
+        )
+        return f"{claim}{launch}{machine.shell_env(env)}"
 
     def unit_rows(self, study: str) -> Callable[[Any], str]:
         """Return the unit's rows folder, which a worker brings back."""

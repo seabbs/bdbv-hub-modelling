@@ -59,7 +59,9 @@ rule score_germany:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        mem_mb=SC["mem_mb"],
+        mem_mb=memory.from_benchmark(
+            f"{CACHE}/benchmarks/score_germany/{{label}}.tsv", 3072, like=("label",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         env=checkpoint_env,
@@ -88,7 +90,9 @@ rule score_run_germany:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        mem_mb=SC["mem_mb"],
+        mem_mb=memory.from_benchmark(
+            f"{RUN}/scores/benchmarks/score_run_germany/n{{n}}.tsv", 3072, like=("n",)
+        ),
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         env=checkpoint_env,

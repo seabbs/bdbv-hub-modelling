@@ -89,10 +89,12 @@ def test_the_example_partitions_send_gpu_jobs_to_a_gpu_partition():
 def test_batches_and_the_trainer_claim_what_they_use():
     # A batch claims no memory on one machine (it is run by count); a
     # Slurm job without a claim gets the whole node or the partition's
-    # default. The trainer's GPU comes from its rule (`gpu=1`).
+    # default. The trainer's GPU comes from its rule (`gpu=1`), its
+    # memory from its last peak (flowlib.memory).
     sized = _set("set-resources")
+    assert int(sized["simulate_batch"]["mem_mb"]) > 0
+    assert "mem_mb" not in sized["train_segment"]
     for rule in ("simulate_batch", "train_segment"):
-        assert int(sized[rule]["mem_mb"]) > 0, rule
         assert int(sized[rule]["runtime"]) > 0, rule
     threads = dict(r.split("=") for r in _profile()["set-threads"])
     assert threads["simulate_batch"] == "1"

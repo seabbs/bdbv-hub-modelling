@@ -14,6 +14,7 @@ from flowlib import (
     localconfig,
     machine,
     manifest,
+    memory,
     notify,
     releases,
     rounds,
@@ -222,16 +223,6 @@ def ft_check_checkpoint():
     from nowcastfoundation.forecaster import finetuned_label
 
     return FTC["checkpoint"] or finetuned_label()
-
-
-MEMORY = config["memory"]
-
-
-def ft_check_mem(wc):
-    """A BDBV check forecast's memory: a Chronos-2 model's (the zero-shot
-    and fine-tuned foundation models, `ft-<checkpoint>`) or another's."""
-    chronos = wc.fmodel.startswith(("ft-", "foundation"))
-    return MEMORY["ft_check_chronos" if chronos else "ft_check"]
 
 
 def ft_check_key():

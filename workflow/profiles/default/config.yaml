@@ -8,5 +8,8 @@ rerun-triggers: [mtime]
 printshellcmds: true
 keep-going: true
 latency-wait: 30
+# A job that runs out of memory runs again with twice its memory
+# (flowlib.memory: each rule's mem_mb doubles with the attempt).
+retries: 2
 set-threads:
   - simulate_batch=1
