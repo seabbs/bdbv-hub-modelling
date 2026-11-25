@@ -252,10 +252,15 @@ class Scoring:
         return priority
 
     def unit_env(self, wc: Any, threads: int) -> str:  # noqa: ARG002
-        """Return the unit's device (torch and JAX), threads and batch."""
+        """Return the unit's device (torch and JAX), threads and batch.
+
+        A unit taking the `gpu` resource runs through `machine.CLAIM`
+        first, on a GPU of its own.
+        """
         env = machine.torch_env(self.local, threads, self.forecast.device)
         env["JAX_PLATFORMS"] = forecast.JAX_PLATFORM[self.forecast.device]
-        return machine.shell_env(env)
+        claim = f"{machine.CLAIM} " if self.forecast.gpu else ""
+        return claim + machine.shell_env(env)
 
     def unit_rows(self, study: str) -> Callable[[Any], str]:
         """Return the unit's rows folder, which a worker brings back."""

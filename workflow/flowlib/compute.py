@@ -149,6 +149,7 @@ MACHINE_KEYS = frozenset(
         "MEM_MB",
         "SIM_SLOTS",
         "DEVICE",
+        "GPUS",
         "CHECKPOINT_ABOVE",
         "TARGETS",
         "SCHEDULE_TARGETS",
@@ -436,7 +437,7 @@ def budget_of(
     This machine's, from `cfg`, for a local worker in this checkout.
     """
     if worker.local and Path(worker.checkout) == Path(checkout):
-        return {**machine.budget(cfg), "gpu": max(1, machine.gpus())}
+        return {**machine.budget(cfg), "gpu": machine.gpu_slots(cfg)}
     cmd = f"cd {shlex.quote(worker.checkout)} && "
     cmd += "python3 workflow/flowlib/machine.py budget"
     got = subprocess.run(

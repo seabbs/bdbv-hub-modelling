@@ -6,13 +6,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from flowlib import gpus, machine
 
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "workflow" / "flowlib" / "gpus.py"
-sys.path.insert(0, str(Path(__file__).parent))
 
-from test_workflow_dryrun import FT, dry_run  # noqa: E402
+
+def _offload_dry_run(tmp_path):
+    """Return the dry run, with each job's command, of an offloaded run."""
+    pytest.importorskip("snakemake")
+    sys.path.insert(0, str(Path(__file__).parent))
+    from test_workflow_dryrun import FT, dry_run
+
+    config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
+    out = dry_run(tmp_path, "finetune", config=config, quiet=False)
+    assert out.returncode == 0, out.stderr + out.stdout
+    return out
 
 
 def _nvidia_smi(tmp_path, count):
@@ -48,12 +58,14 @@ def test_the_gpu_resource_is_one_slot_per_gpu():
 def test_each_claim_takes_a_free_gpu(tmp_path):
     first = gpus.take(["0", "1"], tmp_path)
     second = gpus.take(["0", "1"], tmp_path)
-    assert first is not None and second is not None
+    assert first is not None
+    assert second is not None
     assert {first[0], second[0]} == {"0", "1"}
     assert gpus.take(["0", "1"], tmp_path) is None
     os.close(first[1])
     again = gpus.take(["0", "1"], tmp_path)
-    assert again is not None and again[0] == first[0]
+    assert again is not None
+    assert again[0] == first[0]
 
 
 def _run(tmp_path, local, command):
@@ -86,9 +98,9 @@ def test_the_claim_holds_while_the_job_runs(tmp_path):
     local.write_text(f"ROOT={tmp_path}\nGPUS=0\n")
     # The job, still running, holds GPU 0's lock.
     check = (
-        f"{sys.executable} -c \"import fcntl, os; "
+        f'{sys.executable} -c "import fcntl, os; '
         f"fd = os.open('{tmp_path / gpus.FOLDER / 'gpu-0.lock'}', os.O_RDWR); "
-        "fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\" "
+        'fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)" '
         "2>/dev/null && echo free || echo held"
     )
     assert _run(tmp_path, local, check) == "held\n"
@@ -106,9 +118,7 @@ def _gpu_commands(tmp_path, gpus_set):
         f"ROOT={tmp_path}\nHOST_NAME=test-host\nGPUS={gpus_set}\n"
         "FORECAST_DEVICE=cuda\n"
     )
-    config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
-    out = dry_run(tmp_path, "finetune", config=config, quiet=False)
-    assert out.returncode == 0, out.stderr + out.stdout
+    out = _offload_dry_run(tmp_path)
     return [
         line
         for line in out.stdout.splitlines()
@@ -133,9 +143,7 @@ def test_a_cpu_forecast_claims_no_gpu(tmp_path):
     (tmp_path / "local.env").write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\nFORECAST_DEVICE=cpu\n"
     )
-    config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
-    out = dry_run(tmp_path, "finetune", config=config, quiet=False)
-    assert out.returncode == 0, out.stderr + out.stdout
+    out = _offload_dry_run(tmp_path)
     lines = [
         line
         for line in out.stdout.splitlines()
