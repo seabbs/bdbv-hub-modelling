@@ -358,3 +358,30 @@ def test_a_checkpoint_s_7_day_check_runs_on_its_7_day_blocks(tmp_path):
     assert check["n"] > 0
     for key in ("ratio", "inside90", "rough", "rough_truth", "rough_ratio"):
         assert np.isfinite(check[key])
+
+
+@pytest.mark.usefixtures("short_context")
+def test_the_adapter_is_merged_before_scoring(tmp_path, monkeypatch):
+    # LoRA's extra low-rank products cost about an eighth of a CPU pass;
+    # merged weights give the same losses (#1114).
+    model = trained()
+    val = blocks()
+    where = tmp_path / "step-0000100"
+    fs.save_snapshot(model, where, {"step": 100})
+    base = tiny_model()
+    series_bias.attach(base)
+    lora = []
+    forward = fs.forward
+
+    def watched(m, *args, **kwargs):
+        lora.append(any("lora_A" in n for n, _ in m.named_modules()))
+        return forward(m, *args, **kwargs)
+
+    monkeypatch.setattr(fs, "forward", watched)
+    got = fe.evaluate(where / "adapter", base, val, ["checkpoint"], 100)
+    monkeypatch.setattr(fs, "forward", forward)
+    assert lora
+    assert not any(lora)
+    assert got["held_out_loss"] == pytest.approx(
+        fs.held_out_loss(model, val, 100), rel=1e-5
+    )
