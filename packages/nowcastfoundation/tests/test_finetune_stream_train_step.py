@@ -255,3 +255,164 @@ def test_archie_blocks_that_ran_out_are_recomputed(series, tokens, ran_out):
     # Chronos-2 with its LoRA adapter holds about 0.48 GB.
     rule = fs.MemoryRule(8_161_329_152, 480_000_000)
     assert rule.needs_recompute(series, tokens) is ran_out
+
+
+def bias_step(monkeypatch, rule, meter=None):
+    """Run a bias model's step under `rule`; return its grads and checkpoints."""
+    from chronos.chronos2.model import Chronos2Model
+
+    calls = spy_checkpoints(monkeypatch)
+    model = tiny_model()
+    series_bias.attach(model)
+    model.train()
+    module = getattr(model, series_bias.BIAS_MODULE)
+    with torch.no_grad():
+        for i, p in enumerate(module.parameters()):
+            p.fill_(0.1 * (i + 1))
+    batch = {**batch_of(toy_block()), "series_rows": toy_rows()}
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    fs.train_step(
+        model, batch, accepted, "cpu", 1.0, rule, meter or FakePeak(1)
+    )
+    grads = {
+        n: p.grad.clone()
+        for n, p in model.named_parameters()
+        if p.grad is not None
+    }
+    return grads, len(calls), batch
+
+
+def toy_rule(free: int, bias=fs.BiasShape(2, 4, 32)) -> fs.MemoryRule:
+    """A rule whose budget is `free` bytes."""
+    total = 8 * 10**9
+    margin = int(fs.MEMORY_MARGIN * total)
+    return fs.MemoryRule(total, total - margin - free, bias=bias)
+
+
+def test_a_step_keeps_the_bias_when_it_fits_with_the_same_gradients(
+    monkeypatch,
+):
+    # The series bias's group attention is recomputed in backward only
+    # when the step would not fit holding it; the gradients are the same.
+    batch = batch_of(toy_block())
+    series, tokens = batch["context"].shape[0], fs.batch_tokens(batch)
+    roomy = toy_rule(10**9)
+    assert roomy.keeps_bias(series, tokens)
+    kept, kept_calls, _ = bias_step(monkeypatch, roomy)
+    assert kept_calls == 0
+    assert roomy.rows[-1]["kept_bias"]
+    need = roomy.predict(series, tokens)
+    tight = toy_rule(need + roomy.kept_bytes(series, tokens) - 1)
+    assert not tight.needs_recompute(series, tokens)
+    assert not tight.keeps_bias(series, tokens)
+    checked, checked_calls, _ = bias_step(monkeypatch, tight)
+    # Only the bias's time chunks are checkpointed, not whole blocks.
+    assert checked_calls > 0
+    assert not tight.rows[-1]["recomputed"]
+    assert not tight.rows[-1]["kept_bias"]
+    assert kept.keys() == checked.keys()
+    for name in kept:
+        torch.testing.assert_close(kept[name], checked[name], rtol=0, atol=0)
+
+
+def test_a_model_without_the_bias_keeps_nothing_extra():
+    rule = fs.MemoryRule(8 * 10**9, 0)
+    assert rule.kept_bytes(100, 10) == 0
+    assert not rule.keeps_bias(100, 10)
+
+
+def test_the_bias_held_counts_its_saved_mask_and_group_attention():
+    shape = fs.BiasShape(layers=12, heads=12, d_model=768)
+    rule = fs.MemoryRule(8 * 10**9, 0, bias=shape)
+    series, tokens = 400, 9
+    pairs = 12 * 12 * tokens * series**2 * 4
+    states = series * tokens * 12 * fs.KEPT_STATES * 768 * 4
+    assert rule.kept_bytes(series, tokens) == pairs + states
+
+
+def test_a_kept_step_fits_the_cost_without_what_the_bias_held():
+    rule = toy_rule(10**9)
+    held = rule.kept_bytes(1000, 10)
+    for _ in range(fs.FIT_AFTER):
+        rule.record(1000, 10, False, 1000 * 10 * 300_000 + held, held)
+    assert rule.cost == 300_000
+    assert rule.rows[-1]["predicted"] == rule.predict(1000, 10) + held
+
+
+def test_a_kept_step_that_runs_out_checkpoints_the_bias_at_its_size():
+    rule = toy_rule(10**9)
+    series, tokens = 30, 10
+    assert rule.keeps_bias(series, tokens)
+    rule.ran_out(series, tokens, kept_bias=True)
+    assert not rule.keeps_bias(series, tokens)
+    # The step itself still runs without recomputing its blocks.
+    assert not rule.needs_recompute(series, tokens)
+    again = fs.MemoryRule(rule.total, rule.footprint, rule.state(), rule.bias)
+    assert not again.keeps_bias(series, tokens)
+
+
+def test_a_step_that_runs_out_before_the_rule_changes_is_run_again():
+    # Out of memory with a cheaper choice than the rule now makes: the
+    # same batch is run again whole, so its gradient is unchanged.
+    model = tiny_model()
+    series_bias.attach(model)
+    batch = {**batch_of(toy_block()), "series_rows": toy_rows()}
+    series, tokens = batch["context"].shape[0], fs.batch_tokens(batch)
+    rule = toy_rule(10**9)
+
+    def oom(*_args, **_kwargs):
+        raise RuntimeError("CUDA out of memory")
+
+    with (
+        mock.patch.object(fs, "forward", oom),
+        pytest.raises(fs.RunAgain, match="out of memory"),
+    ):
+        fs.train_step(model, batch, {}, "cpu", 1.0, rule, FakePeak(0))
+    assert not rule.keeps_bias(series, tokens)
+    assert not rule.needs_recompute(series, tokens)
+    with (
+        mock.patch.object(fs, "forward", oom),
+        pytest.raises(fs.RunAgain),
+    ):
+        fs.train_step(model, batch, {}, "cpu", 1.0, rule, FakePeak(0))
+    assert rule.needs_recompute(series, tokens)
+    # Recomputed already: nothing cheaper to give up.
+    with (
+        mock.patch.object(fs, "forward", oom),
+        pytest.raises(RuntimeError, match="out of memory") as raised,
+    ):
+        fs.train_step(model, batch, {}, "cpu", 1.0, rule, FakePeak(0))
+    assert not isinstance(raised.value, fs.RunAgain)
+
+
+def test_with_no_series_threshold_only_a_recompute_checkpoints(monkeypatch):
+    from chronos.chronos2.model import Chronos2EncoderBlock, Chronos2Model
+
+    import torch.utils.checkpoint as tc
+
+    calls: list[int] = []
+    real = tc.checkpoint
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(tc, "checkpoint", spy)
+    monkeypatch.setattr(
+        Chronos2EncoderBlock, "forward", Chronos2EncoderBlock.forward
+    )
+    fs.checkpoint_large_batches(None)
+    model = tiny_model()
+    model.train()
+    batch = batch_of(toy_block())
+    accepted = inspect.signature(Chronos2Model.forward).parameters
+    fs.train_step(model, batch, accepted, "cpu", 1.0)
+    assert not calls
+    with fs.recompute_every_block():
+        fs.train_step(model, batch, accepted, "cpu", 1.0)
+    assert calls
+
+
+def test_the_series_threshold_applies_only_without_a_rule():
+    assert fs.series_threshold(733, None) == 733
+    assert fs.series_threshold(733, fs.MemoryRule(8 * 10**9, 0)) is None
