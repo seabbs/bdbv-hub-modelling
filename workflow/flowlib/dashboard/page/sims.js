@@ -12,7 +12,10 @@ var S={layer:null,src:null,data:null,shown:[],levels:{},bins:{},group:null,
  scale:"log",norm:false,sort:"cases",desc:true,sim:null};
 var STATS={cases:"Cases",strata:"Strata",days:"Days",weeks:"Weeks",
  peak:"Peak week's cases",peak_at:"Peak position",delay:"Mean delay (days)",
- within7:"Share within 7 days",negative:"Share of negative updates"};
+ within7:"Share within 7 days",negative:"Share of negative updates",
+ within14:"Share within 14 days",within28:"Share within 28 days",
+ releases:"Releases a week",gap:"Days between releases",first_report:"Days to the first report",
+ growth:"Largest weekly growth (log)",noise:"Observation noise"};
 function $(id){return document.getElementById(id)}
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){
  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
@@ -246,6 +249,65 @@ function layers(){var d=S.data,box=$("layerbody"),names=[].concat(LAYERS,["outco
     var c=S.bins[k];if(c&&Math.abs(c[0]-r[0])<1e-12)delete S.bins[k];else S.bins[k]=r;update()})})})}
 $("layerpick").addEventListener("click",function(e){var b=e.target.closest("button[data-l]");if(!b)return;S.layer=b.dataset.l;layers()});
 
+// ---- what the simulations produce, by group -------------------------------
+// Each summary computed from the simulations (the delay distribution,
+// weekday profiles, release cadence, epidemic shape, revisions and noise),
+// split by the "Colour and group by" factor as the series panels are: per
+// level its median and 50% band, the source's whole faint grey.
+var DW=300,DH=170,DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+function q(a,p){var b=a.filter(function(v){return v!==null&&!isNaN(v)}).sort(function(x,y){return x-y});if(!b.length)return null;
+ var i=(b.length-1)*p,lo=Math.floor(i),hi=Math.ceil(i);return b[lo]+(b[hi]-b[lo])*(i-lo)}
+function dsvg(inner){return '<svg viewBox="0 0 '+DW+' '+DH+'" width="100%" role="img">'+inner+'</svg>'}
+// curves: per group, the median and 50% band of each point of a curve.
+function curvePanel(el,xs,xlab,rowsOf,groupsList,colour,opts){
+ var L=36,R=8,T=8,B=28,pw=DW-L-R,ph=DH-T-B,g=[],ys=[];
+ var sets=groupsList.map(function(gr){var rows=rowsOf(gr.ix);
+  var st=xs.map(function(_,j){var col=rows.map(function(r){return r[j]});return [q(col,0.25),q(col,0.5),q(col,0.75)]});
+  st.forEach(function(v){v.forEach(function(x){if(x!==null)ys.push(x)})});return {gr:gr,st:st}});
+ if(!ys.length){el.innerHTML="<p class=mut>No values.</p>";return}
+ var y0=opts.y0!==undefined?opts.y0:Math.min.apply(null,ys),y1=Math.max.apply(null,ys);if(y1===y0)y1=y0+1;
+ var x0=0,x1=xs.length-1,sx=function(j){return L+(j-x0)/(x1-x0||1)*pw},sy=function(v){return T+ph-(v-y0)/(y1-y0)*ph};
+ ticks(y0,y1,3).forEach(function(v){g.push('<line class=grid x1='+L+' x2='+(DW-R)+' y1='+sy(v)+' y2='+sy(v)+'></line><text class=ax x='+(L-4)+' y='+(sy(v)+3)+' text-anchor=end>'+fmt(v)+'</text>')});
+ if(opts.hline!==undefined)g.push('<line class=mark x1='+L+' x2='+(DW-R)+' y1='+sy(opts.hline)+' y2='+sy(opts.hline)+'></line>');
+ xs.forEach(function(x,j){if(xs.length<=8||j%2===0||j===xs.length-1)g.push('<text class=ax x='+sx(j)+' y='+(DH-B+12)+' text-anchor=middle>'+x+'</text>')});
+ g.push('<text class=ax x='+(L+pw/2)+' y='+(DH-3)+' text-anchor=middle>'+xlab+'</text>');
+ sets.forEach(function(set){var c=colour(set.gr.key),faint=set.gr.key==="(all)",up=[],dn=[],med="";
+  set.st.forEach(function(v,j){if(v[0]===null)return;up.push(sx(j).toFixed(1)+","+sy(v[2]).toFixed(1));dn.unshift(sx(j).toFixed(1)+","+sy(v[0]).toFixed(1));med+=(med?"L":"M")+sx(j).toFixed(1)+" "+sy(v[1]).toFixed(1)});
+  g.push('<polygon points="'+up.concat(dn).join(" ")+'" fill="'+c+'" opacity="'+(faint?0.12:0.18)+'"><title>'+esc(set.gr.label)+': 50% of simulations</title></polygon>');
+  g.push('<path d="'+med+'" fill=none stroke="'+c+'" stroke-width='+(faint?1.5:2)+(faint?' stroke-dasharray="4 3"':'')+'><title>'+esc(set.gr.label)+' ('+set.gr.ix.length+'): median</title></path>')});
+ el.innerHTML=dsvg(g.join(""))}
+// intervals: per group a row, its 5-95% line, 25-75% bar and median.
+function intervalPanel(el,col,groupsList,colour,log){
+ var L=92,R=10,T=6,B=18,rh=Math.min(18,(DH-T-B)/groupsList.length),pw=DW-L-R,g=[],all=[];
+ var sets=groupsList.map(function(gr){var v=gr.ix.map(function(i){return col[i]}).filter(function(x){return x!==null&&(!log||x>0)});v.forEach(function(x){all.push(x)});
+  return {gr:gr,q:[q(v,0.05),q(v,0.25),q(v,0.5),q(v,0.75),q(v,0.95)],n:v.length}});
+ if(!all.length){el.innerHTML="<p class=mut>No values.</p>";return}
+ var tf=log?Math.log10:function(v){return v},inv=log?function(v){return Math.pow(10,v)}:function(v){return v};
+ var lo=tf(q(all,0.01)),hi=tf(q(all,0.99));if(hi===lo){hi=lo+1}
+ var sx=function(v){return L+(Math.min(hi,Math.max(lo,tf(v)))-lo)/(hi-lo)*pw};
+ [lo,(lo+hi)/2,hi].forEach(function(t,k){g.push('<text class=ax x='+(L+k*pw/2)+' y='+(DH-4)+' text-anchor='+(k===0?'start':k===2?'end':'middle')+'>'+fmt(inv(t))+'</text>')});
+ sets.forEach(function(set,i){var y=T+i*rh+rh/2,c=colour(set.gr.key),v=set.q;
+  g.push('<text class=ax x='+(L-6)+' y='+(y+4)+' text-anchor=end>'+esc(set.gr.label.length>13?set.gr.label.slice(0,12)+"…":set.gr.label)+'</text>');
+  if(v[2]===null)return;
+  g.push('<g><title>'+esc(set.gr.label)+' ('+set.n+'): median '+fmt(v[2])+', 50% '+fmt(v[1])+' to '+fmt(v[3])+', 90% '+fmt(v[0])+' to '+fmt(v[4])+'</title>'+
+   '<line x1='+sx(v[0])+' x2='+sx(v[4])+' y1='+y+' y2='+y+' stroke="'+c+'" stroke-width=1.5 opacity=.7></line>'+
+   '<rect x='+sx(v[1])+' y='+(y-4)+' width='+Math.max(1,sx(v[3])-sx(v[1]))+' height=8 rx=2 fill="'+c+'" opacity=.45></rect>'+
+   '<circle cx='+sx(v[2])+' cy='+y+' r=3.5 fill="'+c+'" stroke="var(--card)" stroke-width=1.5></circle>'+
+   '<rect x=0 y='+(y-rh/2)+' width='+DW+' height='+rh+' fill=transparent></rect></g>')});
+ if(log)g.push('<text class=ax x='+(DW-R)+' y='+(T+8)+' text-anchor=end>log scale</text>');
+ el.innerHTML=dsvg(g.join(""))}
+function derived(){var d=S.data,box=$("derivedbody");if(!d.derived){box.innerHTML='<p class=mut>This source was summarised before these summaries; it is summarised again on the next refresh.</p>';return}
+ var g=groups(),by={};S.shown.forEach(function(i){var l=g.of(i);(by[l]=by[l]||[]).push(i)});
+ var list=[{key:"(all)",label:"all of the source",ix:d.ids.map(function(_,i){return i})}].concat(g.list.map(function(l){return {key:l,label:l==="all"?"shown":l,ix:by[l]||[]}}));
+ var colour=function(k){return k==="(all)"?"var(--mut)":g.colour(k)};
+ $("derivedleg").innerHTML=list.map(function(x){return '<span><i style="background:'+colour(x.key)+(x.key==="(all)"?';opacity:.5':'')+'"></i>'+esc(x.label)+' <span class=mut>'+x.ix.length+'</span></span>'}).join("")+'<span class=mut>Split by '+esc(S.group||"nothing")+' (the "Colour and group by" control); median and 50% band, or median, 50% and 90% of the simulations.</span>';
+ var curves=[["cdf","Share reported by delay","delay (days)",d.delay_points,{y0:0}],["refdow","Reference-date weekday profile","weekday of reference date",DAYS,{hline:1}],["repdow","Report-date weekday profile","weekday of report",DAYS,{hline:1}]];
+ var scalars=[["within7"],["within14"],["within28"],["releases"],["gap"],["first_report"],["growth"],["peak",true],["peak_at"],["negative"],["noise"]];
+ box.innerHTML=curves.map(function(c){return '<div class="card lpanel"><h3>'+c[1]+'</h3><div data-c="'+c[0]+'"></div></div>'}).join("")+
+  scalars.filter(function(k){return d.stats[k[0]]}).map(function(k){return '<div class="card lpanel"><h3>'+esc(STATS[k[0]]||k[0])+'</h3><div data-x="'+k[0]+'"></div></div>'}).join("");
+ curves.forEach(function(c){curvePanel(box.querySelector('[data-c="'+c[0]+'"]'),c[3],c[2],function(ix){return ix.map(function(i){return d.derived[c[0]][i]})},list,colour,c[4])});
+ scalars.forEach(function(k){var el=box.querySelector('[data-x="'+k[0]+'"]');if(el)intervalPanel(el,d.stats[k[0]],list,colour,!!k[1])})}
+
 function sample(ix,cap){if(ix.length<=cap)return ix;var out=[],step=ix.length/cap;
  for(var j=0;j<cap;j++)out.push(ix[Math.floor(j*step)]);return out}
 function seriesOf(i,colour,op,w){var y=S.data.series[i],pk=Math.max.apply(null,y)||1;
@@ -332,7 +394,7 @@ function dive(j){var box=$("divebody"),x=j.dates.map(dayNum),i=S.data.ids.indexO
 // ---- wiring ------------------------------------------------------------
 function update(){S.shown=filtered();chips();
  $("status").textContent=S.shown.length.toLocaleString()+" of "+S.data.ids.length.toLocaleString()+" shown";
- summary();layers();spaghetti();table()}
+ summary();layers();derived();spaghetti();table()}
 function setHash(){var h="src="+encodeURIComponent(S.src||"")+(S.sim?"&sim="+encodeURIComponent(S.sim):"");
  history.replaceState(null,"","#"+h)}
 function readHash(){var o={};location.hash.slice(1).split("&").forEach(function(p){var kv=p.split("=");if(kv[0])o[kv[0]]=decodeURIComponent(kv[1]||"")});return o}
