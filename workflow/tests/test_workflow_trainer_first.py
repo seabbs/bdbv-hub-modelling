@@ -73,5 +73,6 @@ def test_the_bound_covers_every_band_below_the_trainer():
         compute.CHECKPOINT_PRIORITY,
         compute.BATCH_PRIORITY,
         compute.EVALUATION_PRIORITY,
+        compute.NEXT_BATCH_PRIORITY,
     )
     assert 10_000 * (others + 2) < compute.TRAIN_PRIORITY

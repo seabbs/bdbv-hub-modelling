@@ -290,15 +290,19 @@ def _job_priorities(stdout):
     return found
 
 
-def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
+def test_jobs_rank_trainer_evaluation_references_scoring_then_batches(
+    tmp_path,
+):
     # Sam, overnight 25 Nov: with sims queued for later segments, freed
     # cores went to batches; the German reference and each checkpoint's
     # scoring starved, and the batches the trainer reads were never
     # copied into the run, so the GPU waited. One order (flowlib.compute):
     # the trainer, the quick hand-offs (its batches' copies, a
     # checkpoint's release for its BDBV check), the references, each
-    # checkpoint's scoring (newest first), simulation batches, then the
-    # held-out evaluation, which nothing waits for (Sam, 25 Nov).
+    # checkpoint's scoring (newest first), then simulation batches. The
+    # held-out evaluation goes right after the hand-offs and the batches
+    # the next segment reads, so the dashboard's validation loss never
+    # waits hours behind the CPU jobs (Sam, 25 Nov).
     _hub(tmp_path)
     seg = tmp_path / "runs" / "runa" / "train" / "n250"
     seg.mkdir(parents=True)
@@ -351,10 +355,14 @@ def test_jobs_rank_trainer_references_scoring_then_batches(tmp_path):
     seen = {rule for rule, _, _ in _job_priorities(out.stdout)}
     assert {"hub_data", "ft_check_page"} <= seen
     assert min(tiers["train"]) > max(tiers["fetch"])
-    assert min(tiers["fetch"]) > max(tiers["reference"])
+    next_batches = [p for p in tiers["batch"] if p > max(tiers["evaluate"])]
+    later = [p for p in tiers["batch"] if p < min(tiers["checkpoint"])]
+    assert next_batches
+    assert later
+    assert len(next_batches) + len(later) == len(tiers["batch"])
+    assert min(tiers["fetch"]) > max(next_batches)
+    assert min(tiers["evaluate"]) > max(tiers["reference"])
     assert min(tiers["reference"]) > max(tiers["checkpoint"])
-    assert min(tiers["checkpoint"]) > max(tiers["batch"])
-    assert min(tiers["batch"]) > max(tiers["evaluate"])
     assert newest[500] > newest[250]
 
 
