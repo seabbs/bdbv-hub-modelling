@@ -439,3 +439,57 @@ def test_the_pages_render_computes_nothing_the_workflow_hosts_make(
         "sim_realism",
     ):
         assert f"rule {rule}:" not in log
+
+
+def test_the_pages_render_reads_stored_outputs_as_inputs(
+    tmp_path: Path,
+) -> None:
+    # With the stored overlay the host outputs are plain inputs: no rule
+    # makes them, and the synthetic study is real, not dummy.
+    store = tmp_path / "stored"
+    store.mkdir()
+    overlay = {
+        "synthetic": {
+            "forecasts": {"development": str(store / "synthetic-dev.csv.gz")}
+        },
+        "stored": {"pairing_synthetic": str(store / "pairing.csv.gz")},
+    }
+    for name in ("synthetic-dev.csv.gz", "pairing.csv.gz"):
+        (store / name).write_text("")
+    cfg = tmp_path / "real.yaml"
+    cfg.write_text(
+        yaml.safe_dump(
+            {
+                "results": str(tmp_path / "results"),
+                "build": str(tmp_path / "build"),
+                "germany": {
+                    "data": str(tmp_path / "germany"),
+                    "results": str(tmp_path / "germany-results"),
+                },
+            }
+        )
+    )
+    (tmp_path / "stored.yaml").write_text(yaml.safe_dump(overlay))
+    base = str(PAPER / "workflow" / "config.yaml")
+    pages = str(PAPER / "workflow" / "pages.yaml")
+    res = _snakemake(
+        "render",
+        "-n",
+        "--config",
+        "render=development",
+        "--configfile",
+        base,
+        str(cfg),
+        pages,
+        str(tmp_path / "stored.yaml"),
+    )
+    assert res.returncode == 0, res.stderr
+    log = res.stdout + res.stderr
+    assert "rule si_copula:" in log
+    for rule in (
+        "simulate_batch",
+        "synthetic_forecasts_development",
+        "pairing_synthetic",
+        "train_segment",
+    ):
+        assert f"rule {rule}:" not in log

@@ -22,6 +22,9 @@ from paperpipe.config import MODES  # noqa: E402
 from paperpipe.evidence import EVIDENCE as EVIDENCE_NAMES  # noqa: E402
 
 
+from paperpipe import stored  # noqa: E402
+
+
 from paperpipe.flow import BDBV, GERMANY_CLI, PYTHON, PaperFlow  # noqa: E402
 
 # Evidence rows (`evidence` in the config): a file the workflow writes,

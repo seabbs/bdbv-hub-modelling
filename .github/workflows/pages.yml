@@ -277,10 +277,12 @@ jobs:
       # reads the held-out data; the paper target runs only on dispatch.
       # As `task paper`, with the Pages config (paper/workflow/pages.yaml),
       # which leaves out the simulations, fine-tuning runs and their scores
-      # that the workflow's hosts make.
+      # that the workflow's hosts make. Their published outputs (the
+      # paper-<set>-<hash> releases) are fetched and read as inputs.
       - name: Run the paper workflow and render the paper
         env:
           TARGET: ${{ inputs.paper_target || 'development' }}
+          GH_TOKEN: ${{ github.token }}
         # The same steps as `task paper` (workflow/scripts/paper_run.py).
         run: python3 workflow/scripts/paper_run.py --render "$TARGET" --pages
       - name: Build the site into _site

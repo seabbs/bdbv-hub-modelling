@@ -111,7 +111,8 @@ for i, entry in enumerate(GERMANY.get("extra") or []):
 # A run with no forecasts file (`synthetic.forecasts.<mode>: null`) uses the
 # dummy synthetic study, as `germany.real: false` does.
 for _mode in MODES:
-    if not SYNTHETIC["forecasts"][_mode]:
+    # Without the simulations the forecasts file is a stored input.
+    if not SYNTHETIC["forecasts"][_mode] or not SYNTHETIC["simulations"][_mode]:
         continue
 
     rule:
@@ -684,10 +685,14 @@ if GERMANY["real"] and SYNTHETIC["simulations"]["development"]:
             "{params.python} paper/scripts/pairing_synthetic.py {params.sims} "
             "{output} --seeds {params.seeds} --samples {params.samples}"
 
+
+# The synthetic half made above, or the stored one (`stored`).
+if GERMANY["real"] and FLOW.pairing_synthetic_file():
+
     rule si_copula:
         input:
             rules.pairing_germany.output.scores,
-            rules.pairing_synthetic.output,
+            FLOW.pairing_synthetic_file(),
         output:
             FLOW.workflow_evidence()["si_copula"],
         log:
@@ -804,6 +809,58 @@ rule summary:
         "{params.python} -m paperpipe summary --mode {wildcards.mode} "
         "--meta {input.meta} --scores {input.scores} --out {output} "
         "{params.args}"
+
+
+# The host-made development outputs the Site build reads, each set
+# released once per contents as paper-<set>-<hash> (`paperpipe.stored`):
+# the synthetic forecasts and pairing scores, the final run's validation
+# curve and the runs' checkpoint tables, and the simulation summaries and
+# example seeds. Each set's rule exists on a host that makes its inputs.
+# Writes releases, so it is the opt-in target `paper_inputs`.
+STORED_SETS = {
+    name: files
+    for name, files in stored.sets(
+        {**FLOW.config, "evidence": FLOW.evidence}, R
+    ).items()
+    if {
+        "synthetic": SYNTHETIC["simulations"]["development"],
+        "finetune": config.get("final_run"),
+        "simulations": FLOW.rounds_dir,
+    }[name]
+}
+
+
+for _set, _files in STORED_SETS.items():
+
+    rule:
+        name:
+            f"release_paper_{_set}"
+        input:
+            list(_files.values()),
+        output:
+            f"{R}/released/{_set}.json",
+        log:
+            f"{R}/logs/release_paper_{_set}.log",
+        # gh: runs on the driver's host.
+        localrule: True
+        conda:
+            TOOLS_ENV
+        params:
+            python=PYTHON,
+            files=" ".join(
+                shlex.quote(f"{name}={path}") for name, path in _files.items()
+            ),
+            heldout=shlex.quote(json.dumps(config["heldout"])),
+        shell:
+            "exec >{log} 2>&1; "
+            f"{{params.python}} -m paperpipe.stored publish {_set} "
+            "--heldout {params.heldout} --record {output} "
+            "--file {params.files}"
+
+
+rule paper_inputs:
+    input:
+        [f"{R}/released/{name}.json" for name in STORED_SETS],
 
 
 # The paper reads `build`, so it shows the last run published.
