@@ -111,7 +111,7 @@ def test_summary_quotes_each_model_against_randomwalknowcast() -> None:
             "model": [
                 "KIT-frozen_baseline",
                 "randomwalknowcast",
-                "foundation_zeroshot_twostep",
+                "foundation_zeroshot_baselinenowcast",
             ],
             "rel_score": [1.0, 1.2, 0.9],
             "rel_log_score": [1.0, 1.1, 0.95],
@@ -119,9 +119,9 @@ def test_summary_quotes_each_model_against_randomwalknowcast() -> None:
         }
     )
     out = study_summary({"study": "germany", "source": "real"}, scores)
-    assert out["models"]["foundation_zeroshot_twostep"] == 0.75
+    assert out["models"]["foundation_zeroshot_baselinenowcast"] == 0.75
     # A quoted model without scores yet reads as pending.
-    assert out["models"]["foundation_twostep"] == "pending"
+    assert out["models"]["foundation_baselinenowcast"] == "pending"
 
 
 def test_with_randomwalknowcast_the_baseline_its_scores_are_quoted() -> None:

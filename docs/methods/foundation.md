@@ -4,8 +4,8 @@ The `foundation` model and its comparison variants give the hub target's release
 { .page-subtitle }
 
 The data and notation are on the [Data methods page](data.md#target-and-notation).
-`foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the ragged layout.
-The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), the two-step `foundation_twostep` and `foundation_zeroshot_twostep`, and `foundation_real` (fine-tuned on real data alone).
+`foundation` is Chronos-2 fine-tuned on simulated outbreaks ([Fine-tuning](#fine-tuning)) on the reporting-triangle layout.
+The variants the paper compares it with are `foundation_zeroshot` (pretrained weights), `foundation_zeroshot_complete` and `foundation_complete` (complete layout), `foundation_baselinenowcast` and `foundation_zeroshot_baselinenowcast` (baselinenowcast), and `foundation_real` (fine-tuned on real data alone).
 None is fitted to these data: Chronos-2 forecasts in context, from its pretrained weights or a fine-tuned checkpoint.
 Only `foundation` runs in the Fit store and the submission; the variants are run by the paper's workflow alone.
 Each model reads the cadence from the data: one pass on the daily releases gives the daily counts and the weekly hub target, and a task with weekly releases only gives the weekly target.
@@ -43,7 +43,7 @@ Chronos-2 forecasts every target series in the block jointly, from one shared la
 - **Complete** (`*_complete`): the targets $X_{p,t}$ for $t \le t^*$.
   $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([Baseline models](baselines.md#forecast)).
   It comes from the delay alone, so it needs no walk spread.
-- **Ragged** (`*_ragged`): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
+- **Reporting triangle** (`*_ragged`): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
   $t^* = c - D$, the last step whose count is at lag $D$ or more, with $D$ estimated from the data (`lag_count`).
   $D$ is the first lag at which the steps 28 to 112 days (4 to 16 weeks) before the cut-off had 99% of their counts reported, pooled over places and releases, read from no release after the cut-off.
@@ -77,7 +77,7 @@ Independent and comonotone draws remain as named options (`coupling`) for the su
 A draw is rounded to the nearest count and floored at zero.
 Steps up to $t^*$ are their count at the vintage.
 The hub's target is weekly.
-A daily ragged model reads each week from its place's rolling 7-day series on the week's last day, and a daily complete model sums its seven daily draws.
+A daily reporting-triangle model reads each week from its place's rolling 7-day series on the week's last day, and a daily complete model sums its seven daily draws.
 
 ## Patches and context
 
@@ -100,7 +100,7 @@ The renewal models fit the zones and sum them to their provinces instead ([Healt
 
 ## Fine-tuning
 
-The fine-tuned models (`foundation`, `foundation_complete`, `foundation_twostep`) load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
+The fine-tuned models (`foundation`, `foundation_complete`, `foundation_baselinenowcast`) load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
 The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#foundation-model-setup-and-fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
 The simulator is `nowcastfoundation.simulator` (the design and value draws, then each simulation as the joint PyRenew model in `nowcastrenewal.simulation.outbreak`), run on the grid config `packages/nowcastfoundation/config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `nowcastfoundation.finetune.chronos` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
 

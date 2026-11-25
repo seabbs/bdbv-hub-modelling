@@ -42,13 +42,14 @@ def base_step(where: Path, device: str) -> None:
     score_snapshots(train, evaluations.pending(train, -1, 0), device)
 
 
-def logging_passes(label: str) -> Any:
-    """Log each pass of an evaluation as `label` (fe.pass_progress)."""
+def logging_batches(label: str) -> Any:
+    """Log each batch of an evaluation as `label` (fs.batch_progress)."""
+    start = time.perf_counter()
 
-    def report(name: str, seconds: float) -> None:
-        fs.log(f"{label}: {name} in {seconds:.0f} s")
+    def report(k: int, n: int) -> None:
+        fs.log(f"{label}: batch {k}/{n} ({time.perf_counter() - start:.0f} s)")
 
-    return fe.pass_progress(report)
+    return fs.batch_progress(report)
 
 
 def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
@@ -63,7 +64,7 @@ def score_snapshots(train: Path, todo: Sequence[Path], device: str) -> None:
         n = json.loads((snap / "request.json").read_text()).get("n_validation")
         if n not in blocks:
             blocks[n] = fe.load_blocks(train / fs.HELD_OUT_BLOCKS, n)
-        with logging_passes(snap.name):
+        with logging_batches(snap.name):
             result = fe.snapshot_result(base, snap, blocks[n], device)
         fe.write_json(snap.with_name(snap.name + ".json"), result)
         kinds = ", ".join(result["kinds"])
@@ -77,7 +78,7 @@ def checkpoint(where: Path, device: str) -> None:
         where.parent / fs.HELD_OUT_BLOCKS, settings.get("n_validation")
     )
     try:
-        with logging_passes(where.name):
+        with logging_batches(where.name):
             got = fe.write_checkpoint_sidecar(
                 where,
                 fe.load_base("cpu"),
@@ -103,9 +104,13 @@ def seven_day(where: Path, device: str) -> None:
     base = fe.load_base(device)
     series_bias.attach_for(base, where / "finetuned-ckpt")
     t0 = time.perf_counter()
-    check = fe.seven_day_check(
-        where / "finetuned-ckpt", base, blocks, settings.get("batch_size", 256)
-    )
+    with logging_batches(f"{where.name} 7-day"):
+        check = fe.seven_day_check(
+            where / "finetuned-ckpt",
+            base,
+            blocks,
+            settings.get("batch_size", 256),
+        )
     seconds = time.perf_counter() - t0
     fe.write_json(
         where / SEVEN_DAY,

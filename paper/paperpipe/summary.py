@@ -44,8 +44,8 @@ QUOTED_MODELS: tuple[str, ...] = (
     "foundation_zeroshot_complete",
     "foundation_zeroshot",
     "foundation",
-    "foundation_zeroshot_twostep",
-    "foundation_twostep",
+    "foundation_zeroshot_baselinenowcast",
+    "foundation_baselinenowcast",
 )
 """Models whose scores against `randomwalknowcast` the text quotes."""
 

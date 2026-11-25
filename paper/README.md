@@ -7,6 +7,17 @@ In this project the paper reports the fine-tuned Chronos-2 model (`nowcastfounda
 Its rules are a module of the [workflow](../workflow/README.md), and the Site workflow renders it into the docs site at `/paper/`.
 Its code layout is the last section below.
 
+## Preview the paper
+
+1. Install [Quarto](https://quarto.org/docs/get-started/), [uv](https://docs.astral.sh/uv/) and [Task](https://taskfile.dev).
+2. From the repository root run `task paper:preview` (or `task preview` from `paper/`).
+
+This downloads the figures, tables and numbers the site's paper was rendered from (the `paper-build` release, replaced at each Site build from `main`) into `paper/build/` and opens a live preview of `main.qmd`.
+They come from the Site build, so the synthetic study is on dummy data and the fine-tuning results say what they wait on.
+After editing text only, the preview updates as you save, or run `quarto render main.qmd` (or `si.qmd`) from `paper/` once `build/` is there.
+If Quarto reports a missing `build/` file, run `task paper:preview` first.
+When a change needs new figures, tables or numbers, run the workflow instead with `task paper` (below).
+
 ## Reproducing the paper
 
 From the repository root, with [uv](https://docs.astral.sh/uv/), [Task](https://taskfile.dev), [Quarto](https://quarto.org), git and a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN` or a `gh` login):

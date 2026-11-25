@@ -16,7 +16,6 @@ import inspect
 import json
 import time
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -33,33 +32,6 @@ from nowcastfoundation.forecaster import (
 )
 
 KINDS = ("start", "monitor", "by_source", "checkpoint")
-
-_PROGRESS: dict[str, Callable[[str, float], None] | None] = {"report": None}
-"""Who `timed` tells of each pass, inside `pass_progress`."""
-
-
-@contextmanager
-def pass_progress(report: Callable[[str, float], None]) -> Iterator[None]:
-    """Tell `report` of each pass over the held-out blocks while open.
-
-    `report(name, seconds)` follows each pass `evaluate` makes, so a
-    long evaluation shows how far it has got.
-    """
-    _PROGRESS["report"] = report
-    try:
-        yield
-    finally:
-        _PROGRESS["report"] = None
-
-
-def timed(name: str, run: Callable[..., Any], *args: Any) -> Any:
-    """Return `run(*args)`, telling `pass_progress`'s reporter its time."""
-    tick = time.perf_counter()
-    out = run(*args)
-    report = _PROGRESS["report"]
-    if report is not None:
-        report(name, time.perf_counter() - tick)
-    return out
 
 
 def load_blocks(path: Path, n: int | None = None) -> list[dict[str, Any]]:
@@ -94,60 +66,30 @@ def evaluate(
     val = list(blocks)
     out: dict[str, Any] = {}
     if "start" in kinds or "checkpoint" in kinds:
-        parts = timed(
-            "held_out_loss", fs.held_out_parts, model, val, batch_size
-        )
+        parts = fs.held_out_parts(model, val, batch_size)
         out["held_out_loss"] = parts["loss"]
         out |= fs.loss_parts("held_out_loss", parts)
     if "start" in kinds or "checkpoint" in kinds:
-        out["held_out_coverage"] = timed(
-            "held_out_coverage", held_out_coverage, model, val, batch_size
-        )
+        out["held_out_coverage"] = held_out_coverage(model, val, batch_size)
     if "start" in kinds:
-        out["by_level"] = timed(
-            "by_level", fs.held_out_by_level, model, val, fs.LEVEL_BLOCKS
-        )
-        out["by_source"] = timed(
-            "by_source",
-            fs.held_out_by_source,
-            model,
-            val,
-            batch_size,
-            ft.EVAL_BLOCKS,
+        out["by_level"] = fs.held_out_by_level(model, val, fs.LEVEL_BLOCKS)
+        out["by_source"] = fs.held_out_by_source(
+            model, val, batch_size, ft.EVAL_BLOCKS
         )
     if "monitor" in kinds:
-        parts = timed(
-            "eval_loss",
-            fs.held_out_parts,
-            model,
-            val[: ft.EVAL_BLOCKS],
-            batch_size,
-        )
+        parts = fs.held_out_parts(model, val[: ft.EVAL_BLOCKS], batch_size)
         out["eval_loss"] = parts["loss"]
         out |= fs.loss_parts("eval_loss", parts)
     if "by_source" in kinds:
-        out["by_source"] = timed(
-            "by_source",
-            fs.held_out_by_source,
-            model,
-            val,
-            batch_size,
-            ft.EVAL_BLOCKS,
+        out["by_source"] = fs.held_out_by_source(
+            model, val, batch_size, ft.EVAL_BLOCKS
         )
     if "checkpoint" in kinds:
-        out["held_out_loss_by_level"] = timed(
-            "held_out_loss_by_level",
-            fs.held_out_by_level,
-            model,
-            val,
-            fs.LEVEL_BLOCKS,
+        out["held_out_loss_by_level"] = fs.held_out_by_level(
+            model, val, fs.LEVEL_BLOCKS
         )
-        out["held_out_loss_by_source"] = timed(
-            "held_out_loss_by_source",
-            fs.held_out_by_source,
-            model,
-            val,
-            batch_size,
+        out["held_out_loss_by_source"] = fs.held_out_by_source(
+            model, val, batch_size
         )
     return out
 

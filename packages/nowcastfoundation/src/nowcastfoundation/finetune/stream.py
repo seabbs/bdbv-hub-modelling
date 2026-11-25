@@ -40,9 +40,9 @@ import time
 import zlib
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Final, cast
 
 import numpy as np
 import pandas as pd
@@ -811,15 +811,28 @@ def forward(
 
 
 def train_step(
-    model: Any, batch: dict[str, Any], accepted: Any, device: Any, share: float
+    model: Any,
+    batch: dict[str, Any],
+    accepted: Any,
+    device: Any,
+    share: float,
+    memory: Callable[[], tuple[int, int] | None] | None = None,
 ) -> float:
     """Accumulate a batch's gradients, scaled by `share`; return its loss.
 
     Forward and backward both run with the rows' places assigned, so a
     block recomputed in backward (`checkpoint_large_batches`) gets the
-    same series bias.
+    same series bias. A batch whose activations would not fit the
+    device's free memory (`needs_recompute`, read by `memory`, by default
+    `device_memory`) is recomputed from the start.
     """
-    with series_bias.assigned(model, batch.get("series_rows")):
+    tokens = batch_tokens(batch)
+    free = (memory or device_memory)()
+    large = needs_recompute(int(batch["context"].shape[0]), tokens, free)
+    with (
+        recompute_every_block() if large else nullcontext(),
+        series_bias.assigned(model, batch.get("series_rows")),
+    ):
         loss = forward(model, batch, accepted, device).loss
         (loss * share).backward()
     return float(loss.detach())
@@ -941,11 +954,100 @@ def recompute_every_block() -> Iterator[None]:
     threshold with a long context can run out of memory alone, and
     recomputing its activations gives the same gradients in less memory.
     """
+    before = _RECOMPUTING["all"]
     _RECOMPUTING["all"] = True
     try:
         yield
     finally:
-        _RECOMPUTING["all"] = False
+        _RECOMPUTING["all"] = before
+
+
+ACTIVATION_BYTES: Final = 750_000
+"""GPU memory a Chronos-2 training step holds for backward per series and
+token when its activations are not recomputed. Fitted on an RTX 2070
+(8 GB, about 6.9 GB free to the trainer), blocks of 600 to 730 series
+ran out of memory alone from about 9,900 series x tokens, so a step over
+about 8,100 is recomputed there."""
+
+MEMORY_MARGIN: Final = 0.1
+"""Share of the device's memory a step leaves free (`needs_recompute`), for
+the allocator's fragmentation and other processes on the GPU."""
+
+
+def batch_tokens(batch: dict[str, Any]) -> int:
+    """Return the tokens Chronos-2 runs a batch's series over.
+
+    Its context patches (after `trim_context`), the reg token and its
+    output patches.
+    """
+    width = int(batch["context"].shape[-1])
+    outputs = int(batch.get("num_output_patches", 1))
+    return -(-width // INPUT_PATCH) + 1 + outputs
+
+
+def activation_bytes(series: int, tokens: int) -> int:
+    """Return a step's activation memory without recomputation."""
+    return series * tokens * ACTIVATION_BYTES
+
+
+def needs_recompute(
+    series: int, tokens: int, memory: tuple[int, int] | None
+) -> bool:
+    """Return whether a step must recompute its activations to fit.
+
+    `memory` is the device's free and total bytes (`device_memory`), or
+    None off CUDA, where the series threshold alone decides
+    (`checkpoint_large_batches`). A step is recomputed when its
+    activations (`activation_bytes`) exceed the free memory less
+    `MEMORY_MARGIN` of the total. Recomputation gives the same gradients,
+    so the blocks and steps trained are the same whatever the device.
+    """
+    if memory is None:
+        return False
+    free, total = memory
+    budget = free - int(MEMORY_MARGIN * total)
+    return activation_bytes(series, tokens) > budget
+
+
+def device_memory() -> tuple[int, int] | None:
+    """Return the CUDA device's free and total bytes, or None off CUDA.
+
+    Free counts what PyTorch caches but does not use, as a step can take
+    it.
+    """
+    import torch
+
+    if not torch.cuda.is_available():
+        return None
+    free, total = torch.cuda.mem_get_info()
+    cached = torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
+    return free + cached, total
+
+
+_PROGRESS: dict[str, Callable[[int, int], None] | None] = {"report": None}
+"""Who `report_batch` tells of each batch, inside `batch_progress`."""
+
+
+@contextmanager
+def batch_progress(report: Callable[[int, int], None]) -> Iterator[None]:
+    """Tell `report` of each batch of a pass while open.
+
+    `report(k, n)` follows batch `k` of the pass's `n`
+    (`ByLength.indices`), so a long held-out evaluation shows how far it
+    has got.
+    """
+    _PROGRESS["report"] = report
+    try:
+        yield
+    finally:
+        _PROGRESS["report"] = None
+
+
+def report_batch(k: int, n: int) -> None:
+    """Tell `batch_progress`'s reporter, if any, that batch `k` of `n` ran."""
+    report = _PROGRESS["report"]
+    if report is not None:
+        report(k, n)
 
 
 INPUT_PATCH = 16
@@ -1028,8 +1130,10 @@ class ByLength:
         """Yield every block's index once, in batches of one length.
 
         Batches are those Chronos-2's sequential batches make: blocks in
-        order until a batch holds `batch_size` series.
+        order until a batch holds `batch_size` series. Each is reported
+        once used (`report_batch`).
         """
+        planned = []
         for length in self.data:
             idx = [i for i, n in enumerate(self.lengths) if n == length]
             batch, rows = [], 0
@@ -1037,10 +1141,13 @@ class ByLength:
                 batch.append(i)
                 rows += int(self.inputs[i]["context"].shape[0])
                 if rows >= self.batch_size:
-                    yield batch
+                    planned.append(batch)
                     batch, rows = [], 0
             if batch:
-                yield batch
+                planned.append(batch)
+        for k, batch in enumerate(planned, start=1):
+            yield batch
+            report_batch(k, len(planned))
 
     def batches(self) -> Any:
         """Yield every block once, in batches of one length."""

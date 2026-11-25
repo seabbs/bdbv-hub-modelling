@@ -44,6 +44,9 @@ ASSETS = Path(__file__).with_name("page")
 MODES = ("raw", "start", "base")
 STALE = 600
 """Seconds after which the last log line is stale."""
+BIAS_PANEL = (320, 180)
+"""Every attention bias panel's size (width, height), the learning rate's
+too, so the section is an even grid (page/bias.js draws the rest)."""
 ADAPTER = "finetuned-ckpt/adapter_model.safetensors"
 """A checkpoint's adapter, which the trainer writes before it scores it."""
 
@@ -545,8 +548,8 @@ def lr_card(
     if not params["groups"]:
         return ""
     by_sims = bool(params["lr_outbreaks"] and sims)
-    width, height = 440, 260
-    left, right, top, bottom = 44, 10, 8, 30
+    width, height = BIAS_PANEL
+    left, right, top, bottom = 40, 8, 6, 30
     decays = params["lr_outbreaks"] if by_sims else 0
 
     def x_of(s: float) -> float:
@@ -691,7 +694,13 @@ def loss_section(ctx: Context, live: Run, st: Status) -> str:
 
 
 def bias_section(ctx: Context, live: Run, st: Status) -> str:
-    """Return the attention bias row and the live run's learning rates."""
+    """Return the attention bias panels and the live run's learning rates.
+
+    One even grid of equal panels (`BIAS_PANEL`): each relation's bias
+    over training then the learning rate, and each relation's latest
+    matrix then the mean by layer; page/bias.js draws them around the
+    learning rate's card, with one legend above (`biashead`).
+    """
     data = _json(
         bias.payload(
             ctx.runs,
@@ -701,8 +710,8 @@ def bias_section(ctx: Context, live: Run, st: Status) -> str:
         )
     )
     return (
-        "<div id=biasrefs class=refnote></div><div class=biasrow>"
-        f"<div id=biasdyn class=biasdyn></div>"
+        "<div id=biasrefs class=refnote></div><div id=biashead "
+        "class=biashead></div><div class=biasgrid id=biasgrid>"
         f"{lr_card(st.params, st.step, live.key, ctx.sims(live))}</div>"
         f'<script type="application/json" id=bdata>{data}</script>'
         f"<script>{_asset('bias.js')}</script>"

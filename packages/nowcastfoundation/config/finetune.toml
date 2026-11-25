@@ -1,5 +1,5 @@
 # Where the fine-tuned Chronos-2 checkpoint the fine-tuned models
-# (`foundation`, `foundation_complete`, `foundation_twostep`) load is read
+# (`foundation`, `foundation_complete`, `foundation_baselinenowcast`) load is read
 # from (`nowcastfoundation.forecaster.finetuned_checkpoint`):
 # "huggingface" reads [huggingface] `repo` at its pinned `revision`, cached
 # by huggingface_hub; "github" the release `hash` names; "local" the
