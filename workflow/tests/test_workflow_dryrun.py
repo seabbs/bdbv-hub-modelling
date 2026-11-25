@@ -811,11 +811,12 @@ def test_a_run_over_rounds_simulates_them_in_seed_order(tmp_path):
 def test_the_trainer_goes_first_then_simulation_then_scoring(tmp_path):
     # One pool per machine: when jobs compete for cores or the GPU, the
     # trainer (the run's critical path) goes first, then the simulations
-    # it trains on, then checkpoint scoring (score.smk, 10 and below).
+    # its next segment trains on, then the rest.
     got = priorities(tmp_path, "finetune", config=FT)
     trainer = compute.TRAIN_PRIORITY
     assert trainer <= got["train_segment"] < trainer + 1
-    assert 15 <= got["simulate_batch"] < 16
+    nxt = compute.NEXT_BATCH_PRIORITY
+    assert nxt <= got["simulate_batch"] < nxt + 1
 
 
 def test_publish_verifies_then_releases_each_checkpoint(tmp_path):

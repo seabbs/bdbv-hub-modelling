@@ -41,13 +41,20 @@ Freed cores go to the waiting job of highest priority, in one order:
    quick hand-offs that unblock other work (`HANDOFF_PRIORITY`): the
    copies of the batches it reads into the run, and a checkpoint's
    verification and release, which its BDBV check needs;
-2. the references every checkpoint is compared with
+2. the simulation batches the next segment reads
+   (`NEXT_BATCH_PRIORITY`, `Training.next_seeds`), so the trainer never
+   waits for them;
+3. the held-out evaluation (`EVALUATION_PRIORITY`): step 0, each
+   checkpoint's held-out losses, 7-day check and validation forecasts,
+   newest checkpoint first, so the dashboard's validation loss never
+   waits behind the scoring;
+4. the references every checkpoint is compared with
    (`REFERENCE_PRIORITY`): the German reference unit and the BDBV
    check's zero-shot and randomwalknowcast forecasts;
-3. each checkpoint's scoring and evaluation (`CHECKPOINT_PRIORITY`): its
-   German unit, its BDBV check forecast and the held-out evaluation,
-   newest checkpoint first (`newest_first`, `releases.priority`);
-4. simulation batches (`BATCH_PRIORITY`), earliest seed first
+5. each checkpoint's scoring (`CHECKPOINT_PRIORITY`): its German unit
+   and its BDBV check forecast, newest checkpoint first (`newest_first`,
+   `releases.priority`);
+6. the other simulation batches (`BATCH_PRIORITY`), earliest seed first
    (`segments.batch_priority`).
 
 Each band's jobs take its base plus a fraction below two, so the bands
@@ -131,6 +138,17 @@ and the check's own quick jobs (`hub_head`, `hub_data`, `ft_check_page`,
 Below the trainer, above every other job. A release never waits for the
 held-out evaluation (`EVALUATION_PRIORITY`)."""
 
+NEXT_BATCH_PRIORITY = 70
+"""The simulation batches the next segment reads: below the hand-offs,
+above the held-out evaluation, so the trainer never waits for them."""
+
+EVALUATION_PRIORITY = 50
+"""The offloaded held-out evaluation (rules/evaluate.smk,
+`Scoring.evaluation_priority`): below the next segment's batches, above
+the references, scoring and other batches, so the dashboard's validation
+loss comes first among the CPU jobs. No release or check waits for it;
+it joins the checkpoint's release when done (`release_held_out`)."""
+
 REFERENCE_PRIORITY = 30
 """The references' job priority: below the trainer, above every
 checkpoint's scoring, which they are compared with."""
@@ -141,13 +159,8 @@ batches, newer checkpoints a fraction higher."""
 
 BATCH_PRIORITY = 15
 """A simulation batch's job priority, below one above it
-(`segments.batch_priority`), under every checkpoint's scoring."""
-
-EVALUATION_PRIORITY = 10
-"""The offloaded held-out evaluation (rules/evaluate.smk): below every
-other job, as no release, check or batch waits for it. Hours on the CPU
-per checkpoint; the dashboard, tables and paper read it when done, and
-it joins the checkpoint's release then (`release_held_out`)."""
+(`segments.batch_priority`), under every checkpoint's scoring, unless
+the next segment reads it (`NEXT_BATCH_PRIORITY`)."""
 
 
 def scoring_forecast(

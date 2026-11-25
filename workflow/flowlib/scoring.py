@@ -299,7 +299,8 @@ class Scoring:
     def evaluation_priority(self, wc: Any) -> float:
         """Return a held-out evaluation job's priority (`flowlib.compute`).
 
-        `EVALUATION_PRIORITY`, below every other job: step 0 (no `n`)
+        `EVALUATION_PRIORITY`, after the hand-offs and the next segment's
+        batches, before the other CPU jobs: step 0 (no `n`)
         first, which every checkpoint's evaluation needs, then the newest
         checkpoint.
         """
