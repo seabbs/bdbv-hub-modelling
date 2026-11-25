@@ -1,4 +1,4 @@
-"""The site's results are made by Fit store, and Site only assembles them."""
+"""The site's results are made by Site results, and Site only assembles them."""
 
 from __future__ import annotations
 
@@ -21,8 +21,12 @@ COMPUTE = (
 )
 
 
+def _workflow(name: str) -> dict:
+    return yaml.safe_load((WORKFLOWS / name).read_text())
+
+
 def _jobs(name: str) -> dict:
-    return yaml.safe_load((WORKFLOWS / name).read_text())["jobs"]
+    return _workflow(name)["jobs"]
 
 
 def _runs(job: dict) -> str:
@@ -35,17 +39,26 @@ def test_site_runs_no_scoring_or_forecasting() -> None:
             assert command not in _runs(job), (name, command)
 
 
-def test_fit_store_makes_and_stores_the_site_results() -> None:
-    job = _jobs("fit-store.yml")["site-results"]
+def test_site_results_makes_and_stores_the_site_results() -> None:
+    job = _jobs("site-results.yml")["site-results"]
     runs = _runs(job)
     for command in COMPUTE:
         assert command in runs, command
     assert "push-site" in runs
     assert "gh workflow run pages.yml" in runs
-    # After the fits and backtests are stored, so it reads them.
-    assert {"store-quick", "store-current", "store-rest", "backtests"} <= set(
-        job["needs"]
-    )
+    # It waits on no fit, and a dispatch makes the results at once.
+    assert "needs" not in job
+    assert "workflow_dispatch" in _workflow("site-results.yml")[True]
+
+
+def test_each_store_remakes_the_site_results_without_the_slow_fits() -> None:
+    jobs = _jobs("fit-store.yml")
+    assert "site-results" not in jobs
+    for name in ("backtests", "store-current", "store-rest"):
+        assert "gh workflow run site-results.yml" in _runs(jobs[name]), name
+        assert jobs[name]["permissions"]["actions"] == "write", name
+    # The backtests are scored before the newest origin's fits.
+    assert "store-current" not in jobs["backtests"]["needs"]
 
 
 def test_site_unpacks_the_stored_site_results() -> None:

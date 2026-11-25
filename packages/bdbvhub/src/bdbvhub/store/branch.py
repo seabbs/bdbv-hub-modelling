@@ -235,7 +235,7 @@ def push_backtests(bundle: Path, commit: str) -> int:
 
 
 SITE = "site"
-"""The branch folder of the site's results (Fit store's `site-results`),
+"""The branch folder of the site's results (site-results.yml),
 which `prune` never touches: `latest.tar.gz` (the results and docs files
 Pages unpacks) and `latest.json` (the commit that made them and the hash
 of their inputs, so unchanged inputs are not made again)."""
