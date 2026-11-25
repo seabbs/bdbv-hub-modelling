@@ -436,7 +436,7 @@ rule ft_check_forecast:
         TOOLS_ENV
     threads: UNIT_THREADS
     resources:
-        mem_mb=SC["mem_mb"],
+        mem_mb=ft_check_mem,
         gpu=FORECAST.gpu,
     params:
         env=unit_env,

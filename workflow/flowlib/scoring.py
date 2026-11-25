@@ -317,7 +317,7 @@ class Scoring:
         env = machine.torch_env(self.local, threads, fc.device)
         env["JAX_PLATFORMS"] = forecast.JAX_PLATFORM[fc.device]
         claim = f"{machine.CLAIM} " if fc.gpu else ""
-        return claim + machine.shell_env(env)
+        return f"{claim}{machine.CPUS} {threads} {machine.shell_env(env)}"
 
     def unit_rows(self, study: str) -> Callable[[Any], str]:
         """Return the unit's rows folder, which a worker brings back."""

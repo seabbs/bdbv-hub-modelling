@@ -32,6 +32,7 @@ rule evaluate_base:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=MEMORY["evaluate"],
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -74,6 +75,7 @@ rule evaluate_checkpoint:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=MEMORY["evaluate"],
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -111,6 +113,7 @@ rule seven_day_check:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=MEMORY["seven_day_check"],
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -149,6 +152,7 @@ rule validation_forecasts:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=MEMORY["validation_forecasts"],
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,
@@ -184,6 +188,7 @@ rule validation_forecasts_base:
         TOOLS_ENV
     threads: EVALUATE_THREADS
     resources:
+        mem_mb=MEMORY["validation_forecasts"],
         gpu=CHECKPOINT_FORECAST.gpu,
     params:
         where=lambda wc, input: Path(input.settings).parent,

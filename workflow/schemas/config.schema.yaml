@@ -87,6 +87,7 @@ required:
   - score
   - hub_rounds
   - ft_check
+  - memory
   - dashboard
   - huggingface
 properties:
@@ -247,6 +248,25 @@ properties:
         items: {type: string}
       finetuned: {type: string}
       checkpoint: {type: string}
+  memory:
+    description: >-
+      Each job's memory in MB, from peak RSS (workflow/config.yaml).
+    type: object
+    additionalProperties: false
+    required:
+      - train_segment
+      - ft_check_chronos
+      - ft_check
+      - evaluate
+      - seven_day_check
+      - validation_forecasts
+    properties:
+      train_segment: {type: integer, minimum: 1}
+      ft_check_chronos: {type: integer, minimum: 1}
+      ft_check: {type: integer, minimum: 1}
+      evaluate: {type: integer, minimum: 1}
+      seven_day_check: {type: integer, minimum: 1}
+      validation_forecasts: {type: integer, minimum: 1}
   dashboard:
     type: object
     additionalProperties: false
