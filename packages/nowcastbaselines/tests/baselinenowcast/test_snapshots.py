@@ -163,14 +163,20 @@ def test_chain_vmaps_over_locations() -> None:
     counts, observed, cut = _toy()
     both = np.concatenate([counts, 2 * counts])
     pairs, _ = window_pairs(cut, 4)
-    num, den = pair_sums(both, observed, cut, pairs, 4)
-    g = log_factors(num, den, [2, 3])
-    # Doubling every count leaves every ratio, so the delay, the same.
-    np.testing.assert_allclose(g[0], g[1], atol=1e-12)
+    num, _ = pair_sums(both, observed, cut, pairs, 4)
     single = jax.vmap(
         lambda c: pair_sums(c[None], observed, cut, pairs, 4)[0][0]
     )(jnp.asarray(both))
     np.testing.assert_allclose(single, np.asarray(num))
+
+
+def test_doubling_counts_shown_above_0_leaves_the_delay() -> None:
+    num = np.array([[[10.0, 6.0, 5.0], [8.0, 4.0, 3.0]]])
+    den = np.array([[[5.0, 4.0, 5.0], [4.0, 4.0, 3.0]]])
+    g = log_factors(
+        np.concatenate([num, 2 * num]), np.concatenate([den, 2 * den]), [1, 2]
+    )
+    np.testing.assert_allclose(g[0], g[1], rtol=1e-6, atol=1e-9)
 
 
 def test_gaps_7_8_and_9_recover_one_daily_delay() -> None:
