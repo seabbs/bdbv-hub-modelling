@@ -8,7 +8,9 @@ relations it holds. The values come from the run's history
 ranges, its checkpoints' adapters
 (`train/n<N>/finetuned-ckpt/*.safetensors`, read with the standard
 library, or `*.pt`, read with torch when installed) and, for the live
-run, its current state (`train/state/`).
+run, its current state (`train/state/`). Each relation's values over
+training are its mean over layers and heads and each layer's mean over
+heads; logged steps give only the former.
 """
 
 from __future__ import annotations
@@ -164,6 +166,11 @@ def summary(rows: Sequence[Sequence[float]]) -> dict[str, float]:
     return {"mean": sum(flat) / len(flat), "min": min(flat), "max": max(flat)}
 
 
+def layer_means(rows: Sequence[Sequence[float]]) -> list[float]:
+    """Return each layer's mean over heads of a [layers, heads] matrix."""
+    return [sum(r) / len(r) for r in rows]
+
+
 def run_bias(
     run: Run,
     step: int | None,
@@ -178,12 +185,15 @@ def run_bias(
     adapters (at their own simulations) and, for the live run, its
     current state at `step` (None for other runs). `sims` gives the
     simulations trained by a step (`page.Context.sims`); without it, x
-    is the step. Returns None if the run has no bias anywhere.
+    is the step. `pts` holds each relation's mean, min and max over
+    layers and heads; `layers` each layer's mean over heads, where the
+    full matrix is known. Returns None if the run has no bias anywhere.
     """
     if run.folder is None:
         return None
     sims = sims or float
     pts: dict[str, dict[float, dict[str, float]]] = {}
+    layers: dict[str, dict[float, list[float]]] = {}
     latest: dict[str, Any] | None = None
     seen: set[int] = set()
     hist = CACHE.get(run.folder / "train" / "history.json")
@@ -198,19 +208,23 @@ def run_bias(
             if rel is None:
                 continue
             values = v.get("values") if isinstance(v, dict) else v
-            if not (
+            given = isinstance(v, dict) and {"mean", "min", "max"} <= set(v)
+            full = (
                 isinstance(values, list)
                 and values
                 and isinstance(values[0], list)
-            ):
+            )
+            if not (full or given):
                 continue
             seen.add(h["step"])
-            given = isinstance(v, dict) and {"mean", "min", "max"} <= set(v)
             pts.setdefault(rel, {})[at] = (
                 {x: v[x] for x in ("mean", "min", "max")}
                 if given
                 else summary(values)
             )
+            if not full:
+                continue
+            layers.setdefault(rel, {})[at] = layer_means(values)
             if not latest or at > latest["n"]:
                 latest = {"n": at}
             if latest["n"] == at:
@@ -243,12 +257,14 @@ def run_bias(
             continue
         for rel, values in got.items():
             pts.setdefault(rel, {}).setdefault(at, summary(values))
+            layers.setdefault(rel, {}).setdefault(at, layer_means(values))
         if not latest or at >= latest.get("n", -1):
             latest = {"n": at, **got}
     if not any(pts.values()) and not latest:
         return None
     return {
         "pts": {k: sorted(v.items()) for k, v in pts.items()},
+        "layers": {k: sorted(v.items()) for k, v in layers.items()},
         "latest": latest,
     }
 
@@ -284,6 +300,9 @@ def payload(
                 "pts": {
                     k: [[s, v["mean"], v["min"], v["max"]] for s, v in pts]
                     for k, pts in data["pts"].items()
+                },
+                "layers": {
+                    k: [[s, m] for s, m in v] for k, v in data["layers"].items()
                 },
                 "latest": {
                     "n": last.get("n"),
