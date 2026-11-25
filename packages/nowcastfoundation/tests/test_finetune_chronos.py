@@ -1550,3 +1550,23 @@ def test_the_complete_layout_cuts_the_ragged_blocks_without_lag_series(
             c["context"], r["context"][: r["n_targets"]]
         )
         assert c["n_covariates"] == c["n_future_covariates"] == 0
+
+
+def test_a_batch_run_again_is_not_split():
+    # A step that ran out with a cheaper choice than the memory rule now
+    # makes (`RunAgainError`) is run again whole, as the rule now decides, so
+    # its gradient is the whole batch's.
+    from nowcastfoundation.finetune.stream import RunAgainError, accumulate
+
+    calls: list[list[int]] = []
+
+    def backward(part, _share):
+        calls.append(list(part))
+        if len(calls) == 1:
+            raise RunAgainError("CUDA out of memory")
+        return 0.5
+
+    zeroed: list[int] = []
+    assert accumulate([1, 2, 3], backward, lambda: zeroed.append(1)) == 0.5
+    assert calls == [[1, 2, 3], [1, 2, 3]]
+    assert zeroed == [1]

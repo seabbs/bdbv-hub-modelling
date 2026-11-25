@@ -41,6 +41,7 @@ import zlib
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from contextlib import AbstractContextManager, contextmanager, nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, cast
 
@@ -796,9 +797,17 @@ def _join(
 
 
 def forward(
-    model: Any, batch: dict[str, Any], accepted: Any, device: Any = None
+    model: Any,
+    batch: dict[str, Any],
+    accepted: Any,
+    device: Any = None,
+    checkpoint: bool = True,
 ) -> Any:
-    """Run the model on a batch, its rows given their places if any."""
+    """Run the model on a batch, its rows given their places if any.
+
+    With `checkpoint`, the series bias's group attention is recomputed in
+    backward rather than held (`series_bias.assigned`).
+    """
     import torch
 
     inputs = {
@@ -806,8 +815,15 @@ def forward(
         for k, v in batch.items()
         if k in accepted
     }
-    with series_bias.assigned(model, batch.get("series_rows")):
+    with series_bias.assigned(model, batch.get("series_rows"), checkpoint):
         return model(**inputs)
+
+
+class RunAgainError(RuntimeError):
+    """A step ran out of memory, and the rule now runs one its size with less.
+
+    Raised by `train_step`; `accumulate` runs its batch again whole.
+    """
 
 
 def train_step(
@@ -824,21 +840,35 @@ def train_step(
     Forward and backward both run with the rows' places assigned, so a
     block recomputed in backward (`checkpoint_large_batches`) gets the
     same series bias. With a `rule`, a batch predicted not to fit is
-    recomputed from the start, and the peak `meter` measures (by default
-    `CudaPeak`) is recorded in it. A batch that runs out of memory raises
-    the rule's cost before the error goes on to `accumulate`.
+    recomputed from the start, one predicted to fit holding the series
+    bias's group attention holds it rather than recomputing it
+    (`MemoryRule.keeps_bias`), and the peak `meter` measures (by default
+    `CudaPeak`) is recorded in it. Either way the gradients are the same.
+    A batch that runs out of memory having held more than the rule now
+    allows for its size raises `RunAgainError`; one already recomputed raises
+    the error on to `accumulate`.
     """
     series, tokens = int(batch["context"].shape[0]), batch_tokens(batch)
     large = rule is not None and rule.needs_recompute(series, tokens)
+    keep = (
+        rule is not None
+        and not large
+        and not _RECOMPUTING["all"]
+        and "series_rows" in batch
+        and rule.keeps_bias(series, tokens)
+    )
+    held = rule.kept_bytes(series, tokens) if keep and rule else 0
     if rule is not None:
         meter = meter or CudaPeak()
         meter.start()
     try:
         with (
             recompute_every_block() if large else nullcontext(),
-            series_bias.assigned(model, batch.get("series_rows")),
+            series_bias.assigned(
+                model, batch.get("series_rows"), checkpoint=not keep
+            ),
         ):
-            loss = forward(model, batch, accepted, device).loss
+            loss = forward(model, batch, accepted, device, not keep).loss
             (loss * share).backward()
     except RuntimeError as error:
         recomputed = large or _RECOMPUTING["all"]
@@ -847,11 +877,12 @@ def train_step(
             and "out of memory" in str(error)
             and not recomputed
         ):
-            rule.ran_out(series, tokens)
+            rule.ran_out(series, tokens, kept_bias=keep)
+            raise RunAgainError(str(error)) from error
         raise
     if rule is not None:
         recomputed = large or _RECOMPUTING["all"]
-        rule.record(series, tokens, recomputed, meter.peak())
+        rule.record(series, tokens, recomputed, meter.peak(), held, keep)
     return float(loss.detach())
 
 
@@ -930,13 +961,13 @@ def tensors(block: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def checkpoint_large_batches(above: int) -> None:
+def checkpoint_large_batches(above: int | None) -> None:
     """Recompute encoder activations in backward for large batches.
 
     Chronos-2's group attention runs over every series of a batch, so its
-    memory grows with their square. Above `above` series each encoder block
-    is checkpointed (`torch.utils.checkpoint`), and every encoder block is
-    while `recompute_every_block` is open.
+    memory grows with their square. Above `above` series, if given, each
+    encoder block is checkpointed (`torch.utils.checkpoint`), and every
+    encoder block is while `recompute_every_block` is open.
     """
     import functools
 
@@ -947,7 +978,9 @@ def checkpoint_large_batches(above: int) -> None:
     forward = Chronos2EncoderBlock.forward
 
     def checkpointed(self: Any, hidden_states: Any, **kwargs: Any) -> Any:
-        large = _RECOMPUTING["all"] or hidden_states.shape[0] > above
+        large = _RECOMPUTING["all"] or (
+            above is not None and hidden_states.shape[0] > above
+        )
         if large and self.training and torch.is_grad_enabled():
             return checkpoint(
                 functools.partial(forward, self, **kwargs),
@@ -997,6 +1030,35 @@ FIT_AFTER: Final = 50
 """Measured steps the fitted cost needs before it replaces
 `ACTIVATION_BYTES`."""
 
+KEPT_STATES: Final = 8
+"""Tensors of `d_model` values per series and token that a layer's group
+attention keeps for backward when its series bias chunks are held rather
+than recomputed (`MemoryRule.kept_bytes`): its queries, keys and values,
+their output and the copies the attention and the adapter take, counted
+generously so that a held step's measured peak does not raise the cost
+fitted for every step."""
+
+
+@dataclass(frozen=True)
+class BiasShape:
+    """The sizes of a model with the series bias.
+
+    They set what holding its group attention costs
+    (`MemoryRule.kept_bytes`).
+    """
+
+    layers: int
+    heads: int
+    d_model: int
+
+
+def bias_shape(model: Any) -> BiasShape | None:
+    """Return the model's `BiasShape`, or None without the series bias."""
+    if not series_bias.has_bias(model):
+        return None
+    config = model.config
+    return BiasShape(config.num_layers, config.num_heads, config.d_model)
+
 
 def batch_tokens(batch: dict[str, Any]) -> int:
     """Return the tokens Chronos-2 runs a batch's series over.
@@ -1041,6 +1103,13 @@ class MemoryRule:
     the cost so that one its size is recomputed. The cost depends only on
     the steps run, so the same run history on the same card makes the
     same decisions, and it is kept in the trainer's state (`state`).
+
+    With the series bias (`bias`), a step that is not recomputed holds
+    its group attention for backward when it fits beside the step's
+    activations (`keeps_bias`), rather than recomputing it, for the same
+    gradients. What that holds (`kept_bytes`) grows with the square of
+    the series; a held step that runs out of memory scales it up so that
+    a step its size is recomputed.
     """
 
     def __init__(
@@ -1048,14 +1117,17 @@ class MemoryRule:
         total: int,
         footprint: int,
         state: dict[str, Any] | None = None,
+        bias: BiasShape | None = None,
     ) -> None:
         self.total = total
         self.footprint = footprint
         self.budget = total - footprint - int(MEMORY_MARGIN * total)
+        self.bias = bias
         state = state or {}
         self.measured = int(state.get("measured", 0))
         self.most = int(state.get("most", 0))
         self.floor = int(state.get("floor", 0))
+        self.bias_scale = float(state.get("bias_scale", 1.0))
         self.rows: list[dict[str, Any]] = []
 
     @property
@@ -1072,16 +1144,49 @@ class MemoryRule:
         """Return whether a step must recompute its activations to fit."""
         return self.predict(series, tokens) > self.budget
 
+    def kept_bytes(self, series: int, tokens: int) -> int:
+        """Return what a step holds for backward to keep the series bias.
+
+        Each layer's mask plus bias, `(tokens, heads, series, series)` in
+        fp32, and its group attention's `KEPT_STATES` per series and
+        token, scaled up by any held step that ran out (`ran_out`). Zero
+        without the bias.
+        """
+        if self.bias is None:
+            return 0
+        b = self.bias
+        pairs = b.layers * b.heads * tokens * series**2 * 4
+        states = series * tokens * b.layers * KEPT_STATES * b.d_model * 4
+        return int(self.bias_scale * (pairs + states))
+
+    def keeps_bias(self, series: int, tokens: int) -> bool:
+        """Return whether a step holds its series bias for backward."""
+        if self.bias is None:
+            return False
+        held = self.kept_bytes(series, tokens)
+        return self.predict(series, tokens) + held <= self.budget
+
     def record(
-        self, series: int, tokens: int, recomputed: bool, peak: int
+        self,
+        series: int,
+        tokens: int,
+        recomputed: bool,
+        peak: int,
+        held: int = 0,
+        kept_bias: bool = False,
     ) -> None:
-        """Record a step's measured peak, fitting the cost from it."""
+        """Record a step's measured peak, fitting the cost from it.
+
+        `held` is what the step held to keep the series bias
+        (`kept_bytes`), which the cost is fitted without.
+        """
         self.rows.append(
             {
                 "series": series,
                 "tokens": tokens,
                 "recomputed": recomputed,
-                "predicted": self.predict(series, tokens),
+                "kept_bias": kept_bias,
+                "predicted": self.predict(series, tokens) + held,
                 "measured": peak,
                 "cost": self.cost,
             }
@@ -1089,18 +1194,30 @@ class MemoryRule:
         if recomputed or series * tokens < FIT_FROM:
             return
         self.measured += 1
-        self.most = max(self.most, -(-peak // (series * tokens)))
+        self.most = max(self.most, -(-(peak - held) // (series * tokens)))
 
-    def ran_out(self, series: int, tokens: int) -> None:
-        """Raise the cost so that a step this size is recomputed."""
+    def ran_out(
+        self, series: int, tokens: int, kept_bias: bool = False
+    ) -> None:
+        """Change the rule so that a step this size uses less memory.
+
+        One that held its series bias has it recomputed; one that did not
+        is recomputed whole, by raising the cost.
+        """
+        if kept_bias:
+            room = max(1, self.budget - self.predict(series, tokens))
+            unscaled = self.kept_bytes(series, tokens) / self.bias_scale
+            self.bias_scale = max(self.bias_scale, 1.01 * room / unscaled)
+            return
         self.floor = max(self.floor, self.budget // (series * tokens) + 1)
 
-    def state(self) -> dict[str, int]:
+    def state(self) -> dict[str, Any]:
         """Return what a resumed run needs to make the same decisions."""
         return {
             "measured": self.measured,
             "most": self.most,
             "floor": self.floor,
+            "bias_scale": self.bias_scale,
         }
 
 
@@ -1133,12 +1250,22 @@ def memory_rule(
     if not torch.cuda.is_available() or str(device).startswith(("cpu", "mps")):
         return None
     total = torch.cuda.get_device_properties(device).total_memory
-    return MemoryRule(total, fixed_footprint(model), state)
+    return MemoryRule(total, fixed_footprint(model), state, bias_shape(model))
+
+
+def series_threshold(above: int, rule: MemoryRule | None) -> int | None:
+    """Return the series above which every step is recomputed, if any.
+
+    With a memory rule the rule alone decides, from each step's series and
+    tokens; without one (off CUDA) the threshold `above` does.
+    """
+    return None if rule is not None else above
 
 
 MEMORY_FILE = "memory.csv"
-"""Each training step's series, tokens, whether it was recomputed, and its
-predicted and measured peak (`MemoryRule`), in the run's training folder."""
+"""Each training step's series, tokens, whether it was recomputed or held
+its series bias, and its predicted and measured peak (`MemoryRule`), in
+the run's training folder."""
 
 
 def record_memory(out: Path, step: int, rule: MemoryRule) -> None:
@@ -1560,9 +1687,11 @@ def accumulate(
     """Return a batch's loss, accumulating its gradients by `backward`.
 
     The gradients are clear when it starts (`finite_step`). If memory runs
-    out, they are cleared and the memory freed (`zero`) and the batch is
-    run again in halves, and so on, so every block is used once and they
-    share the gradient as the whole batch would. A single block that runs
+    out, they are cleared and the memory freed (`zero`). A part whose step
+    asks to be run again (`RunAgainError`), the memory rule now running it with
+    less, is run again whole, once; otherwise the batch is run again in
+    halves, and so on, so every block is used once and they share the
+    gradient as the whole batch would. A single block that runs
     out is run once more at once with its activations recomputed
     (`recompute`), which gives the same gradients in less memory. If it
     still runs out, it is run again after each `wait` (called with the
@@ -1578,6 +1707,7 @@ def accumulate(
     parts = [indices]
     retried: dict[int, int] = {}
     alone: set[int] = set()
+    again: set[tuple[int, ...]] = set()
     retry = False
     while True:
         if retry:
@@ -1600,6 +1730,11 @@ def accumulate(
         except RuntimeError as error:
             if "out of memory" not in str(error):
                 raise
+            if isinstance(error, RunAgainError) and tuple(part) not in again:
+                # The memory rule now runs it with less: the same parts
+                # again, so the gradient is the one they would give.
+                again.add(tuple(part))
+                continue
             if len(part) > 1:
                 half = len(part) // 2
                 at = parts.index(part)
@@ -1769,7 +1904,7 @@ def save_rng(where: Path) -> None:
     """
     import torch
 
-    rng = {"cpu": torch.get_rng_state()}
+    rng: dict[str, Any] = {"cpu": torch.get_rng_state()}
     if torch.cuda.is_available():
         rng["cuda"] = torch.cuda.get_rng_state_all()
     if torch.backends.mps.is_available():
@@ -2233,9 +2368,6 @@ def main(root: Path | None = None) -> None:
         time.sleep(POLL)
     held = held[: args.holdout]
     (out / "outbreaks-held-out.txt").write_text("\n".join(held) + "\n")
-    # Checkpointing follows from the memory budget; the blocks and steps
-    # do not, so every machine trains on the same ones.
-    checkpoint_large_batches(args.checkpoint_above)
     pool = ProcessPoolExecutor(
         args.cut_workers,
         mp_context=multiprocessing.get_context("spawn"),
@@ -2401,11 +2533,16 @@ def main(root: Path | None = None) -> None:
     ):
         group["base_lr"] = base_lr
     rule = memory_rule(model, device, (state or {}).get("memory"))
+    # Checkpointing follows from the memory budget; the blocks and steps
+    # do not, so every machine trains on the same ones.
+    above = series_threshold(args.checkpoint_above, rule)
+    checkpoint_large_batches(above)
     if rule is not None:
         log(
             f"memory: {rule.total / 1e9:.2f} GB on the device, "
             f"{rule.footprint / 1e9:.2f} GB held, {rule.budget / 1e9:.2f} GB "
             f"for a step's activations at {rule.cost} bytes a series token"
+            + (", the series bias held where it fits" if rule.bias else "")
         )
     step, done, position = 0, 0, 0
     # The outbreaks trained on, in order, and those of the current chunk.
@@ -2746,7 +2883,7 @@ def main(root: Path | None = None) -> None:
                 "level_mix": seen.get("mix", {}),
                 "cadence_mix": seen.get("cadences", {}),
                 "tokens": seen.get("tokens", 0),
-                "checkpoint_above": args.checkpoint_above,
+                "checkpoint_above": above,
             }
             # Memory settings (checkpoint_above) are outside the hash.
             settings_key = verify.settings_hash(settings)

@@ -67,11 +67,6 @@ steps, so the chunks give the same outputs, and each chunk's mask is one
 contiguous tensor, which lets PyTorch's memory-efficient attention
 kernel run where the device has one."""
 
-CHECKPOINT_CHUNKS = True
-"""Whether, while training, each chunk's group attention is recomputed in
-backward (`torch.utils.checkpoint`), so autograd keeps only its inputs and
-not the chunk's mask plus bias; the gradients are the same."""
-
 _STATE: Final = "_series_bias_state"
 """Attribute of a model with the bias holding the next batch's rows."""
 
@@ -244,7 +239,10 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
     (`CHUNK_ELEMENTS`). A block recomputed in backward (gradient
     checkpointing) recomputes the bias from the same rows, so they must
     stay assigned until backward is done; the bias is then never held per
-    layer between forward and backward.
+    layer between forward and backward. While training, each chunk is
+    recomputed in backward (`torch.utils.checkpoint`) unless `assigned`
+    is told to keep it, so autograd holds only its inputs and not the
+    chunk's mask plus bias; the gradients are the same either way.
     """
     from chronos.chronos2.layers import AttentionOutput, GroupSelfAttention
 
@@ -258,7 +256,7 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
     module = _bias_module(config.num_layers, config.num_heads, pairs)
     # Kept in fp32 whatever the model's dtype; cast where it is added.
     setattr(model, BIAS_MODULE, module.to(weight.device))
-    setattr(model, _STATE, {"rows": None})
+    setattr(model, _STATE, {"rows": None, "checkpoint": True})
     groups = [m for m in model.modules() if isinstance(m, GroupSelfAttention)]
     if len(groups) != config.num_layers:
         raise ValueError(
@@ -274,7 +272,8 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
             import torch
             from torch.utils.checkpoint import checkpoint
 
-            rows = getattr(model, _STATE)["rows"]
+            state = getattr(model, _STATE)
+            rows = state["rows"]
             if rows is None:
                 return forward(hidden_states, mask, *args, **kwargs)
             # Group attention runs along the rows: (time, rows, d_model).
@@ -296,7 +295,7 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
             def part(t: int) -> Any:
                 hidden = hidden_states[t : t + size]
                 chunk = mask[t : t + size] if mask.shape[0] > 1 else mask
-                if CHECKPOINT_CHUNKS and torch.is_grad_enabled():
+                if state["checkpoint"] and torch.is_grad_enabled():
                     # Backward rebuilds the chunk's mask plus bias rather
                     # than keeping it.
                     return checkpoint(run, hidden, chunk, use_reentrant=False)
@@ -321,11 +320,13 @@ def attach(model: Any, pairs: Sequence[str] = PAIRS) -> None:
 
 
 @contextmanager
-def assigned(model: Any, rows: Any) -> Iterator[None]:
+def assigned(model: Any, rows: Any, checkpoint: bool = True) -> Iterator[None]:
     """Give the next batches these rows' places; no-op without the bias.
 
-    The rows must stay assigned through backward, which recomputes a
-    checkpointed block's bias from them (`attach`).
+    With `checkpoint`, the group attention's chunks are recomputed in
+    backward rather than held (`attach`), which needs less memory for the
+    same gradients. The rows must stay assigned through backward, which
+    recomputes a checkpointed block's bias from them.
     """
     import torch
 
@@ -334,13 +335,14 @@ def assigned(model: Any, rows: Any) -> Iterator[None]:
         yield
         return
     state = getattr(base, _STATE)
-    before = state["rows"]
+    before = state["rows"], state["checkpoint"]
     state["rows"] = torch.as_tensor(np.asarray(rows), dtype=torch.long)
+    state["checkpoint"] = checkpoint
     try:
         yield
     finally:
         # Nested uses (a step around its forward) get back the outer rows.
-        state["rows"] = before
+        state["rows"], state["checkpoint"] = before
 
 
 def adapter_has_bias(adapter: Path | str) -> bool:
