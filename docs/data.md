@@ -14,6 +14,10 @@ Extraction and synthetic vintages are on the [Data methods page](methods/data.md
 The 2026-08-18 vintage has no delay data.
 The 2026-10-09 delay file exists only in the hub's git history.
 
+The models leave out a first release that is a cumulative dump rather than part of the reporting: one whose next release comes more than $D$ days later (`nowcastutils.releases.cumulative_first_release`).
+Every case it holds is older than $D$ by the next release, so it records the counts to date, not how they were reported.
+The 2026-08-18 release is one, 50 days before the next cut-off, so every task from 2026-10-09 reads its releases from 2026-10-09 on.
+
 ## Release cut-offs
 
 Each release's cut-off is its latest onset day.
