@@ -135,7 +135,7 @@ def test_a_complete_block_has_daily_and_rolling_rows_and_no_lags():
 
 
 def test_a_complete_block_names_its_places_for_the_series_bias():
-    # The fine-tuned two-step model runs the complete layout through the
+    # The fine-tuned baselinenowcast model runs the complete layout through the
     # series bias, which needs each target row's place and its parent.
     tri, start = daily_tri(), 10
     rows = foundation.rolling_rows(tri, 7)

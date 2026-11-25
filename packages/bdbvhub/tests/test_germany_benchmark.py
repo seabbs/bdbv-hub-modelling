@@ -78,8 +78,8 @@ def test_config_gives_the_paper_s_dates_and_an_explicit_model_set() -> None:
         "foundation_zeroshot_complete",
         "foundation_zeroshot",
         "foundation",
-        "foundation_zeroshot_twostep",
-        "foundation_twostep",
+        "foundation_zeroshot_baselinenowcast",
+        "foundation_baselinenowcast",
     )
     assert config.truth_delay == 40
     assert config.submissions

@@ -56,10 +56,10 @@ models = [
   "foundation_zeroshot_complete",
   "foundation_zeroshot",
   "foundation",
-  # The two-step sensitivity analysis (#538): baselinenowcast's point
+  # The baselinenowcast sensitivity analysis (#538): baselinenowcast's point
   # nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
-  "foundation_zeroshot_twostep",
-  "foundation_twostep",
+  "foundation_zeroshot_baselinenowcast",
+  "foundation_baselinenowcast",
 ]
 # Chronos-2 fine-tuned on real data alone (the German development half and
 # BDBV to date), run on the held-out half only, for the SI's comparison
