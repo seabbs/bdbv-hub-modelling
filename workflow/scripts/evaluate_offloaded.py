@@ -8,7 +8,7 @@
 segment n<N>'s adapter, `seven-day` its 7-day check (`SEVEN_DAY`, beside
 its settings), with the trainer's own losses
 (nowcastfoundation.finetune.evaluate); the files are as
-`flowlib.evaluations` says. The step snapshots between are not scored.
+`flowlib.evaluations` says.
 """
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 # Offloaded held-out evaluation (WP10): with `finetune.eval: offload`,
-# score step 0 and each checkpoint, not the step snapshots between, in
+# score step 0 and each checkpoint, in
 # the `evaluate` group (WORKER_GROUPS places it), on the forecasting
 # device (`forecast` in the config, flowlib.forecast) beside the trainer,
 # newest segment first, below every other job (EVALUATION_PRIORITY): no
