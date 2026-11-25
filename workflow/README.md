@@ -230,6 +230,7 @@ A module of this workflow (`use rule * from paper_workflow`), run from the repos
 - Forecasts and scores: `forecasts`, `table`, `truth`, `scores`, `joint_scores` and `real_finetune`.
 - Evidence read from git (`evidence_checkpoint_scores`), gathered by `evidence`.
 - Outputs: `figures_synthetic`, `figures_germany`, `figures_ebola`, `score_tables_synthetic`, `score_tables_germany`, `score_tables_ebola`, `sim_examples`, `sim_realism` (the grid's training rounds against the German development half), `pairing_germany`, `pairing_synthetic` and `si_copula` (the walks' scores with and without pairing, and their German rolling $\rho_p$, on development data), `grid_tables`, `summary` and `publish_paper`.
+- Stored inputs: `release_paper_synthetic`, `release_paper_finetune`, `release_paper_simulations` and `release_paper_germany` publish each set a host makes as a `paper-<set>-<hash>` release, gathered by the opt-in target `paper_inputs`.
 
 ## A fine-tuning run
 

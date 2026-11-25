@@ -501,8 +501,10 @@ def report_days(
     on = np.ones((G, n), dtype=int)
     if stop:
         # Reporting stops for good `report_stop_at` of the way through
-        # the reference days: no later report day, so no later reports.
-        on[:, np.arange(n) >= round(float(v["report_stop_at"]) * T)] = 0
+        # the triangle's reference days: no later report day, so no
+        # later reports.
+        stop_at = round(float(v["report_stop_at"]) * frame.observed)
+        on[:, np.arange(n) >= stop_at] = 0
     if not daily:
         days = [
             _WEEKDAYS.index(d) for d in design["report_weekdays"].split(";")

@@ -8,7 +8,8 @@ name: Tests
 # - the workflow, paper and repo tests (integration);
 # - the slow tiers (model fits and backtests, the torch tests, the live R
 #   checks): nightly, on dispatch, with the `full-tests` label, and on a
-#   pull request whose change reaches them.
+#   pull request whose change reaches them; the live R checks also on
+#   every push to next.
 
 on:
   push:
@@ -99,6 +100,7 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha }}
           LABELLED: ${{ contains(github.event.pull_request.labels.*.name, 'full-tests') }}
+          REF: ${{ github.ref }}
         run: |
           if [ "$EVENT" = pull_request ]; then
             changed=$(git diff --name-only "$BASE"...HEAD)
@@ -143,8 +145,13 @@ jobs:
             tests packages/*/tests | sort)
           torch=$(printf '%s|' "${gated[@]}" | sed 's/|$//; s/\./\\./g')
           tier "^(packages/nowcastfoundation/|${torch})" chronos
-          # The code R checks live, the R cases and the live tests.
-          tier '(\.R$|^tests/model/|r_live|^packages/nowcastrenewal/src/nowcastrenewal/(components|reporting|latent)/|^packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/|^packages/nowcastbaselines/tests/baselinenowcast/|^packages/nowcasteval/src/nowcasteval/scoring\.py|^packages/nowcastbdbv/src/nowcastbdbv/data/delays\.py|^paper/.*scor)' r-live
+          # The code R checks live, the R cases and the live tests; and
+          # every push to next, so each merge is checked against R.
+          if [ "$EVENT" = push ] && [ "$REF" = refs/heads/next ]; then
+            echo "r-live=true" >> "$GITHUB_OUTPUT"
+          else
+            tier '(\.R$|^tests/model/|r_live|^packages/nowcastrenewal/(src|tests)/|^packages/nowcastbaselines/src/nowcastbaselines/baselinenowcast/|^packages/nowcastbaselines/tests/baselinenowcast/|^packages/nowcasteval/src/nowcasteval/scoring\.py|^packages/nowcastbdbv/src/nowcastbdbv/data/delays\.py|^paper/.*scor)' r-live
+          fi
           cat "$GITHUB_OUTPUT"
 
   package:
@@ -451,6 +458,7 @@ jobs:
           packages/nowcastrenewal/tests/test_triangle.py
           packages/nowcastrenewal/tests/test_reporting_effects.py
           packages/nowcastrenewal/tests/test_reporting_expectation.py
+          packages/nowcastrenewal/tests/test_observation_epinowcast.py
           packages/nowcasteval/tests/test_pairwise_skill.py
       # The paper's scores against scoringutils, scored live.
       - name: Live scoringutils check (paper)

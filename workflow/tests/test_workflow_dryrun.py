@@ -1517,3 +1517,26 @@ def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
     ]
     assert "--dry-run" in command
     assert "--repo" not in command
+
+
+def test_a_scored_step_0_is_kept(tmp_path):
+    # runa's step 0 was scored once on the laptop and copied in: a later
+    # run never scores it again, the evaluator's code key and the
+    # held-out set being older than it.
+    import os
+
+    for n in (250, 500):
+        _checkpoint(tmp_path, n)
+    train = tmp_path / "runs" / "runa" / "train"
+    (train / "held-out-blocks.json").write_text('{"outbreaks": []}')
+    (train / "evals").mkdir(exist_ok=True)
+    step0 = train / "evals" / "step-0000000.json"
+    step0.write_text('{"step": 0, "held_out_loss": 0.5}')
+    for path in (
+        train / "held-out-blocks.json",
+        *train.glob("n*/settings.json"),
+    ):
+        os.utime(path, (1, 1))
+    jobs = dry(tmp_path, "finetune", config=OFFLOAD)
+    assert "evaluate_base" not in jobs
+    assert jobs["evaluate_checkpoint"] == 2

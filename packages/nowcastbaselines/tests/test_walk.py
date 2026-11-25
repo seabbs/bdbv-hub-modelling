@@ -6,7 +6,14 @@ import jax
 import numpy as np
 import pytest
 
-from nowcastbaselines.walk import random_walk, walk_noise, walk_variance
+from nowcastbaselines.walk import (
+    DailySteps,
+    random_walk,
+    same_weekday_variance,
+    walk_noise,
+    walk_variance,
+    weekday_means,
+)
 
 
 def test_steps_are_cumulative_within_a_sample() -> None:
@@ -95,3 +102,51 @@ def test_a_walk_on_small_counts_loses_most_of_the_poisson_noise() -> None:
 
 def test_fewer_than_two_changes_give_no_variance() -> None:
     assert np.isnan(walk_variance(np.array([0.7]), np.array([0.1])))
+
+
+def _weekdays(t: int) -> np.ndarray:
+    return np.arange(1, t) % 7
+
+
+def test_a_walk_with_no_weekday_pattern_has_no_step_means() -> None:
+    # A plain random walk: each weekday's mean step is 0 within 3 of its
+    # standard errors.
+    rng = np.random.default_rng(2)
+    t = 7 * 60 + 1
+    y = np.expm1(np.log1p(1e5) + np.cumsum(rng.normal(0.0, 0.1, t)))
+    changes = np.diff(np.log1p(y))
+    weekday = _weekdays(t)
+    means = weekday_means(changes, weekday)
+    se = 0.1 / np.sqrt(np.bincount(weekday, minlength=7))
+    assert (np.abs(means) < 3 * se).all()
+    assert np.sqrt(same_weekday_variance([y])) == pytest.approx(0.1, rel=0.2)
+
+
+def test_a_weekday_pattern_is_recovered_and_left_out_of_the_spread() -> None:
+    # A walk with a fixed weekday effect: the mean step into each weekday
+    # is the change of the effect into it, and the effect cancels in the
+    # same-weekday changes behind the spread.
+    rng = np.random.default_rng(3)
+    t = 7 * 60 + 1
+    effect = np.array([0.4, 0.2, 0.0, -0.1, -0.2, -0.6, 0.3])
+    day = np.arange(t) % 7
+    level = np.log1p(1e5) + np.cumsum(rng.normal(0.0, 0.05, t))
+    y = np.expm1(level + effect[day])
+    weekday = _weekdays(t)
+    means = weekday_means(np.diff(np.log1p(y)), weekday)
+    want = effect - np.roll(effect, 1)
+    se = 0.05 / np.sqrt(np.bincount(weekday, minlength=7))
+    assert (np.abs(means - want) < 3 * se).all()
+    assert np.sqrt(same_weekday_variance([y])) == pytest.approx(0.05, rel=0.2)
+
+
+def test_daily_steps_repeat_the_weekly_means() -> None:
+    steps = DailySteps(
+        mean=np.array([[0.1, 0.2, -0.3, 0.0, 0.0, 0.1, -0.1]]),
+        sigma=np.array([0.05]),
+    )
+    mean, spread = steps.at(np.array([5]), 9)
+    np.testing.assert_allclose(
+        mean[0], [0.1, -0.1, 0.1, 0.2, -0.3, 0.0, 0.0, 0.1, -0.1]
+    )
+    np.testing.assert_allclose(spread, 0.05)

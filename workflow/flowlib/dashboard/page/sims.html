@@ -16,10 +16,14 @@
 <div style="overflow-x:auto"><table id=bygroup></table></div>
 </details>
 <details class=sec id=layers open><summary><h2>By layer</h2></summary>
-<p class=cnote>Each grid layer's factors and drawn values over the
-simulations shown (solid) against all of the source's (faint). Click a
-level or a bin to filter to it; click again to drop it.</p>
-<div id=layerbody></div>
+<div class=sctl id=layerpick></div>
+<div class=leg><span><i style="background:var(--c1)"></i>simulations shown</span>
+<span><i style="background:var(--c1);opacity:.25"></i>all of the source's</span>
+<span class=mut>Shares of each level, or a histogram of each drawn value
+(each scaled to its own peak). Click a level or a bin to filter to it;
+click again to drop it. Hover a name for what it is.</span></div>
+<div id=layerbody class=lgrid></div>
+<p class=cnote id=constants></p>
 </details>
 <details class=sec id=series open><summary><h2>Simulations</h2></summary>
 <div class=sctl>

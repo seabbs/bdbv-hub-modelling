@@ -127,7 +127,45 @@ CASES: list[dict[str, Any]] = [
         "n_ages": 1,
     },
 ]
+CASES += [
+    # Long window: ages and a shared weekday effect, places shared.
+    {
+        "design": _design(delay_change="drift", delay_dow="yes"),
+        "n_places": 3,
+        "n_ages": 2,
+        "max_delay": 28,
+    },
+    # Two-day window, independent places.
+    {
+        "design": _design(
+            delay_family="gamma",
+            delay_change="step",
+            delay_places="independent",
+        ),
+        "n_places": 2,
+        "n_ages": 1,
+        "max_delay": 2,
+    },
+    # Hybrid with a walk on the delay over three weeks of delays, by age.
+    {
+        "design": _design(
+            delay_form="hybrid",
+            delay_family="exponential",
+            delay_change="walk",
+            delay_places="shifted",
+            delay_dow="yes",
+        ),
+        "n_places": 2,
+        "n_ages": 3,
+        "max_delay": 21,
+    },
+]
 MAX_DELAY, N_DAYS, FIRST = 8, 35, "2026-01-03"
+
+
+def _dmax(case: dict[str, Any]) -> int:
+    """The case's window, in days of delay."""
+    return int(case.get("max_delay", MAX_DELAY))
 
 
 def _input(i: int, case: dict[str, Any]) -> dict[str, Any]:
@@ -138,7 +176,7 @@ def _input(i: int, case: dict[str, Any]) -> dict[str, Any]:
         **case,
         "values": VALUES,
         "seed": 100 + i,
-        "max_delay": MAX_DELAY,
+        "max_delay": _dmax(case),
         "n_days": N_DAYS,
         "first_date": FIRST,
         "mean_int": float(delay.mu),
@@ -176,7 +214,10 @@ def _names(cols: Any) -> list[str]:
 
 
 def _sites(
-    out: dict[str, Any], frame: ReferenceFrame, prefix: str
+    out: dict[str, Any],
+    frame: ReferenceFrame,
+    prefix: str,
+    max_delay: int = MAX_DELAY,
 ) -> dict[str, np.ndarray]:
     """The port's sites from epinowcast's parameters, by column name."""
     n_p, n_a = frame.n_places, frame.n_ages
@@ -189,7 +230,7 @@ def _sites(
         "hazard_age": np.zeros(n_a),
         "hazard_day_of_week": np.zeros(7),
         "hazard_day_of_week_place": np.zeros(7 * n_p),
-        "hazard_delay": np.zeros(MAX_DELAY),
+        "hazard_delay": np.zeros(max_delay),
     }
     p = out["parameters"]
     modules = [("mean", "refp_cols", "refp_mean_beta")]
@@ -218,10 +259,11 @@ def _sites(
 def _ours(i: int) -> tuple[ReferenceEffects, dict[str, Any], Any]:
     out = _epinowcast()[i]
     frame = _frame(out)
+    D = _dmax(CASES[i])
     effects = ReferenceEffects(
-        "reference", frame, CASES[i]["design"], VALUES, MAX_DELAY
+        "reference", frame, CASES[i]["design"], VALUES, D
     )
-    sites = _sites(out, frame, "reference")
+    sites = _sites(out, frame, "reference", D)
     with jax.enable_x64(True), handlers.trace() as tr:
         parts = handlers.substitute(effects, data=sites)()
     return effects, out, (tr, parts)
@@ -230,7 +272,7 @@ def _ours(i: int) -> tuple[ReferenceEffects, dict[str, Any], Any]:
 @pytest.mark.parametrize("i", range(len(CASES)))
 def test_reference_effects_match_epinowcast(i: int) -> None:
     effects, out, (tr, (parametric, non_parametric)) = _ours(i)
-    G, T, D = len(effects.frame.place), N_DAYS, MAX_DELAY
+    G, T, D = len(effects.frame.place), N_DAYS, _dmax(CASES[i])
     if effects.parametric:
         idx = np.array(out["refp_findex"]) - 1
         want = np.array(out["refp_mean"])[idx].reshape(G, T)
