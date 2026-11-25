@@ -411,7 +411,8 @@ def load_adapter(model: Any, adapter: Path | str) -> Any:
 
     The bias is attached first when the adapter holds it, with the kinds
     of pair it holds (`adapter_pairs`), so PEFT loads its trained values;
-    an adapter without it loads as before. Every
+    an adapter without it loads as before. The adapter loads onto the
+    model's device, not PEFT's default (a GPU when there is one). Every
     weight in the adapter's file must reach the model (`_check_loaded`).
     """
     import warnings
@@ -422,7 +423,11 @@ def load_adapter(model: Any, adapter: Path | str) -> Any:
     with warnings.catch_warnings():
         # PEFT only warns when an adapter weight has no file entry.
         warnings.filterwarnings("error", message="Found missing adapter keys")
-        peft_model = PeftModel.from_pretrained(model, str(adapter))
+        peft_model = PeftModel.from_pretrained(
+            model,
+            str(adapter),
+            torch_device=str(next(model.parameters()).device),
+        )
     _check_loaded(peft_model, adapter)
     return peft_model.merge_and_unload()
 
