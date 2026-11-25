@@ -476,6 +476,10 @@ def test_the_pages_render_reads_stored_outputs_as_inputs(
         "rho.csv.gz",
     ):
         (store / name).write_text("")
+    (tmp_path / "germany-results").mkdir()
+    (tmp_path / "germany-results" / "paper-forecasts.csv.gz").write_text("")
+    (tmp_path / "germany").mkdir()
+    (tmp_path / "germany" / "COVID-19_hospitalizations.csv").write_text("")
     cfg = tmp_path / "real.yaml"
     cfg.write_text(
         yaml.safe_dump(
