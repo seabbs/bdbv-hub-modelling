@@ -758,8 +758,8 @@ def _walk_spreads(
     qualify = pool_matrix(
         np.where(own > 0, level, 0.0), snap.parent, settings.min_level
     )
-    for n in np.flatnonzero((snap.parent < 0) & ~(pooled > 0)):
-        pooled[n] = variance(np.flatnonzero(qualify[n]))
+    for country in np.flatnonzero((snap.parent < 0) & ~(pooled > 0)):
+        pooled[country] = variance(np.flatnonzero(qualify[country]))
     return own, pooled
 
 

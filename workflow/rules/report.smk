@@ -269,6 +269,8 @@ rule hub_head:
         f"{HUB}/logs/head.log",
     priority: HANDOFF_PRIORITY
     localrule: True
+    conda:
+        TOOLS_ENV
     shell:
         "gh api 'repos/InsightNet-US/BDBV-Modeling-Hub/commits"
         "?path=target-data/time-series.csv&per_page=1' --jq '.[0].sha' "
