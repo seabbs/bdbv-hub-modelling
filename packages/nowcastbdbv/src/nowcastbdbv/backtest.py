@@ -33,7 +33,10 @@ from nowcasteval.backtest import (
 from nowcasteval.nowcast import truth_from_vintage
 from nowcastutils.base import ForecastModel, ForecastTask
 from nowcastutils.dates import reference_date_for_vintage
-from nowcastutils.releases import release_cutoff
+from nowcastutils.releases import (
+    release_cutoff,
+    without_cumulative_first_release,
+)
 
 log = logging.getLogger(__name__)
 
@@ -149,32 +152,32 @@ def make_tasks(
                 same &= delays["kind"] == kind
             past = delays.loc[same]
             history = past if not past.empty else None
-        tasks.append(
-            ForecastTask(
-                vintage=str(vintage),
-                reference_date=ref,
-                kind=str(kind),
-                cutoff=release_cutoff(rows, str(vintage)).isoformat(),
-                target=rows.reset_index(drop=True),
-                delays=dly,
-                delay_history=history,
-                target_history=past_target if not past_target.empty else None,
-                daily_history=_daily_for(daily, str(kind), str(vintage)),
-                **_zone_fields(zones, str(kind), str(vintage)),
-                imputation_delay=imputation(str(vintage)),
-                places=places,
-                locations=forecast_locations(rows),
-                target_end_dates=forecast_weeks(ref, config),
-                n_samples=config.n_samples,
-                seed=config.seed,
-                max_delay=config.max_delay,
-                report_by={
-                    d: release_cutoff(source.loc[mine], d).isoformat()
-                    for d in sorted(report_by)
-                    if kind != "simulated" and d > str(vintage)
-                },
-            )
+        task = ForecastTask(
+            vintage=str(vintage),
+            reference_date=ref,
+            kind=str(kind),
+            cutoff=release_cutoff(rows, str(vintage)).isoformat(),
+            target=rows.reset_index(drop=True),
+            delays=dly,
+            delay_history=history,
+            target_history=past_target if not past_target.empty else None,
+            daily_history=_daily_for(daily, str(kind), str(vintage)),
+            **_zone_fields(zones, str(kind), str(vintage)),
+            imputation_delay=imputation(str(vintage)),
+            places=places,
+            locations=forecast_locations(rows),
+            target_end_dates=forecast_weeks(ref, config),
+            n_samples=config.n_samples,
+            seed=config.seed,
+            max_delay=config.max_delay,
+            report_by={
+                d: release_cutoff(source.loc[mine], d).isoformat()
+                for d in sorted(report_by)
+                if kind != "simulated" and d > str(vintage)
+            },
         )
+        # A cumulative first release is not part of the reporting.
+        tasks.append(without_cumulative_first_release(task))
     return tasks
 
 
