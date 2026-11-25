@@ -33,6 +33,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from nowcasteval.labels import model_label
+
 D = 42
 """The longest reporting delay, days."""
 
@@ -711,11 +713,14 @@ def summary(folder: Path, out: Path, reference: str) -> None:
 
 # ---------------------------------------------------------------- report
 
-MODELS = (
-    ("foundation_zeroshot", "Zero-shot"),
-    ("foundation", "Fine-tuned"),
-    ("foundation_zeroshot_pseudoweeks", "Zero-shot, pseudo weeks"),
-    ("foundation_pseudoweeks", "Fine-tuned, pseudo weeks"),
+MODELS = tuple(
+    (m, model_label(m))
+    for m in (
+        "foundation_zeroshot",
+        "foundation",
+        "foundation_zeroshot_pseudoweeks",
+        "foundation_pseudoweeks",
+    )
 )
 """The models the page compares, each against the reference."""
 

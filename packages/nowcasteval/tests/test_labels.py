@@ -10,8 +10,8 @@ from nowcasteval.labels import (
 )
 
 MAIN = {
-    "foundation": "Fine-tuned (delays)",
-    "foundation_zeroshot": "Zero-shot (delays)",
+    "foundation": "Fine-tuned (reporting triangle)",
+    "foundation_zeroshot": "Zero-shot (reporting triangle)",
     "foundation_zeroshot_complete": "Zero-shot (complete data only)",
     "randomwalknowcast": "Random walk nowcast",
     "randomwalk": "Random walk",
@@ -36,9 +36,13 @@ def test_main_models_have_distinct_colours() -> None:
 
 def test_checkpoints_real_data_and_hub_teams() -> None:
     assert (
-        model_label("foundation@2000") == "Fine-tuned (delays), 2,000 outbreaks"
+        model_label("foundation@2000")
+        == "Fine-tuned (reporting triangle), 2,000 outbreaks"
     )
-    assert model_label("foundation_real") == "Fine-tuned on real data (delays)"
+    assert (
+        model_label("foundation_real")
+        == "Fine-tuned on real data (reporting triangle)"
+    )
     assert model_label("OHTJHU-someteam") == "OHTJHU-someteam"
 
 
@@ -193,7 +197,8 @@ def _oklab(rgb: np.ndarray) -> np.ndarray:
 
 def test_zero_shots_meet_the_palette_validator_against_the_main_models():
     # Zero-shot (green) and Zero-shot complete data (purple) are
-    # clearly distinct from Fine-tuned (delays) and Random walk nowcast:
+    # clearly distinct from Fine-tuned (reporting triangle) and Random walk
+    # nowcast:
     # the dataviz validator's thresholds, OKLab Delta E x 100 of at least 8
     # under simulated deuteranopia and protanopia and 15 under normal
     # vision, for every pair of the four.

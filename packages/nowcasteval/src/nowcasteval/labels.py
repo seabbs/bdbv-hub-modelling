@@ -7,8 +7,8 @@ never by their ids. Data keep the ids; names apply when drawing.
 - `MODEL_LABELS`: each model id's display name.
 - `MODEL_STYLES`: each model id's colour and dash (`solid`, `dashed` or
   `dotted`). Bars have no dashes, so the main models each have their
-  own colour; the dashes keep fine-tuned solid, zero-shot with delays
-  dotted and zero-shot on complete data dashed in line plots.
+  own colour; the dashes keep fine-tuned solid, zero-shot on the
+  reporting triangle dotted and zero-shot on complete data dashed in line plots.
 - `WIS_PART_STACK`, `WIS_PART_FILLS`: the order WIS parts stack in and
   how each fills (solid or hatched), so parts differ by more than shade.
 - `model_label`: the display name of any id, including checkpoints
@@ -58,13 +58,16 @@ def base_model(name: str) -> str:
 
 
 MODEL_LABELS: Final[dict[str, str]] = {
-    "foundation": "Fine-tuned (delays)",
-    "foundation_zeroshot": "Zero-shot (delays)",
+    "foundation_zeroshot": "Zero-shot (reporting triangle)",
+    "foundation": "Fine-tuned (reporting triangle)",
     "foundation_zeroshot_complete": "Zero-shot (complete data only)",
-    "foundation_zeroshot_twostep": "Two-step zero-shot (point nowcast)",
-    "foundation_twostep": "Two-step fine-tuned (point nowcast)",
-    "foundation_zeroshot_pseudoweeks": "Zero-shot (delays, pseudo weeks)",
-    "foundation_pseudoweeks": "Fine-tuned (delays, pseudo weeks)",
+    "foundation_complete": "Fine-tuned (complete data only)",
+    "foundation_zeroshot_twostep": "Zero-shot (baselinenowcast first)",
+    "foundation_twostep": "Fine-tuned (baselinenowcast first)",
+    "foundation_zeroshot_pseudoweeks": (
+        "Zero-shot (reporting triangle, pseudo weeks)"
+    ),
+    "foundation_pseudoweeks": "Fine-tuned (reporting triangle, pseudo weeks)",
     "randomwalknowcast": "Random walk nowcast",
     "randomwalk": "Random walk",
     "KIT-frozen_baseline": "Hub baseline (KIT)",
@@ -116,6 +119,7 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
     "foundation_zeroshot_complete": (_COMPLETE_PURPLE, "dashed"),
     "foundation_zeroshot": (_ZERO_SHOT_GREEN, "dotted"),
     "foundation": (_SLOT_BLUE, "solid"),
+    "foundation_complete": (_COMPLETE_PURPLE, "solid"),
     "foundation_zeroshot_twostep": (_COMPLETE_PURPLE, "dotted"),
     "foundation_twostep": (_SLOT_BLUE, "dashed"),
     "foundation_zeroshot_pseudoweeks": (_ZERO_SHOT_GREEN, "dashed"),
@@ -126,14 +130,14 @@ MODEL_STYLES: Final[dict[str, tuple[str, str]]] = {
 """Colour (hex, light theme) and dash of each model id, in display order:
 baselines, foundation models, others.
 
-Zero-shot with delays is green and zero-shot on complete data only purple,
-chosen with the dataviz palette validator: against Fine-tuned (delays) and
-Random walk nowcast every pair is at least 8 apart (OKLab Delta E x 100)
-under simulated deuteranopia and protanopia and 15 under normal vision,
-on light and dark backgrounds. Every pair of distinct colours differs by
-a CIEDE2000 of 5 or more under normal vision and the three
-colour-blindness simulations, and the main models' colours have a
-contrast of 3 or more on light and dark backgrounds
+Zero-shot on the reporting triangle is green and zero-shot on complete
+data only purple, chosen with the dataviz palette validator: against
+Fine-tuned (reporting triangle) and Random walk nowcast every pair is at
+least 8 apart (OKLab Delta E x 100) under simulated deuteranopia and
+protanopia and 15 under normal vision, on light and dark backgrounds.
+Every pair of distinct colours differs by a CIEDE2000 of 5 or more under
+normal vision and the three colour-blindness simulations, and the main
+models' colours have a contrast of 3 or more on light and dark backgrounds
 (the package's tests/test_labels.py)."""
 
 WIS_PART_STACK: Final = ("underprediction", "dispersion", "overprediction")

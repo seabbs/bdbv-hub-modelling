@@ -262,7 +262,7 @@ The layouts of the training blocks and their shares.
 
 Each training block is built as follows.
 
-- A training block cuts one draw's releases at one cut-off and lays them out as the ragged layout does, with the target past the last complete step the outbreak's final counts.
+- A training block cuts one draw's releases at one cut-off and lays them out as the reporting-triangle layout does, with the target past the last complete step the outbreak's final counts.
 - The blocks with more than one series have as targets every level of their system.
 - Blocks whose places do not nest have no intermediate level, so their targets are the national total and the leaves.
 
@@ -591,14 +591,14 @@ Choices tuned on development data, with their values and the data they were set 
 - We compare the final run's checkpoints, fine-tuned on {{< meta results.training.checkpoints >}} simulations.
 - They share the grid, the data order and the recipe, as checkpoints of one run.
 - @fig-finetune-validation gives the trainer's validation loss by level, for transparency, not to select a checkpoint.
-- @fig-checkpoint-curve gives German first-half relative scores at each checkpoint, with zero-shot Chronos-2 on the ragged layout and on complete data only as reference lines.
+- @fig-checkpoint-curve gives German first-half relative scores at each checkpoint, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data only as reference lines.
 - @tbl-checkpoints gives the headline scores of each checkpoint.
 - A later checkpoint has also trained for more steps.
 - The learning rate falls linearly to zero over the {{< meta results.training.simulations >}} simulations, so the earlier checkpoints are taken at {{< meta results.training.first_rate >}} ({{< meta results.training.first >}}) to {{< meta results.training.penultimate_rate >}} ({{< meta results.training.penultimate >}}) of the starting rate, and only the {{< meta results.training.simulations >}} checkpoint is annealed.
 
 ![The trainer's validation loss of the fine-tune by level (national, intermediate and leaf) against the number of simulated outbreaks it has seen. {{< meta evidence.live.label >}} Development data only.](build/figures/si/finetune-validation.png){#fig-finetune-validation}
 
-![WIS (Germany, on each model's own quantiles) relative to `randomwalknowcast` of the fine-tuned ragged Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the ragged layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
+![WIS (Germany, on each model's own quantiles) relative to `randomwalknowcast` of the fine-tuned reporting-triangle Chronos-2 models against the number of simulated outbreaks each checkpoint was fine-tuned on, by level. Horizontal lines give the models with no fine-tuning: zero-shot Chronos-2 on the reporting-triangle layout (dashed) and on complete data only (dotted), each in its source's colour, and `randomwalknowcast` at 1. Each panel gives n, the fewest matched cells of its points, and the forecast origins they come from, and panels with fewer than 5 are grey. {{< meta evidence.live.label >}} Development data only.](build/figures/si/checkpoint-curve.png){#fig-checkpoint-curve}
 
 ::: {#tbl-checkpoints}
 {{< include build/tables/si/checkpoint-table.md >}}
@@ -627,7 +627,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 
 ### Delays against no delays
 
-- We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the ragged run.
+- We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the reporting-triangle run.
 - Both runs share the grid, the data order, the recipe and the checkpoints.
 - @fig-compare-delays shows both runs by checkpoint.
 - Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
@@ -639,7 +639,7 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 - We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
 - Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it only on held-out Ebola rounds after that release.
 - It saw the German development half, so we score it on the held-out half only.
-- Both use the same recipe and the ragged layout.
+- Both use the same recipe and the reporting-triangle layout.
 - @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
 - We leave the real-data model out of every other table and figure.
 
@@ -655,7 +655,7 @@ Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundat
 
 - We score our models' daily counts in both case studies directly from the daily rows, not summed.
 - The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.
-- Hub teams give no daily forecasts, and `randomwalknowcast` forecasts the 7-day sums only, so for Germany we compare daily counts with zero-shot Chronos-2 on the ragged layout.
+- Hub teams give no daily forecasts, and `randomwalknowcast` forecasts the 7-day sums only, so for Germany we compare daily counts with zero-shot Chronos-2 on the reporting-triangle layout.
 - For Germany, the daily zero-shot and fine-tuned models' block has each place's rolling 7-day sum row, so one call gives the daily counts and the hub's 7-day sums for every day.
 - We score the hub targets on the rolling rows and the daily counts on the daily rows, with no summing of daily draws.
 - The two outputs come from one call and are not forced to agree.
