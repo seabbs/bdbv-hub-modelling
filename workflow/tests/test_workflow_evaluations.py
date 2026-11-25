@@ -169,37 +169,3 @@ def test_a_run_with_no_start_loss_has_no_validation_curve(tmp_path):
         {"n_outbreaks": 250, "held_out_loss_by_level": {"leaf": 0.3}},
     )
     assert evaluations.validation_curve(train, "runa", [250]) == []
-
-
-QUICK = {
-    "loss": 0.3,
-    "loss_nowcast": 0.1,
-    "loss_forecast": 0.2,
-    "cover50": 0.5,
-    "cover90": 0.9,
-    "blocks": 1000,
-    "seconds": 290.0,
-}
-
-
-def test_the_quick_check_is_in_the_checkpoint_s_summary(tmp_path):
-    where = tmp_path / "train" / "n500"
-    write(where / "settings.json", {"hash": "h", "steps": 10})
-    write(where / "quick-check.json", QUICK)
-    got = evaluations.checkpoint_settings(where)
-    assert got["quick_check"] == QUICK
-
-
-def test_the_quick_checks_are_the_subset_loss_by_step(tmp_path):
-    # The dashboard's subset line: base Chronos-2 at step 0 and each
-    # checkpoint at its step.
-    train = tmp_path / "train"
-    write(train / "n500" / "settings.json", {"hash": "h", "steps": 800})
-    write(train / "n500" / "quick-check.json", QUICK)
-    write(train / "evals" / "quick-check-base.json", {**QUICK, "loss": 0.5})
-    history = [{"step": 0}, {"step": 800, "loss": 0.4}]
-    got = evaluations.merged_history(history, train)
-    assert got[0]["eval_loss"] == 0.5
-    assert got[1]["eval_loss"] == 0.3
-    assert got[1]["eval_loss_nowcast"] == 0.1
-    assert got[1]["loss"] == 0.4

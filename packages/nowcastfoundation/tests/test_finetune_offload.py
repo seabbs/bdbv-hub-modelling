@@ -150,29 +150,64 @@ def test_the_evaluator_scores_a_snapshot_as_the_trainer_would(
 
 
 @pytest.mark.usefixtures("short_context")
-def test_the_quick_check_scores_a_fixed_subset(tmp_path):
+def test_blocks_pack_by_length_into_a_series_token_budget():
+    from chronos.chronos2.dataset import DatasetMode
+
+    val = blocks(6)
+    data = fs.ByLength(val, 100, DatasetMode.VALIDATION)
+    groups = fe.pack(data, budget=2 * fe.block_cost(val[0]))
+    # Every block once, each batch of one length within the budget.
+    assert sorted(i for g in groups for i in g) == list(range(6))
+    assert all(len(g) <= 2 for g in groups)
+    assert all(
+        len({val[i]["prediction_length"] for i in g}) == 1 for g in groups
+    )
+    # A block over the budget runs alone.
+    assert fe.pack(data, budget=1) == [[i] for i in range(6)]
+
+
+@pytest.mark.usefixtures("short_context")
+def test_packed_batches_give_the_same_losses():
     model = trained()
     val = blocks(6)
-    where = tmp_path / "n100" / "finetuned-ckpt"
-    model.save_pretrained(where)
-    picked = fe.quick_blocks(val, 3)
-    # Spread evenly over the held-out set, the same every time.
-    assert [b["context"][0, 0] for b in picked] == [
-        val[i]["context"][0, 0] for i in (0, 2, 4)
-    ]
-    assert fe.quick_blocks(val, 10) == val
-    # Base Chronos-2: the check attaches the adapter's series bias.
-    got = fe.quick_check(where, tiny_model(), val, 100, 3)
-    assert got["blocks"] == 3
-    assert got["loss"] == pytest.approx(
-        fs.held_out_loss(model, picked, 100), rel=1e-5
+    one = fe.held_out_pass(model, val, 100)
+    packed = fe.held_out_pass(model, val, 100, budget=10**9)
+    for a, b in zip(one, packed, strict=True):
+        assert b["loss"] == pytest.approx(a["loss"], rel=1e-5)
+
+
+@pytest.mark.usefixtures("short_context")
+def test_a_batch_out_of_memory_is_split(monkeypatch):
+    model = trained()
+    val = blocks(4)
+    want = fe.held_out_pass(model, val, 100)
+    forward = fs.forward
+
+    def tight(model, batch, *args, **kwargs):
+        if len(batch["target_idx_ranges"]) > 1:
+            raise torch.OutOfMemoryError("too big")
+        return forward(model, batch, *args, **kwargs)
+
+    monkeypatch.setattr(fs, "forward", tight)
+    got = fe.held_out_pass(model, val, 100, budget=10**9)
+    for a, b in zip(want, got, strict=True):
+        assert b["loss"] == pytest.approx(a["loss"], rel=1e-5)
+
+
+@pytest.mark.usefixtures("short_context")
+def test_half_precision_is_checked_against_fp32(monkeypatch):
+    model = trained()
+    val = blocks(4)
+    monkeypatch.setenv("PRECISION", "fp32")
+    assert fe.precision_check(model, val, 100, "cpu") is None
+    monkeypatch.setenv("PRECISION", "bf16")
+    got = fe.precision_check(model, val, 100, "cpu")
+    assert got["precision"] == "bf16"
+    assert got["blocks"] == 4
+    assert got["rel"] == pytest.approx(
+        abs(got["loss"] - got["loss_fp32"]) / got["loss_fp32"]
     )
-    cover = fe.held_out_coverage(model, picked, 100)
-    assert got["cover90"] == pytest.approx(cover["cover90"])
-    assert got["cover50"] == pytest.approx(cover["cover50"])
-    assert got["loss_nowcast"] + got["loss_forecast"] == pytest.approx(
-        got["loss"], rel=1e-6
-    )
+    assert got["rel"] < fe.PRECISION_TOLERANCE
 
 
 def test_held_out_blocks_round_trip_with_their_count(tmp_path):

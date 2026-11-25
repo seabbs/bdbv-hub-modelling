@@ -134,26 +134,19 @@ def test_evaluation_logs_each_batch(tmp_path, fake, monkeypatch, capsys):
     assert "batch" not in capsys.readouterr().out
 
 
-def test_the_quick_check_writes_beside_each_checkpoint_and_the_base(
-    tmp_path, fake, monkeypatch
+def test_base_chronos_2_s_step_0_is_cached_by_model_and_held_out_set(
+    tmp_path, fake
 ):
-    mod, _ = fake
-    train = tmp_path / "train"
-    snapshot(train, 0, ["start"])
-    where = checkpoint_at(train, 250, 200)
-    seen = []
-
-    def quick_check(adapter, _base, blocks, _batch, n):
-        seen.append((Path(adapter).name, len(blocks), n))
-        return {"loss": 0.3, "blocks": n, "seconds": 1.0}
-
-    monkeypatch.setattr(mod.fe, "quick_check", quick_check)
-    mod.main(["quick", str(where), "--device", "cpu", "--blocks", "7"])
-    mod.main(["quick-base", str(where), "--device", "cpu", "--blocks", "7"])
-    got = json.loads((where / "quick-check.json").read_text())
-    assert got["loss"] == 0.3
-    assert got["device"] == "cpu"
-    base = json.loads((train / "evals" / "quick-check-base.json").read_text())
-    assert base["loss"] == 0.3
-    # The checkpoint's adapter, then step 0's (base Chronos-2).
-    assert seen == [("finetuned-ckpt", 2, 7), ("adapter", 2, 7)]
+    mod, calls = fake
+    cache = tmp_path / "cache"
+    for run in ("a", "b"):
+        train = tmp_path / run / "train"
+        snapshot(train, 0, ["start"])
+        (train / "held-out-blocks.json").write_text('{"outbreaks": [1]}')
+        first = checkpoint_at(train, 250, 200)
+        mod.main(["base", str(first), "--device", "cpu", "--cache", str(cache)])
+        got = json.loads((train / "evals" / "step-0000000.json").read_text())
+        assert got["held_out_loss"] == 0.4
+    # Scored once: the second run takes the first's from the cache.
+    assert [c[1] for c in calls["evals"]] == [["start"]]
+    assert len(list(cache.glob("*.json"))) == 1
