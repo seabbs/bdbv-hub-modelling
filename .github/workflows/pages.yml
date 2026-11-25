@@ -116,21 +116,11 @@ jobs:
           fi
           tar -xzf "$bundle"
           cat output/fit-store/backtests/latest.json >> "$GITHUB_STEP_SUMMARY"
-      # Pages never fits a model. The fitted models' forecasts come from
-      # the fit store (fit-store.yml), which reruns this build when it has
-      # stored new fits. `load` writes them into results/ with a record of
-      # the fits used, which each page with their results states.
-      - name: Load the stored fits
-        env:
-          FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
-          # The fine-tuned models list the releases for their checkpoint.
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          uv run bdbvhub fit-store load --store output/fit-store
-      # What the site shows from the fits and backtests: the hub
-      # comparison, the German benchmark's tables and the docs figures and
-      # tables, as Fit store made them (its `site-results`), unpacked last
-      # so they win. Site scores and forecasts nothing.
+      # What the site shows from the fits and backtests: the stored fits'
+      # forecasts as `fit-store load` wrote them, the hub comparison, the
+      # German benchmark's tables and the docs figures and tables, as Fit
+      # store made them (its `site-results`), unpacked last so they win.
+      # Site loads, scores and forecasts nothing.
       - name: Load the stored site results
         env:
           FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}

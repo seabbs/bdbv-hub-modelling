@@ -24,7 +24,8 @@ def test_a_dispatch_can_name_a_scratch_store() -> None:
     inputs = wf[True]["workflow_dispatch"]["inputs"]
     assert "store_branch" in inputs
     steps = wf["jobs"]["prep"]["steps"]
-    (load,) = [s for s in steps if s.get("name") == "Load the stored fits"]
+    # The step that fetches the store, whose site results Site unpacks.
+    (load,) = [s for s in steps if "branch.py fetch" in s.get("run", "")]
     assert load["env"]["FIT_STORE_BRANCH"] == (
         "${{ inputs.store_branch || 'fit-store' }}"
     )
