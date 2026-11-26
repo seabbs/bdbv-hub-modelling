@@ -63,4 +63,5 @@ def test_each_store_remakes_the_site_results_without_the_slow_fits() -> None:
 
 def test_site_unpacks_the_stored_site_results() -> None:
     prep = _runs(_jobs("pages.yml")["prep"])
-    assert "output/fit-store/site/latest.tar.gz" in prep
+    # The bundle is stored in parts under GitHub's file size limit.
+    assert "cat output/fit-store/site/latest.tar.gz* | tar -xz" in prep

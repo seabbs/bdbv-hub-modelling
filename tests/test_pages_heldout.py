@@ -70,7 +70,7 @@ def test_pages_forecasts_and_scores_nothing() -> None:
         "bdbvhub score",
     ):
         assert command not in run, command
-    assert "backtests/latest.tar.gz" in run
+    assert "cat output/fit-store/backtests/latest.tar.gz* | tar -xz" in run
 
 
 def test_pages_cancels_in_progress_on_every_ref() -> None:
