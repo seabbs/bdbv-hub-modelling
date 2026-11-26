@@ -260,7 +260,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 - The hub's target is 7-day sums ending on each day from the nowcast date to 28 days before it.
 - We scored the hub's targets, and also our models' forecasts up to 4 weeks after the nowcast date (Supporting Information, *German nowcast hub*).
 - Each nowcast date is forecast once, so every 7-day sum comes from one forecast.
-- Chronos-2 reads each day's 7-day sum from its own rolling-sum series, or sums its daily draws when it sees complete counts.
+- Each place also has a 7-day rolling-sum series, which Chronos-2 forecasts directly, so we read each 7-day sum from it rather than summing daily draws.
 - The random walks forecast weeks ending on Saturdays, so they give only the 7-day sums that end on a Saturday.
 - We scored each model on its own quantiles at the hub's seven levels.
 - As @Wolffram2023 did, we replaced one team's erroneous values by its nowcast of the day before, and filled another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
