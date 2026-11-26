@@ -36,21 +36,24 @@ def test_an_unbuilt_site_fails(tmp_path: Path) -> None:
     assert main([str(tmp_path), "--config", str(CONFIG)]) == 1
 
 
-def test_a_page_without_our_results_passes_when_it_says_so(
-    tmp_path: Path, capsys
-) -> None:
-    # The site results hold no German scores of ours: the page says they
-    # are not yet available and has no summary or explorer data.
+def test_a_page_without_our_results_passes(tmp_path: Path, capsys) -> None:
+    # The site results hold no German scores of ours, so the page says
+    # they are not yet available and has no summary or explorer data.
     site = tmp_path / "_site"
     (site / "germany").mkdir(parents=True)
     (site / "germany" / "index.html").write_text(f"<p>{NOT_RUN}</p>")
-    assert main([str(site), "--config", str(CONFIG)]) == 0
+    results = tmp_path / "results"
+    results.mkdir()
+    args = [str(site), "--config", str(CONFIG), "--results", str(results)]
+    assert main(args) == 0
     assert "not yet available" in capsys.readouterr().out
 
 
-def test_missing_data_fails_when_the_page_does_not_say_so(
-    tmp_path: Path,
-) -> None:
+def test_missing_data_fails_when_our_results_exist(tmp_path: Path) -> None:
     site = _site(tmp_path, SPLIT)
     (site / "figures" / "explorer-germany.json").unlink()
-    assert main([str(site), "--config", str(CONFIG)]) == 1
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / "scores.csv.gz").write_bytes(b"")
+    args = [str(site), "--config", str(CONFIG), "--results", str(results)]
+    assert main(args) == 1
