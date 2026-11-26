@@ -47,7 +47,7 @@ The table counts the weeks where they differ, by vintage and stream.
     --8<-- "national-coherence.md"
 
 A gap is cases counted nationally but in no province.
-The renewal fits stop on a gap and the submission's coherence check fails, since national is the sum of the provinces ([Forecasts](methods/model.md#forecasts)).
+The renewal fits stop on a gap and the submission's coherence check fails, since national is the sum of the provinces ([supporting information](paper/si.html#renewal-model)).
 
 ## Target by vintage
 
@@ -115,7 +115,7 @@ No fall was larger than 8 cases.
 ## Missing onsets
 
 The hub publishes, for every vintage, the cases in each province and onset week with an imputed onset.
-How the hub imputes them is on the [methods page](methods/model.md#hub-imputation).
+How the hub imputes them, and how the renewal models model that, is in the paper's [supporting information](paper/si.html#renewal-model).
 
 <figure class="doc-figure" markdown="span">
   ![Share of each week's cases with an imputed onset, by province and vintage, with point size by the week's count.](figures/imputed-share.svg#only-light)
