@@ -135,24 +135,26 @@ Teams without the capacity to set up specialist models could also use them direc
 
 ::: {.callout-note title="Plan"}
 - Time series foundation models forecast new series with no training on them, which we call zero-shot.
-- We used Chronos-2 because it forecasts a group of related series in one block and takes known-future covariates, which the reporting triangle laid out as ragged series needs [@Ansari2025].
+- We used Chronos-2 because it forecasts a group of related series together, and takes inputs whose future values are already known, which the layout of our data needs (Laying out surveillance data for the model) [@Ansari2025].
 - Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.
-- It gives quantiles for each step in one forward pass, and each draw reads them at a uniform level (Figure 1D).
+- It gives quantiles for each future step in one pass, and we draw samples from these quantiles (Figure 1D).
 - We run it with PyTorch and chronos-forecasting.
 - Key references: [@Ansari2025; @Ansari2024].
 :::
 
-### Adapting the model to reporting delays
+### Laying out surveillance data for the model
 
 ::: {.callout-note title="Plan"}
-- We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).
+- Surveillance data for nowcasting are a reporting triangle, counts by reference date, such as the date of symptom onset, and by reporting delay, in which recent dates have only their shortest delays reported so far [@hohle; @Wolffram2023].
+- We give Chronos-2 one count series per place, complete up to the last date whose counts have settled, and one series per place and reporting delay, each missing until reported (Figure 1B).
+- Counts reported after that date are inputs whose future values are already known.
+- Places nest, such as health zones within provinces within a country, and Chronos-2 forecasts every place as a separate series in one joint block.
 - Without more information, the model has no marker of which delay series belong to which place's count.
-- We add learned attention biases that nudge these weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
-- Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
-- At forecast time the number of lag rows, $D$, is set from the data by default (SI).
-- Each onset day first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
-- $D$ is one more than the 98th percentile of these settling lags, using only days seen for at least $1.5D$ lags.
-- With no such day, $D$ is the release history.
+- We add learned attention biases that nudge the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
+- At forecast time the number of delay series per place, $D$, is set from the data by default (SI).
+- Each reference date first published after releases began settles at the first delay at which its reported count reaches 98% of its latest count.
+- $D$ is one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
+- With no such date, $D$ is the release history.
 - A study can set a fixed $D$ instead.
 - Key references: [@Woo2024; @Yang2022].
 :::
