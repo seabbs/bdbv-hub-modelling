@@ -303,9 +303,9 @@ where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or
 
 - The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
 $$
-\eta_t = \eta_0 \left(1 - \frac{s_t}{3{,}200}\right),
+\eta_t = \eta_0 \left(1 - \frac{s_t}{N}\right),
 $$
-where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
+where $N$ is the number of training simulations, {{< meta results.training.simulations >}} in the final run, $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
 - $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
 - We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
 - Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].

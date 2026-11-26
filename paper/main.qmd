@@ -293,16 +293,24 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 - We compare the joint block with forecasting each level alone and with summing the lowest level.
 - We compare the walks' rolling copula with no pairing, and score Chronos-2's submitted trajectories with its copula, with independent cells and comonotone.
 - We compare the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (SI, Renewal model variants).
-- TODO: say for each which data it is scored on (held-out simulations, the German held-out half or the Ebola rounds), against which model and with which score.
+- We score the real-data fine-tune on the German held-out half, and on the Ebola rounds after its last training release.
+- We compare the runs without attention biases or lag series with the main run by validation loss and by scores on the German development half at each checkpoint.
+- We compare the copula settings on the German development half and the development simulations.
+- We score the other comparisons as in the case study they apply to, relative to its baseline.
 - The SI gives each in full.
 :::
 
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- A Snakemake workflow runs the evaluation from the raw data to every figure and table, including simulation, fine-tuning, the baselines, scoring and the paper.
-- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, PyRenew and numpyro for simulation and the renewal models, and scoringrules for scoring, checked against scoringutils.
-- TODO: hardware, run times and how to rerun from a release.
+- We implemented the methods in a set of Python packages in one repository, each documented with examples and tested for correctness [@placeholder].
+- `nowcastrenewal` is our port of the epinowcast model to Python on top of PyRenew, with its simulator, the renewal forecasters and the BVDOutbreakSize inputs [@abbottepinowcast; @pyrenew; @BVDOutbreakSize].
+- `nowcastfoundation` holds the simulation grid, the Chronos-2 forecasters with the attention biases, and fine-tuning with LoRA and checkpoint scoring, built on PyTorch, chronos-forecasting and PEFT [@Ansari2025; @Hu2021].
+- `nowcastbaselines` holds the random walks, our JAX port of baselinenowcast and the copula that pairs places [@Johnson2025].
+- `nowcasteval` scores forecasts by level and over releases with scoringrules, checked against scoringutils, and makes the score figures [@zanetta_scoringrules_2024; @bosse2022scoringutils].
+- `nowcastgermany` and `nowcastbdbv` give each case study's data as forecast tasks.
+- `bdbvhub` and `bdbvsubmission` fit, store and check forecasts, and submit them to the Ebola hub through an automated, gated workflow.
+- A Snakemake workflow runs the evaluation from the raw data to every figure and table, and we release the simulations and fine-tuned checkpoints.
 :::
 
 ## Results
