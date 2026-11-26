@@ -21,11 +21,12 @@ abstract: |
   Forecasts and nowcasts of infectious disease increasingly inform public health response.
   Time series foundation models, neural networks trained on many time series, forecast well but are not designed for the reporting delays common in surveillance data.
   Nowcasting methods correct for these delays, but are either simple, with limited forecasting support, or need expert knowledge to configure for each setting.
-  We fine-tuned Chronos-2, a time series foundation model, on outbreaks simulated from the epinowcast nowcasting model, which we ported from R and Stan to Python on PyRenew.
-  We gave the model the reporting triangle as one series per place and delay, with learned attention biases linking each series to its place and each place to its region.
+  We fine-tuned Chronos-2, a time series foundation model, on simulated outbreaks.
+  To simulate them, we combined the reporting model of epinowcast, a widely used nowcasting package, with PyRenew, a library of components for building renewal models of infectious disease.
+  We gave it the reporting triangle as one series per place and delay, with learned attention biases linking series to places and places to regions.
   We compared it with unmodified Chronos-2 and with a random walk nowcast, which extends the baselinenowcast method to forecast and to work on sparse data.
   We evaluated them on held-out simulations, retrospectively against the German COVID-19 hospitalisation nowcast hub, and prospectively in the Ebola forecasting hub for the Democratic Republic of the Congo.
-  There we also submitted renewal models built on our port.
+  There we also submitted renewal models built on this combination.
   The fine-tuned model [outperformed / matched] unmodified Chronos-2 and the random walk nowcast on held-out simulations, and [outperformed / performed comparably to] the hub models in both case studies.
   The attention biases and lag series [contributed most of / added little to] these gains, and fine-tuning on simulations [outperformed / matched] fine-tuning on real data.
   Fine-tuning on simulated outbreaks gave a foundation model the delay handling of nowcasting methods without specialist configuration.
