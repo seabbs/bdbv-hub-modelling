@@ -23,7 +23,7 @@ def test_the_report_names_the_references_and_saved_checkpoints():
     )
 
 
-def _scoring(tmp_path, labels=None, listing=None):
+def _scoring(tmp_path, labels=None, listing=None, local_extra=None):
     from types import SimpleNamespace
 
     from flowlib import rounds, runs, training
@@ -44,6 +44,7 @@ def _scoring(tmp_path, labels=None, listing=None):
         "MIN_FREE_GB": "1",
         "MIN_DISK_GB": "2",
         "FORECAST_THREADS": "",
+        **(local_extra or {}),
     }
     trained = training.Training(cfg, local, rounds.Rounds(cfg, local, None))
     listed = SimpleNamespace(output=[listing])
@@ -184,3 +185,27 @@ def test_code_keys_ignore_modules_the_jobs_never_import():
         f.endswith("finetune/evaluate.py") for f in scoring.evaluator_code()
     )
     assert codekey.digest(scoring.evaluator_code())
+
+
+def test_a_german_unit_splits_its_dates_over_its_threads():
+    # Each of the rule's threads is a worker process of one thread, so
+    # the scheduler counts the unit's cores as it runs them.
+    got = scoring.unit_shell("germany")
+    assert "SCORE_WORKERS={threads} " in got
+    assert "SCORE_WORKERS" not in scoring.unit_shell("release")
+
+
+def test_german_unit_workers_come_from_the_config_or_machine(tmp_path):
+    s = _scoring(tmp_path, labels=[])
+    assert s.score_workers == s.sc["workers"]
+    s = _scoring(tmp_path, labels=[], local_extra={"SCORE_WORKERS": "3"})
+    assert s.score_workers == 3
+    # Each worker holds what one process held, so the floor is each's.
+    assert s.unit_memory_floor() == 3 * scoring.WORKER_MB
+
+
+def test_the_evaluation_leaves_a_german_unit_its_workers(tmp_path):
+    from flowlib import machine
+
+    s = _scoring(tmp_path, labels=[], local_extra={"SCORE_WORKERS": "3"})
+    assert s.evaluate_threads == machine.scoring_threads(s.local, 3)

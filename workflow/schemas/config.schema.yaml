@@ -189,6 +189,7 @@ properties:
       - evidence
       - checkpoints
       - branch
+      - workers
     properties:
       labels:
         oneOf: [{type: "null"}, {$ref: "#/$defs/labels"}]
@@ -198,6 +199,7 @@ properties:
       evidence: {type: string}
       checkpoints: {type: string}
       branch: {type: string}
+      workers: {type: integer, minimum: 1}
 
   rt_check:
     type: object

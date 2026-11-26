@@ -165,6 +165,7 @@ OPTIONAL = (
     "PRECISION",
     "RUN",
     "SCORE_DATES",
+    "SCORE_WORKERS",
 )
 """Settings read where set, with no default (`RUN` only to refuse it)."""
 
