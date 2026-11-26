@@ -10,10 +10,14 @@
     fit-store-branch push DIR KEYS PLAN
         add DIR's planned fits to the branch, prune it and push
     fit-store-branch push-backtests BUNDLE COMMIT
-        store BUNDLE as backtests/latest.tar.gz, made at COMMIT, and push
+        store BUNDLE in backtests/, made at COMMIT, and push
     fit-store-branch push-site BUNDLE COMMIT KEY
-        store BUNDLE as site/latest.tar.gz, made at COMMIT from inputs
-        with hash KEY, and push
+        store BUNDLE in site/, made at COMMIT from inputs with hash KEY,
+        and push
+
+A bundle is stored in parts, `latest.tar.gz.000`, `.001` and on, each
+below GitHub's file size limit; `cat <folder>/latest.tar.gz* | tar -xz`
+unpacks it.
 
 KEYS is the JSON list of current keys, `<model>/<origin>/<key>`, and
 PLAN the matrix of planned fits, as `fit-store plan --keys --out` write
@@ -53,6 +57,10 @@ BOT = (
 
 ZONES_SUFFIX = ".zones.csv.gz"
 """A fit's zone run beside it (`bdbvhub.store.store.ZONES_SUFFIX`)."""
+
+PART_BYTES = 50_000_000
+"""Most bytes in one part of a stored bundle: under GitHub's 100 MB file
+limit and its 50 MiB warning."""
 
 PUSH_TRIES = 5
 """Times a push is tried, refetching the branch each time."""
@@ -222,10 +230,22 @@ def push(new: Path, keys_file: Path, plan_file: Path) -> int:
     )
 
 
+def _put_bundle(bundle: Path, folder: Path) -> None:
+    """Store BUNDLE in FOLDER as parts of at most PART_BYTES, in order."""
+    folder.mkdir(exist_ok=True)
+    for old in folder.glob("latest.tar.gz*"):
+        old.unlink()
+    with bundle.open("rb") as src:
+        part = 0
+        while chunk := src.read(PART_BYTES):
+            (folder / f"latest.tar.gz.{part:03d}").write_bytes(chunk)
+            part += 1
+
+
 BACKTESTS = "backtests"
 """The branch folder of the stored backtests, which `prune` never
-touches: `latest.tar.gz` (their results and outputs, as Pages unpacks
-them) and `latest.json` (the commit that made them)."""
+touches: `latest.tar.gz.*` (the parts of their results and outputs, as
+Pages unpacks them) and `latest.json` (the commit that made them)."""
 
 
 def push_backtests(bundle: Path, commit: str) -> int:
@@ -234,8 +254,7 @@ def push_backtests(bundle: Path, commit: str) -> int:
 
     def stage(work: Path) -> str:
         folder = work / BACKTESTS
-        folder.mkdir(exist_ok=True)
-        shutil.copyfile(bundle, folder / "latest.tar.gz")
+        _put_bundle(bundle, folder)
         meta = {"commit": commit}
         (folder / "latest.json").write_text(json.dumps(meta) + "\n")
         return f"Store the backtests of {commit}"
@@ -245,9 +264,10 @@ def push_backtests(bundle: Path, commit: str) -> int:
 
 SITE = "site"
 """The branch folder of the site's results (site-results.yml),
-which `prune` never touches: `latest.tar.gz` (the results and docs files
-Pages unpacks) and `latest.json` (the commit that made them and the hash
-of their inputs, so unchanged inputs are not made again)."""
+which `prune` never touches: `latest.tar.gz.*` (the parts of the results
+and docs files Pages unpacks) and `latest.json` (the commit that made
+them and the hash of their inputs, so unchanged inputs are not made
+again)."""
 
 
 def push_site(bundle: Path, commit: str, key: str) -> int:
@@ -256,8 +276,7 @@ def push_site(bundle: Path, commit: str, key: str) -> int:
 
     def stage(work: Path) -> str:
         folder = work / SITE
-        folder.mkdir(exist_ok=True)
-        shutil.copyfile(bundle, folder / "latest.tar.gz")
+        _put_bundle(bundle, folder)
         meta = {"commit": commit, "key": key}
         (folder / "latest.json").write_text(json.dumps(meta) + "\n")
         return f"Store the site results of {commit}"
