@@ -162,9 +162,12 @@ def _commit(stage: Callable[[Path], str]) -> int:
     """Stage files on the branch with STAGE, commit and push them.
 
     STAGE changes a checkout of the branch's tip and returns the commit
-    message. A push that loses a race refetches and stages again.
+    message. A push that loses a race refetches and stages again. One the
+    remote refuses (`[remote rejected]`: a file over GitHub's size limit,
+    a rule) fails at once. A failed push shows git's reason.
     """
     branch = _branch()
+    orphan = f"{branch}-new"
     for attempt in range(1, PUSH_TRIES + 1):
         work = Path(tempfile.mkdtemp(prefix="fit-store."))
         work.rmdir()
@@ -172,7 +175,7 @@ def _commit(stage: Callable[[Path], str]) -> int:
             _git("worktree", "add", "-q", "--detach", str(work), "FETCH_HEAD")
         else:
             _git("worktree", "add", "-q", "--detach", str(work))
-            _git("switch", "-q", "--orphan", f"{branch}-new", cwd=work)
+            _git("switch", "-q", "--orphan", orphan, cwd=work)
         try:
             msg = stage(work)
             _git("add", "-A", cwd=work)
@@ -191,13 +194,19 @@ def _commit(stage: Callable[[Path], str]) -> int:
             pushed = _git(
                 "push", "-q", "origin", f"HEAD:refs/heads/{branch}",
                 cwd=work, check=False,
-            ).returncode == 0  # fmt: skip
+            )  # fmt: skip
         finally:
             _git("worktree", "remove", "--force", str(work), check=False)
-        if pushed:
+            _git("branch", "-q", "-D", orphan, check=False)
+        if pushed.returncode == 0:
             print(msg)
             return 0
-        time.sleep(attempt * 5)
+        reason = pushed.stderr.decode(errors="replace").strip()
+        print(reason, file=sys.stderr)
+        if "[remote rejected]" in reason:
+            break
+        if attempt < PUSH_TRIES:
+            time.sleep(attempt * 5)
     return _error(f"could not push to {branch}")
 
 
