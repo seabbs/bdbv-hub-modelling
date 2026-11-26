@@ -987,6 +987,65 @@ class RandomWalkNowcast(RandomWalk):
         values = self.pair(origin, task, values)
         return origin, {w: values[:, :, i] for i, w in enumerate(labels)}
 
+    def rolling_nowcast(
+        self, task: ForecastTask
+    ) -> tuple[list[str], np.ndarray]:
+        """Return draws of the 7-day sums ending on each day to the cut-off.
+
+        Each sum is the block of 7 days ending on its weekday, with its
+        own observation model (`_block_draws`), as `_rolling` nowcasts a
+        target date to the cut-off.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task. Its `daily_history` holds the release snapshots.
+
+        Returns
+        -------
+        tuple
+            The days, ISO format, and the draws `[S, L, D]`, the places
+            in the order of `task.locations`.
+        """
+        self._start(task)
+        snap = self._snap
+        assert snap is not None
+        cut = snap.days[snap.cut[-1]].date()
+        draws: dict[str, np.ndarray] = {}
+        rows: list[int] = []
+        for end in range(7):
+            origin, got = self._block_draws(task, 7, end)
+            rows = self.rows(origin, task)
+            draws.update(
+                {d: v[:, rows] for d, v in got.items() if as_date(d) <= cut}
+            )
+        days = sorted(draws)
+        return days, np.stack([draws[d] for d in days], axis=-1)
+
+    def weekly_nowcast(
+        self, task: ForecastTask
+    ) -> tuple[list[str], np.ndarray]:
+        """Return the draws of each hub week, as `forecast` makes them.
+
+        The weeks to the cut-off are the nowcast of hub weeks that
+        `forecast` gives a task of hub weeks, unrounded.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task. Its `daily_history` holds the release snapshots.
+
+        Returns
+        -------
+        tuple
+            The hub weeks, ISO format, and the draws `[S, L, W]`, the
+            places in the order of `task.locations`.
+        """
+        origin = self.origin_at(task, errors=True)
+        values, weeks = self.trajectories(origin, task, origin.point)
+        values = self.pair(origin, task, values)
+        return weeks, values[:, self.rows(origin, task)]
+
     def _rolling(self, task: ForecastTask) -> pd.DataFrame:
         """Return draws of the 7-day sums ending on each target date.
 

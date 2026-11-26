@@ -46,7 +46,7 @@ import numpy as np
 import pandas as pd
 
 from nowcastbaselines.baselinenowcast.nowcast import start_weeks
-from nowcastbaselines.randomwalk import RandomWalk
+from nowcastbaselines.randomwalk import HUB_WEEKDAY, RandomWalk
 from nowcastfoundation import series_bias
 from nowcastfoundation.backends import Series
 from nowcastfoundation.backends.chronos2 import (
@@ -65,7 +65,7 @@ from nowcastutils.base import (
     register_model,
 )
 from nowcastutils.dates import as_date, epiweek_end
-from nowcastutils.hierarchy import province_of
+from nowcastutils.hierarchy import parent, province_of
 from nowcastutils.trajectories import (
     choose_coupling,
     couple,
@@ -1476,15 +1476,19 @@ history."""
 
 
 def point_nowcast(
-    tri: HubTriangle, places: Sequence[str], task: ForecastTask
-) -> HubTriangle:
-    """Return `tri` with each place's days to the cut-off nowcast.
+    tri: HubTriangle, places: Sequence[str], task: ForecastTask, stream: str
+) -> tuple[HubTriangle, np.ndarray]:
+    """Return `tri` with each place's days to the cut-off nowcast, and draws.
 
     Each place's daily triangle at the cut-off (`round(3 * D)` days,
     $D$ = `BASELINENOWCAST_DELAY` capped by the history) is filled by
     baselinenowcast's point nowcast, and those days of the place's counts
-    are replaced by it.
+    are replaced by it. The draws, `[S, L, T]`, are the counts with those
+    days replaced by `task.n_samples` of baselinenowcast's nowcast draws,
+    keyed from the task's `stream`.
     """
+    import jax
+
     from nowcastbaselines.baselinenowcast import baselinenowcast
     from nowcastbaselines.baselinenowcast.triangle import daily_triangle
 
@@ -1501,11 +1505,92 @@ def point_nowcast(
         raise ModelUnavailableError(f"{have} days of releases are too few")
     rows = min(3 * delay, at + 1)
     final = tri.final.copy()
+    draws = np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
+    key = jax.random.key(
+        int(task.rng(stream, "baselinenowcast").integers(0, 2**31 - 1))
+    )
     for i, place in enumerate(places):
         cells, mask = daily_triangle(history, place, cutoff, rows, delay)
         point = baselinenowcast(cells, mask, output_type="point")
         final[i, at - rows + 1 : at + 1] = np.asarray(point, np.float64)
-    return replace(tri, final=final)
+        drawn = baselinenowcast(
+            cells,
+            mask,
+            key=jax.random.fold_in(key, i),
+            draws=task.n_samples,
+        )
+        draws[:, i, at - rows + 1 : at + 1] = np.asarray(drawn, np.float64)
+    return replace(tri, final=final), draws
+
+
+def seven_day_nowcast(
+    task: ForecastTask, places: Sequence[str], tri: HubTriangle
+) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """Return `randomwalknowcast`'s 7-day nowcast to the cut-off.
+
+    The 7-day sums ending on each day are its blocks of 7 days ending on
+    each weekday, each with its own observation model
+    (`RandomWalkNowcast.rolling_nowcast`). The targets are its draws, as
+    it gives them: of those sums, or of hub weeks
+    (`RandomWalkNowcast.weekly_nowcast`) where every target is a hub
+    week. The country, where not a task place, is the sum of its
+    provinces by sample. A zone has none (NaN).
+
+    Returns
+    -------
+    tuple
+        The median 7-day sum ending on each day of `tri`, `[L, T]`, NaN
+        where there is none, and each target to the cut-off's draws,
+        `[S, L]`, rounded as `randomwalknowcast`'s.
+    """
+    from nowcastbaselines.randomwalk import RandomWalkNowcast
+
+    walk = RandomWalkNowcast()
+    days, draws = walk.rolling_nowcast(task)
+    ends = pd.to_datetime(list(task.target_end_dates))
+    labels, values = days, draws
+    if (ends.day_of_week == HUB_WEEKDAY).all():
+        labels, values = walk.weekly_nowcast(task)
+    kids = [
+        j for j, loc in enumerate(task.locations) if parent(loc) == NATIONAL
+    ]
+
+    def own(x: np.ndarray) -> np.ndarray:
+        out = np.full((x.shape[0], len(places), x.shape[2]), np.nan)
+        for j, loc in enumerate(task.locations):
+            out[:, list(places).index(loc)] = x[:, j]
+        if NATIONAL in places and NATIONAL not in task.locations and kids:
+            out[:, list(places).index(NATIONAL)] = x[:, kids].sum(axis=1)
+        return out
+
+    context = np.full(tri.final.shape, np.nan)
+    median = np.median(own(draws), axis=0)
+    for k, day in enumerate(days):
+        if day in tri.times:
+            context[:, tri.times.index(day)] = median[:, k]
+    targets = own(np.maximum(np.round(values), 0.0))
+    cutoff = str(task.cutoff)[:10]
+    return context, {
+        w: targets[:, :, i] for i, w in enumerate(labels) if w <= cutoff
+    }
+
+
+def _with_context(
+    period: PeriodRows | None,
+    seven: tuple[np.ndarray, dict[str, np.ndarray]] | None,
+    places: Sequence[str],
+    view: Sequence[str],
+) -> PeriodRows | None:
+    """Return `period` of `view`'s places with the 7-day nowcast's medians.
+
+    Each 7-day sum the nowcast has (`seven_day_nowcast`) replaces the
+    reported one.
+    """
+    if period is None or seven is None:
+        return period
+    context = seven[0][[list(places).index(p) for p in view]]
+    have = ~np.isnan(context) & period.ends
+    return replace(period, totals=np.where(have, context, period.totals))
 
 
 def _walk_start(task: ForecastTask) -> str:
@@ -1554,12 +1639,13 @@ def _daily_frame(
     start: int,
     places: Sequence[str],
     weeks: Sequence[str],
+    base: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """Return each day of the target weeks from the daily count rows.
 
     A day past the context takes its count row's draw; an earlier day the
-    count reported. `drawn` is
-    `[S, V, horizon]`, the count rows first.
+    count reported, or its draw in `base` (`[S, L, T]`) when given.
+    `drawn` is `[S, V, horizon]`, the count rows first.
     """
     first = as_date(weeks[0]) - dt.timedelta(days=6)
     days = [t for t in tri.times if first <= as_date(t) <= as_date(weeks[-1])]
@@ -1567,7 +1653,11 @@ def _daily_frame(
     cols = []
     for day in days:
         t = tri.times.index(day)
-        final = np.broadcast_to(tri.final[:, t], (n, n_loc))
+        final = (
+            np.broadcast_to(tri.final[:, t], (n, n_loc))
+            if base is None
+            else base[:, :, t]
+        )
         cols.append(drawn[:, :n_loc, t - start] if t >= start else final)
     values = np.stack(cols, axis=2)  # [S, L, D]
     return pd.DataFrame(
@@ -1632,9 +1722,13 @@ class FoundationModel:
         The baselinenowcast model (a sensitivity analysis): each place's
         daily counts to the cut-off are first replaced by baselinenowcast's
         point nowcast (`point_nowcast`), and Chronos-2 forecasts from the
-        day after the cut-off on those corrected counts. The nowcast days
-        are the point nowcast, with no uncertainty. Complete layout, daily
-        source only.
+        day after the cut-off on those corrected counts. Each sample's
+        nowcast days are a baselinenowcast draw. The 7-day sums to the
+        cut-off are `randomwalknowcast`'s 7-day nowcast
+        (`seven_day_nowcast`): its draws are the targets to the cut-off,
+        and their median is Chronos-2's context of the 7-day sums, which
+        it forecasts after the cut-off. Complete layout, daily source
+        only.
     block_limit : int or None
         Most series in one block Chronos-2 predicts, the machine's block
         capacity; a task's block over it is cut into views
@@ -1778,10 +1872,16 @@ class FoundationModel:
         rows, places, weeks = self._rows(task)
         tri = self._triangle(rows, places, weeks[-1])
         start = tri.n_context
+        nowcast = None
+        seven = None
         if self.baselinenowcast:
             # Chronos-2 forecasts from the day after the cut-off, on the
-            # counts baselinenowcast's point nowcast corrects.
-            tri = point_nowcast(tri, places, task)
+            # counts baselinenowcast's point nowcast corrects; the samples'
+            # nowcast days are its draws.
+            tri, nowcast = point_nowcast(
+                tri, places, task, self.stream or self.name
+            )
+            seven = seven_day_nowcast(task, places, tri)
             start = tri.times.index(str(task.cutoff)[:10]) + 1
         elif self.layout == "complete":
             walk = _walk_start(task)
@@ -1799,7 +1899,7 @@ class FoundationModel:
             )
         horizon = len(tri.times) - start
         seed = int(task.rng(self.stream or self.name).integers(0, 2**31 - 1))
-        period = self._period(tri)
+        period = _with_context(self._period(tri), seven, places, places)
         if horizon <= 0:
             # Every step of the target weeks is complete at the latest
             # release (the target ends at least the lag count before the
@@ -1817,7 +1917,12 @@ class FoundationModel:
                     self.layout,
                     view,
                     start,
-                    self._period(_sub(tri, places, view)),
+                    _with_context(
+                        self._period(_sub(tri, places, view)),
+                        seven,
+                        places,
+                        view,
+                    ),
                 )
                 for view, _ in views
             ]
@@ -1864,11 +1969,20 @@ class FoundationModel:
             drawn = np.maximum(draws, 0.0)
         if period is not None:
             values = _weekly_from_totals(drawn, period, tri, start, weeks)
+            if seven is not None:
+                # A target to the cut-off is the 7-day nowcast's draw.
+                for w, week in enumerate(weeks):
+                    got = seven[1].get(week)
+                    if got is not None:
+                        have = ~np.isnan(got[0])
+                        values[:, have, w] = got[:, have]
         else:
             final = tri.final
-            steps = np.broadcast_to(
-                final, (task.n_samples, *final.shape)
-            ).copy()
+            steps = (
+                np.broadcast_to(final, (task.n_samples, *final.shape)).copy()
+                if nowcast is None
+                else nowcast.copy()
+            )
             steps[:, :, start:] = drawn[:, : len(places)]
             week_of = np.array(
                 [_step("weekly", t).isoformat() for t in tri.times]
@@ -1890,7 +2004,9 @@ class FoundationModel:
         )[list(SAMPLE_COLUMNS)]
         if self.source != "daily":
             return weekly_out, pd.DataFrame(columns=list(DAILY_COLUMNS))
-        return weekly_out, _daily_frame(drawn, tri, start, places, weeks)
+        return weekly_out, _daily_frame(
+            drawn, tri, start, places, weeks, nowcast
+        )
 
     def _rows(
         self, task: ForecastTask
