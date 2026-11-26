@@ -79,9 +79,7 @@ def test_training_now_says_only_the_stage_when_the_chunk_is_unknown(tmp_path):
     assert page.training_now(tmp_path, {}, None) == ""
 
 
-RESUME = (
-    "2026-11-24 {t} [train] resumed at step {s}, outbreaks {a}-, batch {b}"
-)
+RESUME = "2026-11-24 {t} [train] resumed at step {s}, outbreaks {a}-, batch {b}"
 SAVED = "2026-11-24 {t} [train] checkpoint {n}: hash abc, CUDA 0.5 GB"
 
 

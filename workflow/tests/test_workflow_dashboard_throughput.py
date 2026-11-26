@@ -123,6 +123,4 @@ def test_a_chunk_resumed_part_way_counts_only_the_steps_it_timed(tmp_path):
     assert got[0]["before"] == 918
     tput = logs.throughput(got)
     assert tput["steps_per_min"] == pytest.approx(878 / 945 * 60)
-    assert tput["sims_per_hour"] == pytest.approx(
-        100 * 878 / 1796 / 945 * 3600
-    )
+    assert tput["sims_per_hour"] == pytest.approx(100 * 878 / 1796 / 945 * 3600)
