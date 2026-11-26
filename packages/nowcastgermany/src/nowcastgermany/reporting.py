@@ -83,11 +83,7 @@ NOT_RUN = (
     "the German benchmark (`task nowcastgermany:benchmark`), which the "
     "site does not run, and none are stored for it yet.\n"
 )
-"""What a page says when the site results hold no German scores of ours.
-`check_site` passes a built page without its data only if it says so."""
-
-_NOT_YET: Final = NOT_RUN.split(":")[0]
-"""The words a built page without our German results shows."""
+"""What a page says when the site results hold no German scores of ours."""
 
 _PAGES: Final = (
     "germany-nowcasts.md",
@@ -505,8 +501,9 @@ def check_site(argv: Sequence[str] | None = None) -> int:
     and its summary and explorer JSON (`held_out_leaks`) and returns 1,
     listing them, if any names a date on or after the split date (or
     after it, in the page's prose), or if one is not built. The summary
-    and explorer JSON may be missing only if the page says our results
-    are not yet available (`NOT_RUN`).
+    and explorer JSON may be missing only if the site results hold no
+    German scores of ours (`--results`), when the page says they are not
+    yet available (`germany_page`).
     """
     import argparse
 
@@ -517,6 +514,12 @@ def check_site(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=Path("packages/nowcastgermany/config/germany.toml"),
     )
+    parser.add_argument(
+        "--results",
+        type=Path,
+        default=Path("results/germany"),
+        help="the site results' German folder (`germany_page`'s results)",
+    )
     args = parser.parse_args(argv)
     split = load_germany_config(args.config).split_date
     files = [
@@ -525,11 +528,11 @@ def check_site(argv: Sequence[str] | None = None) -> int:
         args.site / "figures" / "explorer-germany.json",
     ]
     missing = [str(f) for f in files if not f.exists()]
-    page = files[0]
-    if missing and page.exists() and _NOT_YET in page.read_text():
+    ours = args.results / "scores.csv.gz"
+    if missing and files[0].exists() and not ours.exists():
         print(
-            "::warning::our German results are not yet available; the "
-            f"page says so and has no {', '.join(missing)}"
+            f"::warning::our German results are not yet available ({ours}); "
+            f"the page says so and has no {', '.join(missing)}"
         )
         files = [f for f in files if f.exists()]
     elif missing:
