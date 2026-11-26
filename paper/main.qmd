@@ -134,12 +134,17 @@ Teams without the capacity to set up specialist models could also use them direc
 ### Foundation model
 
 ::: {.callout-note title="Plan"}
-- Time series foundation models forecast new series with no training on them, which we call zero-shot.
-- We used Chronos-2 because it forecasts a group of related series together and takes inputs whose future values are already known, both of which we need (Model inputs) [@Ansari2025].
-- Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.
-- It gives quantiles for each future step in one pass, and we draw samples from these quantiles (Figure 1D).
-- We run it with PyTorch and chronos-forecasting.
-- Key references: [@Ansari2025; @Ansari2024].
+- Time series foundation models forecast new series with no training on them [@Ansari2024; @Das2024a; @Woo2024].
+- Chronos-2 is an encoder-only transformer, based on the T5 encoder, with 120 million parameters [@Ansari2025; @Raffel2020; @Vaswani2017].
+- It scales each series by the mean and standard deviation of its history, applies the inverse hyperbolic sine, and splits the series into patches of consecutive steps [@Ansari2025].
+- Its attention layers update what the model has learned about each patch as a weighted mix of other patches, with more weight on those it finds relevant [@Vaswani2017].
+- Time attention mixes patches along one series, and group attention mixes the series of a group at the same time [@Ansari2025].
+- A group can be a set of related series, together with inputs whose future values are already known, which enter with those future values visible [@Ansari2025].
+- It gives 21 quantiles, from 1% to 99%, for several future steps in one pass, and we draw samples from these quantiles (Figure 1D).
+- It was pretrained in two stages, on real series from the Chronos and GIFT-Eval corpora and on synthetic series, and learned to forecast related series and known inputs from synthetic data alone, from generators that impose dependencies between series [@Ansari2025; @Ansari2024].
+- We used Chronos-2 because it forecasts related series together and takes known future inputs, both of which we need (Model inputs).
+- We run it with PyTorch and chronos-forecasting [@chronos_forecasting].
+- Key references: [@Ansari2025; @Ansari2024; @Vaswani2017].
 :::
 
 ### Model inputs
@@ -150,7 +155,7 @@ Teams without the capacity to set up specialist models could also use them direc
 - Counts reported after that date are inputs whose future values are already known.
 - Places nest, such as health zones within provinces within a country, and Chronos-2 forecasts every place as a separate series in one joint block.
 - Without more information, the model has no marker of which delay series belong to which place's count.
-- We add learned attention biases that nudge the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Supporting Information, *Attention biases*).
+- We add learned attention biases that nudge the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
 - At forecast time the number of delay series per place, $D$, is set from the data by default (Supporting Information, *Lag count*).
 - Each reference date first published after releases began settles at the first delay at which its reported count reaches 98% of its latest count.
 - $D$ is one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
@@ -162,21 +167,16 @@ Teams without the capacity to set up specialist models could also use them direc
 ### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- **What the grid simulates.**
-  - We simulate with our port of the epinowcast model to Python on top of PyRenew and numpyro [@abbottepinowcast; @pyrenew; @Phan2019].
-  - We call the settings each simulation draws from, such as reproduction numbers, reporting delays and reporting patterns, with their sampling distributions, the simulation grid.
-  - We simulate outbreaks in five layers (Supporting Information, *Synthetic data generation*).
-  - In layer 1 we simulate infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
-  - In layer 2 we observe infections as reference events after a delay such as incubation, ascertain a share of them and add NB1 or Poisson noise.
-  - In layer 3 we report them after a reporting delay that is static or changes over time, as epinowcast's observation model does.
-  - In layer 4 we add the reporting system: report days and weekday effects, half with structured patterns such as a weekend dip, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
-  - In layer 5 we set the strata and aggregation: places and age groups and how they nest, how places interact, how settings vary across strata, and aggregates that are exact sums of their strata or do not add up.
-  - Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.
-  - The workflow simulates outbreaks from the grid's config and writes every summary and figure, so a change to the grid regenerates them.
-- **What the summaries show.**
-  - We compare the grid's summary statistics with the German development half and with published ranges for other diseases.
-  - Figure (planned): "The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. (G) Coverage: for R and effective R, the generation time mean, the infection-to-reference delay mean, the mean reporting delay and the growth rate, the grid's median and 5 to 95% range beside published ranges for influenza, COVID-19, Ebola, mpox, cholera, measles and dengue and the German development half's values. Panels B to F compare the simulations with the German development half and published ranges for other diseases where values exist."
-  - We take the published ranges from their sources (Supporting Information, *Synthetic data generation*).
+- We simulate with our port of the epinowcast model to Python on top of PyRenew and numpyro [@abbottepinowcast; @pyrenew; @Phan2019].
+- We call the settings each simulation draws from, such as reproduction numbers, reporting delays and reporting patterns, with their sampling distributions, the simulation grid.
+- We simulate outbreaks in five layers (Figure 1A; Supporting Information, *Synthetic data generation*).
+- In layer 1 we simulate infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
+- In layer 2 we observe infections as reference events after a delay such as incubation, ascertain a share of them and add NB1 or Poisson noise.
+- In layer 3 we report them after a reporting delay that is static or changes over time, as epinowcast's observation model does.
+- In layer 4 we add the reporting system: report days and weekday effects, half with structured patterns such as a weekend dip, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
+- In layer 5 we set the strata and aggregation: places and age groups and how they nest, how places interact, how settings vary across strata, and aggregates that are exact sums of their strata or do not add up.
+- Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.
+- The workflow simulates outbreaks from the grid's config and writes every summary and figure, so a change to the grid regenerates them.
 - Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
 :::
 
@@ -184,7 +184,7 @@ Teams without the capacity to set up specialist models could also use them direc
 
 ::: {.callout-note title="Plan"}
 - We fine-tune base Chronos-2 on synthetic data on one machine, with its default LoRA recipe, using PEFT.
-- LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (Supporting Information, *LoRA*).
+- LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (Figure 1C; Supporting Information, *LoRA*).
 - We train on {{< meta results.training.simulations >}} simulations drawn from the grid, each drawing its settings independently.
 - The loss is Chronos-2's quantile loss over the nowcast steps and one week ahead, so fine-tuning does not change its longer-range forecasting (Supporting Information, *Loss*).
 - The learning rate falls linearly to zero over these simulations.
@@ -373,6 +373,9 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 - Each version changed the settings the simulations draw from, such as the range of reproduction numbers, reporting delays and reporting patterns, or the fine-tuning settings, such as how training blocks are cut from each simulation, the learning rate and the number of simulations.
 - Each version was simulated afresh, so no simulation was reused between versions.
 - For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, using our simulation and fine-tuning dashboards (Methods, Implementation; Supporting Information, *Checkpoint curve*).
+- We compared the summary statistics of each version's simulations with the German development half and with published ranges for other diseases.
+- Figure (planned): "The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. (G) Coverage: for R and effective R, the generation time mean, the infection-to-reference delay mean, the mean reporting delay and the growth rate, the grid's median and 5 to 95% range beside published ranges for influenza, COVID-19, Ebola, mpox, cholera, measles and dengue and the German development half's values. Panels B to F compare the simulations with the German development half and published ranges for other diseases where values exist."
+- We take the published ranges from their sources (Supporting Information, *Synthetic data generation*).
 - Over these versions we made the simulations closer to real reporting, adding:
   - report days, weekday effects, backlogs, outages and revisions to past counts;
   - release schedules, from daily to weekly releases;
