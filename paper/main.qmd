@@ -115,14 +115,14 @@ Teams without the capacity to set up specialist models could also use them direc
   - epinowcast is written in R and Stan [@RCoreTeam; @Carpenter2017], while Chronos-2 is written in Python.
     We ported the epinowcast model to Python on top of PyRenew, reusing its components and adding components where it had none, such as delays that change over time.
   - We validated the port by submitting renewal models built on it to the Ebola forecasting hub in real time [@bdbv_modeling_hub_2026].
-    One of these used the posterior reproduction number estimates of BVDOutbreakSize, our model of the outbreak's size, to inform its own [@BVDOutbreakSize] (SI, Renewal model).
+    One of these used the posterior reproduction number estimates of BVDOutbreakSize, our model of the outbreak's size, to inform its own [@BVDOutbreakSize] (Supporting Information, *Renewal model*).
   - We gave the model the reporting triangle as one series per place and reporting delay.
     We added learned attention biases so it can tell which delay series belong to which place, and which places sit within which regions.
   - We developed the settings for the simulated data based on our past experience of infectious disease modelling including in the COVID-19 pandmeic [@Wolffram2023], the 2023 Mpox outbreak [@Overton2023-dk], and based on the early data available for the 2025 Ebola outbreak in the Democratic Republic of the Congo [@bdbv_modeling_hub_2026].
-  - We adapted a recently developed baseline nowcasting method, baselinenowcast, to also produce forecasts as a baseline for comparison, and to work on sparse data [@Johnson2025] (SI, Baselines).
+  - We adapted a recently developed baseline nowcasting method, baselinenowcast, to also produce forecasts as a baseline for comparison, and to work on sparse data [@Johnson2025] (Supporting Information, *Baselines*).
     We also submitted it to the Ebola forecasting hub in real time.
   - We first evaluated these models on held-out simulations.
-  - To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
+  - To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 hospitalisation nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
   - We explored a range of senesitivity analyses to assess the impact of different design choices on model performance.
   - These included: assessing the impact of using a baseline nowcast as input to the foundation model, fine-tuning on real data, removing the attention biases and lag series, and comparing different lag count rules and block structures.
   - We aim to demonstrate the potential of foundation time series models fine-tuned on domain-specific synthetic data to improve infectious disease nowcasting and forecasting, and to provide a case study for incorporating domain knowledge into foundation models more generally.
@@ -131,65 +131,81 @@ Teams without the capacity to set up specialist models could also use them direc
 
 ## Methods
 
-### Data
+### Foundation model
 
 ::: {.callout-note title="Plan"}
-- We used the German COVID-19 nowcast hub's reporting triangle, nationally, by state and by age group.
-- We used the Ebola forecasting hub's weekly confirmed cases by symptom onset, with every release, by country, province and health zone.
-- We exclude a first release that reports cumulative counts rather than new reports, as BDBV's 18 August release does, because it does not reflect reporting.
-- Key references: [@Wolffram2023; @hospitalization_nowcast_hub_2025; @bdbv_modeling_hub_2026; @MacNeil2010].
+- Time series foundation models forecast new series with no training on them [@Ansari2024; @Das2024a; @Woo2024].
+- Chronos-2 is an encoder-only transformer, based on the T5 encoder, with 120 million parameters [@Ansari2025; @Raffel2020; @Vaswani2017].
+- It scales each series by the mean and standard deviation of its history, applies the inverse hyperbolic sine, and splits the series into patches of consecutive steps [@Ansari2025].
+- Its attention layers update what the model has learned about each patch as a weighted mix of other patches, with more weight on those it finds relevant [@Vaswani2017].
+- Time attention mixes patches along one series, and group attention mixes the series of a group at the same time [@Ansari2025].
+- A group can be a set of related series, together with inputs whose future values are already known, which enter with those future values visible [@Ansari2025].
+- It gives 21 quantiles, from 1% to 99%, for several future steps in one pass, and we drew samples from these quantiles (Figure 1D).
+- It was pretrained in two stages, on real series from the Chronos and GIFT-Eval corpora and on synthetic series, and learned to forecast related series and known inputs from synthetic data alone, from generators that impose dependencies between series [@Ansari2025; @Ansari2024].
+- We used Chronos-2 because it forecasts related series together and takes known future inputs, both of which we need (Model inputs).
+- We ran it with PyTorch and chronos-forecasting [@chronos_forecasting].
+- Key references: [@Ansari2025; @Ansari2024; @Vaswani2017].
 :::
 
-### Baselines
+### Model inputs
 
 ::: {.callout-note title="Plan"}
-- We compare with `randomwalk`, a random walk with no delay adjustment, and `randomwalknowcast`, a random walk nowcast.
-- The SI describes both in full.
-- Key references: [@Johnson2025].
+- Surveillance data for nowcasting are a reporting triangle, counts by reference date, such as the date of symptom onset, and by reporting delay, in which recent dates have only their shortest delays reported so far [@hohle; @Wolffram2023].
+- We gave Chronos-2 one count series per place, complete up to the last date whose counts have settled, and one lag series per place and reporting delay, each missing until reported (Figure 1B).
+- Counts reported after that date are inputs whose future values are already known.
+- Places nest, such as health zones within provinces within a country.
+- Chronos-2 forecasts every place and its lag series together, in one group we call a block.
+- Without more information, the model cannot tell which lag series belong to which place's count.
+- We added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
+- At forecast time we set the number of lag series per place, $D$, from the data (Supporting Information, *Lag count*).
+- Each reference date first published after releases began settles at the first reporting delay at which its reported count reaches 98% of its latest count.
+- $D$ is one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
+- With no such date, $D$ is the release history.
+- A study can fix $D$ instead.
+- Key references: [@Woo2024; @Yang2022].
 :::
 
-### Foundation model setup and fine-tuning
+### Synthetic data generation
 
 ::: {.callout-note title="Plan"}
-- We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).
-- Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.
-- Without more information, the model has no marker of which delay series belong to which place's count.
-- We add learned attention biases that nudge these weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (SI).
-- A third each of the training blocks with places have a country equal to, above or later than the sum of its places.
-- We fine-tune base Chronos-2 on synthetic data on one machine, with its default LoRA recipe.
-- LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (SI).
-- Zero-shot Chronos-2 on the reporting triangle gets the same input as the fine-tuned model for each task, the same lag series, lag count, aggregate rows and layout, so only the weights differ.
-- We train on {{< meta results.training.simulations >}} simulations drawn from the grid, each drawing its settings independently.
+- We simulated surveillance data with our port of the epinowcast model to Python on top of PyRenew and numpyro [@abbottepinowcast; @pyrenew; @Phan2019].
+- The simulation grid is the set of settings each simulation draws from, such as reproduction numbers, reporting delays and reporting patterns, with their sampling distributions.
+- We simulated the data in five layers (Figure 1A; Supporting Information, *Synthetic data generation*).
+- In layer 1 we simulated infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
+- In layer 2 infections became reference events, such as symptom onsets, after a delay such as incubation, and we kept a share of them with negative binomial or Poisson noise.
+- In layer 3 these events were reported after a reporting delay that is fixed or changes over time, as in epinowcast's observation model.
+- In layer 4 we added the reporting system, with report days and weekday effects, half with patterns such as a weekend dip, backlogs, outages, revisions that can take a release above the final count, and how often data are released.
+- In layer 5 we set the places and age groups, how they nest and interact, how settings vary between them, and whether totals are exact sums of their parts.
+- Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.
+- The workflow simulates from the grid's configuration and writes every summary and figure, so a change to the grid regenerates them.
+- Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
+:::
+
+### Fine-tuning
+
+::: {.callout-note title="Plan"}
+- We fine-tuned Chronos-2 on the simulated data on one machine, with its default LoRA recipe, using PEFT.
+- LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (Figure 1C; Supporting Information, *LoRA*).
+- We trained on {{< meta results.training.simulations >}} simulations, each drawing its settings from the grid independently.
+- The loss is Chronos-2's quantile loss over the nowcast steps and one week ahead, so fine-tuning does not change its longer-range forecasting (Supporting Information, *Loss*).
 - The learning rate falls linearly to zero over these simulations.
-- Each simulation gives up to 14 training blocks.
+- We cut up to 14 training blocks from each simulation.
 - A block is daily, 3-day or weekly.
-- A daily block can also have one extra row per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
-- In 30% of blocks the releases start late, so the first release fills in earlier onsets, as the Ebola hub's first release did.
+- A daily block can also have one extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
+- In 30% of blocks releases start late, so the first release fills in earlier reference dates, as the Ebola hub's first release did.
 - 5% of blocks have no lag series, as when only the latest data are at hand.
-- Most blocks are multivariate, and one in five blocks from outbreaks with more than one stratum is univariate.
-- We save checkpoints at {{< meta results.training.checkpoints >}} simulations.
-- At each checkpoint we check that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (SI).
-- We report the final checkpoint, where the learning rate reaches zero, and select no checkpoint on real data.
-- Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.
-- A system too large for one block is cut into views, in training and at forecast time alike.
-- Blocks are limited to what fits in the memory of our available GPUs, and we made several approximations to fit within this (SI, Fitting in GPU memory).
-- Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces (SI).
-- For the Ebola case study, the fine-tuned model makes two forecasts at each nowcast date.
-- One is a joint block of the country, all provinces and the active health zones.
-- A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.
-- The other is one block per province, of the province and all its zones, cut into views as in training when over the block limit.
-- The country, provinces and active zones take their forecast from the joint block, and every other zone from its province's block (SI).
-- At forecast time the number of lag rows, $D$, is set from the data by default, for the zero-shot and fine-tuned models alike (SI).
-- Each onset day first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
-- $D$ is one more than the 98th percentile of these settling lags, using only days seen for at least $1.5D$ lags.
-- With no such day, $D$ is the release history.
-- A study can set a fixed $D$ instead.
-- Training blocks use the same rule for $D$ in 90% of blocks and $D$ scaled by a factor drawn from Normal(1, 0.05) in the other 10%, so the model is robust to $D$ set slightly differently.
-- We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.
-- We plot each checkpoint's scores, with both as reference lines (SI).
-- Figure 1 shows the simulation, the ragged series, training and forecasting.
-- TODO: replace the SI's dashboard screenshot with a static render of the finished run from the workflow.
-- Key references: [@Ansari2025; @Ansari2024; @Hu2021; @Das2024b].
+- Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series.
+- In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later.
+- Training blocks set $D$ by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle $D$ set slightly differently.
+- We saved checkpoints at {{< meta results.training.checkpoints >}} simulations.
+- At each checkpoint we checked that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*).
+- We report the final checkpoint, where the learning rate reaches zero, and selected no checkpoint on real data.
+- Blocks were limited to what fits in the memory of our available GPUs, and we made several approximations to fit within this (Supporting Information, *Fitting in GPU memory*).
+- We cut a set of places too large for one block into views, in training and at forecast time alike.
+- Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces (Supporting Information, *Fitting in GPU memory*).
+- Figure 1 shows the simulation, the model inputs, fine-tuning and forecasting.
+- TODO: replace the Supporting Information's dashboard screenshot with a static render of the finished run from the workflow.
+- Key references: [@Ansari2025; @Hu2021; @Das2024b].
 :::
 
 ![The fine-tuning pipeline.
@@ -201,112 +217,131 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 (C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final simulated counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained.
 (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u.](figures/fig1-pipeline.svg){#fig-pipeline}
 
-### Synthetic data generation
+### Baselines
 
 ::: {.callout-note title="Plan"}
-- **What the grid simulates.**
-  - We simulate outbreaks in five layers, each described with its figure and sampling distributions in the SI.
-  - In layer 1 we simulate infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
-  - In layer 2 we observe infections as reference events after a delay such as incubation, ascertain a share of them and add NB1 or Poisson noise.
-  - In layer 3 we report them after a reporting delay that is static or changes over time, as epinowcast's observation model does.
-  - In layer 4 we add the reporting system: report days and weekday effects, half with structured patterns such as a weekend dip, backlogs, outages, revisions, so a release can exceed the final count, and the release cadence.
-  - In layer 5 we set the strata and aggregation: places and age groups and how they nest, how places interact, how settings vary across strata, and aggregates that are exact sums of their strata or do not add up.
-  - Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.
-  - The workflow simulates outbreaks from the grid's config and writes every summary and figure, so a change to the grid regenerates them.
-- **What the summaries show.**
-  - We compare the grid's summary statistics with the German development half and with published ranges for other diseases.
-  - Figure (planned): "The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. (G) Coverage: for R and effective R, the generation time mean, the infection-to-reference delay mean, the mean reporting delay and the growth rate, the grid's median and 5 to 95% range beside published ranges for influenza, COVID-19, Ebola, mpox, cholera, measles and dengue and the German development half's values. Panels B to F compare the simulations with the German development half and published ranges for other diseases where values exist."
-  - We give the published ranges with their sources in a table in the SI.
-- Key references: [@abbottepinowcast; @lison2024; @Park2024; @Ansari2024; @Dooley2023; @Muller2022; @Hollmann2025].
+- **Foundation model baselines.**
+  - We compared the fine-tuned model with zero-shot Chronos-2 in two ways.
+  - Zero-shot Chronos-2 on the reporting triangle gets the same inputs as the fine-tuned model, so only the weights differ.
+  - Zero-shot Chronos-2 on complete data gets each place's latest counts as if complete, with no lag series, as foundation models are mostly used in forecast hubs [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
+  - We plotted each checkpoint's scores against both (Supporting Information, *Checkpoint curve*).
+- **Random walk nowcast.**
+  - The random walk nowcast nowcasts recent weeks with our port of baselinenowcast, which we extended to releases more than a day apart, and forecasts each nowcast draw with a random walk on the log scale [@Johnson2025] (Supporting Information, *Baselines*).
+  - The random walk is the same walk from the latest complete week, with no nowcast.
+  - Scores in each study are relative to the random walk nowcast unless the study has its own baseline.
+- **Renewal models.**
+  - We fitted renewal models built on our port of epinowcast to the Ebola hub data, and submitted them in real time [@pyrenew; @bdbv_modeling_hub_2026] (Supporting Information, *Renewal model*).
+  - The main renewal model fits the health zones with recent cases together, pooled within provinces and linked by importation.
+  - One variant also uses the reproduction number estimates of BVDOutbreakSize, down-weighted [@BVDOutbreakSize], and another fits each zone on its own.
+  - They fit the hub's known and imputed onset dates separately, as the hub imputes missing onset dates [@lison2024].
+- Key references: [@Johnson2025; @abbottepinowcast; @pyrenew].
 :::
-
-### Correlated trajectories
-
-- We pair the province draws of `randomwalk` and `randomwalknowcast` within each week with a rolling Gaussian copula, so their national forecast, the per-sample sum of the provinces, is not too narrow, while each cell keeps its own draws (SI).
-- The hub does not require coherence across levels, so this is our choice for the walks.
-  Chronos-2 submits its joint block's own national forecast.
-
-We score the national sum and the provinces by the CRPS and 90% coverage.
-We also report the energy score [@Gneiting2008], which is proper for joint forecasts [@gneitingStrictlyProperScoring2007] and has been used for epidemic trajectories from forecast hubs [@Bay2026], but discriminates poorly between dependence structures [@Pinson2013].
 
 ### Evaluation on held-out synthetic data
 
 ::: {.callout-note title="Plan"}
-- We held out a test set of simulations from development, and monitored training on a separate validation set (SI).
-- The fine-tune never trained on the held-out set's seeds (SI).
-- We set each tuned choice on development data, apart from every scored set (SI).
-- We score each model's quantiles with WIS and log-scale WIS, bias, and 50% and 90% coverage (95% for Germany, whose hub quantiles have no 5% or 95% level), relative to `randomwalknowcast`, and split WIS into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021].
-- In the SI we also score samples with the fair CRPS and the fair energy score, which correct for the number of samples, so forecasts with different numbers of samples, ours and the hub teams', compare fairly [@Ferro2014; @Zamo2018; @zanetta_scoringrules_2024].
-- We score against the data as reported $T$ days later, with $T$ each outbreak's 98% reporting delay.
+- We held out a test set of simulations from development, and monitored training on a separate validation set (Supporting Information, *Grid settings and checks*).
+- Fine-tuning never used the test set (Supporting Information, *Grid settings and checks*).
+- We set each tuned choice on development data, apart from every scored set (Supporting Information, *Choices tuned on development data*).
+- We scored quantiles with the weighted interval score (WIS) on the natural and log scales, split into dispersion, overprediction and underprediction, with bias and 50% and 90% coverage [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx].
+- We also scored samples with the fair CRPS and the fair energy score, so forecasts with different numbers of samples compare fairly [@Ferro2014; @Zamo2018; @zanetta_scoringrules_2024] (Supporting Information, *Scoring*).
+- We scored with scoringrules, checked against scoringutils [@zanetta_scoringrules_2024; @bosse2022scoringutils].
+- We scored against the data as reported $T$ days later, with $T$ each simulation's 98% reporting delay.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
 :::
 
 ### Case study 1: German nowcast hub
 
 ::: {.callout-note title="Plan"}
-- We compare with the hub's models, relative to the hub's baseline, and evaluate as the hub did.
-- We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, against the data as reported 40 days later [@Wolffram2023].
-- Our models see only reports made within 40 days of each reference date, so they forecast the count the truth holds.
-- We score the hub's target, 7-day sums, ending on each day from the nowcast date to 28 days before it.
-- We score only the hub's targets, and the SI adds our models' forecasts up to 4 weeks after the nowcast date.
+- We used the German COVID-19 hospitalisation nowcast hub's reporting triangle, nationally, by state and by age group.
+- We compared with the hub's models, relative to the hub's baseline, and evaluated as the hub did.
+- We scored as for held-out simulations, against the data as reported 40 days later, with 95% rather than 90% coverage as the hub's quantiles have no 5% or 95% level [@Wolffram2023].
+- Our models saw only reports made within 40 days of each reference date, so they forecast the count the truth holds.
+- The hub's target is 7-day sums ending on each day from the nowcast date to 28 days before it.
+- We scored the hub's targets, and also our models' forecasts up to 4 weeks after the nowcast date (Supporting Information, *German nowcast hub*).
 - Each nowcast date is forecast once, so every 7-day sum comes from one forecast.
-- Chronos-2 reads each day's 7-day sum from its own rolling-sum series, or sums its daily draws when it sees complete counts.
+- Each place also has a 7-day rolling-sum series, which Chronos-2 forecasts directly, so we read each 7-day sum from it rather than summing daily draws.
 - The random walks forecast weeks ending on Saturdays, so they give only the 7-day sums that end on a Saturday.
-- We score each model on its own quantiles at the hub's seven levels.
-- As @Wolffram2023 did, we replace one team's erroneous values by its nowcast of the day before, and fill another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
-- Chronos-2 gives quantiles directly, which we interpolate linearly to the hub's levels, with no sampling.
-- We score the random walks, which give samples, on the quantiles of 1,000 draws with common random numbers.
+- We scored each model on its own quantiles at the hub's seven levels.
+- As @Wolffram2023 did, we replaced one team's erroneous values by its nowcast of the day before, and filled another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
+- Chronos-2 gives quantiles directly, which we interpolated linearly to the hub's levels, with no sampling.
+- We scored the random walks, which give samples, on the quantiles of 1,000 draws with common random numbers.
 - One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
-- For both case studies, we also score our models' daily counts directly from the daily rows, against `randomwalknowcast` (SI).
+- For both case studies, we also scored our models' daily counts directly from the daily series, against the random walk nowcast (Supporting Information, *Daily nowcasts*).
 - We split the nowcast dates in half at 10 February 2022.
-- We developed the setup on the first half and score the second half.
-- Key references: [@Wolffram2023; @Johnson2025; @amaralPostprocessingWeightedCombination2025].
+- We developed the setup on the first half and scored the second half.
+- Key references: [@Wolffram2023; @hospitalization_nowcast_hub_2025; @Johnson2025; @amaralPostprocessingWeightedCombination2025].
 :::
 
-### Case study 2: prospective submission to the Ebola forecasting hub
+### Case study 2: Ebola forecasting hub
 
 ::: {.callout-note title="Plan"}
-- We compare with the other submissions, relative to the hub's baseline.
-- We score every hub round, all held out from model development.
-- From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past hub rounds, to decide whether it could be submitted.
-- These past rounds therefore informed that decision, and only rounds after the fine-tuned model's first submission are prospective for it.
-- Every model, ours and the hub teams', forecasts some targets and places only, so we compare models on the forecasts they share and report the country, provinces and zones apart.
-- We compare models by pairwise relative skill on the forecasts each pair shares, as scoringutils does, with WIS on the natural and log scales side by side [@Bosse2023-sx; @bosse2022scoringutils].
-- We score only the hub's own targets and horizons.
-- The hub's releases are few, weekly and begin with a backfill, so too few onset days have settled to estimate $D$.
-- We therefore set $D = 42$ days at forecast time, as the random walk nowcast does, for the fine-tuned and zero-shot models alike.
-- Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
-- Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
-- We start forecasting at the first release with at least two usable releases up to it, so the random walk baselines can estimate their delay.
-- We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, taking the hub teams' quantiles from their samples.
-- We score each week against its count in the first release at least $T$ days after the week ends, with $T$ the 98% point of the hub data's reporting delay.
-- By then nearly all of a week's cases are reported, so the truth changes little afterwards while every round can still be scored.
-- $T$ is part of the scoring rule, not a choice tuned on the data.
-- The SI compares the samples directly with the fair CRPS.
-- We score Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
-- Quantiles from 100 draws are noisier than those from 1,000, so WIS is biased against the hub teams, and the fair CRPS in the SI checks this.
-- The fine-tuned models use the final run's last checkpoint, at {{< meta results.training.simulations >}} simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
-- Key references: [@bdbv_modeling_hub_2026; @Viboud2018; @funkAssessingPerformanceRealtime2019].
+- **Data and submissions.**
+  - We used the Ebola forecasting hub's weekly confirmed cases by symptom onset, with every release, by country, province and health zone.
+  - We excluded the hub's first release, of 18 August, as it reports cumulative counts rather than new reports and so does not reflect reporting.
+  - We submitted the fine-tuned model, the random walk nowcast and the renewal models to the hub in real time.
+  - The fine-tuned model uses the final run's last checkpoint, at {{< meta results.training.simulations >}} simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
+  - From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past hub rounds, to decide whether it could be submitted.
+  - These past rounds therefore informed that decision, and only rounds after the fine-tuned model's first submission are prospective for it.
+- **Forecasting.**
+  - The hub's releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate $D$.
+  - We therefore set $D$ to 42 days at forecast time, as the random walk nowcast does, for the fine-tuned and zero-shot models alike.
+  - The fine-tuned model makes two forecasts at each nowcast date (Supporting Information, *Ebola forecast layout*).
+  - One is a single block of the country, all provinces and the active health zones.
+  - A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.
+  - The other is one block per province, of the province and all its zones, cut into views as in training when over the block limit.
+  - The country, provinces and active zones take their forecast from the single block, and every other zone from its province's block.
+  - The hub takes sampled trajectories, so we paired each model's draws across places with a copula (Supporting Information, *Correlated trajectories*).
+  - We paired the province draws of the random walks within each week with a rolling Gaussian copula, so their national forecast, the sum of the provinces for each sample, is not too narrow.
+  - The hub does not require forecasts to add up across levels, so this was our choice for the walks, and Chronos-2 submitted its own national forecast.
+- **Scoring.**
+  - We scored as for held-out simulations, and compared with the other submissions, relative to the hub's baseline.
+  - We scored every hub round.
+  - Every model, ours and the hub teams', forecasts some targets and places only, so we compared models on the forecasts they share and report the country, provinces and zones apart.
+  - We compared models by pairwise relative skill on the forecasts each pair shares, as scoringutils does [@bosse2022scoringutils].
+  - We scored only the hub's own targets and horizons.
+  - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
+  - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
+  - We started forecasting at the first release with at least two usable releases up to it, so the random walk baselines can estimate their delay.
+  - We took the hub teams' quantiles from their samples.
+  - We scored each week against its count in the first release at least $T$ days after the week ends, with $T$ the 98% point of the hub data's reporting delay.
+  - By then nearly all of a week's cases are reported, so the truth changes little afterwards while every round can still be scored.
+  - $T$ is part of the scoring rule, not a choice tuned on the data.
+  - We scored Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
+  - Quantiles from 100 draws are noisier than those from 1,000, so WIS is biased against the hub teams, which the fair CRPS checks (Supporting Information, *Ebola hub submissions*).
+  - We scored the national sum and the provinces by the CRPS and 90% coverage, and the joint forecast by the energy score [@Gneiting2008], which is proper for joint forecasts [@gneitingStrictlyProperScoring2007] and has been used for epidemic trajectories from forecast hubs [@Bay2026], but discriminates poorly between dependence structures [@Pinson2013].
+- Key references: [@bdbv_modeling_hub_2026; @MacNeil2010; @Viboud2018; @funkAssessingPerformanceRealtime2019].
 :::
 
 ### Sensitivity analyses
 
 ::: {.callout-note title="Plan"}
-- In the baselinenowcast variant, we give the point nowcast of our baselinenowcast port to Chronos-2 as complete counts, both zero-shot and with the fine-tuned model, with no further fine-tuning.
-- The fine-tuned model on this input shows what the synthetic data teach beyond the reporting delays.
-- We fine-tune Chronos-2 on real data, the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
-- We fine-tune one run without the attention biases and one without lag series, and compare each with the main run.
-- We compare the lag count rule with a fixed cap of 4 weeks or 28 days.
-- We compare the joint block with forecasting each level alone and with summing the lowest level.
-- We compare the walks' rolling copula with no pairing, and score Chronos-2's submitted trajectories with its copula, with independent cells and comonotone.
-- The SI gives each in full.
+- We gave the random walk nowcast's point nowcast to Chronos-2 as complete counts, both zero-shot and fine-tuned, with no further fine-tuning.
+- The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
+- We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub's releases, and compared it with the model fine-tuned on simulations.
+- We fine-tuned one model without the attention biases and one without lag series, and compared each with the main model.
+- We compared the rule for $D$ with a fixed 4 weeks or 28 days.
+- We compared forecasting all levels in one block with forecasting each level alone and with summing the lowest level.
+- We compared the random walks' rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
+- We compared the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (Supporting Information, *Renewal model variants*).
+- We scored the real-data fine-tune on the German held-out half, and on the Ebola rounds after its last training release.
+- We compared the models without attention biases or lag series with the main model by validation loss and by scores on the German development half at each checkpoint.
+- We compared the copula settings on the German development half and the development simulations.
+- We scored the other comparisons as in the case study they apply to, relative to its baseline.
 :::
 
 ### Implementation
 
 ::: {.callout-note title="Plan"}
-- We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, PyRenew and numpyro for simulation, and scoringrules for scoring, checked against scoringutils.
-- A Snakemake workflow runs the evaluation from the raw data to every figure and table.
+- We implemented the methods in a set of Python packages in one repository, each documented with examples and tested for correctness [@placeholder].
+- `nowcastrenewal` is our port of the epinowcast model to Python on top of PyRenew, with its simulator, the renewal forecasters and the BVDOutbreakSize inputs [@abbottepinowcast; @pyrenew; @BVDOutbreakSize].
+- `nowcastfoundation` holds the simulation grid, the Chronos-2 forecasters with the attention biases, and fine-tuning with LoRA and checkpoint scoring, built on PyTorch, chronos-forecasting and PEFT [@Ansari2025; @Hu2021].
+- `nowcastbaselines` holds the random walks, our JAX port of baselinenowcast and the copula that pairs places [@Johnson2025].
+- `nowcasteval` scores forecasts by level and over releases with scoringrules, checked against scoringutils, and makes the score figures [@zanetta_scoringrules_2024; @bosse2022scoringutils].
+- `nowcastgermany` and `nowcastbdbv` give each case study's data as forecast tasks.
+- `bdbvhub` and `bdbvsubmission` fit, store and check forecasts, and submit them to the Ebola hub through an automated, gated workflow.
+- A Snakemake workflow runs the evaluation from the raw data to every figure and table, and we release the simulations and fine-tuned checkpoints.
+- We built dashboards to monitor the simulations and fine-tuning as they ran, and used them throughout development (Supporting Information, *Monitoring fine-tuning*).
 :::
 
 ## Results
@@ -316,14 +351,15 @@ Each section has a figure panel.
 Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data), Zero-shot (reporting triangle) and Fine-tuned (reporting triangle) in every figure and table.
 The case studies' score panels also show the hub's baseline, which their scores are relative to.
 Zero-shot (complete data) has no lag series.
-Every other comparison, and the hub teams beyond the hub's baseline, is in the SI.
+Every other comparison, and the hub teams beyond the hub's baseline, is in the Supporting Information.
+Our submitted renewal model appears in the Ebola panels as one of the hub submissions, as the hub teams' models do, and the Supporting Information compares the renewal variants with each other (Supporting Information, *Renewal model variants*).
 Each panel shows:
 
-- nowcasts over time at the national level (one outbreak for synthetic data), several origins overlaid, each over its horizons against the truth (ribbons) [@Wolffram2023];
-- scores relative to the baseline (the random walk nowcast for synthetic data, the hub's baseline for each case study), with natural- and log-scale WIS stacked by its decomposition (fair CRPS of samples in the SI);
+- nowcasts over time at the national level (one simulation for held-out simulations), several origins overlaid, each over its horizons against the truth (ribbons) [@Wolffram2023];
+- scores relative to the baseline (the random walk nowcast for synthetic data, the hub's baseline for each case study), with natural- and log-scale WIS stacked by its decomposition (fair CRPS of samples in the Supporting Information);
 - bias;
 - 50% and 90% coverage;
-- score variation by location and horizon, supported by SI plots.
+- score variation by location and horizon.
 - for Germany, a dotted line marking the split between the development and scored parts, with scores split by part, each part a row on the score axis.
 
 The plots in primarycensored-paper are a model for these.
@@ -332,129 +368,109 @@ Each section has two paragraphs, one on visual performance and one summarising s
 Key references: the Methods references, with [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx] for the natural- and log-scale panels.
 :::
 
-::: {#tbl-live-summary}
-{{< include build/tables/si/live-summary.md >}}
-
-Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
+::: {.callout-note title="Plan"}
+- We developed the simulated surveillance data and the way we fine-tune on them over [X] versions.
+- Each version changed the settings the simulations draw from, such as the range of reproduction numbers, reporting delays and reporting patterns, or the fine-tuning settings, such as how training blocks are cut from each simulation, the learning rate and the number of simulations.
+- Each version was simulated afresh, so no simulation was reused between versions.
+- For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, using our simulation and fine-tuning dashboards (Methods, Implementation; Supporting Information, *Checkpoint curve*).
+- We compared the summary statistics of each version's simulations with the German development half and with published ranges for other diseases.
+- Figure (planned): "The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. (G) Coverage: for R and effective R, the generation time mean, the infection-to-reference delay mean, the mean reporting delay and the growth rate, the grid's median and 5 to 95% range beside published ranges for influenza, COVID-19, Ebola, mpox, cholera, measles and dengue and the German development half's values. Panels B to F compare the simulations with the German development half and published ranges for other diseases where values exist."
+- We take the published ranges from their sources (Supporting Information, *Synthetic data generation*).
+- Over these versions we made the simulations closer to real reporting, adding:
+  - report days, weekday effects, backlogs, outages and revisions to past counts;
+  - release schedules, from daily to weekly releases;
+  - regions whose reported totals differ from the sum of their places, as national counts can be reported apart from regional ones.
+- We also changed how we fine-tune Chronos-2, adding:
+  - blocks that mix daily counts with weekly totals or 7-day rolling sums, as the German hub's targets are 7-day sums and the Ebola hub's are weekly counts;
+  - attention biases, so the model can tell which lag series belong to which place.
+- We have modelled the Ebola outbreak since it was first reported, in separate work on its size [@BVDOutbreakSize].
+- Early in the Ebola hub's life we submitted the random walk nowcast and renewal models to it.
+  Its weekly releases start with a backfill, which led us to add training blocks whose releases start late.
+- From the week of 23 November 2026 we scored each released checkpoint on past Ebola rounds to decide when to submit the fine-tuned model, and first submitted it on [date].
 :::
 
-### Held-out synthetic data
+### Held-out simulations
 
 ::: {.callout-note title="Plan"}
-- We show nowcasts of the candidate models against `randomwalknowcast`.
-- We summarise their scores.
-- The SI gives each checkpoint's scores by the number of simulations it was trained on (Checkpoint curve).
-- The SI describes the held-out set (Synthetic data generation).
-- The SI shows the dashboard we used to review fine-tuning (Monitoring fine-tuning).
-:::
-
-::: {#fig-synthetic-nowcasts}
-![](build/figures/main/synthetic-nowcasts.png)
-
-Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+- The first paragraph describes the nowcasts: whether the fine-tuned model's intervals [cover / miss] the final counts as recent counts fill in, and whether zero-shot Chronos-2 [follows the incomplete recent counts down].
+- The second paragraph gives the scores in the abstract's order: the fine-tuned model against zero-shot Chronos-2 on the reporting triangle and on complete data, then against the random walk nowcast, then by horizon and simulation setting (Supporting Information, *Held-out synthetic data*; *Checkpoint curve*).
 :::
 
 ::: {#fig-synthetic}
 ![](build/figures/main/synthetic-results.png)
 
-Held-out synthetic data. (A) Nowcasts over time at one place, several origins overlaid, against the truth; (B, C) WIS relative to `randomwalknowcast` on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by scenario factor; (G) relative WIS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+Held-out synthetic data. (A) Nowcasts over time at one place, several origins overlaid, against the truth; (B, C) WIS relative to the random walk nowcast on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by scenario factor; (G) relative WIS by horizon. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
 :::
 
-On the {{< meta results.synthetic.scope >}}, the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
-
-::: {#tbl-synthetic-scores}
-{{< include build/tables/main/synthetic-scores.md >}}
-
-Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
-:::
+On the {{< meta results.synthetic.scope >}}, the fine-tuned model scored {{< meta results.synthetic.models.foundation >}} relative to the random walk nowcast, against {{< meta results.synthetic.models.foundation_zeroshot >}} for zero-shot Chronos-2 on the reporting triangle and {{< meta results.synthetic.models.foundation_zeroshot_complete >}} on complete data.
+The fine-tuned model [outperformed / matched] zero-shot Chronos-2 and the random walk nowcast, [most at short horizons / across horizons].
 
 ### German nowcast hub
 
 ::: {.callout-note title="Plan"}
-- We show national nowcasts against the other models.
-- We summarise the scores.
-- The SI gives daily nowcasts for both case studies against `randomwalknowcast` (Daily nowcasts).
+- The first paragraph describes the national nowcasts against the truth, on the development and held-out halves.
+- The second paragraph gives the held-out half's scores in the abstract's order: the fine-tuned model against zero-shot Chronos-2 on both inputs, the random walk nowcast and the hub's models, relative to the hub's baseline, then by location, age group and horizon (Supporting Information, *German nowcast hub*).
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
-:::
-
-::: {#fig-germany-nowcasts}
-![](build/figures/main/germany-nowcasts.png)
-
-German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
 ::: {#fig-germany}
 ![](build/figures/main/germany-results.png)
 
-German nowcast hub. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to `KIT-frozen_baseline` on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon, the hub's targets only. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+German nowcast hub. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to the hub's baseline on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon, the hub's targets only. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
 :::
 
-On the {{< meta results.germany.scope >}}, the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
+On the {{< meta results.germany.scope >}}, the fine-tuned model scored {{< meta results.germany.models.foundation >}} relative to the hub's baseline, against {{< meta results.germany.models.foundation_zeroshot >}} for zero-shot Chronos-2 on the reporting triangle, {{< meta results.germany.models.foundation_zeroshot_complete >}} on complete data and [X] for the random walk nowcast.
+It [outperformed / performed comparably to] the hub's models, ranking [X] of [X].
 
-::: {#tbl-germany-scores}
-{{< include build/tables/main/germany-scores.md >}}
-
-German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
-:::
-
-### Ebola hub submissions
+### Ebola forecasting hub
 
 ::: {.callout-note title="Plan"}
-- We show national nowcasts against the other submissions.
-- The main text scores the fine-tuned model from its first submission on, prospectively.
-- The SI scores our final models on every round, retrospectively, including the past rounds that informed the submission.
-- We summarise the scores.
+- We show every hub round, with the fine-tuned model's first submission marked, and give scores before and after it apart, as for the German halves.
+- Rounds before the first submission are retrospective for the fine-tuned model, and rounds after it are prospective.
+- Our submitted renewal model is scored as one of the hub submissions.
+- The first paragraph describes the national nowcasts against the truth.
+- The second paragraph gives the scores in the abstract's order: the fine-tuned model against zero-shot Chronos-2 on both inputs, the random walk nowcast, the other hub submissions and our renewal model, relative to the hub's baseline, then by location and horizon (Supporting Information, *Ebola hub submissions*).
 :::
 
 ::::: {.content-visible when-meta="results.ebola.shown"}
 
-::: {#fig-ebola-nowcasts}
-![](build/figures/main/ebola-nowcasts.png)
-
-Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
-:::
-
 ::: {#fig-ebola}
 ![](build/figures/main/ebola-results.png)
 
-Ebola: forecasts of every hub round, all held out, each from the last release before the round closed. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, as stacked dispersion, overprediction and underprediction, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by location; (G) by horizon, the hub's own horizons only. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+Ebola forecasting hub: forecasts of every hub round, each from the last release before the round closed, with the fine-tuned model's first submission marked. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to {{< meta results.ebola.baseline >}} on the natural and log scales, as stacked dispersion, overprediction and underprediction, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by location; (G) by horizon, the hub's own horizons only. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
 :::
 
-{{< meta results.ebola.status >}} On the {{< meta results.ebola.scope >}}, the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
-
-::: {#tbl-ebola-scores}
-{{< include build/tables/main/ebola-scores.md >}}
-
-Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
-:::
+{{< meta results.ebola.status >}} On the {{< meta results.ebola.scope >}}, the fine-tuned model scored {{< meta results.ebola.models.foundation >}} relative to the hub's baseline, against {{< meta results.ebola.models.foundation_zeroshot >}} for zero-shot Chronos-2 on the reporting triangle, {{< meta results.ebola.models.foundation_zeroshot_complete >}} on complete data and [X] for the random walk nowcast.
+It [outperformed / performed comparably to] the other hub submissions and our renewal model, [before and after its first submission].
 
 :::::
 
 ### Sensitivity analyses
 
-::: {.callout-note title="Plan"}
-- One short paragraph per analysis, each pointing to its SI section.
-- The lag count against a fixed cap and the joint block against each level alone and the sum of the lowest level have no SI section yet, and get a paragraph when they do.
-:::
-
-Against `randomwalknowcast`, the zero-shot baselinenowcast variant scored {{< meta results.synthetic.models.foundation_zeroshot_baselinenowcast >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_baselinenowcast >}} on the German {{< meta results.germany.scope >}}.
-The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_baselinenowcast >}} and {{< meta results.germany.models.foundation_baselinenowcast >}}, and on the reporting-triangle layout {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}}.
+Given the random walk nowcast's point nowcast as complete counts, zero-shot Chronos-2 scored {{< meta results.synthetic.models.foundation_zeroshot_baselinenowcast >}} on the {{< meta results.synthetic.scope >}} and {{< meta results.germany.models.foundation_zeroshot_baselinenowcast >}} on the German {{< meta results.germany.scope >}}, relative to the random walk nowcast.
+The fine-tuned model on the same input scored {{< meta results.synthetic.models.foundation_baselinenowcast >}} and {{< meta results.germany.models.foundation_baselinenowcast >}}, against {{< meta results.synthetic.models.foundation >}} and {{< meta results.germany.models.foundation >}} on the reporting triangle.
 
 ::: {.content-visible when-meta="results.ebola.shown"}
-On the Ebola {{< meta results.ebola.scope >}}, the zero-shot and fine-tuned baselinenowcast variants and the fine-tuned model on the reporting triangle scored {{< meta results.ebola.models.foundation_zeroshot_baselinenowcast >}}, {{< meta results.ebola.models.foundation_baselinenowcast >}} and {{< meta results.ebola.models.foundation >}}.
+On the Ebola {{< meta results.ebola.scope >}}, zero-shot and fine-tuned Chronos-2 given the baseline nowcast and the fine-tuned model on the reporting triangle scored {{< meta results.ebola.models.foundation_zeroshot_baselinenowcast >}}, {{< meta results.ebola.models.foundation_baselinenowcast >}} and {{< meta results.ebola.models.foundation >}}.
 :::
 
-We score the model fine-tuned on real data on the German held-out half and on Ebola rounds after its last training release, {{< meta results.realdata_after >}}, against the model fine-tuned on simulations (SI, Real-data fine-tune against synthetic).
+Fine-tuning on real data instead of simulations changed the German held-out score by [X] and the Ebola score after {{< meta results.realdata_after >}} by [X] (Supporting Information, *Real-data fine-tune against synthetic*).
 
-We compare the runs without attention biases and without lag series with the main run by validation loss and German development scores at each checkpoint (SI, Attention biases for place and parent against none, and Delays against no delays).
+Without the attention biases, the German development score changed by [X] at the final checkpoint, and without lag series by [X] (Supporting Information, *Attention biases for place and parent against none*; *Delays against no delays*).
 
-The median rolling $\rho_p$ between German states was {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, and the SI compares it with no pairing (SI, Impact of correlated trajectories).
-The SI also scores Chronos-2's trajectories with its copula, with independent cells and comonotone (SI, Correlated trajectories).
+A fixed lag count of 4 weeks or 28 days changed scores by [X] against the rule that sets it from the data (Supporting Information, *Lag count*).
+
+Forecasting each level alone changed scores by [X], and summing the lowest level by [X], against forecasting all levels in one block (Supporting Information, *Ebola hub submissions*).
+
+The median rolling $\rho_p$ between German states was {{< meta evidence.rho.randomwalknowcast.rho_p >}} for the random walk nowcast and {{< meta evidence.rho.randomwalk.rho_p >}} for the random walk, and pairing changed the national score by [X] against no pairing (Supporting Information, *Impact of correlated trajectories*).
+Scoring Chronos-2's trajectories with independent cells or comonotone changed the energy score by [X] (Supporting Information, *Correlated trajectories*).
+
+The renewal model using BVDOutbreakSize scored [X] relative to the main renewal model, and the main renewal model [X] relative to fitting each zone on its own (Supporting Information, *Renewal model variants*).
 
 ## Discussion
 
 We used one foundation model, Chronos-2, because it forecasts a group of related series in one block and takes known-future covariates, which the reporting triangle laid out as ragged series needs.
-In the SI we compare fine-tuning on simulations with fine-tuning on real data, on the German held-out half and on the held-out Ebola rounds after the real-data model's last training release.
+In the Supporting Information we compare fine-tuning on simulations with fine-tuning on real data, on the German held-out half and on the held-out Ebola rounds after the real-data model's last training release.
 Those Ebola scores are retrospective, from data released before each round closed.
 The fine-tuned model is trained on simulations only, so it never sees the BDBV truth it is scored against.
 
@@ -465,20 +481,20 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - On held-out simulations it scored [X] relative to the random walk nowcast, against [X] for zero-shot Chronos-2 on the reporting triangle and [X] on complete data.
   - On the German nowcast hub it scored [X] relative to the hub's baseline, ranking [X] of [X] models.
   - On the Ebola hub it scored [X] from its first submission, prospectively, ranking [X] of [X] submissions.
-  - Fine-tuning on real data instead scored [X] against fine-tuning on simulations (SI, Real-data fine-tune against synthetic).
-  - Without the attention biases scores changed by [X], and without lag series by [X] (SI, Attention biases for place and parent against none; Delays against no delays).
-  - Given a baseline nowcast as complete counts, the fine-tuned model scored [X] (SI, Daily nowcasts).
-  - Correlated trajectories changed scores by [X] (SI, Impact of correlated trajectories).
-  - The random walk nowcast, baselinenowcast extended to forecast and adapted to sparse data, scored [X] against the other Ebola hub submissions [@Johnson2025] (SI, Baselines).
-  - The renewal models built on our port of epinowcast, stabilised with BVDOutbreakSize and adapted to the hub's imputation of onset dates, scored [X] against the other Ebola hub submissions [@BVDOutbreakSize; @lison2024] (SI, Renewal model).
-    Stabilising with BVDOutbreakSize changed scores by [X], and pooling and transmission between places by [X] (SI, Renewal model variants).
+  - Fine-tuning on real data instead scored [X] against fine-tuning on simulations (Supporting Information, *Real-data fine-tune against synthetic*).
+  - Without the attention biases scores changed by [X], and without lag series by [X] (Supporting Information, *Attention biases for place and parent against none*; *Delays against no delays*).
+  - Given a baseline nowcast as complete counts, the fine-tuned model scored [X] (Supporting Information, *Daily nowcasts*).
+  - Correlated trajectories changed scores by [X] (Supporting Information, *Impact of correlated trajectories*).
+  - The random walk nowcast, baselinenowcast extended to forecast and adapted to sparse data, scored [X] against the other Ebola hub submissions [@Johnson2025] (Supporting Information, *Baselines*).
+  - The renewal models built on our port of epinowcast, stabilised with BVDOutbreakSize and adapted to the hub's imputation of onset dates, scored [X] against the other Ebola hub submissions [@BVDOutbreakSize; @lison2024] (Supporting Information, *Renewal model*).
+    Stabilising with BVDOutbreakSize changed scores by [X], and pooling and transmission between places by [X] (Supporting Information, *Renewal model variants*).
 - **Strengths and limitations of the evaluation.**
   - We used one foundation model, one source of synthetic data and two case studies.
     However, the case studies differ in pathogen, reporting system and cadence, and one was in real time.
   - We did not compare with epinowcast directly, or, for the synthetic study, with the model that generated the data.
     However, the German case study includes the hub's epinowcast-based model [@Wolffram2023].
   - We ported the epinowcast model to PyRenew rather than using it directly.
-    However, we validated the port by submitting renewal models built on it to the Ebola hub in real time, where they scored [X] against the other submissions (SI, Renewal model).
+    However, we validated the port by submitting renewal models built on it to the Ebola hub in real time, where they scored [X] against the other submissions (Supporting Information, *Renewal model*).
   - We did not compare directly with Mantis or other custom neural networks trained for this task [@Dudley2026].
     The ACCIDDA-Chromantis hub submission is one such model, with delay-aware networks trained on real revisions, and appears in the Ebola case study only as one of the hub teams' forecasts [@accidda_chromantis; @bdbv_modeling_hub_2026].
   - The Ebola case study is held out from model development but not blind.
@@ -488,7 +504,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
     The German held-out half and the simulated test round were fixed in advance, so they are held out for every decision.
 - **Strengths and limitations of the model and data.**
   - Fine-tuning ran on one machine, so it needs no shared compute, and the synthetic data can be tuned to a setting.
-  - We could only fine-tune and forecast with blocks that fit in the memory of our available GPUs, which forced several approximations (Methods; SI, Fitting in GPU memory).
+  - We could only fine-tune and forecast with blocks that fit in the memory of our available GPUs, which forced several approximations (Methods; Supporting Information, *Fitting in GPU memory*).
     We fine-tuned on blocks of at most 364 steps of history but forecast with all available data, and did not test whether this affects Chronos-2's handling of longer histories, which matters most for long series such as the German daily data.
     We cut systems too large for one block into views, so zones in different subtrees inform each other only through the aggregated totals.
     For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.
