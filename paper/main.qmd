@@ -18,14 +18,14 @@ format:
   pdf:
     number-sections: false
 abstract: |
-  Infectious disease forecasts and nowcasts inform public health response.
+  Infectious disease forecasts and nowcasts inform public health.
   Time series foundation models, neural networks trained on many series, forecast new series well with no further training (zero-shot) but are not designed for reporting delays.
   Nowcasting methods correct for these delays but either forecast poorly or need expert configuration.
   We fine-tuned the foundation model Chronos-2 on simulated surveillance data.
   We simulated these data by combining the reporting model of epinowcast, a widely used nowcasting package, with the renewal model library PyRenew.
   We gave Chronos-2 counts by event date and reporting delay, one series per place and delay, with attention biases linking series to places and places to regions.
   We compared it with zero-shot Chronos-2, given the same input or only the latest counts, and with a recently developed baseline nowcasting method, extended to forecast and to sparse data.
-  We evaluated them on held-out simulations, retrospectively against the German COVID-19 nowcast hub, and prospectively in the Democratic Republic of the Congo Ebola forecasting hub.
+  We evaluated them on held-out simulations, retrospectively against the German COVID-19 nowcast hub, and retrospectively and prospectively in the Democratic Republic of the Congo Ebola forecasting hub.
   To the Ebola hub we also submitted renewal models built on this combination, from our real-time modelling.
   On held-out simulations, the fine-tuned model [outperformed / matched] zero-shot Chronos-2 and the baseline method.
   Removing the attention biases [worsened / did not change] its scores, and giving it the baseline method's nowcast as input [improved / worsened] them.
