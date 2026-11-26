@@ -2,7 +2,8 @@
 
 A run's folder is `finetune-stream`'s output folder: its logs,
 `train/n<N>.log` per segment (a line per logged step),
-`train/n<N>/settings.json` per checkpoint and the stream status
+`train/n<N>/settings.json` per checkpoint, each segment's chunk timings
+over every attempt (`train/timings/n<N>.json`) and the stream status
 (`train/stream-status.json`). Everything here only reads.
 """
 
@@ -263,10 +264,12 @@ class RunLog:
         return merged
 
     def chunk_times(self) -> list[dict[str, Any]]:
-        """Return every log's finished chunks (`Log.chunk_times`).
+        """Return every segment's finished chunks.
 
-        Each names its segment (the log's `n<N>`); a chunk in two logs
-        keeps the newest.
+        A chunk's stored timing (`stored_chunk_times`) where the trainer
+        kept one, else its log's (`Log.chunk_times`), which a restart of
+        a trainer that kept none wrote again. Each names its segment
+        (`n<N>`); a chunk in two logs keeps the newest.
         """
         merged: dict[int, dict[str, Any]] = {}
         for log in self._each():
@@ -274,6 +277,8 @@ class RunLog:
                 old = merged.get(row["first"])
                 if old is None or row["t"] >= old["t"]:
                     merged[row["first"]] = row | {"segment": log.path.stem}
+        for row in stored_chunk_times(self.folder):
+            merged[row["first"]] = row
         return [merged[k] for k in sorted(merged)]
 
     def last_line(self) -> tuple[float, str] | None:
@@ -310,6 +315,40 @@ class RunLog:
                 ):
                     merged[row["step"]] = row
         return [merged[k] for k in sorted(merged)]
+
+
+TIMINGS = "timings"
+"""The trainer's folder of segment timings (nowcastfoundation's
+`finetune.stream.TIMINGS`)."""
+
+
+def stored_chunk_times(folder: Path | str) -> list[dict[str, Any]]:
+    """Return the finished chunks of each segment's stored timings.
+
+    The trainer keeps them in its state across restarts and writes them
+    to `train/timings/n<N>.json`, so a chunk's time covers every attempt
+    from its `timed_from` batch (0 unless the state it resumed from kept
+    no timings). Rows as `Log.chunk_times`', with their segment.
+    """
+    out = []
+    paths = Path(folder, "train", TIMINGS).glob("n*.json")
+    for path in sorted(paths, key=lambda p: _size(p.name)):
+        got = CACHE.get(path)
+        if not isinstance(got, dict):
+            continue
+        for c in got.get("chunks", []):
+            out.append(
+                {
+                    "t": c["ended"],
+                    "first": c["first"],
+                    "sims": c["last"] - c["first"] + 1,
+                    "steps": c["steps"],
+                    "before": c.get("timed_from", 0),
+                    **{k: float(c[f"{k}_s"]) for k in SPLIT},
+                    "segment": path.stem,
+                }
+            )
+    return out
 
 
 def timed(row: dict[str, Any]) -> tuple[float, float]:

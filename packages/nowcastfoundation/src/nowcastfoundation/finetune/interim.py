@@ -67,6 +67,8 @@ NOT_ITS_OWN = (
     "cadence_mix",
     "tokens",
     "seconds",
+    "train_seconds",
+    "wall_seconds",
     "held_out_loss_start",
     "held_out_loss",
     "held_out_loss_nowcast",

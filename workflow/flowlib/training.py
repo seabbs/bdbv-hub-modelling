@@ -101,9 +101,18 @@ class Training:
         return lambda wc: self.local.get(key) or self.runs[wc.run].ft[setting]
 
     def segment_copy_back(self, wc: Any) -> list[str]:
-        """Return the files a segment's worker copies back beside it."""
+        """Return the files a segment's worker copies back beside it.
+
+        Its checkpoint's `SEGMENT_COPY_BACK`, the segment's log over
+        every attempt and its chunk timings (nowcastfoundation's
+        `finetune.stream.write_timings`).
+        """
         train = self.train_dir(wc.run)
-        return [f"{train}/n{wc.n}/{name}" for name in SEGMENT_COPY_BACK]
+        return [
+            *(f"{train}/n{wc.n}/{name}" for name in SEGMENT_COPY_BACK),
+            f"{train}/n{wc.n}.log",
+            f"{train}/timings/n{wc.n}.json",
+        ]
 
     def saved(self, run: str, n: int) -> bool:
         """Return whether checkpoint n of the run is saved."""
