@@ -25,12 +25,10 @@ function nice(lo,hi,n){var st=(hi-lo)/(n||4)||1,m=Math.pow(10,Math.floor(Math.lo
  for(var v=Math.ceil(lo/k)*k;v<=hi+1e-9;v+=k)o.push(+v.toFixed(6));return o}
 function sw(c,d){return '<svg width=22 height=8 viewBox="0 0 22 8"><line x1=0 x2=22 y1=4 y2=4 stroke="'+c+'" stroke-width=2'+(d?' stroke-dasharray="'+d+'"':"")+' /></svg>'}
 function svgOpen(){return '<svg viewBox="0 0 '+LPW+' '+LPH+'" width="100%" role="img">'}
-// frame: axes on [x0,x1] x [lo,hi]; log y when `log`, with decade ticks.
-function frame(lo,hi,x0,x1,xlab,log,xt){var L=44,R=8,T=6,B=30,ty=log?function(v){return Math.log10(v)}:function(v){return v},
- a=ty(lo),b=ty(hi),sy=function(y){return T+(1-(ty(y)-a)/((b-a)||1))*(LPH-T-B)},sx=function(x){return L+(x-x0)/((x1-x0)||1)*(LPW-L-R)},s="";
- var ys=log?nice(Math.floor(a),Math.ceil(b),3).filter(function(v){return v===Math.round(v)}).map(function(v){return Math.pow(10,v)}):nice(lo,hi,3);
- ys.forEach(function(v){if(v>=lo&&v<=hi)s+='<line x1="'+L+'" x2="'+(LPW-R)+'" y1="'+sy(v).toFixed(1)+'" y2="'+sy(v).toFixed(1)+'" class=grid /><text x="'+(L-4)+'" y="'+(sy(v)+3).toFixed(1)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
- (xt||nice(x0,x1,3)).forEach(function(v){if(v>=x0&&v<=x1)s+='<text x="'+sx(v).toFixed(1)+'" y="'+(LPH-B+13)+'" text-anchor=middle class=ax>'+v+'</text>'});
+// frame: axes on [x0,x1] x [lo,hi].
+function frame(lo,hi,x0,x1,xlab){var L=44,R=8,T=6,B=30,sy=function(y){return T+(1-(y-lo)/((hi-lo)||1))*(LPH-T-B)},sx=function(x){return L+(x-x0)/((x1-x0)||1)*(LPW-L-R)},s="";
+ nice(lo,hi,3).forEach(function(v){if(v>=lo&&v<=hi)s+='<line x1="'+L+'" x2="'+(LPW-R)+'" y1="'+sy(v).toFixed(1)+'" y2="'+sy(v).toFixed(1)+'" class=grid /><text x="'+(L-4)+'" y="'+(sy(v)+3).toFixed(1)+'" text-anchor=end class=ax>'+fmt(v)+'</text>'});
+ nice(x0,x1,3).forEach(function(v){if(v>=x0&&v<=x1)s+='<text x="'+sx(v).toFixed(1)+'" y="'+(LPH-B+13)+'" text-anchor=middle class=ax>'+v+'</text>'});
  s+='<text x="'+((L+LPW-R)/2)+'" y="'+(LPH-3)+'" text-anchor=middle class=ax>'+xlab+'</text>';
  return {sx:sx,sy:sy,s:s}}
 // lines: each [points, colour, dash, label] on one frame; returns the svg
@@ -110,9 +108,9 @@ function draw(){
  g=lines(frame(0,Math.max(1,Math.ceil(rk.length?Math.max.apply(null,rk):1)),lx[0],lx[1],"layer"),[byl(KT,"rank","",""),byl(KG,"rank","","")]);
  put("row2:rank",lead+"mean over q, k, v, o at "+last,g.svg,g.hits);
  var ab=[];[KT,KG].forEach(function(k){["a","b"].forEach(function(s){run[s][k].forEach(function(v){if(v>0)ab.push(v)})})});
- var alo=ab.length?Math.min.apply(null,ab)/1.5:0.01,ahi=ab.length?Math.max.apply(null,ab)*1.5:1;
- g=lines(frame(alo,ahi,lx[0],lx[1],"layer",true),[byl(KT,"a","","A, "),byl(KG,"a","","A, "),byl(KT,"b","6 3","B, "),byl(KG,"b","6 3","B, ")]);
- put("row2:ab",lead+"A solid, B dashed, log scale, at "+last,g.svg,g.hits)}
+ var ahi=(ab.length?Math.max.apply(null,ab):1)*1.08;
+ g=lines(frame(0,ahi,lx[0],lx[1],"layer"),[byl(KT,"a","","A, "),byl(KG,"a","","A, "),byl(KT,"b","6 3","B, "),byl(KG,"b","6 3","B, ")]);
+ put("row2:ab",lead+"A solid, B dashed, at "+last,g.svg,g.hits)}
 window.addEventListener("ftsel",draw);
 // New data from the server (live.js): redraw with the same state.
 window.addEventListener("ftdata",function(e){if(e.detail!=="lora")return;D=JSON.parse($("lodata").textContent);draw()});
