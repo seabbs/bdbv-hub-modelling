@@ -9,7 +9,7 @@ This section is for readers who want to know how the renewal models submitted to
 
 ## Where to start
 
-- To understand the models, start with the paper's [Supporting Information, *Renewal model*](../paper/si.html#renewal-model), linked from [Methods](methods.md).
+- To understand the models, start with the paper's [supporting information](../paper/si.html#renewal-model), linked from [Methods](methods.md).
 - To fit one, start with `bdbvhub fit` ([CLI](../development/cli.md)) or `nowcastrenewal.forecaster` in [Python](../nowcastrenewal/reference/).
 
 ## In this section

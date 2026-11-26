@@ -36,12 +36,12 @@ The submission pull request embeds `bdbvhub.reporting.data_plots.plot_nowcast`.
 
 The growth to final of each onset day by its age at the latest release, and the observation model by weeks back.
 A place using its parent's estimate is labelled with the parent.
-How both are fitted is in the paper's [Supporting Information, *Baselines*](paper/si.html#baselines).
+How both are fitted is in the paper's [supporting information](paper/si.html#baselines).
 
 ![Growth to final by age, and the dispersion of new reports by weeks back, at the latest release.](figures/delay-check.svg#only-light)
 ![Growth to final by age, and the dispersion of new reports by weeks back, at the latest release.](figures/delay-check-dark.svg#only-dark)
 
-The renewal models fit the onset-to-report delay with the cases ([Supporting Information, *Renewal model*](paper/si.html#renewal-model)).
+The renewal models fit the onset-to-report delay with the cases ([supporting information](paper/si.html#renewal-model)).
 Each row is a place, the renewal models' shared delay first and then each place with a delay of its own.
 Each line is one model's fit at its latest origin.
 The left panel gives the share of onsets in the last week reported by each day since onset, with 90% intervals for the renewal models.

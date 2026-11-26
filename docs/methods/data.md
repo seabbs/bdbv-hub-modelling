@@ -50,17 +50,17 @@ Recent weeks are revised in later releases, so each forecast is made from one vi
 The count of a day is its known plus imputed onsets, and the counts of a week sum to the hub's weekly target.
 A release has an `as_of` date and a data cut-off ([Vintages](#vintages)).
 A release observes the days up to its cut-off, and a day in range with no row counts 0.
-The baseline models compare the counts of a day across releases by its age at each cut-off ([Supporting Information, *Baselines*](../paper/si.html#baselines)).
+The baseline models compare the counts of a day across releases by its age at each cut-off ([supporting information](../paper/si.html#baselines)).
 
 ## Delay and missingness data
 
-The hub imputes an onset for each case reported without one by subtracting a delay drawn from a fit to its published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), [Supporting Information, *Renewal model*](../paper/si.html#renewal-model)).
+The hub imputes an onset for each case reported without one by subtracting a delay drawn from a fit to its published delays ([hub issue 61](https://github.com/InsightNet-US/BDBV-Modeling-Hub/issues/61), [supporting information](../paper/si.html#renewal-model)).
 So the share of cases without an onset is measured at every vintage.
 
 ## BVDOutbreakSize estimates
 
 `renewalbvd` uses the Rt estimates in the public `results-<run>` releases of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) (MIT licence, [Zenodo 10.5281/zenodo.20312758](https://doi.org/10.5281/zenodo.20312758)).
 These are the national $R_T$ draws, the patch summaries with the national $R_T$ they are relative to where the release has them, and the release's data cut-off.
-Which release a forecast uses, how growth rates are turned into $R_T$ and how the estimates enter the model are in the paper's [Supporting Information, *Renewal model*](../paper/si.html#renewal-model).
+Which release a forecast uses, how growth rates are turned into $R_T$ and how the estimates enter the model are in the paper's [supporting information](../paper/si.html#renewal-model).
 The release's joint-fit R-hat is read from the fit diagnostics table in its rendered site, and a release without a readable table is passed over for the next older one.
 Each fit records the release it used, its R-hat and why newer releases were skipped.

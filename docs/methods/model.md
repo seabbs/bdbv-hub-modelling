@@ -6,7 +6,7 @@ The three renewal models, and what their fits give the site and the hub.
 `renewal` fits the health zones with recent cases together, nests them in their provinces, pools them and links them by importation.
 `renewalbvd` is `renewal` with a down-weighted likelihood term on the Rt of BVDOutbreakSize.
 `renewalsp` fits the same model to each health zone on its own, with no pooling or importation.
-Their methods, equations, priors and limitations are in the paper's [Supporting Information, *Renewal model*](../paper/si.html#renewal-model).
+Their methods, equations, priors and limitations are in the paper's [supporting information](../paper/si.html#renewal-model).
 How the models are built in code and sampled is on the [Implementation](implementation.md) page.
 
 The zone fits are in [`zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/zones.py) and [`model/zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/model/zones.py).
@@ -44,7 +44,7 @@ This Rt is estimated from the hub's onsets, including its imputed onsets, so it 
 
 Zones do not enter the national value.
 `renewal` and `renewalbvd` forecast the zones themselves, and their provinces are the zone sums.
-`randomwalk` and `randomwalknowcast` forecast each zone from its own data ([Supporting Information, *Baselines*](../paper/si.html#baselines)).
+`randomwalk` and `randomwalknowcast` forecast each zone from its own data ([supporting information](../paper/si.html#baselines)).
 The foundation models take their zones straight from their joint block, as their provinces and country, so their zones need not sum to the provinces either ([Foundation models](foundation.md#health-zones)).
 `renewalsp` fits each zone on its own, and its provinces are the zone sums too.
 The stored fits, the scores, the site and the submission all read these zone samples.

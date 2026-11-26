@@ -10,7 +10,7 @@ Forecasts from real releases are scored on the count each later release reports,
 ## Scores
 
 The hub takes sample trajectories, so every BDBV forecast is scored on its samples by the continuous ranked probability score (CRPS), as the paper scores Ebola.
-We use the fair form, scoringrules' `crps_ensemble` with `estimator="fair"`, as defined in the paper's [Supporting Information, *Scoring*](../paper/si.html#scoring).
+We use the fair form, scoringrules' `crps_ensemble` with `estimator="fair"`, as defined in the paper's [supporting information](../paper/si.html#scoring).
 CRPS on the log scale is the CRPS of the transformed target, $\text{CRPS}(\log(1 + X), \log(1 + y))$, never the log of CRPS.
 CRPS on the natural scale is dominated by the places with the most cases.
 On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing[^bosse].
@@ -51,7 +51,7 @@ The energy score scores one forecast of a vector $\mathbf{y}$.
 For an origin, a release and a scale, $\mathbf{y}$ holds every place at that scale in every scored week, and national holds the weeks only.
 It uses only the place-week cells that every compared model forecasts.
 Sample $i$ of a model is its draws with sample index $i$, $\mathbf{X}_i$.
-We use the fair form over $m$ samples, scoringrules' `es_ensemble` with `estimator="fair"`, for every model ([Supporting Information, *Scoring*](../paper/si.html#scoring)).
+We use the fair form over $m$ samples, scoringrules' `es_ensemble` with `estimator="fair"`, for every model ([supporting information](../paper/si.html#scoring)).
 
 The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
 Relative energy scores are ratios of means against `randomwalknowcast` over the origins and releases both have, and $n$ counts those.
@@ -93,7 +93,7 @@ Two targets are scored.
 Every other model with a modelled delay forecasts the final count $X$ of week $w$, which is mapped to what $o'$ shows by that delay.
 
 1. Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
-   For `randomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay it fits at the origin ([Supporting Information, *Baselines*](../paper/si.html#baselines)).
+   For `randomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay it fits at the origin ([supporting information](../paper/si.html#baselines)).
    For the renewal models it is the posterior median of each province's cumulative onset-to-report delay of the latest onset week, as the fit stores it.
    Ages past the end of the delay take its last value, and days after the cut-off have $\pi = 0$.
 2. A week's share $\pi_w$ is the mean of $\pi$ over its seven days.
@@ -128,7 +128,7 @@ The run stops if an origin has no release snapshots or two models run here give 
 
 `randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the sum of the provinces, would be too narrow.
 Each pairs its province draws within each week by a Gaussian copula, with a correlation estimated from its own matured errors.
-The copula, its estimator and how its settings were chosen are in the paper's [Supporting Information, *Correlated trajectories*](../paper/si.html#correlated-trajectories).
+The copula, its estimator and how its settings were chosen are in the paper's [supporting information](../paper/si.html#correlated-trajectories).
 
 The pairing is inside each model's own forecast (`nowcastbaselines.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
 The renewal models' draws are already joint trajectories, so they are left as they are: reordering would break their real dependence.
@@ -148,7 +148,7 @@ Horizon is weeks from the reference week, so negative horizons are nowcasts, 0 i
 
 ## Leave-one-province-out
 
-One province's counts are left out of the likelihood while it stays in the model ([Supporting Information, *Renewal model*](../paper/si.html#renewal-model)).
+One province's counts are left out of the likelihood while it stays in the model ([supporting information](../paper/si.html#renewal-model)).
 This removes the known and imputed counts of its zones and its delay counts but keeps its zones in the latent process.
 In `renewalbvd` it also drops the national BVDOutbreakSize term and the patch that holds the province.
 `renewalsp` fits each zone only on its own data, so it cannot forecast a province left out.
@@ -157,7 +157,7 @@ It runs on every real vintage for the three renewal models.
 
 ## Health zones
 
-`randomwalk` and `randomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([Supporting Information, *Baselines*](../paper/si.html#baselines)).
+`randomwalk` and `randomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([supporting information](../paper/si.html#baselines)).
 A week with no onsets in a zone has a count of 0.
 Each model's zone samples are its zone run at the origin, which the fit store holds for every hub zone, scored as the model draws them, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with only one release are skipped, as for provinces.
