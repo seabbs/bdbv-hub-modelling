@@ -2,9 +2,8 @@
 
 import json
 
-from nowcastfoundation.finetune import interim
+from nowcastfoundation.finetune import interim, verify
 from nowcastfoundation.finetune import stream as fs
-from nowcastfoundation.finetune import verify
 
 
 def _split(wait=0.0, cut=0.0, train=0.0, eval_=0.0):
@@ -18,7 +17,12 @@ def _through_state(timings):
 
 def test_a_new_segment_starts_its_own_timings():
     got = fs.segment_timings(None, "n200", now=100.0)
-    assert got == {"segment": "n200", "started": 100.0, "chunks": [], "open": None}
+    assert got == {
+        "segment": "n200",
+        "started": 100.0,
+        "chunks": [],
+        "open": None,
+    }
     # The state kept with the previous checkpoint holds its timings.
     before = fs.segment_timings(None, "n100", now=10.0)
     fs.open_chunk(before, "1-100", 0, now=10.0)
@@ -33,14 +37,20 @@ def test_a_resume_keeps_the_chunks_timed_before_it():
     timings = fs.segment_timings(None, "n200", now=0.0)
     fs.open_chunk(timings, "1-100", 0, now=0.0)
     first = fs.close_chunk(
-        timings, _split(wait=1.0, cut=2.0, train=300.0, eval_=7.0), 400, now=310.0
+        timings,
+        _split(wait=1.0, cut=2.0, train=300.0, eval_=7.0),
+        400,
+        now=310.0,
     )
     assert first["chunk"] == "1-100"
-    assert first["first"] == 1 and first["last"] == 100
+    assert first["first"] == 1
+    assert first["last"] == 100
     assert first["steps"] == 400
     assert first["seconds"] == 310.0
-    assert first["started"] == 0.0 and first["ended"] == 310.0
-    assert first["timed_from"] == 0 and first["resumed_at"] == []
+    assert first["started"] == 0.0
+    assert first["ended"] == 310.0
+    assert first["timed_from"] == 0
+    assert first["resumed_at"] == []
     # The second chunk is saved part way, at batch 150, then the trainer
     # stops.
     split = fs.open_chunk(timings, "101-200", 0, now=320.0)
