@@ -289,7 +289,9 @@ def test_comparison_runs_are_named_from_the_dashboard_config():
         "runa": "Fine-tuned (reporting triangle)",
         "noslots": "Fine-tuned (reporting triangle), no attention bias",
         "nodelays": "Fine-tuned (complete data)",
-        "realdata": "Fine-tuned (reporting triangle), synthetic and German data",
+        "realdata": (
+            "Fine-tuned (reporting triangle), synthetic and German data"
+        ),
         "runb": "Fine-tuned (reporting triangle), release layer",
     }
 

@@ -273,6 +273,14 @@ properties:
             model: {type: string}
             checkpoint: {type: string}
             role: {enum: [baseline, start, other]}
+      run_names:
+        type: object
+        additionalProperties:
+          type: object
+          additionalProperties: false
+          properties:
+            paper_model: {type: string}
+            variant: {type: string}
       studies:
         type: object
         additionalProperties: {type: string}
