@@ -396,10 +396,12 @@ def checkpoint_timings(folder: Path | None, status: Mapping[str, Any]) -> str:
 
     A segment's simulations and steps are its checkpoint's less the one
     before (settings.json); the training segment's steps are the status
-    step's. Its time is the chunk-time lines of its log
-    (`logs.RunLog.chunk_times`), which a restart writes again: when they
-    time only some of the steps (`logs.timed`), the training time is
-    scaled up from them and marked ≈. The wall time runs from the
+    step's. Its time is the trainer's stored chunk timings, kept across
+    restarts, else the chunk-time lines of its log
+    (`logs.RunLog.chunk_times`), which a restart of a trainer that kept
+    none wrote again: when they time only some of the steps
+    (`logs.timed`), the training time is scaled up from them and marked
+    ≈. The wall time runs from the
     previous checkpoint's save to this one's, restarts and idle time
     included.
     """

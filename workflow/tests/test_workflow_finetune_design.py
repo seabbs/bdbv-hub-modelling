@@ -108,8 +108,8 @@ def _trainer_args(tmp_path, finetune=None, machine=""):
     text = out.stdout.replace("\\\n", " ")
     line = next(ln for ln in text.splitlines() if "finetune-stream" in ln)
     words = shlex.split(line.split("finetune-stream", 1)[1])
-    # Up to the log redirect, `>> log` or `>>log` (as snakefmt writes it).
-    end = next(i for i, w in enumerate(words) if w.startswith(">>"))
+    # Up to the output's redirect into the logs (`2>&1 | tee -a ...`).
+    end = words.index("2>&1")
     return words[:end]
 
 

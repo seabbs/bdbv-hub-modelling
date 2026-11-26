@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from flowlib.training import Training
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -40,15 +39,3 @@ def test_each_attempt_appends_to_the_trainer_log(tmp_path):
         assert re.search(rf"tee -a \S*{trainer_log}", job)
         assert not re.search(rf"[^>]>\s*\S*{trainer_log}", job)
         assert job.count("tee -a") == 2
-
-
-def test_a_worker_elsewhere_copies_back_the_log_and_timings(tmp_path):
-    training = Training.__new__(Training)
-    training.train_dir = lambda run: f"{tmp_path}/{run}/train"
-
-    class Wc:
-        run, n = "runa", "800"
-
-    got = Training.segment_copy_back(training, Wc)
-    assert f"{tmp_path}/runa/train/n800.log" in got
-    assert f"{tmp_path}/runa/train/timings/n800.json" in got

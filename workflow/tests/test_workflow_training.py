@@ -63,7 +63,12 @@ def test_a_worker_copies_back_what_publishing_reads(tmp_path: Path) -> None:
     t = _training(tmp_path)
     back = t.segment_copy_back(_wc(n="100"))
     assert back[0] == f"{t.train_dir('x')}/n100/outbreaks.txt"
-    assert len(back) == len(training.SEGMENT_COPY_BACK)
+    assert len(back) == len(training.SEGMENT_COPY_BACK) + 2
+    # And the segment's log and chunk timings over every attempt.
+    assert back[-2:] == [
+        f"{t.train_dir('x')}/n100.log",
+        f"{t.train_dir('x')}/timings/n100.json",
+    ]
 
 
 def test_batches_come_from_local_rounds_only_when_the_run_reads_them(
