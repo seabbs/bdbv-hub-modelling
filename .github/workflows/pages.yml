@@ -108,13 +108,13 @@ jobs:
           FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
         run: |
           python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
-          bundle=output/fit-store/backtests/latest.tar.gz
-          if [ ! -f "$bundle" ]; then
+          if [ ! -f output/fit-store/backtests/latest.json ]; then
             echo "::warning::the fit store holds no backtests yet (Fit store's backtests job writes them); their sections are left out"
             echo "Backtests: not yet stored" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          tar -xzf "$bundle"
+          # The bundle's parts, joined in order (`branch.py`).
+          cat output/fit-store/backtests/latest.tar.gz* | tar -xz
           cat output/fit-store/backtests/latest.json >> "$GITHUB_STEP_SUMMARY"
       # What the site shows from the fits and backtests: the stored fits'
       # forecasts as `fit-store load` wrote them, the hub comparison, the
@@ -126,12 +126,11 @@ jobs:
         env:
           FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
         run: |
-          bundle=output/fit-store/site/latest.tar.gz
-          if [ ! -f "$bundle" ]; then
+          if [ ! -f output/fit-store/site/latest.json ]; then
             echo "::error::the fit store holds no site results yet; dispatch Site results (site-results.yml) on main to make them"
             exit 1
           fi
-          tar -xzf "$bundle"
+          cat output/fit-store/site/latest.tar.gz* | tar -xz
           cat output/fit-store/site/latest.json >> "$GITHUB_STEP_SUMMARY"
       # The store too, as the Getting started notebook reads a stored fit.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

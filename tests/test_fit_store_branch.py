@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from bdbvhub.store import branch
+
 MODULE = (
     Path(__file__).resolve().parents[1]
     / "packages/bdbvhub/src/bdbvhub/store/branch.py"
@@ -55,6 +57,13 @@ def _fit(root: Path, name: str, status: str, fitted_at: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     meta = {"status": status, "fitted_at": fitted_at}
     path.write_bytes(gzip.compress(json.dumps({"meta": meta}).encode()))
+
+
+def _joined(folder: Path) -> bytes:
+    """A stored bundle's parts joined, as `cat latest.tar.gz.*` joins them."""
+    return b"".join(
+        p.read_bytes() for p in sorted(folder.glob("latest.tar.gz.*"))
+    )
 
 
 def _git(*args: str, cwd: Path) -> None:
@@ -165,7 +174,7 @@ def test_push_backtests_stores_the_bundle_beside_the_fits(
 
     got = tmp_path / "got"
     assert _run("fetch", str(got), cwd=clone).returncode == 0
-    assert (got / "backtests" / "latest.tar.gz").read_bytes() == b"bundle"
+    assert _joined(got / "backtests") == b"bundle"
     meta = json.loads((got / "backtests" / "latest.json").read_text())
     assert meta["commit"] == "abc123"
     assert (got / "m/o/cur.json.gz").is_file()
@@ -225,6 +234,61 @@ def test_push_site_stores_the_site_results_and_their_key(
     assert out.returncode == 0, out.stderr
     got = tmp_path / "got"
     assert _run("fetch", str(got), cwd=clone).returncode == 0
-    assert (got / "site" / "latest.tar.gz").read_bytes() == b"site"
+    assert _joined(got / "site") == b"site"
     meta = json.loads((got / "site" / "latest.json").read_text())
     assert meta == {"commit": "abc123", "key": "k1"}
+
+
+def test_a_refused_push_fails_at_once_with_git_s_reason(
+    tmp_path: Path,
+) -> None:
+    # A push the remote refuses (GitHub's file size limit, a rule) fails
+    # the same way on every try, so it is not retried, and git's reason is
+    # shown.
+    _git("init", "-q", "--bare", "remote.git", cwd=tmp_path)
+    _git("clone", "-q", "remote.git", "clone", cwd=tmp_path)
+    clone = tmp_path / "clone"
+    for key, value in (("user.name", "t"), ("user.email", "t@t")):
+        _git("config", key, value, cwd=clone)
+    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=clone)
+    _git("push", "-q", "origin", "HEAD:main", cwd=clone)
+    hook = tmp_path / "remote.git" / "hooks" / "pre-receive"
+    hook.write_text(
+        "#!/bin/sh\necho 'GH001: Large files detected' >&2\nexit 1\n"
+    )
+    hook.chmod(0o755)
+    bundle = tmp_path / "site.tar.gz"
+    bundle.write_bytes(b"site")
+    out = subprocess.run(
+        [sys.executable, "-I", str(MODULE), "push-site", str(bundle), "a", "k"],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=20,
+    )
+    assert out.returncode != 0
+    assert "could not push to fit-store" in out.stderr
+    assert "GH001: Large files detected" in out.stderr
+
+
+def test_a_bundle_is_stored_in_parts_under_the_file_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # GitHub refuses a file over 100 MB, which the site's results pass.
+    monkeypatch.setattr(branch, "PART_BYTES", 4)
+    folder = tmp_path / "site"
+    folder.mkdir()
+    (folder / "latest.tar.gz").write_bytes(b"old")
+    (folder / "latest.tar.gz.009").write_bytes(b"old")
+    bundle = tmp_path / "site.tar.gz"
+    bundle.write_bytes(b"0123456789")
+    branch._put_bundle(bundle, folder)
+    parts = sorted(p.name for p in folder.iterdir())
+    assert parts == [
+        "latest.tar.gz.000",
+        "latest.tar.gz.001",
+        "latest.tar.gz.002",
+    ]
+    assert (folder / "latest.tar.gz.002").read_bytes() == b"89"
+    assert _joined(folder) == b"0123456789"
