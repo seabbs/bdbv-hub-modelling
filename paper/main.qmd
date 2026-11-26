@@ -22,16 +22,16 @@ abstract: |
   Time series foundation models, neural networks trained on many series, forecast well but are not designed for the reporting delays common in surveillance data.
   Nowcasting methods correct for these delays, but are either simple, with limited forecasting support, or need expert knowledge to configure for each setting.
   We fine-tuned Chronos-2, a time series foundation model, on simulated outbreaks.
-  To simulate them, we combined the reporting model of epinowcast, a widely used nowcasting package, with PyRenew, a library of components for building renewal models of infectious disease.
+  We simulated them by combining the reporting model of epinowcast, a widely used nowcasting package, with PyRenew, a library for building renewal models of infectious disease.
   We gave Chronos-2 the reporting triangle, counts by onset date and reporting delay, as one series per place and delay, with learned attention biases linking series to places and places to regions.
   We compared it with unmodified Chronos-2 and with a recently developed baseline nowcasting method, which we extended to forecast and to sparse data.
-  We evaluated them on held-out simulations, retrospectively against the German COVID-19 hospitalisation nowcast hub, and prospectively in the Ebola forecasting hub for the Democratic Republic of the Congo.
-  There we also submitted renewal models built on this combination.
+  We evaluated them on held-out simulations, retrospectively against the German COVID-19 hospitalisation nowcast hub, and prospectively in the Democratic Republic of the Congo Ebola forecasting hub.
+  There we also submitted renewal models from our real-time modelling of the outbreak, built on this combination.
   The fine-tuned model [outperformed / matched] unmodified Chronos-2 and the baseline method on held-out simulations, and [outperformed / performed comparably to] the hub models in both case studies.
   The attention biases and lag series [contributed most of / added little to] these gains, and simulations [outperformed / matched] real data for fine-tuning.
   Fine-tuning on simulated outbreaks gave a foundation model the delay handling of nowcasting methods without specialist configuration.
-  Fine-tuned foundation models could serve as baselines for model developers and forecast and nowcast hubs.
-  Teams without the capacity for expert setup could also use them directly, as they are more flexible and reliable than baseline nowcasting methods, especially unadapted ones.
+  Fine-tuned foundation models could serve as baselines for model developers and forecasting hubs.
+  Teams without capacity for expert setup could also use them directly, as they are more flexible and reliable than baseline methods, especially unadapted ones.
 bibliography: reference.bib
 # The evaluation workflow's numbers (`task pipeline:dev` or
 # `task pipeline:paper`), quoted with the meta shortcode.
