@@ -228,3 +228,36 @@ def test_push_site_stores_the_site_results_and_their_key(
     assert (got / "site" / "latest.tar.gz").read_bytes() == b"site"
     meta = json.loads((got / "site" / "latest.json").read_text())
     assert meta == {"commit": "abc123", "key": "k1"}
+
+
+def test_a_refused_push_fails_at_once_with_git_s_reason(
+    tmp_path: Path,
+) -> None:
+    # A push the remote refuses (GitHub's file size limit, a rule) fails
+    # the same way on every try, so it is not retried, and git's reason is
+    # shown.
+    _git("init", "-q", "--bare", "remote.git", cwd=tmp_path)
+    _git("clone", "-q", "remote.git", "clone", cwd=tmp_path)
+    clone = tmp_path / "clone"
+    for key, value in (("user.name", "t"), ("user.email", "t@t")):
+        _git("config", key, value, cwd=clone)
+    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=clone)
+    _git("push", "-q", "origin", "HEAD:main", cwd=clone)
+    hook = tmp_path / "remote.git" / "hooks" / "pre-receive"
+    hook.write_text(
+        "#!/bin/sh\necho 'GH001: Large files detected' >&2\nexit 1\n"
+    )
+    hook.chmod(0o755)
+    bundle = tmp_path / "site.tar.gz"
+    bundle.write_bytes(b"site")
+    out = subprocess.run(
+        [sys.executable, "-I", str(MODULE), "push-site", str(bundle), "a", "k"],
+        cwd=clone,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=20,
+    )
+    assert out.returncode != 0
+    assert "could not push to fit-store" in out.stderr
+    assert "GH001: Large files detected" in out.stderr
