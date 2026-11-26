@@ -665,3 +665,23 @@ def test_every_run_training_at_once_has_its_status(tmp_path):
 def test_one_run_training_shows_its_status_alone(tmp_path):
     status = _status_section(page.build(_machine(tmp_path)))
     assert "Also training" not in status
+
+
+def test_each_location_level_can_be_picked_or_cleared_at_once(tmp_path):
+    # Every configured level is a group of the location selector, with
+    # controls to pick all of its places or none. Locations no level
+    # matches are a group of their own, so every place can be picked.
+    ctx = _machine(tmp_path)
+    ctx.datasets[0]["groups"] = [
+        {"name": "states", "match": "^DE-"},
+        {"name": "ages", "match": r"^\d\d-\d\d$"},
+    ]
+    sel = page.sections(ctx)["nowcasts"]
+    groups = _gdata(sel)["datasets"][0]["groups"]
+    assert groups == [
+        {"name": "states", "locs": []},
+        {"name": "ages", "locs": []},
+        {"name": "other", "locs": ["DE"]},
+    ]
+    for act in ("all", "none", "clear"):
+        assert f"data-act={act}" in sel
