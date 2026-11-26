@@ -227,3 +227,107 @@ def test_the_machine_may_point_the_dashboard_at_another_root(tmp_path):
     other = tmp_path / "elsewhere"
     ctx = context.build(cfg, {**local, "DASHBOARD_ROOT": str(other)})
     assert ctx.runs[0].folder == other / "runs" / "runa"
+
+
+RUN_NAMES = {
+    "noslots": {"variant": "no attention bias"},
+    "nodelays": {"paper_model": "foundation_complete"},
+    "realdata": {"variant": "synthetic and German data"},
+    "runb": {"variant": "release layer"},
+}
+
+
+def _trained(root, *names):
+    """Give each run a train/ folder, the last named the newest."""
+    import os
+
+    for i, name in enumerate(names):
+        status = root / "runs" / name / "train" / "stream-status.json"
+        status.parent.mkdir(parents=True)
+        status.write_text("{}")
+        os.utime(status, (1000 + i, 1000 + i))
+
+
+def test_the_configured_live_run_is_the_model_whatever_trained_last(
+    tmp_path,
+):
+    # The SI's no-attention-bias run training after Run A finished is
+    # still the variant: the paper's live run (`live_run`) is the model.
+    cfg = {
+        **CONFIG,
+        "live_run": "runa",
+        "dashboard": {**CONFIG["dashboard"], "run_names": RUN_NAMES},
+    }
+    _trained(tmp_path, "runa", "noslots")
+    local = {"ROOT": str(tmp_path), "SCORE_CACHE": "/x", "MAILBOX": ""}
+    ctx = context.build(cfg, local)
+    # Newest first; the status follows the run training now.
+    assert [r.key for r in ctx.runs] == ["noslots", "runa"]
+    assert ctx.runs[0].live
+    assert [r.label for r in ctx.runs] == [
+        "Fine-tuned (reporting triangle), no attention bias",
+        "Fine-tuned (reporting triangle)",
+    ]
+    from flowlib.dashboard import paperstyle
+
+    assert ctx.runs[1].colour == paperstyle.model_colour(context.RUN_MODEL)
+    assert ctx.runs[0].colour in context.RUN_SHADES
+
+
+def test_comparison_runs_are_named_from_the_dashboard_config():
+    from flowlib.dashboard import runs
+
+    got = context.named_runs(
+        [
+            runs.make_run(k, None, live=k == "runb")
+            for k in ("runb", "realdata", "nodelays", "noslots", "runa")
+        ],
+        main="runa",
+        names=RUN_NAMES,
+    )
+    assert {r.key: r.label for r in got} == {
+        "runa": "Fine-tuned (reporting triangle)",
+        "noslots": "Fine-tuned (reporting triangle), no attention bias",
+        "nodelays": "Fine-tuned (complete data)",
+        "realdata": "Fine-tuned (reporting triangle), synthetic and German data",
+        "runb": "Fine-tuned (reporting triangle), release layer",
+    }
+
+
+def test_a_run_shown_alone_keeps_its_variant_name():
+    from flowlib.dashboard import runs
+
+    got = context.named_runs(
+        [runs.make_run("noslots", None, live=True)],
+        main="runa",
+        names=RUN_NAMES,
+    )
+    assert got[0].label == "Fine-tuned (reporting triangle), no attention bias"
+
+
+def test_the_workflow_config_names_every_run():
+    # Every workflow run but the paper's live run has a name of its own.
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).parents[2]
+    wf = yaml.safe_load((root / "workflow" / "config.yaml").read_text())
+    paper = yaml.safe_load(
+        (root / "paper" / "workflow" / "config.yaml").read_text()
+    )
+    named = set(wf["dashboard"]["run_names"])
+    assert named == set(wf["runs"]) - {paper["live_run"]}
+
+
+def test_the_dashboard_script_reads_the_paper_s_live_run():
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).parents[2]
+    sys.path.insert(0, str(root / "workflow" / "scripts"))
+    import dashboard
+
+    config = dashboard.read_config(dashboard.CONFIG)
+    assert config["live_run"] == "runa"
+    assert "dashboard" in config
