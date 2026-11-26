@@ -112,7 +112,9 @@
       if (byPlace && p.id === "national") return;
       h("option", { value: p.id }, selScale, p.label);
     });
-    var rounds = T.roundPicker(controls, d.origins, null, function () { update(); });
+    // One round or all: the relative scores are computed per round and over
+    // every round, not for other sets of rounds.
+    var rounds = T.roundPicker(controls, d.origins, null, function () { update(); }, true);
     var selPlace = null;
     if (byPlace) selPlace = h("select", {}, h("label", {}, controls, "Table for "));
     T.fullscreen(controls, root);
@@ -120,10 +122,10 @@
     var mapOn = hasMap ? T.mapToggle(controls, false, function () { drawMap(); }) : null;
     var note = h("p", { class: "explorer-note" }, root);
     function sayBaseline() {
-      note.textContent = "Cells counts the scores pooled for a model: one per place, " +
-        "target week, round and release that both it and " + d.models[baseline].name +
-        " forecast. Relative scores divide by " + d.models[baseline].name +
-        " on those cells. Scores over several rounds pool their cells.";
+      note.textContent = "Cells counts a model's own scores: one per place, " +
+        "target week, round and release it forecast. Relative scores are pairwise " +
+        "relative skill (each pair of models compared on the forecasts both made), " +
+        "scaled so " + d.models[baseline].name + " is 1.";
     }
     sayBaseline();
     var panes = h("div", { class: "chart-map" }, root);
@@ -186,6 +188,15 @@
       }, baseline);
     }
 
+    // The skill key of a selection: the round chosen (or all), a pool or a
+    // place, and a horizon (or all).
+    function poolKey() {
+      return "p" + d.pools.map(function (p) { return p.id; }).indexOf(selScale.value);
+    }
+    function group(select, horizon) {
+      var rs = rounds.selected();
+      return summarise.key(rs === null ? null : rs[0], select, horizon);
+    }
     function places() {
       return d.places.map(function (p, i) { return { i: i, p: p }; })
         .filter(function (x) { return x.p.pool === selScale.value; });
@@ -217,7 +228,7 @@
         var all = set(places());
         var hrows = [];
         horizons.forEach(function (hz, xi) {
-          summarise(d, keep(all, hz), baseline).forEach(function (s) {
+          summarise(d, keep(all, hz), baseline, group(poolKey(), hz)).forEach(function (s) {
             hrows.push([s.model, xi, s.n].concat(d.metrics.map(function (m) {
               return value(s, m);
             })));
@@ -231,7 +242,8 @@
       var rows = [];
       var j = energy.length ? joint() : {};
       groups.forEach(function (g, xi) {
-        summarise(d, keep(set(g)), baseline).forEach(function (s) {
+        var g0 = byPlace ? group("x" + g[0].i) : group(poolKey());
+        summarise(d, keep(set(g)), baseline, g0).forEach(function (s) {
           rows.push([s.model, xi, s.n].concat(d.metrics.map(function (m) {
             return value(s, m);
           }), energy.map(function (m) {
@@ -261,7 +273,8 @@
         [0.4, 1 - metric.ref];
       var values = {};
       places().forEach(function (x) {
-        var s = summarise(d, keep(set([x])), baseline).filter(function (r) { return r.model === m; })[0];
+        var s = summarise(d, keep(set([x])), baseline, group("x" + x.i))
+          .filter(function (r) { return r.model === m; })[0];
         var v = s ? value(s, d.metrics[shown]) : null;
         if (v === null || v === undefined || isNaN(v) || (metric.log && v <= 0)) return;
         values[x.p.id] = v;
@@ -284,7 +297,8 @@
       var j = energy.length ? joint() : null;
       var k2 = keep(set(chosen));
       table.textContent = "";
-      summaryTable(table, d, summarise(d, k2, baseline),
+      var g2 = chosen.length === 1 && byPlace ? group("x" + chosen[0].i) : group(poolKey());
+      summaryTable(table, d, summarise(d, k2, baseline, g2),
         function (m) { return on[m]; },
         j ? jointCols : [], function (m) { return j && j[m]; },
         emptyNote(d, baseline, k2));

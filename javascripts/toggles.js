@@ -167,7 +167,8 @@
   // unticking the last round, shows all. selected() is null for all, else
   // the sorted indices; indices() is always the indices shown. onChange
   // runs on a change.
-  function roundPicker(controls, labels, initial, onChange) {
+  // With single, one round or all: ticking a round unticks the others.
+  function roundPicker(controls, labels, initial, onChange, single) {
     var box = h("details", { class: "roundpicker" }, controls);
     var summary = h("summary", {}, box);
     var list = h("div", { class: "roundpicker-list" }, box);
@@ -191,10 +192,11 @@
       paint();
       onChange();
     });
-    boxes.forEach(function (cb) {
+    boxes.forEach(function (cb, k) {
       cb.addEventListener("change", function () {
         var on = [];
-        boxes.forEach(function (b, i) { if (b.checked) on.push(i); });
+        if (single) { if (cb.checked) on.push(k); }
+        else boxes.forEach(function (b, i) { if (b.checked) on.push(i); });
         picked = on.length ? on : null;
         paint();
         onChange();

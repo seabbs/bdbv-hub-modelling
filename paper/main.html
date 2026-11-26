@@ -6,9 +6,9 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-11-18">
+<meta name="dcterms.date" content="2026-11-26">
 
-<title>Title to be chosen</title>
+<title>Fine-tuning a time series foundation model on synthetic outbreaks for nowcasting and forecasting</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -55,7 +55,7 @@ div.csl-indent {
 <link href="main_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="main_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="main_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="main_files/libs/bootstrap/bootstrap-d99fc85c7253c7d071cb1f16904a1173.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="main_files/libs/bootstrap/bootstrap-d387409dd495f78ddfe62d5279bc0297.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
@@ -99,7 +99,7 @@ window.Quarto = {
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Title to be chosen</h1>
+<h1 class="title">Fine-tuning a time series foundation model on synthetic outbreaks for nowcasting and forecasting</h1>
 </div>
 
 
@@ -110,22 +110,31 @@ window.Quarto = {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">November 18, 2026</p>
+      <p class="date">November 26, 2026</p>
     </div>
   </div>
   
     
   </div>
   
+<div>
+  <div class="abstract">
+    <div class="block-title">Abstract</div>
+    <p>Infectious disease forecasts and nowcasts inform public health. Time series foundation models, neural networks trained on many series, forecast new series well with no further training (zero-shot) but are not designed for reporting delays. Nowcasting methods correct for these delays but either forecast poorly or need expert configuration. We fine-tuned the foundation model Chronos-2 on simulated surveillance data. We simulated these data by combining the reporting model of epinowcast, a widely used nowcasting package, with the renewal model library PyRenew. We gave Chronos-2 counts by event date and reporting delay, one series per place and delay, with attention biases linking series to places and places to regions. We compared it with zero-shot Chronos-2, given the same input or only the latest counts, and with a recently developed baseline nowcasting method, extended to forecast and to sparse data. We evaluated them on held-out simulations, retrospectively against the German COVID-19 nowcast hub, and retrospectively and prospectively in the Democratic Republic of the Congo Ebola forecasting hub. To the Ebola hub we also submitted renewal models built on this combination, from our real-time modelling. On held-out simulations, the fine-tuned model [outperformed / matched] zero-shot Chronos-2 and the baseline method. Removing the attention biases [worsened / did not change] its scores, and giving it the baseline method’s nowcast as input [improved / worsened] them. On the German hub, it [outperformed / performed comparably to] the hub’s models. On the Ebola hub, it [outperformed / performed comparably to] other teams’ models and our renewal models. Fine-tuning on simulations from mature nowcasting tools fused their domain knowledge with a foundation model’s forecasting performance. Fine-tuned foundation models could serve as baselines for modellers and forecasting hubs. Teams without capacity for expert setup could also use them directly, being more flexible and reliable than unadapted baseline methods.</p>
+  </div>
+</div>
 
 
 </header>
 
 
 <!--
-Plan from #206.
 Each top-level bullet is one paragraph, with 2–3 supporting points.
 -->
+<section id="author-summary" class="level2">
+<h2 class="anchored" data-anchor-id="author-summary">Author summary</h2>
+<p>Forecasts of infectious disease cases help public health agencies plan their response. Recent counts are incomplete because cases take time to be reported. Nowcasts estimate the cases not yet reported. General forecasting models trained on many time series forecast well with no setup. However, we do not think they were trained on reporting delays, so they may mistake incomplete recent counts for a falling outbreak. Nowcasting models account for delays, but simple ones forecast poorly and complex ones need specialist setup. We combined the two by training a general model, Chronos-2, further on surveillance data simulated with established nowcasting tools. This adds what those tools know about reporting to the general model’s forecasting skill. We tested the model on simulated data, on past COVID-19 hospital admissions in Germany, and in real time during an Ebola outbreak in the Democratic Republic of the Congo. It [did better than / matched] the unmodified model, a simple nowcasting method and other teams’ models. Models taught this way could be baselines for teams and hubs that forecast infectious disease. Teams without the capacity to set up specialist models could also use them directly, as they adapt to new settings better than simple nowcasting methods.</p>
+</section>
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
 <div class="callout callout-style-default callout-note callout-titled" title="Plan">
@@ -141,21 +150,52 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 <ul>
 <li><strong>The gap.</strong>
 <ul>
-<li>Real-time case counts are incomplete because of reporting delays.</li>
-<li>Generic forecasting models do not use the reporting structure, so they treat incomplete recent counts as final.</li>
+<li>Infectious disease forecasting is being increasingly used to provide situational awareness for public health.</li>
+<li>Both in infectious disease forecasting, and more widely, modern machine learning methods including neural networks are becoming increasingly popular. In particular, foundation time series models which are neaural networks trained on many time series have been shown to outperform traditional methods in many settings. However, these methods are not generally specifically designed to deal with, or to make use of, the biases and delays common to infectious disease surveillance data.</li>
+<li>Nowcasting models have become increasingly popular as a method to make use of these reporting delays in order to improve forecasts of what will eventually be reported.</li>
+<li>Generally, these methods are either relatively simple <span class="citation" data-cites="hohle Johnson2025">(<a href="#ref-hohle" role="doc-biblioref">Höhle and Heiden 2014</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>, complex and customised for a given setting <span class="citation" data-cites="epinowcast Wolkfram2023">(<a href="#ref-epinowcast" role="doc-biblioref"><strong>epinowcast?</strong></a>; <a href="#ref-Wolkfram2023" role="doc-biblioref"><strong>Wolkfram2023?</strong></a>)</span>, or are developed in ad-hoc fashion for a given target <span class="citation" data-cites="bdbv_modeling_hub_2026">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span>.</li>
+<li>If these methods have forecasting support it is generally relatively limited or difficult to make performant without expert knowledge of the target and the reporting system.</li>
+<li>Methods that fused the frontier forecasting performance of foundation time-series models with the nowcasting performance of domain-specific methods without requiring specialisit knowledge to configure could improve infectious disease forecasts and more generally provide a case study for incorporating domain knowledge into foundation models.</li>
 <li>Key references: <span class="citation" data-cites="hohle Johnson2025 reichCollaborativeHubsMaking2022">(<a href="#ref-hohle" role="doc-biblioref">Höhle and Heiden 2014</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>; <a href="#ref-reichCollaborativeHubsMaking2022" role="doc-biblioref">Reich et al. 2022</a>)</span>.</li>
 </ul></li>
-<li><strong>Context.</strong>
+<li><strong>Context.</strong> Foundation time series models and their use in infectious disease forecasting.
 <ul>
-<li>Nowcasting methods model reporting delays directly.</li>
 <li>Time series foundation models forecast new series with no training on them.</li>
-<li>Training on domain-specific synthetic data has precedent: KernelSynth for Chronos <span class="citation" data-cites="Ansari2024">(<a href="#ref-Ansari2024" role="doc-biblioref">Ansari et al. 2024</a>)</span>, ForecastPFN <span class="citation" data-cites="Dooley2023">(<a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>)</span>, prior-fitted networks <span class="citation" data-cites="Muller2022 Hollmann2025">(<a href="#ref-Muller2022" role="doc-biblioref">Müller et al. 2022</a>; <a href="#ref-Hollmann2025" role="doc-biblioref">Hollmann et al. 2025</a>)</span>, and Mantis for outbreaks <span class="citation" data-cites="Dudley2026">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>)</span>.</li>
+<li>They are typically developed using complex, high parameter neural networks, trained on many time series, and are able to learn general patterns in time series data.</li>
+<li>Recent examples include Chronos-2 <span class="citation" data-cites="Ansari2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>, TimesFM <span class="citation" data-cites="Das2024a">(<a href="#ref-Das2024a" role="doc-biblioref">Das, Kong, et al. 2024</a>)</span> and Moirai <span class="citation" data-cites="Woo2024">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span> which have all been shown to peroform well on a wide range of forecasting tasks.</li>
+<li>They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly without modification (zero-shot) <span class="citation" data-cites="flusight_hub placeholder respicast_si_hub Ansari2025 Das2024a Woo2024">(<a href="#ref-flusight_hub" role="doc-biblioref">CDC 2026</a>; <a href="#ref-placeholder" role="doc-biblioref"><strong>placeholder?</strong></a>; <a href="#ref-respicast_si_hub" role="doc-biblioref">European Respiratory Diseases Forecasting Hub 2026</a>; <a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>; <a href="#ref-Das2024a" role="doc-biblioref">Das, Kong, et al. 2024</a>; <a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span>.</li>
+<li>Most of the currently used foundation modles come with tools that allow them to be fine-tuned on new data.</li>
+<li>This is a process where the weights of the model are modified to better fit the new data, usually using Low-Rank Adaptation (LoRA) or similar methods, which allow the model to be adapted to new data without requiring full retraining.</li>
+<li>Some recent infectious disease forecasting models fine-tune a foundation model on real surveillance data <span class="citation" data-cites="dhauser_fluchronos fluxengine_atlas">(<a href="#ref-dhauser_fluchronos" role="doc-biblioref">Hauser 2026</a>; <a href="#ref-fluxengine_atlas" role="doc-biblioref">fluxengine 2026</a>)</span>.</li>
+<li>Several existing methods incorporate domain knowledge using simulated data but all of these approach custom neural network architectures <span class="citation" data-cites="Dudley2026 umass_axial">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>; <a href="#ref-umass_axial" role="doc-biblioref">UMass 2026</a>)</span>.</li>
+<li>Outside of infectious disease forecasting fine tuning using domain-specific synthetic data has been shown to improve performance in other domains, including weather forecasting <span class="citation" data-cites="Dooley2023">(<a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>)</span> and financial time series <span class="citation" data-cites="Muller2022">(<a href="#ref-Muller2022" role="doc-biblioref">Müller et al. 2022</a>)</span>.</li>
+<li>As well as fine tuning, foundation time series models can be adapted with small changes to their architecture. One such change adds learned biases to the attention scores, so the model knows which series are related, such as a count and its reporting delays, or a place and the region that contains it <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span>.</li>
 <li>Key references: <span class="citation" data-cites="mcgough2020nowcasting gunther2021nowcasting Wolffram2023 Ansari2024 Das2024a Woo2024 Rasul2023 Garza2023 Aksu2024 Shchur2025 Kalahasti2026 Dudley2025">(<a href="#ref-mcgough2020nowcasting" role="doc-biblioref">McGough et al. 2020</a>; <a href="#ref-gunther2021nowcasting" role="doc-biblioref">Günther et al. 2021</a>; <a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-Ansari2024" role="doc-biblioref">Ansari et al. 2024</a>; <a href="#ref-Das2024a" role="doc-biblioref">Das, Kong, et al. 2024</a>; <a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Rasul2023" role="doc-biblioref">Rasul et al. 2023</a>; <a href="#ref-Garza2023" role="doc-biblioref">Garza, Challu, and Mergenthaler-Canseco 2023</a>; <a href="#ref-Aksu2024" role="doc-biblioref">Aksu et al. 2024</a>; <a href="#ref-Shchur2025" role="doc-biblioref">Shchur et al. 2025</a>; <a href="#ref-Kalahasti2026" role="doc-biblioref">Kalahasti et al. 2026</a>; <a href="#ref-Dudley2025" role="doc-biblioref">Dudley et al. 2025</a>)</span>.</li>
+</ul></li>
+<li><strong>Context 2</strong> Nowcasting methods and avilable models
+<ul>
+<li>Nowcasting methods estimate what will eventually be reported for recent dates, using the reporting triangle of counts by reference date and reporting delay <span class="citation" data-cites="hohle Wolffram2023">(<a href="#ref-hohle" role="doc-biblioref">Höhle and Heiden 2014</a>; <a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
+<li>To use simulated data for fine-tuning, we need a method that can also act as a generative model of how outbreaks are reported.</li>
+<li>Chain ladder methods scale up partial counts by the share historically reported at each delay <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>. They are fast and transparent, but have no model of incidence, so they cannot simulate new outbreaks.</li>
+<li>Regression methods fit the reporting triangle as a smooth surface over reference date and delay <span class="citation" data-cites="vandeKassteele2019 Schneble2021 bastos Mellor2025">(<a href="#ref-vandeKassteele2019" role="doc-biblioref">Kassteele, Eilers, and Wallinga 2019</a>; <a href="#ref-Schneble2021" role="doc-biblioref">Schneble et al. 2021</a>; <a href="#ref-bastos" role="doc-biblioref">Bastos et al. 2019</a>; <a href="#ref-Mellor2025" role="doc-biblioref">Mellor et al. 2025</a>)</span>. They describe the observed data well but do not constrain the delay distribution or include mechanisms such as transmission, so they give no clear process to simulate from.</li>
+<li>Conditional generative models first model total counts and then split them across delays <span class="citation" data-cites="hohle Stoner2020 Stoner2023 Seaman2022">(<a href="#ref-hohle" role="doc-biblioref">Höhle and Heiden 2014</a>; <a href="#ref-Stoner2020" role="doc-biblioref">Stoner and Economou 2020</a>; <a href="#ref-Stoner2023" role="doc-biblioref">Stoner, Halliday, and Economou 2023</a>; <a href="#ref-Seaman2022" role="doc-biblioref">Seaman et al. 2022</a>)</span>. This separates variability in incidence from variability in reporting. However, there is no general software framework for them, and they have not been extended to the wide range of reporting patterns seen in practice, such as changing delays, report-day effects and mixed reporting cadences.</li>
+<li>Marginal generative models specify expected counts by reference date and spread them across delays, treating each cell of the reporting triangle as a separate draw <span class="citation" data-cites="mcgough2020nowcasting gunther2021nowcasting lison2024 abbottepinowcast">(<a href="#ref-mcgough2020nowcasting" role="doc-biblioref">McGough et al. 2020</a>; <a href="#ref-gunther2021nowcasting" role="doc-biblioref">Günther et al. 2021</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>)</span>. Run forward, they simulate how outbreaks are reported, and can include a renewal process, parametric and time-varying delays, report-day effects and pooling across places and age groups <span class="citation" data-cites="lison2024 abbottepinowcast Bergstrom2022">(<a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-Bergstrom2022" role="doc-biblioref">Bergström et al. 2022</a>)</span>.</li>
+<li>epinowcast is a community-developed software framework for marginal generative nowcasting models <span class="citation" data-cites="abbottepinowcast">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>)</span>. It is flexible, and supports a wide range of reporting patterns, including changing delays, report-day effects, hierarchical pooling, missing reference dates and user-defined reporting schedules. It has been used in a wide range of applications, including nowcasting COVID-19 hospitalisations in the German nowcast hub <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>, and as a check in nowcasts of mpox and norovirus in England <span class="citation" data-cites="Overton2023-dk Mellor2025">(<a href="#ref-Overton2023-dk" role="doc-biblioref">Overton et al. 2023</a>; <a href="#ref-Mellor2025" role="doc-biblioref">Mellor et al. 2025</a>)</span>. The same form of model has been used to nowcast the effective reproduction number from line list data <span class="citation" data-cites="lison2024">(<a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>)</span>. This makes it a natural basis for simulating training data, and our simulations follow its structure.</li>
+<li>PyRenew is a Python framework, developed and used at the US CDC, for building renewal models of infectious disease from modular components, such as infection processes, delays and observation models, using JAX and NumPyro <span class="citation" data-cites="pyrenew Phan2019">(<a href="#ref-pyrenew" role="doc-biblioref">CDC Center for Forecasting and Outbreak Analytics 2025</a>; <a href="#ref-Phan2019" role="doc-biblioref">Phan, Pradhan, and Jankowiak 2019</a>)</span>. It was developed to fit models similar to those in EpiNow2 and to the generative process in epinowcast to multiple data streams across many locations <span class="citation" data-cites="EpiNow2 abbottepinowcast">(<a href="#ref-EpiNow2" role="doc-biblioref">Abbott et al. 2020</a>, <a href="#ref-abbottepinowcast" role="doc-biblioref">2026</a>)</span>. However, it has no marginal nowcasting model, and does not have delays that change over time or Dirichlet-multinomial reporting noise.</li>
 </ul></li>
 <li><strong>What we did.</strong>
 <ul>
-<li>We fine-tuned Chronos-2, a general time series foundation model, on simulated outbreaks rather than training a model from scratch.</li>
-<li>We evaluated it on held-out simulations, on the German COVID-19 hospitalisation nowcast hub, and prospectively on the Ebola forecasting hub.</li>
+<li>We fine-tuned Chronos-2, a general time series foundation model, on infectious disease surveillance data simulated using the epinowcast nowcasting framework.</li>
+<li>epinowcast is written in R and Stan <span class="citation" data-cites="RCoreTeam Carpenter2017">(<a href="#ref-RCoreTeam" role="doc-biblioref">R Core Team 2025</a>; <a href="#ref-Carpenter2017" role="doc-biblioref">Carpenter et al. 2017</a>)</span>, while Chronos-2 is written in Python. We ported the epinowcast model to Python on top of PyRenew, reusing its components and adding components where it had none, such as delays that change over time.</li>
+<li>We validated the port by submitting renewal models built on it to the Ebola forecasting hub in real time <span class="citation" data-cites="bdbv_modeling_hub_2026">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span>. One of these used the posterior reproduction number estimates of BVDOutbreakSize, our model of the outbreak’s size, to inform its own <span class="citation" data-cites="BVDOutbreakSize">(<a href="#ref-BVDOutbreakSize" role="doc-biblioref">Abbott, Funk, and Holt 2026</a>)</span> (Supporting Information, <em>Renewal model</em>).</li>
+<li>We gave the model the reporting triangle as one series per place and reporting delay. We added learned attention biases so it can tell which delay series belong to which place, and which places sit within which regions.</li>
+<li>We developed the settings for the simulated data based on our past experience of infectious disease modelling including in the COVID-19 pandmeic <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>, the 2023 Mpox outbreak <span class="citation" data-cites="Overton2023-dk">(<a href="#ref-Overton2023-dk" role="doc-biblioref">Overton et al. 2023</a>)</span>, and based on the early data available for the 2025 Ebola outbreak in the Democratic Republic of the Congo <span class="citation" data-cites="bdbv_modeling_hub_2026">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span>.</li>
+<li>We adapted a recently developed baseline nowcasting method, baselinenowcast, to also produce forecasts as a baseline for comparison, and to work on sparse data <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span> (Supporting Information, <em>Baselines</em>). We also submitted it to the Ebola forecasting hub in real time.</li>
+<li>We first evaluated these models on held-out simulations.</li>
+<li>To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 hospitalisation nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.</li>
+<li>We explored a range of senesitivity analyses to assess the impact of different design choices on model performance.</li>
+<li>These included: assessing the impact of using a baseline nowcast as input to the foundation model, fine-tuning on real data, removing the attention biases and lag series, and comparing different lag count rules and block structures.</li>
+<li>We aim to demonstrate the potential of foundation time series models fine-tuned on domain-specific synthetic data to improve infectious disease nowcasting and forecasting, and to provide a case study for incorporating domain knowledge into foundation models more generally.</li>
 <li>Key references: <span class="citation" data-cites="Ansari2025 Johnson2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>.</li>
 </ul></li>
 </ul>
@@ -164,8 +204,8 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 </section>
 <section id="methods" class="level2">
 <h2 class="anchored" data-anchor-id="methods">Methods</h2>
-<section id="data" class="level3">
-<h3 class="anchored" data-anchor-id="data">Data</h3>
+<section id="foundation-model" class="level3">
+<h3 class="anchored" data-anchor-id="foundation-model">Foundation model</h3>
 <div class="callout callout-style-default callout-note callout-titled" title="Plan">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -177,15 +217,23 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We used the German COVID-19 hospitalisation nowcast hub’s reporting triangle, nationally, by state and by age group.</li>
-<li>We used the Ebola forecasting hub’s weekly confirmed cases by symptom onset, with every release, by country, province and health zone.</li>
-<li>Key references: <span class="citation" data-cites="Wolffram2023 hospitalization_nowcast_hub_2025 bdbv_modeling_hub_2026 MacNeil2010">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-hospitalization_nowcast_hub_2025" role="doc-biblioref">KIT Metrics Lab et al. 2025</a>; <a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>; <a href="#ref-MacNeil2010" role="doc-biblioref">MacNeil et al. 2010</a>)</span>.</li>
+<li>Time series foundation models forecast new series with no training on them <span class="citation" data-cites="Ansari2024 Das2024a Woo2024">(<a href="#ref-Ansari2024" role="doc-biblioref">Ansari et al. 2024</a>; <a href="#ref-Das2024a" role="doc-biblioref">Das, Kong, et al. 2024</a>; <a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span>.</li>
+<li>Chronos-2 is an encoder-only transformer, based on the T5 encoder, with 120 million parameters <span class="citation" data-cites="Ansari2025 Raffel2020 Vaswani2017">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>; <a href="#ref-Raffel2020" role="doc-biblioref">Raffel et al. 2020</a>; <a href="#ref-Vaswani2017" role="doc-biblioref">Vaswani et al. 2017</a>)</span>.</li>
+<li>It scales each series by the mean and standard deviation of its history, applies the inverse hyperbolic sine, and splits the series into patches of consecutive steps <span class="citation" data-cites="Ansari2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>.</li>
+<li>Its attention layers update what the model has learned about each patch as a weighted mix of other patches, with more weight on those it finds relevant <span class="citation" data-cites="Vaswani2017">(<a href="#ref-Vaswani2017" role="doc-biblioref">Vaswani et al. 2017</a>)</span>.</li>
+<li>Time attention mixes patches along one series, and group attention mixes the series of a group at the same time <span class="citation" data-cites="Ansari2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>.</li>
+<li>A group can be a set of related series, together with inputs whose future values are already known, which enter with those future values visible <span class="citation" data-cites="Ansari2025">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>.</li>
+<li>It gives 21 quantiles, from 1% to 99%, for several future steps in one pass, and we drew samples from these quantiles (Figure 1D).</li>
+<li>It was pretrained in two stages, on real series from the Chronos and GIFT-Eval corpora and on synthetic series, and learned to forecast related series and known inputs from synthetic data alone, from generators that impose dependencies between series <span class="citation" data-cites="Ansari2025 Ansari2024">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>, <a href="#ref-Ansari2024" role="doc-biblioref">2024</a>)</span>.</li>
+<li>We used Chronos-2 because it forecasts related series together and takes known future inputs, both of which we need (Model inputs).</li>
+<li>We ran it with PyTorch and chronos-forecasting <span class="citation" data-cites="chronos_forecasting">(<a href="#ref-chronos_forecasting" role="doc-biblioref">Amazon Science 2025</a>)</span>.</li>
+<li>Key references: <span class="citation" data-cites="Ansari2025 Ansari2024 Vaswani2017">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>, <a href="#ref-Ansari2024" role="doc-biblioref">2024</a>; <a href="#ref-Vaswani2017" role="doc-biblioref">Vaswani et al. 2017</a>)</span>.</li>
 </ul>
 </div>
 </div>
 </section>
-<section id="baselines" class="level3">
-<h3 class="anchored" data-anchor-id="baselines">Baselines</h3>
+<section id="model-inputs" class="level3">
+<h3 class="anchored" data-anchor-id="model-inputs">Model inputs</h3>
 <div class="callout callout-style-default callout-note callout-titled" title="Plan">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -197,63 +245,21 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We compare with <code>randomwalk</code>, a random walk with no delay adjustment, and <code>randomwalknowcast</code>, a random walk nowcast.</li>
-<li>The SI describes both in full.</li>
-<li>Key references: <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>.</li>
+<li>Surveillance data for nowcasting are a reporting triangle, counts by reference date, such as the date of symptom onset, and by reporting delay, in which recent dates have only their shortest delays reported so far <span class="citation" data-cites="hohle Wolffram2023">(<a href="#ref-hohle" role="doc-biblioref">Höhle and Heiden 2014</a>; <a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
+<li>We gave Chronos-2 one count series per place, complete up to the last date whose counts have settled, and one lag series per place and reporting delay, each missing until reported (Figure 1B).</li>
+<li>Counts reported after that date are inputs whose future values are already known.</li>
+<li>Places nest, such as health zones within provinces within a country.</li>
+<li>Chronos-2 forecasts every place and its lag series together, in one group we call a block.</li>
+<li>Without more information, the model cannot tell which lag series belong to which place’s count.</li>
+<li>We added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai’s any-variate attention and TableFormer’s relation biases <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span> (Figure 1B; Supporting Information, <em>Attention biases</em>).</li>
+<li>At forecast time we set the number of lag series per place, <span class="math inline">\(D\)</span>, from the data (Supporting Information, <em>Lag count</em>).</li>
+<li>Each reference date first published after releases began settles at the first reporting delay at which its reported count reaches 98% of its latest count.</li>
+<li><span class="math inline">\(D\)</span> is one more than the 98th percentile of these settling delays, using only dates seen for at least <span class="math inline">\(1.5D\)</span> days.</li>
+<li>With no such date, <span class="math inline">\(D\)</span> is the release history.</li>
+<li>A study can fix <span class="math inline">\(D\)</span> instead.</li>
+<li>Key references: <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span>.</li>
 </ul>
 </div>
-</div>
-</section>
-<section id="foundation-model-setup-and-fine-tuning" class="level3">
-<h3 class="anchored" data-anchor-id="foundation-model-setup-and-fine-tuning">Foundation model setup and fine-tuning</h3>
-<div class="callout callout-style-default callout-note callout-titled" title="Plan">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-<span class="screen-reader-only">Note</span>Plan
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<ul>
-<li>We give Chronos-2 the reporting triangle as series, one per place and reporting delay, each missing until reported (Figure 1B).</li>
-<li>Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.</li>
-<li>Without more information, the model has no marker of which delay series belong to which place’s count.</li>
-<li>We add learned attention biases that nudge these weights by how two series are related (the same series, the same place, or a place and its parent or child), building on Moirai’s any-variate attention and TableFormer’s relation biases <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span> (SI).</li>
-<li>A third each of the training blocks with places have a country equal to, above or later than the sum of its places.</li>
-<li>We fine-tune base Chronos-2 on synthetic data on a laptop, with its default LoRA recipe.</li>
-<li>LoRA trains a small update to about 1% of the model’s weights rather than retraining them all, so fine-tuning starts from the original model (SI).</li>
-<li>The learning rate falls linearly to zero over the 8,400 simulations.</li>
-<li>Each simulation gives up to 32 training blocks.</li>
-<li>A block is daily, 3-day or weekly, or daily with one weekly or 3-day total row per place.</li>
-<li>Four in five blocks are multivariate and one in five univariate.</li>
-<li>We save checkpoints at 250, 500, 750, 1,000, 2,000, 4,000 and 8,400 simulations.</li>
-<li>We report the final checkpoint, at 8,400 simulations, where the learning rate reaches zero, and select no checkpoint on real data.</li>
-<li>The simulations come in balanced blocks of 840, so the final model has seen ten whole blocks and the checkpoints before 840 only part of the grid.</li>
-<li>Chronos-2 forecasts the country, provinces and health zones as separate series in one joint block.</li>
-<li>We compare the joint block with forecasting each level alone and with summing the lowest level (SI).</li>
-<li>We compare lags capped at 4 weeks or 28 days with lags run to the truth delay (SI).</li>
-<li>We compare the model with attention biases with one fine-tuned without them (SI).</li>
-<li>We fine-tune Chronos-2 on complete counts only, without delay series, and compare it with the ragged model (SI).</li>
-<li>We fine-tune Chronos-2 on real data and compare it with the model fine-tuned on simulations (SI).</li>
-<li>We compare the fine-tuned model with zero-shot Chronos-2 and with Chronos-2 given only complete data.</li>
-<li>We plot each checkpoint’s scores, with both as reference lines (SI).</li>
-<li>Figure 1 shows the simulation, the ragged series, training and forecasting.</li>
-<li>TODO: replace the SI’s dashboard screenshot with a static render of the finished run from the workflow.</li>
-<li>Key references: <span class="citation" data-cites="Ansari2025 Ansari2024 Hu2021 Das2024b">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>, <a href="#ref-Ansari2024" role="doc-biblioref">2024</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>; <a href="#ref-Das2024b" role="doc-biblioref">Das, Faw, et al. 2024</a>)</span>.</li>
-</ul>
-</div>
-</div>
-<div id="fig-pipeline" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="figures/fig1-pipeline.svg" class="img-fluid figure-img">
-</div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle. (B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs. Group attention has learned biases for a series attending to itself and to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai’s any-variate attention <span class="citation" data-cites="Woo2024">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span>, while every place’s series sit in one group. The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation. Beside it, one place’s daily rows carry a weekly total row, missing until the last day of each week. (C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained. (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u and is at least the count reported so far.
-</figcaption>
-</figure>
 </div>
 </section>
 <section id="synthetic-data-generation" class="level3">
@@ -269,21 +275,107 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We simulate outbreaks of up to 52 weeks with epinowcast over a crossed grid of epidemic process, trajectory, places and age groups, reporting delays and their changes, report days, reporting shocks and observation noise (SI).</li>
-<li>The outbreaks range from one wave to several, with cases spread over many places or concentrated in a few, delays that drift, step, bunch or slow down, and NB1 or Poisson noise.</li>
-<li>We checked the grid’s ranges against published values for several diseases, the case studies among them.</li>
+<li>We simulated surveillance data with our port of the epinowcast model to Python on top of PyRenew and numpyro <span class="citation" data-cites="abbottepinowcast pyrenew Phan2019">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-pyrenew" role="doc-biblioref">CDC Center for Forecasting and Outbreak Analytics 2025</a>; <a href="#ref-Phan2019" role="doc-biblioref">Phan, Pradhan, and Jankowiak 2019</a>)</span>.</li>
+<li>The simulation grid is the set of settings each simulation draws from, such as reproduction numbers, reporting delays and reporting patterns, with their sampling distributions.</li>
+<li>We simulated the data in five layers (Figure 1A; Supporting Information, <em>Synthetic data generation</em>).</li>
+<li>In layer 1 we simulated infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.</li>
+<li>In layer 2 infections became reference events, such as symptom onsets, after a delay such as incubation, and we kept a share of them with negative binomial or Poisson noise.</li>
+<li>In layer 3 these events were reported after a reporting delay that is fixed or changes over time, as in epinowcast’s observation model.</li>
+<li>In layer 4 we added the reporting system, with report days and weekday effects, half with patterns such as a weekend dip, backlogs, outages, revisions that can take a release above the final count, and how often data are released.</li>
+<li>In layer 5 we set the places and age groups, how they nest and interact, how settings vary between them, and whether totals are exact sums of their parts.</li>
+<li>Layer 1 is the epidemic setting, and layers 2 to 5 are what fine-tuning teaches.</li>
+<li>The workflow simulates from the grid’s configuration and writes every summary and figure, so a change to the grid regenerates them.</li>
 <li>Key references: <span class="citation" data-cites="abbottepinowcast lison2024 Park2024 Ansari2024 Dooley2023 Muller2022 Hollmann2025">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-Park2024" role="doc-biblioref">Park et al. 2024</a>; <a href="#ref-Ansari2024" role="doc-biblioref">Ansari et al. 2024</a>; <a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>; <a href="#ref-Muller2022" role="doc-biblioref">Müller et al. 2022</a>; <a href="#ref-Hollmann2025" role="doc-biblioref">Hollmann et al. 2025</a>)</span>.</li>
 </ul>
 </div>
 </div>
 </section>
-<section id="correlated-trajectories" class="level3">
-<h3 class="anchored" data-anchor-id="correlated-trajectories">Correlated trajectories</h3>
+<section id="fine-tuning" class="level3">
+<h3 class="anchored" data-anchor-id="fine-tuning">Fine-tuning</h3>
+<div class="callout callout-style-default callout-note callout-titled" title="Plan">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Plan
+</div>
+</div>
+<div class="callout-body-container callout-body">
 <ul>
-<li>We pair the province draws of <code>randomwalk</code> and <code>randomwalknowcast</code> within each week with a rolling Gaussian copula, so their national forecast, the per-sample sum of the provinces, is not too narrow, while each cell keeps its own draws (SI).</li>
-<li>The hub does not require coherence across levels, so this is our choice for the walks. Chronos-2 submits its joint block’s own national forecast.</li>
+<li>We fine-tuned Chronos-2 on the simulated data on one machine, with its default LoRA recipe, using PEFT.</li>
+<li>LoRA trains a small update to about 1% of the model’s weights rather than retraining them all, so fine-tuning starts from the original model (Figure 1C; Supporting Information, <em>LoRA</em>).</li>
+<li>We trained on 4,800 simulations, each drawing its settings from the grid independently.</li>
+<li>The loss is Chronos-2’s quantile loss over the nowcast steps and one week ahead, so fine-tuning does not change its longer-range forecasting (Supporting Information, <em>Loss</em>).</li>
+<li>The learning rate falls linearly to zero over these simulations.</li>
+<li>We cut up to 14 training blocks from each simulation.</li>
+<li>A block is daily, 3-day or weekly.</li>
+<li>A daily block can also have one extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.</li>
+<li>In 30% of blocks releases start late, so the first release fills in earlier reference dates, as the Ebola hub’s first release did.</li>
+<li>5% of blocks have no lag series, as when only the latest data are at hand.</li>
+<li>Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series.</li>
+<li>In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later.</li>
+<li>Training blocks set <span class="math inline">\(D\)</span> by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle <span class="math inline">\(D\)</span> set slightly differently.</li>
+<li>We saved checkpoints at 100, 200, 400, 800, 1,600, 3,200 and 4,800 simulations.</li>
+<li>At each checkpoint we checked that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (Supporting Information, <em>Monitoring fine-tuning</em>).</li>
+<li>We report the final checkpoint, where the learning rate reaches zero, and selected no checkpoint on real data.</li>
+<li>Blocks were limited to what fits in the memory of our available GPUs, and we made several approximations to fit within this (Supporting Information, <em>Fitting in GPU memory</em>).</li>
+<li>We cut a set of places too large for one block into views, in training and at forecast time alike.</li>
+<li>Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces (Supporting Information, <em>Fitting in GPU memory</em>).</li>
+<li>Figure 1 shows the simulation, the model inputs, fine-tuning and forecasting.</li>
+<li>TODO: replace the Supporting Information’s dashboard screenshot with a static render of the finished run from the workflow.</li>
+<li>Key references: <span class="citation" data-cites="Ansari2025 Hu2021 Das2024b">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>; <a href="#ref-Das2024b" role="doc-biblioref">Das, Faw, et al. 2024</a>)</span>.</li>
 </ul>
-<p>We score the national sum and the provinces by the CRPS and 90% coverage. We also report the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span>, which is proper for joint forecasts <span class="citation" data-cites="gneitingStrictlyProperScoring2007">(<a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>)</span> and has been used for epidemic trajectories from forecast hubs <span class="citation" data-cites="Bay2026">(<a href="#ref-Bay2026" role="doc-biblioref">Bay et al. 2026</a>)</span>, but discriminates poorly between dependence structures <span class="citation" data-cites="Pinson2013">(<a href="#ref-Pinson2013" role="doc-biblioref">Pinson and Tastu 2013</a>)</span>.</p>
+</div>
+</div>
+<div id="fig-pipeline" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="figures/fig1-pipeline.svg" class="img-fluid figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle. (B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs. Group attention has learned biases for a series attending to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai’s any-variate attention <span class="citation" data-cites="Woo2024">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>)</span>, while every place’s series sit in one group. The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation (same place: a place’s count series and its lag series). Beside it, one place’s daily rows carry a weekly total row, missing until the last day of each week. (C) Training blocks and LoRA fine-tuning, and why it is fast: blocks cut from simulated release histories at random cut-offs are scored against the final simulated counts, and only rank-8 adapters, about 1% of the weights, and the attention biases are trained. (D) Forecasting with the fine-tuned model: one forward pass gives quantiles for each step, and each draw reads them at a uniform level u.
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="baselines" class="level3">
+<h3 class="anchored" data-anchor-id="baselines">Baselines</h3>
+<div class="callout callout-style-default callout-note callout-titled" title="Plan">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Plan
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li><strong>Foundation model baselines.</strong>
+<ul>
+<li>We compared the fine-tuned model with zero-shot Chronos-2 in two ways.</li>
+<li>Zero-shot Chronos-2 on the reporting triangle gets the same inputs as the fine-tuned model, so only the weights differ.</li>
+<li>Zero-shot Chronos-2 on complete data gets each place’s latest counts as if complete, with no lag series, as foundation models are mostly used in forecast hubs <span class="citation" data-cites="ohtjhu_bm xilab_gleam_ai_hybrid emory_epirsi">(<a href="#ref-ohtjhu_bm" role="doc-biblioref">OHTJHU 2026</a>; <a href="#ref-xilab_gleam_ai_hybrid" role="doc-biblioref">Xi lab 2026</a>; <a href="#ref-emory_epirsi" role="doc-biblioref">Emory 2026</a>)</span>.</li>
+<li>We plotted each checkpoint’s scores against both (Supporting Information, <em>Checkpoint curve</em>).</li>
+</ul></li>
+<li><strong>Random walk nowcast.</strong>
+<ul>
+<li>The random walk nowcast nowcasts recent weeks with our port of baselinenowcast, which we extended to releases more than a day apart, and forecasts each nowcast draw with a random walk on the log scale <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span> (Supporting Information, <em>Baselines</em>).</li>
+<li>The random walk is the same walk from the latest complete week, with no nowcast.</li>
+<li>Scores in each study are relative to the random walk nowcast unless the study has its own baseline.</li>
+</ul></li>
+<li><strong>Renewal models.</strong>
+<ul>
+<li>We fitted renewal models built on our port of epinowcast to the Ebola hub data, and submitted them in real time <span class="citation" data-cites="pyrenew bdbv_modeling_hub_2026">(<a href="#ref-pyrenew" role="doc-biblioref">CDC Center for Forecasting and Outbreak Analytics 2025</a>; <a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span> (Supporting Information, <em>Renewal model</em>).</li>
+<li>The main renewal model fits the health zones with recent cases together, pooled within provinces and linked by importation.</li>
+<li>One variant also uses the reproduction number estimates of BVDOutbreakSize, down-weighted <span class="citation" data-cites="BVDOutbreakSize">(<a href="#ref-BVDOutbreakSize" role="doc-biblioref">Abbott, Funk, and Holt 2026</a>)</span>, and another fits each zone on its own.</li>
+<li>They fit the hub’s known and imputed onset dates separately, as the hub imputes missing onset dates <span class="citation" data-cites="lison2024">(<a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>)</span>.</li>
+</ul></li>
+<li>Key references: <span class="citation" data-cites="Johnson2025 abbottepinowcast pyrenew">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>; <a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-pyrenew" role="doc-biblioref">CDC Center for Forecasting and Outbreak Analytics 2025</a>)</span>.</li>
+</ul>
+</div>
+</div>
 </section>
 <section id="evaluation-on-held-out-synthetic-data" class="level3">
 <h3 class="anchored" data-anchor-id="evaluation-on-held-out-synthetic-data">Evaluation on held-out synthetic data</h3>
@@ -298,12 +390,13 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We held out a set of simulations from development.</li>
-<li>The fine-tune never trained on the held-out set’s seeds (SI).</li>
-<li>We set each tuned choice on development data, apart from every scored set (SI).</li>
-<li>We score sample forecasts with CRPS and log-scale CRPS, bias, and 50% and 90% coverage, relative to <code>randomwalknowcast</code>.</li>
-<li>We score samples with the fair CRPS and the fair energy score, which correct for the number of samples, so forecasts with different numbers of samples, ours and the hub teams’, compare fairly <span class="citation" data-cites="Ferro2014 Zamo2018 zanetta_scoringrules_2024">(<a href="#ref-Ferro2014" role="doc-biblioref">Ferro 2014</a>; <a href="#ref-Zamo2018" role="doc-biblioref">Zamo and Naveau 2018</a>; <a href="#ref-zanetta_scoringrules_2024" role="doc-biblioref">Zanetta and Allen 2024</a>)</span>.</li>
-<li>We score against the data as reported <span class="math inline">\(D\)</span> days later, with <span class="math inline">\(D\)</span> each outbreak’s 98% reporting delay.</li>
+<li>We held out a test set of simulations from development, and monitored training on a separate validation set (Supporting Information, <em>Grid settings and checks</em>).</li>
+<li>Fine-tuning never used the test set (Supporting Information, <em>Grid settings and checks</em>).</li>
+<li>We set each tuned choice on development data, apart from every scored set (Supporting Information, <em>Choices tuned on development data</em>).</li>
+<li>We scored quantiles with the weighted interval score (WIS) on the natural and log scales, split into dispersion, overprediction and underprediction, with bias and 50% and 90% coverage <span class="citation" data-cites="bracherEvaluatingEpidemicForecasts2021 Bosse2023-sx">(<a href="#ref-bracherEvaluatingEpidemicForecasts2021" role="doc-biblioref">Bracher et al. 2021</a>; <a href="#ref-Bosse2023-sx" role="doc-biblioref">Bosse et al. 2023</a>)</span>.</li>
+<li>We also scored samples with the fair CRPS and the fair energy score, so forecasts with different numbers of samples compare fairly <span class="citation" data-cites="Ferro2014 Zamo2018 zanetta_scoringrules_2024">(<a href="#ref-Ferro2014" role="doc-biblioref">Ferro 2014</a>; <a href="#ref-Zamo2018" role="doc-biblioref">Zamo and Naveau 2018</a>; <a href="#ref-zanetta_scoringrules_2024" role="doc-biblioref">Zanetta and Allen 2024</a>)</span> (Supporting Information, <em>Scoring</em>).</li>
+<li>We scored with scoringrules, checked against scoringutils <span class="citation" data-cites="zanetta_scoringrules_2024 bosse2022scoringutils">(<a href="#ref-zanetta_scoringrules_2024" role="doc-biblioref">Zanetta and Allen 2024</a>; <a href="#ref-bosse2022scoringutils" role="doc-biblioref">Bosse et al. 2022</a>)</span>.</li>
+<li>We scored against the data as reported <span class="math inline">\(T\)</span> days later, with <span class="math inline">\(T\)</span> each simulation’s 98% reporting delay.</li>
 <li>Key references: <span class="citation" data-cites="bracherEvaluatingEpidemicForecasts2021 Bosse2023-sx gneitingStrictlyProperScoring2007 gneitingProbabilisticForecastsCalibration2007 sherrattPredictivePerformanceMultimodel2023">(<a href="#ref-bracherEvaluatingEpidemicForecasts2021" role="doc-biblioref">Bracher et al. 2021</a>; <a href="#ref-Bosse2023-sx" role="doc-biblioref">Bosse et al. 2023</a>; <a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>; <a href="#ref-gneitingProbabilisticForecastsCalibration2007" role="doc-biblioref">Gneiting, Balabdaoui, and Raftery 2007</a>; <a href="#ref-sherrattPredictivePerformanceMultimodel2023" role="doc-biblioref">Sherratt et al. 2023</a>)</span>.</li>
 </ul>
 </div>
@@ -322,21 +415,30 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We compare with the hub’s models, relative to the hub’s baseline, and evaluate as the hub did.</li>
-<li>We score quantile forecasts with WIS and log-scale WIS, bias, and coverage, against the data as reported 40 days later <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
-<li>We score each model on its own quantiles at the hub’s seven levels, interpolated linearly where it lacks one.</li>
-<li>We score models that give samples, and sums over days, on the quantiles of 1,000 draws with common random numbers.</li>
+<li>We used the German COVID-19 hospitalisation nowcast hub’s reporting triangle, nationally, by state and by age group.</li>
+<li>We compared with the hub’s models, relative to the hub’s baseline, and evaluated as the hub did.</li>
+<li>We scored as for held-out simulations, against the data as reported 40 days later, with 95% rather than 90% coverage as the hub’s quantiles have no 5% or 95% level <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
+<li>Our models saw only reports made within 40 days of each reference date, so they forecast the count the truth holds.</li>
+<li>The hub’s target is 7-day sums ending on each day from the nowcast date to 28 days before it.</li>
+<li>We scored the hub’s targets, and also our models’ forecasts up to 4 weeks after the nowcast date (Supporting Information, <em>German nowcast hub</em>).</li>
+<li>Each nowcast date is forecast once, so every 7-day sum comes from one forecast.</li>
+<li>Each place also has a 7-day rolling-sum series, which Chronos-2 forecasts directly, so we read each 7-day sum from it rather than summing daily draws.</li>
+<li>The random walks forecast weeks ending on Saturdays, so they give only the 7-day sums that end on a Saturday.</li>
+<li>We scored each model on its own quantiles at the hub’s seven levels.</li>
+<li>As <span class="citation" data-cites="Wolffram2023">Wolffram et al. (<a href="#ref-Wolffram2023" role="doc-biblioref">2023</a>)</span> did, we replaced one team’s erroneous values by its nowcast of the day before, and filled another’s missing 10% quantiles from a normal through its 2.5% and 25% quantiles.</li>
+<li>Chronos-2 gives quantiles directly, which we interpolated linearly to the hub’s levels, with no sampling.</li>
+<li>We scored the random walks, which give samples, on the quantiles of 1,000 draws with common random numbers.</li>
 <li>One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.</li>
-<li>For both case studies, we also score our models’ daily counts directly from the daily rows, against <code>randomwalknowcast</code> (SI).</li>
+<li>For both case studies, we also scored our models’ daily counts directly from the daily series, against the random walk nowcast (Supporting Information, <em>Daily nowcasts</em>).</li>
 <li>We split the nowcast dates in half at 10 February 2022.</li>
-<li>We developed the setup on the first half and score the second half.</li>
-<li>Key references: <span class="citation" data-cites="Wolffram2023 Johnson2025 amaralPostprocessingWeightedCombination2025">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>; <a href="#ref-amaralPostprocessingWeightedCombination2025" role="doc-biblioref">Amaral et al. 2025</a>)</span>.</li>
+<li>We developed the setup on the first half and scored the second half.</li>
+<li>Key references: <span class="citation" data-cites="Wolffram2023 hospitalization_nowcast_hub_2025 Johnson2025 amaralPostprocessingWeightedCombination2025">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-hospitalization_nowcast_hub_2025" role="doc-biblioref">KIT Metrics Lab et al. 2025</a>; <a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>; <a href="#ref-amaralPostprocessingWeightedCombination2025" role="doc-biblioref">Amaral et al. 2025</a>)</span>.</li>
 </ul>
 </div>
 </div>
 </section>
-<section id="case-study-2-prospective-submission-to-the-ebola-forecasting-hub" class="level3">
-<h3 class="anchored" data-anchor-id="case-study-2-prospective-submission-to-the-ebola-forecasting-hub">Case study 2: prospective submission to the Ebola forecasting hub</h3>
+<section id="case-study-2-ebola-forecasting-hub" class="level3">
+<h3 class="anchored" data-anchor-id="case-study-2-ebola-forecasting-hub">Case study 2: Ebola forecasting hub</h3>
 <div class="callout callout-style-default callout-note callout-titled" title="Plan">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -348,15 +450,76 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We compare with the other submissions, relative to the hub’s baseline.</li>
-<li>We score the hub’s rounds from 21 November 2026.</li>
-<li>We used earlier rounds and the release backtest from earlier releases for development (SI).</li>
-<li>We score sample forecasts with CRPS and log-scale CRPS, bias, and coverage, with <span class="math inline">\(D\)</span> the 98% point of the hub data’s reporting delay.</li>
-<li>We score our models on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.</li>
-<li>We score our submitted models on their submissions.</li>
-<li>Each other model of ours forecasts a round from the last release before the round closed.</li>
-<li>The fine-tuned models use the final run’s newest checkpoint (<code>pending</code>), trained on simulations only.</li>
-<li>Key references: <span class="citation" data-cites="bdbv_modeling_hub_2026 Viboud2018 funkAssessingPerformanceRealtime2019">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>; <a href="#ref-Viboud2018" role="doc-biblioref">Viboud et al. 2018</a>; <a href="#ref-funkAssessingPerformanceRealtime2019" role="doc-biblioref">Funk et al. 2019</a>)</span>.</li>
+<li><strong>Data and submissions.</strong>
+<ul>
+<li>We used the Ebola forecasting hub’s weekly confirmed cases by symptom onset, with every release, by country, province and health zone.</li>
+<li>We excluded the hub’s first release, of 18 August, as it reports cumulative counts rather than new reports and so does not reflect reporting.</li>
+<li>We submitted the fine-tuned model, the random walk nowcast and the renewal models to the hub in real time.</li>
+<li>The fine-tuned model uses the final run’s last checkpoint, at 4,800 simulations (<code>pending</code>), trained on simulations only.</li>
+<li>From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past hub rounds, to decide whether it could be submitted.</li>
+<li>These past rounds therefore informed that decision, and only rounds after the fine-tuned model’s first submission are prospective for it.</li>
+</ul></li>
+<li><strong>Forecasting.</strong>
+<ul>
+<li>The hub’s releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate <span class="math inline">\(D\)</span>.</li>
+<li>We therefore set <span class="math inline">\(D\)</span> to 42 days at forecast time, as the random walk nowcast does, for the fine-tuned and zero-shot models alike.</li>
+<li>The fine-tuned model makes two forecasts at each nowcast date (Supporting Information, <em>Ebola forecast layout</em>).</li>
+<li>One is a single block of the country, all provinces and the active health zones.</li>
+<li>A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.</li>
+<li>The other is one block per province, of the province and all its zones, cut into views as in training when over the block limit.</li>
+<li>The country, provinces and active zones take their forecast from the single block, and every other zone from its province’s block.</li>
+<li>The hub takes sampled trajectories, so we paired each model’s draws across places with a copula (Supporting Information, <em>Correlated trajectories</em>).</li>
+<li>We paired the province draws of the random walks within each week with a rolling Gaussian copula, so their national forecast, the sum of the provinces for each sample, is not too narrow.</li>
+<li>The hub does not require forecasts to add up across levels, so this was our choice for the walks, and Chronos-2 submitted its own national forecast.</li>
+</ul></li>
+<li><strong>Scoring.</strong>
+<ul>
+<li>We scored as for held-out simulations, and compared with the other submissions, relative to the hub’s baseline.</li>
+<li>We scored every hub round.</li>
+<li>Every model, ours and the hub teams’, forecasts some targets and places only, so we compared models on the forecasts they share and report the country, provinces and zones apart.</li>
+<li>We compared models by pairwise relative skill on the forecasts each pair shares, as scoringutils does <span class="citation" data-cites="bosse2022scoringutils">(<a href="#ref-bosse2022scoringutils" role="doc-biblioref">Bosse et al. 2022</a>)</span>.</li>
+<li>We scored only the hub’s own targets and horizons.</li>
+<li>Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.</li>
+<li>Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.</li>
+<li>We started forecasting at the first release with at least two usable releases up to it, so the random walk baselines can estimate their delay.</li>
+<li>We took the hub teams’ quantiles from their samples.</li>
+<li>We scored each week against its count in the first release at least <span class="math inline">\(T\)</span> days after the week ends, with <span class="math inline">\(T\)</span> the 98% point of the hub data’s reporting delay.</li>
+<li>By then nearly all of a week’s cases are reported, so the truth changes little afterwards while every round can still be scored.</li>
+<li><span class="math inline">\(T\)</span> is part of the scoring rule, not a choice tuned on the data.</li>
+<li>We scored Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.</li>
+<li>Quantiles from 100 draws are noisier than those from 1,000, so WIS is biased against the hub teams, which the fair CRPS checks (Supporting Information, <em>Ebola hub submissions</em>).</li>
+<li>We scored the national sum and the provinces by the CRPS and 90% coverage, and the joint forecast by the energy score <span class="citation" data-cites="Gneiting2008">(<a href="#ref-Gneiting2008" role="doc-biblioref">Gneiting et al. 2008</a>)</span>, which is proper for joint forecasts <span class="citation" data-cites="gneitingStrictlyProperScoring2007">(<a href="#ref-gneitingStrictlyProperScoring2007" role="doc-biblioref">Gneiting and Raftery 2007</a>)</span> and has been used for epidemic trajectories from forecast hubs <span class="citation" data-cites="Bay2026">(<a href="#ref-Bay2026" role="doc-biblioref">Bay et al. 2026</a>)</span>, but discriminates poorly between dependence structures <span class="citation" data-cites="Pinson2013">(<a href="#ref-Pinson2013" role="doc-biblioref">Pinson and Tastu 2013</a>)</span>.</li>
+</ul></li>
+<li>Key references: <span class="citation" data-cites="bdbv_modeling_hub_2026 MacNeil2010 Viboud2018 funkAssessingPerformanceRealtime2019">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>; <a href="#ref-MacNeil2010" role="doc-biblioref">MacNeil et al. 2010</a>; <a href="#ref-Viboud2018" role="doc-biblioref">Viboud et al. 2018</a>; <a href="#ref-funkAssessingPerformanceRealtime2019" role="doc-biblioref">Funk et al. 2019</a>)</span>.</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="sensitivity-analyses" class="level3">
+<h3 class="anchored" data-anchor-id="sensitivity-analyses">Sensitivity analyses</h3>
+<div class="callout callout-style-default callout-note callout-titled" title="Plan">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Plan
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>We gave the random walk nowcast’s point nowcast to Chronos-2 as complete counts, both zero-shot and fine-tuned, with no further fine-tuning.</li>
+<li>The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.</li>
+<li>We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub’s releases, and compared it with the model fine-tuned on simulations.</li>
+<li>We fine-tuned one model without the attention biases and one without lag series, and compared each with the main model.</li>
+<li>We compared the rule for <span class="math inline">\(D\)</span> with a fixed 4 weeks or 28 days.</li>
+<li>We compared forecasting all levels in one block with forecasting each level alone and with summing the lowest level.</li>
+<li>We compared the random walks’ rolling copula with no pairing, and scored Chronos-2’s submitted trajectories with its copula, with independent places and with fully dependent places.</li>
+<li>We compared the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (Supporting Information, <em>Renewal model variants</em>).</li>
+<li>We scored the real-data fine-tune on the German held-out half, and on the Ebola rounds after its last training release.</li>
+<li>We compared the models without attention biases or lag series with the main model by validation loss and by scores on the German development half at each checkpoint.</li>
+<li>We compared the copula settings on the German development half and the development simulations.</li>
+<li>We scored the other comparisons as in the case study they apply to, relative to its baseline.</li>
 </ul>
 </div>
 </div>
@@ -374,8 +537,15 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We used Python, PyTorch, chronos-forecasting, PEFT for LoRA, R and epinowcast for simulation, and scoringrules for scoring, checked against scoringutils.</li>
-<li>A Snakemake workflow runs the evaluation from the raw data to every figure and table.</li>
+<li>We implemented the methods in a set of Python packages in one repository, each documented with examples and tested for correctness <span class="citation" data-cites="placeholder">(<a href="#ref-placeholder" role="doc-biblioref"><strong>placeholder?</strong></a>)</span>.</li>
+<li><code>nowcastrenewal</code> is our port of the epinowcast model to Python on top of PyRenew, with its simulator, the renewal forecasters and the BVDOutbreakSize inputs <span class="citation" data-cites="abbottepinowcast pyrenew BVDOutbreakSize">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-pyrenew" role="doc-biblioref">CDC Center for Forecasting and Outbreak Analytics 2025</a>; <a href="#ref-BVDOutbreakSize" role="doc-biblioref">Abbott, Funk, and Holt 2026</a>)</span>.</li>
+<li><code>nowcastfoundation</code> holds the simulation grid, the Chronos-2 forecasters with the attention biases, and fine-tuning with LoRA and checkpoint scoring, built on PyTorch, chronos-forecasting and PEFT <span class="citation" data-cites="Ansari2025 Hu2021">(<a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>)</span>.</li>
+<li><code>nowcastbaselines</code> holds the random walks, our JAX port of baselinenowcast and the copula that pairs places <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span>.</li>
+<li><code>nowcasteval</code> scores forecasts by level and over releases with scoringrules, checked against scoringutils, and makes the score figures <span class="citation" data-cites="zanetta_scoringrules_2024 bosse2022scoringutils">(<a href="#ref-zanetta_scoringrules_2024" role="doc-biblioref">Zanetta and Allen 2024</a>; <a href="#ref-bosse2022scoringutils" role="doc-biblioref">Bosse et al. 2022</a>)</span>.</li>
+<li><code>nowcastgermany</code> and <code>nowcastbdbv</code> give each case study’s data as forecast tasks.</li>
+<li><code>bdbvhub</code> and <code>bdbvsubmission</code> fit, store and check forecasts, and submit them to the Ebola hub through an automated, gated workflow.</li>
+<li>A Snakemake workflow runs the evaluation from the raw data to every figure and table, and we release the simulations and fine-tuned checkpoints.</li>
+<li>We built dashboards to monitor the simulations and fine-tuning as they ran, and used them throughout development (Supporting Information, <em>Monitoring fine-tuning</em>).</li>
 </ul>
 </div>
 </div>
@@ -393,64 +563,19 @@ Figure&nbsp;1: The fine-tuning pipeline. (A) The assumptions in the epinowcast s
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>Each section has a figure panel. Each panel shows:</p>
+<p>Each section has a figure panel. Every panel shows the same four models, named Random walk nowcast, Zero-shot (complete data), Zero-shot (reporting triangle) and Fine-tuned (reporting triangle) in every figure and table. The case studies’ score panels also show the hub’s baseline, which their scores are relative to. Zero-shot (complete data) has no lag series. Every other comparison, and the hub teams beyond the hub’s baseline, is in the Supporting Information. Our submitted renewal model appears in the Ebola panels as one of the hub submissions, as the hub teams’ models do, and the Supporting Information compares the renewal variants with each other (Supporting Information, <em>Renewal model variants</em>). Each panel shows:</p>
 <ul>
-<li>nowcasts over time (ribbons);</li>
-<li>scores relative to the baseline (<code>randomwalknowcast</code> for synthetic data, the hub’s baseline for each case study), with natural- and log-scale WIS (or CRPS, MAE where they make sense);</li>
+<li>nowcasts over time at the national level (one simulation for held-out simulations), several origins overlaid, each over its horizons against the truth (ribbons) <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>;</li>
+<li>scores relative to the baseline (the random walk nowcast for synthetic data, the hub’s baseline for each case study), with natural- and log-scale WIS stacked by its decomposition (fair CRPS of samples in the Supporting Information);</li>
 <li>bias;</li>
 <li>50% and 90% coverage;</li>
-<li>score variation by location and horizon, supported by SI plots.</li>
-<li>for Germany and Ebola, a dotted line marking the split between the development and scored parts, with scores split by part.</li>
+<li>score variation by location and horizon.</li>
+<li>for Germany, a dotted line marking the split between the development and scored parts, with scores split by part, each part a row on the score axis.</li>
 </ul>
 <p>The plots in primarycensored-paper are a model for these. Each section has two paragraphs, one on visual performance and one summarising scores.</p>
 <p>Key references: the Methods references, with <span class="citation" data-cites="bracherEvaluatingEpidemicForecasts2021 Bosse2023-sx">(<a href="#ref-bracherEvaluatingEpidemicForecasts2021" role="doc-biblioref">Bracher et al. 2021</a>; <a href="#ref-Bosse2023-sx" role="doc-biblioref">Bosse et al. 2023</a>)</span> for the natural- and log-scale panels.</p>
 </div>
 </div>
-<div id="tbl-live-summary" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-live-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;1: Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half and CRPS and log CRPS on the BDBV release backtest, relative to <code>randomwalknowcast</code> (daily / weekly model), and the trainer’s held-out loss, with each cell’s simulations in brackets. The SI gives every checkpoint (Checkpoint curve). Preliminary: fine-tuned on 2,000 of 8,000 simulations. Development data only.
-</figcaption>
-<div aria-describedby="tbl-live-summary-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 20%">
-<col style="width: 20%">
-<col style="width: 20%">
-<col style="width: 20%">
-<col style="width: 20%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Simulations</th>
-<th>German WIS</th>
-<th>BDBV CRPS</th>
-<th>BDBV log CRPS</th>
-<th>Held-out loss</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>Zero-shot</td>
-<td>3.05 / 4.24</td>
-<td>1.31 / 1.50</td>
-<td>1.25 / 1.58</td>
-<td>0.40</td>
-</tr>
-<tr class="even">
-<td>Newest checkpoint</td>
-<td>4.93 / 2.99 (1,000)</td>
-<td>1.91 / 2.59 (2,000)</td>
-<td>1.90 / 2.22 (2,000)</td>
-<td>0.26 (2,000)</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
-<section id="held-out-synthetic-data" class="level3">
-<h3 class="anchored" data-anchor-id="held-out-synthetic-data">Held-out synthetic data</h3>
 <div class="callout callout-style-default callout-note callout-titled" title="Plan">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -462,25 +587,47 @@ Table&nbsp;1: Zero-shot Chronos-2 and the newest scored checkpoint of the fine-t
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We show nowcasts of the candidate models against <code>randomwalk</code> and <code>randomwalknowcast</code>.</li>
-<li>We summarise their scores.</li>
-<li>The SI gives each checkpoint’s scores by the number of simulations it was trained on (Checkpoint curve).</li>
-<li>The SI describes the held-out set (Synthetic data generation).</li>
-<li>The SI compares the model with attention biases with one fine-tuned without them (Attention biases for place and parent against none).</li>
-<li>The SI compares the ragged model with one fine-tuned without delay series (Delays against no delays).</li>
-<li>The SI shows the dashboard we used to review fine-tuning (Monitoring fine-tuning).</li>
+<li>We developed the simulated surveillance data and the way we fine-tune on them over [X] versions.</li>
+<li>Each version changed the settings the simulations draw from, such as the range of reproduction numbers, reporting delays and reporting patterns, or the fine-tuning settings, such as how training blocks are cut from each simulation, the learning rate and the number of simulations.</li>
+<li>Each version was simulated afresh, so no simulation was reused between versions.</li>
+<li>For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, using our simulation and fine-tuning dashboards (Methods, Implementation; Supporting Information, <em>Checkpoint curve</em>).</li>
+<li>We compared the summary statistics of each version’s simulations with the German development half and with published ranges for other diseases.</li>
+<li>Figure (planned): “The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. (G) Coverage: for R and effective R, the generation time mean, the infection-to-reference delay mean, the mean reporting delay and the growth rate, the grid’s median and 5 to 95% range beside published ranges for influenza, COVID-19, Ebola, mpox, cholera, measles and dengue and the German development half’s values. Panels B to F compare the simulations with the German development half and published ranges for other diseases where values exist.”</li>
+<li>We take the published ranges from their sources (Supporting Information, <em>Synthetic data generation</em>).</li>
+<li>Over these versions we made the simulations closer to real reporting, adding:
+<ul>
+<li>report days, weekday effects, backlogs, outages and revisions to past counts;</li>
+<li>release schedules, from daily to weekly releases;</li>
+<li>regions whose reported totals differ from the sum of their places, as national counts can be reported apart from regional ones.</li>
+</ul></li>
+<li>We also changed how we fine-tune Chronos-2, adding:
+<ul>
+<li>blocks that mix daily counts with weekly totals or 7-day rolling sums, as the German hub’s targets are 7-day sums and the Ebola hub’s are weekly counts;</li>
+<li>attention biases, so the model can tell which lag series belong to which place.</li>
+</ul></li>
+<li>We have modelled the Ebola outbreak since it was first reported, in separate work on its size <span class="citation" data-cites="BVDOutbreakSize">(<a href="#ref-BVDOutbreakSize" role="doc-biblioref">Abbott, Funk, and Holt 2026</a>)</span>.</li>
+<li>Early in the Ebola hub’s life we submitted the random walk nowcast and renewal models to it. Its weekly releases start with a backfill, which led us to add training blocks whose releases start late.</li>
+<li>From the week of 23 November 2026 we scored each released checkpoint on past Ebola rounds to decide when to submit the fine-tuned model, and first submitted it on [date].</li>
 </ul>
 </div>
 </div>
-<div id="fig-synthetic-nowcasts" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-synthetic-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="build/figures/main/synthetic-nowcasts.png" class="img-fluid figure-img">
+<section id="held-out-simulations" class="level3">
+<h3 class="anchored" data-anchor-id="held-out-simulations">Held-out simulations</h3>
+<div class="callout callout-style-default callout-note callout-titled" title="Plan">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
 </div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;2: Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow’s seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals; each column gives the model’s score relative to <code>randomwalknowcast</code>. Illustrative, dummy data
-</figcaption>
-</figure>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Plan
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>The first paragraph describes the nowcasts: whether the fine-tuned model’s intervals [cover / miss] the final counts as recent counts fill in, and whether zero-shot Chronos-2 [follows the incomplete recent counts down].</li>
+<li>The second paragraph gives the scores in the abstract’s order: the fine-tuned model against zero-shot Chronos-2 on the reporting triangle and on complete data, then against the random walk nowcast, then by horizon and simulation setting (Supporting Information, <em>Held-out synthetic data</em>; <em>Checkpoint curve</em>).</li>
+</ul>
+</div>
 </div>
 <div id="fig-synthetic" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
@@ -488,236 +635,11 @@ Figure&nbsp;2: Held-out synthetic data: nowcasts of one held-out outbreak, drawn
 <img src="build/figures/main/synthetic-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-synthetic-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;3: Held-out synthetic data. (A, B) CRPS relative to <code>randomwalknowcast</code> on the natural and log scales; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by scenario factor; (F) relative CRPS by horizon. Illustrative, dummy data
+Figure&nbsp;2: Held-out synthetic data. (A) Nowcasts over time at one place, several origins overlaid, against the truth; (B, C) WIS relative to the random walk nowcast on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 90% coverage; (F) relative WIS by scenario factor; (G) relative WIS by horizon. Illustrative, dummy data
 </figcaption>
 </figure>
 </div>
-<p>On the development simulations, the best model was epinowcast, with a relative score of 0.68 and 0.87 on the log scale, against randomwalknowcast.</p>
-<div id="tbl-synthetic-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;2: Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to randomwalknowcast. Illustrative, dummy data
-</figcaption>
-<div aria-describedby="tbl-synthetic-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>study</th>
-<th>model</th>
-<th>metric</th>
-<th>score</th>
-<th>log_score</th>
-<th>bias</th>
-<th>coverage_50</th>
-<th>coverage_90</th>
-<th>n</th>
-<th>rel_score</th>
-<th>rel_log_score</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>synthetic</td>
-<td>epinowcast</td>
-<td>crps</td>
-<td>10.7</td>
-<td>0.148</td>
-<td>0.24</td>
-<td>0.465</td>
-<td>0.8</td>
-<td>1056</td>
-<td>0.682</td>
-<td>0.869</td>
-</tr>
-<tr class="even">
-<td>synthetic</td>
-<td>fm_chronos_daily_complete</td>
-<td>crps</td>
-<td>18.4</td>
-<td>0.201</td>
-<td>-0.107</td>
-<td>0.415</td>
-<td>0.792</td>
-<td>1056</td>
-<td>1.18</td>
-<td>1.18</td>
-</tr>
-<tr class="odd">
-<td>synthetic</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>21</td>
-<td>0.233</td>
-<td>0.427</td>
-<td>0.295</td>
-<td>0.598</td>
-<td>1056</td>
-<td>1.34</td>
-<td>1.37</td>
-</tr>
-<tr class="even">
-<td>synthetic</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>17.6</td>
-<td>0.209</td>
-<td>-0.2</td>
-<td>0.423</td>
-<td>0.781</td>
-<td>1056</td>
-<td>1.13</td>
-<td>1.23</td>
-</tr>
-<tr class="odd">
-<td>synthetic</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>21.6</td>
-<td>0.225</td>
-<td>0.0425</td>
-<td>0.391</td>
-<td>0.733</td>
-<td>1056</td>
-<td>1.38</td>
-<td>1.32</td>
-</tr>
-<tr class="even">
-<td>synthetic</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>19</td>
-<td>0.21</td>
-<td>-0.0361</td>
-<td>0.549</td>
-<td>0.89</td>
-<td>1056</td>
-<td>1.21</td>
-<td>1.23</td>
-</tr>
-<tr class="odd">
-<td>synthetic</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>15.7</td>
-<td>0.17</td>
-<td>0.178</td>
-<td>0.623</td>
-<td>0.915</td>
-<td>1056</td>
-<td>1</td>
-<td>1</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
-<div id="tbl-synthetic-joint" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-synthetic-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;3: Held-out synthetic data: mean energy score of each model’s trajectories on log(x + 1) counts, and their ratio to randomwalknowcast on the forecasts both made. Illustrative, dummy data
-</figcaption>
-<div aria-describedby="tbl-synthetic-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<thead>
-<tr class="header">
-<th>model</th>
-<th>n</th>
-<th>energy_log</th>
-<th>rel_energy_log</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>epinowcast</td>
-<td>144</td>
-<td>0.518</td>
-<td>0.852</td>
-</tr>
-<tr class="even">
-<td>fm_chronos_daily_complete</td>
-<td>144</td>
-<td>0.726</td>
-<td>1.2</td>
-</tr>
-<tr class="odd">
-<td>fm_chronos_daily_ragged</td>
-<td>144</td>
-<td>0.808</td>
-<td>1.33</td>
-</tr>
-<tr class="even">
-<td>fm_chronos_daily_ragged_ft@1000</td>
-<td>144</td>
-<td>0.653</td>
-<td>1.08</td>
-</tr>
-<tr class="odd">
-<td>fm_chronos_daily_ragged_ft@16000</td>
-<td>144</td>
-<td>0.57</td>
-<td>0.939</td>
-</tr>
-<tr class="even">
-<td>fm_chronos_daily_ragged_ft@2000</td>
-<td>144</td>
-<td>0.592</td>
-<td>0.974</td>
-</tr>
-<tr class="odd">
-<td>fm_chronos_daily_ragged_ft@4000</td>
-<td>144</td>
-<td>0.583</td>
-<td>0.96</td>
-</tr>
-<tr class="even">
-<td>fm_chronos_daily_ragged_ft@8000</td>
-<td>144</td>
-<td>0.549</td>
-<td>0.904</td>
-</tr>
-<tr class="odd">
-<td>fm_chronos_weekly_complete</td>
-<td>144</td>
-<td>0.745</td>
-<td>1.23</td>
-</tr>
-<tr class="even">
-<td>fm_chronos_weekly_ragged</td>
-<td>144</td>
-<td>0.821</td>
-<td>1.35</td>
-</tr>
-<tr class="odd">
-<td>randomwalk</td>
-<td>144</td>
-<td>0.774</td>
-<td>1.28</td>
-</tr>
-<tr class="even">
-<td>randomwalknowcast</td>
-<td>144</td>
-<td>0.607</td>
-<td>1</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
+<p>On the development simulations, the fine-tuned model scored pending relative to the random walk nowcast, against 1.45 for zero-shot Chronos-2 on the reporting triangle and 1.05 on complete data. The fine-tuned model [outperformed / matched] zero-shot Chronos-2 and the random walk nowcast, [most at short horizons / across horizons].</p>
 </section>
 <section id="german-nowcast-hub" class="level3">
 <h3 class="anchored" data-anchor-id="german-nowcast-hub">German nowcast hub</h3>
@@ -732,24 +654,11 @@ Table&nbsp;3: Held-out synthetic data: mean energy score of each model’s traje
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We show national nowcasts against the other models.</li>
-<li>We summarise the scores.</li>
-<li>The SI compares the model fine-tuned on real data with the one fine-tuned on simulations (Real-data fine-tune against synthetic).</li>
-<li>The SI compares capped lags with lags run to the truth delay (Foundation model setup).</li>
-<li>The SI gives daily nowcasts for both case studies against <code>randomwalknowcast</code> (Daily nowcasts).</li>
+<li>The first paragraph describes the national nowcasts against the truth, on the development and held-out halves.</li>
+<li>The second paragraph gives the held-out half’s scores in the abstract’s order: the fine-tuned model against zero-shot Chronos-2 on both inputs, the random walk nowcast and the hub’s models, relative to the hub’s baseline, then by location, age group and horizon (Supporting Information, <em>German nowcast hub</em>).</li>
 <li>Key references: <span class="citation" data-cites="Wolffram2023 amaralPostprocessingWeightedCombination2025">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>; <a href="#ref-amaralPostprocessingWeightedCombination2025" role="doc-biblioref">Amaral et al. 2025</a>)</span>.</li>
 </ul>
 </div>
-</div>
-<div id="fig-germany-nowcasts" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-germany-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="build/figures/main/germany-nowcasts.png" class="img-fluid figure-img">
-</div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;4: German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals; each column gives the model’s WIS relative to <code>randomwalknowcast</code>.
-</figcaption>
-</figure>
 </div>
 <div id="fig-germany" class="quarto-float quarto-figure quarto-figure-center anchored">
 <figure class="quarto-float quarto-float-fig figure">
@@ -757,314 +666,14 @@ Figure&nbsp;4: German nowcast hub: national nowcasts, one column per model and o
 <img src="build/figures/main/germany-results.png" class="img-fluid figure-img">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-germany-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;5: German nowcast hub. (A, B) WIS relative to <code>KIT-frozen_baseline</code> on the natural and log scales; (C) bias; (D) 50% and 95% coverage; (E) relative WIS by location; (F) by age group; (G) by horizon.
+Figure&nbsp;3: German nowcast hub. (A) National nowcasts over time, several origins overlaid, against the truth; (B, C) WIS relative to the hub’s baseline on the natural and log scales, as stacked dispersion, overprediction and underprediction; (D) bias; (E) 50% and 95% coverage; (F) relative WIS by location; (G) by age group; (H) by horizon, the hub’s targets only.
 </figcaption>
 </figure>
 </div>
-<p>On the development half, the best model was MeanEnsemble, with a relative score of 0.11 and 0.14 on the log scale, against KIT-frozen_baseline, and 0.83 against <code>randomwalknowcast</code>, as the hub’s baseline is a point forecast with no coverage.</p>
-<div id="tbl-germany-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-germany-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to KIT-frozen_baseline.
-</figcaption>
-<div aria-describedby="tbl-germany-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-<col style="width: 7%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>study</th>
-<th>model</th>
-<th>metric</th>
-<th>score</th>
-<th>log_score</th>
-<th>bias</th>
-<th>coverage_50</th>
-<th>coverage_95</th>
-<th>n</th>
-<th>rel_score</th>
-<th>rel_log_score</th>
-<th>rel_score_randomwalknowcast</th>
-<th>rel_log_score_randomwalknowcast</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>germany</td>
-<td>Epiforecasts</td>
-<td>wis</td>
-<td>22.6</td>
-<td>0.0302</td>
-<td>0.0364</td>
-<td>0.375</td>
-<td>0.774</td>
-<td>9185</td>
-<td>0.137</td>
-<td>0.159</td>
-<td>1.03</td>
-<td>1.02</td>
-</tr>
-<tr class="even">
-<td>germany</td>
-<td>ILM</td>
-<td>wis</td>
-<td>78</td>
-<td>0.0404</td>
-<td>0.677</td>
-<td>0.281</td>
-<td>0.637</td>
-<td>2716</td>
-<td>0.224</td>
-<td>0.22</td>
-<td>2.03</td>
-<td>2.02</td>
-</tr>
-<tr class="odd">
-<td>germany</td>
-<td>KIT</td>
-<td>wis</td>
-<td>24.5</td>
-<td>0.032</td>
-<td>0.00999</td>
-<td>0.526</td>
-<td>0.929</td>
-<td>9200</td>
-<td>0.148</td>
-<td>0.168</td>
-<td>1.11</td>
-<td>1.08</td>
-</tr>
-<tr class="even">
-<td>germany</td>
-<td>KIT-frozen_baseline</td>
-<td>wis</td>
-<td>165</td>
-<td>0.191</td>
-<td>-0.941</td>
-<td>0.0373</td>
-<td>0.0373</td>
-<td>9200</td>
-<td>1</td>
-<td>1</td>
-<td>7.52</td>
-<td>6.45</td>
-</tr>
-<tr class="odd">
-<td>germany</td>
-<td>LMU</td>
-<td>wis</td>
-<td>26.4</td>
-<td>0.0339</td>
-<td>0.00453</td>
-<td>0.269</td>
-<td>0.61</td>
-<td>8495</td>
-<td>0.148</td>
-<td>0.171</td>
-<td>1.12</td>
-<td>1.18</td>
-</tr>
-<tr class="even">
-<td>germany</td>
-<td>MeanEnsemble</td>
-<td>wis</td>
-<td>18</td>
-<td>0.0271</td>
-<td>0.174</td>
-<td>0.419</td>
-<td>0.828</td>
-<td>9177</td>
-<td>0.11</td>
-<td>0.143</td>
-<td>0.832</td>
-<td>0.925</td>
-</tr>
-<tr class="odd">
-<td>germany</td>
-<td>MedianEnsemble</td>
-<td>wis</td>
-<td>18.4</td>
-<td>0.0271</td>
-<td>0.11</td>
-<td>0.422</td>
-<td>0.83</td>
-<td>9177</td>
-<td>0.112</td>
-<td>0.143</td>
-<td>0.848</td>
-<td>0.925</td>
-</tr>
-<tr class="even">
-<td>germany</td>
-<td>RIVM</td>
-<td>wis</td>
-<td>28</td>
-<td>0.0376</td>
-<td>0.397</td>
-<td>0.233</td>
-<td>0.553</td>
-<td>9200</td>
-<td>0.169</td>
-<td>0.197</td>
-<td>1.27</td>
-<td>1.27</td>
-</tr>
-<tr class="odd">
-<td>germany</td>
-<td>RKI</td>
-<td>wis</td>
-<td>30.1</td>
-<td>0.0489</td>
-<td>0.215</td>
-<td>0.163</td>
-<td>0.304</td>
-<td>6800</td>
-<td>0.202</td>
-<td>0.255</td>
-<td>1.44</td>
-<td>1.51</td>
-</tr>
-<tr class="even">
-<td>germany</td>
-<td>SU</td>
-<td>wis</td>
-<td>26.3</td>
-<td>0.0341</td>
-<td>0.0796</td>
-<td>0.376</td>
-<td>0.781</td>
-<td>9200</td>
-<td>0.159</td>
-<td>0.179</td>
-<td>1.2</td>
-<td>1.15</td>
-</tr>
-<tr class="odd">
-<td>germany</td>
-<td>SZ</td>
-<td>wis</td>
-<td>44.2</td>
-<td>0.0538</td>
-<td>-0.196</td>
-<td>0.149</td>
-<td>0.37</td>
-<td>9131</td>
-<td>0.266</td>
-<td>0.28</td>
-<td>2</td>
-<td>1.81</td>
-</tr>
-<tr class="even">
-<td>germany</td>
-<td>fm_chronos_daily_complete</td>
-<td>wis</td>
-<td>101</td>
-<td>0.114</td>
-<td>-0.0342</td>
-<td>0.165</td>
-<td>0.408</td>
-<td>9200</td>
-<td>0.609</td>
-<td>0.597</td>
-<td>4.58</td>
-<td>3.85</td>
-</tr>
-<tr class="odd">
-<td>germany</td>
-<td>fm_chronos_daily_ragged</td>
-<td>wis</td>
-<td>57.2</td>
-<td>0.0679</td>
-<td>-0.0337</td>
-<td>0.205</td>
-<td>0.506</td>
-<td>9200</td>
-<td>0.346</td>
-<td>0.357</td>
-<td>2.6</td>
-<td>2.3</td>
-</tr>
-<tr class="even">
-<td>germany</td>
-<td>fm_chronos_weekly_complete</td>
-<td>wis</td>
-<td>94.4</td>
-<td>0.0967</td>
-<td>-0.266</td>
-<td>0.329</td>
-<td>0.741</td>
-<td>9200</td>
-<td>0.571</td>
-<td>0.508</td>
-<td>4.3</td>
-<td>3.27</td>
-</tr>
-<tr class="odd">
-<td>germany</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>wis</td>
-<td>89</td>
-<td>0.0933</td>
-<td>-0.194</td>
-<td>0.294</td>
-<td>0.755</td>
-<td>9200</td>
-<td>0.539</td>
-<td>0.49</td>
-<td>4.05</td>
-<td>3.16</td>
-</tr>
-<tr class="even">
-<td>germany</td>
-<td>randomwalk</td>
-<td>wis</td>
-<td>92.3</td>
-<td>0.098</td>
-<td>-0.421</td>
-<td>0.216</td>
-<td>0.487</td>
-<td>9200</td>
-<td>0.558</td>
-<td>0.514</td>
-<td>4.2</td>
-<td>3.32</td>
-</tr>
-<tr class="odd">
-<td>germany</td>
-<td>randomwalknowcast</td>
-<td>wis</td>
-<td>22</td>
-<td>0.0296</td>
-<td>-0.136</td>
-<td>0.551</td>
-<td>0.922</td>
-<td>9200</td>
-<td>0.133</td>
-<td>0.155</td>
-<td>1</td>
-<td>1</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
+<p>On the development half, the fine-tuned model scored pending relative to the hub’s baseline, against pending for zero-shot Chronos-2 on the reporting triangle, pending on complete data and [X] for the random walk nowcast. It [outperformed / performed comparably to] the hub’s models, ranking [X] of [X].</p>
 </section>
-<section id="ebola-hub-submissions" class="level3">
-<h3 class="anchored" data-anchor-id="ebola-hub-submissions">Ebola hub submissions</h3>
+<section id="ebola-forecasting-hub" class="level3">
+<h3 class="anchored" data-anchor-id="ebola-forecasting-hub">Ebola forecasting hub</h3>
 <div class="callout callout-style-default callout-note callout-titled" title="Plan">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -1076,291 +685,29 @@ Table&nbsp;4: German nowcast hub: mean scores, coverage and number of forecasts 
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li>We show national nowcasts against the other submissions.</li>
-<li>We summarise the scores.</li>
-<li>The SI compares the joint block with each level alone and with the lowest level summed (Joint block or aggregation).</li>
-<li>The SI compares the walks with the rolling copula and with no pairing (Impact of correlated trajectories).</li>
+<li>We show every hub round, with the fine-tuned model’s first submission marked, and give scores before and after it apart, as for the German halves.</li>
+<li>Rounds before the first submission are retrospective for the fine-tuned model, and rounds after it are prospective.</li>
+<li>Our submitted renewal model is scored as one of the hub submissions.</li>
+<li>The first paragraph describes the national nowcasts against the truth.</li>
+<li>The second paragraph gives the scores in the abstract’s order: the fine-tuned model against zero-shot Chronos-2 on both inputs, the random walk nowcast, the other hub submissions and our renewal model, relative to the hub’s baseline, then by location and horizon (Supporting Information, <em>Ebola hub submissions</em>).</li>
 </ul>
 </div>
 </div>
-<div id="fig-ebola-nowcasts" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-ebola-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="build/figures/main/ebola-nowcasts.png" class="img-fluid figure-img">
-</div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-nowcasts-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;6: Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model’s median with its 50% and 95% intervals; each column gives the model’s CRPS relative to <code>randomwalknowcast</code>.
-</figcaption>
-</figure>
-</div>
-<div id="fig-ebola" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="build/figures/main/ebola-results.png" class="img-fluid figure-img">
-</div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-ebola-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;7: Ebola: sample forecasts of the hub’s rounds from 21 November 2026 (scored), after the release backtest from earlier releases (development), split by a dotted line. (A, B) CRPS relative to randomwalknowcast on the natural and log scales, on the forecasts each model shares with it, with the share of forecasts a model made in its label where it missed some; (C) bias; (D) 50% and 90% coverage; (E) relative CRPS by location; (F) by horizon.
-</figcaption>
-</figure>
-</div>
-<p> On the release backtest before the scored rounds, the best model was renewalsp, with a relative score of 0.8 and 0.95 on the log scale, against randomwalknowcast.</p>
-<div id="tbl-ebola-scores" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;5: Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to randomwalknowcast.
-</figcaption>
-<div aria-describedby="tbl-ebola-scores-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<colgroup>
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-<col style="width: 9%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>study</th>
-<th>model</th>
-<th>metric</th>
-<th>score</th>
-<th>log_score</th>
-<th>bias</th>
-<th>coverage_50</th>
-<th>coverage_90</th>
-<th>n</th>
-<th>rel_score</th>
-<th>rel_log_score</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_daily_complete</td>
-<td>crps</td>
-<td>4.85</td>
-<td>0.0542</td>
-<td>0.177</td>
-<td>0.833</td>
-<td>0.889</td>
-<td>162</td>
-<td>2.6</td>
-<td>1.78</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_daily_ragged</td>
-<td>crps</td>
-<td>5.26</td>
-<td>0.0701</td>
-<td>0.133</td>
-<td>0.837</td>
-<td>0.915</td>
-<td>270</td>
-<td>1.94</td>
-<td>1.99</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>fm_chronos_weekly_complete</td>
-<td>crps</td>
-<td>3.94</td>
-<td>0.0457</td>
-<td>0.0963</td>
-<td>0.877</td>
-<td>0.944</td>
-<td>162</td>
-<td>2.11</td>
-<td>1.5</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>fm_chronos_weekly_ragged</td>
-<td>crps</td>
-<td>4.17</td>
-<td>0.0537</td>
-<td>0.0407</td>
-<td>0.878</td>
-<td>0.963</td>
-<td>270</td>
-<td>1.65</td>
-<td>1.54</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>pprandomwalknowcast</td>
-<td>crps</td>
-<td>1.95</td>
-<td>0.0256</td>
-<td>0.138</td>
-<td>0.84</td>
-<td>0.883</td>
-<td>162</td>
-<td>1.05</td>
-<td>0.841</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>randomwalk</td>
-<td>crps</td>
-<td>2.59</td>
-<td>0.048</td>
-<td>0.0374</td>
-<td>0.833</td>
-<td>0.932</td>
-<td>162</td>
-<td>1.39</td>
-<td>1.58</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>randomwalknowcast</td>
-<td>crps</td>
-<td>1.86</td>
-<td>0.0304</td>
-<td>0.0469</td>
-<td>0.895</td>
-<td>0.926</td>
-<td>162</td>
-<td>1</td>
-<td>1</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewal</td>
-<td>crps</td>
-<td>1.78</td>
-<td>0.0371</td>
-<td>0.0125</td>
-<td>0.885</td>
-<td>0.93</td>
-<td>270</td>
-<td>0.92</td>
-<td>1.07</td>
-</tr>
-<tr class="odd">
-<td>ebola</td>
-<td>renewalbvd</td>
-<td>crps</td>
-<td>1.63</td>
-<td>0.0379</td>
-<td>0.0121</td>
-<td>0.878</td>
-<td>0.93</td>
-<td>270</td>
-<td>0.933</td>
-<td>1.13</td>
-</tr>
-<tr class="even">
-<td>ebola</td>
-<td>renewalsp</td>
-<td>crps</td>
-<td>1.5</td>
-<td>0.0289</td>
-<td>0.0391</td>
-<td>0.889</td>
-<td>0.926</td>
-<td>162</td>
-<td>0.805</td>
-<td>0.95</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
-<div id="tbl-ebola-joint" class="quarto-float quarto-figure quarto-figure-center anchored">
-<figure class="quarto-float quarto-float-tbl figure">
-<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-ebola-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Table&nbsp;6: Ebola hub submissions: mean energy score of each model’s trajectories on log(x + 1) counts, and their ratio to randomwalknowcast on the forecasts both made.
-</figcaption>
-<div aria-describedby="tbl-ebola-joint-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<table class="caption-top table">
-<thead>
-<tr class="header">
-<th>model</th>
-<th>n</th>
-<th>energy_log</th>
-<th>rel_energy_log</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>fm_chronos_daily_complete</td>
-<td>54</td>
-<td>0.0984</td>
-<td>1.51</td>
-</tr>
-<tr class="even">
-<td>fm_chronos_daily_ragged</td>
-<td>54</td>
-<td>0.108</td>
-<td>1.65</td>
-</tr>
-<tr class="odd">
-<td>fm_chronos_weekly_complete</td>
-<td>54</td>
-<td>0.0771</td>
-<td>1.18</td>
-</tr>
-<tr class="even">
-<td>fm_chronos_weekly_ragged</td>
-<td>54</td>
-<td>0.0822</td>
-<td>1.26</td>
-</tr>
-<tr class="odd">
-<td>pprandomwalknowcast</td>
-<td>54</td>
-<td>0.0539</td>
-<td>0.828</td>
-</tr>
-<tr class="even">
-<td>randomwalk</td>
-<td>54</td>
-<td>0.0839</td>
-<td>1.29</td>
-</tr>
-<tr class="odd">
-<td>randomwalknowcast</td>
-<td>54</td>
-<td>0.0651</td>
-<td>1</td>
-</tr>
-<tr class="even">
-<td>renewal</td>
-<td>54</td>
-<td>0.0698</td>
-<td>1.07</td>
-</tr>
-<tr class="odd">
-<td>renewalbvd</td>
-<td>54</td>
-<td>0.0735</td>
-<td>1.13</td>
-</tr>
-<tr class="even">
-<td>renewalsp</td>
-<td>54</td>
-<td>0.063</td>
-<td>0.967</td>
-</tr>
-</tbody>
-</table>
-</div>
-</figure>
-</div>
+</section>
+<section id="sensitivity-analyses-1" class="level3">
+<h3 class="anchored" data-anchor-id="sensitivity-analyses-1">Sensitivity analyses</h3>
+<p>Given the random walk nowcast’s point nowcast as complete counts, zero-shot Chronos-2 scored pending on the development simulations and pending on the German development half, relative to the random walk nowcast. The fine-tuned model on the same input scored pending and pending, against pending and pending on the reporting triangle.</p>
+<p>Fine-tuning on real data instead of simulations changed the German held-out score by [X] and the Ebola score after 2026-11-08 by [X] (Supporting Information, <em>Real-data fine-tune against synthetic</em>).</p>
+<p>Without the attention biases, the German development score changed by [X] at the final checkpoint, and without lag series by [X] (Supporting Information, <em>Attention biases for place and parent against none</em>; <em>Delays against no delays</em>).</p>
+<p>A fixed lag count of 4 weeks or 28 days changed scores by [X] against the rule that sets it from the data (Supporting Information, <em>Lag count</em>).</p>
+<p>Forecasting each level alone changed scores by [X], and summing the lowest level by [X], against forecasting all levels in one block (Supporting Information, <em>Ebola hub submissions</em>).</p>
+<p>The median rolling <span class="math inline">\(\rho_p\)</span> between German states was (not yet available) for the random walk nowcast and (not yet available) for the random walk, and pairing changed the national score by [X] against no pairing (Supporting Information, <em>Impact of correlated trajectories</em>). Scoring Chronos-2’s trajectories with independent cells or comonotone changed the energy score by [X] (Supporting Information, <em>Correlated trajectories</em>).</p>
+<p>The renewal model using BVDOutbreakSize scored [X] relative to the main renewal model, and the main renewal model [X] relative to fitting each zone on its own (Supporting Information, <em>Renewal model variants</em>).</p>
 </section>
 </section>
 <section id="discussion" class="level2">
 <h2 class="anchored" data-anchor-id="discussion">Discussion</h2>
-<p>We used one foundation model, Chronos-2, because it forecasts a group of related series in one block and takes known-future covariates, which the reporting triangle laid out as ragged series needs. In the SI we compare fine-tuning on simulations with fine-tuning on real data, on the German held-out half and on the scored BDBV rounds. BDBV is scored from the 21 November 2026 round onward, from data released before each round closed. The fine-tuned model is trained on simulations only, so it never sees the BDBV truth it is scored against.</p>
+<p>We used one foundation model, Chronos-2, because it forecasts a group of related series in one block and takes known-future covariates, which the reporting triangle laid out as ragged series needs. In the Supporting Information we compare fine-tuning on simulations with fine-tuning on real data, on the German held-out half and on the held-out Ebola rounds after the real-data model’s last training release. Those Ebola scores are retrospective, from data released before each round closed. The fine-tuned model is trained on simulations only, so it never sees the BDBV truth it is scored against.</p>
 <div class="callout callout-style-default callout-note callout-titled" title="Plan">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -1372,51 +719,71 @@ Table&nbsp;6: Ebola hub submissions: mean energy score of each model’s traject
 </div>
 <div class="callout-body-container callout-body">
 <ul>
-<li><strong>Summary</strong> of what we did.</li>
-<li><strong>Strengths and weaknesses.</strong>
+<li><strong>Summary.</strong>
 <ul>
-<li>We used one foundation model, one source of synthetic data and two case studies.</li>
-<li>We did not compare with epinowcast, or, for the synthetic study, with the model that generated the data.</li>
-<li>We evaluated on a retrospective and a real-time case study, with synthetic data that can be tuned to a setting.</li>
-<li>Fine-tuning ran on a laptop, so it needs no shared compute.</li>
-<li>The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) <span class="citation" data-cites="bdbv_modeling_hub_2026">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span>.</li>
-<li>Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.</li>
-<li>We fine-tuned on blocks of at most 364 steps of history but forecast with all available data.</li>
-<li>We did not test whether this affects Chronos-2’s handling of longer histories, which matters most for long series such as the German daily data.</li>
-<li>Fine-tuning used the laptop’s GPU, which made it several times faster than its CPU.</li>
-<li>On a laptop CPU alone it would run in hours.</li>
+<li>We aimed to combine the forecasting of a foundation time series model with the delay handling of nowcasting methods, without specialist configuration.</li>
+<li>Fine-tuned on simulations alone, Chronos-2 [beat / matched / fell short of] this aim.</li>
+<li>On held-out simulations it scored [X] relative to the random walk nowcast, against [X] for zero-shot Chronos-2 on the reporting triangle and [X] on complete data.</li>
+<li>On the German nowcast hub it scored [X] relative to the hub’s baseline, ranking [X] of [X] models.</li>
+<li>On the Ebola hub it scored [X] from its first submission, prospectively, ranking [X] of [X] submissions.</li>
+<li>Fine-tuning on real data instead scored [X] against fine-tuning on simulations (Supporting Information, <em>Real-data fine-tune against synthetic</em>).</li>
+<li>Without the attention biases scores changed by [X], and without lag series by [X] (Supporting Information, <em>Attention biases for place and parent against none</em>; <em>Delays against no delays</em>).</li>
+<li>Given a baseline nowcast as complete counts, the fine-tuned model scored [X] (Supporting Information, <em>Daily nowcasts</em>).</li>
+<li>Correlated trajectories changed scores by [X] (Supporting Information, <em>Impact of correlated trajectories</em>).</li>
+<li>The random walk nowcast, baselinenowcast extended to forecast and adapted to sparse data, scored [X] against the other Ebola hub submissions <span class="citation" data-cites="Johnson2025">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>)</span> (Supporting Information, <em>Baselines</em>).</li>
+<li>The renewal models built on our port of epinowcast, stabilised with BVDOutbreakSize and adapted to the hub’s imputation of onset dates, scored [X] against the other Ebola hub submissions <span class="citation" data-cites="BVDOutbreakSize lison2024">(<a href="#ref-BVDOutbreakSize" role="doc-biblioref">Abbott, Funk, and Holt 2026</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>)</span> (Supporting Information, <em>Renewal model</em>). Stabilising with BVDOutbreakSize changed scores by [X], and pooling and transmission between places by [X] (Supporting Information, <em>Renewal model variants</em>).</li>
+</ul></li>
+<li><strong>Strengths and limitations of the evaluation.</strong>
+<ul>
+<li>We used one foundation model, one source of synthetic data and two case studies. However, the case studies differ in pathogen, reporting system and cadence, and one was in real time.</li>
+<li>We did not compare with epinowcast directly, or, for the synthetic study, with the model that generated the data. However, the German case study includes the hub’s epinowcast-based model <span class="citation" data-cites="Wolffram2023">(<a href="#ref-Wolffram2023" role="doc-biblioref">Wolffram et al. 2023</a>)</span>.</li>
+<li>We ported the epinowcast model to PyRenew rather than using it directly. However, we validated the port by submitting renewal models built on it to the Ebola hub in real time, where they scored [X] against the other submissions (Supporting Information, <em>Renewal model</em>).</li>
+<li>We did not compare directly with Mantis or other custom neural networks trained for this task <span class="citation" data-cites="Dudley2026">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>)</span>. The ACCIDDA-Chromantis hub submission is one such model, with delay-aware networks trained on real revisions, and appears in the Ebola case study only as one of the hub teams’ forecasts <span class="citation" data-cites="accidda_chromantis bdbv_modeling_hub_2026">(<a href="#ref-accidda_chromantis" role="doc-biblioref">ACCIDDA 2026</a>; <a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span>.</li>
+<li>The Ebola case study is held out from model development but not blind. We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.</li>
+<li>From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past Ebola rounds to decide whether to submit it. Those rounds informed that decision, so only rounds after its first submission are prospective for it. The German held-out half and the simulated test round were fixed in advance, so they are held out for every decision.</li>
+</ul></li>
+<li><strong>Strengths and limitations of the model and data.</strong>
+<ul>
+<li>Fine-tuning ran on one machine, so it needs no shared compute, and the synthetic data can be tuned to a setting.</li>
+<li>We could only fine-tune and forecast with blocks that fit in the memory of our available GPUs, which forced several approximations (Methods; Supporting Information, <em>Fitting in GPU memory</em>). We fine-tuned on blocks of at most 364 steps of history but forecast with all available data, and did not test whether this affects Chronos-2’s handling of longer histories, which matters most for long series such as the German daily data. We cut systems too large for one block into views, so zones in different subtrees inform each other only through the aggregated totals. For the Ebola case study we combine two forecasts, so zones outside the active block are forecast with their own province only, not with the country or zones in other provinces.</li>
+<li>We used one layout, daily counts and daily lag series, with an aggregate row per place in both reporting-triangle models, and could also have included weekly lag series in the block.</li>
+<li>The BDBV hub imputes missing onset dates from reporting delays, which can over-smooth its data (Methods, Data) <span class="citation" data-cites="bdbv_modeling_hub_2026">(<a href="#ref-bdbv_modeling_hub_2026" role="doc-biblioref">InsightNet-US 2026</a>)</span>. Smoothed release histories mismatch the epinowcast reporting structure our simulations assume, which may disadvantage the fine-tuned Chronos-2.</li>
+<li>We simulate and fine-tune on counts only. Other common nowcasting targets are proportions, such as influenza-like illness as a share of visits, variant or sequence proportions, and wastewater samples <span class="citation" data-cites="Bracher2026 placeholder">(<a href="#ref-Bracher2026" role="doc-biblioref">Bracher et al. 2026</a>; <a href="#ref-placeholder" role="doc-biblioref"><strong>placeholder?</strong></a>)</span>.</li>
 <li>Key references: <span class="citation" data-cites="Kalahasti2026 Meyer2025">(<a href="#ref-Kalahasti2026" role="doc-biblioref">Kalahasti et al. 2026</a>; <a href="#ref-Meyer2025" role="doc-biblioref">Meyer et al. 2025</a>)</span>.</li>
 </ul></li>
-<li><strong>Domain knowledge through synthetic data.</strong>
+<li><strong>Comparison with foundation models and neural networks.</strong>
 <ul>
-<li>Domain knowledge enters through the simulations.</li>
-<li>Whether this improves the forecasts is to be filled in from the results.</li>
-<li>Key references: <span class="citation" data-cites="Dudley2026 Dudley2025 Dooley2023 Hollmann2025 Ansari2025">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>, <a href="#ref-Dudley2025" role="doc-biblioref">2025</a>; <a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>; <a href="#ref-Hollmann2025" role="doc-biblioref">Hollmann et al. 2025</a>; <a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>.</li>
+<li>Most uses of foundation models in forecast hubs are zero-shot, and correct for delays outside the model, with a nowcast or adjustment applied before the model sees the data <span class="citation" data-cites="ohtjhu_bm xilab_gleam_ai_hybrid emory_epirsi">(<a href="#ref-ohtjhu_bm" role="doc-biblioref">OHTJHU 2026</a>; <a href="#ref-xilab_gleam_ai_hybrid" role="doc-biblioref">Xi lab 2026</a>; <a href="#ref-emory_epirsi" role="doc-biblioref">Emory 2026</a>)</span>. Our model learns the delays itself, so nowcasting and forecasting happen in one step.</li>
+<li>Hub models fine-tuned on real surveillance data state no delay handling <span class="citation" data-cites="dhauser_fluchronos fluxengine_atlas">(<a href="#ref-dhauser_fluchronos" role="doc-biblioref">Hauser 2026</a>; <a href="#ref-fluxengine_atlas" role="doc-biblioref">fluxengine 2026</a>)</span>.</li>
+<li>Mantis and the UMass axial model use simulations to teach transmission dynamics to custom neural network architectures, while we use them to teach reporting delays to a general foundation model and keep its own forecasting <span class="citation" data-cites="Dudley2026 umass_axial">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>; <a href="#ref-umass_axial" role="doc-biblioref">UMass 2026</a>)</span>.</li>
+<li>Mantis simulates single populations, with one final series per outbreak, no releases or revisions and delays as a weighted kernel over days rather than double interval censored distributions, while our grid simulates linked places and age groups, their releases and revisions, and the model nowcasts them jointly <span class="citation" data-cites="Dudley2026">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>)</span>.</li>
+<li>Mantis is evaluated retrospectively and does not state that its test sets were fixed before its simulators were built, while we fixed our test sets in advance, the German held-out half, the BDBV data and a fresh simulated test round, and submitted to the Ebola hub in real time <span class="citation" data-cites="Dudley2026">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>)</span>.</li>
+<li>Domain knowledge enters our model in two ways, through the simulations and through the attention biases, which add what the model cannot learn from values alone, which series belong to which place and how places nest <span class="citation" data-cites="Woo2024 Yang2022">(<a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Yang2022" role="doc-biblioref">Yang et al. 2022</a>)</span>. Whether each route improves the nowcasts and forecasts is to be filled in from the results and the sensitivity analyses.</li>
+<li>This gives a case study for adding domain knowledge to foundation models in other fields where a well-tested generative model of the data exists.</li>
+<li>Key references: <span class="citation" data-cites="Kalahasti2026 Cai2026 Wang2025 Jafari2026 Du2025 Li2025 Aygun2025 Martinson2026 Koucha2026 Laglil2026 Das2024b Hu2021 Dudley2025 Dooley2023 Hollmann2025 Ansari2025">(<a href="#ref-Kalahasti2026" role="doc-biblioref">Kalahasti et al. 2026</a>; <a href="#ref-Cai2026" role="doc-biblioref">Cai, Huang, and Xu 2026</a>; <a href="#ref-Wang2025" role="doc-biblioref">Wang et al. 2025</a>; <a href="#ref-Jafari2026" role="doc-biblioref">Jafari et al. 2026</a>; <a href="#ref-Du2025" role="doc-biblioref">Du et al. 2025</a>; <a href="#ref-Li2025" role="doc-biblioref">Li et al. 2025</a>; <a href="#ref-Aygun2025" role="doc-biblioref">Aygün et al. 2025</a>; <a href="#ref-Martinson2026" role="doc-biblioref">Martinson et al. 2026</a>; <a href="#ref-Koucha2026" role="doc-biblioref">Koucha et al. 2026</a>; <a href="#ref-Laglil2026" role="doc-biblioref">Laglil et al. 2026</a>; <a href="#ref-Das2024b" role="doc-biblioref">Das, Faw, et al. 2024</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>; <a href="#ref-Dudley2025" role="doc-biblioref">Dudley et al. 2025</a>; <a href="#ref-Dooley2023" role="doc-biblioref">Dooley et al. 2023</a>; <a href="#ref-Hollmann2025" role="doc-biblioref">Hollmann et al. 2025</a>; <a href="#ref-Ansari2025" role="doc-biblioref">Ansari et al. 2025</a>)</span>.</li>
 </ul></li>
-<li><strong>Against the literature.</strong>
+<li><strong>Comparison with nowcasting methods.</strong>
 <ul>
-<li>Other uses of foundation models in infectious disease modelling. Key references: <span class="citation" data-cites="Kalahasti2026 Cai2026 Wang2025 Jafari2026 Du2025 Li2025 Aygun2025 Martinson2026">(<a href="#ref-Kalahasti2026" role="doc-biblioref">Kalahasti et al. 2026</a>; <a href="#ref-Cai2026" role="doc-biblioref">Cai, Huang, and Xu 2026</a>; <a href="#ref-Wang2025" role="doc-biblioref">Wang et al. 2025</a>; <a href="#ref-Jafari2026" role="doc-biblioref">Jafari et al. 2026</a>; <a href="#ref-Du2025" role="doc-biblioref">Du et al. 2025</a>; <a href="#ref-Li2025" role="doc-biblioref">Li et al. 2025</a>; <a href="#ref-Aygun2025" role="doc-biblioref">Aygün et al. 2025</a>; <a href="#ref-Martinson2026" role="doc-biblioref">Martinson et al. 2026</a>)</span>.</li>
-<li>Fine-tuning in other domains. Key references: <span class="citation" data-cites="Laglil2026 Das2024b Hu2021">(<a href="#ref-Laglil2026" role="doc-biblioref">Laglil et al. 2026</a>; <a href="#ref-Das2024b" role="doc-biblioref">Das, Faw, et al. 2024</a>; <a href="#ref-Hu2021" role="doc-biblioref">Hu et al. 2021</a>)</span>.</li>
-<li>Other nowcasting approaches. Key references: <span class="citation" data-cites="bastos Seaman2022 Bergstrom2022 Gressani2024 Schneble2021 vandeKassteele2019 Overton2023-dk Mellor2025 Tang2025 stonerPowerfulModellingFramework2020 Kamarthi2021 Koemen2025 Wilsens2025">(<a href="#ref-bastos" role="doc-biblioref">Bastos et al. 2019</a>; <a href="#ref-Seaman2022" role="doc-biblioref">Seaman et al. 2022</a>; <a href="#ref-Bergstrom2022" role="doc-biblioref">Bergström et al. 2022</a>; <a href="#ref-Gressani2024" role="doc-biblioref">Sumalinab et al. 2024</a>; <a href="#ref-Schneble2021" role="doc-biblioref">Schneble et al. 2021</a>; <a href="#ref-vandeKassteele2019" role="doc-biblioref">Kassteele, Eilers, and Wallinga 2019</a>; <a href="#ref-Overton2023-dk" role="doc-biblioref">Overton et al. 2023</a>; <a href="#ref-Mellor2025" role="doc-biblioref">Mellor et al. 2025</a>; <a href="#ref-Tang2025" role="doc-biblioref">Tang et al. 2025</a>; <a href="#ref-stonerPowerfulModellingFramework2020" role="doc-biblioref">Stoner, Economou, and Halliday 2020</a>; <a href="#ref-Kamarthi2021" role="doc-biblioref">Kamarthi, Rodríguez, and Prakash 2021</a>; <a href="#ref-Koemen2025" role="doc-biblioref">Koemen et al. 2025</a>; <a href="#ref-Wilsens2025" role="doc-biblioref">Wilsens, Antonio, and Claeskens 2025</a>)</span>.</li>
+<li>Chain ladder methods are simple and fast but have limited forecasting support, while generative models can forecast but need expert knowledge to configure for each target and reporting system <span class="citation" data-cites="Johnson2025 abbottepinowcast">(<a href="#ref-Johnson2025" role="doc-biblioref">Johnson et al. 2025</a>; <a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>)</span>. Our model sits between them, configured once through the simulations and applied to new targets without change.</li>
+<li>Simulators for nowcasting need the surveillance process modelled correctly, with releases and revisions and double interval censored delays, and this is where epidemiological knowledge adds value over generic large-scale simulation <span class="citation" data-cites="Charniga2024 abbottprimarycensored">(<a href="#ref-Charniga2024" role="doc-biblioref">Charniga et al. 2024</a>; <a href="#ref-abbottprimarycensored" role="doc-biblioref">Abbott 2026</a>)</span>. A marginal generative nowcasting model gives such a simulator, as it can be run forward, and epinowcast already covers the reporting patterns seen in practice <span class="citation" data-cites="abbottepinowcast">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>)</span>.</li>
+<li>We ported the epinowcast model from R and Stan to Python on top of PyRenew <span class="citation" data-cites="RCoreTeam Carpenter2017 pyrenew">(<a href="#ref-RCoreTeam" role="doc-biblioref">R Core Team 2025</a>; <a href="#ref-Carpenter2017" role="doc-biblioref">Carpenter et al. 2017</a>; <a href="#ref-pyrenew" role="doc-biblioref">CDC Center for Forecasting and Outbreak Analytics 2025</a>)</span>. LLM coding assistants make this kind of port much quicker, which makes it easier to standardise on a single code base. A port still depends on the original implementation being well tested, as it gives the reference the port is checked against. Without a mature, well-tested original, there is no way to tell whether a port is correct.</li>
+<li>Key references: <span class="citation" data-cites="bastos Seaman2022 Bergstrom2022 Gressani2024 Schneble2021 vandeKassteele2019 Overton2023-dk Mellor2025 Tang2025 stonerPowerfulModellingFramework2020 Kamarthi2021 Koemen2025 Wilsens2025">(<a href="#ref-bastos" role="doc-biblioref">Bastos et al. 2019</a>; <a href="#ref-Seaman2022" role="doc-biblioref">Seaman et al. 2022</a>; <a href="#ref-Bergstrom2022" role="doc-biblioref">Bergström et al. 2022</a>; <a href="#ref-Gressani2024" role="doc-biblioref">Sumalinab et al. 2024</a>; <a href="#ref-Schneble2021" role="doc-biblioref">Schneble et al. 2021</a>; <a href="#ref-vandeKassteele2019" role="doc-biblioref">Kassteele, Eilers, and Wallinga 2019</a>; <a href="#ref-Overton2023-dk" role="doc-biblioref">Overton et al. 2023</a>; <a href="#ref-Mellor2025" role="doc-biblioref">Mellor et al. 2025</a>; <a href="#ref-Tang2025" role="doc-biblioref">Tang et al. 2025</a>; <a href="#ref-stonerPowerfulModellingFramework2020" role="doc-biblioref">Stoner, Economou, and Halliday 2020</a>; <a href="#ref-Kamarthi2021" role="doc-biblioref">Kamarthi, Rodríguez, and Prakash 2021</a>; <a href="#ref-Koemen2025" role="doc-biblioref">Koemen et al. 2025</a>; <a href="#ref-Wilsens2025" role="doc-biblioref">Wilsens, Antonio, and Claeskens 2025</a>)</span>.</li>
 </ul></li>
-<li><strong>A possible emulator.</strong>
+<li><strong>Future work.</strong>
 <ul>
-<li>A model fine-tuned on epinowcast simulations may emulate epinowcast in a fraction of its run time.</li>
-<li>We did not compare with epinowcast, so we cannot say how close it is.</li>
-<li>The same approach could emulate other slow packages.</li>
-</ul></li>
-<li><strong>Further work.</strong>
-<ul>
-<li>Other foundation models.</li>
-<li>More case studies.</li>
-<li>A comparison with custom neural networks.</li>
-<li>Testing the fine-tuned model as an emulator of epinowcast.</li>
+<li>Other foundation models, and more case studies.</li>
+<li>A direct comparison with Mantis, and fine-tuning Mantis on our simulations for nowcasting, as reporting delays, revisions and surveillance quirks are not in its training simulations <span class="citation" data-cites="Dudley2026">(<a href="#ref-Dudley2026" role="doc-biblioref">Dudley et al. 2026</a>)</span>.</li>
+<li>A model fine-tuned on epinowcast simulations may emulate epinowcast in a fraction of its run time. Testing this needs a direct comparison with epinowcast, and the same approach could emulate other slow packages.</li>
+<li>Extending the simulator and fine-tuning to proportions and other non-count targets.</li>
 <li>Fine-tuning with other epidemiological features as covariates, such as distances between locations or mobility.</li>
+<li>Training on the count not yet reported instead of the total count. The reported count would then be a lower bound by construction. This needs signed remainders where counts are revised down.</li>
 <li>Key references: <span class="citation" data-cites="Das2024a Woo2024 Rasul2023 Kamarthi2021 Koemen2025 respinow_hub_2025">(<a href="#ref-Das2024a" role="doc-biblioref">Das, Kong, et al. 2024</a>; <a href="#ref-Woo2024" role="doc-biblioref">Woo et al. 2024</a>; <a href="#ref-Rasul2023" role="doc-biblioref">Rasul et al. 2023</a>; <a href="#ref-Kamarthi2021" role="doc-biblioref">Kamarthi, Rodríguez, and Prakash 2021</a>; <a href="#ref-Koemen2025" role="doc-biblioref">Koemen et al. 2025</a>; <a href="#ref-respinow_hub_2025" role="doc-biblioref">KIT Metrics Lab, Bracher, and Schienle 2025</a>)</span>.</li>
 </ul></li>
 <li><strong>Conclusions.</strong>
 <ul>
-<li>Generic forecasting models can be reused, with domain knowledge added through simulated data.</li>
+<li>Foundation time series models can be adapted to infectious disease surveillance data, with domain knowledge added through simulated data and small changes to their architecture.</li>
+<li>This combines their forecasting with the delay handling of nowcasting methods, without specialist configuration.</li>
+<li>Fine-tuned foundation models, ours and the same approach on newer foundation models, should serve as baselines for model developers and for forecast and nowcast hubs. They are cheap to run, general across pathogens and improve as the base models improve, but this needs open checkpoints, the simulation grid and the workflow that fine-tunes and scores them.</li>
 <li>More case studies are needed before routine use.</li>
 </ul></li>
 </ul>
@@ -1441,14 +808,29 @@ Table&nbsp;6: Ebola hub submissions: mean energy score of each model’s traject
 </div></section><section id="ai-disclosure" class="level2 appendix"><h2 class="anchored quarto-appendix-heading">AI disclosure</h2><div class="quarto-appendix-contents">
 
 </div></section><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="ref-abbottprimarycensored" class="csl-entry" role="listitem">
+Abbott, Sam. 2026. <span>“Primarycensored: Primary Event Censored Distributions in <span>R</span> and <span>Stan</span>.”</span> Zenodo. <a href="https://doi.org/10.5281/zenodo.13632838">https://doi.org/10.5281/zenodo.13632838</a>.
+</div>
+<div id="ref-BVDOutbreakSize" class="csl-entry" role="listitem">
+Abbott, Sam, Sebastian Funk, and Charlotte Holt. 2026. <em><span>BVDOutbreakSize</span>: Estimating the Current Size of the 2026 <span>DRC</span> <span>Bundibugyo</span> Virus Outbreak</em>. <a href="https://doi.org/10.5281/zenodo.20312758">https://doi.org/10.5281/zenodo.20312758</a>.
+</div>
+<div id="ref-EpiNow2" class="csl-entry" role="listitem">
+Abbott, Sam, Joel Hellewell, Katharine Sherratt, Katelyn Gostic, Joe Hickson, Hamada S. Badr, Michael DeWitt, Robin Thompson, EpiForecasts, and Sebastian Funk. 2020. <em>EpiNow2: Estimate Real-Time Case Counts and Time-Varying Epidemiological Parameters</em>. <a href="https://doi.org/10.5281/zenodo.3957489">https://doi.org/10.5281/zenodo.3957489</a>.
+</div>
 <div id="ref-abbottepinowcast" class="csl-entry" role="listitem">
 Abbott, Sam, Adrian Lison, Sebastian Funk, Carl Pearson, Hugo Gruson, Felix Guenther, Michael DeWitt, James Mba Azam, and Jessalyn Sebastian. 2026. <em>Epinowcast: A Bayesian Framework for Real-Time Infectious Disease Surveillance</em>. <a href="https://doi.org/10.5281/zenodo.5637165">https://doi.org/10.5281/zenodo.5637165</a>.
+</div>
+<div id="ref-accidda_chromantis" class="csl-entry" role="listitem">
+ACCIDDA. 2026. <span>“<span>ACCIDDA-Chromantis</span> Model Metadata, <span>FluSight</span> Forecast Hub.”</span> <a href="https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/ACCIDDA-Chromantis.yml">https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/ACCIDDA-Chromantis.yml</a>.
 </div>
 <div id="ref-Aksu2024" class="csl-entry" role="listitem">
 Aksu, Taha, Gerald Woo, Juncheng Liu, Xu Liu, Chenghao Liu, Silvio Savarese, Caiming Xiong, and Doyen Sahoo. 2024. <span>“<span>GIFT-Eval</span>: A Benchmark for General Time Series Forecasting Model Evaluation.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2410.10393">https://doi.org/10.48550/arXiv.2410.10393</a>.
 </div>
 <div id="ref-amaralPostprocessingWeightedCombination2025" class="csl-entry" role="listitem">
 Amaral, André Victor Ribeiro, Daniel Wolffram, Paula Moraga, and Johannes Bracher. 2025. <span>“Post-Processing and Weighted Combination of Infectious Disease Nowcasts.”</span> <em>PLoS Computational Biology</em> 21 (3): e1012836. <a href="https://doi.org/10.1371/journal.pcbi.1012836">https://doi.org/10.1371/journal.pcbi.1012836</a>.
+</div>
+<div id="ref-chronos_forecasting" class="csl-entry" role="listitem">
+Amazon Science. 2025. <span>“Chronos-Forecasting.”</span> GitHub. <a href="https://github.com/amazon-science/chronos-forecasting">https://github.com/amazon-science/chronos-forecasting</a>.
 </div>
 <div id="ref-Ansari2025" class="csl-entry" role="listitem">
 Ansari, Abdul Fatir, Oleksandr Shchur, Jaris Küken, Andreas Auer, Boran Han, Pedro Mercado, Syama Sundar Rangapuram, et al. 2025. <span>“<span>Chronos-2</span>: From Univariate to Universal Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2510.15821">https://doi.org/10.48550/arXiv.2510.15821</a>.
@@ -1471,11 +853,29 @@ Bergström, Fanny, Felix Günther, Michael Höhle, and Tom Britton. 2022. <span>
 <div id="ref-Bosse2023-sx" class="csl-entry" role="listitem">
 Bosse, Nikos I., Sam Abbott, Anne Cori, Edwin van Leeuwen, Johannes Bracher, and Sebastian Funk. 2023. <span>“Scoring Epidemiological Forecasts on Transformed Scales.”</span> <em>PLOS Computational Biology</em> 19 (8): e1011393. <a href="https://doi.org/10.1371/journal.pcbi.1011393">https://doi.org/10.1371/journal.pcbi.1011393</a>.
 </div>
+<div id="ref-bosse2022scoringutils" class="csl-entry" role="listitem">
+Bosse, Nikos I., Hugo Gruson, Anne Cori, Edwin van Leeuwen, Sebastian Funk, and Sam Abbott. 2022. <span>“Evaluating Forecasts with Scoringutils in <span>R</span>.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2205.07090">https://doi.org/10.48550/arXiv.2205.07090</a>.
+</div>
 <div id="ref-bracherEvaluatingEpidemicForecasts2021" class="csl-entry" role="listitem">
 Bracher, Johannes, Evan L. Ray, Tilmann Gneiting, and Nicholas G. Reich. 2021. <span>“Evaluating Epidemic Forecasts in an Interval Format.”</span> <em>PLOS Computational Biology</em> 17 (2): e1008618. <a href="https://doi.org/10.1371/journal.pcbi.1008618">https://doi.org/10.1371/journal.pcbi.1008618</a>.
 </div>
+<div id="ref-Bracher2026" class="csl-entry" role="listitem">
+Bracher, Johannes, Daniel Wolffram, Rodrigo Amaral Lind, Nils Bardeck, Micha Böhm, Seba Contreras, Philipp Dönges, et al. 2026. <span>“Multi-Model Forecasting of Respiratory Disease Activity in <span>Germany</span> During the 2024–2025 Season.”</span> <em>PLOS Computational Biology</em> 22 (11): e1014985. <a href="https://doi.org/10.1371/journal.pcbi.1014985">https://doi.org/10.1371/journal.pcbi.1014985</a>.
+</div>
 <div id="ref-Cai2026" class="csl-entry" role="listitem">
 Cai, Peng, Guoyu Huang, and Ximing Xu. 2026. <span>“Benchmarking Time Series Foundation Models for Multi-Country Infectious Disease Forecasting: A Retrospective Evaluation Across over 70 Diseases.”</span> <em>BMC Public Health</em>, October. <a href="https://doi.org/10.1186/s12889-026-29918-1">https://doi.org/10.1186/s12889-026-29918-1</a>.
+</div>
+<div id="ref-Carpenter2017" class="csl-entry" role="listitem">
+Carpenter, Bob, Andrew Gelman, Matthew D. Hoffman, Daniel Lee, Ben Goodrich, Michael Betancourt, Marcus Brubaker, Jiqiang Guo, Peter Li, and Allen Riddell. 2017. <span>“Stan: A Probabilistic Programming Language.”</span> <em>Journal of Statistical Software</em> 76 (1): 1–32. <a href="https://doi.org/10.18637/jss.v076.i01">https://doi.org/10.18637/jss.v076.i01</a>.
+</div>
+<div id="ref-flusight_hub" class="csl-entry" role="listitem">
+CDC. 2026. <span>“<span>FluSight</span> Forecast Hub.”</span> <a href="https://github.com/cdcepi/FluSight-forecast-hub">https://github.com/cdcepi/FluSight-forecast-hub</a>.
+</div>
+<div id="ref-pyrenew" class="csl-entry" role="listitem">
+CDC Center for Forecasting and Outbreak Analytics. 2025. <em><span>PyRenew</span>: A Python Package for Renewal Modelling</em>. <a href="https://github.com/CDCgov/PyRenew">https://github.com/CDCgov/PyRenew</a>.
+</div>
+<div id="ref-Charniga2024" class="csl-entry" role="listitem">
+Charniga, Kelly, Sang Woo Park, Andrei R. Akhmetzhanov, Anne Cori, Jonathan Dushoff, Sebastian Funk, Katelyn M. Gostic, et al. 2024. <span>“Best Practices for Estimating and Reporting Epidemiological Delay Distributions of Infectious Diseases.”</span> <em>PLOS Computational Biology</em> 20 (10). <a href="https://doi.org/10.1371/journal.pcbi.1012520">https://doi.org/10.1371/journal.pcbi.1012520</a>.
 </div>
 <div id="ref-Das2024b" class="csl-entry" role="listitem">
 Das, Abhimanyu, Matthew Faw, Rajat Sen, and Yichen Zhou. 2024. <span>“In-Context Fine-Tuning for Time-Series Foundation Models.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2410.24087">https://doi.org/10.48550/arXiv.2410.24087</a>.
@@ -1495,8 +895,17 @@ Dudley, Carson, Reiden Magdaleno, Christopher Harding, and Marisa Eisenberg. 202
 <div id="ref-Dudley2026" class="csl-entry" role="listitem">
 Dudley, Carson, Reiden Magdaleno, Christopher Harding, Ananya Sharma, Emily Martin, and Marisa Eisenberg. 2026. <span>“Mantis: A Foundation Model for Mechanistic Disease Forecasting.”</span> <em>Proceedings of the National Academy of Sciences</em> 123 (40). <a href="https://doi.org/10.1073/pnas.2602542123">https://doi.org/10.1073/pnas.2602542123</a>.
 </div>
+<div id="ref-emory_epirsi" class="csl-entry" role="listitem">
+Emory. 2026. <span>“<span>Emory-EpiRSI</span> Model Metadata, <span>FluSight</span> Forecast Hub.”</span> <a href="https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/Emory-EpiRSI.yml">https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/Emory-EpiRSI.yml</a>.
+</div>
+<div id="ref-respicast_si_hub" class="csl-entry" role="listitem">
+European Respiratory Diseases Forecasting Hub. 2026. <span>“<span>RespiCast</span> Syndromic Indicators Forecasting Hub.”</span> <a href="https://github.com/european-modelling-hubs/RespiCast-SyndromicIndicators">https://github.com/european-modelling-hubs/RespiCast-SyndromicIndicators</a>.
+</div>
 <div id="ref-Ferro2014" class="csl-entry" role="listitem">
 Ferro, Christopher A. T. 2014. <span>“Fair Scores for Ensemble Forecasts.”</span> <em>Quarterly Journal of the Royal Meteorological Society</em> 140 (683): 1917–23. <a href="https://doi.org/10.1002/qj.2270">https://doi.org/10.1002/qj.2270</a>.
+</div>
+<div id="ref-fluxengine_atlas" class="csl-entry" role="listitem">
+fluxengine. 2026. <span>“<span class="nocase">fluxengine-atlas</span> Model Metadata, <span>RespiCast</span> Syndromic Indicators Hub.”</span> <a href="https://github.com/european-modelling-hubs/RespiCast-SyndromicIndicators/blob/main/model-metadata/fluxengine-atlas.yml">https://github.com/european-modelling-hubs/RespiCast-SyndromicIndicators/blob/main/model-metadata/fluxengine-atlas.yml</a>.
 </div>
 <div id="ref-funkAssessingPerformanceRealtime2019" class="csl-entry" role="listitem">
 Funk, Sebastian, Anton Camacho, Adam J. Kucharski, Rachel Lowe, Rosalind M. Eggo, and W. John Edmunds. 2019. <span>“Assessing the Performance of Real-Time Epidemic Forecasts: <span>A</span> Case Study of <span>Ebola</span> in the <span>Western Area</span> Region of <span>Sierra Leone</span>, 2014-15.”</span> <em>PLOS Computational Biology</em> 15 (2): e1006785. <a href="https://doi.org/10.1371/journal.pcbi.1006785">https://doi.org/10.1371/journal.pcbi.1006785</a>.
@@ -1515,6 +924,9 @@ Gneiting, Tilmann, Larissa I. Stanberry, Eric P. Grimit, Leonhard Held, and Nich
 </div>
 <div id="ref-gunther2021nowcasting" class="csl-entry" role="listitem">
 Günther, Felix, Andreas Bender, Katharina Katz, Helmut Küchenhoff, and Michael Höhle. 2021. <span>“Nowcasting the <span>COVID</span>-19 Pandemic in Bavaria.”</span> <em>Biom. J.</em> 63 (3): 490–502. <a href="https://doi.org/10.1002/bimj.202000112">https://doi.org/10.1002/bimj.202000112</a>.
+</div>
+<div id="ref-dhauser_fluchronos" class="csl-entry" role="listitem">
+Hauser, D. 2026. <span>“<span>DHauser-FluChronos</span> Model Metadata, <span>RespiCast</span> Syndromic Indicators Hub.”</span> <a href="https://github.com/european-modelling-hubs/RespiCast-SyndromicIndicators/blob/main/model-metadata/DHauser-FluChronos.yml">https://github.com/european-modelling-hubs/RespiCast-SyndromicIndicators/blob/main/model-metadata/DHauser-FluChronos.yml</a>.
 </div>
 <div id="ref-hohle" class="csl-entry" role="listitem">
 Höhle, Michael, and Matthias an der Heiden. 2014. <span>“Bayesian Nowcasting During the <span>STEC O104</span>:H4 Outbreak in <span>Germany</span>, 2011.”</span> <em>Biometrics</em> 70 (4): 993–1002. <a href="https://doi.org/10.1111/biom.12194">https://doi.org/10.1111/biom.12194</a>.
@@ -1552,6 +964,9 @@ KIT Metrics Lab, Johannes Bracher, Daniel Wolffram, and Melanie Schienle. 2025. 
 <div id="ref-Koemen2025" class="csl-entry" role="listitem">
 Koemen, Silas, Nuno R. Faria, Leonardo S. Bastos, Oliver Ratmann, and André Victor Ribeiro Amaral. 2025. <span>“Fast and Trustworthy Nowcasting of Dengue Fever: A Case Study Using Attention-Based Probabilistic Neural Networks in <span>São Paulo</span>, <span>Brazil</span>.”</span> medRxiv. <a href="https://doi.org/10.1101/2025.05.05.25326971">https://doi.org/10.1101/2025.05.05.25326971</a>.
 </div>
+<div id="ref-Koucha2026" class="csl-entry" role="listitem">
+Koucha, Mohamed, Keshav Das, Matthew J. Y. Shin, Harold Noël, Bruno Coignard, Juliette Paireau, and Simon Cauchemez. 2026. <span>“Epidemic Forecasting with Deep Learning Architectures and Foundation Models Compared with Mechanistic, Statistical and Ensemble Models.”</span> HAL preprint pasteur-05868182. <a href="https://pasteur.hal.science/pasteur-05868182">https://pasteur.hal.science/pasteur-05868182</a>.
+</div>
 <div id="ref-Laglil2026" class="csl-entry" role="listitem">
 Laglil, Morad, Bertrand Pracca, Emilie Devijver, and Eric Gaussier. 2026. <span>“Foundation Models and Fine-Tuning: Toward a New Generation of Models for Time Series Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2607.23146">https://doi.org/10.48550/arXiv.2607.23146</a>.
 </div>
@@ -1579,14 +994,26 @@ Meyer, Marcel, Sascha Kaltenpoth, Kevin Zalipski, and Oliver Müller. 2025. <spa
 <div id="ref-Muller2022" class="csl-entry" role="listitem">
 Müller, Samuel, Noah Hollmann, Sebastian Pineda Arango, Josif Grabocka, and Frank Hutter. 2022. <span>“Transformers Can Do <span>Bayesian</span> Inference.”</span> In <em>International Conference on Learning Representations</em>. <a href="https://doi.org/10.48550/arXiv.2112.10510">https://doi.org/10.48550/arXiv.2112.10510</a>.
 </div>
+<div id="ref-ohtjhu_bm" class="csl-entry" role="listitem">
+OHTJHU. 2026. <span>“<span>OHTJHU-BM</span> Model Metadata, <span>FluSight</span> Forecast Hub.”</span> <a href="https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/OHTJHU-BM.yml">https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/OHTJHU-BM.yml</a>.
+</div>
 <div id="ref-Overton2023-dk" class="csl-entry" role="listitem">
 Overton, Christopher E, Sam Abbott, Rachel Christie, Fergus Cumming, Julie Day, Owen Jones, Rob Paton, Charlie Turner, and Thomas Ward. 2023. <span>“Nowcasting the 2022 Mpox Outbreak in <span>England</span>.”</span> <em>PLoS Comput. Biol.</em> 19 (9): e1011463. <a href="https://doi.org/10.1371/journal.pcbi.1011463">https://doi.org/10.1371/journal.pcbi.1011463</a>.
 </div>
 <div id="ref-Park2024" class="csl-entry" role="listitem">
 Park, Sang Woo, Andrei R. Akhmetzhanov, Kelly Charniga, Anne Cori, Nicholas G. Davies, Jonathan Dushoff, Sebastian Funk, et al. 2024. <span>“Estimating Epidemiological Delay Distributions for Infectious Diseases.”</span> medRxiv. <a href="https://doi.org/10.1101/2024.01.12.24301247">https://doi.org/10.1101/2024.01.12.24301247</a>.
 </div>
+<div id="ref-Phan2019" class="csl-entry" role="listitem">
+Phan, Du, Neeraj Pradhan, and Martin Jankowiak. 2019. <span>“Composable Effects for Flexible and Accelerated Probabilistic Programming in <span>NumPyro</span>.”</span> <em>arXiv Preprint arXiv:1912.11554</em>. <a href="https://doi.org/10.48550/arXiv.1912.11554">https://doi.org/10.48550/arXiv.1912.11554</a>.
+</div>
 <div id="ref-Pinson2013" class="csl-entry" role="listitem">
 Pinson, Pierre, and Julija Tastu. 2013. <span>“Discrimination Ability of the Energy Score.”</span> DTU Compute Technical Report 2013-15. Technical University of Denmark.
+</div>
+<div id="ref-RCoreTeam" class="csl-entry" role="listitem">
+R Core Team. 2025. <em>R: A Language and Environment for Statistical Computing</em>. Vienna, Austria: R Foundation for Statistical Computing. <a href="https://www.R-project.org/">https://www.R-project.org/</a>.
+</div>
+<div id="ref-Raffel2020" class="csl-entry" role="listitem">
+Raffel, Colin, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, Wei Li, and Peter J. Liu. 2020. <span>“Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer.”</span> <em>Journal of Machine Learning Research</em> 21 (140): 1–67. <a href="https://arxiv.org/abs/1910.10683">https://arxiv.org/abs/1910.10683</a>.
 </div>
 <div id="ref-Rasul2023" class="csl-entry" role="listitem">
 Rasul, Kashif, Arjun Ashok, Andrew Robert Williams, Hena Ghonia, Rishika Bhagwatkar, Arian Khorasani, Mohammad Javad Darvishi Bayazi, et al. 2023. <span>“<span>Lag-Llama</span>: Towards Foundation Models for Probabilistic Time Series Forecasting.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.2310.08278">https://doi.org/10.48550/arXiv.2310.08278</a>.
@@ -1606,14 +1033,26 @@ Shchur, Oleksandr, Abdul Fatir Ansari, Caner Turkmen, Lorenzo Stella, Nick Erick
 <div id="ref-sherrattPredictivePerformanceMultimodel2023" class="csl-entry" role="listitem">
 Sherratt, Katharine, Hugo Gruson, Rok Grah, Helen Johnson, Rene Niehus, Bastian Prasse, Frank Sandmann, et al. 2023. <span>“Predictive Performance of Multi-Model Ensemble Forecasts of <span>COVID-19</span> Across <span>European</span> Nations.”</span> Edited by Amy Wesolowski, Neil M Ferguson, Jeffrey L Shaman, and Sen Pei. <em>eLife</em> 12 (April): e81916. <a href="https://doi.org/10.7554/eLife.81916">https://doi.org/10.7554/eLife.81916</a>.
 </div>
+<div id="ref-Stoner2020" class="csl-entry" role="listitem">
+Stoner, Oliver, and Theo Economou. 2020. <span>“Multivariate Hierarchical Frameworks for Modeling Delayed Reporting in Count Data.”</span> <em>Biometrics</em> 76 (3): 789–98. <a href="https://doi.org/10.1111/biom.13188">https://doi.org/10.1111/biom.13188</a>.
+</div>
 <div id="ref-stonerPowerfulModellingFramework2020" class="csl-entry" role="listitem">
 Stoner, Oliver, Theo Economou, and Alba Halliday. 2020. <span>“A <span>Powerful Modelling Framework</span> for <span>Nowcasting</span> and <span>Forecasting COVID-19</span> and <span>Other Diseases</span>.”</span> arXiv. <a href="https://doi.org/10.48550/arXiv.1912.05965">https://doi.org/10.48550/arXiv.1912.05965</a>.
+</div>
+<div id="ref-Stoner2023" class="csl-entry" role="listitem">
+Stoner, Oliver, Allison Halliday, and Theo Economou. 2023. <span>“Correcting Delayed Reporting of <span>COVID</span>-19 Using the Generalized-<span>Dirichlet</span>-Multinomial Method.”</span> <em>Biometrics</em> 79 (3): 2537–50. <a href="https://doi.org/10.1111/biom.13810">https://doi.org/10.1111/biom.13810</a>.
 </div>
 <div id="ref-Gressani2024" class="csl-entry" role="listitem">
 Sumalinab, Bryan, Oswaldo Gressani, Niel Hens, and Christel Faes. 2024. <span>“Bayesian Nowcasting with <span>Laplacian-P</span>-Splines.”</span> <em>Journal of Computational and Graphical Statistics</em> 34 (2): 718–28. <a href="https://doi.org/10.1080/10618600.2024.2395414">https://doi.org/10.1080/10618600.2024.2395414</a>.
 </div>
 <div id="ref-Tang2025" class="csl-entry" role="listitem">
 Tang, Maria L, Ian S McFarlane, Christopher E Overton, Erjola Hani, Vanessa Saliba, Gareth J Hughes, Paul Crook, Thomas Ward, and Jonathon Mellor. 2025. <span>“Nowcasting Cases and Trends During the Measles 2023/24 Outbreak in <span>England</span>.”</span> <em>Journal of Infection</em> 91 (3): 106569. <a href="https://doi.org/10.1016/j.jinf.2025.106569">https://doi.org/10.1016/j.jinf.2025.106569</a>.
+</div>
+<div id="ref-umass_axial" class="csl-entry" role="listitem">
+UMass. 2026. <span>“<span class="nocase">UMass-axial_r2</span> Model Metadata, <span>FluSight</span> Forecast Hub.”</span> <a href="https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/UMass-axial_r2.yml">https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/UMass-axial_r2.yml</a>.
+</div>
+<div id="ref-Vaswani2017" class="csl-entry" role="listitem">
+Vaswani, Ashish, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, and Illia Polosukhin. 2017. <span>“Attention Is All You Need.”</span> In <em>Advances in Neural Information Processing Systems</em>. Vol. 30. <a href="https://arxiv.org/abs/1706.03762">https://arxiv.org/abs/1706.03762</a>.
 </div>
 <div id="ref-Viboud2018" class="csl-entry" role="listitem">
 Viboud, Cécile, Kaiyuan Sun, Robert Gaffey, Marco Ajelli, Laura Fumanelli, Stefano Merler, Qian Zhang, Gerardo Chowell, Lone Simonsen, and Alessandro Vespignani. 2018. <span>“The <span>RAPIDD</span> <span>Ebola</span> Forecasting Challenge: Synthesis and Lessons Learnt.”</span> <em>Epidemics</em> 22 (March): 13–21. <a href="https://doi.org/10.1016/j.epidem.2017.08.002">https://doi.org/10.1016/j.epidem.2017.08.002</a>.
@@ -1629,6 +1068,9 @@ Wolffram, Daniel, Sam Abbott, Matthias an der Heiden, Sebastian Funk, Felix Gün
 </div>
 <div id="ref-Woo2024" class="csl-entry" role="listitem">
 Woo, Gerald, Chenghao Liu, Akshat Kumar, Caiming Xiong, Silvio Savarese, and Doyen Sahoo. 2024. <span>“Unified Training of Universal Time Series Forecasting Transformers.”</span> In <em>Proceedings of the 41st International Conference on Machine Learning</em>. <a href="https://doi.org/10.48550/arXiv.2402.02592">https://doi.org/10.48550/arXiv.2402.02592</a>.
+</div>
+<div id="ref-xilab_gleam_ai_hybrid" class="csl-entry" role="listitem">
+Xi lab. 2026. <span>“<span class="nocase">Xi_lab-GLEAM_AI_hybrid</span> Model Metadata, <span>FluSight</span> Forecast Hub.”</span> <a href="https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/Xi_lab-GLEAM_AI_hybrid.yml">https://github.com/cdcepi/FluSight-forecast-hub/blob/main/model-metadata/Xi_lab-GLEAM_AI_hybrid.yml</a>.
 </div>
 <div id="ref-Yang2022" class="csl-entry" role="listitem">
 Yang, Jingfeng, Aditya Gupta, Shyam Upadhyay, Luheng He, Rahul Goel, and Shachi Paul. 2022. <span>“<span>TableFormer</span>: Robust Transformer Modeling for Table-Text Encoding.”</span> In <em>Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)</em>. <a href="https://arxiv.org/abs/2203.00274">https://arxiv.org/abs/2203.00274</a>.

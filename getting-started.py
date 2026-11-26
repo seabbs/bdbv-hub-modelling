@@ -20,7 +20,7 @@
 #
 # Every figure and table below comes from the Python code shown above it, which calls the package's functions directly.
 # [Setup](../setup/) installs the package and shows how to run this code in a REPL, a notebook or a script.
-# `task data` fetches the tidy data into `data/`, and `task fit-store` fetches the stored renewal fit.
+# `task nowcastbdbv:data` fetches the tidy data into `data/`, and `task bdbvhub:fit-store` fetches the stored renewal fits into `output/fit-store`.
 # This page is a notebook, and `task getting-started` runs it again.
 
 # %% [markdown]
@@ -31,18 +31,19 @@
 # `load_delays` reads the reporting delays the hub published, which the renewal models use.
 
 # %%
-import json
 from pathlib import Path
 
 import pandas as pd
 
-from bdbvhubrenewal.data import load_daily, load_delays, load_target
-from bdbvhubrenewal.evaluation import backtest as bt
-from bdbvhubrenewal.evaluation import store
-from bdbvhubrenewal.evaluation.nowcast import relative_crps, release_backtest
-from bdbvhubrenewal.evaluation.scoring import relative_skill
-from bdbvhubrenewal.forecasters import NATIONAL, get_model
-from bdbvhubrenewal.reporting.plots import plot_location_grid, save_light_dark
+from bdbvhub.models import get_model
+from bdbvhub.store import store
+from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
+from nowcastbdbv.data.zones import load_zone_data
+from nowcasteval import backtest as bt
+from nowcasteval.nowcast import relative_crps, release_backtest
+from nowcasteval.plots import plot_location_grid, save_light_dark
+from nowcasteval.scoring import relative_skill
+from nowcastutils.base import NATIONAL
 
 target = load_target("data")
 daily = load_daily("data")
@@ -53,17 +54,32 @@ sorted(real["vintage"].unique())
 # %% [markdown]
 # ## Build the forecast task
 #
-# The origin is the second newest release.
-# The newest release scores it.
+# The newest release scores the forecasts.
+# The origin is the newest release before it at which the fit store holds a renewal fit, or the second newest release if it holds none.
 # The task holds what a model sees at the origin, including the daily onsets of every release up to it, and the weeks to forecast.
 # Its reference date is the Saturday after the origin, and the forecast weeks run from six weeks before it to four weeks after it.
 # `origin_tasks` builds the task of every real origin as the fit store fits it, so the baselines and the stored renewal fit see the same task.
+# `current_keys` gives the key of each renewal fit of this code and data, from the tasks with the health-zone tables (`load_zone_data`), as the store keys them.
+# `newest_fit` returns the fit `bdbvhub fit-store load` uses at the newest origin that has one.
+# That is the fit of the current key, or, until that fit is made, the newest fit of older code.
 
 # %%
-ORIGIN, LATER = bt.real_vintages(target)[-2:]
+releases = bt.real_vintages(target)
+LATER = releases[-1]
 
-config = bt.load_config("config/backtest.toml")
-task = store.origin_tasks(target, delays, config, daily)[ORIGIN]
+config = bt.load_config("packages/nowcastbdbv/config/backtest.toml")
+tasks = store.origin_tasks(target, delays, config, daily)
+zones = load_zone_data("data")
+zoned = store.origin_tasks(target, delays, config, daily, zones)
+keys = store.current_keys(
+    {o: t for o, t in zoned.items() if o < LATER},
+    ["renewal"],
+    store.samplers(),
+    store.code_digest("renewal"),
+)
+stored = store.newest_fit("output/fit-store", keys, "renewal")
+ORIGIN = releases[-2] if stored is None else stored.meta["origin"]
+task = tasks[ORIGIN]
 print(task.vintage, task.reference_date, len(task.locations), "provinces")
 print(task.target_end_dates[0], "to", task.target_end_dates[-1])
 print("scored on", LATER)
@@ -103,23 +119,20 @@ baselines.groupby("model")["sample"].nunique()
 # %% [markdown]
 # ## Load the stored renewal fit
 #
-# `bdbvhubrenewal fit-store load` (`task fit-store`) fetches the store and records the fit it uses for each model and origin in `results/fit-store.json`.
-# That is the fit for this code and data, or, until that fit is made, the newest fit of older code.
-# Each stored fit is a gzipped JSON file, which `read_fit` reads into tables.
+# `newest_fit` read the fit chosen above into tables.
 # Its `forecasts` table has the same columns as the baselines' forecasts, and its `delays` table holds the fit's modelled delay.
+# If the store holds no renewal fit, the page says so and shows the baselines only.
 
 # %%
-status = json.loads(Path("results/fit-store.json").read_text())
-entry = next(
-    s for s in status if s["model"] == "renewal" and s["origin"] == ORIGIN
-)
-assert entry["used"], f"The fit store has no renewal fit at {ORIGIN}."
-path = Path("output/fit-store/renewal") / ORIGIN / f"{entry['used']}.json.gz"
-stored = store.read_fit(path)
-renewal = stored.forecasts
-print("fitted at commit", stored.meta["commit"][:7])
-print("fit of this code" if entry["current"] else "fit of older code")
-forecasts = pd.concat([baselines, renewal], ignore_index=True)
+if stored is None:
+    print("The fit store holds no renewal fit, so only the baselines follow.")
+    forecasts, fit_delays = baselines, []
+else:
+    current = stored.meta["key"] == keys[("renewal", ORIGIN)]
+    print("fitted at commit", stored.meta["commit"][:7])
+    print("fit of this code" if current else "fit of older code")
+    forecasts = pd.concat([baselines, stored.forecasts], ignore_index=True)
+    fit_delays = [stored.delays]
 forecasts.groupby("model")["sample"].nunique()
 
 # %% [markdown]
@@ -191,7 +204,7 @@ result = release_backtest(
     target,
     models=(),
     stored=forecasts,
-    delays=pd.concat([*learnt, stored.delays], ignore_index=True),
+    delays=pd.concat([*learnt, *fit_delays], ignore_index=True),
 )
 scores = result.scores.loc[result.scores["target"] == "reported"]
 scores = scores.assign(
