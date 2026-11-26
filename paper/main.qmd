@@ -18,16 +18,16 @@ format:
   pdf:
     number-sections: false
 abstract: |
-  Infectious disease forecasts and nowcasts increasingly inform public health response.
-  Time series foundation models, neural networks trained on many series, forecast well but are not designed for the reporting delays common in surveillance data.
-  Nowcasting methods correct for these delays, but are either simple, with limited forecasting support, or need expert knowledge to configure for each setting.
-  We fine-tuned Chronos-2, a time series foundation model, on simulated outbreaks.
-  We simulated them by combining the reporting model of epinowcast, a widely used nowcasting package, with PyRenew, a library for building renewal models of infectious disease.
-  We gave Chronos-2 the reporting triangle, counts by onset date and reporting delay, as one series per place and delay, with learned attention biases linking series to places and places to regions.
-  We compared it with unmodified Chronos-2 and with a recently developed baseline nowcasting method, which we extended to forecast and to sparse data.
+  Infectious disease forecasts and nowcasts inform public health response.
+  Time series foundation models, neural networks trained on many series, forecast well but are not designed for reporting delays in surveillance data.
+  Nowcasting methods correct for these delays but either forecast poorly or need expert configuration for each setting.
+  We fine-tuned the foundation model Chronos-2 on simulated outbreaks.
+  We simulated them by combining the reporting model of epinowcast, a widely used nowcasting package, with PyRenew, a library for building renewal models.
+  We gave Chronos-2 counts by onset date and reporting delay as one series per place and delay, and added learned attention biases linking series to places and places to regions.
+  We compared it with zero-shot Chronos-2 (not fine-tuned), given the same input or only the latest counts, and with a recently developed baseline nowcasting method, which we extended to forecast and to sparse data.
   We evaluated them on held-out simulations, retrospectively against the German COVID-19 hospitalisation nowcast hub, and prospectively in the Democratic Republic of the Congo Ebola forecasting hub.
   To the Ebola hub we also submitted renewal models from our real-time outbreak modelling, built on this combination.
-  On held-out simulations, the fine-tuned model [outperformed / matched] unmodified Chronos-2 and the baseline method.
+  On held-out simulations, the fine-tuned model [outperformed / matched] zero-shot Chronos-2 and the baseline method, and removing the attention biases [worsened / did not change] its scores.
   On the German hub, it [outperformed / performed comparably to] the hub's models, [particularly for nowcasts].
   On the Ebola hub, it [outperformed / performed comparably to] other teams' models and our renewal models.
   Fine-tuning on simulated outbreaks gave a foundation model the delay handling of nowcasting methods without specialist configuration.
