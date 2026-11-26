@@ -140,3 +140,23 @@ def test_package_site_examples_run(site: Path, tmp_path: Path) -> None:
         check=False,
     )
     assert run.returncode == 0, run.stderr
+
+
+def test_the_main_site_does_not_cross_reference_package_api() -> None:
+    # Each package's API is on its own site, so an autorefs link such as
+    # `[x][nowcastrenewal.model]` from the main site has no target there.
+    # Link to `../<package>/reference/#<object>` instead.
+    names = "|".join(s.parent.name for s in SITES)
+    autoref = re.compile(
+        rf"\]\[`?(?:{names})(?:\.\w+)*`?\]"
+        rf"|\[`?(?:{names})(?:\.\w+)*`?\]\[\]"
+        rf"|^:::\s*(?:{names})\b",
+        re.MULTILINE,
+    )
+    hits = [
+        f"{page.relative_to(ROOT)}: {m.group(0)}"
+        for page in sorted((ROOT / "docs").rglob("*"))
+        if page.suffix in {".md", ".py", ".ipynb"} and "hooks" not in page.parts
+        for m in autoref.finditer(page.read_text())
+    ]
+    assert not hits, hits
