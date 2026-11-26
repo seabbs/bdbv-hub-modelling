@@ -442,13 +442,27 @@ def add_finetune(app, cfg: Mapping[str, str]) -> None:
         def proxied(path: str = ""):
             query = request.query_string.decode()
             url = f"{base}{upstream}{path}" + (f"?{query}" if query else "")
+            # The client's encodings go up and the answer's comes back,
+            # so a gzipped answer passes through as it is.
+            ask = urllib.request.Request(
+                url,
+                headers={
+                    "Accept-Encoding": request.headers.get(
+                        "Accept-Encoding", ""
+                    )
+                },
+            )
             try:
-                with urllib.request.urlopen(url, timeout=60) as got:
-                    return Response(
+                with urllib.request.urlopen(ask, timeout=60) as got:
+                    answer = Response(
                         got.read(),
                         status=got.status,
                         content_type=got.headers.get("Content-Type"),
                     )
+                    for name in ("Content-Encoding", "Vary"):
+                        if got.headers.get(name):
+                            answer.headers[name] = got.headers[name]
+                    return answer
             except urllib.error.HTTPError as err:
                 return Response(err.read(), status=err.code)
             except OSError:

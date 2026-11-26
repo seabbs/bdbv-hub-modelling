@@ -709,10 +709,29 @@ def cached_build(
     return store["built"]
 
 
-def location(built: Mapping[str, Any] | None, loc: str) -> dict[str, Any]:
-    """Return one location's page data: series, scores, stats, truth."""
+BY_MODEL = ("series", "score", "parts", "split", "byday", "stats")
+"""A location's page data keyed by model first (`ranges` by range, then
+score, stats or parts, then model)."""
+
+
+def location(
+    built: Mapping[str, Any] | None,
+    loc: str,
+    models: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Return one location's page data: series, scores, stats, truth.
+
+    With `models`, only those models' series and scores (the truth
+    always): the page fetches the models it shows, not every checkpoint.
+    """
     if not built or loc not in built["series"]:
         return {}
+    keep = None if models is None else set(models)
+
+    def some(by_model: Mapping[str, Any]) -> Mapping[str, Any]:
+        if keep is None:
+            return by_model
+        return {m: v for m, v in by_model.items() if m in keep}
 
     def line(by_target: Mapping[str, Mapping[str, Any]], pick=lambda v: v):
         return {
@@ -720,17 +739,16 @@ def location(built: Mapping[str, Any] | None, loc: str) -> dict[str, Any]:
             for tgt, d in by_target.items()
         }
 
-    return {
-        "series": built["series"][loc],
-        "score": built["score"].get(loc, {}),
-        "parts": built.get("parts", {}).get(loc, {}),
-        "split": built.get("split", {}).get(loc, {}),
-        "ranges": built.get("ranges", {}).get(loc, {}),
-        "byday": built.get("byday", {}).get(loc, {}),
-        "stats": built["stats"].get(loc, {}),
-        "truth": line(built["truth"].get(loc, {}), lambda v: v[1]),
-        "latest": line(built["latest"].get(loc, {})),
+    out: dict[str, Any] = {
+        k: some(built.get(k, {}).get(loc, {})) for k in BY_MODEL
     }
+    out["ranges"] = {
+        name: {part: some(v) for part, v in by.items()}
+        for name, by in built.get("ranges", {}).get(loc, {}).items()
+    }
+    out["truth"] = line(built["truth"].get(loc, {}), lambda v: v[1])
+    out["latest"] = line(built["latest"].get(loc, {}))
+    return out
 
 
 def meta(

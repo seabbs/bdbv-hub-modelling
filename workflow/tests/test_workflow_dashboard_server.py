@@ -69,15 +69,23 @@ def test_the_data_holds_only_the_models_asked_for(server):
 def test_answers_are_gzipped_for_a_client_that_takes_gzip(server):
     import gzip
 
+    zipped = []
     for path in ("/", "/data/germany/DE.json", "/sections.json?have="):
         plain = urllib.request.urlopen(server + path, timeout=30)
         assert plain.headers.get("Content-Encoding") is None
+        body = plain.read()
         req = urllib.request.Request(
             server + path, headers={"Accept-Encoding": "gzip, deflate"}
         )
         with urllib.request.urlopen(req, timeout=30) as r:
-            assert r.headers["Content-Encoding"] == "gzip"
-            assert gzip.decompress(r.read()) == plain.read()
+            got = r.read()
+            if r.headers.get("Content-Encoding") == "gzip":
+                zipped.append(path)
+                got = gzip.decompress(got)
+            assert got == body
+        # Only a body too small to gain goes as it is.
+        assert (path in zipped) == (len(body) >= dashboard.GZIP_FROM)
+    assert "/" in zipped
 
 
 def status_of(url):
