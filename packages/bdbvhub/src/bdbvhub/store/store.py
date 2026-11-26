@@ -106,6 +106,7 @@ __all__ = [
     "fit_files",
     "fit_key",
     "load",
+    "newest_fit",
     "origin_tasks",
     "plan",
     "read_fit",
@@ -1246,6 +1247,36 @@ def _choose(
     if not good:
         return None, failed
     return max(good, key=lambda f: f.meta["fitted_at"]), failed
+
+
+def newest_fit(store: Path | str, keys: Keys, model: str) -> StoredFit | None:
+    """Return the fit `load` uses at the newest origin that has one.
+
+    At each origin of the model in `keys`, newest first, the fit of the
+    current key is used when stored and good, else the newest good fit of
+    older code (`_choose`).
+
+    Parameters
+    ----------
+    store : pathlib.Path or str
+        The store root.
+    keys : dict
+        `current_keys`.
+    model : str
+        The stored model.
+
+    Returns
+    -------
+    StoredFit or None
+        The fit, with its origin and key in `meta`; None if no origin has
+        a good fit.
+    """
+    origins = sorted((o for m, o in keys if m == model), reverse=True)
+    for origin in origins:
+        chosen, _ = _choose(Path(store), model, origin, keys[(model, origin)])
+        if chosen is not None:
+            return chosen
+    return None
 
 
 def load(
