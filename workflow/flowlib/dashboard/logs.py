@@ -266,22 +266,18 @@ class RunLog:
     def chunk_times(self) -> list[dict[str, Any]]:
         """Return every segment's finished chunks.
 
-        A segment's stored timings (`stored_chunk_times`) where the
-        trainer kept them, else its log's (`Log.chunk_times`), which a
-        restart of a trainer that kept none wrote again. Each names its
-        segment (`n<N>`); a chunk in two logs keeps the newest.
+        A chunk's stored timing (`stored_chunk_times`) where the trainer
+        kept one, else its log's (`Log.chunk_times`), which a restart of
+        a trainer that kept none wrote again. Each names its segment
+        (`n<N>`); a chunk in two logs keeps the newest.
         """
-        stored = stored_chunk_times(self.folder)
-        kept = {row["segment"] for row in stored}
         merged: dict[int, dict[str, Any]] = {}
         for log in self._each():
-            if log.path.stem in kept:
-                continue
             for row in log.chunk_times():
                 old = merged.get(row["first"])
                 if old is None or row["t"] >= old["t"]:
                     merged[row["first"]] = row | {"segment": log.path.stem}
-        for row in stored:
+        for row in stored_chunk_times(self.folder):
             merged[row["first"]] = row
         return [merged[k] for k in sorted(merged)]
 

@@ -295,3 +295,30 @@ def test_the_log_still_times_segments_with_no_stored_timings(tmp_path):
     # n200 has no stored timings: its log's.
     assert rows["n200"][2] == "100%"
     assert rows["n200"][3] == "2 h 11 min"
+
+
+def test_stored_timings_take_over_a_segment_s_logged_chunks_one_by_one(
+    tmp_path,
+):
+    # A trainer updated part way through n400 kept timings only from its
+    # restart: the chunk logged before it is still timed from the log.
+    folder = _restarted(tmp_path)
+    (folder / "train" / "n400.log").write_text(
+        "\n".join(
+            [
+                RESUME.format(t="03:00:01", s=4800, a=201, b=0),
+                PLAN.format(t="03:00:02", a=201, b=300, n=2400),
+                TIME.format(t="04:00:00", w=0, c=60, tr=3000, e=0),
+            ]
+        )
+        + "\n"
+    )
+    _stored(
+        folder,
+        "n400",
+        [_chunk(301, 400, 2416, 1540.0, resumed_at=[800], timed_from=800)],
+    )
+    status = {"segment": "n800", "step": 12000}
+    n400 = _cells(page.checkpoint_timings(folder, status))["n400"]
+    # 2,400 logged and 1,616 stored steps of 4,816.
+    assert n400[2] == "83%"
