@@ -19,17 +19,18 @@ format:
     number-sections: false
 abstract: |
   Forecasts and nowcasts of infectious disease increasingly inform public health response.
-  Time series foundation models, neural networks trained on many time series, forecast well in many settings, but are not designed to handle or make use of the reporting delays common in surveillance data.
-  Nowcasting methods correct for these delays, but are either simple, with limited forecasting support, or complex, needing expert knowledge to configure for each target and reporting system.
+  Time series foundation models, neural networks trained on many time series, forecast well but are not designed for the reporting delays common in surveillance data.
+  Nowcasting methods correct for these delays, but are either simple, with limited forecasting support, or need expert knowledge to configure for each setting.
   We fine-tuned Chronos-2, a time series foundation model, on outbreaks simulated from the epinowcast nowcasting model, which we ported from R and Stan to Python on PyRenew.
   We gave the model the reporting triangle as one series per place and delay, with learned attention biases linking each series to its place and each place to its region.
   We compared it with unmodified Chronos-2 and with a random walk nowcast, which extends the baselinenowcast method to forecast and to work on sparse data.
-  We evaluated them on held-out simulations, retrospectively against the German COVID-19 hospitalisation nowcast hub, and prospectively in the Ebola forecasting hub for the Bundibugyo virus disease outbreak in the Democratic Republic of the Congo.
+  We evaluated them on held-out simulations, retrospectively against the German COVID-19 hospitalisation nowcast hub, and prospectively in the Ebola forecasting hub for the Democratic Republic of the Congo.
   There we also submitted renewal models built on our port.
-  The fine-tuned model [outperformed / matched] unmodified Chronos-2 and the random walk nowcast on held-out simulations, and [outperformed / performed comparably to] the hub models in both case studies, with the largest gains [for nowcasts / at short horizons].
+  The fine-tuned model [outperformed / matched] unmodified Chronos-2 and the random walk nowcast on held-out simulations, and [outperformed / performed comparably to] the hub models in both case studies.
   The attention biases and lag series [contributed most of / added little to] these gains, and fine-tuning on simulations [outperformed / matched] fine-tuning on real data.
   Fine-tuning on simulated outbreaks gave a foundation model the delay handling of nowcasting methods without specialist configuration.
-  Fine-tuned foundation models, ours and newer ones, could serve as baselines for model developers and for forecast and nowcast hubs.
+  Fine-tuned foundation models could serve as baselines for model developers and forecast and nowcast hubs.
+  Teams without the capacity for expert setup could also use them directly, as they are more flexible and reliable than baseline nowcasting methods, especially unadapted ones.
 bibliography: reference.bib
 # The evaluation workflow's numbers (`task pipeline:dev` or
 # `task pipeline:paper`), quoted with the meta shortcode.
@@ -48,13 +49,14 @@ Forecasts of infectious disease cases help public health agencies plan their res
 Recent counts are incomplete because cases take time to be reported.
 Nowcasts estimate the cases not yet reported.
 General forecasting models trained on many unrelated time series forecast well with no setup.
-However, we do not think they were trained on data with reporting delays, so they may mistake incomplete recent counts for a falling outbreak.
-Nowcasting models do account for delays, but simple ones forecast poorly and complex ones need specialist knowledge to set up for each disease and reporting system.
+However, we do not think they were trained on reporting delays, so they may mistake incomplete recent counts for a falling outbreak.
+Nowcasting models do account for delays, but simple ones forecast poorly and complex ones need specialist knowledge to set up for each setting.
 We taught one of these general models, Chronos-2, about reporting delays by training it further on simulated outbreaks.
-The simulations follow an established nowcasting model, which we rewrote in Python to match Chronos-2.
+The simulations follow an established nowcasting model.
 We tested the model on simulated outbreaks, on past COVID-19 hospital admissions in Germany, and in real time during an Ebola outbreak in the Democratic Republic of the Congo.
-It [did better than / matched / did worse than] the unmodified model, and [X] the models from other teams.
-General forecasting models taught about reporting with simulated outbreaks could be cheap and simple baselines for teams and hubs that forecast infectious disease.
+It [did better than / matched] the unmodified model, a simple nowcasting method and other teams' models.
+Models taught this way could be baselines for teams and hubs that forecast infectious disease.
+Teams without the capacity to set up specialist models could also use them directly, as they adapt to new settings better than simple nowcasting methods.
 
 ## Introduction
 
