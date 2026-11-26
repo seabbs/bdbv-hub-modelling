@@ -37,6 +37,7 @@ from flowlib.dashboard.runs import Run
 
 CHECKOUT = Path(__file__).parents[2]
 CONFIG = CHECKOUT / "workflow" / "config.yaml"
+PAPER_CONFIG = CHECKOUT / "paper" / "workflow" / "config.yaml"
 LOCK = threading.Lock()
 CLIENT_GONE = (ConnectionError, TimeoutError)
 """How a client that left shows up: a closed tab, a reset, a timeout."""
@@ -367,10 +368,22 @@ def simulations(
     return index, layer_of
 
 
+def read_config(path: Path, paper: Path = PAPER_CONFIG) -> dict:
+    """Return the workflow config at `path` with the paper's beside it.
+
+    As the workflow loads them (workflow/Snakefile), so the dashboard
+    shows the paper's `live_run` as the fine-tuned model.
+    """
+    config = yaml.safe_load(path.read_text())
+    if paper.exists():
+        config = {**config, **yaml.safe_load(paper.read_text())}
+    return config
+
+
 def main() -> None:
     """Serve the dashboard or write it once."""
     a = parser().parse_args()
-    config = yaml.safe_load(a.config.read_text())
+    config = read_config(a.config)
     localconfig.check()
     local = localconfig.read()
     ctx = context.build(

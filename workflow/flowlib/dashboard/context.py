@@ -3,7 +3,9 @@
 The runs are the workflow's (`runs` in workflow/config.yaml), each in
 `<ROOT>/runs/<name>`; `--run NAME` picks some of them by name.
 `workflow/config.yaml`'s `dashboard` section holds the rest (references,
-the scoring rule, the mailbox filter, the datasets); `config/local.env`
+each run's display name, the scoring rule, the mailbox filter, the
+datasets); the paper's `live_run` (paper/workflow/config.yaml) is the
+run shown as the fine-tuned model; `config/local.env`
 holds this machine's `ROOT`, scoring cache (`SCORE_CACHE`) and mailbox;
 `--ref` adds or replaces references.
 """
@@ -123,7 +125,11 @@ def build(
         for k, v in (dash.get("studies") or {}).items()
         if k not in hidden_studies
     }
-    run_list = named_runs(workflow_runs(config, local, runs))
+    run_list = named_runs(
+        workflow_runs(config, local, runs),
+        main=config.get("live_run"),
+        names=dash.get("run_names") or {},
+    )
     source = Sources(local, datasets)
     return Context(
         runs=run_list,
@@ -167,31 +173,57 @@ def _identifier(run: spec.Run) -> str:
     return run.key
 
 
-def named_runs(run_list: Sequence[spec.Run]) -> list[spec.Run]:
+def run_label(entry: Mapping[str, Any]) -> str | None:
+    """Return a run's configured display name (`dashboard.run_names`).
+
+    Its paper model's name (`paper_model`, else the fine-tuned model),
+    then `, <variant>` when it sets one.
+    """
+    if not entry:
+        return None
+    name = paperstyle.model_label(entry.get("paper_model") or RUN_MODEL)
+    variant = entry.get("variant")
+    return f"{name}, {variant}" if variant else name
+
+
+def named_runs(
+    run_list: Sequence[spec.Run],
+    main: str | None = None,
+    names: Mapping[str, Mapping[str, Any]] | None = None,
+) -> list[spec.Run]:
     """Name and colour every run as the fine-tuned model.
 
-    The live run is the model's display name in its colour; earlier runs
-    are `<name> - <identifier>` (their grid, else their key)
-    in shades of it (`RUN_SHADES`). A configured label or colour is not
-    shown, so the toggles and every panel name runs alike.
+    The main run, `main` (the paper's `live_run`), is the model's display
+    name in its colour; with no `main`, the live run is. Other runs take
+    their name in `names` (`run_label`), else `<name> - <identifier>`
+    (their grid, else their key), in shades of the model's colour
+    (`RUN_SHADES`). A run's own label or colour is not shown, so the
+    toggles and every panel name runs alike.
     """
+    names = names or {}
     name = paperstyle.model_label(RUN_MODEL)
     colour = paperstyle.model_colour(RUN_MODEL)
-    # The live run, as `runs.load_runs` marks it, else the first.
-    live = next((r.key for r in run_list if r.live), None)
-    live = live or (run_list[0].key if run_list else None)
-    ids = {r.key: _identifier(r) for r in run_list if r.key != live}
+    if main is None:
+        # The live run, as `runs.load_runs` marks it, else the first.
+        main = next((r.key for r in run_list if r.live), None)
+        main = main or (run_list[0].key if run_list else None)
+    ids = {
+        r.key: _identifier(r)
+        for r in run_list
+        if r.key != main and not names.get(r.key)
+    }
     # Two earlier runs of one grid are told apart by their keys.
     dup = {i for i in ids.values() if list(ids.values()).count(i) > 1}
     out = []
     shade = iter(RUN_SHADES * (1 + len(run_list) // len(RUN_SHADES)))
     for r in run_list:
-        if r.key == live:
+        if r.key == main:
             r = dataclasses.replace(r, label=name, colour=colour)
         else:
-            suffix = r.key if ids[r.key] in dup else ids[r.key]
-            r = dataclasses.replace(
-                r, label=f"{name} - {suffix}", colour=next(shade)
-            )
+            label = run_label(names.get(r.key) or {})
+            if label is None:
+                suffix = r.key if ids[r.key] in dup else ids[r.key]
+                label = f"{name} - {suffix}"
+            r = dataclasses.replace(r, label=label, colour=next(shade))
         out.append(r)
     return out
