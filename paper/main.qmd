@@ -27,8 +27,9 @@ abstract: |
   We compared it with unmodified Chronos-2 and with a recently developed baseline nowcasting method, which we extended to forecast and to sparse data.
   We evaluated them on held-out simulations, retrospectively against the German COVID-19 hospitalisation nowcast hub, and prospectively in the Democratic Republic of the Congo Ebola forecasting hub.
   To the Ebola hub we also submitted renewal models from our real-time outbreak modelling, built on this combination.
-  The fine-tuned model [outperformed / matched] unmodified Chronos-2 and the baseline method on held-out simulations, and [outperformed / performed comparably to] the hub models in both case studies.
-  The attention biases and lag series [contributed most of / added little to] these gains, and simulations [outperformed / matched] real data for fine-tuning.
+  On held-out simulations, the fine-tuned model [outperformed / matched] unmodified Chronos-2 and the baseline method.
+  On the German hub, it [outperformed / performed comparably to] the hub's models, [particularly for nowcasts].
+  On the Ebola hub, it [outperformed / performed comparably to] other teams' models and our renewal models.
   Fine-tuning on simulated outbreaks gave a foundation model the delay handling of nowcasting methods without specialist configuration.
   Fine-tuned foundation models could serve as baselines for model developers and forecasting hubs.
   Teams without capacity for expert setup could also use them directly, as they are more flexible and reliable than baseline methods, especially unadapted ones.
