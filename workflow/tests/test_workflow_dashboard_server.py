@@ -58,6 +58,28 @@ def test_one_location_s_data_is_served(server):
     }
 
 
+def test_the_data_holds_only_the_models_asked_for(server):
+    _, whole = get(server + "/data/germany/DE.json")
+    _, none = get(server + "/data/germany/DE.json?models=")
+    assert json.loads(whole)["series"]
+    assert json.loads(none)["series"] == {}
+    assert json.loads(none)["truth"] == json.loads(whole)["truth"]
+
+
+def test_answers_are_gzipped_for_a_client_that_takes_gzip(server):
+    import gzip
+
+    for path in ("/", "/data/germany/DE.json", "/sections.json?have="):
+        plain = urllib.request.urlopen(server + path, timeout=30)
+        assert plain.headers.get("Content-Encoding") is None
+        req = urllib.request.Request(
+            server + path, headers={"Accept-Encoding": "gzip, deflate"}
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:
+            assert r.headers["Content-Encoding"] == "gzip"
+            assert gzip.decompress(r.read()) == plain.read()
+
+
 def status_of(url):
     try:
         return get(url)[0]

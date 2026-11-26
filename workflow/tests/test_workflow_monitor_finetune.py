@@ -1,5 +1,6 @@
 """One entry per host: the monitor, with the fine-tuning dashboard under it."""
 
+import gzip
 import http.server
 import os
 import subprocess
@@ -48,6 +49,9 @@ class _Upstream(http.server.BaseHTTPRequestHandler):
         body = f"upstream {self.path}".encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
+        if "gzip" in self.headers.get("Accept-Encoding", ""):
+            body = gzip.compress(body)
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -77,6 +81,30 @@ def test_the_monitor_serves_the_dashboard_under_finetune():
     finally:
         up.shutdown()
     assert 'href="/finetune/"' in monitor_server.LINK
+
+
+def test_the_monitor_passes_gzipped_answers_through():
+    flask = pytest.importorskip("flask")
+    from flowlib import monitor_server
+
+    up = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Upstream)
+    threading.Thread(target=up.serve_forever, daemon=True).start()
+    try:
+        app = flask.Flask("test")
+        cfg = {
+            "DASHBOARD_HOST": "127.0.0.1",
+            "DASHBOARD_PORT": str(up.server_port),
+        }
+        monitor_server.add_finetune(app, cfg)
+        got = app.test_client().get(
+            "/finetune/data/germany/DE.json",
+            headers={"Accept-Encoding": "gzip"},
+        )
+        assert got.headers["Content-Encoding"] == "gzip"
+        body = gzip.decompress(got.get_data())
+        assert body == b"upstream /data/germany/DE.json"
+    finally:
+        up.shutdown()
 
 
 def test_the_workflow_keeps_one_monitor_serving(tmp_path):
