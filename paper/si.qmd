@@ -844,6 +844,18 @@ Choices tuned on development data, with their values and the data they were set 
 
 ### Held-out synthetic data
 
+::: {#fig-synthetic-nowcasts}
+![](build/figures/main/synthetic-nowcasts.png)
+
+Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#tbl-synthetic-scores}
+{{< include build/tables/main/synthetic-scores.md >}}
+
+Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
 ::: {#tbl-synthetic-joint}
 {{< include build/tables/main/synthetic-joint.md >}}
 
@@ -906,6 +918,18 @@ Held-out synthetic data scores by location and stratum. {{< meta results.synthet
 
 ### German nowcast hub
 
+::: {#fig-germany-nowcasts}
+![](build/figures/main/germany-nowcasts.png)
+
+German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#tbl-germany-scores}
+{{< include build/tables/main/germany-scores.md >}}
+
+German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
 ::: {#fig-germany-si-nowcasts}
 ![](build/figures/si/germany-si-nowcasts.png)
 
@@ -959,6 +983,18 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 :::
 
 ::::: {.content-visible when-meta="results.ebola.shown"}
+
+::: {#fig-ebola-nowcasts}
+![](build/figures/main/ebola-nowcasts.png)
+
+Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#tbl-ebola-scores}
+{{< include build/tables/main/ebola-scores.md >}}
+
+Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
 
 ::: {#tbl-ebola-joint}
 {{< include build/tables/main/ebola-joint.md >}}
@@ -1025,11 +1061,17 @@ Ebola hub submissions scores by location and stratum. {{< meta results.ebola.lab
 - Its loss panel gives the trainer's training loss and the validation loss by source and by level, for transparency, not to select a checkpoint.
 - Its German panels give first-half relative scores at each checkpoint on every horizon, the nowcasts and the forecasts, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data as reference lines.
 - Its 7-day panel gives the 7-day check, and in a paper run its BDBV panel gives the BDBV check, at each checkpoint.
-- @tbl-checkpoints gives the headline scores of each checkpoint.
+- @tbl-checkpoints gives the headline scores of each checkpoint, and @tbl-live-summary the newest scored checkpoint against zero-shot Chronos-2.
 - A later checkpoint has also trained for more steps.
 - The learning rate falls linearly to zero over the {{< meta results.training.simulations >}} simulations, so the earlier checkpoints are taken at {{< meta results.training.first_rate >}} ({{< meta results.training.first >}}) to {{< meta results.training.penultimate_rate >}} ({{< meta results.training.penultimate >}}) of the starting rate, and only the {{< meta results.training.simulations >}} checkpoint is annealed.
 
 ![Progress of the final run (`runa`) over its checkpoints. Loss: the trainer's training loss (a rolling mean of 50 logged steps), the validation loss by source at each evaluated step and by level (markers) at the start and at each checkpoint, against training step, with each checkpoint's simulations marked. 7-day check: the 7-day row's median over the 7-day sums of the daily medians, the share of those sums inside the row's 90% interval, and the roughness of its median over the truth's, each with its target dashed. BDBV check: relative CRPS against `randomwalknowcast` on the hub's releases, in a paper run only. German rows: WIS (on each model's own quantiles) relative to `randomwalknowcast` by level, on every horizon, the nowcasts (days 0 and before) and the forecasts (days after), with zero-shot Chronos-2 on the reporting-triangle layout (dashed) and on complete data (dotted) and `randomwalknowcast` at 1. Each German panel gives n, the fewest matched cells of its points, and the forecast origins they come from. Panels without rows say so. {{< meta evidence.live.label >}} Development data only.](build/figures/si/progress-runa.png){#fig-progress-runa}
+
+::: {#tbl-live-summary}
+{{< include build/tables/si/live-summary.md >}}
+
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
+:::
 
 ::: {#tbl-checkpoints}
 {{< include build/tables/si/checkpoint-table.md >}}

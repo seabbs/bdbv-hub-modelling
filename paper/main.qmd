@@ -321,6 +321,8 @@ Every panel shows the same four models, named Random walk nowcast, Zero-shot (co
 The case studies' score panels also show the hub's baseline, which their scores are relative to.
 Zero-shot (complete data) has no lag series.
 Every other comparison, and the hub teams beyond the hub's baseline, is in the SI.
+Our submitted renewal model appears in the Ebola panels as one of the hub submissions, as the hub teams' models do, and the SI compares the renewal variants with each other (SI, Renewal model variants).
+Each section has one figure, and the SI gives each model's nowcasts and the score table.
 Each panel shows:
 
 - nowcasts over time at the national level (one outbreak for synthetic data), several origins overlaid, each over its horizons against the truth (ribbons) [@Wolffram2023];
@@ -336,10 +338,13 @@ Each section has two paragraphs, one on visual performance and one summarising s
 Key references: the Methods references, with [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx] for the natural- and log-scale panels.
 :::
 
-::: {#tbl-live-summary}
-{{< include build/tables/si/live-summary.md >}}
-
-Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. The SI gives every checkpoint (Checkpoint curve). {{< meta evidence.live.label >}} Development data only.
+::: {.callout-note title="Plan"}
+- We developed the simulation grid and the fine-tuning recipe over [X] versions of the grid, each simulated afresh so no simulation was reused between versions.
+- For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, with a dashboard the workflow serves from the training machine (SI, Monitoring fine-tuning; Checkpoint curve).
+- The test simulations are fresh draws from the final grid, never trained on or checked during development, and we scored them only for the final model.
+- Over these versions we added the reporting system layer (report days, backlogs, revisions and release cadence), mixed-frequency and rolling-sum blocks, places that do not sum to their parent, and the attention biases (Methods, Synthetic data generation; Fine-tuning).
+- Early in the Ebola outbreak we submitted the random walk nowcast and renewal models to the hub, and its data, weekly releases that start with a backfill, led us to add training blocks whose releases start late.
+- From the week of 23 November 2026 we scored each released checkpoint on past Ebola rounds to decide when to submit the fine-tuned model, and first submitted it on [date].
 :::
 
 ### Held-out synthetic data
@@ -352,12 +357,6 @@ Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: na
 - The SI shows the dashboard we used to review fine-tuning (Monitoring fine-tuning).
 :::
 
-::: {#fig-synthetic-nowcasts}
-![](build/figures/main/synthetic-nowcasts.png)
-
-Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
-:::
-
 ::: {#fig-synthetic}
 ![](build/figures/main/synthetic-results.png)
 
@@ -365,12 +364,6 @@ Held-out synthetic data. (A) Nowcasts over time at one place, several origins ov
 :::
 
 On the {{< meta results.synthetic.scope >}}, the best model was {{< meta results.synthetic.best_model >}}, with a relative score of {{< meta results.synthetic.best_rel_score >}} and {{< meta results.synthetic.best_rel_log_score >}} on the log scale, against {{< meta results.synthetic.baseline >}}.
-
-::: {#tbl-synthetic-scores}
-{{< include build/tables/main/synthetic-scores.md >}}
-
-Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
-:::
 
 ### German nowcast hub
 
@@ -381,12 +374,6 @@ Held-out synthetic data: mean scores, coverage and number of forecasts of each m
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
 
-::: {#fig-germany-nowcasts}
-![](build/figures/main/germany-nowcasts.png)
-
-German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
-:::
-
 ::: {#fig-germany}
 ![](build/figures/main/germany-results.png)
 
@@ -395,28 +382,17 @@ German nowcast hub. (A) National nowcasts over time, several origins overlaid, a
 
 On the {{< meta results.germany.scope >}}, the best model was {{< meta results.germany.best_model >}}, with a relative score of {{< meta results.germany.best_rel_score >}} and {{< meta results.germany.best_rel_log_score >}} on the log scale, against {{< meta results.germany.baseline >}}, and {{< meta results.germany.best_rel_score_randomwalknowcast >}} against `randomwalknowcast`, as the hub's baseline is a point forecast with no coverage.
 
-::: {#tbl-germany-scores}
-{{< include build/tables/main/germany-scores.md >}}
-
-German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
-:::
-
 ### Ebola hub submissions
 
 ::: {.callout-note title="Plan"}
 - We show national nowcasts against the other submissions.
 - The main text scores the fine-tuned model from its first submission on, prospectively.
 - The SI scores our final models on every round, retrospectively, including the past rounds that informed the submission.
+- Our submitted renewal model is scored as one of the hub submissions.
 - We summarise the scores.
 :::
 
 ::::: {.content-visible when-meta="results.ebola.shown"}
-
-::: {#fig-ebola-nowcasts}
-![](build/figures/main/ebola-nowcasts.png)
-
-Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
-:::
 
 ::: {#fig-ebola}
 ![](build/figures/main/ebola-results.png)
@@ -425,12 +401,6 @@ Ebola: forecasts of every hub round, all held out, each from the last release be
 :::
 
 {{< meta results.ebola.status >}} On the {{< meta results.ebola.scope >}}, the best model was {{< meta results.ebola.best_model >}}, with a relative score of {{< meta results.ebola.best_rel_score >}} and {{< meta results.ebola.best_rel_log_score >}} on the log scale, against {{< meta results.ebola.baseline >}}.
-
-::: {#tbl-ebola-scores}
-{{< include build/tables/main/ebola-scores.md >}}
-
-Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
-:::
 
 :::::
 
