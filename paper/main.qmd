@@ -345,8 +345,16 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 - Each version changed the settings the simulations draw from, such as the range of reproduction numbers, reporting delays and reporting patterns, or the fine-tuning settings, such as how training blocks are cut from each simulation, the learning rate and the number of simulations.
 - Each version was simulated afresh, so no simulation was reused between versions.
 - For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, using our simulation and fine-tuning dashboards (Methods, Implementation; SI, Checkpoint curve).
-- Over these versions we added simulated report days, backlogs, revisions and release schedules, training blocks that mix daily and weekly counts or rolling sums, regions whose totals differ from the sum of their places, and the attention biases (Methods, Synthetic data generation; Fine-tuning).
-- Early in the Ebola outbreak we submitted the random walk nowcast and renewal models to the hub, and its data, weekly releases that start with a backfill, led us to add training blocks whose releases start late.
+- Over these versions we made the simulations closer to real reporting, adding:
+  - report days, weekday effects, backlogs, outages and revisions to past counts;
+  - release schedules, from daily to weekly releases;
+  - regions whose reported totals differ from the sum of their places, as national counts can be reported apart from regional ones.
+- We also changed what the model is given:
+  - blocks that mix daily counts with weekly totals or 7-day rolling sums, as the German hub's targets are 7-day sums and the Ebola hub's are weekly counts;
+  - attention biases, so the model can tell which delay series belong to which place.
+- We have modelled the Ebola outbreak since it was first reported, in separate work on its size [@BVDOutbreakSize].
+- Early in the Ebola hub's life we submitted the random walk nowcast and renewal models to it.
+  Its weekly releases start with a backfill, which led us to add training blocks whose releases start late.
 - From the week of 23 November 2026 we scored each released checkpoint on past Ebola rounds to decide when to submit the fine-tuned model, and first submitted it on [date].
 :::
 
