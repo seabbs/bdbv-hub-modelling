@@ -349,7 +349,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
   - report days, weekday effects, backlogs, outages and revisions to past counts;
   - release schedules, from daily to weekly releases;
   - regions whose reported totals differ from the sum of their places, as national counts can be reported apart from regional ones.
-- We also changed what the model is given:
+- We also changed how we fine-tune Chronos-2, adding:
   - blocks that mix daily counts with weekly totals or 7-day rolling sums, as the German hub's targets are 7-day sums and the Ebola hub's are weekly counts;
   - attention biases, so the model can tell which delay series belong to which place.
 - We have modelled the Ebola outbreak since it was first reported, in separate work on its size [@BVDOutbreakSize].
