@@ -78,8 +78,16 @@ _BANDS: Final = dict(
 )
 """The explorer's interval columns and the hub's levels they show."""
 
-NOT_RUN = "Not run yet: `task nowcastgermany:benchmark`.\n"
-"""What a page says before the benchmark has run."""
+NOT_RUN = (
+    "Not yet available: our models' German nowcasts and scores come from "
+    "the German benchmark (`task nowcastgermany:benchmark`), which the "
+    "site does not run, and none are stored for it yet.\n"
+)
+"""What a page says when the site results hold no German scores of ours.
+`check_site` passes a built page without its data only if it says so."""
+
+_NOT_YET: Final = NOT_RUN.split(":")[0]
+"""The words a built page without our German results shows."""
 
 _PAGES: Final = (
     "germany-nowcasts.md",
@@ -398,9 +406,7 @@ def germany_page(
     _write(gen / "germany-ft.md", _ft_note(results))
     if not (results / "scores.csv.gz").exists():
         for name in _PAGES[:-1]:
-            _write(
-                gen / name, "Not run yet: `task nowcastgermany:benchmark`.\n"
-            )
+            _write(gen / name, NOT_RUN)
         return
     scores = _read(results, ("scores.csv.gz", "teams.csv.gz"), shown)
     assert scores is not None
@@ -449,10 +455,7 @@ def germany_page(
         + sortable_table(table, digits=3),
     )
     if forecasts is None:
-        _write(
-            gen / "germany-nowcasts.md",
-            "Not run yet: `task nowcastgermany:benchmark`.\n",
-        )
+        _write(gen / "germany-nowcasts.md", NOT_RUN)
     else:
         forecasts = _development(forecasts, config)
         _refuse_held_out(forecasts, config.split_date)
@@ -501,7 +504,9 @@ def check_site(argv: Sequence[str] | None = None) -> int:
     run from the repo root after `mkdocs build`. Reads the German page
     and its summary and explorer JSON (`held_out_leaks`) and returns 1,
     listing them, if any names a date on or after the split date (or
-    after it, in the page's prose), or if one is not built.
+    after it, in the page's prose), or if one is not built. The summary
+    and explorer JSON may be missing only if the page says our results
+    are not yet available (`NOT_RUN`).
     """
     import argparse
 
@@ -520,7 +525,14 @@ def check_site(argv: Sequence[str] | None = None) -> int:
         args.site / "figures" / "explorer-germany.json",
     ]
     missing = [str(f) for f in files if not f.exists()]
-    if missing:
+    page = files[0]
+    if missing and page.exists() and _NOT_YET in page.read_text():
+        print(
+            "::warning::our German results are not yet available; the "
+            f"page says so and has no {', '.join(missing)}"
+        )
+        files = [f for f in files if f.exists()]
+    elif missing:
         print(f"Not built: {', '.join(missing)}", file=sys.stderr)
         return 1
     leaks = held_out_leaks(files, split)
