@@ -109,8 +109,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          bundle="$STORE/backtests/latest.tar.gz"
-          if [ -f "$bundle" ]; then tar -xzf "$bundle"; fi
+          # The bundle's parts, joined in order (`branch.py`).
+          if [ -f "$STORE/backtests/latest.json" ]; then
+            cat "$STORE"/backtests/latest.tar.gz* | tar -xz
+          fi
           uv run bdbvhub fit-store load --store "$STORE"
       # The fine-tuned models' German forecasts, as the workflow's German
       # unit made them: the asset germany-forecasts.tar.gz of the release

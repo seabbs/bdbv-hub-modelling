@@ -538,8 +538,7 @@ jobs:
 
   # The backtests scored with the stored fits once the fits are stored,
   # one process per backtest (all at once ran a runner out of memory),
-  # then stored on the store branch as backtests/latest.tar.gz, which
-  # Pages unpacks.
+  # then stored on the store branch in backtests/, which Pages unpacks.
   # As soon as the backtest cells finish, not behind the model fits
   # (hours): scored with the fits already stored, then the site's
   # results remade. Those made after the fits are stored show them.
