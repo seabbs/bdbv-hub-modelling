@@ -6,7 +6,7 @@ How the [models](model.md) are built in code, computed and sampled.
 ## Code
 
 The model extends [PyRenew](https://github.com/CDCgov/PyRenew), pinned to a commit, and runs in JAX with NumPyro.
-Its code is in [`nowcastrenewal.model`][nowcastrenewal.model] and the variants are in [`nowcastrenewal.forecaster`][nowcastrenewal.forecaster].
+Its code is in [`nowcastrenewal.model`](../../nowcastrenewal/reference/#nowcastrenewal.model) and the variants are in [`nowcastrenewal.forecaster`](../../nowcastrenewal/reference/#nowcastrenewal.forecaster).
 The model is configured by `ModelConfig`.
 
 ## PyRenew and what is built here
