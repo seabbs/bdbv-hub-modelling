@@ -45,7 +45,7 @@ where $q_i$ and $k_j$ are the query and key vectors of one head in one layer, an
 Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
 Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
 
-### Laying out surveillance data for the model
+### Model inputs
 
 #### Attention biases
 
