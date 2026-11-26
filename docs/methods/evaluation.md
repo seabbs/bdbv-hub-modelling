@@ -10,13 +10,7 @@ Forecasts from real releases are scored on the count each later release reports,
 ## Scores
 
 The hub takes sample trajectories, so every BDBV forecast is scored on its samples by the continuous ranked probability score (CRPS), as the paper scores Ebola.
-With samples $X_1, \dots, X_m$ of a forecast $F$ and the observed count $y$, we use the fair form[^ferro],
-
-$$
-\text{CRPS}(F, y) = \frac{1}{m} \sum_{i} \lvert X_i - y \rvert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lvert X_i - X_j \rvert.
-$$
-
-This is scoringrules' `crps_ensemble` with `estimator="fair"`, as in the paper.
+We use the fair form, scoringrules' `crps_ensemble` with `estimator="fair"`, as defined in the paper's [supporting information](../paper/si.html#scoring).
 CRPS on the log scale is the CRPS of the transformed target, $\text{CRPS}(\log(1 + X), \log(1 + y))$, never the log of CRPS.
 CRPS on the natural scale is dominated by the places with the most cases.
 On the log scale it approximates a score of the relative error, close to a score of the growth rate, so every place counts on a similar footing[^bosse].
@@ -57,11 +51,7 @@ The energy score scores one forecast of a vector $\mathbf{y}$.
 For an origin, a release and a scale, $\mathbf{y}$ holds every place at that scale in every scored week, and national holds the weeks only.
 It uses only the place-week cells that every compared model forecasts.
 Sample $i$ of a model is its draws with sample index $i$, $\mathbf{X}_i$.
-We use the fair form over $m$ samples, scoringrules' `es_ensemble` with `estimator="fair"`, for every model,
-
-$$
-\text{ES}(F, \mathbf{y}) = \frac{1}{m} \sum_{i} \lVert \mathbf{X}_i - \mathbf{y} \rVert - \frac{1}{2m(m - 1)} \sum_{i \ne j} \lVert \mathbf{X}_i - \mathbf{X}_j \rVert.
-$$
+We use the fair form over $m$ samples, scoringrules' `es_ensemble` with `estimator="fair"`, for every model ([supporting information](../paper/si.html#scoring)).
 
 The energy score on the log scale is the energy score of $\log(1 + \mathbf{y})$ against $\log(1 + \mathbf{X}_i)$, never the log of the score.
 Relative energy scores are ratios of means against `randomwalknowcast` over the origins and releases both have, and $n$ counts those.
@@ -103,7 +93,7 @@ Two targets are scored.
 Every other model with a modelled delay forecasts the final count $X$ of week $w$, which is mapped to what $o'$ shows by that delay.
 
 1. Day $t$ is $a = c - t$ days old at a cut-off $c$, and $\pi(a)$ is the share of its final count the model expects reported by then.
-   For `randomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay it fits at the origin ([Baseline models](baselines.md#delay)).
+   For `randomwalknowcast`, $\pi(a) = 1 / \Gamma(a)$ under the daily delay it fits at the origin ([supporting information](../paper/si.html#baselines)).
    For the renewal models it is the posterior median of each province's cumulative onset-to-report delay of the latest onset week, as the fit stores it.
    Ages past the end of the delay take its last value, and days after the cut-off have $\pi = 0$.
 2. A week's share $\pi_w$ is the mean of $\pi$ over its seven days.
@@ -137,27 +127,12 @@ The run stops if an origin has no release snapshots or two models run here give 
 ## Correlated trajectories
 
 `randomwalk` and `randomwalknowcast` draw each province on its own, so the country, the sum of the provinces, would be too narrow.
-Each pairs its province draws inside its own forecast (`nowcastbaselines.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
+Each pairs its province draws within each week by a Gaussian copula, with a correlation estimated from its own matured errors.
+The copula, its estimator and how its settings were chosen are in the paper's [supporting information](../paper/si.html#correlated-trajectories).
+
+The pairing is inside each model's own forecast (`nowcastbaselines.copula.pair_walks`), so the fit store, every page, the backtests and the submissions read the same paired draws.
 The renewal models' draws are already joint trajectories, so they are left as they are: reordering would break their real dependence.
 `renewal` and `renewalbvd` fit their zones jointly and sum them to provinces, and `renewalsp` fits each zone on its own and sums them to provinces.
-
-Provinces are their own forecasts.
-The country is the sum of the provinces in each sample.
-Zones are their own forecasts, and are neither summed nor paired.
-The copula pairs province draws with each other within a week only, by one correlation, $\rho_p$.
-
-The pairing is a Gaussian copula applied by rank reordering, the Schaake shuffle[^clark] as ensemble copula coupling uses it[^schefzik].
-Each week, each trajectory draws one normal per province, with correlation $\rho_p$ between any two, and each cell's draws are reordered across samples to rank as the normals do.
-So every per-week forecast and its scores are unchanged.
-Every week is reordered this way, whether a province is nowcast or walking that week, so the recent nowcast weeks are paired too.
-Weeks are reordered on their own, so a province's draws are not kept as one trajectory across weeks.
-Nothing we submit or score uses a quantity over several weeks, so this costs nothing.
-
-At each forecast $\rho_p$ is estimated from the model's own matured errors: each earlier release's nowcast of the count still to come, against what the origin release reports, over releases in the last 8 weeks.
-Each error's randomised PIT under the model's negative binomial nowcast is mapped to a normal score.
-$r$ is the Pearson correlation of the scores of two provinces in the same week of one release.
-With $n$ such pairs the estimate is $(n r + w \rho_0)/(n + w)$, floored at 0 and capped at 0.95, with $w = 10$ chosen on the release backtest so the estimate dominates.
-The prior $\rho_0 = 0.1$, the value where no earlier release can be scored, is the best of 0 to 0.9 on the release backtest; the window and cap make no difference there.
 Each forecast's $\rho_p$, the pairs behind it and whether it fell back to the prior are recorded (a submission's `copula.json`).
 How much pairing matters is on the [Pairing sensitivity](../pairing.md) page.
 
@@ -173,13 +148,16 @@ Horizon is weeks from the reference week, so negative horizons are nowcasts, 0 i
 
 ## Leave-one-province-out
 
-One province's counts are left out of the likelihood while it stays in the model ([Renewal models](model.md#partially-pooled)).
+One province's counts are left out of the likelihood while it stays in the model ([supporting information](../paper/si.html#renewal-model)).
+This removes the known and imputed counts of its zones and its delay counts but keeps its zones in the latent process.
+In `renewalbvd` it also drops the national BVDOutbreakSize term and the patch that holds the province.
+`renewalsp` fits each zone only on its own data, so it cannot forecast a province left out.
 Its onsets are scored against the latest real vintage on the complete weeks.
 It runs on every real vintage for the three renewal models.
 
 ## Health zones
 
-`randomwalk` and `randomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([Baseline models](baselines.md#health-zones)).
+`randomwalk` and `randomwalknowcast` are scored at zone level, for every zone with cases at the vintage ([supporting information](../paper/si.html#baselines)).
 A week with no onsets in a zone has a count of 0.
 Each model's zone samples are its zone run at the origin, which the fit store holds for every hub zone, scored as the model draws them, as in the submitted file.
 Each real vintage before the latest is forecast, and origins with only one release are skipped, as for provinces.
@@ -255,10 +233,4 @@ The paper also filled some missing ILM and LMU nowcasts from later model version
 
 [^wolffram]: Wolffram D, Abbott S, an der Heiden M, Funk S, Günther F, Hailer D, et al. (2023). Collaborative nowcasting of COVID-19 hospitalization incidences in Germany. PLOS Computational Biology 19(8): e1011394. [doi:10.1371/journal.pcbi.1011394](https://doi.org/10.1371/journal.pcbi.1011394).
 
-[^ferro]: Ferro CAT (2014). Fair scores for ensemble forecasts. Quarterly Journal of the Royal Meteorological Society 140(683): 1917–1923. [doi:10.1002/qj.2270](https://doi.org/10.1002/qj.2270).
-
 [^bosse]: Bosse NI, Abbott S, Cori A, van Leeuwen E, Bracher J, Funk S (2023). Scoring epidemiological forecasts on transformed scales. PLOS Computational Biology 19(8): e1011393. [doi:10.1371/journal.pcbi.1011393](https://doi.org/10.1371/journal.pcbi.1011393).
-
-[^clark]: Clark M, Gangopadhyay S, Hay L, Rajagopalan B, Wilby R (2004). The Schaake shuffle: a method for reconstructing space-time variability in forecasted precipitation and temperature fields. Journal of Hydrometeorology 5(1): 243-262. [doi:10.1175/1525-7541(2004)005<0243:TSSAMF>2.0.CO;2](https://doi.org/10.1175/1525-7541(2004)005%3C0243:TSSAMF%3E2.0.CO;2).
-
-[^schefzik]: Schefzik R, Thorarinsdottir TL, Gneiting T (2013). Uncertainty quantification in complex simulation models using ensemble copula coupling. Statistical Science 28(4): 616-640. [doi:10.1214/13-STS443](https://doi.org/10.1214/13-STS443).
