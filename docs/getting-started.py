@@ -38,6 +38,7 @@ import pandas as pd
 from bdbvhub.models import get_model
 from bdbvhub.store import store
 from nowcastbdbv.data.tidy import load_daily, load_delays, load_target
+from nowcastbdbv.data.zones import load_zone_data
 from nowcasteval import backtest as bt
 from nowcasteval.nowcast import relative_crps, release_backtest
 from nowcasteval.plots import plot_location_grid, save_light_dark
@@ -58,7 +59,7 @@ sorted(real["vintage"].unique())
 # The task holds what a model sees at the origin, including the daily onsets of every release up to it, and the weeks to forecast.
 # Its reference date is the Saturday after the origin, and the forecast weeks run from six weeks before it to four weeks after it.
 # `origin_tasks` builds the task of every real origin as the fit store fits it, so the baselines and the stored renewal fit see the same task.
-# `current_keys` gives the key of each renewal fit of this code and data.
+# `current_keys` gives the key of each renewal fit of this code and data, from the tasks with the health-zone tables (`load_zone_data`), as the store keys them.
 # `newest_fit` returns the fit `bdbvhub fit-store load` uses at the newest origin that has one.
 # That is the fit of the current key, or, until that fit is made, the newest fit of older code.
 
@@ -68,8 +69,10 @@ LATER = releases[-1]
 
 config = bt.load_config("packages/nowcastbdbv/config/backtest.toml")
 tasks = store.origin_tasks(target, delays, config, daily)
+zones = load_zone_data("data")
+zoned = store.origin_tasks(target, delays, config, daily, zones)
 keys = store.current_keys(
-    {o: t for o, t in tasks.items() if o < LATER},
+    {o: t for o, t in zoned.items() if o < LATER},
     ["renewal"],
     store.samplers(),
     store.code_digest("renewal"),
