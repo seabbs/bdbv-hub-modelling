@@ -135,7 +135,7 @@ Teams without the capacity to set up specialist models could also use them direc
 
 ::: {.callout-note title="Plan"}
 - Time series foundation models forecast new series with no training on them, which we call zero-shot.
-- We used Chronos-2 because it forecasts a group of related series together, and takes inputs whose future values are already known, which our inputs need (Model inputs) [@Ansari2025].
+- We used Chronos-2 because it forecasts a group of related series together and takes inputs whose future values are already known, both of which we need (Model inputs) [@Ansari2025].
 - Chronos-2 is built from attention layers, in which each series updates what it has learned as a weighted mix of the other series, with more weight on those it finds relevant.
 - It gives quantiles for each future step in one pass, and we draw samples from these quantiles (Figure 1D).
 - We run it with PyTorch and chronos-forecasting.
