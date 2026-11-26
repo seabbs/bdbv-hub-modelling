@@ -293,6 +293,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 
 ::: {.callout-note title="Plan"}
 - In the baselinenowcast variant, we give the point nowcast of our baselinenowcast port to Chronos-2 as complete counts, both zero-shot and with the fine-tuned model, with no further fine-tuning.
+- Its 7-day sums up to the cut-off are the random walk nowcast's draws, and Chronos-2 sees their median.
 - The fine-tuned model on this input shows what the synthetic data teach beyond the reporting delays.
 - We fine-tune Chronos-2 on real data, the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
 - We fine-tune one run without the attention biases and one without lag series, and compare each with the main run.

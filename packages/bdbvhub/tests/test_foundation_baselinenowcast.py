@@ -1,4 +1,4 @@
-"""The baselinenowcast variants: its point nowcast, then Chronos-2."""
+"""The baselinenowcast variants: its nowcast, then Chronos-2."""
 
 import dataclasses
 import datetime as dt

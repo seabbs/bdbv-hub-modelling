@@ -10,7 +10,8 @@ model; `finetuned_checkpoint`), `foundation_zeroshot` (pretrained
 weights), `foundation_complete` and `foundation_zeroshot_complete`
 (complete layout), and `foundation_baselinenowcast` and
 `foundation_zeroshot_baselinenowcast` (complete layout on baselinenowcast's
-point nowcast). For the SI,
+point nowcast, with `randomwalknowcast`'s 7-day nowcast to the cut-off).
+For the SI,
 `foundation_real` is the ragged model with the checkpoint fine-tuned on real
 data alone (the German development half and the public BDBV data to date,
 `scripts/finetune_realdata.py`), pinned in
@@ -2456,8 +2457,9 @@ register_model(
     fitted=True,
     paper_only=True,
 )
-# The baselinenowcast sensitivity analysis: baselinenowcast's point
-# nowcast, then Chronos-2's complete layout, zero-shot and fine-tuned.
+# The baselinenowcast sensitivity analysis: baselinenowcast's nowcast and
+# randomwalknowcast's 7-day nowcast, then Chronos-2's complete layout,
+# zero-shot and fine-tuned.
 register_model(
     "foundation_zeroshot_baselinenowcast",
     partial(
@@ -2467,7 +2469,7 @@ register_model(
         "complete",
         baselinenowcast=True,
     ),
-    "baselinenowcast's point nowcast, then Chronos-2 on the corrected "
+    "baselinenowcast's nowcast, then Chronos-2 on the corrected "
     "daily counts, complete layout.",
     fitted=True,
     paper_only=True,
@@ -2480,7 +2482,7 @@ register_model(
         "complete",
         baselinenowcast=True,
     ),
-    "baselinenowcast's point nowcast, then the fine-tuned Chronos-2 on the "
+    "baselinenowcast's nowcast, then the fine-tuned Chronos-2 on the "
     "corrected daily counts, complete layout.",
     fitted=True,
     paper_only=True,
