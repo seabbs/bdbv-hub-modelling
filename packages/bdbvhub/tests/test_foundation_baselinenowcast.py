@@ -139,8 +139,7 @@ def many():
 
 def test_the_nowcast_days_carry_baselinenowcast_draws(many):
     # Each sample's days to the cut-off are baselinenowcast's draws, so
-    # they spread as its draws do, and each week is the sum of its days
-    # in the same sample, across the cut-off too.
+    # they spread as its draws do.
     import jax
 
     from bdbvhub.models import get_model
@@ -151,7 +150,7 @@ def test_the_nowcast_days_carry_baselinenowcast_draws(many):
     model = dataclasses.replace(
         get_model("foundation_zeroshot_baselinenowcast"), sample=_capture([])
     )
-    weekly, daily = model.forecast_both(many)
+    _, daily = model.forecast_both(many)
     cutoff = str(many.cutoff)[:10]
     place = next(iter(many.locations))
     tri, mask = daily_triangle(
@@ -170,14 +169,71 @@ def test_the_nowcast_days_carry_baselinenowcast_draws(many):
     # Reproducible from the task.
     _, again = model.forecast_both(many)
     pd.testing.assert_frame_equal(daily, again)
-    days = daily.assign(date=pd.to_datetime(daily["date"]))
-    for _, row in weekly.iterrows():
-        end = pd.Timestamp(row["target_end_date"])
-        week = days.loc[
-            (days["location"] == row["location"])
-            & (days["sample"] == row["sample"])
-            & (days["date"] > end - pd.Timedelta(days=7))
-            & (days["date"] <= end),
-            "value",
-        ]
-        assert row["value"] == pytest.approx(week.sum(), rel=1e-6, abs=1e-6)
+
+
+def _sums_to_cut_off(model, task, labels, draws):
+    # Each target to the cut-off is the walk nowcast's draw, rounded, and
+    # the country the sum of its provinces by sample.
+    from nowcastutils.base import NATIONAL
+
+    weekly, _ = model.forecast_both(task)
+    cutoff = str(task.cutoff)[:10]
+    past = [w for w in task.target_end_dates if w <= cutoff]
+    assert past
+    want = np.maximum(np.round(draws), 0.0)
+    for w in past:
+        k = labels.index(w)
+        for j, loc in enumerate([*task.locations, NATIONAL]):
+            got = (
+                weekly.loc[
+                    (weekly["location"] == loc)
+                    & (weekly["target_end_date"] == w)
+                ]
+                .sort_values("sample")["value"]
+                .to_numpy()
+            )
+            if loc == NATIONAL:
+                expect = want[:, :, k].sum(axis=1)
+            else:
+                expect = want[:, j, k]
+            np.testing.assert_allclose(got, expect)
+    k = labels.index(past[-1])
+    assert want[:, :, k].std(axis=0).min() > 0
+
+
+def test_the_7_day_sums_to_the_cut_off_are_the_walk_nowcast(many):
+    # The 7-day sums to the cut-off are randomwalknowcast's 7-day nowcast
+    # draws, and Chronos-2's context of them is their median.
+    from bdbvhub.models import get_model
+    from nowcastbaselines.randomwalk import RandomWalkNowcast
+
+    store: list = []
+    model = dataclasses.replace(
+        get_model("foundation_zeroshot_baselinenowcast"),
+        sample=_capture(store),
+    )
+    days, draws = RandomWalkNowcast().rolling_nowcast(many)
+    _sums_to_cut_off(model, many, days, draws)
+    assert days[-1] == str(many.cutoff)[:10]
+    target = np.atleast_2d(store[-1]["target"])
+    n = 1 + len(many.locations)
+    for j in range(len(many.locations)):
+        median = np.median(draws[:, j, -1])
+        assert target[n + 1 + j, -1] == pytest.approx(median, rel=1e-5)
+        assert target[n + 1 + j, -8] == pytest.approx(
+            np.median(draws[:, j, -8]), rel=1e-5
+        )
+
+
+def test_hub_week_targets_take_the_walk_weekly_nowcast():
+    # A task of hub weeks takes the walk's nowcast of hub weeks.
+    from bdbvhub.models import get_model
+    from nowcastbaselines.randomwalk import RandomWalkNowcast
+    from nowcastgermany.data import nowcast_tasks
+
+    task = nowcast_tasks(_triangle(), NOWCAST, 200, 7, horizons=(-9, -2, 5))[0]
+    model = dataclasses.replace(
+        get_model("foundation_zeroshot_baselinenowcast"), sample=_capture([])
+    )
+    weeks, draws = RandomWalkNowcast().weekly_nowcast(task)
+    _sums_to_cut_off(model, task, weeks, draws)
