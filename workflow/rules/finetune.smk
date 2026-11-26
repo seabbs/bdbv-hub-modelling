@@ -84,8 +84,11 @@ rule train_segment:
     output:
         settings=protected(f"{TRAIN}/n{{n}}/settings.json"),
         adapter=protected(f"{TRAIN}/n{{n}}/finetuned-ckpt/adapter_model.safetensors"),
+    # This attempt's output. Snakemake removes a job's log before it runs,
+    # so the segment's own log, `trainer_log`, which a restart appends to,
+    # is not the rule's.
     log:
-        f"{TRAIN}/n{{n}}.log",
+        f"{TRAIN}/logs/train-segment-n{{n}}.log",
     benchmark:
         f"{RUN}/{memory.TRAINER_BENCHMARK}"
     # The trainer, the run's critical path, goes before every other job;
@@ -131,6 +134,7 @@ rule train_segment:
         watermark=LOCAL.get("MPS_HIGH_WATERMARK", "0.85"),
         # The run's folders, as functions: they hold the outputs.
         train=lambda wc: train_dir(wc.run),
+        trainer_log=lambda wc: f"{train_dir(wc.run)}/n{wc.n}.log",
         run=lambda wc: run_of(wc).dir,
         grid_file=GRID_FILE,
         holdout=ft("holdout"),
@@ -151,7 +155,7 @@ rule train_segment:
         # before replaces it if missing or behind (flowlib.segments).
         """
         uv run python workflow/scripts/prepare_segment.py {params.train} \
-            {params.prev_args} >{log}
+            {params.prev_args} 2>&1 | tee -a {params.trainer_log} >{log}
         {params.claim} {params.launch}DEVICE={params.device} \
             HF_HOME={params.hf_home} \
             HF_HUB_OFFLINE=1 PYTORCH_MPS_HIGH_WATERMARK_RATIO={params.watermark} \
@@ -177,7 +181,7 @@ rule train_segment:
             --checkpoint-above {params.checkpoint} \
             --batch-size {params.batch_size} \
             --block-limit {params.block_limit} \
-            --until {wildcards.n} >>{log} 2>&1
+            --until {wildcards.n} 2>&1 | tee -a {params.trainer_log} >>{log}
         # An optional notification line; it never fails the rule.
         uv run python workflow/scripts/segment_saved.py {output.settings} \
             {wildcards.n} || true
