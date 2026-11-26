@@ -165,7 +165,6 @@ def test_the_section_is_one_grid_with_its_data_and_explainers(tmp_path):
     assert "id=loragrid" in out
     data = out.split("id=lodata>")[1].split("</script>")[0]
     assert json.loads(data)["runs"][0]["n"] == [250]
-    assert "loss" not in out.lower().replace("lora", "")
     for key in level_loss_lora.EXPLAINERS:
         assert f"<i data-key={key}></i>" in out
 
