@@ -41,7 +41,7 @@ Zone counts are zero before the zone releases start.
 Chronos-2 forecasts every target series in the block jointly, from one shared last step of context, $t^*$, which each layout sets differently.
 
 - **Complete** (`*_complete`): the targets $X_{p,t}$ for $t \le t^*$.
-  $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([supporting information](../paper/si.html#baselines)).
+  $t^*$ is the earliest over places of the week `randomwalk` starts its walk from, the latest week 95% complete under its delay ([Supporting Information, *Baselines*](../paper/si.html#baselines)).
   It comes from the delay alone, so it needs no walk spread.
 - **Reporting triangle** (`*_ragged`): the same targets, with one lag series per place with cases and lag $d < D$, indexed by onset step as in a regression nowcast.
   Lag series $d$ holds $Y_{p,t,d}$, missing where it is not yet reported, and Chronos-2 masks the missing values.
@@ -101,7 +101,7 @@ The renewal models fit the zones and sum them to their provinces instead ([Healt
 ## Fine-tuning
 
 The fine-tuned models (`foundation`, `foundation_complete`, `foundation_baselinenowcast`) load one LoRA checkpoint of Chronos-2, fine-tuned on simulated outbreaks whose reporting follows epinowcast's observation model.
-The simulations, the training and the checkpoints' scores are in the paper's [supporting information](../paper/si.html#fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
+The simulations, the training and the checkpoints' scores are in the paper's [Supporting Information, *Fine-tuning*](../paper/si.html#fine-tuning), and how to load a checkpoint is on [Using the fine-tuned model](finetuned-chronos.md).
 The simulator is `nowcastfoundation.simulator` (the design and value draws, then each simulation as the joint PyRenew model in `nowcastrenewal.simulation.outbreak`), run on the grid config `packages/nowcastfoundation/config/finetune/grid.yaml` by the workflow's `simulate_batch` rule; the training blocks are cut by `nowcastfoundation.finetune.training_block`, and the block design and release cadences are `BLOCK_DESIGN` in `nowcastfoundation.finetune.chronos` and `finetune.release_days`; the [workflow README](https://github.com/seabbs/bdbv-hub-modelling/blob/main/workflow/README.md) says which rounds a run trains on.
 
 A checkpoint is named by its settings hash, of the blocks, the code and the training settings.

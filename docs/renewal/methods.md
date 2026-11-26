@@ -5,7 +5,7 @@ How the renewal models used for the hub's nowcasts and forecasts work, from data
 
 `renewal` fits the health zones with recent cases jointly, pooled within provinces and linked by importation, with a renewal equation for infections and a reporting delay learnt jointly with the counts.
 `renewalbvd` adds the reproduction number estimates of [BVDOutbreakSize](https://github.com/epiforecasts/BVDOutbreakSize) as a down-weighted term, and `renewalsp` fits the same model to each zone on its own.
-Their methods, equations, priors, inference and limitations are in the paper's [supporting information](../paper/si.html#renewal-model).
+Their methods, equations, priors, inference and limitations are in the paper's [Supporting Information, *Renewal model*](../paper/si.html#renewal-model).
 
 The code is in [`zones.py`](https://github.com/seabbs/bdbv-hub-modelling/blob/main/packages/nowcastrenewal/src/nowcastrenewal/zones.py) and [`model/`](https://github.com/seabbs/bdbv-hub-modelling/tree/main/packages/nowcastrenewal/src/nowcastrenewal/model).
 How the model is built in code and sampled is on the [Implementation](../methods/implementation.md) page.
