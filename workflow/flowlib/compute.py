@@ -597,6 +597,8 @@ def _profile_args(
         (state / "budgets.json").write_text(json.dumps(budgets) + "\n")
     keys = ("cores", "mem_mb", "gpu")
     total = {k: sum(b[k] for b in budgets.values()) for k in keys}
+    # A trainer's memory kept for each pooled GPU (`machine.side_mem`).
+    side = machine.side_mem(cfg, total["mem_mb"], total["gpu"])
     sets = [
         f"{rule}:gpu_{worker}=1"
         for group, worker in groups(cfg, list(found)).items()
@@ -612,6 +614,7 @@ def _profile_args(
         *(["--set-resources", *sets] if sets else []),
         "--resources",
         f"mem_mb={total['mem_mb']}",
+        *([f"{machine.SIDE_MEM}={side}"] if side else []),
         f"gpu={total['gpu']}",
         *(f"gpu_{n}={b['gpu']}" for n, b in budgets.items()),
         f"sim_slots={cfg.get('SIM_SLOTS') or 2}",

@@ -26,7 +26,7 @@ from bdbvhub.submission.fitting import stored_forecast
 from bdbvhub.submission.hub import HUB_COLUMNS, own_national
 from nowcastbdbv.backtest import vintage_task
 from nowcastbdbv.data.zones import ZoneData
-from nowcasteval.backtest import BacktestConfig
+from nowcasteval.backtest import BacktestConfig, backtest_origins
 from nowcastrenewal.zones import ZONES_FILE
 from nowcastutils.base import (
     ForecastTask,
@@ -144,10 +144,10 @@ def store_task(
     Returns
     -------
     ForecastTask or None
-        The task, or None for a release the store does not fit
-        (`config.skip_origins`).
+        The task, or None for a release the store does not fit, one
+        before the first origin (`nowcasteval.backtest.backtest_origins`).
     """
-    if origin in config.skip_origins:
+    if origin not in backtest_origins(target, config):
         return None
     weeks = store.NEXT_ROUND_WEEKS
     return vintage_task(

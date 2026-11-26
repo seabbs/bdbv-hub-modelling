@@ -283,10 +283,9 @@ def test_each_chunk_s_attention_is_recomputed_in_backward(monkeypatch):
     monkeypatch.setattr(series_bias, "CHUNK_ELEMENTS", 1)
 
     def step(checkpointed: bool):
-        monkeypatch.setattr(series_bias, "CHECKPOINT_CHUNKS", checkpointed)
         model.zero_grad()
         calls.clear()
-        with series_bias.assigned(model, rows):
+        with series_bias.assigned(model, rows, checkpoint=checkpointed):
             loss = model(
                 context=batch["context"],
                 group_ids=batch["group_ids"],

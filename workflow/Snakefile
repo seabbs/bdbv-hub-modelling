@@ -71,3 +71,8 @@ onstart:
 
 onerror:
     say(f"FAILED; the failing rule and its error are in the Snakemake log {log}")
+
+
+# Every job but the trainer claims its memory of the share the trainers
+# leave (flowlib.machine.share_side_memory), once every rule is defined.
+machine.share_side_memory(workflow.rules)

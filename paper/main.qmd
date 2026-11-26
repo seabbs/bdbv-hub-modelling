@@ -251,6 +251,7 @@ We also report the energy score [@Gneiting2008], which is proper for joint forec
 - We therefore set $D = 42$ days at forecast time, as the random walk nowcast does, for the fine-tuned and zero-shot models alike.
 - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
 - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
+- We start forecasting at the first release with at least two usable releases up to it, so the random walk baselines can estimate their delay.
 - We score quantile forecasts with WIS, split into its three components [@bracherEvaluatingEpidemicForecasts2021], and log-scale WIS, bias, and coverage, taking the hub teams' quantiles from their samples.
 - We score each week against its count in the first release at least $T$ days after the week ends, with $T$ the 98% point of the hub data's reporting delay.
 - By then nearly all of a week's cases are reported, so the truth changes little afterwards while every round can still be scored.

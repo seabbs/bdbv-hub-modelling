@@ -195,9 +195,12 @@ GERMANY_UNIT = "germany-days"
 
 WORKER_MB = 4608
 """The least memory (MB) of each of a German unit's worker processes,
-each holding what one process forecasting a chunk of dates holds: the
-reference unit's four workers peaked at 17.7 GB with their coordinator
-(laptop CPU, five dates a chunk)."""
+each holding what one process forecasting a chunk of dates holds: a
+worker peaked at 4.6 GB, and the reference unit's four at 17.7 GB with
+their coordinator (laptop CPU, five dates a chunk)."""
+
+COORDINATOR_MB = 1024
+"""The memory (MB) a German unit's coordinator holds beside its workers."""
 
 
 class Scoring:
@@ -274,8 +277,14 @@ class Scoring:
         return releases.oldest_first(f"{self.cache}/releases.json", self.sc)
 
     def unit_memory_floor(self) -> int:
-        """Return a German unit's least memory: `WORKER_MB` a worker."""
-        return WORKER_MB * self.score_workers
+        """Return a German unit's least memory.
+
+        `WORKER_MB` a worker and `COORDINATOR_MB`; one worker on CUDA,
+        where the unit forecasts in its own process
+        (`nowcastgermany.checkpoint.score_workers`).
+        """
+        workers = 1 if self.checkpoint_forecast.gpu else self.score_workers
+        return WORKER_MB * workers + COORDINATOR_MB
 
     def unit_priority(
         self, base: float, reference: float

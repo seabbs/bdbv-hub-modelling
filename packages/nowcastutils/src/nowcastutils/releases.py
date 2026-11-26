@@ -12,6 +12,8 @@ renewal models learn their report to publication lag from.
 `cumulative_first_release` finds a first release that is a cumulative dump
 rather than part of the reporting, and `without_cumulative_first_release`
 leaves it out of a task's releases.
+`origin_releases` gives the releases forecasting starts from: those with
+at least `MIN_ORIGIN_RELEASES` usable releases up to them.
 """
 
 from __future__ import annotations
@@ -32,9 +34,12 @@ from nowcastutils.dates import as_date
 __all__ = [
     "HISTORY_FIELDS",
     "MAX_PAIR_AGE",
+    "MIN_ORIGIN_RELEASES",
     "cumulative_first_release",
     "latest_onset_days",
+    "origin_releases",
     "release_cutoff",
+    "release_cutoffs",
     "release_pairs",
     "without_cumulative_first_release",
 ]
@@ -249,6 +254,48 @@ def cumulative_first_release(
         return None
     gap = (cut["cutoff"].iloc[1] - cut["cutoff"].iloc[0]).days
     return str(cut["vintage"].iloc[0]) if gap > max_delay else None
+
+
+MIN_ORIGIN_RELEASES = 2
+"""Usable releases up to a release for it to be a forecast origin
+(`origin_releases`)."""
+
+
+def origin_releases(
+    rows: pd.DataFrame,
+    max_delay: int | None,
+    min_releases: int = MIN_ORIGIN_RELEASES,
+) -> list[str]:
+    """Return the releases forecasting starts from, oldest first.
+
+    The usable releases are every release less a cumulative first
+    release (`cumulative_first_release`). A release is an origin when at
+    least `min_releases` usable releases are on or before it, so the
+    models that learn from pairs of releases have one at every origin.
+
+    Parameters
+    ----------
+    rows : pandas.DataFrame
+        Releases, with `vintage` and `cutoff`.
+    max_delay : int or None
+        $D$ in days, for `cumulative_first_release`.
+    min_releases : int, optional
+        Usable releases needed up to an origin.
+
+    Returns
+    -------
+    list of str
+        The origins' labels, in cut-off order. Empty if there are fewer
+        than `min_releases` usable releases.
+    """
+    if rows.empty:
+        return []
+    cut = rows.drop_duplicates("vintage")
+    cut = cut.assign(cutoff=pd.to_datetime(cut["cutoff"])).sort_values("cutoff")
+    labels = [str(v) for v in cut["vintage"]]
+    first = cumulative_first_release(rows, max_delay)
+    usable = [v for v in labels if v != first]
+    return usable[min_releases - 1 :]
 
 
 def without_cumulative_first_release(task: ForecastTask) -> ForecastTask:

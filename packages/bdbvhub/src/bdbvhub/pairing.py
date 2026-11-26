@@ -35,7 +35,7 @@ def bdbv_sensitivity(
 ) -> pd.DataFrame:
     """Score both pairings on the BDBV release backtest's origins.
 
-    Each real origin (less `skip_origins` and the latest) is forecast for
+    Each origin but the latest (`origin_tasks`) is forecast for
     the provinces, with the country their sum. Zones are their own
     forecasts and are not paired, so they are not scored here. Truth is
     each week's count in the first release the backtest's truth delay
@@ -64,7 +64,7 @@ def bdbv_sensitivity(
     tasks = origin_tasks(target, delays, config, daily)
     frames = []
     for origin in vintages[:-1]:
-        if origin in config.skip_origins or origin not in tasks:
+        if origin not in tasks:
             continue
         if origins is not None and origin not in origins:
             continue
@@ -122,7 +122,7 @@ def bdbv_candidates(
     tasks = origin_tasks(target, delays, config, load_daily(data))
     frames = []
     for origin in real_vintages(real)[:-1]:
-        if origin in config.skip_origins or origin not in tasks:
+        if origin not in tasks:
             continue
         if origins is not None and origin not in origins:
             continue

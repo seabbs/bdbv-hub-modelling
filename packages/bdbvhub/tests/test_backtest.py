@@ -17,6 +17,7 @@ from nowcastbdbv.backtest import (
 )
 from nowcasteval.backtest import (
     BacktestConfig,
+    backtest_origins,
     energy_tasks,
     forecast_weeks,
     load_config,
@@ -24,7 +25,7 @@ from nowcasteval.backtest import (
     score_tasks,
     truth_changes,
 )
-from nowcasteval.nowcast import resolve_truth_delay
+from nowcasteval.nowcast import resolve_truth_delay, truth_skip
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = ROOT / "tests" / "fixtures" / "data"
@@ -42,9 +43,8 @@ def test_load_config() -> None:
     # The generic config knows no BVD default: the caller's is
     # nowcastrenewal.bvd.MAX_RHAT.
     assert BacktestConfig().bvd_max_rhat is None
-    # The first release is not a backtest origin.
-    assert cfg.skip_origins == ("2026-08-18",)
-    assert BacktestConfig().skip_origins == ()
+    # The origins come from the data, not the config.
+    assert not hasattr(cfg, "skip_origins")
     # The truth delay is estimated from the data unless fixed.
     assert cfg.truth_delay is None
     assert cfg.truth_level == 0.98
@@ -77,28 +77,47 @@ def test_truth_delay_is_fixed_or_estimated_from_the_releases() -> None:
                 "location": "CD",
                 "target_end_date": w,
                 "total": n,
+                "cutoff": vintage,
             }
             for w, n in zip(weeks, counts, strict=True)
         ]
 
     target = pd.DataFrame(
         [
+            # A cumulative first release, more than D before the next,
+            # left out.
+            *rows("2026-07-01", [1, 1]),
             # 7 and 0 days after the weeks end: 90 and 10 of 100.
             *rows("2026-09-12", [90, 10]),
             # 14 and 7 days: 100 and 90.
             *rows("2026-09-19", [100, 90]),
-            # A revision, left out as a skipped origin.
-            *rows("2026-09-15", [1, 1]),
             *rows("2026-09-26", [100, 100]),
         ]
     )
-    cfg = BacktestConfig(skip_origins=("2026-09-15",))
+    cfg = BacktestConfig(max_delay=42)
     # 180 of 200 at 7 days, all 100 at 14 days.
     assert resolve_truth_delay(cfg, target) == 14
     assert resolve_truth_delay(replace(cfg, truth_level=0.9), target) == 7
     assert resolve_truth_delay(replace(cfg, truth_delay=28), target) == 28
+    assert truth_skip(target, cfg) == ("2026-07-01",)
+    assert truth_skip(target, BacktestConfig()) == ()
+    # Without the last release no age reaches 98%.
+    early = target.loc[target["vintage"] != "2026-09-26"]
     with pytest.raises(ValueError, match="truth_level"):
-        resolve_truth_delay(BacktestConfig(), target)
+        resolve_truth_delay(cfg, early)
+
+
+def test_backtest_origins_start_at_two_usable_releases(
+    target: pd.DataFrame, vintages: list[str]
+) -> None:
+    config = load_config(
+        ROOT / "packages" / "nowcastbdbv" / "config" / "backtest.toml"
+    )
+    # 2026-08-18 is a cumulative first release, so 2026-10-09 is the only
+    # usable release there and 2026-10-17 the first with two.
+    assert backtest_origins(target, config) == vintages[2:]
+    # With no D every release counts, so the second is the first origin.
+    assert backtest_origins(target, BacktestConfig()) == vintages[1:]
 
 
 def test_forecast_weeks() -> None:
@@ -108,7 +127,7 @@ def test_forecast_weeks() -> None:
     assert len(weeks) == 8
 
 
-def test_development_uses_every_real_vintage_but_the_latest(
+def test_development_uses_every_origin_but_the_latest(
     target: pd.DataFrame,
     delays: pd.DataFrame,
     config: BacktestConfig,
@@ -117,7 +136,8 @@ def test_development_uses_every_real_vintage_but_the_latest(
     forecasts = run_development([get_model("flat")], target, delays, config)
     # Vintages after the model choice date are backtested too.
     real = forecasts.loc[forecasts["kind"] == "real"]
-    assert set(real["vintage"]) == set(vintages[:-1])
+    # The first release has no earlier one, so it is not an origin.
+    assert set(real["vintage"]) == set(vintages[1:-1])
     assert max(real["vintage"]) > "2026-10-10"
 
 
@@ -360,7 +380,7 @@ def test_lopo_masks_one_province_at_a_time(
     # Only the masked province is kept, from development vintages only.
     assert (forecasts["location"] == forecasts["masked"]).all()
     assert set(forecasts["masked"]) == {"CD-IT", "CD-NK"}
-    assert set(forecasts["vintage"]) == set(vintages[:-1])
+    assert set(forecasts["vintage"]) == set(vintages[1:-1])
     assert set(scores["location"]) == {"CD-IT", "CD-NK"}
     assert set(scores["truth_vintage"]) == {vintages[-1]}
 
@@ -536,19 +556,20 @@ def test_tasks_carry_the_daily_releases_up_to_their_vintage(
     assert other.daily_history is None
 
 
-def test_skipped_origins_stay_in_the_later_tasks(
-    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+def test_development_tasks_start_at_the_first_origin(
+    target: pd.DataFrame,
+    delays: pd.DataFrame,
+    daily: pd.DataFrame,
+    vintages: list[str],
 ) -> None:
-    every = development_tasks(target, delays, BacktestConfig(), daily=daily)
-    skip = BacktestConfig(skip_origins=("2026-08-18",))
-    kept = development_tasks(target, delays, skip, daily=daily)
-    assert [t.vintage for t in kept] == [
-        t.vintage for t in every if t.vintage != "2026-08-18"
-    ]
-    # Its rows are still in the later tasks' histories.
-    later = kept[0]
-    assert "2026-08-18" in set(later.target_history["vintage"])
-    assert "2026-08-18" in set(later.daily_history["vintage"])
+    config = BacktestConfig(max_delay=42)
+    kept = development_tasks(target, delays, config, daily=daily)
+    # From the first origin to the release before the latest.
+    assert [t.vintage for t in kept] == vintages[2:-1]
+    # The earlier releases stay in the later tasks' raw histories.
+    later = development_tasks(target, delays, BacktestConfig(), daily=daily)
+    assert "2026-08-18" in set(later[0].target_history["vintage"])
+    assert "2026-08-18" in set(later[0].daily_history["vintage"])
 
 
 def test_development_tasks_pass_the_daily_releases(

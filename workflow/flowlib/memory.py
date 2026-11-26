@@ -25,6 +25,13 @@ STEP = 256
 """The MB a job's memory is rounded up to."""
 
 
+TRAINER_MIN_MB = 4096
+"""The least a segment's trainer takes (MB), before any has a benchmark."""
+
+TRAINER_BENCHMARK = "train/benchmarks/train_segment/n{n}.tsv"
+"""A segment's benchmark, in its run's folder (<ROOT>/runs/<run>/)."""
+
+
 def peak_mb(path: Path | str) -> float | None:
     """Return a benchmark's last `max_rss` (MB), or None."""
     try:
@@ -99,3 +106,22 @@ def from_benchmark(
         return base * 2 ** (max(1, attempt) - 1)
 
     return mem_mb
+
+
+def trainer_mb(root: Path | str | None) -> int:
+    """Return the memory (MB) a trainer is kept on this machine.
+
+    The most any run's segment under `root` peaked at, with `MARGIN`,
+    else `TRAINER_MIN_MB`: at least what the next segment asks for, as
+    its rule takes the peaks of the run's other segments before it has
+    its own.
+    """
+    found = (
+        glob.glob(  # noqa: PTH207
+            str(Path(root, "runs", "*", TRAINER_BENCHMARK.format(n="*")))
+        )
+        if root
+        else []
+    )
+    peaks = [p for p in map(peak_mb, found) if p is not None]
+    return max([TRAINER_MIN_MB, *(padded(p) for p in peaks)])
