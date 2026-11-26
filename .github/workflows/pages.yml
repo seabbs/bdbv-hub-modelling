@@ -240,7 +240,9 @@ jobs:
         run: python3 workflow/scripts/paper_run.py --render "$TARGET" --pages
       - name: Build the site into _site
         run: uv run mkdocs build --strict
-      # The German page and its data name no held-out nowcast date.
+      # The German page and its data name no held-out nowcast date. Until
+      # the site results hold our German scores, the page says they are not
+      # yet available and has no data, which passes with a warning.
       - name: Check the German page for held-out dates
         run: uv run germany-site-check _site
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
