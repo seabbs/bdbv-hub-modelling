@@ -312,6 +312,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 - `nowcastgermany` and `nowcastbdbv` give each case study's data as forecast tasks.
 - `bdbvhub` and `bdbvsubmission` fit, store and check forecasts, and submit them to the Ebola hub through an automated, gated workflow.
 - A Snakemake workflow runs the evaluation from the raw data to every figure and table, and we release the simulations and fine-tuned checkpoints.
+- We built dashboards to monitor the simulations and fine-tuning as they ran, and used them throughout development (SI, Monitoring fine-tuning).
 :::
 
 ## Results
@@ -343,7 +344,7 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 - We developed the simulated surveillance data and the way we fine-tune on them over [X] versions.
 - Each version changed the settings the simulations draw from, such as the range of reproduction numbers, reporting delays and reporting patterns, or the fine-tuning settings, such as how training blocks are cut from each simulation, the learning rate and the number of simulations.
 - Each version was simulated afresh, so no simulation was reused between versions.
-- For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, with a dashboard the workflow serves from the training machine (SI, Monitoring fine-tuning; Checkpoint curve).
+- For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, using our simulation and fine-tuning dashboards (Methods, Implementation; SI, Checkpoint curve).
 - The test simulations are fresh draws from the final version's settings, never trained on or checked during development, and we scored them only for the final model.
 - Over these versions we added simulated report days, backlogs, revisions and release schedules, training blocks that mix daily and weekly counts or rolling sums, regions whose totals differ from the sum of their places, and the attention biases (Methods, Synthetic data generation; Fine-tuning).
 - Early in the Ebola outbreak we submitted the random walk nowcast and renewal models to the hub, and its data, weekly releases that start with a backfill, led us to add training blocks whose releases start late.
