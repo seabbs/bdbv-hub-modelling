@@ -29,3 +29,12 @@ def test_a_dispatch_can_name_a_scratch_store() -> None:
     assert load["env"]["FIT_STORE_BRANCH"] == (
         "${{ inputs.store_branch || 'fit-store' }}"
     )
+
+
+def test_the_getting_started_notebook_reads_the_store_itself() -> None:
+    # The site results' fit list can name a fit the fetched store has
+    # since pruned, so the notebook chooses its fit from the store.
+    notebook = (PAGES.parents[2] / "docs" / "getting-started.py").read_text()
+    assert "store.newest_fit(" in notebook
+    assert "fit-store.json" not in notebook
+    assert ".json.gz" not in notebook
