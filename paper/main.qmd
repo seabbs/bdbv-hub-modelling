@@ -136,6 +136,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ::: {.callout-note title="Plan"}
 - **What the grid simulates.**
   - We simulate with our port of the epinowcast model to Python on top of PyRenew and numpyro [@abbottepinowcast; @pyrenew; @Phan2019].
+  - We call the settings each simulation draws from, such as reproduction numbers, reporting delays and reporting patterns, with their sampling distributions, the simulation grid.
   - We simulate outbreaks in five layers, each described with its figure and sampling distributions in the SI.
   - In layer 1 we simulate infections by a renewal process with susceptible depletion in each place and age group, with R(t) following one of several transmission paths, shifts in R(t), immune escape, imports and mixing between strata.
   - In layer 2 we observe infections as reference events after a delay such as incubation, ascertain a share of them and add NB1 or Poisson noise.
@@ -339,10 +340,12 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 :::
 
 ::: {.callout-note title="Plan"}
-- We developed the simulation grid and the fine-tuning recipe over [X] versions of the grid, each simulated afresh so no simulation was reused between versions.
+- We developed the simulated surveillance data and the way we fine-tune on them over [X] versions.
+- Each version changed the settings the simulations draw from, such as the range of reproduction numbers, reporting delays and reporting patterns, or the fine-tuning settings, such as how training blocks are cut from each simulation, the learning rate and the number of simulations.
+- Each version was simulated afresh, so no simulation was reused between versions.
 - For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, with a dashboard the workflow serves from the training machine (SI, Monitoring fine-tuning; Checkpoint curve).
-- The test simulations are fresh draws from the final grid, never trained on or checked during development, and we scored them only for the final model.
-- Over these versions we added the reporting system layer (report days, backlogs, revisions and release cadence), mixed-frequency and rolling-sum blocks, places that do not sum to their parent, and the attention biases (Methods, Synthetic data generation; Fine-tuning).
+- The test simulations are fresh draws from the final version's settings, never trained on or checked during development, and we scored them only for the final model.
+- Over these versions we added simulated report days, backlogs, revisions and release schedules, training blocks that mix daily and weekly counts or rolling sums, regions whose totals differ from the sum of their places, and the attention biases (Methods, Synthetic data generation; Fine-tuning).
 - Early in the Ebola outbreak we submitted the random walk nowcast and renewal models to the hub, and its data, weekly releases that start with a backfill, led us to add training blocks whose releases start late.
 - From the week of 23 November 2026 we scored each released checkpoint on past Ebola rounds to decide when to submit the fine-tuned model, and first submitted it on [date].
 :::
