@@ -31,6 +31,7 @@ def test_each_chunk_s_time_is_tied_to_its_planned_chunk(tmp_path):
             "first": 101,
             "sims": 100,
             "steps": 2400,
+            "before": 0,
             "wait": 0.0,
             "cut": 600.0,
             "train": 3000.0,
@@ -103,3 +104,25 @@ def test_the_line_sits_under_the_status_tiles():
     src = inspect.getsource(page)
     tiles = src[src.index('f"<div class=tiles>{tiles}</div>') :]
     assert "{tput}" in tiles[:200]
+
+
+def test_a_chunk_resumed_part_way_counts_only_the_steps_it_timed(tmp_path):
+    # The trainer resumed 918 steps into a 1,796-step chunk: its time is
+    # for the other 878 steps, and for that share of its simulations.
+    log = tmp_path / "n3200.log"
+    log.write_text(
+        "2026-11-25 22:23:22 [train] resumed at step 54400, "
+        "outbreaks 3101-, batch 918\n"
+        + PLAN.format(t="22:23:24", a=3101, b=3200, n=1796)
+        + "\n"
+        + TIME.format(t="22:39:08", w=0, c=1, tr=944, e=0)
+        + "\n"
+    )
+    got = logs.Log(log).chunk_times()
+    assert got[0]["steps"] == 1796
+    assert got[0]["before"] == 918
+    tput = logs.throughput(got)
+    assert tput["steps_per_min"] == pytest.approx(878 / 945 * 60)
+    assert tput["sims_per_hour"] == pytest.approx(
+        100 * 878 / 1796 / 945 * 3600
+    )
