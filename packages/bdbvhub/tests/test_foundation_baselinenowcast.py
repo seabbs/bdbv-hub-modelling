@@ -128,3 +128,56 @@ def test_the_context_is_the_point_nowcast_to_the_cut_off(task):
         & (task.daily_history["location"] == place)
     ].set_index("onset_date")["observed"]
     assert target[row, -1] >= reported.get(task.cutoff, 0.0)
+
+
+@pytest.fixture(scope="module")
+def many():
+    from nowcastgermany.data import nowcast_tasks
+
+    return nowcast_tasks(_triangle(), NOWCAST, 300, 7, horizons=HORIZONS)[0]
+
+
+def test_the_nowcast_days_carry_baselinenowcast_draws(many):
+    # Each sample's days to the cut-off are baselinenowcast's draws, so
+    # they spread as its draws do, and each week is the sum of its days
+    # in the same sample, across the cut-off too.
+    import jax
+
+    from bdbvhub.models import get_model
+    from nowcastbaselines.baselinenowcast import baselinenowcast
+    from nowcastbaselines.baselinenowcast.triangle import daily_triangle
+    from nowcastutils.dates import as_date
+
+    model = dataclasses.replace(
+        get_model("foundation_zeroshot_baselinenowcast"), sample=_capture([])
+    )
+    weekly, daily = model.forecast_both(many)
+    cutoff = str(many.cutoff)[:10]
+    place = next(iter(many.locations))
+    tri, mask = daily_triangle(
+        many.daily_history, place, as_date(cutoff), 120, 40
+    )
+    ref = np.asarray(
+        baselinenowcast(tri, mask, key=jax.random.key(0), draws=4000)
+    )[:, -1]
+    day = daily.loc[
+        (daily["location"] == place) & (daily["date"] == cutoff), "value"
+    ].to_numpy()
+    assert len(day) == many.n_samples
+    assert day.std() > 0
+    assert day.mean() == pytest.approx(ref.mean(), rel=0.15)
+    assert day.std() == pytest.approx(ref.std(), rel=0.25)
+    # Reproducible from the task.
+    _, again = model.forecast_both(many)
+    pd.testing.assert_frame_equal(daily, again)
+    days = daily.assign(date=pd.to_datetime(daily["date"]))
+    for _, row in weekly.iterrows():
+        end = pd.Timestamp(row["target_end_date"])
+        week = days.loc[
+            (days["location"] == row["location"])
+            & (days["sample"] == row["sample"])
+            & (days["date"] > end - pd.Timedelta(days=7))
+            & (days["date"] <= end),
+            "value",
+        ]
+        assert row["value"] == pytest.approx(week.sum(), rel=1e-6, abs=1e-6)
