@@ -127,6 +127,7 @@ function legend(eff,ds){
  return '<div class=leg2>'+leg+'</div>'}
 function plots(){
  if(C.empty)return;
+ if(!S.locs.length){$("gplot").innerHTML='<p class=mut>No locations picked: pick some under Locations.</p>';$("gwis").innerHTML='';return}
  var eff=effective(),ds=dates(),small=S.locs.length>1;
  $("gwrap").className=small?"gwrap wide":"gwrap";
  Promise.all(S.locs.map(load)).then(function(all){
@@ -275,9 +276,13 @@ function chips(){var h='';
  RUNS.forEach(function(r){if(!isOn(r.key))return;var all=ofRun(r.key),ch=chosen(r.key);
   h+='<span class=lg><b style="color:'+r.color+'">'+r.label+'</b> '+(all.length?all.map(function(m){var on=ch.indexOf(m.id)>=0;return '<button class="tog'+(on?' on':'')+'" data-chip="'+r.key+'|'+m.id+'" title="'+m.id+' ('+m.count+' dates)" style="'+(on?'background:'+r.color+';border-color:'+r.color:'')+'">n'+m.n+(/ interim /.test(m.label)?' interim':'')+'</button>'}).join(""):'<span class=mut>no checkpoints scored yet</span>')+'</span>'});
  $("gck").innerHTML=h}
+// One row per level (the dataset's `groups`): pick all of its places or
+// none, then each place; a last row clears every pick.
 function locBtns(){
- $("glocs").innerHTML=C.groups.filter(function(g){return g.locs.length}).map(function(g){return '<div><span class=mut>'+g.name+'</span> '+g.locs.map(function(l){return '<button class="tog'+(S.locs.indexOf(l)>=0?' on':'')+'" data-loc="'+l+'">'+l+'</button>'}).join("")+'</div>'}).join("");
- $("gsum").textContent="Locations: "+S.locs.join(", ")}
+ $("glocs").innerHTML=C.groups.map(function(g,j){if(!g.locs.length)return "";
+  return '<div><span class=mut>'+g.name+'</span> <button class=tog data-act=all data-g='+j+' title="Pick every '+g.name+' place">all</button><button class=tog data-act=none data-g='+j+' title="Drop every '+g.name+' place">none</button> '+g.locs.map(function(l){return '<button class="tog'+(S.locs.indexOf(l)>=0?' on':'')+'" data-loc="'+l+'">'+l+'</button>'}).join("")+'</div>'}).join("")
+  +'<div><button class=tog data-act=clear>clear all</button></div>';
+ $("gsum").textContent="Locations: "+(S.locs.join(", ")||"none")}
 function draw(){
  if(C.empty)return empty();
  $("gdate").textContent=ORI()[S.oi]+(S.latest?" (latest)":"");
@@ -307,7 +312,12 @@ function build(){
  $("gsl").oninput=function(){pl.pause();S.oi=+this.value;S.latest=S.oi==ORI().length-1;draw()};
  $("gprev").onclick=function(){S.oi=Math.max(0,S.oi-1);S.latest=false;draw()};
  $("gnext").onclick=function(){S.oi=Math.min(ORI().length-1,S.oi+1);S.latest=S.oi==ORI().length-1;draw()};
- $("glocs").onclick=function(e){var b=e.target.closest("button");if(!b)return;var l=b.dataset.loc,i=S.locs.indexOf(l);
+ $("glocs").onclick=function(e){var b=e.target.closest("button");if(!b)return;var a=b.dataset.act;
+  if(a){var g=a=="clear"?C.locs:C.groups[+b.dataset.g].locs;
+   if(a=="all")g.forEach(function(l){if(S.locs.indexOf(l)<0)S.locs.push(l)});
+   else S.locs=S.locs.filter(function(l){return g.indexOf(l)<0});
+   draw();return}
+  var l=b.dataset.loc,i=S.locs.indexOf(l);
   if(i>=0){if(S.locs.length>1)S.locs.splice(i,1)}else S.locs.push(l);draw()};
  $("gck").onclick=function(e){var b=e.target.closest("button");if(!b)return;var p=b.dataset.chip.split("|"),k=p[0],id=p[1];
   var ids=chosen(k).slice(),i=ids.indexOf(id);if(i>=0){if(ids.length>1)ids.splice(i,1)}else ids.push(id);S.chk[k]=ids;draw()};

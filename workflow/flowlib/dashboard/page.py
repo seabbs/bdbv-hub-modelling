@@ -18,7 +18,7 @@ import json
 import math
 import re
 from collections import deque
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -881,6 +881,29 @@ INPUT_LABELS = {"daily": "daily counts", "weekly": "weekly totals"}
 """The nowcast panels' model inputs, as the control names them."""
 
 
+def _loc_groups(
+    locs: Sequence[str], groups: Iterable[Mapping[str, str]]
+) -> list[dict[str, Any]]:
+    """Return the location selector's levels, each with its locations.
+
+    `groups` are a dataset's levels, (name, regex), in page order. The
+    page picks every location of a level at once, or none. Locations no
+    level matches are a last `other` level, so each can be picked.
+    """
+    out = [
+        {
+            "name": g["name"],
+            "locs": [x for x in locs if re.match(g["match"], x)],
+        }
+        for g in groups
+    ]
+    seen = {x for g in out for x in g["locs"]}
+    rest = [x for x in locs if x not in seen]
+    if rest:
+        out.append({"name": "other", "locs": rest})
+    return out
+
+
 def nowcasts_section(
     ctx: Context, sizes: Mapping[str, int], builts: Mapping[str, Any]
 ) -> str:
@@ -949,15 +972,7 @@ def nowcasts_section(
                 }
                 if ctx.once
                 else {},
-                "groups": [
-                    {
-                        "name": g["name"],
-                        "locs": [
-                            x for x in built["locs"] if re.match(g["match"], x)
-                        ],
-                    }
-                    for g in ds.get("groups") or ()
-                ],
+                "groups": _loc_groups(built["locs"], ds.get("groups") or ()),
             }
         )
     if not any(not d.get("empty") for d in datasets):
