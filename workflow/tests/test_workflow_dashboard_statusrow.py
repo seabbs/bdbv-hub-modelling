@@ -213,7 +213,12 @@ def test_training_now_counts_from_the_resumed_step(tmp_path):
     # the logged chunks' steps.
     folder = _restarted(tmp_path)
     (folder / "train" / "n800.log").unlink()
-    (folder / "train" / "n400" / "settings.json").unlink()
+    (folder / "train" / "n400.log").write_text(
+        RESUME.format(t="04:33:19", s=8000, a=301, b=800)
+        + "\n"
+        + PLAN.format(t="04:33:20", a=301, b=400, n=2416)
+        + "\n"
+    )
     status = {"stage": "training", "step": 8500, "segment": "n400"}
     out = page.training_now(folder, status, None)
     assert "simulations 301-400 of n400" in out
