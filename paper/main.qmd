@@ -97,7 +97,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
     We also submitted it to the Ebola forecasting hub in real time.
   - We first evaluated these models on held-out simulations.
   - To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 hospitalisation nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
-  - We explored a range of senesitivity analyses to assess the impact of different design choices on model performance.
+  - We explored a range of sensitivity analyses to assess the impact of different design choices on model performance.
   - These included: assessing the impact of using a baseline nowcast as input to the foundation model, fine-tuning on real data, removing the attention biases and lag series, and comparing different lag count rules and block structures.
   - We aim to demonstrate the potential of foundation time series models fine-tuned on domain-specific synthetic data to improve infectious disease nowcasting and forecasting, and to provide a case study for incorporating domain knowledge into foundation models more generally.
   - Key references: [@Ansari2025; @Johnson2025].
@@ -118,6 +118,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 
 ::: {.callout-note title="Plan"}
 - We compare with `randomwalk`, a random walk with no delay adjustment, and `randomwalknowcast`, a random walk nowcast.
+- In every case study, scores are relative to `randomwalknowcast`.
 - The SI describes both in full.
 - Key references: [@Johnson2025].
 :::
