@@ -174,6 +174,8 @@ def test_only_generic_profiles_ship():
 
 FT = {
     "rounds": [1, 2],
+    # One trained run, whatever the config trains.
+    "train_runs": ["runa"],
     "finetune": {
         "prefixes": [250, 500],
         "outbreaks": 500,
