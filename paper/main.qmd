@@ -17,6 +17,23 @@ format:
         href: si.html
   pdf:
     number-sections: false
+abstract: |
+  Infectious disease forecasts and nowcasts inform public health.
+  Time series foundation models, neural networks trained on many series, forecast new series well with no further training (zero-shot) but are not designed for reporting delays.
+  Nowcasting methods correct for these delays but either forecast poorly or need expert configuration.
+  We fine-tuned the foundation model Chronos-2 on simulated surveillance data.
+  We simulated these data by combining the reporting model of epinowcast, a widely used nowcasting package, with the renewal model library PyRenew.
+  We gave Chronos-2 counts by event date and reporting delay, one series per place and delay, with attention biases linking series to places and places to regions.
+  We compared it with zero-shot Chronos-2, given the same input or only the latest counts, and with a recently developed baseline nowcasting method, extended to forecast and to sparse data.
+  We evaluated them on held-out simulations, retrospectively against the German COVID-19 nowcast hub, and retrospectively and prospectively in the Democratic Republic of the Congo Ebola forecasting hub.
+  To the Ebola hub we also submitted renewal models built on this combination, from our real-time modelling.
+  On held-out simulations, the fine-tuned model [outperformed / matched] zero-shot Chronos-2 and the baseline method.
+  Removing the attention biases [worsened / did not change] its scores, and giving it the baseline method's nowcast as input [improved / worsened] them.
+  On the German hub, it [outperformed / performed comparably to] the hub's models.
+  On the Ebola hub, it [outperformed / performed comparably to] other teams' models and our renewal models.
+  Fine-tuning on simulations from mature nowcasting tools fused their domain knowledge with a foundation model's forecasting performance.
+  Fine-tuned foundation models could serve as baselines for modellers and forecasting hubs.
+  Teams without capacity for expert setup could also use them directly, being more flexible and reliable than unadapted baseline methods.
 bibliography: reference.bib
 # The evaluation workflow's numbers (`task pipeline:dev` or
 # `task pipeline:paper`), quoted with the meta shortcode.
@@ -29,11 +46,20 @@ metadata-files:
 Each top-level bullet is one paragraph, with 2–3 supporting points.
 -->
 
-## Abstract
+## Author summary
 
-::: {.callout-note title="Plan"}
-- We think fine-tuned foundation models like ours, and the same approach applied to newer industry-leading foundation models, should serve as baselines for other model developers and for forecast and nowcast hubs.
-:::
+Forecasts of infectious disease cases help public health agencies plan their response.
+Recent counts are incomplete because cases take time to be reported.
+Nowcasts estimate the cases not yet reported.
+General forecasting models trained on many time series forecast well with no setup.
+However, we do not think they were trained on reporting delays, so they may mistake incomplete recent counts for a falling outbreak.
+Nowcasting models account for delays, but simple ones forecast poorly and complex ones need specialist setup.
+We combined the two by training a general model, Chronos-2, further on surveillance data simulated with established nowcasting tools.
+This adds what those tools know about reporting to the general model's forecasting skill.
+We tested the model on simulated data, on past COVID-19 hospital admissions in Germany, and in real time during an Ebola outbreak in the Democratic Republic of the Congo.
+It [did better than / matched] the unmodified model, a simple nowcasting method and other teams' models.
+Models taught this way could be baselines for teams and hubs that forecast infectious disease.
+Teams without the capacity to set up specialist models could also use them directly, as they adapt to new settings better than simple nowcasting methods.
 
 ## Introduction
 
@@ -96,7 +122,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
   - We adapted a recently developed baseline nowcasting method, baselinenowcast, to also produce forecasts as a baseline for comparison, and to work on sparse data [@Johnson2025] (SI, Baselines).
     We also submitted it to the Ebola forecasting hub in real time.
   - We first evaluated these models on held-out simulations.
-  - To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 hospitalisation nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
+  - To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
   - We explored a range of senesitivity analyses to assess the impact of different design choices on model performance.
   - These included: assessing the impact of using a baseline nowcast as input to the foundation model, fine-tuning on real data, removing the attention biases and lag series, and comparing different lag count rules and block structures.
   - We aim to demonstrate the potential of foundation time series models fine-tuned on domain-specific synthetic data to improve infectious disease nowcasting and forecasting, and to provide a case study for incorporating domain knowledge into foundation models more generally.
@@ -108,7 +134,7 @@ Each top-level bullet is one paragraph, with 2–3 supporting points.
 ### Data
 
 ::: {.callout-note title="Plan"}
-- We used the German COVID-19 hospitalisation nowcast hub's reporting triangle, nationally, by state and by age group.
+- We used the German COVID-19 nowcast hub's reporting triangle, nationally, by state and by age group.
 - We used the Ebola forecasting hub's weekly confirmed cases by symptom onset, with every release, by country, province and health zone.
 - We exclude a first release that reports cumulative counts rather than new reports, as BDBV's 18 August release does, because it does not reflect reporting.
 - Key references: [@Wolffram2023; @hospitalization_nowcast_hub_2025; @bdbv_modeling_hub_2026; @MacNeil2010].
