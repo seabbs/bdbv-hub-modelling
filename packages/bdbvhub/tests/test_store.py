@@ -837,6 +837,38 @@ def test_unpack_takes_the_newest_stored_fit_when_the_key_changed(
     assert found.meta["key"] == keys[(candidate_flat, origin)]
 
 
+def test_newest_fit_is_the_fit_load_uses_at_the_newest_origin_with_one(
+    candidate_flat: str,
+    tasks: dict[str, ForecastTask],
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "store"
+    older, newer, newest = sorted(tasks)[-3:]
+    keys = store.current_keys(tasks, [candidate_flat], {}, "new")
+    assert store.newest_fit(root, keys, candidate_flat) is None
+    stale = store.fit(candidate_flat, tasks[older], {}, "old")
+    for key, at in (("k1", "2026-11-01"), ("k2", "2026-11-02")):
+        meta = {**stale.meta, "key": key, "fitted_at": at}
+        store.write_fit(root, dataclasses.replace(stale, meta=meta))
+    # The newest good fit of older code, when the current key has none.
+    found = store.newest_fit(root, keys, candidate_flat)
+    assert found is not None
+    assert (found.meta["origin"], found.meta["key"]) == (older, "k2")
+    # A newer origin with only a failed fit is passed over.
+    broken = store.fit(candidate_flat, tasks[newest], {}, "new")
+    meta = {**broken.meta, "status": "failed"}
+    store.write_fit(root, dataclasses.replace(broken, meta=meta))
+    found = store.newest_fit(root, keys, candidate_flat)
+    assert found is not None
+    assert found.meta["origin"] == older
+    # The current key's fit, at the newest origin that has one.
+    store.write_fit(root, store.fit(candidate_flat, tasks[newer], {}, "new"))
+    found = store.newest_fit(root, keys, candidate_flat)
+    assert found is not None
+    assert found.meta["origin"] == newer
+    assert found.meta["key"] == keys[(candidate_flat, newer)]
+
+
 def test_unpack_chooses_per_model(
     candidate_flat: str,
     tasks: dict[str, ForecastTask],
