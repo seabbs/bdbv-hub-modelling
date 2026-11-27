@@ -190,6 +190,7 @@ properties:
       - checkpoints
       - branch
       - workers
+      - device
     properties:
       labels:
         oneOf: [{type: "null"}, {$ref: "#/$defs/labels"}]
@@ -200,6 +201,8 @@ properties:
       checkpoints: {type: string}
       branch: {type: string}
       workers: {type: integer, minimum: 1}
+      device:
+        oneOf: [{type: "null"}, {enum: [cpu, cuda, mps]}]
 
   rt_check:
     type: object

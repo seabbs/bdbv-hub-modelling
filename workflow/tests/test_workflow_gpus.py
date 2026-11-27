@@ -139,8 +139,11 @@ def test_every_gpu_job_claims_its_gpu_with_one_or_two_gpus(tmp_path):
         lines = _gpu_commands(folder, given)
         assert any("finetune-stream" in line for line in lines)
         assert any("evaluate_offloaded.py" in line for line in lines)
+        assert any("nowcastgermany.checkpoint" in line for line in lines)
         for line in lines:
-            assert machine.CLAIM in line, line
+            # The German units stay on the CPU (`score.device`).
+            german = "nowcastgermany.checkpoint" in line
+            assert (machine.CLAIM in line) != german, line
 
 
 def test_a_cpu_forecast_claims_no_gpu(tmp_path):
