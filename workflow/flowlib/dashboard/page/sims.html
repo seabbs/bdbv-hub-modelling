@@ -2,7 +2,7 @@
 <div class=navrow><b>Simulations</b>
 <label class=k>Source <select id=source></select></label>
 <nav class=nav><a href="#summary">Summary</a><a href="#layers">By layer</a>
-<a href="#derived">Produced</a><a href="#series">Simulations</a><a href="#table">Table</a>
+<a href="#derived">Produced</a><a href="#delays">Delays</a><a href="#series">Simulations</a><a href="#table">Table</a>
 <a href="#dive">Deep dive</a></nav>
 <span id=status class=mut></span></div>
 <div class=selbar><span class=k>Colour and group by</span>
@@ -27,11 +27,23 @@ click again to drop it. Hover a name for what it is.</span></div>
 </details>
 <details class=sec id=derived open><summary><h2>What they produce</h2></summary>
 <p class=cnote>Summaries computed from the simulations' counts (first
-draw, strata summed), not their settings: the reporting delay
-distribution, the weekday profiles by reference and report date, release
-cadence, epidemic shape, revisions and observation noise.</p>
+draw, strata summed), not their settings: epidemic shape, revisions and
+observation noise. The delays have their own section below.</p>
 <div id=derivedleg class=leg></div>
 <div id=derivedbody class=dgrid></div>
+</details>
+<details class=sec id=delays open><summary><h2>Delay structure</h2></summary>
+<p class=cnote>How the reporting delays are made, from each simulation's
+counts (first draw): the delay distribution, how it moves over the series,
+its weekday effects, how much strata differ and the release cadence with
+the wait it adds. Delays are of reference dates at least the 95% delay
+before the last report, so the series' end does not shorten them; a
+release is a report date with any count. Dashed lines are the same
+summaries of the German development half (states) and the BDBV hub's
+releases (provinces), from the workflow's <code>delay_reference</code>
+rule.</p>
+<div id=delaysleg class=leg></div>
+<div id=delaysbody class=dgrid></div>
 </details>
 <details class=sec id=series open><summary><h2>Simulations</h2></summary>
 <div class=sctl>

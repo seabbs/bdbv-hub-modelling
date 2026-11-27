@@ -4,12 +4,14 @@ Its sources are each round's simulations (`<ROOT>/rounds/r<N>/sims/`)
 and each run's (`<ROOT>/runs/<run>/sims/`), as the simulator writes them:
 `counts-<seed>.csv.gz` (counts by stratum, reference and report date),
 `settings-<seed>.csv` (each simulation's drawn settings) and, for rounds,
-`latent-<seed>.csv.gz` (infections, onsets and R).
+`latent-<seed>.csv.gz` (infections, onsets and R). The German and BDBV
+delays to compare with are the workflow's (`reference_path`).
 
 `Index` summarises a source, one entry per simulation from its first
 observation draw: its grid factors and drawn values, each with the grid
-layer it belongs to (`layers`), its size, strata, delays and weekly
-counts by reference date. A batch is summarised once and cached on disk
+layer it belongs to (`layers`), its size, strata, delays, the structure
+of its delays (`flowlib.delay_structure`) and weekly counts by reference
+date. A batch is summarised once and cached on disk
 until its files change. `simulation` gives one simulation's detail for
 the deep dive. `page` is the browser page, in the fine-tuning
 dashboard's style; workflow/scripts/dashboard.py serves it under /sims/.
@@ -29,6 +31,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import yaml
+
+from .. import delay_structure as ds
 
 LAYER_ORDER = ("infections", "strata", "observation", "delays", "reporting")
 """The grid's layers, in the order the grid file describes them."""
@@ -155,12 +159,31 @@ def _read_settings(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, keep_default_na=False)
 
 
-DELAY_POINTS = (0, 1, 2, 3, 5, 7, 10, 14, 21, 28, 42)
+DELAY_POINTS = ds.DELAY_POINTS
 """The delays (days) a simulation's reporting delay distribution is kept
 at: the share of its cases reported by each."""
 
-CACHE_VERSION = 2
+CURVES = (
+    "cdf",
+    "refdow",
+    "repdow",
+    "delay_time",
+    "ref_delay",
+    "release_days",
+    "gaps",
+)
+"""Each simulation's curves (`flowlib.delay_structure.curves`)."""
+
+CACHE_VERSION = 3
 """The batch summaries' version: a cached summary of another is redone."""
+
+
+def _structure(rows: pd.DataFrame) -> dict[str, Any] | None:
+    """Return a simulation's delay structure, its strata nested."""
+    return ds.structure(
+        rows.rename(columns={"location": "stratum"}),
+        parent=ds.sim_parent,
+    )
 
 
 def _derived(rows: pd.DataFrame) -> tuple[dict[str, float], dict[str, Any]]:
@@ -169,18 +192,18 @@ def _derived(rows: pd.DataFrame) -> tuple[dict[str, float], dict[str, Any]]:
     Statistics: the share reported within 14 and 28 days, releases a
     week (report dates over their span), the median gap between report
     dates and the days from the first reference date to the first report
-    (cadence), the largest weekly log growth, and the observation noise
+    (cadence), the largest weekly log growth, the observation noise
     (the mean absolute log ratio of each day's final count to its
-    centred 7-day mean). Curves: the delay distribution's cumulative
-    share at `DELAY_POINTS`, and the reference- and report-date weekday
-    profiles (Monday first, each weekday's counts over their mean).
+    centred 7-day mean) and the delay structure's numbers
+    (`flowlib.delay_structure.scalars`). Curves: the delay structure's
+    (`CURVES`): the delay distribution's cumulative share at
+    `DELAY_POINTS`, the reference- and report-date weekday profiles
+    (Monday first, each weekday's counts over their mean), the mean
+    delay over the series, by weekday of reference, the release weekdays
+    and the gaps between releases.
     """
     total = float(rows["count"].sum()) or 1.0
     by_delay = rows.groupby("delay")["count"].sum()
-    cdf = [
-        _round(float(by_delay[by_delay.index <= d].sum()) / total, 4)
-        for d in DELAY_POINTS
-    ]
     reports = np.sort(rows["rep"].unique())
     days = (reports[-1] - reports[0]) / np.timedelta64(1, "D") + 1
     gaps = np.diff(reports) / np.timedelta64(1, "D")
@@ -195,13 +218,7 @@ def _derived(rows: pd.DataFrame) -> tuple[dict[str, float], dict[str, Any]]:
     first = rows["ref"].min()
     weekly = rows.groupby((rows["ref"] - first).dt.days // 7)["count"].sum()
     growth = np.diff(np.log1p(weekly.clip(lower=0).to_numpy()))
-
-    def profile(dates: pd.Series) -> list[float]:
-        by = rows.groupby(dates.dt.day_of_week)["count"].sum()
-        by = by.reindex(range(7), fill_value=0).to_numpy(dtype=float)
-        mean = by.mean()
-        return [_round(v / mean, 3) if mean else 0.0 for v in by]
-
+    st = _structure(rows)
     stats = {
         "within14": _round(
             float(by_delay[by_delay.index < 14].sum()) / total, 3
@@ -217,12 +234,9 @@ def _derived(rows: pd.DataFrame) -> tuple[dict[str, float], dict[str, Any]]:
         else 0.0,
         "noise": _round(float(noise), 3),
     }
-    curves = {
-        "cdf": cdf,
-        "refdow": profile(rows["ref"]),
-        "repdow": profile(rows["rep"]),
-    }
-    return stats, curves
+    if st is None:
+        return stats, dict.fromkeys(CURVES)
+    return stats | ds.scalars(st), ds.curves(st)
 
 
 def _summary(rows: pd.DataFrame) -> tuple[dict[str, float], list[int], str]:
@@ -295,6 +309,14 @@ def summarise_batch(
     return out
 
 
+def reference_path(root: Path | str) -> Path:
+    """Return where the workflow writes the German and BDBV delays.
+
+    The `delay_reference` rule's output under ROOT's rounds.
+    """
+    return Path(root) / "rounds" / "report" / "delay-reference.json"
+
+
 def _stamp(*paths: Path) -> list[int]:
     return [n for p in paths for n in (p.stat().st_mtime_ns, p.stat().st_size)]
 
@@ -324,6 +346,23 @@ class Index:
         self.built: dict[str, dict[str, Any]] = {}
         self.encoded: dict[str, bytes] = {}
         self.lock = threading.Lock()
+
+    def reference(self) -> dict[str, Any]:
+        """Return the German and BDBV delays, empty until they are built.
+
+        Read again when the file changes (`reference_path`).
+        """
+        path = reference_path(self.root)
+        try:
+            stamp = _stamp(path)
+        except OSError:
+            return {}
+        if getattr(self, "_reference", (None, None))[0] != stamp:
+            try:
+                self._reference = (stamp, json.loads(path.read_text()))
+            except ValueError:
+                return {}
+        return self._reference[1]
 
     def sources(self) -> dict[str, Path]:
         """Return the sources under ROOT now."""
@@ -366,7 +405,7 @@ class Index:
                 "levels": levels,
                 "codes": [code[r["f"].get(k, "")] for r in rows],
             }
-        stat_names = list(rows[0]["s"]) if rows else []
+        stat_names = list(dict.fromkeys(k for r in rows for k in r["s"]))
         return {
             "source": name,
             "batches": sum(
@@ -382,13 +421,11 @@ class Index:
             "notes": self.notes,
             "factors": factors,
             "values": {k: [r["v"].get(k) for r in rows] for k in value_names},
-            "stats": {k: [r["s"][k] for r in rows] for k in stat_names},
+            "stats": {k: [r["s"].get(k) for r in rows] for k in stat_names},
             "series": [r["w"] for r in rows],
-            "derived": {
-                k: [r["x"][k] for r in rows]
-                for k in ("cdf", "refdow", "repdow")
-            },
+            "derived": {k: [r["x"].get(k) for r in rows] for k in CURVES},
             "delay_points": list(DELAY_POINTS),
+            "time_bins": ds.TIME_BINS,
         }
 
     def refresh(self) -> None:
@@ -571,6 +608,7 @@ def _detail(
         },
         "settings": listed,
         "latent": latent,
+        "structure": _structure(rows),
     }
 
 

@@ -1433,11 +1433,19 @@ def test_sim_reports_render_each_round_and_the_rounds_together(tmp_path):
         )
     assert f"sim_report.py render {rounds}/report/sim-report.html" in text
     assert "'Simulated outbreaks, rounds 4, 5'" in text
-    # From the batch files and the German triangle only: nothing of the
-    # rounds' records, and no BDBV data.
+    # The delays against the German development half's and the hub's
+    # releases, which the simulations dashboard reads too.
+    delays = f"{rounds}/report/delay-reference.json"
+    assert (
+        f"sim_report.py delays {triangle} 2022-02-10"
+        f" {tmp_path}/hub/data/daily.csv 42 {delays}"
+    ) in text
+    assert f"{rounds}/report/germany-dev.csv {delays} r4=" in text
+    assert "bdbvhub data" in text
+    # From the batch files, the German triangle and the hub's data only:
+    # nothing of the rounds' records.
     joined = "".join(blocks)
     assert "rule batch_record" not in joined
-    assert "bdbvhub.cli data" not in joined
 
 
 def test_the_comparison_scores_every_run_s_checkpoints(tmp_path):

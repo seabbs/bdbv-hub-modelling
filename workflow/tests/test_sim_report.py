@@ -1,5 +1,6 @@
 """The simulation report (workflow/scripts/sim_report.py)."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -89,12 +90,15 @@ def test_a_round_renders_one_self_contained_page(tmp_path):
     )  # fmt: skip
     de_path = tmp_path / "de.csv"
     de.to_csv(de_path, index=False)
+    delays = tmp_path / "delays.json"
+    delays.write_text(json.dumps(_reference()))
     out = tmp_path / "report" / "sim-report.html"
     sr.render(
         out,
         "Simulated outbreaks, round 1",
         ROOT / "paper" / "data" / "reference-values.csv",
         de_path,
+        delays,
         [f"r1={sims}:{summary}"],
     )
     page = out.read_text()
@@ -115,6 +119,10 @@ def test_a_round_renders_one_self_contained_page(tmp_path):
     assert "Fewer than 100 cases" in page
     # R(t) levels each run, so implausible R shows.
     assert "<h3>R(t)</h3>" in page
+    # The delays' structure against Germany's and BDBV's.
+    assert "<h2>3. Structure of the delays</h2>" in page
+    assert "Germany" in page
+    assert "BDBV" in page
 
 
 def test_shares_count_shifts_and_reactive_ones():
@@ -197,3 +205,110 @@ def test_r_levels_count_days_with_infections_by_threshold(tmp_path):
     page = sr.r_section({"r1": sims})
     assert "<h3>R(t)</h3>" in page
     assert "data:image/png;base64," in page
+
+
+def _wide(dates, locations):
+    rows = []
+    for loc in locations:
+        for d in dates:
+            row = {"date": d, "location": loc, "age_group": "00+"}
+            row |= {f"value_{k}d": 0 for k in range(81)}
+            row |= {"value_0d": 3, "value_2d": 1, "value_>80d": 0}
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def test_german_delay_rows_are_the_states_in_the_development_half():
+    dates = pd.date_range("2021-03-01", "2022-03-31").strftime("%Y-%m-%d")
+    wide = _wide(dates, ["DE", "DE-BY", "DE-BE"])
+    rows = sr.germany_delay_rows(wide, "2022-02-10")
+    assert set(rows["stratum"]) == {"DE-BY", "DE-BE"}
+    assert rows["ref"].min() == pd.Timestamp(sr.DEV_FIRST)
+    assert rows["ref"].max() < pd.Timestamp("2022-02-10")
+    delays = (rows["rep"] - rows["ref"]).dt.days
+    assert set(delays[rows["count"] > 0]) == {0, 2}
+
+
+def test_bdbv_delay_rows_are_province_changes_between_releases():
+    daily = pd.DataFrame(
+        {"vintage": ["2026-10-01", "2026-10-01", "2026-10-08",
+                     "2026-10-08", "2026-10-08", "2026-10-08"],
+         "location": ["CD", "CD-IT", "CD", "CD-IT", "CD-IT", "CD-IT"],
+         "onset_date": ["2026-10-01", "2026-10-01", "2026-10-01",
+                        "2026-10-01", "2026-10-03", "2026-09-01"],
+         "observed": [3, 3, 9, 5, 4, 7]}
+    )  # fmt: skip
+    daily["cutoff"] = daily["vintage"]
+    rows = sr.bdbv_delay_rows(daily, 42).sort_values(["ref", "rep"])
+    # The country is the provinces' total, not a stratum; onsets before
+    # the first release are left out.
+    assert set(rows["stratum"]) == {"CD-IT"}
+    got = [
+        (r.ref.strftime("%m-%d"), r.rep.strftime("%m-%d"), r.count)
+        for r in rows.itertuples()
+    ]
+    assert got == [
+        ("10-01", "10-01", 3),
+        ("10-01", "10-08", 2),
+        ("10-03", "10-08", 4),
+    ]
+
+
+def test_bdbv_delay_rows_leave_out_a_cumulative_first_release():
+    # A dump on 2026-08-01, more than 42 days before the next release's
+    # cut-off: left out as the backtests leave it out, so the first
+    # usable release is the first one read.
+    daily = pd.DataFrame(
+        {"vintage": ["2026-08-01", "2026-10-01", "2026-10-08"],
+         "location": "CD-IT",
+         "onset_date": ["2026-08-01", "2026-10-01", "2026-10-01"],
+         "observed": [40, 3, 5]}
+    )  # fmt: skip
+    daily["cutoff"] = daily["vintage"]
+    rows = sr.bdbv_delay_rows(daily, 42).sort_values(["ref", "rep"])
+    assert list(rows["rep"].dt.strftime("%m-%d")) == ["10-01", "10-08"]
+    assert list(rows["count"]) == [3, 2]
+    # Within the delay window the first release is kept.
+    kept = sr.bdbv_delay_rows(daily, 70)
+    assert "08-01" in set(kept["rep"].dt.strftime("%m-%d"))
+
+
+def _reference():
+    from flowlib import delay_structure as ds
+
+    rows = pd.DataFrame(
+        {"stratum": "A",
+         "ref": pd.date_range("2026-01-05", periods=60),
+         "count": 10}
+    )  # fmt: skip
+    rows["rep"] = rows["ref"] + pd.Timedelta(days=2)
+    s = ds.structure(rows)
+    entry = {"structure": s, "scalars": ds.scalars(s), "curves": ds.curves(s)}
+    return {
+        "germany": {"label": "Germany", **entry},
+        "bdbv": {"label": "BDBV", **entry},
+    }
+
+
+def test_the_delay_reference_has_germany_and_bdbv(tmp_path):
+    dates = pd.date_range("2021-03-01", "2021-06-30").strftime("%Y-%m-%d")
+    tri = tmp_path / "tri.csv"
+    _wide(dates, ["DE", "DE-BY"]).to_csv(tri, index=False)
+    daily = tmp_path / "daily.csv"
+    pd.DataFrame(
+        {"vintage": ["2026-10-01"] * 20 + ["2026-10-08"] * 20,
+         "location": "CD-IT",
+         "onset_date": [str(d.date()) for d in
+                        pd.date_range("2026-09-20", periods=20)] * 2,
+         "observed": [2] * 20 + [3] * 20}
+    ).assign(cutoff=lambda d: d["vintage"]).to_csv(
+        daily, index=False
+    )  # fmt: skip
+    got = sr.delay_reference(tri, "2022-02-10", daily, 42)
+    assert set(got) == {"germany", "bdbv"}
+    for entry in got.values():
+        assert {"short", "label", "structure", "scalars", "curves"} <= set(
+            entry
+        )
+    assert got["germany"]["structure"]["overall"]["mean"] == 0.5
+    json.dumps(got)

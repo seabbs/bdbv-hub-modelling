@@ -21,6 +21,9 @@ import numpy as np
 from jax import Array, lax
 from jax.scipy.special import gammaln, xlogy
 
+from nowcastbaselines.draws import DRAW_STEPS, poisson
+from nowcastutils.shapes import bucket
+
 from ._checks import assert_integerish, coerce, validate_reporting_triangle
 from .aggregate import identity, row_sums
 from .delays import estimate_and_apply_delay
@@ -900,29 +903,118 @@ def fit_sizes(added: np.ndarray, remaining: np.ndarray) -> np.ndarray:
     numpy.ndarray
         $\phi_k$, `[K]`.
     """
-    fitted = np.asarray(fit_by_horizon(added, remaining))
+    # `fit_by_horizon` with `fit_nb`, in NumPy but for the fit, so only
+    # the fit compiles, once per number of errors.
+    x = np.atleast_2d(np.asarray(added, np.float32))
+    mu = np.atleast_2d(np.asarray(remaining, np.float32))
+    fitted = np.array(
+        [_fit_column(x[:, k], mu[:, k]) for k in range(x.shape[1])]
+    )
     return np.where((remaining > 0).any(axis=0), fitted, PRIOR_SIZE)
 
 
+def _fit_column(x: Any, mu: Any) -> np.ndarray:
+    """`fit_nb` of one week back, checked in NumPy."""
+    xa = np.atleast_1d(np.asarray(x, np.float32))
+    mua = np.atleast_1d(np.asarray(mu, np.float32))
+    if xa.size == 0:
+        return np.asarray(np.nan)
+    if (xa < 0).any():
+        raise ValueError(
+            "Negative values detected in observations for uncertainty "
+            "estimation. fit_nb() requires non-negative integer "
+            "observations."
+        )
+    if (mua < 0).any():
+        raise ValueError(
+            "Negative values detected in predictions for uncertainty "
+            "estimation. fit_nb() requires non-negative predictions."
+        )
+    assert_integerish(xa, "x")
+    return np.asarray(_fit_nb_kernel(xa, mua))
+
+
 def sample_count(
-    key: Array, reported: Array, remaining: Array, size: Array
-) -> Array:
+    key: Array,
+    reported: Any,
+    remaining: Any,
+    size: Any,
+    samples: int | None = None,
+) -> np.ndarray:
     r"""Draw the count at the later release.
+
+    The draws are `reported + sample_nb(key, remaining, size)`, with the
+    arrays stacked `samples` times along a new first axis where given.
+    They are drawn flat, padded to `nowcastutils.shapes.bucket` of their
+    size (with `draws.DRAW_STEPS`), so one program serves many shapes:
+    the gamma draws are each element's own, and the Poisson draws are as
+    the unpadded ones (`nowcastbaselines.draws.poisson`).
 
     Parameters
     ----------
     key : jax.Array
         Random key.
-    reported : jax.Array
+    reported : array_like
         $Y$, of any shape.
-    remaining : jax.Array
+    remaining : array_like
         $\mathrm{rem}$, the shape of `reported`.
-    size : jax.Array
+    size : array_like
         $\phi_k$, the shape of `reported`.
+    samples : int, optional
+        Draws of each element.
 
     Returns
     -------
-    jax.Array
-        $X$, the shape of `reported`.
+    numpy.ndarray
+        $X$, float32, `[samples, *shape]`, or the shape of `reported`
+        without `samples`.
     """
-    return reported + sample_nb(key, remaining, size)
+    shape = np.shape(reported)
+    cells = int(np.prod(shape))
+    n = 1 if samples is None else int(samples)
+    width = bucket(cells)
+
+    def flat(x: Any) -> np.ndarray:
+        out = np.zeros(width, np.float32)
+        out[:cells] = np.asarray(x, np.float32).ravel()
+        return out
+
+    drawn = _sample_count(
+        key,
+        flat(reported),
+        flat(remaining),
+        flat(size),
+        np.int32(cells),
+        np.int32(n * cells),
+        bucket(n * cells, DRAW_STEPS),
+    )
+    out: np.ndarray = np.asarray(drawn)[: n * cells]
+    return out.reshape(shape if samples is None else (n, *shape))
+
+
+@partial(jax.jit, static_argnums=6)
+def _sample_count(
+    key: Array,
+    reported: Array,
+    remaining: Array,
+    size: Array,
+    cells: Array,
+    count: Array,
+    width: int,
+) -> Array:
+    """`sample_count` of `count` draws of `cells` elements, flat and padded.
+
+    Draw `i` is of element `i % cells`, as of the arrays stacked flat. The
+    padding draws nothing, with a size whose gamma draws are quick: JAX's
+    gamma draws loop until every element is accepted.
+    """
+    i = jnp.arange(width)
+    real = i < count
+    at = jnp.where(real, i % cells, 0)
+    mu = jnp.where(real, remaining[at], 0.0)
+    phi = jnp.where(real, size[at], 100.0)
+    k_gamma, k_pois = jax.random.split(key)
+    lam = jax.random.gamma(k_gamma, phi, mu.shape, dtype=mu.dtype) * mu / phi
+    draw = poisson(k_pois, lam, real).astype(mu.dtype)
+    ok = jnp.isfinite(mu) & jnp.isfinite(phi)
+    return reported[at] + jnp.where(ok, draw, jnp.nan)
