@@ -124,7 +124,7 @@ Teams without the capacity to set up specialist models could also use them direc
   - We first evaluated these models on held-out simulations.
   - To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 hospitalisation nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
   - We explored a range of senesitivity analyses to assess the impact of different design choices on model performance.
-  - These included: assessing the impact of using a baseline nowcast as input to the foundation model, fine-tuning on real data, removing the attention biases and lag series, and comparing different lag count rules and block structures.
+  - These included: assessing the impact of using a baseline nowcast as input to the foundation model, fine-tuning on real data, and removing the attention biases and lag series.
   - We aim to demonstrate the potential of foundation time series models fine-tuned on domain-specific synthetic data to improve infectious disease nowcasting and forecasting, and to provide a case study for incorporating domain knowledge into foundation models more generally.
   - Key references: [@Ansari2025; @Johnson2025].
 :::
@@ -151,18 +151,19 @@ Teams without the capacity to set up specialist models could also use them direc
 
 ::: {.callout-note title="Plan"}
 - Surveillance data for nowcasting are a reporting triangle: counts are reported by reference date, such as the date of symptom onset, and by reporting delay, where the most recent dates are incomplete because counts that have longer delays have not been reported yet [@hohle; @Wolffram2023].
-- For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series is complete up to the last date E. 
-- We also gave Chronos-2 one lagged series per place and reporting delay, each with the counts reported by that delay and missing until then (Figure 1B). The count series only has values up to E, whereas the lagged series can have values up to the latest data release. 
-- The last complete date E, corresponds to the latest data release minus the number of lagged series
-- Values of the lagged series up to E are past inputs, and values after E are known future inputs, which the model can use to forecast the count series.
+- We call the last date whose counts we treat as complete $E$. It is the date of the latest data release less the number of lagged series, $D$ (defined below).
+- For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series has values up to $E$.
+- We also gave Chronos-2 one lagged series per place and reporting delay, each with the counts reported by that delay and missing until then (Figure 1B). The lagged series can have values up to the latest data release.
+- Values of the lagged series up to $E$ are past inputs, and values after $E$ are known future inputs, which the model can use to forecast the count series.
 - Places nest, such as health zones within provinces within a country.
 - Chronos-2 takes every place's count and lagged series together, in one group we call a block. It then forecasts every place's count series.
 - The model can tell whether a series is a count series or a lagged series, because the lagged series are input as covariates. The model can also implicitly learn what length of reporting delay each lagged series represents by the number of missing data points.
 - However, the model is unable to tell which lagged series belong to which place's count series, or which places are related, such as a province and its health zones as they are all input into the same block.
 - To address this, we added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
-- At forecast time we set the number of lagged series per place, $D$. This is either estimated from the data, where enough data is available, or set by the user  for their setting.
+- At forecast time we set the number of lagged series per place, $D$. This is either estimated from the data, where enough data is available, or set by the user for their setting.
 - To estimate $D$, we look at each past reference date to find the first delay at which its reported count reaches 98% of its latest count. $D$ is then the smallest value that is at least one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
-- If not enough data is available for any of the refernce dates to settle, $D$ defaults to the whole release history (Supporting Information, *Lag count*).
+- If not enough data is available for any of the reference dates to settle, $D$ defaults to the whole release history (Supporting Information, *Lag count*).
+- In both case studies we set $D$ by hand, to 40 days for Germany and 42 days for Ebola (Case study 1; Case study 2).
 - Key references: [@Woo2024; @Yang2022].
 :::
 
@@ -258,6 +259,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 - We compared with the hub's models, relative to the hub's baseline, and evaluated as the hub did.
 - We scored as for held-out simulations, against the data as reported 40 days later, with 95% rather than 90% coverage as the hub's quantiles have no 5% or 95% level [@Wolffram2023].
 - Our models saw only reports made within 40 days of each reference date, so they forecast the count the truth holds.
+- We therefore set $D$ to 40 days for the zero-shot and fine-tuned models alike, rather than estimating it.
 - The hub's target is 7-day sums ending on each day from the nowcast date to 28 days before it.
 - We scored the hub's targets, and also our models' forecasts up to 4 weeks after the nowcast date (Supporting Information, *German nowcast hub*).
 - Each nowcast date is forecast once, so every 7-day sum comes from one forecast.
@@ -286,8 +288,9 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
   - These past rounds therefore informed that decision, and only rounds after the fine-tuned model's first submission are prospective for it.
 - **Forecasting.**
   - The hub's releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate $D$.
-  - We therefore set $D$ to 42 days at forecast time, as the random walk nowcast does, for the fine-tuned and zero-shot models alike.
-  - The fine-tuned model makes two forecasts at each nowcast date (Supporting Information, *Ebola forecast layout*).
+  - We therefore set $D$ to 42 days for the fine-tuned and zero-shot models and the random walk nowcast alike, based on our experience modelling the outbreak.
+  - Chronos-2 takes daily counts with daily lagged series and a weekly total row per place, and the hub's weekly targets come from that row in the same forecast.
+  - The fine-tuned model makes two forecasts at each nowcast date, as all zones together exceed the block size that fits in GPU memory (Supporting Information, *Ebola forecast layout*; *Fitting in GPU memory*).
   - One is a single block of the country, all provinces and the active health zones.
   - A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.
   - The other is one block per province, of the province and all its zones, cut into views as in training when over the block limit.
@@ -321,13 +324,11 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
 - We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub's releases, and compared it with the model fine-tuned on simulations.
 - We fine-tuned one model without the attention biases and one without lag series, and compared each with the main model.
-- We compared the rule for $D$ with a fixed 4 weeks or 28 days.
-- We compared forecasting all levels in one block with forecasting each level alone and with summing the lowest level.
-- We compared the random walks' rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
+- For the Ebola hub only, we compared the random walks' rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
 - We compared the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (Supporting Information, *Renewal model variants*).
 - We scored the real-data fine-tune on the German held-out half, and on the Ebola rounds after its last training release.
 - We compared the models without attention biases or lag series with the main model by validation loss and by scores on the German development half at each checkpoint.
-- We compared the copula settings on the German development half and the development simulations.
+- We set the copula settings on the Ebola release backtest before the Ebola study was held out (Supporting Information, *Choices tuned on development data*).
 - We scored the other comparisons as in the case study they apply to, relative to its baseline.
 :::
 
@@ -459,12 +460,8 @@ Fine-tuning on real data instead of simulations changed the German held-out scor
 
 Without the attention biases, the German development score changed by [X] at the final checkpoint, and without lag series by [X] (Supporting Information, *Attention biases for place and parent against none*; *Delays against no delays*).
 
-A fixed lag count of 4 weeks or 28 days changed scores by [X] against the rule that sets it from the data (Supporting Information, *Lag count*).
-
-Forecasting each level alone changed scores by [X], and summing the lowest level by [X], against forecasting all levels in one block (Supporting Information, *Ebola hub submissions*).
-
-The median rolling $\rho_p$ between German states was {{< meta evidence.rho.randomwalknowcast.rho_p >}} for the random walk nowcast and {{< meta evidence.rho.randomwalk.rho_p >}} for the random walk, and pairing changed the national score by [X] against no pairing (Supporting Information, *Impact of correlated trajectories*).
-Scoring Chronos-2's trajectories with independent cells or comonotone changed the energy score by [X] (Supporting Information, *Correlated trajectories*).
+On the Ebola hub, the median rolling $\rho_p$ between provinces was [X] for the random walk nowcast and [X] for the random walk, and pairing changed the national score by [X] against no pairing (Supporting Information, *Impact of correlated trajectories*).
+Scoring Chronos-2's Ebola trajectories with independent cells or comonotone changed the energy score by [X] (Supporting Information, *Correlated trajectories*).
 
 The renewal model using BVDOutbreakSize scored [X] relative to the main renewal model, and the main renewal model [X] relative to fitting each zone on its own (Supporting Information, *Renewal model variants*).
 

@@ -106,23 +106,32 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 
 #### Lag count
 
-::: {.callout-note title="Plan"}
-- Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
-- Each block or task has one lag count.
-- Each step first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
-- The lag count less one is the 98th percentile of these settling lags over the block's steps and places with a count.
-- Only steps seen for at least 1.5 times the lag count enter, so their latest count stands for their final one and right truncation does not bias the count short.
-- Steps before the first release are left out, as a first release that fills in earlier onsets measures when releases began, not a delay.
-- A lag on which no release fell carries the count of the lag before, as with weekly releases of daily data.
-- The estimate reads no release after the cut-off.
-- In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
-- The lag count is capped only by the history, keeping two steps of context before the longest lag.
-- With no step old enough to have settled, the block takes its whole release history, every step from the first release to the cut-off.
-- Training blocks use this lag count in 90% of blocks and the count scaled by a factor drawn from Normal(1, 0.05) in the other 10%.
-- At forecast time a study can fix the lag count instead, for the zero-shot and fine-tuned models alike.
-- The Ebola case study fixes it at 42 days, as the random walk nowcast uses, because too few onset days in the hub's releases have settled to estimate it.
-- A user can set a fixed count instead.
-:::
+The lag count $D$ is the number of lagged series per place.
+It sets the last complete date $E$, the latest release less $D$.
+We either estimate $D$ from the data or set it by hand.
+
+**Estimating $D$.**
+We estimate $D$ from the release history up to the cut-off, in four steps.
+
+1. For each reference date first published after releases began, we find the first reporting delay at which its reported count reaches 98% of its latest count. We call this its settling delay.
+2. We keep only reference dates seen for at least $1.5D$ days, so that their latest count stands for their final count and recent dates do not bias $D$ short.
+3. $D$ is one more than the 98th percentile of the settling delays over the kept dates and places with a count.
+4. As step 2 depends on $D$, we take the smallest $D$ that satisfies step 3.
+
+Reference dates before the first release are left out, as a first release that fills in earlier dates measures when releases began, not a delay.
+A delay on which no release fell carries the count of the delay before, as with weekly releases of daily data.
+If no reference date is old enough to have settled, $D$ is the whole release history.
+$D$ is capped only by the history, keeping two steps of context before the longest lag.
+Training blocks use the same rule, reading the simulation's releases up to the cut-off.
+In 10% of training blocks we scale $D$ by a factor drawn from Normal(1, 0.05), so the model can handle $D$ set slightly differently.
+The rule is the same for the zero-shot and fine-tuned models.
+<!-- TODO: compare with baselinenowcast's quantile delay rule, truncate_to_quantile (#1279), and cite @Johnson2025. -->
+
+**Setting $D$ by hand.**
+A user can instead fix $D$ for their setting, and both case studies do so.
+
+- For the German hub we set $D$ to 40 days, the delay at which the hub takes its truth, as our models see only reports made within 40 days of each reference date [@Wolffram2023].
+- For the Ebola hub we set $D$ to 42 days, based on our experience modelling the outbreak. The hub's releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate $D$. The random walk nowcast uses the same 42 days.
 
 ### Synthetic data generation
 
@@ -805,7 +814,7 @@ We score the country and each province by the CRPS and 90% coverage, and each le
 - We score Chronos-2's trajectories with this copula, with every cell drawn independently, and with one level per trajectory across each series' steps (comonotone), as bounds on the dependence.
 - We score the random walk nowcast's trajectories as submitted.
 - We score trajectories by the energy score on counts and on $\log(x + 1)$ counts.
-- We score Ebola trajectories only at the final held-out evaluation, and German and synthetic trajectories now.
+- We score trajectories for the Ebola hub only, at the final held-out evaluation.
 - Ebola trajectory scores use the same truth as every other Ebola score, with $D$ the 98% point of the hub data's national reporting delay.
 :::
 
@@ -1154,9 +1163,13 @@ Zero-shot Chronos-2 and the newest checkpoint of the runs with and without atten
 
 ### Impact of correlated trajectories
 
-- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half and the development simulations, at the national level and for provinces.
+::: {.callout-note title="Plan"}
+- The pairing analysis moves to the Ebola hub only. The figure and the $\rho_p$ values below still come from the German first half and the development simulations, and the workflow needs updating to read the Ebola release backtest.
+:::
+
+- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the Ebola hub, at the national level and for provinces.
 - The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.
-- The median rolling $\rho_p$ between German states over the first half's nowcasts is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} nowcasts falling back to the prior.
+- The median rolling $\rho_p$ between provinces is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} nowcasts falling back to the prior.
 
 ![Each score of `randomwalk` and `randomwalknowcast` with the rolling $\rho_p$ relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level's places and weeks on the log scale. Development data only.](build/figures/si/copula-impact.png){#fig-copula-impact}
 
