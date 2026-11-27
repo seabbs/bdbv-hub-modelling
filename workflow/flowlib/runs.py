@@ -143,8 +143,9 @@ def real_blocks(run: Run) -> dict[str, str]:
 def real_trainer_options(run: Run) -> str:
     """Return a real run's `finetune-real` options from its recipe.
 
-    Its checkpoints (`prefixes`, in steps, the last the steps trained),
-    the series bias and its rate, the learning rate, batch size and note.
+    Its checkpoints (`prefixes`, thousandths of the whole training), the
+    series bias and its rate, the learning rate, batch size, and the steps
+    its passes aim at and their cap.
     """
     f = run.ft
     bias = f"--series-bias --bias-lr {f['bias_lr']}" if f["series_bias"] else ""
@@ -156,6 +157,8 @@ def real_trainer_options(run: Run) -> str:
             bias,
             f"--learning-rate {f['learning_rate']}",
             f"--batch-size {f['batch_size']}",
+            option("--target-steps", f.get("target_steps")),
+            option("--max-passes", f.get("max_passes")),
         )
         if a
     )

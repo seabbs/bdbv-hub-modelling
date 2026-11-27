@@ -2,12 +2,15 @@
 #
 # A run with `data: real` (workflow/config.yaml `runs.realonly`) trains
 # Chronos-2 from base on the German development half and the public BDBV
-# releases, with the main run's recipe: the reporting triangle with its
-# lag series, every level in one block with its 7-day rows, and the
-# attention biases. Its blocks are cut once (`realonly_blocks_germany`,
+# releases, with the main run's recipe. Its blocks are the studies'
+# forecast tasks laid out as the fine-tuned model forecasts them
+# (nowcastfoundation.finetune.realtasks): the reporting triangle with its
+# lag series at the data rule's lag count, every level in its blocks with
+# their 7-day rows. It trains with the attention biases, in passes. Its
+# blocks are cut once (`realonly_blocks_germany`,
 # `realonly_blocks_bdbv`; the cut is packages/nowcastfoundation/config/
 # finetune.toml `[realdata_germany]`, `[realdata_bdbv]`), and each
-# checkpoint n<steps> is trained by `train_real` from the one before
+# checkpoint n<N> (thousandths of the training) is trained by `train_real` from the one before
 # (`finetune-real`, nowcastfoundation.finetune.realdata). Its checkpoints
 # are then scored, reported and published by the rules every run takes
 # through the {run} wildcard (rules/score.smk, rules/report.smk,
@@ -24,9 +27,9 @@
 
 
 rule realonly_blocks_germany:
-    # The German triangle as available on the last day of the development
-    # half, cut at every nowcast date with truth by then, from the daily
-    # and weekly releases, each German task whole.
+    # Every nowcast date with truth by the last day of the development
+    # half: its German tasks (Germany with its states, with its ages),
+    # from the triangle as available then, laid out as forecast.
     wildcard_constraints:
         run=REAL_RUN,
     input:
@@ -37,17 +40,18 @@ rule realonly_blocks_germany:
         f"{RUN}/logs/real-germany.log",
     conda:
         TOOLS_ENV
-    threads: 4
+    params:
+        block_limit=local_or_ft("BLOCK_LIMIT", "block_limit"),
     shell:
         "uv run python -m nowcastgermany.finetune_blocks {input} {output} "
-        "--realdata --workers {threads} > {log} 2>&1"
+        "--realdata --block-limit {params.block_limit} > {log} 2>&1"
 
 
 rule realonly_blocks_bdbv:
-    # Every public BDBV release up to the one in `[realdata_bdbv]`: daily
-    # blocks of the country, provinces and zones at each daily release,
-    # weekly blocks from the release's delay table, truth masked after
-    # `truth_until`.
+    # Every public BDBV release up to the one in `[realdata_bdbv]`: its
+    # Ebola task laid out as forecast (the joint block of the country,
+    # provinces and active zones, a block per province), truth masked
+    # after `truth_until`.
     wildcard_constraints:
         run=REAL_RUN,
     input:
@@ -67,7 +71,7 @@ rule realonly_blocks_bdbv:
 
 
 rule train_real:
-    # Checkpoint n<steps> of a real run, resumed from the state kept with
+    # Checkpoint n<N> of a real run, N thousandths of its training, resumed from the state kept with
     # the checkpoint before, on a GPU of its own as a segment is.
     wildcard_constraints:
         run=REAL_RUN,

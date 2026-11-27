@@ -137,10 +137,14 @@ finetune:
   # (real data alone: the German development half and the public BDBV
   # releases, packages/nowcastfoundation/config/finetune.toml
   # `[realdata_germany]` and `[realdata_bdbv]`). A real run cuts its
-  # blocks (rules/realdata.smk), trains with `finetune-real`
-  # (nowcastfoundation.finetune.realdata) for its last prefix in steps,
-  # with this recipe (layout, series bias, learning rates, batch size,
-  # block limit), and saves each prefix as a checkpoint, n<steps>.
+  # blocks (rules/realdata.smk): each slice's forecast task laid out as
+  # the fine-tuned model forecasts it, at the data rule's lag count. It
+  # trains with `finetune-real` (nowcastfoundation.finetune.realdata)
+  # with this recipe (series bias, learning rates, batch size, block
+  # limit) in passes over every block, as many as give `target_steps`,
+  # at most `max_passes`, the learning rate falling to zero over them.
+  # Its prefixes are thousandths of the whole training, each saved as a
+  # checkpoint n<N>.
   data: simulations
   # Part of the settings hash: changing it changes every checkpoint's hash.
   note: 4,800 simulations, 32 cuts
@@ -165,15 +169,19 @@ runs:
   realdata: {real_training: germany}
   # Chronos-2 fine-tuned on real data alone (`foundation_real`, the SI's
   # "Fine-tuning on real data"): Run A's recipe, layout and attention
-  # biases on the German development half and the BDBV releases, for
-  # Chronos-2's default 1,000 steps, checkpoints in steps. Its final
-  # checkpoint is released as realdata-ft-<hash>, which `realdata` in
+  # biases on the German development half and the BDBV releases. It
+  # trains in passes to Run A's steps (its final checkpoint's 82,040,
+  # chronos-slots-66a7a630d729), at most 20 passes, with checkpoints at
+  # 1/8, 1/4, 1/2 and all of them; the final one is reported, with no
+  # choice on real data. Its final checkpoint is released as realdata-ft-<hash>, which `realdata` in
   # packages/nowcastfoundation/config/finetune.toml pins. One target
   # cuts, trains, scores and publishes it: `task workflow:finetune-realonly`
   # (rule finetune_realonly). The paper's `realonly` comparison.
   realonly:
     data: real
     prefixes: [125, 250, 500, 1000]
+    target_steps: 82040
+    max_passes: 20
     eval: local
     note: real data alone, German development half and BDBV releases
   # Run B: Run A's recipe with the release
