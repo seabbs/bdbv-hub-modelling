@@ -36,6 +36,7 @@ include: "rules/evaluate.smk"
 include: "rules/publish.smk"
 include: "rules/score.smk"
 include: "rules/report.smk"
+include: "rules/realdata.smk"
 include: "rules/paper.smk"
 include: "rules/monitor.smk"
 

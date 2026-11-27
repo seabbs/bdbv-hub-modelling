@@ -17,7 +17,8 @@ def test_the_real_only_run_is_run_a_s_recipe_on_real_data():
     # its attention biases and its learning rates.
     cfg, found = _found()
     a, real = found["runa"], found["realonly"]
-    assert real.real and not a.real
+    assert real.real
+    assert not a.real
     assert real.ft["data"] == "real"
     for key in ("series_bias", "layout", "learning_rate", "bias_lr"):
         assert real.ft[key] == a.ft[key], key

@@ -51,6 +51,15 @@ class Run:
         return {n: p for p, n in segments.segments(self.ft["prefixes"])}
 
     @property
+    def real(self) -> bool:
+        """Whether the run trains on real data alone (`data: real`).
+
+        Its prefixes are steps, and it trains with `finetune-real`
+        (rules/realdata.smk), not on the simulation rounds.
+        """
+        return self.ft.get("data", "simulations") == "real"
+
+    @property
     def check(self) -> int:
         """The checkpoint checked against zero-shot."""
         return int(self.ft.get("check_at", 1000))
@@ -85,9 +94,12 @@ def resolve(
         ft = grids.resolve(ft, config["grid_rounds"])
         if local.get("SIMS_FROM"):
             ft["sims_from"] = local["SIMS_FROM"]
-        segments.check_chunks(ft["prefixes"], ft["chunk"], ft["outbreaks"])
+        run = Run(name, ft, f"{local['ROOT']}/runs/{name}")
+        if not run.real:
+            # Chunks of outbreaks; a real run's prefixes are steps.
+            segments.check_chunks(ft["prefixes"], ft["chunk"], ft["outbreaks"])
         segments.check_eval(ft["eval"])
-        out[name] = Run(name, ft, f"{local['ROOT']}/runs/{name}")
+        out[name] = run
     return out
 
 
@@ -118,6 +130,35 @@ def resume_options(run: Run, n: int) -> str:
 def real_training_blocks(run: Run) -> str:
     """Return the run's real-data blocks (rule real_training_blocks)."""
     return f"{run.dir}/real-training.pkl"
+
+
+def real_blocks(run: Run) -> dict[str, str]:
+    """Return a real run's block files (rules realonly_blocks_*)."""
+    return {
+        "germany": f"{run.dir}/real/germany.pkl",
+        "bdbv": f"{run.dir}/real/bdbv.pkl",
+    }
+
+
+def real_trainer_options(run: Run) -> str:
+    """Return a real run's `finetune-real` options from its recipe.
+
+    Its checkpoints (`prefixes`, in steps, the last the steps trained),
+    the series bias and its rate, the learning rate, batch size and note.
+    """
+    f = run.ft
+    bias = f"--series-bias --bias-lr {f['bias_lr']}" if f["series_bias"] else ""
+    prefixes = " ".join(str(p) for p in f["prefixes"])
+    return " ".join(
+        a
+        for a in (
+            f"--prefixes {prefixes}",
+            bias,
+            f"--learning-rate {f['learning_rate']}",
+            f"--batch-size {f['batch_size']}",
+        )
+        if a
+    )
 
 
 def trainer_options(run: Run) -> str:

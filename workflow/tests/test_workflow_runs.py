@@ -22,6 +22,7 @@ def test_the_committed_runs_are_run_a_its_variants_and_run_b():
         "noslots",
         "nodelays",
         "realdata",
+        "realonly",
         "runb",
     ]
 

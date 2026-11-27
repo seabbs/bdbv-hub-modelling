@@ -156,6 +156,18 @@ The state carries the learning-rate schedule, the step, the batch position and t
 
 Outputs are in `<ROOT>/runs/<run>/train/n<N>/`.
 
+### Real data alone (`rules/realdata.smk`)
+
+A run with `data: real` trains on real data alone, with no simulations: the `realonly` run, whose final checkpoint `foundation_real` loads (the SI's "Fine-tuning on real data").
+It is not the `realdata` run, which mixes German blocks into Run A's simulations (`real_training_blocks` above).
+Its recipe is Run A's: the reporting triangle with its lag series, every level in one block with its 7-day rows, the attention biases, the learning rates and the batch size; only the data differ.
+Its prefixes are steps, to Chronos-2's default 1,000.
+
+- `realonly_blocks_germany`: the German triangle as available on the last day of the development half (2022-02-09), cut at every nowcast date whose truth is at least 40 days old by then (2021-04-20 to 2021-12-03), from the daily releases with 7-day rows and the weekly releases, each German task whole (Germany with its states, or with its age groups), at release lags taken in turn (`nowcastgermany.finetune_blocks --realdata`, `<run>/real/germany.pkl`). The window is `[realdata_germany]` in `packages/nowcastfoundation/config/finetune.toml`.
+- `realonly_blocks_bdbv`: every public BDBV release up to `[realdata_bdbv]` `release` (2026-11-08), from the hub's tidy data (`hub_data`): daily blocks at each daily release of the country, its provinces and their zones in one block with 7-day rows, cut into the simulated blocks' views over the block limit, and weekly blocks at each Saturday from the release's delay table, at every lag, with the truth masked after `truth_until` (`nowcastbdbv.finetune_blocks`, `<run>/real/bdbv.pkl`).
+- `train_real`: checkpoint `n<steps>` on the GPU, resumed from the state kept with the one before (`finetune-real`, `nowcastfoundation.finetune.realdata`). The blocks of the last 14 German nowcast dates are held out and their loss is the checkpoint's held-out loss.
+- `finetune_realonly`: every checkpoint of each real run, its German unit (`score_run_germany`), the run's tables (`run_table`, `horizon_table`) and German report (`german_report`), and the final checkpoint's release, `realdata-ft-<hash>` (`verify_checkpoint`, `publish_checkpoint`). Run it with `task workflow:finetune-realonly` on a machine with a GPU and the German and BDBV data (`germany_triangle`, `hub_data` fetch them), then pin the release's hash as `realdata` in `packages/nowcastfoundation/config/finetune.toml`.
+
 ## 3. Publish (`rules/publish.smk`)
 
 - `verify_checkpoint`: the checkpoint's hash recomputes from its commit (`finetune-verify`).
