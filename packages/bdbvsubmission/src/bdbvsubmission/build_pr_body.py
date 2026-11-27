@@ -329,12 +329,12 @@ def fit_line(provenance: Mapping[str, Any]) -> str:
             f"{head}: `{store['model']}` {what} from commit "
             f"`{store['commit'][:7]}` (key `{store['key']}`, {made} "
             f"{store['fitted_at']}); current code key `{current}`, "
-            f"which the fit store lacks (fit-store commit `{where}`)."
+            f"which the fit store lacks (fit store version `{where}`)."
         )
     return (
         f"{head}: read from the fit store, the `{store['model']}` {what} at "
         f"{store['origin']} (key `{store['key']}`, {made} at "
-        f"`{store['commit'][:7]}`, fit-store commit `{where}`)."
+        f"`{store['commit'][:7]}`, fit store version `{where}`)."
     )
 
 

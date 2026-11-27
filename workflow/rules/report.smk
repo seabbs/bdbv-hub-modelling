@@ -514,7 +514,7 @@ rule ft_check:
 # the round, with the wk R_t quantiles, the gate's pick and the renewal
 # fits' convergence (workflow/scripts/this_round_report.py). No scores.
 # It reruns when <ROOT>/hub/round/run.txt (the run and its status),
-# <ROOT>/hub/round/store.txt (the fit store's commit) or
+# <ROOT>/hub/round/store.txt (the fit store's version) or
 # <ROOT>/hub/round/submissions.txt (the hub's newest model-output commit)
 # changes, which workflow/scripts/hub_watch.sh writes. Not part of `all`.
 

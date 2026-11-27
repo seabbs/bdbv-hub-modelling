@@ -5,8 +5,8 @@ The fitted models are slow, so the docs never fit them. The random
 walks (`SAMPLE_FREE`) are stored the same way, so the submission, the
 backtest and the docs read one forecast of each at each origin.
 The Fit store workflow (`.github/workflows/fit-store.yml`) fits each
-(model, origin) pair once and commits the result to the `fit-store`
-branch, one file per fit:
+(model, origin) pair once and stores the result in the `fit-store`
+Actions artifact (`bdbvhub.store.artifact`), one file per fit:
 
 ```text
 <model>/<origin>/<key>.json.gz
