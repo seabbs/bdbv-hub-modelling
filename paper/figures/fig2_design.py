@@ -183,12 +183,12 @@ def node(
         g.text(tx, ty + 8.8, sub, size=SMALL, fill=MUTED, lead=1.25)
 
 
-# Panel A: the ablations of the main fine-tuned model, name and glyph.
+# Panel A: the ablations of the main fine-tuned model: name, note, glyph.
 ABLATIONS = (
-    ("No biases", (True, ())),
-    ("Same place only", (True, ("same",))),
-    ("Parent and child only", (True, ("parent",))),
-    ("No lags", (False, ALL_BIASES)),
+    ("No attention biases", "", (True, ())),
+    ("Same place", "attention bias only", (True, ("same",))),
+    ("Parent and child", "attention biases only", (True, ("parent",))),
+    ("No lag series", "", (False, ALL_BIASES)),
 )
 
 
@@ -197,7 +197,7 @@ def panel_a(g: Svg, oy: float) -> float:
     g.label(0, oy + 9, "A", "What we fine-tune Chronos-2 on")
     top = oy + 22
     # Column positions: root, branch split, model, ablation leaves.
-    lw, lh, lgap = 124.0, 18.0, 4.0
+    lw, lh, lgap = 124.0, 22.0, 3.0
     lx = WIDTH - lw
     mw = 132.0
     mx = lx - 30 - mw
@@ -259,7 +259,7 @@ def panel_a(g: Svg, oy: float) -> float:
         anchor="end",
     )
     # The main fine-tuned model and its ablations.
-    for k, (name, glyph) in enumerate(ABLATIONS):
+    for k, (name, sub, glyph) in enumerate(ABLATIONS):
         y = ay + k * (lh + lgap)
         link(
             g,
@@ -270,7 +270,7 @@ def panel_a(g: Svg, oy: float) -> float:
             stroke=MUTED,
             sw=0.8,
         )
-        node(g, lx, y, lw, lh, name, glyph=glyph)
+        node(g, lx, y, lw, lh, name, sub=[sub] if sub else None, glyph=glyph)
     node(
         g,
         mx,
@@ -278,7 +278,7 @@ def panel_a(g: Svg, oy: float) -> float:
         mw,
         main_h,
         "Fine-tuned",
-        ["all biases"],
+        ["all attention biases"],
         glyph=(True, ALL_BIASES),
         main=True,
     )
@@ -334,12 +334,26 @@ MODELS = (
 )
 
 
+# Panel B: one colour per model, its node's stripe and its links
+# (colour-blind safe, after Okabe and Ito and Tol).
+MODEL_COLOURS = {
+    "Fine-tuning ablations": "#AA3377",
+    "Zero-shot, complete counts": "#E69F00",
+    "Zero-shot, reporting triangle": "#56B4E9",
+    "Nowcast \u2192 Chronos-2": "#B5A33A",
+    "Fine-tuned": ACCENT,
+    "Random walk nowcast": "#D55E00",
+    "Renewal models": "#555555",
+    "Real-data fine-tune": "#332288",
+}
+
+
 def panel_b(g: Svg, oy: float) -> float:
     """Draw panel B, the web of which models run in which studies."""
     g.label(0, oy + 9, "B", "How the models are used")
     top = oy + 22
     # Left: the models.
-    mw, mh, mgap = 150.0, 16.0, 7.0
+    mw, mh, mgap = 156.0, 16.0, 7.0
     ys = [top + k * (mh + mgap) for k in range(len(MODELS))]
     bottom = ys[-1] + mh
     # Right: the studies, spread over the same height.
@@ -358,7 +372,7 @@ def panel_b(g: Svg, oy: float) -> float:
         pad = 7.0
         for k, i in enumerate(models):
             port[(i, s)] = sy[s] + pad + k * (sh - 2 * pad) / (n - 1)
-    # Links, grey first and the fine-tuned model's on top.
+    # Links in each model's colour, the fine-tuned model's on top.
     order = sorted(
         range(len(MODELS)), key=lambda i: MODELS[i][0] == "Fine-tuned"
     )
@@ -376,8 +390,8 @@ def panel_b(g: Svg, oy: float) -> float:
                 y1,
                 sx,
                 y2,
-                stroke=ACCENT if main else LINE,
-                sw=1.1 if main else 0.8,
+                stroke=MODEL_COLOURS[name],
+                sw=1.2 if main else 0.9,
             )
             if label:
                 labels.append((i, s, y1, y2, label))
@@ -385,6 +399,7 @@ def panel_b(g: Svg, oy: float) -> float:
                 stars.append((sx, y2))
     for i, (name, glyph, _) in enumerate(MODELS):
         node(g, 0, ys[i], mw, mh, name, glyph=glyph, main=name == "Fine-tuned")
+        g.rect(mw - 3, ys[i] + 2, 3, mh - 4, fill=MODEL_COLOURS[name], rx=1)
     for s, (name, tag) in enumerate(STUDIES):
         g.rect(sx, sy[s], sw_, sh, fill=PANEL, stroke=LINE, sw=0.6, rx=3)
         cy = sy[s] + sh / 2
@@ -405,8 +420,8 @@ def panel_b(g: Svg, oy: float) -> float:
     x = 0.0
     items = (
         ("star", "submitted to the Ebola hub"),
-        ("same", "same-place bias"),
-        ("parent", "parent and child biases"),
+        ("same", "same-place attention bias"),
+        ("parent", "parent and child attention biases"),
     )
     for kind, words in items:
         if kind == "star":
