@@ -186,25 +186,27 @@ Teams without the capacity to set up specialist models could also use them direc
 ### Fine-tuning
 
 ::: {.callout-note title="Plan"}
-- We fine-tuned Chronos-2 on the simulated data on one machine, with its default LoRA recipe, using PEFT.
-- LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (Figure 1C; Supporting Information, *LoRA*).
+- We fine-tuned Chronos-2 on the simulated data on one machine, with its default LoRA (low-rank adaptation) recipe, using PEFT.
+- Chronos-2 has many weights that are learned from a large pretraining dataset. Updating all of these weights would be very computationally expensive. In contrast, LoRA trains a small update to about 1% of the model's weights rather than retraining them all (Figure 1C; Supporting Information, *LoRA*).
 - We trained on {{< meta results.training.simulations >}} simulations, each drawing its settings from the grid independently.
-- The loss is Chronos-2's quantile loss over the nowcast steps and one week ahead, so fine-tuning does not change its longer-range forecasting (Supporting Information, *Loss*).
-- The learning rate falls linearly to zero over these simulations.
-- We cut up to 14 training blocks from each simulation.
-- A block is daily, 3-day or weekly.
-- A daily block can also have one extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums.
-- In 30% of blocks releases start late, so the first release fills in earlier reference dates, as the Ebola hub's first release did.
-- 5% of blocks have no lag series, as when only the latest data are at hand.
-- Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series.
-- In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later.
-- Training blocks set $D$ by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle $D$ set slightly differently.
+- During training the loss is Chronos-2's quantile loss over the nowcast steps and one week ahead (Supporting Information, *Loss*). This means the fine-tuning focuses on improving the nowcasting task, so the model learns the reporting process simulated in layers 2 to 5 of the synthetic data generation and tries to leave the longer-range forecasting performance of the pretrained model intact.
+- The learning rate falls linearly to zero over these simulations, allowing training to stabilise [@chronos_forecasting].
+- We cut up to 32 training blocks of different sizes from each simulated outbreak.
+- We varied the blocks so that during fine-tuning the model sees a range of different reporting formats found in real surveillance data. This may allow the model to learn how to handle different reporting scenarios. The variations include:
+  - Blocks can be daily, 3-day or weekly, reflecting the different time steps found in real surveillance data.
+  - Daily blocks can also have an extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums, allowing the model to learn how to handle different methods of aggregating over time.
+  - In 15% of blocks the releases start late, so the first release fills in earlier reference dates, as the Ebola hub's first release did. This allows the model to learn how to handle situations where reporting starts partway through an outbreak resulting in missing lag values for earlier dates.
+  - 5% of blocks have no lag series, so the model only sees counts up to the last complete date, as when no lagged series are available.
+  - Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series, so the model sees both single and multiple places.
+  - In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later. This reflects situations where the sum of individual locations does not equal the national count or may have a different reporting delay.
+  - Training blocks set $D$ by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle $D$ set slightly differently.
+
 - We saved checkpoints at {{< meta results.training.checkpoints >}} simulations.
-- At each checkpoint we checked that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*).
-- We report the final checkpoint, where the learning rate reaches zero, and selected no checkpoint on real data.
+- At each checkpoint we monitored whether the 7-day rolling sum forecasts agree with the sums of the daily forecasts, and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*). If they were rough, this would imply that the model is forecasting a weekday pattern that cannot be true for a rolling forecast.
+- We report the final checkpoint, where the learning rate reaches zero and not the checkpoint with the best validation score.
 - Blocks were limited to what fits in the memory of our available GPUs, and we made several approximations to fit within this (Supporting Information, *Fitting in GPU memory*).
-- We cut a set of places too large for one block into views, in training and at forecast time alike.
-- Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces (Supporting Information, *Fitting in GPU memory*).
+- Each block can hold up to 1,000 series. If a set of places exceeds this limit then the block is split into views, in training and at forecast time alike. 
+- Each view is a subtree, such as a province with its zones, or the aggregated top of the country and its provinces. Places in different views cannot inform each other than through aggregated totals (Supporting Information, *Fitting in GPU memory*).
 - Figure 1 shows the simulation, the model inputs, fine-tuning and forecasting.
 - TODO: replace the Supporting Information's dashboard screenshot with a static render of the finished run from the workflow.
 - Key references: [@Ansari2025; @Hu2021; @Das2024b].
