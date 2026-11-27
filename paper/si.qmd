@@ -24,6 +24,411 @@ One SI section per paper section.
 
 ## Methods
 
+### Foundation model
+
+::: {.callout-note title="Plan"}
+- We describe how Chronos-2 works, with a schematic.
+- Key references: [@Ansari2025].
+:::
+
+#### Group attention
+
+- In attention, each series updates its representation as a weighted mix of the others, with weights from how well its query matches their keys.
+- Chronos-2 attends over time within each series, then over the series of a block at each time step, which is group attention [@Ansari2025].
+- At one time step, row $i$ of a block (a place's count or one of its lag series) attends to row $j$ with weight
+$$
+a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij}\right),
+$$
+where $q_i$ and $k_j$ are the query and key vectors of one head in one layer, and $M_{ij}$ is the group mask, $0$ when rows $i$ and $j$ are in the same block and $-\infty$ otherwise.
+- Chronos-2 does not divide the scores by the square root of the key dimension.
+
+Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
+Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
+
+### Model inputs
+
+#### Attention biases
+
+Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
+
+- We add three learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
+- They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
+- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the {{< meta results.training.simulations >}} simulations.
+- We identify places by name within each block, with no limit on the number of places.
+- A place's parent is the nearest prefix of its name in the block, else the country.
+- Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
+- The biases follow Moirai's any-variate attention bias [@Woo2024], and the relative position biases of T5 [@Raffel2020] and the structural biases of Graphormer [@Ying2021].
+- In Moirai's ablation, additive learned variate embeddings gave a normalised MAE of 0.904 on the Monash benchmark, against 0.655 with the attention bias [@Woo2024].
+
+::: {#tbl-attention-biases}
+| Relation | Pairs of series | Parameters |
+|---|---|---|
+| Same place | A series attending to another series of its place, its count or a lag | One scalar per layer and head, starting at zero |
+| Up | A child place's series attending to its parent's series | One scalar per layer and head, starting at zero |
+| Down | A parent place's series attending to its children's series | One scalar per layer and head, starting at zero |
+
+The learned biases added to Chronos-2's group-attention scores.
+:::
+
+
+- Our change adds a learned nudge to those weights for each pair of rows, by their relation (same place, child to parent, parent to child), so the model can tell which lags belong to which count.
+- Each row $i$ belongs to a place $P(i)$, and each place $p$ has a parent $\pi(p)$ in the block, or none.
+- We add a learned bias for each relation $r$ to the scores:
+$$
+a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij} + \sum_{r} b_r^{(l,h)}\,\mathbb{1}\!\left[(i,j) \in R_r\right]\right),
+$$
+with one scalar $b_r^{(l,h)}$ per relation $r$, layer $l$ and head $h$, and $b_r^{(l,h)} = 0$ at the start.
+- The relations are the pairs of rows in @tbl-attention-biases:
+$$
+\begin{aligned}
+R_\text{same} &= \{(i, j) : i \neq j,\ P(i) = P(j)\},\\
+R_\text{up} &= \{(i, j) : P(j) = \pi(P(i))\},\\
+R_\text{down} &= \{(i, j) : P(i) = \pi(P(j))\}.
+\end{aligned}
+$$
+- A pair in no relation gets no bias, as in Moirai's any-variate attention [@Woo2024] and TableFormer's relation biases [@Yang2022].
+
+#### Mixed-frequency blocks
+
+- One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
+- A training block is daily, 3-day or weekly, or daily with one aggregate row per place (@tbl-block-layouts).
+- A place's aggregate row holds its 3-day or weekly totals,
+$$
+y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} & \text{if day } t \text{ ends a period of } k \text{ days},\\ \text{missing} & \text{otherwise,} \end{cases}
+$$
+where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or $k = 3$ for 3-day totals.
+- The aggregate row has no lag series of its own.
+- It belongs to its place, so it is in that place's same-place relation.
+- The loss counts the aggregate row only on period-end days, where $m_{n,t} = 1$, and its missing days have $m_{n,t} = 0$.
+- Each block's periods end on a day drawn at random, so its totals can end on any weekday.
+- Other daily blocks instead have a row per place with its rolling 7-day or 3-day sum.
+- The rolling row has a value on every day and the loss counts it on every day, as the German target's 7-day sums are.
+
+#### Lag count
+
+::: {.callout-note title="Plan"}
+- Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
+- Each block or task has one lag count.
+- Each step first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
+- The lag count less one is the 98th percentile of these settling lags over the block's steps and places with a count.
+- Only steps seen for at least 1.5 times the lag count enter, so their latest count stands for their final one and right truncation does not bias the count short.
+- Steps before the first release are left out, as a first release that fills in earlier onsets measures when releases began, not a delay.
+- A lag on which no release fell carries the count of the lag before, as with weekly releases of daily data.
+- The estimate reads no release after the cut-off.
+- In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
+- The lag count is capped only by the history, keeping two steps of context before the longest lag.
+- With no step old enough to have settled, the block takes its whole release history, every step from the first release to the cut-off.
+- Training blocks use this lag count in 90% of blocks and the count scaled by a factor drawn from Normal(1, 0.05) in the other 10%.
+- At forecast time a study can fix the lag count instead, for the zero-shot and fine-tuned models alike.
+- The Ebola case study fixes it at 42 days, as the random walk nowcast uses, because too few onset days in the hub's releases have settled to estimate it.
+- A user can set a fixed count instead.
+:::
+
+### Synthetic data generation
+
+::: {.callout-note title="Plan"}
+- We describe the simulation in five layers: infections, observation, reporting delays, the reporting system, and strata and aggregation.
+- Each layer has a subsection in the same order: what the layer simulates, with its equations, how its settings vary across simulations and strata, a table of its settings and a figure of example trajectories.
+- Each table has one row per setting, with its symbol, sampling distribution and range, units and reason, grouped by part of the layer under header rows.
+- Categorical settings give their levels and weights in the same table.
+- The workflow generates every table from the grid config.
+- A further subsection gives the order in which one simulation draws the layers, with a figure of sample simulations across the grid.
+- Layer 1 is the epidemic setting, and layers 2 to 5 are the delays and surveillance quirks fine-tuning teaches.
+- The workflow simulates outbreaks from the grid config and writes every figure below, so a change to the grid regenerates the tables and figures.
+- The layer tables replace the grid tables after the layers, and the workflow's figures replace the example simulations and comparisons.
+- The main text's coverage panel reads the sourced reference-values table, as @tbl-sim-diseases does.
+- The simulator composes PyRenew's components [@placeholder] for infections, the infection to reference delay and observation noise, with small components on PyRenew's base classes where it has none.
+- The reporting step is part of the same model and gives counts by reference and report date as epinowcast's observation model does [@abbottepinowcast].
+- We test the simulator by calling epinowcast, EpiNow2 [@placeholder] and primarycensored [@abbottprimarycensored] directly and comparing the outputs, with delay distributions matched to primarycensored's discretisation.
+- Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
+:::
+
+#### Layer 1: infections
+
+::: {.callout-note title="Plan"}
+- We simulate infections in each place and age group by a renewal process with susceptible depletion, and strata infect one another through a mixing matrix.
+- R(t) follows one of the transmission paths (growth, decline, flat, a sharp or gradual rise and fall, a fall and rise, oscillating and several waves).
+- We add shifts in R(t) that mostly react to the epidemic, down while effective R is above 1 and up while it is below.
+- In established and endemic settings, immune escape events return part of the immune to the susceptible pool and raise R(t).
+- We draw the generation time mean on a continuous scale covering influenza to Ebola.
+- The window opens either at seeding or on an epidemic already running, with imports.
+- Figure (planned): "Layer 1, infections. One panel per transmission path: daily infections of one simulated outbreak, with R(t) and effective R below."
+- Table (planned): "Layer 1, sampling distributions of the infection settings, each with its reason."
+:::
+
+#### Layer 2: observation
+
+::: {.callout-note title="Plan"}
+- We turn infections into reference events, such as symptom onsets, tests or admissions, after a delay drawn as a discretised gamma, as in the renewal model.
+- We ascertain a share of the reference events as cases.
+- We add NB1 or Poisson noise, with a drawn dispersion that varies between strata.
+- Figure (planned): "Layer 2, observation. Infections of one simulated outbreak against its expected and observed cases by reference date, for short and long infection-to-reference delays, low and high ascertainment, and Poisson and NB1 noise."
+- Table (planned): "Layer 2, sampling distributions of the observation settings, each with its reason."
+:::
+
+#### Layer 3: reporting delays
+
+::: {.callout-note title="Plan"}
+- We report cases by reference and report date through a reporting delay hazard, as epinowcast's observation model does.
+- The reporting delay has a drawn family and mean, and differs between places and age groups.
+- Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.
+- In a third of simulations, the mean delay varies by reference weekday, by 4% to 23% (5% to 95%), spanning the weekday effects of the German and Ebola data.
+- The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
+- Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
+- Table (planned): "Layer 3, sampling distributions of the reporting delay settings, each with its reason."
+:::
+
+#### Layer 4: the reporting system
+
+::: {.callout-note title="Plan"}
+- Cases are reported every day in 45% of simulations, on weekdays only in a quarter, on two or three fixed weekdays in 15% and on one day a week in 15%, with the days drawn.
+- In half of the simulations reporting every day, the chance of reporting varies by report weekday.
+- In two thirds of simulations, counts vary by reference weekday.
+- Both weekday effects have a log weekday profile with a standard deviation of 0.13 to 0.69 (5% to 95%), so effects as strong as the German data's are common and mild ones are kept.
+- In half of simulations the weekday profiles are structured, built from parts such as a weekend dip, a catch-up on the first day after it, a Friday surge, one quiet day or weekdays above the weekend, with some free noise added.
+- Otherwise each weekday's effect is drawn freely.
+- Reporting shocks add backlogs or outages.
+- Revisions are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
+- Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
+- Some cases are filed under a nearby reference day and moved later.
+- The target is still the final count, and lag series can then fall from one lag to the next.
+- Releases follow a daily, 3-day or weekly cadence, some with missed releases, as described with the training blocks.
+- Figure (planned): "Layer 4, the reporting system and revisions. One outbreak through each quirk (every day, weekdays only, fixed days, one day a week, backlog, outage and revisions): final counts against the counts reported by the nowcast date."
+- Table (planned): "Layer 4, sampling distributions of the reporting system settings, each with its reason."
+:::
+
+#### Layer 5: strata and aggregation
+
+::: {.callout-note title="Plan"}
+- We draw how many places and age groups an outbreak has and how they nest, in regions and in places by ages.
+- Places nest in one to three levels below the country, crossed with age groups, and R(t), mixing and delays share structure within a region.
+- Systems range up to several hundred leaves, so systems the size of Germany's 16 states by 6 age groups are common.
+- Places interact through mixing, share, correlate, lag or keep independent their R(t) paths, and can be seeded part way through the outbreak.
+- Each layer's settings are shared across strata, partially pooled or independent.
+- Aggregates are either the exact sum of their strata or do not add up, with a share of cases reported only at the aggregate or an aggregate reported later than its strata.
+- A third of aggregates are exact sums, a third also hold cases not assigned to a stratum and a third are reported later.
+- The unallocated share is drawn from a Beta(3, 14) distribution, with mean 18%, and the later aggregate's lag from a log-normal distribution with median 7 days.
+- Figure (planned): "Layer 5, strata and aggregation. One simulated system: leaf series, group totals and the national series, with one aggregate that does not add up and the leaves' partially pooled reporting delays."
+- Table (planned): "Layer 5, sampling distributions of the strata and aggregation settings, each with its reason."
+:::
+
+#### All layers
+
+::: {.callout-note title="Plan"}
+- We combine the five layers in every simulation.
+- Figure (planned): "All layers combined. Sample simulations across the grid's settings, each with its final counts and counts reported by the nowcast date, and a strip of the mean reporting delay over time."
+- The main text figure compares the grid's summaries with the German development half and other diseases.
+:::
+
+#### Grid settings and checks
+
+{{< include build/tables/si/epinowcast-model.md >}}
+
+We draw every continuous setting from a named sampling distribution, which states what we believe likely outbreaks look like (@tbl-grid).
+
+::: {#tbl-grid}
+{{< include build/tables/si/grid.md >}}
+
+The simulation grid, read from the grid config: by layer, each categorical setting's levels with their shares where uneven, and each continuous setting's sampling distribution with its reason.
+The last group is the release layer, drawn per training block at fine-tuning time.
+:::
+
+
+![Six contrasting simulations of the grid, from the development round: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
+
+Outbreak length is drawn from a log-normal distribution with median 30 weeks, and is at least 4 weeks.
+A simulation that fails or reports no cases is redrawn with a new seed.
+No simulation is rejected for its size, growth or reporting delay.
+We test the simulator so that a stratum never has more cases than its population.
+
+::: {.callout-note title="Plan"}
+- We recheck the delay comparison below with the wider delay prior, against the German delay truncated at 40 days, as the German target needs.
+:::
+
+The grid has one known limitation.
+Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
+
+![The simulated outbreaks of the grid's training rounds (grey histograms) against the German development half, nationally, by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
+
+::: {#tbl-sim-diseases}
+{{< include build/tables/si/sim-diseases.md >}}
+
+The simulated outbreaks' ranges against published values for several diseases, the case studies among them.
+:::
+
+{{< include build/tables/si/heldout-set.md >}}
+
+We cut the held-out simulations into blocks as in training, with the same layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
+We keep two rounds of simulations out of training, separate from the training rounds.
+The validation set is the round on which the trainer monitors its loss, on the first 90 of its simulations by seed.
+The test set is a further round simulated with fresh seeds, and no model is scored on it until the final model is fixed.
+The test set is the paper's held-out synthetic data.
+
+The Ebola case study is held out from model development but not blind.
+We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
+A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
+
+### Fine-tuning
+
+::: {.callout-note title="Plan"}
+- We describe how LoRA works, with a schematic, and give every setting of the fine-tune.
+- Key references: [@Hu2021].
+:::
+
+#### LoRA
+
+- Instead of retraining all the weights, LoRA trains a small low-rank update to some of them, about 1% of the weights, which leaves the base model unchanged at the start.
+- LoRA replaces a weight matrix $W \in \mathbb{R}^{d_\text{out} \times d_\text{in}}$ with
+$$
+W' = W + \frac{\alpha}{r} B A,
+$$
+where $A \in \mathbb{R}^{r \times d_\text{in}}$ and $B \in \mathbb{R}^{d_\text{out} \times r}$ are trained and $W$ is frozen [@Hu2021].
+- We use rank $r = 8$ and $\alpha = 16$.
+- These are the defaults of Chronos-2's fine-tuning (`Chronos2Pipeline.fit`) and of AutoGluon [@chronos_forecasting; @autogluon].
+- We apply it to the query, key, value and output projections of the time and group attention of all 12 layers, and to the output layer.
+- $B$ starts at zero, so $W' = W$ at the start.
+
+#### Loss
+
+- Chronos-2 scales each row by the mean $\mu_n$ and standard deviation $\sigma_n$ of its context, then applies $\operatorname{arcsinh}$, so a target $y_{n,t}$ becomes $\tilde y_{n,t} = \operatorname{arcsinh}\!\left((y_{n,t} - \mu_n)/\sigma_n\right)$.
+- The model gives a quantile $\hat q_{n,t,k}$ at each of 21 levels $\tau_k \in \{0.01, 0.05, 0.10, \dots, 0.95, 0.99\}$.
+- The loss is the quantile (pinball) loss [@Koenker1978], averaged over the $H$ steps and the $N$ rows of a batch and summed over levels:
+$$
+L = \frac{1}{N} \sum_{n=1}^{N} \frac{1}{H} \sum_{t=1}^{H} m_{n,t} \sum_{k=1}^{21} 2 \left| \left(\tilde y_{n,t} - \hat q_{n,t,k}\right) \left(\mathbb{1}\!\left[\tilde y_{n,t} \le \hat q_{n,t,k}\right] - \tau_k\right) \right|,
+$$
+where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or a lag series' known future value.
+- The loss covers the nowcast steps and one week ahead, so fine-tuning does not change long-range forecasting, and we score every horizon to 4 weeks.
+
+#### Learning rates
+
+- The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
+$$
+\eta_t = \eta_0 \left(1 - \frac{s_t}{N}\right),
+$$
+where $N$ is the number of training simulations, {{< meta results.training.simulations >}} in the final run, $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
+- $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
+- We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
+- Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
+- A step that runs out of GPU memory is run again in halves.
+- A single block that runs out of memory stops the run, so no block is dropped.
+- A step whose loss or gradients are not finite is skipped and counted.
+- We do not stop early.
+
+**Training blocks.**
+A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off.
+Releases follow the layout's steps, daily, every 3 days or weekly.
+Of the daily blocks, 25% have weekly releases, 10% releases on weekdays only and 10% daily releases with missed days.
+Of the 3-day and weekly blocks, 20% have missed releases.
+In those blocks each release but the last is missed with chance 0.2.
+In 30% of blocks the releases start late, 7 to 182 days after the outbreak's first report, with the delay drawn from a Beta(1, 3) on that range, so short delays are most common.
+The releases before the start are dropped, so the first kept release fills in the earlier onsets, as the Ebola hub's first release held onsets from months before.
+Lag series start at that release, and the counts keep the whole history.
+In 5% of blocks there are no lag series, and the block holds counts to the last complete step, as the complete layout does.
+Release starts, cadences and blocks without lag series are drawn per block at fine-tuning time from the simulated releases, and every view of a block shares them.
+Each simulation gives one observation draw, cut at 14 cut-offs, one drawn at random within each of 14 equal stretches of its weekly cut-offs, so one simulation gives up to 14 blocks.
+Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
+A block with fewer than 10 cases reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
+Each day counts once, at its latest report, in the block's busiest level.
+We train on {{< meta results.training.simulations >}} simulations drawn from the grid, with checkpoints at {{< meta results.training.checkpoints >}}.
+
+::: {#tbl-block-layouts}
+| Layout | Share of blocks |
+|---|---|
+| Daily | 25% |
+| Weekly | 25% |
+| 3-day | 15% |
+| Daily with a weekly row per place | 12.5% |
+| Daily with a rolling 7-day row per place | 12.5% |
+| Daily with a 3-day row per place | 5% |
+| Daily with a rolling 3-day row per place | 5% |
+
+The layouts of the training blocks and their shares.
+:::
+
+- We apply further options on top of the layout, each drawn independently.
+- In outbreaks with more than one stratum, 20% of the blocks hold the country alone.
+- Outbreaks with a single stratum give only blocks of the country.
+- The other blocks hold the whole system, which is the country, every group total, every age group total across places and every leaf.
+- Where a block holds the country and its places, a third each have a country equal to the sum of its places, above it (with cases not assigned to a place), or later than it (its own stream).
+- The options combine, so a block can be, for example, daily with a weekly row and non-summing.
+- Non-summing parents apply only where a block holds both the country and its places.
+- @tbl-block-combinations gives the realised share of each combination.
+
+::: {.callout-note title="Plan"}
+- No training block is skipped, as dropping large systems would bias training towards small ones.
+- Each training block is a view of the simulated system that fits the largest block that trains in memory, chosen by rule and never by dropping leaves.
+- A system that fits is trained whole.
+- A larger system is aggregated up, by collapsing a level of places or dropping the age split, so its totals stay exact.
+- A block can also be a subtree, one region with its places and ages and the region's total at the top.
+- A simulation can give several views.
+- The views and their shares are set in the grid configuration, and the regions are the simulation's own.
+:::
+
+Each training block is built as follows.
+
+- A training block cuts one draw's releases at one cut-off and lays them out as the reporting-triangle layout does, with the target past the last complete step the outbreak's final counts.
+- The blocks with more than one series have as targets every level of their system.
+- Blocks whose places do not nest have no intermediate level, so their targets are the national total and the leaves.
+
+::: {#tbl-block-combinations}
+{{< include build/tables/si/block-combinations.md >}}
+
+The realised shares of the combinations of layout and options in the training blocks.
+:::
+
+**Order of the training data.**
+Each simulation draws its settings, the grid's factors among them, independently from their sampling distributions, seeded per simulation.
+Training takes the simulations in order, in chunks.
+Each simulation gives up to 14 training blocks, which are shuffled within a chunk and packed into steps.
+Each step is filled until it holds 256 series or more, so one large block can make a step on its own.
+
+#### Fitting in GPU memory
+
+We fine-tune and forecast only with blocks that fit in the memory of our available GPUs, and make several approximations to do so.
+
+- A block holds at most 1,000 series, the capacity of the smallest GPU that trains, measured with every block's activations recomputed, with a margin.
+- A system with more series is cut into views that each fit, by aggregating a level of places, dropping the age split or taking a subtree (Training blocks).
+- Places in different views then inform each other only through the aggregated totals.
+- The same limit applies at forecast time, so the Ebola by-province forecast is cut into views as in training (Ebola forecast layout).
+- A training block has at most 364 steps of context, while forecasts use all available data.
+- A step whose series exceed 733 recomputes its activations in the backward pass rather than storing them, which changes memory and speed but not the trained model.
+- A step that runs out of memory is run again in halves, and a single block that runs out of memory stops the run, so no block is dropped.
+- A machine with more GPU memory can raise the block limit, which changes the trained model.
+
+::: {.callout-note title="Plan"}
+- A table lists the trainer's memory and speed settings at the values the paper run used, read from the workflow configuration.
+- A machine can override them for its own runs, and the table gives the committed defaults.
+- The threshold above which a block's activations are recomputed rather than stored changes only memory and speed, not the trained model.
+- The number of series in a step changes the recipe, as it sets how many blocks each gradient step averages over.
+:::
+
+#### Monitoring fine-tuning
+
+A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (@fig-dashboard).
+It showed the training and validation loss by source, each checkpoint's scores against `randomwalknowcast` with the zero-shot and complete-only references, and the German nowcasts by checkpoint.
+At each checkpoint we also check the 7-day forecasts on up to 100 held-out blocks with a 7-day row per place.
+We compare the median of the 7-day row with the 7-day sums of the same block's daily medians, and give the share of those sums inside the row's 90% interval.
+We compare the roughness of the 7-day median, the mean absolute second difference of its log, with the truth's, so a ratio of 1 is as smooth as the truth.
+The dashboard shows these in its checkpoint tables.
+Reviewing it led to the complete-only reference in the German panels of each run's progress figure (@fig-progress-runa).
+The dashboard was built with the help of a large language model.
+
+![The fine-tuning dashboard on 16 November 2026 at 17:29, with a run at 500 simulations: training and validation loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
+
+#### Fine-tuning on real data
+
+To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`foundation_real`).
+It was trained on the German data and the BDBV data together.
+The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later.
+German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03.
+Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks.
+The hub file's changes after 80 days hold revisions made up to August 2022, so they were left out.
+The BDBV part used every public release up to 2026-11-08 (cut-off 2026-11-05).
+Daily blocks were cut at each daily release, and weekly blocks at each week from the hub's public per-case delay table, for the country alone and with its provinces, at every release lag.
+Truth was the latest release's counts, left out after 2026-10-01, so every count trained on was at least the BDBV truth delay of 35 days old.
+Training followed Chronos-2's recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps.
+The last 14 German nowcast dates were held out to monitor the loss.
+
 ### Baselines
 
 We nowcast the most recent weeks by estimating the reporting delay from past releases, and then forecast each nowcast draw forward with a random walk on the log scale.
@@ -334,398 +739,26 @@ The main priors of the renewal models.
 - Zones that are not fitted send nothing on, so an introduced zone does not seed further introductions within the horizon.
 - The model of the hub's imputation, the importation and the BVDOutbreakSize term are specific to this outbreak and are not part of epinowcast.
 
-### Foundation model setup and fine-tuning
+### Scoring
 
 ::: {.callout-note title="Plan"}
-- We describe how Chronos-2 and LoRA work, with schematics.
-- We give every setting of the model and the fine-tune.
-- Key references: [@Ansari2025; @Hu2021].
+- We describe the scores and check them against scoringutils.
+- We compute the WIS directly from the quantiles, as the weighted interval scores and the absolute error of the median.
+- Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
 :::
 
-**Attention biases.**
-Chronos-2's group attention has no notion of which series is which, so on its own it can link a lag series to its place's counts only by matching their values.
-
-- We add three learned biases to Chronos-2's group-attention scores (@tbl-attention-biases).
-- They start at zero, so fine-tuning starts from base Chronos-2, as for the relation biases TableFormer adds to a pretrained model [@Yang2022].
-- The biases train at a learning rate of $10^{-3}$ and the LoRA adapter at $10^{-5}$, both falling linearly to zero over the {{< meta results.training.simulations >}} simulations.
-- We identify places by name within each block, with no limit on the number of places.
-- A place's parent is the nearest prefix of its name in the block, else the country.
-- Training blocks include countries equal to, above or later than the sum of their places, so a place belongs to its parent without summing to it.
-- The biases follow Moirai's any-variate attention bias [@Woo2024], and the relative position biases of T5 [@Raffel2020] and the structural biases of Graphormer [@Ying2021].
-- In Moirai's ablation, additive learned variate embeddings gave a normalised MAE of 0.904 on the Monash benchmark, against 0.655 with the attention bias [@Woo2024].
-
-::: {#tbl-attention-biases}
-| Relation | Pairs of series | Parameters |
-|---|---|---|
-| Same place | A series attending to another series of its place, its count or a lag | One scalar per layer and head, starting at zero |
-| Up | A child place's series attending to its parent's series | One scalar per layer and head, starting at zero |
-| Down | A parent place's series attending to its children's series | One scalar per layer and head, starting at zero |
-
-The learned biases added to Chronos-2's group-attention scores.
-:::
-
-#### Group attention
-
-- In attention, each series updates its representation as a weighted mix of the others, with weights from how well its query matches their keys.
-- Chronos-2 attends over time within each series, then over the series of a block at each time step, which is group attention [@Ansari2025].
-- At one time step, row $i$ of a block (a place's count or one of its lag series) attends to row $j$ with weight
+We score quantiles with WIS, split into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021], and samples, where they are the natural form, with the fair CRPS.
+For a forecast of $m$ samples $x_1, \dots, x_m$ and an observation $y$, the fair CRPS is
 $$
-a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij}\right),
+\mathrm{CRPS}_\mathrm{f}(x, y) = \frac{1}{m}\sum_{i=1}^{m} |x_i - y| - \frac{1}{2m(m-1)}\sum_{i \ne j} |x_i - x_j|.
 $$
-where $q_i$ and $k_j$ are the query and key vectors of one head in one layer, and $M_{ij}$ is the group mask, $0$ when rows $i$ and $j$ are in the same block and $-\infty$ otherwise.
-- Chronos-2 does not divide the scores by the square root of the key dimension.
-
-#### Attention biases
-
-- Our change adds a learned nudge to those weights for each pair of rows, by their relation (same place, child to parent, parent to child), so the model can tell which lags belong to which count.
-- Each row $i$ belongs to a place $P(i)$, and each place $p$ has a parent $\pi(p)$ in the block, or none.
-- We add a learned bias for each relation $r$ to the scores:
-$$
-a_{ij} = \operatorname{softmax}_j\!\left(q_i^\top k_j + M_{ij} + \sum_{r} b_r^{(l,h)}\,\mathbb{1}\!\left[(i,j) \in R_r\right]\right),
-$$
-with one scalar $b_r^{(l,h)}$ per relation $r$, layer $l$ and head $h$, and $b_r^{(l,h)} = 0$ at the start.
-- The relations are the pairs of rows in @tbl-attention-biases:
-$$
-\begin{aligned}
-R_\text{same} &= \{(i, j) : i \neq j,\ P(i) = P(j)\},\\
-R_\text{up} &= \{(i, j) : P(j) = \pi(P(i))\},\\
-R_\text{down} &= \{(i, j) : P(i) = \pi(P(j))\}.
-\end{aligned}
-$$
-- A pair in no relation gets no bias, as in Moirai's any-variate attention [@Woo2024] and TableFormer's relation biases [@Yang2022].
-
-#### Mixed-frequency blocks
-
-- One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
-- A training block is daily, 3-day or weekly, or daily with one aggregate row per place (@tbl-block-layouts).
-- A place's aggregate row holds its 3-day or weekly totals,
-$$
-y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} & \text{if day } t \text{ ends a period of } k \text{ days},\\ \text{missing} & \text{otherwise,} \end{cases}
-$$
-where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or $k = 3$ for 3-day totals.
-- The aggregate row has no lag series of its own.
-- It belongs to its place, so it is in that place's same-place relation.
-- The loss counts the aggregate row only on period-end days, where $m_{n,t} = 1$, and its missing days have $m_{n,t} = 0$.
-- Each block's periods end on a day drawn at random, so its totals can end on any weekday.
-- Other daily blocks instead have a row per place with its rolling 7-day or 3-day sum.
-- The rolling row has a value on every day and the loss counts it on every day, as the German target's 7-day sums are.
-
-#### LoRA
-
-- Instead of retraining all the weights, LoRA trains a small low-rank update to some of them, about 1% of the weights, which leaves the base model unchanged at the start.
-- LoRA replaces a weight matrix $W \in \mathbb{R}^{d_\text{out} \times d_\text{in}}$ with
-$$
-W' = W + \frac{\alpha}{r} B A,
-$$
-where $A \in \mathbb{R}^{r \times d_\text{in}}$ and $B \in \mathbb{R}^{d_\text{out} \times r}$ are trained and $W$ is frozen [@Hu2021].
-- We use rank $r = 8$ and $\alpha = 16$.
-- These are the defaults of Chronos-2's fine-tuning (`Chronos2Pipeline.fit`) and of AutoGluon [@chronos_forecasting; @autogluon].
-- We apply it to the query, key, value and output projections of the time and group attention of all 12 layers, and to the output layer.
-- $B$ starts at zero, so $W' = W$ at the start.
-
-#### Loss
-
-- Chronos-2 scales each row by the mean $\mu_n$ and standard deviation $\sigma_n$ of its context, then applies $\operatorname{arcsinh}$, so a target $y_{n,t}$ becomes $\tilde y_{n,t} = \operatorname{arcsinh}\!\left((y_{n,t} - \mu_n)/\sigma_n\right)$.
-- The model gives a quantile $\hat q_{n,t,k}$ at each of 21 levels $\tau_k \in \{0.01, 0.05, 0.10, \dots, 0.95, 0.99\}$.
-- The loss is the quantile (pinball) loss [@Koenker1978], averaged over the $H$ steps and the $N$ rows of a batch and summed over levels:
-$$
-L = \frac{1}{N} \sum_{n=1}^{N} \frac{1}{H} \sum_{t=1}^{H} m_{n,t} \sum_{k=1}^{21} 2 \left| \left(\tilde y_{n,t} - \hat q_{n,t,k}\right) \left(\mathbb{1}\!\left[\tilde y_{n,t} \le \hat q_{n,t,k}\right] - \tau_k\right) \right|,
-$$
-where $m_{n,t}$ is 1 for a target step to forecast and 0 for a missing target or a lag series' known future value.
-- The loss covers the nowcast steps and one week ahead, so fine-tuning does not change long-range forecasting, and we score every horizon to 4 weeks.
-
-#### Learning rates
-
-- The learning rate falls linearly from $\eta_0$ to zero over the simulations [@Devlin2019]:
-$$
-\eta_t = \eta_0 \left(1 - \frac{s_t}{3{,}200}\right),
-$$
-where $s_t$ is the number of simulations trained by step $t$, interpolated within a chunk by its steps, so the rate reaches zero at the last simulation however the blocks are packed into steps.
-- $\eta_0 = 10^{-5}$ for the LoRA adapter, the rate Chronos-2's fine-tuning recommends for LoRA and AutoGluon's default [@chronos_forecasting; @autogluon], and $\eta_0 = 10^{-3}$ for the attention biases.
-- We train with AdamW [@Loshchilov2019] in fp32 and clip the gradient norm at 1 [@Pascanu2013].
-- Neither has weight decay or warmup, as in Chronos-2's fine-tuning [@Ansari2025], and the biases follow Moirai and TableFormer in having no weight decay [@Woo2024; @Yang2022].
-- A step that runs out of GPU memory is run again in halves.
-- A single block that runs out of memory stops the run, so no block is dropped.
-- A step whose loss or gradients are not finite is skipped and counted.
-- We do not stop early.
-
-**Training blocks.**
-A simulation gives daily counts by onset and report date, and a release counts every case reported by its cut-off.
-Releases follow the layout's steps, daily, every 3 days or weekly.
-Of the daily blocks, 25% have weekly releases, 10% releases on weekdays only and 10% daily releases with missed days.
-Of the 3-day and weekly blocks, 20% have missed releases.
-In those blocks each release but the last is missed with chance 0.2.
-In 30% of blocks the releases start late, 7 to 182 days after the outbreak's first report, with the delay drawn from a Beta(1, 3) on that range, so short delays are most common.
-The releases before the start are dropped, so the first kept release fills in the earlier onsets, as the Ebola hub's first release held onsets from months before.
-Lag series start at that release, and the counts keep the whole history.
-In 5% of blocks there are no lag series, and the block holds counts to the last complete step, as the complete layout does.
-Release starts, cadences and blocks without lag series are drawn per block at fine-tuning time from the simulated releases, and every view of a block shares them.
-Each simulation gives one observation draw, cut at 14 cut-offs, one drawn at random within each of 14 equal stretches of its weekly cut-offs, so one simulation gives up to 14 blocks.
-Each block has up to 364 steps of context, and its prediction length is its nowcast steps and one week ahead, rounded up to whole steps.
-A block with fewer than 10 cases reported across its places in the 28 days up to its cut-off is dropped, from what is known at the cut-off.
-Each day counts once, at its latest report, in the block's busiest level.
-We train on {{< meta results.training.simulations >}} simulations drawn from the grid, with checkpoints at {{< meta results.training.checkpoints >}}.
-
-::: {#tbl-block-layouts}
-| Layout | Share of blocks |
-|---|---|
-| Daily | 25% |
-| Weekly | 25% |
-| 3-day | 15% |
-| Daily with a weekly row per place | 12.5% |
-| Daily with a rolling 7-day row per place | 12.5% |
-| Daily with a 3-day row per place | 5% |
-| Daily with a rolling 3-day row per place | 5% |
-
-The layouts of the training blocks and their shares.
-:::
-
-- We apply further options on top of the layout, each drawn independently.
-- In outbreaks with more than one stratum, 20% of the blocks hold the country alone.
-- Outbreaks with a single stratum give only blocks of the country.
-- The other blocks hold the whole system, which is the country, every group total, every age group total across places and every leaf.
-- Where a block holds the country and its places, a third each have a country equal to the sum of its places, above it (with cases not assigned to a place), or later than it (its own stream).
-- The options combine, so a block can be, for example, daily with a weekly row and non-summing.
-- Non-summing parents apply only where a block holds both the country and its places.
-- @tbl-block-combinations gives the realised share of each combination.
-
-::: {.callout-note title="Plan"}
-- No training block is skipped, as dropping large systems would bias training towards small ones.
-- Each training block is a view of the simulated system that fits the largest block that trains in memory, chosen by rule and never by dropping leaves.
-- A system that fits is trained whole.
-- A larger system is aggregated up, by collapsing a level of places or dropping the age split, so its totals stay exact.
-- A block can also be a subtree, one region with its places and ages and the region's total at the top.
-- A simulation can give several views.
-- The views and their shares are set in the grid configuration, and the regions are the simulation's own.
-:::
-
-Each training block is built as follows.
-
-- A training block cuts one draw's releases at one cut-off and lays them out as the reporting-triangle layout does, with the target past the last complete step the outbreak's final counts.
-- The blocks with more than one series have as targets every level of their system.
-- Blocks whose places do not nest have no intermediate level, so their targets are the national total and the leaves.
-
-::: {#tbl-block-combinations}
-{{< include build/tables/si/block-combinations.md >}}
-
-The realised shares of the combinations of layout and options in the training blocks.
-:::
-
-**Order of the training data.**
-Each simulation draws its settings, the grid's factors among them, independently from their sampling distributions, seeded per simulation.
-Training takes the simulations in order, in chunks.
-Each simulation gives up to 14 training blocks, which are shuffled within a chunk and packed into steps.
-Each step is filled until it holds 256 series or more, so one large block can make a step on its own.
-
-#### Fitting in GPU memory
-
-We fine-tune and forecast only with blocks that fit in the memory of our available GPUs, and make several approximations to do so.
-
-- A block holds at most 1,000 series, the capacity of the smallest GPU that trains, measured with every block's activations recomputed, with a margin.
-- A system with more series is cut into views that each fit, by aggregating a level of places, dropping the age split or taking a subtree (Training blocks).
-- Places in different views then inform each other only through the aggregated totals.
-- The same limit applies at forecast time, so the Ebola by-province forecast is cut into views as in training (Ebola forecast layout).
-- A training block has at most 364 steps of context, while forecasts use all available data.
-- A step whose series exceed 733 recomputes its activations in the backward pass rather than storing them, which changes memory and speed but not the trained model.
-- A step that runs out of memory is run again in halves, and a single block that runs out of memory stops the run, so no block is dropped.
-- A machine with more GPU memory can raise the block limit, which changes the trained model.
-
-::: {.callout-note title="Plan"}
-- A table lists the trainer's memory and speed settings at the values the paper run used, read from the workflow configuration.
-- A machine can override them for its own runs, and the table gives the committed defaults.
-- The threshold above which a block's activations are recomputed rather than stored changes only memory and speed, not the trained model.
-- The number of series in a step changes the recipe, as it sets how many blocks each gradient step averages over.
-:::
-
-Chronos-2 divides a flat context by a scale of $10^{-5}$, and we apply no floor to that scale at inference.
-Chronos-2's widest interval is from 1% to 99%, as it has no 2.5% or 97.5% quantiles.
-
-::: {.callout-note title="Plan"}
-- Training and prediction choose the number of lag series by the same rule, for the zero-shot and fine-tuned models alike, and training draws no lag count.
-- Each block or task has one lag count.
-- Each step first published after releases began settles at the first lag at which its reported count reaches 98% of its latest count.
-- The lag count less one is the 98th percentile of these settling lags over the block's steps and places with a count.
-- Only steps seen for at least 1.5 times the lag count enter, so their latest count stands for their final one and right truncation does not bias the count short.
-- Steps before the first release are left out, as a first release that fills in earlier onsets measures when releases began, not a delay.
-- A lag on which no release fell carries the count of the lag before, as with weekly releases of daily data.
-- The estimate reads no release after the cut-off.
-- In training it reads the simulation's releases up to the cut-off, as prediction reads the real ones.
-- The lag count is capped only by the history, keeping two steps of context before the longest lag.
-- With no step old enough to have settled, the block takes its whole release history, every step from the first release to the cut-off.
-- Training blocks use this lag count in 90% of blocks and the count scaled by a factor drawn from Normal(1, 0.05) in the other 10%.
-- At forecast time a study can fix the lag count instead, for the zero-shot and fine-tuned models alike.
-- The Ebola case study fixes it at 42 days, as the random walk nowcast uses, because too few onset days in the hub's releases have settled to estimate it.
-- A user can set a fixed count instead.
-:::
-
-To compare training on simulations with training on real data, we also fine-tuned Chronos-2 on real data alone (`foundation_real`).
-It was trained on the German data and the BDBV data together.
-The German part used the data as available on 2022-02-09, the last day of the German development half, and nothing later.
-German training blocks were cut at every nowcast date whose truth, four weeks ahead, was at least 40 days old by then, from 2021-04-20 to 2021-12-03.
-Each date was laid out as the German nowcast tasks are, with the same block functions as the simulations, from the daily and weekly releases, for Germany alone and with its states or age groups, at release lags of 14 to 49 days (including 40) or 2 to 7 weeks.
-The hub file's changes after 80 days hold revisions made up to August 2022, so they were left out.
-The BDBV part used every public release up to 2026-11-08 (cut-off 2026-11-05).
-Daily blocks were cut at each daily release, and weekly blocks at each week from the hub's public per-case delay table, for the country alone and with its provinces, at every release lag.
-Truth was the latest release's counts, left out after 2026-10-01, so every count trained on was at least the BDBV truth delay of 35 days old.
-Training followed Chronos-2's recipe as the simulation fine-tune does, from base Chronos-2, for its default 1,000 steps.
-The last 14 German nowcast dates were held out to monitor the loss.
-
-### Monitoring fine-tuning
-
-A local dashboard, part of the fine-tuning workflow, was used to review training as it ran (@fig-dashboard).
-It showed the training and validation loss by source, each checkpoint's scores against `randomwalknowcast` with the zero-shot and complete-only references, and the German nowcasts by checkpoint.
-At each checkpoint we also check the 7-day forecasts on up to 100 held-out blocks with a 7-day row per place.
-We compare the median of the 7-day row with the 7-day sums of the same block's daily medians, and give the share of those sums inside the row's 90% interval.
-We compare the roughness of the 7-day median, the mean absolute second difference of its log, with the truth's, so a ratio of 1 is as smooth as the truth.
-The dashboard shows these in its checkpoint tables.
-Reviewing it led to the complete-only reference in the German panels of each run's progress figure (@fig-progress-runa).
-The dashboard was built with the help of a large language model.
-
-![The fine-tuning dashboard on 16 November 2026 at 17:29, with a run at 500 simulations: training and validation loss by source, checkpoint scores against `randomwalknowcast` with the zero-shot and complete-only references, and German nowcasts by checkpoint.](figures/dashboard-2026-11-16.png){#fig-dashboard}
-
-### Synthetic data generation
-
-::: {.callout-note title="Plan"}
-- We describe the simulation in five layers: infections, observation, reporting delays, the reporting system, and strata and aggregation.
-- Each layer has a subsection in the same order: what the layer simulates, with its equations, how its settings vary across simulations and strata, a table of its settings and a figure of example trajectories.
-- Each table has one row per setting, with its symbol, sampling distribution and range, units and reason, grouped by part of the layer under header rows.
-- Categorical settings give their levels and weights in the same table.
-- The workflow generates every table from the grid config.
-- A further subsection gives the order in which one simulation draws the layers, with a figure of sample simulations across the grid.
-- Layer 1 is the epidemic setting, and layers 2 to 5 are the delays and surveillance quirks fine-tuning teaches.
-- The workflow simulates outbreaks from the grid config and writes every figure below, so a change to the grid regenerates the tables and figures.
-- The layer tables replace the grid tables after the layers, and the workflow's figures replace the example simulations and comparisons.
-- The main text's coverage panel reads the sourced reference-values table, as @tbl-sim-diseases does.
-- The simulator composes PyRenew's components [@placeholder] for infections, the infection to reference delay and observation noise, with small components on PyRenew's base classes where it has none.
-- The reporting step is part of the same model and gives counts by reference and report date as epinowcast's observation model does [@abbottepinowcast].
-- We test the simulator by calling epinowcast, EpiNow2 [@placeholder] and primarycensored [@abbottprimarycensored] directly and comparing the outputs, with delay distributions matched to primarycensored's discretisation.
-- Key references: [@abbottepinowcast; @lison2024; @Park2024; @abbottprimarycensored].
-:::
-
-#### Layer 1: infections
-
-::: {.callout-note title="Plan"}
-- We simulate infections in each place and age group by a renewal process with susceptible depletion, and strata infect one another through a mixing matrix.
-- R(t) follows one of the transmission paths (growth, decline, flat, a sharp or gradual rise and fall, a fall and rise, oscillating and several waves).
-- We add shifts in R(t) that mostly react to the epidemic, down while effective R is above 1 and up while it is below.
-- In established and endemic settings, immune escape events return part of the immune to the susceptible pool and raise R(t).
-- We draw the generation time mean on a continuous scale covering influenza to Ebola.
-- The window opens either at seeding or on an epidemic already running, with imports.
-- Figure (planned): "Layer 1, infections. One panel per transmission path: daily infections of one simulated outbreak, with R(t) and effective R below."
-- Table (planned): "Layer 1, sampling distributions of the infection settings, each with its reason."
-:::
-
-#### Layer 2: observation
-
-::: {.callout-note title="Plan"}
-- We turn infections into reference events, such as symptom onsets, tests or admissions, after a delay drawn as a discretised gamma, as in the renewal model.
-- We ascertain a share of the reference events as cases.
-- We add NB1 or Poisson noise, with a drawn dispersion that varies between strata.
-- Figure (planned): "Layer 2, observation. Infections of one simulated outbreak against its expected and observed cases by reference date, for short and long infection-to-reference delays, low and high ascertainment, and Poisson and NB1 noise."
-- Table (planned): "Layer 2, sampling distributions of the observation settings, each with its reason."
-:::
-
-#### Layer 3: reporting delays
-
-::: {.callout-note title="Plan"}
-- We report cases by reference and report date through a reporting delay hazard, as epinowcast's observation model does.
-- The reporting delay has a drawn family and mean, and differs between places and age groups.
-- Mean delays range from a day to several weeks, and the tails vary widely, from a fast head with a long tail to heavy-tailed families with tail parameters drawn from wide distributions, so long and slow delays are a real share of training.
-- In a third of simulations, the mean delay varies by reference weekday, by 4% to 23% (5% to 95%), spanning the weekday effects of the German and Ebola data.
-- The delay is static or changes over time by one of the delay changes, among them a drift, a step, a slowdown, a weekly walk interpolated between weeks and a smooth periodic change.
-- Figure (planned): "Layer 3, reporting delays. (A) The mean reporting delay by reference date for each kind of delay change. (B) The delay distributions drawn across the grid."
-- Table (planned): "Layer 3, sampling distributions of the reporting delay settings, each with its reason."
-:::
-
-#### Layer 4: the reporting system
-
-::: {.callout-note title="Plan"}
-- Cases are reported every day in 45% of simulations, on weekdays only in a quarter, on two or three fixed weekdays in 15% and on one day a week in 15%, with the days drawn.
-- In half of the simulations reporting every day, the chance of reporting varies by report weekday.
-- In two thirds of simulations, counts vary by reference weekday.
-- Both weekday effects have a log weekday profile with a standard deviation of 0.13 to 0.69 (5% to 95%), so effects as strong as the German data's are common and mild ones are kept.
-- In half of simulations the weekday profiles are structured, built from parts such as a weekend dip, a catch-up on the first day after it, a Friday surge, one quiet day or weekdays above the weekend, with some free noise added.
-- Otherwise each weekday's effect is drawn freely.
-- Reporting shocks add backlogs or outages.
-- Revisions are true of real data, so we apply them to the release triangle afterwards, in a drawn share of simulations.
-- Some cases are reported in error, appear in releases for a time and are then removed, so a release can exceed the final count.
-- Some cases are filed under a nearby reference day and moved later.
-- The target is still the final count, and lag series can then fall from one lag to the next.
-- Releases follow a daily, 3-day or weekly cadence, some with missed releases, as described with the training blocks.
-- Figure (planned): "Layer 4, the reporting system and revisions. One outbreak through each quirk (every day, weekdays only, fixed days, one day a week, backlog, outage and revisions): final counts against the counts reported by the nowcast date."
-- Table (planned): "Layer 4, sampling distributions of the reporting system settings, each with its reason."
-:::
-
-#### Layer 5: strata and aggregation
-
-::: {.callout-note title="Plan"}
-- We draw how many places and age groups an outbreak has and how they nest, in regions and in places by ages.
-- Places nest in one to three levels below the country, crossed with age groups, and R(t), mixing and delays share structure within a region.
-- Systems range up to several hundred leaves, so systems the size of Germany's 16 states by 6 age groups are common.
-- Places interact through mixing, share, correlate, lag or keep independent their R(t) paths, and can be seeded part way through the outbreak.
-- Each layer's settings are shared across strata, partially pooled or independent.
-- Aggregates are either the exact sum of their strata or do not add up, with a share of cases reported only at the aggregate or an aggregate reported later than its strata.
-- A third of aggregates are exact sums, a third also hold cases not assigned to a stratum and a third are reported later.
-- The unallocated share is drawn from a Beta(3, 14) distribution, with mean 18%, and the later aggregate's lag from a log-normal distribution with median 7 days.
-- Figure (planned): "Layer 5, strata and aggregation. One simulated system: leaf series, group totals and the national series, with one aggregate that does not add up and the leaves' partially pooled reporting delays."
-- Table (planned): "Layer 5, sampling distributions of the strata and aggregation settings, each with its reason."
-:::
-
-#### All layers
-
-::: {.callout-note title="Plan"}
-- We combine the five layers in every simulation.
-- Figure (planned): "All layers combined. Sample simulations across the grid's settings, each with its final counts and counts reported by the nowcast date, and a strip of the mean reporting delay over time."
-- The main text figure compares the grid's summaries with the German development half and other diseases.
-:::
-
-#### Grid settings and checks
-
-{{< include build/tables/si/epinowcast-model.md >}}
-
-We draw every continuous setting from a named sampling distribution, which states what we believe likely outbreaks look like (@tbl-grid).
-
-::: {#tbl-grid}
-{{< include build/tables/si/grid.md >}}
-
-The simulation grid, read from the grid config: by layer, each categorical setting's levels with their shares where uneven, and each continuous setting's sampling distribution with its reason.
-The last group is the release layer, drawn per training block at fine-tuning time.
-:::
-
-
-![Six contrasting simulations of the grid, from the development round: the final daily counts (black) and the counts known at releases 40%, 65% and 90% of the way through each outbreak (dashed), summed over strata.](build/figures/si/sim-examples.png){#fig-sim-examples}
-
-Outbreak length is drawn from a log-normal distribution with median 30 weeks, and is at least 4 weeks.
-A simulation that fails or reports no cases is redrawn with a new seed.
-No simulation is rejected for its size, growth or reporting delay.
-We test the simulator so that a stratum never has more cases than its population.
-
-::: {.callout-note title="Plan"}
-- We recheck the delay comparison below with the wider delay prior, against the German delay truncated at 40 days, as the German target needs.
-:::
-
-The grid has one known limitation.
-Simulated delays are shorter than the German data's, whose 99% point is {{< meta evidence.realism.delay_q99.Germany_states >}} days against {{< meta evidence.realism.delay_q99.sim_q95 >}} at the 95% point of the simulations.
-
-![The simulated outbreaks of the grid's training rounds (grey histograms) against the German development half, nationally, by state and by age: outbreak size, weekly peak, growth, the share of stratum-weeks with no cases, dispersion, the reporting delay and the share reported within 0, 7, 14 and 28 days.](build/figures/si/sim-realism.png){#fig-sim-realism}
-
-::: {#tbl-sim-diseases}
-{{< include build/tables/si/sim-diseases.md >}}
-
-The simulated outbreaks' ranges against published values for several diseases, the case studies among them.
-:::
-
-{{< include build/tables/si/heldout-set.md >}}
-
-We cut the held-out simulations into blocks as in training, with the same layouts and non-summing parents (@tbl-block-layouts), using a fixed seed.
-We keep two rounds of simulations out of training, separate from the training rounds.
-The validation set is the round on which the trainer monitors its loss, on the first 90 of its simulations by seed.
-The test set is a further round simulated with fresh seeds, and no model is scored on it until the final model is fixed.
-The test set is the paper's held-out synthetic data.
-
-The Ebola case study is held out from model development but not blind.
-We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
-A few Ebola checkpoint scores were produced in error during development and were not used to choose models or settings.
+Its expectation does not depend on $m$, whereas the usual sample form, with $2m^2$ in the second denominator, favours forecasts with more samples [@Ferro2014; @Zamo2018].
+The fair energy score is the same form for a vector of counts, with the Euclidean norm $\lVert \cdot \rVert$ in place of $|\cdot|$.
+We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, the CRPS on counts and on $\log(x + 1)$ counts, and the energy score on counts and on $\log(x + 1)$ counts.
+The random walks give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
+Chronos-2 gives quantiles, so its fair scores are of the trajectories the copula draws from them.
+We score the German hub's seven quantile levels, and 23 levels, from 1% to 99%, for the synthetic study and for forecasts given as samples.
+Relative WIS compares each model with the baseline on the forecasts both made, while bias and coverage use every forecast a model made.
 
 ### Ebola forecast layout
 
@@ -776,27 +809,6 @@ We score the country and each province by the CRPS and 90% coverage, and each le
 - Ebola trajectory scores use the same truth as every other Ebola score, with $D$ the 98% point of the hub data's national reporting delay.
 :::
 
-### Scoring
-
-::: {.callout-note title="Plan"}
-- We describe the scores and check them against scoringutils.
-- We compute the WIS directly from the quantiles, as the weighted interval scores and the absolute error of the median.
-- Key references: [@bosse2022scoringutils; @jordanEvaluatingProbabilisticForecasts2019; @zanetta_scoringrules_2024].
-:::
-
-We score quantiles with WIS, split into dispersion, overprediction and underprediction [@bracherEvaluatingEpidemicForecasts2021], and samples, where they are the natural form, with the fair CRPS.
-For a forecast of $m$ samples $x_1, \dots, x_m$ and an observation $y$, the fair CRPS is
-$$
-\mathrm{CRPS}_\mathrm{f}(x, y) = \frac{1}{m}\sum_{i=1}^{m} |x_i - y| - \frac{1}{2m(m-1)}\sum_{i \ne j} |x_i - x_j|.
-$$
-Its expectation does not depend on $m$, whereas the usual sample form, with $2m^2$ in the second denominator, favours forecasts with more samples [@Ferro2014; @Zamo2018].
-The fair energy score is the same form for a vector of counts, with the Euclidean norm $\lVert \cdot \rVert$ in place of $|\cdot|$.
-We compute both with scoringrules' `fair` estimator, `crps_ensemble` and `es_ensemble`, the CRPS on counts and on $\log(x + 1)$ counts, and the energy score on counts and on $\log(x + 1)$ counts.
-The random walks give 1,000 samples and hub teams 100, so the fair form compares them on the same footing.
-Chronos-2 gives quantiles, so its fair scores are of the trajectories the copula draws from them.
-We score the German hub's seven quantile levels, and 23 levels, from 1% to 99%, for the synthetic study and for forecasts given as samples.
-Relative WIS compares each model with the baseline on the forecasts both made, while bias and coverage use every forecast a model made.
-
 ### Choices tuned on development data
 
 @tbl-tuned-choices lists each choice we tuned and the data it was set on.
@@ -830,108 +842,19 @@ Choices tuned on development data, with their values and the data they were set 
 :::
 
 
-### Impact of correlated trajectories
-
-- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half and the development simulations, at the national level and for provinces.
-- The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.
-- The median rolling $\rho_p$ between German states over the first half's nowcasts is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} nowcasts falling back to the prior.
-
-![Each score of `randomwalk` and `randomwalknowcast` with the rolling $\rho_p$ relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level's places and weeks on the log scale. Development data only.](build/figures/si/copula-impact.png){#fig-copula-impact}
-
-### Checkpoint curve
-
-- We compare the final run's checkpoints, fine-tuned on {{< meta results.training.checkpoints >}} simulations.
-- They share the grid, the data order and the recipe, as checkpoints of one run.
-- @fig-progress-runa gives its progress over the checkpoints, in the panels every run's progress figure has.
-- Its loss panel gives the trainer's training loss and the validation loss by source and by level, for transparency, not to select a checkpoint.
-- Its German panels give first-half relative scores at each checkpoint on every horizon, the nowcasts and the forecasts, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data as reference lines.
-- Its 7-day panel gives the 7-day check, and in a paper run its BDBV panel gives the BDBV check, at each checkpoint.
-- @tbl-checkpoints gives the headline scores of each checkpoint.
-- A later checkpoint has also trained for more steps.
-- The learning rate falls linearly to zero over the {{< meta results.training.simulations >}} simulations, so the earlier checkpoints are taken at {{< meta results.training.first_rate >}} ({{< meta results.training.first >}}) to {{< meta results.training.penultimate_rate >}} ({{< meta results.training.penultimate >}}) of the starting rate, and only the {{< meta results.training.simulations >}} checkpoint is annealed.
-
-![Progress of the final run (`runa`) over its checkpoints. Loss: the trainer's training loss (a rolling mean of 50 logged steps), the validation loss by source at each evaluated step and by level (markers) at the start and at each checkpoint, against training step, with each checkpoint's simulations marked. 7-day check: the 7-day row's median over the 7-day sums of the daily medians, the share of those sums inside the row's 90% interval, and the roughness of its median over the truth's, each with its target dashed. BDBV check: relative CRPS against `randomwalknowcast` on the hub's releases, in a paper run only. German rows: WIS (on each model's own quantiles) relative to `randomwalknowcast` by level, on every horizon, the nowcasts (days 0 and before) and the forecasts (days after), with zero-shot Chronos-2 on the reporting-triangle layout (dashed) and on complete data (dotted) and `randomwalknowcast` at 1. Each German panel gives n, the fewest matched cells of its points, and the forecast origins they come from. Panels without rows say so. {{< meta evidence.live.label >}} Development data only.](build/figures/si/progress-runa.png){#fig-progress-runa}
-
-::: {#tbl-checkpoints}
-{{< include build/tables/si/checkpoint-table.md >}}
-
-Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
-:::
-
-### Attention biases for place and parent against none
-
-- We compare the run with attention biases with a run without them.
-- Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
-- @fig-compare-slots shows the trainer's validation loss and German first-half relative scores of both runs by checkpoint and level.
-- @fig-progress-noslots gives the run without biases' own progress, as @fig-progress-runa does for the run with them.
-- @tbl-slots-summary gives each run's newest checkpoint.
-- The lag-swap test moves whole lag series to another place.
-- A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
-- Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
-- The lag-swap test is not yet scored for this run.
-
-![Progress of the run without attention biases (`noslots`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-noslots.png){#fig-progress-noslots}
-
-![Attention biases against none: the trainer's validation loss and German first-half relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
-
-::: {#tbl-slots-summary}
-{{< include build/tables/si/slots-summary.md >}}
-
-Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
-:::
-
-### Delays against no delays
-
-- We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the reporting-triangle run.
-- Both runs share the grid, the data order, the recipe and the checkpoints.
-- @fig-compare-delays shows both runs by checkpoint.
-- @fig-progress-nodelays gives the no-delay run's own progress.
-- Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
-
-![Delays against no delays: validation loss by source and German first-half relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
-
-![Progress of the no-delay run (`nodelays`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-nodelays.png){#fig-progress-nodelays}
-
-### Real-data fine-tune against synthetic
-
-- We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
-- Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it only on held-out Ebola rounds after that release.
-- It saw the German development half, so we score it on the held-out half only.
-- Both use the same recipe and the reporting-triangle layout.
-- @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
-- @fig-progress-realdata gives the real-data run's own progress, in the panels of @fig-progress-runa.
-- We leave the real-data model out of every other table and figure.
-
-![Real-data fine-tune against synthetic: German held-out and BDBV relative scores.](build/figures/si/compare-realdata.png){#fig-compare-realdata}
-
-![Progress of the real-data run (`realdata`) over its checkpoints, in the panels of @fig-progress-runa. Its German development scores are on data it trained on. Development data only.](build/figures/si/progress-realdata.png){#fig-progress-realdata}
-
-::: {#tbl-real-finetune}
-{{< include build/tables/si/real-finetune.md >}}
-
-Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundation`) and fine-tuned on real data (`foundation_real`), by level: WIS on the German held-out half and on held-out Ebola rounds after the real-data model's last training release, relative to `randomwalknowcast`. Blank cells have no scores yet.
-:::
-
-### Daily nowcasts
-
-- We score our models' daily counts in both case studies directly from the daily rows, not summed.
-- The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.
-- Hub teams give no daily forecasts, and `randomwalknowcast` forecasts the 7-day sums only, so for Germany we compare daily counts with zero-shot Chronos-2 on the reporting-triangle layout.
-- For Germany, the daily zero-shot and fine-tuned models' block has each place's rolling 7-day sum row, so one call gives the daily counts and the hub's 7-day sums for every day.
-- We score the hub targets on the rolling rows and the daily counts on the daily rows, with no summing of daily draws.
-- The two outputs come from one call and are not forced to agree.
-- @fig-compare-daily shows both.
-- @fig-germany-si-results-daily repeats the German results figure for daily counts.
-
-![Daily nowcasts: German relative scores on daily counts and on the hub targets, by checkpoint.](build/figures/si/compare-daily.png){#fig-compare-daily}
-
-::: {#fig-germany-si-results-daily}
-![](build/figures/si/germany-si-results-daily.png)
-
-German nowcast hub, daily counts: the score panels of the German results figure, on daily counts relative to `randomwalknowcast`, without the hub teams or the nowcast panel. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
-:::
-
 ### Held-out synthetic data
+
+::: {#fig-synthetic-nowcasts}
+![](build/figures/main/synthetic-nowcasts.png)
+
+Held-out synthetic data: nowcasts of one held-out outbreak, drawn with the workflow's seed, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's score relative to `randomwalknowcast`. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
+
+::: {#tbl-synthetic-scores}
+{{< include build/tables/main/synthetic-scores.md >}}
+
+Held-out synthetic data: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.synthetic.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.synthetic.label >}} {{< meta results.synthetic.note >}}
+:::
 
 ::: {#tbl-synthetic-joint}
 {{< include build/tables/main/synthetic-joint.md >}}
@@ -995,6 +918,18 @@ Held-out synthetic data scores by location and stratum. {{< meta results.synthet
 
 ### German nowcast hub
 
+::: {#fig-germany-nowcasts}
+![](build/figures/main/germany-nowcasts.png)
+
+German nowcast hub: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+::: {#tbl-germany-scores}
+{{< include build/tables/main/germany-scores.md >}}
+
+German nowcast hub: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.germany.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
 ::: {#fig-germany-si-nowcasts}
 ![](build/figures/si/germany-si-nowcasts.png)
 
@@ -1048,6 +983,18 @@ German nowcast hub scores by location and stratum. {{< meta results.germany.labe
 :::
 
 ::::: {.content-visible when-meta="results.ebola.shown"}
+
+::: {#fig-ebola-nowcasts}
+![](build/figures/main/ebola-nowcasts.png)
+
+Ebola: national nowcasts, one column per model and one row per origin. Black is the rolling truth, grey dashed the data as of the origin, and blue the model's median with its 50% and 90% intervals; each column gives the model's WIS relative to `randomwalknowcast`. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
+
+::: {#tbl-ebola-scores}
+{{< include build/tables/main/ebola-scores.md >}}
+
+Ebola hub submissions: mean scores, coverage and number of forecasts of each model, with scores relative to {{< meta results.ebola.baseline >}} on the forecasts both made, and each model's pairwise relative skill against every other model on the natural and log scales, scaled to the same model. {{< meta results.ebola.label >}} {{< meta results.ebola.note >}}
+:::
 
 ::: {#tbl-ebola-joint}
 {{< include build/tables/main/ebola-joint.md >}}
@@ -1105,6 +1052,113 @@ Ebola hub submissions scores by location and stratum. {{< meta results.ebola.lab
 :::
 
 :::::
+
+### Checkpoint curve
+
+- We compare the final run's checkpoints, fine-tuned on {{< meta results.training.checkpoints >}} simulations.
+- They share the grid, the data order and the recipe, as checkpoints of one run.
+- @fig-progress-runa gives its progress over the checkpoints, in the panels every run's progress figure has.
+- Its loss panel gives the trainer's training loss and the validation loss by source and by level, for transparency, not to select a checkpoint.
+- Its German panels give first-half relative scores at each checkpoint on every horizon, the nowcasts and the forecasts, with zero-shot Chronos-2 on the reporting-triangle layout and on complete data as reference lines.
+- Its 7-day panel gives the 7-day check, and in a paper run its BDBV panel gives the BDBV check, at each checkpoint.
+- @tbl-checkpoints gives the headline scores of each checkpoint, and @tbl-live-summary the newest scored checkpoint against zero-shot Chronos-2.
+- A later checkpoint has also trained for more steps.
+- The learning rate falls linearly to zero over the {{< meta results.training.simulations >}} simulations, so the earlier checkpoints are taken at {{< meta results.training.first_rate >}} ({{< meta results.training.first >}}) to {{< meta results.training.penultimate_rate >}} ({{< meta results.training.penultimate >}}) of the starting rate, and only the {{< meta results.training.simulations >}} checkpoint is annealed.
+
+![Progress of the final run (`runa`) over its checkpoints. Loss: the trainer's training loss (a rolling mean of 50 logged steps), the validation loss by source at each evaluated step and by level (markers) at the start and at each checkpoint, against training step, with each checkpoint's simulations marked. 7-day check: the 7-day row's median over the 7-day sums of the daily medians, the share of those sums inside the row's 90% interval, and the roughness of its median over the truth's, each with its target dashed. BDBV check: relative CRPS against `randomwalknowcast` on the hub's releases, in a paper run only. German rows: WIS (on each model's own quantiles) relative to `randomwalknowcast` by level, on every horizon, the nowcasts (days 0 and before) and the forecasts (days after), with zero-shot Chronos-2 on the reporting-triangle layout (dashed) and on complete data (dotted) and `randomwalknowcast` at 1. Each German panel gives n, the fewest matched cells of its points, and the forecast origins they come from. Panels without rows say so. {{< meta evidence.live.label >}} Development data only.](build/figures/si/progress-runa.png){#fig-progress-runa}
+
+::: {#tbl-live-summary}
+{{< include build/tables/si/live-summary.md >}}
+
+Zero-shot Chronos-2 and the newest scored checkpoint of the fine-tuned model: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. @tbl-checkpoints gives every checkpoint. {{< meta evidence.live.label >}} Development data only.
+:::
+
+::: {#tbl-checkpoints}
+{{< include build/tables/si/checkpoint-table.md >}}
+
+Zero-shot Chronos-2, then each checkpoint by the simulations it was fine-tuned on: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss. Blank cells are not yet scored. {{< meta evidence.live.label >}} Development data only.
+:::
+
+### Daily nowcasts
+
+- We score our models' daily counts in both case studies directly from the daily rows, not summed.
+- The main text scores the hub targets, 7-day counts for Germany and weekly counts for BDBV.
+- Hub teams give no daily forecasts, and `randomwalknowcast` forecasts the 7-day sums only, so for Germany we compare daily counts with zero-shot Chronos-2 on the reporting-triangle layout.
+- For Germany, the daily zero-shot and fine-tuned models' block has each place's rolling 7-day sum row, so one call gives the daily counts and the hub's 7-day sums for every day.
+- We score the hub targets on the rolling rows and the daily counts on the daily rows, with no summing of daily draws.
+- The two outputs come from one call and are not forced to agree.
+- @fig-compare-daily shows both.
+- @fig-germany-si-results-daily repeats the German results figure for daily counts.
+
+![Daily nowcasts: German relative scores on daily counts and on the hub targets, by checkpoint.](build/figures/si/compare-daily.png){#fig-compare-daily}
+
+::: {#fig-germany-si-results-daily}
+![](build/figures/si/germany-si-results-daily.png)
+
+German nowcast hub, daily counts: the score panels of the German results figure, on daily counts relative to `randomwalknowcast`, without the hub teams or the nowcast panel. {{< meta results.germany.label >}} {{< meta results.germany.note >}}
+:::
+
+### Real-data fine-tune against synthetic
+
+- We fine-tune a model on the German development half and BDBV releases, and compare it with the model fine-tuned on simulations.
+- Its BDBV training data are every release up to {{< meta results.realdata_after >}}, so we score it only on held-out Ebola rounds after that release.
+- It saw the German development half, so we score it on the held-out half only.
+- Both use the same recipe and the reporting-triangle layout.
+- @tbl-real-finetune gives the scores, and @fig-compare-realdata shows them.
+- @fig-progress-realdata gives the real-data run's own progress, in the panels of @fig-progress-runa.
+- We leave the real-data model out of every other table and figure.
+
+![Real-data fine-tune against synthetic: German held-out and BDBV relative scores.](build/figures/si/compare-realdata.png){#fig-compare-realdata}
+
+![Progress of the real-data run (`realdata`) over its checkpoints, in the panels of @fig-progress-runa. Its German development scores are on data it trained on. Development data only.](build/figures/si/progress-realdata.png){#fig-progress-realdata}
+
+::: {#tbl-real-finetune}
+{{< include build/tables/si/real-finetune.md >}}
+
+Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundation`) and fine-tuned on real data (`foundation_real`), by level: WIS on the German held-out half and on held-out Ebola rounds after the real-data model's last training release, relative to `randomwalknowcast`. Blank cells have no scores yet.
+:::
+
+### Attention biases for place and parent against none
+
+- We compare the run with attention biases with a run without them.
+- Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
+- @fig-compare-slots shows the trainer's validation loss and German first-half relative scores of both runs by checkpoint and level.
+- @fig-progress-noslots gives the run without biases' own progress, as @fig-progress-runa does for the run with them.
+- @tbl-slots-summary gives each run's newest checkpoint.
+- The lag-swap test moves whole lag series to another place.
+- A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
+- Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
+- The lag-swap test is not yet scored for this run.
+
+![Progress of the run without attention biases (`noslots`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-noslots.png){#fig-progress-noslots}
+
+![Attention biases against none: the trainer's validation loss and German first-half relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
+
+::: {#tbl-slots-summary}
+{{< include build/tables/si/slots-summary.md >}}
+
+Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
+:::
+
+### Delays against no delays
+
+- We fine-tune a run on complete counts only, with the attention biases and without lag series, and compare it with the reporting-triangle run.
+- Both runs share the grid, the data order, the recipe and the checkpoints.
+- @fig-compare-delays shows both runs by checkpoint.
+- @fig-progress-nodelays gives the no-delay run's own progress.
+- Without lag series the no-delay model has no counts after the last complete step, so its context ends there.
+
+![Delays against no delays: validation loss by source and German first-half relative scores, by checkpoint.](build/figures/si/compare-delays.png){#fig-compare-delays}
+
+![Progress of the no-delay run (`nodelays`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-nodelays.png){#fig-progress-nodelays}
+
+### Impact of correlated trajectories
+
+- @fig-copula-impact compares the rolling $\rho_p$ with no pairing on the German first half and the development simulations, at the national level and for provinces.
+- The per-province CRPS and coverage are unchanged by construction, so only the national sum and the energy score move.
+- The median rolling $\rho_p$ between German states over the first half's nowcasts is {{< meta evidence.rho.randomwalknowcast.rho_p >}} for `randomwalknowcast` and {{< meta evidence.rho.randomwalk.rho_p >}} for `randomwalk`, with {{< meta evidence.rho.randomwalknowcast.fallback >}} and {{< meta evidence.rho.randomwalk.fallback >}} nowcasts falling back to the prior.
+
+![Each score of `randomwalk` and `randomwalknowcast` with the rolling $\rho_p$ relative to no pairing, by study and level: CRPS and 90% coverage of each cell, where the national level is the sum of the provinces, and the energy score (ES) of each level's places and weeks on the log scale. Development data only.](build/figures/si/copula-impact.png){#fig-copula-impact}
 
 ### Renewal model variants
 
