@@ -1062,3 +1062,55 @@ def test_the_hub_comparison_takes_the_walks_zones_from_the_store(
     assert sorted(whole["location"].astype(str)) == ["CD", "CD-BC", "CD-BC-01"]
     bare = _fit_store_forecasts(args, zones=False)
     assert sorted(bare["location"].astype(str)) == ["CD", "CD-BC"]
+
+
+def test_the_release_origins_name_the_stored_fit_scored(tmp_path: Path) -> None:
+    # `nowcast-origins.csv` says which fit each stored model was scored
+    # from, and lists a failed fit once, with no forecast.
+    from bdbvhub.cli import _write_release
+    from bdbvhub.store import store
+    from nowcasteval.nowcast import ReleaseBacktest
+
+    origins = pd.DataFrame(
+        {
+            "origin": ["2026-10-17", "2026-10-17"],
+            "model": ["renewal", "randomwalk"],
+            "status": ["scored", "scored"],
+            "reason": ["", ""],
+            "n_reported": [3, 3],
+            "n_complete": [2, 2],
+        }
+    )
+    base = {"origin": "2026-10-17", "key": "k1", "current": False}
+    (tmp_path / store.STATUS_FILE).write_text(
+        json.dumps(
+            [
+                {
+                    **base,
+                    "model": "renewal",
+                    "used": "k0",
+                    "commit": "c0",
+                    "failed": False,
+                    "pending": True,
+                },
+                {
+                    **base,
+                    "model": "renewalsp",
+                    "used": None,
+                    "commit": None,
+                    "failed": True,
+                    "pending": False,
+                },
+            ]
+        )
+    )
+    empty = pd.DataFrame()
+    _write_release(
+        ReleaseBacktest(empty, empty, empty, origins, empty), tmp_path, 7
+    )
+    got = pd.read_csv(tmp_path / "nowcast-origins.csv").set_index("model")
+    assert got.loc["renewal", "fit"] == "pending"
+    assert got.loc["renewal", "fit_commit"] == "c0"
+    assert got.loc["renewalsp", "status"] == "no forecast"
+    assert got.loc["renewalsp", "n_reported"] == 0
+    assert pd.isna(got.loc["randomwalk", "fit"])

@@ -67,3 +67,12 @@ def test_the_zone_backtest_scores_the_stored_zone_runs() -> None:
     assert run.index("fit-store load") < run.index("bdbvhub zone-backtest")
     assert "parts-zones" not in run
     assert "zone-backtest --forecast-only" not in FIT_STORE.read_text()
+
+
+def test_the_backtests_score_only_the_fits_of_their_own_code() -> None:
+    # The backtests run before the slow fits are stored, so they load
+    # only the current code's fits: a pair not yet fitted for it is
+    # listed as pending, not scored from an older fit.
+    job = _jobs()["backtests"]
+    run = "\n".join(str(s.get("run", "")) for s in job["steps"])
+    assert 'fit-store load --store "$STORE" --current-only' in run
