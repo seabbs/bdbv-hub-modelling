@@ -80,11 +80,6 @@ Teams without the capacity to set up specialist models could also use them direc
   - They are typically developed using complex, high parameter neural networks, trained on many time series, and are able to learn general patterns in time series data.
   - Recent examples include Chronos-2 [@Ansari2025], TimesFM [@Das2024a] and Moirai [@Woo2024] which have all been shown to peroform well on a wide range of forecasting tasks.
   - They are now used widely in operational forecast hubs, for influenza, COVID-19 and RSV, mostly without modification (zero-shot) [@flusight_hub; @placeholder; @respicast_si_hub; @Ansari2025; @Das2024a; @Woo2024].
-  - In the Ebola forecasting hub, two teams use foundation models zero-shot after a separate nowcast [@bdbv_modeling_hub_2026].
-    OHTJHU-BM takes a median ensemble of Chronos-2, TimesFM 2.5, Moirai 2.0 and Timestral on each nowcast draw [@bdbv_ohtjhu_bm].
-    ACCIDDA-insightcast pools the five best of statistical models and Chronos, TimesFM and Sundial in each place [@bdbv_accidda_insightcast].
-    A third, ACCIDDA-Chromantis, makes a negative binomial nowcast and then forecasts with custom neural networks trained on past Ebola outbreaks [@bdbv_accidda_chromantis].
-    No team fine-tunes a foundation model or gives it the reporting delays.
   - Most of the currently used foundation modles come with tools that allow them to be fine-tuned on new data.
   - This is a process where the weights of the model are modified to better fit the new data, usually using Low-Rank Adaptation (LoRA) or similar methods, which allow the model to be adapted to new data without requiring full retraining.
   - Some recent infectious disease forecasting models fine-tune a foundation model on real surveillance data [@dhauser_fluchronos; @fluxengine_atlas].
@@ -546,7 +541,11 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Key references: [@Kalahasti2026; @Meyer2025].
 - **Comparison with foundation models and neural networks.**
   - Most uses of foundation models in forecast hubs are zero-shot, and correct for delays outside the model, with a nowcast or adjustment applied before the model sees the data [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
-    In the Ebola hub, both teams that use foundation models do this, and pool several of them [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast].
+    In the Ebola hub, two teams use foundation models zero-shot after a separate nowcast [@bdbv_modeling_hub_2026].
+    OHTJHU-BM takes a median ensemble of Chronos-2, TimesFM 2.5, Moirai 2.0 and Timestral on each nowcast draw [@bdbv_ohtjhu_bm].
+    ACCIDDA-insightcast pools the five best of statistical models and Chronos, TimesFM and Sundial in each place [@bdbv_accidda_insightcast].
+    A third, ACCIDDA-Chromantis, makes a negative binomial nowcast and then forecasts with custom neural networks trained on past Ebola outbreaks [@bdbv_accidda_chromantis].
+    No team fine-tunes a foundation model or gives it the reporting delays.
     Our zero-shot model given the random walk nowcast follows the same approach with one foundation model, so the gap between it and the fine-tuned model shows what fine-tuning adds over a separate nowcast.
     Our model learns the delays itself, so nowcasting and forecasting happen in one step.
   - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
