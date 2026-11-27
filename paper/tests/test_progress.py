@@ -79,6 +79,24 @@ def test_the_figure_has_each_standard_panel() -> None:
     assert [len(s.legends) for s in fig.subfigs[1:]] == [0, 0, 1]
 
 
+def test_a_run_on_real_data_alone_is_drawn_by_its_share_of_training() -> None:
+    # Its checkpoints have no outbreaks; n<N> are thousandths of its passes.
+    rows = _horizons()
+    tuned = rows["checkpoint"] != "zero-shot"
+    rows.loc[tuned, "checkpoint"] = rows.loc[tuned, "checkpoint"].map(
+        {"n100": "n500", "n200": "n1000"}
+    )
+    rows["outbreaks"] = 0
+    fig = progress_figure(_loss(), rows, _seven_day(), None, run="realonly")
+    german = [
+        ax for ax in fig.get_axes() if ax.get_title().startswith("germany")
+    ]
+    assert german
+    for ax in german:
+        assert ax.get_xlabel() == "Share of the passes"
+        assert [t.get_text() for t in ax.get_xticklabels()] == ["1/2", "all"]
+
+
 def test_the_bdbv_panel_is_held_out_of_development_runs() -> None:
     fig = progress_figure(_loss(), _horizons(), _seven_day(), None)
     bdbv = fig.get_axes()[2]

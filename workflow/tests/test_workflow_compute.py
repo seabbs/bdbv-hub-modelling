@@ -210,7 +210,7 @@ def test_a_worker_s_gpu_is_its_own_for_the_groups_placed_on_it():
 def test_only_the_trainer_takes_the_gpu():
     # The GPU is the trainer's for the whole run: evaluation, scoring and
     # figures run beside it on the CPU and never hold the next segment up.
-    assert {"train_segment"} == compute.GPU_RULES
+    assert {"train_segment", "train_real"} == compute.GPU_RULES
 
 
 def test_the_trainer_comes_before_every_other_job():
@@ -224,6 +224,7 @@ def test_the_trainer_comes_before_every_other_job():
             elif line.strip().startswith("priority:"):
                 seen[rule] = line.split(":", 1)[1].strip()
     assert seen.pop("train_segment") == "TRAINING.trainer_priority"
+    assert seen.pop("train_real") == "TRAINING.trainer_priority"
     for rule, value in seen.items():
         numbers = [float(x) for x in re.findall(r"\d+(?:\.\d+)?", value)]
         assert all(x < compute.TRAIN_PRIORITY for x in numbers), rule

@@ -41,6 +41,30 @@ def test_the_tag_follows_the_series_bias(
     assert json.loads(out.read_text())["tag"] == tag
 
 
+def test_a_real_data_checkpoint_is_released_as_realdata_ft(
+    publish_checkpoint, monkeypatch, tmp_path
+):
+    # The real-only run's checkpoints are `foundation_real`'s release,
+    # which the fine-tuned models' latest lookup never takes.
+    settings = {"hash": "abc", "data": "real", "series_bias": {}}
+    (tmp_path / "settings.json").write_text(json.dumps(settings))
+    published = []
+    monkeypatch.setattr(
+        publish_checkpoint.realdata,
+        "publish",
+        lambda where: published.append(where) or "realdata-ft-abc",
+    )
+    monkeypatch.setattr(
+        publish_checkpoint.fs, "publish", lambda *_: pytest.fail("simulated")
+    )
+    out = tmp_path / "published.json"
+    monkeypatch.setattr(sys, "argv", ["x", str(tmp_path), str(out)])
+    publish_checkpoint.main()
+    assert published == [tmp_path]
+    record = json.loads(out.read_text())
+    assert record == {"tag": "realdata-ft-abc", "hash": "abc"}
+
+
 def test_a_release_never_waits_for_its_held_out_losses(
     publish_checkpoint, monkeypatch, tmp_path
 ):

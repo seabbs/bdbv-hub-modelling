@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 finetune-stream = "nowcastfoundation.finetune.stream:main"
+finetune-real = "nowcastfoundation.finetune.realdata:main"
 finetune-verify = "nowcastfoundation.finetune.verify:main"
 sim-qc = "nowcastfoundation.finetune.qc:main"
 publish-hf = "nowcastfoundation.hubpublish:main"
