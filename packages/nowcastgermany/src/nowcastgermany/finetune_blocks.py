@@ -199,8 +199,8 @@ def german_blocks(
     each of `places` (`PLACES` by default) gives a block by
     `finetune.training_block`, at a lag taken in turn (from cut `first`
     on), padded as the simulated blocks are. `SOURCE` takes every report
-    date up to the cut as a release, at a lag from `LAGS`; `weekly` takes a release a week, on the cut's
-    weekday, at a lag from `WEEKLY_LAGS`.
+    date up to the cut as a release, at a lag from `LAGS`; `weekly` takes
+    a release a week, on the cut's weekday, at a lag from `WEEKLY_LAGS`.
 
     Raises
     ------
