@@ -19,7 +19,13 @@ var STATS={cases:"Cases",strata:"Strata",days:"Days",weeks:"Weeks",
  delay_drift:"Week-to-week variation of the mean delay (CV)",delay_trend:"Mean delay, last third less first (days)",
  dow_delay:"Range of the mean delay over weekdays (days)",release_weekdays:"Weekdays with releases",
  wait:"Days waiting for the next release",wait_share:"Share of the delay waiting for a release",
- strata_spread:"Spread of the strata's mean delays (sd, days)"};
+ strata_spread:"Spread of the strata's mean delays (sd, days)",
+ strata_corr:"Strata's weekly mean delays, mean pairwise correlation",strata_corr_min:"Lowest stratum's mean correlation with the others",
+ share7_sd:"Largest stratum's sd of its weekly share by day 7",counts_slope:"Mean delay on log daily count, within strata (days)",
+ counts_corr:"Mean delay with log daily count, correlation within strata",share1_counts_corr:"Share by day 1 with log daily count, correlation",
+ burst_ratio:"Largest weekly first report over final count",withdrawn_share:"Share of final cases ever withdrawn",
+ withdrawn_max:"Largest stratum's share ever withdrawn",noise_time:"Delay noise: share common to strata over time",
+ noise_strata:"Delay noise: share fixed by stratum",noise_residual:"Delay noise: share by stratum and week"};
 // The data the simulations are read against (`delay_reference` in the
 // workflow, as reference.json names them): each drawn in the page's ink,
 // told apart by its dash.
@@ -83,8 +89,9 @@ function lineChart(el,o){
  o.series.forEach(function(s,si){var d="",pen=false;s.x.forEach(function(x,i){var y=s.y[i];
   if(y===null||isNaN(y)||(o.log&&y<=0)){pen=false;return}
   var px=fx(x),py=fy(y);d+=(pen?"L":"M")+px.toFixed(1)+" "+py.toFixed(1);pen=true;
+  if(s.pts)g.push('<circle cx='+px.toFixed(1)+' cy='+py.toFixed(1)+' r=2.5 fill="'+s.colour+'" fill-opacity=.7></circle>');
   if(o.pick||o.hover)pts.push([px,py,si,i])});
-  g.push('<path d="'+d+'" fill=none stroke="'+s.colour+'" stroke-width='+(s.w||2)+
+  if(!s.pts)g.push('<path d="'+d+'" fill=none stroke="'+s.colour+'" stroke-width='+(s.w||2)+
    ' stroke-opacity='+(s.op===undefined?1:s.op)+(s.dash?' stroke-dasharray="'+s.dash+'"':'')+' stroke-linejoin=round></path>')});
  el.innerHTML='<svg width='+W+' height='+H+' viewBox="0 0 '+W+' '+H+'">'+g.join("")+
   '<circle id=dot r=4 fill=none stroke-width=2 visibility=hidden></circle>'+
@@ -347,7 +354,9 @@ function delays(){var d=S.data,box=$("delaysbody"),gl=groupLists();
   ["gaps","Share of gaps between releases","days between releases",["1","2","3","4","5","6","7","8+"],{y0:0}]];
  box.innerHTML=curves.map(function(c){return '<div class="card lpanel"><h3 title="'+esc(c[1])+'">'+c[1]+'</h3><div data-c="'+c[0]+'"></div></div>'}).join("");
  scalarPanels(box,[["delay"],["within7"],["within14"],["within28"],["delay_drift"],["delay_trend"],["dow_delay"],["strata_spread"],
-  ["releases"],["gap"],["first_report"],["release_weekdays"],["wait"],["wait_share"]],gl,refStat);
+  ["releases"],["gap"],["first_report"],["release_weekdays"],["wait"],["wait_share"],
+  ["strata_corr"],["strata_corr_min"],["share7_sd"],["counts_slope"],["counts_corr"],["share1_counts_corr"],
+  ["burst_ratio",true],["withdrawn_share"],["withdrawn_max"],["noise_time"],["noise_strata"],["noise_residual"]],gl,refStat);
  curves.forEach(function(c){var o=Object.assign({refs:refsOf(function(e){return e.curves?e.curves[c[0]]:null})},c[4]);
   curvePanel(box.querySelector('[data-c="'+c[0]+'"]'),c[3],c[2],function(ix){return ix.map(function(i){return d.derived[c[0]][i]}).filter(Boolean)},gl.list,gl.colour,o)});
  if(!built.length)box.insertAdjacentHTML("afterbegin",'<p class=mut style="grid-column:1/-1">No data to compare with on this machine yet: build the workflow rule <code>delay_reference</code>.</p>')}
@@ -402,7 +411,7 @@ function dive(j){var box=$("divebody"),x=j.dates.map(dayNum),i=S.data.ids.indexO
    return fs.length?"<b>"+l+"</b>: "+fs.map(function(k){return esc(level(k,i))}).join(", "):""}).filter(Boolean).join("; ")+".</p>":"";
  box.innerHTML='<h3>'+esc(j.id)+'</h3>'+head+'<div class=plots>'+cards.map(function(c){return '<div class=card><h3>'+c[1]+'</h3><div id=d-'+c[0]+'></div><div id=l-'+c[0]+' class=leg></div></div>'}).join("")+
   '</div><div id=d-struct></div><h3 style="margin-top:10px">Settings by layer</h3><div class=plots3 id=d-set></div>';
- diveDelays(j.structure);
+ diveDelays(j.structure,j.noise_drawn);
  // Strata: the eight largest each, the rest summed as "other", and the total.
  var names=Object.keys(j.strata),tot=function(n){return j.strata[n].reduce(function(a,b){return a+b},0)};
  names.sort(function(a,b){return tot(b)-tot(a)});
@@ -457,7 +466,7 @@ function strataPanel(el,rows){var shown=rows.filter(function(r){return r.mean!==
    '<circle cx='+sx(r.mean)+' cy='+y+' r=4 fill="'+c+'" stroke="var(--card)" stroke-width=1.5></circle>'+
    '<rect x=0 y='+(y-rh/2)+' width='+W+' height='+rh+' fill=transparent></rect></g>')});
  el.innerHTML='<svg width='+W+' height='+H+'>'+g.join("")+'</svg>'}
-function diveDelays(st){var box=$("d-struct");
+function diveDelays(st,drawn){var box=$("d-struct");
  if(!st){box.innerHTML="";return}
  var sc=function(e){return e&&e.scalars?e.scalars:{}},mine=st,wait=mine.releases.wait,mean=mine.overall.mean;
  var cmp=function(k,lab){var parts=refList().map(function(r){var v=sc(S.ref[r[0]])[k];return r[1]+" "+fmt(v)});
@@ -470,6 +479,10 @@ function diveDelays(st){var box=$("d-struct");
   "; delays of reference dates to "+esc(dayLabel(dayNum(mine.last_rep)-mine.horizon))+" (the 95% delay, "+mine.horizon+" days, before the last report).</p>";
  var cards=[["dref","Delay by reference week"],["drel","Delay by release week"],["dwd","Mean delay by reference weekday, less the mean"],
   ["drw","Counts by report weekday, over the mean"],["dgap","Gaps between releases"],["dstr","Delay by stratum: total, parents, children"]];
+ var bs=mine.by_stratum;
+ if(bs)cards.push(["dsm","Mean delay by stratum and reference week"],["ds7","Share reported by day 7, by stratum"],
+  ["dcc","Mean delay against the log daily count, by week"],["dfr","First report over the final count, by stratum"],
+  ["dno","Delay noise by part"]);
  box.innerHTML='<h3 style="margin-top:10px">Delay structure</h3>'+note+'<div class=plots>'+cards.map(function(c){return '<div class=card><h3>'+c[1]+'</h3><div id=d-'+c[0]+'></div><div id=l-'+c[0]+' class=leg></div></div>'}).join("")+'</div>';
  var rw=weekSeries(mine.by_ref),lw=weekSeries(mine.by_rel),wk={dates:dayLabel,ylab:"Delay (days)",hover:defaultHover,ymin:0};
  lineChart($("d-dref"),Object.assign({series:rw},wk));$("l-dref").innerHTML=legendOf([rw[3],rw[2],Object.assign({},rw[1],{name:"10 and 90%"})]);
@@ -484,7 +497,30 @@ function diveDelays(st){var box=$("d-struct");
  lineChart($("d-dgap"),{series:gp,xt:gx,xfmt:function(v){return v===8?"8+":String(v)},ymin:0,xlab:"Days between releases",ylab:"Share of gaps",hover:defaultHover});
  $("l-dgap").innerHTML=legendOf(gp)+'<span class=mut>'+mine.releases.n+' releases, '+fmt(mine.releases.per_week)+' a week</span>';
  strataPanel($("d-dstr"),mine.strata);
- $("l-dstr").innerHTML='<span class=mut>Line 10 to 90%, tick median, dot mean; bold the total and parents. The largest 16.</span>'}
+ $("l-dstr").innerHTML='<span class=mut>Line 10 to 90%, tick median, dot mean; bold the total and parents. The largest 16.</span>';
+ if(bs)strataWeeks(mine,drawn,cmp)}
+// Each stratum's delays week by week (`by_stratum`), how they follow the
+// counts, the over-reporting bursts and the delay's noise by part.
+function strataWeeks(st,drawn,cmp){var bs=st.by_stratum,x=bs.week.map(dayNum),one=bs.strata.length<2;
+ var lines=function(key){var ser=bs.strata.slice(0,MAXCOL).map(function(r,k){return {x:x,y:r[key],colour:PAL[k],w:1.5,name:r.name}});
+  if(!one)ser.push({x:x,y:bs.total[key],colour:"var(--fg)",w:2.5,name:"all strata"});return ser};
+ var wk={dates:dayLabel,hover:defaultHover};
+ var sm=lines("mean");lineChart($("d-dsm"),Object.assign({series:sm,ylab:"Mean delay (days)",ymin:0},wk));$("l-dsm").innerHTML=legendOf(sm);
+ var s7=lines("share7");lineChart($("d-ds7"),Object.assign({series:s7,ylab:"Share by day 7",ymin:0,hline:1},wk));$("l-ds7").innerHTML=legendOf(s7);
+ var cc=bs.strata.slice(0,MAXCOL).map(function(r,k){return {x:r.log_count,y:r.mean,colour:PAL[k],pts:true,name:r.name}});
+ lineChart($("d-dcc"),{series:cc,xlab:"Log daily count (week)",ylab:"Mean delay (days)",hover:defaultHover});
+ $("l-dcc").innerHTML=bs.strata.slice(0,MAXCOL).map(function(r,k){return '<span><i style="background:'+PAL[k]+'"></i>'+esc(r.name)+' <span class=mut>slope '+fmt(r.counts_slope)+', r '+fmt(r.counts_corr)+'</span></span>'}).join("");
+ var fr=lines("first_ratio");lineChart($("d-dfr"),Object.assign({series:fr,ylab:"First report / final",ymin:0,hline:1},wk));
+ $("l-dfr").innerHTML=legendOf(fr)+'<span class=mut>Withdrawn: '+bs.strata.slice(0,MAXCOL).map(function(r){return esc(r.name)+" "+fmt(r.withdrawn)}).join(", ")+'</span>';
+ var no=st.noise||{},dr=drawn||{},parts=[["time","Common to strata, by week","time"],["strata","Fixed by stratum","strata"],["residual","By stratum and week","strata_time"]];
+ $("d-dno").innerHTML='<table class=settings><tr><th>part</th><th>sd</th><th>share</th><th>drawn sd</th></tr>'+parts.map(function(p){
+  return "<tr><td>"+p[1]+"</td><td>"+fmt(no[p[0]+"_sd"])+"</td><td>"+fmt(no[p[0]+"_share"])+"</td><td>"+fmt(dr[p[2]])+"</td></tr>"}).join("")+"</table>";
+ $("l-dno").innerHTML='<span class=mut>The strata\'s weekly log(1 + mean delay) split additively; the stratum-by-week part holds the weekly counts\' sampling noise too. Drawn sds are the settings\' (delay_jitter_sd, delay_strata_sd, delay_strata_jitter_sd) on the delay parameters\' log scale.</span>';
+ var sc=st.coupling||{},bu=st.bursts||{},box2=$("d-struct").querySelector(".cnote");
+ if(box2)box2.insertAdjacentHTML("beforeend"," "+cmp("strata_corr","Strata's weekly mean delays correlate "+fmt(bs.corr)+" (lowest stratum "+fmt(bs.corr_min)+")")+
+  "; "+cmp("counts_slope","mean delay on the log daily count "+fmt(sc.slope)+" days (r "+fmt(sc.corr)+")")+
+  "; "+cmp("burst_ratio","largest first report over final "+fmt(bu.max_ratio))+
+  "; "+cmp("withdrawn_share","share withdrawn "+fmt(bu.withdrawn)+" (largest stratum "+fmt(bu.withdrawn_max)+")")+".")}
 
 // ---- wiring ------------------------------------------------------------
 function update(){S.shown=filtered();chips();

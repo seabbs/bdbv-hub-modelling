@@ -377,3 +377,83 @@ def test_the_page_has_the_delay_structure_section():
     page = sims.page()
     assert "id=delays" in page
     assert "reference.json" in page
+
+
+DELAY_FACTORS = {
+    "delay_change_strata": "strata",
+    "delay_change_switch": "delays",
+    "delay_change_combine": "delays",
+    "delay_counts": "delays",
+    "delay_strata_noise": "delays",
+    "bursts": "reporting",
+}
+"""The grid's factors for the delay's structure by stratum and bursts."""
+
+
+def test_the_delay_structure_factors_have_their_layers():
+    got = sims.layers(GRID)
+    for name, layer in DELAY_FACTORS.items():
+        assert got[name] == layer
+
+
+def test_the_delay_structure_factors_group_the_simulations(root, tmp_path):
+    folder = root / "rounds" / "r1" / "sims"
+    for seed in (101, 102):
+        path = folder / f"settings-{seed}.csv"
+        lines = path.read_text().splitlines()
+        extra = list(DELAY_FACTORS)
+        lines[0] += "," + ",".join(extra)
+        lines[1] += ",related,diverge,combined,strata,both,yes"
+        lines[2] += ",shared,none,single,none,none,none"
+        path.write_text("\n".join(lines) + "\n")
+    layer_of = LAYERS | DELAY_FACTORS
+    got = sims.Index(root, tmp_path / "cache", layer_of).data("r1")
+    for name, layer in DELAY_FACTORS.items():
+        assert name in got["factors"]
+        assert got["layers"][name] == layer
+        # The page's "Colour and group by" lists the index's factors in
+        # the grid's order.
+        assert name in got["order"]
+    bursts = got["factors"]["bursts"]
+    assert [bursts["levels"][c] for c in bursts["codes"]] == [
+        "yes",
+        "none",
+        "yes",
+        "none",
+    ]
+
+
+def test_each_simulation_s_strata_delays_in_the_index(root, tmp_path):
+    got = sims.Index(root, tmp_path / "cache", LAYERS).data("r1")
+    stats = got["stats"]
+    for k in (
+        "strata_corr",
+        "counts_slope",
+        "burst_ratio",
+        "withdrawn_share",
+        "noise_time",
+    ):
+        assert k in stats
+    # Nothing withdrawn; the first report is half the final count.
+    assert stats["withdrawn_share"][0] == 0
+    assert stats["burst_ratio"][0] == 0.5
+
+
+def test_one_simulation_s_strata_delays_and_drawn_noise(root):
+    got = sims.simulation(root / "rounds" / "r1" / "sims", "101-0001", LAYERS)
+    by = got["structure"]["by_stratum"]
+    assert [s["name"] for s in by["strata"]] == ["P01-A1", "P01-A2"]
+    assert len(by["strata"][0]["mean"]) == len(by["week"])
+    assert set(got["structure"]["noise"]) >= {"time_share", "strata_share"}
+    assert got["noise_drawn"] == {
+        "time": None,
+        "strata": None,
+        "strata_time": None,
+    }
+
+
+def test_the_page_draws_each_stratum_s_delays():
+    page = sims.page()
+    assert "strataWeeks" in page
+    assert "First report over the final count" in page
+    assert "noise_residual" in page
