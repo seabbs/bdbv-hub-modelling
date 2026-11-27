@@ -9,8 +9,9 @@ so one pass gives the daily counts and the 7-day hub target):
 model; `finetuned_checkpoint`), `foundation_zeroshot` (pretrained
 weights), `foundation_complete` and `foundation_zeroshot_complete`
 (complete layout), and `foundation_baselinenowcast` and
-`foundation_zeroshot_baselinenowcast` (complete layout on baselinenowcast's
-point nowcast, with `randomwalknowcast`'s 7-day nowcast to the cut-off).
+`foundation_zeroshot_baselinenowcast` (complete layout on the median of
+baselinenowcast's nowcast draws, with `randomwalknowcast`'s 7-day nowcast to
+the cut-off).
 For the SI,
 `foundation_real` is the ragged model with the checkpoint fine-tuned on real
 data alone (the German development half and the public BDBV data to date,
@@ -1476,17 +1477,18 @@ BASELINENOWCAST_DELAY: Final = 40
 history."""
 
 
-def point_nowcast(
+def baselinenowcast_draws(
     tri: HubTriangle, places: Sequence[str], task: ForecastTask, stream: str
 ) -> tuple[HubTriangle, np.ndarray]:
     """Return `tri` with each place's days to the cut-off nowcast, and draws.
 
     Each place's daily triangle at the cut-off (`round(3 * D)` days,
-    $D$ = `BASELINENOWCAST_DELAY` capped by the history) is filled by
-    baselinenowcast's point nowcast, and those days of the place's counts
-    are replaced by it. The draws, `[S, L, T]`, are the counts with those
-    days replaced by `task.n_samples` of baselinenowcast's nowcast draws,
-    keyed from the task's `stream`.
+    $D$ = `BASELINENOWCAST_DELAY` capped by the history) is nowcast by
+    `task.n_samples` of baselinenowcast's draws, keyed from the task's
+    `stream`. The draws, `[S, L, T]`, are the counts with those days
+    replaced by the draws, and `tri`'s counts on those days are their
+    median, the context Chronos-2 forecasts on, as the 7-day rows' context
+    is the median of the walk's 7-day draws (`seven_day_nowcast`).
     """
     import jax
 
@@ -1512,15 +1514,17 @@ def point_nowcast(
     )
     for i, place in enumerate(places):
         cells, mask = daily_triangle(history, place, cutoff, rows, delay)
-        point = baselinenowcast(cells, mask, output_type="point")
-        final[i, at - rows + 1 : at + 1] = np.asarray(point, np.float64)
-        drawn = baselinenowcast(
-            cells,
-            mask,
-            key=jax.random.fold_in(key, i),
-            draws=task.n_samples,
+        drawn = np.asarray(
+            baselinenowcast(
+                cells,
+                mask,
+                key=jax.random.fold_in(key, i),
+                draws=task.n_samples,
+            ),
+            np.float64,
         )
-        draws[:, i, at - rows + 1 : at + 1] = np.asarray(drawn, np.float64)
+        draws[:, i, at - rows + 1 : at + 1] = drawn
+        final[i, at - rows + 1 : at + 1] = np.median(drawn, axis=0)
     return replace(tri, final=final), draws
 
 
@@ -1721,9 +1725,10 @@ class FoundationModel:
         added to it, and the forecast stops.
     baselinenowcast : bool
         The baselinenowcast model (a sensitivity analysis): each place's
-        daily counts to the cut-off are first replaced by baselinenowcast's
-        point nowcast (`point_nowcast`), and Chronos-2 forecasts from the
-        day after the cut-off on those corrected counts. Each sample's
+        daily counts to the cut-off are first replaced by the median of
+        baselinenowcast's nowcast draws (`baselinenowcast_draws`), and
+        Chronos-2 forecasts from the day after the cut-off on those corrected
+        counts. Each sample's
         nowcast days are a baselinenowcast draw. The 7-day sums to the
         cut-off are `randomwalknowcast`'s 7-day nowcast
         (`seven_day_nowcast`): its draws are the targets to the cut-off,
@@ -1877,9 +1882,9 @@ class FoundationModel:
         seven = None
         if self.baselinenowcast:
             # Chronos-2 forecasts from the day after the cut-off, on the
-            # counts baselinenowcast's point nowcast corrects; the samples'
-            # nowcast days are its draws.
-            tri, nowcast = point_nowcast(
+            # median of baselinenowcast's nowcast draws; the samples'
+            # nowcast days are the draws themselves.
+            tri, nowcast = baselinenowcast_draws(
                 tri, places, task, self.stream or self.name
             )
             seven = seven_day_nowcast(task, places, tri)

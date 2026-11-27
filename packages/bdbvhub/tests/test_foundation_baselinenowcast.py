@@ -103,7 +103,7 @@ def test_the_context_is_the_median_nowcast_to_the_cut_off(task):
     # the 7-day rows see the median of the walk's 7-day draws, and
     # forecasts from the day after it.
     from bdbvhub.models import get_model
-    from nowcastfoundation.forecaster import point_nowcast
+    from nowcastfoundation.forecaster import baselinenowcast_draws
 
     store: list = []
     model = dataclasses.replace(
@@ -114,10 +114,10 @@ def test_the_context_is_the_median_nowcast_to_the_cut_off(task):
     run = model.for_task(task)
     rows, places, weeks = run._rows(task)
     tri = run._triangle(rows, places, weeks[-1])
-    _, draws = point_nowcast(tri, places, task, run.stream or run.name)
+    _, draws = baselinenowcast_draws(tri, places, task, run.stream or run.name)
     target = np.atleast_2d(group["target"])
     # Count rows are the places in the block's order: the country first.
-    place = list(task.locations)[0]
+    place = next(iter(task.locations))
     row = 1 + list(task.locations).index(place)
     i = list(places).index(place)
     median = np.median(draws[:, i, :], axis=0)
