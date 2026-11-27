@@ -619,9 +619,7 @@ def draw_values(
     v["shock_weeks"] = vec(dc("shock_weeks", n_shocks))
     v["shock_mult"] = vec(ds("shock_mult", n_shocks))
     rep = design["reporting_strata"]
-    v["revise_over"] = stratum_values(
-        grid, rep, n_s, "revise_over", rng, probability=True
-    )
+    v["revise_over"] = stratum_values(grid, rep, n_s, "revise_over", rng)
     v["revise_move"] = stratum_values(
         grid, rep, n_s, "revise_move", rng, probability=True
     )
@@ -639,4 +637,186 @@ def draw_values(
     # draws above are unchanged.
     v["report_cap_days"] = ds("report_cap_days")
     v["report_stop_at"] = ds("report_stop_at")
+    # Noise on the delay's parameters by stratum (`delay_strata_noise`).
+    v["delay_strata_sd"] = ds("delay_strata_sd")
+    v["delay_strata_jitter_sd"] = ds("delay_strata_jitter_sd")
+    # The delay change by stratum (`delay_change_strata`, `_switch`,
+    # `_combine`): a second kind, each stratum's own change, and the
+    # switch between shared and own.
+    v.update(_stratum_changes(grid, design, n_s, rng))
+    # The delay by the stratum's expected counts (`delay_counts`): longer
+    # when counts are high with `delay_counts_longer`, else shorter; one
+    # sign for all strata unless each has its own slope.
+    longer = draw_share(grid, "delay_counts_longer", rng, n_s)
+    sign = np.where(longer, 1, -1)
+    if design.get("delay_counts", "none") in ("none", "shared"):
+        sign[:] = sign[0]
+    v["delay_counts_sign"] = vec(sign)
+    v["delay_counts_slope"] = ds("delay_counts_slope")
+    v["delay_counts_sd"] = ds("delay_counts_sd")
+    # Over-reporting bursts (`bursts`): a few, usually one, strata with
+    # cases, each with one or more short bursts.
+    n_a = int(design["n_ages"])
+    with_cases = [s + 1 for s in range(n_s) if s // n_a + 1 in cases]
+    if design.get("bursts", "none") == "none":
+        burst: list[int] = []
+    else:
+        burst = _sample(
+            rng, with_cases, min(len(with_cases), dc("burst_strata"))
+        )
+    per_stratum = dc("bursts_per_stratum", len(burst))
+    v["burst_strata"] = [
+        s for s, k in zip(burst, per_stratum, strict=True) for _ in range(k)
+    ]
+    n_bursts = len(v["burst_strata"])
+    v["burst_at"] = vec(ds("burst_at", n_bursts))
+    v["burst_days"] = vec(dc("burst_days", n_bursts))
+    v["burst_mult"] = vec(ds("burst_mult", n_bursts))
+    keep = int(grid["constants"]["burst_keep_max"])
+    v["burst_keep"] = vec(np.minimum(dc("burst_keep_days", n_bursts), keep))
+    # Ascertainment that changes over time (`ascertainment_*`).
+    v.update(_ascertainment_changes(grid, design, n_s, span, rng))
     return v
+
+
+def _ascertainment_changes(
+    grid: Grid,
+    design: Mapping[str, Any],
+    n_s: int,
+    span: int,
+    rng: np.random.Generator,
+) -> dict[str, Any]:
+    """Draw the values of ascertainment that changes over time.
+
+    The shared change's sizes (signed for drift and step) and timings,
+    its weekly walk over `span` weeks, each stratum's own change (of the
+    shared kind for related strata, of a kind drawn by the
+    `ascertainment_change` weights for independent ones), the strata's
+    shared share and switch, the slope on the stratum's counts (lower
+    ascertainment at peaks with `ascertainment_counts_lower`, a sign per
+    stratum where each has its own slope) and the noise sd. Changes are
+    on the logit scale.
+    """
+
+    def ds(name: str, n: int | None = None) -> Any:
+        return draw_setting(grid, name, rng, n)
+
+    def signed(name: str, n: int) -> list[float]:
+        sign = np.where(rng.random(n) < 0.5, 1.0, -1.0)
+        return [float(e) for e in sign * ds(name, n)]
+
+    def each(name: str, n: int) -> list[float]:
+        return [float(e) for e in ds(name, n)]
+
+    floor = float(grid["floors"]["period_days"])
+    levels = grid["factors"]["ascertainment_change"]
+    names = list(levels)
+    w = np.asarray([levels[k] for k in names], dtype=float)
+    first = str(design.get("ascertainment_change", "static"))
+    if design.get("ascertainment_change_strata") == "independent":
+        own = [
+            str(names[i]) for i in rng.choice(len(names), n_s, p=w / w.sum())
+        ]
+    else:
+        own = [first] * n_s
+    v: dict[str, Any] = {}
+    for prefix, n in (("asc_", 1), ("asc_own_", n_s)):
+        v[f"{prefix}drift"] = signed("ascertainment_drift", n)
+        v[f"{prefix}step"] = signed("ascertainment_step", n)
+        v[f"{prefix}step_at"] = each("step_at", n)
+        v[f"{prefix}periodic"] = each("ascertainment_periodic", n)
+        v[f"{prefix}periodic_weeks"] = each("periodic_weeks", n)
+        v[f"{prefix}smooth_amp"] = each("ascertainment_smooth_amp", n)
+        v[f"{prefix}smooth_period"] = [
+            max(floor, e) for e in each("smooth_period", n)
+        ]
+        v[f"{prefix}smooth_phase"] = each("phase", n)
+    for k in list(v):
+        if k.startswith("asc_") and not k.startswith("asc_own_"):
+            v[k] = v[k][0]
+    v["asc_own_change"] = own
+    v["asc_walk_sd"] = ds("ascertainment_walk_sd")
+    steps = np.concatenate([[0.0], ds("walk_step", span - 1)])
+    v["asc_walk"] = [float(e) for e in v["asc_walk_sd"] * np.cumsum(steps)]
+    v["asc_rho"] = ds("delay_change_rho")
+    v["asc_switch_at"] = ds("delay_switch_at")
+    v["asc_switch_days"] = ds("delay_switch_days")
+    lower = draw_share(grid, "ascertainment_counts_lower", rng, n_s)
+    sign = np.where(lower, -1, 1)
+    if design.get("ascertainment_counts", "none") in ("none", "shared"):
+        sign[:] = sign[0]
+    v["asc_counts_sign"] = [int(e) for e in sign]
+    v["asc_counts_slope"] = ds("ascertainment_counts_slope")
+    v["asc_counts_sd"] = ds("ascertainment_counts_sd")
+    v["asc_noise_sd"] = ds("ascertainment_noise_sd")
+    return v
+
+
+def _stratum_changes(
+    grid: Grid,
+    design: Mapping[str, Any],
+    n_s: int,
+    rng: np.random.Generator,
+) -> dict[str, Any]:
+    """Draw the delay change's second kind and each stratum's own change.
+
+    A combined change (`delay_change_combine`) adds a second kind, drawn
+    by the `delay_change` weights from the kinds that change and are not
+    the first. Related strata's own changes are of the shared kinds;
+    independent strata (`delay_change_strata`) draw their own kinds as
+    the shared change does. Each stratum's sizes and timings are its own
+    draws from the shared change's distributions.
+    """
+
+    def ds(name: str, n: int | None = None) -> Any:
+        return draw_setting(grid, name, rng, n)
+
+    levels = grid["factors"]["delay_change"]
+
+    def kind(exclude: Sequence[str]) -> str:
+        names = [k for k in levels if k not in exclude]
+        w = np.asarray([levels[k] for k in names], dtype=float)
+        return str(names[rng.choice(len(names), p=w / w.sum())])
+
+    first = str(design["delay_change"])
+    combined = design.get("delay_change_combine") == "combined"
+    second = (
+        kind(("static", first)) if combined and first != "static" else "none"
+    )
+    own = []
+    for _ in range(n_s):
+        if design.get("delay_change_strata") == "independent":
+            a = kind(())
+            b = kind(("static", a)) if combined and a != "static" else "none"
+        else:
+            a, b = first, second
+        own.append(a if b == "none" else f"{a}+{b}")
+
+    def signed(name: str) -> list[float]:
+        sign = np.where(rng.random(n_s) < 0.5, 1.0, -1.0)
+        return [float(e) for e in sign * ds(name, n_s)]
+
+    def each(name: str) -> list[float]:
+        return [float(e) for e in ds(name, n_s)]
+
+    floor = float(grid["floors"]["period_days"])
+    return {
+        "delay_change_second": second,
+        "own_change": own,
+        "own_drift": signed("drift"),
+        "own_step": signed("step"),
+        "own_step_at": each("step_at"),
+        "own_periodic": each("periodic"),
+        "own_periodic_weeks": each("periodic_weeks"),
+        "own_smooth_amp": each("smooth_amp"),
+        "own_smooth_period": [max(floor, e) for e in each("smooth_period")],
+        "own_smooth_phase": each("phase"),
+        "own_slow_at": each("slow_at"),
+        "own_slow_weeks": [
+            int(e) for e in draw_count(grid, "slow_weeks", rng, n_s)
+        ],
+        "own_slow_mult": each("slow_mult"),
+        "delay_change_rho": ds("delay_change_rho"),
+        "delay_switch_at": ds("delay_switch_at"),
+        "delay_switch_days": ds("delay_switch_days"),
+    }

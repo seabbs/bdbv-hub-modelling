@@ -3,7 +3,8 @@ r"""A simulation's reported counts from its expected onsets.
 
 `reporting_model` is the reporting step as one numpyro model: the
 expected reports (`expectation.ReportingExpectation`), then for each
-observation draw the counts (`observation.ObservedReports`) and their
+observation draw the counts (`observation.ObservedReports`), any
+over-reporting bursts (`revisions.OverReportingBursts`) and the
 revisions (`revisions.Revisions`). `report_simulation` samples it forward
 and returns the counts in the simulator's long format, with the values
 the step adds.
@@ -26,7 +27,7 @@ from numpyro import handlers
 from .effects import ReferenceFrame
 from .expectation import ReportingExpectation
 from .observation import ObservedReports, nb1_scale
-from .revisions import Revisions
+from .revisions import OverReportingBursts, Revisions
 
 __all__ = [
     "COUNT_COLUMNS",
@@ -103,8 +104,9 @@ def reporting_model(
         Expected onsets over the triangle's days, by strata; floored at
         1e-8, and 0 on the frame's padded days.
     draws : int
-        Observation draws: sites `"draw_{k}::reports::counts"` and, with
-        revisions, `"draw_{k}::revisions::counts"`.
+        Observation draws: sites `"draw_{k}::reports::counts"`, with
+        bursts `"draw_{k}::bursts::errors"` and, with revisions,
+        `"draw_{k}::revisions::counts"`.
     """
     D = int(values["max_delay"])
     x = jnp.asarray(onsets, dtype=float)
@@ -121,9 +123,27 @@ def reporting_model(
         values=values,
         max_delay=D,
     )
+    bursts = None
+    if design.get("bursts") == "yes" and len(
+        np.atleast_1d(values["burst_strata"])
+    ):
+        bursts = OverReportingBursts(
+            "bursts",
+            frame,
+            values["burst_strata"],
+            values["burst_at"],
+            values["burst_days"],
+            values["burst_mult"],
+            values["burst_keep"],
+        )
     for k in range(draws):
         with handlers.scope(prefix=f"draw_{k}", divider="::"):
             counts = observed(log_expected=log_expected)
+            extra = (
+                None
+                if bursts is None
+                else bursts(counts=counts, log_expected=log_expected)
+            )
             if design["revisions"] == "yes":
                 Revisions(
                     "revisions",
@@ -131,9 +151,10 @@ def reporting_model(
                     values["revise_move"],
                     values["revise_keep"],
                     frame.observed,
-                )(counts=counts)
+                )(counts=counts, bursts=extra)
             else:
-                numpyro.deterministic("reported", counts)
+                reported = counts if extra is None else counts + extra
+                numpyro.deterministic("reported", reported)
 
 
 def _location(place: str, age: str, multi_place: bool, multi_age: bool) -> str:

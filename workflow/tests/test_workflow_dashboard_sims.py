@@ -377,3 +377,218 @@ def test_the_page_has_the_delay_structure_section():
     page = sims.page()
     assert "id=delays" in page
     assert "reference.json" in page
+
+
+DELAY_FACTORS = {
+    "delay_change_strata": "strata",
+    "delay_change_switch": "delays",
+    "delay_change_combine": "delays",
+    "delay_counts": "delays",
+    "delay_strata_noise": "delays",
+    "bursts": "reporting",
+}
+"""The grid's factors for the delay's structure by stratum and bursts."""
+
+
+def test_the_delay_structure_factors_have_their_layers():
+    got = sims.layers(GRID)
+    for name, layer in DELAY_FACTORS.items():
+        assert got[name] == layer
+
+
+def test_the_delay_structure_factors_group_the_simulations(root, tmp_path):
+    folder = root / "rounds" / "r1" / "sims"
+    for seed in (101, 102):
+        path = folder / f"settings-{seed}.csv"
+        lines = path.read_text().splitlines()
+        extra = list(DELAY_FACTORS)
+        lines[0] += "," + ",".join(extra)
+        lines[1] += ",related,diverge,combined,strata,both,yes"
+        lines[2] += ",shared,none,single,none,none,none"
+        path.write_text("\n".join(lines) + "\n")
+    layer_of = LAYERS | DELAY_FACTORS
+    got = sims.Index(root, tmp_path / "cache", layer_of).data("r1")
+    for name, layer in DELAY_FACTORS.items():
+        assert name in got["factors"]
+        assert got["layers"][name] == layer
+        # The page's "Colour and group by" lists the index's factors in
+        # the grid's order.
+        assert name in got["order"]
+    bursts = got["factors"]["bursts"]
+    assert [bursts["levels"][c] for c in bursts["codes"]] == [
+        "yes",
+        "none",
+        "yes",
+        "none",
+    ]
+
+
+def test_each_simulation_s_strata_delays_in_the_index(root, tmp_path):
+    got = sims.Index(root, tmp_path / "cache", LAYERS).data("r1")
+    stats = got["stats"]
+    for k in (
+        "strata_corr",
+        "counts_slope",
+        "burst_ratio",
+        "withdrawn_share",
+        "noise_time",
+    ):
+        assert k in stats
+    # Nothing withdrawn; the first report is half the final count.
+    assert stats["withdrawn_share"][0] == 0
+    assert stats["burst_ratio"][0] == 0.5
+
+
+def test_one_simulation_s_strata_delays_and_drawn_noise(root):
+    got = sims.simulation(root / "rounds" / "r1" / "sims", "101-0001", LAYERS)
+    by = got["structure"]["by_stratum"]
+    assert [s["name"] for s in by["strata"]] == ["P01-A1", "P01-A2"]
+    assert len(by["strata"][0]["mean"]) == len(by["week"])
+    assert set(got["structure"]["noise"]) >= {"time_share", "strata_share"}
+    assert got["noise_drawn"] == {
+        "time": None,
+        "strata": None,
+        "strata_time": None,
+    }
+
+
+def test_the_page_draws_each_stratum_s_delays():
+    page = sims.page()
+    assert "strataWeeks" in page
+    assert "First report over the final count" in page
+    assert "noise_residual" in page
+
+
+def _chromium() -> str | None:
+    """Return a headless Chromium on this machine, None if there is none.
+
+    `CHROMIUM` if set, else Playwright's cached headless shell.
+    """
+    import shutil
+
+    if os.environ.get("CHROMIUM"):
+        return os.environ["CHROMIUM"]
+    cache = Path.home() / "Library" / "Caches" / "ms-playwright"
+    if not cache.exists():
+        cache = Path.home() / ".cache" / "ms-playwright"
+    found = sorted(cache.glob("chromium_headless_shell-*/*/*shell"))
+    return str(found[-1]) if found else shutil.which("chromium")
+
+
+def _page_dom(server, root, reference):
+    """Return the sims page as headless Chromium draws it, and its log.
+
+    With `reference` as the delay reference and simulation 101-0001's
+    deep dive open; the page's script text left out of the DOM.
+    """
+    import re
+    import subprocess
+
+    chrome = _chromium()
+    if chrome is None:
+        pytest.skip("no headless Chromium on this machine")
+    sims.reference_path(root).parent.mkdir(parents=True, exist_ok=True)
+    sims.reference_path(root).write_text(json.dumps(reference))
+    got = subprocess.run(
+        [
+            chrome,
+            "--headless",
+            "--disable-gpu",
+            "--enable-logging=stderr",
+            "--v=0",
+            "--virtual-time-budget=15000",
+            "--dump-dom",
+            server + "/sims/#src=r1&sim=101-0001",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    dom = re.sub(r"<script>.*?</script>", "", got.stdout, flags=re.S)
+    return dom, got.stderr
+
+
+def _german_entry():
+    """A delay reference entry: two strata over 12 weeks."""
+    import pandas as pd
+    from flowlib import delay_structure as ds
+
+    days = pd.date_range("2026-01-05", periods=84)
+    rows = pd.DataFrame(
+        {
+            "stratum": ["DE-BY", "DE-HB"] * 42,
+            "ref": days,
+            "rep": days + pd.Timedelta(days=2),
+            "count": 20,
+        }
+    )
+    st = ds.structure(rows)
+    return {
+        "short": "Germany",
+        "label": "Germany",
+        "structure": st,
+        "scalars": ds.scalars(st),
+        "curves": ds.curves(st),
+    }
+
+
+def _with_ascertainment(root):
+    """Add drawn ascertainment settings to batch 101's simulations."""
+    path = root / "rounds" / "r1" / "sims" / "settings-101.csv"
+    lines = path.read_text().splitlines()
+    lines[0] += ",ascertainment_change,ascertainment_counts,asc_counts_sign"
+    lines[1] += ",drift,strata,-1;1"
+    lines[2] += ",static,none,"
+    path.write_text("\n".join(lines) + "\n")
+
+
+def test_one_simulation_s_drawn_ascertainment(root):
+    _with_ascertainment(root)
+    folder = root / "rounds" / "r1" / "sims"
+    got = sims.simulation(folder, "101-0001", LAYERS)
+    assert got["ascertainment_drawn"] == {
+        "ascertainment_change": "drift",
+        "ascertainment_counts": "strata",
+        "asc_counts_sign": "-1;1",
+    }
+    by = got["structure"]["by_stratum"]
+    # Each stratum's weekly counts over its mean: the same every week.
+    assert by["strata"][0]["rel_count"] == [1.0] * len(by["week"])
+    assert set(got["structure"]["levels"]) == {"corr", "share_sd"}
+
+
+def test_the_page_renders_each_stratum_s_delays_in_chromium(server, root):
+    _with_ascertainment(root)
+    dom, log = _page_dom(server, root, {"germany": _german_entry()})
+    assert "Uncaught" not in log, log
+    assert "<svg" in dom
+    # The delay section's new numbers and the deep dive's strata.
+    for text in (
+        "Largest weekly first report over final count",
+        "Delay noise: share by stratum and week",
+        "Sd of the strata's log shares of the weekly count",
+        "Mean delay by stratum and reference week",
+        "Share reported by day 7, by stratum",
+        "Mean delay against the log daily count, by week",
+        "First report over the final count, by stratum",
+        "Delay noise by part",
+        "Strata's weekly mean delays correlate",
+        "Weekly counts by stratum, over each stratum's mean",
+        "Ascertainment as drawn",
+        "asc_counts_sign",
+    ):
+        assert text in dom, text
+    # Each stratum a line in the deep dive's strata panels.
+    assert dom.count("P01-A2") >= 5
+
+
+def test_a_reference_without_a_structure_leaves_the_page_whole(server, root):
+    # An entry not built yet (or from before it had a structure).
+    dom, log = _page_dom(
+        server, root, {"germany": {"short": "Germany", "label": "Germany"}}
+    )
+    assert "Uncaught" not in log, log
+    # The delay section, the table and the deep dive are all drawn.
+    assert "Share reported by delay</h3>" in dom
+    assert 'data-id="101-0002"' in dom
+    assert "Mean delay by stratum and reference week" in dom
