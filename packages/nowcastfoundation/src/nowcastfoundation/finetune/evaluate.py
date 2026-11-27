@@ -601,8 +601,8 @@ def split_pass(
     `rows` are the held-out blocks `need`, scored with `adapter` on
     `device`. The batches are those one process runs (`plan`), the
     costliest (`block_cost`) given out first, so the entries are the same
-    however many workers run them, up to float rounding. Each batch is reported as it is done
-    (`fs.report_batch`).
+    however many workers run them, up to float rounding. Each batch is
+    reported as it is done (`fs.report_batch`).
     """
     from chronos.chronos2.dataset import DatasetMode
 
