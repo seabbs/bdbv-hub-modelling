@@ -77,6 +77,52 @@ def test_bias_settings_enter_the_hash_only_when_on():
     assert on["relations"] == ["same", "up", "down"]
 
 
+def test_a_subset_of_pairs_states_only_its_relations():
+    on = fs.bias_settings(True, 1e-3, ("same",))["series_bias"]
+    assert on["relations"] == ["same"]
+    assert on["pairs"] == "same place (count and lag series)"
+    # The full set's settings are as before, so its checkpoints keep
+    # their hashes.
+    full = fs.bias_settings(True, 1e-3)["series_bias"]
+    assert full["pairs"] == (
+        "same place (count and lag series); parent and child either way round"
+    )
+
+
+def _args(*extra: str):
+    base = ["sims", "out", "--held-out-seeds", "1", "2", "--series-bias"]
+    return fs.build_parser().parse_args([*base, *extra])
+
+
+def test_the_bias_pairs_default_to_all_three():
+    assert _args().bias_pairs == series_bias.PAIRS
+
+
+@pytest.mark.parametrize(
+    ("given", "want"),
+    [(["same"], ("same",)), (["down", "up"], ("up", "down"))],
+)
+def test_a_run_with_bias_pairs_attaches_only_those(given, want):
+    args = _args("--bias-pairs", *given)
+    assert args.bias_pairs == want
+    model = tiny_model()
+    series_bias.attach(model, args.bias_pairs)
+    assert series_bias.model_pairs(model) == want
+    names = {
+        n.rsplit(".", 1)[-1]
+        for n, _ in model.named_parameters()
+        if series_bias.BIAS_MODULE in n
+    }
+    assert names == set(want)
+
+
+@pytest.mark.parametrize("given", [["sideways"], ["self_"], ["same", "same"]])
+def test_unknown_or_repeated_bias_pairs_are_refused(given, capsys):
+    with pytest.raises(SystemExit):
+        _args("--bias-pairs", *given)
+    assert "bias pairs" in capsys.readouterr().err
+
+
 def test_the_bias_trains_in_its_own_group_at_its_own_rate():
     model = tiny_model()
     series_bias.attach(model)

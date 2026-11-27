@@ -312,3 +312,22 @@ def test_masks_are_made_only_for_the_pairs_asked():
     assert torch.equal(
         got[series_bias._SAVED_ONLY], torch.eye(3, dtype=torch.bool)
     )
+
+
+@pytest.mark.parametrize("pairs", [("same",), ("up", "down")])
+def test_an_adapter_with_a_subset_reloads_with_that_subset(tmp_path, pairs):
+    model = trained_bias(pairs=pairs)
+    model.save_pretrained(tmp_path / "bias")
+    assert series_bias.adapter_pairs(tmp_path / "bias") == pairs
+    loaded = series_bias.load_adapter(tiny_model(), tmp_path / "bias")
+    assert series_bias.model_pairs(loaded) == pairs
+    block = toy_block()
+    want = predict(model, block, toy_rows())
+    assert torch.allclose(predict(loaded, block, toy_rows()), want, atol=1e-5)
+
+
+def test_chosen_pairs_are_put_in_their_order_and_checked():
+    assert series_bias.chosen(["down", "same"]) == ("same", "down")
+    for bad in ([], ["sideways"], [series_bias._SAVED_ONLY], ["up", "up"]):
+        with pytest.raises(ValueError, match="bias pairs"):
+            series_bias.chosen(bad)

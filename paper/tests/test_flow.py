@@ -356,7 +356,13 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
     assert CONFIG["evidence"]["block_combinations"] == {
         "file": "$ROOT/runs/noslots/train/block-combinations.csv"
     }
-    assert set(CONFIG["comparisons"]) == {"slots", "delays", "realdata"}
+    assert set(CONFIG["comparisons"]) == {
+        "slots",
+        "sameonly",
+        "parentonly",
+        "delays",
+        "realdata",
+    }
     assert CONFIG["comparisons"]["slots"] in runs
     for name in CONFIG["comparisons"]:
         assert f"compare_{name}" not in CONFIG["evidence"]
@@ -365,7 +371,8 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
 def test_the_comparisons_are_passed_by_run_name() -> None:
     flow = _flow()
     assert flow.comparisons_arg() == (
-        "--comparison slots=noslots --comparison delays=nodelays "
+        "--comparison slots=noslots --comparison sameonly=sameonly "
+        "--comparison parentonly=parentonly --comparison delays=nodelays "
         "--comparison realdata=realdata"
     )
 

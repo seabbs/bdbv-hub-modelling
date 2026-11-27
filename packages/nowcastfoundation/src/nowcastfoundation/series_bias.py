@@ -47,6 +47,7 @@ __all__ = [
     "attach_for",
     "batch_rows",
     "block_rows",
+    "chosen",
     "has_bias",
     "load_adapter",
     "model_pairs",
@@ -169,6 +170,28 @@ _SAVED_ONLY: Final = "self_"
 """A row and itself: loaded with an adapter that holds it, never made."""
 
 _KNOWN: Final = (_SAVED_ONLY, *PAIRS)
+
+
+def chosen(names: Iterable[str]) -> tuple[str, ...]:
+    """Return the kinds of pair a run asks for, in `PAIRS` order.
+
+    Raises
+    ------
+    ValueError
+        If `names` is empty, repeats a kind or names one not in `PAIRS`.
+    """
+    names = list(names)
+    unknown = sorted(set(names) - set(PAIRS))
+    if unknown:
+        raise ValueError(
+            f"unknown series bias pairs {unknown}, not of {list(PAIRS)}"
+        )
+    if not names or len(set(names)) != len(names):
+        raise ValueError(
+            f"series bias pairs {names}: give each of {list(PAIRS)} at most "
+            "once, and at least one"
+        )
+    return tuple(p for p in PAIRS if p in names)
 
 
 def pair_masks(

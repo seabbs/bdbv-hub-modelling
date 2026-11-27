@@ -40,6 +40,7 @@ from fig1_pipeline import (
     LINE,
     MUTED,
     PANEL,
+    PARENT_SLOT,
     SLOTS,
     SMALL,
     WIDTH,
@@ -74,11 +75,15 @@ def badge(g: Svg, x: float, y: float, role: str) -> float:
     return w
 
 
-def _layout(g: Svg, x: float, y: float, lags: bool, biases: bool) -> None:
+def _layout(
+    g: Svg, x: float, y: float, lags: bool, biases: tuple[str, ...]
+) -> None:
     """Draw a small input block: a target row and, optionally, lag rows.
 
     Cells are shaded as in Figure 1 (`cell`), drawn finer at this size.
-    A bar to the left marks the place attention biases.
+    Bars to the left mark the attention biases, in Figure 1's colours:
+    the same-place bias (`same`) and the parent and child biases
+    (`parent`).
     """
     cols, cw, rh = 7, 4.6, 3.2
     rows = [["final" if c < 4 else "future" for c in range(cols)]]
@@ -103,21 +108,24 @@ def _layout(g: Svg, x: float, y: float, lags: bool, biases: bool) -> None:
                 x + c * cw, yy, cw, rh, fill=fill, stroke=edge, sw=0.35, rx=0.6
             )
         yy += rh + 0.6
-    if biases:
-        g.rect(x - 4, y, 2.2, yy - y - 0.6, fill=SLOTS[0], rx=1.1)
+    bars = (("same", SLOTS[0]), ("parent", PARENT_SLOT))
+    for k, (kind, colour) in enumerate(bars):
+        if kind in biases:
+            g.rect(x - 4 - 3 * k, y, 2.2, yy - y - 0.6, fill=colour, rx=1.1)
 
 
 # What each fine-tuned model is trained on (panel A): its source, a
 # description, its name in panel B, the role, whether its blocks have lag
-# series and whether it has the attention biases.
+# series and which attention biases it has.
+ALL_BIASES = ("same", "parent")
 FINETUNES = (
     (
         "Simulated surveillance data",
-        "reporting triangle, with attention biases",
+        "reporting triangle, with all attention biases",
         "Fine-tuned",
         MAIN,
         True,
-        True,
+        ALL_BIASES,
     ),
     (
         "Simulated data, no attention biases",
@@ -125,15 +133,31 @@ FINETUNES = (
         "No biases",
         SI,
         True,
-        False,
+        (),
+    ),
+    (
+        "Simulated data, same-place bias only",
+        "reporting triangle, no parent or child biases",
+        "Same place only",
+        SI,
+        True,
+        ("same",),
+    ),
+    (
+        "Simulated data, parent and child biases only",
+        "reporting triangle, no same-place bias",
+        "Parent and child only",
+        SI,
+        True,
+        ("parent",),
     ),
     (
         "Simulated data as complete counts",
-        "no lag series, with attention biases",
+        "no lag series, with all attention biases",
         "No lags",
         SI,
         False,
-        True,
+        ALL_BIASES,
     ),
     (
         "Real data",
@@ -141,7 +165,7 @@ FINETUNES = (
         "Real data",
         SI,
         True,
-        True,
+        ALL_BIASES,
     ),
 )
 
@@ -150,7 +174,7 @@ def panel_a(g: Svg, oy: float) -> float:
     """Draw panel A, what we fine-tune Chronos-2 on."""
     g.label(0, oy + 9, "A", "What we fine-tune Chronos-2 on")
     top = oy + 26
-    rh, gap = 22.0, 4.0
+    rh, gap = 20.0, 3.0
     n = len(FINETUNES)
     bottom = top + n * rh + (n - 1) * gap
     # Base Chronos-2, the start of every fine-tune, also used zero-shot.
@@ -268,8 +292,23 @@ USES = (
         [(SI, ""), (SI, ""), (SI, "")],
     ),
     (
-        "No biases, no lags",
-        "fine-tuned without attention biases or lags",
+        "No biases",
+        "fine-tuned without attention biases",
+        [(SI, "validation set"), (SI, "development half"), None],
+    ),
+    (
+        "Same place only",
+        "fine-tuned with the same-place bias only",
+        [(SI, "validation set"), (SI, "development half"), None],
+    ),
+    (
+        "Parent and child only",
+        "fine-tuned with the parent and child biases only",
+        [(SI, "validation set"), (SI, "development half"), None],
+    ),
+    (
+        "No lags",
+        "fine-tuned without lag series",
         [(SI, "validation set"), (SI, "development half"), None],
     ),
     (

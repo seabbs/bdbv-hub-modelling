@@ -199,17 +199,37 @@ def lora_config(bias: bool) -> Any:
     )
 
 
-def bias_settings(bias: bool, lr: float = 0.0) -> dict[str, Any]:
-    """Return the series bias's entry of a checkpoint's settings."""
+PAIR_TEXT = {
+    "same": "same place (count and lag series)",
+    "up": "child to parent",
+    "down": "parent to child",
+}
+"""Each kind of pair, as a subset's settings state it."""
+
+
+def bias_settings(
+    bias: bool,
+    lr: float = 0.0,
+    pairs: tuple[str, ...] = series_bias.PAIRS,
+) -> dict[str, Any]:
+    """Return the series bias's entry of a checkpoint's settings.
+
+    A run with only some of the kinds of pair (`pairs`) states those; the
+    full set's entry is as it was, so its checkpoints keep their hashes.
+    """
     if not bias:
         return {}
+    text = (
+        "same place (count and lag series); parent and child either way round"
+        if pairs == series_bias.PAIRS
+        else "; ".join(PAIR_TEXT[p] for p in pairs)
+    )
     return {
         "series_bias": {
-            "pairs": "same place (count and lag series); parent and child "
-            "either way round",
+            "pairs": text,
             "per": "encoder layer and head, added to the group attention "
             "scores",
-            "relations": list(series_bias.PAIRS),
+            "relations": list(pairs),
             "init": "zero",
             "learning_rate": lr,
             "parent_rule": "nearest '-' prefix in the block, else the "
@@ -2067,6 +2087,22 @@ BIAS_LR = 1e-3
 adapter's."""
 
 
+class _BiasPairs(argparse.Action):
+    """Keep `--bias-pairs` as `series_bias.chosen` orders and checks them."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: Any,
+        option_string: str | None = None,  # noqa: ARG002
+    ) -> None:
+        try:
+            setattr(namespace, self.dest, series_bias.chosen(values))
+        except ValueError as error:
+            parser.error(str(error))
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the trainer's command-line parser."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -2139,6 +2175,15 @@ def build_parser() -> argparse.ArgumentParser:
     # group attention bias for same-place and parent-child pairs.
     parser.add_argument("--series-bias", action="store_true")
     parser.add_argument("--bias-lr", type=float, default=BIAS_LR)
+    # Only some of its kinds of pair (series_bias.PAIRS), saved with the
+    # adapter, which loads with them.
+    parser.add_argument(
+        "--bias-pairs",
+        nargs="+",
+        action=_BiasPairs,
+        default=series_bias.PAIRS,
+        metavar="PAIR",
+    )
     # One segment of a continuous run: stop once prefix N is saved, with
     # the trainer's state beside it (`n<N>/state`), which the next
     # segment resumes from (workflow/rules/finetune.smk).
@@ -2438,7 +2483,7 @@ def main(root: Path | None = None) -> None:
         CHRONOS_MODEL, revision=CHRONOS_REVISION, device_map=device
     )
     if args.series_bias:
-        series_bias.attach(pipeline.model)
+        series_bias.attach(pipeline.model, args.bias_pairs)
     lora = lora_config(args.series_bias)
     model = lora_model(pipeline.model, lora)
     model.train()
@@ -2494,7 +2539,7 @@ def main(root: Path | None = None) -> None:
                 else {}
             ),
         },
-        **bias_settings(args.series_bias, args.bias_lr),
+        **bias_settings(args.series_bias, args.bias_lr, args.bias_pairs),
         "learning_rate": args.learning_rate,
         **(
             {"seed_list_sha256": ft._sha256(args.seed_list)}

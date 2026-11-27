@@ -33,9 +33,12 @@ live_run: runa
 # The fine-tuning comparisons (`paperpipe.evidence.COMPARISONS`): each
 # compares the live run with the workflow run named here (the workflow
 # config's `runs`), from `evidence.checkpoint_scores`. A comparison waits
-# until its run has a scored checkpoint.
+# until its run has a scored checkpoint. The attention bias subsets
+# (`evidence.BIAS_SUBSETS`) join the slots comparison.
 comparisons:
   slots: noslots
+  sameonly: sameonly
+  parentonly: parentonly
   delays: nodelays
   realdata: realdata
 # Samples per forecast for the studies scored on samples.
