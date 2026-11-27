@@ -214,7 +214,7 @@ Teams without the capacity to set up specialist models could also use them direc
 - In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later.
 - Training blocks set the maximum delay by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle it set slightly differently.
 - We saved checkpoints at {{< meta results.training.checkpoints >}} simulations.
-- We scored every checkpoint of every fine-tuned model, including those with other attention bias setups and without lag series, on the validation simulations and the German development half, and show these in the Supporting Information (*Checkpoint curve*).
+- We scored every checkpoint of every fine-tuned model, including those with other attention bias setups and without lag series, on the validation simulations and the German development period, and show these in the Supporting Information (*Checkpoint curve*).
 - At each checkpoint we checked that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*).
 - We report the final checkpoint, where the learning rate reaches zero, and selected no checkpoint on real data.
 - Blocks were limited to what fits in the memory of our available GPUs, and we made several approximations to fit within this (Supporting Information, *Fitting in GPU memory*).
@@ -298,8 +298,7 @@ Filled dots mark the main text, outlined dots the Supporting Information, and st
 - We scored the random walk nowcast, which gives samples, on the quantiles of 1,000 draws with common random numbers.
 - One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
 - We also scored our models' daily counts directly from the daily series, against the random walk nowcast (Supporting Information, *Daily nowcasts*).
-- We split the nowcast dates in half at 10 February 2022.
-- We developed the setup on the first half and scored the second half.
+- We developed the setup on nowcast dates before 10 February 2022, the development period, and scored those from then on, the test period.
 - Key references: [@Wolffram2023; @hospitalization_nowcast_hub_2025; @Johnson2025; @amaralPostprocessingWeightedCombination2025].
 :::
 
@@ -351,13 +350,13 @@ Filled dots mark the main text, outlined dots the Supporting Information, and st
 - Its 7-day sums up to the cut-off were the random walk nowcast's draws, and Chronos-2 saw their median.
 - Zero-shot, this is how the Ebola hub teams that use foundation models use them [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast].
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
-- We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub's releases, and compared it with the model fine-tuned on simulations (@fig-design A).
+- We fine-tuned Chronos-2 on real data, the German development period and the Ebola hub's releases, and compared it with the model fine-tuned on simulations (@fig-design A).
 - Besides the main model, which has all three attention biases, we fine-tuned models with no biases, with the same-place bias only, and with the parent and child biases only.
 - We also fine-tuned one model without lag series.
 - For the Ebola hub only, we compared the random walk nowcast's rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
 - We compared the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (Supporting Information, *Renewal model variants*).
-- We scored the real-data fine-tune on the German held-out half, and on the Ebola rounds after its last training release.
-- We compared the other three attention bias setups and the model without lag series with the main model by validation loss and by scores on the German development half at each checkpoint.
+- We scored the real-data fine-tune on the German test period, and on the Ebola rounds after its last training release.
+- We compared the other three attention bias setups and the model without lag series with the main model by validation loss and by scores on the German development period at each checkpoint.
 - We set the copula settings on the Ebola release backtest before the Ebola study was held out (Supporting Information, *Choices tuned on development data*).
 - We scored the other comparisons as in the case study they apply to, relative to its baseline.
 :::
@@ -404,15 +403,15 @@ Key references: the Methods references, with [@bracherEvaluatingEpidemicForecast
 - We developed the simulated surveillance data and the way we fine-tune on them over [X] versions.
 - Each version changed the settings the simulations draw from, such as the range of reproduction numbers, reporting delays and reporting patterns, or the fine-tuning settings, such as how training blocks are cut from each simulation, the learning rate and the number of simulations.
 - Each version was simulated afresh, so no simulation was reused between versions.
-- For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development half, up to 10 February 2022, using our simulation and fine-tuning dashboards (Methods, Implementation; Supporting Information, *Checkpoint curve*).
+- For each version we fine-tuned on its training simulations, and checked the nowcasts and scores on its validation simulations and on the German development period, up to 10 February 2022, using our simulation and fine-tuning dashboards (Methods, Implementation; Supporting Information, *Checkpoint curve*).
 - For example, we noticed that in January 2022 Bremen first reported far more hospitalisations than it kept, on some days 5 to 7 times the final count, and withdrew them within 1 to 7 days.
   Removed cases were 21% of Bremen's final total, against 0.5 to 3% in the other states.
   The fine-tuned model read these early reports as a rise.
   At the 12 January 2022 origin its 7-day nowcast reached 350, with a 90% upper bound of 850, against a final count of about 120.
   It got worse with more checkpoints, as our simulations almost never over-reported in this way.
   This led us to add short bursts of over-reporting corrected within days.
-- We compared the summary statistics of each version's simulations with the German development half and with published ranges for other diseases.
-- Figure (planned): "The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. (G) Coverage: for R and effective R, the generation time mean, the infection-to-reference delay mean, the mean reporting delay and the growth rate, the grid's median and 5 to 95% range beside published ranges for influenza, COVID-19, Ebola, mpox, cholera, measles and dengue and the German development half's values. Panels B to F compare the simulations with the German development half and published ranges for other diseases where values exist."
+- We compared the summary statistics of each version's simulations with the German development period and with published ranges for other diseases.
+- Figure (planned): "The simulation grid against real outbreaks. (A) A few example simulations across settings (endemic, early outbreak and established epidemic), each with its final counts and the counts reported by the nowcast date, and strips of R(t) with effective R and of the mean reporting delay. (B) The share of simulated outbreaks with 0, 1 and 2 or more rises. (C) The share of training cut-offs in each epidemic phase (growing, stable, declining and turning). (D) Outbreak sizes. (E) Growth rates. (F) Reporting delays. (G) Coverage: for R and effective R, the generation time mean, the infection-to-reference delay mean, the mean reporting delay and the growth rate, the grid's median and 5 to 95% range beside published ranges for influenza, COVID-19, Ebola, mpox, cholera, measles and dengue and the German development period's values. Panels B to F compare the simulations with the German development period and published ranges for other diseases where values exist."
 - We take the published ranges from their sources (Supporting Information, *Synthetic data generation*).
 - Over these versions we made the simulations closer to real reporting, adding:
   - report days, weekday effects, backlogs, outages and revisions to past counts;
@@ -447,8 +446,8 @@ The fine-tuned model [outperformed / matched] zero-shot Chronos-2 and the random
 ### German nowcast hub
 
 ::: {.callout-note title="Plan"}
-- The first paragraph describes the national nowcasts against the truth, on the development and held-out halves.
-- The second paragraph gives the held-out half's scores in the abstract's order: the fine-tuned model against zero-shot Chronos-2 on both inputs, the random walk nowcast and the hub's models, relative to the hub's baseline, then by location, age group and horizon (Supporting Information, *German nowcast hub*).
+- The first paragraph describes the national nowcasts against the truth, on the development and test periods.
+- The second paragraph gives the test period's scores in the abstract's order: the fine-tuned model against zero-shot Chronos-2 on both inputs, the random walk nowcast and the hub's models, relative to the hub's baseline, then by location, age group and horizon (Supporting Information, *German nowcast hub*).
 - Key references: [@Wolffram2023; @amaralPostprocessingWeightedCombination2025].
 :::
 
@@ -464,7 +463,7 @@ It [outperformed / performed comparably to] the hub's models, ranking [X] of [X]
 ### Ebola forecasting hub
 
 ::: {.callout-note title="Plan"}
-- We show every hub round, with the fine-tuned model's first submission marked, and give scores before and after it apart, as for the German halves.
+- We show every hub round, with the fine-tuned model's first submission marked, and give scores before and after it apart, as for the German periods.
 - Rounds before the first submission are retrospective for the fine-tuned model, and rounds after it are prospective.
 - Our submitted renewal model is scored as one of the hub submissions.
 - Among the hub submissions we focus on those closest to ours: the two that use foundation models zero-shot after a nowcast, OHTJHU-BM and ACCIDDA-insightcast, and the custom neural network ACCIDDA-Chromantis [@bdbv_ohtjhu_bm; @bdbv_accidda_insightcast; @bdbv_accidda_chromantis].
@@ -507,7 +506,7 @@ The renewal model using BVDOutbreakSize scored [X] relative to the main renewal 
 ## Discussion
 
 We used one foundation model, Chronos-2, because it forecasts a group of related series in one block and takes known-future covariates, which the reporting triangle laid out as ragged series needs.
-In the Supporting Information we compare fine-tuning on simulations with fine-tuning on real data, on the German held-out half and on the held-out Ebola rounds after the real-data model's last training release.
+In the Supporting Information we compare fine-tuning on simulations with fine-tuning on real data, on the German test period and on the held-out Ebola rounds after the real-data model's last training release.
 Those Ebola scores are retrospective, from data released before each round closed.
 The fine-tuned model is trained on simulations only, so it never sees the BDBV truth it is scored against.
 
@@ -538,7 +537,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
     We knew the structure of the data and its challenges from submitting other models to the hub, and this shaped the simulation design.
   - From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past Ebola rounds to decide whether to submit it.
     Those rounds informed that decision, so only rounds after its first submission are prospective for it.
-    The German held-out half and the simulated test round were fixed in advance, so they are held out for every decision.
+    The German test period and the simulated test round were fixed in advance, so they are held out for every decision.
 - **Strengths and limitations of the model and data.**
   - Fine-tuning ran on one machine, so it needs no shared compute, and the synthetic data can be tuned to a setting.
   - We could only fine-tune and forecast with blocks that fit in the memory of our available GPUs, which forced several approximations (Methods; Supporting Information, *Fitting in GPU memory*).
@@ -563,7 +562,7 @@ The fine-tuned model is trained on simulations only, so it never sees the BDBV t
   - Hub models fine-tuned on real surveillance data state no delay handling [@dhauser_fluchronos; @fluxengine_atlas].
   - Mantis and the UMass axial model use simulations to teach transmission dynamics to custom neural network architectures, while we use them to teach reporting delays to a general foundation model and keep its own forecasting [@Dudley2026; @umass_axial].
   - Mantis simulates single populations, with one final series per outbreak, no releases or revisions and delays as a weighted kernel over days rather than double interval censored distributions, while our grid simulates linked places and age groups, their releases and revisions, and the model nowcasts them jointly [@Dudley2026].
-  - Mantis is evaluated retrospectively and does not state that its test sets were fixed before its simulators were built, while we fixed our test sets in advance, the German held-out half, the BDBV data and a fresh simulated test round, and submitted to the Ebola hub in real time [@Dudley2026].
+  - Mantis is evaluated retrospectively and does not state that its test sets were fixed before its simulators were built, while we fixed our test sets in advance, the German test period, the BDBV data and a fresh simulated test round, and submitted to the Ebola hub in real time [@Dudley2026].
   - Domain knowledge enters our model in two ways, through the simulations and through the attention biases, which tell the model which series belong to which place and how places nest, rather than leaving it to learn these from the values [@Woo2024; @Yang2022].
     Whether each route improves the nowcasts and forecasts is to be filled in from the results and the sensitivity analyses.
   - This gives a case study for adding domain knowledge to foundation models in other fields where a well-tested generative model of the data exists.
