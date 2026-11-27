@@ -170,7 +170,8 @@ def test_realdata_blocks_are_the_german_tasks_as_forecast(tmp_path):
     cuts = window.cuts(fg.first_date(tri))
     # From the first usable date, not once a full history exists.
     assert cuts[0] == "2021-03-01"
-    some = [*cuts[1:4], cuts[60]]
+    # The first date with two days of context gives blocks.
+    some = [*cuts[2:5], cuts[60]]
     blocks = fg.realdata_blocks(tri, window, some, block_limit=1000)
     assert {b["cut"] for b in blocks} == set(some)
     early = [b["lag"] for b in blocks if b["cut"] == some[0]]
