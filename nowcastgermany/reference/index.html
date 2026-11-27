@@ -4694,7 +4694,7 @@ epinowcast's <code>germany_covid19_hosp</code>.</p>
 
 
 <a href="#nowcastgermany.data.nowcast_tasks" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">nowcast_tasks</span><span class="p">(</span><span class="n">triangle</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">nowcast_date</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">horizons</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">HORIZONS</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ForecastTask</span><span class="p">]</span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">nowcast_tasks</span><span class="p">(</span><span class="n">triangle</span><span class="p">:</span> <span class="n">DataFrame</span><span class="p">,</span> <span class="n">nowcast_date</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">horizons</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">HORIZONS</span><span class="p">,</span> <span class="n">max_delay</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ForecastTask</span><span class="p">]</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -4797,6 +4797,25 @@ hub's (<code>HORIZONS</code>) by default. Days after it are forecasts.</p>
   
       module-attribute
    (nowcastgermany.data.HORIZONS)" href="#nowcastgermany.data.HORIZONS">HORIZONS</a></code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>max_delay</code>
+            </td>
+            <td>
+                  <code><span title="int">int</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The study's longest delay $D$ in days, the truth's
+(<code>GermanyConfig.truth_delay</code>), set as each task's <code>max_delay</code>.
+Chronos-2 then has lags 0 to $D$ (<code>FoundationModel.for_task</code>),
+as BDBV's tasks fix theirs. None leaves the lags to the data.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
             </td>
           </tr>
       </tbody>
@@ -4921,12 +4940,20 @@ horizon's day, so one forecast gives every 7-day sum.</p>
 <span class="normal">361</span>
 <span class="normal">362</span>
 <span class="normal">363</span>
-<span class="normal">364</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">nowcast_tasks</span><span class="p">(</span>
+<span class="normal">364</span>
+<span class="normal">365</span>
+<span class="normal">366</span>
+<span class="normal">367</span>
+<span class="normal">368</span>
+<span class="normal">369</span>
+<span class="normal">370</span>
+<span class="normal">371</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">nowcast_tasks</span><span class="p">(</span>
     <span class="n">triangle</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">nowcast_date</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">n_samples</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">horizons</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="n">HORIZONS</span><span class="p">,</span>
+    <span class="n">max_delay</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ForecastTask</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Return the states and the age groups task of a nowcast date.</span>
 
@@ -4943,6 +4970,11 @@ horizon's day, so one forecast gives every 7-day sum.</p>
 <span class="sd">    horizons : sequence of int</span>
 <span class="sd">        Days from the nowcast date to the end of each 7-day sum, the</span>
 <span class="sd">        hub's (`HORIZONS`) by default. Days after it are forecasts.</span>
+<span class="sd">    max_delay : int, optional</span>
+<span class="sd">        The study's longest delay $D$ in days, the truth's</span>
+<span class="sd">        (`GermanyConfig.truth_delay`), set as each task's `max_delay`.</span>
+<span class="sd">        Chronos-2 then has lags 0 to $D$ (`FoundationModel.for_task`),</span>
+<span class="sd">        as BDBV's tasks fix theirs. None leaves the lags to the data.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -5009,6 +5041,7 @@ horizon's day, so one forecast gives every 7-day sum.</p>
                 <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
                 <span class="n">target_history</span><span class="o">=</span><span class="n">history</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">drop</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
                 <span class="n">daily_history</span><span class="o">=</span><span class="n">own</span><span class="p">,</span>
+                <span class="n">max_delay</span><span class="o">=</span><span class="n">max_delay</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span>
     <span class="k">return</span> <span class="n">tasks</span>
@@ -5126,14 +5159,7 @@ left out of the age groups task.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/data.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">432</span>
-<span class="normal">433</span>
-<span class="normal">434</span>
-<span class="normal">435</span>
-<span class="normal">436</span>
-<span class="normal">437</span>
-<span class="normal">438</span>
-<span class="normal">439</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">439</span>
 <span class="normal">440</span>
 <span class="normal">441</span>
 <span class="normal">442</span>
@@ -5165,7 +5191,14 @@ left out of the age groups task.</p>
 <span class="normal">468</span>
 <span class="normal">469</span>
 <span class="normal">470</span>
-<span class="normal">471</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hub_forecasts</span><span class="p">(</span>
+<span class="normal">471</span>
+<span class="normal">472</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span>
+<span class="normal">476</span>
+<span class="normal">477</span>
+<span class="normal">478</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hub_forecasts</span><span class="p">(</span>
     <span class="n">samples</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">task</span><span class="p">:</span> <span class="n">ForecastTask</span><span class="p">,</span> <span class="n">nowcast_date</span><span class="p">:</span> <span class="nb">str</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return one task's forecasts on the hub's dates and places.</span>
@@ -5301,14 +5334,7 @@ end on: <code>kind</code> (<code>real</code>), <code>vintage</code> and <code>cu
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/data.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">474</span>
-<span class="normal">475</span>
-<span class="normal">476</span>
-<span class="normal">477</span>
-<span class="normal">478</span>
-<span class="normal">479</span>
-<span class="normal">480</span>
-<span class="normal">481</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">481</span>
 <span class="normal">482</span>
 <span class="normal">483</span>
 <span class="normal">484</span>
@@ -5358,7 +5384,14 @@ end on: <code>kind</code> (<code>real</code>), <code>vintage</code> and <code>cu
 <span class="normal">528</span>
 <span class="normal">529</span>
 <span class="normal">530</span>
-<span class="normal">531</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hub_target</span><span class="p">(</span><span class="n">triangle</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">ends</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span>
+<span class="normal">538</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">hub_target</span><span class="p">(</span><span class="n">triangle</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">ends</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return 7-day sums as each report date gives them, as a target table.</span>
 
 <span class="sd">    Parameters</span>
@@ -7064,7 +7097,9 @@ forecasts (<code>nowcastgermany.data.nowcast_tasks</code>).</p>
                 <p>The truth's delay (<code>GermanyConfig.truth_delay</code>): the models see
 only the counts reported within it (<code>nowcastgermany.data.within_delay</code>),
 so they forecast the count the truth holds, not the eventual one.
-A <code>tasks_dir</code> must then be keyed on it.</p>
+It is also each task's <code>max_delay</code>, so Chronos-2 has lags 0 to it
+(<code>FoundationModel.for_task</code>). A <code>tasks_dir</code> keeps such tasks in
+a folder named by it.</p>
               </div>
             </td>
             <td>
@@ -7142,17 +7177,7 @@ none.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">477</span>
-<span class="normal">478</span>
-<span class="normal">479</span>
-<span class="normal">480</span>
-<span class="normal">481</span>
-<span class="normal">482</span>
-<span class="normal">483</span>
-<span class="normal">484</span>
-<span class="normal">485</span>
-<span class="normal">486</span>
-<span class="normal">487</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">487</span>
 <span class="normal">488</span>
 <span class="normal">489</span>
 <span class="normal">490</span>
@@ -7268,7 +7293,23 @@ none.</p>
 <span class="normal">600</span>
 <span class="normal">601</span>
 <span class="normal">602</span>
-<span class="normal">603</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">germany_forecasts</span><span class="p">(</span>
+<span class="normal">603</span>
+<span class="normal">604</span>
+<span class="normal">605</span>
+<span class="normal">606</span>
+<span class="normal">607</span>
+<span class="normal">608</span>
+<span class="normal">609</span>
+<span class="normal">610</span>
+<span class="normal">611</span>
+<span class="normal">612</span>
+<span class="normal">613</span>
+<span class="normal">614</span>
+<span class="normal">615</span>
+<span class="normal">616</span>
+<span class="normal">617</span>
+<span class="normal">618</span>
+<span class="normal">619</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">germany_forecasts</span><span class="p">(</span>
     <span class="n">models</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
     <span class="n">triangle</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span>
     <span class="n">dates</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
@@ -7307,7 +7348,9 @@ none.</p>
 <span class="sd">        The truth's delay (`GermanyConfig.truth_delay`): the models see</span>
 <span class="sd">        only the counts reported within it (`nowcastgermany.data.within_delay`),</span>
 <span class="sd">        so they forecast the count the truth holds, not the eventual one.</span>
-<span class="sd">        A `tasks_dir` must then be keyed on it.</span>
+<span class="sd">        It is also each task's `max_delay`, so Chronos-2 has lags 0 to it</span>
+<span class="sd">        (`FoundationModel.for_task`). A `tasks_dir` keeps such tasks in</span>
+<span class="sd">        a folder named by it.</span>
 <span class="sd">    timings : list, optional</span>
 <span class="sd">        Given, a row is appended for each model and date: `model`,</span>
 <span class="sd">        `origin`, `stage` (`forecast`) and `seconds`; and one for each</span>
@@ -7337,7 +7380,9 @@ none.</p>
     <span class="n">tasks</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">ForecastTask</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">FoundationModel</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">built</span><span class="p">):</span>
         <span class="n">tasks</span> <span class="o">=</span> <span class="p">{</span>
-            <span class="n">d</span><span class="p">:</span> <span class="n">_tasks</span><span class="p">(</span><span class="n">triangle</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="n">tasks_dir</span><span class="p">,</span> <span class="n">horizons</span><span class="p">)</span>
+            <span class="n">d</span><span class="p">:</span> <span class="n">_tasks</span><span class="p">(</span>
+                <span class="n">triangle</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="n">tasks_dir</span><span class="p">,</span> <span class="n">horizons</span><span class="p">,</span> <span class="n">max_delay</span>
+            <span class="p">)</span>
             <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">dates</span>
         <span class="p">}</span>
         <span class="n">every</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span> <span class="k">for</span> <span class="n">ts</span> <span class="ow">in</span> <span class="n">tasks</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">ts</span><span class="p">]</span>
@@ -7358,7 +7403,9 @@ none.</p>
     <span class="k">for</span> <span class="n">date</span> <span class="ow">in</span> <span class="n">dates</span><span class="p">:</span>
         <span class="n">mine</span> <span class="o">=</span> <span class="n">tasks</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">date</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">mine</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">mine</span> <span class="o">=</span> <span class="n">_tasks</span><span class="p">(</span><span class="n">triangle</span><span class="p">,</span> <span class="n">date</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="n">tasks_dir</span><span class="p">,</span> <span class="n">horizons</span><span class="p">)</span>
+            <span class="n">mine</span> <span class="o">=</span> <span class="n">_tasks</span><span class="p">(</span>
+                <span class="n">triangle</span><span class="p">,</span> <span class="n">date</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">,</span> <span class="n">seed</span><span class="p">,</span> <span class="n">tasks_dir</span><span class="p">,</span> <span class="n">horizons</span><span class="p">,</span> <span class="n">max_delay</span>
+            <span class="p">)</span>
         <span class="n">spent</span> <span class="o">=</span> <span class="nb">dict</span><span class="o">.</span><span class="n">fromkeys</span><span class="p">(</span><span class="n">models</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">task</span> <span class="ow">in</span> <span class="n">mine</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">model</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">models</span><span class="p">,</span> <span class="n">built</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
@@ -7507,23 +7554,7 @@ missing where the data hold no report that late.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">634</span>
-<span class="normal">635</span>
-<span class="normal">636</span>
-<span class="normal">637</span>
-<span class="normal">638</span>
-<span class="normal">639</span>
-<span class="normal">640</span>
-<span class="normal">641</span>
-<span class="normal">642</span>
-<span class="normal">643</span>
-<span class="normal">644</span>
-<span class="normal">645</span>
-<span class="normal">646</span>
-<span class="normal">647</span>
-<span class="normal">648</span>
-<span class="normal">649</span>
-<span class="normal">650</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">650</span>
 <span class="normal">651</span>
 <span class="normal">652</span>
 <span class="normal">653</span>
@@ -7567,7 +7598,23 @@ missing where the data hold no report that late.</p>
 <span class="normal">691</span>
 <span class="normal">692</span>
 <span class="normal">693</span>
-<span class="normal">694</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">daily_truth</span><span class="p">(</span>
+<span class="normal">694</span>
+<span class="normal">695</span>
+<span class="normal">696</span>
+<span class="normal">697</span>
+<span class="normal">698</span>
+<span class="normal">699</span>
+<span class="normal">700</span>
+<span class="normal">701</span>
+<span class="normal">702</span>
+<span class="normal">703</span>
+<span class="normal">704</span>
+<span class="normal">705</span>
+<span class="normal">706</span>
+<span class="normal">707</span>
+<span class="normal">708</span>
+<span class="normal">709</span>
+<span class="normal">710</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">daily_truth</span><span class="p">(</span>
     <span class="n">triangle</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">days</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">truth_delay</span><span class="p">:</span> <span class="nb">int</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return each place's count of each day as reported $D$ days later.</span>
@@ -7739,23 +7786,7 @@ the truth), missing for sums with no data $D$ days after them.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">697</span>
-<span class="normal">698</span>
-<span class="normal">699</span>
-<span class="normal">700</span>
-<span class="normal">701</span>
-<span class="normal">702</span>
-<span class="normal">703</span>
-<span class="normal">704</span>
-<span class="normal">705</span>
-<span class="normal">706</span>
-<span class="normal">707</span>
-<span class="normal">708</span>
-<span class="normal">709</span>
-<span class="normal">710</span>
-<span class="normal">711</span>
-<span class="normal">712</span>
-<span class="normal">713</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">713</span>
 <span class="normal">714</span>
 <span class="normal">715</span>
 <span class="normal">716</span>
@@ -7779,7 +7810,23 @@ the truth), missing for sums with no data $D$ days after them.</p>
 <span class="normal">734</span>
 <span class="normal">735</span>
 <span class="normal">736</span>
-<span class="normal">737</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">with_truth</span><span class="p">(</span>
+<span class="normal">737</span>
+<span class="normal">738</span>
+<span class="normal">739</span>
+<span class="normal">740</span>
+<span class="normal">741</span>
+<span class="normal">742</span>
+<span class="normal">743</span>
+<span class="normal">744</span>
+<span class="normal">745</span>
+<span class="normal">746</span>
+<span class="normal">747</span>
+<span class="normal">748</span>
+<span class="normal">749</span>
+<span class="normal">750</span>
+<span class="normal">751</span>
+<span class="normal">752</span>
+<span class="normal">753</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">with_truth</span><span class="p">(</span>
     <span class="n">forecasts</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">triangle</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">truth_delay</span><span class="p">:</span> <span class="nb">int</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Add each forecast's truth: the sum as reported $D$ days after it ends.</span>
@@ -7872,23 +7919,7 @@ reported the truth delay after it, as the scores' truth
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">740</span>
-<span class="normal">741</span>
-<span class="normal">742</span>
-<span class="normal">743</span>
-<span class="normal">744</span>
-<span class="normal">745</span>
-<span class="normal">746</span>
-<span class="normal">747</span>
-<span class="normal">748</span>
-<span class="normal">749</span>
-<span class="normal">750</span>
-<span class="normal">751</span>
-<span class="normal">752</span>
-<span class="normal">753</span>
-<span class="normal">754</span>
-<span class="normal">755</span>
-<span class="normal">756</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">756</span>
 <span class="normal">757</span>
 <span class="normal">758</span>
 <span class="normal">759</span>
@@ -7903,7 +7934,23 @@ reported the truth delay after it, as the scores' truth
 <span class="normal">768</span>
 <span class="normal">769</span>
 <span class="normal">770</span>
-<span class="normal">771</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">truth_context</span><span class="p">(</span>
+<span class="normal">771</span>
+<span class="normal">772</span>
+<span class="normal">773</span>
+<span class="normal">774</span>
+<span class="normal">775</span>
+<span class="normal">776</span>
+<span class="normal">777</span>
+<span class="normal">778</span>
+<span class="normal">779</span>
+<span class="normal">780</span>
+<span class="normal">781</span>
+<span class="normal">782</span>
+<span class="normal">783</span>
+<span class="normal">784</span>
+<span class="normal">785</span>
+<span class="normal">786</span>
+<span class="normal">787</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">truth_context</span><span class="p">(</span>
     <span class="n">triangle</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">GermanyConfig</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return the truth the plots show, from `plot_start` on.</span>
@@ -8032,23 +8079,7 @@ reported the truth delay after it, as the scores' truth
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">774</span>
-<span class="normal">775</span>
-<span class="normal">776</span>
-<span class="normal">777</span>
-<span class="normal">778</span>
-<span class="normal">779</span>
-<span class="normal">780</span>
-<span class="normal">781</span>
-<span class="normal">782</span>
-<span class="normal">783</span>
-<span class="normal">784</span>
-<span class="normal">785</span>
-<span class="normal">786</span>
-<span class="normal">787</span>
-<span class="normal">788</span>
-<span class="normal">789</span>
-<span class="normal">790</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">790</span>
 <span class="normal">791</span>
 <span class="normal">792</span>
 <span class="normal">793</span>
@@ -8089,7 +8120,23 @@ reported the truth delay after it, as the scores' truth
 <span class="normal">828</span>
 <span class="normal">829</span>
 <span class="normal">830</span>
-<span class="normal">831</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_germany</span><span class="p">(</span><span class="n">forecasts</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">truth_delay</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="normal">831</span>
+<span class="normal">832</span>
+<span class="normal">833</span>
+<span class="normal">834</span>
+<span class="normal">835</span>
+<span class="normal">836</span>
+<span class="normal">837</span>
+<span class="normal">838</span>
+<span class="normal">839</span>
+<span class="normal">840</span>
+<span class="normal">841</span>
+<span class="normal">842</span>
+<span class="normal">843</span>
+<span class="normal">844</span>
+<span class="normal">845</span>
+<span class="normal">846</span>
+<span class="normal">847</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">score_germany</span><span class="p">(</span><span class="n">forecasts</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">truth_delay</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Score quantile forecasts on their truth, as the hub scored them.</span>
 
 <span class="sd">    Parameters</span>
@@ -8228,26 +8275,26 @@ and <code>value</code>.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">834</span>
-<span class="normal">835</span>
-<span class="normal">836</span>
-<span class="normal">837</span>
-<span class="normal">838</span>
-<span class="normal">839</span>
-<span class="normal">840</span>
-<span class="normal">841</span>
-<span class="normal">842</span>
-<span class="normal">843</span>
-<span class="normal">844</span>
-<span class="normal">845</span>
-<span class="normal">846</span>
-<span class="normal">847</span>
-<span class="normal">848</span>
-<span class="normal">849</span>
-<span class="normal">850</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">850</span>
 <span class="normal">851</span>
 <span class="normal">852</span>
-<span class="normal">853</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">read_submissions</span><span class="p">(</span><span class="n">paths</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="normal">853</span>
+<span class="normal">854</span>
+<span class="normal">855</span>
+<span class="normal">856</span>
+<span class="normal">857</span>
+<span class="normal">858</span>
+<span class="normal">859</span>
+<span class="normal">860</span>
+<span class="normal">861</span>
+<span class="normal">862</span>
+<span class="normal">863</span>
+<span class="normal">864</span>
+<span class="normal">865</span>
+<span class="normal">866</span>
+<span class="normal">867</span>
+<span class="normal">868</span>
+<span class="normal">869</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">read_submissions</span><span class="p">(</span><span class="n">paths</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Read the hub teams' submissions as the paper gathered them.</span>
 
 <span class="sd">    Parameters</span>
@@ -8391,23 +8438,7 @@ forecast date), <code>location</code> (the place, as in <code>PLACE_NAMES</code>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">900</span>
-<span class="normal">901</span>
-<span class="normal">902</span>
-<span class="normal">903</span>
-<span class="normal">904</span>
-<span class="normal">905</span>
-<span class="normal">906</span>
-<span class="normal">907</span>
-<span class="normal">908</span>
-<span class="normal">909</span>
-<span class="normal">910</span>
-<span class="normal">911</span>
-<span class="normal">912</span>
-<span class="normal">913</span>
-<span class="normal">914</span>
-<span class="normal">915</span>
-<span class="normal">916</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">916</span>
 <span class="normal">917</span>
 <span class="normal">918</span>
 <span class="normal">919</span>
@@ -8451,7 +8482,23 @@ forecast date), <code>location</code> (the place, as in <code>PLACE_NAMES</code>
 <span class="normal">957</span>
 <span class="normal">958</span>
 <span class="normal">959</span>
-<span class="normal">960</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">team_forecasts</span><span class="p">(</span>
+<span class="normal">960</span>
+<span class="normal">961</span>
+<span class="normal">962</span>
+<span class="normal">963</span>
+<span class="normal">964</span>
+<span class="normal">965</span>
+<span class="normal">966</span>
+<span class="normal">967</span>
+<span class="normal">968</span>
+<span class="normal">969</span>
+<span class="normal">970</span>
+<span class="normal">971</span>
+<span class="normal">972</span>
+<span class="normal">973</span>
+<span class="normal">974</span>
+<span class="normal">975</span>
+<span class="normal">976</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">team_forecasts</span><span class="p">(</span>
     <span class="n">submissions</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">dates</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return the hub teams' quantile nowcasts at our horizons.</span>
@@ -8629,23 +8676,7 @@ and the coverage of the 50% and 95% intervals.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 963</span>
-<span class="normal"> 964</span>
-<span class="normal"> 965</span>
-<span class="normal"> 966</span>
-<span class="normal"> 967</span>
-<span class="normal"> 968</span>
-<span class="normal"> 969</span>
-<span class="normal"> 970</span>
-<span class="normal"> 971</span>
-<span class="normal"> 972</span>
-<span class="normal"> 973</span>
-<span class="normal"> 974</span>
-<span class="normal"> 975</span>
-<span class="normal"> 976</span>
-<span class="normal"> 977</span>
-<span class="normal"> 978</span>
-<span class="normal"> 979</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"> 979</span>
 <span class="normal"> 980</span>
 <span class="normal"> 981</span>
 <span class="normal"> 982</span>
@@ -8675,7 +8706,23 @@ and the coverage of the 50% and 95% intervals.</p>
 <span class="normal">1006</span>
 <span class="normal">1007</span>
 <span class="normal">1008</span>
-<span class="normal">1009</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">relative_scores</span><span class="p">(</span>
+<span class="normal">1009</span>
+<span class="normal">1010</span>
+<span class="normal">1011</span>
+<span class="normal">1012</span>
+<span class="normal">1013</span>
+<span class="normal">1014</span>
+<span class="normal">1015</span>
+<span class="normal">1016</span>
+<span class="normal">1017</span>
+<span class="normal">1018</span>
+<span class="normal">1019</span>
+<span class="normal">1020</span>
+<span class="normal">1021</span>
+<span class="normal">1022</span>
+<span class="normal">1023</span>
+<span class="normal">1024</span>
+<span class="normal">1025</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">relative_scores</span><span class="p">(</span>
     <span class="n">scores</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">,</span> <span class="n">by</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">baseline</span><span class="p">:</span> <span class="nb">str</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return each model's pairwise relative scores and its own means.</span>
@@ -8805,23 +8852,7 @@ scores.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>packages/nowcastgermany/src/nowcastgermany/evaluation.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1012</span>
-<span class="normal">1013</span>
-<span class="normal">1014</span>
-<span class="normal">1015</span>
-<span class="normal">1016</span>
-<span class="normal">1017</span>
-<span class="normal">1018</span>
-<span class="normal">1019</span>
-<span class="normal">1020</span>
-<span class="normal">1021</span>
-<span class="normal">1022</span>
-<span class="normal">1023</span>
-<span class="normal">1024</span>
-<span class="normal">1025</span>
-<span class="normal">1026</span>
-<span class="normal">1027</span>
-<span class="normal">1028</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">1028</span>
 <span class="normal">1029</span>
 <span class="normal">1030</span>
 <span class="normal">1031</span>
@@ -8842,7 +8873,23 @@ scores.</p>
 <span class="normal">1046</span>
 <span class="normal">1047</span>
 <span class="normal">1048</span>
-<span class="normal">1049</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">paper_forecasts</span><span class="p">(</span><span class="n">forecasts</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
+<span class="normal">1049</span>
+<span class="normal">1050</span>
+<span class="normal">1051</span>
+<span class="normal">1052</span>
+<span class="normal">1053</span>
+<span class="normal">1054</span>
+<span class="normal">1055</span>
+<span class="normal">1056</span>
+<span class="normal">1057</span>
+<span class="normal">1058</span>
+<span class="normal">1059</span>
+<span class="normal">1060</span>
+<span class="normal">1061</span>
+<span class="normal">1062</span>
+<span class="normal">1063</span>
+<span class="normal">1064</span>
+<span class="normal">1065</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">paper_forecasts</span><span class="p">(</span><span class="n">forecasts</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Return forecasts as the paper's long table (`paper/schema.md`).</span>
 
 <span class="sd">    Parameters</span>
