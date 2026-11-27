@@ -157,9 +157,10 @@ runs:
   # layer (late release starts and the weekly-release share).
   runb: {release_layer: packages/nowcastfoundation/config/finetune/release-layer.yaml}
 
-# The runs `finetune` trains (null: every run in `runs`), each on a GPU
-# of its own when there are enough, else in this order.
-train_runs: [runa]
+# The runs `finetune` trains, scores and reports on (null: every run in
+# `runs`), each on a GPU of its own when there are enough, else in this
+# order. A run's saved segments are not trained again.
+train_runs: [runa, noslots]
 
 # The device and CPU threads of every forecasting job: checkpoint scoring
 # (the German units), held-out evaluation, backtests (German, Ebola), hub
@@ -193,6 +194,12 @@ score:
   # config overrides it). Two take the cores one 2-thread unit took, so
   # the held-out evaluation keeps its threads; more take them from it.
   workers: 2
+  # The German units' device: cpu, cuda or mps, or null for the
+  # checkpoint scoring device (compute.scoring_forecast), a whole GPU
+  # once no run trains on it. On the CPU, so the GPU is left to training
+  # and the held-out evaluation: an 8 GB GPU runs out of memory on a
+  # unit and is slower than two CPU workers.
+  device: cpu
 
 hub_rounds:
   # The hub rounds report (rules/report.smk): our last this many submitted
@@ -227,7 +234,18 @@ dashboard:
   # Snakemake run) lives.
   serve: true
   # It shows the workflow's runs (`runs` above), each in <ROOT>/runs/<run>,
-  # or those --run NAME picks; the first is the live run.
+  # or those --run NAME picks; the first (the newest to train) is the one
+  # the status follows.
+  # The paper's live run (paper/workflow/config.yaml `live_run`) is shown
+  # as "Fine-tuned (reporting triangle)" whichever run trained last; each
+  # other run is named here: its paper model's display name
+  # (`paper_model`, default the fine-tuned model) then ", <variant>".
+  # A run not named here is "<model> - <its grid> grid".
+  run_names:
+    noslots: {variant: no attention bias}
+    nodelays: {paper_model: foundation_complete}
+    realdata: {variant: synthetic and German data}
+    runb: {variant: release layer}
   # Reference series, matched on rows by model and checkpoint; --ref adds
   # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]
   # [,role=..]). Role: baseline (scores are relative to it), start (each

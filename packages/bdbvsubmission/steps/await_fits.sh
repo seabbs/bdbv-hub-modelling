@@ -5,7 +5,7 @@
 # (fit-store.yml) fits every fitted model at each real origin, and each
 # candidate reads the stored fit of the same key (`fit-store unpack`).
 # This lists the candidates' fits the store lacks at the round's origin.
-# If there are any, it starts Fit store and checks the store branch until
+# If there are any, it starts Fit store and checks the store until
 # it has them, Fit store has finished without them, or the wait runs
 # out. Fit store runs one at a time (its concurrency group), so a
 # release is fitted once, whichever workflow saw it first.
@@ -17,8 +17,8 @@
 #                     reserve_minutes before the window closes
 #   DISPATCH=true     start Fit store when fits are missing
 #   FIT_REF           the branch Fit store runs on (default main)
-#   FIT_STORE_BRANCH  the store branch (default fit-store; a test from a
-#                     branch names a fit-store-scratch* branch)
+#   FIT_STORE         the store (default fit-store; a test from a branch
+#                     names a fit-store-scratch* store)
 #   STORE             where to fetch the store (default output/fit-store)
 #   POLL_SECONDS      between checks (default 120)
 #   SKIP_FETCH=true   use STORE as it is (the dry run)
@@ -30,7 +30,7 @@ source "$(dirname "$0")/lib.sh"
 
 : "${MODELS:?}" "${AS_OF:?}"
 store=${STORE:-output/fit-store}
-branch=${FIT_STORE_BRANCH:-fit-store}
+name=${FIT_STORE:-fit-store}
 ref=${FIT_REF:-main}
 out="$WORK/await"
 mkdir -p "$out"
@@ -43,7 +43,7 @@ started=$(date -u +%s)
 missing() {
   if [ "${SKIP_FETCH:-false}" != true ]; then
     rm -rf "$store"
-    FIT_STORE_BRANCH=$branch store_branch fetch "$store"
+    FIT_STORE=$name fit_store fetch "$store"
   fi
   # shellcheck disable=SC2086  # MODELS is a list
   cli fit-store plan --store "$store" --models $MODELS --origins "$AS_OF" \
@@ -82,9 +82,9 @@ fi
 
 since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 args=(fit-store.yml --ref "$ref" -R "${GITHUB_REPOSITORY:?}")
-if [ "$branch" != fit-store ]; then
+if [ "$name" != fit-store ]; then
   # A scratch store fits only this round's candidates.
-  args+=(-f "store_branch=$branch" -f "models=$MODELS" -f "origins=$AS_OF")
+  args+=(-f "store=$name" -f "models=$MODELS" -f "origins=$AS_OF")
 fi
 gh workflow run "${args[@]}"
 note "Started Fit store on \`$ref\`; waiting up to ${WAIT_MINUTES:-0} minutes."

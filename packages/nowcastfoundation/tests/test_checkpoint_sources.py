@@ -229,22 +229,14 @@ def test_hub_errors_say_what_failed(
         fc._hub_file("org/m", "v1", "settings.json")
 
 
-def test_the_label_resolves_latest_from_the_listing_alone(
+def test_the_label_resolves_latest_from_the_main_release_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The newest release by publish date, slots releases included; no
-    # checksum file is read for the name.
+    # The checkpoint the main release names; no checksum file is read
+    # for the name.
     monkeypatch.delenv(fc.FINETUNED_ENV, raising=False)
-    listing = [
-        {"tag_name": t, "published_at": at, "draft": d}
-        for t, at, d in [
-            ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
-            ("chronos-slots-new", "2026-11-20T00:00:00Z", False),
-            ("chronos-slots-draft", "2026-11-22T00:00:00Z", True),
-            ("realdata-ft-de", "2026-11-23T00:00:00Z", False),
-        ]
-    ]
-    monkeypatch.setattr(fc, "finetuned_releases", lambda: listing)
+    record = {"run": "runa", "spec": "slots-new", "tag": "chronos-slots-new"}
+    monkeypatch.setattr(fc, "main_release", lambda: record)
     conf = _config(tmp_path, 'source = "github"\nhash = "latest"\n')
     assert fc.latest_spec() == "slots-new"
     assert fc.finetuned_label(conf) == "slots-new"

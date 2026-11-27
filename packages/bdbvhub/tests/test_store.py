@@ -685,11 +685,12 @@ def test_plan_fit_and_load(
     assert not by_origin[stale].current
     assert by_origin[stale].used == old.meta["key"]
     assert by_origin[broken].failed
-    assert by_origin[broken].used is not None
+    # A failed fit is not replaced by the older fit at its origin.
+    assert by_origin[broken].used is None
     assert by_origin[origins[3]].used is None
     dev = pd.read_csv(results / "forecasts.csv.gz")
     # Every loaded origin is backtested, from the backtest's first week.
-    assert set(dev["vintage"]) == {oldest, stale, broken, newest}
+    assert set(dev["vintage"]) == {oldest, stale, newest}
     assert stored.forecasts["horizon"].min() < config.min_horizon
     assert stored.forecasts["horizon"].max() > config.max_horizon
     assert dev["horizon"].min() == config.min_horizon
@@ -1691,7 +1692,125 @@ def test_zone_data_keys_the_walks(
     assert store.ZONE_CODE in store.fit_code("randomwalk", ROOT)
 
 
-def test_the_branch_moves_a_fit_s_zone_run_with_it() -> None:
-    from bdbvhub.store import branch
+def test_the_artifact_store_moves_a_fit_s_zone_run_with_it() -> None:
+    from bdbvhub.store import artifact
 
-    assert branch.ZONES_SUFFIX == store.ZONES_SUFFIX
+    assert artifact.ZONES_SUFFIX == store.ZONES_SUFFIX
+    assert artifact.VERSION_FILE == store.COMMIT_FILE
+
+
+def test_a_failed_fit_is_not_replaced_by_an_older_fit(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    # The current code was fitted at the origin and failed: the model has
+    # no forecast there, not one from a fit made on other code or data.
+    root = tmp_path / "store"
+    origin = sorted(tasks)[-1]
+    keys = store.current_keys({origin: tasks[origin]}, [fitted_flat], {}, "c")
+    old = store.fit(fitted_flat, tasks[origin], {}, "old")
+    store.write_fit(root, old)
+    meta = {**old.meta, "key": keys[(fitted_flat, origin)]}
+    store.write_fit(root, store.failed(meta, RuntimeError("x")))
+    results = tmp_path / "results"
+    (status,) = store.load(
+        root, keys, results, config.min_horizon, config.max_horizon
+    )
+    assert status.failed
+    assert not status.pending
+    assert status.used is None
+    assert status.commit is None
+    assert not (results / "forecasts.csv.gz").exists()
+    assert store.newest_fit(root, keys, fitted_flat) is None
+
+
+def test_a_pending_fit_falls_back_to_an_older_fit_labelled_pending(
+    fitted_flat: str,
+    tasks: dict[str, ForecastTask],
+    config: BacktestConfig,
+    tmp_path: Path,
+) -> None:
+    # The current code has not been fitted at the origin yet: the newest
+    # good fit of older code is used and labelled pending, unless only
+    # current fits are asked for.
+    root = tmp_path / "store"
+    origin = sorted(tasks)[-1]
+    keys = store.current_keys({origin: tasks[origin]}, [fitted_flat], {}, "c")
+    old = store.fit(fitted_flat, tasks[origin], {}, "old")
+    store.write_fit(root, old)
+    (status,) = store.load(
+        root, keys, tmp_path / "a", config.min_horizon, config.max_horizon
+    )
+    assert status.pending
+    assert not status.current
+    assert not status.failed
+    assert status.used == old.meta["key"]
+    assert status.commit == old.meta["commit"]
+    recorded = json.loads((tmp_path / "a" / store.STATUS_FILE).read_text())
+    assert recorded[0]["pending"]
+    (only,) = store.load(
+        root,
+        keys,
+        tmp_path / "b",
+        config.min_horizon,
+        config.max_horizon,
+        current_only=True,
+    )
+    assert only.pending
+    assert only.used is None
+    assert not (tmp_path / "b" / "forecasts.csv.gz").exists()
+    # Once the current code's fit is stored, it is used.
+    store.write_fit(root, store.fit(fitted_flat, tasks[origin], {}, "c"))
+    (now,) = store.load(root, keys, tmp_path / "c", current_only=True)
+    assert now.current
+    assert not now.pending
+    assert now.used == keys[(fitted_flat, origin)]
+
+
+def test_the_origins_name_the_fit_each_stored_model_was_scored_from() -> None:
+    origins = pd.DataFrame(
+        {
+            "origin": ["2026-10-03", "2026-10-03", "2026-10-10"],
+            "model": ["renewal", "randomwalk", "renewal"],
+            "status": ["scored", "no forecast", "scored"],
+            "reason": ["", "too few releases", ""],
+        }
+    )
+
+    def row(model, origin, used, current, failed, pending):
+        return {
+            "model": model,
+            "origin": origin,
+            "key": "now",
+            "used": used,
+            "commit": None if used is None else f"c-{used}",
+            "current": current,
+            "failed": failed,
+            "pending": pending,
+        }
+
+    status = [
+        row("renewal", "2026-10-03", "now", True, False, False),
+        row("renewal", "2026-10-10", "old", False, False, True),
+        # Already listed as no forecast by its run: not listed again.
+        row("randomwalk", "2026-10-03", None, False, True, False),
+        row("renewalsp", "2026-10-03", None, False, True, False),
+        row("renewalsp", "2026-10-10", None, False, False, True),
+        # Not a scored origin.
+        row("renewalsp", "2026-11-01", None, False, False, True),
+    ]
+    got = store.label_origins(origins, status)
+    by = got.set_index(["model", "origin"])
+    assert len(got) == 5
+    assert by.loc[("renewal", "2026-10-03"), "fit"] == "current"
+    assert by.loc[("renewal", "2026-10-03"), "fit_key"] == "now"
+    assert by.loc[("renewal", "2026-10-03"), "fit_commit"] == "c-now"
+    assert by.loc[("renewal", "2026-10-10"), "fit"] == "pending"
+    assert by.loc[("renewal", "2026-10-10"), "fit_commit"] == "c-old"
+    assert by.loc[("randomwalk", "2026-10-03"), "status"] == "no forecast"
+    assert by.loc[("renewalsp", "2026-10-03"), "status"] == "no forecast"
+    assert by.loc[("renewalsp", "2026-10-03"), "fit"] == "failed"
+    assert by.loc[("renewalsp", "2026-10-10"), "status"] == "no forecast"
+    assert by.loc[("renewalsp", "2026-10-10"), "fit"] == "pending"

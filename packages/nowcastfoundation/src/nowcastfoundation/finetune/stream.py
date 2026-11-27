@@ -22,6 +22,9 @@ The workflow's `finetune` rule runs it (workflow/rules/finetune.smk).
 
 `OUT/stream-status.json` holds the trainer's state, and while
 `OUT/../PAUSE` exists the trainer waits between steps.
+`OUT/timings/n<N>.json` holds each chunk's time in segment n<N> over
+every attempt (`write_timings`), and a checkpoint's settings its
+segment's `train_seconds` and `wall_seconds` over every attempt.
 """
 
 from __future__ import annotations
@@ -56,8 +59,12 @@ from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
     LAYOUTS,
+    MAIN_TAG,
+    SUMS_FILE,
+    checkpoint_spec,
     release_tag,
 )
+from nowcastutils import pointers
 
 CHUNK = 500
 """Outbreaks per chunk."""
@@ -1391,9 +1398,18 @@ class ByLength:
     def indices(self) -> Any:
         """Yield every block's index once, in batches of one length.
 
+        The batches of `plan`, each reported once used (`report_batch`).
+        """
+        planned = self.plan()
+        for k, batch in enumerate(planned, start=1):
+            yield batch
+            report_batch(k, len(planned))
+
+    def plan(self) -> list[list[int]]:
+        """Return every block's index once, in batches of one length.
+
         Batches are those Chronos-2's sequential batches make: blocks in
-        order until a batch holds `batch_size` series. Each is reported
-        once used (`report_batch`).
+        order until a batch holds `batch_size` series.
         """
         planned = []
         for length in self.data:
@@ -1407,9 +1423,7 @@ class ByLength:
                     batch, rows = [], 0
             if batch:
                 planned.append(batch)
-        for k, batch in enumerate(planned, start=1):
-            yield batch
-            report_batch(k, len(planned))
+        return planned
 
     def batches(self) -> Any:
         """Yield every block once, in batches of one length."""
@@ -1659,6 +1673,65 @@ def publish(where: Path, key: str, run: Any = subprocess.run) -> None:
     log(f"uploaded {[f.name for f in missing]} to {tag}")
 
 
+def promote_main(
+    where: Path,
+    run_name: str,
+    branches: Sequence[str],
+    run: Any = subprocess.run,
+) -> dict[str, Any]:
+    """Name a released checkpoint the main run's newest, in `MAIN_TAG`.
+
+    `MAIN_FILE` of the release `MAIN_TAG` records the run and the
+    checkpoint (`nowcastutils.pointers.promote`); the fine-tuned models
+    load it (`forecaster.latest_spec`). Only the main fine-tuning run
+    (the paper's `live_run`) calls this, from a commit on one of
+    `branches`.
+
+    Parameters
+    ----------
+    where : pathlib.Path
+        The checkpoint's folder, with its `settings.json`.
+    run_name : str
+        The main run's workflow name.
+    branches : sequence of str
+        The branches a promotion may run from.
+    run : callable
+        Runs a command, as `subprocess.run`.
+
+    Returns
+    -------
+    dict
+        The record written to `MAIN_FILE`.
+
+    Raises
+    ------
+    RuntimeError
+        If the checkpoint's own release (with its `SUMS_FILE`) is missing,
+        HEAD is on none of `branches`, or `gh` fails.
+    """
+    settings = json.loads((where / "settings.json").read_text())
+    spec = checkpoint_spec(settings)
+    tag = release_tag(spec)
+    record = pointers.promote(
+        MAIN_TAG.removesuffix(pointers.SUFFIX),
+        tag,
+        hash=str(settings["hash"]),
+        produced_by=f"fine-tuning run {run_name} (rule publish_checkpoint)",
+        branches=branches,
+        repo=REPO,
+        title="Chronos-2 fine-tuned, main run",
+        needs=SUMS_FILE,
+        extra={
+            "run": run_name,
+            "spec": spec,
+            "n_outbreaks": settings.get("n_outbreaks"),
+        },
+        run=run,
+    )
+    log(f"{MAIN_TAG} names {tag} of {run_name}")
+    return record
+
+
 OOM_PAUSE = 60
 """Seconds a block that runs out of memory alone waits before it reruns."""
 OOM_WAITS = 120
@@ -1894,6 +1967,117 @@ def keep_state(state: Path, where: Path) -> None:
     kept = where / "state"
     shutil.rmtree(kept, ignore_errors=True)
     shutil.copytree(state, kept)
+
+
+TIMINGS = "timings"
+"""The folder of each segment's chunk timings (`write_timings`), beside
+the state."""
+
+SPLIT_KEYS = ("wait_s", "cut_s", "train_s", "eval_s")
+"""The parts of a chunk's time: waiting for outbreaks, cutting blocks,
+training and evaluating, in seconds."""
+
+
+def segment_timings(
+    saved: dict[str, Any] | None, segment: str, now: float
+) -> dict[str, Any]:
+    """Return a segment's chunk timings: those saved if of `segment`.
+
+    They are kept in the trainer's state, so a restart keeps the chunks
+    timed before it and the open chunk's time so far. A state of another
+    segment (the one kept with the previous checkpoint), or with no
+    timings, starts new ones at `now`.
+    """
+    if saved and saved.get("segment") == segment:
+        return saved
+    return {"segment": segment, "started": now, "chunks": [], "open": None}
+
+
+def open_chunk(
+    timings: dict[str, Any], chunk: str, position: int, now: float
+) -> dict[str, float]:
+    """Start or resume timing `chunk` ("first-last") at batch `position`.
+
+    Return its time so far: that saved if the chunk is open in the
+    timings, else none. A chunk resumed with no saved time is timed from
+    `position` on (`timed_from`).
+    """
+    current = timings.get("open")
+    if position and current and current["chunk"] == chunk:
+        current["resumed_at"].append(position)
+        return dict(current["split"])
+    timings["open"] = {
+        "chunk": chunk,
+        "started": now,
+        "timed_from": position,
+        "resumed_at": [position] if position else [],
+        "split": dict.fromkeys(SPLIT_KEYS, 0.0),
+    }
+    return dict.fromkeys(SPLIT_KEYS, 0.0)
+
+
+def note_split(timings: dict[str, Any], split: dict[str, float]) -> None:
+    """Keep the open chunk's time so far, for the next save."""
+    timings["open"]["split"] = dict(split)
+
+
+def close_chunk(
+    timings: dict[str, Any], split: dict[str, float], steps: int, now: float
+) -> dict[str, Any]:
+    """Record the open chunk's time over every attempt and return it."""
+    current = timings["open"]
+    first, last = (int(x) for x in current["chunk"].split("-"))
+    record = {
+        "chunk": current["chunk"],
+        "first": first,
+        "last": last,
+        "steps": steps,
+        "timed_from": current["timed_from"],
+        "resumed_at": current["resumed_at"],
+        **{k: split[k] for k in SPLIT_KEYS},
+        "seconds": sum(split[k] for k in SPLIT_KEYS),
+        "started": current["started"],
+        "ended": now,
+    }
+    timings["chunks"].append(record)
+    timings["open"] = None
+    return record
+
+
+def train_seconds(
+    timings: dict[str, Any], split: dict[str, float] | None = None
+) -> float:
+    """Return the segment's training seconds over all its attempts.
+
+    The finished chunks' time and the open chunk's, `split` if given,
+    else as last saved. Time trained after a save and lost to a restart
+    is not counted: those steps are trained again.
+    """
+    done = sum(float(c["seconds"]) for c in timings["chunks"])
+    if split is None and timings.get("open"):
+        split = timings["open"]["split"]
+    return done + (sum(float(split[k]) for k in SPLIT_KEYS) if split else 0.0)
+
+
+def wall_seconds(timings: dict[str, Any], now: float) -> float:
+    """Return the wall time since the segment's first attempt started."""
+    return now - float(timings["started"])
+
+
+def write_timings(out: Path, timings: dict[str, Any]) -> Path:
+    """Write the segment's timings to `out/TIMINGS/<segment>.json`.
+
+    Rewritten whole from the state at each save, never appended or cut
+    short, so it holds every attempt's chunks.
+    """
+    path = out / TIMINGS / f"{timings['segment']}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(
+        json.dumps({**timings, "train_seconds": train_seconds(timings)})
+    )
+    tmp.replace(path)
+    return path
 
 
 def save_rng(where: Path) -> None:
@@ -2607,6 +2791,9 @@ def main(root: Path | None = None) -> None:
         log(f"resumed at step {step}, outbreaks {done + 1}-, batch {position}")
 
     def snapshot() -> None:
+        # The open chunk's time so far, so a restart carries it on.
+        if timings["open"] is not None and train_from is not None:
+            note_split(timings, split_now())
         save_state(
             state_dir,
             model,
@@ -2621,9 +2808,18 @@ def main(root: Path | None = None) -> None:
                 "history": history,
                 "seen": seen,
                 "losses": losses,
+                "timings": timings,
                 **({"memory": rule.state()} if rule is not None else {}),
             },
         )
+        write_timings(out, timings)
+
+    def split_now() -> dict[str, float]:
+        """Return the open chunk's time so far, its training running."""
+        if train_from is None:
+            return dict(split)
+        ran = time.perf_counter() - train_from - (split["eval_s"] - eval_from)
+        return split | {"train_s": split["train_s"] + ran}
 
     def backward(part: list[int], share: float) -> float:
         """Accumulate the gradients of part of a batch."""
@@ -2663,14 +2859,18 @@ def main(root: Path | None = None) -> None:
         done, args.until, (out / f"n{args.until}" / "settings.json").exists()
     )
     stop = args.outbreaks if args.until is None else args.until
+    # The segment's chunk times over every attempt, kept in its state.
+    timings = segment_timings(
+        state.get("timings") if state else None, f"n{stop}", time.time()
+    )
+    # While a chunk trains: when it began here and its evaluation then.
+    train_from: float | None = None
+    eval_from = 0.0
+    split: dict[str, float] = dict.fromkeys(SPLIT_KEYS, 0.0)
     while done < stop:
         hi = min(done + CHUNK, args.outbreaks)
-        split: dict[str, float] = {
-            "wait_s": 0.0,
-            "cut_s": 0.0,
-            "train_s": 0.0,
-            "eval_s": 0.0,
-        }
+        # A chunk resumed part way carries on its saved time.
+        split = open_chunk(timings, f"{done + 1}-{hi}", position, time.time())
         tick = time.perf_counter()
         report(
             stage=f"waiting for outbreaks {done + 1}-{hi}",
@@ -2686,7 +2886,7 @@ def main(root: Path | None = None) -> None:
             if done_all:
                 raise RuntimeError(f"fewer than {hi} training outbreaks")
             time.sleep(POLL)
-        split["wait_s"] = time.perf_counter() - tick
+        split["wait_s"] += time.perf_counter() - tick
         tick = time.perf_counter()
         report(
             stage=f"cutting blocks of outbreaks {done + 1}-{hi}",
@@ -2723,8 +2923,9 @@ def main(root: Path | None = None) -> None:
                 -(-args.outbreaks // CHUNK),
             )
         ]
-        split["cut_s"] = time.perf_counter() - tick
+        split["cut_s"] += time.perf_counter() - tick
         tick = time.perf_counter()
+        train_from, eval_from = tick, split["eval_s"]
         blocks = [b for _, b in pairs]
         sizes = np.array([int(b["context"].shape[0]) for b in blocks])
         rng = np.random.default_rng([args.seed, done])
@@ -2841,7 +3042,8 @@ def main(root: Path | None = None) -> None:
         trained.extend(chunk)
         chunk = []
         done, position = len(trained), 0
-        split["train_s"] = time.perf_counter() - tick - split["eval_s"]
+        split = split_now()
+        train_from = None
         tick = time.perf_counter()
         seen["blocks"] += len(pairs)
         seen["series"] += int(sizes.sum())
@@ -2918,7 +3120,14 @@ def main(root: Path | None = None) -> None:
                     f"(start {start_loss:.4f})"
                 )
             entry["hash"] = settings_key
-            settings["seconds"] = time.perf_counter() - t0
+            # Over every attempt: the chunks' own time, and the wall time
+            # since the segment's first attempt began.
+            settings["train_seconds"] = train_seconds(
+                timings,
+                split
+                | {"eval_s": split["eval_s"] + time.perf_counter() - tick},
+            )
+            settings["wall_seconds"] = wall_seconds(timings, time.time())
             (where / "settings.json").write_text(json.dumps(settings, indent=1))
             history.append(entry)
             (out / "history.json").write_text(json.dumps(history))
@@ -2940,6 +3149,7 @@ def main(root: Path | None = None) -> None:
             "chunk time: "
             + ", ".join(f"{k[:-2]} {v:.0f} s" for k, v in split.items())
         )
+        close_chunk(timings, split, len(plan), time.time())
         snapshot()
         report(stage="training", step=step, outbreaks=done, split=split)
     pool.shutdown(cancel_futures=True)

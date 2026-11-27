@@ -9,9 +9,9 @@
 # <label>/ and resumes from it; its done stamp is written when it exits
 # cleanly. `score_table` merges every label's rows into the evidence
 # tables in <SCORE_CACHE>/tables/, newest checkpoint first. A unit runs
-# on the forecasting device with its threads (`forecast` in the config,
-# flowlib.forecast), beside the trainer; on CUDA, `forecast.gpu` says
-# whether a unit waits for the trainer's GPU or shares it.
+# on `score.device` in the config (the CPU), beside the trainer, its
+# dates split over worker processes (`score.workers`); unset, on the
+# checkpoint scoring device (`compute.germany_forecast`).
 #
 # Targets: `score`, or one unit, <SCORE_CACHE>/germany-days/<label>.done
 # (`GERMANY_UNIT`); `germany` is the unit's study name.
@@ -65,9 +65,9 @@ rule score_germany:
             UNIT_MEMORY,
             like=("label",),
         ),
-        gpu=CHECKPOINT_FORECAST.gpu,
+        gpu=GERMANY_FORECAST.gpu,
     params:
-        env=checkpoint_env,
+        env=germany_env,
         copy_back=unit_rows(GERMANY_UNIT),
         cache=lambda wc, output: Path(output[0]).parents[1],
         label=lambda wc: wc.label,
@@ -98,9 +98,9 @@ rule score_run_germany:
             UNIT_MEMORY,
             like=("n",),
         ),
-        gpu=CHECKPOINT_FORECAST.gpu,
+        gpu=GERMANY_FORECAST.gpu,
     params:
-        env=checkpoint_env,
+        env=germany_env,
         copy_back=lambda wc: f"{run_scores_dir(wc.run)}/{GERMANY_UNIT}/n{wc.n}/",
         cache=lambda wc, output: Path(output[0]).parents[1],
         label=lambda wc: f"n{wc.n}",

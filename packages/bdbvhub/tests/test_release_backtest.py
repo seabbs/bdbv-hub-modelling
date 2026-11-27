@@ -569,3 +569,48 @@ def test_relative_crps_scores_crps_and_log_crps() -> None:
     assert rel.loc["a", "crps"] == pytest.approx(1.0)
     assert rel.loc["a", "base_crps"] == pytest.approx(3.0)
     assert not any("wis" in c for c in rel.columns)
+
+
+def test_a_run_with_no_forecast_is_not_scored_from_stored_samples(
+    target: pd.DataFrame, delays: pd.DataFrame, daily: pd.DataFrame
+) -> None:
+    # A model its run found no forecast for at an origin is listed once,
+    # with no forecast, and never scored there from stored samples.
+    from nowcasteval.nowcast import ReleaseForecasts, score_releases
+
+    real = target.loc[target["kind"] == "real"]
+    tasks = make_tasks(
+        real.loc[real["vintage"] == "2026-10-17"],
+        delays.assign(kind="real"),
+        BacktestConfig(n_samples=20, seed=3),
+        daily=daily,
+    )
+    weeks = list(tasks[0].target_end_dates)
+    stored = pd.DataFrame(
+        {
+            "model": "flat",
+            "vintage": "2026-10-17",
+            "location": "CD-IT",
+            "target_end_date": np.repeat(weeks, 20),
+            "sample": np.tile(np.arange(1, 21), len(weeks)),
+            "value": 100.0,
+        }
+    )
+    empty = pd.DataFrame()
+    run = ReleaseForecasts(
+        pd.DataFrame(
+            {
+                "origin": ["2026-10-17"],
+                "model": ["flat"],
+                "status": ["no forecast"],
+                "reason": ["too few releases"],
+            }
+        ),
+        empty,
+        empty,
+        empty,
+    )
+    out = score_releases(tasks, daily, target, run, stored=stored)
+    flat = out.origins.loc[out.origins["model"] == "flat"]
+    assert list(flat["status"]) == ["no forecast"]
+    assert "flat" not in set(out.scores.get("model", []))

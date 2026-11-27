@@ -10,8 +10,8 @@
 # once scored (rules/evaluate.smk); `publish_hf`
 # uploads a verified one to the Hugging Face Hub (opt-in, named by its
 # output only); and
-# `publish_germany_unit` attaches a released checkpoint's German unit to
-# its release for the Pages build. Publishing writes
+# `promote_main` names the main run's newest released checkpoint in the
+# release `chronos-main`. Publishing writes
 # GitHub releases, so it is the opt-in target `publish`, never part of
 # `finetune` or `all`.
 
@@ -59,6 +59,31 @@ rule publish_checkpoint:
         uv run python workflow/scripts/notify.py "checkpoint {wildcards.ck} published:" \
             "$(cat {output})" || true
         """
+
+
+rule promote_main:
+    # The main fine-tuning run's (the paper's `live_run`) newest released
+    # checkpoint, named in the release `chronos-main`, which the
+    # fine-tuned models load (`bdbvhub finetuned-checkpoint`). A newer
+    # checkpoint of that run changes the input, so it reruns; no other
+    # run's checkpoint reaches it.
+    input:
+        TRAINING.main_checkpoint,
+    output:
+        TRAINING.main_record,
+    log:
+        f"{TRAINING.dir}/promote-main.log",
+    priority: HANDOFF_PRIORITY
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        run=config["live_run"],
+        where=lambda wc, input: Path(input[0]).parent,
+        branches=PROMOTE_BRANCHES,
+    shell:
+        "uv run python workflow/scripts/publish_checkpoint.py --main "
+        "{params.run} {params.where} {output} {params.branches} > {log} 2>&1"
 
 
 rule ft_check_release:
@@ -116,29 +141,6 @@ rule publish_hf:
         args=lambda wc: hf_args(),
     shell:
         "uv run publish-hf {params.where} {output} {params.args} > {log} 2>&1"
-
-
-rule publish_germany_unit:
-    # A released checkpoint's German unit (score_germany), packed as the
-    # stored forecasts the Pages build loads and attached to its own
-    # release (`nowcastgermany unit-publish`, nowcastgermany.store).
-    # Opt-in, as it writes to a release.
-    input:
-        f"{CACHE}/{GERMANY_UNIT}/{{label}}.done",
-    output:
-        touch(f"{CACHE}/{GERMANY_UNIT}/{{label}}.published"),
-    log:
-        f"{CACHE}/log/{GERMANY_UNIT}-{{label}}-publish.log",
-    wildcard_constraints:
-        label=r"slots-[0-9a-f]+",
-    localrule: True
-    conda:
-        TOOLS_ENV
-    params:
-        cache=lambda wc, input: Path(input[0]).parents[1],
-    shell:
-        "uv run nowcastgermany unit-publish {params.cache} {wildcards.label} "
-        "> {log} 2>&1"
 
 
 rule publish:

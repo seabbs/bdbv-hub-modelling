@@ -87,6 +87,11 @@ def ft_check_record(wc):
 TARGETS = LOCAL["TARGETS"].split()
 # The tools the shell rules call (envs/tools.yaml).
 TOOLS_ENV = "../envs/tools.yaml"
+
+
+# The branches a promote rule runs from (`promote_branches`, the
+# paper's config).
+PROMOTE_BRANCHES = " ".join(config["promote_branches"])
 # A mailbox line, when NOTIFY is set.
 say = functools.partial(notify.post, cfg=LOCAL)
 
@@ -165,8 +170,12 @@ UNIT_THREADS = SCORING.unit_threads
 SCORE_WORKERS = SCORING.score_workers
 UNIT_MEMORY = SCORING.unit_memory_floor()
 EVALUATE_THREADS = SCORING.evaluate_threads
+EVALUATION_MEMORY = SCORING.evaluation_memory_floor()
+# A held-out pass's workers, from its job's threads.
+evaluation_workers = lambda wc, threads: SCORING.evaluation_workers(threads)
 FORECAST = SCORING.forecast
 CHECKPOINT_FORECAST = SCORING.checkpoint_forecast
+GERMANY_FORECAST = SCORING.germany_forecast
 GERMANY_UNIT = scoring.GERMANY_UNIT
 EVALUATE = scoring.EVALUATE
 newest_first = compute.newest_first
@@ -175,6 +184,7 @@ unit_priority = SCORING.unit_priority
 ft_check_priority = SCORING.ft_check_priority
 unit_env = SCORING.unit_env
 checkpoint_env = SCORING.checkpoint_env
+germany_env = SCORING.germany_env
 evaluation_priority = SCORING.evaluation_priority
 unit_rows = SCORING.unit_rows
 unit_shell = SCORING.unit_shell

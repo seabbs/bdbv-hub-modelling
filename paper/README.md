@@ -29,8 +29,8 @@ task paper TARGET=paper    # the paper run, with the held-out data
 
 CI runs the same steps (`python3 workflow/scripts/paper_run.py --render development --pages`, [`paper_run.py`](../workflow/scripts/paper_run.py)), with [`workflow/pages.yaml`](workflow/pages.yaml) over the config.
 That never runs the simulations, fine-tuning runs and their scores, which the workflow's hosts make.
-The hosts publish their development outputs instead, each set (`synthetic`, `finetune`, `simulations`) as a `paper-<set>-<hash>` release once per version (`snakemake -s workflow/Snakefile paper_inputs`, [`paperpipe/stored.py`](paperpipe/stored.py)).
-CI fetches the newest of each and reads its files as inputs; a set not yet published leaves its results saying what they wait on.
+The hosts publish their development outputs instead, each set (`synthetic`, `finetune`, `simulations`, `germany`) as a `paper-<set>-<hash>` release once per version, and name it the set's current one in the release `paper-<set>-main` (`snakemake -s workflow/Snakefile paper_inputs`, [`paperpipe/stored.py`](paperpipe/stored.py)).
+CI fetches the release each `paper-<set>-main` names and reads its files as inputs; a set never promoted leaves its results saying what they wait on.
 Publishing refuses any held-out synthetic seed, held-out German date or Ebola row.
 It runs the target's missing steps, renders the paper as HTML and PDF and copies it into `docs/paper/`.
 `CORES=8 task paper`, or `CORES` in `config/local.env`, sets Snakemake's cores (4 by default).

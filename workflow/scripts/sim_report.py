@@ -11,15 +11,22 @@ paper's reference values (`paper/data/reference-values.csv`):
 2. by layer, the drawn settings and the outcomes, each against the German
    national value (development half) and the reference values where one
    exists;
-3. flags: attack rates above 1, redrawn draws and why, and the sim-realism
+3. the structure of the reporting delays (`flowlib.delay_structure`):
+   over time, by weekday, between strata and with the release cadence,
+   against the German development half's and the BDBV releases'
+   (`delays`, written by the `delay_reference` rule);
+4. flags: attack rates above 1, redrawn draws and why, and the sim-realism
    audit's odd combinations.
 
     uv run python workflow/scripts/sim_report.py germany \
         <COVID-19_hospitalizations.csv> <split_date> <out.csv>
     uv run python workflow/scripts/sim_report.py diseases <out.csv> \
         <reference-values.csv> <outbreaks.csv> [...]
+    uv run python workflow/scripts/sim_report.py delays \
+        <COVID-19_hospitalizations.csv> <split_date> <daily.csv> \
+        <max_delay> <out.json>
     uv run python workflow/scripts/sim_report.py render <out.html> <title> \
-        <reference-values.csv> <germany.csv> \
+        <reference-values.csv> <germany.csv> <delays.json> \
         <name>=<sims_dir>:<outbreaks.csv> [...]
 """
 
@@ -28,7 +35,9 @@ from __future__ import annotations
 import base64
 import html
 import io
+import json
 import sys
+import warnings
 from pathlib import Path
 from typing import Final
 
@@ -40,9 +49,12 @@ import numpy as np
 import pandas as pd
 
 from nowcastgermany.data import hub_changes
+from nowcastutils.releases import cumulative_first_release
 
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parents[1]))
 import grid_summaries as gs
+from flowlib import delay_structure as ds
 
 DEV_FIRST = "2021-04-06"
 """The first German reference date used, as the sim-realism audit."""
@@ -52,6 +64,7 @@ MUTED = "#8a94a0"
 DE_COLOUR = "#c2410c"
 SIM_COLOUR = "#2a78d6"
 REF_COLOUR = "#1baf7a"
+BDBV_COLOUR = "#7c3aed"
 
 # --- Germany ---------------------------------------------------------------
 
@@ -108,6 +121,107 @@ def germany(triangle: Path, split: str) -> pd.DataFrame:
         ]
     long = pd.DataFrame(rows)
     return long.groupby(["kind", "statistic"], as_index=False)["value"].median()
+
+
+def germany_delay_rows(wide: pd.DataFrame, split: str) -> pd.DataFrame:
+    """Return the German states' changes in the development half.
+
+    As `flowlib.delay_structure` reads them: `stratum` (the state),
+    `ref`, `rep` and `count`, for reference dates from `DEV_FIRST` to the
+    day before `split`. The states are the national series' children.
+    """
+    wide = wide.loc[(wide["date"] >= DEV_FIRST) & (wide["date"] < split)]
+    parts = [
+        pd.DataFrame(
+            {
+                "stratum": loc,
+                "ref": c["reference_date"],
+                "rep": c["report_date"],
+                "count": c["count"],
+            }
+        )
+        for (loc, age), c in german_series(wide).items()
+        if age == "00+" and loc != "DE"
+    ]
+    return pd.concat(parts, ignore_index=True)
+
+
+def bdbv_delay_rows(daily: pd.DataFrame, max_delay: int) -> pd.DataFrame:
+    """Return the BDBV provinces' changes from one release to the next.
+
+    From the hub's daily onsets by release (`daily.csv`, with `cutoff`):
+    each province and onset date's count at each release less its count
+    at the one before, as `stratum`, `ref` (onset date), `rep` (release)
+    and `count`. The usable releases are those the backtests use: a
+    cumulative first release (more than `max_delay` days before the next
+    release's cut-off, `nowcastutils.releases.cumulative_first_release`)
+    is left out. The country is the provinces' total, not a stratum.
+    Onset dates before the first usable release are left out, as their
+    delays are not seen.
+    """
+    dump = cumulative_first_release(daily, max_delay)
+    d = daily.loc[(daily["location"] != "CD") & (daily["vintage"] != dump)]
+    wide = d.pivot_table(
+        index=["location", "onset_date"],
+        columns="vintage",
+        values="observed",
+        aggfunc="sum",
+    ).fillna(0)
+    change = wide.diff(axis=1)
+    change.iloc[:, 0] = wide.iloc[:, 0]
+    long = change.reset_index().melt(
+        id_vars=["location", "onset_date"],
+        var_name="vintage",
+        value_name="count",
+    )
+    long = long.loc[
+        (long["count"] != 0) & (long["onset_date"] >= wide.columns[0])
+    ]
+    return pd.DataFrame(
+        {
+            "stratum": long["location"],
+            "ref": pd.to_datetime(long["onset_date"]),
+            "rep": pd.to_datetime(long["vintage"]),
+            "count": long["count"],
+        }
+    ).reset_index(drop=True)
+
+
+def _entry(short: str, label: str, rows: pd.DataFrame) -> dict:
+    s = ds.structure(rows)
+    return {
+        "short": short,
+        "label": label,
+        "structure": s,
+        "scalars": ds.scalars(s),
+        "curves": ds.curves(s),
+    }
+
+
+def delay_reference(
+    triangle: Path, split: str, daily: Path, max_delay: int
+) -> dict:
+    """Return the German and BDBV delay structures to compare with.
+
+    Germany: the hub's triangle in the development half, the states as
+    the national series' children (`germany_delay_rows`). BDBV: the
+    hub's usable releases (a cumulative first release left out, with
+    the backtests' `max_delay`), the provinces as the country's children
+    (`bdbv_delay_rows`). Each as `flowlib.delay_structure` gives it.
+    """
+    wide = pd.read_csv(triangle)
+    return {
+        "germany": _entry(
+            "Germany",
+            "Germany (development half, states)",
+            germany_delay_rows(wide, split),
+        ),
+        "bdbv": _entry(
+            "BDBV",
+            "BDBV (hub releases, provinces)",
+            bdbv_delay_rows(pd.read_csv(daily), max_delay),
+        ),
+    }
 
 
 # --- Reading the rounds ----------------------------------------------------
@@ -209,7 +323,7 @@ def _style(ax) -> None:
 
 def outbreak_figure(counts: pd.DataFrame, latent: pd.DataFrame):
     """Return the six panels of one example outbreak."""
-    fig, axes = plt.subplots(2, 3, figsize=(14, 6.4))
+    fig, axes = plt.subplots(3, 3, figsize=(14, 9.6))
     latent = latent.assign(date=pd.to_datetime(latent["date"]))
     c = counts.assign(
         reference_date=pd.to_datetime(counts["reference_date"]),
@@ -319,11 +433,70 @@ def outbreak_figure(counts: pd.DataFrame, latent: pd.DataFrame):
         )
     ax.set_xlim(0, max(top, 7))
     ax.set_title("Delay CDF by 4-week reference block (darker later)")
+    structure = ds.structure(
+        c.rename(
+            columns={
+                "location": "stratum",
+                "reference_date": "ref",
+                "report_date": "rep",
+            }
+        ),
+        parent=ds.sim_parent,
+    )
+    if structure is not None:
+        weekly_delay_panel(
+            axes[2, 0], structure["by_ref"], "Delay by reference week"
+        )
+        weekly_delay_panel(
+            axes[2, 1], structure["by_rel"], "Delay by release week"
+        )
+        strata_panel(axes[2, 2], structure["strata"])
     for a in axes.flat:
         _style(a)
     fig.autofmt_xdate()
     fig.tight_layout()
     return fig
+
+
+def weekly_delay_panel(ax, weekly: dict, title: str) -> None:
+    """Draw a weekly delay summary: its mean, median and 10 to 90%."""
+    x = pd.to_datetime(pd.Series(weekly["week"]))
+    num = {
+        k: pd.to_numeric(pd.Series(weekly[k]), errors="coerce")
+        for k in ("mean", "q10", "q50", "q90")
+    }
+    ax.fill_between(
+        x, num["q10"], num["q90"], color=SIM_COLOUR, alpha=0.18, lw=0,
+        step="mid", label="10 to 90%",
+    )  # fmt: skip
+    ax.step(x, num["q50"], where="mid", color=SIM_COLOUR, lw=1, label="median")
+    ax.plot(x, num["mean"], color=INK, lw=1.4, label="mean")
+    ax.set_ylim(bottom=0)
+    ax.set_ylabel("delay (days)", fontsize=7)
+    ax.set_title(title)
+    ax.legend(fontsize=6, frameon=False)
+
+
+def strata_panel(ax, strata: list[dict], top: int = 12) -> None:
+    """Draw each stratum's 10 to 90% delay, median and mean.
+
+    The total first, then each parent with its children (the `top`
+    first).
+    """
+    rows = [r for r in strata if r["mean"] is not None][:top]
+    for i, r in enumerate(rows):
+        colour = INK if r["level"] != "child" else SIM_COLOUR
+        ax.plot([r["q10"], r["q90"]], [i, i], color=colour, lw=1.2, alpha=0.6)
+        ax.plot(r["q50"], i, "|", color=colour, ms=8)
+        ax.plot(r["mean"], i, "o", color=colour, ms=4)
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels(
+        [("  " if r["level"] == "child" else "") + r["name"] for r in rows]
+    )
+    ax.invert_yaxis()
+    ax.set_xlim(left=0)
+    ax.set_xlabel("delay (days): 10 to 90%, median |, mean o", fontsize=7)
+    ax.set_title("Delay by stratum (total, parents, children)")
 
 
 def bands_of(
@@ -973,6 +1146,209 @@ def flags(d: pd.DataFrame, failures: pd.DataFrame) -> str:
     return "\n".join(out)
 
 
+# --- The structure of the delays -------------------------------------------
+
+
+def sim_structures(dirs: dict) -> list[dict]:
+    """Return each outbreak's delay scalars and curves, first draw.
+
+    `flowlib.delay_structure` of every outbreak in each round's batches,
+    strata nested by `delay_structure.sim_parent`.
+    """
+    out = []
+    for name, sims in dirs.items():
+        for path in sorted(Path(sims).glob("counts-*.csv.gz")):
+            counts = pd.read_csv(path)
+            counts = counts.loc[counts["outbreak"].str.endswith("-1")]
+            counts = counts.rename(
+                columns={
+                    "location": "stratum",
+                    "reference_date": "ref",
+                    "report_date": "rep",
+                }
+            )
+            for oid, rows in counts.groupby("outbreak"):
+                st = ds.structure(rows, parent=ds.sim_parent)
+                if st is None:
+                    continue
+                out.append(
+                    {
+                        "round": name,
+                        "outbreak": oid[:-2],
+                        "mean": st["overall"]["mean"],
+                        "scalars": ds.scalars(st),
+                        "curves": ds.curves(st),
+                    }
+                )
+    return out
+
+
+CURVES = [
+    ("cdf", "Share reported by delay", "delay (days)", ds.DELAY_POINTS),
+    (
+        "delay_time",
+        "Mean delay over the series, over its mean",
+        "tenth of the series",
+        range(1, ds.TIME_BINS + 1),
+    ),
+    (
+        "ref_delay",
+        "Mean delay by reference weekday, less the mean (days)",
+        "weekday of reference",
+        WEEKDAYS := ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
+    ),
+    ("refdow", "Counts by reference weekday, over the mean", "weekday",
+     WEEKDAYS),
+    ("repdow", "Counts by report weekday, over the mean", "weekday",
+     WEEKDAYS),
+    ("release_days", "Share of releases on each weekday", "weekday",
+     WEEKDAYS),
+    (
+        "gaps",
+        "Share of gaps between releases",
+        "days between releases (8 is 8 or more)",
+        range(1, ds.GAP_BINS + 1),
+    ),
+]  # fmt: skip
+"""The delay curves the report compares: key, title, x label, x."""
+
+SCALARS = [
+    ("mean", "Mean delay (days)"),
+    ("delay_drift", "Week-to-week variation of the mean delay (CV)"),
+    ("delay_trend", "Mean delay, last third less first (days)"),
+    ("dow_delay", "Range of the mean delay over weekdays (days)"),
+    ("release_weekdays", "Weekdays with releases"),
+    ("wait", "Days waiting for the next release"),
+    ("wait_share", "Share of the delay waiting for a release"),
+    ("strata_spread", "Spread of the strata's mean delays (sd, days)"),
+]
+"""The delay numbers the report compares: key and title."""
+
+REF_STYLES = {
+    "germany": (DE_COLOUR, "-"),
+    "bdbv": (BDBV_COLOUR, "--"),
+}
+
+
+def curves_figure(structs: list[dict], reference: dict):
+    """Return the delay curves against Germany's and BDBV's.
+
+    The simulations' median, 50% and 90%, one panel each on an even grid.
+    """
+    fig, axes = plt.subplots(2, 4, figsize=(14, 5.8))
+    axes = axes.ravel()
+    for ax, (key, title, xlab, xs) in zip(axes, CURVES, strict=False):
+        m = np.array(
+            [
+                [np.nan if v is None else v for v in s["curves"][key]]
+                for s in structs
+            ],
+            dtype=float,
+        ).reshape(len(structs), len(xs))
+        x = np.arange(len(xs))
+        if len(structs):
+            with warnings.catch_warnings():
+                # A point no outbreak has is left empty.
+                warnings.simplefilter("ignore", RuntimeWarning)
+                q = np.nanquantile(m, [0.05, 0.25, 0.5, 0.75, 0.95], 0)
+            ax.fill_between(
+                x,
+                q[0],
+                q[4],
+                color=SIM_COLOUR,
+                alpha=0.12,
+                lw=0,
+                label="simulations, 90%",
+            )
+            ax.fill_between(
+                x,
+                q[1],
+                q[3],
+                color=SIM_COLOUR,
+                alpha=0.25,
+                lw=0,
+                label="simulations, 50%",
+            )
+            ax.plot(x, q[2], color=SIM_COLOUR, lw=1.6,
+                    label="simulations, median")  # fmt: skip
+        for name, (colour, ls) in REF_STYLES.items():
+            entry = reference.get(name)
+            if not entry:
+                continue
+            y = [np.nan if v is None else v for v in entry["curves"][key]]
+            ax.plot(x, y, color=colour, ls=ls, lw=1.6,
+                    label=entry["label"])  # fmt: skip
+        ax.set_xticks(x)
+        ax.set_xticklabels([str(v) for v in xs], fontsize=6)
+        ax.set_xlabel(xlab, fontsize=7)
+        ax.set_title(title)
+        _style(ax)
+    for ax in axes[len(CURVES) :]:
+        ax.set_visible(False)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower right", fontsize=8,
+               frameon=False, bbox_to_anchor=(0.98, 0.08))  # fmt: skip
+    fig.tight_layout()
+    return fig
+
+
+def scalars_figure(structs: list[dict], reference: dict):
+    """Return the delay numbers' histograms with Germany's and BDBV's."""
+    fig, axes = plt.subplots(2, 4, figsize=(14, 5.2))
+    for ax, (key, title) in zip(axes.ravel(), SCALARS, strict=True):
+        v = pd.Series(
+            [s["mean"] if key == "mean" else s["scalars"][key]
+             for s in structs], dtype=float,
+        ).dropna()  # fmt: skip
+        if len(v):
+            lo, hi = np.quantile(v, [0.005, 0.995])
+            ax.hist(v.clip(lo, hi), bins=30, color=SIM_COLOUR, alpha=0.75)
+        notes = []
+        for name, (colour, ls) in REF_STYLES.items():
+            entry = reference.get(name)
+            if not entry:
+                continue
+            ref = (
+                entry["structure"]["overall"]["mean"]
+                if key == "mean"
+                else entry["scalars"].get(key)
+            )
+            if ref is None:
+                continue
+            ax.axvline(ref, color=colour, ls=ls, lw=1.6)
+            pct = 100 * (v < ref).mean() if len(v) else np.nan
+            short = "DE" if name == "germany" else "BDBV"
+            notes.append(f"{short} {ref:.3g} (p{pct:.0f})")
+        ax.set_title(title + ("\n" + ", ".join(notes) if notes else ""))
+        _style(ax)
+    fig.tight_layout()
+    return fig
+
+
+def delay_section(dirs: dict, reference: dict) -> str:
+    """Return the structure of the delays against Germany's and BDBV's."""
+    structs = sim_structures(dirs)
+    labels = ", ".join(
+        f"{e['label']} ({e['structure']['first']} to "
+        f"{e['structure']['last_ref']})"
+        for e in reference.values()
+        if e and e.get("structure")
+    )
+    return (
+        "<p>How the reporting delays are made, outbreak by outbreak "
+        f"({len(structs)} outbreaks, first draw), against "
+        f"{html.escape(labels) or 'no data (no delay reference)'}. "
+        "Delays are of reference dates at least the 95% delay before the "
+        "last report, so the series' end does not shorten them. A release "
+        "is a report date with any count; the wait is the days from a "
+        "reference date to the next release, the part of the delay the "
+        "release cadence sets. Strata are the leaves (places, ages or "
+        "both; the German states; the BDBV provinces).</p>"
+        + png(curves_figure(structs, reference))
+        + png(scalars_figure(structs, reference))
+    )
+
+
 CSS = """
 :root{--ink:#1f2933;--muted:#5f6b78;--bg:#ffffff;--rule:#d9dee3}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
@@ -1072,10 +1448,19 @@ def r_section(dirs: dict) -> str:
 
 
 def render(
-    out: Path, title: str, refs: Path, de_csv: Path, sources: list[str]
+    out: Path,
+    title: str,
+    refs: Path,
+    de_csv: Path,
+    delays: Path,
+    sources: list[str],
 ) -> None:
-    """Write the report of the rounds in `sources` to `out`."""
+    """Write the report of the rounds in `sources` to `out`.
+
+    `delays` is the German and BDBV delay structure (`delay_reference`).
+    """
     d, failures, dirs = read_sources(sources)
+    reference = json.loads(Path(delays).read_text())
     de = pd.read_csv(de_csv)
     ref = pd.read_csv(refs)
     rounds = ", ".join(dirs)
@@ -1108,7 +1493,9 @@ def render(
         germany_table(de, d),
         layers(d, de, ref),
         r_section(dirs),
-        "<h2>3. Flags</h2>",
+        "<h2>3. Structure of the delays</h2>",
+        delay_section(dirs, reference),
+        "<h2>4. Flags</h2>",
         flags(d, failures),
     ]
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -1132,8 +1519,22 @@ def main(argv: list[str]) -> None:
         d = pd.concat([pd.read_csv(p) for p in argv[3:]], ignore_index=True)
         diseases(d, refs).to_csv(argv[1], index=False)
         print(f"diseases -> {argv[1]}")
+    elif argv[0] == "delays":
+        got = delay_reference(
+            Path(argv[1]), argv[2], Path(argv[3]), int(argv[4])
+        )
+        Path(argv[5]).parent.mkdir(parents=True, exist_ok=True)
+        Path(argv[5]).write_text(json.dumps(got))
+        print(f"delays -> {argv[5]}")
     elif argv[0] == "render":
-        render(Path(argv[1]), argv[2], Path(argv[3]), Path(argv[4]), argv[5:])
+        render(
+            Path(argv[1]),
+            argv[2],
+            Path(argv[3]),
+            Path(argv[4]),
+            Path(argv[5]),
+            argv[6:],
+        )
     else:
         raise SystemExit(__doc__)
 

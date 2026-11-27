@@ -61,10 +61,10 @@ on:
         description: Ignore the submission window (dry runs only)
         type: boolean
         default: false
-      store_branch:
+      store:
         description: >-
-          Fit store branch (blank for fit-store; a fit-store-scratch*
-          branch to test a branch, which Fit store fits on that branch)
+          Fit store (blank for fit-store; a fit-store-scratch* store to
+          test a branch, which Fit store fits on that branch)
         type: string
         default: ''
 
@@ -76,6 +76,8 @@ concurrency:
 
 permissions:
   contents: read
+  # To read the fit store's artifacts.
+  actions: read
 
 env:
   # Chronos-2 runs on the device named here, never a detected one.
@@ -92,7 +94,7 @@ env:
   FORK: ${{ vars.HUB_FORK || 'seabbs-bot/BDBV-Modeling-Hub' }}
   HUB: InsightNet-US/BDBV-Modeling-Hub
   LEDGER_BRANCH: submission-ledger
-  FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
+  FIT_STORE: ${{ inputs.store || 'fit-store' }}
 
 jobs:
   detect:
@@ -254,8 +256,8 @@ jobs:
           WAIT_MINUTES: '60'
           FIT_REF: ${{ github.ref_name }}
           DISPATCH: >-
-            ${{ (github.ref == 'refs/heads/main' && inputs.store_branch == '')
-            || startsWith(inputs.store_branch, 'fit-store-scratch') }}
+            ${{ (github.ref == 'refs/heads/main' && inputs.store == '')
+            || startsWith(inputs.store, 'fit-store-scratch') }}
         run: packages/bdbvsubmission/steps/baselines.sh
       # Each hub model runs only when opted in (`submit = true` in
       # packages/bdbvhub/config/hub.toml).
@@ -303,7 +305,7 @@ jobs:
   # Fit store fits; this waits for the round's fits there. On main it
   # starts Fit store, which runs one at a time, so a fit it is already
   # making is not made twice. A branch run starts Fit store only for a
-  # scratch store (`store_branch`), on that branch.
+  # scratch store (`store`), on that branch.
   await-fits:
     name: Wait for the fit store
     needs: [detect, prepare]
@@ -331,8 +333,8 @@ jobs:
           WAIT_MINUTES: ${{ needs.prepare.outputs.wait }}
           FIT_REF: ${{ github.ref_name }}
           DISPATCH: >-
-            ${{ (github.ref == 'refs/heads/main' && inputs.store_branch == '')
-            || startsWith(inputs.store_branch, 'fit-store-scratch') }}
+            ${{ (github.ref == 'refs/heads/main' && inputs.store == '')
+            || startsWith(inputs.store, 'fit-store-scratch') }}
         run: packages/bdbvsubmission/steps/await_fits.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -352,7 +354,7 @@ jobs:
       matrix: ${{ needs.prepare.outputs.matrix }}
       reference_date: ${{ needs.detect.outputs.reference_date }}
       expected_locations: ${{ vars.EXPECTED_LOCATIONS }}
-      store_branch: ${{ inputs.store_branch || 'fit-store' }}
+      store: ${{ inputs.store || 'fit-store' }}
 
   gate:
     name: Select and validate
@@ -562,7 +564,9 @@ jobs:
           git config --global user.email "signin@samabbott.co.uk"
       # The walks' stored forecasts, which `prepare` waited for.
       - name: Fetch the fit store
-        run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py fetch output/fit-store
       - name: Check and submit
         id: track
         env:
@@ -590,8 +594,10 @@ jobs:
           path: |
             ${{ env.WORK }}/track-randomwalknowcast/gate
             ${{ env.WORK }}/track-randomwalknowcast/metadata
-          # The round's record: kept for a live submission, briefly for a
-          # dry run.
+            ${{ env.WORK }}/track-randomwalknowcast/fits
+          # The round's record and the fits it forecast from, which the
+          # round's release keeps: kept for a live submission, briefly for
+          # a dry run.
           retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   # chronos: fine-tuned Chronos-2 (`chronos_model`, the
@@ -676,7 +682,9 @@ jobs:
           git config --global user.email "signin@samabbott.co.uk"
       # The walks' stored forecasts, which `prepare` waited for.
       - name: Fetch the fit store
-        run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py fetch output/fit-store
       - name: Check and submit
         id: track
         env:
@@ -707,8 +715,10 @@ jobs:
           path: |
             ${{ env.WORK }}/track-${{ needs.prepare.outputs.chronos_model }}/gate
             ${{ env.WORK }}/track-${{ needs.prepare.outputs.chronos_model }}/metadata
-          # The round's record: kept for a live submission, briefly for a
-          # dry run.
+            ${{ env.WORK }}/track-${{ needs.prepare.outputs.chronos_model }}/fits
+          # The round's record and the fits it forecast from, which the
+          # round's release keeps: kept for a live submission, briefly for
+          # a dry run.
           retention-days: ${{ needs.detect.outputs.dry_run == 'false' && 90 || 7 }}
 
   record:
@@ -817,6 +827,8 @@ jobs:
           AS_OF: ${{ needs.detect.outputs.as_of }}
           # To list releases, such as a fine-tuned model's checkpoint.
           GITHUB_TOKEN: ${{ github.token }}
+          # To read the fit store's artifacts.
+          GH_TOKEN: ${{ github.token }}
         run: packages/bdbvsubmission/steps/archive_candidates.sh
 
   outcome:

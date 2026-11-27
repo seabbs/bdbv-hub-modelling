@@ -44,13 +44,13 @@ on:
     - cron: '43 */6 * * *'
   # A dispatch from main rebuilds and deploys the site. From another
   # branch it builds the site as an artifact only, which is how a branch
-  # is checked against a scratch fit store (`store_branch`).
+  # is checked against a scratch fit store (`store`).
   workflow_dispatch:
     inputs:
-      store_branch:
+      store:
         description: >-
-          Fit store branch to read (blank for fit-store); a scratch store
-          such as fit-store-scratch-fm-chronos checks a branch's fits
+          Fit store to read (blank for fit-store); a scratch store such
+          as fit-store-scratch-fm-chronos checks a branch's fits
         type: string
         default: ''
       paper_target:
@@ -86,6 +86,15 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'full-tests') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      # To read the store's artifacts and start Site results.
+      actions: write
+    outputs:
+      ready: ${{ steps.site.outputs.ready }}
+    env:
+      FIT_STORE: ${{ inputs.store || 'fit-store' }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-forecast-env
@@ -104,36 +113,43 @@ jobs:
       # are loaded so the newest fits win. Pages forecasts and scores
       # nothing.
       - name: Load the stored backtests
-        env:
-          FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
         run: |
-          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
+          python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py \
+            fetch output/fit-store backtests site
           if [ ! -f output/fit-store/backtests/latest.json ]; then
             echo "::warning::the fit store holds no backtests yet (Fit store's backtests job writes them); their sections are left out"
             echo "Backtests: not yet stored" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # The bundle's parts, joined in order (`branch.py`).
-          cat output/fit-store/backtests/latest.tar.gz* | tar -xz
+          tar -xzf output/fit-store/backtests/latest.tar.gz
           cat output/fit-store/backtests/latest.json >> "$GITHUB_STEP_SUMMARY"
       # What the site shows from the fits and backtests: the stored fits'
       # forecasts as `fit-store load` wrote them, the hub comparison, the
       # German benchmark's tables and the docs figures and tables, as Site
       # results made them (site-results.yml), unpacked last so they win.
-      # They may predate the newest fits; only none at all fails the build.
+      # They may predate the newest fits. With none (not yet made, or
+      # expired), nothing is built and the published site stays as it
+      # is; on main this starts Site results, which rebuilds the site.
       # Site loads, scores and forecasts nothing.
       - name: Load the stored site results
-        env:
-          FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
+        id: site
         run: |
           if [ ! -f output/fit-store/site/latest.json ]; then
-            echo "::error::the fit store holds no site results yet; dispatch Site results (site-results.yml) on main to make them"
-            exit 1
+            echo "::warning::the fit store holds no site results; Site results (site-results.yml) makes them and then rebuilds the site"
+            echo "Site results: pending" >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            if [ "$GITHUB_REF" = refs/heads/main ] && [ "$FIT_STORE" = fit-store ] \
+              && [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+              gh workflow run site-results.yml --ref main -R "$GITHUB_REPOSITORY"
+            fi
+            exit 0
           fi
-          cat output/fit-store/site/latest.tar.gz* | tar -xz
+          tar -xzf output/fit-store/site/latest.tar.gz
           cat output/fit-store/site/latest.json >> "$GITHUB_STEP_SUMMARY"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
       # The store too, as the Getting started notebook reads a stored fit.
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: steps.site.outputs.ready == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: inputs
           path: |
@@ -151,7 +167,9 @@ jobs:
   build:
     name: Build the site and the paper
     needs: prep
-    if: ${{ !cancelled() && needs.prep.result == 'success' }}
+    if: >-
+      ${{ !cancelled() && needs.prep.result == 'success'
+      && needs.prep.outputs.ready == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -231,7 +249,8 @@ jobs:
       # As `task paper`, with the Pages config (paper/workflow/pages.yaml),
       # which leaves out the simulations, fine-tuning runs and their scores
       # that the workflow's hosts make. Their published outputs (the
-      # paper-<set>-<hash> releases) are fetched and read as inputs.
+      # paper-<set>-<hash> release each paper-<set>-main names) are
+      # fetched and read as inputs.
       - name: Run the paper workflow and render the paper
         env:
           TARGET: ${{ inputs.paper_target || 'development' }}

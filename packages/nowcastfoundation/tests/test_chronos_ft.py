@@ -24,31 +24,24 @@ EXAMPLE = Path(__file__).parents[3] / "docs" / "examples" / "chronos_ft.py"
 
 @pytest.fixture
 def releases(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_release
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_release, point_main
 ) -> Iterator[Path]:
-    """Fake releases `chronos-ft-old` and `chronos-ft-new`, the newest."""
+    """Fake releases `chronos-ft-old` and `chronos-ft-new`, the main
+    run's newest."""
     root = tmp_path / "releases"
     root.mkdir()
     for tag_hash in ("old", "new"):
         write_release(root, tag_hash, _ADAPTER, tag_hash)
     monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
     monkeypatch.setattr(foundation, "FINETUNED_CACHE", str(tmp_path / "cache"))
-    listing = [
-        {"tag_name": t, "published_at": at, "draft": False}
-        for t, at in (
-            ("chronos-ft-old", "2026-11-01T00:00:00Z"),
-            ("germany-ft-later", "2026-11-20T00:00:00Z"),
-            ("chronos-ft-new", "2026-11-12T00:00:00Z"),
-        )
-    ]
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    point_main(root, "new")
     foundation.resolve_checkpoint.cache_clear()
     yield root
     foundation.resolve_checkpoint.cache_clear()
 
 
 @pytest.mark.usefixtures("releases")
-def test_load_takes_the_newest_chronos_ft_release(tmp_path: Path) -> None:
+def test_load_takes_the_main_run_s_checkpoint(tmp_path: Path) -> None:
     model = chronos_ft.load()
     assert model.checkpoint.hash == "new"
     assert model.adapter == tmp_path / "cache" / "chronos-ft-new"

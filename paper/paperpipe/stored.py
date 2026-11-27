@@ -4,22 +4,35 @@ The workflow's hosts make what the Site build cannot: the synthetic
 study's forecasts, the fine-tuning runs' progress tables and checkpoint
 scores, and the simulation summaries. Each set of them is published as a
 release, `paper-<set>-<hash>`, whose hash is of the files' contents, so a
-set is published once per version (rules `release_paper_<set>`, target
-`paper_inputs`). Only development outputs are published: `publish` refuses
-a held-out synthetic seed, a held-out German date or an Ebola row.
+set is published once per version (rules `release_paper_<set>`). Only
+development outputs are published: `publish` refuses a held-out synthetic
+seed, a held-out German date or an Ebola row. Each published version then
+becomes the set's current one: the release `paper-<set>-main` names it in
+`main.json` (`promote`, rules `promote_paper_<set>`, target
+`paper_inputs`; `nowcastutils.pointers`).
 
-The Site build fetches each set's newest release and writes a config
-overlay that points the paper workflow at its files (`fetch`), so they are
-inputs there, never jobs. A set with no release is left out, and what reads
-it stays pending.
+The Site build reads each set's `paper-<set>-main`, fetches the release it
+names and writes a config overlay that points the paper workflow at its
+files (`fetch`), so they are inputs there, never jobs. A set never promoted
+is left out with a warning, and what reads it stays pending; a pointer that
+names no release fails.
 
     python -m paperpipe.stored publish SET --heldout JSON --file NAME=PATH...
-    python -m paperpipe.stored fetch OUT_DIR --overlay OVERLAY
+        --record OUT
+    python -m paperpipe.stored promote --released RECORD --record OUT
+        --branches BRANCH...
+    python -m paperpipe.stored fetch OUT_DIR --overlay OVERLAY [--set SET...]
+
+Site results fetches the `germany` set alone (`--set germany`): our
+German development forecasts from the fine-tuning workflow's units
+(`germany-units.csv.gz`, `nowcastgermany units`), so the site and the
+paper show the same ones.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import os
@@ -33,11 +46,15 @@ from typing import Any
 
 import pandas as pd
 import yaml
+from nowcastutils import pointers
 
 from paperpipe.config import seed_of
 
 PREFIX = "paper-"
 """Every set's release tags start `paper-<set>-`."""
+
+SETS = ("synthetic", "finetune", "simulations", "germany")
+"""Every set, in the order `fetch` reads them."""
 
 ASSET = "paper-inputs.tar.gz"
 """Each release's one asset."""
@@ -70,9 +87,10 @@ and horizon_table). Stored as `progress/<run>/<file name>`; the BDBV check
 is left out, as it holds Ebola rows."""
 
 # The dates a German row is held out by, as the table guard reads them
-# (`paperpipe.config.check_no_heldout`): a development origin's targets
-# may run past the split.
-DATE_COLUMNS = ("origin_date", "nowcast_date")
+# (`paperpipe.config.check_no_heldout`), and `origin` of
+# `nowcastgermany`'s own tables: a development origin's targets may run
+# past the split.
+DATE_COLUMNS = ("origin_date", "nowcast_date", "origin")
 
 
 def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
@@ -142,6 +160,15 @@ def sets(config: Mapping[str, Any], results: str) -> dict[str, dict[str, str]]:
             # The German benchmark's development table, every model.
             "germany-forecasts.csv.gz": (
                 f"{config['germany']['results']}/paper-forecasts.csv.gz"
+            ),
+            # Our models' rows of it as the fine-tuning workflow's units
+            # made them, and the checkpoint they load, which Site results
+            # reads (`nowcastgermany units`).
+            "germany-units.csv.gz": (
+                f"{config['germany']['results']}/forecasts.csv.gz"
+            ),
+            "germany-units.json": (
+                f"{config['germany']['results']}/units.json"
             ),
         },
         "simulations": {
@@ -269,29 +296,25 @@ def overlay(folders: Mapping[str, Path]) -> dict[str, Any]:
     return {k: v for k, v in config.items() if v}
 
 
-def newest(releases: Sequence[Mapping[str, Any]], set_name: str) -> str | None:
-    """Return the newest release tag of a set, or None."""
-    prefix = f"{PREFIX}{set_name}-"
-    mine = [r for r in releases if str(r["tag_name"]).startswith(prefix)]
-    if not mine:
-        return None
-    return max(mine, key=lambda r: r["created_at"])["tag_name"]
-
-
 def fetch(
     out: Path,
-    releases: Sequence[Mapping[str, Any]],
+    pointer: Callable[[str], Mapping[str, Any]],
     download: Callable[[str, Path], Path],
-    names: Sequence[str] = ("synthetic", "finetune", "simulations", "germany"),
+    names: Sequence[str] = SETS,
 ) -> dict[str, Any]:
-    """Unpack each set's newest release under `out`; return the overlay."""
+    """Unpack each set's current release under `out`; return the overlay.
+
+    `pointer` returns the record of an endpoint's current version
+    (`nowcastutils.pointers.read`), and raises `LookupError` for a set
+    never promoted, which is left out with a warning.
+    """
     folders = {}
     for name in names:
-        release = newest(releases, name)
-        if release is None:
-            print(
-                f"{name}: no {PREFIX}{name}-* release; its results stay pending"
-            )
+        endpoint = f"{PREFIX}{name}"
+        try:
+            release = str(pointer(endpoint)["tag"])
+        except LookupError as err:
+            print(f"::warning::{name}: {err} Its results stay pending.")
             continue
         with tempfile.TemporaryDirectory() as tmp:
             path = download(release, Path(tmp))
@@ -305,18 +328,6 @@ def fetch(
 
 def _repo() -> str:
     return os.environ.get("GITHUB_REPOSITORY") or REPO
-
-
-def gh_releases() -> list[dict[str, Any]]:
-    """Return the repository's releases (tag and creation time)."""
-    out = subprocess.run(
-        [
-            "gh", "api", "--paginate", f"repos/{_repo()}/releases",
-            "-q", ".[] | {tag_name, created_at}",
-        ],
-        capture_output=True, text=True, check=True,
-    )  # fmt: skip
-    return [json.loads(line) for line in out.stdout.splitlines() if line]
 
 
 def gh_download(release: str, dest: Path) -> Path:
@@ -344,7 +355,7 @@ def gh_publish(set_name: str, files: Mapping[str, Path], git_sha: str) -> str:
         notes = (
             f"The paper's host-made {set_name} outputs (development only), "
             f"from {git_sha}: {', '.join(sorted(files))}. The Site build "
-            "reads the newest `paper-" + set_name + "-*` release."
+            f"reads the release `{pointers.tag(PREFIX + set_name)}` names."
         )
         subprocess.run(
             ["gh", "release", "create", release, str(path), "-R", _repo(),
@@ -356,8 +367,30 @@ def gh_publish(set_name: str, files: Mapping[str, Path], git_sha: str) -> str:
     return release
 
 
-def main(argv: Sequence[str]) -> int:
-    """Publish one set, or fetch every set; return the exit code."""
+def promote(
+    released: Path, branches: Sequence[str], run: Any = subprocess.run
+) -> dict[str, Any]:
+    """Name a published set's release its current one; return the record.
+
+    `released` is the record `publish` wrote (`set`, `tag`, `hash`).
+    """
+    record = json.loads(Path(released).read_text())
+    name = record["set"]
+    return pointers.promote(
+        f"{PREFIX}{name}",
+        record["tag"],
+        hash=record["hash"],
+        produced_by=f"the paper workflow (rule release_paper_{name})",
+        branches=branches,
+        repo=_repo(),
+        title=f"Paper {name} outputs, current",
+        needs=ASSET,
+        run=run,
+    )
+
+
+def parser() -> argparse.ArgumentParser:
+    """Return the command line's parser."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     pub = sub.add_parser("publish")
@@ -365,10 +398,26 @@ def main(argv: Sequence[str]) -> int:
     pub.add_argument("--heldout", required=True)
     pub.add_argument("--file", action="append", default=[], required=True)
     pub.add_argument("--record", type=Path, required=True)
+    up = sub.add_parser("promote")
+    up.add_argument("--released", type=Path, required=True)
+    up.add_argument("--record", type=Path, required=True)
+    up.add_argument("--branches", nargs="+", default=[])
     get = sub.add_parser("fetch")
     get.add_argument("out", type=Path)
     get.add_argument("--overlay", type=Path, required=True)
-    args = parser.parse_args(argv)
+    get.add_argument(
+        "--set",
+        action="append",
+        choices=SETS,
+        default=None,
+        help="Fetch this set only (repeat for more); every set by default.",
+    )
+    return parser
+
+
+def main(argv: Sequence[str]) -> int:
+    """Publish or promote one set, or fetch sets; return the exit code."""
+    args = parser().parse_args(argv)
     if args.command == "publish":
         config = {"heldout": json.loads(args.heldout)}
         files = dict(entry.split("=", 1) for entry in args.file)
@@ -381,10 +430,19 @@ def main(argv: Sequence[str]) -> int:
         release = gh_publish(args.set, files, sha)
         args.record.parent.mkdir(parents=True, exist_ok=True)
         args.record.write_text(
-            json.dumps({"set": args.set, "tag": release}) + "\n"
+            json.dumps(
+                {"set": args.set, "tag": release, "hash": content_hash(files)}
+            )
+            + "\n"
         )
         return 0
-    config = fetch(args.out, gh_releases(), gh_download)
+    if args.command == "promote":
+        record = promote(args.released, args.branches)
+        args.record.parent.mkdir(parents=True, exist_ok=True)
+        args.record.write_text(json.dumps(record) + "\n")
+        return 0
+    pointer = functools.partial(pointers.read, repo=_repo())
+    config = fetch(args.out, pointer, gh_download, args.set or SETS)
     args.overlay.parent.mkdir(parents=True, exist_ok=True)
     args.overlay.write_text(yaml.safe_dump(config, sort_keys=True))
     print(f"Overlay: {args.overlay}")

@@ -34,10 +34,10 @@ def test_the_walks_are_stored_before_the_slow_fits() -> None:
     jobs = _jobs()
     assert jobs["fit-quick"]["needs"] == "plan"
     assert "quick" in jobs["fit-quick"]["strategy"]["matrix"]
-    store = "\n".join(
-        str(s.get("run", "")) for s in jobs["store-quick"]["steps"]
-    )
-    assert "push new keys.json quick.json" in store
+    (merge,) = [
+        s for s in jobs["store-quick"]["steps"] if "PART" in s.get("env", {})
+    ]
+    assert merge["env"]["PART"] == "quick"
 
 
 def test_no_simulated_backtest_is_run() -> None:
@@ -54,7 +54,7 @@ def test_the_backtests_are_stored_without_waiting_for_the_fits() -> None:
     assert set(job["needs"]) == {"plan", "backtest", "store-quick"}
     run = "\n".join(str(s.get("run", "")) for s in job["steps"])
     assert run.index("fit-store load") < run.index("bdbvhub score")
-    assert "push-backtests" in run
+    assert "backtests/latest.tar.gz" in run
     # The site's results are then made from them, and rebuild Pages.
     assert "gh workflow run site-results.yml" in run
 
@@ -67,3 +67,12 @@ def test_the_zone_backtest_scores_the_stored_zone_runs() -> None:
     assert run.index("fit-store load") < run.index("bdbvhub zone-backtest")
     assert "parts-zones" not in run
     assert "zone-backtest --forecast-only" not in FIT_STORE.read_text()
+
+
+def test_the_backtests_score_only_the_fits_of_their_own_code() -> None:
+    # The backtests run before the slow fits are stored, so they load
+    # only the current code's fits: a pair not yet fitted for it is
+    # listed as pending, not scored from an older fit.
+    job = _jobs()["backtests"]
+    run = "\n".join(str(s.get("run", "")) for s in job["steps"])
+    assert 'fit-store load --store "$STORE" --current-only' in run

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -70,15 +72,28 @@ def _write_checkpoint_release(
     )
 
 
+def write_main(root: Path, spec: str, run: str = "runa") -> None:
+    """Name checkpoint `spec` the main run's newest in fake `chronos-main`."""
+    import json
+
+    from nowcastfoundation import forecaster as foundation
+
+    folder = root / foundation.MAIN_TAG
+    folder.mkdir(parents=True, exist_ok=True)
+    record = {"run": run, "spec": spec, "tag": foundation.release_tag(spec)}
+    (folder / foundation.MAIN_FILE).write_text(json.dumps(record))
+
+
 @pytest.fixture(autouse=True)
 def _fake_checkpoint_releases(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> Path:
     """Resolve the fine-tuned checkpoint from a fake release list.
 
-    No test reaches GitHub. The latest `chronos-ft-*` release is
-    `FAKE_CHECKPOINT`, with its `sha256sums.txt` only, and the models take
-    the latest release (`BDBV_CHRONOS_FT=latest`), whatever
+    No test reaches GitHub. The main run's newest checkpoint
+    (`chronos-main`) is the release `chronos-ft-<FAKE_CHECKPOINT>`, with
+    its `sha256sums.txt` only, and the models take it
+    (`BDBV_CHRONOS_FT=latest`), whatever
     packages/nowcastfoundation/config/finetune.toml pins.
     """
     from nowcastfoundation import forecaster as foundation
@@ -92,20 +107,10 @@ def _fake_checkpoint_releases(
         )  # fmt: skip
         for name in ("adapter_model.safetensors", "adapter_config.json"):
             (root / f"chronos-ft-{FAKE_CHECKPOINT}" / name).unlink()
+        write_main(root, FAKE_CHECKPOINT)
     monkeypatch.setenv(foundation.FINETUNED_ENV, "latest")
     monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
     monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
-    monkeypatch.setattr(
-        foundation,
-        "finetuned_releases",
-        lambda: [
-            {
-                "tag_name": f"chronos-ft-{FAKE_CHECKPOINT}",
-                "published_at": "2026-11-13T12:00:00Z",
-                "draft": False,
-            }
-        ],
-    )
     foundation.resolve_checkpoint.cache_clear()
     yield root
     foundation.resolve_checkpoint.cache_clear()
@@ -133,6 +138,89 @@ def _keep_the_checkpoint_pin():  # type: ignore[no-untyped-def]
 def write_release():  # type: ignore[no-untyped-def]
     """Write a fake checkpoint release (`_write_checkpoint_release`)."""
     return _write_checkpoint_release
+
+
+@pytest.fixture
+def point_main():  # type: ignore[no-untyped-def]
+    """Name a fake checkpoint the main run's newest (`write_main`)."""
+    return write_main
+
+
+class FakeReleases:
+    """A stand-in for `gh release` and the `git` a promotion runs.
+
+    `releases` maps each tag to its assets' names and text. HEAD is
+    `head`, on the remote branches in `branches`. Every command is kept
+    in `calls`.
+    """
+
+    def __init__(
+        self,
+        releases: dict[str, dict[str, str]] | None = None,
+        head: str = "c0ffee",
+        branches: tuple[str, ...] = ("main",),
+    ) -> None:
+        self.releases = releases if releases is not None else {}
+        self.head = head
+        self.branches = set(branches)
+        self.calls: list[list[str]] = []
+
+    def __call__(
+        self, command: list[str], **_: object
+    ) -> subprocess.CompletedProcess[str]:
+        self.calls.append(list(command))
+
+        def done(
+            code: int, out: str = "", err: str = ""
+        ) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(command, code, out, err)
+
+        if command[0] == "git":
+            if command[1] == "rev-parse":
+                return done(0, self.head + "\n")
+            if command[1] == "fetch":
+                return done(0)
+            if command[1:3] == ["merge-base", "--is-ancestor"]:
+                branch = command[4].removeprefix("origin/")
+                ok = command[3] == self.head and branch in self.branches
+                return done(0 if ok else 1)
+            raise AssertionError(command)
+        action, tag = command[2], command[3]
+        files = [
+            Path(f) for f in command[4:]
+            if not f.startswith("-") and "\n" not in f and Path(f).is_file()
+        ]  # fmt: skip
+        if action == "view":
+            if tag not in self.releases:
+                return done(1, err="release not found")
+            names = [{"name": n} for n in self.releases[tag]]
+            return done(0, json.dumps({"assets": names}))
+        if action == "download":
+            if tag not in self.releases:
+                return done(1, err="release not found")
+            name = command[command.index("-p") + 1]
+            if name not in self.releases[tag]:
+                return done(1, err="no assets match the file pattern")
+            return done(0, self.releases[tag][name])
+        if action == "create":
+            if tag in self.releases:
+                return done(1, err="a release with the same tag name exists")
+            self.releases[tag] = {}
+        if action in ("create", "upload"):
+            if tag not in self.releases:
+                return done(1, err="release not found")
+            for f in files:
+                self.releases[tag][f.name] = f.read_text()
+            return done(0, "ok")
+        if action == "edit":
+            return done(0 if tag in self.releases else 1, "ok")
+        raise AssertionError(command)
+
+
+@pytest.fixture
+def fake_releases() -> type[FakeReleases]:
+    """Return the fake `gh release` and `git` (`FakeReleases`)."""
+    return FakeReleases
 
 
 @pytest.fixture

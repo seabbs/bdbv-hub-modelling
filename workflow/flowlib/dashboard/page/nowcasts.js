@@ -48,12 +48,29 @@ function dates(){var O=ORI(),out=[],n=S.mode==1?(S.nd||O.length):1;
   for(var i=0;i<O.length;i++){if(ms(O[i])<=tg)j=i}
   if(j>=0&&out.indexOf(O[j])<0)out.unshift(O[j])}
  return out}
-var cache={};
+// A location's data holds only the models fetched so far (?models=): the
+// ticked ones, each once, so a request never carries every checkpoint.
+// One request a location and set of models at a time, however often drawn.
+var cache={},inflight={},BYM=["series","score","parts","split","byday","stats"];
+function want(loc){var c=cache[C.key+"/"+loc];
+ return ticked().map(function(e){return e.id}).filter(function(i,n,a){return a.indexOf(i)==n&&!(c&&c.got[i])}).sort()}
+function needs(loc){return !(C.preload||{})[loc]&&(!cache[C.key+"/"+loc]||want(loc).length>0)}
+// While data load, the last plot stays with a note above it.
+function loading(){if($("gload"))return;var n='<p class=mut id=gload>Loading the nowcasts...</p>';
+ if($("gplot").querySelector("svg"))$("gplot").insertAdjacentHTML("afterbegin",n);else $("gplot").innerHTML=n}
+function merge(k,j,ids){var c=cache[k]||{got:{},ranges:{}};
+ BYM.forEach(function(p){c[p]=c[p]||{};Object.keys(j[p]||{}).forEach(function(m){c[p][m]=j[p][m]})});
+ Object.keys(j.ranges||{}).forEach(function(r){var to=c.ranges[r]=c.ranges[r]||{};
+  Object.keys(j.ranges[r]).forEach(function(p){to[p]=to[p]||{};Object.keys(j.ranges[r][p]).forEach(function(m){to[p][m]=j.ranges[r][p][m]})})});
+ c.truth=j.truth;c.latest=j.latest;ids.forEach(function(i){c.got[i]=true});cache[k]=c;return c}
 function load(loc){var pre=C.preload||{};
  if(pre[loc])return Promise.resolve(pre[loc]);
- var k=C.key+"/"+loc;if(cache[k])return Promise.resolve(cache[k]);
- return fetch("data/"+encodeURIComponent(C.key)+"/"+encodeURIComponent(loc)+".json").then(function(r){return r.json()})
-  .then(function(j){cache[k]=j;return j})}
+ var k=C.key+"/"+loc,ids=want(loc);if(cache[k]&&!ids.length)return Promise.resolve(cache[k]);
+ var q=k+"?"+ids.join(",");
+ if(!inflight[q])inflight[q]=fetch("data/"+encodeURIComponent(C.key)+"/"+encodeURIComponent(loc)+".json?models="+encodeURIComponent(ids.join(",")))
+  .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json()})
+  .then(function(j){delete inflight[q];return merge(k,j,ids)},function(e){delete inflight[q];throw e});
+ return inflight[q]}
 function colour(id){var m=C.meta.find(function(x){return x.id==id});return m?m.color:"var(--mut)"}
 function id2lab(id){var m=C.meta.find(function(x){return x.id==id});return m?m.label:id}
 function fmt(v){return v>=1000?Math.round(v).toLocaleString("en-GB"):v==0?"0":(+v).toPrecision(3)}
@@ -125,12 +142,16 @@ function legend(eff,ds){
  if(rf.length)leg+='<div class=lg><b>reference</b> '+rf.map(function(e){return sw(colour(e.id),0,e.id)+id2lab(e.id)}).join(" ")+'</div>';
  if(ds.length>1)leg+='<div class=lg><b>nowcast date</b> '+ds.map(function(o,i){return '<svg width=12 height=12 viewBox="0 0 12 12">'+mark(MK[i%4],6,6,"var(--fg)","",3)+'</svg>'+o}).join(" ")+'</div>';
  return '<div class=leg2>'+leg+'</div>'}
+var DRAWN=0;
 function plots(){
  if(C.empty)return;
- if(!S.locs.length){$("gplot").innerHTML='<p class=mut>No locations picked: pick some under Locations.</p>';$("gwis").innerHTML='';return}
- var eff=effective(),ds=dates(),small=S.locs.length>1;
+ if(!S.locs.length){++DRAWN;$("gplot").innerHTML='<p class=mut>No locations picked: pick some under Locations.</p>';$("gwis").innerHTML='';return}
+ var eff=effective(),ds=dates(),small=S.locs.length>1,me=++DRAWN;
  $("gwrap").className=small?"gwrap wide":"gwrap";
+ if(S.locs.some(needs))loading();
  Promise.all(S.locs.map(load)).then(function(all){
+  // Only the latest draw paints: an older one that answers late does not.
+  if(me!==DRAWN)return;
   var miss={},h='<div class=panels style="grid-template-columns:repeat('+(small?"auto-fit,minmax(260px,1fr)":"1,1fr")+')">';
   all.forEach(function(d,i){h+='<div>'+(small?'<h4>'+S.locs[i]+'</h4>':"")+'<div class=gp></div></div>'});
   // The target's own caption where the dataset gives one per target.
@@ -148,7 +169,7 @@ function plots(){
   var ms_=Object.keys(miss);
   if(ms_.length)$("gplot").insertAdjacentHTML("beforeend",'<p class=mut>No forecast in the horizon shown'+(HZR()?' ('+HZR()[0]+')':'')+' for some nowcast dates: '+ms_.join(", ")+'</p>');
   // The score card compares every ticked model, in either view.
-  wisChart(all[0],ticked(),ds)}).catch(function(){$("gplot").innerHTML='<p class=mut>Could not load data.</p>'})}
+  wisChart(all[0],ticked(),ds)}).catch(function(e){if(me===DRAWN)$("gplot").innerHTML='<p class=mut>Could not load the nowcasts ('+(e&&e.message||e)+'); they are fetched again on the next change or update.</p>'})}
 // Score panels a row: three on a wide card, two on a medium one, else one.
 function scoreCols(w){return w>=1084?3:w>=544?2:1}
 // Round axis ticks from 0 to `top`: steps of 1, 2, 2.5 or 5 times a
@@ -323,8 +344,10 @@ function build(){
   var ids=chosen(k).slice(),i=ids.indexOf(id);if(i>=0){if(ids.length>1)ids.splice(i,1)}else ids.push(id);S.chk[k]=ids;draw()};
  draw()}
 window.addEventListener("ftsel",function(){draw()});
-// New data from the server (live.js): keep every control, drop cached locations.
-window.addEventListener("ftdata",function(e){if(e.detail!=="nowcasts")return;D=JSON.parse($("gdata").textContent);DSS=D.datasets;RUNS=D.runs;C=cur();cache={};if(!window.ftPlaying)draw()});
+// New data from the server (live.js): keep every control, refetch the models shown.
+window.addEventListener("ftdata",function(e){if(e.detail!=="nowcasts")return;D=JSON.parse($("gdata").textContent);DSS=D.datasets;RUNS=D.runs;C=cur();
+ // Every model is fetched afresh; the plot keeps the old data till then.
+ Object.keys(cache).forEach(function(k){cache[k].got={}});if(!window.ftPlaying)draw()});
 var rsz=null;window.addEventListener("resize",function(){clearTimeout(rsz);rsz=setTimeout(plots,150)});
 var sec=document.getElementById("nowcasts");if(sec)sec.addEventListener("toggle",function(){if(sec.open)plots()});
 build();

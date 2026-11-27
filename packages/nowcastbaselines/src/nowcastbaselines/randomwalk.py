@@ -68,7 +68,6 @@ from dataclasses import dataclass, field, replace
 from typing import ClassVar, Final
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 
@@ -108,6 +107,7 @@ from nowcastutils.base import (
 )
 from nowcastutils.dates import as_date
 from nowcastutils.hierarchy import depth
+from nowcastutils.shapes import bucket
 from nowcastutils.snapshots import SnapshotArrays, blocks, snapshot_arrays
 
 __all__ = ["RandomWalk", "RandomWalkNowcast"]
@@ -115,34 +115,33 @@ __all__ = ["RandomWalk", "RandomWalkNowcast"]
 logger = logging.getLogger(__name__)
 
 
-_KEPT_ORIGINS: Final = 4
-"""Origins whose compiled programs are kept in memory at once."""
+_KEPT_SIZES: Final = 4
+"""Snapshot sizes whose compiled programs are kept in memory at once."""
 
-_ORIGINS: set[tuple[object, ...]] = set()
+_SIZES: set[tuple[int, ...]] = set()
 
 
-def _clear_caches(task: ForecastTask) -> None:
-    """Drop JAX's compiled programs when a task brings a new origin.
+def _clear_caches(snap: SnapshotArrays, task: ForecastTask) -> None:
+    """Drop JAX's compiled programs when a task brings a new size.
 
-    Each origin compiles its own shapes, and keeping every origin's
-    programs over a run fills `vm.max_map_count` (an LLVM "Cannot allocate
-    memory" error). The programs of the last `_KEPT_ORIGINS` origins are
-    kept, so the models forecasting one task, and the same task forecast
-    again (the release backtest after the development one), reuse them.
+    The arrays are padded to a few sizes (`nowcastutils.shapes.bucket`),
+    so the programs of one size serve the dates whose places, releases,
+    days and draws pad to it. Keeping every size's programs over a long
+    run fills `vm.max_map_count` (an LLVM "Cannot allocate memory"
+    error), so those of the last `_KEPT_SIZES` sizes are kept.
     """
-    origin = (
-        task.kind,
-        task.vintage,
-        task.reference_date,
-        tuple(task.locations),
+    size = (
+        len(snap.locations),
+        bucket(len(snap.releases)),
+        bucket(len(snap.days)),
         task.n_samples,
     )
-    if origin in _ORIGINS:
+    if size in _SIZES:
         return
-    if len(_ORIGINS) >= _KEPT_ORIGINS:
+    if len(_SIZES) >= _KEPT_SIZES:
         jax.clear_caches()  # type: ignore[no-untyped-call]
-        _ORIGINS.clear()
-    _ORIGINS.add(origin)
+        _SIZES.clear()
+    _SIZES.add(size)
 
 
 HUB_WEEKDAY: Final = 5
@@ -250,20 +249,18 @@ def _walk(
     first: np.ndarray | None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return `walk.random_walks` in weeks (`sigma`) or in days (`steps`)."""
-    x = jnp.asarray(x0, jnp.float32)
+    x = np.asarray(x0, np.float32)
     if steps is None:
-        lam, drawn = random_walks(keys, x, jnp.asarray(sigma, jnp.float32), h)
-    else:
-        assert first is not None
-        mean, spread = steps.at(first, h)
-        lam, drawn = random_walks(
-            keys,
-            x,
-            jnp.asarray(spread, jnp.float32),
-            h,
-            jnp.asarray(mean, jnp.float32),
-        )
-    return np.asarray(lam), np.asarray(drawn)
+        return random_walks(keys, x, np.asarray(sigma, np.float32), h)
+    assert first is not None
+    mean, spread = steps.at(first, h)
+    return random_walks(
+        keys,
+        x,
+        np.asarray(spread, np.float32),
+        h,
+        np.asarray(mean, np.float32),
+    )
 
 
 def _walks(
@@ -684,14 +681,15 @@ class RandomWalk:
         MissingSnapshots
             If the task has no release snapshots.
         """
-        _clear_caches(task)
         daily = task.daily_history
         if daily is None or daily.empty:
             raise MissingSnapshots(
                 f"{self.name} needs daily release snapshots, and the task "
                 f"for {task.vintage} has none."
             )
-        return snapshot_arrays(daily, task.vintage, task.locations)
+        snap = snapshot_arrays(daily, task.vintage, task.locations)
+        _clear_caches(snap, task)
+        return snap
 
     def origin_at(self, task: ForecastTask, errors: bool) -> Origin:
         """Fit the delays and the walk at the task's vintage.
@@ -987,6 +985,65 @@ class RandomWalkNowcast(RandomWalk):
         values = self.pair(origin, task, values)
         return origin, {w: values[:, :, i] for i, w in enumerate(labels)}
 
+    def rolling_nowcast(
+        self, task: ForecastTask
+    ) -> tuple[list[str], np.ndarray]:
+        """Return draws of the 7-day sums ending on each day to the cut-off.
+
+        Each sum is the block of 7 days ending on its weekday, with its
+        own observation model (`_block_draws`), as `_rolling` nowcasts a
+        target date to the cut-off.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task. Its `daily_history` holds the release snapshots.
+
+        Returns
+        -------
+        tuple
+            The days, ISO format, and the draws `[S, L, D]`, the places
+            in the order of `task.locations`.
+        """
+        self._start(task)
+        snap = self._snap
+        assert snap is not None
+        cut = snap.days[snap.cut[-1]].date()
+        draws: dict[str, np.ndarray] = {}
+        rows: list[int] = []
+        for end in range(7):
+            origin, got = self._block_draws(task, 7, end)
+            rows = self.rows(origin, task)
+            draws.update(
+                {d: v[:, rows] for d, v in got.items() if as_date(d) <= cut}
+            )
+        days = sorted(draws)
+        return days, np.stack([draws[d] for d in days], axis=-1)
+
+    def weekly_nowcast(
+        self, task: ForecastTask
+    ) -> tuple[list[str], np.ndarray]:
+        """Return the draws of each hub week, as `forecast` makes them.
+
+        The weeks to the cut-off are the nowcast of hub weeks that
+        `forecast` gives a task of hub weeks, unrounded.
+
+        Parameters
+        ----------
+        task : ForecastTask
+            The task. Its `daily_history` holds the release snapshots.
+
+        Returns
+        -------
+        tuple
+            The hub weeks, ISO format, and the draws `[S, L, W]`, the
+            places in the order of `task.locations`.
+        """
+        origin = self.origin_at(task, errors=True)
+        values, weeks = self.trajectories(origin, task, origin.point)
+        values = self.pair(origin, task, values)
+        return weeks, values[:, self.rows(origin, task)]
+
     def _rolling(self, task: ForecastTask) -> pd.DataFrame:
         """Return draws of the 7-day sums ending on each target date.
 
@@ -1162,18 +1219,14 @@ class RandomWalkNowcast(RandomWalk):
         # Weeks older than the fitted ones have nothing to come.
         k = np.clip(back, 0, k_n - 1)
         key_x, key_walk, key_part, key_ahead = jax.random.split(_key(task), 4)
-        shape = (n, *point.shape)
-        reported = jnp.broadcast_to(
-            jnp.asarray(origin.reported, jnp.float32), shape
-        )
+        reported = np.asarray(origin.reported, np.float32)
         nowcast = np.asarray(
             sample_count(
                 key_x,
                 reported,
-                jnp.maximum(jnp.asarray(point, jnp.float32) - reported, 0.0),
-                jnp.broadcast_to(
-                    jnp.asarray(origin.size[:, k], jnp.float32), shape
-                ),
+                np.maximum(np.asarray(point, np.float32) - reported, 0.0),
+                np.asarray(origin.size[:, k], np.float32),
+                n,
             ),
             np.float64,
         )
@@ -1210,8 +1263,8 @@ class RandomWalkNowcast(RandomWalk):
         part = np.asarray(
             jax.random.poisson(
                 key_part,
-                jnp.asarray(
-                    lam[rows, :, at_cw] * miss / snap.period, jnp.float32
+                np.asarray(
+                    lam[rows, :, at_cw] * miss / snap.period, np.float32
                 ),
             ),
             dtype=np.float64,

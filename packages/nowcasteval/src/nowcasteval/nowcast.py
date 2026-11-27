@@ -1048,7 +1048,9 @@ def score_releases(
 
     The scoring half of `release_backtest`, which it equals given the
     same tasks and models. Models are taken at each origin in the order
-    they were run, then the stored models.
+    they were run, then the stored models. A model the run has no
+    forecast from at an origin is listed so there, never scored from
+    stored samples.
 
     Parameters
     ----------
@@ -1092,6 +1094,14 @@ def score_releases(
         if task.kind != "real" or not later:
             continue
         here = kept.loc[kept["vintage"].astype(str) == task.vintage]
+        # A model its run has no forecast from here is not scored from
+        # stored samples, which may come from other data.
+        none = runs.loc[
+            (runs["origin"] == task.vintage)
+            & (runs["status"] == "no forecast"),
+            "model",
+        ]
+        here = here.loc[~here["model"].isin(set(none))]
         forecasts: dict[str, pd.DataFrame] = {}
         summaries: dict[str, pd.DataFrame | None] = {}
         for row in runs.loc[runs["origin"] == task.vintage].itertuples():
