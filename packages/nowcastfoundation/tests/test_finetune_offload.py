@@ -456,23 +456,15 @@ def test_the_evaluation_s_workers_come_from_the_environment(monkeypatch):
     assert fe.evaluate_workers("mps") == 1
 
 
-@pytest.mark.usefixtures("short_context")
-@pytest.mark.filterwarnings("ignore:This process .* is multi-threaded")
 @pytest.mark.parametrize(
     "kinds", [["start"], ["checkpoint"], ["monitor", "by_source"]]
 )
-def test_a_split_evaluation_gives_what_one_process_does(
-    tmp_path, monkeypatch, kinds
-):
+def test_a_split_evaluation_gives_what_one_process_does(tmp_path, kinds):
     # The batches are those one process runs, split over the workers,
-    # so every loss and the coverage are the same, bit for bit. Forked
-    # here, so the workers see the stubs.
-    import multiprocessing
+    # so every loss and the coverage are the same, bit for bit. The
+    # workers are fresh interpreters, loading the tiny Chronos-2 by name.
+    from chronos_toy import toy_base
 
-    if "fork" not in multiprocessing.get_all_start_methods():
-        pytest.skip("no fork on this platform")
-    monkeypatch.setattr(fe, "START_METHOD", "fork")
-    monkeypatch.setattr(fe, "load_base", lambda _device: tiny_model())
     val = blocks(7)
     path = tmp_path / fs.HELD_OUT_BLOCKS
     fs.save_blocks(val, path)
@@ -482,7 +474,7 @@ def test_a_split_evaluation_gives_what_one_process_does(
     for n in (1, 3):
         base = tiny_model()
         series_bias.attach_for(base, where / "adapter")
-        split = fe.Split(n, path, len(val))
+        split = fe.Split(n, path, len(val), toy_base)
         got[n] = fe.evaluate(where / "adapter", base, val, kinds, 2, split)
     assert got[1] == got[3]
     assert got[1]

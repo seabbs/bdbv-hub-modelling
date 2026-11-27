@@ -42,7 +42,7 @@ def fake(monkeypatch):
         calls["loads"] += 1
         return Base()
 
-    def evaluate(adapter, _base, _blocks, kinds, _batch, real=()):
+    def evaluate(adapter, _base, _blocks, kinds, _batch, _split=None, real=()):
         calls["evals"].append((Path(adapter), list(kinds), len(real)))
         if "start" in kinds:
             return {"held_out_loss": 0.4}
@@ -152,24 +152,17 @@ def test_base_chronos_2_s_step_0_is_cached_by_model_and_held_out_set(
     assert len(list(cache.glob("*.json"))) == 1
 
 
-@pytest.mark.filterwarnings("ignore:This process .* is multi-threaded")
 def test_the_runner_writes_the_same_results_over_workers(tmp_path, monkeypatch):
     # End to end on a tiny Chronos-2: step 0 and a checkpoint scored in
-    # one process and over three workers write the same results.
-    import multiprocessing
-    import sys
-
-    if "fork" not in multiprocessing.get_all_start_methods():
-        pytest.skip("no fork on this platform")
-    sys.path.insert(0, str(ROOT / "packages/nowcastfoundation/tests"))
-    from chronos_toy import tiny_model
+    # one process and over three workers write the same results. The
+    # workers, fresh interpreters, load the tiny model by name.
+    monkeypatch.syspath_prepend(str(ROOT / "packages/nowcastfoundation/tests"))
+    from chronos_toy import toy_base
     from test_finetune_offload import blocks, trained
 
     mod = runner()
     fs = mod.fs
-    monkeypatch.setattr(fs.ft, "CONTEXT", 48)
-    monkeypatch.setattr(mod.fe, "START_METHOD", "fork")
-    monkeypatch.setattr(mod.fe, "load_base", lambda _device: tiny_model())
+    monkeypatch.setattr(mod.fe, "load_base", toy_base)
     out = {}
     for n in (1, 3):
         monkeypatch.setenv(mod.fe.WORKERS_ENV, str(n))

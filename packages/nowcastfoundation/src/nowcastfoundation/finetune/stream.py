@@ -1394,9 +1394,18 @@ class ByLength:
     def indices(self) -> Any:
         """Yield every block's index once, in batches of one length.
 
+        The batches of `plan`, each reported once used (`report_batch`).
+        """
+        planned = self.plan()
+        for k, batch in enumerate(planned, start=1):
+            yield batch
+            report_batch(k, len(planned))
+
+    def plan(self) -> list[list[int]]:
+        """Return every block's index once, in batches of one length.
+
         Batches are those Chronos-2's sequential batches make: blocks in
-        order until a batch holds `batch_size` series. Each is reported
-        once used (`report_batch`).
+        order until a batch holds `batch_size` series.
         """
         planned = []
         for length in self.data:
@@ -1410,9 +1419,7 @@ class ByLength:
                     batch, rows = [], 0
             if batch:
                 planned.append(batch)
-        for k, batch in enumerate(planned, start=1):
-            yield batch
-            report_batch(k, len(planned))
+        return planned
 
     def batches(self) -> Any:
         """Yield every block once, in batches of one length."""
