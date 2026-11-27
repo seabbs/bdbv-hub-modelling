@@ -26,7 +26,7 @@ def _run(tmp_path):
         {NAMES["same"]: [[1.0, 3.0], [5.0, 7.0]]},
     )
     (d / "settings.json").write_text(
-        json.dumps({"steps": 250, "n_outbreaks": 250})
+        json.dumps({"steps": 250, "n_outbreaks": 250, "series_bias": {}})
     )
     _safetensors(
         folder / "train" / "state" / "adapter_model.safetensors",

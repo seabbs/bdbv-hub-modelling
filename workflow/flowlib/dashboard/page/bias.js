@@ -9,8 +9,9 @@
 // keys sit above the grid.
 var PW=320,PH=180;
 // biasLayout: the grid's columns and its panels in order, [kind, relation].
-function biasLayout(pairs){var n=pairs.length,out=[];
- pairs.forEach(function(k){out.push(["line",k.key])});out.push(["lr",null]);
+// Without the learning rate's card (lr false) its cell is left empty.
+function biasLayout(pairs,lr){var n=pairs.length,out=[];
+ pairs.forEach(function(k){out.push(["line",k.key])});out.push([lr===false?"gap":"lr",null]);
  pairs.forEach(function(k){out.push(["heat",k.key])});out.push(["layers",null]);
  return {cols:n+1,panels:out}}
 // layerShade: layer i of n in colour c, a single-hue ramp by depth. The
@@ -19,7 +20,17 @@ function biasLayout(pairs){var n=pairs.length,out=[];
 function layerShade(c,i,n){if(n<2)return c;var t=i/(n-1);
  if(t<=0.6)return 'color-mix(in oklab, '+c+' '+Math.round(30+70*t/0.6)+'%, var(--card))';
  return 'color-mix(in oklab, '+c+' '+Math.round(100-45*(t-0.6)/0.4)+'%, var(--fg))'}
-if(typeof module!=="undefined")module.exports={biasLayout:biasLayout,layerShade:layerShade};
+// biasPlan: of the runs selected (on), those drawn, a one-line note for
+// each run trained without the bias (D.nobias) or with none logged yet
+// (D.missing), and whether the learning rate's card (run lrRun) is drawn:
+// only for a selected run trained with the bias.
+function biasPlan(D,on,lrRun){
+ function sel(l){return (l||[]).filter(function(r){return on.indexOf(r.key)>=0})}
+ var notes=sel(D.nobias).map(function(r){return r.label+": no attention bias in this run"})
+  .concat(sel(D.missing).map(function(r){return r.label+": no attention bias logged or saved yet"}));
+ var lr=on.indexOf(lrRun)>=0&&!(D.nobias||[]).some(function(r){return r.key===lrRun});
+ return {runs:sel(D.runs),notes:notes,lr:lr}}
+if(typeof module!=="undefined")module.exports={biasLayout:biasLayout,layerShade:layerShade,biasPlan:biasPlan};
 else (function(){
 var D=JSON.parse(document.getElementById("bdata").textContent);
 var $=function(i){return document.getElementById(i)};
@@ -74,17 +85,17 @@ function layers(lat,keys,lim){var n=0;keys.forEach(function(k){n=Math.max(n,lat[
  return s+'</svg>'}
 function card(id,title,sub,info){return '<div class="card bpanel" id="'+id+'"><h3>'+title+(info?ftInfo(info):"")+'</h3><div class="leg bsub">'+sub+'</div><div class=bplot></div></div>'}
 function draw(){
- var on=ftSel.get(),runs=D.runs.filter(function(r){return on.indexOf(r.key)>=0}),grid=$("biasgrid"),head=$("biashead"),lr=$("lrcard");
+ var on=ftSel.get(),grid=$("biasgrid"),head=$("biashead"),lr=$("lrcard");
+ var plan=biasPlan(D,on,lr?lr.dataset.run:null),runs=plan.runs,named=runs.length>1||plan.notes.length>0;
  $("biasrefs").innerHTML=ftSel.refsOn().map(function(r){return '<span class="tog dis" title="'+r.label+' is a reference with no attention bias">'+r.label+'</span>'}).join("");
- if(lr)lr.style.display=on.indexOf(lr.dataset.run)>=0?"":"none";
- var none=(D.missing||[]).filter(function(r){return on.indexOf(r.key)>=0}).map(function(r){return r.label});
- var miss=none.length?'<span class=mut>no attention bias logged or saved: '+none.join(", ")+'</span>':"";
- if(!runs.length){head.innerHTML='<p class=mut>none of the selected runs has an attention bias module</p>';
+ if(lr)lr.style.display=plan.lr?"":"none";
+ var miss=plan.notes.map(function(t){return '<span class=mut>'+t+'</span>'}).join("");
+ if(!runs.length){head.innerHTML=plan.notes.length?plan.notes.map(function(t){return '<p class=mut>'+t+'</p>'}).join(""):'<p class=mut>none of the selected runs has an attention bias</p>';
   [].forEach.call(grid.querySelectorAll(".bpanel"),function(c){c.remove()});shape="";return}
  if(!sel0||!runs.some(function(r){return r.key==sel0}))sel0=runs[0].key;
  var run=runs.find(function(r){return r.key==sel0}),lat=run.latest||{};
  var pairs=D.pairs.filter(function(k){return runs.some(function(r){return (r.pts[k.key]||[]).length})||lat[k.key]});
- var lay=biasLayout(pairs),keys=pairs.filter(function(k){return lat[k.key]});
+ var lay=biasLayout(pairs,plan.lr),keys=pairs.filter(function(k){return lat[k.key]});
  // Shared scales: one for the bias over training, one for the matrices.
  var ys=[],x1=1,flat=[];
  runs.forEach(function(r){pairs.forEach(function(k){(r.pts[k.key]||[]).forEach(function(p){ys.push(p[1]);x1=Math.max(x1,p[0])})})});
@@ -114,11 +125,12 @@ function draw(){
    if(p[0]==="line")return card("bl-"+p[1],k.label,"each layer, mean over heads",p[1]===pairs[0].key?"biasline":"");
    if(p[0]==="heat")return card("bh-"+p[1],k.label,"latest, by layer and head",p[1]===pairs[0].key?"biasheat":"");
    if(p[0]==="layers")return card("bm","Mean by layer","latest, each relation","relations");
+   if(p[0]==="gap")return '<div class=bpanel></div>';
    return '<div id=lrslot></div>'}).join("");
   grid.insertBefore(t.content,grid.firstChild);
   var slot=$("lrslot");if(slot){if(lr)slot.replaceWith(lr);else slot.remove()}}
  pairs.forEach(function(k){var c=$("bl-"+k.key);if(c){var g=line(runs,run,k,lim),b=c.querySelector(".bsub");
-   b.dataset.d=(runs.length>1?run.label+", ":"")+(((run.layers||{})[k.key]||[]).length?"each layer, mean over heads":"mean over layers and heads");
+   b.dataset.d=(named?run.label+", ":"")+(((run.layers||{})[k.key]||[]).length?"each layer, mean over heads":"mean over layers and heads");
    b.textContent=b.dataset.d;c.querySelector(".bplot").innerHTML=g.svg;hover(c,g.hits)}
   var h=$("bh-"+k.key);if(h)h.querySelector(".bplot").innerHTML=lat[k.key]?heat(lat[k.key],k,amp):'<p class=mut>no matrix saved</p>';
   if(h)h.querySelector(".bsub").textContent=lat[k.key]?run.label+" at "+Math.round(lat.n)+" simulations":"no matrix saved"});

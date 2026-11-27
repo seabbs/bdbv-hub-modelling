@@ -5,8 +5,8 @@ The fitted models are slow, so the docs never fit them. The random
 walks (`SAMPLE_FREE`) are stored the same way, so the submission, the
 backtest and the docs read one forecast of each at each origin.
 The Fit store workflow (`.github/workflows/fit-store.yml`) fits each
-(model, origin) pair once and commits the result to the `fit-store`
-branch, one file per fit:
+(model, origin) pair once and stores the result in the `fit-store`
+Actions artifact (`bdbvhub.store.artifact`), one file per fit:
 
 ```text
 <model>/<origin>/<key>.json.gz
@@ -207,7 +207,7 @@ a submission candidate whose fit directory holds no samples of its own,
 so `unpack` writes its stored forecasts there."""
 
 COMMIT_FILE: Final = ".commit"
-"""The store branch commit, written by `scripts/fit-store.sh fetch`."""
+"""The fetched store's version, written by `fit-store-artifact fetch`."""
 
 
 def stored_models() -> list[str]:
@@ -689,7 +689,7 @@ def store_path(store: Path | str, model: str, origin: str, key: str) -> Path:
     Parameters
     ----------
     store : pathlib.Path or str
-        The store root (a checkout of the `fit-store` branch).
+        The store root (as `fit-store-artifact fetch` unpacks it).
     model, origin, key : str
         The fit.
 

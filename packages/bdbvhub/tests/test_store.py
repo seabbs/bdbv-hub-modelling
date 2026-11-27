@@ -1692,10 +1692,11 @@ def test_zone_data_keys_the_walks(
     assert store.ZONE_CODE in store.fit_code("randomwalk", ROOT)
 
 
-def test_the_branch_moves_a_fit_s_zone_run_with_it() -> None:
-    from bdbvhub.store import branch
+def test_the_artifact_store_moves_a_fit_s_zone_run_with_it() -> None:
+    from bdbvhub.store import artifact
 
-    assert branch.ZONES_SUFFIX == store.ZONES_SUFFIX
+    assert artifact.ZONES_SUFFIX == store.ZONES_SUFFIX
+    assert artifact.VERSION_FILE == store.COMMIT_FILE
 
 
 def test_a_failed_fit_is_not_replaced_by_an_older_fit(

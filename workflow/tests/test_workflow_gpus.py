@@ -2,6 +2,7 @@
 
 import fcntl
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -13,14 +14,14 @@ ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "workflow" / "flowlib" / "gpus.py"
 
 
-def _offload_dry_run(tmp_path):
+def _offload_dry_run(tmp_path, extra=()):
     """Return the dry run, with each job's command, of an offloaded run."""
     pytest.importorskip("snakemake")
     sys.path.insert(0, str(Path(__file__).parent))
     from test_workflow_dryrun import FT, dry_run
 
     config = {**FT, "finetune": {**FT["finetune"], "eval": "offload"}}
-    out = dry_run(tmp_path, "finetune", config=config, quiet=False)
+    out = dry_run(tmp_path, "finetune", config=config, quiet=False, extra=extra)
     assert out.returncode == 0, out.stderr + out.stdout
     return out
 
@@ -138,8 +139,11 @@ def test_every_gpu_job_claims_its_gpu_with_one_or_two_gpus(tmp_path):
         lines = _gpu_commands(folder, given)
         assert any("finetune-stream" in line for line in lines)
         assert any("evaluate_offloaded.py" in line for line in lines)
+        assert any("nowcastgermany.checkpoint" in line for line in lines)
         for line in lines:
-            assert machine.CLAIM in line, line
+            # The German units stay on the CPU (`score.device`).
+            german = "nowcastgermany.checkpoint" in line
+            assert (machine.CLAIM in line) != german, line
 
 
 def test_a_cpu_forecast_claims_no_gpu(tmp_path):
@@ -182,3 +186,35 @@ def test_the_locks_are_this_node_s_not_the_shared_root(monkeypatch):
     folder = gpus.claims_dir()
     assert folder.parent == Path("/tmp")
     assert str(os.getuid()) in folder.name
+
+
+def _evaluate_workers(tmp_path, device):
+    """Return the threads and EVALUATE_WORKERS of the one-pass evaluations."""
+    (tmp_path / "local.env").write_text(
+        f"ROOT={tmp_path}\nHOST_NAME=test-host\nGPUS=0\n"
+        f"FORECAST_DEVICE={device}\nFORECAST_THREADS=1\nCORES=8\n"
+    )
+    out = _offload_dry_run(tmp_path, ["--cores", "8"])
+    got = set()
+    for block in out.stdout.split("\nrule ")[1:]:
+        if not block.startswith(("evaluate_base:", "evaluate_checkpoint:")):
+            continue
+        threads = re.search(r"threads: (\d+)", block)
+        workers = re.search(r"EVALUATE_WORKERS=(\d+) ", block)
+        assert workers, block
+        got.add((int(threads[1]) if threads else 1, int(workers[1])))
+    assert got
+    return got
+
+
+def test_the_held_out_pass_takes_a_worker_a_forecast_s_threads(tmp_path):
+    # On the CPU a worker for each of the job's `forecast.threads` (one
+    # here); on CUDA one process, which holds the GPU.
+    (tmp_path / "cpu").mkdir()
+    (tmp_path / "cuda").mkdir()
+    got = _evaluate_workers(tmp_path / "cpu", "cpu")
+    assert max(threads for threads, _ in got) > 1
+    for threads, workers in got:
+        assert workers == threads
+    for _, workers in _evaluate_workers(tmp_path / "cuda", "cuda"):
+        assert workers == 1

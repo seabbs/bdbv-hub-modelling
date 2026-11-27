@@ -334,8 +334,8 @@ def test_says_which_stored_fit_it_read(tmp_path: Path) -> None:
     )
     assert visible(body(g, provenance=prov))[3] == (
         "Fit: read from the fit store, the `renewal` fit at 2026-10-31 "
-        "(key `0123456789abcdef`, fitted at `c0ffee0`, fit-store commit "
-        "`5707e00`)."
+        "(key `0123456789abcdef`, fitted at `c0ffee0`, fit store "
+        "version `5707e00`)."
     )
 
 
@@ -359,7 +359,7 @@ def test_says_when_the_fit_is_not_the_current_code_key(
     assert visible(body(g, provenance=prov))[3] == (
         "Fit: `renewalbvd` fit from commit `f493519` (key `afbd3b1c`, "
         "fitted 2026-11-23T08:00:00+00:00); current code key `cf891224`, "
-        "which the fit store lacks (fit-store commit `5707e00`)."
+        "which the fit store lacks (fit store version `5707e00`)."
     )
 
 
@@ -394,8 +394,8 @@ def test_says_which_stored_walk_forecast_it_read(tmp_path: Path) -> None:
     )
     assert visible(body(g, provenance=prov))[3] == (
         "Forecast: read from the fit store, the `randomwalk` forecast at "
-        "2026-10-31 (key `0123456789abcdef`, made at `c0ffee0`, fit-store "
-        "commit `5707e00`)."
+        "2026-10-31 (key `0123456789abcdef`, made at `c0ffee0`, fit store "
+        "version `5707e00`)."
     )
 
 

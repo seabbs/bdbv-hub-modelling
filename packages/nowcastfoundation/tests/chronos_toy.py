@@ -40,6 +40,11 @@ def tiny_model(seed: int = 0):
     return Chronos2Model(config).eval()
 
 
+def toy_base(_device: str):
+    """`tiny_model`, as `finetune.evaluate.load_base` gives base Chronos-2."""
+    return tiny_model()
+
+
 def toy_block(seed: int = 0) -> dict:
     """A ragged block: three places' counts, then each place's two lags."""
     rng = np.random.default_rng(seed)

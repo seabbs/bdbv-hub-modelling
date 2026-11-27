@@ -22,13 +22,11 @@ def test_a_dispatch_can_name_a_scratch_store() -> None:
     wf = _workflow()
     # PyYAML reads the key `on` as True.
     inputs = wf[True]["workflow_dispatch"]["inputs"]
-    assert "store_branch" in inputs
-    steps = wf["jobs"]["prep"]["steps"]
-    # The step that fetches the store, whose site results Site unpacks.
-    (load,) = [s for s in steps if "branch.py fetch" in s.get("run", "")]
-    assert load["env"]["FIT_STORE_BRANCH"] == (
-        "${{ inputs.store_branch || 'fit-store' }}"
-    )
+    assert "store" in inputs
+    prep = wf["jobs"]["prep"]
+    # The job that fetches the store, whose site results Site unpacks.
+    assert any("artifact.py" in s.get("run", "") for s in prep["steps"])
+    assert prep["env"]["FIT_STORE"] == "${{ inputs.store || 'fit-store' }}"
 
 
 def test_the_getting_started_notebook_reads_the_store_itself() -> None:

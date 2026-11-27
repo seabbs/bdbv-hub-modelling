@@ -19,9 +19,7 @@ def test_pages_forecasts_nothing_for_the_german_benchmark() -> None:
     # Pages loads; no job of its own forecasts them.
     jobs = _jobs()
     assert "germany-heldout" not in jobs
-    assert (
-        "FIT_STORE_BRANCH=fit-store-scratch-fm-chronos" not in PAGES.read_text()
-    )
+    assert "FIT_STORE=fit-store-scratch-fm-chronos" not in PAGES.read_text()
 
 
 def _build_script() -> str:
@@ -70,7 +68,7 @@ def test_pages_forecasts_and_scores_nothing() -> None:
         "bdbvhub score",
     ):
         assert command not in run, command
-    assert "cat output/fit-store/backtests/latest.tar.gz* | tar -xz" in run
+    assert "tar -xzf output/fit-store/backtests/latest.tar.gz" in run
 
 
 def test_pages_cancels_in_progress_on_every_ref() -> None:
