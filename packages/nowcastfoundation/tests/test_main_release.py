@@ -9,7 +9,6 @@ folders under a file URL, and `gh` is a stand-in.
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -86,33 +85,6 @@ def test_a_record_whose_tag_is_not_its_checkpoint_s_fails(
         fc.latest_spec()
 
 
-class _Gh:
-    """A fake `gh release`: each release's asset names and notes."""
-
-    def __init__(self, releases: dict[str, dict[str, str]]):
-        self.releases = releases
-        self.calls: list[list[str]] = []
-
-    def __call__(self, command: list[str], **_: object):
-        self.calls.append(command)
-        action, tag = command[2], command[3]
-        done = subprocess.CompletedProcess
-        if action == "view":
-            if tag not in self.releases:
-                return done(command, 1, "", "release not found")
-            names = [{"name": n} for n in self.releases[tag]]
-            return done(command, 0, json.dumps({"assets": names}), "")
-        if action in ("create", "upload"):
-            assets = self.releases.setdefault(tag, {})
-            for f in command[4:]:
-                if "\n" not in f and Path(f).is_file():
-                    assets[Path(f).name] = Path(f).read_text()
-            return done(command, 0, "ok", "")
-        if action == "edit":
-            return done(command, 0, "ok", "")
-        raise AssertionError(command)
-
-
 def _segment(tmp_path: Path, settings: dict) -> Path:
     where = tmp_path / "n4800"
     where.mkdir(parents=True)
@@ -121,37 +93,38 @@ def _segment(tmp_path: Path, settings: dict) -> Path:
 
 
 SETTINGS = {"hash": "main4800", "series_bias": {"lr": 1}, "n_outbreaks": 4800}
+BRANCHES = ("main", "next")
 
 
 def test_promoting_names_the_checkpoint_in_the_main_release(
-    tmp_path: Path,
+    tmp_path: Path, fake_releases
 ) -> None:
-    gh = _Gh({"chronos-slots-main4800": {fc.SUMS_FILE: ""}})
-    record = fs.promote_main(_segment(tmp_path, SETTINGS), "runa", run=gh)
-    assert record == {
+    gh = fake_releases({"chronos-slots-main4800": {fc.SUMS_FILE: ""}})
+    record = fs.promote_main(
+        _segment(tmp_path, SETTINGS), "runa", BRANCHES, run=gh
+    )
+    assert {k: record[k] for k in ("run", "spec", "tag", "hash")} == {
         "run": "runa",
         "spec": "slots-main4800",
         "tag": "chronos-slots-main4800",
         "hash": "main4800",
-        "n_outbreaks": 4800,
     }
+    assert record["n_outbreaks"] == 4800
+    assert record["endpoint"] == "chronos"
+    assert record["commit"] == gh.head
     assert json.loads(gh.releases[fc.MAIN_TAG][fc.MAIN_FILE]) == record
-    create = next(c for c in gh.calls if c[2] == "create")
-    assert "--latest=false" in create
     # A later checkpoint replaces the record in place.
     gh.releases["chronos-slots-next"] = {fc.SUMS_FILE: ""}
     later = _segment(tmp_path / "later", {**SETTINGS, "hash": "next"})
-    fs.promote_main(later, "runa", run=gh)
-    upload = [c for c in gh.calls if c[2] == "upload"]
-    assert upload
-    assert "--clobber" in upload[-1]
-    assert any(c[2] == "edit" for c in gh.calls)
+    fs.promote_main(later, "runa", BRANCHES, run=gh)
     main = json.loads(gh.releases[fc.MAIN_TAG][fc.MAIN_FILE])
     assert main["spec"] == "slots-next"
 
 
-def test_an_unreleased_checkpoint_is_never_promoted(tmp_path: Path) -> None:
-    gh = _Gh({})
+def test_an_unreleased_checkpoint_is_never_promoted(
+    tmp_path: Path, fake_releases
+) -> None:
+    gh = fake_releases({})
     with pytest.raises(RuntimeError, match="chronos-slots-main4800"):
-        fs.promote_main(_segment(tmp_path, SETTINGS), "runa", run=gh)
+        fs.promote_main(_segment(tmp_path, SETTINGS), "runa", BRANCHES, run=gh)
     assert fc.MAIN_TAG not in gh.releases

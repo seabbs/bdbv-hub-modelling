@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import functools
 import json
 import tarfile
 from pathlib import Path
@@ -11,6 +12,7 @@ import pandas as pd
 import pytest
 import yaml
 
+from nowcastutils import pointers
 from paperpipe import stored
 from paperpipe.flow import PaperFlow
 
@@ -155,18 +157,23 @@ def test_a_bundle_unpacks_to_its_files_and_overlay(tmp_path: Path) -> None:
     assert "compare_daily" not in overlay["evidence"]
 
 
-def test_fetch_takes_each_sets_newest_release(tmp_path: Path) -> None:
-    releases = [
+def _pointer(gh):  # type: ignore[no-untyped-def]
+    return functools.partial(pointers.read, repo="owner/repo", run=gh)
+
+
+def test_fetch_takes_the_release_each_set_s_pointer_names(
+    tmp_path: Path, fake_releases
+) -> None:
+    # A newer release of the set than its pointer names is never taken.
+    gh = fake_releases(
         {
-            "tag_name": "paper-finetune-aaa",
-            "created_at": "2026-11-20T00:00:00Z",
-        },
-        {
-            "tag_name": "paper-finetune-bbb",
-            "created_at": "2026-11-24T00:00:00Z",
-        },
-        {"tag_name": "chronos-slots-ccc", "created_at": "2026-11-25T00:00:00Z"},
-    ]
+            "paper-finetune-aaa": {stored.ASSET: ""},
+            "paper-finetune-bbb": {stored.ASSET: ""},
+            "paper-finetune-main": {
+                pointers.ASSET: json.dumps({"tag": "paper-finetune-aaa"})
+            },
+        }
+    )
     files = {
         "comparison.csv": _write(
             tmp_path / "h" / "c.csv", pd.DataFrame({"v": [1]})
@@ -178,11 +185,50 @@ def test_fetch_takes_each_sets_newest_release(tmp_path: Path) -> None:
         asked.append(tag)
         return stored.bundle("finetune", files, dest)
 
-    overlay = stored.fetch(tmp_path / "stored", releases, download)
-    assert asked == ["paper-finetune-bbb"]
+    overlay = stored.fetch(tmp_path / "stored", _pointer(gh), download)
+    assert asked == ["paper-finetune-aaa"]
     assert "checkpoint_scores" in overlay["evidence"]
-    # Sets with no release are left out, so their results stay pending.
+    # A set never promoted is left out, so its results stay pending.
     assert "synthetic" not in json.dumps(overlay)
+
+
+def test_a_broken_pointer_fails_the_fetch(
+    tmp_path: Path, fake_releases
+) -> None:
+    gh = fake_releases({"paper-germany-main": {pointers.ASSET: "{}"}})
+    with pytest.raises(ValueError, match="paper-germany-main"):
+        stored.fetch(
+            tmp_path / "stored",
+            _pointer(gh),
+            lambda tag, dest: dest,
+            ["germany"],
+        )
+
+
+def test_promoting_a_set_names_its_release_in_its_pointer(
+    tmp_path: Path, fake_releases
+) -> None:
+    released = tmp_path / "released" / "germany.json"
+    released.parent.mkdir()
+    released.write_text(
+        json.dumps(
+            {"set": "germany", "tag": "paper-germany-abc", "hash": "abcdef"}
+        )
+    )
+    gh = fake_releases({"paper-germany-abc": {stored.ASSET: ""}})
+    record = stored.promote(released, ("main", "next"), run=gh)
+    assert record["tag"] == "paper-germany-abc"
+    assert record["hash"] == "abcdef"
+    assert record["endpoint"] == "paper-germany"
+    assert "release_paper_germany" in record["produced_by"]
+    assert pointers.read("paper-germany", "owner/repo", run=gh) == record
+    # Not from a configured branch: no promotion.
+    gh = fake_releases(
+        {"paper-germany-abc": {stored.ASSET: ""}}, branches=("feature",)
+    )
+    with pytest.raises(RuntimeError, match="main"):
+        stored.promote(released, ("main",), run=gh)
+    assert "paper-germany-main" not in gh.releases
 
 
 def test_stored_outputs_stand_in_for_the_host_rules() -> None:

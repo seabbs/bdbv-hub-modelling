@@ -85,15 +85,17 @@ def test_the_main_run_s_checkpoint_is_promoted(
     (tmp_path / "settings.json").write_text(json.dumps({"hash": "abc"}))
     calls = []
 
-    def promote(where, run):
-        calls.append((where, run))
+    def promote(where, run, branches):
+        calls.append((where, run, branches))
         return {"run": run, "spec": "abc", "tag": "chronos-ft-abc"}
 
     monkeypatch.setattr(publish_checkpoint.fs, "promote_main", promote)
     out = tmp_path / "main-release.json"
     monkeypatch.setattr(
-        sys, "argv", ["x", "--main", "runa", str(tmp_path), str(out)]
+        sys,
+        "argv",
+        ["x", "--main", "runa", str(tmp_path), str(out), "main", "next"],
     )
     publish_checkpoint.main()
-    assert calls == [(tmp_path, "runa")]
+    assert calls == [(tmp_path, "runa", ("main", "next"))]
     assert json.loads(out.read_text())["tag"] == "chronos-ft-abc"
