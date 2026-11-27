@@ -98,3 +98,24 @@ def test_the_model_cuts_by_activity_when_configured():
     assert model._views(PLACES, tri) == active_views(PLACES, {"CD-AA-01"}, None)
     off = dataclasses.replace(model, active_zone_cases=None)
     assert off._views(PLACES, tri) == [(PLACES, PLACES)]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "foundation_zeroshot",
+        "foundation_zeroshot_complete",
+        "foundation_zeroshot_baselinenowcast",
+    ],
+)
+def test_zero_shot_models_cut_blocks_as_their_fine_tuned_ones(name):
+    # Only the weights differ from the fine-tuned model (`_finetuned`), so
+    # the zero-shot models take the same active-zone rule.
+    from nowcastutils.base import get_model
+
+    model = get_model(name)
+    assert (
+        model.active_zone_cases,
+        model.active_zone_weeks,
+        model.active_zone_recent_weeks,
+    ) == active_zone_rule()
