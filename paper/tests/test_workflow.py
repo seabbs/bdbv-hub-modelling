@@ -304,7 +304,7 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
     assert CONFIG["ebola"]["n_samples"] == 1000
     # The zero-shot Chronos-2 models run there too, and a fine-tuned one
     # loads the final checkpoint, as in the other studies.
-    draws = [line for line in log.splitlines() if "--samples" in line]
+    draws = [ln for ln in log.splitlines() if "backtest --config" in ln]
     assert draws
     for line in draws:
         assert "foundation_zeroshot_baselinenowcast" in line

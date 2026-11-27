@@ -82,9 +82,14 @@ MODELS: Final = (
     "foundation_zeroshot_complete",
     "foundation_zeroshot",
     "foundation",
+    "foundation_zeroshot_baselinenowcast",
+    "foundation_baselinenowcast",
 )
 """The baseline, the random walk, zero-shot Chronos-2 on complete data and
-on the ragged releases, and the fine-tuned ragged model."""
+on the ragged releases, the fine-tuned ragged model, and the
+baselinenowcast sensitivity: zero-shot and fine-tuned Chronos-2 on the
+baseline's point nowcast. The same Chronos-2 models as the German and
+Ebola studies."""
 
 MIN_RELEASES: Final = 6
 """Releases up to the first origin: two weeks of context past the
