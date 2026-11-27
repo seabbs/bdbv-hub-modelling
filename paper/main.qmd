@@ -161,24 +161,23 @@ Teams without the capacity to set up specialist models could also use them direc
 
 ::: {.callout-note title="Plan"}
 - Surveillance data for nowcasting are a reporting triangle: counts are reported by reference date, such as the date of symptom onset, and by reporting delay, where the most recent dates are incomplete because counts that have longer delays have not been reported yet [@hohle; @Wolffram2023].
-- We call the last date whose counts we treat as complete $E$. It is the date of the latest data release less the number of lagged series, $D$ (defined below).
-- For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series has values up to $E$ and is the target.
+- We call the last date whose counts we treat as complete the last complete date. It is the date of the latest data release less the maximum delay (defined below).
+- For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series has values up to the last complete date and is the target.
 - We also gave Chronos-2 one lagged series per place and reporting delay, each with the counts reported by that delay and missing until then (Figure 1B). The lagged series can have values up to the latest data release.
-- The lagged series are covariates (Foundation model). Their values up to $E$ are past inputs, and their values after $E$ are known future inputs, which the model can use to forecast the count series.
-- We put every place's count and lagged series, at every level such as the country, its provinces and their health zones, into one group we call a block.
+- The lagged series are covariates (Foundation model). Their values up to the last complete date are past inputs, and their values after it are known future inputs, which the model can use to forecast the count series.
+- We put the count and lagged series of every place, at every spatial level of the data, into one group we call a block.
 - Aggregates go in the same block, such as a place's weekly totals or 7-day sums beside its daily counts.
 - Chronos-2 then forecasts every count and aggregate series together in one pass.
-- At forecast time we set the number of lagged series per place, $D$. This is either estimated from the data, where enough data is available, or set by the user for their setting.
-- To estimate $D$, we look at each past reference date to find the first delay at which its reported count reaches 98% of its latest count. $D$ is then the smallest value that is at least one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
-- If not enough data is available for any of the reference dates to settle, $D$ defaults to the whole release history (Supporting Information, *Lag count*).
-- In both case studies we set $D$ by hand, to 40 days for Germany and 42 days for Ebola (Case study 1; Case study 2).
+- At forecast time we set the maximum delay, which gives the number of lagged series per place. This is either estimated from the data, where enough data is available, or set by the user for their setting.
+- To estimate it, we find for each past reference date the first delay at which its reported count reaches 98% of its latest count, and take the 98th percentile of these delays over dates old enough to have settled.
+- If not enough data is available for any of the reference dates to settle, the maximum delay defaults to the whole release history (Supporting Information, *Lag count*).
 - Key references: [@hohle; @Wolffram2023].
 :::
 
 ### Attention biases
 
 ::: {.callout-note title="Plan"}
-- Group attention has no explicit mechanism to represent which lagged series belong to which place's count series, or which places are related, such as a province and its health zones, as they are all in one block (Foundation model).
+- Group attention has no explicit mechanism to represent which lagged series belong to which place's count series, or which places are related, such as a region and the places within it, as they are all in one block (Foundation model).
 - Chronos-2 may learn some of these relations from the data, but we do not tell it them.
 - To explore this, we added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
 - The biases start at zero, so the model starts as base Chronos-2, and are trained with the LoRA adapters during fine-tuning (Fine-tuning).
@@ -217,7 +216,7 @@ Teams without the capacity to set up specialist models could also use them direc
 - 5% of blocks have no lag series, as when only the latest data are at hand.
 - Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series.
 - In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later.
-- Training blocks set $D$ by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle $D$ set slightly differently.
+- Training blocks set the maximum delay by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle it set slightly differently.
 - We saved checkpoints at {{< meta results.training.checkpoints >}} simulations.
 - At each checkpoint we checked that the 7-day forecasts agree with the sums of the daily forecasts and are no rougher than the truth (Supporting Information, *Monitoring fine-tuning*).
 - We report the final checkpoint, where the learning rate reaches zero, and selected no checkpoint on real data.
@@ -231,7 +230,7 @@ Teams without the capacity to set up specialist models could also use them direc
 
 ![The fine-tuning pipeline.
 (A) The assumptions in the simulations: a latent process gives expected onsets by stratum, which a reporting delay that may drift or step, report-day effects and count noise turn into a reporting triangle.
-(B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to E and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs.
+(B) The reporting triangle laid out as ragged series for Chronos-2: each place has a target complete up to the last complete date and one series per lag, missing until reported (daily lag series fill only on release days), and counts reported after E enter as known-future inputs.
 Group attention has learned biases for a series attending to the other series of its place, its count and lags, and between a place and its parent or children, as in Moirai's any-variate attention [@Woo2024], while every place's series sit in one group.
 The grid shows group attention at one step for a country C and places A and B, each with a count and two lag series, with each cell shaded by its relation (same place: a place's count series and its lag series).
 Beside it, one place's daily rows carry a weekly total row, missing until the last day of each week.
@@ -264,7 +263,7 @@ Only the model fine-tuned on simulated reporting triangles with attention biases
 (B) How the models are used: rows are models and their inputs, and columns are the held-out simulations and the two case studies.
 Each cell is marked main text (filled) or Supporting Information (outlined), and left empty where the model does not apply.
 The dashed line separates the four models in every main results figure from the rest.
-$D$ is 40 days for Germany and 42 days for Ebola, and one forward pass gives the daily counts and, from each place's aggregate row, the hub targets.](figures/fig2-design.svg){#fig-design}
+The maximum delay is 40 days for Germany and 42 days for Ebola, and one forward pass gives the daily counts and, from each place's aggregate row, the hub targets.](figures/fig2-design.svg){#fig-design}
 
 ### Evaluation on held-out synthetic data
 
@@ -286,7 +285,8 @@ $D$ is 40 days for Germany and 42 days for Ebola, and one forward pass gives the
 - We compared with the hub's models, relative to the hub's baseline, and evaluated as the hub did.
 - We scored as for held-out simulations, against the data as reported 40 days later, with 95% rather than 90% coverage as the hub's quantiles have no 5% or 95% level [@Wolffram2023].
 - Our models saw only reports made within 40 days of each reference date, so they forecast the count the truth holds.
-- We therefore set $D$ to 40 days for the zero-shot and fine-tuned models alike, rather than estimating it.
+- We therefore set the maximum delay to 40 days for the zero-shot and fine-tuned models alike, rather than estimating it.
+- Each block holds Germany with either its 16 states or its age groups, each with daily counts, daily lagged series and a 7-day sum series.
 - The hub's target is 7-day sums ending on each day from the nowcast date to 28 days before it.
 - We scored the hub's targets, and also our models' forecasts up to 4 weeks after the nowcast date (Supporting Information, *German nowcast hub*).
 - Each nowcast date is forecast once, so every 7-day sum comes from one forecast.
@@ -314,8 +314,9 @@ $D$ is 40 days for Germany and 42 days for Ebola, and one forward pass gives the
   - From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past hub rounds, to decide whether it could be submitted.
   - These past rounds therefore informed that decision, and only rounds after the fine-tuned model's first submission are prospective for it.
 - **Forecasting.**
-  - The hub's releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate $D$.
-  - We therefore set $D$ to 42 days for the fine-tuned and zero-shot models and the random walk nowcast alike, based on our experience modelling the outbreak.
+  - The hub's releases are few, weekly and begin with a backfill, so too few onset dates have settled to estimate the maximum delay.
+  - We therefore set the maximum delay to 42 days for the fine-tuned and zero-shot models and the random walk nowcast alike, based on our experience modelling the outbreak.
+  - Each block holds the country, its provinces and their health zones, each with daily counts, daily lagged series and a weekly total series.
   - The fine-tuned model makes two forecasts at each nowcast date, as all zones together exceed the block size that fits in GPU memory (Supporting Information, *Ebola forecast layout*; *Fitting in GPU memory*).
   - One is a single block of the country, all provinces and the active health zones.
   - A zone is active with at least 20 cases in the last 8 weeks and at least 1 case in the last 4 weeks, as reported by the nowcast date.

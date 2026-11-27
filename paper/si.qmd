@@ -106,8 +106,8 @@ where $y_{p,s}$ is place $p$'s daily count on day $s$ and $k = 7$ for weekly or 
 
 #### Lag count
 
-The lag count $D$ is the number of lagged series per place.
-It sets the last complete date $E$, the latest release less $D$.
+The maximum delay $D$ sets the number of lagged series per place.
+It also sets the last complete date $E$, the latest release less $D$.
 We either estimate $D$ from the data or set it by hand.
 
 **Estimating $D$.**

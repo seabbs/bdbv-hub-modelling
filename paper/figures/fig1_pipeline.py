@@ -426,8 +426,8 @@ def panel_b(g: Svg, oy: float) -> float:
     g.line(tx - 2, ey, tx + cw * len(releases) + 3, ey, stroke=ACCENT, sw=1.1)
     g.text(
         tx + cw * len(releases) + 6,
-        ey + 3,
-        "E",
+        ey + 12,
+        "last complete",
         size=BODY,
         weight="bold",
         fill=ACCENT,
@@ -522,7 +522,7 @@ def panel_b(g: Svg, oy: float) -> float:
     g.text(
         exx,
         bottom + 11,
-        "E",
+        "last complete",
         size=BODY,
         weight="bold",
         fill=ACCENT,
@@ -771,7 +771,7 @@ def panel_c(g: Svg, oy: float) -> float:
     g.text(
         exx,
         bottom + 11,
-        "E",
+        "last complete",
         size=BODY,
         weight="bold",
         fill=ACCENT,
