@@ -23,3 +23,4 @@ line-height:1.35;max-width:280px}
 margin-right:4px;vertical-align:middle}
 .tog.on .mut{color:inherit;opacity:.8}
 .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:8px;margin-top:8px}
+.nav{flex-wrap:wrap;row-gap:2px}

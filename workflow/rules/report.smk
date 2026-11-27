@@ -58,11 +58,19 @@ rule grid_figures:
 # over every round in `rounds`, the science of the simulated outbreaks
 # against the German development half and the paper's reference values.
 # Target `sim_reports`. The German triangle is the hub's, at
-# packages/nowcastgermany/config/germany.toml's commit; no BDBV data.
+# packages/nowcastgermany/config/germany.toml's commit; the BDBV data are
+# the hub's releases (`hub_data`), for the delays' structure only.
 GERMANY_SPLIT = tomllib.loads(
     Path("packages/nowcastgermany/config/germany.toml").read_text()
 )["nowcast"]["split_date"]
 REFERENCE_VALUES = "paper/data/reference-values.csv"
+# The German and BDBV delays' structure (`delay_reference`), from the
+# BDBV releases the backtests use: a cumulative first release, more than
+# the backtests' longest delay before the next, is left out.
+DELAY_REFERENCE = f"{ROUNDS_DIR}/report/delay-reference.json"
+BDBV_MAX_DELAY = tomllib.loads(
+    Path("packages/nowcastbdbv/config/backtest.toml").read_text()
+)["forecast"]["max_delay"]
 
 
 rule germany_triangle:
@@ -102,6 +110,7 @@ rule sim_report:
     input:
         summaries=rules.round_summaries.output,
         germany=rules.germany_dev_stats.output,
+        delays=DELAY_REFERENCE,
         refs=REFERENCE_VALUES,
     output:
         f"{ROUNDS_DIR}/r{{round}}/report/sim-report.html",
@@ -114,7 +123,7 @@ rule sim_report:
     shell:
         "uv run python workflow/scripts/sim_report.py render {output} "
         "'Simulated outbreaks, round {wildcards.round}' {input.refs} "
-        "{input.germany} {params.source} > {log} 2>&1"
+        "{input.germany} {input.delays} {params.source} > {log} 2>&1"
 
 
 rule sim_report_run:
@@ -125,6 +134,7 @@ rule sim_report_run:
             round=config["rounds"],
         ),
         germany=rules.germany_dev_stats.output,
+        delays=DELAY_REFERENCE,
         refs=REFERENCE_VALUES,
     output:
         f"{ROUNDS_DIR}/report/sim-report.html",
@@ -138,7 +148,8 @@ rule sim_report_run:
         sources=lambda wc, input: summary_sources(config["rounds"], input.summaries),
     shell:
         "uv run python workflow/scripts/sim_report.py render {output} "
-        "'{params.title}' {input.refs} {input.germany} {params.sources} "
+        "'{params.title}' {input.refs} {input.germany} {input.delays} "
+        "{params.sources} "
         "> {log} 2>&1"
 
 
@@ -298,6 +309,30 @@ rule hub_data:
         "> {log} 2>&1"
 
 
+rule delay_reference:
+    # The structure of the delays (flowlib.delay_structure) in the German
+    # development half and the BDBV hub's releases, to compare the
+    # simulations' with: in the sim reports and the simulations dashboard.
+    input:
+        germany=rules.germany_triangle.output,
+        hub=rules.hub_data.output,
+    output:
+        DELAY_REFERENCE,
+    log:
+        f"{ROUNDS_DIR}/report/delay-reference.log",
+    localrule: True
+    conda:
+        TOOLS_ENV
+    params:
+        split=GERMANY_SPLIT,
+        daily=lambda wc, input: Path(input.hub[0]).parent / "daily.csv",
+        max_delay=BDBV_MAX_DELAY,
+    shell:
+        "uv run python workflow/scripts/sim_report.py delays {input.germany} "
+        "{params.split} {params.daily} {params.max_delay} {output} "
+        "> {log} 2>&1"
+
+
 rule hub_submissions_table:
     # Each round's submitted model per hub id, from the ledger branch
     # (bdbvsubmission.submissions), so the report says which chain model
@@ -346,7 +381,7 @@ rule hub_comparison:
         models=" ".join(config["hub_rounds"]["models"]),
     shell:
         "(rm -rf {params.out}/store && "
-        "uv run fit-store-branch fetch {params.out}/store && "
+        "uv run fit-store-artifact fetch {params.out}/store && "
         "BDBV_DATA_DIR={params.data} uv run bdbvhub fit-store load "
         "--data {params.data} --store {params.out}/store "
         "--results {params.out}/results --models {params.models} && "
@@ -514,7 +549,7 @@ rule ft_check:
 # the round, with the wk R_t quantiles, the gate's pick and the renewal
 # fits' convergence (workflow/scripts/this_round_report.py). No scores.
 # It reruns when <ROOT>/hub/round/run.txt (the run and its status),
-# <ROOT>/hub/round/store.txt (the fit store's commit) or
+# <ROOT>/hub/round/store.txt (the fit store's version) or
 # <ROOT>/hub/round/submissions.txt (the hub's newest model-output commit)
 # changes, which workflow/scripts/hub_watch.sh writes. Not part of `all`.
 

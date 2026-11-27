@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 from dashboard_helpers import saved_run
 from flowlib.dashboard import nowcasts, runs
@@ -694,3 +695,32 @@ def test_the_truth_context_reaches_the_page_before_the_first_forecast(
     got = dict(zip(line["t"], line["y"], strict=True))
     assert got["2021-06-01"] == 5.0
     assert got["2022-02-04"] == 9.0
+
+
+def test_one_location_s_data_can_hold_only_some_models(tmp_path):
+    parts = []
+    for model in ("foundation_zeroshot", "randomwalknowcast"):
+        one = tmp_path / f"{model}.csv.gz"
+        _quantiles(one, model)
+        parts.append(pd.read_csv(one))
+    out = tmp_path / "reference" / "2022-02-09.csv.gz"
+    out.parent.mkdir()
+    pd.concat(parts).to_csv(out, index=False)
+    rs, refs = _setup()
+    ranges = {"all": (None, None), "nowcast": (None, 0)}
+    built = nowcasts.build(
+        tmp_path, rs, refs, levels=PAGE, days=(-28, 28), ranges=ranges
+    )
+    whole = nowcasts.location(built, "DE")
+    assert {"zero", "rw"} <= set(whole["series"])
+    some = nowcasts.location(built, "DE", models=["rw"])
+    for part in ("series", "score", "parts", "split", "byday", "stats"):
+        assert set(some[part]) <= {"rw"}
+        assert some[part].get("rw") == whole[part].get("rw")
+    for name, by in some["ranges"].items():
+        for part, models in by.items():
+            assert set(models) <= {"rw"}
+            assert models.get("rw") == whole["ranges"][name][part].get("rw")
+    assert some["truth"] == whole["truth"]
+    assert some["latest"] == whole["latest"]
+    assert nowcasts.location(built, "DE", models=[])["series"] == {}

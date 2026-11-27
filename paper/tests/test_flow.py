@@ -170,6 +170,22 @@ def test_germany_reads_its_held_out_half_only_in_a_paper_run() -> None:
     assert _flow(germany__real=False).germany_tables("paper") == []
 
 
+def test_germany_s_development_table_is_the_fine_tuning_units() -> None:
+    # The reference unit and the final run's final checkpoint's unit,
+    # which the fine-tuning workflow scores (rules score_germany and
+    # score_run_germany): no separate German backtest.
+    final = CONFIG["finetune"]["prefixes"][-1]
+    flow = _flow(final_run="/r/runs/runa")
+    assert flow.germany_units() == [
+        f"{CONFIG['germany']['units']}/reference",
+        f"/r/runs/runa/scores/germany-days/n{final}",
+    ]
+    # Without a final run, the reference alone.
+    assert _flow(final_run=None).germany_units() == [
+        f"{CONFIG['germany']['units']}/reference"
+    ]
+
+
 def test_ebola_sources_name_every_input() -> None:
     args = _flow().sources(_w("paper", "ebola"))
     for option in (

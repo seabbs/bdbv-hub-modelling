@@ -23,13 +23,15 @@ on:
       expected_locations:
         type: string
         default: ''
-      store_branch:
-        description: The fit store branch to read
+      store:
+        description: The fit store to read
         type: string
         default: fit-store
 
 permissions:
   contents: read
+  # To read the fit store's artifacts.
+  actions: read
 
 env:
   # Chronos-2 runs on the device named here, never a detected one.
@@ -64,8 +66,9 @@ jobs:
           path: ${{ env.WORK }}
       - name: Fetch the fit store
         env:
-          FIT_STORE_BRANCH: ${{ inputs.store_branch }}
-        run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch output/fit-store
+          FIT_STORE: ${{ inputs.store }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py fetch output/fit-store
       - name: Forecast and check ${{ matrix.id }}
         env:
           CAND_ID: ${{ matrix.id }}
@@ -86,13 +89,13 @@ jobs:
           path: ${{ env.WORK }}/candidates/${{ matrix.id }}
           if-no-files-found: warn
           retention-days: 7
-      # The fit directory, kept a few days for diagnosis, as
-      # BVDOutbreakSize keeps its fit artefacts for three days. The
-      # durable copy of a stored fit is on the fit-store branch.
+      # The fit directory the candidate forecast from, which the round's
+      # release keeps (round_assets.sh): kept as long as the candidates,
+      # so it is still there when the round is released.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: fit-${{ matrix.id }}
           path: ${{ env.WORK }}/fits/${{ matrix.id }}
           if-no-files-found: ignore
-          retention-days: 3
+          retention-days: 7

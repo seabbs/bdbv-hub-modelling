@@ -2,6 +2,7 @@
 how long each checkpoint took."""
 
 import inspect
+import json
 import re
 from pathlib import Path
 
@@ -78,18 +79,148 @@ def test_training_now_says_only_the_stage_when_the_chunk_is_unknown(tmp_path):
     assert page.training_now(tmp_path, {}, None) == ""
 
 
-def test_each_checkpoint_s_time_is_in_a_table(tmp_path):
-    out = page.checkpoint_timings(_run(tmp_path))
+RESUME = "2026-11-24 {t} [train] resumed at step {s}, outbreaks {a}-, batch {b}"
+SAVED = "2026-11-24 {t} [train] checkpoint {n}: hash abc, CUDA 0.5 GB"
+
+
+def _saved(train, name, sims, steps, published=None):
+    (train / name).mkdir()
+    (train / name / "settings.json").write_text(
+        json.dumps({"sims_done": sims, "steps": steps, "chunk": 100})
+    )
+    if published:
+        (train / name / "publish.log").write_text(
+            f"2026-11-24 {published} [train] published chronos-slots-x: "
+            "https://example.org\n"
+        )
+
+
+def _restarted(tmp_path):
+    """A run whose n400 log lost its first chunk to a restart.
+
+    n200 trained both its chunks in one go. n400 was restarted part way
+    through its second chunk, 800 steps in: its log, written again by
+    the restart, has only the rest of that chunk. n800 is training.
+    """
+    train = tmp_path / "train"
+    train.mkdir()
+    _saved(train, "n200", 200, 4800, published="03:05:00")
+    _saved(train, "n400", 400, 9616)
+    (train / "n200.log").write_text(
+        "\n".join(
+            [
+                RESUME.format(t="00:59:59", s=0, a=1, b=0),
+                PLAN.format(t="01:00:00", a=1, b=100, n=2400),
+                TIME.format(t="02:00:00", w=0, c=60, tr=3300, e=240),
+                PLAN.format(t="02:00:01", a=101, b=200, n=2400),
+                SAVED.format(t="03:00:00", n="n200"),
+                TIME.format(t="03:00:00", w=0, c=60, tr=3000, e=1200),
+            ]
+        )
+        + "\n"
+    )
+    (train / "n400.log").write_text(
+        "\n".join(
+            [
+                RESUME.format(t="04:33:19", s=8000, a=301, b=800),
+                PLAN.format(t="04:33:20", a=301, b=400, n=2416),
+                SAVED.format(t="05:00:00", n="n400"),
+                TIME.format(t="05:00:00", w=0, c=0, tr=1600, e=0),
+            ]
+        )
+        + "\n"
+    )
+    (train / "n800.log").write_text(
+        "\n".join(
+            [
+                RESUME.format(t="05:10:00", s=9616, a=401, b=0),
+                PLAN.format(t="05:10:01", a=401, b=500, n=2000),
+                TIME.format(t="05:26:41", w=0, c=0, tr=1000, e=0),
+                PLAN.format(t="05:26:42", a=501, b=600, n=2000),
+            ]
+        )
+        + "\n"
+    )
+    return tmp_path
+
+
+def _cells(out):
     rows = re.findall(r"<tr><td>(n\d+)</td>(.*?)</tr>", out)
-    assert [r[0] for r in rows] == ["n200", "n400"]
-    n200 = rows[0][1]
-    # Two chunks, 4,800 steps; 6,300 s training, 120 s cutting, 1,440 s
-    # evaluating, 7,860 s in all.
-    assert "<td>2</td><td>4,800</td>" in n200
-    assert "1 h 45 min" in n200
-    assert "24 min" in n200
-    assert "2 h 11 min" in n200
-    assert page.checkpoint_timings(tmp_path / "none") == ""
+    return {
+        name: re.findall(r"<td[^>]*>(.*?)</td>", rest) for name, rest in rows
+    }
+
+
+def test_each_checkpoint_s_time_is_in_a_table(tmp_path):
+    status = {"segment": "n800", "step": 12000}
+    out = page.checkpoint_timings(_restarted(tmp_path), status)
+    rows = _cells(out)
+    assert list(rows) == ["n200", "n400", "n800"]
+    # n200: simulations 1-200, 4,800 steps all timed: 7,860 s of chunk
+    # time, 200 simulations in it, saved at 03:00 and released at 03:05.
+    assert rows["n200"] == [
+        "1-200",
+        "4,800",
+        "100%",
+        "2 h 11 min",
+        "92",
+        "n/a",
+        "24 Nov 03:00",
+        "24 Nov 03:05",
+    ]
+
+
+def test_a_restarted_segment_counts_its_checkpoint_s_steps(tmp_path):
+    status = {"segment": "n800", "step": 12000}
+    rows = _cells(page.checkpoint_timings(_restarted(tmp_path), status))
+    n400 = rows["n400"]
+    # The checkpoints' steps, 9,616 less 4,800, not the one logged
+    # chunk's 2,416; of them the log timed 1,616 (2,416 less the 800
+    # done before the restart) in 1,600 s.
+    assert n400[0] == "201-400"
+    assert n400[1] == "4,816"
+    assert n400[2] == "34%"
+    # So about 4,768 s at the timed rate; 60.5 simulations of the chunk
+    # in 1,600 s are 150 an hour.
+    assert "1 h 19 min" in n400[3]
+    assert "≈" in n400[3]
+    assert n400[4] == "150"
+    # Two hours of wall time from n200's save to n400's.
+    assert n400[5] == "2 h 00 min"
+    assert n400[6] == "24 Nov 05:00"
+    assert n400[7] == "not yet"
+
+
+def test_the_training_segment_is_marked_not_saved(tmp_path):
+    status = {"segment": "n800", "step": 12000}
+    rows = _cells(page.checkpoint_timings(_restarted(tmp_path), status))
+    n800 = rows["n800"]
+    # 2,384 steps so far, 2,000 of them in the finished chunk.
+    assert n800[:3] == ["401-800", "2,384", "84%"]
+    assert n800[6] == "training"
+    assert n800[7] == ""
+
+
+def test_the_table_has_no_rows_without_a_log(tmp_path):
+    assert page.checkpoint_timings(tmp_path / "none", {}) == ""
+
+
+def test_training_now_counts_from_the_resumed_step(tmp_path):
+    # The log of n400 lost the chunks before the restart: the chunk's
+    # steps run from its first step (8,000 less the 800 done), not from
+    # the logged chunks' steps.
+    folder = _restarted(tmp_path)
+    (folder / "train" / "n800.log").unlink()
+    (folder / "train" / "n400.log").write_text(
+        RESUME.format(t="04:33:19", s=8000, a=301, b=800)
+        + "\n"
+        + PLAN.format(t="04:33:20", a=301, b=400, n=2416)
+        + "\n"
+    )
+    status = {"stage": "training", "step": 8500, "segment": "n400"}
+    out = page.training_now(folder, status, None)
+    assert "simulations 301-400 of n400" in out
+    assert "1,300 of 2,416 steps" in out
 
 
 def test_the_status_section_shows_now_throughput_and_timings():
@@ -97,3 +228,97 @@ def test_the_status_section_shows_now_throughput_and_timings():
     tiles = src[src.index('f"<div class=tiles>{tiles}</div>') :][:300]
     for part in ("{now}", "{tput}", "{timings}"):
         assert part in tiles
+
+
+def _chunk(first, last, steps, train, resumed_at=(), timed_from=0):
+    return {
+        "chunk": f"{first}-{last}",
+        "first": first,
+        "last": last,
+        "steps": steps,
+        "timed_from": timed_from,
+        "resumed_at": list(resumed_at),
+        "wait_s": 0.0,
+        "cut_s": 60.0,
+        "train_s": train,
+        "eval_s": 0.0,
+        "seconds": 60.0 + train,
+        "started": 0.0,
+        "ended": 1_700_000_000.0 + first,
+    }
+
+
+def _stored(folder, segment, chunks):
+    # The trainer's timings over every attempt (finetune.stream
+    # `write_timings`).
+    where = folder / "train" / "timings"
+    where.mkdir(exist_ok=True)
+    (where / f"{segment}.json").write_text(
+        json.dumps(
+            {
+                "segment": segment,
+                "started": 0.0,
+                "chunks": chunks,
+                "open": None,
+                "train_seconds": sum(c["seconds"] for c in chunks),
+            }
+        )
+    )
+
+
+def test_stored_timings_time_a_restarted_segment_in_full(tmp_path):
+    # n400's timings, kept across its restart: both chunks, the second
+    # timed before and after it.
+    folder = _restarted(tmp_path)
+    _stored(
+        folder,
+        "n400",
+        [
+            _chunk(201, 300, 2400, 3000.0),
+            _chunk(301, 400, 2416, 2340.0, resumed_at=[800]),
+        ],
+    )
+    status = {"segment": "n800", "step": 12000}
+    n400 = _cells(page.checkpoint_timings(folder, status))["n400"]
+    assert n400[1] == "4,816"
+    assert n400[2] == "100%"
+    # 5,460 s, all of it timed: no estimate.
+    assert n400[3] == "1 h 31 min"
+    # 200 simulations in 5,460 s.
+    assert n400[4] == "132"
+
+
+def test_the_log_still_times_segments_with_no_stored_timings(tmp_path):
+    folder = _restarted(tmp_path)
+    _stored(folder, "n400", [_chunk(201, 300, 2400, 3000.0)])
+    rows = _cells(page.checkpoint_timings(folder, {"segment": "n800"}))
+    # n200 has no stored timings: its log's.
+    assert rows["n200"][2] == "100%"
+    assert rows["n200"][3] == "2 h 11 min"
+
+
+def test_stored_timings_take_over_a_segment_s_logged_chunks_one_by_one(
+    tmp_path,
+):
+    # A trainer updated part way through n400 kept timings only from its
+    # restart: the chunk logged before it is still timed from the log.
+    folder = _restarted(tmp_path)
+    (folder / "train" / "n400.log").write_text(
+        "\n".join(
+            [
+                RESUME.format(t="03:00:01", s=4800, a=201, b=0),
+                PLAN.format(t="03:00:02", a=201, b=300, n=2400),
+                TIME.format(t="04:00:00", w=0, c=60, tr=3000, e=0),
+            ]
+        )
+        + "\n"
+    )
+    _stored(
+        folder,
+        "n400",
+        [_chunk(301, 400, 2416, 1540.0, resumed_at=[800], timed_from=800)],
+    )
+    status = {"segment": "n800", "step": 12000}
+    n400 = _cells(page.checkpoint_timings(folder, status))["n400"]
+    # 2,400 logged and 1,616 stored steps of 4,816.
+    assert n400[2] == "83%"

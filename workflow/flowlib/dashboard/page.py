@@ -370,7 +370,12 @@ def training_now(
         ]
         if open_:
             a, b, n = max(open_)
-            into = step - sum(r["steps"] for r in done)
+            # From the chunk's first step where the log says (a restart
+            # loses the chunks before it), else the finished chunks'.
+            first = run.starts().get(a)
+            if first is None:
+                first = sum(r["steps"] for r in done)
+            into = step - first
             if 0 <= into <= n:
                 parts.append(f"simulations {a}-{b} of {html.escape(seg)}")
                 parts.append(f"{into:,} of {n:,} steps")
@@ -382,39 +387,91 @@ def training_now(
     )
 
 
-def checkpoint_timings(folder: Path | None) -> str:
-    """Return a table of each checkpoint's chunks, steps and time split.
+def _when(t: float | None) -> str:
+    return "" if t is None else f"{datetime.fromtimestamp(t):%d %b %H:%M}"
 
-    From the trainer's chunk-time lines (`logs.RunLog.chunk_times`); a
-    segment with no saved checkpoint yet is marked as running so far.
+
+def checkpoint_timings(folder: Path | None, status: Mapping[str, Any]) -> str:
+    """Return a table of each checkpoint's segment: steps, time and rate.
+
+    A segment's simulations and steps are its checkpoint's less the one
+    before (settings.json); the training segment's steps are the status
+    step's. Its time is the trainer's stored chunk timings, kept across
+    restarts, else the chunk-time lines of its log
+    (`logs.RunLog.chunk_times`), which a restart of a trainer that kept
+    none wrote again: when they time only some of the steps
+    (`logs.timed`), the training time is scaled up from them and marked
+    ≈. The wall time runs from the
+    previous checkpoint's save to this one's, restarts and idle time
+    included.
     """
     if folder is None:
         return ""
-    rows = logs.RunLog(folder).chunk_times()
+    run = logs.RunLog(folder)
+    rows = run.chunk_times()
     if not rows:
         return ""
     by: dict[str, list[dict[str, Any]]] = {}
     for r in rows:
         by.setdefault(r["segment"], []).append(r)
+    settings = {name: s for name, s, _ in logs.checkpoints(folder)}
+    saved_at = run.saved()
     head = (
-        "<tr><th>checkpoint</th><th>chunks</th><th>steps</th>"
-        "<th>training</th><th>cutting</th><th>evaluating</th>"
-        "<th>in all</th><th>last chunk ended</th></tr>"
+        "<tr><th>checkpoint</th><th>simulations</th><th>steps</th>"
+        "<th>steps timed</th><th>training time</th>"
+        "<th>simulations/h</th><th>wall time</th><th>saved</th>"
+        "<th>released</th></tr>"
     )
     body = []
-    for seg in sorted(by, key=logs._size):
-        rs = by[seg]
-        part = {k: sum(r[k] for r in rs) for k in logs.SPLIT}
-        ended = datetime.fromtimestamp(max(r["t"] for r in rs))
-        saved = (folder / "train" / seg / "settings.json").exists()
-        body.append(
-            f"<tr><td>{html.escape(seg)}</td><td>{len(rs)}</td>"
-            f"<td>{sum(r['steps'] for r in rs):,}</td>"
-            f"<td>{_dur(part['train'])}</td><td>{_dur(part['cut'])}</td>"
-            f"<td>{_dur(part['eval'])}</td>"
-            f"<td>{_dur(sum(part.values()))}</td>"
-            f"<td>{ended:%d %b %H:%M}{'' if saved else ' (running)'}</td></tr>"
+    prev_sims, prev_steps, prev_saved = 0, 0, None
+    for name in sorted(set(by) | set(settings), key=logs._size):
+        s = settings.get(name)
+        training = s is None and status.get("segment") == name
+        steps = (
+            s.get("steps")
+            if s is not None
+            else status.get("step")
+            if training
+            else None
         )
+        seg = None if steps is None else steps - prev_steps
+        rs = by.get(name, [])
+        total = sum(r[k] for r in rs for k in logs.SPLIT)
+        t_steps = sum(logs.timed(r)[0] for r in rs)
+        t_sims = sum(logs.timed(r)[1] for r in rs)
+        share = t_steps / seg if seg else None
+        if not total or not t_steps:
+            train = rate = "n/a"
+        else:
+            rate = f"{t_sims / total * 3600:.0f}"
+            train = _dur(total)
+            if share is not None and share < 0.995:
+                train = f"≈ {_dur(total * seg / t_steps)}"
+        saved = saved_at.get(name)
+        if s is None:
+            when = "training" if training else "not saved"
+        else:
+            when = _when(saved) or "not logged"
+        wall = (
+            _dur(saved - prev_saved)
+            if saved is not None and prev_saved is not None
+            else "n/a"
+        )
+        rel = _when(logs.released(folder, name))
+        if not rel and s is not None:
+            rel = "not yet"
+        sims = logs._size(name)
+        body.append(
+            f"<tr><td>{html.escape(name)}</td>"
+            f"<td>{prev_sims + 1}-{sims}</td>"
+            f"<td>{'n/a' if seg is None else f'{seg:,}'}</td>"
+            f"<td>{'n/a' if share is None else f'{share:.0%}'}</td>"
+            f"<td>{train}</td><td>{rate}</td><td>{wall}</td>"
+            f"<td>{when}</td><td>{rel}</td></tr>"
+        )
+        prev_sims, prev_saved = sims, saved
+        if steps is not None:
+            prev_steps = steps
     return (
         "<details class=about open><summary class=mut>Checkpoint timings"
         f"{tip('t_timings')}</summary><div class=wrap><table class=tim>"
@@ -1158,7 +1215,7 @@ def _parts(ctx: Context) -> tuple[Run, str, str, list]:
     views = training.views_summary(live.folder) if live.folder else None
     tput = throughput_line(live.folder, status.get("segment"))
     now = training_now(live.folder, status, st.rate)
-    timings = checkpoint_timings(live.folder)
+    timings = checkpoint_timings(live.folder, status)
     about = {
         "trainer_status": status,
         "block_views": views,

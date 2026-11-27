@@ -444,3 +444,48 @@ def test_validation_records_name_their_own_blocks(monkeypatch):
     # Each record's truth is its own block's horizon.
     for r, block in zip(got, val, strict=True):
         assert len(r["rows"][0]["truth"]) == block["prediction_length"]
+
+
+def test_the_evaluation_s_workers_come_from_the_environment(monkeypatch):
+    monkeypatch.delenv(fe.WORKERS_ENV, raising=False)
+    assert fe.evaluate_workers("cpu") == 1
+    monkeypatch.setenv(fe.WORKERS_ENV, "3")
+    assert fe.evaluate_workers("cpu") == 3
+    # Off the CPU the pass runs in one process, which holds the device.
+    assert fe.evaluate_workers("cuda") == 1
+    assert fe.evaluate_workers("mps") == 1
+
+
+def _approx(value):  # type: ignore[no-untyped-def]
+    """Return `value` with every float compared to a relative 1e-6."""
+    if isinstance(value, dict):
+        return {k: _approx(v) for k, v in value.items()}
+    if isinstance(value, float):
+        return pytest.approx(value, rel=1e-6, abs=1e-12)
+    return value
+
+
+@pytest.mark.parametrize(
+    "kinds", [["start"], ["checkpoint"], ["monitor", "by_source"]]
+)
+def test_a_split_evaluation_gives_what_one_process_does(tmp_path, kinds):
+    # The batches are those one process runs, split over the workers,
+    # so every loss and the coverage are the same up to float rounding:
+    # a worker's torch threads differ from the coordinator's, which can
+    # change the order of CPU reductions (about 1e-8 here). The workers
+    # are fresh interpreters, loading the tiny Chronos-2 by name.
+    from chronos_toy import toy_base
+
+    val = blocks(7)
+    path = tmp_path / fs.HELD_OUT_BLOCKS
+    fs.save_blocks(val, path)
+    where = tmp_path / "step-0000100"
+    fs.save_snapshot(trained(), where, {"step": 100})
+    got = {}
+    for n in (1, 3):
+        base = tiny_model()
+        series_bias.attach_for(base, where / "adapter")
+        split = fe.Split(n, path, len(val), toy_base)
+        got[n] = fe.evaluate(where / "adapter", base, val, kinds, 2, split)
+    assert got[3] == _approx(got[1])
+    assert got[1]

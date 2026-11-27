@@ -2,7 +2,8 @@
 
 A run's folder is `finetune-stream`'s output folder: its logs,
 `train/n<N>.log` per segment (a line per logged step),
-`train/n<N>/settings.json` per checkpoint and the stream status
+`train/n<N>/settings.json` per checkpoint, each segment's chunk timings
+over every attempt (`train/timings/n<N>.json`) and the stream status
 (`train/stream-status.json`). Everything here only reads.
 """
 
@@ -54,6 +55,23 @@ CHUNK_TIME = re.compile(
 """A chunk's time when it ends: waiting for batches, cutting blocks,
 training and evaluating, in seconds."""
 
+RESUME = re.compile(
+    r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d \[train\] resumed at step (\d+), "
+    r"outbreaks (\d+)-, batch (\d+)"
+)
+"""Where a (re)started trainer picks up: the step, the first simulation
+of the chunk it is in and the steps of that chunk already done."""
+
+SAVED = re.compile(
+    r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] checkpoint (n\d+): hash"
+)
+"""A checkpoint the trainer saves: its time and name."""
+
+PUBLISHED = re.compile(
+    r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d) \[train\] published "
+)
+"""A checkpoint's release (`n<N>/publish.log`): its time."""
+
 SPLIT = ("wait", "cut", "train", "eval")
 """The parts of a chunk's time, as the trainer logs them."""
 
@@ -71,7 +89,11 @@ class Log:
         self._rows: dict[int, dict[str, Any]] = {}
         self._chunks: dict[int, tuple[int, int]] = {}
         self._times: dict[int, dict[str, Any]] = {}
-        self._open: tuple[int, int, int] | None = None
+        self._open: tuple[int, int, int, int] | None = None
+        self._resume: tuple[int, int, int] | None = None
+        self._start: dict[int, int] = {}
+        self._next: int | None = None
+        self._saved: dict[str, float] = {}
 
     def _update(self) -> None:
         try:
@@ -81,6 +103,8 @@ class Log:
         if size < self.offset:
             self.offset, self._rows, self._chunks = 0, {}, {}
             self._times, self._open = {}, None
+            self._resume, self._start, self._next = None, {}, None
+            self._saved = {}
         if size == self.offset:
             return
         with self.path.open("rb") as f:
@@ -89,24 +113,45 @@ class Log:
         end = data.rfind(b"\n") + 1
         self.offset += end
         for line in data[:end].decode("utf-8", "replace").splitlines():
+            r = RESUME.match(line)
+            if r:
+                at, first, done = map(int, r.groups())
+                self._resume = (at, first, done)
+                continue
             c = CHUNK.match(line)
             if c:
                 a, b, n = map(int, c.groups())
                 self._chunks[a - 1] = (b, n)
-                self._open = (a, b, n)
+                # The chunk's first step: the resumed step less the
+                # chunk's steps done before it, or where the last ended.
+                before = 0
+                if self._resume and self._resume[1] == a:
+                    before = self._resume[2]
+                    self._start[a] = self._resume[0] - before
+                elif self._next is not None:
+                    self._start[a] = self._next
+                self._open = (a, b, n, before)
+                self._next = self._start[a] + n if a in self._start else None
+                self._resume = None
+                continue
+            sv = SAVED.match(line)
+            if sv:
+                t = datetime.strptime(sv[1], "%Y-%m-%d %H:%M:%S")
+                self._saved[sv[2]] = t.timestamp()
                 continue
             ct = CHUNK_TIME.match(line)
             if ct:
                 # The time ends the chunk planned last; one with no plan
                 # in this log (it began before a restart) is left out.
                 if self._open:
-                    a, b, n = self._open
+                    a, b, n, before = self._open
                     t = datetime.strptime(ct[1], "%Y-%m-%d %H:%M:%S")
                     self._times[a] = {
                         "t": t.timestamp(),
                         "first": a,
                         "sims": b - a + 1,
                         "steps": n,
+                        "before": before,
                         **{
                             k: float(v)
                             for k, v in zip(SPLIT, ct.groups()[1:], strict=True)
@@ -147,10 +192,27 @@ class Log:
     def chunk_times(self) -> list[dict[str, Any]]:
         """Return each finished chunk's simulations, steps and time split.
 
-        A chunk logged twice (a resumed segment) keeps its newest time.
+        `steps` is the chunk's planned steps and `before` those done
+        before a restart resumed it, which its time leaves out. A chunk
+        logged twice (a resumed segment) keeps its newest time.
         """
         self._update()
         return [self._times[k] for k in sorted(self._times)]
+
+    def starts(self) -> dict[int, int]:
+        """Return the planned chunks' first steps, where the log says.
+
+        From the step a restart resumed at, less the chunk's steps done
+        before it, and on from there: a log written again by a restart
+        has lost the chunks before it.
+        """
+        self._update()
+        return dict(self._start)
+
+    def saved(self) -> dict[str, float]:
+        """Return the time each checkpoint was saved, by name."""
+        self._update()
+        return dict(self._saved)
 
 
 class RunLog:
@@ -187,11 +249,27 @@ class RunLog:
             merged |= log.chunks()
         return merged
 
-    def chunk_times(self) -> list[dict[str, Any]]:
-        """Return every log's finished chunks (`Log.chunk_times`).
+    def starts(self) -> dict[int, int]:
+        """Return every log's chunks' first steps (`Log.starts`)."""
+        merged: dict[int, int] = {}
+        for log in self._each():
+            merged |= log.starts()
+        return merged
 
-        Each names its segment (the log's `n<N>`); a chunk in two logs
-        keeps the newest.
+    def saved(self) -> dict[str, float]:
+        """Return every log's checkpoint save times (`Log.saved`)."""
+        merged: dict[str, float] = {}
+        for log in self._each():
+            merged |= log.saved()
+        return merged
+
+    def chunk_times(self) -> list[dict[str, Any]]:
+        """Return every segment's finished chunks.
+
+        A chunk's stored timing (`stored_chunk_times`) where the trainer
+        kept one, else its log's (`Log.chunk_times`), which a restart of
+        a trainer that kept none wrote again. Each names its segment
+        (`n<N>`); a chunk in two logs keeps the newest.
         """
         merged: dict[int, dict[str, Any]] = {}
         for log in self._each():
@@ -199,6 +277,8 @@ class RunLog:
                 old = merged.get(row["first"])
                 if old is None or row["t"] >= old["t"]:
                     merged[row["first"]] = row | {"segment": log.path.stem}
+        for row in stored_chunk_times(self.folder):
+            merged[row["first"]] = row
         return [merged[k] for k in sorted(merged)]
 
     def last_line(self) -> tuple[float, str] | None:
@@ -237,21 +317,68 @@ class RunLog:
         return [merged[k] for k in sorted(merged)]
 
 
+TIMINGS = "timings"
+"""The trainer's folder of segment timings (nowcastfoundation's
+`finetune.stream.TIMINGS`)."""
+
+
+def stored_chunk_times(folder: Path | str) -> list[dict[str, Any]]:
+    """Return the finished chunks of each segment's stored timings.
+
+    The trainer keeps them in its state across restarts and writes them
+    to `train/timings/n<N>.json`, so a chunk's time covers every attempt
+    from its `timed_from` batch (0 unless the state it resumed from kept
+    no timings). Rows as `Log.chunk_times`', with their segment.
+    """
+    out = []
+    paths = Path(folder, "train", TIMINGS).glob("n*.json")
+    for path in sorted(paths, key=lambda p: _size(p.name)):
+        got = CACHE.get(path)
+        if not isinstance(got, dict):
+            continue
+        for c in got.get("chunks", []):
+            out.append(
+                {
+                    "t": c["ended"],
+                    "first": c["first"],
+                    "sims": c["last"] - c["first"] + 1,
+                    "steps": c["steps"],
+                    "before": c.get("timed_from", 0),
+                    **{k: float(c[f"{k}_s"]) for k in SPLIT},
+                    "segment": path.stem,
+                }
+            )
+    return out
+
+
+def timed(row: dict[str, Any]) -> tuple[float, float]:
+    """Return the steps and simulations a chunk's logged time covers.
+
+    A chunk a restart resumed part way (`before` steps done) timed only
+    the rest of its steps, and that share of its simulations.
+    """
+    steps = row["steps"] - row.get("before", 0)
+    share = steps / row["steps"] if row["steps"] else 0.0
+    return steps, row["sims"] * share
+
+
 def throughput(rows: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the rates of finished chunks, over the chunks' own time.
 
-    Steps a minute and simulations an hour over the summed wait, cut,
-    train and evaluation time (`SPLIT`), so a restart or a pause between
-    chunks does not count; the GPU is busy training and evaluating. None
-    with no chunk.
+    Steps a minute and simulations an hour (`timed`) over the summed
+    wait, cut, train and evaluation time (`SPLIT`), so a restart or a
+    pause between chunks does not count; the GPU is busy training and
+    evaluating. None with no chunk.
     """
     total = sum(r[k] for r in rows for k in SPLIT)
     if not rows or total <= 0:
         return None
+    steps = sum(timed(r)[0] for r in rows)
+    sims = sum(timed(r)[1] for r in rows)
     return {
         "chunks": len(rows),
-        "steps_per_min": sum(r["steps"] for r in rows) / total * 60,
-        "sims_per_hour": sum(r["sims"] for r in rows) / total * 3600,
+        "steps_per_min": steps / total * 60,
+        "sims_per_hour": sims / total * 3600,
         "gpu_busy": sum(r["train"] + r["eval"] for r in rows) / total,
         "share": {k: sum(r[k] for r in rows) / total for k in SPLIT},
     }
@@ -281,6 +408,20 @@ class JsonCache:
 
 
 CACHE = JsonCache()
+
+
+def released(folder: Path | str, name: str) -> float | None:
+    """Return when a checkpoint was released, from its `publish.log`."""
+    try:
+        text = (Path(folder) / "train" / name / "publish.log").read_text()
+    except OSError:
+        return None
+    for line in text.splitlines():
+        m = PUBLISHED.match(line)
+        if m:
+            t = datetime.strptime(m[1], "%Y-%m-%d %H:%M:%S")
+            return t.timestamp()
+    return None
 
 
 def _size(name: str) -> int:

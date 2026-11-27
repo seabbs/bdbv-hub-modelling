@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Final, Protocol
 
 from nowcastfoundation.forecaster import FINETUNED_ENV
+from nowcastgermany.checkpoint import GERMANY_UNIT, REFERENCE
 
 from paperpipe.config import run_settings, run_studies
 from paperpipe.outputs import (
@@ -161,6 +162,7 @@ class PaperFlow:
         for key in ("final_run", "rounds_dir", "runs_dir"):
             if config.get(key):
                 config[key] = expand(config[key])
+        germany["units"] = expand(germany["units"])
         # The `_ft` models load the final run's final checkpoint, a rule
         # input, so each new one reruns their forecasts.
         config["finetuned_record"] = (
@@ -452,6 +454,21 @@ class PaperFlow:
             for i in range(len(self.germany.get("extra") or []))
         ]
         return tables + extra
+
+    def germany_units(self) -> list[str]:
+        """Return the German units our development table stacks.
+
+        The reference unit (randomwalknowcast and zero-shot Chronos-2,
+        rule score_germany) and the final run's final checkpoint's unit
+        (rule score_run_germany), the checkpoint the `_ft` models load;
+        the reference alone without a final run. Their done stamps are
+        the rule's inputs.
+        """
+        units = [f"{self.germany['units']}/{REFERENCE}"]
+        if run := self.config.get("final_run"):
+            n = _final_prefix(self.config)
+            units.append(f"{run}/scores/{GERMANY_UNIT}/n{n}")
+        return units
 
     def finetuned_inputs(self) -> list[str]:
         """Return the final checkpoint's release record, if there is a run.

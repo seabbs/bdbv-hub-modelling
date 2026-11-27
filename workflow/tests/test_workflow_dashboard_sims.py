@@ -333,3 +333,47 @@ def test_a_batch_is_read_once_for_its_simulations(root, monkeypatch):
 def test_the_page_splits_the_derived_summaries_by_the_group():
     page = sims.page()
     assert "id=derived" in page
+
+
+def test_each_simulation_s_delay_structure_in_the_index(root, tmp_path):
+    got = sims.Index(root, tmp_path / "cache", LAYERS).data("r1")
+    for k in ("delay_time", "ref_delay", "release_days", "gaps"):
+        assert len(got["derived"][k]) == 4
+    # Outbreak 1 is reported every day: no wait for a release.
+    assert got["stats"]["wait"][0] == 0
+    assert got["stats"]["release_weekdays"][0] == 7
+    # Two strata with the same delays.
+    assert got["stats"]["strata_spread"][0] == 0
+    assert got["stats"]["strata_spread"][1] is None
+    assert got["time_bins"] == 10
+
+
+def test_one_simulation_s_delay_structure(root):
+    got = sims.simulation(root / "rounds" / "r1" / "sims", "101-0001", LAYERS)
+    st = got["structure"]
+    assert st["overall"]["mean"] == 3.5
+    assert st["by_ref"]["week"][0] == "2026-01-01"
+    names = [s["name"] for s in st["strata"]]
+    assert names == ["all", "P01", "P01-A1", "P01-A2"]
+
+
+def test_the_german_and_bdbv_delays_are_served_when_built(root, tmp_path):
+    path = sims.reference_path(root)
+    assert path == root / "rounds" / "report" / "delay-reference.json"
+    index = sims.Index(root, tmp_path / "cache", LAYERS)
+    assert index.reference() == {}
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"germany": {"label": "Germany"}}))
+    assert index.reference()["germany"]["label"] == "Germany"
+
+
+def test_the_server_answers_the_delay_reference(server):
+    status, body = _get(server + "/sims/reference.json")
+    assert status == 200
+    assert json.loads(body) == {}
+
+
+def test_the_page_has_the_delay_structure_section():
+    page = sims.page()
+    assert "id=delays" in page
+    assert "reference.json" in page

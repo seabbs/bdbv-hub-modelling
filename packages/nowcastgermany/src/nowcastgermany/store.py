@@ -1,125 +1,65 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
-"""Stored German forecasts of the fine-tuned Chronos-2 model.
+"""Our German forecasts, from the fine-tuning workflow's units.
 
-The Pages build never runs `STORED_MODELS` on the German benchmark. The
-workflow's German unit (`score_germany`, `nowcastgermany.checkpoint`)
-already nowcasts every development date with each released checkpoint.
-`publish_germany_unit` packs a released checkpoint's unit into a store
-directory (`pack_unit`, `write_stored`) as the `ASSET` tarball and
-attaches it to the checkpoint's own release (`nowcastgermany
-unit-publish`). The Pages build downloads the asset of the checkpoint
-packages/nowcastfoundation/config/finetune.toml pins (`pinned_tag`) and loads
-it (`nowcastgermany
-ft-load`), so it is scored and shown like every other model; no other
-checkpoint stands in.
+The workflow's German units (`score_germany`, `score_run_germany`,
+`nowcastgermany.checkpoint`) already nowcast every development date: the
+reference unit (randomwalknowcast and zero-shot Chronos-2) and each
+checkpoint's unit (the fine-tuned models). `nowcastgermany units` stacks
+the reference and the paper's final checkpoint's unit as the German
+development table (`units_forecasts`), which the paper's
+`germany_development` rule scores. `release_paper_germany` publishes it
+in the `paper-germany-<hash>` release (`UNITS`, with its note `NOTE`),
+and Site results loads the one the paper reads (`nowcastgermany
+stored-load`, `load_units`), so the site and the paper show the same
+forecasts and neither runs a backtest of the development half.
 
 Only development dates, nowcast dates before the split date, at the
-hub's nowcast horizons are ever stored or loaded (`development_rows`).
+hub's nowcast horizons are ever stacked or loaded (`development_rows`).
 """
 
 from __future__ import annotations
 
-import gzip
-import io
 import json
-import re
-import tarfile
-import tempfile
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Final
 
 import pandas as pd
 
-from nowcastfoundation.forecaster import SLOTS_PREFIX
-from nowcastfoundation.forecaster import release_tag as foundation_release_tag
-
 __all__ = [
-    "ASSET",
-    "STORED_MODELS",
+    "NOTE",
+    "UNITS",
+    "UNITS_NOTE",
+    "checkpoint_of",
     "development_rows",
-    "load_stored",
-    "pack_unit",
-    "pinned_tag",
+    "load_units",
     "read_unit",
-    "release_tag",
-    "stored_tags",
-    "write_stored",
+    "units_forecasts",
 ]
 
-STORED_MODELS: Final = ("foundation",)
-"""The models whose German forecasts come from the store: Germany is
-daily only (`packages/nowcastgermany/config/germany.toml`)."""
+UNITS: Final = "germany-units.csv.gz"
+"""Our development forecasts' file in the `paper-germany` release."""
 
-ASSET: Final = "germany-forecasts.tar.gz"
-"""The release asset with a checkpoint's stored German forecasts."""
+NOTE: Final = "units.json"
+"""The note naming the checkpoint (and, on the site, the release) shown."""
 
-UNIT: Final = "germany-days"
-"""The German unit's folder in the score cache
-(`nowcastgermany.checkpoint.GERMANY_UNIT`)."""
+UNITS_NOTE: Final = "germany-units.json"
+"""`NOTE` of the units, as the `paper-germany` release holds it."""
 
-FORECASTS: Final = "forecasts.csv.gz"
-MANIFEST: Final = "manifest.json"
-
-_HASH = re.compile(r"[0-9a-f]{6,64}")
+_DTYPE: Final = {"origin": str, "truth_vintage": str, "target_end_date": str}
 
 
-def release_tag(label: str) -> str:
-    """Return the release tag of a checkpoint scorer label.
-
-    Parameters
-    ----------
-    label : str
-        A settings hash (a `chronos-ft-<hash>` release) or `slots-<hash>`
-        (a `chronos-slots-<hash>` release).
-
-    Returns
-    -------
-    str
-
-    Raises
-    ------
-    ValueError
-        If the label is neither.
-    """
-    if not _HASH.fullmatch(label.removeprefix(SLOTS_PREFIX)):
-        raise ValueError(
-            f"Not a checkpoint label: {label!r}. Give a settings hash or "
-            "slots-<hash>."
-        )
-    return foundation_release_tag(label)
-
-
-def pinned_tag(spec: str) -> str:
-    """Return the release of the checkpoint the finetune config pins.
-
-    The config is `packages/nowcastfoundation/config/finetune.toml`.
-
-    Parameters
-    ----------
-    spec : str
-        The checkpoint, `slots-<hash>` or a settings hash
-        (`forecaster.finetuned_checkpoint().hash`).
-
-    Returns
-    -------
-    str
-        Its release tag.
-    """
-    return release_tag(spec)
-
-
-def read_unit(cache: Path | str, label: str) -> pd.DataFrame:
-    """Stack a label's German unit files as the page scores them.
+def read_unit(root: Path | str) -> pd.DataFrame:
+    """Stack a German unit's date files as the page scores them.
 
     The 7-day sums at the hub's nowcast horizons (0 days back or
     earlier), without the `target` column.
 
     Parameters
     ----------
-    cache : pathlib.Path or str
-        The score cache, with `<UNIT>/<label>/<date>.csv.gz`.
-    label : str
-        The checkpoint's label.
+    root : pathlib.Path or str
+        The unit's folder, with `<date>.csv.gz` (`<SCORE_CACHE>/
+        germany-days/reference` or `<run>/scores/germany-days/n<N>`).
 
     Returns
     -------
@@ -131,68 +71,31 @@ def read_unit(cache: Path | str, label: str) -> pd.DataFrame:
     ValueError
         If the unit has no files.
     """
-    root = Path(cache) / UNIT / label
+    root = Path(root)
     files = sorted(root.glob("20*.csv.gz"))
     if not files:
         raise ValueError(f"No German unit files in {root}.")
-    dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
     rows = pd.concat(
-        [pd.read_csv(f, dtype=dtype) for f in files], ignore_index=True
+        [pd.read_csv(f, dtype=_DTYPE) for f in files], ignore_index=True
     )
     if "target" in rows:
         rows = rows.loc[rows["target"] == "7day"].drop(columns="target")
     return rows.loc[rows["horizon"] <= 0].reset_index(drop=True)
 
 
-def pack_unit(
-    cache: Path | str, label: str, out: Path | str, split_date: str
-) -> Path:
-    """Pack a label's development forecasts as the release asset.
-
-    Parameters
-    ----------
-    cache : pathlib.Path or str
-        The score cache.
-    label : str
-        The checkpoint's label (`slots-<hash>` or a settings hash).
-    out : pathlib.Path or str
-        The folder the asset is written to.
-    split_date : str
-        The first held-out nowcast date; any later row is refused.
-
-    Returns
-    -------
-    pathlib.Path
-        `<out>/ASSET`, holding `<release tag>/forecasts.csv.gz` and
-        `manifest.json`.
-    """
-    tag = release_tag(label)
-    rows = read_unit(cache, label)
-    with tempfile.TemporaryDirectory() as tmp:
-        write_stored(tmp, tag, rows, split_date, label, f"{UNIT}/{label}")
-        path = Path(out) / ASSET
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(path, "w:gz") as tar:
-            tar.add(Path(tmp) / tag, arcname=tag)
-    return path
-
-
 def development_rows(
-    forecasts: pd.DataFrame,
-    split_date: str,
-    models: tuple[str, ...] = STORED_MODELS,
+    forecasts: pd.DataFrame, split_date: str, models: Sequence[str]
 ) -> pd.DataFrame:
     """Return the models' forecasts, refusing any held-out date.
 
     Parameters
     ----------
     forecasts : pandas.DataFrame
-        `germany_forecasts` output with truth (`with_truth`), of any
-        models.
+        `germany_forecasts` output with truth (`with_truth`).
     split_date : str
         The first held-out nowcast date (`GermanyConfig.split_date`).
-    models : tuple of str
-        The models kept.
+    models : sequence of str
+        The models kept (the German config's `models`).
 
     Returns
     -------
@@ -202,8 +105,8 @@ def development_rows(
     Raises
     ------
     ValueError
-        If a row of the models has a nowcast date or a target end date on
-        or after the split date, or there are none.
+        If a kept row has a nowcast date or a target end date on or after
+        the split date, or there are none.
     """
     rows = forecasts.loc[forecasts["model"].isin(models)].copy()
     for col in ("origin", "target_end_date", "truth_vintage"):
@@ -214,9 +117,8 @@ def development_rows(
     if late.any():
         first = rows.loc[late, "origin"].min()
         raise ValueError(
-            f"{int(late.sum())} rows of {', '.join(models)} are held-out "
-            f"(on or after {split_date}, from {first}); only development "
-            "dates may be "
+            f"{int(late.sum())} rows are held-out (on or after "
+            f"{split_date}, from {first}); only development dates may be "
             "stored or shown."
         )
     if rows.empty:
@@ -232,101 +134,65 @@ def development_rows(
     return rows.sort_values(keys, kind="stable").reset_index(drop=True)
 
 
-def _csv_gz(frame: pd.DataFrame, path: Path) -> None:
-    """Write a gzipped CSV with no timestamp.
-
-    The same rows give the same bytes.
-    """
-    buf = io.BytesIO()
-    with gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as gz:
-        gz.write(frame.to_csv(index=False).encode())
-    path.write_bytes(buf.getvalue())
-
-
-def write_stored(
-    store: Path | str,
-    tag: str,
-    forecasts: pd.DataFrame,
-    split_date: str,
-    label: str,
-    source: str = "",
-) -> Path:
-    """Write a checkpoint's development forecasts into a store directory.
+def units_forecasts(
+    units: Iterable[Path | str], split_date: str, models: Sequence[str]
+) -> pd.DataFrame:
+    """Stack the units' development forecasts of the config's models.
 
     Parameters
     ----------
-    store : pathlib.Path or str
-        The store's root, one folder per release tag.
-    tag : str
-        The checkpoint's release tag, the directory written.
-    forecasts : pandas.DataFrame
-        Its forecasts (`development_rows` keeps `STORED_MODELS`).
+    units : iterable of pathlib.Path or str
+        The units' folders (`read_unit`).
     split_date : str
         The first held-out nowcast date.
-    label : str
-        The checkpoint scorer's label, for the manifest.
-    source : str
-        Where the forecasts came from, for the manifest.
-
-    Returns
-    -------
-    pathlib.Path
-        The directory written: `forecasts.csv.gz` and `manifest.json`.
-    """
-    rows = development_rows(forecasts, split_date)
-    out = Path(store) / tag
-    out.mkdir(parents=True, exist_ok=True)
-    _csv_gz(rows, out / FORECASTS)
-    manifest = {
-        "tag": tag,
-        "label": label,
-        "models": sorted(set(rows["model"])),
-        "split_date": split_date,
-        "first_origin": str(rows["origin"].min()),
-        "last_origin": str(rows["origin"].max()),
-        "origins": int(rows["origin"].nunique()),
-        "rows": len(rows),
-        "source": source,
-    }
-    (out / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n")
-    return out
-
-
-def stored_tags(store: Path | str) -> set[str]:
-    """Return the release tags with stored forecasts.
-
-    Parameters
-    ----------
-    store : pathlib.Path or str
-        The store's root; missing means none.
-
-    Returns
-    -------
-    set of str
-    """
-    root = Path(store)
-    if not root.is_dir():
-        return set()
-    return {p.name for p in root.iterdir() if (p / FORECASTS).exists()}
-
-
-def load_stored(store: Path | str, tag: str, split_date: str) -> pd.DataFrame:
-    """Read a checkpoint's stored forecasts, refusing any held-out date.
-
-    Parameters
-    ----------
-    store : pathlib.Path or str
-        The store's root.
-    tag : str
-        The release tag.
-    split_date : str
-        The first held-out nowcast date.
+    models : sequence of str
+        The models kept.
 
     Returns
     -------
     pandas.DataFrame
-        `nowcastgermany backtest`'s forecast columns, `STORED_MODELS` only.
+        `nowcastgermany backtest`'s forecast columns.
     """
-    dtype = {"origin": str, "truth_vintage": str, "target_end_date": str}
-    frame = pd.read_csv(Path(store) / tag / FORECASTS, dtype=dtype)
-    return development_rows(frame, split_date)
+    rows = pd.concat([read_unit(u) for u in units], ignore_index=True)
+    return development_rows(rows, split_date, models)
+
+
+def checkpoint_of(record: Path | str | None) -> str | None:
+    """Return a checkpoint's release tag from its release record.
+
+    Parameters
+    ----------
+    record : pathlib.Path or str or None
+        The checkpoint's `published.json` (rule publish_checkpoint).
+
+    Returns
+    -------
+    str or None
+        Its tag, or None with no record.
+    """
+    if not record:
+        return None
+    return str(json.loads(Path(record).read_text())["tag"])
+
+
+def load_units(
+    store: Path | str, split_date: str, models: Sequence[str]
+) -> pd.DataFrame:
+    """Read the published development forecasts, refusing any held-out date.
+
+    Parameters
+    ----------
+    store : pathlib.Path or str
+        The unpacked `paper-germany` release (`paperpipe.stored fetch`).
+    split_date : str
+        The first held-out nowcast date.
+    models : sequence of str
+        The models kept.
+
+    Returns
+    -------
+    pandas.DataFrame
+        `nowcastgermany backtest`'s forecast columns.
+    """
+    frame = pd.read_csv(Path(store) / UNITS, dtype=_DTYPE)
+    return development_rows(frame, split_date, models)

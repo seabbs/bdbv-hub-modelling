@@ -23,7 +23,9 @@ def test_the_report_names_the_references_and_saved_checkpoints():
     )
 
 
-def _scoring(tmp_path, labels=None, listing=None, local_extra=None):
+def _scoring(
+    tmp_path, labels=None, listing=None, local_extra=None, score_extra=None
+):
     from types import SimpleNamespace
 
     from flowlib import rounds, runs, training
@@ -31,7 +33,12 @@ def _scoring(tmp_path, labels=None, listing=None, local_extra=None):
     cfg = runs.load_config()
     cfg["runs"] = {"x": {"prefixes": [100, 200], "outbreaks": 200}}
     cfg["train_runs"] = ["x"]
-    cfg["score"] = {**cfg["score"], "labels": labels, "reference": ["ref"]}
+    cfg["score"] = {
+        **cfg["score"],
+        "labels": labels,
+        "reference": ["ref"],
+        **(score_extra or {}),
+    }
     local = {
         "ROOT": str(tmp_path),
         "HOST_NAME": "box",
@@ -213,10 +220,39 @@ def test_a_german_unit_on_a_gpu_is_one_worker_s_memory(tmp_path):
     import dataclasses
 
     s = _scoring(tmp_path, labels=[], local_extra={"SCORE_WORKERS": "3"})
-    s.checkpoint_forecast = dataclasses.replace(
-        s.checkpoint_forecast, device="cuda"
-    )
+    s.germany_forecast = dataclasses.replace(s.germany_forecast, device="cuda")
     assert s.unit_memory_floor() == scoring.WORKER_MB + scoring.COORDINATOR_MB
+
+
+def test_german_units_stay_on_the_cpu_beside_a_free_gpu(tmp_path, monkeypatch):
+    # The config's `score.device: cpu`: with a GPU no run trains on, the
+    # held-out evaluation takes it and the German units keep their CPU
+    # workers.
+    monkeypatch.setattr(scoring.Scoring, "_gpus", lambda _self: 2)
+    s = _scoring(tmp_path, labels=[], local_extra={"SCORE_WORKERS": "3"})
+    assert s.sc["device"] == "cpu"
+    assert s.checkpoint_forecast.device == "cuda"
+    assert s.germany_forecast.device == "cpu"
+    assert s.germany_forecast.gpu == 0
+    assert (
+        s.unit_memory_floor() == 3 * scoring.WORKER_MB + scoring.COORDINATOR_MB
+    )
+    env = s.germany_env(None, 3, None)
+    assert "DEVICE=cpu" in env
+
+
+def test_german_units_follow_the_scoring_device_when_unset(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(scoring.Scoring, "_gpus", lambda _self: 2)
+    s = _scoring(
+        tmp_path,
+        labels=[],
+        local_extra={"SCORE_WORKERS": "3"},
+        score_extra={"device": None},
+    )
+    assert s.germany_forecast == s.checkpoint_forecast
+    assert s.germany_forecast.device == "cuda"
 
 
 def test_the_evaluation_leaves_a_german_unit_its_workers(tmp_path):
@@ -224,3 +260,28 @@ def test_the_evaluation_leaves_a_german_unit_its_workers(tmp_path):
 
     s = _scoring(tmp_path, labels=[], local_extra={"SCORE_WORKERS": "3"})
     assert s.evaluate_threads == machine.scoring_threads(s.local, 3)
+
+
+def test_the_evaluation_splits_over_workers_of_the_forecast_threads(tmp_path):
+    # Each worker takes a forecasting job's threads (`forecast.threads`);
+    # off the CPU the pass runs in one process.
+    import dataclasses
+
+    s = _scoring(tmp_path, labels=[])
+    each = s.unit_threads
+    assert s.evaluation_workers(4 * each) == 4
+    assert s.evaluation_workers(4 * each + 1) == 4
+    assert s.evaluation_workers(each) == 1
+    assert s.evaluation_workers(1) == 1
+    s.checkpoint_forecast = dataclasses.replace(
+        s.checkpoint_forecast, device="cuda"
+    )
+    assert s.evaluation_workers(4 * each) == 1
+
+
+def test_the_evaluation_memory_floor_counts_its_workers(tmp_path):
+    s = _scoring(tmp_path, labels=[])
+    n = s.evaluation_workers(s.evaluate_threads)
+    assert s.evaluation_memory_floor() == (
+        scoring.EVALUATION_WORKER_MB * n + scoring.EVALUATION_COORDINATOR_MB
+    )

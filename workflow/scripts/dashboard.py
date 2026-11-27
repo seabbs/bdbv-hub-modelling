@@ -16,13 +16,14 @@ ends when that process does: a workflow run serves it so
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import os
 import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -37,6 +38,7 @@ from flowlib.dashboard.runs import Run
 
 CHECKOUT = Path(__file__).parents[2]
 CONFIG = CHECKOUT / "workflow" / "config.yaml"
+PAPER_CONFIG = CHECKOUT / "paper" / "workflow" / "config.yaml"
 LOCK = threading.Lock()
 CLIENT_GONE = (ConnectionError, TimeoutError)
 """How a client that left shows up: a closed tab, a reset, a timeout."""
@@ -125,12 +127,26 @@ class Pages:
         threading.Thread(target=loop, daemon=True).start()
 
 
+GZIP_FROM = 1024
+"""Bodies of at least this many bytes go gzipped to a client that takes
+gzip: the page, its parts and a location's nowcasts shrink several times
+over a slow link."""
+
+
 class _Sending(BaseHTTPRequestHandler):
     """A handler that sends whole bodies and logs nothing."""
 
     def _send(self, code: int, body: bytes, kind: str) -> None:
+        headers = getattr(self, "headers", None) or {}
+        takes = headers.get("Accept-Encoding", "")
+        zipped = len(body) >= GZIP_FROM and "gzip" in takes
+        if zipped:
+            body = gzip.compress(body, compresslevel=5)
         self.send_response(code)
         self.send_header("Content-Type", kind)
+        self.send_header("Vary", "Accept-Encoding")
+        if zipped:
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -148,8 +164,9 @@ def sims_answer(
 ) -> tuple[int, bytes, str]:
     """Return the answer to a request under /sims/.
 
-    The page (`/sims/`), the sources (`/sims/sources.json`), a source's
-    index (`/sims/index/<source>.json`) and one simulation
+    The page (`/sims/`), the sources (`/sims/sources.json`), the German
+    and BDBV delays (`/sims/reference.json`, empty until built), a
+    source's index (`/sims/index/<source>.json`) and one simulation
     (`/sims/sim/<source>/<id>.json`).
     """
     rest = path.removeprefix("/sims")
@@ -157,6 +174,8 @@ def sims_answer(
         return 200, sims.page().encode(), "text/html; charset=utf-8"
     if rest == "/sources.json":
         return 200, page._json(index.listing()).encode(), JSON
+    if rest == "/reference.json":
+        return 200, page._json(index.reference()).encode(), JSON
     if rest.startswith("/index/") and rest.endswith(".json"):
         body = index.encoded_data(rest[len("/index/") : -len(".json")])
         return (200, body, JSON) if body is not None else NOT_FOUND
@@ -261,7 +280,10 @@ def handler(
                     query = parse_qs(urlsplit(self.path).query)
                     self._sections(query.get("have", [""])[0])
                 elif path.startswith("/data/"):
-                    self._data(path.removeprefix("/data/"))
+                    query = parse_qs(
+                        urlsplit(self.path).query, keep_blank_values=True
+                    )
+                    self._data(path.removeprefix("/data/"), query)
                 elif path in ("/", "/index.html"):
                     body = pages.html or BUILDING
                     self._send(200, body, "text/html; charset=utf-8")
@@ -297,14 +319,18 @@ def handler(
                 )
             self._send(200, page._json(out).encode(), "application/json")
 
-        def _data(self, name: str) -> None:
-            # /data/<dataset>/<location>.json
+        def _data(self, name: str, query: Mapping[str, list[str]]) -> None:
+            # /data/<dataset>/<location>.json[?models=a,b]: with `models`,
+            # only those models' series and scores.
             key, _, loc = name.removesuffix(".json").partition("/")
+            models = None
+            if "models" in query:
+                models = [m for m in query["models"][0].split(",") if m]
             if key not in {d["key"] for d in ctx.datasets} or not loc:
                 self._send(404, b"{}", "application/json")
                 return
             built = pages.builts.get(key)
-            found = nowcasts.location(built, loc) if built else None
+            found = nowcasts.location(built, loc, models) if built else None
             if not found:
                 self._send(404, b"{}", "application/json")
                 return
@@ -367,10 +393,22 @@ def simulations(
     return index, layer_of
 
 
+def read_config(path: Path, paper: Path = PAPER_CONFIG) -> dict:
+    """Return the workflow config at `path` with the paper's beside it.
+
+    As the workflow loads them (workflow/Snakefile), so the dashboard
+    shows the paper's `live_run` as the fine-tuned model.
+    """
+    config = yaml.safe_load(path.read_text())
+    if paper.exists():
+        config = {**config, **yaml.safe_load(paper.read_text())}
+    return config
+
+
 def main() -> None:
     """Serve the dashboard or write it once."""
     a = parser().parse_args()
-    config = yaml.safe_load(a.config.read_text())
+    config = read_config(a.config)
     localconfig.check()
     local = localconfig.read()
     ctx = context.build(

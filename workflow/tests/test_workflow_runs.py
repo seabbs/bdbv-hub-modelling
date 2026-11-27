@@ -40,7 +40,7 @@ def test_run_b_trains_with_the_release_layer():
     assert (runs.CONFIG.parents[1] / layer).is_file()
     assert f"--release-layer {layer}" in runs.trainer_options(found["runb"])
     assert "--release-layer" not in runs.trainer_options(found["runa"])
-    assert runs.trained(cfg, found) == ["runa"]
+    assert runs.trained(cfg, found) == ["runa", "noslots"]
 
 
 def test_the_no_slots_run_is_run_a_without_the_attention_biases():

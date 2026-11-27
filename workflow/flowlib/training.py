@@ -36,6 +36,10 @@ SEGMENT_COPY_BACK: tuple[str, ...] = (
 """Files publishing reads beside a segment's outputs, copied back with
 them from a worker elsewhere (flowlib.compute)."""
 
+MAIN_RECORD = "main-release.json"
+"""Rule `promote_main`'s record, in the runs folder, of the main run's
+checkpoint the release `chronos-main` names."""
+
 
 class Training:
     """The fine-tuning runs of a workflow config on this machine.
@@ -101,9 +105,18 @@ class Training:
         return lambda wc: self.local.get(key) or self.runs[wc.run].ft[setting]
 
     def segment_copy_back(self, wc: Any) -> list[str]:
-        """Return the files a segment's worker copies back beside it."""
+        """Return the files a segment's worker copies back beside it.
+
+        Its checkpoint's `SEGMENT_COPY_BACK`, the segment's log over
+        every attempt and its chunk timings (nowcastfoundation's
+        `finetune.stream.write_timings`).
+        """
         train = self.train_dir(wc.run)
-        return [f"{train}/n{wc.n}/{name}" for name in SEGMENT_COPY_BACK]
+        return [
+            *(f"{train}/n{wc.n}/{name}" for name in SEGMENT_COPY_BACK),
+            f"{train}/n{wc.n}.log",
+            f"{train}/timings/n{wc.n}.json",
+        ]
 
     def saved(self, run: str, n: int) -> bool:
         """Return whether checkpoint n of the run is saved."""
@@ -354,11 +367,37 @@ class Training:
                     if self.saved(run, n)
                 ]
                 out += [f for n in ns for f in self.released_held_out(run, n)]
+                if run == self.config.get("live_run"):
+                    out += self.promoted()
             # The check once its checkpoint is within reach, so it never
             # pulls the training past the batches there are.
             if there.check in ns:
                 out.append(f"{there.dir}/reports/n{there.check}-check.txt")
         return out
+
+    @property
+    def main_record(self) -> str:
+        """Return the record of the main run's promoted checkpoint."""
+        return f"{self.dir}/{MAIN_RECORD}"
+
+    def main_checkpoint(self, wc: Any = None) -> list[str]:  # noqa: ARG002
+        """Return the main run's newest saved checkpoint's release record.
+
+        The main run is the paper's `live_run`, when this machine trains
+        it; none before its first saved checkpoint. Rule `promote_main`
+        names that checkpoint in the release `chronos-main`.
+        """
+        run = self.config.get("live_run")
+        if run not in self.trained_runs():
+            return []
+        saved = [n for n in self.runs[run].ft["prefixes"] if self.saved(run, n)]
+        if not saved:
+            return []
+        return [f"{self.train_dir(run)}/n{max(saved)}/published.json"]
+
+    def promoted(self) -> list[str]:
+        """Return `main_record` once the main run has a saved checkpoint."""
+        return [self.main_record] if self.main_checkpoint() else []
 
     def released_held_out(self, run: str, n: int) -> list[str]:
         """Return checkpoint n's held-out losses' upload, if offloaded."""
@@ -367,8 +406,11 @@ class Training:
         return [f"{self.train_dir(run)}/n{n}/held-out-released.txt"]
 
     def published_checkpoints(self, wc: Any) -> list[str]:  # noqa: ARG002
-        """Return the saved checkpoints' releases and held-out uploads."""
-        return [
+        """Return the saved checkpoints' releases and held-out uploads.
+
+        With them, the main run's newest checkpoint promoted (`promoted`).
+        """
+        return self.promoted() + [
             f
             for run in self.trained_runs()
             for n in self.runs[run].ft["prefixes"]

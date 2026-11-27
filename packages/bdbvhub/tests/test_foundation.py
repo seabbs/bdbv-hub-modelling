@@ -485,40 +485,26 @@ def test_finetuned_models_are_the_ragged_models_with_the_checkpoint(
     assert model.checkpoint.sha256[1][1] in repr(model)
 
 
-def _listing(*releases: tuple[str, str, bool]) -> list[dict]:
-    return [
-        {"tag_name": tag, "published_at": at, "draft": draft}
-        for tag, at, draft in releases
-    ]
-
-
-def test_latest_is_the_newest_published_checkpoint_release(
-    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+def test_latest_is_the_checkpoint_the_main_release_names(
+    releases: Path, write_release, point_main
 ) -> None:
-    for tag_hash in ("old", "new", "draft"):
+    for tag_hash in ("old", "new", "other"):
         write_release(releases, tag_hash, _ADAPTER, tag_hash)
-    listing = _listing(
-        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
-        ("round-2026-11-14", "2026-11-20T00:00:00Z", False),
-        ("chronos-ft-new", "2026-11-12T00:00:00Z", False),
-        ("chronos-ft-draft", "2026-11-19T00:00:00Z", True),
-    )
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    point_main(releases, "new")
     got = foundation.resolve_checkpoint("latest")
     assert got == _checkpoint("new")
     # A pinned hash takes its own release.
     assert foundation.resolve_checkpoint("old") == _checkpoint("old")
 
 
-def test_a_new_release_changes_the_models_fit_key(
-    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+def test_a_new_main_checkpoint_changes_the_models_fit_key(
+    releases: Path, write_release, point_main
 ) -> None:
     for tag_hash in ("one", "two"):
         write_release(releases, tag_hash, _ADAPTER, tag_hash)
-    listing = _listing(("chronos-ft-one", "2026-11-01T00:00:00Z", False))
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    point_main(releases, "one")
     before = repr(get_model("foundation"))
-    listing += _listing(("chronos-ft-two", "2026-11-02T00:00:00Z", False))
+    point_main(releases, "two")
     foundation.resolve_checkpoint.cache_clear()
     after = repr(get_model("foundation"))
     assert "'one'" in before
@@ -529,10 +515,10 @@ def test_a_new_release_changes_the_models_fit_key(
 def test_unreachable_github_fails_loudly(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake_checkpoint
 ) -> None:
-    def offline() -> list[dict]:
+    def offline() -> dict:
         raise ConnectionError("GitHub cannot be reached")
 
-    monkeypatch.setattr(foundation, "finetuned_releases", offline)
+    monkeypatch.setattr(foundation, "main_release", offline)
     # Even with a checkpoint cached, no older one is used in its place.
     cache = tmp_path / "cache"
     (cache / f"chronos-ft-{fake_checkpoint}").mkdir(parents=True)
@@ -542,10 +528,10 @@ def test_unreachable_github_fails_loudly(
         get_model("foundation")
 
 
-def test_no_checkpoint_release_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    listing = _listing(("v0.1.0", "2026-11-04T00:00:00Z", False))
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
-    with pytest.raises(LookupError, match="chronos-ft-"):
+def test_no_main_run_checkpoint_fails(releases: Path, write_release) -> None:
+    # Another run's release is never taken in its place.
+    write_release(releases, "ablation", _ADAPTER, "ablation")
+    with pytest.raises(LookupError, match="chronos-main"):
         foundation.resolve_checkpoint("latest")
 
 
@@ -734,17 +720,17 @@ def test_a_changed_cached_adapter_is_downloaded_again(
     assert (adapter / "adapter_model.safetensors").read_bytes() == b"weights"
 
 
-def test_the_release_list_is_read_once_per_process(
+def test_the_main_release_is_read_once_per_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[int] = []
-    listing = foundation.finetuned_releases()
+    record = foundation.main_release()
 
-    def count() -> list[dict]:
+    def count() -> dict:
         calls.append(1)
-        return listing
+        return record
 
-    monkeypatch.setattr(foundation, "finetuned_releases", count)
+    monkeypatch.setattr(foundation, "main_release", count)
     foundation.resolve_checkpoint.cache_clear()
     for _ in range(3):
         for name in FINETUNED_MODELS:
@@ -755,18 +741,18 @@ def test_the_release_list_is_read_once_per_process(
 def test_a_run_passes_its_resolved_checkpoint_down(
     monkeypatch: pytest.MonkeyPatch, fake_checkpoint: str
 ) -> None:
-    # A job given the hash its run resolved never lists the releases.
-    def offline() -> list[dict]:
-        raise AssertionError("listed the releases")
+    # A job given the hash its run resolved never reads the main release.
+    def offline() -> dict:
+        raise AssertionError("read the main release")
 
-    monkeypatch.setattr(foundation, "finetuned_releases", offline)
+    monkeypatch.setattr(foundation, "main_release", offline)
     monkeypatch.setenv(foundation.FINETUNED_ENV, fake_checkpoint)
     foundation.resolve_checkpoint.cache_clear()
     model = get_model("foundation")
     assert model.checkpoint.hash == fake_checkpoint
 
 
-def test_the_release_list_sends_a_token_when_set(
+def test_a_github_api_request_sends_a_token_when_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: list = []
@@ -788,11 +774,12 @@ def test_the_release_list_sends_a_token_when_set(
     monkeypatch.undo()
     monkeypatch.setattr(foundation.urllib.request, "urlopen", urlopen)
     monkeypatch.setenv("GH_TOKEN", "secret")
-    assert foundation.finetuned_releases() == []
+    api = "https://api.github.com/repos/seabbs/bdbv-hub-modelling/releases"
+    assert foundation._get(api) == b"[]"
     assert seen[0].get_header("Authorization") == "Bearer secret"
     monkeypatch.delenv("GH_TOKEN")
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    foundation.finetuned_releases()
+    foundation._get(api)
     assert seen[1].get_header("Authorization") is None
 
 
@@ -806,7 +793,7 @@ def test_a_failed_lookup_says_how_to_set_a_token(
     monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
     monkeypatch.setattr(foundation.urllib.request, "urlopen", refuse)
     with pytest.raises(ConnectionError, match="GH_TOKEN"):
-        foundation.finetuned_releases()
+        foundation.main_release()
 
 
 def _by_series(groups, horizon, n, _seed):
@@ -917,7 +904,7 @@ def test_a_passing_github_error_is_retried(
     monkeypatch.undo()
     monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
     monkeypatch.setattr(foundation.urllib.request, "urlopen", flaky)
-    assert foundation.finetuned_releases() == []
+    assert foundation._get(foundation.FINETUNED_URL) == b"[]"
     assert len(calls) == 3
 
 
@@ -1035,7 +1022,7 @@ def test_too_many_requests_is_retried_a_bounded_number_of_times(
 
 
 def test_slots_checkpoints_have_their_own_releases(
-    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+    releases: Path, write_release, point_main
 ) -> None:
     # A checkpoint with per-series slots is released as chronos-slots-<hash>
     # and named "slots-<hash>".
@@ -1044,13 +1031,9 @@ def test_slots_checkpoints_have_their_own_releases(
     write_release(releases, "abc", _ADAPTER, "abc")
     (releases / "chronos-ft-abc").rename(releases / "chronos-slots-abc")
     write_release(releases, "old", _ADAPTER, "old")
-    listing = _listing(
-        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
-        ("chronos-slots-abc", "2026-11-20T00:00:00Z", False),
-    )
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
-    # The newest released checkpoint, slots releases included:
-    # the submission is never a hand pin that goes stale.
+    point_main(releases, "slots-abc")
+    # The main run's newest checkpoint, a slots release here: the
+    # submission is never a hand pin that goes stale.
     assert foundation.resolve_checkpoint("latest") == _checkpoint("slots-abc")
     pinned = foundation.resolve_checkpoint("slots-abc")
     assert pinned == _checkpoint("slots-abc")
@@ -1062,15 +1045,11 @@ REALDATA_MODELS = ("foundation_real",)
 
 
 def test_latest_never_takes_a_realdata_release(
-    releases: Path, monkeypatch: pytest.MonkeyPatch, write_release
+    releases: Path, write_release, point_main
 ) -> None:
     write_release(releases, "old", _ADAPTER, "old")
     write_release(releases, "de", _ADAPTER, "de", prefix="realdata-ft")
-    listing = _listing(
-        ("chronos-ft-old", "2026-11-01T00:00:00Z", False),
-        ("realdata-ft-de", "2026-11-20T00:00:00Z", False),
-    )
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    point_main(releases, "old")
     assert foundation.resolve_checkpoint("latest") == _checkpoint("old")
 
 
@@ -1242,11 +1221,11 @@ def test_a_changed_local_adapter_fails(tmp_path: Path) -> None:
 def test_the_finetuned_models_take_a_segment_folder_from_the_run(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    def offline() -> list[dict]:
-        raise AssertionError("listed the releases")
+    def offline() -> dict:
+        raise AssertionError("read the main release")
 
     segment = _segment(tmp_path / "n100", {"hash": "abc"})
-    monkeypatch.setattr(foundation, "finetuned_releases", offline)
+    monkeypatch.setattr(foundation, "main_release", offline)
     monkeypatch.setenv(foundation.FINETUNED_ENV, str(segment))
     model = get_model("foundation")
     assert model.checkpoint == _checkpoint("abc")
