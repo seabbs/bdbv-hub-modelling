@@ -349,9 +349,8 @@ rule ebola_backtest_draws:
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
     shell:
-        "exec >{log} 2>&1; {params.ft} {params.env} "
-        "mkdir -p {params.folder} && "
-        "{params.bdbv} backtest --config {params.config} --samples {params.n} "
+        "exec >{log} 2>&1; mkdir -p {params.folder} && "
+        "{params.ft} {params.env} {params.bdbv} backtest --config {params.config} --samples {params.n} "
         "--models {params.models} "
         "--results {params.folder}/results --output {params.folder}"
 
