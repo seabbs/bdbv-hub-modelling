@@ -84,7 +84,7 @@ def test_the_release_is_realdata_ft_with_its_blocks(tmp_path: Path):
     assert tag == f"{REALDATA_PREFIX}-abc"
     create = next(c for c in gh.commands if c[2] == "create")
     assert create[3] == "realdata-ft-abc"
-    assets = {Path(f).name for f in create if Path(f).is_file()}
+    assets = {Path(f).name for f in create if f.startswith(str(tmp_path))}
     assert "blocks.txt" in assets
     assert "outbreaks.txt" not in assets
     assert "--latest=false" in create

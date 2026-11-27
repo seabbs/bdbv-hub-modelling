@@ -1612,29 +1612,19 @@ def memory() -> str:
     return "CPU"
 
 
-def publish(
-    where: Path,
-    key: str,
-    run: Any = subprocess.run,
-    *,
-    tag: str | None = None,
-    describe: tuple[str, str] | None = None,
-    listing: str = "outbreaks.txt",
-) -> None:
+def publish(where: Path, key: str, run: Any = subprocess.run) -> None:
     """Publish a checkpoint as the release `chronos-ft-<key>`.
 
     Safe to run again: a release whose sha256sums match is left as it is,
     one missing assets gets them uploaded, and one whose sums differ is an
-    error. Another release's `tag`, its title and notes (`describe`) and
-    the list of what it trained on (`listing`) replace the simulation
-    checkpoint's (the real-only run's, `finetune.realdata.publish`).
+    error.
     """
-    tag = tag or release_tag(key)
+    tag = release_tag(key)
     files = [
         where / "finetuned-ckpt" / "adapter_config.json",
         where / "finetuned-ckpt" / "adapter_model.safetensors",
         where / "settings.json",
-        where / listing,
+        where / "outbreaks.txt",
     ]
     sums = where / "sha256sums.txt"
     sums.write_text("".join(f"{ft._sha256(f)}  {f.name}\n" for f in files))
@@ -1650,25 +1640,18 @@ def publish(
 
     view = gh("view", tag, "--json", "assets")
     if view.returncode != 0:
-        if describe is None:
-            settings = json.loads((where / "settings.json").read_text())
-            n = settings["n_outbreaks"]
-            describe = (
-                f"Chronos-2 fine-tuned checkpoint {key} ({n} outbreaks)",
-                f"LoRA adapter of Chronos-2 for the _ft models, fine-tuned in "
-                f"one pass on {n} simulated outbreaks "
-                f"(scripts/finetune_stream.py).",
-            )
-        title, notes = describe
+        n = json.loads((where / "settings.json").read_text())["n_outbreaks"]
         result = gh(
             "create",
             tag,
             "--latest=false",
             "--title",
-            title,
+            f"Chronos-2 fine-tuned checkpoint {key} ({n} outbreaks)",
             "--notes",
-            f"{notes} Check the files with sha256sums.txt.\n\nThis was opened "
-            f"by a bot. Please ping @seabbs for any questions.",
+            f"LoRA adapter of Chronos-2 for the _ft models, fine-tuned in one "
+            f"pass on {n} simulated outbreaks (scripts/finetune_stream.py). "
+            f"Check the files with sha256sums.txt.\n\nThis was opened by a "
+            f"bot. Please ping @seabbs for any questions.",
             *map(str, files),
         )
         if result.returncode != 0:

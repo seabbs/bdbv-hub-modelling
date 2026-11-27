@@ -46,6 +46,7 @@ from nowcastfoundation.forecaster import (
     CHRONOS_MODEL,
     CHRONOS_REVISION,
     REALDATA_PREFIX,
+    SUMS_FILE,
 )
 
 TRAINER = (
@@ -157,30 +158,68 @@ def publish(where: Path, run: Any = subprocess.run) -> str:
     """Release checkpoint `where` as `realdata-ft-<hash>` and return the tag.
 
     As the simulation checkpoints are released (`finetune.stream.publish`),
-    with the blocks it trained on in place of the outbreaks. The fine-tuned
-    models' latest lookup never takes it.
+    with the blocks it trained on in place of the outbreaks: the adapter,
+    the settings, `blocks.txt` and `sha256sums.txt`. Safe to run again: a
+    release whose sums match is left as it is, one missing assets gets
+    them, and one whose sums differ is an error. The fine-tuned models'
+    latest lookup never takes it.
     """
     settings = json.loads((where / "settings.json").read_text())
     key = str(settings["hash"])
     tag = release_tag(key)
-    fs.publish(
-        where,
-        key,
-        run,
-        tag=tag,
-        describe=(
+    files = [
+        where / "finetuned-ckpt" / "adapter_config.json",
+        where / "finetuned-ckpt" / "adapter_model.safetensors",
+        where / "settings.json",
+        where / BLOCKS_FILE,
+    ]
+    sums = where / SUMS_FILE
+    sums.write_text("".join(f"{ft._sha256(f)}  {f.name}\n" for f in files))
+    files.append(sums)
+
+    def gh(*command: str) -> subprocess.CompletedProcess[str]:
+        done: subprocess.CompletedProcess[str] = run(
+            ["gh", "release", *command, "-R", fs.REPO],
+            capture_output=True,
+            text=True,
+        )
+        return done
+
+    view = gh("view", tag, "--json", "assets")
+    if view.returncode != 0:
+        result = gh(
+            "create",
+            tag,
+            "--latest=false",
+            "--title",
             f"Chronos-2 fine-tuned on real data {key} "
             f"({settings['steps']} steps, SI only)",
+            "--notes",
             "LoRA adapter of Chronos-2 fine-tuned from base Chronos-2 on "
-            "real data alone: the German hospitalisation data as available "
-            "on the last day of the development half and the public BDBV "
-            "data up to the release in [realdata_bdbv] "
-            "(packages/nowcastfoundation/config/finetune.toml), "
-            "nowcastfoundation.finetune.realdata. `foundation_real` loads "
-            "it once pinned; the _ft models never do.",
-        ),
-        listing=BLOCKS_FILE,
-    )
+            "real data alone, with the main run's recipe: the German "
+            "hospitalisation data as available on the last day of the "
+            "development half and the public BDBV data up to the release "
+            "in [realdata_bdbv] (packages/nowcastfoundation/config/"
+            "finetune.toml), nowcastfoundation.finetune.realdata. "
+            "`foundation_real` loads it once pinned; the _ft models never "
+            "do. Check the files with sha256sums.txt.\n\nThis was opened by "
+            "a bot. Please ping @seabbs for any questions.",
+            *map(str, files),
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"could not publish {tag}: {result.stderr}")
+        log(f"published {tag}")
+        return tag
+    present = {a["name"] for a in json.loads(view.stdout)["assets"]}
+    if sums.name in present:
+        theirs = gh("download", tag, "-p", sums.name, "-O", "-").stdout
+        if theirs != sums.read_text():
+            raise RuntimeError(f"{tag} exists and its sha256sums differ")
+    missing = [f for f in files if f.name not in present]
+    if missing:
+        result = gh("upload", tag, *map(str, missing))
+        if result.returncode != 0:
+            raise RuntimeError(f"could not upload to {tag}: {result.stderr}")
     return tag
 
 
