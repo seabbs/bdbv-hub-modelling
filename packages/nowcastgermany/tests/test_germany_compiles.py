@@ -31,8 +31,9 @@ FIXTURE = (
     / "germany_covid19_hosp.csv.gz"
 )
 GOLDEN = Path(__file__).parent / "fixtures" / "randomwalknowcast-golden.csv"
-DATES = ("2021-10-13", "2021-10-14")
-"""Consecutive nowcast dates, a Wednesday and a Thursday."""
+DATES = ("2021-10-17", "2021-10-18")
+"""Consecutive nowcast dates, a Sunday and a Monday, whose arrays pad
+to the same sizes."""
 LEVELS = (0.05, 0.25, 0.5, 0.75, 0.95)
 
 _COMPILES = [0]

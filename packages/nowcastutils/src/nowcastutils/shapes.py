@@ -21,7 +21,7 @@ def round_up(n: int, bucket: int) -> int:
     return -(-int(n) // bucket) * bucket
 
 
-def bucket(n: int, steps: int = 8, least: int = 8) -> int:
+def bucket(n: int, steps: int = 8, least: int = 16) -> int:
     """Return `n` rounded up to one of a few sizes, for padding.
 
     The sizes are the multiples of `1 / steps` of the power of two at or
@@ -35,7 +35,7 @@ def bucket(n: int, steps: int = 8, least: int = 8) -> int:
         A length.
     steps : int, default 8
         Sizes for each doubling, a power of two.
-    least : int, default 8
+    least : int, default 16
         The smallest size.
 
     Returns
@@ -46,7 +46,7 @@ def bucket(n: int, steps: int = 8, least: int = 8) -> int:
     Examples
     --------
     >>> [bucket(n) for n in (1, 9, 100, 1000)]
-    [8, 9, 104, 1024]
+    [16, 16, 104, 1024]
     """
     n = max(int(n), least)
     unit = max((1 << (n.bit_length() - 1)) // steps, 1)

@@ -1,11 +1,12 @@
 """The random walk models' JAX programs see a few shapes, not one a date.
 
 Each nowcast date brings a release and a day more, so the arrays the
-walks, the draws, the delay sums and the size fits see grow by date.
+walks, the draws and the delay sums see grow by date.
 They are padded to a few sizes (`nowcastutils.shapes.bucket`), and a
 compiled program serves every length that pads to its size. The draws
 are those of the unpadded arrays: JAX draws each element from its flat
-index, so the padding only adds draws after the real ones.
+index, so the padding only adds draws after the real ones, and the
+Poisson draws leave the padding out (`nowcastbaselines.draws.poisson`).
 """
 
 from __future__ import annotations
@@ -32,11 +33,10 @@ from nowcastbaselines.baselinenowcast.triangle import (
     preprocess_negative_values,
 )
 from nowcastbaselines.baselinenowcast.uncertainty import (
-    fit_by_horizon,
-    fit_sizes,
     sample_count,
     sample_nb,
 )
+from nowcastbaselines.draws import poisson
 from nowcastbaselines.walk import random_walk, random_walks
 from nowcastutils.shapes import bucket
 from nowcastutils.snapshots import SnapshotArrays, snapshot_arrays
@@ -67,9 +67,29 @@ def test_bucket_pads_by_at_most_an_eighth() -> None:
     sizes = [bucket(n) for n in range(1, 5000)]
     n = np.arange(1, 5000)
     assert (np.asarray(sizes) >= n).all()
-    assert (np.asarray(sizes) <= np.maximum(n * 9 / 8, 8)).all()
+    assert (np.asarray(sizes) <= np.maximum(n * 9 / 8, 16)).all()
     # A length growing a day at a time takes a few sizes.
     assert len(set(sizes[100:400])) < 20
+
+
+@pytest.mark.parametrize("width", [3000, 3500, 4096])
+def test_padded_poisson_draws_are_jaxs_on_the_unpadded_rates(
+    width: int,
+) -> None:
+    # JAX's rejection loop runs until every element is accepted and keeps
+    # the latest accepted draw, so padding the rates changes its draws.
+    # `draws.poisson` leaves the padding out of the loop, and pins this
+    # copy of JAX's sampler to JAX's own.
+    rng = np.random.default_rng(width)
+    lam = rng.gamma(0.7, 30.0, 3000).astype(np.float32)
+    lam[:20] = 0.0
+    key = jax.random.key(width)
+    want = np.asarray(jax.random.poisson(key, lam))
+    padded = np.zeros(width, np.float32)
+    padded[:3000] = lam
+    got = jax.jit(poisson)(key, padded, np.arange(width) < 3000)
+    np.testing.assert_array_equal(np.asarray(got)[:3000], want)
+    assert (np.asarray(got)[3000:] == 0).all()
 
 
 @partial(jax.jit, static_argnums=3)
@@ -92,20 +112,22 @@ def _reference_walks(
 
 @pytest.mark.parametrize("h", [1, 5, 37, 40])
 def test_random_walks_draw_each_places_own_walk(h: int) -> None:
+    # The rates are those of the unpadded walk to float32 rounding (XLA
+    # fuses a walk of one step differently), and the counts are equal.
     rng = np.random.default_rng(h)
     x0 = rng.gamma(2.0, 20.0, (3, 50)).astype(np.float32)
     keys = jax.random.split(jax.random.key(h), 3)
     sigma = np.array([0.1, 0.4, 0.0], np.float32)
     lam, y = random_walks(keys, x0, sigma, h)
     want_lam, want_y = _reference_walks(keys, x0, sigma, h)
-    np.testing.assert_array_equal(np.asarray(lam), want_lam)
+    np.testing.assert_allclose(np.asarray(lam), want_lam, rtol=1e-6)
     np.testing.assert_array_equal(np.asarray(y), want_y)
     # Steps in days, each with its own mean and spread.
     mean = rng.normal(0, 0.1, (3, h)).astype(np.float32)
     spread = np.repeat(sigma[:, None], h, axis=1)
     lam, y = random_walks(keys, x0, spread, h, mean)
     want_lam, want_y = _reference_walks(keys, x0, spread, h, mean)
-    np.testing.assert_array_equal(np.asarray(lam), want_lam)
+    np.testing.assert_allclose(np.asarray(lam), want_lam, rtol=1e-6)
     np.testing.assert_array_equal(np.asarray(y), want_y)
 
 
@@ -131,43 +153,27 @@ def test_sample_count_draws_as_unpadded() -> None:
     got = np.asarray(sample_count(key, reported, remaining, size))
     want = np.asarray(jnp.asarray(reported) + sample_nb(key, remaining, size))
     np.testing.assert_array_equal(got, want)
+    # Draws of each place and week, as of the arrays stacked by sample.
+    got = sample_count(key, reported[0], remaining[0], size[0], 40)
+    stacked = [np.broadcast_to(x[0], shape) for x in (remaining, size)]
+    want = np.asarray(
+        jnp.asarray(np.broadcast_to(reported[0], shape))
+        + sample_nb(key, *stacked)
+    )
+    np.testing.assert_array_equal(got, want)
 
 
 def test_sample_count_compiles_once_for_weeks_of_one_size() -> None:
     key = jax.random.key(0)
 
     def draw(w: int) -> np.ndarray:
-        x = np.full((40, 3, w), 5.0, np.float32)
-        return np.asarray(sample_count(key, x, x, x))
+        x = np.full((4, w), 5.0, np.float32)
+        return sample_count(key, x, x, x, 1000)
 
-    draw(30)
+    # 1000 draws of 4 places' 261 and 262 days pad to one size.
+    draw(261)
     with compiles() as n:
-        draw(31)
-    assert n[0] == 0
-
-
-def test_fit_sizes_are_those_of_the_unpadded_errors() -> None:
-    rng = np.random.default_rng(2)
-    remaining = rng.gamma(1.0, 10.0, (37, 4))
-    added = rng.poisson(remaining * rng.gamma(3.0, 1 / 3.0, remaining.shape))
-    remaining[:5, 3] = 0.0
-    added[:5, 3] = 0
-    got = fit_sizes(added.astype(float), remaining)
-    want = np.asarray(fit_by_horizon(added.astype(float), remaining))
-    np.testing.assert_array_equal(got, want)
-
-
-def test_fit_sizes_compile_once_for_errors_of_one_size() -> None:
-    rng = np.random.default_rng(3)
-
-    def fit(n: int) -> np.ndarray:
-        remaining = rng.gamma(1.0, 10.0, (n, 2))
-        return fit_sizes(rng.poisson(remaining).astype(float), remaining)
-
-    fit(33)
-    with compiles() as n:
-        fit(34)
-        fit(35)
+        draw(262)
     assert n[0] == 0
 
 

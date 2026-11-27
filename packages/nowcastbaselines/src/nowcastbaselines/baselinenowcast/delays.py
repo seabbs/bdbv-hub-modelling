@@ -26,7 +26,7 @@ from scipy.optimize import nnls
 
 from nowcastbaselines.pooling import MIN_LEVEL, pool_matrix, source_index
 from nowcastutils.base import ModelUnavailableError
-from nowcastutils.shapes import round_up
+from nowcastutils.shapes import bucket
 from nowcastutils.snapshots import SnapshotArrays, weekly_sums
 
 from ._checks import (
@@ -35,10 +35,9 @@ from ._checks import (
     n_unobserved_rows,
     validate_reporting_triangle,
 )
-from .triangle import preprocess_negative_values
+from .triangle import _preprocess
 
 __all__ = [
-    "PAIR_BUCKET",
     "DelayFit",
     "NoDelayPair",
     "Settings",
@@ -328,7 +327,7 @@ def pair_sums(
     cut: Any,
     pairs: Any,
     max_delay: int,
-) -> tuple[Array, Array]:
+) -> tuple[Any, Any]:
     """Numerator and denominator per pair and age (extension E1).
 
     For pair ``p = (r, r + 1)`` and age ``x = 0 .. max_delay - 1`` at
@@ -353,17 +352,39 @@ def pair_sums(
 
     Returns
     -------
-    tuple of jax.Array
-        ``(num, den)``, each ``(n_loc, n_pair, max_delay)``.
+    tuple of numpy.ndarray or jax.Array
+        ``(num, den)``, each ``(n_loc, n_pair, max_delay)``: arrays of
+        JAX's under ``vmap`` or ``jit``, and NumPy's otherwise.
     """
-    c = jnp.asarray(counts)
-    return _pair_sums(
-        c,
-        jnp.asarray(observed, bool),
-        jnp.asarray(cut, int),
-        jnp.asarray(pairs, int),
+    args = (counts, observed, cut, pairs)
+    if any(isinstance(a, jax.core.Tracer) for a in args):
+        return _pair_sums(
+            jnp.asarray(counts),
+            jnp.asarray(observed, bool),
+            jnp.asarray(cut, int),
+            jnp.asarray(pairs, int),
+            int(max_delay),
+        )
+    c = np.asarray(counts)
+    seen = np.asarray(observed, bool)
+    cut = np.asarray(cut, int)
+    pairs = np.asarray(pairs, int)
+    _, n_rel, n_day = c.shape
+    # The releases and days are padded to a few sizes (`bucket`) with
+    # unobserved cells, and the pairs to the padded releases with copies
+    # of the first, cut off after: one compiled program serves many
+    # snapshots and releases.
+    rels, days = bucket(n_rel), bucket(n_day)
+    first = np.full(rels, pairs[0] if pairs.size else 0)
+    first[: pairs.size] = pairs
+    num, den = _pair_sums(
+        np.pad(c, ((0, 0), (0, rels - n_rel), (0, days - n_day))),
+        np.pad(seen, ((0, rels - n_rel), (0, days - n_day))),
+        np.pad(cut, (0, rels - n_rel)),
+        first,
         int(max_delay),
     )
+    return np.asarray(num)[:, : pairs.size], np.asarray(den)[:, : pairs.size]
 
 
 def log_factors(num: Any, den: Any, gaps: Any) -> np.ndarray:
@@ -598,10 +619,6 @@ def _pairs_at(
     return np.stack([keep, keep + 1], axis=1).astype(np.int64)
 
 
-PAIR_BUCKET = 16
-"""The pairs a delay fit sums are padded to a multiple of this."""
-
-
 def _delay_counts(snap: SnapshotArrays, r: int) -> np.ndarray:
     """Return counts with downward revisions moved onto earlier releases.
 
@@ -625,10 +642,16 @@ def _delay_counts(snap: SnapshotArrays, r: int) -> np.ndarray:
         [np.zeros_like(c[:, :1]), c[:, :-1] * obs[None, :-1]], axis=1
     )
     inc = np.where(obs[None], c - prev, 0.0)
-    rows = inc.transpose(0, 2, 1).reshape(n_loc * n_day, n_rel)
-    mask = np.tile(obs.T, (n_loc, 1))
-    fixed = np.asarray(preprocess_negative_values(rows, mask, validate=False))
-    fixed = fixed.reshape(n_loc, n_day, n_rel).transpose(0, 2, 1)[:, : r + 1]
+    # The days and releases are padded to a few sizes (`bucket`) with
+    # unobserved cells, which pass no amount on, so one compiled scan
+    # serves many snapshots.
+    days, rels = bucket(n_day), bucket(n_rel)
+    pad = ((0, 0), (0, days - n_day), (0, rels - n_rel))
+    rows = np.pad(inc.transpose(0, 2, 1), pad).reshape(n_loc * days, rels)
+    mask = np.tile(np.pad(obs.T, pad[1:]), (n_loc, 1))
+    fixed = np.asarray(_preprocess(np.where(mask, rows, 0.0), mask))
+    fixed = fixed.reshape(n_loc, days, rels)[:, :n_day, :n_rel]
+    fixed = fixed.transpose(0, 2, 1)[:, : r + 1]
     out = c.copy()
     out[:, : r + 1] = np.where(
         obs[None, : r + 1], np.cumsum(fixed, axis=1), c[:, : r + 1]
@@ -673,20 +696,10 @@ def delay_sums(
         first = min(first, oldest)
     window = day > first
     observed = snap.observed & window[None, :]
-    # The pairs are padded to a multiple of PAIR_BUCKET with copies of the
-    # first, and their sums cut off after, so the compiled sums see a few
-    # shapes rather than one a release.
-    n = len(pairs)
-    first_of = np.full(round_up(n, PAIR_BUCKET), pairs[0, 0], dtype=np.int64)
-    first_of[:n] = pairs[:, 0]
     num, den = pair_sums(
-        jnp.asarray(counts),
-        jnp.asarray(observed),
-        jnp.asarray(snap.cut),
-        jnp.asarray(first_of),
-        settings.max_delay,
+        counts, observed, snap.cut, pairs[:, 0], settings.max_delay
     )
-    return pairs, np.asarray(num)[:, :n], np.asarray(den)[:, :n], gaps
+    return pairs, np.asarray(num), np.asarray(den), gaps
 
 
 def fit_delay(
