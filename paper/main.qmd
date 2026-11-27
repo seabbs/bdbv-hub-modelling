@@ -248,7 +248,6 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
   - We plotted each checkpoint's scores against both (Supporting Information, *Checkpoint curve*).
 - **Random walk nowcast.**
   - The random walk nowcast nowcasts recent weeks with our port of baselinenowcast, which we extended to releases more than a day apart, and forecasts each nowcast draw with a random walk on the log scale [@Johnson2025] (Supporting Information, *Baselines*).
-  - The random walk is the same walk from the latest complete week, with no nowcast.
   - Scores in each study are relative to the random walk nowcast unless the study has its own baseline.
 - **Renewal models.**
   - We fitted renewal models built on our port of epinowcast to the Ebola hub data, and submitted them in real time [@pyrenew; @bdbv_modeling_hub_2026] (Supporting Information, *Renewal model*).
@@ -276,6 +275,7 @@ The maximum delay is 40 days for Germany and 42 days for Ebola, and one forward 
 - We also scored samples with the fair CRPS and the fair energy score, so forecasts with different numbers of samples compare fairly [@Ferro2014; @Zamo2018; @zanetta_scoringrules_2024] (Supporting Information, *Scoring*).
 - We scored with scoringrules, checked against scoringutils [@zanetta_scoringrules_2024; @bosse2022scoringutils].
 - We scored against the data as reported $T$ days later, with $T$ each simulation's 98% reporting delay.
+- We scored each simulation at the aggregations it has, such as daily, 3-day or weekly counts, and report scores split by aggregation.
 - Key references: [@bracherEvaluatingEpidemicForecasts2021; @Bosse2023-sx; @gneitingStrictlyProperScoring2007; @gneitingProbabilisticForecastsCalibration2007; @sherrattPredictivePerformanceMultimodel2023].
 :::
 
@@ -292,13 +292,13 @@ The maximum delay is 40 days for Germany and 42 days for Ebola, and one forward 
 - We scored the hub's targets, and also our models' forecasts up to 4 weeks after the nowcast date (Supporting Information, *German nowcast hub*).
 - Each nowcast date is forecast once, so every 7-day sum comes from one forecast.
 - Each place also has a 7-day rolling-sum series, which Chronos-2 forecasts directly, so we read each 7-day sum from it rather than summing daily draws.
-- The random walks forecast weeks ending on Saturdays, so they give only the 7-day sums that end on a Saturday.
+- The random walk nowcast forecasts weeks ending on Saturdays, so it gives only the 7-day sums that end on a Saturday.
 - We scored each model on its own quantiles at the hub's seven levels.
 - As @Wolffram2023 did, we replaced one team's erroneous values by its nowcast of the day before, and filled another's missing 10% quantiles from a normal through its 2.5% and 25% quantiles.
 - Chronos-2 gives quantiles directly, which we interpolated linearly to the hub's levels, with no sampling.
-- We scored the random walks, which give samples, on the quantiles of 1,000 draws with common random numbers.
+- We scored the random walk nowcast, which gives samples, on the quantiles of 1,000 draws with common random numbers.
 - One fine-tuned Chronos-2 model forecasts daily, 3-day and weekly data.
-- For both case studies, we also scored our models' daily counts directly from the daily series, against the random walk nowcast (Supporting Information, *Daily nowcasts*).
+- We also scored our models' daily counts directly from the daily series, against the random walk nowcast (Supporting Information, *Daily nowcasts*).
 - We split the nowcast dates in half at 10 February 2022.
 - We developed the setup on the first half and scored the second half.
 - Key references: [@Wolffram2023; @hospitalization_nowcast_hub_2025; @Johnson2025; @amaralPostprocessingWeightedCombination2025].
@@ -324,8 +324,8 @@ The maximum delay is 40 days for Germany and 42 days for Ebola, and one forward 
   - The other is one block per province, of the province and all its zones, cut into views as in training when over the block limit.
   - The country, provinces and active zones take their forecast from the single block, and every other zone from its province's block.
   - The hub takes sampled trajectories, so we paired each model's draws across places with a copula (Supporting Information, *Correlated trajectories*).
-  - We paired the province draws of the random walks within each week with a rolling Gaussian copula, so their national forecast, the sum of the provinces for each sample, is not too narrow.
-  - The hub does not require forecasts to add up across levels, so this was our choice for the walks, and Chronos-2 submitted its own national forecast.
+  - We paired the province draws of the random walk nowcast within each week with a rolling Gaussian copula, so their national forecast, the sum of the provinces for each sample, is not too narrow.
+  - The hub does not require forecasts to add up across levels, so this was our choice for the random walk nowcast, and Chronos-2 submitted its own national forecast.
 - **Scoring.**
   - We scored as for held-out simulations, and compared with the other submissions, relative to the hub's baseline.
   - We scored every hub round.
@@ -334,12 +334,12 @@ The maximum delay is 40 days for Germany and 42 days for Ebola, and one forward 
   - We scored only the hub's own targets and horizons.
   - Scores of our submitted models are prospective, on the forecasts they submitted before each round closed.
   - Scores of every other model of ours are retrospective, each forecasting a round from the last release before the round closed.
-  - We started forecasting at the first release with at least two usable releases up to it, so the random walk baselines can estimate their delay.
+  - We started forecasting at the first release with at least two usable releases up to it, so the random walk nowcast can estimate its delay.
   - We took the hub teams' quantiles from their samples.
   - We scored each week against its count in the first release at least $T$ days after the week ends, with $T$ the 98% point of the hub data's reporting delay.
   - By then nearly all of a week's cases are reported, so the truth changes little afterwards while every round can still be scored.
   - $T$ is part of the scoring rule, not a choice tuned on the data.
-  - We scored Chronos-2 on its own quantiles, the random walks on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
+  - We scored Chronos-2 on its own quantiles, the random walk nowcast on 1,000 draws with common random numbers, and hub submissions on their 100 submitted trajectories.
   - Quantiles from 100 draws are noisier than those from 1,000, so WIS is biased against the hub teams, which the fair CRPS checks (Supporting Information, *Ebola hub submissions*).
   - We scored the national sum and the provinces by the CRPS and 90% coverage, and the joint forecast by the energy score [@Gneiting2008], which is proper for joint forecasts [@gneitingStrictlyProperScoring2007] and has been used for epidemic trajectories from forecast hubs [@Bay2026], but discriminates poorly between dependence structures [@Pinson2013].
 - Key references: [@bdbv_modeling_hub_2026; @MacNeil2010; @Viboud2018; @funkAssessingPerformanceRealtime2019].
@@ -353,7 +353,7 @@ The maximum delay is 40 days for Germany and 42 days for Ebola, and one forward 
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
 - We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub's releases, and compared it with the model fine-tuned on simulations (@fig-design A).
 - We fine-tuned one model without the attention biases and one without lag series, and compared each with the main model.
-- For the Ebola hub only, we compared the random walks' rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
+- For the Ebola hub only, we compared the random walk nowcast's rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
 - We compared the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (Supporting Information, *Renewal model variants*).
 - We scored the real-data fine-tune on the German held-out half, and on the Ebola rounds after its last training release.
 - We compared the models without attention biases or lag series with the main model by validation loss and by scores on the German development half at each checkpoint.
@@ -491,7 +491,7 @@ Fine-tuning on real data instead of simulations changed the German held-out scor
 
 Without the attention biases, the German development score changed by [X] at the final checkpoint, and without lag series by [X] (Supporting Information, *Attention biases for place and parent against none*; *Delays against no delays*).
 
-On the Ebola hub, the median rolling $\rho_p$ between provinces was [X] for the random walk nowcast and [X] for the random walk, and pairing changed the national score by [X] against no pairing (Supporting Information, *Impact of correlated trajectories*).
+On the Ebola hub, the median rolling $\rho_p$ between provinces was [X] for the random walk nowcast, and pairing changed the national score by [X] against no pairing (Supporting Information, *Impact of correlated trajectories*).
 Scoring Chronos-2's Ebola trajectories with independent cells or comonotone changed the energy score by [X] (Supporting Information, *Correlated trajectories*).
 
 The renewal model using BVDOutbreakSize scored [X] relative to the main renewal model, and the main renewal model [X] relative to fitting each zone on its own (Supporting Information, *Renewal model variants*).
