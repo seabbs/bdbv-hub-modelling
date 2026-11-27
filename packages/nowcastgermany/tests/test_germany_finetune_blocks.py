@@ -158,9 +158,7 @@ def test_weekly_blocks_take_weekly_releases_on_the_cut_weekday(monkeypatch):
         seen.append((source, cutoffs, max_lag))
 
     monkeypatch.setattr(fg, "training_block", block)
-    fg.german_blocks(
-        counts, ["2021-06-01"], "2021-07-31", sources=("weekly",)
-    )
+    fg.german_blocks(counts, ["2021-06-01"], "2021-07-31", sources=("weekly",))
     assert seen
     for source, cutoffs, lag in seen:
         assert source == "weekly"

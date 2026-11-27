@@ -1,11 +1,21 @@
-"""German real-data training blocks, for the real-data ablation.
+"""German real-data training blocks, for the real-data runs.
 
 The German hub triangle cut into training blocks as the German tasks lay
-it out, from reports before the first scored German date only
-(`window`), so the real-data run is never scored on what it trained on.
-Run as `python -m nowcastgermany.finetune_blocks TRIANGLE OUT
---first-date D --truth-delay N`, the window's two settings from
-`packages/nowcastgermany/config/germany.toml` (rule real_training_blocks).
+it out. Two runs read them (workflow/config.yaml `runs`):
+
+- `realdata` mixes them into Run A's simulations. Its blocks use reports
+  before the first scored German date only (`window`), so the run is
+  never scored on what it trained on. Run as `python -m
+  nowcastgermany.finetune_blocks TRIANGLE OUT --first-date D
+  --truth-delay N`, the window's two settings from
+  `packages/nowcastgermany/config/germany.toml` (rule
+  real_training_blocks).
+- `realonly` trains on real data alone (`foundation_real`). Its blocks
+  use the data as available on the last day of the development half,
+  from the daily and the weekly releases (`realdata_window`, the table
+  `[realdata_germany]` of packages/nowcastfoundation/config/finetune.toml).
+  Run as `python -m nowcastgermany.finetune_blocks TRIANGLE OUT
+  --realdata` (rule realonly_blocks_germany).
 """
 
 from __future__ import annotations
@@ -13,7 +23,9 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import pickle
+import tomllib
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +45,10 @@ LAGS = (14, 21, 28, 35, 40, 49)
 models' default (28 days), the German truth delay (40 days) and the
 simulations' range around them."""
 
+WEEKLY_LAGS = (2, 3, 4, 5, 6, 7)
+"""Release lags $D$ in weeks of the weekly blocks, taken in turn over the
+cuts: the ragged models' default (4 weeks) and the range around it."""
+
 PLACES = ("national", "states", "ages")
 """The blocks' places: Germany alone, or Germany with its states or its
 age groups, as the German tasks group them."""
@@ -40,6 +56,9 @@ age groups, as the German tasks group them."""
 FIRST_CUT = "2021-04-20"
 """The first nowcast date cut, two weeks after the triangle's first
 Meldedatum; cuts with under two steps of context are skipped."""
+
+FINETUNE_CONFIG = ft.ROOT / "packages/nowcastfoundation/config/finetune.toml"
+"""The fine-tuning settings, with the real-data window `[realdata_germany]`."""
 
 
 def window(first_date: str, truth_delay: int) -> tuple[str, str]:
@@ -62,6 +81,56 @@ def cut_dates(first: str, truth_until: str) -> list[str]:
         out.append(day.isoformat())
         day += dt.timedelta(days=1)
     return out
+
+
+@dataclass(frozen=True)
+class RealdataWindow:
+    """The German data the real-data checkpoint trains on.
+
+    Attributes
+    ----------
+    as_of : str
+        The last report date used: the last day of the development half.
+    truth_delay : int
+        Days a count must have had by `as_of` to be truth.
+    first_cut : str
+        The first nowcast date cut.
+    sources : tuple of str
+        The blocks' sources: `SOURCE` (the daily releases) and `weekly`.
+    held_out_dates : int
+        The latest nowcast dates held out to monitor the loss.
+    """
+
+    as_of: str
+    truth_delay: int
+    first_cut: str
+    sources: tuple[str, ...]
+    held_out_dates: int
+
+    @property
+    def truth_until(self) -> str:
+        """The last Meldedatum complete for `truth_delay` days by `as_of`."""
+        day = dt.date.fromisoformat(self.as_of)
+        return (day - dt.timedelta(days=self.truth_delay)).isoformat()
+
+    def cuts(self) -> list[str]:
+        """Every nowcast date from `first_cut` with its truth by then."""
+        return cut_dates(self.first_cut, self.truth_until)
+
+
+def realdata_window(path: Path | str = FINETUNE_CONFIG) -> RealdataWindow:
+    """Return the real-data checkpoint's German window.
+
+    Read from the table `[realdata_germany]` of the fine-tuning settings.
+    """
+    raw = tomllib.loads(Path(path).read_text())["realdata_germany"]
+    return RealdataWindow(
+        as_of=str(raw["as_of"]),
+        truth_delay=int(raw["truth_delay"]),
+        first_cut=str(raw["first_cut"]),
+        sources=tuple(raw["sources"]),
+        held_out_dates=int(raw["held_out_dates"]),
+    )
 
 
 def german_counts(wide: pd.DataFrame, as_of: str) -> pd.DataFrame:
@@ -110,14 +179,17 @@ def german_blocks(
     cuts: list[str],
     truth_until: str,
     first: int = 0,
+    sources: tuple[str, ...] = (SOURCE,),
 ) -> list[dict[str, Any]]:
     """Return the training blocks of the German data at nowcast dates.
 
     Each cut is laid out as the German tasks lay it out, on its real
-    dates: every report date up to it is a release, and Germany is the
-    country (`parent` exact). Each of `PLACES` gives a
-    block by `finetune.training_block`, at a lag taken in turn from
-    `LAGS` (from cut `first` on), padded as the simulated blocks are.
+    dates, and Germany is the country (`parent` exact). Each source and
+    each of `PLACES` gives a block by `finetune.training_block`, at a lag
+    taken in turn (from cut `first` on), padded as the simulated blocks
+    are. `SOURCE` takes every report date up to the cut as a release, at
+    a lag from `LAGS`; `weekly` takes a release a week, on the cut's
+    weekday, at a lag from `WEEKLY_LAGS`.
 
     Raises
     ------
@@ -136,42 +208,62 @@ def german_blocks(
                 f"cut {cut} needs truth to {end}, past the truth date "
                 f"{truth_until}"
             )
-        cutoffs = sorted(d for d in counts["report_date"].unique() if d <= cut)
-        for j, which in enumerate(PLACES):
-            view = (NATIONAL,)
-            if which != "national":
-                view = (NATIONAL, *leaves[which])
-            own = counts.loc[counts["location"].isin(leaves[which])]
-            block = training_block(
-                own,
-                SOURCE,
-                view,
-                cutoffs,
-                max_lag=LAGS[(i + j) % len(LAGS)],
-            )
-            if block is None or block["start"] < 2:
-                continue
-            padded = ft._pad(
-                block,
-                ft.CONTEXT,
-                ft.LOSS_HORIZON_DAYS,
-                ft.DAYS_PER_STEP[SOURCE],
-            )
-            levels = ft.target_levels(view)
-            padded["levels"] = tuple(levels[k] for k in block["target_places"])
-            padded["places"] = view
-            padded["target_places"] = list(block["target_places"])
-            padded["parent"] = "exact"
-            padded["mix"] = "germany"
-            padded["source"] = SOURCE
-            padded["cut"] = cut
-            out.append(padded)
+        daily = sorted(d for d in counts["report_date"].unique() if d <= cut)
+        for source in sources:
+            weekly = source == "weekly"
+            lags = WEEKLY_LAGS if weekly else LAGS
+            # Weekly releases fall on the cut's weekday, back from the cut.
+            cutoffs = daily[::-7][::-1] if weekly else daily
+            for j, which in enumerate(PLACES):
+                view = (NATIONAL,)
+                if which != "national":
+                    view = (NATIONAL, *leaves[which])
+                own = counts.loc[counts["location"].isin(leaves[which])]
+                lag = lags[(i + j) % len(lags)]
+                block = training_block(own, source, view, cutoffs, max_lag=lag)
+                if block is None or block["start"] < 2:
+                    continue
+                padded = ft._pad(
+                    block,
+                    ft.CONTEXT,
+                    ft.LOSS_HORIZON_DAYS,
+                    ft.DAYS_PER_STEP[source],
+                )
+                levels = ft.target_levels(view)
+                padded["levels"] = tuple(
+                    levels[k] for k in block["target_places"]
+                )
+                padded["places"] = view
+                padded["target_places"] = list(block["target_places"])
+                padded["parent"] = "exact"
+                padded["mix"] = "germany"
+                padded["data"] = "germany"
+                padded["source"] = source
+                padded["cut"] = cut
+                padded["lag"] = lag
+                padded["truth_end"] = end.isoformat()
+                out.append(padded)
     return out
 
 
-def _cut(args: tuple[pd.DataFrame, str, int, str]) -> list[dict[str, Any]]:
-    counts, cut, i, truth_until = args
-    return german_blocks(counts, [cut], truth_until, first=i)
+def _cut(
+    args: tuple[pd.DataFrame, str, int, str, tuple[str, ...]],
+) -> list[dict[str, Any]]:
+    counts, cut, i, truth_until, sources = args
+    return german_blocks(counts, [cut], truth_until, first=i, sources=sources)
+
+
+def _cut_all(
+    counts: pd.DataFrame,
+    cuts: list[str],
+    truth_until: str,
+    sources: tuple[str, ...],
+    workers: int,
+) -> list[dict[str, Any]]:
+    """Cut every cut's blocks over `workers` processes, in cut order."""
+    jobs = [(counts, c, i, truth_until, sources) for i, c in enumerate(cuts)]
+    with ProcessPoolExecutor(workers) as pool:
+        return [b for part in pool.map(_cut, jobs) for b in part]
 
 
 def make_blocks(
@@ -185,9 +277,7 @@ def make_blocks(
     as_of, truth_until = window(first_date, truth_delay)
     counts = german_counts(pd.read_csv(triangle), as_of)
     cuts = cut_dates(FIRST_CUT, truth_until)
-    jobs = [(counts, c, i, truth_until) for i, c in enumerate(cuts)]
-    with ProcessPoolExecutor(workers) as pool:
-        blocks = [b for part in pool.map(_cut, jobs) for b in part]
+    blocks = _cut_all(counts, cuts, truth_until, (SOURCE,), workers)
     with out.open("wb") as f:
         pickle.dump(blocks, f)
     print(
@@ -198,18 +288,52 @@ def make_blocks(
     return len(blocks)
 
 
+def make_realdata_blocks(
+    triangle: Path,
+    out: Path,
+    real: RealdataWindow,
+    workers: int = 4,
+) -> int:
+    """Cut the real-data checkpoint's German blocks and pickle them.
+
+    The triangle as available on the window's `as_of`, cut at each of its
+    nowcast dates from each of its sources, in cut order.
+    """
+    counts = german_counts(pd.read_csv(triangle), real.as_of)
+    cuts = real.cuts()
+    blocks = _cut_all(counts, cuts, real.truth_until, real.sources, workers)
+    with out.open("wb") as f:
+        pickle.dump(blocks, f)
+    print(
+        f"{len(blocks)} blocks of {len(cuts)} cuts {cuts[0]} to {cuts[-1]} "
+        f"from {', '.join(real.sources)}, reports to {real.as_of}, "
+        f"truth to {real.truth_until}: {out}",
+        flush=True,
+    )
+    return len(blocks)
+
+
 def main() -> None:
     """Cut the German blocks of the window the options give."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("triangle", type=Path)
     parser.add_argument("out", type=Path)
-    # The first scored German nowcast date and the benchmark's truth
-    # delay (`packages/nowcastgermany/config/germany.toml`
+    # The real-data checkpoint's window (`realdata_window`), or the mixed
+    # run's: the first scored German nowcast date and the benchmark's
+    # truth delay (`packages/nowcastgermany/config/germany.toml`
     # `nowcast.first_date`, `truth.delay`).
-    parser.add_argument("--first-date", required=True)
-    parser.add_argument("--truth-delay", type=int, required=True)
+    parser.add_argument("--realdata", action="store_true")
+    parser.add_argument("--first-date")
+    parser.add_argument("--truth-delay", type=int)
     parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
+    if args.realdata:
+        make_realdata_blocks(
+            args.triangle, args.out, realdata_window(), args.workers
+        )
+        return
+    if args.first_date is None or args.truth_delay is None:
+        parser.error("give --realdata, or --first-date and --truth-delay")
     make_blocks(
         args.triangle,
         args.out,
