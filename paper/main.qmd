@@ -195,8 +195,8 @@ Teams without the capacity to set up specialist models could also use them direc
 - We varied the blocks so that during fine-tuning the model sees a range of different reporting formats found in real surveillance data. This may allow the model to learn how to handle different reporting scenarios. The variations include:
   - Blocks can be daily, 3-day or weekly, reflecting the different time steps found in real surveillance data.
   - Daily blocks can also have an extra series per place, with its weekly or 3-day totals or its rolling 7-day or 3-day sums, allowing the model to learn how to handle different methods of aggregating over time.
-  - In 15% of blocks the releases start late, so the first release fills in earlier reference dates, as the Ebola hub's first release did. This allows the model to learn how to handle situations where reporting starts partway through an outbreak resulting in missing lag values for earlier dates.
-  - 5% of blocks have no lag series, so the model only sees counts up to the last complete date, as when no lagged series are available.
+  - In 15% of blocks the releases start late, so the first release fills in earlier reference dates, as the Ebola hub's first release did. This means the model can learn how to handle situations where reporting starts partway through an outbreak resulting in missing lag values for earlier dates.
+  - 5% of blocks have no lag series, so the model only sees counts up to the last complete date (as when no lagged series are available).
   - Most blocks hold several places, and one in five blocks from simulations with more than one place holds a single series, so the model sees both single and multiple places.
   - In a third each of the blocks with places, the national count equals the sum of the places, exceeds it, or is reported later. This reflects situations where the sum of individual locations does not equal the national count or may have a different reporting delay.
   - Training blocks set $D$ by the same rule in 90% of blocks, and scale it by a factor drawn from Normal(1, 0.05) in the other 10%, so the model can handle $D$ set slightly differently.
