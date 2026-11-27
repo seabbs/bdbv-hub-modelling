@@ -674,6 +674,81 @@ def draw_values(
     v["burst_mult"] = vec(ds("burst_mult", n_bursts))
     keep = int(grid["constants"]["burst_keep_max"])
     v["burst_keep"] = vec(np.minimum(dc("burst_keep_days", n_bursts), keep))
+    # Ascertainment that changes over time (`ascertainment_*`).
+    v.update(_ascertainment_changes(grid, design, n_s, span, rng))
+    return v
+
+
+def _ascertainment_changes(
+    grid: Grid,
+    design: Mapping[str, Any],
+    n_s: int,
+    span: int,
+    rng: np.random.Generator,
+) -> dict[str, Any]:
+    """Draw the values of ascertainment that changes over time.
+
+    The shared change's sizes (signed for drift and step) and timings,
+    its weekly walk over `span` weeks, each stratum's own change (of the
+    shared kind for related strata, of a kind drawn by the
+    `ascertainment_change` weights for independent ones), the strata's
+    shared share and switch, the slope on the stratum's counts (lower
+    ascertainment at peaks with `ascertainment_counts_lower`, a sign per
+    stratum where each has its own slope) and the noise sd. Changes are
+    on the logit scale.
+    """
+
+    def ds(name: str, n: int | None = None) -> Any:
+        return draw_setting(grid, name, rng, n)
+
+    def signed(name: str, n: int) -> list[float]:
+        sign = np.where(rng.random(n) < 0.5, 1.0, -1.0)
+        return [float(e) for e in sign * ds(name, n)]
+
+    def each(name: str, n: int) -> list[float]:
+        return [float(e) for e in ds(name, n)]
+
+    floor = float(grid["floors"]["period_days"])
+    levels = grid["factors"]["ascertainment_change"]
+    names = list(levels)
+    w = np.asarray([levels[k] for k in names], dtype=float)
+    first = str(design.get("ascertainment_change", "static"))
+    if design.get("ascertainment_change_strata") == "independent":
+        own = [
+            str(names[i]) for i in rng.choice(len(names), n_s, p=w / w.sum())
+        ]
+    else:
+        own = [first] * n_s
+    v: dict[str, Any] = {}
+    for prefix, n in (("asc_", 1), ("asc_own_", n_s)):
+        v[f"{prefix}drift"] = signed("ascertainment_drift", n)
+        v[f"{prefix}step"] = signed("ascertainment_step", n)
+        v[f"{prefix}step_at"] = each("step_at", n)
+        v[f"{prefix}periodic"] = each("ascertainment_periodic", n)
+        v[f"{prefix}periodic_weeks"] = each("periodic_weeks", n)
+        v[f"{prefix}smooth_amp"] = each("ascertainment_smooth_amp", n)
+        v[f"{prefix}smooth_period"] = [
+            max(floor, e) for e in each("smooth_period", n)
+        ]
+        v[f"{prefix}smooth_phase"] = each("phase", n)
+    for k in list(v):
+        if k.startswith("asc_") and not k.startswith("asc_own_"):
+            v[k] = v[k][0]
+    v["asc_own_change"] = own
+    v["asc_walk_sd"] = ds("ascertainment_walk_sd")
+    steps = np.concatenate([[0.0], ds("walk_step", span - 1)])
+    v["asc_walk"] = [float(e) for e in v["asc_walk_sd"] * np.cumsum(steps)]
+    v["asc_rho"] = ds("delay_change_rho")
+    v["asc_switch_at"] = ds("delay_switch_at")
+    v["asc_switch_days"] = ds("delay_switch_days")
+    lower = draw_share(grid, "ascertainment_counts_lower", rng, n_s)
+    sign = np.where(lower, -1, 1)
+    if design.get("ascertainment_counts", "none") in ("none", "shared"):
+        sign[:] = sign[0]
+    v["asc_counts_sign"] = [int(e) for e in sign]
+    v["asc_counts_slope"] = ds("ascertainment_counts_slope")
+    v["asc_counts_sd"] = ds("ascertainment_counts_sd")
+    v["asc_noise_sd"] = ds("ascertainment_noise_sd")
     return v
 
 

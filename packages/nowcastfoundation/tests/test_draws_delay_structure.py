@@ -43,6 +43,11 @@ def test_new_factors_have_a_layer_and_keep_todays_level(grid):
         "delay_change_combine": "single",
         "delay_counts": "none",
         "bursts": "none",
+        "ascertainment_change": "static",
+        "ascertainment_change_strata": "shared",
+        "ascertainment_change_switch": "none",
+        "ascertainment_counts": "none",
+        "ascertainment_noise": "none",
     }
     for factor, level in keep.items():
         assert factor in grid["factor_layers"]
@@ -150,3 +155,35 @@ def test_over_reporting_rates_reach_bremen_like_values(grid):
     assert 0.005 < np.median(rate) < 0.03
     assert 0.005 < np.mean(rate > 0.5) < 0.03
     assert np.mean(rate > 1.5) > 0
+
+
+def test_ascertainment_changes_are_drawn_by_stratum(grid, sims):
+    kinds = set(grid["factors"]["ascertainment_change"])
+    lower = []
+    for d, v in sims:
+        n_s = d["n_places"] * d["n_ages"]
+        own = v["asc_own_change"]
+        assert len(own) == n_s
+        assert set(own) <= kinds
+        if d["ascertainment_change_strata"] != "independent":
+            assert set(own) == {d["ascertainment_change"]}
+        for key in ("asc_own_drift", "asc_own_step_at", "asc_counts_sign"):
+            assert len(v[key]) == n_s
+        span = d["weeks"] + max(grid["max_delay_days"]) // 7 + 6
+        assert len(v["asc_walk"]) == span
+        if d["ascertainment_counts"] in ("none", "shared"):
+            assert len(set(v["asc_counts_sign"])) == 1
+        lower += [s < 0 for s in v["asc_counts_sign"]]
+        assert v["asc_noise_sd"] > 0
+    share = grid["shares"]["ascertainment_counts_lower"]
+    assert abs(np.mean(lower) - share) < 0.05
+    for factor in (
+        "ascertainment_change",
+        "ascertainment_change_strata",
+        "ascertainment_change_switch",
+        "ascertainment_counts",
+        "ascertainment_noise",
+    ):
+        for level in grid["factors"][factor]:
+            want = _weight(grid, factor, level)
+            assert abs(_share(sims, factor, level) - want) < 0.05

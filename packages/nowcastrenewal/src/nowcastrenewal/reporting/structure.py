@@ -200,7 +200,8 @@ def own_change(
     ----------
     v : mapping
         The values: `{prefix}change` (each stratum's kinds, a combined
-        change as `"drift+step"`) and `{prefix}{setting}` by stratum.
+        change as `"drift+step"`) and `{prefix}{setting}` by stratum for
+        the settings its kinds use.
     prefix : str
         The values' prefix, as `"own_"`.
     g : int
@@ -214,7 +215,8 @@ def own_change(
     kinds = tuple(str(np.atleast_1d(v[f"{prefix}change"])[g]).split("+"))
     out = {"weeks": v["weeks"]}
     for k in OWN_SETTINGS:
-        out[k] = float(np.atleast_1d(v[f"{prefix}{k}"])[g])
+        if f"{prefix}{k}" in v:
+            out[k] = float(np.atleast_1d(v[f"{prefix}{k}"])[g])
     return kinds, out
 
 

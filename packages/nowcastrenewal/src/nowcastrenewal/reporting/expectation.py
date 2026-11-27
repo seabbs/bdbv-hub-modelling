@@ -3,6 +3,9 @@ r"""A simulation's log expected reports by stratum, reference day and delay.
 
 `ReportingExpectation` composes the reporting step's parts:
 
+- ascertainment that changes over time
+  (`ascertainment.AscertainmentChange`), on the expected counts by
+  reference date before the delay;
 - the reference-date effects on the delay (`effects.ReferenceEffects`);
 - the report-date and reference-weekday effects
   (`effects.ReportEffects`);
@@ -31,6 +34,7 @@ from jax.typing import ArrayLike
 from pyrenew.metaclass import RandomVariable
 
 from ..components.hazards import log_hazard_probs
+from .ascertainment import ascertainment_change
 from .effects import (
     ReferenceEffects,
     ReferenceFrame,
@@ -87,6 +91,9 @@ class ReportingExpectation(RandomVariable):
             as_log_pmf=self.as_log_probs,
         )
         self.reports = report_days(frame, design, values, max_delay)
+        self.ascertainment = ascertainment_change(
+            f"{name}::ascertainment", frame, design, values
+        )
 
     def sample(self, log_lambda: ArrayLike, **kwargs: object) -> Array:
         """Return the log expected reports.
@@ -103,6 +110,8 @@ class ReportingExpectation(RandomVariable):
         Array
             `(G, T, D)`.
         """
+        if self.ascertainment is not None:
+            log_lambda = self.ascertainment(log_lambda=log_lambda)
         parametric, non_parametric = self.reference(log_lambda=log_lambda)
         report, by_reference = self.report()
         if self.as_log_probs:
