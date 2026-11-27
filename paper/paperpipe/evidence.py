@@ -149,6 +149,15 @@ waits on until the variant is scored, and the two runs' labels. The
 variant is named by its workflow run (the paper config's `comparisons`)."""
 
 
+SHARES: Final = {125: "1/8", 250: "1/4", 500: "1/2", 1000: "all"}
+"""A real-data run's checkpoints, thousandths of its passes, as shares."""
+
+
+def _share(thousandths: float) -> str:
+    """Return a checkpoint's share of its run's passes."""
+    return SHARES.get(int(thousandths), f"{thousandths / 1000:g}")
+
+
 def _step(label: str) -> int:
     """Return a run checkpoint's steps or outbreaks, `n<N>`; 0 otherwise."""
     return int(label[1:]) if re.fullmatch(r"n\d+", label) else 0
@@ -340,6 +349,7 @@ def checkpoint_figure(
     scores: pd.DataFrame,
     fig: Figure | SubFigure | None = None,
     legend: bool = True,
+    share: bool = False,
 ) -> Figure | SubFigure:
     """Plot each model's relative WIS against the fine-tune's outbreaks.
 
@@ -354,7 +364,8 @@ def checkpoint_figure(
     `rel_wis` against `randomwalknowcast`.
     Drawn on `fig`, a new figure by default, or a subfigure of a run's
     progress figure (`paperpipe.progress`); `legend` False leaves out the
-    shared legend.
+    shared legend. With `share`, `outbreaks` are thousandths of a run's
+    passes (a run on real data alone), labelled as shares of them.
     """
     sc = scores.loc[scores["model"] != "randomwalknowcast"]
     sizes = sorted(sc.loc[sc["outbreaks"] > 0, "outbreaks"].unique())
@@ -409,12 +420,15 @@ def checkpoint_figure(
             )
         ax.set_xscale("log")
         ax.set_xlim(ticks[0] / 1.5, ticks[-1] * 1.5)
-        ax.set_xticks(ticks, [f"{t:,.0f}" for t in ticks], fontsize=7)
+        labels = [_share(t) if share else f"{t:,.0f}" for t in ticks]
+        ax.set_xticks(ticks, labels, fontsize=7)
         ax.minorticks_off()
         reference = model_label("randomwalknowcast")
         ax.axhline(1, color="#888888", ls="-", lw=1, label=reference)
         ax.set_title(f"{study}, {level} (n = {n}{origins})", fontsize=9)
-        ax.set_xlabel("Fine-tuning outbreaks")
+        ax.set_xlabel(
+            "Share of the passes" if share else "Fine-tuning outbreaks"
+        )
         ax.set_ylabel("Relative WIS")
     for ax in axes[len(panels) :]:
         ax.set_visible(False)
