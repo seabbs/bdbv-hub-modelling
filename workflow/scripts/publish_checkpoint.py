@@ -2,13 +2,19 @@
 
     python workflow/scripts/publish_checkpoint.py CHECKPOINT OUT
     python workflow/scripts/publish_checkpoint.py --held-out CHECKPOINT OUT
+    python workflow/scripts/publish_checkpoint.py --main RUN CHECKPOINT OUT
 
 CHECKPOINT is a run's `n<N>/` folder. A checkpoint with the series bias
 is released as `chronos-slots-<hash>`, else `chronos-ft-<hash>`. Safe
 to run again: a release whose sums match is left as it is. OUT records
 the tag. With `--held-out`, an offloaded checkpoint's held-out losses
 (`held-out.json`, rules/evaluate.smk), scored after its release, are
-uploaded to it beside its settings, and OUT records the tag.
+uploaded to it beside its settings, and OUT records the tag. With
+`--main`, released checkpoint CHECKPOINT of the main fine-tuning run RUN
+(the paper's `live_run`) becomes the one the fine-tuned models load: the
+release `chronos-main` names it (`fs.promote_main`), and OUT records it.
+CHECKPOINT needs only its `settings.json`, so a checkpoint is promoted
+from a folder holding its release's `settings.json` too.
 """
 
 from __future__ import annotations
@@ -41,6 +47,10 @@ def main() -> None:
     """Publish the checkpoint in `sys.argv[1]`, recording it in argv[2]."""
     if sys.argv[1] == "--held-out":
         held_out(Path(sys.argv[2]), Path(sys.argv[3]))
+        return
+    if sys.argv[1] == "--main":
+        record = fs.promote_main(Path(sys.argv[3]), sys.argv[2])
+        Path(sys.argv[4]).write_text(json.dumps(record) + "\n")
         return
     where, out = Path(sys.argv[1]), Path(sys.argv[2])
     settings = json.loads((where / "settings.json").read_text())

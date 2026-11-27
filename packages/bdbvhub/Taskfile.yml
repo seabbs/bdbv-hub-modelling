@@ -9,10 +9,10 @@ tasks:
 
   fit-store:
     dir: ../..
-    desc: Load the fitted models' stored fits into results/ (fetches the fit-store branch)
+    desc: Load the fitted models' stored fits into results/ (fetches the fit store artifact)
     run: once
     cmds:
-      - uv run fit-store-branch fetch output/fit-store
+      - uv run fit-store-artifact fetch output/fit-store
       - uv run bdbvhub fit-store load --store output/fit-store
 
 
@@ -20,7 +20,7 @@ tasks:
     dir: ../..
     desc: List the fits the store lacks for this code and data
     cmds:
-      - uv run fit-store-branch fetch output/fit-store
+      - uv run fit-store-artifact fetch output/fit-store
       - uv run bdbvhub fit-store plan --store output/fit-store
 
 

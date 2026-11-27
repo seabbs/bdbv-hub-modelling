@@ -202,6 +202,16 @@ their coordinator (laptop CPU, five dates a chunk)."""
 COORDINATOR_MB = 1024
 """The memory (MB) a German unit's coordinator holds beside its workers."""
 
+EVALUATION_WORKER_MB = 3072
+"""The least memory (MB) of each worker process of a held-out pass split
+over the CPU (`nowcastfoundation.finetune.evaluate.split_pass`): base
+Chronos-2 with the adapter merged, the held-out blocks and one batch's
+activations. Its benchmark's peak takes over once it has one."""
+
+EVALUATION_COORDINATOR_MB = 2048
+"""The memory (MB) a split held-out pass's coordinator holds beside its
+workers: its own model and the held-out blocks."""
+
 
 class Scoring:
     """The checkpoint scoring units of a workflow config on this machine.
@@ -290,6 +300,27 @@ class Scoring:
         """
         workers = 1 if self.germany_forecast.gpu else self.score_workers
         return WORKER_MB * workers + COORDINATOR_MB
+
+    def evaluation_workers(self, threads: int) -> int:
+        """Return the worker processes a held-out pass with `threads` uses.
+
+        On the CPU, one for each forecasting job's threads
+        (`forecast.threads`) the rule's `threads` hold, so each worker
+        runs at a few threads' rate, where the pass scales best; one off
+        the CPU (`nowcastfoundation.finetune.evaluate.evaluate_workers`).
+        """
+        if self.checkpoint_forecast.device != "cpu":
+            return 1
+        return max(1, threads // self.unit_threads)
+
+    def evaluation_memory_floor(self) -> int:
+        """Return a held-out pass's least memory, its workers' and its own.
+
+        `EVALUATION_WORKER_MB` a worker (`evaluation_workers` of
+        `evaluate_threads`) and `EVALUATION_COORDINATOR_MB`.
+        """
+        workers = self.evaluation_workers(self.evaluate_threads)
+        return EVALUATION_WORKER_MB * workers + EVALUATION_COORDINATOR_MB
 
     def unit_priority(
         self, base: float, reference: float

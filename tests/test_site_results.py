@@ -44,7 +44,8 @@ def test_site_results_makes_and_stores_the_site_results() -> None:
     runs = _runs(job)
     for command in COMPUTE:
         assert command in runs, command
-    assert "push-site" in runs
+    stores = [s for s in job["steps"] if "upload-artifact" in s.get("uses", "")]
+    assert [s["with"]["name"] for s in stores] == ["${{ env.FIT_STORE }}-site"]
     assert "gh workflow run pages.yml" in runs
     # It waits on no fit, and a dispatch makes the results at once.
     assert "needs" not in job
@@ -63,5 +64,5 @@ def test_each_store_remakes_the_site_results_without_the_slow_fits() -> None:
 
 def test_site_unpacks_the_stored_site_results() -> None:
     prep = _runs(_jobs("pages.yml")["prep"])
-    # The bundle is stored in parts under GitHub's file size limit.
-    assert "cat output/fit-store/site/latest.tar.gz* | tar -xz" in prep
+    assert "fetch output/fit-store backtests site" in prep
+    assert "tar -xzf output/fit-store/site/latest.tar.gz" in prep

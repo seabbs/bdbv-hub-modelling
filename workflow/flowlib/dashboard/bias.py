@@ -10,7 +10,9 @@ ranges, its checkpoints' adapters
 library, or `*.pt`, read with torch when installed) and, for the live
 run, its current state (`train/state/`). Each relation's values over
 training are its mean over layers and heads and each layer's mean over
-heads; logged steps give only the former.
+heads; logged steps give only the former. A run whose checkpoints'
+settings carry no `series_bias` entry trained without the bias and is
+named, not read (`has_series_bias`).
 """
 
 from __future__ import annotations
@@ -171,6 +173,21 @@ def layer_means(rows: Sequence[Sequence[float]]) -> list[float]:
     return [sum(r) / len(r) for r in rows]
 
 
+def has_series_bias(run: Run) -> bool | None:
+    """Return whether a run trained with the series attention bias.
+
+    The trainer writes a `series_bias` entry into each checkpoint's
+    settings only with the bias. None if the run has no checkpoint yet,
+    so its own files decide.
+    """
+    if run.folder is None:
+        return None
+    saved = [s for _, s, _ in checkpoints(run.folder)]
+    if not saved:
+        return None
+    return any("series_bias" in s for s in saved)
+
+
 def run_bias(
     run: Run,
     step: int | None,
@@ -278,10 +295,15 @@ def payload(
     """Return the bias row's data for the runs that have bias.
 
     `rows` and `sims` are each run's logged steps and step-to-simulations
-    map, by run key (`run_bias`).
+    map, by run key (`run_bias`). Runs trained without the bias are
+    `nobias` (`has_series_bias`); runs with no bias logged or saved yet
+    are `missing`.
     """
-    out, missing = [], []
+    out, missing, nobias = [], [], []
     for r in run_list:
+        if has_series_bias(r) is False:
+            nobias.append({"key": r.key, "label": r.label})
+            continue
         data = run_bias(
             r,
             live_step if r.live else None,
@@ -317,6 +339,7 @@ def payload(
     return {
         "runs": out,
         "missing": missing,
+        "nobias": nobias,
         "col": {k: COLOURS.get(k, OTHER) for k in keys},
         "pairs": [{"key": k, "label": labels.get(k, k)} for k in keys],
     }

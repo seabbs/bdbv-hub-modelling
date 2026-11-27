@@ -42,7 +42,11 @@ def _matrix(v):
 
 
 def _history(run):
-    # As the trainer writes it: each relation's mean, range and values.
+    # As the trainer writes it: each relation's mean, range and values,
+    # with the bias in the checkpoint's settings.
+    path = run / "train" / "n250" / "settings.json"
+    settings = json.loads(path.read_text())
+    path.write_text(json.dumps({**settings, "series_bias": {"init": "zero"}}))
     rows = []
     for step, v in ((0, 0.0), (100, 0.2), (200, 0.4)):
         bias = {

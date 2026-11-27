@@ -1,10 +1,10 @@
 # Copyright (c) 2026 The bdbv-hub-modelling authors. MIT licence, see LICENSE.
 """Use our fine-tuned Chronos-2 on your own reporting triangle.
 
-`load` downloads a `chronos-ft-<hash>` release of seabbs/bdbv-hub-modelling,
-the newest or a pinned one, and checks each adapter file against the
-release's `sha256sums.txt`. `forecast_triangle` gives a reporting
-triangle to Chronos-2 as the `foundation` model does and
+`load` downloads a checkpoint release of seabbs/bdbv-hub-modelling, the
+main fine-tuning run's newest or a pinned one, and checks each adapter
+file against the release's `sha256sums.txt`. `forecast_triangle` gives a
+reporting triangle to Chronos-2 as the `foundation` model does and
 returns quantiles of each row's final count, for the rows still being
 reported and for rows ahead.
 See the "Using the fine-tuned Chronos-2" docs page.
@@ -57,7 +57,8 @@ def load(spec: str = "latest") -> FineTunedChronos:
     Parameters
     ----------
     spec : str
-        `"latest"`, the newest `chronos-ft-*` release by publish date, or
+        `"latest"`, the main fine-tuning run's newest checkpoint (the
+        release `chronos-main` names), or
         a settings hash such as `"e8a1f5ae338b"`, the release
         `chronos-ft-e8a1f5ae338b`.
 
@@ -73,7 +74,7 @@ def load(spec: str = "latest") -> FineTunedChronos:
     Raises
     ------
     LookupError
-        If there is no `chronos-ft-*` release.
+        If no checkpoint of the main fine-tuning run is released.
     FileNotFoundError
         If the release lacks an asset.
     ValueError

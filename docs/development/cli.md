@@ -51,7 +51,7 @@ The Pages build makes the rest with the steps of `task bdbvhub:results`, from th
 
 The backtest and the docs build fit no model.
 The Fit store workflow (`.github/workflows/fit-store.yml`) fits each fitted model once at each real origin.
-Each fit is one file on the `fit-store` branch, `<model>/<origin>/<key>.json.gz`.
+Each fit is one file in the fit store, `<model>/<origin>/<key>.json.gz`, kept as the GitHub Actions artifact `fit-store` ([where the store lives](https://github.com/seabbs/bdbv-hub-modelling/blob/main/.github/workflows/README.md#where-the-fit-store-lives)).
 The key hashes:
 
 - the task at the origin, which holds only the releases up to it;
@@ -73,12 +73,14 @@ A submission candidate's fit also holds the fit directory the submission reads (
 The workflow runs on pushes to `main` that change these inputs, every 6 hours for new hub releases, and when the submission finds a round's fits missing.
 It fits and stores the newest origin first, then the other origins, so a backfill never holds up a round.
 A push never cancels a running refit: the latest push waits and runs after it.
-The fit jobs are read-only, and one job with no project code pushes their files and prunes the branch.
+The fit jobs are read-only, and jobs with no project code add their files to the newest store, prune it and upload it again, one after another.
 It keeps the current key's file and the newest good fit of older code for each model and origin.
 A fit that fails is stored as failed, and is fitted again only when its inputs change or a dispatch sets `retry_failed`.
 On a pull request the workflow only lists the fits the change needs.
+The store artifact is kept 90 days and renewed by each store; once it has expired, every fit is made again.
 Only `main` writes to `fit-store`.
-To test a branch, dispatch the workflow on it with `store_branch` set to a name starting `fit-store-scratch`, and `models` to limit it. Any other `store_branch` stops the run.
+To test a branch, dispatch the workflow on it with `store` set to a name starting `fit-store-scratch`, and `models` to limit it. Any other `store` stops the run.
+A scratch store is kept 7 days.
 When fits are stored, the workflow rebuilds the docs.
 
 ```bash
@@ -87,7 +89,10 @@ task bdbvhub:fit-store       # load the stored fits into results/
 ```
 
 `task bdbvhub:backtest` loads the store first.
-Where the store has no fit for the current key, `load` uses the newest stored fit of that model and origin.
+Where the current key has not been fitted yet, `load` uses the newest good stored fit of that model and origin and labels it pending.
+Where the current key's fit failed, the model has no forecast at that origin, and no older fit stands in.
+The stored backtests load only the current code's fits (`fit-store load --current-only`), so a fit not made yet is listed as pending, not scored.
+`nowcast-origins.csv` names the key and commit of the fit each stored model was scored from.
 Pages with fitted-model results list the commits of their fits and the fits not yet made.
 A full refit is 20 fits (4 models at 5 origins): 43 minutes and 5.3 runner-hours, with the slowest fit 39 minutes (`renewalbvd`).
 A new release adds 4 fits: about 40 minutes and 1.3 runner-hours.

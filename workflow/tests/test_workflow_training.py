@@ -156,3 +156,24 @@ def test_the_next_segment_s_batches_go_first(
     # The next segment's above the held-out evaluation, earlier seeds first.
     assert first > second > compute.NEXT_BATCH_PRIORITY
     assert compute.BATCH_PRIORITY <= later < compute.BATCH_PRIORITY + 1
+
+
+def test_the_main_run_promotes_only_its_newest_saved_checkpoint(
+    tmp_path: Path,
+) -> None:
+    t = _training(tmp_path)
+    t.config = {**t.config, "live_run": "x"}
+    assert t.main_checkpoint() == []
+    assert t.promoted() == []
+    for n in (100, 200):
+        where = Path(t.train_dir("x")) / f"n{n}"
+        where.mkdir(parents=True)
+        (where / "settings.json").write_text("{}")
+    newest = f"{t.train_dir('x')}/n200/published.json"
+    assert t.main_checkpoint() == [newest]
+    assert t.main_record == f"{tmp_path}/runs/{training.MAIN_RECORD}"
+    assert t.main_record in t.published_checkpoints(None)
+    # An ablation run never promotes its checkpoints.
+    t.config = {**t.config, "live_run": "other"}
+    assert t.main_checkpoint() == []
+    assert t.main_record not in t.published_checkpoints(None)

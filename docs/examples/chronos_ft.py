@@ -16,7 +16,7 @@ t, d = np.indices(counts.shape)
 counts[t + d > len(weeks) - 1] = np.nan
 triangle = pd.DataFrame(counts, index=weeks, columns=range(4))
 
-# The newest chronos-ft release, its adapter checked against its SHA-256.
+# The main fine-tuning run's newest checkpoint, checked against its SHA-256.
 model = chronos_ft.load("latest")
 forecast = chronos_ft.forecast_triangle(
     triangle, horizon=2, model=model, quantile_levels=[0.1, 0.5, 0.9]

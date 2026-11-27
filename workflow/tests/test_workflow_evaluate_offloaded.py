@@ -42,7 +42,7 @@ def fake(monkeypatch):
         calls["loads"] += 1
         return Base()
 
-    def evaluate(adapter, _base, _blocks, kinds, _batch, real=()):
+    def evaluate(adapter, _base, _blocks, kinds, _batch, _split=None, real=()):
         calls["evals"].append((Path(adapter), list(kinds), len(real)))
         if "start" in kinds:
             return {"held_out_loss": 0.4}
@@ -150,3 +150,49 @@ def test_base_chronos_2_s_step_0_is_cached_by_model_and_held_out_set(
     # Scored once: the second run takes the first's from the cache.
     assert [c[1] for c in calls["evals"]] == [["start"]]
     assert len(list(cache.glob("*.json"))) == 1
+
+
+def test_the_runner_writes_the_same_results_over_workers(tmp_path, monkeypatch):
+    # End to end on a tiny Chronos-2: step 0 and a checkpoint scored in
+    # one process and over three workers write the same results. The
+    # workers, fresh interpreters, load the tiny model by name.
+    monkeypatch.syspath_prepend(str(ROOT / "packages/nowcastfoundation/tests"))
+    from chronos_toy import toy_base
+    from test_finetune_offload import blocks, trained
+
+    mod = runner()
+    fs = mod.fs
+    monkeypatch.setattr(mod.fe, "load_base", toy_base)
+    out = {}
+    for n in (1, 3):
+        monkeypatch.setenv(mod.fe.WORKERS_ENV, str(n))
+        train = tmp_path / f"w{n}" / "train"
+        train.mkdir(parents=True)
+        val = blocks(7)
+        fs.save_blocks(val, train / fs.HELD_OUT_BLOCKS)
+        model = trained()
+        request = {"n_validation": len(val), "batch_size": 2}
+        fs.save_snapshot(
+            model,
+            train / "evals" / "step-0000000",
+            {**request, "step": 0, "kinds": ["start"]},
+        )
+        where = train / "n500"
+        model.save_pretrained(where / "finetuned-ckpt")
+        (where / "settings.json").write_text(
+            json.dumps({**request, "steps": 200})
+        )
+        mod.main(["base", str(where), "--device", "cpu"])
+        mod.main(["checkpoint", str(where), "--device", "cpu"])
+        out[n] = [
+            {
+                k: v
+                for k, v in json.loads(path.read_text()).items()
+                if k != "seconds"
+            }
+            for path in (
+                train / "evals" / "step-0000000.json",
+                where / "held-out.json",
+            )
+        ]
+    assert out[1] == out[3]
