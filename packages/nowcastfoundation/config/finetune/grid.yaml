@@ -112,6 +112,7 @@ factor_layers:
   delay_jitter: delays
   report_cap: reporting
   report_stop: reporting
+  delay_strata_noise: delays
 # Structured weekday patterns: with `weekday_pattern`, a sim's reference
 # and report weekday effects each take a pattern drawn from these parts
 # (each in with `weekday_pattern_part`, at least one; which days and the
@@ -274,6 +275,14 @@ factors:
   report_stop:
     'no': 9
     'yes': 1
+  # Noise on every delay parameter by stratum: static (`strata`), week to
+  # week in each stratum (`strata_time`) or both, on top of the week-to-
+  # week noise shared by all strata (`delay_jitter`); none in half.
+  delay_strata_noise:
+    none: 3
+    strata: 1
+    strata_time: 1
+    both: 1
 distributions:
   quiet:
     dist: beta
@@ -768,6 +777,18 @@ distributions:
     sdlog: 0.5
     layer: delays
     why: week-to-week jitter of the delay's parameters of about 4% to 23% (5-95%) on their log scale
+  delay_strata_sd:
+    dist: lognormal
+    median: 0.1
+    sdlog: 0.5
+    layer: delays
+    why: each stratum's static noise on the delay's parameters of about 4% to 23% (5-95%) on their log scale, as the week-to-week jitter
+  delay_strata_jitter_sd:
+    dist: lognormal
+    median: 0.07
+    sdlog: 0.5
+    layer: delays
+    why: each stratum's own week-to-week noise on the delay's parameters of about 3% to 16% (5-95%) on their log scale
   delay_dow_sd:
     dist: lognormal
     median: 0.1

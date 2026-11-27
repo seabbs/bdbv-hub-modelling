@@ -22,6 +22,8 @@ intercept, the covariates and the random effects (centred).
 
 The forms, and the simulator's values for each term, are epinowcast's at
 the pinned commit; two differences are listed in `ReferenceEffects`.
+The delay's structure across strata and time beyond that regression
+(noise layers by week, stratum and both) is in `structure`.
 PyRenew has no reporting-delay regression,
 so this is our own `RandomVariable`.
 """
@@ -325,28 +327,12 @@ class ReferenceEffects(RandomVariable):
         self.hazard = design["delay_form"] != "parametric"
         self.covariates = change_covariates(frame, design, values)
         self.effects = _effects(frame, design, values)
-        self.jitter = (
-            float(values["delay_jitter_sd"])
-            if design.get("delay_jitter") == "yes"
-            else 0.0
-        )
+        from .structure import NoiseLayers, noise_layers
 
-    def _jitter(self, name: str) -> Array:
-        """Each stratum and day's week-to-week delay jitter, `(G, T)`.
-
-        A standard normal per week times `delay_jitter_sd`, the same in
-        every stratum and centred over the observed days as the random
-        effects, so the delay moves from week to week with no trend.
-        """
-        G, T = len(self.frame.place), len(self.frame.dates)
-        week = np.asarray(self.frame.week)
-        z = numpyro.sample(
-            f"{self.name}::jitter_{name}",
-            dist.Normal(0.0, 1.0).expand([int(week.max()) + 1]),
-        )
-        x = self.jitter * z[week]
-        x = x - x[: self.frame.observed].mean()
-        return jnp.broadcast_to(x, (G, T))
+        # Noise on every delay parameter (`structure.NoiseLayers`): by
+        # week (`delay_jitter`), by stratum and by stratum and week
+        # (`delay_strata_noise`), with no trend.
+        self.noise = NoiseLayers(name, frame, *noise_layers(design, values))
 
     def _random(self, prefix: str) -> Array:
         """Each stratum and day's random effects, centred, `(G, T)`."""
@@ -379,8 +365,8 @@ class ReferenceEffects(RandomVariable):
             + self._fixed(1.0, centre=True)
             + self._random("mean")
         )
-        if self.jitter:
-            mu = mu + self._jitter("location")
+        if self.noise:
+            mu = mu + self.noise(term="location")
         return mu
 
     def non_parametric(self) -> Array:
@@ -402,13 +388,13 @@ class ReferenceEffects(RandomVariable):
         intercept = jnp.log(1 / v["delay_mean"])  # logit(1 / (1 + mean))
         by_day = self._fixed(-1.0, centre=True) + self._random("hazard")
         out = intercept + by_day[..., None] + by_delay
-        if self.jitter:
-            # The level and the shape (a tilt across delays) by week.
+        if self.noise:
+            # The level and the shape (a tilt across delays).
             tilt = (jnp.arange(D) - (D - 1) / 2) / D
             out = (
                 out
-                + self._jitter("hazard")[..., None]
-                + self._jitter("shape")[..., None] * tilt
+                + self.noise(term="hazard")[..., None]
+                + self.noise(term="shape")[..., None] * tilt
             )
         return jnp.asarray(out)
 
@@ -434,8 +420,8 @@ class ReferenceEffects(RandomVariable):
             mu = self.location()
             numpyro.deterministic(f"{self.name}::location", mu)
             scale = jnp.broadcast_to(jnp.asarray(sigma, dtype=float), mu.shape)
-            if self.jitter:
-                scale = scale * jnp.exp(self._jitter("scale"))
+            if self.noise:
+                scale = scale * jnp.exp(self.noise(term="scale"))
             numpyro.deterministic(f"{self.name}::scale", scale)
             delay = Delay(family, mu, scale)
             parametric = (

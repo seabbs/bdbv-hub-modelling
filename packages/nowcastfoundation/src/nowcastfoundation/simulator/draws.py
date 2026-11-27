@@ -639,4 +639,7 @@ def draw_values(
     # draws above are unchanged.
     v["report_cap_days"] = ds("report_cap_days")
     v["report_stop_at"] = ds("report_stop_at")
+    # Noise on the delay's parameters by stratum (`delay_strata_noise`).
+    v["delay_strata_sd"] = ds("delay_strata_sd")
+    v["delay_strata_jitter_sd"] = ds("delay_strata_jitter_sd")
     return v
