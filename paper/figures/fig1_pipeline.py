@@ -373,17 +373,18 @@ def panel_b(g: Svg, oy: float) -> float:
     """Draw panel B, the reporting triangle as ragged series."""
     g.label(0, oy + 9, "B", "The reporting triangle as ragged series")
     top = oy + 22
-    # A toy triangle: onset steps 1 to 8, releases at steps 4 to 8, and
-    # lag series 0 to 3, so the target is complete up to E = 4.
-    n_on, first_rel, n_lag = 8, 4, 4
-    releases = list(range(first_rel, n_on + 1))
+    # A toy triangle: onset steps 1 to 8 by reporting delay 0 to 4, as
+    # of the latest release at step 8. Onsets up to the last complete
+    # step (8 - 4) have every delay reported; later ones are ragged.
+    n_on, n_lag = 8, 4
+    n_delay = n_lag + 1
     e_step = n_on - n_lag
     cw, ch = 15.0, 10.0
     tx, ty = 24.0, top + 14
     g.text(
-        tx + cw * len(releases) / 2,
+        tx + cw * n_delay / 2,
         top + 4,
-        "release \u2192",
+        "delay \u2192",
         size=SMALL,
         anchor="middle",
         fill=MUTED,
@@ -396,26 +397,18 @@ def panel_b(g: Svg, oy: float) -> float:
     )
     for t in range(1, n_on + 1):
         y = ty + (t - 1) * ch
-        for j, r in enumerate(releases):
-            x = tx + j * cw
-            if t > r:
-                cell(g, x, y, cw, ch, "unseen")
-                continue
-            lag = r - t
-            cell(g, x, y, cw, ch, "final" if lag >= n_lag else "lag")
-            if lag == 0:
-                g.rect(
-                    x + 0.4,
-                    y + 0.4,
-                    cw - 0.8,
-                    ch - 0.8,
-                    stroke=FG,
-                    sw=1.0,
-                    rx=1,
-                )
+        for d in range(n_delay):
+            x = tx + d * cw
+            if t + d > n_on:
+                kind = "unseen"
+            elif t <= e_step:
+                kind = "final"
+            else:
+                kind = "lag"
+            cell(g, x, y, cw, ch, kind)
     hi = e_step + 1
     g.rect(
-        tx + (hi - first_rel) * cw - 0.8,
+        tx - 0.8,
         ty + (hi - 1) * ch - 0.8,
         (n_on - hi + 1) * cw + 1.6,
         ch + 1.6,
@@ -423,9 +416,9 @@ def panel_b(g: Svg, oy: float) -> float:
         sw=1.3,
     )
     ey = ty + e_step * ch
-    g.line(tx - 2, ey, tx + cw * len(releases) + 3, ey, stroke=ACCENT, sw=1.1)
+    g.line(tx - 2, ey, tx + cw * n_delay + 3, ey, stroke=ACCENT, sw=1.1)
     g.text(
-        tx + cw * len(releases) + 6,
+        tx + cw * n_delay + 6,
         ey + 12,
         "last complete",
         size=BODY,
@@ -435,7 +428,7 @@ def panel_b(g: Svg, oy: float) -> float:
     tri_bottom = ty + n_on * ch
 
     # The arrow to the ragged layout.
-    ax = tx + cw * len(releases) + 16
+    ax = tx + cw * n_delay + 16
     g.line(ax, ty + 40, ax + 22, ty + 40, arrow="ah")
 
     # The ragged block of two places: each a target and its lag series.
@@ -448,7 +441,7 @@ def panel_b(g: Svg, oy: float) -> float:
     def kinds() -> list[list[str]]:
         rows = [["final" if c + 1 <= e_step else "future" for c in range(cols)]]
         for d in range(n_lag):
-            lo, hi_ = first_rel - d, n_on - d
+            lo, hi_ = 1, n_on - d
             rows.append(
                 ["lag" if lo <= c + 1 <= hi_ else "none" for c in range(cols)]
             )
