@@ -254,6 +254,11 @@ class Scoring:
         self.checkpoint_forecast = compute.scoring_forecast(
             self.forecast, gpus, training
         )
+        # The German units take `score.device`, the CPU, where their
+        # workers beat a small GPU; unset, the checkpoint scoring device.
+        self.germany_forecast = compute.germany_forecast(
+            self.checkpoint_forecast, self.sc["device"]
+        )
 
     def _gpus(self) -> int:
         """Return this machine's CUDA GPUs.
@@ -283,7 +288,7 @@ class Scoring:
         where the unit forecasts in its own process
         (`nowcastgermany.checkpoint.score_workers`).
         """
-        workers = 1 if self.checkpoint_forecast.gpu else self.score_workers
+        workers = 1 if self.germany_forecast.gpu else self.score_workers
         return WORKER_MB * workers + COORDINATOR_MB
 
     def unit_priority(
@@ -348,6 +353,15 @@ class Scoring:
     ) -> str:
         """Return `unit_env` for a checkpoint's scoring (its own device)."""
         return self._env(self.checkpoint_forecast, threads, resources)
+
+    def germany_env(
+        self,
+        wc: Any,  # noqa: ARG002
+        threads: int,
+        resources: Any,
+    ) -> str:
+        """Return `unit_env` for a German unit (`score.device`)."""
+        return self._env(self.germany_forecast, threads, resources)
 
     def _env(self, fc: forecast.Forecast, threads: int, resources: Any) -> str:
         """Return a job's environment on `fc`'s device with `threads`.
