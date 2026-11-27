@@ -426,6 +426,12 @@ def build_parser() -> argparse.ArgumentParser:
         "can use is not lacking.",
     )
     fst.add_argument(
+        "--current-only",
+        action="store_true",
+        help="With `load`: load only the current code's fits; a pair not "
+        "yet fitted for it loads none and is listed as pending.",
+    )
+    fst.add_argument(
         "--keys",
         default=None,
         help="With `plan`: write every current key here, for pruning.",
@@ -1025,12 +1031,20 @@ def _release_scores(
 
 
 def _write_release(out: ReleaseBacktest, results: Path, delay: int) -> None:
-    """Write the release backtest's tables to `results`."""
+    """Write the release backtest's tables to `results`.
+
+    The origins say which stored fit each stored model was scored from,
+    by the `fit-store load` record in `results` (`store.label_origins`).
+    """
+    status = results / store.STATUS_FILE
+    origins = out.origins
+    if status.exists() and not origins.empty:
+        origins = store.label_origins(origins, json.loads(status.read_text()))
     for name, table in (
         ("scores", out.scores),
         ("quantiles", out.quantiles),
         ("energy", out.energy),
-        ("origins", out.origins),
+        ("origins", origins),
         ("fits", out.fits),
     ):
         write_csv(table, results / f"nowcast-{name}.csv")

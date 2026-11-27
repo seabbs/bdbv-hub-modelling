@@ -536,12 +536,15 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  # The backtests scored with the stored fits once the fits are stored,
-  # one process per backtest (all at once ran a runner out of memory),
-  # then stored on the store branch in backtests/, which Pages unpacks.
-  # As soon as the backtest cells finish, not behind the model fits
-  # (hours): scored with the fits already stored, then the site's
-  # results remade. Those made after the fits are stored show them.
+  # The backtests scored with the stored fits, one process per backtest
+  # (all at once ran a runner out of memory), then stored on the store
+  # branch in backtests/, which Pages unpacks. As soon as the backtest
+  # cells finish, not behind the model fits (hours), then the site's
+  # results remade. Only the fits made for this commit's code are
+  # scored (`--current-only`): a fit not made for it yet is listed as
+  # pending in nowcast-origins.csv, never scored from an older fit, and
+  # the next run's backtests, after it is stored, score it. Each scored
+  # fit's key and commit are in nowcast-origins.csv.
   backtests:
     name: Score and store the backtests
     # After the walks' forecasts are stored, which it loads.
@@ -573,7 +576,7 @@ jobs:
           BDBV_CHRONOS_FT: ${{ needs.plan.outputs.chronos_ft }}
         run: |
           python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
-          uv run bdbvhub fit-store load --store "$STORE"
+          uv run bdbvhub fit-store load --store "$STORE" --current-only
       - name: Score
         run: |
           p=output/parts/parts
