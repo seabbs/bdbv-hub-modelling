@@ -364,3 +364,58 @@ def test_the_drawn_noise_sds_by_layer():
         "strata": None,
         "strata_time": None,
     }
+
+
+def test_each_stratum_s_weekly_counts_over_its_mean():
+    def count(s, i):
+        return 10 * (1 + (i // 7) % 3) * (2 if s == "B" else 1)
+
+    got = ds.structure(_weekly_delays(lambda _s, _i: 1, "AB", count=count))
+    by = {x["name"]: x for x in got["by_stratum"]["strata"]}
+    # The same shape at twice the size: the same line over its mean.
+    assert by["A"]["rel_count"][:3] == pytest.approx([0.5, 1.0, 1.5])
+    assert by["B"]["rel_count"] == pytest.approx(by["A"]["rel_count"])
+    assert np.mean(by["A"]["rel_count"]) == pytest.approx(1.0, abs=1e-3)
+    assert got["by_stratum"]["total"]["rel_count"][:3] == pytest.approx(
+        [0.5, 1.0, 1.5]
+    )
+    # Strata that move together keep their shares.
+    assert got["levels"]["corr"] == pytest.approx(1.0)
+    assert got["levels"]["share_sd"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_stratum_whose_counts_move_on_their_own_moves_its_share():
+    def count(s, i):
+        # C's ascertainment doubles half way; A and B stay put.
+        return 20 * (2 if s == "C" and i >= 42 else 1) + 5 * ((i // 7) % 2)
+
+    got = ds.structure(_weekly_delays(lambda _s, _i: 1, "ABC", count=count))
+    by = {x["name"]: x for x in got["by_stratum"]["strata"]}
+    # Shares are of the strata's total, so A's and B's move a little too.
+    assert by["C"]["count_share_sd"] > by["A"]["count_share_sd"]
+    assert by["C"]["rel_count"][-1] > by["C"]["rel_count"][0]
+    sc = ds.scalars(got)
+    assert sc["count_share_sd"] > 0.1
+    assert sc["strata_count_corr"] < 0.9
+
+
+def test_the_drawn_ascertainment_structure():
+    got = ds.drawn_ascertainment(
+        {
+            "ascertainment_change": "drift",
+            "ascertainment_change_strata": "related",
+            "ascertainment_counts": "strata",
+            "asc_counts_sign": "-1;-1;1",
+            "asc_counts_slope": "0.2",
+            "asc_noise_sd": "",
+            "delay_change": "step",
+        }
+    )
+    assert got == {
+        "ascertainment_change": "drift",
+        "ascertainment_change_strata": "related",
+        "ascertainment_counts": "strata",
+        "asc_counts_sign": "-1;-1;1",
+        "asc_counts_slope": "0.2",
+    }
+    assert ds.drawn_ascertainment({}) == {}

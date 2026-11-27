@@ -57,7 +57,7 @@ MAX_LINES = 16
 SHARE_DAYS = (1, 7)
 """The delays (days) each stratum's weekly share reported by is kept at."""
 
-STRATUM_KEYS = ("by_stratum", "coupling", "bursts", "noise")
+STRATUM_KEYS = ("by_stratum", "coupling", "bursts", "noise", "levels")
 """The keys of `structure` from `_by_stratum`."""
 
 MIN_WEEKS = 4
@@ -362,6 +362,47 @@ def _rl(v: np.ndarray, digits: int = 3) -> list[float | None]:
     return [_r(x, digits) for x in v]
 
 
+def _levels(
+    final: np.ndarray, days: np.ndarray, log_count: np.ndarray
+) -> dict[str, Any]:
+    """Return how the strata's weekly final counts move, for ascertainment.
+
+    Ascertainment is not told apart from infections by the counts alone,
+    so these show the counts' own movement. `rel`: each stratum's count
+    a day by week over its mean (the total's in `total_rel`). `corr`:
+    the mean pairwise correlation of the strata's log daily counts by
+    week. `share_sd`: each stratum's sd of its log share of the strata's
+    weekly count (weeks with `MIN_COUNT` cases, at least `MIN_WEEKS`),
+    and `share_sd_all` their mean weighted by count; a stratum whose
+    ascertainment moves on its own moves its share.
+    """
+    daily = np.clip(final, 0, None) / days
+    mean = daily.mean(1, keepdims=True)
+    rel = np.where(mean > 0, daily / np.where(mean > 0, mean, 1.0), np.nan)
+    tot = daily.sum(0)
+    total_rel = tot / tot.mean() if tot.mean() > 0 else tot * np.nan
+    _, corr = _corr(log_count)
+    ok = np.isfinite(log_count) & (tot > 0)[None, :]
+    share = np.where(
+        ok,
+        np.log(np.where(ok, daily, 1.0) / np.where(tot > 0, tot, 1.0)[None, :]),
+        np.nan,
+    )
+    sds = np.array([_sd(r) if len(daily) > 1 else None for r in share],
+                   dtype=float)  # fmt: skip
+    w = np.clip(final, 0, None).sum(1)
+    use = np.isfinite(sds) & (w > 0)
+    return {
+        "rel": rel,
+        "total_rel": total_rel,
+        "corr": corr,
+        "share_sd": sds,
+        "share_sd_all": float((sds[use] * w[use]).sum() / w[use].sum())
+        if use.any()
+        else None,
+    }
+
+
 def _by_stratum(
     complete: pd.DataFrame, first: pd.Timestamp
 ) -> dict[str, Any] | None:
@@ -382,7 +423,9 @@ def _by_stratum(
     `bursts` (`max_ratio`, the largest weekly first-report-to-final
     ratio of any stratum; `withdrawn`, the share of the final count
     ever withdrawn; `withdrawn_max`, the largest stratum's share); and
-    `noise` (`_decompose` of the strata's weekly log(1 + mean delay)).
+    `noise` (`_decompose` of the strata's weekly log(1 + mean delay));
+    and `levels` (`_levels`: `corr` and `share_sd`, also each line's
+    `count_share_sd` and `rel_count`, and the total's `rel_count`).
     Strata are the `MAX_STRATA` largest.
     """
     if complete.empty:
@@ -414,6 +457,7 @@ def _by_stratum(
     final = g["final"].sum(1)
     kept = final > 0
     withdrawn = g["withdrawn"].sum(1) / np.where(kept, final, 1.0)
+    lv = _levels(g["final"], days, ser["log_count"])
     lines = []
     for i, name in enumerate(names[:MAX_LINES]):
         slope, cc = _fit(ser["log_count"][i], ser["mean"][i])
@@ -428,6 +472,8 @@ def _by_stratum(
                 "counts_slope": _r(slope),
                 "counts_corr": _r(cc),
                 "share1_corr": _r(c1),
+                "count_share_sd": _r(lv["share_sd"][i]),
+                "rel_count": _rl(lv["rel"][i]),
                 **{k: _rl(v[i]) for k, v in ser.items()},
             }
         )
@@ -443,7 +489,10 @@ def _by_stratum(
                 (first + pd.Timedelta(weeks=w)).strftime("%Y-%m-%d")
                 for w in weeks
             ],
-            "total": {k: _rl(v) for k, v in total.items()},
+            "total": {
+                **{k: _rl(v) for k, v in total.items()},
+                "rel_count": _rl(lv["total_rel"]),
+            },
             "strata": lines,
             "corr": _r(corr),
             "corr_min": _r(float(eachs.min())) if len(eachs) else None,
@@ -463,6 +512,10 @@ def _by_stratum(
             else None,
         },
         "noise": _decompose(np.log1p(ser["mean"])),
+        "levels": {
+            "corr": _r(lv["corr"]),
+            "share_sd": _r(lv["share_sd_all"]),
+        },
     }
 
 
@@ -601,6 +654,9 @@ def scalars(s: dict[str, Any]) -> dict[str, float | None]:
     all strata and the largest stratum's. `noise_time`, `noise_strata`
     and `noise_residual`: the shares of the weekly log mean delay's
     variation common to strata, fixed by stratum and the rest.
+    `strata_count_corr` and `count_share_sd`: the mean pairwise
+    correlation of the strata's log weekly counts and the count-weighted
+    sd of their log shares of the weekly count (`_levels`).
     """
     ref = s["by_ref"]
     pairs = [
@@ -649,6 +705,7 @@ def _stratum_scalars(s: dict[str, Any]) -> dict[str, float | None]:
     cp = s.get("coupling") or {}
     bu = s.get("bursts") or {}
     no = s.get("noise") or {}
+    lv = s.get("levels") or {}
     sds = [x["share7_sd"] for x in by.get("strata", [])]
     sds = [v for v in sds if v is not None]
     return {
@@ -664,6 +721,8 @@ def _stratum_scalars(s: dict[str, Any]) -> dict[str, float | None]:
         "noise_time": no.get("time_share"),
         "noise_strata": no.get("strata_share"),
         "noise_residual": no.get("residual_share"),
+        "strata_count_corr": lv.get("corr"),
+        "count_share_sd": lv.get("share_sd"),
     }
 
 
@@ -679,6 +738,39 @@ NOISE_SETTINGS = (
 )
 """Each delay noise layer: its name, the factor that turns it on, the
 factor's levels that do and the setting with its drawn sd."""
+
+
+ASCERTAINMENT_SETTINGS = (
+    "ascertainment_change",
+    "ascertainment_change_strata",
+    "ascertainment_change_switch",
+    "ascertainment_counts",
+    "ascertainment_noise",
+    "asc_own_change",
+    "asc_rho",
+    "asc_switch_at",
+    "asc_counts_sign",
+    "asc_counts_slope",
+    "asc_counts_sd",
+    "asc_noise_sd",
+)
+"""The settings that make a simulation's ascertainment, as drawn."""
+
+
+def drawn_ascertainment(settings: Mapping[str, Any]) -> dict[str, str]:
+    """Return a simulation's drawn ascertainment structure.
+
+    Each of `ASCERTAINMENT_SETTINGS` the settings hold (not empty), as
+    written: factor levels, and values per stratum `;`-joined.
+    """
+    out = {}
+    for k in ASCERTAINMENT_SETTINGS:
+        v = settings.get(k)
+        if v is None or (isinstance(v, float) and not np.isfinite(v)):
+            continue
+        if str(v).strip() not in ("", "nan", "NA"):
+            out[k] = str(v).strip()
+    return out
 
 
 def drawn_noise(settings: Mapping[str, Any]) -> dict[str, float | None]:
