@@ -60,7 +60,7 @@ print(r["key"], r["commit"][:7], (r["store_commit"] or "unknown")[:7],
       r.get("current_key", r["key"]))' \
         "$fit/store.json")
       read -r skey scommit sstore ckey <<< "$where"
-      note "Fit read from the fit store: key \`$skey\`, fitted at \`$scommit\`, store commit \`$sstore\`."
+      note "Fit read from the fit store: key \`$skey\`, fitted at \`$scommit\`, store version \`$sstore\`."
       [ "$skey" = "$ckey" ] \
         || note "The current code key \`$ckey\` has no stored fit, so the model's newest stored fit is used."
       cp "$fit/store.json" "$out/"
