@@ -164,8 +164,9 @@ def sims_answer(
 ) -> tuple[int, bytes, str]:
     """Return the answer to a request under /sims/.
 
-    The page (`/sims/`), the sources (`/sims/sources.json`), a source's
-    index (`/sims/index/<source>.json`) and one simulation
+    The page (`/sims/`), the sources (`/sims/sources.json`), the German
+    and BDBV delays (`/sims/reference.json`, empty until built), a
+    source's index (`/sims/index/<source>.json`) and one simulation
     (`/sims/sim/<source>/<id>.json`).
     """
     rest = path.removeprefix("/sims")
@@ -173,6 +174,8 @@ def sims_answer(
         return 200, sims.page().encode(), "text/html; charset=utf-8"
     if rest == "/sources.json":
         return 200, page._json(index.listing()).encode(), JSON
+    if rest == "/reference.json":
+        return 200, page._json(index.reference()).encode(), JSON
     if rest.startswith("/index/") and rest.endswith(".json"):
         body = index.encoded_data(rest[len("/index/") : -len(".json")])
         return (200, body, JSON) if body is not None else NOT_FOUND

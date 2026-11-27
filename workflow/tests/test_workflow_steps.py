@@ -20,6 +20,7 @@ REPORTS = {
     "grid_figures",
     "germany_triangle",
     "germany_dev_stats",
+    "delay_reference",
     "sim_report",
     "sim_diseases",
     "sim_report_run",
