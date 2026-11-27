@@ -82,9 +82,9 @@ def test_the_curve_keeps_zero_shot_and_the_live_run_by_level() -> None:
 def test_the_attention_bias_comparison_comes_from_checkpoint_scores() -> None:
     from paperpipe.evidence import COMPARISONS, comparison_rows
 
-    labels = COMPARISONS["slots"][1]
+    labels = COMPARISONS["nobiases"][1]
     out = comparison_rows(_scores(), "one-model", "no-slots", labels)
-    assert set(out["run"]) == {"all biases", "no biases"}
+    assert set(out["run"]) == {"Fine-tuned", "No attention biases"}
     # One set per study and level, not pooled.
     assert {"German national, daily", "German states, daily"} <= set(out["set"])
     assert not any(name.startswith("BDBV") for name in out["set"])
@@ -102,15 +102,15 @@ def test_the_evidence_has_the_compact_tables_and_labels(tmp_path) -> None:
         tmp_path / "fig",
         tmp_path / "e.yml",
         run="one-model",
-        comparisons={"slots": "no-slots"},
+        comparisons={"nobiases": "no-slots"},
     )
     table = (tmp_path / "si" / "checkpoint-table.md").read_text()
     assert "Zero-shot" in table
     assert "slots-z" not in table
     summary = (tmp_path / "si" / "slots-summary.md").read_text()
-    assert "no biases" in summary
+    assert "No attention biases" in summary
     assert (tmp_path / "si" / "live-summary.md").is_file()
-    assert (tmp_path / "fig" / "compare-slots.png").is_file()
+    assert (tmp_path / "fig" / "compare-nobiases.png").is_file()
     live = yaml.safe_load((tmp_path / "e.yml").read_text())["evidence"]["live"]
     # BDBV is held out, so the evidence quotes no BDBV checkpoint.
     assert "ebola" not in live
@@ -150,7 +150,7 @@ def test_each_comparison_pairs_the_live_run_with_its_variant() -> None:
     assert set(out["run"]) == set(labels)
     assert {"German national, daily", "German states, daily"} <= set(out["set"])
     # A variant with no scored checkpoint gives no rows.
-    assert comparison_rows(_scores(), "one-model", "nodelays", labels).empty
+    assert comparison_rows(_scores(), "one-model", "nolags", labels).empty
 
 
 def _real_only(scores: pd.DataFrame) -> pd.DataFrame:
@@ -187,7 +187,7 @@ def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
     rows = tmp_path / "scores.csv"
     _scores().to_csv(rows, index=False)
     paths = dict.fromkeys(EVIDENCE) | {"checkpoint_scores": rows}
-    pairs = {"slots": "no-slots", "delays": "nodelays"}
+    pairs = {"nobiases": "no-slots", "nolags": "nolags"}
     numbers = write_evidence(
         paths,
         tmp_path / "si",
@@ -199,10 +199,10 @@ def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
     from paperpipe.evidence import COMPARISONS
 
     waiting = numbers["evidence"]["waiting"]
-    assert COMPARISONS["slots"][0] not in waiting
-    assert COMPARISONS["delays"][0] in waiting
+    assert COMPARISONS["nobiases"][0] not in waiting
+    assert COMPARISONS["nolags"][0] in waiting
     assert COMPARISONS["realdata"][0] in waiting
-    assert (tmp_path / "fig" / "compare-delays.png").is_file()
+    assert (tmp_path / "fig" / "compare-nolags.png").is_file()
 
 
 def test_the_trainer_s_loss_is_named_the_validation_loss() -> None:
@@ -210,7 +210,7 @@ def test_the_trainer_s_loss_is_named_the_validation_loss() -> None:
 
     scores = _scores()
     scores.loc[scores["study"] == "held_out", "level"] = "national"
-    labels = COMPARISONS["slots"][1]
+    labels = COMPARISONS["nobiases"][1]
     out = comparison_rows(scores, "one-model", "no-slots", labels)
     assert "Validation loss, national" in set(out["set"])
     assert not out["set"].str.startswith("Held-out").any()
@@ -231,38 +231,42 @@ def _with_subsets() -> pd.DataFrame:
 
 
 PAIRS = {
-    "slots": "no-slots",
-    "sameonly": "same-only",
-    "parentonly": "parent-only",
+    "nobiases": "no-slots",
+    "sameplace": "same-only",
+    "parentchild": "parent-only",
 }
 
 
 def test_the_attention_bias_setups_are_compared_together() -> None:
     from paperpipe.evidence import compared, comparison_rows
 
-    others, labels = compared("slots", PAIRS)
+    others, labels = compared("nobiases", PAIRS)
     assert others == ["no-slots", "same-only", "parent-only"]
     assert labels == (
-        "all biases",
-        "no biases",
-        "same place only",
-        "parent and child only",
+        "Fine-tuned",
+        "No attention biases",
+        "Same place only",
+        "Parent and child only",
     )
     out = comparison_rows(_with_subsets(), "one-model", others, labels)
     assert set(out["run"]) == set(labels)
-    # The subsets join the slots comparison only.
-    assert compared("delays", PAIRS | {"delays": "nodelays"})[0] == ["nodelays"]
+    # The subsets join the no-biases comparison only.
+    assert compared("nolags", PAIRS | {"nolags": "nolags"})[0] == ["nolags"]
 
 
 def test_the_bias_summary_has_a_row_per_setup_scored() -> None:
     from paperpipe.evidence import compared, slots_summary
 
-    others, labels = compared("slots", PAIRS)
+    others, labels = compared("nobiases", PAIRS)
     out = slots_summary(_with_subsets(), "one-model", others, labels)
     assert list(out["Run"]) == ["Zero-shot", *labels]
     # A setup not yet scored has no row.
     out = slots_summary(_scores(), "one-model", others, labels)
-    assert list(out["Run"]) == ["Zero-shot", "all biases", "no biases"]
+    assert list(out["Run"]) == [
+        "Zero-shot",
+        "Fine-tuned",
+        "No attention biases",
+    ]
 
 
 def test_the_bias_setups_share_the_slots_figure_and_table(tmp_path) -> None:
@@ -278,9 +282,9 @@ def test_the_bias_setups_share_the_slots_figure_and_table(tmp_path) -> None:
         comparisons=PAIRS,
     )
     summary = (tmp_path / "si" / "slots-summary.md").read_text()
-    assert "same place only" in summary
-    assert "parent and child only" in summary
-    assert not (tmp_path / "fig" / "compare-sameonly.png").exists()
+    assert "Same place only" in summary
+    assert "Parent and child only" in summary
+    assert not (tmp_path / "fig" / "compare-sameplace.png").exists()
     from paperpipe.evidence import COMPARISONS
 
-    assert COMPARISONS["slots"][0] not in numbers["evidence"]["waiting"]
+    assert COMPARISONS["nobiases"][0] not in numbers["evidence"]["waiting"]

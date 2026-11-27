@@ -62,7 +62,7 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     config["germany"]["config"] = str(germany)
     root = tmp_path / "root"
     # An older saved checkpoint is never what the paper loads.
-    older = root / "runs" / "runa" / "train" / "n800"
+    older = root / "runs" / "finetuned" / "train" / "n800"
     (older / "finetuned-ckpt").mkdir(parents=True)
     (older / "settings.json").write_text('{"hash": "abc123"}')
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
@@ -76,7 +76,7 @@ def test_load_expands_the_simulations_and_sets_the_checkpoint(
     # The `_ft` models load the final run's final checkpoint, a rule
     # input: its release record, whatever is saved when the flow plans.
     final = CONFIG["finetune"]["prefixes"][-1]
-    segment = root / "runs" / "runa" / "train" / f"n{final}"
+    segment = root / "runs" / "finetuned" / "train" / f"n{final}"
     assert config["finetuned_record"] == f"{segment}/published.json"
     assert flow.finetuned_env() == f"BDBV_CHRONOS_FT={segment}"
     assert "BDBV_CHRONOS_FT" not in os.environ
@@ -117,13 +117,13 @@ def test_the_final_checkpoint_is_the_runs_own_last_prefix(
     ).write_text('[realdata_bdbv]\nrelease = "2026-08-01"\n')
     config = copy.deepcopy(CONFIG)
     config["germany"]["config"] = str(germany)
-    config["runs"] = {"runa": {"prefixes": [100, 3200]}, "other": {}}
+    config["runs"] = {"finetuned": {"prefixes": [100, 3200]}, "other": {}}
     flow = PaperFlow.load(
         config, {}, tmp_path, lambda f: f.replace("$ROOT", str(tmp_path))
     )
     # Only the final run's own record: no other run is an input.
     assert flow.finetuned_inputs() == [
-        f"{tmp_path}/runs/runa/train/n3200/published.json"
+        f"{tmp_path}/runs/finetuned/train/n3200/published.json"
     ]
 
 
@@ -133,7 +133,7 @@ def test_no_script_pins_the_checkpoint() -> None:
     assert "finetuned" not in CONFIG
     assert "finetune_run" not in CONFIG
     assert "final_checkpoints" not in CONFIG
-    assert CONFIG["final_run"] == "$ROOT/runs/runa"
+    assert CONFIG["final_run"] == "$ROOT/runs/finetuned"
 
 
 def test_extra_args_name_only_what_the_entry_sets() -> None:
@@ -175,10 +175,10 @@ def test_germany_s_development_table_is_the_fine_tuning_units() -> None:
     # which the fine-tuning workflow scores (rules score_germany and
     # score_run_germany): no separate German backtest.
     final = CONFIG["finetune"]["prefixes"][-1]
-    flow = _flow(final_run="/r/runs/runa")
+    flow = _flow(final_run="/r/runs/finetuned")
     assert flow.germany_units() == [
         f"{CONFIG['germany']['units']}/reference",
-        f"/r/runs/runa/scores/germany-days/n{final}",
+        f"/r/runs/finetuned/scores/germany-days/n{final}",
     ]
     # Without a final run, the reference alone.
     assert _flow(final_run=None).germany_units() == [
@@ -225,7 +225,7 @@ def test_the_ebola_fine_tuned_models_wait_for_the_final_checkpoint() -> None:
     pending = _flow().ebola_draws_models()
     assert "foundation_baselinenowcast" not in pending
     assert {"randomwalknowcast", "foundation_zeroshot"} <= set(pending)
-    ready = _flow(finetuned_record="runs/runa/train/n1/published.json")
+    ready = _flow(finetuned_record="runs/finetuned/train/n1/published.json")
     assert "foundation_baselinenowcast" in ready.ebola_draws_models()
 
 
@@ -273,7 +273,7 @@ def test_summary_args_name_the_checkpoint_when_set() -> None:
 
 
 def test_the_summary_takes_the_final_runs_own_checkpoints() -> None:
-    runs = {"runa": {"prefixes": [100, 3200]}}
+    runs = {"finetuned": {"prefixes": [100, 3200]}}
     assert _flow(runs=runs).summary_args().endswith("--prefixes 100 3200")
     # With no final run, the workflow's fine-tuning settings.
     assert (
@@ -367,20 +367,18 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
     assert CONFIG["evidence"]["checkpoint_scores"] == {
         "file": "$ROOT/runs/comparison.csv"
     }
-    # The no-slots run writes the joint tally and cuts the same blocks
-    # as Run A, so its tally is Run A's design.
+    # The no-biases run writes the joint tally and cuts the same blocks
+    # as the fine-tuned model's run, so its tally is that run's design.
     assert CONFIG["evidence"]["block_combinations"] == {
-        "file": "$ROOT/runs/noslots/train/block-combinations.csv"
+        "file": "$ROOT/runs/nobiases/train/block-combinations.csv"
     }
-    assert set(CONFIG["comparisons"]) == {
-        "slots",
-        "sameonly",
-        "parentonly",
-        "delays",
-        "realdata",
-        "realonly",
+    assert CONFIG["comparisons"] == {
+        "nobiases": "nobiases",
+        "sameplace": "sameplace",
+        "parentchild": "parentchild",
+        "nolags": "nolags",
     }
-    assert CONFIG["comparisons"]["slots"] in runs
+    assert set(CONFIG["comparisons"].values()) <= set(runs)
     for name in CONFIG["comparisons"]:
         assert f"compare_{name}" not in CONFIG["evidence"]
 
@@ -388,9 +386,8 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
 def test_the_comparisons_are_passed_by_run_name() -> None:
     flow = _flow()
     assert flow.comparisons_arg() == (
-        "--comparison slots=noslots --comparison sameonly=sameonly "
-        "--comparison parentonly=parentonly --comparison delays=nodelays "
-        "--comparison realdata=realdata --comparison realonly=realonly"
+        "--comparison nobiases=nobiases --comparison sameplace=sameplace "
+        "--comparison parentchild=parentchild --comparison nolags=nolags"
     )
 
 

@@ -31,7 +31,7 @@ def test_the_paper_targets_resolve_in_the_one_workflow(tmp_path, target):
         "evidence",
         "run_progress",
         "horizon_table",
-        "progress_runa",
+        "progress_finetuned",
     ):
         assert f"rule {rule}:" in out.stdout
     lines = _job_lines(out.stdout)

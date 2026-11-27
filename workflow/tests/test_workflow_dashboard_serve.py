@@ -88,7 +88,10 @@ def test_the_dashboard_shows_the_runs_it_is_given(tmp_path):
     )
     try:
         serve.ensure(
-            _local(tmp_path), driver.pid, script=script, runs=["runa", "runb"]
+            _local(tmp_path),
+            driver.pid,
+            script=script,
+            runs=["finetuned", "nobiases"],
         )
         for _ in range(100):
             if seen.exists():
@@ -97,7 +100,7 @@ def test_the_dashboard_shows_the_runs_it_is_given(tmp_path):
     finally:
         driver.kill()
         driver.wait()
-    assert "--run runa --run runb" in seen.read_text()
+    assert "--run finetuned --run nobiases" in seen.read_text()
 
 
 def test_the_coordinator_names_itself_as_the_driver():

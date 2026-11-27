@@ -136,9 +136,9 @@ def test_the_monitor_s_rows_become_jobs():
 
 
 def test_targets_are_named_or_named_after_themselves():
-    cfg = {"MONITOR_DAG": "runa=run_scores results/x.csv"}
+    cfg = {"MONITOR_DAG": "finetuned=run_scores results/x.csv"}
     assert dag.targets(cfg) == {
-        "runa": "run_scores",
+        "finetuned": "run_scores",
         "results-x.csv": "results/x.csv",
     }
     assert dag.targets({}) == {}

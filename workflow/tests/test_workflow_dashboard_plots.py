@@ -104,7 +104,7 @@ def test_the_learning_rate_chart_is_a_titled_card_that_fills_it():
             "current": {"lora": 5e-6},
         },
         10,
-        "runa",
+        "finetuned",
         lambda s: s * 10,
     )
     assert "<h3>Learning rate" in out

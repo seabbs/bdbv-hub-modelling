@@ -365,14 +365,14 @@ def test_a_run_s_table_scores_its_own_saved_checkpoints(
         ).reindex(columns=ck.COLUMNS)  # fmt: skip
 
     monkeypatch.setattr(ck, "germany_rows", germany)
-    got = ck.run_table(train, scores, ref, "runa")
+    got = ck.run_table(train, scores, ref, "finetuned")
     assert seen == {ck.REFERENCE: ref, "n100": scores / "n100"}
     held = got.loc[got["study"] == "held_out"].set_index("checkpoint")
     assert held.loc["n200", "loss"] == 0.4
     assert held.loc["n100", "loss"] == 0.5
     by = got.drop_duplicates("checkpoint").set_index("checkpoint")
     assert by.loc["n200", "outbreaks"] == 200
-    assert by.loc["n100", "run"] == "runa"
+    assert by.loc["n100", "run"] == "finetuned"
     assert by.loc["zero-shot", "run"] == "zero-shot"
 
 
@@ -384,8 +384,8 @@ def test_the_comparison_holds_each_run_and_one_zero_shot() -> None:
              for c, r in (("zero-shot", "zero-shot"), ("n100", run))]
         ).reindex(columns=ck.COLUMNS)  # fmt: skip
 
-    got = ck.comparison([rows("runa"), rows("noslots")])
-    assert sorted(got["run"]) == ["noslots", "runa", "zero-shot"]
+    got = ck.comparison([rows("finetuned"), rows("nobiases")])
+    assert sorted(got["run"]) == ["nobiases", "finetuned", "zero-shot"]
 
 
 def test_the_german_config_scores_four_weeks_ahead_too() -> None:
@@ -613,7 +613,7 @@ def test_a_run_s_daily_table_holds_both_views_by_checkpoint(
         ).reindex(columns=ck.COLUMNS)  # fmt: skip
 
     monkeypatch.setattr(ck, "germany_rows", germany)
-    got = ck.daily_table(train, scores, tmp_path / "r", "runa")
+    got = ck.daily_table(train, scores, tmp_path / "r", "finetuned")
     assert {(t, b) for t, b, _ in seen} == {
         ("7day", "randomwalknowcast"),
         ("daily", "foundation_zeroshot"),
@@ -623,7 +623,7 @@ def test_a_run_s_daily_table_holds_both_views_by_checkpoint(
         "Germany, 7-day sums, national",
         "Germany, daily counts, national",
     ]
-    assert set(got["run"]) == {"runa"}
+    assert set(got["run"]) == {"finetuned"}
     by = got.set_index(["set", "outbreaks"])["score"]
     assert by[("Germany, daily counts, national", 200)] == 0.6
 
@@ -863,13 +863,13 @@ def test_a_run_s_horizon_table_scores_each_part_of_its_checkpoints(
         ).reindex(columns=ck.COLUMNS)  # fmt: skip
 
     monkeypatch.setattr(ck, "germany_rows", germany)
-    got = ck.horizon_table(train, scores, ref, "runa")
+    got = ck.horizon_table(train, scores, ref, "finetuned")
     assert [h for _, h in seen] == list(ck.HORIZON_PARTS)
     assert seen[0][0] == {ck.REFERENCE: ref, "n100": scores / "n100"}
     assert sorted(set(got["horizons"])) == sorted(ck.HORIZON_PARTS)
     by = got.drop_duplicates("checkpoint").set_index("checkpoint")
     assert by.loc["n100", "outbreaks"] == 100
-    assert by.loc["n100", "run"] == "runa"
+    assert by.loc["n100", "run"] == "finetuned"
     assert by.loc["zero-shot", "outbreaks"] == 0
     assert by.loc["zero-shot", "run"] == "zero-shot"
 

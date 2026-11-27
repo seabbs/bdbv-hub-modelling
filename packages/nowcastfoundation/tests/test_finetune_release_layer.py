@@ -282,7 +282,7 @@ def test_a_lag_jitter_that_cannot_be_drawn_is_refused(bad):
         ft.check_release_layer(bad)
 
 
-def test_run_b_s_layer_jitters_a_tenth_of_lag_counts():
+def test_the_recipe_s_layer_jitters_a_tenth_of_lag_counts():
     layer = ft.read_release_layer(
         ft.ROOT
         / "packages"

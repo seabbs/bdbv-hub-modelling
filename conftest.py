@@ -72,7 +72,7 @@ def _write_checkpoint_release(
     )
 
 
-def write_main(root: Path, spec: str, run: str = "runa") -> None:
+def write_main(root: Path, spec: str, run: str = "finetuned") -> None:
     """Name checkpoint `spec` the main run's newest in fake `chronos-main`."""
     import json
 

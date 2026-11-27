@@ -100,7 +100,7 @@ pytest.importorskip("snakemake")
 
 
 def test_a_rule_that_notifies_runs_with_no_mailbox(tmp_path):
-    n800 = tmp_path / "runs" / "runa" / "train" / "n800"
+    n800 = tmp_path / "runs" / "finetuned" / "train" / "n800"
     n800.mkdir(parents=True)
     (n800 / "settings.json").write_text(
         '{"held_out_loss": 0.4, "held_out_loss_start": 0.5}'
@@ -113,7 +113,7 @@ def test_a_rule_that_notifies_runs_with_no_mailbox(tmp_path):
     out = subprocess.run(
         [
             str(SNAKEMAKE),
-            str(tmp_path / "runs/runa/reports/n800-check.txt"),
+            str(tmp_path / "runs/finetuned/reports/n800-check.txt"),
             "--cores",
             "1",
             "--workflow-profile",

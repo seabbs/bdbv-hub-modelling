@@ -72,11 +72,11 @@ def _write(path, model, n, value):
 
 
 def _run(tmp_path):
-    train = tmp_path / "runa" / "train"
+    train = tmp_path / "finetuned" / "train"
     _write(train / validation.BASE_FILE, "base", 0, 10)
     _write(train / "n100" / validation.FILE, "n100", 100, 20)
     (train / "n100" / "settings.json").write_text('{"n_outbreaks": 100}')
-    return runs.make_run("runa", str(tmp_path / "runa"), live=True)
+    return runs.make_run("finetuned", str(tmp_path / "finetuned"), live=True)
 
 
 def test_a_run_s_validation_index_lists_its_blocks_and_models(tmp_path):
@@ -104,7 +104,7 @@ def test_one_block_has_each_model_s_quantiles_beside_the_truth(tmp_path):
 
 
 def test_a_run_with_none_has_an_empty_index(tmp_path):
-    run = runs.make_run("runb", str(tmp_path / "runb"), live=False)
+    run = runs.make_run("nobiases", str(tmp_path / "nobiases"), live=False)
     assert validation.index(run) == {"models": [], "blocks": []}
 
 
@@ -118,9 +118,11 @@ def test_the_server_answers_a_run_s_index_and_blocks(tmp_path):
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{srv.server_address[1]}"
     try:
-        with urllib.request.urlopen(f"{base}/validation/runa/index.json") as r:
+        with urllib.request.urlopen(
+            f"{base}/validation/finetuned/index.json"
+        ) as r:
             assert json.loads(r.read())["blocks"][0]["block"] == 4
-        with urllib.request.urlopen(f"{base}/validation/runa/4.json") as r:
+        with urllib.request.urlopen(f"{base}/validation/finetuned/4.json") as r:
             assert "n100" in json.loads(r.read())["q"]
         with pytest.raises(urllib.error.HTTPError):
             urllib.request.urlopen(f"{base}/validation/nope/4.json")

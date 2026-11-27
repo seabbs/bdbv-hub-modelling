@@ -7,10 +7,10 @@ from flowlib.dashboard import runs
 
 
 def test_a_run_is_its_folder(tmp_path):
-    r = runs.make_run("runa", tmp_path, live=True)
+    r = runs.make_run("finetuned", tmp_path, live=True)
     assert (r.key, r.label, r.folder, r.live) == (
-        "runa",
-        "runa",
+        "finetuned",
+        "finetuned",
         tmp_path,
         True,
     )

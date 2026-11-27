@@ -175,7 +175,7 @@ def test_only_generic_profiles_ship():
 FT = {
     "rounds": [1, 2],
     # One trained run, whatever the config trains.
-    "train_runs": ["runa"],
+    "train_runs": ["finetuned"],
     "finetune": {
         "prefixes": [250, 500],
         "outbreaks": 500,
@@ -267,7 +267,7 @@ def test_finetune_asks_for_ft_check_of_released_checkpoints(tmp_path):
     # Each released checkpoint (its published.json) gets its
     # BDBV check page.
     _hub(tmp_path)
-    seg = tmp_path / "runs" / "runa" / "train" / "n250"
+    seg = tmp_path / "runs" / "finetuned" / "train" / "n250"
     seg.mkdir(parents=True)
     (seg / "published.json").write_text(
         '{"tag": "chronos-slots-abcdef", "hash": "abcdef"}'
@@ -307,7 +307,7 @@ def test_jobs_rank_trainer_evaluation_references_scoring_then_batches(
     # the next segment reads, so the dashboard's validation loss never
     # waits hours behind the CPU jobs.
     _hub(tmp_path)
-    seg = tmp_path / "runs" / "runa" / "train" / "n250"
+    seg = tmp_path / "runs" / "finetuned" / "train" / "n250"
     seg.mkdir(parents=True)
     (seg / "published.json").write_text(
         '{"tag": "chronos-slots-abcdef", "hash": "abcdef"}'
@@ -379,7 +379,9 @@ def test_finetune_builds_each_trained_run_s_german_report(tmp_path):
 def test_a_run_table_pulls_its_checkpoints_and_their_scores(tmp_path):
     # One graph: asking for a run's table (as the paper does) trains and
     # scores every checkpoint in reach, not only those already saved.
-    table = tmp_path / "runs" / "runa" / "reports" / "checkpoint-scores.csv"
+    table = (
+        tmp_path / "runs" / "finetuned" / "reports" / "checkpoint-scores.csv"
+    )
     jobs = dry(tmp_path, str(table), config=FT)
     assert jobs["train_segment"] == 2
     assert jobs["score_run_germany"] == 2
@@ -479,7 +481,7 @@ def _released(tmp_path, seeds):
 
 def _stale_list(tmp_path, seeds):
     """A batch list an earlier run wrote."""
-    where = tmp_path / "runs" / "runa"
+    where = tmp_path / "runs" / "finetuned"
     where.mkdir(parents=True, exist_ok=True)
     (where / "available-batches.txt").write_text(
         "".join(f"{s}\n" for s in seeds)
@@ -514,7 +516,7 @@ def test_from_releases_each_run_lists_them_as_it_plans(tmp_path):
     _released(tmp_path, [*range(30100, 30140)])
     jobs = dry(tmp_path, "finetune", config=RELEASE)
     assert "available_batches" not in jobs
-    record = tmp_path / "runs" / "runa" / "available-batches.txt"
+    record = tmp_path / "runs" / "finetuned" / "available-batches.txt"
     assert record.read_text().split() == [str(s) for s in range(30100, 30140)]
 
 
@@ -590,7 +592,7 @@ def test_an_offloaded_checkpoint_publishes_before_its_held_out_losses(
     # release once scored.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    where = tmp_path / "runs" / "runa" / "train" / "n250"
+    where = tmp_path / "runs" / "finetuned" / "train" / "n250"
     jobs = dry(tmp_path, f"{where}/published.json", config=OFFLOAD)
     assert jobs == {"verify_checkpoint": 1, "publish_checkpoint": 1}
     jobs = dry(tmp_path, "publish", config=OFFLOAD)
@@ -608,7 +610,9 @@ def test_a_publishing_run_checks_each_saved_checkpoint_once_released(
     _hub(tmp_path)
     _local(tmp_path, "PUBLISH=1")
     _checkpoint(tmp_path, 250)
-    settings = tmp_path / "runs" / "runa" / "train" / "n250" / "settings.json"
+    settings = (
+        tmp_path / "runs" / "finetuned" / "train" / "n250" / "settings.json"
+    )
     settings.write_text('{"hash": "abcdef"}')
     jobs, edges = _dag(tmp_path, "finetune", FT)
     rules = {i: label.split("\\n")[0] for i, label in jobs.items()}
@@ -626,7 +630,7 @@ def test_a_checkpoint_is_scored_only_after_step_0(tmp_path):
     # segment's other steps.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    sidecar = "runs/runa/train/n500/held-out.json"
+    sidecar = "runs/finetuned/train/n500/held-out.json"
     jobs = dry(tmp_path, str(tmp_path / sidecar), config=OFFLOAD)
     assert jobs["evaluate_base"] == 1
     assert jobs["evaluate_checkpoint"] == 1
@@ -649,7 +653,7 @@ def test_a_checkpoint_s_evaluation_needs_only_step_0_and_earlier_settings(
     # a checkpoint is scored between segments.
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    sidecar = tmp_path / "runs/runa/train/n500/held-out.json"
+    sidecar = tmp_path / "runs/finetuned/train/n500/held-out.json"
     jobs, edges = _dag(tmp_path, str(sidecar), OFFLOAD)
     assert "evaluate_steps" not in jobs.values()
     (check,) = [
@@ -702,7 +706,7 @@ def test_finetune_never_publishes(tmp_path):
 
 
 def test_finished_checkpoints_are_kept(tmp_path):
-    n250 = tmp_path / "runs" / "runa" / "train" / "n250"
+    n250 = tmp_path / "runs" / "finetuned" / "train" / "n250"
     (n250 / "finetuned-ckpt").mkdir(parents=True)
     (n250 / "state").mkdir()
     (n250 / "settings.json").write_text("{}")
@@ -713,7 +717,7 @@ def test_finished_checkpoints_are_kept(tmp_path):
 
 
 def _checkpoint(tmp_path, n):
-    where = tmp_path / "runs" / "runa" / "train" / f"n{n}"
+    where = tmp_path / "runs" / "finetuned" / "train" / f"n{n}"
     (where / "finetuned-ckpt").mkdir(parents=True)
     (where / "state").mkdir()
     (where / "settings.json").write_text("{}")
@@ -725,7 +729,7 @@ def test_the_live_run_switches_over_without_retraining(tmp_path):
     # The slots run: n250 to n750 saved without state of their
     # own, the trainer's state part way to n1000, and a seed list that
     # reaches 1,500 outbreaks so far.
-    train = tmp_path / "runs" / "runa" / "train"
+    train = tmp_path / "runs" / "finetuned" / "train"
     for n in (250, 500, 750):
         where = train / f"n{n}"
         (where / "finetuned-ckpt").mkdir(parents=True)
@@ -843,7 +847,7 @@ def test_verify_alone_never_releases(tmp_path):
     _checkpoint(tmp_path, 250)
     jobs = dry(
         tmp_path,
-        f"{tmp_path}/runs/runa/train/n250/verified.txt",
+        f"{tmp_path}/runs/finetuned/train/n250/verified.txt",
         config=FT,
     )
     assert jobs == {"verify_checkpoint": 1}
@@ -1033,13 +1037,13 @@ def test_a_failed_run_posts_a_mailbox_line(tmp_path):
     # with no losses.
     box = tmp_path / "box.md"
     _local(tmp_path, "NOTIFY=1", f"MAILBOX={box}")
-    n800 = tmp_path / "runs" / "runa" / "train" / "n800"
+    n800 = tmp_path / "runs" / "finetuned" / "train" / "n800"
     n800.mkdir(parents=True)
     (n800 / "settings.json").write_text("{}")
     # Evaluated in the trainer, so the report needs only the checkpoint.
     overlay = tmp_path / "overlay.yaml"
     overlay.write_text("finetune:\n  eval: local\ndashboard:\n  serve: false\n")
-    target = tmp_path / "runs" / "runa" / "reports" / "n800-check.txt"
+    target = tmp_path / "runs" / "finetuned" / "reports" / "n800-check.txt"
     out = subprocess.run(
         [
             str(SNAKEMAKE),
@@ -1120,7 +1124,7 @@ def test_the_rounds_host_s_manifests_and_qc_are_mirrored(tmp_path):
     # REMOTE_ROOT: round 1 whole, round 2 so far one batch.
     _rounds_host(tmp_path, {1: range(30100, 30140), 2: [30200]})
     dry(tmp_path, "finetune", config=REMOTE)
-    run = tmp_path / "runs" / "runa"
+    run = tmp_path / "runs" / "finetuned"
     listed = (run / "available-batches.txt").read_text().split()
     assert listed == [str(s) for s in [*range(30100, 30140), 30200]]
     assert (run / "rounds" / "r1" / "qc" / "summary.txt").exists()
@@ -1391,7 +1395,7 @@ def test_a_fetched_batch_is_a_copy_not_a_link_to_its_source(tmp_path):
     now = time.time_ns()
     os.utime(counts, ns=(now, now))
     os.utime(settings, ns=(now + 10**6, now + 10**6))
-    run = tmp_path / "runs" / "runa"
+    run = tmp_path / "runs" / "finetuned"
     (tmp_path / "local.env").write_text(
         f"ROOT={tmp_path}\nHOST_NAME=test-host\nSIMS_FROM=local\n"
     )
@@ -1455,7 +1459,9 @@ def test_the_comparison_scores_every_run_s_checkpoints(tmp_path):
     assert out.returncode == 0, out.stderr + out.stdout
     assert "rule comparison:" in out.stdout
     assert "rule run_table:" in out.stdout
-    assert f"{tmp_path}/runs/runa/reports/checkpoint-scores.csv" in out.stdout
+    assert (
+        f"{tmp_path}/runs/finetuned/reports/checkpoint-scores.csv" in out.stdout
+    )
 
 
 @pytest.mark.parametrize(
@@ -1470,24 +1476,25 @@ def test_the_comparisons_ask_only_for_the_paper_s_runs(tmp_path, table, report):
     # the workflow config names.
     # The overlay merges into the paper config's comparisons, so each names
     # the same run here.
-    pairs = dict.fromkeys(("slots", "delays", "realdata"), "noslots")
-    config = {**FT, "live_run": "runa", "comparisons": pairs}
+    names = ("nobiases", "sameplace", "parentchild", "nolags")
+    pairs = dict.fromkeys(names, "nobiases")
+    config = {**FT, "live_run": "finetuned", "comparisons": pairs}
     out = dry_run(
         tmp_path, f"{tmp_path}/runs/{table}", config=config, quiet=False
     )
     assert out.returncode == 0, out.stderr + out.stdout
-    for run in ("runa", "noslots"):
+    for run in ("finetuned", "nobiases"):
         assert f"{tmp_path}/runs/{run}/reports/{report}" in out.stdout
-    for run in ("nodelays", "realdata", "runb"):
+    for run in ("nolags", "sameplace", "parentchild"):
         assert f"{tmp_path}/runs/{run}/reports/{report}" not in out.stdout
 
 
 def test_a_run_s_block_combinations_come_from_its_final_checkpoint(tmp_path):
-    target = f"{tmp_path}/runs/runa/train/block-combinations.csv"
+    target = f"{tmp_path}/runs/finetuned/train/block-combinations.csv"
     out = dry_run(tmp_path, target, config=FT, quiet=False)
     assert out.returncode == 0, out.stderr + out.stdout
     assert "rule block_combinations:" in out.stdout
-    assert f"{tmp_path}/runs/runa/train/n500/settings.json" in out.stdout
+    assert f"{tmp_path}/runs/finetuned/train/n500/settings.json" in out.stdout
 
 
 def test_the_daily_comparison_scores_every_run_s_checkpoints(tmp_path):
@@ -1499,13 +1506,13 @@ def test_the_daily_comparison_scores_every_run_s_checkpoints(tmp_path):
     assert out.returncode == 0, out.stderr + out.stdout
     assert "rule compare_daily:" in out.stdout
     assert "rule daily_table:" in out.stdout
-    assert f"{tmp_path}/runs/runa/reports/compare-daily.csv" in out.stdout
+    assert f"{tmp_path}/runs/finetuned/reports/compare-daily.csv" in out.stdout
 
 
 def test_an_interim_checkpoint_verifies_then_releases(tmp_path):
     # The hub's fine-tuned model is an interim
     # checkpoint (`finetune.interim`), released through the same rules.
-    where = tmp_path / "runs" / "runa" / "train" / "interim" / "s48100"
+    where = tmp_path / "runs" / "finetuned" / "train" / "interim" / "s48100"
     (where / "finetuned-ckpt").mkdir(parents=True)
     (where / "settings.json").write_text("{}")
     (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
@@ -1526,7 +1533,7 @@ def test_rt_check_is_one_job_per_model_and_origin(tmp_path):
 def test_each_checkpoint_gets_its_7_day_check(tmp_path):
     # The 7-day check is a workflow rule per checkpoint,
     # on the held-out blocks, whichever way the run evaluates.
-    where = tmp_path / "runs" / "runa" / "train" / "n250"
+    where = tmp_path / "runs" / "finetuned" / "train" / "n250"
     (where / "finetuned-ckpt").mkdir(parents=True)
     (where / "settings.json").write_text("{}")
     (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
@@ -1548,7 +1555,7 @@ def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
     # repository in packages/nowcastfoundation/config/finetune.toml and dry_run
     # off; the repository
     # is empty until one is set, so it writes the folder only.
-    where = tmp_path / "runs" / "runa" / "train" / "interim" / "s48100"
+    where = tmp_path / "runs" / "finetuned" / "train" / "interim" / "s48100"
     (where / "finetuned-ckpt").mkdir(parents=True)
     (where / "settings.json").write_text("{}")
     (where / "finetuned-ckpt" / "adapter_model.safetensors").write_text("")
@@ -1564,14 +1571,14 @@ def test_publish_hf_is_a_dry_run_until_a_repository_is_set(tmp_path):
 
 
 def test_a_scored_step_0_is_kept(tmp_path):
-    # runa's step 0 was scored once on the laptop and copied in: a later
+    # finetuned's step 0 was scored once on the laptop and copied in: a later
     # run never scores it again, the evaluator's code key and the
     # held-out set being older than it.
     import os
 
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    train = tmp_path / "runs" / "runa" / "train"
+    train = tmp_path / "runs" / "finetuned" / "train"
     (train / "held-out-blocks.json").write_text('{"outbreaks": []}')
     (train / "evals").mkdir(exist_ok=True)
     step0 = train / "evals" / "step-0000000.json"
@@ -1592,7 +1599,9 @@ def test_a_job_asks_for_its_last_peak(tmp_path):
 
     for n in (250, 500):
         _checkpoint(tmp_path, n)
-    bench = tmp_path / "runs/runa/train/benchmarks/seven_day_check/n250.tsv"
+    bench = (
+        tmp_path / "runs/finetuned/train/benchmarks/seven_day_check/n250.tsv"
+    )
     bench.parent.mkdir(parents=True)
     bench.write_text("s\th:m:s\tmax_rss\n1\t0:00:01\t9000\n")
     out = dry_run(tmp_path, "finetune", config=OFFLOAD, quiet=False)
