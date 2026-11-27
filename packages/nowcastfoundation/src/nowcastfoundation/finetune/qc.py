@@ -3,8 +3,8 @@
 Summarises each simulation of `ROUND_DIR/sims` (`summaries`): cases,
 strata with cases, the largest week-on-week rise in weekly cases by
 reference date, the reporting delay and the share of reported cases
-later withdrawn (revisions and over-reporting bursts). The grid sets no thresholds, so
-no simulation is excluded.
+later withdrawn (revisions and over-reporting bursts). The grid sets no
+thresholds, so no simulation is excluded.
 
 Records the table and a one-line summary in `ROUND_DIR/qc/`.
 Simulations are never deleted. The workflow's `sim_qc` rule runs it:
