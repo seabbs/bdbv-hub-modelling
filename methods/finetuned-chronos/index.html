@@ -2264,7 +2264,7 @@ Fine-tuning runs locally, not on CI.</p>
 Chronos-2 runs on a CPU, a CUDA GPU or an Apple GPU.
 Set <code>GH_TOKEN</code> or <code>GITHUB_TOKEN</code> to a GitHub token if you list releases often, as anonymous requests are rate limited.</p>
 <h2 id="load-a-checkpoint">Load a checkpoint<a class="headerlink" href="#load-a-checkpoint" title="Permanent link">&para;</a></h2>
-<p><code>chronos_ft.load</code> takes <code>"latest"</code>, the newest <code>chronos-ft-*</code> release by publish date, or a settings hash, which pins that release.
+<p><code>chronos_ft.load</code> takes <code>"latest"</code>, the main fine-tuning run's newest checkpoint (the one the release <code>chronos-main</code> names), or a settings hash, which pins that release.
 It downloads the adapter once to <code>~/.cache/bdbv-hub-modelling/chronos-ft-&lt;hash&gt;</code>.
 It checks each adapter file against the release's <code>sha256sums.txt</code>, on download and on every later use, and fails if one differs.
 The check catches a damaged download, not a release whose files were replaced, as the sums come from the same release.

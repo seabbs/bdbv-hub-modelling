@@ -335,9 +335,9 @@ y^{(k)}_{p,t} = \begin{cases} \sum_{s=t-k+1}^{t} y_{p,s} &amp; \text{if day } t 
 <li>The workflow simulates outbreaks from the grid config and writes every figure below, so a change to the grid regenerates the tables and figures.</li>
 <li>The layer tables replace the grid tables after the layers, and the workflow’s figures replace the example simulations and comparisons.</li>
 <li>The main text’s coverage panel reads the sourced reference-values table, as <a href="#tbl-sim-diseases" class="quarto-xref">Table&nbsp;3</a> does.</li>
-<li>The simulator composes PyRenew’s components <span class="citation" data-cites="placeholder">(<a href="#ref-placeholder" role="doc-biblioref"><strong>placeholder?</strong></a>)</span> for infections, the infection to reference delay and observation noise, with small components on PyRenew’s base classes where it has none.</li>
+<li>The simulator composes PyRenew’s components <span class="citation" data-cites="pyrenew">(<a href="#ref-pyrenew" role="doc-biblioref">CDC Center for Forecasting and Outbreak Analytics 2025</a>)</span> for infections, the infection to reference delay and observation noise, with small components on PyRenew’s base classes where it has none.</li>
 <li>The reporting step is part of the same model and gives counts by reference and report date as epinowcast’s observation model does <span class="citation" data-cites="abbottepinowcast">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>)</span>.</li>
-<li>We test the simulator by calling epinowcast, EpiNow2 <span class="citation" data-cites="placeholder">(<a href="#ref-placeholder" role="doc-biblioref"><strong>placeholder?</strong></a>)</span> and primarycensored <span class="citation" data-cites="abbottprimarycensored">(<a href="#ref-abbottprimarycensored" role="doc-biblioref">Abbott 2026</a>)</span> directly and comparing the outputs, with delay distributions matched to primarycensored’s discretisation.</li>
+<li>We test the simulator by calling epinowcast, EpiNow2 <span class="citation" data-cites="EpiNow2">(<a href="#ref-EpiNow2" role="doc-biblioref">Abbott et al. 2020</a>)</span> and primarycensored <span class="citation" data-cites="abbottprimarycensored">(<a href="#ref-abbottprimarycensored" role="doc-biblioref">Abbott 2026</a>)</span> directly and comparing the outputs, with delay distributions matched to primarycensored’s discretisation.</li>
 <li>Key references: <span class="citation" data-cites="abbottepinowcast lison2024 Park2024 abbottprimarycensored">(<a href="#ref-abbottepinowcast" role="doc-biblioref">Abbott et al. 2026</a>; <a href="#ref-lison2024" role="doc-biblioref">Lison et al. 2024</a>; <a href="#ref-Park2024" role="doc-biblioref">Park et al. 2024</a>; <a href="#ref-abbottprimarycensored" role="doc-biblioref">Abbott 2026</a>)</span>.</li>
 </ul>
 </div>
@@ -17367,6 +17367,9 @@ Abbott, Sam. 2026. <span>“Primarycensored: Primary Event Censored Distribution
 </div>
 <div id="ref-BVDOutbreakSize" class="csl-entry" role="listitem">
 Abbott, Sam, Sebastian Funk, and Charlotte Holt. 2026. <em><span>BVDOutbreakSize</span>: Estimating the Current Size of the 2026 <span>DRC</span> <span>Bundibugyo</span> Virus Outbreak</em>. <a href="https://doi.org/10.5281/zenodo.20312758">https://doi.org/10.5281/zenodo.20312758</a>.
+</div>
+<div id="ref-EpiNow2" class="csl-entry" role="listitem">
+Abbott, Sam, Joel Hellewell, Katharine Sherratt, Katelyn Gostic, Joe Hickson, Hamada S. Badr, Michael DeWitt, Robin Thompson, EpiForecasts, and Sebastian Funk. 2020. <em>EpiNow2: Estimate Real-Time Case Counts and Time-Varying Epidemiological Parameters</em>. <a href="https://doi.org/10.5281/zenodo.3957489">https://doi.org/10.5281/zenodo.3957489</a>.
 </div>
 <div id="ref-abbottepinowcast" class="csl-entry" role="listitem">
 Abbott, Sam, Adrian Lison, Sebastian Funk, Carl Pearson, Hugo Gruson, Felix Guenther, Michael DeWitt, James Mba Azam, and Jessalyn Sebastian. 2026. <em>Epinowcast: A Bayesian Framework for Real-Time Infectious Disease Surveillance</em>. <a href="https://doi.org/10.5281/zenodo.5637165">https://doi.org/10.5281/zenodo.5637165</a>.

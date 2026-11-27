@@ -2342,7 +2342,7 @@ The Pages build makes the rest with the steps of <code>task bdbvhub:results</cod
 <h2 id="fit-store">Fit store<a class="headerlink" href="#fit-store" title="Permanent link">&para;</a></h2>
 <p>The backtest and the docs build fit no model.
 The Fit store workflow (<code>.github/workflows/fit-store.yml</code>) fits each fitted model once at each real origin.
-Each fit is one file on the <code>fit-store</code> branch, <code>&lt;model&gt;/&lt;origin&gt;/&lt;key&gt;.json.gz</code>.
+Each fit is one file in the fit store, <code>&lt;model&gt;/&lt;origin&gt;/&lt;key&gt;.json.gz</code>, kept as the GitHub Actions artifact <code>fit-store</code> (<a href="https://github.com/seabbs/bdbv-hub-modelling/blob/main/.github/workflows/README.md#where-the-fit-store-lives">where the store lives</a>).
 The key hashes:</p>
 <ul>
 <li>the task at the origin, which holds only the releases up to it;</li>
@@ -2363,18 +2363,23 @@ A submission candidate's fit also holds the fit directory the submission reads (
 <p>The workflow runs on pushes to <code>main</code> that change these inputs, every 6 hours for new hub releases, and when the submission finds a round's fits missing.
 It fits and stores the newest origin first, then the other origins, so a backfill never holds up a round.
 A push never cancels a running refit: the latest push waits and runs after it.
-The fit jobs are read-only, and one job with no project code pushes their files and prunes the branch.
+The fit jobs are read-only, and jobs with no project code add their files to the newest store, prune it and upload it again, one after another.
 It keeps the current key's file and the newest good fit of older code for each model and origin.
 A fit that fails is stored as failed, and is fitted again only when its inputs change or a dispatch sets <code>retry_failed</code>.
 On a pull request the workflow only lists the fits the change needs.
+The store artifact is kept 90 days and renewed by each store; once it has expired, every fit is made again.
 Only <code>main</code> writes to <code>fit-store</code>.
-To test a branch, dispatch the workflow on it with <code>store_branch</code> set to a name starting <code>fit-store-scratch</code>, and <code>models</code> to limit it. Any other <code>store_branch</code> stops the run.
+To test a branch, dispatch the workflow on it with <code>store</code> set to a name starting <code>fit-store-scratch</code>, and <code>models</code> to limit it. Any other <code>store</code> stops the run.
+A scratch store is kept 7 days.
 When fits are stored, the workflow rebuilds the docs.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>task<span class="w"> </span>bdbvhub:fit-store-plan<span class="w">  </span><span class="c1"># the fits the store lacks for this code and data</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>task<span class="w"> </span>bdbvhub:fit-store<span class="w">       </span><span class="c1"># load the stored fits into results/</span>
 </code></pre></div>
 <p><code>task bdbvhub:backtest</code> loads the store first.
-Where the store has no fit for the current key, <code>load</code> uses the newest stored fit of that model and origin.
+Where the current key has not been fitted yet, <code>load</code> uses the newest good stored fit of that model and origin and labels it pending.
+Where the current key's fit failed, the model has no forecast at that origin, and no older fit stands in.
+The stored backtests load only the current code's fits (<code>fit-store load --current-only</code>), so a fit not made yet is listed as pending, not scored.
+<code>nowcast-origins.csv</code> names the key and commit of the fit each stored model was scored from.
 Pages with fitted-model results list the commits of their fits and the fits not yet made.
 A full refit is 20 fits (4 models at 5 origins): 43 minutes and 5.3 runner-hours, with the slowest fit 39 minutes (<code>renewalbvd</code>).
 A new release adds 4 fits: about 40 minutes and 1.3 runner-hours.</p>

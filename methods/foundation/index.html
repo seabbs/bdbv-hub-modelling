@@ -2457,7 +2457,11 @@ The simulator is <code>nowcastfoundation.simulator</code> (the design and value 
 The first release, <code>chronos-ft-2c2b22a03107</code>, was trained from earlier code, so its hash cannot be reproduced from this repository.
 Later releases are trained from the code here, so retraining from it gives the same hash.
 Each checkpoint is published as the repository's release <code>chronos-slots-&lt;hash&gt;</code> (with the series bias) or <code>chronos-ft-&lt;hash&gt;</code>, with a <code>sha256sums.txt</code> of its files.
-The models load the newest such release by publish date (<code>hash = "latest"</code> in <code>packages/nowcastfoundation/config/finetune.toml</code>), so each new release, interim or final, is picked up; a settings hash there pins one release instead.
+The models load the main fine-tuning run's newest released checkpoint (<code>hash = "latest"</code> in <code>packages/nowcastfoundation/config/finetune.toml</code>); a settings hash there pins one release instead.
+The main run is the paper's <code>live_run</code> in <code>paper/workflow/config.yaml</code>.
+Each time it publishes a checkpoint, the release <code>chronos-main</code> is updated to name it in its <code>main.json</code> (rule <code>promote_main</code>).
+Ablation runs publish their own releases but never change <code>chronos-main</code>, so the models never take their checkpoints.
+With no <code>chronos-main</code> release, the lookup fails rather than take another run's checkpoint.
 <code>source</code> in <code>packages/nowcastfoundation/config/finetune.toml</code> says where the checkpoint is read from: <code>github</code> (the release), <code>huggingface</code> (a Hugging Face Hub repository at a pinned revision holding the same files) or <code>local</code> (a training segment folder).
 A checkpoint read from the Hub is the same checkpoint as its release, so it keys the same stored fits.
 The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the fine-tuned models, and each stored fit records the checkpoint it used.
