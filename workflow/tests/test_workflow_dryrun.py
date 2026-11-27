@@ -1438,7 +1438,7 @@ def test_sim_reports_render_each_round_and_the_rounds_together(tmp_path):
     delays = f"{rounds}/report/delay-reference.json"
     assert (
         f"sim_report.py delays {triangle} 2022-02-10"
-        f" {tmp_path}/hub/data/daily.csv {delays}"
+        f" {tmp_path}/hub/data/daily.csv 42 {delays}"
     ) in text
     assert f"{rounds}/report/germany-dev.csv {delays} r4=" in text
     assert "bdbvhub data" in text

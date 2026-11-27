@@ -238,7 +238,8 @@ def test_bdbv_delay_rows_are_province_changes_between_releases():
                         "2026-10-01", "2026-10-03", "2026-09-01"],
          "observed": [3, 3, 9, 5, 4, 7]}
     )  # fmt: skip
-    rows = sr.bdbv_delay_rows(daily).sort_values(["ref", "rep"])
+    daily["cutoff"] = daily["vintage"]
+    rows = sr.bdbv_delay_rows(daily, 42).sort_values(["ref", "rep"])
     # The country is the provinces' total, not a stratum; onsets before
     # the first release are left out.
     assert set(rows["stratum"]) == {"CD-IT"}
@@ -251,6 +252,25 @@ def test_bdbv_delay_rows_are_province_changes_between_releases():
         ("10-01", "10-08", 2),
         ("10-03", "10-08", 4),
     ]
+
+
+def test_bdbv_delay_rows_leave_out_a_cumulative_first_release():
+    # A dump on 2026-08-01, more than 42 days before the next release's
+    # cut-off: left out as the backtests leave it out, so the first
+    # usable release is the first one read.
+    daily = pd.DataFrame(
+        {"vintage": ["2026-08-01", "2026-10-01", "2026-10-08"],
+         "location": "CD-IT",
+         "onset_date": ["2026-07-30", "2026-10-01", "2026-10-01"],
+         "observed": [40, 3, 5]}
+    )  # fmt: skip
+    daily["cutoff"] = daily["vintage"]
+    rows = sr.bdbv_delay_rows(daily, 42).sort_values(["ref", "rep"])
+    assert list(rows["rep"].dt.strftime("%m-%d")) == ["10-01", "10-08"]
+    assert list(rows["count"]) == [3, 2]
+    # Within the delay window the first release is kept.
+    kept = sr.bdbv_delay_rows(daily, 70)
+    assert "08-01" in set(kept["rep"].dt.strftime("%m-%d"))
 
 
 def _reference():
@@ -281,8 +301,10 @@ def test_the_delay_reference_has_germany_and_bdbv(tmp_path):
          "onset_date": [str(d.date()) for d in
                         pd.date_range("2026-09-20", periods=20)] * 2,
          "observed": [2] * 20 + [3] * 20}
-    ).to_csv(daily, index=False)  # fmt: skip
-    got = sr.delay_reference(tri, "2022-02-10", daily)
+    ).assign(cutoff=lambda d: d["vintage"]).to_csv(
+        daily, index=False
+    )  # fmt: skip
+    got = sr.delay_reference(tri, "2022-02-10", daily, 42)
     assert set(got) == {"germany", "bdbv"}
     for entry in got.values():
         assert {"short", "label", "structure", "scalars", "curves"} <= set(
