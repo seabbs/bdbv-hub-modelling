@@ -122,7 +122,7 @@ Teams without the capacity to set up specialist models could also use them direc
   - We adapted a recently developed baseline nowcasting method, baselinenowcast, to also produce forecasts as a baseline for comparison, and to work on sparse data [@Johnson2025] (Supporting Information, *Baselines*).
     We also submitted it to the Ebola forecasting hub in real time.
   - We first evaluated these models on held-out simulations.
-  - To assess real world performance we compared our methods retrospective nowcasts to those from models from the the German COVID-19 hospitalisation nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
+  - To assess real world performance we compared our methods' retrospective nowcasts to those from models from the German COVID-19 hospitalisation nowcast hub and initially retrospective and then prospective nowcasts and forecasts to those from models from Ebola forecasting hub.
   - We explored a range of sensitivity analyses to assess the impact of different design choices on model performance.
   - These included: assessing the impact of using a baseline nowcast as input to the foundation model, fine-tuning on real data, removing the attention biases and lag series, and comparing different lag count rules and block structures.
   - We aim to demonstrate the potential of foundation time series models fine-tuned on domain-specific synthetic data to improve infectious disease nowcasting and forecasting, and to provide a case study for incorporating domain knowledge into foundation models more generally.
