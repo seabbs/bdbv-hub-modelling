@@ -457,3 +457,86 @@ def test_the_page_draws_each_stratum_s_delays():
     assert "strataWeeks" in page
     assert "First report over the final count" in page
     assert "noise_residual" in page
+
+
+def _chromium() -> str | None:
+    """Return a headless Chromium on this machine, None if there is none.
+
+    `CHROMIUM` if set, else Playwright's cached headless shell.
+    """
+    import shutil
+
+    if os.environ.get("CHROMIUM"):
+        return os.environ["CHROMIUM"]
+    cache = Path.home() / "Library" / "Caches" / "ms-playwright"
+    if not cache.exists():
+        cache = Path.home() / ".cache" / "ms-playwright"
+    found = sorted(cache.glob("chromium_headless_shell-*/*/*shell"))
+    return str(found[-1]) if found else shutil.which("chromium")
+
+
+def test_the_page_renders_each_stratum_s_delays_in_chromium(server, root):
+    import subprocess
+
+    chrome = _chromium()
+    if chrome is None:
+        pytest.skip("no headless Chromium on this machine")
+    import pandas as pd
+    from flowlib import delay_structure as ds
+
+    # The data to compare with, two strata over 12 weeks.
+    days = pd.date_range("2026-01-05", periods=84)
+    rows = pd.DataFrame(
+        {
+            "stratum": ["DE-BY", "DE-HB"] * 42,
+            "ref": days,
+            "rep": days + pd.Timedelta(days=2),
+            "count": 20,
+        }
+    )
+    st = ds.structure(rows)
+    entry = {
+        "short": "Germany",
+        "label": "Germany",
+        "structure": st,
+        "scalars": ds.scalars(st),
+        "curves": ds.curves(st),
+    }
+    sims.reference_path(root).parent.mkdir(parents=True)
+    sims.reference_path(root).write_text(json.dumps({"germany": entry}))
+    got = subprocess.run(
+        [
+            chrome,
+            "--headless",
+            "--disable-gpu",
+            "--enable-logging=stderr",
+            "--v=0",
+            "--virtual-time-budget=15000",
+            "--dump-dom",
+            server + "/sims/#src=r1&sim=101-0001",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    import re
+
+    # The page as drawn, not its script's text.
+    dom = re.sub(r"<script>.*?</script>", "", got.stdout, flags=re.S)
+    log = got.stderr
+    assert "Uncaught" not in log, log
+    assert "<svg" in dom
+    # The delay section's new numbers and the deep dive's strata.
+    for text in (
+        "Largest weekly first report over final count",
+        "Delay noise: share by stratum and week",
+        "Mean delay by stratum and reference week",
+        "Share reported by day 7, by stratum",
+        "Mean delay against the log daily count, by week",
+        "First report over the final count, by stratum",
+        "Delay noise by part",
+        "Strata's weekly mean delays correlate",
+    ):
+        assert text in dom, text
+    # Each stratum a line in the deep dive's strata panels.
+    assert dom.count("P01-A2") >= 4
