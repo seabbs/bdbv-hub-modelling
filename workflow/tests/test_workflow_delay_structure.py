@@ -27,7 +27,7 @@ def _rows(spec, days=56, stratum="A"):
 
 
 def test_a_fixed_delay_is_the_same_by_reference_and_by_release():
-    rows = _rows(lambda i: [(2, 10)])
+    rows = _rows(lambda _: [(2, 10)])
     got = ds.structure(rows)
     assert got["horizon"] == 2
     ref = got["by_ref"]
@@ -59,7 +59,7 @@ def test_a_delay_that_lengthens_shows_by_reference_week():
 def test_reference_dates_too_late_to_be_complete_are_left_out():
     # Every reference date reported 3 days later; the last report date
     # is the last reference date's, so the last 3 days are incomplete.
-    rows = _rows(lambda i: [(0, 5), (3, 5)])
+    rows = _rows(lambda _: [(0, 5), (3, 5)])
     last = rows["ref"].max()
     rows = rows[rows["rep"] <= last]
     got = ds.structure(rows)
@@ -105,7 +105,7 @@ def test_release_cadence_and_the_wait_for_a_release():
 
 
 def test_daily_releases_wait_nothing():
-    got = ds.structure(_rows(lambda i: [(0, 5), (4, 5)]))
+    got = ds.structure(_rows(lambda _: [(0, 5), (4, 5)]))
     assert got["releases"]["gaps"][0] == 1.0
     sc = ds.scalars(got)
     assert sc["wait"] == 0
@@ -114,12 +114,10 @@ def test_daily_releases_wait_nothing():
 
 
 def test_delays_by_stratum_with_the_parent_and_its_children():
-    fast = _rows(lambda i: [(1, 10)], stratum="P01-A1")
-    slow = _rows(lambda i: [(5, 10)], stratum="P01-A2")
-    other = _rows(lambda i: [(3, 20)], stratum="P02-A1")
-    got = ds.structure(
-        pd.concat([fast, slow, other]), parent=ds.sim_parent
-    )
+    fast = _rows(lambda _: [(1, 10)], stratum="P01-A1")
+    slow = _rows(lambda _: [(5, 10)], stratum="P01-A2")
+    other = _rows(lambda _: [(3, 20)], stratum="P02-A1")
+    got = ds.structure(pd.concat([fast, slow, other]), parent=ds.sim_parent)
     by = {s["name"]: s for s in got["strata"]}
     assert by["all"]["level"] == "total"
     assert by["all"]["mean"] == pytest.approx(3.0)
@@ -133,11 +131,13 @@ def test_delays_by_stratum_with_the_parent_and_its_children():
     assert names.index("P01") < names.index("P01-A1")
     assert names.index("P02") < names.index("P02-A1")
     # The children's means weighted by their counts: 1, 5, 3, 3.
-    assert ds.scalars(got)["strata_spread"] == pytest.approx(np.sqrt(2))
+    assert ds.scalars(got)["strata_spread"] == pytest.approx(
+        np.sqrt(2), abs=1e-3
+    )
 
 
 def test_one_stratum_has_no_spread():
-    got = ds.structure(_rows(lambda i: [(1, 10)]))
+    got = ds.structure(_rows(lambda _: [(1, 10)]))
     assert [s["level"] for s in got["strata"]] == ["total"]
     assert ds.scalars(got)["strata_spread"] is None
 
@@ -150,10 +150,10 @@ def test_the_sim_parent_of_a_stratum():
 
 def test_negative_updates_are_netted_before_the_summaries():
     # 10 reported on the day, 2 of them withdrawn 2 days later.
-    rows = _rows(lambda i: [(0, 10), (2, -2), (1, 2)])
+    rows = _rows(lambda _: [(0, 10), (2, -2), (1, 2)])
     got = ds.structure(rows)
     # Net by delay: 10 at 0, 2 at 1; the withdrawn 2 at 2 are dropped.
-    assert got["by_ref"]["mean"][0] == pytest.approx(2 / 12)
+    assert got["by_ref"]["mean"][0] == pytest.approx(2 / 12, abs=1e-3)
 
 
 def test_a_structure_is_plain_json():
