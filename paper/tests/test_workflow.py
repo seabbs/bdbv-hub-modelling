@@ -310,6 +310,9 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
         assert "foundation_zeroshot_baselinenowcast" in line
         if "foundation_baselinenowcast" in line.split():
             assert "BDBV_CHRONOS_FT=" in line
+        # The device and threads prefix the backtest, not the mkdir.
+        command = line.split(" && ")[-1]
+        assert "DEVICE=" in command
 
 
 def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(
