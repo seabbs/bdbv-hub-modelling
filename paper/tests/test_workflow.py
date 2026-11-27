@@ -302,6 +302,17 @@ def test_the_paper_runs_its_ebola_models_at_its_own_draws(
     # backtest`; the stored fits keep `[forecast] n_samples`.
     assert f"--samples {CONFIG['ebola']['n_samples']}" in log
     assert CONFIG["ebola"]["n_samples"] == 1000
+    # The zero-shot Chronos-2 models run there too, and a fine-tuned one
+    # loads the final checkpoint, as in the other studies.
+    draws = [ln for ln in log.splitlines() if "backtest --config" in ln]
+    assert draws
+    for line in draws:
+        assert "foundation_zeroshot_baselinenowcast" in line
+        if "foundation_baselinenowcast" in line.split():
+            assert "BDBV_CHRONOS_FT=" in line
+        # The device and threads prefix the backtest, not the mkdir.
+        command = line.split(" && ")[-1]
+        assert "DEVICE=" in command
 
 
 def test_the_workflow_pins_and_records_the_fine_tuned_checkpoint(

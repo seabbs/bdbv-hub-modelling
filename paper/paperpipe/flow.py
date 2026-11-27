@@ -472,6 +472,33 @@ class PaperFlow:
             return ""
         return f"{FINETUNED_ENV}={Path(record).parent}"
 
+    def ebola_draws_models(self) -> list[str]:
+        """Return the models the paper's own Ebola backtest runs.
+
+        `backtest_models`, less the fine-tuned ones while the final run
+        has no checkpoint, as for the synthetic runner. `foundation` is
+        not among them: it is a stored model, so `bdbvhub backtest` never
+        runs it and its forecasts are the fit store's.
+        """
+        models = list(self.ebola["backtest_models"])
+        if self.config.get("finetuned_record"):
+            return models
+        from nowcasteval.labels import FINETUNED
+
+        return [m for m in models if m not in FINETUNED]
+
+    def ebola_site_models(self) -> list[str]:
+        """Return the models the site's release backtest file is made with.
+
+        The walks only: the paper's own backtest (`ebola_draws_models`)
+        replaces every model it runs, so the Chronos-2 ones run there
+        alone.
+        """
+        from nowcasteval.labels import FINETUNED
+
+        chronos = {*FINETUNED, *FINETUNED.values()}
+        return [m for m in self.ebola["backtest_models"] if m not in chronos]
+
     def synthetic_models_arg(self) -> str:
         """Return the synthetic runner's models option."""
         if self.config.get("finetuned_record"):
@@ -546,7 +573,7 @@ class PaperFlow:
                 files = " ".join(self.ebola_extra())
                 args.append(f"--ebola-extra {files}")
             if ebola.get("n_samples"):
-                models = " ".join(ebola["backtest_models"])
+                models = " ".join(self.ebola_draws_models())
                 args.append(f"--ebola-draws {self.ebola_draws}")
                 args.append(f"--ebola-draws-models {models}")
             releases = self.round_releases()

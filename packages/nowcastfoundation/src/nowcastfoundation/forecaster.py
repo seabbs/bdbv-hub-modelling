@@ -706,22 +706,23 @@ def local_checkpoint(segment: Path | str) -> Checkpoint:
     return Checkpoint(checkpoint_spec(settings), sums, path=str(adapter))
 
 
-def _finetuned(
+def _zeroshot(
     name: str,
     layout: str = "ragged",
     baselinenowcast: bool = False,
+    checkpoint: Checkpoint | None = None,
 ) -> FoundationModel:
-    """Build a fine-tuned model with the checkpoint `finetuned_checkpoint`.
+    """Build a model with the pretrained weights, or with `checkpoint`.
 
-    It builds the block its zero-shot model of `layout` builds, with the
-    cadence read from each task (`FROM_DATA`); only the weights differ.
+    It reads the cadence from each task (`FROM_DATA`) and cuts its blocks
+    by the active-zone rule (`active_zone_rule`).
     """
     cases, weeks, recent = active_zone_rule()
     return FoundationModel(
         name,
         FROM_DATA,
         layout,
-        finetuned_checkpoint(),
+        checkpoint,
         baselinenowcast=baselinenowcast,
         active_zone_cases=cases,
         active_zone_weeks=weeks,
@@ -729,13 +730,25 @@ def _finetuned(
     )
 
 
+def _finetuned(
+    name: str,
+    layout: str = "ragged",
+    baselinenowcast: bool = False,
+) -> FoundationModel:
+    """Build a fine-tuned model with the checkpoint `finetuned_checkpoint`.
+
+    It builds the block its zero-shot model of `layout` builds
+    (`_zeroshot`); only the weights differ.
+    """
+    return _zeroshot(name, layout, baselinenowcast, finetuned_checkpoint())
+
+
 def _real_data(name: str) -> FoundationModel:
     """Build a model with the real-data checkpoint `realdata_spec`."""
-    return FoundationModel(
+    return _zeroshot(
         name,
-        FROM_DATA,
         "ragged",
-        resolve_checkpoint(realdata_spec(), REALDATA_PREFIX),
+        checkpoint=resolve_checkpoint(realdata_spec(), REALDATA_PREFIX),
     )
 
 
@@ -2309,9 +2322,9 @@ def prefetch(
 # and the submission run; the others are paper-only (`paper_only`).
 register_model(
     "foundation_zeroshot",
-    partial(FoundationModel, "foundation_zeroshot", FROM_DATA, "ragged"),
-    "Chronos-2 zero-shot on the hub target's releases, ragged layout, every "
-    "target in one block.",
+    partial(_zeroshot, "foundation_zeroshot", "ragged"),
+    "Chronos-2 zero-shot on the hub target's releases, ragged layout, in "
+    "the fine-tuned model's blocks.",
     fitted=True,
     paper_only=True,
 )
@@ -2324,9 +2337,7 @@ register_model(
 )
 register_model(
     "foundation_zeroshot_complete",
-    partial(
-        FoundationModel, "foundation_zeroshot_complete", FROM_DATA, "complete"
-    ),
+    partial(_zeroshot, "foundation_zeroshot_complete", "complete"),
     "Chronos-2 zero-shot on the hub target's releases, complete layout.",
     fitted=True,
     paper_only=True,
@@ -2345,9 +2356,8 @@ register_model(
 register_model(
     "foundation_zeroshot_baselinenowcast",
     partial(
-        FoundationModel,
+        _zeroshot,
         "foundation_zeroshot_baselinenowcast",
-        FROM_DATA,
         "complete",
         baselinenowcast=True,
     ),

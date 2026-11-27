@@ -108,7 +108,16 @@ ebola:
   # Further models' release-backtest samples from evidence rows
   # (`evidence` below), in the backtest's layout, kept to `models`.
   extra: []
-  backtest_models: [randomwalk, randomwalknowcast]
+  # The walks and the paper-only Chronos-2 models, as in the other
+  # studies. The fine-tuned ragged model (`foundation`) is a stored model,
+  # so its forecasts are the fit store's in `backtest`, not run here.
+  backtest_models:
+    - randomwalk
+    - randomwalknowcast
+    - foundation_zeroshot_complete
+    - foundation_zeroshot
+    - foundation_zeroshot_baselinenowcast
+    - foundation_baselinenowcast
   # Draws per forecast of the paper's own run of `backtest_models`, with
   # the backtest's seed shared by every model (common random numbers).
   # Their rows replace the site backtest's, which keeps its own number.

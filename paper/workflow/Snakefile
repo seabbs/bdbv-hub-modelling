@@ -321,9 +321,13 @@ if FLOW.round_releases():
             "--out {output} && rm -rf {params.tmp}"
 
 
+# The paper's own release backtest of the walks and the paper-only
+# Chronos-2 models, the fine-tuned ones loading the final checkpoint as in
+# the other studies. `foundation` is the fit store's, in EBOLA["backtest"].
 rule ebola_backtest_draws:
     input:
         f"{EBOLA['data']}/target.csv",
+        FINETUNED,
     output:
         EBOLA_DRAWS,
     log:
@@ -338,15 +342,15 @@ rule ebola_backtest_draws:
         heavy=1,
     params:
         env=FORECAST.env,
+        ft=FT_EXPORT,
         bdbv=BDBV,
-        models=" ".join(EBOLA["backtest_models"]),
+        models=" ".join(FLOW.ebola_draws_models()),
         n=EBOLA["n_samples"],
         folder=lambda w: os.path.abspath(f"{R}/ebola-backtest"),
         config=EBOLA["config"],
     shell:
-        "exec >{log} 2>&1; {params.env} "
-        "mkdir -p {params.folder} && "
-        "{params.bdbv} backtest --config {params.config} --samples {params.n} "
+        "exec >{log} 2>&1; mkdir -p {params.folder} && "
+        "{params.ft} {params.env} {params.bdbv} backtest --config {params.config} --samples {params.n} "
         "--models {params.models} "
         "--results {params.folder}/results --output {params.folder}"
 
@@ -384,7 +388,7 @@ rule ebola_backtest:
     params:
         env=FORECAST.env,
         bdbv=BDBV,
-        models=" ".join(EBOLA["backtest_models"]),
+        models=" ".join(FLOW.ebola_site_models()),
     shell:
         "exec >{log} 2>&1; {params.env} "
         "{params.bdbv} backtest --models {params.models}"
