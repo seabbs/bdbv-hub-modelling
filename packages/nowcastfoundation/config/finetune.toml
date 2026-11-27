@@ -47,14 +47,14 @@ realdata = ""
 # (`nowcastgermany.finetune_blocks.realdata_window`): the hub triangle as
 # available on `as_of`, the last day of the German development half
 # (packages/nowcastgermany/config/germany.toml `split_date` less a day),
-# cut at every nowcast date from `first_cut` whose truth, four weeks
-# ahead, is at least `truth_delay` days old by `as_of`, each date's tasks
-# laid out as the fine-tuned model forecasts them. The last
-# `held_out_dates` nowcast dates are held out to monitor the loss.
+# cut at every nowcast date from the triangle's first whose truth, four
+# weeks ahead, is at least `truth_delay` days old by `as_of`, each date's
+# tasks laid out as the fine-tuned model forecasts them, at lags to the
+# truth delay. The last `held_out_dates` nowcast dates are held out to
+# monitor the loss.
 [realdata_germany]
 as_of = "2022-02-09"
 truth_delay = 40
-first_cut = "2021-04-20"
 held_out_dates = 14
 
 # The BDBV data the real-data checkpoint trained on: every public release

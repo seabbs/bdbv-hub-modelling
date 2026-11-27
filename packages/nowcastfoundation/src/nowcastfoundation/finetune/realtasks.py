@@ -5,12 +5,14 @@ A real-data block is a forecast task (`ForecastTask`, built by the study's
 own task builder) laid out by `FoundationModel` exactly as its forecast
 is: the source the task gives (`for_task`), the ragged triangle with each
 place's lag series and 7-day rows, and the model's views
-(`active_views`, or `block_views` over the block limit). Only the lag
-count differs from a forecast's: the data rule (`lag_count`), scaled in
-a share of blocks by a draw from Normal(1, sd), as the simulated blocks'
+(`active_views`, or `block_views` over the block limit). Its lags are
+those of the study's maximum delay, as its forecasts fix them, or as
+many as the history holds when it is shorter; in a share of blocks the
+count is scaled by a draw from Normal(1, sd), as the simulated blocks'
 lag jitter (`LAG_JITTER`). Each block's targets after its context hold
-the truth, a later task's final counts, masked after the truth date, so
-no count trained on is younger than the study's truth delay.
+the truth, a later task's final counts, masked step by step after the
+truth date, so no count trained on is younger than the study's truth
+delay.
 """
 
 from __future__ import annotations
@@ -28,7 +30,6 @@ from nowcastfoundation.forecaster import (
     _sub,
     active_zone_rule,
     hub_triangle,
-    lag_count,
     layout_block,
     rolling_totals,
 )
@@ -141,24 +142,26 @@ def task_blocks(
     task: ForecastTask,
     truth: Truth,
     rng: np.random.Generator,
+    max_delay: int,
     jitter: tuple[float, float] = LAG_JITTER,
     **labels: Any,
 ) -> list[dict[str, Any]]:
     """Return the training blocks of one task, one per view.
 
-    The task is laid out as `model` forecasts it, at the data rule's lag
-    count scaled by `lag_scale`, and each view of its block becomes a
-    training block, its targets after the context the truth's, missing
-    after `truth.until`. `labels` (such as `data` and `cut`) are added to
-    each block. None if the task has under two steps of context.
+    The task is laid out as `model` forecasts it, at lags 0 to
+    `max_delay` days (scaled by `lag_scale`), or as many as its history
+    holds (`FoundationModel._triangle`), and each view of its block
+    becomes a training block, its targets after the context the truth's,
+    missing on each step after `truth.until`. `labels` (such as `data` and
+    `cut`) are added to each block. None if the task has under two steps
+    of context or no truth.
     """
     run = model.for_task(task)
     rows, places, weeks = run._rows(task)
-    full = hub_triangle(rows, run.source, places, weeks[-1], all_lags=True)
     scale = lag_scale(rng, jitter)
-    lags = max(1, round(lag_count(full, run.source) * scale))
-    run = replace(run, lags=lags)
+    run = replace(run, lags=max(1, round((max_delay + 1) * scale)))
     tri = run._triangle(rows, places, weeks[-1])
+    lags = int(tri.partial.shape[2])
     start = tri.n_context
     if start < 2 or start >= len(tri.times):
         return []
