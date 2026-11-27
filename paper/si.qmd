@@ -1127,13 +1127,13 @@ German nowcast hub, daily counts: the score panels of the German results figure,
 Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundation`) and fine-tuned on real data (`foundation_real`), by level: WIS on the German held-out half and on held-out Ebola rounds after the real-data model's last training release, relative to `randomwalknowcast`. Blank cells have no scores yet.
 :::
 
-### Attention biases for place and parent against none
+### Attention bias setups
 
-- We compare the run with attention biases with a run without them.
-- Both runs share the grid, the data order, the LoRA recipe and the checkpoints.
-- @fig-compare-slots shows the trainer's validation loss and German first-half relative scores of both runs by checkpoint and level.
-- @fig-progress-noslots gives the run without biases' own progress, as @fig-progress-runa does for the run with them.
-- @tbl-slots-summary gives each run's newest checkpoint.
+- We compare four attention bias setups: all three biases (the main model), no biases, the same-place bias only, and the parent and child biases only.
+- All four runs share the grid, the data order, the LoRA recipe and the checkpoints.
+- @fig-compare-slots shows the trainer's validation loss and German first-half relative scores of each run by checkpoint and level.
+- @fig-progress-noslots, @fig-progress-sameonly and @fig-progress-parentonly give each other run's own progress, as @fig-progress-runa does for the main model.
+- @tbl-slots-summary gives each run's scores at its final checkpoint.
 - The lag-swap test moves whole lag series to another place.
 - A ratio above 1 means the model's forecast depends on which place's lags sit with a target.
 - Zero-shot Chronos-2 can also match lags to targets by value, so the comparison with the run without biases, not the ratio alone, tests the biases.
@@ -1141,12 +1141,16 @@ Chronos-2 zero-shot (`foundation_zeroshot`), fine-tuned on simulations (`foundat
 
 ![Progress of the run without attention biases (`noslots`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-noslots.png){#fig-progress-noslots}
 
-![Attention biases against none: the trainer's validation loss and German first-half relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
+![Progress of the run with the same-place bias only (`sameonly`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-sameonly.png){#fig-progress-sameonly}
+
+![Progress of the run with the parent and child biases only (`parentonly`) over its checkpoints, in the panels of @fig-progress-runa. Development data only.](build/figures/si/progress-parentonly.png){#fig-progress-parentonly}
+
+![Attention bias setups: the trainer's validation loss and German first-half relative scores, by checkpoint and level. {{< meta evidence.live.label >}} Development data only.](build/figures/si/compare-slots.png){#fig-compare-slots}
 
 ::: {#tbl-slots-summary}
 {{< include build/tables/si/slots-summary.md >}}
 
-Zero-shot Chronos-2 and the newest checkpoint of the runs with and without attention biases: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
+Zero-shot Chronos-2 and the newest checkpoint of each attention bias setup: national WIS on the German first half, relative to `randomwalknowcast` (daily / weekly model), and the trainer's validation loss, with each cell's simulations in brackets. {{< meta evidence.live.label >}} Development data only.
 :::
 
 ### Delays against no delays
