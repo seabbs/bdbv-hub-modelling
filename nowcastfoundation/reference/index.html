@@ -23471,7 +23471,44 @@ text, vectors as lists, place indices from 1.</p>
 <span class="normal">639</span>
 <span class="normal">640</span>
 <span class="normal">641</span>
-<span class="normal">642</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">draw_values</span><span class="p">(</span>
+<span class="normal">642</span>
+<span class="normal">643</span>
+<span class="normal">644</span>
+<span class="normal">645</span>
+<span class="normal">646</span>
+<span class="normal">647</span>
+<span class="normal">648</span>
+<span class="normal">649</span>
+<span class="normal">650</span>
+<span class="normal">651</span>
+<span class="normal">652</span>
+<span class="normal">653</span>
+<span class="normal">654</span>
+<span class="normal">655</span>
+<span class="normal">656</span>
+<span class="normal">657</span>
+<span class="normal">658</span>
+<span class="normal">659</span>
+<span class="normal">660</span>
+<span class="normal">661</span>
+<span class="normal">662</span>
+<span class="normal">663</span>
+<span class="normal">664</span>
+<span class="normal">665</span>
+<span class="normal">666</span>
+<span class="normal">667</span>
+<span class="normal">668</span>
+<span class="normal">669</span>
+<span class="normal">670</span>
+<span class="normal">671</span>
+<span class="normal">672</span>
+<span class="normal">673</span>
+<span class="normal">674</span>
+<span class="normal">675</span>
+<span class="normal">676</span>
+<span class="normal">677</span>
+<span class="normal">678</span>
+<span class="normal">679</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">draw_values</span><span class="p">(</span>
     <span class="n">grid</span><span class="p">:</span> <span class="n">Grid</span><span class="p">,</span> <span class="n">design</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">rng</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">Generator</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">"""Draw the continuous settings of a simulation, by layer.</span>
@@ -23693,9 +23730,7 @@ text, vectors as lists, place indices from 1.</p>
     <span class="n">v</span><span class="p">[</span><span class="s2">"shock_weeks"</span><span class="p">]</span> <span class="o">=</span> <span class="n">vec</span><span class="p">(</span><span class="n">dc</span><span class="p">(</span><span class="s2">"shock_weeks"</span><span class="p">,</span> <span class="n">n_shocks</span><span class="p">))</span>
     <span class="n">v</span><span class="p">[</span><span class="s2">"shock_mult"</span><span class="p">]</span> <span class="o">=</span> <span class="n">vec</span><span class="p">(</span><span class="n">ds</span><span class="p">(</span><span class="s2">"shock_mult"</span><span class="p">,</span> <span class="n">n_shocks</span><span class="p">))</span>
     <span class="n">rep</span> <span class="o">=</span> <span class="n">design</span><span class="p">[</span><span class="s2">"reporting_strata"</span><span class="p">]</span>
-    <span class="n">v</span><span class="p">[</span><span class="s2">"revise_over"</span><span class="p">]</span> <span class="o">=</span> <span class="n">stratum_values</span><span class="p">(</span>
-        <span class="n">grid</span><span class="p">,</span> <span class="n">rep</span><span class="p">,</span> <span class="n">n_s</span><span class="p">,</span> <span class="s2">"revise_over"</span><span class="p">,</span> <span class="n">rng</span><span class="p">,</span> <span class="n">probability</span><span class="o">=</span><span class="kc">True</span>
-    <span class="p">)</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"revise_over"</span><span class="p">]</span> <span class="o">=</span> <span class="n">stratum_values</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">rep</span><span class="p">,</span> <span class="n">n_s</span><span class="p">,</span> <span class="s2">"revise_over"</span><span class="p">,</span> <span class="n">rng</span><span class="p">)</span>
     <span class="n">v</span><span class="p">[</span><span class="s2">"revise_move"</span><span class="p">]</span> <span class="o">=</span> <span class="n">stratum_values</span><span class="p">(</span>
         <span class="n">grid</span><span class="p">,</span> <span class="n">rep</span><span class="p">,</span> <span class="n">n_s</span><span class="p">,</span> <span class="s2">"revise_move"</span><span class="p">,</span> <span class="n">rng</span><span class="p">,</span> <span class="n">probability</span><span class="o">=</span><span class="kc">True</span>
     <span class="p">)</span>
@@ -23713,6 +23748,45 @@ text, vectors as lists, place indices from 1.</p>
     <span class="c1"># draws above are unchanged.</span>
     <span class="n">v</span><span class="p">[</span><span class="s2">"report_cap_days"</span><span class="p">]</span> <span class="o">=</span> <span class="n">ds</span><span class="p">(</span><span class="s2">"report_cap_days"</span><span class="p">)</span>
     <span class="n">v</span><span class="p">[</span><span class="s2">"report_stop_at"</span><span class="p">]</span> <span class="o">=</span> <span class="n">ds</span><span class="p">(</span><span class="s2">"report_stop_at"</span><span class="p">)</span>
+    <span class="c1"># Noise on the delay's parameters by stratum (`delay_strata_noise`).</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"delay_strata_sd"</span><span class="p">]</span> <span class="o">=</span> <span class="n">ds</span><span class="p">(</span><span class="s2">"delay_strata_sd"</span><span class="p">)</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"delay_strata_jitter_sd"</span><span class="p">]</span> <span class="o">=</span> <span class="n">ds</span><span class="p">(</span><span class="s2">"delay_strata_jitter_sd"</span><span class="p">)</span>
+    <span class="c1"># The delay change by stratum (`delay_change_strata`, `_switch`,</span>
+    <span class="c1"># `_combine`): a second kind, each stratum's own change, and the</span>
+    <span class="c1"># switch between shared and own.</span>
+    <span class="n">v</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">_stratum_changes</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">design</span><span class="p">,</span> <span class="n">n_s</span><span class="p">,</span> <span class="n">rng</span><span class="p">))</span>
+    <span class="c1"># The delay by the stratum's expected counts (`delay_counts`): longer</span>
+    <span class="c1"># when counts are high with `delay_counts_longer`, else shorter; one</span>
+    <span class="c1"># sign for all strata unless each has its own slope.</span>
+    <span class="n">longer</span> <span class="o">=</span> <span class="n">draw_share</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="s2">"delay_counts_longer"</span><span class="p">,</span> <span class="n">rng</span><span class="p">,</span> <span class="n">n_s</span><span class="p">)</span>
+    <span class="n">sign</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">longer</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">design</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"delay_counts"</span><span class="p">,</span> <span class="s2">"none"</span><span class="p">)</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"none"</span><span class="p">,</span> <span class="s2">"shared"</span><span class="p">):</span>
+        <span class="n">sign</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">sign</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"delay_counts_sign"</span><span class="p">]</span> <span class="o">=</span> <span class="n">vec</span><span class="p">(</span><span class="n">sign</span><span class="p">)</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"delay_counts_slope"</span><span class="p">]</span> <span class="o">=</span> <span class="n">ds</span><span class="p">(</span><span class="s2">"delay_counts_slope"</span><span class="p">)</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"delay_counts_sd"</span><span class="p">]</span> <span class="o">=</span> <span class="n">ds</span><span class="p">(</span><span class="s2">"delay_counts_sd"</span><span class="p">)</span>
+    <span class="c1"># Over-reporting bursts (`bursts`): a few, usually one, strata with</span>
+    <span class="c1"># cases, each with one or more short bursts.</span>
+    <span class="n">n_a</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">design</span><span class="p">[</span><span class="s2">"n_ages"</span><span class="p">])</span>
+    <span class="n">with_cases</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="o">+</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_s</span><span class="p">)</span> <span class="k">if</span> <span class="n">s</span> <span class="o">//</span> <span class="n">n_a</span> <span class="o">+</span> <span class="mi">1</span> <span class="ow">in</span> <span class="n">cases</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">design</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"bursts"</span><span class="p">,</span> <span class="s2">"none"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"none"</span><span class="p">:</span>
+        <span class="n">burst</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">burst</span> <span class="o">=</span> <span class="n">_sample</span><span class="p">(</span>
+            <span class="n">rng</span><span class="p">,</span> <span class="n">with_cases</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">with_cases</span><span class="p">),</span> <span class="n">dc</span><span class="p">(</span><span class="s2">"burst_strata"</span><span class="p">))</span>
+        <span class="p">)</span>
+    <span class="n">per_stratum</span> <span class="o">=</span> <span class="n">dc</span><span class="p">(</span><span class="s2">"bursts_per_stratum"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">burst</span><span class="p">))</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"burst_strata"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">s</span> <span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">burst</span><span class="p">,</span> <span class="n">per_stratum</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+    <span class="p">]</span>
+    <span class="n">n_bursts</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">[</span><span class="s2">"burst_strata"</span><span class="p">])</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"burst_at"</span><span class="p">]</span> <span class="o">=</span> <span class="n">vec</span><span class="p">(</span><span class="n">ds</span><span class="p">(</span><span class="s2">"burst_at"</span><span class="p">,</span> <span class="n">n_bursts</span><span class="p">))</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"burst_days"</span><span class="p">]</span> <span class="o">=</span> <span class="n">vec</span><span class="p">(</span><span class="n">dc</span><span class="p">(</span><span class="s2">"burst_days"</span><span class="p">,</span> <span class="n">n_bursts</span><span class="p">))</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"burst_mult"</span><span class="p">]</span> <span class="o">=</span> <span class="n">vec</span><span class="p">(</span><span class="n">ds</span><span class="p">(</span><span class="s2">"burst_mult"</span><span class="p">,</span> <span class="n">n_bursts</span><span class="p">))</span>
+    <span class="n">keep</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="s2">"constants"</span><span class="p">][</span><span class="s2">"burst_keep_max"</span><span class="p">])</span>
+    <span class="n">v</span><span class="p">[</span><span class="s2">"burst_keep"</span><span class="p">]</span> <span class="o">=</span> <span class="n">vec</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">minimum</span><span class="p">(</span><span class="n">dc</span><span class="p">(</span><span class="s2">"burst_keep_days"</span><span class="p">,</span> <span class="n">n_bursts</span><span class="p">),</span> <span class="n">keep</span><span class="p">))</span>
+    <span class="c1"># Ascertainment that changes over time (`ascertainment_*`).</span>
+    <span class="n">v</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">_ascertainment_changes</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span> <span class="n">design</span><span class="p">,</span> <span class="n">n_s</span><span class="p">,</span> <span class="n">span</span><span class="p">,</span> <span class="n">rng</span><span class="p">))</span>
     <span class="k">return</span> <span class="n">v</span>
 </code></pre></div></td></tr></table></div>
             </details>
