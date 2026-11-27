@@ -46,7 +46,7 @@ bdbvhub fit --model renewal|renewalsp --config main|renewalsp --vintage <as_of> 
 - Append progress lines to `<fit dir>/progress.log` as you go, for example `iteration=500 divergences=0` every few hundred iterations.
   The job prints the newest line once a minute, as BVDOutbreakSize does, so a stalled fit is visible.
 - Everything the forecast needs from the fit stays in `<fit dir>`, for example posterior draws as NetCDF or `.npz`.
-  That directory is uploaded for 3 days. A fitted candidate's directory is normally the fit store's (`fit-store unpack`), not a fit made in the run.
+  That directory is uploaded for 7 days, and the round's release keeps it. A fitted candidate's directory is normally the fit store's (`fit-store unpack`), not a fit made in the run.
 - Set the device count before importing JAX: `numpyro.set_host_device_count(4)`.
   The setup action also sets `XLA_FLAGS` to the runner's CPU count, and sets `JAX_COMPILATION_CACHE_DIR`.
 

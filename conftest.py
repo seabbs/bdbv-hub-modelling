@@ -70,15 +70,28 @@ def _write_checkpoint_release(
     )
 
 
+def write_main(root: Path, spec: str, run: str = "runa") -> None:
+    """Name checkpoint `spec` the main run's newest in fake `chronos-main`."""
+    import json
+
+    from nowcastfoundation import forecaster as foundation
+
+    folder = root / foundation.MAIN_TAG
+    folder.mkdir(parents=True, exist_ok=True)
+    record = {"run": run, "spec": spec, "tag": foundation.release_tag(spec)}
+    (folder / foundation.MAIN_FILE).write_text(json.dumps(record))
+
+
 @pytest.fixture(autouse=True)
 def _fake_checkpoint_releases(
     tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> Path:
     """Resolve the fine-tuned checkpoint from a fake release list.
 
-    No test reaches GitHub. The latest `chronos-ft-*` release is
-    `FAKE_CHECKPOINT`, with its `sha256sums.txt` only, and the models take
-    the latest release (`BDBV_CHRONOS_FT=latest`), whatever
+    No test reaches GitHub. The main run's newest checkpoint
+    (`chronos-main`) is the release `chronos-ft-<FAKE_CHECKPOINT>`, with
+    its `sha256sums.txt` only, and the models take it
+    (`BDBV_CHRONOS_FT=latest`), whatever
     packages/nowcastfoundation/config/finetune.toml pins.
     """
     from nowcastfoundation import forecaster as foundation
@@ -92,20 +105,10 @@ def _fake_checkpoint_releases(
         )  # fmt: skip
         for name in ("adapter_model.safetensors", "adapter_config.json"):
             (root / f"chronos-ft-{FAKE_CHECKPOINT}" / name).unlink()
+        write_main(root, FAKE_CHECKPOINT)
     monkeypatch.setenv(foundation.FINETUNED_ENV, "latest")
     monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
     monkeypatch.setattr(foundation, "RETRY_SECONDS", (0, 0, 0))
-    monkeypatch.setattr(
-        foundation,
-        "finetuned_releases",
-        lambda: [
-            {
-                "tag_name": f"chronos-ft-{FAKE_CHECKPOINT}",
-                "published_at": "2026-11-13T12:00:00Z",
-                "draft": False,
-            }
-        ],
-    )
     foundation.resolve_checkpoint.cache_clear()
     yield root
     foundation.resolve_checkpoint.cache_clear()
@@ -133,6 +136,12 @@ def _keep_the_checkpoint_pin():  # type: ignore[no-untyped-def]
 def write_release():  # type: ignore[no-untyped-def]
     """Write a fake checkpoint release (`_write_checkpoint_release`)."""
     return _write_checkpoint_release
+
+
+@pytest.fixture
+def point_main():  # type: ignore[no-untyped-def]
+    """Name a fake checkpoint the main run's newest (`write_main`)."""
+    return write_main
 
 
 @pytest.fixture

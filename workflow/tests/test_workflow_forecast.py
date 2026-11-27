@@ -100,7 +100,7 @@ def test_jax_starts_with_the_cuda_platform_list_without_cuda():
 
 
 SCORING_RULES = ("score_germany", "score_run_germany")
-"""The German units, on the scoring device while a run trains."""
+"""The German units, on their own device (`score.device`)."""
 
 
 def _rule_text(name: str) -> str:
@@ -111,14 +111,12 @@ def _rule_text(name: str) -> str:
     raise AssertionError(f"no rule {name}")
 
 
-def test_checkpoint_scoring_runs_on_the_scoring_device():
+def test_german_units_run_on_their_own_device():
     for name in SCORING_RULES:
         text = _rule_text(name)
-        assert "gpu=CHECKPOINT_FORECAST.gpu" in text, name
-        assert "env=checkpoint_env" in text, name
-        assert "FORECAST.device" not in text.replace(
-            "CHECKPOINT_FORECAST.device", ""
-        ), name
+        assert "gpu=GERMANY_FORECAST.gpu" in text, name
+        assert "env=germany_env" in text, name
+        assert "CHECKPOINT_FORECAST" not in text, name
     # The BDBV check stays on the forecasting device: its blocks do not
     # fit an 8 GB GPU.
     assert "gpu=FORECAST.gpu" in _rule_text("ft_check_forecast")
@@ -133,6 +131,18 @@ EVALUATION_RULES = (
 )
 """A checkpoint's held-out scoring: on the CPU while a run trains, a
 whole GPU once none does, never pausing training."""
+
+
+SPLIT_RULES = ("evaluate_base", "evaluate_checkpoint")
+"""The one-pass held-out evaluations, split over CPU workers."""
+
+
+def test_the_held_out_pass_splits_over_the_rule_s_threads():
+    for name in SPLIT_RULES:
+        text = _rule_text(name)
+        assert "EVALUATE_WORKERS={params.workers} " in text, name
+        assert "workers=evaluation_workers" in text, name
+        assert "EVALUATION_MEMORY" in text, name
 
 
 def test_evaluation_never_pauses_training():

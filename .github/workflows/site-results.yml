@@ -1,8 +1,9 @@
 name: Site results
 
 # What the site shows from the stored fits and backtests, made from what
-# the fit store holds now and stored on the store branch (`site/`), so
-# the Site build only unpacks it: the comparison with the hub teams'
+# the fit store holds now and stored as the artifact `fit-store-site`
+# (`latest.tar.gz` and `latest.json`, kept 90 days), so the Site build
+# only unpacks it: the comparison with the hub teams'
 # forecasts, the German benchmark's tables with its teams scored, and the
 # docs figures and tables (`bdbvhub report`). A fit not yet stored is
 # shown as not yet fitted (`fit-store load`'s status file), so this never
@@ -12,32 +13,37 @@ name: Site results
 # hub data, the code and the fine-tuned German forecasts) are those it
 # was last made from. Then Site is rebuilt.
 #
-# Writes fit-store from main only. A dispatch from another branch must
-# name a scratch store branch (`store_branch`), for testing.
+# Writes the main store from main only. A dispatch from another branch
+# must name a scratch store (`store`), for testing.
 
 on:
   workflow_dispatch:
     inputs:
-      store_branch:
+      store:
         description: >-
-          Store branch to read and write (blank for fit-store, from main
-          only; any other name is a scratch store for testing a branch)
+          Store to read and write (blank for fit-store, from main only;
+          any other name is a scratch store for testing a branch)
         type: string
         default: ''
 
 # A running run on main finishes; a newer dispatch replaces a queued one,
 # which reads the store when it starts.
 concurrency:
-  group: site-results-${{ inputs.store_branch || github.ref }}
+  group: site-results-${{ inputs.store || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
+  # To read the store's artifacts.
+  actions: read
 
 env:
   DEVICE: cpu
   STORE: output/fit-store
-  FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
+  FIT_STORE: ${{ inputs.store || 'fit-store' }}
+  # Days the site results are kept: a scratch store's only for its test.
+  RETENTION: ${{ inputs.store && '7' || '90' }}
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   site-results:
@@ -45,19 +51,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: write
+      contents: read
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Decide whether this run may write a store
         env:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
-          SCRATCH: ${{ inputs.store_branch }}
+          SCRATCH: ${{ inputs.store }}
         run: |
-          write=$(python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py guard "$EVENT" "$REF" "$SCRATCH")
+          write=$(python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py guard "$EVENT" "$REF" "$SCRATCH")
           if [ "$write" != true ]; then
-            echo "::error::only main writes fit-store; name a scratch store_branch"
+            echo "::error::only main writes fit-store; name a scratch store"
             exit 1
           fi
       - uses: ./.github/actions/setup-forecast-env
@@ -76,12 +84,12 @@ jobs:
           uv run bdbvhub bvd
           echo "BDBV_CHRONOS_FT=$(uv run bdbvhub finetuned-checkpoint)" \
             >> "$GITHUB_ENV"
+      # A store or bundle that has expired or is not yet made is left out:
+      # its fits show as not yet fitted and its sections as pending.
       - name: Fetch the store and the ledger, and hash them
         id: key
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
+          python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py fetch "$STORE" backtests site
           mkdir -p output/ledger
           ledger=none
           if git fetch -q --depth 1 origin submission-ledger; then
@@ -109,9 +117,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          # The bundle's parts, joined in order (`branch.py`).
           if [ -f "$STORE/backtests/latest.json" ]; then
-            cat "$STORE"/backtests/latest.tar.gz* | tar -xz
+            tar -xzf "$STORE/backtests/latest.tar.gz"
           fi
           uv run bdbvhub fit-store load --store "$STORE"
       # The fine-tuned models' German forecasts, as the workflow's German
@@ -160,7 +167,7 @@ jobs:
           uv run nowcastgermany asof --out results/germany
           uv run nowcastgermany paper --results results/germany
           uv run bdbvhub report --ledger output/ledger
-      - name: Store the site results
+      - name: Bundle the site results
         if: steps.key.outputs.make == 'true'
         env:
           KEY: ${{ steps.key.outputs.key }}
@@ -168,11 +175,19 @@ jobs:
           # Only what this job made or changed, never a committed file.
           git ls-files --others --modified -- results docs \
             > "$RUNNER_TEMP/site.txt"
-          tar -czf "$RUNNER_TEMP/site.tar.gz" -T "$RUNNER_TEMP/site.txt"
-          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py \
-            push-site "$RUNNER_TEMP/site.tar.gz" "$GITHUB_SHA" "$KEY"
+          mkdir -p "$RUNNER_TEMP/site"
+          tar -czf "$RUNNER_TEMP/site/latest.tar.gz" -T "$RUNNER_TEMP/site.txt"
+          jq -n --arg commit "$GITHUB_SHA" --arg key "$KEY" \
+            '{commit: $commit, key: $key}' > "$RUNNER_TEMP/site/latest.json"
+      - name: Store the site results
+        if: steps.key.outputs.make == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.FIT_STORE }}-site
+          path: ${{ runner.temp }}/site
+          overwrite: true
+          compression-level: 0
+          retention-days: ${{ env.RETENTION }}
       - name: Rebuild the docs from the store
-        if: github.ref == 'refs/heads/main' && inputs.store_branch == ''
-        env:
-          GH_TOKEN: ${{ github.token }}
+        if: github.ref == 'refs/heads/main' && inputs.store == ''
         run: gh workflow run pages.yml --ref main -R "$GITHUB_REPOSITORY"

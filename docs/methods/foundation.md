@@ -108,7 +108,11 @@ A checkpoint is named by its settings hash, of the blocks, the code and the trai
 The first release, `chronos-ft-2c2b22a03107`, was trained from earlier code, so its hash cannot be reproduced from this repository.
 Later releases are trained from the code here, so retraining from it gives the same hash.
 Each checkpoint is published as the repository's release `chronos-slots-<hash>` (with the series bias) or `chronos-ft-<hash>`, with a `sha256sums.txt` of its files.
-The models load the newest such release by publish date (`hash = "latest"` in `packages/nowcastfoundation/config/finetune.toml`), so each new release, interim or final, is picked up; a settings hash there pins one release instead.
+The models load the main fine-tuning run's newest released checkpoint (`hash = "latest"` in `packages/nowcastfoundation/config/finetune.toml`); a settings hash there pins one release instead.
+The main run is the paper's `live_run` in `paper/workflow/config.yaml`.
+Each time it publishes a checkpoint, the release `chronos-main` is updated to name it in its `main.json` (rule `promote_main`).
+Ablation runs publish their own releases but never change `chronos-main`, so the models never take their checkpoints.
+With no `chronos-main` release, the lookup fails rather than take another run's checkpoint.
 `source` in `packages/nowcastfoundation/config/finetune.toml` says where the checkpoint is read from: `github` (the release), `huggingface` (a Hugging Face Hub repository at a pinned revision holding the same files) or `local` (a training segment folder).
 A checkpoint read from the Hub is the same checkpoint as its release, so it keys the same stored fits.
 The checkpoint's hash and adapter SHA-256 key the stored fits, so a new release refits the fine-tuned models, and each stored fit records the checkpoint it used.

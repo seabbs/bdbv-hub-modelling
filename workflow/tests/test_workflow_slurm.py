@@ -151,7 +151,8 @@ def test_a_dry_run_sizes_each_batch_as_a_slurm_job(tmp_path):
 
 def test_every_gpu_job_asks_slurm_for_its_gpu(tmp_path):
     # The trainer and, with forecast.device cuda, every forecasting job
-    # take `gpu=1`, which the plugin submits as --gpus=1.
+    # but the German units (`score.device: cpu`) take `gpu=1`, which the
+    # plugin submits as --gpus=1.
     pytest.importorskip("snakemake")
     utils = pytest.importorskip("snakemake_executor_plugin_slurm.utils")
     sys.path.insert(0, str(Path(__file__).parent))
@@ -181,9 +182,9 @@ def test_every_gpu_job_asks_slurm_for_its_gpu(tmp_path):
         "evaluate_base",
         "evaluate_checkpoint",
         "seven_day_check",
-        "score_run_germany",
     ):
         assert gpu[rule] == {True}, rule
+    assert gpu["score_run_germany"] == {False}
     job = types.SimpleNamespace(resources={"gpu": 1})
     assert "--gpus=1" in utils.set_gres_string(job)
 

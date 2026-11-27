@@ -43,7 +43,7 @@ ctx="$out/run/inputs/inputs/context.json"
 origin=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["as_of"])' "$ctx")
 ref=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["reference_date"])' "$ctx")
 rm -rf "$out/store"
-uv run fit-store-branch fetch "$out/store"
+uv run fit-store-artifact fetch "$out/store"
 BDBV_DATA_DIR=$data uv run bdbvhub fit-store archive --store "$out/store" \
   --data "$data" --origin "$origin" --reference-date "$ref" \
   --models "${models[@]}" --out "$out/candidates.csv.gz" ||

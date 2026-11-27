@@ -33,7 +33,7 @@ MOVED = {
     "scripts/hub_imputation_fit.R": (
         "packages/nowcastbdbv/tests/test_hub_imputation_delays.py"
     ),
-    "scripts/fit-store.sh": "packages/bdbvhub/src/bdbvhub/store/branch.py",
+    "scripts/fit-store.sh": "packages/bdbvhub/src/bdbvhub/store/artifact.py",
     "scripts/results-release.sh": (
         "packages/bdbvhub/src/bdbvhub/submission/release.py"
     ),

@@ -4,4 +4,5 @@
 - `store`: stored fits, keyed by the code and data they run.
 - `archive`: the store's archive.
 - `digest`: the backtest digest and each model's code.
+- `artifact`: the store as GitHub Actions artifacts, read and written in CI.
 """

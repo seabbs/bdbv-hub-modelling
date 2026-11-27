@@ -63,7 +63,9 @@ def test_a_run_s_bias_from_its_checkpoints_and_history(tmp_path):
             {NAMES["same"]: [[v, v], [v, v]]},
         )
         (d / "settings.json").write_text(
-            json.dumps({"steps": step, "n_outbreaks": n})
+            json.dumps(
+                {"steps": step, "n_outbreaks": n, "series_bias": {"init": 0}}
+            )
         )
     (folder / "train" / "history.json").write_text(
         json.dumps(
@@ -106,7 +108,9 @@ def test_the_page_payload_lists_each_run_with_bias(tmp_path):
         d / "finetuned-ckpt" / "adapter_model.safetensors",
         {NAMES["down"]: [[1.0]]},
     )
-    (d / "settings.json").write_text(json.dumps({"steps": 10}))
+    (d / "settings.json").write_text(
+        json.dumps({"steps": 10, "series_bias": {"module": "series_bias"}})
+    )
     rs = [runs.make_run("r", folder, live=True), runs.make_run("x", None)]
     got = bias.payload(rs, live_step=None)
     assert [r["key"] for r in got["runs"]] == ["r"]

@@ -9,10 +9,11 @@ source = "github"
 
 # The GitHub release of the checkpoint
 # (`nowcastfoundation.forecaster.resolve_checkpoint`). "latest" is the
-# newest released checkpoint on seabbs/bdbv-hub-modelling by publish date
-# (`chronos-ft-<hash>` or `chronos-slots-<hash>`), so each new release,
-# interim or final, is picked up and refits those models, never a hand pin
-# that goes stale. A settings hash (`slots-<hash>` or
+# main fine-tuning run's (the paper's `live_run`) newest released
+# checkpoint, the one the release `chronos-main` names (rule
+# `promote_main`), so each new checkpoint of that run is picked up and
+# refits those models, never a hand pin that goes stale; an ablation
+# run's release is never taken. A settings hash (`slots-<hash>` or
 # `<hash>`) pins that release instead. Either way the adapter is checked
 # against the release's sha256sums.txt. The Fit store and the submission
 # resolve it once per run (`bdbvhub finetuned-checkpoint`,

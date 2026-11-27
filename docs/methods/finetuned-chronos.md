@@ -21,7 +21,7 @@ Set `GH_TOKEN` or `GITHUB_TOKEN` to a GitHub token if you list releases often, a
 
 ## Load a checkpoint
 
-`chronos_ft.load` takes `"latest"`, the newest `chronos-ft-*` release by publish date, or a settings hash, which pins that release.
+`chronos_ft.load` takes `"latest"`, the main fine-tuning run's newest checkpoint (the one the release `chronos-main` names), or a settings hash, which pins that release.
 It downloads the adapter once to `~/.cache/bdbv-hub-modelling/chronos-ft-<hash>`.
 It checks each adapter file against the release's `sha256sums.txt`, on download and on every later use, and fails if one differs.
 The check catches a damaged download, not a release whose files were replaced, as the sums come from the same release.

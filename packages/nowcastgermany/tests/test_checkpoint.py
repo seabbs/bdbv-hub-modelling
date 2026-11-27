@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from nowcastgermany import checkpoint as ck
+from nowcastutils import workers
 
 
 def test_german_dates_forecast_together_come_from_the_environment(
@@ -882,23 +883,6 @@ def test_a_unit_s_workers_come_from_the_environment(
     assert ck.score_workers() == 4
 
 
-@pytest.mark.parametrize(
-    ("threads", "workers", "each"), [(4, 4, 1), (8, 4, 2), (2, 4, 1)]
-)
-def test_workers_share_the_unit_s_threads(threads, workers, each) -> None:
-    assert ck.worker_threads(threads, workers) == each
-
-
-@pytest.mark.parametrize(
-    ("index", "workers", "cores"),
-    [(0, 2, [10, 11]), (1, 2, [12, 13]), (2, 2, [10, 11]), (0, 8, [10])],
-)
-def test_each_worker_takes_its_own_of_the_unit_s_cores(
-    index, workers, cores
-) -> None:
-    assert ck.worker_cores([10, 11, 12, 13], index, workers) == cores
-
-
 def _unit_files(root: Path) -> dict[str, pd.DataFrame]:
     return {p.name: pd.read_csv(p) for p in sorted(root.glob("*.csv.gz"))}
 
@@ -933,13 +917,13 @@ def test_a_unit_split_over_workers_writes_what_one_process_does(
     monkeypatch.setattr(ck, "score_dates", lambda: step)
     monkeypatch.setattr(ck, "START_METHOD", "fork")
     out = {}
-    for workers in (1, 3):
-        monkeypatch.setenv(ck.WORKERS_ENV, str(workers))
-        cache = tmp_path / f"w{workers}"
+    for n in (1, 3):
+        monkeypatch.setenv(ck.WORKERS_ENV, str(n))
+        cache = tmp_path / f"w{n}"
         ck.germany_unit(cache, "n100")
         root = cache / ck.GERMANY_UNIT / "n100"
         timings = pd.read_csv(root / "timings.csv")
-        out[workers] = (
+        out[n] = (
             _unit_files(root),
             ck.written(root),
             len(timings),
@@ -973,7 +957,7 @@ def test_a_worker_pins_itself_to_its_share_of_the_unit_s_cores(
     monkeypatch.setattr(devices, "allowed_cpus", lambda: [4, 5, 6, 7])
     monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
-    monkeypatch.setattr(ck, "_watch_parent", lambda _parent: None)
+    monkeypatch.setattr(workers, "watch_parent", lambda _parent: None)
     counter = multiprocessing.Value("i", 0)
     for _ in range(2):
         ck._start_worker("abc", None, tmp_path, counter, 2, os.getpid())
@@ -1001,7 +985,7 @@ def test_a_worker_watches_its_coordinator(
     from nowcastgermany import data as dg
 
     watched: list = []
-    monkeypatch.setattr(ck, "_watch_parent", watched.append)
+    monkeypatch.setattr(workers, "watch_parent", watched.append)
     monkeypatch.setattr(dg, "hub_triangle", lambda _path: pd.DataFrame())
     monkeypatch.delenv("BDBV_CHRONOS_FT", raising=False)
     counter = multiprocessing.Value("i", 0)
@@ -1014,12 +998,12 @@ import os
 import time
 from pathlib import Path
 
-from nowcastgermany import checkpoint as ck
+from nowcastutils import workers
 
 
-def start(label, segment, path, counter, workers, parent):
+def start(label, segment, path, counter, n_workers, parent):
     if WATCH:
-        ck._watch_parent(parent)
+        workers.watch_parent(parent)
 
 
 def chunk(unit, need, dates):
