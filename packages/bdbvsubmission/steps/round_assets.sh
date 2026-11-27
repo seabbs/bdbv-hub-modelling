@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Attach a Submit run's artefacts to its round's release, so the models
-# a round did not submit are kept for later evaluation: every
-# candidate's hub file, checks and run record (`candidate-<id>`), the
-# gates' provenance with each candidate's hub validation log (`gate`,
-# `baseline-gate`, `chronos-gate`) and the round's inputs (`inputs`).
-# The fit directories (`fit-<id>`), the PR body and the fit-store wait
-# are left out. The run's artefacts expire (candidates after 7 days), so
+# a round did not submit are kept for later evaluation, and the
+# submission can be made again: every candidate's hub file, checks and
+# run record (`candidate-<id>`), the fit directory it forecast from
+# (`fit-<id>`), the gates' provenance with each candidate's hub
+# validation log and the tracks' fits (`gate`, `baseline-gate`,
+# `chronos-gate`) and the round's pinned inputs (`inputs`). The PR body
+# and the fit-store wait are left out. The run's artefacts expire (candidates after 7 days), so
 # release.sh calls this as each round is released and a dispatch of
 # round-assets.yml backfills past rounds while they last.
 #
@@ -31,7 +32,7 @@ names=$(gh api "repos/$repo/actions/runs/$run/artifacts" --paginate \
 kept=()
 for name in $names; do
   case "$name" in
-    inputs | gate | baseline-gate | chronos-gate | candidate-*) ;;
+    inputs | gate | baseline-gate | chronos-gate | candidate-* | fit-*) ;;
     *) continue ;;
   esac
   if gh run download "$run" -R "$repo" -n "$name" -D "$pack/$name"; then

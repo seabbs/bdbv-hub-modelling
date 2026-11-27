@@ -5,7 +5,7 @@
 # when a team's submission lands on the hub.
 # Every POLL seconds (default 600) it writes what changed under
 # <ROOT>/hub/ (head.txt: the hub's time-series.csv commit; round/run.txt:
-# the run id and status; round/store.txt: the fit-store branch commit;
+# the run id and status; round/store.txt: the fit store's version;
 # round/submissions.txt: the hub's newest model-output commit),
 # which reruns the rules that read it, and builds the targets. Run it
 # from the workflow's worktree, for example under nohup; it never stops
@@ -43,7 +43,7 @@ while :; do
     -w submit.yml -b main -L 1 --json databaseId,status,conclusion \
     --jq '.[0] | "\(.databaseId) \(.status) \(.conclusion)"' 2>/dev/null)")
   store=$(update "$root/hub/round/store.txt" \
-    "$(git ls-remote origin fit-store 2>/dev/null | cut -f1)")
+    "$(uv run fit-store-artifact latest 2>/dev/null)")
   subs=$(update "$root/hub/round/submissions.txt" "$(gh api \
     "repos/$hub/commits?path=model-output&per_page=1" \
     --jq '.[0].sha' 2>/dev/null)")

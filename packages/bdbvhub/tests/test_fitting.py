@@ -450,8 +450,12 @@ def test_nowcast_records_the_checkpoint_it_loaded(
     # Zones split from the provinces, and the national sidecar.
     assert json.loads((out / "zones.json").read_text())["zones"]
     assert (out / "national.json").exists()
+
     # With no checkpoint release, the nowcast fails.
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: [])
+    def unreleased() -> dict:
+        raise LookupError("no main run checkpoint")
+
+    monkeypatch.setattr(foundation, "main_release", unreleased)
     foundation.resolve_checkpoint.cache_clear()
     assert main(["nowcast", *args[:2], "--out", str(tmp_path / "x")]) == 1
     # A model with no checkpoint writes none.
@@ -462,7 +466,10 @@ def test_nowcast_records_the_checkpoint_it_loaded(
 
 @pytest.mark.usefixtures("in_root")
 def test_chronos_metadata_names_the_release(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write_release
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    write_release,
+    point_main,
 ) -> None:
     from nowcastfoundation import forecaster as foundation
 
@@ -472,14 +479,7 @@ def test_chronos_metadata_names_the_release(
     adapter = {"adapter_config.json": b"{}", "adapter_model.safetensors": b"w"}
     write_release(root, tag, adapter, tag)
     monkeypatch.setattr(foundation, "FINETUNED_URL", root.as_uri())
-    listing = [
-        {
-            "tag_name": f"chronos-ft-{tag}",
-            "published_at": "2026-11-13T00:00:00Z",
-            "draft": False,
-        }
-    ]
-    monkeypatch.setattr(foundation, "finetuned_releases", lambda: listing)
+    point_main(root, tag)
     foundation.resolve_checkpoint.cache_clear()
     out = tmp_path / "meta"
     args = ["--model", "foundation", "--out", str(out)]

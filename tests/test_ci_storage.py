@@ -33,7 +33,13 @@ def test_every_artefact_expires_within_a_week_but_a_live_submission() -> None:
             name = f"{path.name}: {step['with']['name']}"
             days = step["with"].get("retention-days")
             assert days is not None, f"{name} has no retention-days"
-            if isinstance(days, int):
+            if step["with"]["name"].startswith(
+                ("fit-store", "${{ env.FIT_STORE")
+            ):
+                # The fit store, renewed by each store and refitted once
+                # it expires (test_fit_store_workflows.py).
+                assert days in (90, "${{ env.RETENTION }}"), name
+            elif isinstance(days, int):
                 assert days <= 7, name
             else:
                 # The hub submission's record: kept long for a live

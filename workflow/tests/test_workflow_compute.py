@@ -375,3 +375,17 @@ def test_checkpoint_scoring_takes_a_gpu_no_trainer_needs(
 def test_a_cuda_forecast_device_stays_the_scoring_device():
     fc = forecast.Forecast("cuda", 2)
     assert compute.scoring_forecast(fc, 1, 1) == fc
+
+
+@pytest.mark.parametrize("scoring", ["cpu", "cuda"])
+def test_german_units_take_their_own_device_when_set(scoring):
+    # `score.device: cpu` keeps a German unit off the GPU, even one no
+    # run trains on: its CPU workers beat a small GPU.
+    fc = forecast.Forecast(scoring, 2)
+    got = compute.germany_forecast(fc, "cpu")
+    assert (got.device, got.threads, got.gpu) == ("cpu", 2, 0)
+
+
+def test_german_units_follow_the_scoring_device_when_unset():
+    fc = forecast.Forecast("cuda", 2)
+    assert compute.germany_forecast(fc, None) == fc

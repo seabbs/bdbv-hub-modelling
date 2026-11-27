@@ -1,7 +1,7 @@
 name: Fit store
 
-# Fits each fitted model once per real origin and stores the result on
-# the fit-store branch, one file per fit, keyed by a hash of what reaches
+# Fits each fitted model once per real origin and stores the result in
+# the fit store, one file per fit, keyed by a hash of what reaches
 # the fit (bdbvhub.store.store.fit_key). The random walks fit nothing,
 # but their forecasts are stored the same way (`SAMPLE_FREE`), with their
 # zone runs beside them, so the submission, the backtests, the hub
@@ -21,9 +21,18 @@ name: Fit store
 #   backtest -> backtests
 #   backtests, store-current, store-rest -> Site results -> Pages
 #
-# Only `store` can write, and it runs no project code. Fits are written
-# to fit-store from main only. A dispatch from another branch must name
-# a scratch store branch (`store_branch`), for testing.
+# The store is a GitHub Actions artifact, `fit-store`, with its bundles
+# `fit-store-backtests` and `fit-store-site`
+# (packages/bdbvhub/src/bdbvhub/store/artifact.py). Each `store-*` job
+# fetches the newest store, adds its fits and uploads the whole store
+# again; they run one after another, so none loses another's fits. An
+# artifact is kept 90 days, and each store renews it. An expired store
+# reads as empty, so its fits are made again.
+#
+# Only the `store-*` and `backtests` jobs upload a store, and the
+# `store-*` jobs run no project code. The main store is written from
+# main only. A dispatch from another branch must name a scratch store
+# (`store`, fit-store-scratch*), kept 7 days, for testing.
 
 on:
   push:
@@ -58,7 +67,7 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
-      - 'packages/bdbvhub/src/bdbvhub/store/branch.py'
+      - 'packages/bdbvhub/src/bdbvhub/store/artifact.py'
       - '.github/workflows/fit-store.yml'
   # A pull request only plans, so its summary says how many fits the
   # change will cost on main.
@@ -93,17 +102,17 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.python-version'
-      - 'packages/bdbvhub/src/bdbvhub/store/branch.py'
+      - 'packages/bdbvhub/src/bdbvhub/store/artifact.py'
       - '.github/workflows/fit-store.yml'
   # New hub releases: a check with nothing new ends after `plan`.
   schedule:
     - cron: '30 */6 * * *'
   workflow_dispatch:
     inputs:
-      store_branch:
+      store:
         description: >-
-          Store branch to write (blank for fit-store, from main only; any
-          other name is a scratch store for testing a branch)
+          Store to write (blank for fit-store, from main only; any other
+          name is a scratch store for testing a branch)
         type: string
         default: ''
       models:
@@ -124,17 +133,22 @@ on:
 # stores and other branches have their own groups, so they never replace
 # a queued main run; pull requests cancel their superseded plans.
 concurrency:
-  group: fit-store-${{ github.event_name == 'pull_request' && github.ref || inputs.store_branch || (github.ref == 'refs/heads/main' && 'main' || github.ref) }}
+  group: fit-store-${{ github.event_name == 'pull_request' && github.ref || inputs.store || (github.ref == 'refs/heads/main' && 'main' || github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
+  # To read the store's artifacts.
+  actions: read
 
 env:
   # Chronos-2 runs on the device named here, never a detected one.
   DEVICE: cpu
   STORE: output/fit-store
-  FIT_STORE_BRANCH: ${{ inputs.store_branch || 'fit-store' }}
+  FIT_STORE: ${{ inputs.store || 'fit-store' }}
+  # Days a store artifact is kept: a scratch store only for its test.
+  RETENTION: ${{ inputs.store && '7' || '90' }}
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   plan:
@@ -157,16 +171,17 @@ jobs:
           persist-credentials: false
       # Main writes fit-store; a branch writes only a scratch store
       # (fit-store-scratch*); pull requests and other branch runs plan.
+      # A missing or expired store plans every fit.
       - name: Decide whether this run may write a store
         id: guard
         env:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
-          SCRATCH: ${{ inputs.store_branch }}
+          SCRATCH: ${{ inputs.store }}
         run: |
-          write=$(python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py guard "$EVENT" "$REF" "$SCRATCH")
+          write=$(python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py guard "$EVENT" "$REF" "$SCRATCH")
           echo "write=$write" >> "$GITHUB_OUTPUT"
-          echo "Writes $FIT_STORE_BRANCH: $write" >> "$GITHUB_STEP_SUMMARY"
+          echo "Writes $FIT_STORE: $write" >> "$GITHUB_STEP_SUMMARY"
       # Restores only: plan compiles nothing, so saving here would take
       # the key before the fit jobs could save what they compile.
       - uses: ./.github/actions/setup-forecast-env
@@ -181,7 +196,7 @@ jobs:
           uv run bdbvhub data
           uv run bdbvhub bvd
       - name: Fetch the store
-        run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
+        run: python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py fetch "$STORE"
       # The fine-tuned models' checkpoint, resolved once for the run so
       # every fit job keys and loads the same one without listing the
       # releases again.
@@ -332,22 +347,25 @@ jobs:
           path: new
           retention-days: 3
 
-  # The only jobs that write. They run no project code: each merges its
-  # fits' files into the store branch, prunes keys not needed and pushes
-  # once.
+  # The jobs that write fits. They run no project code: each fetches the
+  # newest store, merges its fits' files into it, prunes keys not needed
+  # and uploads it again. They run in turn (quick, current, rest), so each
+  # fetches the one before's store.
   store-current:
     name: Store the newest origin's fits
-    needs: [plan, fit-current]
+    needs: [plan, fit-current, store-quick]
     if: >-
       always() && needs.plan.outputs.write == 'true'
       && needs.plan.outputs.current_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: fit-*
@@ -356,17 +374,34 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json current.json
+      - name: Add the fits to the store
+        env:
+          PART: current
+        run: &merge |
+          python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py fetch "$STORE"
+          python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py \
+            merge "$STORE" new keys.json "$PART.json"
+      # The whole store, replacing this run's earlier upload. The fits are
+      # gzipped already.
+      - &upload-store
+        name: Upload the store
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.FIT_STORE }}
+          path: ${{ env.STORE }}
+          overwrite: true
+          compression-level: 0
+          retention-days: ${{ env.RETENTION }}
       # The site's results from what the store now holds (site-results.yml),
       # which then rebuilds Site. Each store below starts it again.
       - &site-results
         name: Make the site's results from the store
         env:
           GH_TOKEN: ${{ github.token }}
-          SCRATCH: ${{ inputs.store_branch }}
+          SCRATCH: ${{ inputs.store }}
         run: >-
           gh workflow run site-results.yml --ref "$GITHUB_REF_NAME"
-          -R "$GITHUB_REPOSITORY" -f store_branch="$SCRATCH"
+          -R "$GITHUB_REPOSITORY" -f store="$SCRATCH"
 
   # The walks' forecasts, one short job each, stored as soon as they are
   # all made, before the slow fits.
@@ -391,9 +426,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: fit-*
@@ -402,7 +440,11 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json quick.json
+      - name: Add the fits to the store
+        env:
+          PART: quick
+        run: *merge
+      - *upload-store
 
   # With the longest fits first, 8 runners finish a full refit as soon
   # as 12 (the longest fit, about 4 h). The rest of the 20 are left for
@@ -430,10 +472,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: fit-*
@@ -442,7 +486,11 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plan
-      - run: python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py push new keys.json rest.json
+      - name: Add the fits to the store
+        env:
+          PART: rest
+        run: *merge
+      - *upload-store
       - *site-results
 
   # The BDBV backtests of the models that fit nothing (the walks' release
@@ -538,7 +586,7 @@ jobs:
 
   # The backtests scored with the stored fits once the fits are stored,
   # one process per backtest (all at once ran a runner out of memory),
-  # then stored on the store branch in backtests/, which Pages unpacks.
+  # then stored as the artifact `<store>-backtests`, which Pages unpacks.
   # As soon as the backtest cells finish, not behind the model fits
   # (hours): scored with the fits already stored, then the site's
   # results remade. Those made after the fits are stored show them.
@@ -552,10 +600,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
-      contents: write
+      contents: read
       actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-forecast-env
         with:
           save-jax: 'false'
@@ -572,7 +622,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           BDBV_CHRONOS_FT: ${{ needs.plan.outputs.chronos_ft }}
         run: |
-          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py fetch "$STORE"
+          python3 -I packages/bdbvhub/src/bdbvhub/store/artifact.py fetch "$STORE"
           uv run bdbvhub fit-store load --store "$STORE"
       - name: Score
         run: |
@@ -583,14 +633,23 @@ jobs:
           # The pairing sensitivity's blocks, for docs/pairing.md.
           mkdir -p results/pairing
           cp "$p"-pairing-bdbv/pairing/*.csv.gz results/pairing/
-      - name: Store
+      - name: Bundle
         run: |
           # Only what this job made or changed, never a committed file,
           # so Pages keeps its own checkout's results.
           git ls-files --others --modified -- results output \
             | grep -v -e '^output/fit-store/' -e '^output/parts/' \
             > "$RUNNER_TEMP/backtests.txt"
-          tar -czf "$RUNNER_TEMP/backtests.tar.gz" -T "$RUNNER_TEMP/backtests.txt"
-          python3 -I packages/bdbvhub/src/bdbvhub/store/branch.py \
-            push-backtests "$RUNNER_TEMP/backtests.tar.gz" "$GITHUB_SHA"
+          mkdir -p "$RUNNER_TEMP/backtests"
+          tar -czf "$RUNNER_TEMP/backtests/latest.tar.gz" -T "$RUNNER_TEMP/backtests.txt"
+          jq -n --arg commit "$GITHUB_SHA" '{commit: $commit}' \
+            > "$RUNNER_TEMP/backtests/latest.json"
+      - name: Store
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.FIT_STORE }}-backtests
+          path: ${{ runner.temp }}/backtests
+          overwrite: true
+          compression-level: 0
+          retention-days: ${{ env.RETENTION }}
       - *site-results

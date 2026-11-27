@@ -45,10 +45,8 @@ import dataclasses
 import gc
 import json
 import os
-import signal
 import subprocess
 import sys
-import threading
 import time
 import tomllib
 from collections.abc import Iterator, Mapping, Sequence
@@ -60,7 +58,7 @@ import pandas as pd
 
 from nowcasteval.labels import FINETUNED, FINETUNED_OF, base_model
 from nowcastfoundation.sidecar import SIDECAR, with_sidecar
-from nowcastutils import codekey
+from nowcastutils import codekey, workers
 
 RULE: Final = "own-quantile-wis_crps-1000-common"
 """The scoring rule: WIS and CRPS on each model's own quantiles, from
@@ -332,19 +330,8 @@ WORKERS_ENV: Final = "SCORE_WORKERS"
 """The environment variable with the worker processes a German unit
 splits its dates over: its rule's threads (`flowlib.scoring.unit_shell`)."""
 
-THREAD_VARS: Final = (
-    "TORCH_THREADS",
-    "OMP_NUM_THREADS",
-    "MKL_NUM_THREADS",
-    "OPENBLAS_NUM_THREADS",
-    "VECLIB_MAXIMUM_THREADS",
-)
-"""The thread settings a unit's job gives (`flowlib.machine.torch_env`),
-which a unit split over workers shares out between them."""
-
-START_METHOD: Final = "spawn"
-"""How a unit starts its workers: fresh interpreters, as torch and JAX
-hold threads that a forked process would not have."""
+START_METHOD: Final = workers.START_METHOD
+"""How a unit starts its workers (`nowcastutils.workers.START_METHOD`)."""
 
 
 def score_workers() -> int:
@@ -541,22 +528,6 @@ def triangle_path(config: Any) -> Path:
     return Path("data/raw/germany") / Path(config.triangle).name
 
 
-def worker_threads(threads: int, workers: int) -> int:
-    """Return each worker's share of a unit's `threads`, at least one."""
-    return max(1, threads // workers)
-
-
-def worker_cores(cores: Sequence[int], index: int, workers: int) -> list[int]:
-    """Return the cores of worker `index` of `workers`: its share of `cores`.
-
-    Each worker takes its own slice, so none of their thread pools (XLA's
-    sizes itself to every core it may use) crowds another's.
-    """
-    each = max(1, len(cores) // workers)
-    at = (index % max(1, len(cores) // each)) * each
-    return list(cores)[at : at + each]
-
-
 @dataclasses.dataclass(frozen=True)
 class _Unit:
     """What a German unit's worker needs to forecast and write its dates."""
@@ -569,45 +540,13 @@ class _Unit:
 _TRIANGLE: list[pd.DataFrame] = []
 """A worker process's German triangle, read once (`_start_worker`)."""
 
-PARENT_POLL: Final = 1.0
-"""Seconds between a worker's checks that its coordinator is alive."""
-
-PR_SET_PDEATHSIG: Final = 1
-"""Linux's `prctl` option to signal a process when its parent exits."""
-
-
-def _watch_parent(parent: int) -> None:
-    """Exit this worker when its coordinator, process `parent`, has gone.
-
-    A daemon thread polls the parent every `PARENT_POLL` seconds, so a
-    coordinator killed outright (SIGKILL) leaves no worker forecasting
-    on. Linux also kills the worker as its parent exits (`prctl`).
-    """
-    if sys.platform == "linux":
-        import ctypes
-
-        libc = ctypes.CDLL(None, use_errno=True)
-        libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
-
-    def watch() -> None:
-        while os.getppid() == parent:
-            time.sleep(PARENT_POLL)
-        os._exit(1)
-
-    threading.Thread(target=watch, name="parent-watch", daemon=True).start()
-
-
-def _stop(signum: int, _frame: Any) -> None:
-    """Stop the coordinator on `signum` as on an error: its workers too."""
-    raise SystemExit(128 + signum)
-
 
 def _start_worker(
     label: str,
     segment: Path | None,
     path: Path,
     counter: Any,
-    workers: int,
+    n_workers: int,
     parent: int,
 ) -> None:
     """Set up a worker: its checkpoint, its own cores, and the triangle.
@@ -615,17 +554,10 @@ def _start_worker(
     It exits when its coordinator, process `parent`, does.
     """
     from nowcastgermany.data import hub_triangle
-    from nowcastutils.devices import allowed_cpus
 
-    _watch_parent(parent)
+    workers.watch_parent(parent)
     _pin(label, segment)
-    # Looked up, not named: mypy checks `os` as each platform has it.
-    pin = getattr(os, "sched_setaffinity", None)
-    if pin is not None:
-        with counter.get_lock():
-            index = counter.value
-            counter.value += 1
-        pin(0, worker_cores(allowed_cpus(), index, workers))
+    workers.pin_worker(counter, n_workers)
     _TRIANGLE[:] = [hub_triangle(path)]
 
 
@@ -687,56 +619,32 @@ def _chunk_results(
     unit: _Unit,
     triangle: pd.DataFrame,
     chunks: Sequence[Chunk],
-    workers: int,
+    n_workers: int,
     start: tuple[str, Path | None, Path],
 ) -> Iterator[tuple[Chunk, list[dict[str, Any]]]]:
     """Yield each chunk with its timings as it is done, in any order.
 
-    In this process with one worker; else over `workers` processes, each
-    with its share of the job's threads (`worker_threads`) and cores.
+    In this process with one worker; else over `n_workers` processes
+    (`nowcastutils.workers.pooled`), each with its share of the job's
+    threads and cores.
     `start` is the label, segment and triangle path a worker loads. On
     an error, or SIGTERM in the main thread, the workers are stopped
     without finishing their chunks.
     """
-    if workers <= 1 or len(chunks) <= 1:
+    if n_workers <= 1 or len(chunks) <= 1:
         for need, chunk in chunks:
             yield (need, chunk), _forecast_chunk(unit, triangle, need, chunk)
         return
-    import multiprocessing
-    from concurrent.futures import ProcessPoolExecutor, as_completed
-
-    threads = int(os.environ.get("TORCH_THREADS") or workers)
-    workers = min(workers, len(chunks))
-    # The workers take their environment from this process's.
-    for var in THREAD_VARS:
-        os.environ[var] = str(worker_threads(threads, workers))
-    context = multiprocessing.get_context(START_METHOD)
-    counter = context.Value("i", 0)
-    main = threading.current_thread() is threading.main_thread()
-    before = signal.signal(signal.SIGTERM, _stop) if main else None
-    try:
-        with ProcessPoolExecutor(
-            max_workers=workers,
-            mp_context=context,
-            initializer=_start_worker,
-            initargs=(*start, counter, workers, os.getpid()),
-        ) as pool:
-            futures = {
-                pool.submit(_worker_chunk, unit, need, chunk): (need, chunk)
-                for need, chunk in chunks
-            }
-            try:
-                for done in as_completed(futures):
-                    yield futures[done], done.result()
-            except BaseException:
-                # Running chunks are not waited for: each may take minutes.
-                for proc in list(pool._processes.values()):
-                    proc.terminate()
-                pool.shutdown(wait=False, cancel_futures=True)
-                raise
-    finally:
-        if main:
-            signal.signal(signal.SIGTERM, before or signal.SIG_DFL)
+    tasks = [(unit, need, chunk) for need, chunk in chunks]
+    for (_, need, chunk), timings in workers.pooled(
+        _worker_chunk,
+        tasks,
+        n_workers,
+        _start_worker,
+        start,
+        START_METHOD,
+    ):
+        yield (need, chunk), timings
 
 
 def germany_unit(cache: Path, label: str, segment: Path | None = None) -> None:

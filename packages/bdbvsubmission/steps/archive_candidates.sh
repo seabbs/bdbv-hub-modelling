@@ -18,7 +18,7 @@ source "$(dirname "$0")/lib.sh"
 store=${STORE:-output/fit-store}
 if [ "${SKIP_FETCH:-false}" != true ]; then
   rm -rf "$store"
-  store_branch fetch "$store"
+  fit_store fetch "$store"
 fi
 made="$WORK/candidates.csv.gz"
 # Exits 1 when any model is not archived, after writing the others,

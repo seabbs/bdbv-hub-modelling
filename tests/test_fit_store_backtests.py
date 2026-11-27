@@ -34,10 +34,10 @@ def test_the_walks_are_stored_before_the_slow_fits() -> None:
     jobs = _jobs()
     assert jobs["fit-quick"]["needs"] == "plan"
     assert "quick" in jobs["fit-quick"]["strategy"]["matrix"]
-    store = "\n".join(
-        str(s.get("run", "")) for s in jobs["store-quick"]["steps"]
-    )
-    assert "push new keys.json quick.json" in store
+    (merge,) = [
+        s for s in jobs["store-quick"]["steps"] if "PART" in s.get("env", {})
+    ]
+    assert merge["env"]["PART"] == "quick"
 
 
 def test_no_simulated_backtest_is_run() -> None:
@@ -54,7 +54,7 @@ def test_the_backtests_are_stored_without_waiting_for_the_fits() -> None:
     assert set(job["needs"]) == {"plan", "backtest", "store-quick"}
     run = "\n".join(str(s.get("run", "")) for s in job["steps"])
     assert run.index("fit-store load") < run.index("bdbvhub score")
-    assert "push-backtests" in run
+    assert "backtests/latest.tar.gz" in run
     # The site's results are then made from them, and rebuild Pages.
     assert "gh workflow run site-results.yml" in run
 
