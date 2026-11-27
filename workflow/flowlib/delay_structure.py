@@ -4,13 +4,18 @@ One set of summaries for simulated outbreaks and for real data alike
 (the German triangle, the BDBV releases), so the simulations' delays can
 be read against the data's: how the delay distribution moves over time
 (by reference week and by release week), its weekday effects, how it
-differs between strata (a parent and its children), and the release
-cadence with the wait it adds.
+differs between strata (a parent and its children), the release
+cadence with the wait it adds, and each stratum's delays week by week:
+how strata's delays move together, how they follow the counts, bursts
+of over-reporting withdrawn later and the delay's noise split into a
+part common to strata, a part fixed by stratum and the rest.
 
 Input rows have `stratum`, `ref` and `rep` (dates) and `count`, the
 count of reference date `ref` first reported (or revised) on `rep`.
-Counts are netted by delay before any summary, so a revision moves cases
-between delays and a net negative is dropped. Delay summaries use only
+Counts are netted by delay before the delay summaries, so a revision
+moves cases between delays and a net negative is dropped; the
+first-report ratios, the shares by a delay and the withdrawn share use
+the counts as reported, revisions included. Delay summaries use only
 reference dates at least `horizon` days (the 95% delay) before the last
 report, and release summaries only reports at least `horizon` days after
 the first reference date, so the series' ends do not shorten or lengthen
@@ -22,7 +27,7 @@ numbers and `curves` its fixed-length curves, for comparing many series.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import numpy as np
@@ -45,6 +50,18 @@ DELAY_POINTS = (0, 1, 2, 3, 5, 7, 10, 14, 21, 28, 42)
 
 MAX_STRATA = 40
 """The most strata `structure` lists, the largest first."""
+
+MAX_LINES = 16
+"""The most strata `by_stratum` keeps week by week, the largest first."""
+
+SHARE_DAYS = (1, 7)
+"""The delays (days) each stratum's weekly share reported by is kept at."""
+
+STRATUM_KEYS = ("by_stratum", "coupling", "bursts", "noise")
+"""The keys of `structure` from `_by_stratum`."""
+
+MIN_WEEKS = 4
+"""The fewest weeks a correlation or slope between series needs."""
 
 
 def _r(v: float | None, digits: int = 3) -> float | None:
@@ -165,6 +182,290 @@ def _strata(
     return out
 
 
+def _stratum_weeks(rows: pd.DataFrame, first: pd.Timestamp) -> pd.DataFrame:
+    """Return counts by stratum and week of reference date.
+
+    `final`: the count as last reported. `net` and `dsum`: the count
+    netted by delay and its delays' sum, for the mean delay. `by<d>`:
+    the count reported by each of `SHARE_DAYS`, revisions included.
+    `first`: the count at each reference date's first report.
+    `withdrawn`: the size of the negative updates.
+    """
+    rows = rows.assign(week=(rows["ref"] - first).dt.days // 7)
+    keys = ["stratum", "week"]
+    net = (
+        rows.groupby([*keys, "delay"])["count"]
+        .sum()
+        .clip(lower=0)
+        .reset_index()
+    )
+    net = (
+        net.assign(dsum=net["delay"] * net["count"])
+        .groupby(keys)[["count", "dsum"]]
+        .sum()
+        .rename(columns={"count": "net"})
+    )
+    seen = rows[rows["count"] != 0]
+    at = seen.groupby(["stratum", "ref"])["rep"].transform("min")
+    by = rows.groupby(keys)["count"]
+    cols = {
+        "final": by.sum(),
+        **{
+            f"by{d}": rows[rows["delay"] <= d].groupby(keys)["count"].sum()
+            for d in SHARE_DAYS
+        },
+        "first": seen[seen["rep"] == at].groupby(keys)["count"].sum(),
+        "withdrawn": (-rows["count"].clip(upper=0))
+        .groupby([rows["stratum"], rows["week"]])
+        .sum()
+        .rename_axis(keys),
+    }
+    return pd.DataFrame(cols).join(net).fillna(0.0).astype(float)
+
+
+def _week_series(
+    g: dict[str, np.ndarray], days: np.ndarray
+) -> dict[str, np.ndarray]:
+    """Return weekly series from `_stratum_weeks`' columns as arrays.
+
+    `mean`: the mean delay (netted); `share<d>`: the share of the final
+    count reported by each of `SHARE_DAYS`; `first_ratio`: the count at
+    the first report over the final; `log_count`: the log of the final
+    count a day (over the week's `days` reference dates, so a part week
+    at the end is not low). Weeks with fewer than `MIN_COUNT` final
+    cases are NaN.
+    """
+    final = g["final"]
+    ok = final >= MIN_COUNT
+    safe = np.where(ok, final, 1.0)
+    net = np.where(g["net"] > 0, g["net"], 1.0)
+    return {
+        "mean": np.where(ok & (g["net"] > 0), g["dsum"] / net, np.nan),
+        **{
+            f"share{d}": np.where(ok, g[f"by{d}"] / safe, np.nan)
+            for d in SHARE_DAYS
+        },
+        "first_ratio": np.where(ok, g["first"] / safe, np.nan),
+        "log_count": np.where(ok, np.log(safe / days), np.nan),
+    }
+
+
+def _fit(x: np.ndarray, y: np.ndarray) -> tuple[float | None, float | None]:
+    """Return the slope of `y` on `x` and their correlation.
+
+    Over the points where both are known; None with fewer than
+    `MIN_WEEKS` points or no variation.
+    """
+    ok = np.isfinite(x) & np.isfinite(y)
+    if ok.sum() < MIN_WEEKS:
+        return None, None
+    xd, yd = x[ok] - x[ok].mean(), y[ok] - y[ok].mean()
+    sxx, syy = float((xd * xd).sum()), float((yd * yd).sum())
+    if sxx <= 1e-12 or syy <= 1e-12:
+        return None, None
+    sxy = float((xd * yd).sum())
+    return sxy / sxx, sxy / np.sqrt(sxx * syy)
+
+
+def _pooled(x: np.ndarray, y: np.ndarray) -> tuple[float | None, ...]:
+    """Return `_fit` within strata: each stratum's series less its mean."""
+    xs, ys = [], []
+    for xi, yi in zip(x, y, strict=True):
+        ok = np.isfinite(xi) & np.isfinite(yi)
+        if ok.sum() >= MIN_WEEKS:
+            xs.append(xi[ok] - xi[ok].mean())
+            ys.append(yi[ok] - yi[ok].mean())
+    if not xs:
+        return None, None
+    return _fit(np.concatenate(xs), np.concatenate(ys))
+
+
+def _corr(mean: np.ndarray) -> tuple[np.ndarray, float | None]:
+    """Return each stratum's mean correlation with the others and all's.
+
+    Pearson correlations of the strata's weekly mean delays, pair by
+    pair over the weeks both have (at least `MIN_WEEKS`); NaN for a
+    stratum with none.
+    """
+    k = len(mean)
+    c: np.ndarray = (
+        pd.DataFrame(mean.T).corr(min_periods=MIN_WEEKS).to_numpy(copy=True)
+    )
+    c[np.eye(k, dtype=bool)] = np.nan
+    with np.errstate(invalid="ignore"):
+        each = np.array(
+            [np.nanmean(r) if np.isfinite(r).any() else np.nan for r in c]
+        )
+    pairs = c[np.triu_indices(k, 1)]
+    pairs = pairs[np.isfinite(pairs)]
+    return each, float(pairs.mean()) if len(pairs) else None
+
+
+def _decompose(y: np.ndarray) -> dict[str, float | None] | None:
+    """Return the variation of a strata-by-week matrix by its parts.
+
+    An additive fit over the known cells: a time part common to strata
+    (by week), a static stratum part and the stratum-by-week rest (which
+    holds the weekly counts' sampling noise too). Each part's sd over
+    the cells and its share of their sum of variances. With one stratum
+    only the time part's sd. None with fewer than `MIN_WEEKS` cells.
+    """
+    ok = np.isfinite(y)
+    if ok.sum() < MIN_WEEKS:
+        return None
+    strata = int((ok.sum(1) > 0).sum())
+    if strata < 2:
+        v = y[ok]
+        return {
+            "time_sd": _r(float(v.std())),
+            "strata_sd": None,
+            "residual_sd": None,
+            "time_share": None,
+            "strata_share": None,
+            "residual_share": None,
+        }
+    z = np.where(ok, y, 0.0)
+    n_s, n_w = ok.sum(1), ok.sum(0)
+    mu = float(z.sum() / ok.sum())
+    a, b = np.zeros(y.shape[0]), np.zeros(y.shape[1])
+    for _ in range(200):
+        r = np.where(ok, z - mu - a[:, None], 0.0)
+        b = np.divide(r.sum(0), n_w, out=np.zeros_like(b), where=n_w > 0)
+        r = np.where(ok, z - mu - b[None, :], 0.0)
+        new = np.divide(r.sum(1), n_s, out=np.zeros_like(a), where=n_s > 0)
+        done = np.abs(new - a).max() < 1e-10
+        a = new
+        if done:
+            break
+    parts = {
+        "time": np.broadcast_to(b[None, :], y.shape)[ok],
+        "strata": np.broadcast_to(a[:, None], y.shape)[ok],
+        "residual": (y - mu - a[:, None] - b[None, :])[ok],
+    }
+    var = {k: float(v.var()) for k, v in parts.items()}
+    total = sum(var.values())
+    return {
+        **{f"{k}_sd": _r(np.sqrt(v)) for k, v in var.items()},
+        **{
+            f"{k}_share": _r(v / total) if total > 0 else None
+            for k, v in var.items()
+        },
+    }
+
+
+def _sd(v: np.ndarray) -> float | None:
+    v = v[np.isfinite(v)]
+    return float(v.std()) if len(v) >= MIN_WEEKS else None
+
+
+def _rl(v: np.ndarray, digits: int = 3) -> list[float | None]:
+    return [_r(x, digits) for x in v]
+
+
+def _by_stratum(
+    complete: pd.DataFrame, first: pd.Timestamp
+) -> dict[str, Any] | None:
+    """Return each stratum's delays week by week, and what they show.
+
+    Keys: `by_stratum` (`week`, the weeks' first reference dates;
+    `total`, `_week_series` of all strata summed; `strata`, the largest
+    `MAX_LINES` strata, each with its `name`, `n` (final count),
+    `withdrawn` (the share of its final count ever withdrawn), `corr`
+    (its weekly mean delay's mean correlation with the other strata's),
+    `share7_sd` (the sd of its weekly share by day 7), `counts_slope`
+    and `counts_corr` (its weekly mean delay's slope on and correlation
+    with its log daily count by week), `share1_corr` (the share by day
+    1's correlation with the log count) and its `_week_series`; `corr`,
+    the mean pairwise correlation of the strata's weekly mean delays,
+    and `corr_min`, the lowest stratum's mean correlation); `coupling`
+    (`slope`, `corr` and `share1_corr` pooled within strata);
+    `bursts` (`max_ratio`, the largest weekly first-report-to-final
+    ratio of any stratum; `withdrawn`, the share of the final count
+    ever withdrawn; `withdrawn_max`, the largest stratum's share); and
+    `noise` (`_decompose` of the strata's weekly log(1 + mean delay)).
+    Strata are the `MAX_STRATA` largest.
+    """
+    if complete.empty:
+        return None
+    t = _stratum_weeks(complete, first)
+    weeks = range(int(t.index.get_level_values("week").max()) + 1)
+    sizes = (
+        t.groupby(level="stratum")["final"]
+        .sum()
+        .sort_values(ascending=False, kind="stable")
+    )
+    names = list(sizes.index[:MAX_STRATA])
+    g = {
+        str(c): t[c]
+        .unstack("week")
+        .reindex(index=names, columns=weeks)
+        .fillna(0.0)
+        .to_numpy(dtype=float)
+        for c in t.columns
+    }
+    tot = t.groupby(level="week").sum().reindex(weeks, fill_value=0.0)
+    span = (complete["ref"].max() - first).days + 1
+    days = np.array([min(7, span - 7 * w) for w in weeks], dtype=float)
+    total = _week_series(
+        {str(c): tot[c].to_numpy(dtype=float) for c in t.columns}, days
+    )
+    ser = _week_series(g, days)
+    each, corr = _corr(ser["mean"])
+    final = g["final"].sum(1)
+    kept = final > 0
+    withdrawn = g["withdrawn"].sum(1) / np.where(kept, final, 1.0)
+    lines = []
+    for i, name in enumerate(names[:MAX_LINES]):
+        slope, cc = _fit(ser["log_count"][i], ser["mean"][i])
+        _, c1 = _fit(ser["log_count"][i], ser["share1"][i])
+        lines.append(
+            {
+                "name": str(name),
+                "n": _r(final[i], 1),
+                "withdrawn": _r(withdrawn[i], 4) if kept[i] else None,
+                "corr": _r(each[i]),
+                "share7_sd": _r(_sd(ser["share7"][i])),
+                "counts_slope": _r(slope),
+                "counts_corr": _r(cc),
+                "share1_corr": _r(c1),
+                **{k: _rl(v[i]) for k, v in ser.items()},
+            }
+        )
+    slope, cc = _pooled(ser["log_count"], ser["mean"])
+    _, c1 = _pooled(ser["log_count"], ser["share1"])
+    ratios = ser["first_ratio"][np.isfinite(ser["first_ratio"])]
+    big = final >= MIN_COUNT
+    all_final = float(final[kept].sum())
+    eachs = each[np.isfinite(each)]
+    return {
+        "by_stratum": {
+            "week": [
+                (first + pd.Timedelta(weeks=w)).strftime("%Y-%m-%d")
+                for w in weeks
+            ],
+            "total": {k: _rl(v) for k, v in total.items()},
+            "strata": lines,
+            "corr": _r(corr),
+            "corr_min": _r(float(eachs.min())) if len(eachs) else None,
+        },
+        "coupling": {
+            "slope": _r(slope),
+            "corr": _r(cc),
+            "share1_corr": _r(c1),
+        },
+        "bursts": {
+            "max_ratio": _r(float(ratios.max())) if len(ratios) else None,
+            "withdrawn": _r(float(g["withdrawn"].sum()) / all_final, 4)
+            if all_final > 0
+            else None,
+            "withdrawn_max": _r(float(withdrawn[big].max()), 4)
+            if big.any()
+            else None,
+        },
+        "noise": _decompose(np.log1p(ser["mean"])),
+    }
+
+
 def _releases(rows: pd.DataFrame, complete: pd.DataFrame) -> dict[str, Any]:
     """Return the release cadence and the wait it adds.
 
@@ -221,8 +522,10 @@ def structure(
     the seven; `ref_share` and `rep_share`, counts by weekday of
     reference and of report over their mean; `release_days`, the share
     of releases on each weekday);
-    `strata` (the total, then each parent with its children); and
-    `releases` (`_releases`).
+    `strata` (the total, then each parent with its children);
+    `releases` (`_releases`); and `by_stratum`, `coupling`, `bursts`
+    and `noise` (`_by_stratum`, each None without complete reference
+    dates).
     """
     if rows.empty or float(rows["count"].clip(lower=0).sum()) <= 0:
         return None
@@ -265,6 +568,7 @@ def structure(
         },
         "strata": _strata(complete, parent),
         "releases": rel,
+        **(_by_stratum(complete, first) or dict.fromkeys(STRATUM_KEYS)),
     }
 
 
@@ -285,7 +589,18 @@ def scalars(s: dict[str, Any]) -> dict[str, float | None]:
     5% of releases. `wait`: the mean days to the next release, and
     `wait_share` its share of the mean delay. `strata_spread`: the
     count-weighted sd of the children's mean delays (days), None with
-    fewer than two.
+    fewer than two. `strata_corr` and `strata_corr_min`: the mean
+    pairwise correlation of the strata's weekly mean delays and the
+    lowest stratum's mean correlation. `share7_sd`: the largest
+    stratum's sd of its weekly share by day 7. `counts_slope`,
+    `counts_corr` and `share1_counts_corr`: the weekly mean delay's
+    slope on and correlation with the log weekly count, and the share
+    by day 1's correlation, within strata. `burst_ratio`: the largest
+    weekly first-report-to-final ratio of any stratum. `withdrawn_share`
+    and `withdrawn_max`: the share of the final count ever withdrawn,
+    all strata and the largest stratum's. `noise_time`, `noise_strata`
+    and `noise_residual`: the shares of the weekly log mean delay's
+    variation common to strata, fixed by stratum and the rest.
     """
     ref = s["by_ref"]
     pairs = [
@@ -325,7 +640,67 @@ def scalars(s: dict[str, Any]) -> dict[str, float | None]:
         )
         if len(kids) > 1
         else None,
+        **_stratum_scalars(s),
     }
+
+
+def _stratum_scalars(s: dict[str, Any]) -> dict[str, float | None]:
+    by = s.get("by_stratum") or {}
+    cp = s.get("coupling") or {}
+    bu = s.get("bursts") or {}
+    no = s.get("noise") or {}
+    sds = [x["share7_sd"] for x in by.get("strata", [])]
+    sds = [v for v in sds if v is not None]
+    return {
+        "strata_corr": by.get("corr"),
+        "strata_corr_min": by.get("corr_min"),
+        "share7_sd": max(sds) if sds else None,
+        "counts_slope": cp.get("slope"),
+        "counts_corr": cp.get("corr"),
+        "share1_counts_corr": cp.get("share1_corr"),
+        "burst_ratio": bu.get("max_ratio"),
+        "withdrawn_share": bu.get("withdrawn"),
+        "withdrawn_max": bu.get("withdrawn_max"),
+        "noise_time": no.get("time_share"),
+        "noise_strata": no.get("strata_share"),
+        "noise_residual": no.get("residual_share"),
+    }
+
+
+NOISE_SETTINGS = (
+    ("time", "delay_jitter", ("yes",), "delay_jitter_sd"),
+    ("strata", "delay_strata_noise", ("strata", "both"), "delay_strata_sd"),
+    (
+        "strata_time",
+        "delay_strata_noise",
+        ("strata_time", "both"),
+        "delay_strata_jitter_sd",
+    ),
+)
+"""Each delay noise layer: its name, the factor that turns it on, the
+factor's levels that do and the setting with its drawn sd."""
+
+
+def drawn_noise(settings: Mapping[str, Any]) -> dict[str, float | None]:
+    """Return a simulation's drawn delay noise sds, by layer.
+
+    From its settings: `time` (`delay_jitter_sd`), `strata`
+    (`delay_strata_sd`) and `strata_time` (`delay_strata_jitter_sd`),
+    each None where its factor leaves the layer off or the setting is
+    missing (0 where the factor is there and off).
+    """
+    out: dict[str, float | None] = {}
+    for name, factor, on, col in NOISE_SETTINGS:
+        level = str(settings.get(factor, "")).strip()
+        try:
+            v = float(settings.get(col, ""))
+        except (TypeError, ValueError):
+            v = float("nan")
+        if level and level not in on:
+            out[name] = 0.0
+        else:
+            out[name] = _r(v) if np.isfinite(v) else None
+    return out
 
 
 def curves(s: dict[str, Any]) -> dict[str, list[float | None]]:
