@@ -175,7 +175,7 @@ Teams without the capacity to set up specialist models could also use them direc
 ::: {.callout-note title="Plan"}
 - Group attention has no explicit mechanism to represent which lagged series belong to which place's count series, or which places are related, such as a region and the places within it, as they are all in one block (Foundation model).
 - Chronos-2 may learn some of these relations from the data, but we do not tell it them.
-- To explore this, we added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
+- To explore this, we added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1C; Supporting Information, *Attention biases*).
 - The biases start at zero, so the model starts as base Chronos-2, and are trained with the LoRA adapters during fine-tuning (Fine-tuning).
 - We fine-tuned models with none or only some of them to test whether they help (Sensitivity analyses).
 - Key references: [@Woo2024; @Yang2022].

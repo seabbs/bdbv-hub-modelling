@@ -9,19 +9,21 @@ and, with `--png`, a 200 dpi `fig1-pipeline.png` with `rsvg-convert`
 
 The panels are:
 
-- A, the assumptions in the simulations
-  (`nowcastfoundation.simulator`), one box per stage;
-- B, the reporting triangle laid out as ragged series for Chronos-2
-  (`nowcastfoundation.forecaster.layout_block`), each place's count and lag
-  series joined by a learned attention bias for rows of the same place,
-  and another for a place and its parent, all places in one group;
+- A, the five layers of the simulations (`nowcastfoundation.simulator`),
+  one icon each;
+- B, the model inputs (`nowcastfoundation.forecaster.layout_block`):
+  each place's target, lag series and weekly row in one block, the lag
+  series reported so far entering as known-future inputs;
 - C, a training block cut from a simulated release history
-  (`nowcastfoundation.finetune.training_block`) and the LoRA adapters;
+  (`nowcastfoundation.finetune.training_block`) and the LoRA adapters,
+  and below them the attention biases (`nowcastfoundation.series_bias`)
+  on a map of the places and in the group-attention grid;
 - D, forecasting with the fine-tuned model
   (`nowcastfoundation.forecaster.chronos_sampler`).
 
 Units are points at the final size, 6.5 inches wide, so font sizes are
-the printed sizes.
+the printed sizes. Panels are laid out in `WIDTH`, and `Svg.render`
+adds a white margin of `MARGIN` on every side.
 """
 
 from __future__ import annotations
@@ -32,7 +34,9 @@ import subprocess
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent / "fig1-pipeline"
-WIDTH = 468.0
+PAGE = 468.0
+MARGIN = 7.0
+WIDTH = PAGE - 2 * MARGIN
 
 FONT = "Helvetica, Arial, sans-serif"
 FG = "#1a1e27"
@@ -47,10 +51,11 @@ COV_SOFT = "#f5e5c8"
 HATCH = "#a3aabb"
 TRUTH = "#1b7f5f"
 TRUTH_SOFT = "#d4eee3"
-# One colour per place's rows, which share the same-place attention bias
-# (panel B), and one for the bias between a place and its parent.
+# The attention-bias colours: a place's own series, and a place and its
+# parent (up) or its children (down).
 SLOTS = ("#6f42c1", "#c0397a")
 PARENT_SLOT = "#2f7d4f"
+CHILD_SLOT = COV
 
 # Body text, small notes and headings, in points.
 BODY = 7.5
@@ -162,7 +167,18 @@ class Svg:
         self.text(x + 12, y, title, size=TITLE, weight="bold")
 
     def render(self, height: float) -> str:
-        """Return the document."""
+        """Return the document, with a white margin on every side."""
+        markers = "".join(
+            f'<marker id="{name}" viewBox="0 0 6 6" refX="5.5" refY="3" '
+            'markerWidth="5" markerHeight="5" orient="auto">'
+            f'<path d="M0,0 L6,3 L0,6 z" fill="{colour}"/></marker>'
+            for name, colour in (
+                ("ah", MUTED),
+                ("aha", ACCENT),
+                ("ahup", PARENT_SLOT),
+                ("ahdown", CHILD_SLOT),
+            )
+        )
         defs = (
             "<defs>"
             '<pattern id="hatch" width="3.5" height="3.5" '
@@ -170,22 +186,18 @@ class Svg:
             f'<rect width="3.5" height="3.5" fill="{PANEL}"/>'
             f'<line x1="0" y1="0" x2="0" y2="3.5" stroke="{HATCH}" '
             'stroke-width="0.9"/></pattern>'
-            '<marker id="ah" viewBox="0 0 6 6" refX="5.5" refY="3" '
-            'markerWidth="5" markerHeight="5" orient="auto">'
-            f'<path d="M0,0 L6,3 L0,6 z" fill="{MUTED}"/></marker>'
-            '<marker id="aha" viewBox="0 0 6 6" refX="5.5" refY="3" '
-            'markerWidth="5" markerHeight="5" orient="auto">'
-            f'<path d="M0,0 L6,3 L0,6 z" fill="{ACCENT}"/></marker>'
-            "</defs>"
+            f"{markers}</defs>"
         )
+        total = height + 2 * MARGIN
         return (
             '<svg xmlns="http://www.w3.org/2000/svg" '
-            f'width="{WIDTH}pt" height="{height}pt" '
-            f'viewBox="0 0 {WIDTH} {height}" font-family="{FONT}">'
+            f'width="{PAGE}pt" height="{total}pt" '
+            f'viewBox="0 0 {PAGE} {total}" font-family="{FONT}">'
             f"{defs}"
-            f'<rect width="{WIDTH}" height="{height}" fill="white"/>'
+            f'<rect width="{PAGE}" height="{total}" fill="white"/>'
+            f'<g transform="translate({MARGIN} {MARGIN})">'
             + "".join(self.parts)
-            + "</svg>\n"
+            + "</g></svg>\n"
         )
 
 
@@ -218,22 +230,43 @@ def cell(g: Svg, x: float, y: float, w: float, h: float, kind: str) -> None:
         g.rect(x, y, w, h, fill="none", stroke=LINE, sw=0.5, dash="1.5 1.5")
 
 
-def panel_a(g: Svg, oy: float) -> float:
-    """Draw panel A, the simulations' generative chain."""
-    g.label(0, oy + 9, "A", "Simulated outbreaks")
-    widths = [96.0, 84.0, 96.0, 84.0, 72.0]
-    gap = (WIDTH - sum(widths)) / (len(widths) - 1)
-    top = oy + 18
-    stages = [
-        ("Latent process", ["renewal \u00b7 random walks", "growth steps"]),
-        ("Expected onsets", ["places \u00b7 ages", "places \u00d7 ages"]),
-        ("Reporting delay", ["parametric \u00b7 hazard", "drift \u00b7 steps"]),
-        ("Report days", ["weekday effects", "set weekdays"]),
-        ("Observation", ["NB1", "Poisson"]),
+def lag_rows(cols: int, latest: int, last_complete: int, lags: int):
+    """Return the cell kinds of a target and its lag series by row.
+
+    Steps are 1 to `cols`. The target is complete up to the last
+    complete step and to forecast after it. Lag `d` is reported up to
+    `latest - d`, so every lag series is solid from the left and the
+    longer lags end earlier.
+    """
+    rows = [
+        [
+            "final" if c <= last_complete else "future"
+            for c in range(1, cols + 1)
+        ]
     ]
-    height = 66.0
-    x = 0.0
-    for i, (w, (head, words)) in enumerate(zip(widths, stages, strict=True)):
+    for d in range(lags):
+        rows.append(
+            ["lag" if c <= latest - d else "unseen" for c in range(1, cols + 1)]
+        )
+    return rows
+
+
+def panel_a(g: Svg, oy: float) -> float:
+    """Draw panel A, the five layers of the simulations."""
+    g.label(0, oy + 9, "A", "Simulated outbreaks")
+    names = [
+        "Infections",
+        "Observation",
+        "Reporting delays",
+        "Reporting system",
+        "Places and strata",
+    ]
+    gap = 14.0
+    w = (WIDTH - gap * (len(names) - 1)) / len(names)
+    top = oy + 17
+    height = 46.0
+    for i, name in enumerate(names):
+        x = i * (w + gap)
         g.rect(x, top, w, height, fill="white", stroke=LINE, sw=0.7, rx=3)
         g.rect(x, top, w, 30, fill=PANEL, stroke="none", rx=3)
         g.rect(x, top + 26, w, 4, fill=PANEL, stroke="none", rx=0)
@@ -241,21 +274,12 @@ def panel_a(g: Svg, oy: float) -> float:
         g.text(
             x + w / 2,
             top + 40,
-            head,
-            size=HEAD,
+            name,
+            size=BODY,
             weight="bold",
             anchor="middle",
         )
-        g.text(
-            x + w / 2,
-            top + 51,
-            words,
-            size=SMALL,
-            anchor="middle",
-            fill=MUTED,
-            lead=1.2,
-        )
-        if i < len(widths) - 1:
+        if i < len(names) - 1:
             g.line(
                 x + w + 1.5,
                 top + 15,
@@ -263,7 +287,6 @@ def panel_a(g: Svg, oy: float) -> float:
                 top + 15,
                 arrow="ah",
             )
-        x += w + gap
     return top + height
 
 
@@ -291,52 +314,28 @@ def _area(
     g.path(d, **kw)  # type: ignore[arg-type]
 
 
+def _node(
+    g: Svg, x: float, y: float, r: float, text: str = "", fill: str = "white"
+) -> None:
+    """Draw a place as a circle, with its letter."""
+    g.add(
+        f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{fill}" '
+        f'stroke="{FG}" stroke-width="0.8"/>'
+    )
+    if text:
+        g.text(x, y + 2.8, text, size=HEAD, anchor="middle", weight="bold")
+
+
 def _glyph(g: Svg, i: int, cx: float, cy: float) -> None:
-    """Draw the icon of stage `i` of panel A: what the stage produces."""
+    """Draw the icon of layer `i` of panel A."""
     base = cy + 9
     if i == 0:
-        # A growth-rate path, with a step change, about zero (dashed).
-        g.line(
-            cx - 24, cy + 1, cx + 24, cy + 1, stroke=LINE, sw=0.6, dash="2 1.5"
-        )
-        pts = [
-            (cx - 24 + k * 2.4, cy - 4 - 2.5 * (k % 3 == 1)) for k in range(9)
-        ]
-        pts += [
-            (cx - 2.4 + k * 2.4, cy + 5 - 1.5 * (k % 2)) for k in range(1, 12)
-        ]
-        g.poly(pts, stroke=ACCENT, sw=1.1)
-    elif i == 1:
-        # Expected onsets: stacked epidemic curves of three strata.
-        for peak, skew, op in [
-            (16, -0.08, 0.25),
-            (11, 0.04, 0.45),
-            (6, 0.12, 0.9),
-        ]:
-            pts = _curve(cx, base, 46, peak, skew)
-            _area(g, pts, base, stroke="none", fill=ACCENT, opacity=op)
+        # Infections: an epidemic curve.
+        pts = _curve(cx, base, 46, 16, -0.05)
+        _area(g, pts, base, stroke="none", fill=ACCENT, opacity=0.85)
         g.line(cx - 24, base, cx + 24, base, stroke=MUTED, sw=0.6)
-    elif i == 2:
-        # A delay distribution as bars, and its drifted shape (dashed).
-        probs = [0.15, 0.55, 0.85, 0.7, 0.48, 0.3, 0.18, 0.1, 0.05]
-        for k, p in enumerate(probs):
-            g.rect(
-                cx - 20 + k * 4.6, base - 17 * p, 3.4, 17 * p, fill=ACCENT, rx=0
-            )
-        shifted = [
-            (cx - 18.3 + (k + 1.6) * 4.6, base - 17 * p)
-            for k, p in enumerate(probs)
-        ]
-        g.poly(shifted, stroke=FG, sw=0.8, dash="1.8 1.4")
-        g.line(cx - 22, base, cx + 24, base, stroke=MUTED, sw=0.6)
-    elif i == 3:
-        # Reports by day of the week, with two days of no reports.
-        for k, h in enumerate([12, 8, 0, 9, 15, 0, 5]):
-            if h:
-                g.rect(cx - 16 + k * 4.8, base - h, 3.4, h, fill=ACCENT, rx=0)
-        g.line(cx - 18, base, cx + 18, base, stroke=MUTED, sw=0.6)
-    else:
-        # Observed counts scattered about their expectation.
+    elif i == 1:
+        # Observation: noisy counts about their expectation.
         pts = _curve(cx, base, 44, 15, 0.0)
         g.poly(pts, stroke=MUTED, sw=0.8)
         noise = [1.5, -2.5, 2, -1, 3, -3, 0.5, 2.5, -2, 1, -1.5]
@@ -347,6 +346,29 @@ def _glyph(g: Svg, i: int, cx: float, cy: float) -> None:
                 f'fill="{ACCENT}"/>'
             )
         g.line(cx - 23, base, cx + 23, base, stroke=MUTED, sw=0.6)
+    elif i == 2:
+        # Reporting delays: a delay distribution.
+        probs = [0.15, 0.55, 0.85, 0.7, 0.48, 0.3, 0.18, 0.1, 0.05]
+        for k, p in enumerate(probs):
+            g.rect(
+                cx - 20 + k * 4.6, base - 17 * p, 3.4, 17 * p, fill=ACCENT, rx=0
+            )
+        g.line(cx - 22, base, cx + 22, base, stroke=MUTED, sw=0.6)
+    elif i == 3:
+        # The reporting system: reports by weekday, two days with none.
+        for k, h in enumerate([12, 8, 0, 9, 15, 0, 5]):
+            if h:
+                g.rect(cx - 16 + k * 4.8, base - h, 3.4, h, fill=ACCENT, rx=0)
+        g.line(cx - 18, base, cx + 18, base, stroke=MUTED, sw=0.6)
+    else:
+        # Places and strata: a country over two places.
+        top, low = (cx, cy - 6), [(cx - 12, cy + 6), (cx + 12, cy + 6)]
+        for x, y in low:
+            g.line(top[0], top[1], x, y, stroke=MUTED, sw=0.7)
+        for x, y in [top, *low]:
+            g.add(
+                f'<circle cx="{x:.2f}" cy="{y:.2f}" r="3.6" fill="{ACCENT}"/>'
+            )
 
 
 def _block(
@@ -370,218 +392,117 @@ def _block(
 
 
 def panel_b(g: Svg, oy: float) -> float:
-    """Draw panel B, the reporting triangle as ragged series."""
-    g.label(0, oy + 9, "B", "The reporting triangle as ragged series")
-    top = oy + 22
-    # A toy triangle: onset steps 1 to 8 by reporting delay 0 to 4, as
-    # of the latest release at step 8. Onsets up to the last complete
-    # step (8 - 4) have every delay reported; later ones are ragged.
-    n_on, n_lag = 8, 4
-    n_delay = n_lag + 1
-    e_step = n_on - n_lag
-    cw, ch = 15.0, 10.0
-    tx, ty = 24.0, top + 14
-    g.text(
-        tx + cw * n_delay / 2,
-        top + 4,
-        "delay \u2192",
-        size=SMALL,
-        anchor="middle",
-        fill=MUTED,
-    )
-    g.add(
-        f'<text x="{tx - 6:.2f}" y="{ty + 30:.2f}" font-size="{SMALL}" '
-        f'fill="{MUTED}" text-anchor="middle" '
-        f'transform="rotate(-90 {tx - 6:.2f} {ty + 30:.2f})">'
-        "onset \u2192</text>"
-    )
-    for t in range(1, n_on + 1):
-        y = ty + (t - 1) * ch
-        for d in range(n_delay):
-            x = tx + d * cw
-            if t + d > n_on:
-                kind = "unseen"
-            elif t <= e_step:
-                kind = "final"
-            else:
-                kind = "lag"
-            cell(g, x, y, cw, ch, kind)
-    hi = e_step + 1
-    g.rect(
-        tx - 0.8,
-        ty + (hi - 1) * ch - 0.8,
-        (n_on - hi + 1) * cw + 1.6,
-        ch + 1.6,
-        stroke=ACCENT,
-        sw=1.3,
-    )
-    ey = ty + e_step * ch
-    g.line(tx - 2, ey, tx + cw * n_delay + 3, ey, stroke=ACCENT, sw=1.1)
-    g.text(
-        tx + cw * n_delay + 6,
-        ey + 12,
-        "last complete",
-        size=BODY,
-        weight="bold",
-        fill=ACCENT,
-    )
-    tri_bottom = ty + n_on * ch
-
-    # The arrow to the ragged layout.
-    ax = tx + cw * n_delay + 16
-    g.line(ax, ty + 40, ax + 22, ty + 40, arrow="ah")
-
-    # The ragged block of two places: each a target and its lag series.
-    bx = 196.0
-    by = ty + 2
-    cols = n_on + 2
-    bw = 17.0
-    rh = 8.5
-
-    def kinds() -> list[list[str]]:
-        rows = [["final" if c + 1 <= e_step else "future" for c in range(cols)]]
-        for d in range(n_lag):
-            lo, hi_ = 1, n_on - d
-            rows.append(
-                ["lag" if lo <= c + 1 <= hi_ else "none" for c in range(cols)]
-            )
-        return rows
-
-    bottoms = []
-    starts = []
-    y0 = by
-    for p in (1, 2):
-        starts.append(y0)
-        bottom = _block(g, bx, y0, cols, bw, rh, kinds())
-        g.text(
-            bx - 4,
-            y0 + rh - 1.5,
-            "target",
-            size=SMALL,
-            anchor="end",
-            fill=ACCENT,
+    """Draw panel B, every place's series in one block."""
+    g.label(0, oy + 9, "B", "Model inputs")
+    # Days 1 to 14, the latest release on day 11 and a maximum delay of
+    # three days, so the last complete day is day 8.
+    cols, latest, lags = 14, 11, 3
+    last = latest - lags
+    bw, rh = 21.0, 7.0
+    bx, by = 66.0, oy + 30
+    names = ["target", *(f"lag {d}" for d in range(lags)), "weekly"]
+    colours = [ACCENT, *([COV] * lags), MUTED]
+    tops: list[float] = []
+    y = by
+    for p, place in enumerate(("C", "A", "B")):
+        tops.append(y)
+        bottom = _block(
+            g, bx, y, cols, bw, rh, lag_rows(cols, latest, last, lags)
         )
-        lag_mid = (y0 + rh + 2 + bottom) / 2
+        # The weekly row: each week's total, complete or to forecast.
+        wy = bottom + 3
+        for k in range(cols // 7):
+            kind = "final" if 7 * (k + 1) <= last else "future"
+            cell(g, bx + 7 * k * bw, wy, 7 * bw, rh, kind)
+        place_bottom = wy + rh
         g.text(
-            bx - 4,
-            lag_mid + 2.5,
-            "lag 0\u20133",
-            size=SMALL,
-            anchor="end",
-            fill=COV,
-        )
-        g.line(bx - 2, y0 + rh + 2.5, bx - 2, bottom - 0.5, stroke=COV, sw=0.6)
-        g.text(
-            bx - 40,
-            (y0 + bottom) / 2 + 0.5,
-            f"place {p}",
-            size=SMALL,
-            anchor="end",
+            6,
+            (y + place_bottom) / 2 + 3,
+            place,
+            size=11,
             weight="bold",
+            anchor="middle",
         )
-        # The place's rows, joined by the same-place bias, and beside them
-        # the bias between the place and its parent.
-        colour = SLOTS[p - 1]
-        g.rect(bx - 35, y0, 3.2, bottom - y0, fill=colour, rx=1.6)
-        g.rect(bx - 30.5, y0, 2.2, bottom - y0, fill=PARENT_SLOT, rx=1.1)
-        g.text(
-            bx - 40,
-            (y0 + bottom) / 2 + 9,
-            "+ parent bias",
-            size=SMALL,
-            anchor="end",
-            fill=colour,
-        )
-        bottoms.append(bottom)
-        y0 = bottom + 7
-    bottom = bottoms[-1]
+        if p == 0:
+            ys = [y + k * (rh + 1) + (2 if k else 0) for k in range(lags + 1)]
+            ys.append(wy)
+            for yy, name, colour in zip(ys, names, colours, strict=True):
+                g.text(
+                    bx - 4,
+                    yy + rh - 1,
+                    name,
+                    size=SMALL - 0.5,
+                    anchor="end",
+                    fill=colour,
+                )
+            # The lags reported after the last complete day enter as
+            # known-future inputs.
+            x0 = bx + last * bw
+            ly = [y + (d + 1) * (rh + 1) + 2 for d in range(lags)]
+            pts = [(x0, ly[0]), (bx + latest * bw, ly[0])]
+            for d in range(lags):
+                xr = bx + (latest - d) * bw
+                pts += [(xr, ly[d] + rh)]
+                if d + 1 < lags:
+                    pts += [(bx + (latest - d - 1) * bw, ly[d] + rh)]
+            pts += [(x0, ly[-1] + rh), (x0, ly[0])]
+            g.poly(pts, stroke=COV, sw=1.4)
+            kx = bx + cols * bw + 8
+            ky = ly[0] + rh / 2
+            g.line(kx - 2, ky, bx + latest * bw + 2, ky, stroke=COV, sw=0.7)
+            g.text(kx, ky + 2.5, "known future", size=SMALL, fill=COV)
+        y = place_bottom + 7
+    bottom = y - 7
     # Column headings.
-    for lo, hi_, name in [
-        (1, e_step, "context"),
-        (e_step + 1, n_on, "nowcast"),
-        (n_on + 1, cols, "forecast"),
+    for lo, hi, name in [
+        (1, last, "context"),
+        (last + 1, latest, "nowcast"),
+        (latest + 1, cols, "forecast"),
     ]:
         g.text(
-            bx + (lo - 1 + hi_) / 2 * bw,
-            by - 4,
+            bx + (lo - 1 + hi) / 2 * bw,
+            by - 5,
             name,
             size=SMALL,
             anchor="middle",
             fill=MUTED,
         )
-    # E, the end of the targets' context, and the latest release.
-    exx = bx + e_step * bw
+    # The last complete day and the latest release.
+    exx = bx + last * bw
     g.line(exx, by - 2, exx, bottom + 3, stroke=ACCENT, sw=1.1)
     g.text(
         exx,
-        bottom + 11,
+        bottom + 12,
         "last complete",
-        size=BODY,
+        size=SMALL,
         weight="bold",
         fill=ACCENT,
         anchor="middle",
     )
-    rx_ = bx + n_on * bw
+    rx_ = bx + latest * bw
     g.line(rx_, by - 2, rx_, bottom + 3, stroke=FG, sw=0.8, dash="2.5 2")
-    # The highlighted onset step of place 1, read down its column.
-    g.rect(
-        bx + (hi - 1) * bw - 0.8,
-        starts[0] + rh + 1.2,
-        bw + 1.6,
-        n_lag * (rh + 1) + 1.6,
-        stroke=ACCENT,
-        sw=1.3,
-    )
-    # Known-future inputs, beside place 1's lag rows.
-    g.text(
-        bx + cols * bw + 7,
-        starts[0] + 24,
-        ["known", "future"],
-        size=SMALL,
-        fill=COV,
-    )
-    # Every place's series are one group in group attention.
-    gx = bx + cols * bw + 3
-    g.line(gx, starts[0], gx, bottom, stroke=MUTED, sw=0.7)
-    for yy in (starts[0], bottom):
-        g.line(gx - 2, yy, gx, yy, stroke=MUTED, sw=0.7)
-    g.text(
-        gx + 4,
-        starts[1] + 16,
-        ["all places", "in one", "group"],
-        size=SMALL,
-        fill=MUTED,
-    )
-    # One-row legend.
-    lgy = max(tri_bottom, bottom + 11) + 12
+    g.text(rx_, bottom + 12, "latest data", size=SMALL, anchor="middle")
+    # The legend, beside the block.
+    lx = bx + cols * bw + 8
     items = [
         ("final", "complete"),
         ("lag", "reported so far"),
-        ("future", "to forecast"),
-        ("none", "no release"),
         ("unseen", "not yet reported"),
-        ("slot", "same-place bias"),
-        ("parent", "parent bias"),
+        ("future", "to forecast"),
     ]
-    x = 0.0
-    for kind, name in items:
-        if kind == "slot":
-            g.rect(x + 3, lgy - 7, 3.2, 8.5, fill=SLOTS[0], rx=1.6)
-        elif kind == "parent":
-            g.rect(x + 3.5, lgy - 7, 2.2, 8.5, fill=PARENT_SLOT, rx=1.1)
-        else:
-            cell(g, x, lgy - 6.5, 9, 7.5, kind)
-        g.text(x + 12, lgy, name, size=SMALL)
-        x += 12 + 3.6 * len(name) + 12
-    return lgy + 3
+    for k, (kind, name) in enumerate(items):
+        ly_ = tops[2] + 10 + 13 * k
+        cell(g, lx, ly_ - 6.5, 9, 7.5, kind)
+        g.text(lx + 13, ly_, name, size=SMALL)
+    return bottom + 14
 
 
-# The attention-bias relations (panel B, lower part), each with its colour.
+# The attention-bias relations (panel C, lower part), each with its colour.
 RELATIONS = (
     ("same", "same place", SLOTS[0]),
     ("up", "up (child \u2192 parent)", PARENT_SLOT),
-    ("down", "down (parent \u2192 child)", COV),
-    ("itself", "a series and itself (no bias)", "white"),
+    ("down", "down (parent \u2192 child)", CHILD_SLOT),
+    ("itself", "itself (no bias)", "white"),
     ("none", "unrelated (no bias)", CELL),
 )
 
@@ -602,17 +523,67 @@ def _relation(row: tuple[str, int], col: tuple[str, int]) -> str:
     return "none"
 
 
-def panel_b_bias(g: Svg, oy: float) -> float:
-    """Draw the lower part of panel B, the group-attention biases."""
+def _arc(
+    g: Svg,
+    a: tuple[float, float],
+    b: tuple[float, float],
+    bend: float,
+    colour: str,
+    arrow: str,
+) -> None:
+    """Draw a curved arrow from `a` to `b`, bent to its left by `bend`."""
+    mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    n = (dx * dx + dy * dy) ** 0.5
+    qx, qy = mx + bend * dy / n, my - bend * dx / n
+    g.add(
+        f'<path d="M{a[0]:.2f},{a[1]:.2f} Q{qx:.2f},{qy:.2f} '
+        f'{b[0]:.2f},{b[1]:.2f}" stroke="{colour}" stroke-width="1.0" '
+        f'fill="none" marker-end="url(#{arrow})"/>'
+    )
+
+
+def _toward(
+    a: tuple[float, float], b: tuple[float, float], r: float
+) -> tuple[float, float]:
+    """Return the point `r` from `a` toward `b`."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    n = (dx * dx + dy * dy) ** 0.5
+    return (a[0] + r * dx / n, a[1] + r * dy / n)
+
+
+def attention_biases(g: Svg, oy: float) -> float:
+    """Draw the attention biases: a map of the places and the grid."""
+    g.text(
+        0,
+        oy + 8,
+        "Attention biases in group attention",
+        size=HEAD,
+        weight="bold",
+    )
+    top = oy + 16
+    # The map: country C over places A and B, with the up and down
+    # relations between them as arrows.
+    r = 8.0
+    c = (44.0, top + 14)
+    kids = {"A": (18.0, top + 58), "B": (70.0, top + 58)}
+    for k in kids.values():
+        lo = _toward(k, c, r + 1.5)
+        hi = _toward(c, k, r + 1.5)
+        _arc(g, lo, hi, 4.5, PARENT_SLOT, "ahup")
+        _arc(g, hi, lo, 4.5, CHILD_SLOT, "ahdown")
+    for name, (x, y) in [("C", c), *kids.items()]:
+        _node(g, x, y, r, name)
+    # The grid: group attention at one step, rows attending to columns.
     places = ("C", "A", "B")
-    names = ("count", "lag 1", "lag 2")
-    rows = [(p, k) for p in places for k in range(len(names))]
-    cs = 9.0
-    gx, gy = 70.0, oy + 22
+    n_series = 3
+    rows = [(p, k) for p in places for k in range(n_series)]
+    cs = 8.0
+    gx, gy = 132.0, top + 9
     g.text(
         gx + cs * len(rows) / 2,
-        oy + 8,
-        "group attention at one step: rows attend to columns",
+        top + 1,
+        "at one step, rows attend to columns",
         size=SMALL,
         anchor="middle",
         fill=MUTED,
@@ -620,104 +591,65 @@ def panel_b_bias(g: Svg, oy: float) -> float:
     colour = {key: c for key, _, c in RELATIONS}
     for a, row in enumerate(rows):
         for b, col in enumerate(rows):
+            rel = _relation(row, col)
             g.rect(
                 gx + b * cs + 0.4,
-                gy + a * cs + 0.4,
+                gy + 9 + a * cs + 0.4,
                 cs - 0.8,
                 cs - 0.8,
-                fill=colour[_relation(row, col)],
+                fill=colour[rel],
                 rx=1,
-                stroke=LINE if _relation(row, col) == "itself" else "none",
+                stroke=LINE if rel == "itself" else "none",
                 sw=0.6,
             )
-    # Places over the columns, and places and series beside the rows.
     for k, p in enumerate(places):
-        mid = len(names) * cs * (k + 0.5)
+        mid = n_series * cs * (k + 0.5)
+        g.text(gx + mid, gy + 6, p, size=SMALL, anchor="middle", weight="bold")
         g.text(
-            gx + mid, gy - 2.5, p, size=SMALL, anchor="middle", weight="bold"
-        )
-        g.text(
-            gx - 40,
-            gy + mid + 2.5,
+            gx - 4,
+            gy + 9 + mid + 2.5,
             p,
             size=SMALL,
-            anchor="middle",
+            anchor="end",
             weight="bold",
         )
-        for n, name in enumerate(names):
-            y = gy + (k * len(names) + n) * cs + cs - 2.2
-            g.text(gx - 3, y, name, size=SMALL - 1, anchor="end", fill=MUTED)
-    bottom = gy + len(rows) * cs
+    grid_bottom = gy + 9 + len(rows) * cs
     # The relations, one a line, beside the grid.
-    lx = gx + len(rows) * cs + 24
-    for k, (key, name, c) in enumerate(RELATIONS):
-        y = gy + 4 + k * 12
+    lx = gx + len(rows) * cs + 22
+    for k, (key, name, c_) in enumerate(RELATIONS):
+        y = gy + 11 + k * 12
         edge = LINE if key == "itself" else "none"
-        g.rect(lx, y - 7, 9, 7.5, fill=c, rx=1, stroke=edge, sw=0.6)
+        g.rect(lx, y - 7, 9, 7.5, fill=c_, rx=1, stroke=edge, sw=0.6)
         g.text(lx + 13, y, name, size=SMALL)
-    for k, line in enumerate(
-        (
-            "learned bias per relation, layer",
-            "and head, added to the attention",
-            "scores; zero at the start",
-        )
-    ):
-        g.text(
-            lx,
-            gy + 4 + len(RELATIONS) * 12 + 4 + 9 * k,
-            line,
-            size=SMALL,
-            fill=MUTED,
-        )
-    # One place's daily rows with a weekly total row, beside the grid.
-    days, cw, rh = 14, 6.2, 9.0
-    ax = WIDTH - days * cw - 2
     g.text(
-        ax + days * cw,
-        oy + 8,
-        "one place with a weekly row",
+        lx + 128,
+        gy + 11,
+        [
+            "one learned bias per",
+            "relation, layer and head,",
+            "added to the attention",
+            "scores",
+        ],
         size=SMALL,
-        anchor="end",
         fill=MUTED,
     )
-    agg = [("daily", 0), ("lag 1", 1), ("lag 2", 2), ("weekly", None)]
-    for r, (name, lag) in enumerate(agg):
-        y = gy + r * (rh + 2)
-        g.text(
-            ax - 3, y + rh - 2.2, name, size=SMALL - 1, anchor="end", fill=MUTED
-        )
-        for d in range(days):
-            if lag is None:
-                kind = "truth" if (d + 1) % 7 == 0 else "unseen"
-            elif lag == 0:
-                kind = "final"
-            else:
-                kind = "lag" if d < days - lag else "unseen"
-            cell(g, ax + d * cw, y, cw, rh, kind)
-    # The weekly row joins its place's same-place group.
-    g.rect(ax - 30, gy, 3.2, len(agg) * (rh + 2) - 2, fill=SLOTS[0], rx=1.6)
-    return max(bottom, gy + len(agg) * (rh + 2)) + 3
+    return max(grid_bottom, top + 58 + r)
 
 
 def panel_c(g: Svg, oy: float) -> float:
-    """Draw panel C, a training block and the LoRA adapters."""
+    """Draw panel C, training blocks, the LoRA adapters and the biases."""
     g.label(0, oy + 9, "C", "Training blocks and LoRA fine-tuning")
     top = oy + 22
-    # The training block, cut at a random cut-off.
-    cw, rh = 12.0, 9.0
-    n_ctx, n_now, n_fc = 8, 4, 3
-    cols = n_ctx + n_now + n_fc
+    # The training block, cut at a random cut-off, laid out as in B.
+    cw, rh = 12.0, 8.0
+    n_ctx, lags, n_fc = 8, 3, 3
+    cut = n_ctx + lags
+    cols = cut + n_fc
     bx = 34.0
     by = top + 18
-    rows = [["final" if c < n_ctx else "truth" for c in range(cols)]]
-    for d in range(n_now):
-        rows.append(
-            [
-                "lag" if d <= c < n_ctx + n_now - d else "none"
-                for c in range(cols)
-            ]
-        )
-    bottom = by + (n_now + 1) * (rh + 1) + 1
+    rows = lag_rows(cols, cut, n_ctx, lags)
+    rows[0] = ["final" if c < n_ctx else "truth" for c in range(cols)]
+    bottom = by + (lags + 1) * (rh + 1) + 1
     # A stack of blocks behind, for many outbreaks and cut-offs.
     for k in (2, 1):
         g.rect(
@@ -737,7 +669,7 @@ def panel_c(g: Svg, oy: float) -> float:
     g.text(
         bx - 4,
         (by + rh + 2 + bottom) / 2 + 2.5,
-        "lag 0\u20133",
+        "lags",
         size=SMALL,
         anchor="end",
         fill=COV,
@@ -763,21 +695,21 @@ def panel_c(g: Svg, oy: float) -> float:
     g.line(exx, by - 2, exx, bottom + 3, stroke=ACCENT, sw=1.1)
     g.text(
         exx,
-        bottom + 11,
+        bottom + 12,
         "last complete",
-        size=BODY,
+        size=SMALL,
         weight="bold",
         fill=ACCENT,
         anchor="middle",
     )
-    cut = bx + (n_ctx + n_now) * cw
-    g.line(cut, by - 2, cut, bottom + 3, stroke=FG, sw=0.8, dash="2.5 2")
-    g.text(cut, bottom + 11, "cut-off", size=SMALL, anchor="middle")
-    left_bottom = bottom + 12
+    cutx = bx + cut * cw
+    g.line(cutx, by - 2, cutx, bottom + 3, stroke=FG, sw=0.8, dash="2.5 2")
+    g.text(cutx + 2, bottom + 12, "cut-off", size=SMALL, anchor="start")
+    left_bottom = bottom + 14
 
     # LoRA: the frozen model with small trained adapters.
-    mx = 268.0
     mw, aw = 104.0, 24.0
+    mx = WIDTH - mw - aw - 30
     y0 = top
     g.rect(mx, y0, mw, 13, fill=CELL, rx=2)
     g.text(
@@ -802,11 +734,10 @@ def panel_c(g: Svg, oy: float) -> float:
         size=SMALL,
         anchor="middle",
     )
-    # The place and parent biases, trained, inside group attention.
     g.text(
         mx + mw / 2,
         y0 + 35.6,
-        "+ place and parent biases",
+        "+ attention biases",
         size=SMALL,
         anchor="middle",
         fill=ACCENT,
@@ -852,17 +783,20 @@ def panel_c(g: Svg, oy: float) -> float:
     )
     g.text(mx + 62, lgy, "trained", size=SMALL)
     # The arrow from the blocks to the model.
-    g.line(bx + cols * cw + 12, y0 + 38, mx - 10, y0 + 38, arrow="ah")
-    return max(left_bottom, lgy + 2)
+    g.line(bx + cols * cw + 14, y0 + 38, mx - 10, y0 + 38, arrow="ah")
+    y = max(left_bottom, lgy + 2) + 8
+    # The attention biases, set apart below a rule.
+    g.line(0, y, WIDTH, y, stroke=LINE, sw=0.5)
+    return attention_biases(g, y + 4)
 
 
 def panel_d(g: Svg, oy: float) -> float:
     """Draw panel D, forecasting with the fine-tuned model."""
     g.label(0, oy + 9, "D", "Forecasting with the fine-tuned model")
     top = oy + 18
-    h = 56.0
+    h = 58.0
     gap = 18.0
-    widths = [86.0, 86.0, 112.0]
+    widths = [86.0, 86.0, 104.0]
     widths.append(WIDTH - sum(widths) - 3 * gap)
     xs = [0.0]
     for w in widths[:-1]:
@@ -871,7 +805,7 @@ def panel_d(g: Svg, oy: float) -> float:
         "latest data",
         "Chronos-2",
         "quantiles \u2192 draws",
-        "nowcast and forecast",
+        "predictions",
     ]
     for k, (x, w, lab) in enumerate(zip(xs, widths, labels, strict=True)):
         g.rect(
@@ -889,22 +823,15 @@ def panel_d(g: Svg, oy: float) -> float:
         )
         if k:
             g.line(x - gap + 2, top + h / 2, x - 2, top + h / 2, arrow="ah")
-    # Stage 1: the latest data as a ragged block.
-    cw, rh = 7.0, 5.0
-    rows = [["final" if c < 5 else "future" for c in range(10)]]
-    for d in range(4):
-        rows.append(
-            [
-                "lag" if 1 - d <= c < 9 - d and c >= d else "none"
-                for c in range(10)
-            ]
-        )
-    _block(g, xs[0] + (widths[0] - 70) / 2, top + 19, 10, cw, rh, rows)
+    # Stage 1: the latest data, laid out as in B.
+    cw, rh = 7.0, 6.0
+    rows = lag_rows(10, 8, 5, 3)
+    _block(g, xs[0] + (widths[0] - 70) / 2, top + 20, 10, cw, rh, rows)
     # Stage 2: the model and its adapter.
     x2, w2 = xs[1], widths[1]
     g.rect(
         x2 + w2 / 2 - 34,
-        top + 24,
+        top + 25,
         68,
         15,
         fill=ACCENT_SOFT,
@@ -914,7 +841,7 @@ def panel_d(g: Svg, oy: float) -> float:
     )
     g.text(
         x2 + w2 / 2,
-        top + 34.5,
+        top + 35.5,
         "+ adapter \u00b7 biases",
         size=SMALL,
         anchor="middle",
@@ -923,7 +850,7 @@ def panel_d(g: Svg, oy: float) -> float:
     )
     # Stage 3: a quantile function read at a uniform level.
     x3, w3 = xs[2], widths[2]
-    px, py, pw, ph = x3 + 26, top + 17, w3 - 40, 28.0
+    px, py, pw, ph = x3 + 24, top + 18, w3 - 36, 30.0
     g.line(px, py + ph, px + pw, py + ph, stroke=MUTED, sw=0.6)
     g.line(px, py, px, py + ph, stroke=MUTED, sw=0.6)
     g.text(px + pw + 2, py + ph + 2.5, "u", size=SMALL, fill=MUTED)
@@ -953,39 +880,61 @@ def panel_d(g: Svg, oy: float) -> float:
     ux, uy = pts[levels.index(0.7)]
     g.line(ux, py + ph, ux, uy, stroke=FG, sw=0.7, dash="1.5 1.5")
     g.line(ux, uy, px, uy, stroke=FG, sw=0.7, dash="1.5 1.5", arrow="ah")
-    # Stage 4: trajectories.
+    # Stage 4: the nowcast up to the latest data and the forecast after.
     x4, w4 = xs[3], widths[3]
-    fx, fy, fw, fh = x4 + 8, top + 16, w4 - 16, 34.0
-    n, now = 14, 8
+    fx, fy, fw, fh = x4 + 10, top + 24, w4 - 20, 28.0
+    n, last, latest = 14, 6, 9
     step = fw / (n - 1)
     base = [12, 13, 15, 18, 20, 24, 27, 30, 32, 34, 35, 35, 34, 33]
-    reported = [12, 13, 15, 18, 19, 21, 18, 11]
+    reported = [12, 13, 15, 18, 20, 23, 24, 20, 14, 8]
 
     def yv(v: float) -> float:
-        return fy + fh - v / 52 * fh
+        return fy + fh - v / 42 * fh
 
-    for wdt, op in [(1.6, 0.18), (0.8, 0.32)]:
+    ex, lx = fx + last * step, fx + latest * step
+    g.rect(ex, fy - 3, lx - ex, fh + 3, fill=PANEL, rx=0)
+    g.text(
+        (ex + lx) / 2,
+        fy - 5,
+        "nowcast",
+        size=SMALL - 0.5,
+        fill=MUTED,
+        anchor="middle",
+    )
+    g.text(
+        (lx + fx + fw) / 2,
+        fy - 5,
+        "forecast",
+        size=SMALL - 0.5,
+        fill=MUTED,
+        anchor="middle",
+    )
+    for wdt, op in [(1.5, 0.18), (0.75, 0.32)]:
         up, lo = [], []
-        for k in range(3, n):
-            s = 0 if k < 4 else (k - 3) * wdt
+        for k in range(last, n):
+            s = (k - last) * wdt
             up.append((fx + k * step, yv(base[k] + s)))
             lo.append((fx + k * step, yv(base[k] - s * 0.8)))
         d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in up)
         d += " L" + " L".join(f"{x:.2f},{y:.2f}" for x, y in lo[::-1])
         g.path(d + " Z", stroke="none", fill=ACCENT, opacity=op)
     g.poly(
-        [(fx + k * step, yv(base[k])) for k in range(3, n)],
+        [(fx + k * step, yv(base[k])) for k in range(last, n)],
         stroke=ACCENT,
         sw=1.0,
     )
-    g.poly([(fx + k * step, yv(base[k])) for k in range(4)], stroke=FG, sw=0.9)
-    for k in range(now):
+    g.poly(
+        [(fx + k * step, yv(base[k])) for k in range(last + 1)],
+        stroke=FG,
+        sw=0.9,
+    )
+    for k in range(latest + 1):
         g.add(
             f'<circle cx="{fx + k * step:.2f}" cy="{yv(reported[k]):.2f}" '
             f'r="1.3" fill="{COV}"/>'
         )
-    nx = fx + (now - 0.5) * step
-    g.line(nx, fy - 1, nx, fy + fh, stroke=FG, sw=0.7, dash="2 1.5")
+    g.line(lx, fy - 3, lx, fy + fh, stroke=FG, sw=0.7, dash="2 1.5")
+    g.line(fx, fy + fh, fx + fw, fy + fh, stroke=MUTED, sw=0.6)
     return top + h
 
 
@@ -993,11 +942,10 @@ def build() -> str:
     """Return Figure 1 as SVG."""
     g = Svg()
     y = panel_a(g, 0.0)
-    y = panel_b(g, y + 10)
-    y = panel_b_bias(g, y + 4)
-    y = panel_c(g, y + 10)
+    y = panel_b(g, y + 12)
+    y = panel_c(g, y + 8)
     y = panel_d(g, y + 10)
-    return g.render(round(y + 3))
+    return g.render(round(y))
 
 
 def main() -> None:
