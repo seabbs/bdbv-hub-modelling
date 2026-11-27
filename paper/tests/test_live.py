@@ -153,6 +153,36 @@ def test_each_comparison_pairs_the_live_run_with_its_variant() -> None:
     assert comparison_rows(_scores(), "one-model", "nodelays", labels).empty
 
 
+def _real_only(scores: pd.DataFrame) -> pd.DataFrame:
+    """A real-only run's checkpoints n125 and n1000, with no outbreaks."""
+    real = scores.loc[
+        (scores["run"] == "no-slots") & (scores["study"] != "ebola")
+    ]
+    parts = [
+        real.assign(run="realonly", checkpoint=ck, outbreaks=0, rel_wis=wis)
+        for ck, wis in (("n125", 2.5), ("n1000", 2.2))
+    ]
+    return pd.concat([scores, *parts], ignore_index=True)
+
+
+def test_a_run_on_real_data_alone_is_its_final_checkpoint() -> None:
+    # The real-only run has steps, not outbreaks: its final checkpoint is
+    # drawn across the live run's checkpoints, a line to compare with.
+    from paperpipe.evidence import COMPARISONS, comparison_rows
+
+    labels = COMPARISONS["realonly"][1]
+    out = comparison_rows(
+        _real_only(_scores()), "one-model", "realonly", labels
+    )
+    real = out.loc[out["run"] == labels[1]]
+    assert not real.empty
+    assert set(real["outbreaks"]) == {125, 1000}
+    assert set(real["score"]) == {2.2}
+    # Its loss is on real held-out blocks, not the validation round.
+    assert not real["set"].str.startswith("Validation").any()
+    assert set(out.loc[out["run"] == labels[0], "outbreaks"]) == {125, 1000}
+
+
 def test_the_comparisons_wait_on_the_variants_they_name(tmp_path) -> None:
     rows = tmp_path / "scores.csv"
     _scores().to_csv(rows, index=False)
