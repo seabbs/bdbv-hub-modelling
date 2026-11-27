@@ -277,6 +277,7 @@ def nowcast_tasks(
     n_samples: int,
     seed: int,
     horizons: Sequence[int] = HORIZONS,
+    max_delay: int | None = None,
 ) -> list[ForecastTask]:
     """Return the states and the age groups task of a nowcast date.
 
@@ -293,6 +294,11 @@ def nowcast_tasks(
     horizons : sequence of int
         Days from the nowcast date to the end of each 7-day sum, the
         hub's (`HORIZONS`) by default. Days after it are forecasts.
+    max_delay : int, optional
+        The study's longest delay $D$ in days, the truth's
+        (`GermanyConfig.truth_delay`), set as each task's `max_delay`.
+        Chronos-2 then has lags 0 to $D$ (`FoundationModel.for_task`),
+        as BDBV's tasks fix theirs. None leaves the lags to the data.
 
     Returns
     -------
@@ -359,6 +365,7 @@ def nowcast_tasks(
                 seed=seed,
                 target_history=history.reset_index(drop=True),
                 daily_history=own,
+                max_delay=max_delay,
             )
         )
     return tasks

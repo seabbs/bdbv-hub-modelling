@@ -68,6 +68,13 @@ $defs:
       by_source_every: {$ref: "#/$defs/positive"}
       eval: {enum: [local, offload]}
       series_bias: {type: boolean}
+      # Only some of the bias's kinds of pair (series_bias.PAIRS); unset,
+      # all of them.
+      bias_pairs:
+        type: array
+        items: {enum: [same, up, down]}
+        minItems: 1
+        uniqueItems: true
       layout: {enum: [ragged, complete]}
       release_layer: {type: ["null", string]}
       real_training: {enum: [null, germany]}

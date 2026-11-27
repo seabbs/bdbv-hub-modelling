@@ -37,12 +37,15 @@ promote_branches: [main, next]
 # The fine-tuning comparisons (`paperpipe.evidence.COMPARISONS`): each
 # compares the live run with the workflow run named here (the workflow
 # config's `runs`), from `evidence.checkpoint_scores`. A comparison waits
-# until its run has a scored checkpoint. `realdata` is Run A with German
-# real-data blocks mixed into its simulations; `realonly` is Chronos-2
-# fine-tuned on real data alone (`foundation_real`), with no simulations,
-# drawn as its final checkpoint across the live run's.
+# until its run has a scored checkpoint. The attention bias subsets
+# (`evidence.BIAS_SUBSETS`) join the slots comparison. `realdata` is Run A
+# with German real-data blocks mixed into its simulations; `realonly` is
+# Chronos-2 fine-tuned on real data alone (`foundation_real`), with no
+# simulations, drawn as its final checkpoint across the live run's.
 comparisons:
   slots: noslots
+  sameonly: sameonly
+  parentonly: parentonly
   delays: nodelays
   realdata: realdata
   realonly: realonly
@@ -121,7 +124,16 @@ ebola:
   # Further models' release-backtest samples from evidence rows
   # (`evidence` below), in the backtest's layout, kept to `models`.
   extra: []
-  backtest_models: [randomwalk, randomwalknowcast]
+  # The walks and the paper-only Chronos-2 models, as in the other
+  # studies. The fine-tuned ragged model (`foundation`) is a stored model,
+  # so its forecasts are the fit store's in `backtest`, not run here.
+  backtest_models:
+    - randomwalk
+    - randomwalknowcast
+    - foundation_zeroshot_complete
+    - foundation_zeroshot
+    - foundation_zeroshot_baselinenowcast
+    - foundation_baselinenowcast
   # Draws per forecast of the paper's own run of `backtest_models`, with
   # the backtest's seed shared by every model (common random numbers).
   # Their rows replace the site backtest's, which keeps its own number.

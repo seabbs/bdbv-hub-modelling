@@ -194,11 +194,45 @@ def test_ebola_sources_name_every_input() -> None:
         "--ebola-config",
         "--ebola-backtest",
         "--ebola-draws",
-        "--ebola-draws-models randomwalk randomwalknowcast",
+        "--ebola-draws-models randomwalk randomwalknowcast "
+        "foundation_zeroshot_complete foundation_zeroshot "
+        "foundation_zeroshot_baselinenowcast",
         "--round-releases",
     ):
         assert option in args
     assert _flow(ebola__hub=None).sources(_w("paper", "ebola")) == ""
+
+
+CHRONOS = (
+    "foundation_zeroshot_complete",
+    "foundation_zeroshot",
+    "foundation_zeroshot_baselinenowcast",
+    "foundation_baselinenowcast",
+)
+"""The Chronos-2 models the paper's own Ebola backtest runs."""
+
+
+def test_ebola_runs_every_study_s_chronos_set() -> None:
+    # The fine-tuned ragged model is the fit store's (`foundation` is a
+    # stored model, which `bdbvhub backtest` never runs); the rest run in
+    # the paper's own release backtest.
+    models = CONFIG["ebola"]["backtest_models"]
+    assert set(models) >= {"randomwalk", "randomwalknowcast", *CHRONOS}
+    assert "foundation" not in models
+
+
+def test_the_ebola_fine_tuned_models_wait_for_the_final_checkpoint() -> None:
+    pending = _flow().ebola_draws_models()
+    assert "foundation_baselinenowcast" not in pending
+    assert {"randomwalknowcast", "foundation_zeroshot"} <= set(pending)
+    ready = _flow(finetuned_record="runs/runa/train/n1/published.json")
+    assert "foundation_baselinenowcast" in ready.ebola_draws_models()
+
+
+def test_the_site_backtest_runs_the_walks_only() -> None:
+    # The site's own backtest file needs no Chronos-2 run: the paper's
+    # draws replace every model it runs itself.
+    assert _flow().ebola_site_models() == ["randomwalk", "randomwalknowcast"]
 
 
 def test_truth_arguments_follow_the_config() -> None:
@@ -340,6 +374,8 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
     }
     assert set(CONFIG["comparisons"]) == {
         "slots",
+        "sameonly",
+        "parentonly",
         "delays",
         "realdata",
         "realonly",
@@ -352,7 +388,8 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
 def test_the_comparisons_are_passed_by_run_name() -> None:
     flow = _flow()
     assert flow.comparisons_arg() == (
-        "--comparison slots=noslots --comparison delays=nodelays "
+        "--comparison slots=noslots --comparison sameonly=sameonly "
+        "--comparison parentonly=parentonly --comparison delays=nodelays "
         "--comparison realdata=realdata --comparison realonly=realonly"
     )
 

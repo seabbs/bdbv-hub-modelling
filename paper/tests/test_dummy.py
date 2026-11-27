@@ -126,6 +126,15 @@ def test_dummy_has_complete_ragged_and_fine_tuned_chronos(study) -> None:
     } <= models
 
 
+def test_dummy_has_the_baselinenowcast_sensitivity_models(study) -> None:
+    # The dummy run quotes every study's sensitivity models.
+    _, fc, _ = study
+    assert {
+        "foundation_zeroshot_baselinenowcast",
+        "foundation_baselinenowcast",
+    } <= set(fc["model"])
+
+
 def test_dummy_cells_take_a_level_of_each_grid_factor() -> None:
     from paperfigs.dummy import DUMMY_CELLS, dummy_factors
 

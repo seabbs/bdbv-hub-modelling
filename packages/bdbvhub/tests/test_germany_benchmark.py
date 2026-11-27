@@ -502,7 +502,7 @@ def test_models_without_chronos_hold_one_dates_tasks_at_a_time(
     # tasks before the next date's are built.
     events: list[tuple[str, str]] = []
 
-    def tasks(_triangle, date, _n, _seed, _root, _horizons):
+    def tasks(_triangle, date, _n, _seed, _root, _horizons, _max_delay=None):
         events.append(("build", date))
         return [date]
 
@@ -593,7 +593,7 @@ def test_forecasts_pass_their_horizons_and_store_them_apart(
 
     seen: list[tuple[int, ...]] = []
 
-    def tasks(_triangle, _date, _n, _seed, horizons=HORIZONS):
+    def tasks(_triangle, _date, _n, _seed, horizons=HORIZONS, **_kwargs):
         seen.append(tuple(horizons))
         return []
 
@@ -619,7 +619,7 @@ def test_models_see_only_the_counts_the_truth_holds(
     # models forecast that count: what is reported later is not theirs.
     seen: list[pd.DataFrame] = []
 
-    def tasks(triangle, _date, _n, _seed, _root, _horizons):
+    def tasks(triangle, _date, _n, _seed, _root, _horizons, _max_delay=None):
         seen.append(triangle)
         return []
 
