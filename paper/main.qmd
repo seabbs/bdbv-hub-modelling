@@ -186,7 +186,7 @@ Teams without the capacity to set up specialist models could also use them direc
 ### Fine-tuning
 
 ::: {.callout-note title="Plan"}
-- We fine-tuned Chronos-2 on the simulated data on one machine, with its default LoRA recipe, using PEFT.
+- We fine-tuned Chronos-2 on the simulated data on one machine, with its default LoRA recipe, using PEFT (@fig-design A).
 - LoRA trains a small update to about 1% of the model's weights rather than retraining them all, so fine-tuning starts from the original model (Figure 1C; Supporting Information, *LoRA*).
 - We trained on {{< meta results.training.simulations >}} simulations, each drawing its settings from the grid independently.
 - The loss is Chronos-2's quantile loss over the nowcast steps and one week ahead, so fine-tuning does not change its longer-range forecasting (Supporting Information, *Loss*).
@@ -223,7 +223,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 
 ::: {.callout-note title="Plan"}
 - **Foundation model baselines.**
-  - We compared the fine-tuned model with zero-shot Chronos-2 in two ways.
+  - We compared the fine-tuned model with zero-shot Chronos-2 in two ways (@fig-design B).
   - Zero-shot Chronos-2 on the reporting triangle gets the same inputs as the fine-tuned model, so only the weights differ.
   - Zero-shot Chronos-2 on complete data gets each place's latest counts as if complete, with no lag series, as foundation models are mostly used in forecast hubs [@ohtjhu_bm; @xilab_gleam_ai_hybrid; @emory_epirsi].
   - We plotted each checkpoint's scores against both (Supporting Information, *Checkpoint curve*).
@@ -238,6 +238,14 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
   - They fit the hub's known and imputed onset dates separately, as the hub imputes missing onset dates [@lison2024].
 - Key references: [@Johnson2025; @abbottepinowcast; @pyrenew].
 :::
+
+![The study design.
+(A) What we fine-tune Chronos-2 on: every fine-tune starts from base Chronos-2 and trains LoRA adapters.
+Only the model fine-tuned on simulated reporting triangles with attention biases is in the main text, and base Chronos-2 is also used zero-shot.
+(B) How the models are used: rows are models and their inputs, and columns are the held-out simulations and the two case studies.
+Each cell is marked main text (filled) or Supporting Information (outlined), and left empty where the model does not apply.
+The dashed line separates the four models in every main results figure from the rest.
+$D$ is 40 days for Germany and 42 days for Ebola, and one forward pass gives the daily counts and, from each place's aggregate row, the hub targets.](figures/fig2-design.svg){#fig-design}
 
 ### Evaluation on held-out synthetic data
 
@@ -255,7 +263,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 ### Case study 1: German nowcast hub
 
 ::: {.callout-note title="Plan"}
-- We used the German COVID-19 hospitalisation nowcast hub's reporting triangle, nationally, by state and by age group.
+- We used the German COVID-19 hospitalisation nowcast hub's reporting triangle, nationally, by state and by age group (@fig-design B).
 - We compared with the hub's models, relative to the hub's baseline, and evaluated as the hub did.
 - We scored as for held-out simulations, against the data as reported 40 days later, with 95% rather than 90% coverage as the hub's quantiles have no 5% or 95% level [@Wolffram2023].
 - Our models saw only reports made within 40 days of each reference date, so they forecast the count the truth holds.
@@ -282,7 +290,7 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 - **Data and submissions.**
   - We used the Ebola forecasting hub's weekly confirmed cases by symptom onset, with every release, by country, province and health zone.
   - We excluded the hub's first release, of 18 August, as it reports cumulative counts rather than new reports and so does not reflect reporting.
-  - We submitted the fine-tuned model, the random walk nowcast and the renewal models to the hub in real time.
+  - We submitted the fine-tuned model, the random walk nowcast and the renewal models to the hub in real time (@fig-design B).
   - The fine-tuned model uses the final run's last checkpoint, at {{< meta results.training.simulations >}} simulations (`{{< meta results.finetuned >}}`), trained on simulations only.
   - From the week of 23 November 2026 we scored each released checkpoint of the fine-tuned model on past hub rounds, to decide whether it could be submitted.
   - These past rounds therefore informed that decision, and only rounds after the fine-tuned model's first submission are prospective for it.
@@ -320,9 +328,9 @@ Beside it, one place's daily rows carry a weekly total row, missing until the la
 ### Sensitivity analyses
 
 ::: {.callout-note title="Plan"}
-- We gave the random walk nowcast's point nowcast to Chronos-2 as complete counts, both zero-shot and fine-tuned, with no further fine-tuning.
+- We gave the random walk nowcast's point nowcast to Chronos-2 as complete counts, both zero-shot and fine-tuned, with no further fine-tuning (@fig-design B).
 - The fine-tuned model on this input shows what the simulated data teach beyond the reporting delays.
-- We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub's releases, and compared it with the model fine-tuned on simulations.
+- We fine-tuned Chronos-2 on real data, the German development half and the Ebola hub's releases, and compared it with the model fine-tuned on simulations (@fig-design A).
 - We fine-tuned one model without the attention biases and one without lag series, and compared each with the main model.
 - For the Ebola hub only, we compared the random walks' rolling copula with no pairing, and scored Chronos-2's submitted trajectories with its copula, with independent places and with fully dependent places.
 - We compared the renewal models with and without BVDOutbreakSize, and with and without pooling and transmission between places, on the stored fits of the submission workflow (Supporting Information, *Renewal model variants*).

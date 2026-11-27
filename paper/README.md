@@ -134,6 +134,7 @@ Settings, data paths and the held-out sets are in [`workflow/config.yaml`](workf
 - [`paperpipe/`](paperpipe) and [`workflow/`](workflow): the steps and the Snakemake workflow.
 - [`papertables/`](papertables): the grid tables and the SI notes on the simulator and the held-out set, read from the simulator's code by the `grid_tables` rule.
 - [`figures/fig1_pipeline.py`](figures/fig1_pipeline.py): Figure 1.
+- [`figures/fig2_design.py`](figures/fig2_design.py): Figure 2.
 - [`tests/`](tests): `task test`.
 
 </details>
