@@ -138,8 +138,13 @@ Teams without the capacity to set up specialist models could also use them direc
 - Chronos-2 is an encoder-only transformer, based on the T5 encoder, with 120 million parameters [@Ansari2025; @Raffel2020; @Vaswani2017].
 - It scales each series by the mean and standard deviation of its history, applies the inverse hyperbolic sine, and splits the series into patches of consecutive steps [@Ansari2025].
 - Its attention layers update what the model has learned about each patch as a weighted mix of other patches, with more weight on those it finds relevant [@Vaswani2017].
-- Time attention mixes patches along one series, and group attention mixes the series of a group at the same time [@Ansari2025].
-- A group can be a set of related series, together with inputs whose future values are already known, which enter with those future values visible [@Ansari2025].
+- Time attention mixes patches along one series, and group attention mixes the series of a group at the same time step [@Ansari2025].
+- The user says which series form a group, such as series that share dynamics, or targets with their covariates [@Ansari2025].
+- Group attention has no positional or identity embedding for series, as series in a group have no natural order [@Ansari2025].
+- Covariates enter as further series of the group. Known future covariates have their future values visible, while the future values of targets and past-only covariates are missing [@Ansari2025].
+- The model infers the forecasting setup, and how the series in a group relate, from these inputs and their context. The loss counts only the targets [@Ansari2025].
+- It learned to use related series from synthetic data that impose dependencies between series, at the same time step and with lags [@Ansari2025].
+- Chronos-2 improves its forecasts when given related series, though the authors note that the gains from modelling series jointly can be limited [@Ansari2025].
 - It gives 21 quantiles, from 1% to 99%, for several future steps in one pass, and we drew samples from these quantiles (Figure 1D).
 - It was pretrained in two stages, on real series from the Chronos and GIFT-Eval corpora and on synthetic series, and learned to forecast related series and known inputs from synthetic data alone, from generators that impose dependencies between series [@Ansari2025; @Ansari2024].
 - We used Chronos-2 because it forecasts related series together and takes known future inputs, both of which we need (Model inputs).
@@ -152,18 +157,25 @@ Teams without the capacity to set up specialist models could also use them direc
 ::: {.callout-note title="Plan"}
 - Surveillance data for nowcasting are a reporting triangle: counts are reported by reference date, such as the date of symptom onset, and by reporting delay, where the most recent dates are incomplete because counts that have longer delays have not been reported yet [@hohle; @Wolffram2023].
 - We call the last date whose counts we treat as complete $E$. It is the date of the latest data release less the number of lagged series, $D$ (defined below).
-- For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series has values up to $E$.
+- For each place, we gave Chronos-2 a count series which is the outcome we are trying to nowcast and forecast. This count series has values up to $E$ and is the target.
 - We also gave Chronos-2 one lagged series per place and reporting delay, each with the counts reported by that delay and missing until then (Figure 1B). The lagged series can have values up to the latest data release.
-- Values of the lagged series up to $E$ are past inputs, and values after $E$ are known future inputs, which the model can use to forecast the count series.
-- Places nest, such as health zones within provinces within a country.
+- The lagged series are covariates (Foundation model). Their values up to $E$ are past inputs, and their values after $E$ are known future inputs, which the model can use to forecast the count series.
 - Chronos-2 takes every place's count and lagged series together, in one group we call a block. It then forecasts every place's count series.
-- The model can tell whether a series is a count series or a lagged series, because the lagged series are input as covariates. The model can also implicitly learn what length of reporting delay each lagged series represents by the number of missing data points.
-- However, the model is unable to tell which lagged series belong to which place's count series, or which places are related, such as a province and its health zones as they are all input into the same block.
-- To address this, we added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
 - At forecast time we set the number of lagged series per place, $D$. This is either estimated from the data, where enough data is available, or set by the user for their setting.
 - To estimate $D$, we look at each past reference date to find the first delay at which its reported count reaches 98% of its latest count. $D$ is then the smallest value that is at least one more than the 98th percentile of these settling delays, using only dates seen for at least $1.5D$ days.
 - If not enough data is available for any of the reference dates to settle, $D$ defaults to the whole release history (Supporting Information, *Lag count*).
 - In both case studies we set $D$ by hand, to 40 days for Germany and 42 days for Ebola (Case study 1; Case study 2).
+- Key references: [@hohle; @Wolffram2023].
+:::
+
+### Attention biases
+
+::: {.callout-note title="Plan"}
+- Group attention has no explicit mechanism to represent which lagged series belong to which place's count series, or which places are related, such as a province and its health zones, as they are all in one block (Foundation model).
+- Chronos-2 may learn some of these relations from the data, but we do not tell it them.
+- To explore this, we added learned attention biases that shift the attention weights by how two series are related (the same place, or a place and its parent or child), building on Moirai's any-variate attention and TableFormer's relation biases [@Woo2024; @Yang2022] (Figure 1B; Supporting Information, *Attention biases*).
+- The biases start at zero, so the model starts as base Chronos-2, and are trained with the LoRA adapters during fine-tuning (Fine-tuning).
+- We fine-tuned one model without them to test whether they help (Sensitivity analyses).
 - Key references: [@Woo2024; @Yang2022].
 :::
 
