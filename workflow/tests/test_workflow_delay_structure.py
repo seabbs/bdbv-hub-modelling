@@ -168,3 +168,20 @@ def test_a_structure_is_plain_json():
 def test_no_counts_have_no_structure():
     empty = pd.DataFrame(columns=["stratum", "ref", "rep", "count"])
     assert ds.structure(empty) is None
+
+
+def test_the_curves_have_fixed_lengths_for_any_series():
+    got = ds.curves(ds.structure(_rows(lambda _: [(0, 5), (7, 5)])))
+    assert dict(zip(ds.DELAY_POINTS, got["cdf"], strict=True))[0] == 0.5
+    assert dict(zip(ds.DELAY_POINTS, got["cdf"], strict=True))[7] == 1.0
+    lengths = {
+        "cdf": len(ds.DELAY_POINTS),
+        "delay_time": ds.TIME_BINS,
+        "ref_delay": 7,
+        "refdow": 7,
+        "repdow": 7,
+        "release_days": 7,
+        "gaps": ds.GAP_BINS,
+    }
+    assert {k: len(v) for k, v in got.items()} == lengths
+    assert got["refdow"] == [1.0] * 7
