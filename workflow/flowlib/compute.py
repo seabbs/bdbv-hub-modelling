@@ -60,14 +60,16 @@ Freed cores go to the waiting job of highest priority, in one order:
 Each band's jobs take its base plus a fraction below two, so the bands
 never overlap. Other jobs take Snakemake's default, 0.
 
-Training has the GPU. A checkpoint's scoring (its held-out evaluation,
-7-day check and German units) runs on the forecasting device while every
-GPU has a run to train, and on a GPU of its own, the whole GPU, once one
-has none (`scoring_forecast`): another GPU of the machine, or its only
-GPU when no segment of any run is left to train. Each run re-plans this,
-so the tick after a run's last segment moves its scoring to the GPU. The
-BDBV check's forecasts stay on the forecasting device: one release's
-block does not fit an 8 GB GPU.
+Training has the GPU. A checkpoint's held-out evaluation and 7-day
+check run on the forecasting device while every GPU has a run to train,
+and on a GPU of its own, the whole GPU, once one has none
+(`scoring_forecast`): another GPU of the machine, or its only GPU when
+no segment of any run is left to train. Each run re-plans this, so the
+tick after a run's last segment moves them to the GPU. The German units
+run on the config's `score.device` (`germany_forecast`), the CPU, where
+their worker processes beat an 8 GB GPU; unset, they follow the
+evaluation. The BDBV check's forecasts stay on the forecasting device:
+one release's block does not fit an 8 GB GPU.
 """
 
 from __future__ import annotations
@@ -186,6 +188,29 @@ def scoring_forecast(
     if gpus > training:
         return dataclasses.replace(default, device="cuda")
     return default
+
+
+def germany_forecast(
+    scoring: forecast.Forecast, device: str | None
+) -> forecast.Forecast:
+    """Return the device and threads of a checkpoint's German units.
+
+    Parameters
+    ----------
+    scoring : Forecast
+        The checkpoint scoring device and threads (`scoring_forecast`).
+    device : str or None
+        The German units' device (`score.device` in the config), or None
+        to follow `scoring`.
+
+    Returns
+    -------
+    Forecast
+        `scoring` on `device`.
+    """
+    if device is None:
+        return scoring
+    return dataclasses.replace(scoring, device=device)
 
 
 def newest_first(base: float) -> Callable[[Any], float]:
