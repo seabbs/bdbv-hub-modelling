@@ -133,6 +133,19 @@ finetune:
   # target is trained on (rule real_training_blocks). Unset adds nothing
   # to the settings hash.
   real_training: null
+  # What a run trains on: `simulations` (the rounds, as above) or `real`
+  # (real data alone: the German development half and the public BDBV
+  # releases, packages/nowcastfoundation/config/finetune.toml
+  # `[realdata_germany]` and `[realdata_bdbv]`). A real run cuts its
+  # blocks (rules/realdata.smk): each slice's forecast task laid out as
+  # the fine-tuned model forecasts it, at the data rule's lag count. It
+  # trains with `finetune-real` (nowcastfoundation.finetune.realdata)
+  # with this recipe (series bias, learning rates, batch size, block
+  # limit) in passes over every block, as many as give `target_steps`,
+  # at most `max_passes`, the learning rate falling to zero over them.
+  # Its prefixes are thousandths of the whole training, each saved as a
+  # checkpoint n<N>.
+  data: simulations
   # Part of the settings hash: changing it changes every checkpoint's hash.
   note: 4,800 simulations, 32 cuts
   # The checkpoint checked against zero-shot on the held-out simulations.
@@ -155,9 +168,27 @@ runs:
   # Run A on complete counts, without lag series (the paper's delays
   # comparison).
   nodelays: {layout: complete}
-  # Run A with the German real-data blocks mixed in (the paper's
-  # real-data comparison).
+  # Run A with the German real-data blocks mixed in: simulations and
+  # German data (the paper's `realdata` comparison). Not the real-only
+  # run below.
   realdata: {real_training: germany}
+  # Chronos-2 fine-tuned on real data alone (`foundation_real`, the SI's
+  # "Fine-tuning on real data"): Run A's recipe, layout and attention
+  # biases on the German development half and the BDBV releases. It
+  # trains in passes to Run A's steps (its final checkpoint's 82,040,
+  # chronos-slots-66a7a630d729), at most 20 passes, with checkpoints at
+  # 1/8, 1/4, 1/2 and all of them; the final one is reported, with no
+  # choice on real data. Its final checkpoint is released as realdata-ft-<hash>, which `realdata` in
+  # packages/nowcastfoundation/config/finetune.toml pins. One target
+  # cuts, trains, scores and publishes it: `task workflow:finetune-realonly`
+  # (rule finetune_realonly). The paper's `realonly` comparison.
+  realonly:
+    data: real
+    prefixes: [125, 250, 500, 1000]
+    target_steps: 82040
+    max_passes: 20
+    eval: local
+    note: real data alone, German development half and BDBV releases
   # Run B: Run A's recipe with the release
   # layer (late release starts and the weekly-release share).
   runb: {release_layer: packages/nowcastfoundation/config/finetune/release-layer.yaml}
@@ -250,6 +281,7 @@ dashboard:
     noslots: {variant: no attention bias}
     nodelays: {paper_model: foundation_complete}
     realdata: {variant: synthetic and German data}
+    realonly: {paper_model: foundation_real}
     runb: {variant: release layer}
   # Reference series, matched on rows by model and checkpoint; --ref adds
   # or replaces one (name=MODEL_REGEX[,checkpoint=..][,label=..][,colour=..]

@@ -35,11 +35,27 @@ active_zone_weeks = 8
 active_zone_recent_weeks = 4
 
 # The Chronos-2 checkpoint fine-tuned on real data alone, the German
-# development half and the public BDBV data up to the release in
-# packages/nowcastfoundation/config/finetune/realdata.toml on the germany-ft branch
-# (`realdata-ft-<hash>`), that the SI-only `foundation_real` model
-# load. Empty until that release is published.
+# development half and the public BDBV data up to the release below
+# (`[realdata_germany]`, `[realdata_bdbv]`), that the SI-only
+# `foundation_real` model loads: the settings hash of the release
+# `realdata-ft-<hash>`, which the workflow's `realonly` run publishes
+# (`task workflow:finetune-realonly`). Empty until that release is
+# published.
 realdata = ""
+
+# The German data the real-data checkpoint trained on
+# (`nowcastgermany.finetune_blocks.realdata_window`): the hub triangle as
+# available on `as_of`, the last day of the German development half
+# (packages/nowcastgermany/config/germany.toml `split_date` less a day),
+# cut at every nowcast date from `first_cut` whose truth, four weeks
+# ahead, is at least `truth_delay` days old by `as_of`, each date's tasks
+# laid out as the fine-tuned model forecasts them. The last
+# `held_out_dates` nowcast dates are held out to monitor the loss.
+[realdata_germany]
+as_of = "2022-02-09"
+truth_delay = 40
+first_cut = "2021-04-20"
+held_out_dates = 14
 
 # The BDBV data the real-data checkpoint trained on: every public release
 # up to `release` (cut-off `cutoff`), with truth masked after `truth_until`,

@@ -378,6 +378,7 @@ def test_the_evidence_reads_the_workflow_runs_comparison() -> None:
         "parentonly",
         "delays",
         "realdata",
+        "realonly",
     }
     assert CONFIG["comparisons"]["slots"] in runs
     for name in CONFIG["comparisons"]:
@@ -389,7 +390,7 @@ def test_the_comparisons_are_passed_by_run_name() -> None:
     assert flow.comparisons_arg() == (
         "--comparison slots=noslots --comparison sameonly=sameonly "
         "--comparison parentonly=parentonly --comparison delays=nodelays "
-        "--comparison realdata=realdata"
+        "--comparison realdata=realdata --comparison realonly=realonly"
     )
 
 

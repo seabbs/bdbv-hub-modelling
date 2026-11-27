@@ -78,6 +78,9 @@ $defs:
       layout: {enum: [ragged, complete]}
       release_layer: {type: ["null", string]}
       real_training: {enum: [null, germany]}
+      data: {enum: [simulations, real]}
+      target_steps: {$ref: "#/$defs/positive"}
+      max_passes: {$ref: "#/$defs/positive"}
       note: {type: string}
       check_at: {$ref: "#/$defs/positive"}
 
@@ -162,6 +165,7 @@ properties:
           - series_bias
           - layout
           - real_training
+          - data
           - note
           - check_at
 

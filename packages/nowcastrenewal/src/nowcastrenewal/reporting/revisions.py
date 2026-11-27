@@ -11,7 +11,16 @@ $r$ may be revised:
   first day), are moved back $k_g$ days later.
 
 A correction past the last report day falls on it, so the counts as of
-the last day are the unrevised ones. The revised counts are increments by
+the last day are the unrevised ones.
+
+Over-reporting bursts (`OverReportingBursts`) are short and large: for a
+few reference days in one stratum, the first report is $m$ times the
+day's final count, the excess, Poisson($m Y_{g,t} - y_{g,t,d^*}$) with
+$Y$ the final count and $d^*$ the first delay with a report, withdrawn on
+the first report day at least $k$ days later (or the last day). Bursts
+add to the counts before the revisions (`revise`'s `bursts`).
+
+The revised counts are increments by
 reference day and report day, `(G, T, T)`: they leave the delay window,
 so they are not a `(G, T, D)` triangle.
 
@@ -22,6 +31,8 @@ PyRenew has no revision process, so this is our own `RandomVariable`.
 
 from __future__ import annotations
 
+from typing import Any
+
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -30,7 +41,7 @@ from jax import Array
 from jax.typing import ArrayLike
 from pyrenew.metaclass import RandomVariable
 
-__all__ = ["Revisions", "revise"]
+__all__ = ["OverReportingBursts", "Revisions", "revise"]
 
 
 def revise(
@@ -40,6 +51,7 @@ def revise(
     shift: ArrayLike,
     keep: ArrayLike,
     n_days: int | None = None,
+    bursts: ArrayLike | None = None,
 ) -> Array:
     """Return the revised counts by reference and report day.
 
@@ -57,6 +69,9 @@ def revise(
     n_days : int, optional
         The triangle's days, the first `n_days` of `T`; all of them if
         None. Later days pad the arrays to a shared shape and hold none.
+    bursts : array_like, optional
+        Increments added to the counts by reference day and delay,
+        `(G, T, D)`, not revised (`OverReportingBursts`).
 
     Returns
     -------
@@ -80,6 +95,8 @@ def revise(
 
     err, mv = on(errors), on(moved)
     out = jnp.zeros((G, T, T), dtype=jnp.result_type(y, err, float))
+    if bursts is not None:
+        out = out.at[g, t, rr].add(on(bursts))
     for ref, rep, x in (
         (t, rr, on(y)),
         (t, rr, err),
@@ -122,13 +139,20 @@ class Revisions(RandomVariable):
         self.move = np.atleast_1d(np.asarray(move, dtype=float))
         self.keep = np.atleast_1d(np.asarray(keep, dtype=float))
 
-    def sample(self, counts: ArrayLike, **kwargs: object) -> Array:
+    def sample(
+        self,
+        counts: ArrayLike,
+        bursts: ArrayLike | None = None,
+        **kwargs: object,
+    ) -> Array:
         """Draw the revisions and return the revised counts.
 
         Parameters
         ----------
         counts : array_like
             Reported counts, `(G, T, D)`.
+        bursts : array_like, optional
+            Increments added unrevised, `(G, T, D)` (`revise`).
         **kwargs
             Ignored, for the PyRenew interface.
 
@@ -155,6 +179,108 @@ class Revisions(RandomVariable):
         )
         shift = (2 * direction - 1) * (1 + extra)
         keep = jnp.broadcast_to(jnp.asarray(self.keep), (G,))
-        out = revise(y, errors, moved, shift, keep, self.n_days)
+        out = revise(y, errors, moved, shift, keep, self.n_days, bursts)
         numpyro.deterministic(f"{self.name}::counts", out)
         return out
+
+
+class OverReportingBursts(RandomVariable):
+    """Short over-reporting bursts, withdrawn within days (module docstring).
+
+    Parameters
+    ----------
+    name : str
+        Name of the component; its draws are `"{name}::errors"`, by
+        stratum and reference day.
+    frame : object
+        The triangle's frame (`effects.ReferenceFrame`).
+    strata : sequence of int
+        Each burst's stratum, from 1.
+    at : sequence of float
+        Each burst's first reference day, a share of the observed days.
+    days : sequence of int
+        Each burst's reference days.
+    mult : sequence of float
+        Each burst's first report over the final count, $m$.
+    keep : sequence of int
+        Each burst's days until the excess is withdrawn, $k$.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        frame: Any,
+        strata: Any,
+        at: Any,
+        days: Any,
+        mult: Any,
+        keep: Any,
+    ) -> None:
+        super().__init__(name=name)
+        G, T = len(frame.place), len(frame.dates)
+        self.last = int(frame.observed) - 1
+        m = np.zeros((G, T))
+        k = np.ones((G, T), dtype=int)
+        for s, a, n, x, w in zip(
+            np.atleast_1d(strata),
+            np.atleast_1d(at),
+            np.atleast_1d(days),
+            np.atleast_1d(mult),
+            np.atleast_1d(keep),
+            strict=True,
+        ):
+            start = int(np.round(float(a) * frame.observed))
+            window = np.arange(start, min(start + int(n), frame.observed))
+            m[int(s) - 1, window] = np.maximum(m[int(s) - 1, window], x)
+            k[int(s) - 1, window] = max(1, int(w))
+        self.mult = m
+        self.keep = k
+
+    def sample(
+        self, counts: ArrayLike, log_expected: ArrayLike, **kwargs: object
+    ) -> Array:
+        """Draw the bursts and return them as increments.
+
+        Parameters
+        ----------
+        counts : array_like
+            Reported counts, `(G, T, D)`.
+        log_expected : array_like
+            Log expected reports, `(G, T, D)`; a delay with none (minus
+            infinity, as off a report day) takes no withdrawal.
+        **kwargs
+            Ignored, for the PyRenew interface.
+
+        Returns
+        -------
+        Array
+            Increments by stratum, reference day and delay, `(G, T, D)`:
+            the excess at the first report and its withdrawal.
+        """
+        y = jnp.asarray(counts)
+        G, T, D = y.shape
+        reported = y > 0
+        first = jnp.argmax(reported, axis=-1)
+        total = y.sum(axis=-1)
+        head = jnp.take_along_axis(y, first[..., None], axis=-1)[..., 0]
+        d = jnp.arange(D)[None, None, :]
+        keep = jnp.asarray(self.keep)
+        report = jnp.isfinite(jnp.asarray(log_expected))
+        later = report & (d >= (first + keep)[..., None])
+        withdraw = jnp.argmax(later, axis=-1)
+        t = jnp.arange(T)[None, :]
+        withdraw = jnp.minimum(withdraw, self.last - t)
+        mult = jnp.asarray(self.mult)
+        on = (
+            (mult > 0)
+            & reported.any(axis=-1)
+            & later.any(axis=-1)
+            & (withdraw > first)
+        )
+        rate = jnp.where(on, jnp.maximum(mult * total - head, 0.0), 0.0)
+        errors = numpyro.sample(f"{self.name}::errors", dist.Poisson(rate))
+        g = jnp.broadcast_to(jnp.arange(G)[:, None], (G, T))
+        tt = jnp.broadcast_to(t, (G, T))
+        out = jnp.zeros((G, T, D), dtype=jnp.result_type(y, float))
+        out = out.at[g, tt, first].add(errors)
+        return out.at[g, tt, withdraw].add(-errors)

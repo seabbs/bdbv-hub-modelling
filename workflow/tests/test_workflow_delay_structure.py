@@ -161,6 +161,8 @@ def test_a_structure_is_plain_json():
 
     got = ds.structure(_rows(lambda i: [(i % 3, 4)]), parent=ds.sim_parent)
     json.dumps(got)
+    many = _weekly_delays(lambda s, i: (i + len(s)) % 5, ["P01-A1", "P02"])
+    json.dumps(ds.structure(many, parent=ds.sim_parent), allow_nan=False)
     json.dumps(ds.scalars(got))
     json.dumps(ds.curves(got))
 
@@ -185,3 +187,235 @@ def test_the_curves_have_fixed_lengths_for_any_series():
     }
     assert {k: len(v) for k, v in got.items()} == lengths
     assert got["refdow"] == [1.0] * 7
+
+
+def _weekly_delays(delay_of, strata, days=84, count=lambda _s, _i: 20):
+    """Rows where stratum `s`'s reference day `i` is all reported after
+    `delay_of(s, i)` days, `count(s, i)` cases."""
+    return pd.concat(
+        [
+            _rows(
+                lambda i, s=s: [(delay_of(s, i), count(s, i))],
+                days=days,
+                stratum=s,
+            )
+            for s in strata
+        ],
+        ignore_index=True,
+    )
+
+
+def _wobble(i):
+    """A delay that moves week to week: 1, 4, 2, 5, 3, 6, ... days."""
+    return (1, 4, 2, 5, 3, 6)[(i // 7) % 6]
+
+
+def test_shared_delay_changes_move_strata_together():
+    rows = _weekly_delays(lambda _s, i: _wobble(i), ["A", "B", "C"])
+    got = ds.structure(rows)
+    by = got["by_stratum"]
+    assert [x["name"] for x in by["strata"]] == ["A", "B", "C"]
+    assert by["corr"] == pytest.approx(1.0)
+    assert by["corr_min"] == pytest.approx(1.0)
+    # One line per stratum, week by week, as the total.
+    assert len(by["strata"][0]["mean"]) == len(by["week"])
+    assert by["strata"][0]["mean"][:3] == pytest.approx([1.0, 4.0, 2.0])
+    assert by["total"]["mean"][:3] == pytest.approx([1.0, 4.0, 2.0])
+
+
+def test_a_stratum_whose_delay_lengthens_diverges_from_the_others():
+    def delay(s, i):
+        return 1 + i // 7 if s == "C" else _wobble(i)
+
+    got = ds.structure(_weekly_delays(delay, ["A", "B", "C"]))
+    by = {x["name"]: x for x in got["by_stratum"]["strata"]}
+    # C's line rises week on week; A and B wobble together.
+    assert by["C"]["mean"][-1] > by["C"]["mean"][0] + 5
+    assert by["C"]["corr"] < by["A"]["corr"]
+    sc = ds.scalars(got)
+    assert sc["strata_corr"] < 0.9
+    assert sc["strata_corr_min"] == pytest.approx(by["C"]["corr"])
+
+
+def _counts(_s, i):
+    """Weekly counts rising and falling: 10 to 60 a day."""
+    return 10 * (1 + (1, 3, 5, 2, 4, 6)[(i // 7) % 6])
+
+
+def test_delays_that_lengthen_with_the_counts_give_a_positive_slope():
+    def delay(s, i):
+        return _counts(s, i) // 10 + (2 if s == "B" else 0)
+
+    got = ds.structure(_weekly_delays(delay, ["A", "B"], count=_counts))
+    assert got["coupling"]["slope"] > 0
+    assert got["coupling"]["corr"] == pytest.approx(1.0, abs=0.1)
+    line = got["by_stratum"]["strata"][0]
+    assert line["counts_slope"] > 0
+    # The log count a day in each week.
+    assert line["log_count"][0] == pytest.approx(np.log(20), abs=1e-3)
+    sc = ds.scalars(got)
+    assert sc["counts_slope"] > 0
+
+
+def test_delays_that_shorten_with_the_counts_give_a_negative_slope():
+    def delay(s, i):
+        return 8 - _counts(s, i) // 10
+
+    got = ds.structure(_weekly_delays(delay, ["A", "B"], count=_counts))
+    assert got["coupling"]["slope"] < 0
+    assert got["coupling"]["corr"] < -0.9
+    # Reported by day 1 only in the busiest weeks (7 days' delay or less
+    # elsewhere is 2 days or more): the share by day 1 rises with them.
+    assert ds.scalars(got)["share1_counts_corr"] > 0
+
+
+def test_an_over_reporting_burst_is_withdrawn_within_days():
+    def spec(i):
+        # Days 21 to 27: 50 first reported, 40 withdrawn 3 days later.
+        if 21 <= i < 28:
+            return [(0, 50), (3, -40)]
+        return [(0, 10)]
+
+    burst = _rows(spec, days=56, stratum="A")
+    calm = _rows(lambda _: [(0, 10)], days=56, stratum="B")
+    got = ds.structure(pd.concat([burst, calm], ignore_index=True))
+    by = {x["name"]: x for x in got["by_stratum"]["strata"]}
+    # The burst's week first reports 5 times its final count.
+    assert by["A"]["first_ratio"][3] == pytest.approx(5.0)
+    assert by["A"]["first_ratio"][0] == pytest.approx(1.0)
+    assert by["B"]["first_ratio"] == pytest.approx([1.0] * 8)
+    # 7 * 40 of A's 56 * 10 final cases were withdrawn.
+    assert by["A"]["withdrawn"] == pytest.approx(0.5)
+    assert by["B"]["withdrawn"] == 0
+    sc = ds.scalars(got)
+    assert sc["burst_ratio"] == pytest.approx(5.0)
+    assert sc["withdrawn_share"] == pytest.approx(0.25)
+    assert sc["withdrawn_max"] == pytest.approx(0.5)
+
+
+def test_the_first_report_ratio_counts_revisions_as_reported():
+    # Without a burst the first report is the whole count: the ratio is
+    # 1 even though the netted delays drop the withdrawn 2.
+    rows = _rows(lambda _: [(0, 12), (2, -2)])
+    got = ds.structure(rows)
+    assert got["by_stratum"]["total"]["first_ratio"][0] == pytest.approx(1.2)
+    assert got["by_stratum"]["total"]["share1"][0] == pytest.approx(1.2)
+
+
+def test_a_pure_time_pattern_is_the_time_part_of_the_noise():
+    got = ds.structure(_weekly_delays(lambda _s, i: _wobble(i), "ABCD"))
+    noise = got["noise"]
+    assert noise["time_share"] == pytest.approx(1.0)
+    assert noise["strata_share"] == pytest.approx(0.0, abs=1e-6)
+    assert noise["residual_share"] == pytest.approx(0.0, abs=1e-6)
+    assert ds.scalars(got)["noise_time"] == pytest.approx(1.0)
+
+
+def test_fixed_stratum_delays_are_the_strata_part_of_the_noise():
+    offset = {"A": 1, "B": 3, "C": 6, "D": 10}
+    got = ds.structure(_weekly_delays(lambda s, _i: offset[s], "ABCD"))
+    noise = got["noise"]
+    assert noise["strata_share"] == pytest.approx(1.0)
+    assert noise["time_share"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_strata_moving_on_their_own_are_the_residual_part():
+    # Each stratum's own week-to-week pattern, none shared, none fixed.
+    pats = {"A": (1, 5, 3, 1, 5, 3), "B": (5, 3, 1, 5, 3, 1),
+            "C": (3, 1, 5, 3, 1, 5)}  # fmt: skip
+
+    def delay(s, i):
+        return pats[s][(i // 7) % 6]
+
+    noise = ds.structure(_weekly_delays(delay, "ABC"))["noise"]
+    assert noise["residual_share"] > 0.9
+    assert noise["residual_sd"] > 0
+
+
+def test_one_stratum_has_only_a_time_part():
+    noise = ds.structure(_weekly_delays(lambda _s, i: _wobble(i), "A"))["noise"]
+    assert noise["time_sd"] > 0
+    assert noise["strata_share"] is None
+
+
+def test_the_drawn_noise_sds_by_layer():
+    got = ds.drawn_noise(
+        {
+            "delay_jitter": "yes",
+            "delay_jitter_sd": "0.12",
+            "delay_strata_noise": "strata",
+            "delay_strata_sd": "0.3",
+            "delay_strata_jitter_sd": "0.05",
+        }
+    )
+    assert got == {"time": 0.12, "strata": 0.3, "strata_time": 0.0}
+    both = ds.drawn_noise(
+        {
+            "delay_jitter": "no",
+            "delay_jitter_sd": "0.12",
+            "delay_strata_noise": "both",
+            "delay_strata_sd": "0.3",
+            "delay_strata_jitter_sd": "0.05",
+        }
+    )
+    assert both == {"time": 0.0, "strata": 0.3, "strata_time": 0.05}
+    assert ds.drawn_noise({}) == {
+        "time": None,
+        "strata": None,
+        "strata_time": None,
+    }
+
+
+def test_each_stratum_s_weekly_counts_over_its_mean():
+    def count(s, i):
+        return 10 * (1 + (i // 7) % 3) * (2 if s == "B" else 1)
+
+    got = ds.structure(_weekly_delays(lambda _s, _i: 1, "AB", count=count))
+    by = {x["name"]: x for x in got["by_stratum"]["strata"]}
+    # The same shape at twice the size: the same line over its mean.
+    assert by["A"]["rel_count"][:3] == pytest.approx([0.5, 1.0, 1.5])
+    assert by["B"]["rel_count"] == pytest.approx(by["A"]["rel_count"])
+    assert np.mean(by["A"]["rel_count"]) == pytest.approx(1.0, abs=1e-3)
+    assert got["by_stratum"]["total"]["rel_count"][:3] == pytest.approx(
+        [0.5, 1.0, 1.5]
+    )
+    # Strata that move together keep their shares.
+    assert got["levels"]["corr"] == pytest.approx(1.0)
+    assert got["levels"]["share_sd"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_stratum_whose_counts_move_on_their_own_moves_its_share():
+    def count(s, i):
+        # C's ascertainment doubles half way; A and B stay put.
+        return 20 * (2 if s == "C" and i >= 42 else 1) + 5 * ((i // 7) % 2)
+
+    got = ds.structure(_weekly_delays(lambda _s, _i: 1, "ABC", count=count))
+    by = {x["name"]: x for x in got["by_stratum"]["strata"]}
+    # Shares are of the strata's total, so A's and B's move a little too.
+    assert by["C"]["count_share_sd"] > by["A"]["count_share_sd"]
+    assert by["C"]["rel_count"][-1] > by["C"]["rel_count"][0]
+    sc = ds.scalars(got)
+    assert sc["count_share_sd"] > 0.1
+    assert sc["strata_count_corr"] < 0.9
+
+
+def test_the_drawn_ascertainment_structure():
+    got = ds.drawn_ascertainment(
+        {
+            "ascertainment_change": "drift",
+            "ascertainment_change_strata": "related",
+            "ascertainment_counts": "strata",
+            "asc_counts_sign": "-1;-1;1",
+            "asc_counts_slope": "0.2",
+            "asc_noise_sd": "",
+            "delay_change": "step",
+        }
+    )
+    assert got == {
+        "ascertainment_change": "drift",
+        "ascertainment_change_strata": "related",
+        "ascertainment_counts": "strata",
+        "asc_counts_sign": "-1;-1;1",
+        "asc_counts_slope": "0.2",
+    }
+    assert ds.drawn_ascertainment({}) == {}

@@ -24,6 +24,7 @@ def test_the_committed_runs_are_run_a_its_variants_and_run_b():
         "parentonly",
         "nodelays",
         "realdata",
+        "realonly",
         "runb",
     ]
 

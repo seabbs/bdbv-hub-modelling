@@ -2,8 +2,9 @@
 
 Summarises each simulation of `ROUND_DIR/sims` (`summaries`): cases,
 strata with cases, the largest week-on-week rise in weekly cases by
-reference date and the reporting delay. The grid sets no thresholds, so
-no simulation is excluded.
+reference date, the reporting delay and the share of reported cases
+later withdrawn (revisions and over-reporting bursts). The grid sets no
+thresholds, so no simulation is excluded.
 
 Records the table and a one-line summary in `ROUND_DIR/qc/`.
 Simulations are never deleted. The workflow's `sim_qc` rule runs it:
@@ -40,6 +41,19 @@ CELL = [
     "obs_strata",
     "delay_places",
     "strata_link",
+    "delay_jitter",
+    "delay_strata_noise",
+    "delay_change_strata",
+    "delay_change_switch",
+    "delay_change_combine",
+    "delay_counts",
+    "bursts",
+    "revisions",
+    "ascertainment_change",
+    "ascertainment_change_strata",
+    "ascertainment_change_switch",
+    "ascertainment_counts",
+    "ascertainment_noise",
 ]
 
 
@@ -89,6 +103,7 @@ def summaries(sim_dir: Path) -> pd.DataFrame:
                     "reported_within_7d": float(
                         w[delay.to_numpy() <= 7].sum() / w.sum()
                     ),
+                    "withdrawn_share": float(-w[w < 0].sum() / w.sum()),
                 }
             )
     return pd.DataFrame(rows)

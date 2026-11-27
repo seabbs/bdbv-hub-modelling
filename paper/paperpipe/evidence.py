@@ -18,6 +18,7 @@ waits on in place of its table, and `None` in place of its numbers.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
@@ -133,9 +134,16 @@ COMPARISONS: Final = {
         "the full and no-delay runs' scores by checkpoint",
         ("with delays", "without delays"),
     ),
+    # The workflow's `realdata` run: German blocks mixed into Run A's
+    # simulations.
     "realdata": (
         "the real-data and synthetic fine-tunes' scores",
         ("synthetic", "synthetic and German"),
+    ),
+    # The workflow's `realonly` run: real data alone (`foundation_real`).
+    "realonly": (
+        "the real-only and synthetic fine-tunes' scores",
+        ("synthetic", "real data alone"),
     ),
 }
 """Each fine-tuning comparison of the live run with a variant: what it
@@ -170,6 +178,46 @@ def compared(
     return others, labels
 
 
+SHARES: Final = {125: "1/8", 250: "1/4", 500: "1/2", 1000: "all"}
+"""A real-data run's checkpoints, thousandths of its passes, as shares."""
+
+
+def _share(thousandths: float) -> str:
+    """Return a checkpoint's share of its run's passes."""
+    return SHARES.get(int(thousandths), f"{thousandths / 1000:g}")
+
+
+def _step(label: str) -> int:
+    """Return a run checkpoint's steps or outbreaks, `n<N>`; 0 otherwise."""
+    return int(label[1:]) if re.fullmatch(r"n\d+", label) else 0
+
+
+def _on_live_axis(rows: pd.DataFrame, run: str, other: str) -> pd.DataFrame:
+    """Put a variant trained on no simulations on the live run's axis.
+
+    A run on real data alone (the workflow's `data: real`) has steps, not
+    outbreaks, so its rows have none. Its final checkpoint's German rows
+    are repeated at each of the live run's outbreaks, a line to compare
+    with; its held-out loss, on real blocks, is left out. Any other
+    variant's rows are returned as they are.
+    """
+    mine = rows["run"] == other
+    if not mine.any() or (rows.loc[mine, "outbreaks"] > 0).any():
+        return rows
+    labels = rows.loc[mine, "checkpoint"].astype(str).unique()
+    final = max(labels, key=_step)
+    last = rows.loc[
+        mine
+        & (rows["checkpoint"].astype(str) == final)
+        & (rows["study"] != "held_out")
+    ]
+    live = rows.loc[(rows["run"] == run) & (rows["outbreaks"] > 0)]
+    spread = [
+        last.assign(outbreaks=n) for n in sorted(live["outbreaks"].unique())
+    ]
+    return pd.concat([rows.loc[~mine], *spread], ignore_index=True)
+
+
 def comparison_rows(
     scores: pd.DataFrame,
     run: str,
@@ -183,13 +231,16 @@ def comparison_rows(
     in the layout of `comparison_figure` (`set`, `run`, `outbreaks`,
     `score`). `labels` name `run` and then each run of `other`, one
     variant or several (`compared`). Empty while no variant has a scored
-    checkpoint.
+    checkpoint. A variant on real data alone is its final checkpoint
+    at each of the live run's outbreaks (`_on_live_axis`).
     """
     others = [other] if isinstance(other, str) else list(other)
     rows = tidy(scores)
     names = dict(zip((run, *others), labels, strict=True))
     if not rows["run"].isin(others).any():
         return pd.DataFrame(columns=["set", "run", "outbreaks", "score"])
+    for variant in others:
+        rows = _on_live_axis(rows, run, variant)
     rows = rows.loc[rows["run"].isin(names) & (rows["outbreaks"] > 0)]
     loss = rows.loc[
         (rows["study"] == "held_out") & rows["level"].isin(VALIDATION_LEVELS)
@@ -345,6 +396,7 @@ def checkpoint_figure(
     scores: pd.DataFrame,
     fig: Figure | SubFigure | None = None,
     legend: bool = True,
+    share: bool = False,
 ) -> Figure | SubFigure:
     """Plot each model's relative WIS against the fine-tune's outbreaks.
 
@@ -359,7 +411,8 @@ def checkpoint_figure(
     `rel_wis` against `randomwalknowcast`.
     Drawn on `fig`, a new figure by default, or a subfigure of a run's
     progress figure (`paperpipe.progress`); `legend` False leaves out the
-    shared legend.
+    shared legend. With `share`, `outbreaks` are thousandths of a run's
+    passes (a run on real data alone), labelled as shares of them.
     """
     sc = scores.loc[scores["model"] != "randomwalknowcast"]
     sizes = sorted(sc.loc[sc["outbreaks"] > 0, "outbreaks"].unique())
@@ -414,12 +467,15 @@ def checkpoint_figure(
             )
         ax.set_xscale("log")
         ax.set_xlim(ticks[0] / 1.5, ticks[-1] * 1.5)
-        ax.set_xticks(ticks, [f"{t:,.0f}" for t in ticks], fontsize=7)
+        labels = [_share(t) if share else f"{t:,.0f}" for t in ticks]
+        ax.set_xticks(ticks, labels, fontsize=7)
         ax.minorticks_off()
         reference = model_label("randomwalknowcast")
         ax.axhline(1, color="#888888", ls="-", lw=1, label=reference)
         ax.set_title(f"{study}, {level} (n = {n}{origins})", fontsize=9)
-        ax.set_xlabel("Fine-tuning outbreaks")
+        ax.set_xlabel(
+            "Share of the passes" if share else "Fine-tuning outbreaks"
+        )
         ax.set_ylabel("Relative WIS")
     for ax in axes[len(panels) :]:
         ax.set_visible(False)
@@ -881,7 +937,7 @@ def write_evidence(
         data["block_combinations"],
         ["block_combinations"],
     )
-    for name in ("slots", "delays", "realdata", "daily"):
+    for name in ("slots", "delays", "realdata", "realonly", "daily"):
         rows = data[f"compare_{name}"]
         figure(
             f"compare-{name}",
