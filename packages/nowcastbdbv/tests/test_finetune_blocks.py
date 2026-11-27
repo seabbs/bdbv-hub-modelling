@@ -101,7 +101,8 @@ def test_no_bdbv_truth_after_the_truth_date(source):
     for b in blocks:
         assert set(BLOCK_KEYS) <= set(b)
         assert (b["data"], b["mix"], b["source"]) == ("bdbv", "bdbv", source)
-        assert b["places"][0] == "CD"
+        # A province's view of its zones is under the province.
+        assert b["places"][0] == "CD" or b["view"] == "subtree"
         assert b["cut"] <= cut.cutoff
         assert b["truth_end"] <= cut.truth_until
         assert len(b["times"]) == b["context"].shape[1]

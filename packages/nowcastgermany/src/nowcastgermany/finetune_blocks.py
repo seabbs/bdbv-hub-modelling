@@ -53,6 +53,11 @@ PLACES = ("national", "states", "ages")
 """The blocks' places: Germany alone, or Germany with its states or its
 age groups, as the German tasks group them."""
 
+REAL_PLACES = ("states", "ages")
+"""The real-only checkpoint's blocks' places: each German task whole,
+every level in one block as the fine-tuned model forecasts it (Germany
+with its states, or with its age groups)."""
+
 FIRST_CUT = "2021-04-20"
 """The first nowcast date cut, two weeks after the triangle's first
 Meldedatum; cuts with under two steps of context are skipped."""
@@ -106,6 +111,11 @@ class RealdataWindow:
     first_cut: str
     sources: tuple[str, ...]
     held_out_dates: int
+
+    @property
+    def places(self) -> tuple[str, ...]:
+        """The blocks' places, each German task whole (`REAL_PLACES`)."""
+        return REAL_PLACES
 
     @property
     def truth_until(self) -> str:
@@ -180,14 +190,15 @@ def german_blocks(
     truth_until: str,
     first: int = 0,
     sources: tuple[str, ...] = (SOURCE,),
+    places: tuple[str, ...] = PLACES,
 ) -> list[dict[str, Any]]:
     """Return the training blocks of the German data at nowcast dates.
 
     Each cut is laid out as the German tasks lay it out, on its real
     dates, and Germany is the country (`parent` exact). Each source and
-    each of `PLACES` gives a block by `finetune.training_block`, at a lag
-    taken in turn (from cut `first` on), padded as the simulated blocks
-    are. `SOURCE` takes every report date up to the cut as a release, at
+    each of `places` (`PLACES` by default) gives a block by
+    `finetune.training_block`, at a lag taken in turn (from cut `first`
+    on), padded as the simulated blocks are. `SOURCE` takes every report date up to the cut as a release, at
     a lag from `LAGS`; `weekly` takes a release a week, on the cut's
     weekday, at a lag from `WEEKLY_LAGS`.
 
@@ -196,9 +207,9 @@ def german_blocks(
     ValueError
         If a cut's horizon ends after `truth_until`.
     """
-    places = sorted(counts["location"].unique())
-    states = [p for p in places if "-A" not in p]
-    ages = [p for p in places if "-A" in p]
+    every = sorted(counts["location"].unique())
+    states = [p for p in every if "-A" not in p]
+    ages = [p for p in every if "-A" in p]
     leaves = {"national": states, "states": states, "ages": ages}
     out = []
     for i, cut in enumerate(cuts, start=first):
@@ -214,7 +225,7 @@ def german_blocks(
             lags = WEEKLY_LAGS if weekly else LAGS
             # Weekly releases fall on the cut's weekday, back from the cut.
             cutoffs = daily[::-7][::-1] if weekly else daily
-            for j, which in enumerate(PLACES):
+            for j, which in enumerate(places):
                 view = (NATIONAL,)
                 if which != "national":
                     view = (NATIONAL, *leaves[which])
@@ -247,10 +258,12 @@ def german_blocks(
 
 
 def _cut(
-    args: tuple[pd.DataFrame, str, int, str, tuple[str, ...]],
+    args: tuple[pd.DataFrame, str, int, str, tuple[str, ...], tuple[str, ...]],
 ) -> list[dict[str, Any]]:
-    counts, cut, i, truth_until, sources = args
-    return german_blocks(counts, [cut], truth_until, first=i, sources=sources)
+    counts, cut, i, truth_until, sources, places = args
+    return german_blocks(
+        counts, [cut], truth_until, first=i, sources=sources, places=places
+    )
 
 
 def _cut_all(
@@ -259,9 +272,12 @@ def _cut_all(
     truth_until: str,
     sources: tuple[str, ...],
     workers: int,
+    places: tuple[str, ...] = PLACES,
 ) -> list[dict[str, Any]]:
     """Cut every cut's blocks over `workers` processes, in cut order."""
-    jobs = [(counts, c, i, truth_until, sources) for i, c in enumerate(cuts)]
+    jobs = [
+        (counts, c, i, truth_until, sources, places) for i, c in enumerate(cuts)
+    ]
     with ProcessPoolExecutor(workers) as pool:
         return [b for part in pool.map(_cut, jobs) for b in part]
 
@@ -301,7 +317,9 @@ def make_realdata_blocks(
     """
     counts = german_counts(pd.read_csv(triangle), real.as_of)
     cuts = real.cuts()
-    blocks = _cut_all(counts, cuts, real.truth_until, real.sources, workers)
+    blocks = _cut_all(
+        counts, cuts, real.truth_until, real.sources, workers, real.places
+    )
     with out.open("wb") as f:
         pickle.dump(blocks, f)
     print(
